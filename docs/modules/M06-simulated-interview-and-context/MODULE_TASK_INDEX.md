@@ -1,0 +1,14 @@
+# M06 模拟面试、上下文与导出 - 模块任务索引
+
+## 1. 模块任务总表
+
+| Subtask ID | 子任务名称 | 状态 | 文档成熟度 | 待确认问题 | 目录 | 是否具备实施条件 |
+| --- | --- | --- | --- | --- | --- | --- |
+| ST06_01 | 面试会话创建与列表 | todo | 仅有骨架 | - | sub_modules/ST06_01-interview-session-bootstrap/ | 否 |
+| ST06_02 | 上下文包与问题来源规则 | todo | 仅有骨架 | OQ-009、OQ-011、OQ-012、OQ-018 | sub_modules/ST06_02-context-pack-and-question-source/ | 否 |
+| ST06_03 | 消息流、trace、报告与导出 | todo | 仅有骨架 | OQ-012 | sub_modules/ST06_03-message-trace-report-and-export/ | 否 |
+
+## 2. 使用规则
+
+- 模块内推进顺序应优先参考依赖关系和开放问题数量。
+- 子任务设计先成熟，再推进子任务实施。
