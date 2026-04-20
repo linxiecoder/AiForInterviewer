@@ -1,25 +1,42 @@
-# M07 打磨模式、评估与进度 - 模块待确认问题
+# 模块待确认问题
 
-## 1. 当前模块问题
-- OQ-008 匹配分析与评估规则是否需要版本化
-- OQ-013 打磨主题推荐是规则、LLM 还是混合
-- OQ-014 模拟面试、打磨模式和复盘是否共用同一评估口径
+## 1. 文档定位
 
-## 2. 问题详情
-### OQ-008 匹配分析与评估规则是否需要版本化
+- 本文档用于记录当前模块内部仍未收敛、会影响模块设计或子任务推进的问题。
+- 本文档是模块级问题清单，不代替根目录 `OPEN_QUESTIONS.md` 的全局问题总表。
+- 当前模块主责 Codex 在推进模块文档时，若发现新的模块级问题，应优先记录在这里。
+- 若问题已明显影响多个模块、多个子任务或共享契约，应进一步上升到根目录 `OPEN_QUESTIONS.md`。
 
-- 为什么影响本模块：会影响评分可追溯性、弱项证据归因和复盘结果复现。
-- 当前建议：默认保留规则版本字段和来源记录，但首轮不做复杂配置中心。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 2. 状态定义
 
-### OQ-013 打磨主题推荐是规则、LLM 还是混合
+- `open`：问题已识别，但尚无明确默认方案
+- `proposed-default`：已有默认建议，可在未正式确认前先按该口径继续推进
+- `confirmed`：问题已确认，后续文档应按确认结果回写
+- `superseded`：问题已失效或已被其他新口径替代
 
-- 为什么影响本模块：会影响打磨模式可验证性和实施复杂度。
-- 当前建议：默认先做规则推荐，后续再考虑 LLM 增强。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 3. 问题表
 
-### OQ-014 模拟面试、打磨模式和复盘是否共用同一评估口径
+| MQ ID | 问题 | 状态 | 影响范围 | 当前建议 | 是否需上升到全局 | 需回写文档 |
+| --- | --- | --- | --- | --- | --- | --- |
+| MQ-001 | 示例：本模块是否负责 XXX | open | MODULE_REQUIREMENTS / MODULE_DESIGN | 默认先不纳入本模块边界 | 否 | `MODULE_REQUIREMENTS.md` |
+| MQ-002 | 示例：异常路径是否需要回滚 | proposed-default | MODULE_LOGIC / 子任务设计 | 默认需要定义最小回滚策略 | 否 | `MODULE_LOGIC_DESIGN.md`、子任务设计文档 |
 
-- 为什么影响本模块：会影响能力树、评估对象和结果可对比性。
-- 当前建议：默认共用核心评分框架，但允许不同场景补充上下文字段。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 4. 当前高优问题
+
+| 优先级 | MQ ID | 当前阻塞文档 | 原因 | 本轮处理要求 |
+| --- | --- | --- | --- | --- |
+| P0 | MQ-001 | `MODULE_REQUIREMENTS.md` | 模块边界不清会导致后续设计漂移 | 优先冻结默认边界 |
+| P1 | MQ-002 | `MODULE_LOGIC_DESIGN.md` | 逻辑分支和回滚策略未定 | 在逻辑设计细化前先给默认方案 |
+
+## 5. 需要升级到全局的问题
+
+> 只有当问题影响多个模块、共享契约或全局技术口径时，才列在这里，等待总控 Codex 同步到根目录 `OPEN_QUESTIONS.md`。
+
+- 暂无
+
+## 6. 使用说明
+
+- 模块 Codex 每轮推进模块文档时，都应检查是否新增了模块级问题。
+- 若问题只影响当前模块，优先记录在本文件。
+- 若问题已影响多个模块、共享契约或全局技术口径，应在本文件记录后，同时上报总控 Codex，并推动更新根目录 `OPEN_QUESTIONS.md`。
+- 当问题状态从 `open` 变为 `proposed-default` 或 `confirmed` 时，应同步回写受影响模块文档。

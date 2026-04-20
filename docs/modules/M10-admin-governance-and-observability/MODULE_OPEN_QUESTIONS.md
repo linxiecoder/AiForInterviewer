@@ -1,46 +1,42 @@
-# M10 管理台、治理与可观测性 - 模块待确认问题
+# 模块待确认问题
 
-## 1. 当前模块问题
-- OQ-002 首轮是否只建立最小运行时、测试和 CI 基线
-- OQ-004 P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie
-- OQ-005 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面
-- OQ-007 上传、转换、导出在 P1 中哪些必须异步
-- OQ-017 管理台的模型推荐来源是本地 catalog 还是在线同步
-- OQ-018 管理台是否负责 search snapshot 导入与运维
+## 1. 文档定位
 
-## 2. 问题详情
-### OQ-002 首轮是否只建立最小运行时、测试和 CI 基线
+- 本文档用于记录当前模块内部仍未收敛、会影响模块设计或子任务推进的问题。
+- 本文档是模块级问题清单，不代替根目录 `OPEN_QUESTIONS.md` 的全局问题总表。
+- 当前模块主责 Codex 在推进模块文档时，若发现新的模块级问题，应优先记录在这里。
+- 若问题已明显影响多个模块、多个子任务或共享契约，应进一步上升到根目录 `OPEN_QUESTIONS.md`。
 
-- 为什么影响本模块：会影响基础模块的范围，决定是否先搭骨架还是一次补齐完整工程化。
-- 当前建议：默认只做最小可运行基线，把完整 CI/E2E 提升到后续轮次。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 2. 状态定义
 
-### OQ-004 P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie
+- `open`：问题已识别，但尚无明确默认方案
+- `proposed-default`：已有默认建议，可在未正式确认前先按该口径继续推进
+- `confirmed`：问题已确认，后续文档应按确认结果回写
+- `superseded`：问题已失效或已被其他新口径替代
 
-- 为什么影响本模块：会影响鉴权 API、前端登录流、测试夹具和权限校验方式。
-- 当前建议：默认用固定 Bearer token 作为 P1 开发口径，但在决策表中标记为 proposed。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 3. 问题表
 
-### OQ-005 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面
+| MQ ID | 问题 | 状态 | 影响范围 | 当前建议 | 是否需上升到全局 | 需回写文档 |
+| --- | --- | --- | --- | --- | --- | --- |
+| MQ-001 | 示例：本模块是否负责 XXX | open | MODULE_REQUIREMENTS / MODULE_DESIGN | 默认先不纳入本模块边界 | 否 | `MODULE_REQUIREMENTS.md` |
+| MQ-002 | 示例：异常路径是否需要回滚 | proposed-default | MODULE_LOGIC / 子任务设计 | 默认需要定义最小回滚策略 | 否 | `MODULE_LOGIC_DESIGN.md`、子任务设计文档 |
 
-- 为什么影响本模块：会影响权限测试矩阵、管理台范围和跨团队访问边界。
-- 当前建议：默认先覆盖 P1 页面和 API，不扩展到未来多租户治理能力。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 4. 当前高优问题
 
-### OQ-007 上传、转换、导出在 P1 中哪些必须异步
+| 优先级 | MQ ID | 当前阻塞文档 | 原因 | 本轮处理要求 |
+| --- | --- | --- | --- | --- |
+| P0 | MQ-001 | `MODULE_REQUIREMENTS.md` | 模块边界不清会导致后续设计漂移 | 优先冻结默认边界 |
+| P1 | MQ-002 | `MODULE_LOGIC_DESIGN.md` | 逻辑分支和回滚策略未定 | 在逻辑设计细化前先给默认方案 |
 
-- 为什么影响本模块：会影响对象存储、任务队列、导出日志和实施顺序。
-- 当前建议：默认转换和正式导出异步，上传元数据登记同步。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+## 5. 需要升级到全局的问题
 
-### OQ-017 管理台的模型推荐来源是本地 catalog 还是在线同步
+> 只有当问题影响多个模块、共享契约或全局技术口径时，才列在这里，等待总控 Codex 同步到根目录 `OPEN_QUESTIONS.md`。
 
-- 为什么影响本模块：会影响治理边界、实现复杂度和维护成本。
-- 当前建议：默认采用本地 catalog / seed。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+- 暂无
 
-### OQ-018 管理台是否负责 search snapshot 导入与运维
+## 6. 使用说明
 
-- 为什么影响本模块：会影响模块边界，以及上下文包对运营后台的依赖。
-- 当前建议：默认由管理台承担导入配置和审计，不承担在线抓取。
-- 需要回写的文档：`MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`
+- 模块 Codex 每轮推进模块文档时，都应检查是否新增了模块级问题。
+- 若问题只影响当前模块，优先记录在本文件。
+- 若问题已影响多个模块、共享契约或全局技术口径，应在本文件记录后，同时上报总控 Codex，并推动更新根目录 `OPEN_QUESTIONS.md`。
+- 当问题状态从 `open` 变为 `proposed-default` 或 `confirmed` 时，应同步回写受影响模块文档。
