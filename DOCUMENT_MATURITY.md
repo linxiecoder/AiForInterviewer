@@ -79,9 +79,9 @@
 
 | 模块 | 本轮整体成熟度 | 当前最低成熟度文档 | 变化说明 | 是否可进入子任务设计 |
 | --- | --- | --- | --- | --- |
-| M01 | L2 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md`（L1） | 从“待评估”回写为“需求初稿已成型，但设计包仍是骨架” | 否 |
-| M02 | L2 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md`（L1） | 从“待评估”回写为“需求初稿已成型，但设计包仍是骨架” | 否 |
-| M03 | L2 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md`（L1） | 从“待评估”回写为“需求初稿已成型，但设计包仍是骨架” | 否 |
+| M01 | L4 | 模块核心文档整体已提升到 L4，可评审但未达到稳定下游输入 | 模块需求、设计、API、schema、logic、依赖、任务索引和模块问题已形成可评审闭环；但根目录脚本/最小 CI、共享页面原语、列表查询状态与 locale 策略仍未全局冻结，因此暂不登记为 L5 | 否 |
+| M02 | L4 | 模块核心文档整体已提升到 L4，可评审但未达到稳定下游输入 | 身份模型、团队隔离、成员目录和权限矩阵已形成可评审闭环；但仍依赖 M01 未冻结的列表/i18n 共享契约，且存在 `/members` envelope、`display_name/displayName`、`teams.id/team_id` 等口径对齐问题，因此暂不登记为 L5 | 否 |
+| M03 | L4 | 模块核心文档整体已提升到 L4，可评审但未达到稳定下游输入 | 岗位、简历、版本、上传/转换/导出链路已形成成套可评审草案；但状态枚举、版本冲突策略、业务下载入口与共享下载契约的最终收口仍待下一轮完成，因此暂不登记为 L5 | 否 |
 | M04 | L1 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md`（L1） | 本轮确认仍停留在“需求初稿 + 模块骨架”阶段 | 否 |
 | M05 | L1 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md`（L1） | 本轮确认仍停留在“需求初稿 + 模块骨架”阶段 | 否 |
 | M06 | L1 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md`（L1） | 本轮确认仍停留在“需求初稿 + 模块骨架”阶段 | 否 |
@@ -92,11 +92,16 @@
 
 ### 5.2 当前低成熟度重点模块
 
-| 优先级 | 模块 | 当前整体判断 | 主要缺口 | 当前最低成熟度文档 | 是否可进入子任务设计 |
+> 本轮总控判断：
+> - 当前最低成熟度模块仍为 `M04-M10`，整体停留在 `L1`
+> - `M01-M03` 已从 `L2` 提升到 `L4`，不再属于“最低成熟度模块”
+> - 但下一轮仍应优先推进 `M01-M03`，原因是它们尚未形成稳定下游输入，且其共享契约直接决定 `M04-M06` 能否安全主写
+
+| 分类 | 模块 | 当前整体判断 | 推进结论 | 当前最低成熟度文档 | 是否可进入子任务设计 |
 | --- | --- | --- | --- | --- | --- |
-| P0 | M04、M05、M06 | 下游链路核心模块整体停留在 L1，仍缺稳定模块设计输入 | 字段级 API 契约、schema 关系、状态变化、异常回退与跨模块边界均未固化 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md` | 否 |
-| P0 | M07、M08、M09、M10 | 业务后段模块整体停留在 L1，且被共享评估口径和治理边界问题共同阻塞 | 评估规则、review 输入、弱项生命周期、管理台治理边界都未从“方向”收敛为契约 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md` | 否 |
-| P1 | M01、M02、M03 | 基础链路虽达到 L2，但设计包仍为骨架，尚不能向下游稳定供给 | monorepo、鉴权、渲染链与异步边界仍未冻结，导致设计包无法进入可评审 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md` | 否 |
+| 当前最低成熟度模块 | M04、M05、M06 | 下游链路核心模块整体停留在 L1，仍缺来自 `M01-M03` 的稳定模块设计输入 | 下一轮不建议直接作为主写窗口；先等待 `M01-M03` 收口到稳定下游输入 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md` | 否 |
+| 当前最低成熟度模块 | M07、M08、M09、M10 | 业务后段模块整体停留在 L1，且继续受共享评估口径、治理边界和上下文包契约阻塞 | 维持只读评审或延后处理，不建议在下一轮抢跑主写 | `MODULE_DESIGN.md` / `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md` | 否 |
+| 本轮显著提升模块 | M01、M02、M03 | 三个基础链路模块已形成可评审设计包，但仍未进入稳定下游输入状态 | 下一轮继续优先推进，但目标从“脱离骨架”改为“收口共享契约并争取进入 L5” | 模块核心文档已整体升到 L4；主要缺口转为共享契约与全局回写 | 否 |
 
 ## 6. 当前可作为下游输入的文档
 
@@ -105,14 +110,18 @@
 - `AGENTS.md`
 - `docs/DOC_GOVERNANCE.md`
 
-> 说明：本轮未发现任何模块级或子任务级文档达到稳定下游输入门槛；当前可稳定依赖的仍仅限全局治理入口。
+> 说明：
+> - 本轮确认 `M01/M02/M03` 已达到 `L5` 候选讨论区，但基于评审分歧与共享契约未完全冻结，暂不正式登记为“可作为下游输入”。
+> - 当前可稳定依赖的仍仅限全局治理入口；模块级文档尚需总控完成共享契约收口后再决定是否升入本节。
 
 ## 7. 当前可直接用于实施的子任务
 
 > 只有当 `SUBTASK_DESIGN.md >= L5` 且 `SUBTASK_IMPLEMENTATION.md >= L6` 时，子任务才能出现在这里。
 
 - 暂无。
-- 本轮 readiness 判断：所有模块均未达到 `MODULE_REQUIREMENTS / MODULE_DESIGN / MODULE_API_DESIGN / MODULE_SCHEMA_DESIGN / MODULE_LOGIC_DESIGN >= L5` 的上游门槛；所有 `SUBTASK_DESIGN.md` 与 `SUBTASK_IMPLEMENTATION.md` 也都仍停留在骨架级或接近骨架级，因此没有可进入实施准备或代码实施的子任务。
+- 本轮 readiness 判断：
+  - `M01/M02/M03` 已具备“接近子任务设计候选”的基础，但总控未正式登记其模块核心文档为 `L5`，因此仍不能开放子任务设计窗口。
+  - 所有 `SUBTASK_DESIGN.md` 与 `SUBTASK_IMPLEMENTATION.md` 仍停留在骨架级或接近骨架级，因此没有可进入实施准备或代码实施的子任务。
 
 ## 8. 判断规则
 
