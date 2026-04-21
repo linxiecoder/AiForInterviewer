@@ -35,11 +35,21 @@
 - 需求变更回写
 - 共享契约冲突处理
 - 子任务是否具备可实施条件的判断
+- 具体文档模板定义不在本文件重复维护；若模板已有独立文件或独立索引，应以模板文件为准。
 
 如果 `AGENTS.md` 与 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 看似冲突：
 - 目录结构、角色边界、全局总则以 `AGENTS.md` 为准
 - 文档治理细节、成熟度规则、进展规则、回写规则以 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 为准
 
+### 1.3.1 子任务模板规则
+
+子任务双文档模板统一定义在 [`docs/SUBTASK_DOC_TEMPLATES.md`](docs/SUBTASK_DOC_TEMPLATES.md)。
+
+当任务涉及以下任一事项时，除阅读 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 外，还应同时阅读 [`docs/SUBTASK_DOC_TEMPLATES.md`](docs/SUBTASK_DOC_TEMPLATES.md)：
+- 新建或完善 `SUBTASK_DESIGN.md`
+- 新建或完善 `SUBTASK_IMPLEMENTATION.md`
+- 判断子任务双文档字段是否完整
+- 检查设计文档与实施文档是否职责分离
 ### 1.4 Markdown 安全读写规则
 
 - 涉及 `.md` 文件的读取、编辑、重写或乱码修复时，优先使用全局 skill `markdown-safe-read-write`。
@@ -71,6 +81,8 @@
 - [AI 模拟面试 P1 待确认问题](OPEN_QUESTIONS.md)
 - [AI 模拟面试 P1 文档成熟度](DOCUMENT_MATURITY.md)
 - [AI 模拟面试 P1 文档进展](DOCUMENT_PROGRESS.md)
+- [AI 模拟面试 P1 文档治理规则](docs/DOC_GOVERNANCE.md)
+- [AI 模拟面试 P1 子任务双文档模板](docs/SUBTASK_DOC_TEMPLATES.md)
 
 ### 2.5 模块目录
 

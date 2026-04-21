@@ -47,7 +47,9 @@
 - 当前约束：
   - 组件内部禁止直接写死可见文案。
   - 后续模块若新增页面或组件，必须先补消息键，再写 UI。
-  - locale fallback、切换方式与命名空间拆分仍未冻结到 L5。
+  - locale 切换由 layout / App Shell 统一解析 active locale，下游页面和组件只消费，不自行定义切换策略。
+  - locale fallback 固定为“请求 locale -> `zh-CN` -> 记录缺失 key”。
+  - 消息命名空间只冻结“共享壳层一层、业务页面一层”的最小边界。
 
 ## 5. 壳层接口
 
@@ -70,9 +72,12 @@
   - 标题区。
   - 可选说明文案。
   - 可选主动作 / 次动作区域。
+- 配套默认冻结口径：
+  - 摘要区独立于 `PageHeader`，只承载 `status_badge`、`updated_at`、`summary_items` 与最小状态表达。
+  - `PageHeader` 与摘要区共同构成“最小共享页面原语”，但不扩张为完整设计系统 props catalog。
 - 未冻结项：
-  - 精确 props 结构。
-  - 摘要卡是否属于头部本体还是页面内容区。
+  - 精确 props / slot 结构。
+  - 文案采用 message key 还是 resolved copy 的代码级承载形式。
 
 ## 6. 列表原语接口
 
@@ -94,23 +99,32 @@
 
 - 负责：展示当前页、总页数和翻页入口。
 - 当前至少需要消费：当前页、总页数。
-- 未冻结项：翻页回调签名、URL 查询参数序列化规则。
+- 未冻结项：翻页回调具体签名、完整 props catalog 与高级筛选序列化规则。
 
 ## 7. 跨接口规则
 
 - HTTP API 统一挂在 `/api/v1` 前缀下。
 - 页面壳层与列表原语统一复用 i18n 入口，不允许自行维护独立文案来源。
 - 列表页优先遵循 `16.1 表格规范`：排序、筛选、服务端分页、图标操作列。
+- 列表查询默认采用共享 `ListQueryState`，并使用最小映射：
+  - `page -> page`
+  - `pageSize -> page_size`
+  - `sortBy -> sort`
+  - `sortDirection -> order`
+  - `filters.q -> q`
+  - `filters.status -> status`
+- 服务端列表接口默认复用统一分页骨架：`items`、`page`、`page_size`、`total`、`total_pages`。
+- 页面容器负责 state / URL / request adapter；`DataTable` / `FilterBar` / `Pagination` 不直接依赖 router。
 - M01 只冻结平台级接口方向，不在本轮定义业务模块的请求 DTO、鉴权头或错误码字典。
 
 ## 8. 当前缺口
 
-- `PageHeader`、列表查询状态和分页交互的精确 props / callback 仍未冻结。
+- 共享页面原语已形成默认冻结口径；列表查询状态也已形成最小共享映射，但 `PageHeader` 与列表原语的实现级 props / callback catalog 仍未冻结。
 - 根目录脚本与 CI 入口虽已有方向，但未收敛成可供子任务直接照搬的接口清单。
-- 文案命名空间与 locale fallback 仍缺精确约束。
+- 完整的 URL locale、持久化偏好、formatter 规则与分包加载策略仍未冻结。
 
 ## 9. 进入可作为下游输入前需要补充
 
-- 冻结 `PageHeader` 与 Dashboard 摘要区的最小接口边界。
-- 冻结列表查询状态与翻页交互的精确 contract。
+- 将 `PageHeader` 与 Dashboard 摘要区的最小接口边界固化为模块级默认共享页面原语口径。
+- 将列表查询状态的默认冻结口径继续吸收到实现级 prop / callback contract。
 - 冻结根目录最小验证命令矩阵与调用入口。

@@ -19,12 +19,17 @@
 
 ## 3. 当前状态
 
-- 当前阶段：阶段 3
-- 阶段目标：从“优先模块设计可评审”推进到“优先模块形成稳定下游输入”
+- 当前阶段：阶段 3 / 计划重构执行轮 `R-Refactor-01`
+- 阶段目标：从“优先模块设计可评审”切换到“共享契约冻结 + `M01/M02/M03` 任务重切”
+- 本轮轮次定位：
+  - 本轮不是普通推进轮，而是针对既有文档体系的计划重构执行轮。
+  - 当前实施计划不再继续按 11 个源任务直接执行，而是按“共享契约窗口 + 模块重切窗口 + 评审窗口”重新组织。
+  - 本轮不调整项目目录结构，不开启任何子任务实施窗口，也不开放子任务 Codex。
 - 本轮总控判断：
   - `M01/M02/M03` 已整体从 `L2` 提升到 `L4`
   - 当前最低成熟度模块仍为 `M04-M10`
-  - 下一轮仍应优先推进 `M01/M02/M03`，暂不切换到 `M04/M05/M06` 全面主写
+  - 当前最接近“可进入子任务设计候选”的顺序为：`M03` > `M02` > `M01`
+  - 本轮仍应优先推进 `M01/M02/M03`，但方式已从“普通模块推进”改为“共享契约冻结 + 模块重切”
 - 已完成事项：
   - 修复全局入口和总控文档乱码。
   - 建立根目录全局文档体系。
@@ -34,11 +39,13 @@
   - 完成 `M01`、`M02`、`M03` 首轮模块设计收敛，并把三者统一推进到可评审层级。
   - 明确 `M01` 的剩余缺口集中在平台共享契约，`M02` 的剩余缺口集中在对齐 M01 契约和清理命名漂移，`M03` 的剩余缺口集中在状态/冲突/下载映射等收口项。
   - 识别出需要上升为全局治理的问题：最小 CI 验证矩阵、共享页面原语、列表查询状态映射、locale 策略，以及 admin 成员管理归属。
+  - 将 `OQ-023` 维持为 `proposed-default`，作为 `M02/M10` 职责重切输入，而不是继续保持模块间摇摆状态。
   - 明确当前仍没有任何模块达到正式子任务设计准入条件。
 - 当前未完成事项：
-  - `M01` 的共享平台契约尚未总控收口到全局：根目录脚本/最小 CI、页面头部/摘要区、列表查询状态与 locale 策略仍未完全冻结。
-  - `M02` 仍需完成与 `M01` 共享契约的最终对齐，并修正 `display_name/displayName`、`teams.id/team_id`、`logout` 响应体与 `/members` envelope 的口径漂移。
-  - `M03` 虽已形成完整可评审草案，但仍未正式达到稳定下游输入。
+  - `M01` 的共享平台契约虽已完成本轮总控回写：`OQ-019`、`OQ-020`、`OQ-021`、`OQ-022` 已形成默认冻结候选并可作为继续推进输入；其中 `OQ-021` 已完成 `M01-M03` 的模块级默认口径吸收，但完整实现级细节与 `OQ-022` 的模块边界收口仍未定稿。
+  - `M02` 仍需完成与 `M01` 共享契约的最终对齐，吸收 `OQ-020` 的共享页面原语口径与 `OQ-022` 的默认 i18n 口径，并把 `OQ-023` 的职责重切稳定回写到模块边界。
+  - `M03` 虽已形成完整可评审草案，但仍未完成“候选面收缩”，尚不能由总控正式登记为稳定下游输入。
+  - `M04-M10` 当前仍停留在需求初稿 / 设计骨架阶段，不适合作为本轮主写对象。
   - 子任务设计与实施文档普遍尚未达到下游输入门槛，且多份 `SUBTASK_DESIGN.md` 仍残留父模块模板占位符。
   - 当前仍没有任何子任务可进入实施准备。
 
@@ -52,10 +59,13 @@
   - `OQ-014`
   - `OQ-017`、`OQ-018`
 - 当前仍阻塞 `M01/M02/M03` 正式升入 `L5` 的问题：
-  - `OQ-019` 根目录统一脚本与最小 CI 校验矩阵的冻结粒度仍未明确。
-  - `OQ-020` 共享页面原语（`PageHeader` / Dashboard 摘要区）的最小接口边界仍未明确。
-  - `OQ-021` 列表查询状态、分页交互与 URL / callback 映射仍未明确。
-  - `OQ-022` locale fallback、切换策略与消息命名空间仍未明确。
+  - `OQ-021` 已形成 `proposed-default`，并已完成 `M01-M03` 的模块级默认口径吸收，但仍需继续保留实现级细节风险位。
+- 本轮已具备默认冻结并可直接作为任务重切输入的问题：
+  - `OQ-019` 保持 `proposed-default`：冻结根目录脚本命名、最小 health check、验证入口类型与 API/Web 两类最小校验 lane，不扩张为完整流水线设计。
+  - `OQ-020` 保持 `proposed-default`：冻结最小共享页面原语边界；`PageHeader` 只承载标题/说明/主次动作，摘要区独立承载 `status_badge` / `updated_at` / `summary_items` 与最小状态表达，可作为 `M01` 收口、`M03` 页面设计收缩与 `M02` 页面承接口径对齐输入。
+  - `OQ-021` 保持 `proposed-default`：冻结共享 `ListQueryState`、query 映射、分页响应骨架与页面容器 adapter 职责；可作为 `M01-M03` 继续推进输入，但不扩张为完整实现级交互定稿。
+  - `OQ-022` 保持 `proposed-default`：冻结统一取词入口、locale seed、最小 fallback 规则与 namespace 边界，可作为 `M01` 共享 i18n 收口与 `M02` 模块重切输入，但不扩张为完整 i18n 架构定稿。
+  - `OQ-023` 保持 `proposed-default`，作为 `M02` 与后续治理模块的职责切分口径，不再单独占用共享契约冻结窗口。
 - 当前仍阻塞下一批模块深化设计的问题：
   - `OQ-012` 上下文包中的 source priority 与引用摘要规则仍未完整冻结，`M06` 只能先停留在评审准备。
   - `OQ-016` 薄弱项聚合 key、消减规则和停练规则仍未完整冻结，`M09` 仍不宜进入主写深化。
@@ -66,21 +76,66 @@
 ## 5. 当前并行文档完善计划
 
 > 本节由总控 Codex 每轮更新。任何“第一轮 / 当前轮”的并行计划都必须写在这里，而不能只停留在聊天中。
+>
+> 本轮（`R-Refactor-01` / 计划重构执行轮）收口结论：
+> - `OQ-019~OQ-022` 已全部完成 `proposed-default` 回写，且不再回退为 `open`
+> - `M02` 已完成第一轮职责重切，`M03` 已完成第一轮旧入口清理与微任务重切
+> - 下一轮不再重复讨论“是否冻结 `OQ-019~OQ-022`”，而是转向“补齐残留共享契约 + 同步全局索引 + 收紧模块 readiness”
+> - 下一轮建议保持 6 个窗口并行：总控 / 全局问题升级 x1，`M01` 共享契约收口 x2，`M02 / M03` 模块收紧 x2，评审 x1
+> - 下一轮仍不开放任何子任务 Codex
 
-### 5.1 本轮总目标
-- 已完成：
-  - 将 `M01/M02/M03` 从“需求初稿 + 设计骨架”推进到“模块设计可评审”
-  - 收到 `M01`、`M02` 模块回报与评审回报，并据此识别出应上升为全局的问题
-- 本轮未完成：
-  - `M01/M02/M03` 尚未正式形成稳定下游输入
-  - `M04/M05/M06` 仍不具备全面主写条件
-- 下一轮目标：
-  - 先收口 `M01/M02/M03` 的共享契约与全局对齐问题，再决定是否开放 `M04/M05/M06`
+### 5.1 当前阻塞项变化
 
-### 5.2 本轮任务包
-#### 任务包 A：M01 平台共享契约全局化收口
+- 已不再构成本轮主阻塞：
+  - `OQ-019`
+  - `OQ-020`
+  - `OQ-021`
+  - `OQ-022`
+- 仍需下一轮继续处理的阻塞：
+  - `OQ-024`：旧 `ST02_* / ST03_*` 目录的全局映射与退役口径
+  - `OQ-025`：`jobs.requirement_items_json` 的最小输入契约
+  - `M01` 共享下载 / 对象存储口径与 shared adapter 实现级边界
+  - `M02` 页面 adapter readiness 与 `MODULE_API_DESIGN.md` 的最后收口
+  - `M03` 岗位链输入契约与上传 / 导出链的上游依赖
+
+### 5.2 下一轮任务包
+
+#### 任务包 GC-01：旧入口退役与全局问题升级
+- 任务包名称：旧入口退役与全局问题升级
+- 负责角色：总控 Codex
+- 负责范围：把 `MQ-207` + `MQ-306` 合并升级为 `OQ-024`，把 `MQ-307` 升级为 `OQ-025`，并同步全局索引与 readiness 口径。
+- 允许修改的文档：
+  - `OPEN_QUESTIONS.md`
+  - `TASK_INDEX.md`
+  - `MODULE_INDEX.md`
+  - `DOCUMENT_PROGRESS.md`
+  - `DOCUMENT_MATURITY.md`
+  - `EXECUTION_LOG.md`
+- 禁止修改的文档：
+  - `docs/modules/**`
+  - 所有 `sub_modules/**`
+- 依赖的上游文档：
+  - `AGENTS.md`
+  - `docs/DOC_GOVERNANCE.md`
+  - `docs/modules/M02-identity-and-team/MODULE_OPEN_QUESTIONS.md`
+  - `docs/modules/M02-identity-and-team/MODULE_TASK_INDEX.md`
+  - `docs/modules/M03-jobs-resumes-and-documents/MODULE_OPEN_QUESTIONS.md`
+  - `docs/modules/M03-jobs-resumes-and-documents/MODULE_TASK_INDEX.md`
+  - 评审窗口回报
+- 目标成熟度：
+  - 让全局状态文档与模块重切结果重新对齐，避免下一轮继续按错误入口开窗。
+- 完成标准：
+  - `OQ-024`、`OQ-025` 在根目录问题表完成登记。
+  - `TASK_INDEX.md` 不再把旧 `ST02_* / ST03_*` 作为可直开入口。
+  - 下一轮窗口编排与 readiness 口径完成同步。
+- 若发现需求不清时的处理规则：
+  - 不在总控层直接新建或重命名子任务目录。
+  - 只登记保守映射策略与未决点。
+
+#### 任务包 SC-05：`M01` 共享下载 / 对象存储口径收口
+- 任务包名称：`M01` 共享下载 / 对象存储口径收口
 - 负责角色：模块 Codex
-- 负责范围：继续收口 `M01` 的模块级共享平台契约，并把影响多模块的剩余缺口与总控口径对齐。
+- 负责范围：冻结业务下载入口到共享下载网关、对象引用面与最小对象存储边界，给 `M03` 上传 / 导出链提供稳定上游输入。
 - 允许修改的文档：
   - `docs/modules/M01-foundation-and-platform/MODULE_REQUIREMENTS.md`
   - `docs/modules/M01-foundation-and-platform/MODULE_DESIGN.md`
@@ -90,6 +145,7 @@
   - `docs/modules/M01-foundation-and-platform/MODULE_DEPENDENCIES.md`
   - `docs/modules/M01-foundation-and-platform/MODULE_TASK_INDEX.md`
   - `docs/modules/M01-foundation-and-platform/MODULE_OPEN_QUESTIONS.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_EXECUTION_LOG.md`
 - 禁止修改的文档：
   - 所有根目录全局状态文档
   - `docs/modules/M01-foundation-and-platform/sub_modules/**`
@@ -97,37 +153,65 @@
 - 依赖的上游文档：
   - `AGENTS.md`
   - `docs/DOC_GOVERNANCE.md`
-  - `PLAN_LATEST.md`
-  - `TASK_INDEX.md`
+  - `OPEN_QUESTIONS.md`
+  - `TECHNICAL_STANDARDS.md`
+  - `docs/modules/M03-jobs-resumes-and-documents/**`
+- 目标成熟度：
+  - 维持 `M01` 为高 `L4`，但把“共享下载 / 对象存储”补到可供 `M03` 引用的上游输入程度。
+- 完成标准：
+  - 业务下载入口与共享下载网关的映射被写清。
+  - 对象引用面、受理边界与明确不做的部分被写清。
+  - `M03` 依赖文档可直接引用该口径，而不是继续口头引用。
+- 若发现需求不清时的处理规则：
+  - 不扩张为完整存储平台设计。
+  - 只冻结最小共享边界与未决风险。
+
+#### 任务包 SC-06：`M01` shared adapter 边界补写
+- 任务包名称：`M01` shared adapter 边界补写
+- 负责角色：模块 Codex
+- 负责范围：在 `OQ-020~OQ-022` 已完成默认冻结的前提下，把页面原语、列表 adapter、i18n 消费边界补写到 `M01` 模块文档。
+- 允许修改的文档：
+  - `docs/modules/M01-foundation-and-platform/MODULE_REQUIREMENTS.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_DESIGN.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_API_DESIGN.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_LOGIC_DESIGN.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_DEPENDENCIES.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_TASK_INDEX.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_OPEN_QUESTIONS.md`
+  - `docs/modules/M01-foundation-and-platform/MODULE_EXECUTION_LOG.md`
+- 禁止修改的文档：
+  - 所有根目录全局状态文档
+  - `docs/modules/M01-foundation-and-platform/sub_modules/**`
+  - 其他模块目录
+- 依赖的上游文档：
+  - `AGENTS.md`
+  - `docs/DOC_GOVERNANCE.md`
+  - `OPEN_QUESTIONS.md`
   - `TECHNICAL_STANDARDS.md`
   - `DESIGN_DECISIONS.md`
-  - `OPEN_QUESTIONS.md`
-- 本轮已冻结输入：
-  - `OQ-001` monorepo：`apps/web` + `apps/api` + `infra`
-  - `OQ-002` 首轮只建立最小运行时、测试和 CI 基线
-  - `OQ-003` 视觉规范首轮只沉淀壳层、头部、列表原语与基础页面样式
+  - `docs/modules/M02-identity-and-team/**`
+  - `docs/modules/M03-jobs-resumes-and-documents/**`
 - 目标成熟度：
-  - 模块核心文档从高 `L4` 收口到可判定是否升入 `L5`
+  - 维持 `M01` 高 `L4`，并把默认冻结口径补成可审计、可被模块下游复用的 shared adapter 输入。
 - 完成标准：
-  - `OQ-019~OQ-022` 对应的模块级表达与全局口径一致。
-  - 页面头部/摘要区、列表查询状态与 locale 策略不再只停留在方向级描述。
-  - 是否具备 `L5` 候选条件可以由总控用统一尺子判断。
+  - 页面容器、request adapter、shared primitive 与 i18n 消费边界被写清。
+  - 不再把 `OQ-020~OQ-022` 的实现级细节停留在总控口径。
+  - 仍明确本轮不开放 `M01` 子任务窗口。
 - 若发现需求不清时的处理规则：
-  - 不补关键契约。
-  - 先写入 `MODULE_OPEN_QUESTIONS.md`，再向总控回报。
+  - 不扩张为完整设计系统或完整 i18n 架构。
+  - 只补共享边界，不补具体实现。
 
-#### 任务包 B：M02 鉴权与成员目录契约对齐收口
+#### 任务包 MR-03：`M02` readiness 收紧与入口映射同步
+- 任务包名称：`M02` readiness 收紧与入口映射同步
 - 负责角色：模块 Codex
-- 负责范围：在不扩大模块边界的前提下，修复 `M02` 与 `M01`、`M10` 相关的共享契约漂移。
+- 负责范围：继续收紧 `M02` 的 `MODULE_API_DESIGN.md`、同步 `OQ-024` 的旧入口映射口径，并把页面类微任务与可先开的非页面微任务明确分离。
 - 允许修改的文档：
-  - `docs/modules/M02-identity-and-team/MODULE_REQUIREMENTS.md`
   - `docs/modules/M02-identity-and-team/MODULE_DESIGN.md`
   - `docs/modules/M02-identity-and-team/MODULE_API_DESIGN.md`
-  - `docs/modules/M02-identity-and-team/MODULE_SCHEMA_DESIGN.md`
-  - `docs/modules/M02-identity-and-team/MODULE_LOGIC_DESIGN.md`
   - `docs/modules/M02-identity-and-team/MODULE_DEPENDENCIES.md`
   - `docs/modules/M02-identity-and-team/MODULE_TASK_INDEX.md`
   - `docs/modules/M02-identity-and-team/MODULE_OPEN_QUESTIONS.md`
+  - `docs/modules/M02-identity-and-team/MODULE_EXECUTION_LOG.md`
 - 禁止修改的文档：
   - 所有根目录全局状态文档
   - `docs/modules/M02-identity-and-team/sub_modules/**`
@@ -135,41 +219,31 @@
 - 依赖的上游文档：
   - `AGENTS.md`
   - `docs/DOC_GOVERNANCE.md`
-  - `PLAN_LATEST.md`
-  - `TECHNICAL_STANDARDS.md`
-  - `DESIGN_DECISIONS.md`
   - `OPEN_QUESTIONS.md`
+  - `MODULE_INDEX.md`
   - `docs/modules/M01-foundation-and-platform/**`
-- 本轮已冻结输入：
-  - `OQ-004` P1 鉴权默认采用固定 Bearer token
-  - `OQ-005` 权限矩阵首轮只覆盖 P1 页面与 API，不扩展未来多租户治理
-- 本轮必须显式处理的对齐项：
-  - `/members` 列表 envelope / 分页参数与 `M01` 列表原语的关系
-  - `display_name / displayName` 命名一致性
-  - `teams.id / team_id` 主键与外键表述一致性
-  - `logout` 成功响应语义
 - 目标成熟度：
-  - 模块核心文档从高 `L4` 收口到可判定是否升入 `L5`
+  - 把 `M02` 从“高 `L4` 可评审”推进到“接近 `L5` 候选但仍未放行页面面”的清晰状态。
 - 完成标准：
-  - 模块内不再同时存在“已完全 L5”与“仍依赖 M01 未冻结契约”两套叙事。
-  - `MQ-203` 的跨模块职责边界与全局 `OPEN_QUESTIONS.md` 对齐。
-  - 模块是否可进入 `L5` 候选有清晰、可审计的依据。
+  - `MODULE_API_DESIGN.md` 的最低位原因被进一步缩小到可审计范围。
+  - `MT02_05/MT02_06` 被明确保留在后置页面队列，不被误判为可直开。
+  - 旧 `ST02_*` 入口的历史容器口径与新微任务蓝本映射被写清。
 - 若发现需求不清时的处理规则：
-  - 不补关键契约。
-  - 先写入 `MODULE_OPEN_QUESTIONS.md`，再向总控回报。
+  - 不直接去补写子任务双文档。
+  - 不把页面范围重新并回 backend / policy 任务。
 
-#### 任务包 C：M03 从可评审草案收口到稳定候选
+#### 任务包 MR-04：`M03` 岗位链再切分与输入契约上提
+- 任务包名称：`M03` 岗位链再切分与输入契约上提
 - 负责角色：模块 Codex
-- 负责范围：在不回退既有设计的前提下，把 `M03` 的剩余缺口压缩到可由总控判断是否进入 `L5` 候选。
+- 负责范围：进一步拆细 `MT03_02`、`MT03_05`，并把 `jobs.requirement_items_json` 的最小输入契约上提为可供总控冻结的问题输入。
 - 允许修改的文档：
   - `docs/modules/M03-jobs-resumes-and-documents/MODULE_REQUIREMENTS.md`
   - `docs/modules/M03-jobs-resumes-and-documents/MODULE_DESIGN.md`
-  - `docs/modules/M03-jobs-resumes-and-documents/MODULE_API_DESIGN.md`
   - `docs/modules/M03-jobs-resumes-and-documents/MODULE_SCHEMA_DESIGN.md`
-  - `docs/modules/M03-jobs-resumes-and-documents/MODULE_LOGIC_DESIGN.md`
   - `docs/modules/M03-jobs-resumes-and-documents/MODULE_DEPENDENCIES.md`
   - `docs/modules/M03-jobs-resumes-and-documents/MODULE_TASK_INDEX.md`
   - `docs/modules/M03-jobs-resumes-and-documents/MODULE_OPEN_QUESTIONS.md`
+  - `docs/modules/M03-jobs-resumes-and-documents/MODULE_EXECUTION_LOG.md`
 - 禁止修改的文档：
   - 所有根目录全局状态文档
   - `docs/modules/M03-jobs-resumes-and-documents/sub_modules/**`
@@ -177,27 +251,25 @@
 - 依赖的上游文档：
   - `AGENTS.md`
   - `docs/DOC_GOVERNANCE.md`
-  - `PLAN_LATEST.md`
-  - `TECHNICAL_STANDARDS.md`
-  - `DESIGN_DECISIONS.md`
   - `OPEN_QUESTIONS.md`
+  - `MODULE_INDEX.md`
   - `docs/modules/M01-foundation-and-platform/**`
-  - `docs/modules/M02-identity-and-team/**`
-- 本轮已冻结输入：
-  - `OQ-006` Markdown 预览与导出共用同一渲染链
-  - `OQ-007` 上传可同步入库，转换与导出走异步任务
+  - `docs/modules/M04-match-analysis-and-evidence/**`
+  - `docs/modules/M06-simulated-interview-and-context/**`
 - 目标成熟度：
-  - 模块核心文档从 `L4` 收口到可判定是否升入 `L5`
+  - 维持 `M03` 为 `L4`，但把“只有简历聚合根链局部接近候选”的判断写实，并为 `OQ-025` 提供可冻结输入。
 - 完成标准：
-  - 状态枚举、版本冲突策略、下载入口映射仍未冻结的部分被清楚隔离到子任务层或后续模块，而不是继续悬在模块层。
-  - 输出给 `M04/M05/M06` 的可依赖内容与不可依赖内容被显式列出。
+  - `jobs.requirement_items_json` 的最小结构候选、空值语义、排序规则与写入责任被整理成可升级输入。
+  - `MT03_02`、`MT03_05` 的边界继续收紧，不再混合读模型与页面 adapter。
+  - 上传 / 导出链仍明确受 `M01` 共享下载口径约束，不被误判为可并行直开。
 - 若发现需求不清时的处理规则：
-  - 不补关键契约。
-  - 先写入 `MODULE_OPEN_QUESTIONS.md`，再向总控回报。
+  - 不允许下游模块先发明 JSON 契约再回填上游。
+  - 不直接开放任何 `ST03_*` 或新微任务设计窗口。
 
-#### 任务包 D：评审 / 总控共享契约校准
+#### 任务包 RV-02：下一轮 readiness 交叉复核
+- 任务包名称：下一轮 readiness 交叉复核
 - 负责角色：评审 Codex
-- 负责范围：只读评审 `M01-M03` 与根目录状态文档之间的共享契约一致性，输出“哪些问题必须先全局收口”。
+- 负责范围：交叉复核 `GC-01`、`SC-05`、`SC-06`、`MR-03`、`MR-04` 的输出，确认 `M01/M02/M03` 的真实 readiness 与下一轮是否仍应关闭子任务窗口。
 - 允许修改的文档：
   - 无。本任务包只读评审，产出直接回报总控。
 - 禁止修改的文档：
@@ -206,20 +278,22 @@
 - 依赖的上游文档：
   - `AGENTS.md`
   - `docs/DOC_GOVERNANCE.md`
+  - `DOCUMENT_MATURITY.md`
+  - `DOCUMENT_PROGRESS.md`
+  - `MODULE_INDEX.md`
   - `OPEN_QUESTIONS.md`
-  - `TECHNICAL_STANDARDS.md`
-  - `DESIGN_DECISIONS.md`
   - `docs/modules/M01-foundation-and-platform/**`
   - `docs/modules/M02-identity-and-team/**`
   - `docs/modules/M03-jobs-resumes-and-documents/**`
 - 目标成熟度：
-  - 不直接提升模块成熟度，目标是降低“模块自评”和“总控登记”之间的口径差。
+  - 不直接提升成熟度，目标是防止模块自评与总控登记再次分叉。
 - 完成标准：
-  - 明确哪些模块级问题必须上升到根目录 `OPEN_QUESTIONS.md`。
-  - 明确 `M01/M02/M03` 哪些剩余缺口属于总控收口、哪些仍应由模块继续写清。
+  - 明确 `M02` 是否已进入真正的 `L5` 候选区间。
+  - 明确 `M03` 是否仍只能登记为“局部接近候选”。
+  - 明确下一轮是否依然不得开启第一批子任务窗口。
 - 若发现需求不清时的处理规则：
   - 不补关键契约。
-  - 只记录到评审回报，由总控决定是否升级到全局 `OPEN_QUESTIONS.md`。
+  - 只记录风险点、保守结论和建议总控动作。
 
 ## 6. 当前模块推进判断
 
@@ -227,9 +301,9 @@
 
 | 模块 | 当前主阶段 | 当前判断 | 是否可进入子任务设计 | 主要原因 |
 | --- | --- | --- | --- | --- |
-| M01 | 模块设计可评审 | 整体高 `L4`，下一轮仍应优先推进收口 | 否 | 根目录脚本/最小 CI、共享页面原语、列表查询状态与 locale 契约未全局冻结 |
-| M02 | 模块设计可评审 | 整体高 `L4`，下一轮仍应优先推进收口 | 否 | 仍依赖 `M01` 未冻结的列表/i18n 契约，且存在 DTO / schema / 响应语义漂移 |
-| M03 | 模块设计可评审 | 整体 `L4`，下一轮仍应优先推进收口 | 否 | 状态枚举、版本冲突策略与下载入口映射仍待收口；尚未正式形成稳定下游输入 |
+| M01 | 共享契约收口 / 上游稳定化 | 整体高 `L4`，但当前仍不是 `L5` 候选优先项 | 否 | `OQ-019~OQ-022` 已全部形成 `proposed-default`，下一步瓶颈转为共享下载 / 对象存储口径与 shared adapter 实现级边界 |
+| M02 | 模块重切 / `L5` 候选前复核 | 整体高 `L4`，是当前最接近整体 `L5` 候选的模块，但页面面仍未 ready | 否 | `MODULE_API_DESIGN.md` 仍是最低位；`MT02_05/MT02_06` 继续受 `OQ-020/OQ-021/OQ-022` 吸收完成度与 `OQ-024` 入口映射约束 |
+| M03 | 模块重切 / 局部候选收紧 | 整体 `L4`，只有简历聚合根链局部接近候选，模块整体不 ready | 否 | `jobs.requirement_items_json` 仍缺最小输入契约；岗位链受 `OQ-025` 阻塞，上传 / 导出链仍依赖 `M01` 共享下载口径 |
 | M04 | 需求初稿 + 模块骨架 | 整体 L1，下一轮不建议作为主写窗口 | 否 | `M03` 尚未正式形成稳定输入，且 `OQ-008` 之外仍缺上游边界 |
 | M05 | 需求初稿 + 模块骨架 | 整体 L1，下一轮不建议作为主写窗口 | 否 | `OQ-009/OQ-010` 仍 open，且依赖 `M03/M04` |
 | M06 | 需求初稿 + 模块骨架 | 整体 L1，下一轮不建议作为主写窗口 | 否 | `OQ-012` 仍 open，且依赖 `M03-M05` 设计输入 |
@@ -240,11 +314,11 @@
 
 ## 7. 下一轮建议
 
-- 仍优先开启 `M01`、`M02`、`M03` 三个模块窗口，但目标从“脱离骨架”改为“收口共享契约、争取进入 L5 候选”。
-- 另开 1 个评审 / 总控校准窗口，专门处理共享契约上升全局的问题，不再继续做宽泛的 `M04-M10` 只读评审。
-- 暂不建议把主写窗口切到 `M04/M05/M06`；最多只允许做准备性阅读，不建议全面改写。
-- 本轮仍不要开启任何子模块 Codex；所有 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 目前都还不具备细化条件。
-- 在 `M01/M02/M03` 正式升入 `L5` 前，先统一清理 `SUBTASK_DESIGN.md` 中残留的父模块模板占位符，并补真实模块执行日志。
+- 下一轮建议直接按 6 个窗口执行：`GC-01`、`SC-05`、`SC-06`、`MR-03`、`MR-04`、`RV-02`。
+- `OQ-019~OQ-022` 已完成默认冻结回写，下一轮不再重复开单问题冻结窗口；优先级转移到 `OQ-024`、`OQ-025` 与 `M01` 共享下载 / 对象存储口径。
+- `M02` 可以继续按“接近 `L5` 候选但页面面未 ready”推进；`M03` 只能按“局部接近候选”推进，不能再用“模块整体最接近候选”的说法放宽判断。
+- 暂不建议把主写窗口切到 `M04/M05/M06`；这些模块仍应以准备性阅读或只读评审为主。
+- 下一轮仍不建议开启任何子任务 Codex；至少要等 `OQ-024` 完成全局映射、`OQ-025` 至少形成可下发口径、`M01` 共享下载 / 对象存储口径稳定并通过 `RV-02` 复核后再判断。
 
 ## 8. 本轮收口要求
 

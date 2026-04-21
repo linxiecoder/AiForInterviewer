@@ -3,7 +3,7 @@
 ## 1. 文档定位
 
 - 本文档用于沉淀本模块涉及的领域对象、关系、约束和生命周期字段。
-- 当前状态：可评审草案，字段面以源计划中的最低字段面为基础，不额外发明未冻结共享契约。
+- 当前状态：稳定候选，字段面以源计划中的最低字段面为基础，已经能够支撑子任务设计继续细化。
 - 本模块只定义 M03 自有对象；`job_resume_bindings`、`job_resume_match_analyses` 等对象属于 M04。
 
 ## 2. 核心对象
@@ -52,7 +52,7 @@
   - `deleted_at`
   - `deleted_by`
 - 说明：
-  - `requirement_items_json` 是 M04 / M06 的稳定输入之一。
+  - `requirement_items_json` 被 M04 / M06 直接消费，但当前只冻结“结构化要求集合”这一语义；最小 item 结构、空值语义和排序规则仍待 `MQ-307` 收口。
   - `latest_match_analysis_id` 只是跨模块引用，不代表 M03 管理分析对象本身。
 
 ### 2.3 `resumes`
@@ -202,12 +202,22 @@
 - `resume_export_records`
   - 反映导出任务的真实状态，不允许“前端认为成功但无产物对象”。
 
+### 5.1 模块级冻结字段与延后细化字段
+
+| 对象 | 模块级已冻结 | 延后到子任务级细化 |
+| --- | --- | --- |
+| `jobs` | 最小字段面、`requirement_items_json` 作为下游稳定输入、必须存在可筛选 `status` | `status` 精确枚举值与页面侧 badge 映射 |
+| `resumes` | `source_type`、`original_pdf_object_id` / `current_document_id` 的可空语义、当前版本指针规则 | `status` 精确枚举值、列表摘要字段投影 |
+| `resume_documents` | `version_no` 唯一、`markdown_content` 为事实正文、历史版本不可变 | `summary_json` 结构、`save_reason` 枚举值 |
+| `resume_conversion_logs` | 状态日志是上传后异步转换事实来源、失败必须有 `error_message` | 错误分类细粒度、前端展示文案映射 |
+| `resume_export_records` | 导出基于具体 `document_id` 快照、成功必须有 `output_object_id` | 导出类型扩展与重试 UI 投影 |
+
 ## 6. 对下游模块的稳定输出
 
 - 面向 M04：
   - `jobs.id`
   - `jobs.jd_markdown`
-  - `jobs.requirement_items_json`
+  - `jobs.requirement_items_json`（当前仅字段级可引用，item-level JSON contract 仍待 `MQ-307`）
   - `resumes.id`
   - `resumes.current_document_id`
   - `resume_documents.markdown_content`
@@ -222,5 +232,6 @@
 ## 7. 当前缺口
 
 - `summary_json`、`save_reason` 与状态字段的细化枚举留待子任务评审，不再阻塞本轮模块推进。
+- `jobs.requirement_items_json` 的最小 item 结构与责任边界仍未冻结；在 `MQ-307` 收口前，它不能被宣称为完整 `L5` 级稳定契约。
 - 历史版本恢复是否需要单独字段或复用新增版本语义，留待 `ST03_02` 继续细化。
 - 文件清理与过期策略依赖基础设施与治理模块，本轮不在 M03 内单独发明。

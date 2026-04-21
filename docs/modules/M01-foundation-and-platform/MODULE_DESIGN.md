@@ -51,7 +51,8 @@
 
 - `AppShell` 负责左侧导航、主内容区和顶层布局骨架。
 - `PageHeader` 负责标题、描述与操作区的统一头部结构。
-- Dashboard 页面只提供首个可复用的“摘要区 + 主内容区”基线，不沉淀业务卡片细节。
+- 默认冻结口径采用方案 B：`PageHeader` 只承载标题、可选说明、主动作与次动作；摘要区独立承载 `status_badge`、`updated_at` 与 `summary_items`，不并入正文卡片体系。
+- Dashboard 页面只提供首个可复用的“摘要区 + 主内容区”基线，不沉淀业务卡片细节，也不在本轮扩张为完整设计系统 props catalog。
 - `DataTable`、`FilterBar`、`Pagination` 负责列表页的统一交互骨架，业务模块只补字段和数据来源。
 - 训练中心不进入一级导航，但保留被工作台和详情页引出的能力入口约束。
 
@@ -70,7 +71,7 @@
 | `EnvTemplateEntry` | 表达安全占位环境变量模板 | Workspace | 只承载键名、说明和本地占位值 |
 | `HealthCheckResponse` | 表达最小存活确认 | API | 当前只冻结 `status: ok` |
 | `ShellNavigationItem` | 表达一级导航项 | Web | 对齐页面信息架构中的一级导航 |
-| `PageHeaderModel` | 表达统一页面头部 | Web | 负责标题、说明和动作区，精确 props 仍待后续收敛 |
+| `PageHeaderModel` | 表达统一页面头部 | Web | 默认冻结到标题、说明和动作区语义；摘要区作为独立对象承接，精确 props 命名仍待后续收敛 |
 | `ListViewState` | 表达筛选、排序、分页和状态容器 | Web | 为后续业务列表页复用 |
 | `LocaleMessageBundle` | 表达统一文案资源 | Governance | 页面与组件均通过集中入口取词 |
 | `VerificationEntry` | 表达最小测试 / CI 入口 | Governance | 用于定义“现在至少如何验证” |
@@ -126,9 +127,9 @@
 
 ## 10. 进入 L5 前仍需补充
 
-- `PageHeaderModel`、Dashboard 摘要区和列表查询状态的精确接口尚未冻结。
+- `PageHeaderModel` 与 Dashboard 摘要区已形成最小共享页面原语默认冻结口径，但精确 props 命名与列表查询状态接口仍未冻结。
 - 根目录脚本与 CI 最小矩阵尚未细化到命令级和通过标准级。
-- locale fallback、切换策略和消息命名空间仍停留在方向级，不足以直接安全拆子任务设计。
+- locale fallback、切换策略和消息命名空间已形成最小共享默认口径，但完整 i18n 架构仍未定稿，不足以直接安全拆子任务设计。
 
 ## 11. 关联文档
 

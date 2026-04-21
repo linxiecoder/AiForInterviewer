@@ -43,7 +43,7 @@
   - 本模块的关键开放问题已登记，且未擅自升级为全局 confirmed 契约。
 - 进入本模块子任务设计前，至少需要：
   - `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` 至少达到 `L5`。
-  - `PageHeader`、Dashboard 摘要区、列表查询状态和最小验证矩阵已冻结到可下游引用。
+  - `PageHeader`、Dashboard 摘要区、列表查询状态、最小验证矩阵以及 i18n 最小共享规则已冻结到可下游引用。
 - 进入本模块子任务实施前，至少需要：
   - 相关 SUBTASK_DESIGN.md 达到可作为下游输入。
   - 对应 SUBTASK_IMPLEMENTATION.md 达到可直接用于实施。

@@ -22,7 +22,7 @@
 | 字段 | 类型建议 | 约束 / 说明 |
 | --- | --- | --- |
 | `id` | `uuid` / `string` | 主键 |
-| `team_id` | `uuid` / `string` | 与 `id` 对齐，保留为团队作用域通用键 |
+| `team_id` | `uuid` / `string` | 逻辑团队键，值必须与 `id` 相同；用于与全局 `team_id` 约定对齐，不引入第二套团队身份 |
 | `display_name` | `string` | 团队展示名 |
 | `team_key` | `string` | 对外可读业务键，需唯一 |
 | `status` | `enum-like string` | `P1` 只冻结 `active`；其他状态值不进入当前模块契约 |
@@ -78,10 +78,23 @@
 | `role` | 角色 |
 | `status` | 状态 |
 
+### 4.3 命名映射规范
+
+| 存储层字段 | 接口 / 前端字段 | 说明 |
+| --- | --- | --- |
+| `display_name` | `displayName` | 由序列化层完成映射 |
+| `team_id` | `teamId` | 统一表达团队作用域键 |
+| `last_login_at` | `lastLoginAt` | 若对外暴露，沿用相同映射原则 |
+
+- 数据库与 ORM 模型保持 `snake_case`。
+- JSON payload、前端状态与页面 props 保持 `camelCase`。
+- 不允许在同一层同时混用 `display_name` 与 `displayName`，或把 `team_id` 与 `teamId` 当作不同语义字段。
+
 ## 5. 关系与约束
 
 ### 5.1 关系
 
+- `teams.team_id = teams.id`
 - `users.team_id -> teams.id`
 - 当前 `P1` 不引入 `many-to-many` 团队成员关系。
 - 团队成员身份直接由 `users.team_id + users.role` 表达。
@@ -143,4 +156,7 @@
 ## 9. 当前缺口
 
 - 固定 token 与用户身份的映射仍是逻辑层问题，不属于本 schema 文档直接定稿范围。
-- 成员目录已冻结为团队内基础目录，当前安全投影只保留 `id`、`display_name`、`role`、`status`；若后续扩展字段需单独评审。
+- schema 层的命名与主键漂移已在本轮收口：
+  - 存储层使用 `display_name` / `team_id`
+  - `teams.id` 与 `teams.team_id(=id)` 的关系已明确
+- 剩余阻塞来自共享列表 / i18n 契约，而不是 schema 本身的字段歧义。

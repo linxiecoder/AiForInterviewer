@@ -3,7 +3,7 @@
 ## 1. 文档定位
 
 - 本文档用于沉淀本模块的接口清单与契约方向。
-- 当前状态：可评审草案，重点明确接口边界、同步/异步职责和跨模块归属。
+- 当前状态：稳定候选，重点明确接口边界、同步/异步职责、最小查询键和跨模块归属。
 - 鉴权基线引用 M02：
   - 所有接口默认要求已登录用户。
   - 访问控制遵循 `401 / 403 / 404` 与 `team_id` 隔离规则。
@@ -117,6 +117,42 @@
   - 导出同步受理、生成异步。
   - 异步结果通过日志 / 记录接口查询，不通过长轮询阻塞创建接口。
 
+### 5.1 已冻结的列表查询键
+- 已与 `OQ-021` 的 `proposed-default` 口径对齐；M03 模块级冻结的服务端查询键集合为：
+  - `page`
+  - `page_size`
+  - `q`
+  - `status`
+  - `sort`
+  - `order`
+  - `updated_after`
+  - `updated_before`
+- 模块级当前冻结“服务端查询键”“分页响应骨架”以及与全局默认口径一致的最小 URL / request 映射；不冻结前端实现级 callback 签名与高级筛选双向序列化细节。
+
+### 5.2 已冻结的最小响应骨架
+- 列表集合统一复用分页骨架：`items`、`page`、`page_size`、`total`、`total_pages`。
+- `GET /api/v1/jobs`
+  - 每个列表项至少返回：`id`、`company`、`title`、`status`、`updated_at`
+- `GET /api/v1/jobs/{job_id}`
+  - 至少返回：岗位基础信息、`jd_markdown`、`requirement_items_json`、必要的跨模块引用字段
+- `GET /api/v1/resumes`
+  - 每个列表项至少返回：`id`、`name`、`source_type`、`status`、`current_document_id`、`updated_at`
+- `GET /api/v1/resumes/{resume_id}`
+  - 至少返回：简历基础信息、当前版本摘要、`original_pdf_object_id`、最近转换状态、最近导出状态
+- `POST /api/v1/resumes/upload-pdf`
+  - 至少返回：`resume_id`、`conversion_log_id` 与当前受理状态摘要
+- `POST /api/v1/resumes/{resume_id}/export-pdf`
+  - 至少返回：`export_record_id`、目标文档引用与当前受理状态摘要
+
+### 5.3 已冻结的下载入口职责
+- `GET /api/v1/resumes/{resume_id}/original-pdf`
+  - 保留业务语义定位入口，用于从“简历”上下文访问原始 PDF。
+- `GET /api/v1/storage-objects/{object_id}/download`
+  - 仍是实际文件下载能力的唯一共享入口。
+- 模块级冻结原则：
+  - M03 不重复发明第二套下载权限逻辑。
+  - `ST03_03` 只需把业务入口正确投影到共享下载能力，而不是重写共享网关。
+
 ## 6. 错误语义
 
 - 鉴权失败：遵循 M02 的 `401 / 403 / 404` 基线。
@@ -141,3 +177,4 @@
 - DTO 字段命名的 camelCase / snake_case 细节尚未在模块内冻结。
 - 版本保存的精确冲突返回契约留待 `ST03_02` 细化，但不再阻塞本轮模块推进。
 - 原始 PDF / 导出 PDF 下载入口已确认复用共享下载能力，剩余只需在 `ST03_03` 落具体接口投影。
+- `OQ-021` 已形成 `proposed-default`，但列表页实现级 callback 签名、复杂筛选编码与路由细节仍属于子任务级待确认项。
