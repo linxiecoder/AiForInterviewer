@@ -407,3 +407,37 @@
 目标：
 - 文档体系进入增量演进状态
 - 成熟度与进展持续更新
+
+## 十三、结构化状态与 bootstrap 规则
+
+### 1. 真值优先级
+
+- 正式结构化状态真值文件预留为 `docs/governance/DOC_STATE.yaml`。
+- Phase 1A 当前只允许生成 `docs/governance/DOC_STATE.bootstrap.yaml`，该文件只用于 bootstrap / 审核，不等价于正式真值。
+- Markdown 正文叙述仍可作为说明材料，但不能直接覆盖结构化状态结论。
+
+### 2. Phase 1A 白名单导入来源
+
+- 文件系统中的模块目录、子任务目录与固定 doc slots 是否存在。
+- `OPEN_QUESTIONS.md` 结构化表中的 `OQ ID / 问题 / 状态 / 关联模块`。
+- `TASK_INDEX.md` 结构化表中的 `Task ID / 父任务 / 前置依赖 / 对应文档路径` 以及历史容器标记信息。
+
+当前阶段禁止导入：
+- Markdown 正文中的成熟度自评、readiness 自评、candidate 自评、review 自评。
+- 正文里的“已可实施 / implementation-ready / candidate=true”之类自我宣称。
+- 未经确认的 `active_working_doc`、maturity 提升或 readiness 提升。
+
+### 3. 空模板与假信号处理
+
+- 空 `SUBTASK_IMPLEMENTATION.md` 模板不能被视为成熟实施文档。
+- 统一模板骨架、PowerShell / 变量占位符残留、明显空模板残留，都只能作为假信号处理，不得正向提升状态。
+- 若发现 `implementation_doc.exists=true` 且 `template_like=false` 的模糊情况，Phase 1A 的 bootstrap 必须整体失败，不得写出半可信的 bootstrap 状态文件。
+
+### 4. 自动化依赖
+
+- 当前本地 `doc-governor` 依赖 Python 环境可导入 `yaml`（PyYAML）。
+- 若依赖缺失，CLI 必须显式失败并输出结构化 diagnostics。
+
+### 5. 关联文档
+
+- `docs/governance/DOC_AUTOMATION.md`

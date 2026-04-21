@@ -41,7 +41,18 @@
 - 目录结构、角色边界、全局总则以 `AGENTS.md` 为准
 - 文档治理细节、成熟度规则、进展规则、回写规则以 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 为准
 
-### 1.3.1 子任务模板规则
+### 1.3.1 结构化状态自动化规则
+
+文档治理自动化的本地机制定义在 [`docs/governance/DOC_AUTOMATION.md`](docs/governance/DOC_AUTOMATION.md)。
+
+当前 Phase 1A 的自动化边界固定为：
+- `docs/governance/DOC_STATE.bootstrap.yaml` 只是 bootstrap 输出，不是正式真值。
+- `docs/governance/DOC_STATE.yaml` 不得由当前阶段自动生成、覆盖或回写。
+- bootstrap 只允许导入白名单来源：文件系统、`OPEN_QUESTIONS.md` 结构化表、`TASK_INDEX.md` 结构化表。
+- Markdown 正文中的 `maturity` / `readiness` / `candidate` / `review` 自我宣称不得直接导入状态层。
+- 当前 `doc-governor` 依赖本地 Python 环境可导入 `yaml`（PyYAML）；若缺失，应显式失败，不允许静默 fallback。
+
+### 1.3.2 子任务模板规则
 
 子任务双文档模板统一定义在 [`docs/SUBTASK_DOC_TEMPLATES.md`](docs/SUBTASK_DOC_TEMPLATES.md)。
 
@@ -61,6 +72,7 @@
 ### 2.1 规范
 
 - [项目语言规范](docs/project-language-rules.md)
+- [文档治理自动化规则](docs/governance/DOC_AUTOMATION.md)
 
 ### 2.2 设计
 
