@@ -25,6 +25,119 @@
 
 ## 3. 当前记录
 
+### 2026-04-21 / 轮次 MR-24
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 复核 `MODULE_API_DESIGN.md` 当前为什么仍停在高 `L4`
+  - 明确“正式开窗层为空”与“仍只是观察面”的关系
+  - 明确 `MT02_02` 权限消费边界为什么仍必须留在模块层
+- 执行类型：最低位候选前复核 / 放行缺口压缩 / 模块状态回写
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中把高 `L4` 的结构性主阻塞进一步压缩为单一最低位：`GET /api/v1/members` 共享最小层虽已模块内闭合，但仍只停留在 `OQ-021` `proposed-default`，尚未被总控认可为正式候选输入
+  - 在 `MODULE_API_DESIGN.md` 中把“正式开窗层为空 -> `MT02_01/MT02_02` 仍只是观察面”的关系拆成两段判断，并把 `MT02_02` 的 `CurrentUserContext` / `logout=204` / `401/403` / admin route group 边界为何必须留在模块层写成共享契约理由
+  - 在 `MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` 中同步收紧为同一最小放行缺口：最低位 `GET /api/v1/members` + 正式开窗层为空 + `MT02_02` 权限消费边界继续留在模块层
+  - 复核 `MODULE_OPEN_QUESTIONS.md`，确认现有 `MQ-205`、`MQ-207`、`MQ-209` 已足以承接本轮结论，因此本轮无需改写
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，但当前最低位原因已进一步压缩到单一共享最小层引用，离正式候选还差的最小条件更可判定
+  - `MODULE_DEPENDENCIES.md`：维持 `L5` 候选，当前最小剩余放行缺口与模块层共享边界更明确
+  - `MODULE_TASK_INDEX.md`：维持 `L5` 候选，`MT02_02` 为什么仍只是观察面且不能下放共享边界的理由更直接
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，本轮最低位候选前复核结论已可直接供总控汇总
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`MODULE_OPEN_QUESTIONS.md` 核对本轮范围，只处理 `MR-24` 指定的最低位候选前复核主题
+  - 已确认 `MODULE_OPEN_QUESTIONS.md` 现有 `MQ-205`、`MQ-207`、`MQ-209` 仍稳定支持“`/members` 已闭合但未放行”“正式开窗层为空”“`MT02_01/MT02_02` 仍只是观察面”的当前判断，因此无需改写
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md`
+  - 本轮未运行代码或测试命令；本轮工作范围仅为模块文档最低位候选前复核与状态回写
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`：`GET /api/v1/members` 的共享最小层虽已在模块内闭合，但仍只停留在默认治理层，尚未被总控认可为正式候选输入
+  - `MQ-207` / `OQ-024`：正式开窗层当前仍为空，因此 `MT02_01 / MT02_02` 仍只能停留在观察蓝本
+  - `MQ-209`：`MT02_02` 的 `CurrentUserContext` / `logout=204` / `401/403` / admin route group 边界仍必须继续留在模块层，不能下放为子任务私有契约
+  - `MQ-206` / `OQ-022`
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控在后续回写全局状态文档时，把 M02 当前最小剩余放行缺口固定写成“`GET /api/v1/members` 共享最小层尚未升格为正式候选输入 + 正式开窗层为空 + `MT02_02` 权限消费边界继续留在模块层”
+  - 在总控未同时解除上述两层条件前，继续维持 `MT02_01 / MT02_02` 仅为观察面，不得据 auth 接口较稳定就外推为正式入口
+  - 页面相关判断继续维持“`/members` 已闭合但未放行”，不得把 `MT02_04 / MT02_06` 写成 ready
+
+### 2026-04-21 / 轮次 MR-22
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 清理 `MODULE_REQUIREMENTS.md` 头部会误导总控放行的目标性“候选”措辞
+  - 保持模块口径为“`/members` 已闭合到共享最小层，但仍未放行正式候选”
+  - 明确 `MT02_01 / MT02_02` 仍只是观察面，不因头部降噪而改变
+- 执行类型：头部目标性措辞降噪 / 模块日志回写
+- 修改内容：
+  - 在 `MODULE_REQUIREMENTS.md` 的“文档定位”中，将“推进到可作为下游输入的候选状态”改写为“收敛为可评审、可供模块内依赖对齐的需求基线”，并显式排除“已放行正式候选”的误读
+  - 在 `MODULE_REQUIREMENTS.md` 的“模块目标”中，将“可作为下游输入候选”改写为“供模块评审、共享契约吸收与白名单观察使用”，去掉头部目标性候选信号
+  - 确认 `MODULE_OPEN_QUESTIONS.md` 现有“已闭合但未放行 / `MT02_01`、`MT02_02` 仍是观察面”口径已对齐，因此本轮不修改
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_REQUIREMENTS.md`：维持当前成熟度判断；本轮只清理头部降噪，不改变结构性阻塞结论
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，补充本轮局部纠偏记录
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`MODULE_OPEN_QUESTIONS.md` 核对本轮范围，只处理 `MR-22` 指定的头部目标性措辞
+  - 已确认 `MODULE_OPEN_QUESTIONS.md` 现有 `MQ-205`、`MQ-207`、`MQ-209` 仍稳定支持“已闭合但未放行正式候选”“正式开窗层为空”“观察面 != 正式候选”的当前判断，因此无需改写
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_REQUIREMENTS.md`、`MODULE_EXECUTION_LOG.md`
+  - 本轮未运行代码或测试命令；本轮工作范围仅为模块文档局部降噪与状态回写
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`：`/members` 虽已在模块内闭合到共享最小层，但该口径仍不构成正式候选放行依据
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`：正式开窗层当前仍为空
+  - `MQ-209`：`MT02_01 / MT02_02` 仍只属于观察面
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控在后续回写全局状态文档时，避免摘引 `MODULE_REQUIREMENTS.md` 旧头部中的“候选”目标句
+  - 在总控未推进正式开窗层前，继续维持 `MT02_01 / MT02_02` 仅为观察面，不得据本轮降噪外推为正式候选
+  - 页面相关判断继续维持“`/members` 已闭合但未放行”，不得把 `MT02_04 / MT02_06` 写成 ready
+
+### 2026-04-21 / 轮次 MR-21
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 修正 `MODULE_REQUIREMENTS.md` 中那一处会把整体状态说得偏前的收尾句
+  - 统一口径为“`/members` 已闭合到共享最小层，但仍未放行正式候选，`MT02_01 / MT02_02` 仍只是观察面”
+  - 不改写 M02 其他 readiness 判断
+- 执行类型：收尾句压回总控口径 / 模块日志回写
+- 修改内容：
+  - 在 `MODULE_REQUIREMENTS.md` 第 12 节最后一句中，移除“核心需求已达到 `L5` 候选”的偏乐观表述，改写为“`/members` 已闭合到共享最小层，但仍未放行正式候选，`MT02_01 / MT02_02` 仍只是观察面”
+  - 复核 `MODULE_OPEN_QUESTIONS.md`，确认现有 `MQ-205`、`MQ-207`、`MQ-209` 已与本轮目标口径一致，因此本轮无需改写
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_REQUIREMENTS.md`：维持当前判断；仅回收会误导总控放行的收尾句，不上调 readiness
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选；本轮局部纠偏动作已可供总控汇总
+- 验证结果：
+  - 已对照 `MODULE_OPEN_QUESTIONS.md` 当前判断，确认“`/members` 已闭合到共享最小层但仍未放行正式候选”“`MT02_01 / MT02_02` 仍只是观察面”已在模块问题文档中写明
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_REQUIREMENTS.md`、`MODULE_EXECUTION_LOG.md`
+  - 本轮未运行代码或测试命令；本轮工作范围仅为模块文档局部纠偏与状态回写
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`：`/members` 已闭合到共享最小层，但仍未放行正式候选
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`：正式开窗层当前仍为空
+  - `MQ-209`：`MT02_01 / MT02_02` 仍只是观察面
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控检查并统一回写全局状态文档中任何仍把 M02 写得偏前的总结句，固定使用“`/members` 已闭合到共享最小层，但仍未放行正式候选；`MT02_01 / MT02_02` 仍只是观察面”的口径
+  - 在正式开窗层、最低位 API 与共享默认口径没有实质变化前，继续维持 `MT02_01 / MT02_02` 仅为观察面
+
 ### 2026-04-20 / 轮次 M02-R001
 
 - 当前模块：M02 鉴权、团队与成员
@@ -305,6 +418,133 @@
   - 由总控把 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 中与 `M02` 相关的“观察面 / 正式候选 / 开窗状态”继续写死，避免观察结论回流成放行结论
   - `M02` 若继续推进，仍只允许围绕 `MODULE_API_DESIGN.md` 的最低位和 `MT02_01/MT02_02` 的观察条件复核，不扩写其他主题
   - 在 `OQ-024` 未形成正式入口映射、且 `MODULE_API_DESIGN.md` 未整体跨过 `L5` 前，不得创建 `MT02_01/MT02_02` 的正式子任务窗口
+
+### 2026-04-21 / 轮次 MR-11
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 执行 `MR-11`：只处理 `/members` 共享列表契约闭合、`MT02_02` 权限消费边界收紧，以及 `OQ-024` 正式映射在模块文档中的引用吸收
+  - 继续把最低位阻塞收敛到 `MODULE_API_DESIGN.md` 对 `/members` 共享列表契约的吸收引用
+  - 明确 `MT02_01/MT02_02` 仍只是白名单观察面，而不是正式候选
+- 执行类型：最低位阻塞收敛 / 权限消费边界收紧 / 模块映射引用吸收
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中把 `/members` 共享列表契约闭合到共享最小层，只保留 `page/page_size/q/status/sort/order` 与统一分页骨架作为模块级契约，并把 callback、URL 序列化、request adapter 细节明确留在页面 / 实现层
+  - 在 `MODULE_API_DESIGN.md` 中收紧 `MT02_02`：明确它只能消费模块层已冻结的 `CurrentUserContext`、`logout=204`、`401/403` 与 admin route group 边界，不能把权限矩阵重新下放到子任务层
+  - 在 `MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` 中吸收全局 `OQ-024` 已写死的三层映射引用，统一改为“历史容器固定、观察蓝本固定、正式开窗层当前为空”，并删除“总控尚未正式映射 / 正式下发入口”的旧表述
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中更新 `MQ-205`、`MQ-207`、`MQ-209`，不新增新的模块问题编号
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_DESIGN.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，但最低位阻塞已进一步收敛到 `/members` 共享列表契约的模块内吸收引用
+  - `MODULE_DESIGN.md`：维持 `L5` 候选，`MT02_02` 的权限消费边界与 `OQ-024` 引用吸收更清晰
+  - `MODULE_DEPENDENCIES.md`：维持 `L5` 候选，正式候选前置条件与风险边界更一致
+  - `MODULE_TASK_INDEX.md`：维持 `L5` 候选，观察蓝本 / 正式入口 / 旧容器的区分更稳定
+  - `MODULE_OPEN_QUESTIONS.md`：维持 `L5` 候选，问题判断已与 `MR-11` 范围对齐
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，本轮动作与验证证据已可直接供总控汇总
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`PLAN_LATEST.md`、`TASK_INDEX.md` 与全局 `OPEN_QUESTIONS.md` 核对 `MR-11` 只涉及模块内可写范围
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_API_DESIGN.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_OPEN_QUESTIONS.md`、`MODULE_EXECUTION_LOG.md`
+  - 本轮未运行代码或测试命令；本轮工作范围仅为模块文档吸收与状态回写
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`：`/members` 共享列表契约虽已在模块内闭合到共享最小层，但全局仍处于 `proposed-default`，因此 `MODULE_API_DESIGN.md` 仍是最低位
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`：全局映射已写死，但正式开窗层当前仍为空
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控把 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 中与 `M02` 相关的最低位阻塞、观察蓝本与正式开窗层状态继续统一回写
+  - `M02` 若继续推进，仍只允许围绕 `MODULE_API_DESIGN.md` 的最低位与 `MT02_01/MT02_02` 的观察条件复核，不扩写页面、验证或其他模块主题
+  - 在总控未把正式开窗层从“当前为空”推进到新的正式候选前，不得创建 `MT02_01/MT02_02` 的正式子任务窗口
+
+### 2026-04-21 / 轮次 MR-14
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 执行 `MR-14`：只处理 `/members` 共享最小层防误读复核 + `MODULE_API_DESIGN.md` 最低位候选前复核
+  - 继续加固 `MT02_01 / MT02_02` 仍只是观察面的理由
+  - 明确禁止从“`/members` 已闭合”外推 `MT02_04 / MT02_06 ready`
+- 执行类型：最低位候选前复核 / 防误读边界压实 / 模块状态回写
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中新增“`/members` 已闭合但未放行”的直白边界说明，并把 `MT02_04 / MT02_06` 不得外推 ready 的理由压实到接口级表述
+  - 在 `MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` 中统一改写 readiness 叙事：`MT02_01 / MT02_02` 继续只属于观察面，`MT02_04 / MT02_06` 继续阻塞，且原因与最低位 / 全局开窗状态保持一致
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中更新 `MQ-205`、`MQ-209` 与当前判断，显式写出“闭合 != 放行”
+  - 在本日志中新增本轮记录，沉淀本轮验证证据与建议总控回写项
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_DESIGN.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，但“`/members` 已闭合但未放行”的最低位边界更难误读
+  - `MODULE_DESIGN.md`：维持 `L5` 候选，当前 readiness 叙事与 API 最低位更一致
+  - `MODULE_DEPENDENCIES.md`：维持 `L5` 候选，正式候选前置条件与阻塞因子更可审计
+  - `MODULE_TASK_INDEX.md`：维持 `L5` 候选，观察面 / 阻塞面 / 页面后置面的区分更清晰
+  - `MODULE_OPEN_QUESTIONS.md`：维持 `L5` 候选，`MQ-205` 与 `MQ-209` 的判断边界更明确
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，本轮动作与结论已可直接供总控汇总
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、全局 `OPEN_QUESTIONS.md`、`TASK_INDEX.md`、`DOCUMENT_PROGRESS.md` 中的 `MR-14` 范围，确认本轮只处理模块内允许写入的文档
+  - 已复读遗留 `ST02_01 / ST02_02` 子任务双文档，确认两者 `SUBTASK_DESIGN.md` 仍写着“当前成熟度：仅有骨架”且父模块行残留占位符，`SUBTASK_IMPLEMENTATION.md` 仍为空白实施模板，不能作为任何正式入口证明
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_API_DESIGN.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_OPEN_QUESTIONS.md`、`MODULE_EXECUTION_LOG.md`
+  - 本轮未运行代码或测试命令；本轮工作范围仅为模块文档复核与状态回写
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`：`/members` 虽已在模块内闭合到共享最小层，但该口径仍只处于默认治理层，且 `MODULE_API_DESIGN.md` 仍是最低位
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`：正式开窗层当前仍为空
+  - `MQ-209`
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控把 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 中与 `M02` 相关的“`/members` 已闭合但未放行”“观察面 != 正式候选 != 可开窗任务”继续统一回写
+  - `M02` 若继续推进，仍只允许围绕 `MODULE_API_DESIGN.md` 的最低位候选前复核，以及 `MT02_01 / MT02_02` 的观察条件继续收口
+  - 在总控未把正式开窗层从“当前为空”推进到新的正式候选前，不得把 `MT02_01 / MT02_02` 写成正式入口，也不得把 `MT02_04 / MT02_06` 写成 ready
+
+### 2026-04-21 / 轮次 MR-17
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 修正 `MODULE_REQUIREMENTS.md` 中把 `/members` 写成“仍依赖 `M01` 最终收口”的旧保守句
+  - 保持模块口径为“`/members` 已闭合到共享最小层，但仍未放行正式候选”
+  - 明确本轮不改变 `MT02_01 / MT02_02` 仍只是观察面的判断
+- 执行类型：旧保守句修正 / 模块日志回写
+- 修改内容：
+  - 在 `MODULE_REQUIREMENTS.md` 的“当前缺口与待确认问题”中，将 `MQ-205 / OQ-021` 改写为“`/members` 已在模块内闭合到共享最小层，但不构成正式候选放行”
+  - 同段同步去掉“`OQ-021` 未收口”旧口径，改写为“页面面仍需按既有默认口径吸收，且不能因 `/members` 已闭合而提前启动页面子任务设计”
+  - 在本日志中新增本轮记录，并确认 `MODULE_OPEN_QUESTIONS.md` 现有“闭合 != 放行”口径已对齐，无需改写
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_REQUIREMENTS.md`：维持 `L5` 候选，仅清理会误导总控判断的旧保守句
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，本轮纠偏动作已可供总控汇总
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md` 与 `MODULE_OPEN_QUESTIONS.md` 核对本轮范围，只处理 `MR-17` 指定的单一主题
+  - 已确认 `MODULE_OPEN_QUESTIONS.md` 现有 `MQ-205` 与当前判断已写明“模块内已闭合到共享最小层，但仍未放行正式候选输入”，因此本轮无需改写
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_REQUIREMENTS.md`、`MODULE_EXECUTION_LOG.md`
+  - 本轮未运行代码或测试命令；本轮工作范围仅为模块文档局部纠偏与状态回写
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`：`/members` 虽已在模块内闭合到共享最小层，但该口径仍不构成正式候选放行依据
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`：正式开窗层当前仍为空
+  - `MQ-209`：`MT02_01 / MT02_02` 仍只属于观察面
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控检查并统一回写全局文档中任何仍把 `/members` 写成“依赖 `M01` 最终收口”的旧句
+  - 在总控未推进正式开窗层前，继续维持 `MT02_01 / MT02_02` 仅为观察面，不得据本轮纠偏外推为正式候选
+  - 页面相关判断继续维持“`/members` 已闭合但未放行”，不得把 `MT02_04 / MT02_06` 写成 ready
 
 ## 4. 使用说明
 

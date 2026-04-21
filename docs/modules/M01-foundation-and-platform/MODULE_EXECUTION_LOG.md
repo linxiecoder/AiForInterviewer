@@ -23,7 +23,130 @@
 - 当前待确认问题
 - 下一步建议动作
 
+口径说明：
+
+- 本文件中的历史阶段判断已按当前口径回写；统一判断以“高 `L4`、接近整体 `L5` 候选但未接受”为准，不再保留历史乐观阶段用语作为阶段结论。
+
 ## 3. 当前记录
+
+### 2026-04-21 / 轮次 MR-19 / MODULE_EXECUTION_LOG 历史残句降格
+
+- 当前模块：M01
+- 本轮目标：
+  - 将 `MODULE_EXECUTION_LOG.md` 中“待总控接受”类历史残句降格为历史说明
+  - 清除会把“已吸收但未接受”误读回“仍待总控接受”的动作态表述
+  - 保持 M01 口径为高 `L4`、接近整体 `L5` 候选但未接受
+- 执行类型：历史残句降格 / 模块级日志修订 / 总控回写准备
+- 修改内容：
+  - 在 `MODULE_EXECUTION_LOG.md` 中把历史记录里的“待总控接受为共享最小层输入”改写为“已吸收到模块侧历史说明，仍不构成整体接受”
+  - 同步把同段“总控是否接受 `proposed-default`”改写为“总控若需统一回写，仅继续维持未接受口径”的历史说明
+- 影响文件：
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_EXECUTION_LOG.md`：高 `L4` 维持（历史记录口径与当前未接受判断进一步对齐）
+- 验证结果：
+  - 已按 UTF-8 读取并回读 `MODULE_EXECUTION_LOG.md`
+  - 已确认本轮仅修正历史残句，不扩展到 M01 其他文档或其他主题
+  - 已复核修订后不再保留“待总控接受”类动作态残句
+- 当前阻塞：
+  - M01 整体仍受 `MQ-001`、`MQ-003`、`MQ-005` 与全局未接受口径约束，当前仅接近整体 `L5` 候选，未正式接受
+- 当前待确认问题：
+  - 无新增模块级待确认问题
+- 下一步建议动作：
+  - 由总控窗口按现口径决定是否同步回写全局文档中的相关历史描述，但不把 M01 表述为已接受
+
+### 2026-04-21 / 轮次 MR-16 / 历史乐观阶段语义清理 + 保守口径再压平
+
+- 当前模块：M01
+- 本轮目标：
+  - 清理历史乐观阶段语义
+  - 统一 M01 口径为“高 `L4`、接近整体 `L5` 候选但未接受”
+  - 只在 M01 模块文档内做最小语义收敛，不扩展新主题
+- 执行类型：历史语义清理 / 模块级保守收口 / 总控回写准备
+- 修改内容：
+  - 在 `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` 中清理带有乐观阶段含义的措辞
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中更新 `MQ-001`、`MQ-003`、`MQ-005`、`MQ-007` 的保守判断，明确共享最小层已写清不等于整体接受
+  - 在 `MODULE_EXECUTION_LOG.md` 中回写历史阶段记录，统一为高 `L4` 维持或“接近整体 `L5` 候选但未接受”
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_DESIGN.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_REQUIREMENTS.md`：高 L4 维持
+  - `MODULE_DESIGN.md`：高 L4 维持
+  - `MODULE_DEPENDENCIES.md`：高 L4 维持
+  - `MODULE_TASK_INDEX.md`：高 L4 维持
+  - `MODULE_OPEN_QUESTIONS.md`：高 L4 维持
+  - `MODULE_EXECUTION_LOG.md`：高 L4 维持
+- 验证结果：
+  - 已对目标文档做 UTF-8 回读
+  - 已复核 M01 主文档中不再保留会误导为即将进入下一阶段的表述作为阶段判断
+  - 已确认本轮未修改全局主文档、其他模块文档或子任务文档
+- 当前阻塞：
+  - `MQ-001`、`MQ-003`、`MQ-005` 仍是整体接受前主阻塞
+  - 总控尚未统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`
+  - M01 仍不开放子任务设计
+- 当前待确认问题：
+  - `MQ-001`
+  - `MQ-003`
+  - `MQ-005`
+  - `MQ-007`
+- 下一步建议动作：
+  - 由总控统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`
+  - 继续维持 M01 为高 `L4`、接近整体 `L5` 候选但未接受的保守判断
+  - 在整体未被接受前，不把局部共享边界收敛解读为子任务设计放开
+
+### 2026-04-21 / 轮次 MR-13 / 乐观措辞回收 + 整体接受前口径压平
+
+- 当前模块：M01
+- 本轮目标：
+  - 回收可能导致总控误判的“整体接受判断 / 开窗判断”乐观措辞
+  - 统一 M01 口径为“高 `L4`、接近整体 `L5` 候选但未接受”
+  - 只围绕 `MQ-001`、`MQ-003`、`MQ-005` 做整体接受前口径压平
+- 执行类型：口径回收 / 模块级收口复核 / 总控回写准备
+- 修改内容：
+  - 在 `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` 中回收历史乐观阶段表述
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中把 `MQ-001`、`MQ-003`、`MQ-005` 改写为“已压缩但仍未足以接受”的当前判断
+  - 在 `MODULE_EXECUTION_LOG.md` 中新增本轮统一口径说明，并记录总控需回写的最小全局文档集合
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_DESIGN.md`
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_SCHEMA_DESIGN.md`
+  - `MODULE_LOGIC_DESIGN.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_REQUIREMENTS.md`：高 L4 维持
+  - `MODULE_DESIGN.md`：高 L4 维持
+  - `MODULE_API_DESIGN.md`：高 L4 维持
+  - `MODULE_SCHEMA_DESIGN.md`：高 L4 维持
+  - `MODULE_LOGIC_DESIGN.md`：高 L4 维持
+  - `MODULE_DEPENDENCIES.md`：高 L4 维持
+  - `MODULE_TASK_INDEX.md`：高 L4 维持
+  - `MODULE_OPEN_QUESTIONS.md`：高 L4 维持
+  - `MODULE_EXECUTION_LOG.md`：高 L4 维持
+- 验证结果：
+  - 已在 M01 当前状态文档中回收会误导总控的前向乐观表述，并统一压回“高 `L4`、接近整体 `L5` 候选但未接受”
+  - 已确认本轮只修改 M01 模块级文档，未越权修改全局主文档、其他模块文档或子任务文档
+  - 已按 UTF-8 回读目标文件，确认本轮补丁未引入 Markdown 结构破坏或明显乱码
+- 当前阻塞：
+  - `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩，但仍是整体接受前的主阻塞
+  - 总控尚未统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`
+  - M01 当前仍不开放子任务设计
+- 当前待确认问题：
+  - `MQ-001`
+  - `MQ-003`
+  - `MQ-005`
+- 下一步建议动作：
+  - 由总控统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`
+  - 若阶段判断同步变化，再补写 `TASK_INDEX.md`、`MODULE_INDEX.md`
+  - 在总控正式接受前，继续维持 M01 为高 `L4`、接近整体 `L5` 候选但未接受的保守判断，不开放子任务窗口
 
 ### 2026-04-21 / 轮次 R-Refactor-02 / 最低位压缩轮复核（仅 MQ-001 / MQ-003 / MQ-005）
 
@@ -35,7 +158,7 @@
 - 执行类型：最低位压缩复核 / 模块级收口判断 / 总控回写准备
 - 修改内容：
   - 复核 `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md` 对 `MQ-001`、`MQ-003`、`MQ-005` 的现有吸收情况
-  - 在 `MODULE_OPEN_QUESTIONS.md` 中增补三项问题的复核结论，明确它们已不再构成 M01 模块内结构性阻塞
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中增补三项问题的复核结论，明确它们已压缩到共享最小层，但仍不足以支撑整体接受
   - 在 `MODULE_EXECUTION_LOG.md` 中登记本轮复核动作、建议成熟度与总控需回写的最小全局文档集合
 - 影响文件：
   - `MODULE_OPEN_QUESTIONS.md`
@@ -48,15 +171,15 @@
   - 已确认本轮只修改 `MODULE_OPEN_QUESTIONS.md` 与 `MODULE_EXECUTION_LOG.md`，未越权修改全局主文档、其他模块文档或子任务文档
   - 已按 UTF-8 回读目标文件，确认本轮补丁未引入 Markdown 结构破坏或明显乱码
 - 当前阻塞：
-  - `MQ-001`、`MQ-003`、`MQ-005` 已不再构成 M01 模块内结构性阻塞
-  - 当前剩余最小集合，主要转为总控是否接受 `OQ-019`、`OQ-020~022`、`OQ-021` 的 `proposed-default` 作为 M01 的共享最小层输入，并统一回写全局成熟度 / 进展 / 问题文档
+  - `MQ-001`、`MQ-003`、`MQ-005` 已压缩到共享最小层，但仍是整体接受前主阻塞
+  - 当前剩余最小集合已在模块侧压缩并吸收到共享最小层历史说明；若总控需要统一回写，也只应维持 M01 “接近整体 `L5` 候选但未接受”的口径并更新全局成熟度 / 进展 / 问题文档
 - 当前待确认问题：
-  - `MQ-001`（`proposed-default`，待总控接受为共享最小层输入）
-  - `MQ-003`（`proposed-default`，待总控接受为共享最小层输入）
-  - `MQ-005`（`proposed-default`，待总控接受为共享最小层输入）
+  - `MQ-001`（`proposed-default` 已吸收到模块侧历史说明，仍不构成整体接受）
+  - `MQ-003`（`proposed-default` 已吸收到模块侧历史说明，仍不构成整体接受）
+  - `MQ-005`（`proposed-default` 已吸收到模块侧历史说明，仍不构成整体接受）
 - 下一步建议动作：
   - 由总控统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`；若阶段判断同步变化，再补写 `TASK_INDEX.md`、`MODULE_INDEX.md`
-  - 若总控接受当前候选判断，M01 下轮不应再重复扩张 `MQ-001`、`MQ-003`、`MQ-005`，而应进入整体 `L5` 候选确认或正式开窗判断
+  - 若总控继续复核当前压缩结果，M01 下轮仍应先等待全局回写完成，再判断是否具备进一步收口条件
   - 完整 workflow、lint / format gate、E2E、多平台矩阵，以及精确 props / callback / hook 细节继续后置到 M10 或后续子任务设计，不回灌为 M01 共享前置
 
 ### 2026-04-21 / 轮次 R-Refactor-02 / 最低位压缩轮（MQ-001 / MQ-003 / MQ-005）
@@ -65,7 +188,7 @@
 - 本轮目标：
   - 只围绕 `MQ-001`、`MQ-003`、`MQ-005` 压缩 M01 的最低位阻塞
   - 把三项问题从“方向级缺口”压到“共享最小层已冻结、剩余仅是实现级或总控回写项”
-  - 更新模块问题与执行日志，为总控判断 M01 整体 `L5` 候选提供最小集合依据
+  - 更新模块问题与执行日志，为总控判断 M01 是否仍应维持高 `L4` 提供最小集合依据
 - 执行类型：最低位压缩 / 模块级共享口径吸收 / 收口判断
 - 修改内容：
   - 在 `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` 中吸收 `OQ-019` 默认口径，冻结根目录最小脚本命名、`GET /api/v1/health` 存活检查、API=`pytest` / Web=`vitest` 与 API / Web 双 lane
@@ -84,32 +207,32 @@
   - `MODULE_OPEN_QUESTIONS.md`
   - `MODULE_EXECUTION_LOG.md`
 - 建议成熟度变化：
-  - `MODULE_REQUIREMENTS.md`：高 L4 -> 低 L5 候选（最小脚本命名、health check 与 API / Web 双 lane 已吸收）
-  - `MODULE_DESIGN.md`：高 L4 -> 低 L5 候选（shared adapter 的共享最小层 / 模块投影层 / 实现细节层边界已写清）
-  - `MODULE_API_DESIGN.md`：高 L4 -> 低 L5 候选（列表状态与 shared adapter 的最小承接契约已可下游引用）
-  - `MODULE_SCHEMA_DESIGN.md`：高 L4 -> 低 L5 候选（`ListQueryState` 与 `VerificationEntry` 的共享最小层已进一步稳定）
-  - `MODULE_LOGIC_DESIGN.md`：高 L4 -> 低 L5 候选（启动 / 验证顺序与列表状态同步规则已与最低位口径对齐）
-  - `MODULE_TASK_INDEX.md`：高 L4 -> 低 L5 候选（`ST01_01` / `ST01_02` / `ST01_03` 的触发条件已从方向级缺口压缩为候选判断条件）
-  - `MODULE_DEPENDENCIES.md`：低 L5 候选维持（模块内结构性共享缺口已收敛，剩余最小集合转为总控回写与候选确认）
+  - `MODULE_REQUIREMENTS.md`：高 L4 维持（最小脚本命名、health check 与 API / Web 双 lane 已吸收，但仍不足以支撑整体接受）
+  - `MODULE_DESIGN.md`：高 L4 维持（shared adapter 的共享最小层 / 模块投影层 / 实现细节层边界已写清，但仍不足以支撑整体接受）
+  - `MODULE_API_DESIGN.md`：高 L4 维持（列表状态与 shared adapter 的最小承接契约已可审计，但不改变整体仍未被接受）
+  - `MODULE_SCHEMA_DESIGN.md`：高 L4 维持（`ListQueryState` 与 `VerificationEntry` 的共享最小层已进一步稳定，但不改变整体仍未被接受）
+  - `MODULE_LOGIC_DESIGN.md`：高 L4 维持（启动 / 验证顺序与列表状态同步规则已与最低位口径对齐，但不改变整体仍未被接受）
+  - `MODULE_TASK_INDEX.md`：高 L4 维持（`ST01_01` / `ST01_02` / `ST01_03` 的触发条件已更清晰，但仍不能据此进入子任务设计）
+  - `MODULE_DEPENDENCIES.md`：高 L4 维持（模块内结构性共享缺口已收敛，但仍依赖总控全局回写与整体复核）
   - `MODULE_OPEN_QUESTIONS.md`：高 L4 维持（`MQ-001` / `MQ-003` / `MQ-005` 已全部压缩为 `proposed-default` 共享最小层）
-  - `MODULE_EXECUTION_LOG.md`：L4 -> 高 L4（本轮最低位压缩结果与候选判断依据已可审计）
+  - `MODULE_EXECUTION_LOG.md`：L4 -> 高 L4（本轮最低位压缩结果与保守判断依据已可审计）
 - 验证结果：
   - 已对照 `OPEN_QUESTIONS.md` 中 `OQ-019`、`OQ-020~022`、`OQ-021` 的默认口径回写 M01，不新增模块私有共享契约
   - 已确认本轮补丁只落在 M01 模块级文档，未越权修改全局主文档或其他模块文档
   - 已按 UTF-8 回读目标文件，确认本轮补丁未引入 Markdown 结构破坏或明显乱码
 - 当前阻塞：
   - `MQ-001`、`MQ-003`、`MQ-005` 的模块内结构性阻塞已压缩到 `proposed-default` 共享最小层，不再是继续扩张 M01 共享契约的理由
-  - 当前距离 M01 整体 `L5` 候选还差的最小集合，主要转为总控是否接受 `OQ-019` / `OQ-020~022` / `OQ-021` 的 `proposed-default` 作为共享最小层输入，并同步回写全局成熟度 / 进展 / 问题文档
+  - 当前距离整体接受仍差的最小集合已压缩到共享最小层历史说明；若总控统一回写全局文档，也只应维持 M01 “接近整体 `L5` 候选但未接受”的口径
 - 当前待确认问题：
   - `MQ-001`（`proposed-default`）
   - `MQ-003`（`proposed-default`）
   - `MQ-005`（`proposed-default`）
 - 下一步建议动作：
-  - 由总控判断 M01 是否可进入整体 `L5` 候选，并统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md` 等全局文档
-  - 若总控接受当前压缩结果，M01 下轮不应再重复扩张 `MQ-001` / `MQ-003` / `MQ-005`，而应转入候选确认或正式开窗判断
+  - 由总控统一复核 M01 的整体接受条件，并统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md` 等全局文档
+  - 若总控继续复核当前压缩结果，M01 下轮仍应先等待全局回写完成，再判断是否具备进一步收口条件
   - 完整 workflow、lint / format gate、E2E、多平台矩阵与实现级 props / callback / hook 细节应继续后置到 M10 或后续子任务设计，不回灌为 M01 共享前置
 
-### 2026-04-21 / 轮次 R-Refactor-02 / 整体 L5 收口
+### 2026-04-21 / 轮次 R-Refactor-02 / 整体保守收口复核
 
 - 当前模块：M01
 - 本轮目标：
@@ -121,9 +244,9 @@
   - 在 `MODULE_API_DESIGN.md` 中补写 `OQ-021` 最小映射白名单，并明确 `updated_after` / `updated_before` 不属于 M01 共享最小映射
   - 在 `MODULE_SCHEMA_DESIGN.md` 中收回列表时间筛选的共享映射漂移，改为“业务模块扩展，不属于 M01 共享白名单”
   - 在 `MODULE_LOGIC_DESIGN.md` 中补写列表状态与 URL / request 同步的共享边界，明确时间筛选和复杂筛选仍留在业务模块扩展层
-  - 在 `MODULE_DEPENDENCIES.md` 中写清“SC-05 主题已可作为下游模块设计输入，但 M01 整体仍非 L5”的分层判断
+  - 在 `MODULE_DEPENDENCIES.md` 中写清“SC-05 主题已可作为下游模块设计参考输入，但 M01 整体仍未被接受”的分层判断
   - 在 `MODULE_OPEN_QUESTIONS.md` 中补写 `MQ-007`，记录需要总控统一回写跨模块 / 全局文档的治理问题
-  - 在 `MODULE_EXECUTION_LOG.md` 中登记本轮 L5 收口动作、保守 readiness 结论与总控回写建议
+  - 在 `MODULE_EXECUTION_LOG.md` 中登记本轮保守收口动作、保守 readiness 结论与总控回写建议
 - 影响文件：
   - `MODULE_API_DESIGN.md`
   - `MODULE_SCHEMA_DESIGN.md`
@@ -132,10 +255,10 @@
   - `MODULE_OPEN_QUESTIONS.md`
   - `MODULE_EXECUTION_LOG.md`
 - 建议成熟度变化：
-  - `MODULE_API_DESIGN.md`：高 L4 维持，已与全局 `OQ-021` / SC-05 口径对齐，接近 L5 候选但仍缺实现级 contract
-  - `MODULE_SCHEMA_DESIGN.md`：高 L4 维持，已收回共享映射漂移，接近 L5 候选但仍缺验证矩阵与实现级对象细化
-  - `MODULE_LOGIC_DESIGN.md`：高 L4 维持，SC-05 与 shared list state 逻辑更稳定，但仍缺验证矩阵与壳层精确状态流
-  - `MODULE_DEPENDENCIES.md`：高 L4 -> 低 L5 候选（跨模块共享边界与整体 readiness 分层判断已更明确）
+  - `MODULE_API_DESIGN.md`：高 L4 维持，已与全局 `OQ-021` / SC-05 口径对齐，仍只说明接近整体 `L5` 候选但未接受
+  - `MODULE_SCHEMA_DESIGN.md`：高 L4 维持，已收回共享映射漂移，仍只说明接近整体 `L5` 候选但未接受
+  - `MODULE_LOGIC_DESIGN.md`：高 L4 维持，SC-05 与 shared list state 逻辑更稳定，但仍只说明接近整体 `L5` 候选但未接受
+  - `MODULE_DEPENDENCIES.md`：高 L4 维持（跨模块共享边界与整体 readiness 分层判断已更明确，但不改变整体仍未被接受）
   - `MODULE_OPEN_QUESTIONS.md`：L4 -> 高 L4（新增 `MQ-007`，并把剩余缺口聚焦到整体 L5 收口与总控回写）
 - 验证结果：
   - 已对照 `OPEN_QUESTIONS.md` / `TECHNICAL_STANDARDS.md` / `DESIGN_DECISIONS.md` 回收 `OQ-021` 相关口径漂移
@@ -151,7 +274,7 @@
   - `MQ-005`
   - `MQ-007`
 - 下一步建议动作：
-  - 继续把 `MQ-001` 收敛成最小验证矩阵与命令级入口，这是 M01 逼近整体 L5 候选的首要缺口
+  - 继续把 `MQ-001` 收敛成最小验证矩阵与命令级入口，这是 M01 在整体接受前仍需补齐的首要缺口
   - 继续把 `MQ-003` / `MQ-005` 吸收到可审计的实现级 contract，但不要把业务模块扩展重新抬升为 M01 共享白名单
   - 由总控统一回写 M03 / M05 与全局状态文档，解除旧的“SC-05 仍是主阻塞”表述
 
@@ -177,9 +300,9 @@
   - `MODULE_OPEN_QUESTIONS.md`
   - `MODULE_EXECUTION_LOG.md`
 - 建议成熟度变化：
-  - `MODULE_API_DESIGN.md`：L4 -> 高 L4（共享下载 / 对象存储主题达到 L5 候选）
-  - `MODULE_SCHEMA_DESIGN.md`：L4 -> 高 L4（共享存储元数据主题达到 L5 候选）
-  - `MODULE_LOGIC_DESIGN.md`：L4 -> 高 L4（对象写入 / 下载逻辑主题达到 L5 候选）
+  - `MODULE_API_DESIGN.md`：L4 -> 高 L4（共享下载 / 对象存储主题边界更清晰，但不改变整体仍为高 L4）
+  - `MODULE_SCHEMA_DESIGN.md`：L4 -> 高 L4（共享存储元数据主题边界更清晰，但不改变整体仍为高 L4）
+  - `MODULE_LOGIC_DESIGN.md`：L4 -> 高 L4（对象写入 / 下载逻辑主题边界更清晰，但不改变整体仍为高 L4）
   - `MODULE_DEPENDENCIES.md`：高 L4 维持，跨模块依赖判断更可审计
 - 验证结果：
   - 已对照 `TECHNICAL_STANDARDS.md`、源实现计划中的对象存储约束，以及 M03 对 `storage_objects` / 共享下载的依赖引用进行回写

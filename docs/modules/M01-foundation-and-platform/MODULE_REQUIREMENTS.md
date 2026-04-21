@@ -146,6 +146,7 @@
 
 ## 13. 当前缺口
 
+- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但当前整体口径仍只能视为高 `L4`、接近整体 `L5` 候选但未接受；不得据此推导为已具备整体接受条件或可开启子任务设计。
 - 根目录统一脚本命名、health check 与 API / Web 双 lane 已按 `OQ-019` 吸收；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - `PageHeader`、Dashboard 摘要区和列表查询状态的共享最小层已冻结；当前未冻结的只剩精确 props 命名、callback catalog 与 resolved copy 承载形态等实现级细节。
 - locale fallback、切换策略和命名空间约束已冻结到最小共享规则级别，但完整的 URL / 持久化 / formatter 级 i18n 架构仍未定稿，尚不能据此直接开放子任务设计。

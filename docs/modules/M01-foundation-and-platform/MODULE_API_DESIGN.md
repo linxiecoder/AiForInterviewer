@@ -10,8 +10,8 @@
 | 接口 | 类型 | 消费方 | 作用 | 当前成熟度 |
 | --- | --- | --- | --- | --- |
 | `GET /api/v1/health` | HTTP API | 本地开发、CI、后续模块联调 | 返回最小存活确认 | L4 |
-| `GET /api/v1/storage-objects/{object_id}/download` | HTTP API | M03、M05、M06、M08 等业务模块 | 统一实际文件下载入口 | L4 / L5 候选 |
-| `StorageObjectWritePort` | 平台内部接口 | M03 上传 / 导出、M05 归档、M08 导出 | 统一对象写入与元数据回填边界 | L4 / L5 候选 |
+| `GET /api/v1/storage-objects/{object_id}/download` | HTTP API | M03、M05、M06、M08 等业务模块 | 统一实际文件下载入口 | 高 L4 |
+| `StorageObjectWritePort` | 平台内部接口 | M03 上传 / 导出、M05 归档、M08 导出 | 统一对象写入与元数据回填边界 | 高 L4 |
 | `getMessages()` + locale seed | 前端文案入口 | Web 页面、共享组件 | 统一读取可见文案，禁止硬编码 | L4 |
 | `AppShell` / `PageHeader` | 前端组合接口 | `/(dashboard)` 页面与后续业务页 | 统一工作台壳层与页面头部 | L4 |
 | `DataTable` / `FilterBar` / `Pagination` | 前端组合接口 | 列表型页面 | 统一表格、筛选、分页与状态骨架 | L4 |
@@ -214,12 +214,13 @@
 
 ## 10. 当前缺口
 
+- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但 API 文档整体仍只应按高 `L4` 理解，接近整体 `L5` 候选但未接受。
 - 共享下载网关与对象写入的最小口径已可供下游模块引用；当前仍未冻结的只剩代理流 / 签名 URL 切换策略、签名 TTL、分块上传与对象生命周期策略。
 - 共享页面原语已形成默认冻结口径；列表查询状态也已与全局 `OQ-021` 对齐到最小共享映射，并补齐了 request adapter / shared adapter 的最小承接边界；当前未冻结的只剩实现级 props / callback catalog、hook 组织和 resolved copy 承载形态。
 - 根目录脚本与 CI 入口虽已有方向，但未收敛成可供子任务直接照搬的接口清单。
 - 完整的 URL locale、持久化偏好、formatter 规则与分包加载策略仍未冻结。
 
-## 11. 进入可作为下游输入前需要补充
+## 11. 维持高 L4 时仍缺的最小条件
 
 - 共享下载 / 对象存储主题已补到可供 M03 / M05 引用；若继续推进这一主题，下一层只应细化 transport mode、生命周期与实现级适配，而不是回退最小共享边界。
 - 将 `PageHeader` 与 Dashboard 摘要区的最小接口边界固化为模块级默认共享页面原语口径。

@@ -144,8 +144,9 @@
 - 页面设计：统一要求后续页面显式覆盖 loading / empty / error 其中至少一种处理策略。
 - 文档治理：任何影响共享壳层、i18n 或目录结构的变化，都必须先更新模块文档，再下放到子任务。
 
-## 10. 进入 L5 前仍需补充
+## 10. 维持高 L4 时仍缺的最小条件
 
+- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但这只说明共享边界更稳定；当前 M01 仍只是高 `L4`、接近整体 `L5` 候选但未接受，不构成子任务设计前置条件。
 - `PageHeaderModel`、Dashboard 摘要区与 `ListQueryState` 的 shared adapter 三层边界已补齐；当前未冻结的只剩精确 props、request adapter 签名与 resolved copy 承载方式等实现级细节。
 - 根目录脚本命名、health check 与 API / Web 双 lane 已收敛为共享最小层；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - locale fallback、切换策略和消息命名空间已形成最小共享默认口径，但完整 i18n 架构仍未定稿，不足以直接安全拆子任务设计。

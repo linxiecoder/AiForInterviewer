@@ -168,12 +168,13 @@
 
 ## 7. 当前缺口
 
-- 页面头部与摘要区对象模型已形成默认冻结候选，但 `PageHeaderModel.summarySlot`、动作区代码级结构和摘要区精确字段命名仍停留在实现级细化阶段。
+- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但 Schema 文档整体仍只应按高 `L4` 理解，接近整体 `L5` 候选但未接受。
+- 页面头部与摘要区对象模型已形成默认冻结口径，但 `PageHeaderModel.summarySlot`、动作区代码级结构和摘要区精确字段命名仍停留在实现级细化阶段。
 - `ListQueryState` 与 URL、服务端查询参数的最小映射已形成 `proposed-default`，且当前只冻结 `page / page_size / q / status / sort / order`；高级筛选序列化、时间筛选扩展和 route / callback 等实现级交互细节仍未冻结。
 - `StorageObjectRecord` 的最小字段面、bucket / key 规则和 owner/source pointer 已冻结；当前仍未冻结的是对象生命周期、版本化、保留策略与 provider failover。
 - `VerificationEntry` 已冻结到最小命名与 API / Web 双 lane；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 
-## 8. 进入可作为下游输入前需要补充
+## 8. 维持高 L4 时仍缺的最小条件
 
 - `storage_objects` 的最小字段面已经足以供 M03 / M05 / M08 建立对象引用与下载投影，不应继续在下游模块重定义 bucket / key / source pointer。
 - 将页面头部与摘要区对象模型提升为模块级稳定默认口径，并保持不扩张为完整 props catalog。
