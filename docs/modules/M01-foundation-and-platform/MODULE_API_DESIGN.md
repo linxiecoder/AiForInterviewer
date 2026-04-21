@@ -197,6 +197,7 @@
   - `sortDirection -> order`
   - `filters.q -> q`
   - `filters.status -> status`
+- `updated_after` / `updated_before` 当前不属于 M01 冻结的共享最小映射；若业务模块需要时间筛选，只能在各自模块层单独登记扩展，不得反向要求 M01 升级共享白名单。
 - 服务端列表接口默认复用统一分页骨架：`items`、`page`、`page_size`、`total`、`total_pages`。
 - 页面容器负责 state / URL / request adapter；`DataTable` / `FilterBar` / `Pagination` 不直接依赖 router。
 - M01 只冻结平台级接口方向，不在本轮定义业务模块的请求 DTO、鉴权头或错误码字典。
@@ -204,7 +205,7 @@
 ## 10. 当前缺口
 
 - 共享下载网关与对象写入的最小口径已可供下游模块引用；当前仍未冻结的只剩代理流 / 签名 URL 切换策略、签名 TTL、分块上传与对象生命周期策略。
-- 共享页面原语已形成默认冻结口径；列表查询状态也已形成最小共享映射，但 `PageHeader` 与列表原语的实现级 props / callback catalog 仍未冻结。
+- 共享页面原语已形成默认冻结口径；列表查询状态也已与全局 `OQ-021` 对齐到最小共享映射，但 `PageHeader` 与列表原语的实现级 props / callback catalog 仍未冻结。
 - 根目录脚本与 CI 入口虽已有方向，但未收敛成可供子任务直接照搬的接口清单。
 - 完整的 URL locale、持久化偏好、formatter 规则与分包加载策略仍未冻结。
 
@@ -212,5 +213,5 @@
 
 - 共享下载 / 对象存储主题已补到可供 M03 / M05 引用；若继续推进这一主题，下一层只应细化 transport mode、生命周期与实现级适配，而不是回退最小共享边界。
 - 将 `PageHeader` 与 Dashboard 摘要区的最小接口边界固化为模块级默认共享页面原语口径。
-- 将列表查询状态的默认冻结口径继续吸收到实现级 prop / callback contract。
+- 将列表查询状态的默认冻结口径继续吸收到实现级 prop / callback contract，并保持共享最小映射只覆盖 `page / page_size / q / status / sort / order`。
 - 冻结根目录最小验证命令矩阵与调用入口。

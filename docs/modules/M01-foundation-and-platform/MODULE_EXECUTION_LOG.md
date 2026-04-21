@@ -25,6 +25,52 @@
 
 ## 3. 当前记录
 
+### 2026-04-21 / 轮次 R-Refactor-02 / 整体 L5 收口
+
+- 当前模块：M01
+- 本轮目标：
+  - 收口 `MODULE_API_DESIGN.md` / `MODULE_SCHEMA_DESIGN.md` / `MODULE_LOGIC_DESIGN.md` 的剩余口径漂移
+  - 明确 SC-05 已可下发给 M03 / M05，但 M01 整体仍未达到 `L5` 的保守判断
+  - 更新模块问题与执行日志，给总控提供跨模块回写依据
+- 执行类型：模块设计收口 / readiness 判断 / 文档治理回写准备
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中补写 `OQ-021` 最小映射白名单，并明确 `updated_after` / `updated_before` 不属于 M01 共享最小映射
+  - 在 `MODULE_SCHEMA_DESIGN.md` 中收回列表时间筛选的共享映射漂移，改为“业务模块扩展，不属于 M01 共享白名单”
+  - 在 `MODULE_LOGIC_DESIGN.md` 中补写列表状态与 URL / request 同步的共享边界，明确时间筛选和复杂筛选仍留在业务模块扩展层
+  - 在 `MODULE_DEPENDENCIES.md` 中写清“SC-05 主题已可作为下游模块设计输入，但 M01 整体仍非 L5”的分层判断
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中补写 `MQ-007`，记录需要总控统一回写跨模块 / 全局文档的治理问题
+  - 在 `MODULE_EXECUTION_LOG.md` 中登记本轮 L5 收口动作、保守 readiness 结论与总控回写建议
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_SCHEMA_DESIGN.md`
+  - `MODULE_LOGIC_DESIGN.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：高 L4 维持，已与全局 `OQ-021` / SC-05 口径对齐，接近 L5 候选但仍缺实现级 contract
+  - `MODULE_SCHEMA_DESIGN.md`：高 L4 维持，已收回共享映射漂移，接近 L5 候选但仍缺验证矩阵与实现级对象细化
+  - `MODULE_LOGIC_DESIGN.md`：高 L4 维持，SC-05 与 shared list state 逻辑更稳定，但仍缺验证矩阵与壳层精确状态流
+  - `MODULE_DEPENDENCIES.md`：高 L4 -> 低 L5 候选（跨模块共享边界与整体 readiness 分层判断已更明确）
+  - `MODULE_OPEN_QUESTIONS.md`：L4 -> 高 L4（新增 `MQ-007`，并把剩余缺口聚焦到整体 L5 收口与总控回写）
+- 验证结果：
+  - 已对照 `OPEN_QUESTIONS.md` / `TECHNICAL_STANDARDS.md` / `DESIGN_DECISIONS.md` 回收 `OQ-021` 相关口径漂移
+  - 已核对 `M02` / `M03` 对 `PageHeader`、`ListQueryState`、共享下载 / `storage_objects` 的引用，确认 M01 本轮只做模块侧吸收与判断，不越权修改下游文档
+  - 已按 UTF-8 回读目标文件，确认本轮补丁未引入 Markdown 结构破坏或明显乱码
+- 当前阻塞：
+  - `MQ-001`：根目录最小脚本 / pytest / vitest / CI 命令矩阵仍未冻结到可直接下发
+  - `MQ-003`：列表查询状态虽已对齐共享最小映射，但实现级 callback / request adapter contract 仍未冻结
+  - `MQ-005`：shared adapter 只冻结到职责边界，尚未冻结实现级承接方式
+- 当前待确认问题：
+  - `MQ-001`
+  - `MQ-003`
+  - `MQ-005`
+  - `MQ-007`
+- 下一步建议动作：
+  - 继续把 `MQ-001` 收敛成最小验证矩阵与命令级入口，这是 M01 逼近整体 L5 候选的首要缺口
+  - 继续把 `MQ-003` / `MQ-005` 吸收到可审计的实现级 contract，但不要把业务模块扩展重新抬升为 M01 共享白名单
+  - 由总控统一回写 M03 / M05 与全局状态文档，解除旧的“SC-05 仍是主阻塞”表述
+
 ### 2026-04-21 / 轮次 R-Refactor-02 / SC-05
 
 - 当前模块：M01

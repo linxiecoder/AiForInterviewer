@@ -24,17 +24,21 @@
 | MQ-301 | 简历保存新版本时是否必须提交 `base_version_no` 以做乐观锁校验 | confirmed | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`ST03_02` | 已确认：本轮只冻结“保存会新增不可变版本快照”，`base_version_no` 不设为模块级必填；若后续需要冲突校验，由 `ST03_02` 细化 | 否 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` |
 | MQ-302 | `jobs.status` 与 `resumes.status` 是否要在本轮冻结到精确枚举级 | confirmed | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_TASK_INDEX.md`、`ST03_01`、`ST03_02` | 已确认：本轮只冻结“必须存在可筛选状态字段与生命周期语义”，不在模块级冻结最终枚举表；精确枚举留待子任务评审 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_TASK_INDEX.md` |
 | MQ-303 | 原始 PDF / 导出 PDF 的业务下载入口与共享 `storage_objects` 下载入口如何映射 | confirmed | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`ST03_03` | 已确认：保留业务入口定位资源，真实文件下载统一复用共享文件下载能力 | 否 | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md` |
-| MQ-304 | 在 `OQ-021` 默认冻结后，M03 如何与全局列表共享契约对齐 | proposed-default | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MT03_02A`、`MT03_05` | 已与全局 `OQ-021` 对齐：冻结服务端查询键 `page` / `page_size` / `q` / `status` / `sort` / `order` / `updated_after` / `updated_before`、统一分页骨架与最小 URL / request 映射；实现级 callback 与复杂筛选双向映射继续留待微任务细化 | 否 | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
+| MQ-304 | 在 `OQ-021` 默认冻结后，M03 如何与全局列表共享契约对齐 | proposed-default | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MT03_02A`、`MT03_05` | 已与全局 `OQ-021` 对齐：共享最小映射只冻结 `page` / `page_size` / `q` / `status` / `sort` / `order`、统一分页骨架与最小 URL / request 映射；`updated_after` / `updated_before` 只可作为 M03 模块级扩展单独登记，不能回写成共享最小映射，也不能作为白名单 readiness 前提；实现级 callback 与复杂筛选双向映射继续留待微任务细化 | 否 | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
 | MQ-305 | 在 `OQ-020` 已形成默认冻结候选后，M03 页面如何承接共享页面头部 / 摘要区的最小接口边界 | proposed-default | `MODULE_DESIGN.md`、`MODULE_TASK_INDEX.md`、`MT03_02B`、`MT03_05` | 跟随全局方案 B：`PageHeader` 承载 `title` / `subtitle` / `primary_actions` / `secondary_actions`，摘要区独立承载 `status_badge` / `updated_at` / `summary_items` 与最小状态表达；完整 shared props catalog 继续后置 | 否 | `MODULE_DESIGN.md`、`MODULE_TASK_INDEX.md` |
 | MQ-306 | 现有 `ST03_01`、`ST03_02`、`ST03_03` 是否还能继续作为直接子任务设计入口 | proposed-default | `MODULE_TASK_INDEX.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、现有 `ST03_*` 子任务双文档 | 本轮默认不再作为直接入口，而是先回退为旧切分容器；待总控决定是否在全局任务索引与目录层面正式重编号或重映射 | 是 | `MODULE_TASK_INDEX.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md` |
-| MQ-307 | `jobs.requirement_items_json` 既作为 M04 / M06 输入，又缺少模块层最小输入契约，是否应先以候选口径上提收口 | proposed-default | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MT03_01`、`MT03_02A`、`MT03_02B`、M04、M06 | 本轮模块层默认口径：JSON array item 至少含 `item_key` / `text`；`null`=未完成结构化，`[]`=已结构化但无项；数组顺序即消费顺序；仅岗位写模型可整体替换；下一步等待总控决定是否升为 `OQ-025` 默认口径 | 是 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` |
+| MQ-307 | `jobs.requirement_items_json` 既作为 M04 / M06 输入，又缺少模块层最小输入契约，是否应先以候选口径上提收口 | proposed-default | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MT03_01`、`MT03_02A`、`MT03_02B`、M04、M06 | 已按 `OQ-025` 的 `proposed-default` 口径吸收到模块层：JSON array item 至少含 `item_key` / `text`；`null`=未完成结构化，`[]`=已结构化但无项；数组顺序即消费顺序；仅岗位写模型可整体替换；下一步不是等待是否升格，而是继续收紧模块内对下游稳定性的措辞 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` |
+| MQ-308 | `OQ-025` 已成为全局 `proposed-default` 后，M03 面向 M04 / M06 的输入契约应收紧到什么程度，才能避免把最小共享输入误写成完整岗位链 ready | proposed-default | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、M04、M06 | 当前只承认 `jobs.jd_markdown`、`requirement_items_json[*].item_key / text`、`null / []` 语义、数组顺序与“仅岗位写模型可整体替换”为最小共享输入；扩展字段、派生摘要、页面投影与岗位链整体 readiness 继续后置 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
+| MQ-309 | `MT03_01` / `MT03_03` 为什么当前仍只能停留在白名单观察面，而不能升级为正式子任务设计候选 | proposed-default | `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、`MT03_01`、`MT03_03` | 当前建议：两者虽已具备局部可拆输入，但仍受 `OQ-024` 正式入口映射未同步、`OQ-021` 模块漂移未完全清除、模块最低位文档仍需继续收紧，以及当前阶段仍关闭子任务窗口等约束；因此只能继续做模块层观察，不得正式开窗 | 否 | `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md` |
 
 ## 4. 当前高优问题
 
 | 优先级 | MQ ID | 当前阻塞文档 | 原因 | 本轮处理要求 |
 | --- | --- | --- | --- | --- |
 | P0 | MQ-306 | `MODULE_TASK_INDEX.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、现有 `ST03_*` 子任务双文档 | 若不先把旧入口回退为容器，M03 仍会被误判为“已可进入子任务设计” | 本轮先在模块层清理入口、重切微任务，并上报总控处理全局索引同步 |
-| P0 | MQ-307 | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、M04 / M06 下游输入判断 | 若模块层不给出最小默认口径，下游仍会各自发明 item schema，岗位链切分也无法稳定 | 本轮已整理出模块层 `proposed-default` 候选；下一步等待总控决定是否把该口径升级为 `OQ-025` 的默认冻结 |
+| P0 | MQ-307 | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、M04 / M06 下游输入判断 | 若模块层不给出最小默认口径，下游仍会各自发明 item schema，岗位链切分也无法稳定 | 当前已按 `OQ-025` 吸收到模块层；下一步转为收紧“最小共享输入 != 完整岗位链 ready”的表述 |
+| P0 | MQ-308 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、M04 / M06 下游输入判断 | 若不继续收紧措辞，模块文档仍会把最小共享输入误写成完整下游稳定输入 | 本轮只承认最小共享输入，不扩张到扩展字段、派生摘要或岗位链整体 ready |
+| P0 | MQ-309 | `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md` | 若不把白名单观察面与正式候选分开，`MT03_01` / `MT03_03` 会再次被误判为“可正式开子任务设计” | 本轮明确两者只可继续做模块层观察，不得正式开窗 |
 | P0 | MQ-301 | `ST03_02` 下游设计 | 若子任务阶段重新发明冲突策略，编辑器保存接口仍可能漂移 | 已确认当前轮口径；下一步只在 `ST03_02` 细化冲突契约 |
 | P1 | MQ-302 | `MODULE_SCHEMA_DESIGN.md`、`ST03_01`、`ST03_02` | 若子任务阶段各自定义状态枚举，列表筛选和日志仍会对不齐 | 已确认当前轮口径；下一步由 `ST03_01` / `ST03_02` 细化枚举 |
 | P1 | MQ-303 | `MODULE_API_DESIGN.md`、`ST03_03` | 若实施时绕开共享下载能力，仍会产生重复权限逻辑 | 已确认当前轮口径；下一步由 `ST03_03` 按共享下载能力落实现 |
@@ -45,13 +49,10 @@
 
 > 只有当问题影响多个模块、共享契约或全局技术口径时，才列在这里，等待总控 Codex 同步到根目录 `OPEN_QUESTIONS.md`。
 
-- `MQ-304`、`MQ-305` 分别依赖已存在的 `OQ-021`、`OQ-020`；其中 `MQ-304` 已按全局 `proposed-default` 吸收，本轮不重复升级。
-- `MQ-306` 建议升级到全局：
-  - 原因：它会影响根目录 `TASK_INDEX.md`、`MODULE_INDEX.md` 对 M03 阶段判断的口径。
-  - 建议动作：由总控决定是否把现有 `ST03_*` 保留为容器，并在全局索引中同步“暂不直开”。
-- `MQ-307` 建议升级到全局：
-  - 原因：它影响 M04 / M06 对 `jobs.requirement_items_json` 的可依赖性判断，已经超出 M03 内部单模块边界。
-  - 建议动作：由总控评估是否把当前模块候选口径升级为 `OQ-025` 的 `proposed-default` / `confirmed`，并同步回写 M04 / M06 的下游依赖判断。
+- `MQ-304`、`MQ-305` 分别依赖已存在的 `OQ-021`、`OQ-020`；本轮不新增全局问题，只继续吸收现有默认口径。
+- `MQ-306` 已映射到全局 `OQ-024`；本轮不新增全局问题，但仍需要总控把“旧入口仅保留为历史容器、禁止直开”的状态同步到全局索引。
+- `MQ-307` 已映射到全局 `OQ-025`；本轮不新增全局问题，但仍需要总控把“最小共享输入 != 完整岗位链 ready”的措辞同步到全局状态文档。
+- `MQ-308`、`MQ-309` 属于 M03 的模块层吸收与 readiness 收紧问题，本轮不新增全局问题。
 
 ## 6. 使用说明
 

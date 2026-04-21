@@ -188,6 +188,48 @@
   - 继续保持 `MT02_05`、`MT02_06` 在页面后置队列，不因模块整体接近 `L5` 候选而放宽
   - 若下一轮需要尝试进入子任务设计，只能先从 `MT02_01`、`MT02_02` 的候选复核开始，而不是直接开启页面或验证类任务
 
+### 2026-04-21 / 轮次 MR-06
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 收紧 `M02` 的 readiness 判断，只围绕 `MT02_01`、`MT02_02` 做候选白名单准备
+  - 明确旧入口与新入口映射下，为什么“白名单观察面”不等于“正式子任务开窗”
+  - 记录仍阻塞正式进入子任务设计的 API / 权限 / 映射问题
+- 执行类型：候选白名单准备 / readiness 边界收紧 / 入口映射叙事校正
+- 修改内容：
+  - 在 `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`、`MODULE_DESIGN.md` 中统一写死：本轮白名单观察面仅为 `MT02_01/MT02_02`，`MT02_03/MT02_07` 只保留后续观察顺序，不纳入本轮白名单
+  - 在 `MODULE_API_DESIGN.md` 中收紧接口口径：auth backend 只足以支持 `MT02_01/MT02_02` 作为观察面；`MT02_02` 若要转为正式候选，仍需 `OQ-024` 正式映射与权限消费边界继续留在模块层
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中新增 `MQ-209`，把“白名单观察面 vs 正式开窗状态”的治理边界显式化
+  - 在模块文档中同步强调：白名单观察面只用于总控继续复核 readiness，不允许据此创建子任务设计窗口或补写子任务双文档
+- 影响文件：
+  - `MODULE_DESIGN.md`
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_DESIGN.md`：维持 `L5` 候选，但 readiness 与白名单边界更清晰
+  - `MODULE_TASK_INDEX.md`：维持 `L5` 候选，但“观察面”与“正式开窗”不再混写
+  - `MODULE_DEPENDENCIES.md`：维持 `L5` 候选，但 readiness 结论从候选顺序收紧到白名单观察面
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，最低位继续集中在 `/members` 列表共享契约与权限消费边界
+  - `MODULE_OPEN_QUESTIONS.md`、`MODULE_EXECUTION_LOG.md`：维持可审计收口状态
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md` 与全局 `OPEN_QUESTIONS.md` 核对本轮范围
+  - 已按 UTF-8 安全读写要求完成修改并回读校验
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控在全局文档中同步“白名单观察面”和“正式开窗状态”的区分，避免把 `MT02_01/MT02_02` 误写为已放行任务
+  - 若继续推进 `M02`，仅继续围绕 `MT02_01/MT02_02` 做白名单复核，不打开任何子任务设计窗口
+  - 页面类与验证类微任务继续保持后置，直到 `OQ-021`、`OQ-022` 与 `OQ-024` 的全局状态完成回写
+
 ## 4. 使用说明
 
 - 每完成一轮模块级工作后，应新增一条记录，而不是覆盖旧记录。

@@ -23,21 +23,21 @@
 
 | 前置项 | 当前状态 | 影响微任务 | 当前判断 |
 | --- | --- | --- | --- |
-| `jobs.requirement_items_json` 最小结构与字段责任 | `proposed-default`（模块层候选） | `MT03_01`、`MT03_02A`、`MT03_02B`，以及 M04 / M06 下游消费 | 已上提到模块层，可作为岗位链首开输入；仍待总控决定是否升格为 `OQ-025` 默认口径 |
+| `jobs.requirement_items_json` 最小结构与字段责任 | `proposed-default`（已按 `OQ-025` 吸收） | `MT03_01`、`MT03_02A`、`MT03_02B`，以及 M04 / M06 下游消费 | 已上提到模块层并与 `OQ-025` 对齐；当前只足够支撑最小共享输入与白名单观察，不等于岗位链整体 ready |
 | `jobs.status` / `resumes.status` 生命周期语义 | 已冻结到语义层，未冻结到枚举层 | `MT03_01`、`MT03_02A`、`MT03_02B`、`MT03_03`、`MT03_04` | 允许继续做微任务设计，但不允许各微任务自行发明最终枚举 |
 | `current_document_id` / `version_no` / 保存新增快照规则 | 已冻结到模块层 | `MT03_03`、`MT03_04`、`MT03_05` | 可以作为后续微任务设计输入 |
 | `OQ-020` 共享页面原语最小边界 | `proposed-default` | `MT03_02B`、`MT03_05` | 作为候选输入可引用，但不适合本轮直接开页面微任务 |
-| `OQ-021` 列表 shared contract | `proposed-default` | `MT03_02A`、`MT03_05` | 作为候选输入可引用，但仍需保留实现级风险位 |
+| `OQ-021` 列表 shared contract | `proposed-default` | `MT03_02A`、`MT03_05` | 共享最小映射只覆盖 `page / page_size / q / status / sort / order`；`updated_after / updated_before` 只可作为模块级扩展单独登记，仍需保留实现级风险位 |
 | M01 共享下载 / 对象存储口径 | 成熟度不足 | `MT03_06`、`MT03_07`、`MT03_08` | 仍是上传/导出相关微任务的主要阻塞 |
 
 ## 4. 重切后的微任务依赖矩阵
 
 | 微任务 ID | 直接依赖 | 当前主要阻塞 | 并行组 | 当前判断 |
 | --- | --- | --- | --- | --- |
-| `MT03_01` | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md` | `OQ-025` 尚未全局冻结，但模块层已给出最小候选契约 | A | 可先按模块候选口径开设计，不得新增 item schema 义务 |
+| `MT03_01` | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md` | `OQ-025` 虽已形成全局 `proposed-default`，但当前只足够支撑最小共享输入与白名单观察 | A | 仅保留为白名单观察面，不得正式开设计窗口 |
 | `MT03_02A` | `MT03_01`、`MQ-302`、`OQ-021`、M02 页面可见性基线 | 列表 shared contract 仍只有默认候选 | B | `OQ-021` 进一步收敛后可单独启动 |
 | `MT03_02B` | `MT03_01`、`OQ-020`、M02 页面可见性基线 | 详情页摘要 / 页面原语仍只有默认候选 | B | `OQ-020` 进一步收敛后可单独启动 |
-| `MT03_03` | `MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` | 仅剩状态精确枚举未细化 | A | 模块层补齐后可优先启动 |
+| `MT03_03` | `MODULE_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` | 状态精确枚举、正式入口映射与模块整体 readiness 仍未完全收口 | A | 仅保留为白名单观察面，不得正式开设计窗口 |
 | `MT03_04` | `MT03_03`、`MQ-301` | 依赖聚合根与版本不变量先稳定 | 串行 | 不建议与 `MT03_03` 同时开启 |
 | `MT03_05` | `MT03_03`、`MT03_04`、`OQ-006`、`OQ-020`、`OQ-021` | 页面共享契约与版本接口仍未同时稳定 | B | 共享契约冻结后可并行 |
 | `MT03_06` | `OQ-007`、M01 对象存储基线 | M01 成熟度不足 | D | 等待 M01 |
@@ -47,7 +47,7 @@
 ## 5. 面向 M04-M06 的输出 readiness
 
 ### 5.1 面向 M04
-- 当前可稳定引用：
+- 当前只可按最小共享输入引用：
   - `jobs.id`
   - `jobs.jd_markdown`
   - `jobs.requirement_items_json[*].item_key`
@@ -56,16 +56,16 @@
   - `resumes.id`
   - `resumes.current_document_id`
   - `resume_documents.markdown_content`
-- 当前仍不能宣称完全稳定：
+- 当前仍不能宣称为完整稳定输入：
   - `jobs.requirement_items_json` 的扩展字段
-  - 原因：模块层已形成 `proposed-default` 最小契约，但 `OQ-025` 尚未在总控层完成默认冻结
+  - 原因：`OQ-025` 虽已在总控层登记为 `proposed-default`，但当前仍只冻结最小 item 子集、`null / []` 语义、数组顺序与写入责任
 - 不应从 M03 引用：
   - `job_resume_bindings`
   - `job_resume_match_analyses`
   - 训练证据对象
 
 ### 5.2 面向 M05
-- 当前可稳定引用：
+- 当前可按现有模块边界引用：
   - 原始 PDF / 导出 PDF 对应的对象引用关系
   - `resume_conversion_logs`
   - `resume_export_records`
@@ -76,16 +76,16 @@
   - M05 若要归档简历相关内容，应基于业务显式选择的导出产物或归档流程，而不是直接把当前简历正文当共享知识资产
 
 ### 5.3 面向 M06
-- 当前可稳定引用：
+- 当前只可按最小共享输入引用：
   - `jobs.jd_markdown`
   - `jobs.requirement_items_json[*].item_key`
   - `jobs.requirement_items_json[*].text`
   - `jobs.requirement_items_json` 的数组顺序
   - `resumes.current_document_id`
   - `resume_documents.markdown_content`
-- 当前仍不能宣称完全稳定：
+- 当前仍不能宣称为完整稳定输入：
   - `jobs.requirement_items_json` 的扩展字段
-  - 原因：与 M04 一致，模块层只有最小候选契约，`OQ-025` 尚未全局冻结
+  - 原因：与 M04 一致，当前只有 `OQ-025` 的最小共享输入，不包含扩展字段与完整岗位链 readiness
 - 需要显式遵守：
   - M06 消费的是“当前简历正文”，不是转换日志内部细节
   - M06 不应依赖 `summary_json` 这类未冻结内部 JSON 结构
@@ -99,9 +99,10 @@
   - 当前仍不满足“批量开启”
   - 主要原因：
     - 旧 `ST03_*` 入口已经被判定为错误切分，必须先完成任务重切后的全局索引同步
-    - `OQ-020`、`OQ-021` 和 M01 共享下载口径仍会直接影响页面 / 下载相关微任务
-  - 但局部判断：
-    - `MT03_01` 已具备岗位链首开候选条件，只能按模块层 `proposed-default` 契约推进，不得再改 item schema
+    - `OQ-021` 的共享最小映射虽已澄清，但模块内仍需继续消化漂移，`OQ-020` 与 M01 共享下载口径也仍会直接影响页面 / 下载相关微任务
+    - 当前阶段仍定义为“白名单观察准备”，不是“正式放行子任务设计”
+  - 局部判断：
+    - `MT03_01`、`MT03_03` 当前只可作为白名单观察面继续复核，不得据此启动正式子任务设计窗口
 - 进入 M03 微任务实施：
   - 当前不满足
   - 原因：
@@ -113,6 +114,6 @@
 
 - M01 仍只给出了方向性基础设施约束，尚未提供足以支撑上传 / 导出微任务的高成熟度下载与对象存储口径。
 - M02 已给出权限矩阵基线，但页面级和接口级的最终细节仍不适合在 M03 内部重写。
-- `jobs.requirement_items_json` 已形成模块层最小候选契约，但 `OQ-025` 尚未全局冻结，扩展字段仍不可依赖；若总控改写默认口径，岗位链 `MT03_01` / `MT03_02A` / `MT03_02B` 需同步回看。
-- `OQ-021` 与 `OQ-020` 当前都只应被视为 shared contract 候选输入，仍不足以让旧 `ST03_01` / `ST03_02` 直接开窗。
+- `jobs.requirement_items_json` 已按 `OQ-025` 吸收到模块层最小共享输入，但扩展字段仍不可依赖；若总控改写默认口径或调整下游措辞，岗位链 `MT03_01` / `MT03_02A` / `MT03_02B` 需同步回看。
+- `OQ-021` 与 `OQ-020` 当前都只应被视为 shared contract 候选输入；其中 `updated_after / updated_before` 只属于模块级扩展，不足以让旧 `ST03_01` / `ST03_02` 或新的白名单观察面直接开窗。
 - 如果后续 `OQ-006`、`OQ-007` 或 M01 共享下载口径被改写，M03 的上传 / 导出 / 预览相关微任务切分需要整体回看。

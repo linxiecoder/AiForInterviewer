@@ -25,6 +25,59 @@
 
 ## 3. 当前记录
 
+### 2026-04-21 / 轮次 R-Refactor-03 / 任务包 MR-07
+
+- 当前模块：M03
+- 本轮目标：
+  - 将 `OQ-025` 吸收到 M03 模块文档，并收紧对 M04 / M06 的输入契约措辞
+  - 修正 `OQ-021` 在模块内造成的共享最小映射漂移
+  - 明确 `MT03_01` / `MT03_03` 为什么当前仍只属于白名单观察面
+- 执行类型：共享契约吸收 / 模块措辞收紧 / readiness 重判
+- 修改内容：
+  - 在 `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md` 中把“稳定输入 / 候选 ready”收紧为“最小共享输入 / 白名单观察”，避免把 `OQ-025` 的最小口径误写成完整岗位链已 ready
+  - 在 `MODULE_API_DESIGN.md` 中修正 `OQ-021` 漂移：共享最小映射只保留 `page / page_size / q / status / sort / order`，并把 `updated_after / updated_before` 回退为 M03 模块级扩展
+  - 在 `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md` 中把 `MT03_01` / `MT03_03` 从“接近可开设计”收紧为“只允许继续做模块层白名单观察”
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中修正 `MQ-304` / `MQ-307`，并新增 `MQ-308`、`MQ-309` 记录输入契约措辞收紧和白名单升级条件
+  - 同步下调 `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` 的状态表述，统一回到高 `L4`
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_DESIGN.md`
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_SCHEMA_DESIGN.md`
+  - `MODULE_LOGIC_DESIGN.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_REQUIREMENTS.md`：高 `L4` 维持，白名单观察与正式候选边界更清晰
+  - `MODULE_DESIGN.md`：高 `L4` 维持，M03 -> M04/M06 的最小共享输入措辞已收紧
+  - `MODULE_API_DESIGN.md`：高 `L4` 维持，`OQ-021` 共享最小映射漂移已修正
+  - `MODULE_SCHEMA_DESIGN.md`：高 `L4` 维持，`OQ-025` 最小 item 契约与扩展字段边界更一致
+  - `MODULE_LOGIC_DESIGN.md`：高 `L4` 维持，状态表述与当前阶段判断重新对齐
+  - `MODULE_TASK_INDEX.md`：高 `L4` 维持，`MT03_01` / `MT03_03` 白名单观察面已显式化
+  - `MODULE_DEPENDENCIES.md`：高 `L4` 维持，正式候选门槛与最小共享输入边界更清晰
+  - `MODULE_OPEN_QUESTIONS.md`：高 `L4` 维持，新增本轮模块吸收与 readiness 收紧问题
+- 验证结果：
+  - 已对照 `OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md` 中 `OQ-021` / `OQ-025` / 白名单观察面的最新口径
+  - 已检查本轮修改未越出 M03 模块目录，也未触碰全局主文档和其他模块文档
+  - 已按 UTF-8 回读确认相关 Markdown 段落无乱码、无结构破坏
+- 当前阻塞：
+  - `OQ-024`：旧 `ST03_*` 历史容器与 `MT03_*` 正式入口映射仍未由总控同步
+  - `MQ-308`：M03 -> M04 / M06 的最小共享输入虽已收紧，但全局状态文档仍需同步使用同一措辞
+  - `MQ-309`：`MT03_01` / `MT03_03` 的白名单观察面升级条件仍未满足
+  - M01 共享下载 / 对象存储口径仍继续阻塞 `MT03_06`、`MT03_08`
+- 当前待确认问题：
+  - `MQ-304`
+  - `MQ-306`
+  - `MQ-307`
+  - `MQ-308`
+  - `MQ-309`
+- 下一步建议动作：
+  - 由总控窗口统一回写 `OQ-025` 对 `M03 -> M04/M06` 的“最小共享输入、不等于完整链路 ready”措辞
+  - 由总控窗口统一回写 `OQ-024` 下旧 `ST03_*` 与 `MT03_*` 的正式映射状态
+  - 在当前轮次结束前继续维持 `MT03_01` / `MT03_03` 只做白名单观察，不开放任何 `MT03_*` 子任务设计窗口
+
 ### 2026-04-21 / 轮次 R-Refactor-02 / 任务包 MR-04
 
 - 当前模块：M03

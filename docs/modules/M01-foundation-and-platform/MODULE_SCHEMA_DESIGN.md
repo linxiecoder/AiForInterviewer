@@ -87,7 +87,7 @@
   - `sortDirection -> order`
   - `filters.q -> q`
   - `filters.status -> status`
-  - 时间筛选统一映射为 `updated_after`、`updated_before`
+- `updated_after` / `updated_before` 当前只允许作为业务模块扩展字段单独登记，不属于 M01 冻结的共享最小映射。
 - 多值筛选首轮默认使用重复 query key 表达，不引入模块私有编码格式。
 
 ### 3.8 `LocaleMessageBundle`
@@ -138,6 +138,7 @@
 - `ShellNavigationItem.labelKey`、`PageHeaderModel.*Key`、`ListActionSpec.labelKey` 都必须引用 `LocaleMessageBundle` 中的消息键。
 - `ShellNavigationItem.href` 需对齐页面信息架构中的工作台一级导航与 Dashboard 路由组。
 - `ListQueryState` 是页面与列表原语之间的共享视图状态，不是后端数据库实体。
+- `ListQueryState` 的共享最小映射只覆盖 `page / page_size / q / status / sort / order`；时间筛选和更复杂的高级筛选仍留给业务模块在各自文档中扩展，不作为 M01 共享 readiness 白名单。
 - `StorageObjectRecord.source_type` / `source_id` 表达对象与业务资源的最小 owner/source pointer；它们为共享下载网关提供定位线索，但不单独构成完整权限来源。
 - 业务模块若需要保留 `original-pdf`、`export-report` 等业务入口，应通过业务资源定位到 `storage_objects.id`，而不是复制 bucket / key 规则。
 - 服务端列表响应默认复用统一分页骨架：`items`、`page`、`page_size`、`total`、`total_pages`。
@@ -163,7 +164,7 @@
 ## 7. 当前缺口
 
 - 页面头部与摘要区对象模型已形成默认冻结候选，但 `PageHeaderModel.summarySlot`、动作区代码级结构和摘要区精确字段命名尚未冻结到可直接实现复用。
-- `ListQueryState` 与 URL、服务端查询参数的最小映射已形成 `proposed-default`；但高级筛选序列化和完整实现级交互细节仍未冻结。
+- `ListQueryState` 与 URL、服务端查询参数的最小映射已形成 `proposed-default`，且当前只冻结 `page / page_size / q / status / sort / order`；高级筛选序列化、时间筛选扩展和完整实现级交互细节仍未冻结。
 - `StorageObjectRecord` 的最小字段面、bucket / key 规则和 owner/source pointer 已冻结；当前仍未冻结的是对象生命周期、版本化、保留策略与 provider failover。
 - `VerificationEntry` 尚未细化到最终命令级矩阵。
 
@@ -171,5 +172,5 @@
 
 - `storage_objects` 的最小字段面已经足以供 M03 / M05 / M08 建立对象引用与下载投影，不应继续在下游模块重定义 bucket / key / source pointer。
 - 将页面头部与摘要区对象模型提升为模块级稳定默认口径，并保持不扩张为完整 props catalog。
-- 将列表查询状态与 URL / callback 的默认冻结口径继续吸收到组件接口与页面样例。
+- 将列表查询状态与 URL / callback 的默认冻结口径继续吸收到组件接口与页面样例，并保持时间筛选等扩展留在业务模块侧。
 - 冻结根目录验证矩阵对象与 CI job 的一一对应关系。
