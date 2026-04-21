@@ -252,7 +252,17 @@
 | 普通团队业务页 / API | 如岗位、简历、面试、复盘、资产、训练 | 允许 | 允许访问本团队资源 | `401` / 跳转登录 | `404` 或 `403` |
 | `/(dashboard)/admin/**`、`/api/v1/admin/**` | 管理台专属能力 | 允许 | `403` | `401` / 跳转登录 | `403` |
 
-## 6. 鉴权测试硬约束映射
+## 6. 接口与旧新入口映射
+
+| 旧入口 | 当前由 API 文档冻结的内容 | 对应新蓝本 | 当前 readiness 判断 |
+| --- | --- | --- | --- |
+| `ST02_01` | `POST /api/v1/auth/login`、`GET /api/v1/auth/me`、`POST /api/v1/auth/logout` 的 payload、`CurrentUserContext` 语义、`logout=204` | `MT02_01`、`MT02_02` | auth backend 边界已比页面面更稳定，但在 `OQ-024` 正式映射前仍只应视为候选，不得借旧入口直开 |
+| `ST02_01` | `/login` 只允许消费上面的 auth 契约，不允许反向扩张 API 负载 | `MT02_05` | 页面 adapter 继续后置；不能因为 `/auth/*` 边界已较清楚，就误判 `/login` 已可进入子任务设计 |
+| `ST02_02` | `GET /api/v1/members`、`GET /api/v1/members/{member_id}` 的安全字段投影、过滤与错误语义 | `MT02_03`、`MT02_04` | `member detail` 边界已接近稳定；`members list` 仍受 `OQ-021`，所以 `MT02_04` 继续阻塞 |
+| `ST02_02` | `/(dashboard)/members` 只能消费共享列表 / i18n / 页面原语口径，不能私自倒推 API 细节 | `MT02_06` | 页面 adapter 继续后置；必须等待列表契约与页面共享口径同时稳定 |
+| `ST02_03` | `/(dashboard)/admin/**`、`/api/v1/admin/**` 的访问矩阵基线 | `MT02_07`、`MT02_08` | policy 面可列为候选，但验证矩阵必须等待 `MT02_04`、`MT02_07` 稳定，旧入口不得直开 |
+
+## 7. 鉴权测试硬约束映射
 
 - 所有新增受保护接口必须覆盖：
   - 未登录 `401`
@@ -264,7 +274,11 @@
 - 权限矩阵专门测试文件基线：
   - `apps/api/tests/test_authorization_matrix.py`
 
-## 7. 当前缺口
+## 8. 当前缺口与 readiness 收紧点
 
 - `members` 列表已具备共享 query / envelope 默认口径，但实现级分页回调签名、复杂筛选编码与 URL 细节仍依赖后续精化。
-- 因此当前 API 文档达到的是“登录态接口、详情接口、成员条目 payload 与列表集合最小包装均已有稳定候选，但完整实现级交互仍为高 `L4` 缺口”的状态。
+- 这意味着当前 API 文档的最低位已经收缩到明确范围：
+  - auth backend 相关接口主要支撑 `MT02_01`、`MT02_02` 的候选边界
+  - `GET /api/v1/members/{member_id}` 的 detail 语义已接近稳定
+  - 真正仍拉低 readiness 的核心是 `GET /api/v1/members` 的列表共享契约吸收，以及页面 adapter 不能据此提前放行
+- 因此当前 API 文档达到的是“auth 接口、detail 接口与权限矩阵基线已可审计，列表接口仍为高 `L4` 缺口；页面类微任务继续后置”的状态，而不是“所有接口都已足以支撑子任务设计”。

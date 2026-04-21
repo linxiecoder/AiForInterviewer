@@ -25,6 +25,54 @@
 
 ## 3. 当前记录
 
+### 2026-04-21 / 轮次 R-Refactor-02 / 任务包 MR-04
+
+- 当前模块：M03
+- 本轮目标：
+  - 继续清理岗位链相关任务拆分，不再把岗位读模型与页面承接绑成同一微任务
+  - 把 `jobs.requirement_items_json` 的最小输入契约上提到模块层，作为可供总控冻结的候选口径
+  - 更新岗位链的依赖闸门、问题状态与下一轮首开顺序
+- 执行类型：岗位链再切分 / 输入契约上提 / 模块问题回写
+- 修改内容：
+  - 在 `MODULE_DESIGN.md` 中新增模块层 `proposed-default` 候选契约：`jobs.requirement_items_json` 的 item 至少包含 `item_key` / `text`，并明确 `null` / `[]` 语义、数组顺序与写入责任
+  - 在 `MODULE_SCHEMA_DESIGN.md` 中把上述候选口径落成 schema 级表述，限制扩展字段仍处于未冻结区
+  - 在 `MODULE_TASK_INDEX.md` 中把旧 `MT03_02` 再切成 `MT03_02A`（岗位列表 read API 与查询 adapter）和 `MT03_02B`（岗位详情 read projection 与页面摘要承接）
+  - 在 `MODULE_DEPENDENCIES.md` 中改写岗位链依赖闸门：`MT03_01` 成为岗位链首开候选，`MT03_02A` 受 `OQ-021` 闸门控制，`MT03_02B` 受 `OQ-020` 闸门控制
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中把 `MQ-307` 从 `open` 推进为 `proposed-default`，并明确需要总控决定是否升级为 `OQ-025` 默认口径
+  - 同步修补 `MODULE_REQUIREMENTS.md` 对 `jobs.requirement_items_json` 的旧表述，避免与本轮模块层候选口径冲突
+- 影响文件：
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_DESIGN.md`
+  - `MODULE_SCHEMA_DESIGN.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_DESIGN.md`：保持 `L4/L5` 候选，但岗位链共享契约边界已明显更清晰
+  - `MODULE_SCHEMA_DESIGN.md`：`L4` 内部收紧，`jobs.requirement_items_json` 不再只有字段级描述
+  - `MODULE_TASK_INDEX.md`：保持 `L4`，但岗位链微任务边界从“读模型+页面混合面”收紧为可审计的列表面 / 详情面
+  - `MODULE_DEPENDENCIES.md`：保持 `L4`，但岗位链的首开顺序与共享闸门更可执行
+  - `MODULE_OPEN_QUESTIONS.md`：保持 `L4/L5` 候选，`MQ-307` 已从纯问题升级为可供总控冻结的默认候选
+- 验证结果：
+  - 已按 UTF-8 回读本轮修改的 Markdown 文件，未发现新的 `U+FFFD`、异常问号或 Markdown 结构损坏
+  - 已对照 `DOC_GOVERNANCE.md` 与 `MR-04` 任务包范围，确认本轮只处理岗位链与输入契约上提，未扩展到其他 M03 主题
+  - 已检查 `MODULE_REQUIREMENTS.md` 与重点文档的直接冲突表述，并同步修补到一致口径
+- 当前阻塞：
+  - `OQ-025` 仍未在总控层冻结；当前只有模块层 `proposed-default` 候选，扩展字段仍不可依赖
+  - `OQ-021` 仍限制 `MT03_02A` 的列表查询 / URL / callback 细节
+  - `OQ-020` 仍限制 `MT03_02B` 的详情摘要区与共享页面原语承接细节
+  - `MQ-306` 仍需总控把旧 `ST03_*` 容器状态同步回写到全局索引
+- 当前待确认问题：
+  - `MQ-306`
+  - `MQ-307`
+  - `MQ-304`
+  - `MQ-305`
+- 下一步建议动作：
+  - 先由总控窗口决定是否把当前 `MQ-307` 候选口径升级为 `OQ-025` 的默认冻结
+  - 若总控接受当前候选口径，可优先开启 `MT03_01` 的子任务设计
+  - 待 `OQ-021` 进一步收敛后开启 `MT03_02A`，待 `OQ-020` 进一步收敛后开启 `MT03_02B`
+
 ### 2026-04-21 / 轮次 R-Refactor-01 / 任务包 M03-Task-Recut
 
 - 当前模块：M03

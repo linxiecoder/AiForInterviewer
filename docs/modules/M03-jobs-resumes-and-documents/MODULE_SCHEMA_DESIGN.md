@@ -52,8 +52,32 @@
   - `deleted_at`
   - `deleted_by`
 - 说明：
-  - `requirement_items_json` 被 M04 / M06 直接消费，但当前只冻结“结构化要求集合”这一语义；最小 item 结构、空值语义和排序规则仍待 `MQ-307` 收口。
+  - `requirement_items_json` 被 M04 / M06 直接消费；本轮已在模块层形成 `proposed-default` 最小契约，用于约束最小 item 结构、空值语义、排序规则与写入责任。
   - `latest_match_analysis_id` 只是跨模块引用，不代表 M03 管理分析对象本身。
+
+### 2.2.1 `jobs.requirement_items_json` 最小 item 契约
+- 物理形态：
+  - `jsonb`
+  - 允许为 `null` 或 JSON array
+- 空值语义：
+  - `null`：岗位结构化要求尚未完成整理，不能作为 M04 / M06 稳定输入。
+  - `[]`：岗位结构化要求已完成整理，但当前没有可独立消费的要求项。
+- 非空数组中的每个 item 至少包含：
+  - `item_key`
+    - string
+    - 在同一 `job` 内唯一，用于下游稳定引用。
+  - `text`
+    - string
+    - `trim` 后不能为空，承载最小人类可读要求正文。
+- 排序规则：
+  - 数组顺序是唯一排序事实来源。
+  - 下游详情展示、上下文装配与匹配分析必须保持原序，不得自行重排。
+- 写入责任：
+  - 仅 `POST/PATCH jobs` 可以整体替换该数组。
+  - 列表 / 详情读模型与 M04 / M06 不得局部 patch、反向回写或重写 item schema。
+- 未冻结扩展区：
+  - 分类、权重、来源区段、证据提示等扩展字段仍未冻结。
+  - 在总控收口 `OQ-025` 前，下游模块不得依赖扩展字段存在。
 
 ### 2.3 `resumes`
 - 最低字段面：
@@ -206,7 +230,7 @@
 
 | 对象 | 模块级已冻结 | 延后到子任务级细化 |
 | --- | --- | --- |
-| `jobs` | 最小字段面、`requirement_items_json` 作为下游稳定输入、必须存在可筛选 `status` | `status` 精确枚举值与页面侧 badge 映射 |
+| `jobs` | 最小字段面、`requirement_items_json` 的 `item_key` / `text` / 数组顺序候选契约、必须存在可筛选 `status` | `status` 精确枚举值、`requirement_items_json` 扩展字段与页面侧 badge 映射 |
 | `resumes` | `source_type`、`original_pdf_object_id` / `current_document_id` 的可空语义、当前版本指针规则 | `status` 精确枚举值、列表摘要字段投影 |
 | `resume_documents` | `version_no` 唯一、`markdown_content` 为事实正文、历史版本不可变 | `summary_json` 结构、`save_reason` 枚举值 |
 | `resume_conversion_logs` | 状态日志是上传后异步转换事实来源、失败必须有 `error_message` | 错误分类细粒度、前端展示文案映射 |
@@ -217,7 +241,9 @@
 - 面向 M04：
   - `jobs.id`
   - `jobs.jd_markdown`
-  - `jobs.requirement_items_json`（当前仅字段级可引用，item-level JSON contract 仍待 `MQ-307`）
+  - `jobs.requirement_items_json[*].item_key`
+  - `jobs.requirement_items_json[*].text`
+  - `jobs.requirement_items_json` 的数组顺序
   - `resumes.id`
   - `resumes.current_document_id`
   - `resume_documents.markdown_content`
@@ -226,12 +252,12 @@
   - `resume_conversion_logs` 与 `resume_export_records` 的来源链路
   - `resume_documents` 不进入共享 `retrieval_chunks`
 - 面向 M06：
-  - 岗位结构化要求
+  - 岗位结构化要求的 `item_key` / `text` 与数组顺序
   - 当前简历正文
 
 ## 7. 当前缺口
 
 - `summary_json`、`save_reason` 与状态字段的细化枚举留待子任务评审，不再阻塞本轮模块推进。
-- `jobs.requirement_items_json` 的最小 item 结构与责任边界仍未冻结；在 `MQ-307` 收口前，它不能被宣称为完整 `L5` 级稳定契约。
+- `jobs.requirement_items_json` 已形成模块层 `proposed-default` 最小 item 契约，但扩展字段区、总控冻结结论与 M04 / M06 共识回写尚未完成；在 `OQ-025` 收口前，不得把扩展字段当稳定依赖。
 - 历史版本恢复是否需要单独字段或复用新增版本语义，留待 `ST03_02` 继续细化。
 - 文件清理与过期策略依赖基础设施与治理模块，本轮不在 M03 内单独发明。

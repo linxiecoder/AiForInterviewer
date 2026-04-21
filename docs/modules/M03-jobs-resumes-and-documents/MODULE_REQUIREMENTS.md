@@ -141,7 +141,7 @@
 - 领域对象最小字段面已稳定：
   - `jobs`、`resumes`、`resume_documents`、`resume_conversion_logs`、`resume_export_records` 与共享 `storage_objects` 的最小字段面已对齐源计划。
   - `resume_documents.markdown_content` 与 `resumes.current_document_id` 已明确为下游稳定输入。
-  - `jobs.requirement_items_json` 当前只冻结到“字段存在且承载结构化要求”这一层；最小 item 结构仍待 `MQ-307` 收口。
+  - `jobs.requirement_items_json` 已形成模块层 `proposed-default` 最小契约候选：JSON array item 至少含 `item_key` / `text`，`null` 表示未完成结构化，`[]` 表示已结构化但无项，数组顺序即消费顺序；是否升级为全局稳定输入仍待 `MQ-307` / `OQ-025` 收口。
 - 关键业务规则已稳定：
   - 预览与导出共用同一 Markdown 渲染链。
   - 上传同步入库并受理，转换与导出异步执行。
@@ -163,7 +163,7 @@
 - `OQ-021`：列表查询状态、分页交互与 URL / callback 的统一映射已形成全局 `proposed-default`，但实现级 URL / callback 细节仍未定稿，继续影响 `jobs` / `resumes` 列表页和相关 API 的最终页面态设计。
 - `OQ-020`：共享页面头部与摘要区的最小接口边界已形成全局 `proposed-default`，但实现级 props / slot 细节仍未定稿，继续影响岗位页与简历页的共享 UI 口径收口。
 - M01 共享下载能力与对象存储实现细节成熟度仍偏低，影响上传 / 导出相关微任务的实施级方案深度，但不阻塞模块级任务重切继续推进。
-- `jobs.requirement_items_json` 的最小 item 结构、空值语义与排序规则仍未冻结；在 `MQ-307` 收口前，岗位相关微任务和 M04 / M06 下游都不能自行发明该字段的 JSON 契约。
+- `jobs.requirement_items_json` 虽已形成模块层候选口径，但总控尚未把它升级为全局默认冻结；在 `OQ-025` 收口前，下游只可依赖 `item_key` / `text` 与数组顺序，不得依赖扩展字段。
 
 ## 11. 当前已确认口径
 

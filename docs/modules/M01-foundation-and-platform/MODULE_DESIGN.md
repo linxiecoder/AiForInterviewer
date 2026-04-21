@@ -22,13 +22,14 @@
 - `Workspace Baseline`：monorepo 根目录、应用目录、基础设施目录和环境模板的边界。
 - `API Runtime Baseline`：FastAPI 最小入口、`/api/v1/health`、结构化日志初始化。
 - `Web Shell Baseline`：Next.js 入口、`/(dashboard)` 壳层、一级导航、页面头部、Dashboard 基础摘要区。
-- `Shared List Primitive Baseline`：表格、筛选条、分页容器以及统一列表状态规范。
+- `Shared Primitive / Adapter Baseline`：页面头部、Dashboard 摘要区、表格、筛选条、分页容器与 shared adapter 的职责边界。
 - `Governance Baseline`：i18n 集中取词入口、最小测试入口、CI 方向与文档回写约束。
 
 ### 3.2 M01 不负责
 
 - 鉴权会话、成员权限矩阵、团队隔离。
 - 业务对象建模、业务路由、领域 API 和持久化表设计。
+- 业务模块专属页面 adapter、模块私有 query / DTO 协议和页面级 service 组合规则。
 - Markdown 渲染链、上传/导出、异步任务编排的最终实施契约。
 - 完整设计系统、完整可观测性与完整 E2E 策略。
 
@@ -56,7 +57,18 @@
 - `DataTable`、`FilterBar`、`Pagination` 负责列表页的统一交互骨架，业务模块只补字段和数据来源。
 - 训练中心不进入一级导航，但保留被工作台和详情页引出的能力入口约束。
 
-### 4.4 验证与治理层
+### 4.4 Shared adapter 边界层
+
+- `shared adapter` 位于页面容器与共享页面原语 / 服务层之间，是 Web 侧的编排边界，不是新的领域服务层。
+- M01 本轮只冻结 shared adapter 的职责切分，不冻结实现级 props / callback / DTO：
+  - 页面容器：持有当前 route、active locale、`ListQueryState` 与 `loading / empty / ready / error` 页面态，决定何时触发 adapter。
+  - request adapter：负责 `ListQueryState <-> URL <-> request` 的最小映射，沿用统一 query / pagination 骨架，不引入模块私有 query 编码。
+  - shared primitive：`AppShell`、`PageHeader`、摘要区、`FilterBar`、`DataTable`、`Pagination` 只消费稳定输入，不直接访问 router、fetch client 或模块私有 service。
+  - i18n 消费边界：layout / App Shell 负责 locale 解析与 fallback；页面容器或 shared adapter 只能从集中消息入口取词，并将稳定 message key 或按同一入口解析后的文案投影给共享原语，不维护第二套消息源。
+  - 服务层：只输出领域数据、统一分页骨架和错误语义，不感知 `PageHeader`、摘要区、locale fallback 或共享组件树。
+- 因此 shared adapter 的职责是“编排与投影”，不是“重写业务协议”：它可以整理页面输入与服务响应，但不能改写领域字段含义、权限语义或模块私有校验规则。
+
+### 4.5 验证与治理层
 
 - 后端最小 pytest 用例验证健康检查。
 - 前端最小 vitest 用例验证 App Shell 与 DataTable 的可渲染性。
@@ -95,19 +107,22 @@
 
 1. Web 入口装载 locale seed 与根 layout。
 2. `/(dashboard)` layout 复用 `AppShell` 建立导航和内容骨架。
-3. Dashboard 页面使用 `PageHeaderModel` 与摘要区模板渲染首屏结构。
-4. 后续模块页面在相同壳层中挂载自己的主内容。
+3. Dashboard 页面容器读取当前 route / locale 上下文，并通过 shared adapter 组装 `PageHeaderModel`、摘要区输入与页面态。
+4. `PageHeader` 与摘要区模板只负责渲染，不直接拉取模块私有服务。
+5. 后续模块页面在相同壳层中挂载自己的主内容，并复用同一职责切分。
 
 ### 6.4 列表原语复用链路
 
-1. 业务模块提供列定义、数据行、筛选条件和分页状态。
-2. `FilterBar`、`DataTable`、`Pagination` 只负责通用展示和交互框架。
-3. 列表的查询参数、鉴权和后端请求由业务模块接管，不由 M01 代为实现。
+1. 页面容器持有 `ListQueryState`、active locale 和 `loading / empty / ready / error` 页面态。
+2. request adapter 负责把 `ListQueryState` 同步到 URL 与服务请求参数。
+3. 服务层返回领域数据、统一分页骨架和错误语义。
+4. shared adapter 把服务响应与文案消费边界投影为 `FilterBar`、`DataTable`、`Pagination` 可消费的稳定输入。
+5. `FilterBar`、`DataTable`、`Pagination` 只负责通用展示和交互框架，不直接读取 router、locale 策略或模块私有 service。
 
 ## 7. 跨模块协作点
 
-- M02 直接复用 `/(dashboard)` 路由骨架、`/api/v1` 前缀、i18n 取词入口和列表页模板。
-- M03 直接复用列表页与页面头部模式，并承接 Markdown / 导出相关能力的后续设计。
+- M02 直接复用 `/(dashboard)` 路由骨架、`/api/v1` 前缀、i18n 取词入口和 shared adapter 边界；`MT02_05`、`MT02_06` 只能消费该边界，不得自行定义模块私有 page adapter 协议。
+- M03 直接复用列表页、页面头部与 shared adapter 边界；`MT03_02`、`MT03_05` 只能在模块内做字段投影与渲染承接，不重写列表 / 页面原语协议。
 - M04-M10 间接复用仓库结构、日志初始化、最小测试入口和页面状态规范。
 - 若后续模块需要改变一级导航、页面头部或列表原语的共享行为，应先回写 M01，而不是在业务模块私自分叉。
 
@@ -127,7 +142,7 @@
 
 ## 10. 进入 L5 前仍需补充
 
-- `PageHeaderModel` 与 Dashboard 摘要区已形成最小共享页面原语默认冻结口径，但精确 props 命名与列表查询状态接口仍未冻结。
+- `PageHeaderModel`、Dashboard 摘要区与 `ListQueryState` 的 shared adapter 职责切分已补齐，但精确 props、request adapter 签名与 resolved copy 承载方式仍未冻结。
 - 根目录脚本与 CI 最小矩阵尚未细化到命令级和通过标准级。
 - locale fallback、切换策略和消息命名空间已形成最小共享默认口径，但完整 i18n 架构仍未定稿，不足以直接安全拆子任务设计。
 

@@ -146,6 +146,48 @@
   - 不要直接开启任何 `ST02_01 ~ ST02_03` 子任务 Codex
   - 待 `OQ-021`、`OQ-022` 继续收口后，再按新的微任务边界开启 `P03` 子任务设计
 
+### 2026-04-21 / 轮次 R-Refactor-02
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 收紧 `M02` 的 readiness 判断，不再把“接近候选”误写成“可直开”
+  - 同步 `OQ-024` 下的旧入口与新蓝本映射
+  - 明确页面类微任务与仍被阻塞的非页面微任务
+- 执行类型：readiness 收紧 / 入口映射同步 / 页面后置化
+- 修改内容：
+  - 在 `MODULE_TASK_INDEX.md` 中新增旧 `ST02_*` 到 `MT02_*` 的映射表，并把 `MT02_01/02/03/07` 与 `MT02_04/05/06/08` 的当前准入状态分开写明
+  - 在 `MODULE_DEPENDENCIES.md` 中新增映射后的依赖判断，明确“旧目录仅为历史容器、正式入口以后续映射为准”
+  - 在 `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md` 中补入设计级 / 接口级映射约束，明确页面 adapter 不能因为 backend 契约变清楚就提前放行
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中把 `MQ-207` 收紧为与全局 `OQ-024` 对齐的 `proposed-default`，不再保留为开放式“是否沿用旧入口”的问题
+- 影响文件：
+  - `MODULE_DESIGN.md`
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_TASK_INDEX.md`
+  - `MODULE_DEPENDENCIES.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_DESIGN.md`：维持 `L5` 候选，但旧入口映射与页面后置边界更清晰
+  - `MODULE_TASK_INDEX.md`：维持 `L5` 候选，且“候选顺序”与“正式放行”不再混淆
+  - `MODULE_DEPENDENCIES.md`：维持 `L5` 候选，但 readiness 判断显式收紧
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，最低位原因已缩窄到 `/members` 列表共享契约与页面 adapter 边界
+  - `MODULE_OPEN_QUESTIONS.md`、`MODULE_EXECUTION_LOG.md`：维持可审计收口状态
+- 验证结果：
+  - 已对照 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md` 与 `MODULE_INDEX.md` 核对 `MR-03` 的职责边界
+  - 已按 UTF-8 安全读写要求完成修改并回读检查，无 Markdown 乱码
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控正式下发 `OQ-024` 的入口映射，不再允许旧 `ST02_*` 作为直开入口
+  - 继续保持 `MT02_05`、`MT02_06` 在页面后置队列，不因模块整体接近 `L5` 候选而放宽
+  - 若下一轮需要尝试进入子任务设计，只能先从 `MT02_01`、`MT02_02` 的候选复核开始，而不是直接开启页面或验证类任务
+
 ## 4. 使用说明
 
 - 每完成一轮模块级工作后，应新增一条记录，而不是覆盖旧记录。

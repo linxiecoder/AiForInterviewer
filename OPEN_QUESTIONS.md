@@ -37,28 +37,23 @@
 | OQ-018 | 管理台是否负责 search snapshot 导入与运维 | proposed-default | M06、M10 | 本轮先按负责导入与运维入口、不承担抓取本身推进 | `TECHNICAL_STANDARDS.md`、`MODULE_INDEX.md` |
 | OQ-019 | 根目录统一脚本与最小 CI 校验矩阵应冻结到什么粒度，才算满足平台基线的下游输入要求 | proposed-default | M01、M10 | 本轮先采用方案 B：冻结统一脚本命名（`dev:web` / `dev:api` / `test:web` / `test:api`）、最小存活检查（`GET /api/v1/health` -> `200 {"status":"ok"}`）与最小验证入口类型（API=`pytest`、Web=`vitest`），CI 只冻结 API/Web 两类最小校验 lane，不在当前轮冻结完整流水线矩阵 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 | OQ-020 | 共享页面原语（`PageHeader` / Dashboard 摘要区）应冻结到什么最小接口边界，才能支撑后续页面复用 | proposed-default | M01、M02、M03 | 本轮先采用方案 B：冻结最小共享页面原语边界；`PageHeader` 只承载标题/说明/主次动作，摘要区独立承载 `status_badge` / `updated_at` / `summary_items` 与最小状态表达，不扩张为完整 props catalog | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
-| OQ-021 | 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一 | proposed-default | M01、M02、M03、M04-M10 | 本轮默认采用方案 B：冻结共享 `ListQueryState`、统一 query / pagination 最小映射与分页响应骨架，页面容器负责 state / URL / request adapter，共享列表原语不直接耦合 router；暂不冻结完整 props / callback catalog 与高级筛选序列化细节 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
+| OQ-021 | 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一 | proposed-default | M01、M02、M03、M04-M10 | 当前默认采用方案 B：共享最小映射固定为 `page` / `page_size` / `q` / `status` / `sort` / `order`，并冻结统一分页响应骨架与“页面容器负责 state / URL / request adapter、共享列表原语不直接耦合 router”的职责边界；`updated_after` / `updated_before` 暂不进入共享最小映射，当前仅可作为模块级扩展单独登记 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 | OQ-022 | locale fallback、切换策略与消息命名空间应冻结到什么程度，才能作为共享 Web 契约下发 | proposed-default | M01、M02、M03、M04-M10 | 本轮先采用方案 B：统一 `apps/web/src/i18n/**` + `getMessages(locale)` 入口，首轮 locale seed 固定为 `zh-CN` / `en-US`、默认 locale=`zh-CN`；切换由 layout / App Shell 统一解析 active locale；fallback 固定为“请求 locale -> `zh-CN` -> 记录缺失 key”，禁止组件硬编码兜底；namespace 只冻结“共享壳层一层、业务页面一层”的最小边界，不扩张为完整 i18n 架构 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 | OQ-023 | `/(dashboard)/admin/members` 与 `/api/v1/admin/members` 的完整实现应继续由 M02 承接，还是由后续治理模块承接 | proposed-default | M02、M10 | 本轮先采用方案 B：`M02` 只负责身份解析、授权规则、权限矩阵与最小鉴权契约，完整成员管理页面 / API 由后续治理模块承接 | `DESIGN_DECISIONS.md`、`MODULE_INDEX.md` |
-| OQ-024 | 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口 | proposed-default | M02、M03 | 本轮先按默认口径推进：旧目录只保留为历史容器，禁止在 `TASK_INDEX.md` 中继续作为直开入口；后续正式入口以 `MT02_* / MT03_*` 微任务蓝本和总控映射策略为准，再决定是否复用旧目录编号 | `TASK_INDEX.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md` |
-| OQ-025 | `jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为 M04 / M06 的稳定输入 | open | M03、M04、M06 | 当前建议先在模块 / 总控层冻结最小可消费 item schema、空值语义、排序规则与写入责任；在冻结前，下游模块不得自行扩张 JSON 契约 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
+| OQ-024 | 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口 | proposed-default | M02、M03 | `GC-01` 已固化全局口径：旧 `ST02_* / ST03_*` 目录只保留为历史容器，禁止继续作为直开入口；仍未最终确认的是“是否复用旧编号、如何把 `MT02_* / MT03_*` 正式映射成可开窗入口”，该部分继续保留在 `OQ-024` | `TASK_INDEX.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md` |
+| OQ-025 | `jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为 M04 / M06 的稳定输入 | proposed-default | M03、M04、M06 | 本轮先按默认口径推进：最小 item 只要求 `item_key` / `text`；`null` 表示尚未完成结构化、`[]` 表示已结构化但当前无项；数组顺序即消费顺序；仅岗位写模型允许整体替换；扩展字段暂不进入共享稳定输入 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 
 ## 3. 本轮高优问题处理判断
 
-- 本轮（`R-Refactor-01` / 计划重构执行轮）必须优先处理的问题：
-  - `OQ-019` 根目录统一脚本与最小 CI 校验矩阵的冻结粒度
-  - `OQ-020` 共享页面原语最小接口边界
-  - `OQ-021` 列表查询状态、分页交互与 URL / callback 映射
-  - `OQ-022` locale fallback、切换策略与消息命名空间
-  - `OQ-023` admin 成员管理完整实现归属
+- 本轮（`R-Refactor-02` / 计划重构执行轮）必须优先处理的问题：
+  - `OQ-024` 旧入口退役后的全局映射与直开约束
+  - `OQ-025` `jobs.requirement_items_json` 最小输入契约
+  - `OQ-021` 共享最小映射与模块级扩展的边界澄清
 - 本轮检查结论：
-  - `OQ-019` 已形成 `proposed-default` 默认冻结候选，可作为 `M01/M10` 继续推进输入，但暂不升级为 `confirmed`
-  - `OQ-020` 已形成 `proposed-default` 默认冻结候选，可作为 `M01` 共享页面原语收口、`M03` 页面设计收缩与 `M02` 页面承接口径对齐输入
-  - `OQ-021` 已形成 `proposed-default` 默认冻结候选，可作为 `M01-M03` 继续推进输入，但暂不升级为 `confirmed`
-  - `OQ-022` 已形成 `proposed-default` 默认冻结候选，可作为 `M01` i18n 共享契约收口与 `M02` 模块重切输入，但暂不升级为 `confirmed`
-  - `OQ-023` 继续保持 `proposed-default`，直接作为 `M02/M10` 职责重切输入
-  - `OQ-024` 已由 `MQ-207` + `MQ-306` 上升为新的全局问题，并已足够登记为 `proposed-default`：旧 `ST02_* / ST03_*` 目录只保留为历史容器、不得继续直开
-  - `OQ-025` 已由 `MQ-307` 上升为新的全局输入契约问题，但当前仍不足以冻结为 `proposed-default`，下一轮应优先继续收口
+  - `OQ-024` 继续保持 `proposed-default`，且“旧入口只保留为历史容器、禁止直开”已固化为全局口径；未决部分只剩正式编号 / 映射策略
+  - `OQ-025` 已具备升级为 `proposed-default` 的依据，可作为 `M03` 对 `M04/M06` 的最小共享输入，但暂不升级为 `confirmed`
+  - `OQ-021` 继续保持 `proposed-default`，并补充澄清：`updated_after` / `updated_before` 当前不属于共享最小映射，只能作为模块级扩展
+  - `OQ-019~OQ-023` 继续维持上一轮已登记的默认冻结口径，不再作为本轮主阻塞重复讨论
 
 | 优先级 | OQ ID | 当前状态 | 当前影响模块 | 本轮处理判断 |
 | --- | --- | --- | --- | --- |
@@ -66,9 +61,9 @@
 | P0 | OQ-004 | proposed-default | M02、M10 | 已按固定 Bearer token 冻结，可作为本轮 `M02` 输入 |
 | P0 | OQ-006、OQ-007 | proposed-default | M03、M10 | 已按共享渲染链与“上传同步/转换导出异步”冻结，可作为本轮 `M03` 输入 |
 | P0 | OQ-019 | proposed-default | M01、M10 | 已形成入口语义级默认冻结方案；可作为 `M01` 平台基线与 `M10` 治理边界切分输入，但暂不扩张为完整流水线定稿 |
-| P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成最小共享契约候选：统一 `ListQueryState`、query 映射、分页骨架与页面容器 adapter 职责；可作为本轮 `M01-M03` 输入，但暂不扩张为完整实现级交互定稿 |
-| P0 | OQ-024 | proposed-default | M02、M03 | 已形成默认冻结候选：旧 `ST02_* / ST03_*` 目录只保留为历史容器、禁止直开；下一轮正式入口以模块微任务蓝本和总控映射策略为准 |
-| P0 | OQ-025 | open | M03、M04、M06 | 新升级的输入契约问题；在冻结最小 item schema、空值语义、排序规则与写入责任前，不得把 `jobs.requirement_items_json` 作为稳定下游输入 |
+| P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成最小共享契约候选：共享最小映射维持 `page/page_size/q/status/sort/order`、分页骨架与页面容器 adapter 职责；`updated_after` / `updated_before` 暂不进入共享最小映射 |
+| P0 | OQ-024 | proposed-default | M02、M03 | “旧入口退役为历史容器、禁止直开”已固化为全局映射；未决部分收敛到“是否复用旧编号 / 如何正式映射新入口” |
+| P0 | OQ-025 | proposed-default | M03、M04、M06 | 已形成最小默认冻结候选：`item_key` / `text`、`null` / `[]` 语义、数组顺序与“仅岗位写模型可整体替换”；扩展字段仍不得作为稳定输入 |
 | P1 | OQ-020 | proposed-default | M01、M02、M03 | 已形成方案 B 默认冻结候选；最小共享页面原语已足够支撑 `M01/M03` 继续推进，并为 `M02` 提供页面承接口径，但暂不升级为 `confirmed` |
 | P1 | OQ-022 | proposed-default | M01、M02、M03、M04-M10 | 已形成最小 i18n 共享默认口径；可作为模块设计输入，但完整 locale 切换持久化、URL 策略与 formatter 规则仍未冻结 |
 | P1 | OQ-023 | proposed-default | M02、M10 | 继续保持 `proposed-default`；本轮直接作为模块职责重切输入，不再回退为 `open` |
@@ -105,11 +100,11 @@
 | OQ-018 | 已标记 `proposed-default` | 是 | M06、M10 |
 | OQ-019 | 已标记 `proposed-default` | 是，可作为 `M01` 基线收口与 `M10` 职责切分输入 | M01、M10 |
 | OQ-020 | 已标记 `proposed-default` | 是，可作为 `M01` 共享页面原语收口、`M03` 页面设计收缩与 `M02` 页面承接口径对齐输入 | M01、M02、M03 |
-| OQ-021 | 已标记 `proposed-default` | 是，但仅覆盖共享 state model、query 映射、分页骨架与职责边界；不覆盖完整实现级交互细节 | M01、M02、M03 |
+| OQ-021 | 已标记 `proposed-default` | 是，但共享最小映射只覆盖 `page/page_size/q/status/sort/order`、分页骨架与职责边界；`updated_after` / `updated_before` 当前仅可作为模块级扩展 | M01、M02、M03 |
 | OQ-022 | 已标记 `proposed-default` | 是，可作为 `M01` 共享 i18n 收口、`M02` 模块重切与 `M03` 页面命名基线输入 | M01、M02、M03 |
 | OQ-023 | 继续保持 `proposed-default` | 是 | M02、M10 |
-| OQ-024 | 已标记 `proposed-default` | 是，可作为 `TASK_INDEX.md` 与模块入口同步的默认口径 | M02、M03 |
-| OQ-025 | 保持 `open` | 否，当前尚不足以冻结 `jobs.requirement_items_json` 的最小 item 结构与写入责任 | M03、M04、M06 |
+| OQ-024 | 已标记 `proposed-default` | 是，可作为 `TASK_INDEX.md` 与模块入口同步的默认口径；未决部分只剩正式映射策略 | M02、M03 |
+| OQ-025 | 已标记 `proposed-default` | 是，可作为 `M03 -> M04/M06` 的最小共享输入；扩展字段继续保持未冻结 | M03、M04、M06 |
 
 ## 5. 使用说明
 

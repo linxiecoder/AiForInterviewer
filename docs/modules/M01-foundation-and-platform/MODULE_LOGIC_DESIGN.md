@@ -13,6 +13,10 @@
 | `workspace` | `configured` | 环境模板已补全、本地占位值已准备 |
 | `workspace` | `services-ready` | Web / API 最小入口已可启动 |
 | `workspace` | `verified` | 最小测试或 CI 入口已通过 |
+| `storage-object` | `write-prepared` | 对象元数据、bucket 与 owner/source pointer 已校验完成 |
+| `storage-object` | `stored` | 对象字节与 `storage_objects` 元数据已稳定写入 |
+| `storage-object` | `download-authorized` | 共享下载网关已通过团队与 owner/source pointer 校验 |
+| `storage-object` | `download-blocked` | 对象不存在、不可下载或超出当前作用域 |
 | `shell` | `route-resolved` | 当前页面路由已确定 |
 | `shell` | `messages-loaded` | 页面所需消息资源已可读取 |
 | `shell` | `layout-rendered` | App Shell 与 Page Header 已渲染 |
@@ -60,6 +64,25 @@
 2. 若变化影响全局规则或共享契约，再由总控更新全局状态文档。
 3. 在模块文档未达到 `L5` 前，不允许把缺口下放到子任务文档中伪装解决。
 
+### 3.6 对象写入与业务关联逻辑
+
+1. 业务模块先完成自己的输入校验，明确 `team_id`、bucket、`source_type`、`source_id`、`content_type`、`size_bytes` 和 `checksum_sha256`。
+2. 调用共享 `StorageObjectWritePort` 写入对象二进制流。
+3. 平台层先写对象存储，再落 `storage_objects` 元数据，并返回稳定的 `object_id`。
+4. 业务模块在拿到 `object_id` 后，再把它关联到自己的业务记录，例如 `original_pdf_object_id`、`output_object_id`。
+5. 在业务关联成功前，不允许把 bucket / key 或下载地址直接暴露给前端。
+
+### 3.7 共享下载网关逻辑
+
+1. 业务模块详情页或业务入口先定位到共享 `object_id`。
+2. 请求进入 `GET /api/v1/storage-objects/{object_id}/download`。
+3. 共享下载网关读取 `storage_objects` 元数据，并校验：
+   - 当前成员身份是否存在
+   - `team_id` 是否在当前作用域内
+   - `source_type` / `source_id` 对应的业务 owner/source pointer 是否允许访问
+4. 校验通过后，网关根据平台策略返回代理流或签名 URL。
+5. 网关记录下载事件，但不在 M01 冻结完整审计字段字典。
+
 ## 4. 分支流程
 
 ### 4.1 环境缺失分支
@@ -81,9 +104,27 @@
 - 当仅发生翻页时，不应清空既有筛选与排序状态。
 - 页面容器负责 `ListQueryState` 与 URL / request 之间的同步；共享列表原语不直接操作 router。
 
+### 4.4 对象写入或业务关联失败分支
+
+- 若对象字节写入成功，但 `storage_objects` 元数据落库失败：
+  - 不允许返回可用 `object_id`
+  - 必须记录补偿 / 清理日志，避免形成下游不可见的悬空对象
+- 若 `storage_objects` 已创建，但业务记录关联失败：
+  - 不允许把下载入口暴露给前端
+  - 由业务模块或后续治理流程负责补偿清理，而不是让业务模块绕过共享元数据层直接回放 bucket / key
+
+### 4.5 下载授权失败分支
+
+- 若 `object_id` 不存在、对象已不可下载或团队 / owner/source pointer 校验失败：
+  - 进入 `download-blocked`
+  - 返回 `403` 或 `404`
+  - 不暴露 bucket、key、provider 等底层细节
+
 ## 5. 异常路径与回退策略
 
 - 健康检查失败：先修复最小入口，再继续任何下游工作。
+- 对象写入成功但共享元数据或业务关联失败：必须保留补偿记录，不允许让业务模块继续携带裸 bucket / key 工作。
+- 下载授权失败：共享下载网关直接拦截，不允许把失败原因转化为对象存储地址泄漏。
 - Web 壳层渲染失败：先确认路由、消息资源和共享组件边界，禁止在业务页面私自复制壳层。
 - 测试 / CI 基线失败：视为平台基线未完成，阻塞模块合并与下游实现准备。
 - 文档边界发生冲突：记录到 `MODULE_OPEN_QUESTIONS.md`，不要在模块内临时补一套新契约。
@@ -92,17 +133,22 @@
 
 - `GET /api/v1/health` 必须保持幂等。
 - 环境模板与根目录脚本应支持重复执行，不依赖真实生产凭据。
+- 共享下载网关是实际对象字节输出的唯一平台入口；业务模块可以保留自己的资源定位入口，但不能旁路共享下载能力。
+- `storage_objects` 的 `team_id` 与 `source_type` / `source_id` 必须在对象可被下游引用前稳定落库。
+- 共享下载网关只冻结最小团队与 owner/source pointer 校验职责，不在 M01 扩张为完整权限矩阵或签名 URL 策略。
 - i18n 取词是单一事实来源；同一条文案不应在多个组件中重复维护。
 - 列表原语只负责展示与交互骨架，避免和业务请求 / 权限语义耦合。
 
 ## 7. 当前缺口
 
 - 根目录脚本、CI 基线与验证顺序尚未收敛为可直接执行矩阵。
+- 对象写入顺序、共享下载网关和最小 owner/source pointer 已形成稳定输入；当前未冻结的只剩签名 URL TTL、对象生命周期与清理策略。
 - Dashboard 摘要区和 `PageHeader` 的详细状态流仍停留在方向级。
 - 列表查询状态仅冻结到最小共享行为口径，完整实现级交互细节仍待子任务细化；完整的 URL / 持久化 / formatter 级 locale 策略仍未冻结。
 
 ## 8. 进入可作为下游输入前需要补充
 
+- 共享下载 / 对象存储主题已足以支撑 M03 的对象引用与下载投影继续推进；后续若继续细化，应留在实现级适配与治理策略，不应回退共享边界。
 - 冻结最小验证矩阵与状态切换判定标准。
 - 冻结壳层头部与摘要区的精确交互状态。
 - 将列表查询状态与 URL / callback 的默认行为口径继续吸收到页面样例与组件测试。

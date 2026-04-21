@@ -14,9 +14,9 @@
 | `docs/DOC_GOVERNANCE.md` | 文档成熟度与收口规则 | 模块未到 `L5` 前不得进入子任务设计 |
 | `PLAN_LATEST.md` | 模块地图与执行顺序 | M01 是优先推进的依赖根模块 |
 | `TASK_INDEX.md` | 依赖链索引 | M02、M03 直接依赖 M01 |
-| `TECHNICAL_STANDARDS.md` | 默认技术口径 | monorepo、Next.js、FastAPI、i18n 与列表原语先沉淀 |
-| `DESIGN_DECISIONS.md` | 全局设计决策 | `DD-004`、`DD-005` 目前仍是 proposed，只能按默认方案推进 |
-| `OPEN_QUESTIONS.md` | 冻结 / open 问题总表 | `OQ-001~003` 足以支撑本轮 L4，但不代表所有平台细节已冻结 |
+| `TECHNICAL_STANDARDS.md` | 默认技术口径 | monorepo、Next.js、FastAPI，以及 i18n / 页面原语 / list adapter 的默认边界先沉淀；对象存储默认走 S3-compatible，本地以 MinIO 模拟 |
+| `DESIGN_DECISIONS.md` | 全局设计决策 | `DD-011~DD-014` 仍是 proposed，shared adapter 只能按默认职责边界推进 |
+| `OPEN_QUESTIONS.md` | 冻结 / open 问题总表 | `OQ-001~003` 提供平台首轮边界，`OQ-007` 提供“上传同步入库、转换 / 导出异步”的上游约束，`OQ-020~022` 提供 shared page primitive / list adapter / i18n consumer 的默认冻结候选 |
 
 ## 2. 下游承接子任务
 
@@ -30,17 +30,46 @@
 - `ST01_02` 依赖 `ST01_01` 已冻结的目录结构、i18n 入口和 Dashboard 路由骨架。
 - `ST01_03` 依赖 `ST01_01` 的最小运行时入口与 `ST01_02` 的前端共享组件边界，才能定义测试与 CI 的最小覆盖面。
 
+### 3.1 shared adapter 依赖链
+
+- `ST01_02` 在 `ST01_01` 的路由 / 运行时基线上，负责把页面容器、request adapter、shared primitive 与 i18n 消费边界补到模块层。
+- `ST01_03` 依赖 shared adapter 边界已写清，才能确定 App Shell、列表原语与 i18n 消费的最小测试面和文档回写范围。
+
 ## 4. 对其他模块的输出依赖
 
-- M02 直接依赖：`/api/v1` 前缀、Dashboard 壳层、i18n 入口、列表页模板。
-- M03 直接依赖：共享列表原语、页面头部模式、monorepo 目录边界。
+- M02 直接依赖：`/api/v1` 前缀、Dashboard 壳层、i18n 入口、shared adapter 边界与列表页模板。
+- M03 直接依赖：共享列表原语、页面头部模式、shared adapter 边界、monorepo 目录边界。
 - M04-M10 间接依赖：仓库结构、最小日志 / 测试入口和共享页面状态语义。
+
+### 4.1 受 shared adapter 边界调整影响的旧入口与任务
+
+| 范围 | 入口 / 任务 | 依赖点 | 当前要求 |
+| --- | --- | --- | --- |
+| M01 模块内 | `ST01_02` | 直接承接页面容器、request adapter、shared primitive 与 i18n 消费边界 | 继续留在模块层吸收，不开启子任务设计 |
+| M02 旧入口 | `ST02_01`、`ST02_02` | 历史上把 auth backend、page adapter 与 list contract 混在同一入口 | 只保留历史来源，不再作为正式设计入口 |
+| M02 下游任务 | `MT02_05`、`MT02_06` | 分别消费 i18n / shared page primitive 边界，以及 list / request adapter 边界 | 必须引用 M01 默认口径，不得私有化 adapter 协议 |
+| M03 旧入口 | `ST03_01`、`ST03_02` | 历史上混合读模型、页面投影与 shared list / render contract | 只保留历史来源，不直接开窗 |
+| M03 下游任务 | `MT03_02`、`MT03_05` | 消费 `PageHeader` / 摘要区 / `ListQueryState` / shared render 边界 | 等 M01 shared adapter 口径继续稳定后再推进设计 |
+
+### 4.2 共享下载 / 对象存储边界对下游模块的影响
+
+| 模块 | 当前可直接消费的 SC-05 输出 | 当前不应从 M01 直接索取的内容 | 当前判断 |
+| --- | --- | --- | --- |
+| M02 | 仅需遵守“共享下载能力不在身份模块重建”的边界 | 不应在 M02 自建对象下载网关、bucket 规则或对象元数据模型 | SC-05 对 M02 没有新增主阻塞，M02 可继续按既有页面 / 接口边界推进 |
+| M03 | 共享 `storage_objects` 最小字段面、bucket / key 规则、统一下载网关、对象写入顺序 | 不应从 M01 索取上传 / 导出业务 API、转换状态机、导出记录业务语义 | `MT03_06`、`MT03_08` 的上游平台输入已更明确，可继续推进模块设计与微任务切分准备 |
+| M05 | `storage_objects` 的 owner/source pointer、对象引用模式、统一下载能力 | 不应绕过业务模块直接定义简历正文归档策略，也不应在 M05 私自改写 bucket 规则 | 与对象引用、来源链路相关的模块设计可以继续推进 |
+| M06 / M08 | 后续导出产物与报告文件统一走共享下载网关的约束 | 不应假设自己拥有独立文件下载平台或独立 bucket 命名规则 | 可把共享下载能力作为后续模块设计输入，但尚未进入实施级 |
+| M04 / M07 / M09 / M10 | 间接受到共享对象引用与下载边界约束 | 不应在这些模块提前冻结与对象存储无关的实现细节 | SC-05 对这些模块主要是约束性输入，不是当前主推进项 |
 
 ## 5. 依赖门槛
 
 - 进入本模块详细设计前，至少需要：
   - `OQ-001~003` 已按默认口径冻结为可评审输入。
   - 本模块的关键开放问题已登记，且未擅自升级为全局 confirmed 契约。
+- 对 SC-05 主题而言，当前已满足“可作为下游模块输入”的最低门槛：
+  - 共享 `storage_objects` 最小字段面已冻结。
+  - bucket / key 规则已冻结。
+  - 统一下载网关与对象写入顺序已冻结。
 - 进入本模块子任务设计前，至少需要：
   - `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` 至少达到 `L5`。
   - `PageHeader`、Dashboard 摘要区、列表查询状态、最小验证矩阵以及 i18n 最小共享规则已冻结到可下游引用。
@@ -50,9 +79,12 @@
 
 ## 6. 当前依赖风险
 
-- `DD-004`、`DD-005` 仍处于 proposed，说明仓库结构与技术栈虽可按默认口径推进，但尚未形成完全稳定的全局 confirmed 输入。
+- `DD-011~DD-014` 仍处于 proposed，说明平台基线、shared page primitive、list adapter 与 i18n 边界虽可按默认口径推进，但尚未形成完全稳定的全局 confirmed 输入。
 - `OQ-002` 只冻结了“最小运行时 / 测试 / CI 基线”，尚未冻结根目录脚本和 CI 命令矩阵。
 - `OQ-003` 只冻结了壳层 / 头部 / 列表原语 / 基础页面样式，说明 `PageHeader` 和摘要区仍不能扩张成完整设计系统契约。
+- shared adapter 的职责边界虽已补写到模块层，但 request adapter 签名、resolved copy 承载方式和页面级 service 组合仍未冻结到可直接实施。
+- 共享下载 / 对象存储主题当前剩余风险已收缩到实现级细节：签名 URL TTL、代理流 / 重定向切换策略、对象生命周期与清理策略仍未冻结。
+- 共享下载网关只冻结了团队与 owner/source pointer 的最小校验边界；完整权限矩阵仍依赖 M02 / M10 后续治理口径。
 - 子任务文档当前仍是骨架，且模块核心设计文档尚未达到 `L5`，因此不能进入子任务设计阶段。
 
 ## 7. 当前推进判断
@@ -63,3 +95,8 @@
   2. ST01_02
   3. ST01_03
 - 但在模块文档整体达到 `L5` 前，上述顺序只能作为下一轮设计收敛参考，不能视为已具备子任务设计前置条件。
+- `MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` 当前也只能把该边界当候选输入，不能因为本轮补写就视为 ready。
+- 对 SC-05 主题的下游推进判断：
+  - M03 可继续推进与 `storage_objects`、上传受理、导出下载投影相关的模块设计细化。
+  - M05 可继续推进对象引用与来源链路相关设计，不必再等待 M01 补 bucket / key / source pointer 基线。
+  - M02 不因 SC-05 获得新增能力，也不再被该主题阻塞。
