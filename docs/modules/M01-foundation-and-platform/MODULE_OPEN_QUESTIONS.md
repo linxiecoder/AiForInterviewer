@@ -29,11 +29,11 @@
 
 | MQ ID | 问题 | 状态 | 影响范围 | 当前建议 | 是否需上升到全局 | 需回写文档 |
 | --- | --- | --- | --- | --- | --- | --- |
-| MQ-001 | 根目录统一脚本与最小 CI 校验矩阵应细化到什么粒度，才算满足 M01 的下游输入要求 | open | `MODULE_REQUIREMENTS.md`、`MODULE_DEPENDENCIES.md`、ST01_01、ST01_03 | 本轮先只冻结“需要最小运行时 / 测试 / CI 基线”，不擅自补命令级契约 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
+| MQ-001 | 根目录统一脚本与最小 CI 校验矩阵应细化到什么粒度，才算满足 M01 的下游输入要求 | proposed-default | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、ST01_01、ST01_03 | 已与全局 `OQ-019` 对齐：冻结统一脚本命名（`dev:web` / `dev:api` / `test:web` / `test:api`）、最小存活检查（`GET /api/v1/health` -> `200 {"status":"ok"}`）、最小验证入口类型（API=`pytest`、Web=`vitest`）与 API / Web 双 lane；完整 workflow、lint / format gate、E2E 与多平台矩阵留给 M10 / 后续治理，不再作为 M01 共享前置 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
 | MQ-002 | `PageHeader` 与 Dashboard 摘要区的最小 props / slot 边界如何冻结 | proposed-default | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、ST01_02 | 采用方案 B：`PageHeader` 只冻结标题/说明/主次动作，摘要区独立承载 `status_badge` / `updated_at` / `summary_items` 与最小状态表达，不冻结代码级 props 形态 | 否 | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_TASK_INDEX.md` |
-| MQ-003 | 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一 | proposed-default | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、ST01_02 | 已与全局 `OQ-021` 对齐：冻结共享 `ListQueryState`、最小 query 映射（只含 `page / page_size / q / status / sort / order`）、分页响应骨架与页面容器 adapter 职责；时间筛选与高级筛选序列化只允许作为业务模块扩展，不冻结完整 props / callback catalog | 否 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_TASK_INDEX.md` |
+| MQ-003 | 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一 | proposed-default | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、ST01_02 | 已与全局 `OQ-021` 对齐，并按三层状态分层：共享最小层固定 `page / page_size / q / status / sort / order` 与统一分页骨架；模块扩展层允许单独登记 `updated_after` / `updated_before` 等扩展键；route / callback / request adapter 细节留在实现细节层，不再回灌为 M01 共享前置 | 否 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_TASK_INDEX.md` |
 | MQ-004 | locale fallback、切换策略与消息命名空间需要冻结到什么程度，才能支撑下游子任务设计 | proposed-default | `MODULE_REQUIREMENTS.md`、`MODULE_API_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、ST01_02 | 已按全局 `OQ-022` 形成最小共享默认口径：冻结集中取词入口、locale seed、统一 fallback 与最小 namespace 边界，但不冻结完整 locale 策略 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_API_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_TASK_INDEX.md` |
-| MQ-005 | `shared adapter` 应冻结到什么程度，才能让页面容器、共享页面原语、i18n 消费与服务层按同一默认口径协作 | proposed-default | `MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、ST01_02、ST01_03、`MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` | 本轮只冻结职责切分：页面容器持有 route / locale / page state，request adapter 负责 `ListQueryState <-> URL <-> request`，shared primitive 只消费稳定输入，服务层只返回领域数据 / 分页骨架 / 错误语义，i18n 仍统一经集中入口；不冻结具体 DTO、props / callback 与 resolved copy 载体 | 否 | `MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
+| MQ-005 | `shared adapter` 应冻结到什么程度，才能让页面容器、共享页面原语、i18n 消费与服务层按同一默认口径协作 | proposed-default | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、ST01_02、ST01_03、`MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` | 已吸收 `OQ-020~022`：共享最小层固定页面容器持有 route / locale / page state、request adapter 负责最小 query 映射、shared primitive 只消费稳定输入、服务层只返回领域数据 / 分页骨架 / 错误语义；模块投影层允许业务模块登记摘要字段和扩展 view model；精确 props / callback / resolved copy 载体留在实现细节层，不再作为 M01 共享前置 | 否 | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
 | MQ-006 | 共享下载网关与 `storage_objects` 最小边界应冻结到什么程度，才能让 M03 / M05 继续推进而不把平台契约写进业务模块 | confirmed | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、M03、M05 | 已确认：冻结共享 `storage_objects` 最低字段面、bucket / key 规则、`source_type` / `source_id` owner pointer、对象写入顺序，以及 `GET /api/v1/storage-objects/{object_id}/download` 作为唯一实际下载入口；业务入口只做资源定位，不再复制下载逻辑 | 否 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md` |
 | MQ-007 | 当 SC-05 已达到下游模块输入门槛后，是否需要由总控统一回写跨模块 / 全局文档，解除旧的“共享下载 / 对象存储成熟度不足”表述 | proposed-default | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、M03、M05、全局进展 / 问题文档 | 本模块默认判断：M01 整体仍未到 `L5`，但 SC-05 共享下载 / `storage_objects` 主题已可作为 M03 / M05 的模块设计输入；应由总控统一回写跨模块依赖与进展表述，避免继续把该主题记为主阻塞 | 是 | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、`OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md`、M03 / M05 相关模块文档 |
 
@@ -41,19 +41,28 @@
 
 | 优先级 | MQ ID | 当前阻塞文档 | 原因 | 本轮处理要求 |
 | --- | --- | --- | --- | --- |
-| P0 | MQ-001 | `MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` | 若没有最小脚本 / CI 矩阵，ST01_01 与 ST01_03 仍无法形成下游输入 | 明确这是进入 `L5` 前的剩余阻塞，而不是本轮 L4 的阻塞 |
+| P0 | MQ-001 | `MODULE_REQUIREMENTS.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` | 若没有最小脚本命名、health check 与 API / Web 双 lane，ST01_01 与 ST01_03 仍无法共享同一验证基线 | 本轮已吸收 `OQ-019` 的默认口径；后续不在 M01 继续扩张完整 workflow、lint / format gate、E2E 与多平台矩阵 |
 | P0 | MQ-002 | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md` | 若没有最小共享页面原语口径，ST01_02 与后续业务页面会继续各写一套头部/摘要区模型 | 本轮按方案 B 冻结最小对象模型与职责边界，不补代码级 props |
-| P0 | MQ-003 | `MODULE_API_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` | 列表查询状态若不形成默认口径，会导致后续页面各写一套列表交互 | 本轮已形成 `proposed-default`，下一轮重点转为模块吸收与实现级接口细化 |
-| P0 | MQ-005 | `MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` | 若不写清 shared adapter 的跨层边界，M02/M03 页面 adapter 与旧入口会继续把页面容器、共享原语和服务调用混写 | 本轮只冻结责任切分与受影响旧入口，不补实现级 props / callback / DTO |
+| P0 | MQ-003 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` | 列表查询状态若不形成共享最小层，会导致后续页面各写一套列表交互 | 本轮已按“共享最小层 / 模块扩展层 / 实现细节层”压缩；后续只在下游模块或子任务补实现级接口细化 |
+| P0 | MQ-005 | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` | 若不写清 shared adapter 的共享最小层，M02/M03 页面 adapter 与旧入口会继续把页面容器、共享原语和服务调用混写 | 本轮已按三层边界压缩；后续不在 M01 扩张精确 props / callback / resolved copy 载体 |
 | P0 | MQ-006 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md` | 若共享下载与对象存储边界不冻结，M03 的上传 / 导出与 M05 的对象引用设计会继续把平台契约写进业务模块 | 本轮已按 SC-05 完成确认；后续只保留实现级细节风险，不再把该主题视为模块级主阻塞 |
 | P1 | MQ-004 | `MODULE_API_DESIGN.md` | locale 规则不清会影响 i18n 下游拆解 | 本轮已形成最小共享默认口径，按该口径回写，不扩张到完整 locale 策略 |
 | P1 | MQ-007 | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、跨模块依赖文档 | 若总控不统一回写，M03 / M05 与全局进展文档仍会继续把已收口的 SC-05 主题记成旧阻塞 | 由总控统一回写跨模块依赖与进展，不在 M01 窗口直接修改其他模块或全局主文档 |
+
+### 5.1 本轮最低位压缩复核（仅 MQ-001 / MQ-003 / MQ-005）
+
+- `MQ-001` 已压缩：M01 内只保留最小脚本命名、`GET /api/v1/health`、API=`pytest` / Web=`vitest` 与 API / Web 双 lane 作为共享最小层；完整 workflow、lint / format gate、E2E 与多平台矩阵继续后置，不再作为本模块共享前置。
+- `MQ-003` 已压缩：M01 内只冻结 `ListQueryState` 的共享最小映射与统一分页骨架；扩展筛选键和 callback / request adapter 细节继续留在业务模块或子任务设计，不再要求在 M01 继续扩张。
+- `MQ-005` 已压缩：M01 内只冻结页面容器、request adapter、shared primitive、i18n 消费与服务层的共享最小职责边界；精确 props / callback / hook 组织与 resolved copy 载体继续后置，不再回灌为 M01 共享契约。
+- 复核结论：上述三项都已从“模块内结构性阻塞”压缩为“共享最小层已冻结、剩余仅待总控候选确认或后续实现细化”。
+- 当前距离 M01 整体 `L5` 候选还差的最小集合，只剩总控是否接受 `OQ-019`、`OQ-020~022`、`OQ-021` 的 `proposed-default` 作为共享最小层输入，并统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`；若阶段判断同步变化，再补写 `TASK_INDEX.md`、`MODULE_INDEX.md`。
 
 ## 6. 需要升级到全局的问题
 
 > 只有当问题影响多个模块、共享契约或全局技术口径时，才列在这里，等待总控 Codex 同步到根目录 `OPEN_QUESTIONS.md`。
 
 - `MQ-003` 已映射到全局 `OQ-021`，并按 `proposed-default` 口径继续回写。
+- `MQ-001` 已映射到全局 `OQ-019`，并按最小脚本命名、health check 与 API / Web 双 lane 口径继续回写。
 - `MQ-005` 依赖并吸收 `OQ-020~022` 的默认口径，本轮不新增全局问题，只在 M01 记录 shared adapter 的模块层承接方式。
 - `MQ-006` 本轮在模块层已完成 `confirmed` 收口，不新增全局升级项；若后续需要改写 bucket 体系、owner/source pointer 或共享下载唯一入口，再考虑升级为全局问题。
 - `MQ-007` 影响 M03 / M05 与全局进展判断，应由总控统一回写 `OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md` 及相关模块依赖文档，避免跨窗口继续引用旧阻塞表述。
@@ -61,7 +70,7 @@
 ## 7. 对子任务设计的影响
 
 - `OQ-001~003` 已足够支撑 M01 在本轮达到可评审，但不足以自动让模块进入子任务设计。
-- 当前真正阻塞子任务设计的，主要是 `MQ-001`、`MQ-003` 与 `MQ-005` 仍未达到可直接实施级；`MQ-002`、`MQ-004` 虽已形成 `proposed-default` 最小共享口径，但模块整体尚未达到 `L5` 可下游引用标准。
+- 本轮已把 `MQ-001`、`MQ-003` 与 `MQ-005` 压缩到共享最小层口径，它们不再要求继续扩张 M01 共享契约；当前 M01 未开放子任务设计，主要因为模块整体 `L5` 候选尚待总控复核与全局回写，且子任务文档仍为骨架。
 - 对跨模块依赖而言，`MQ-006` 已可以作为 M03 / M05 的直接上游输入继续引用，但这不等于 M01 整体已进入子任务设计阶段。
 - `MQ-007` 不构成 M01 子任务设计的新增技术阻塞，但会影响总控对 M03 / M05 与全局文档状态的统一判断。
 

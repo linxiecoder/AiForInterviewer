@@ -67,12 +67,16 @@
   - i18n 消费边界：layout / App Shell 负责 locale 解析与 fallback；页面容器或 shared adapter 只能从集中消息入口取词，并将稳定 message key 或按同一入口解析后的文案投影给共享原语，不维护第二套消息源。
   - 服务层：只输出领域数据、统一分页骨架和错误语义，不感知 `PageHeader`、摘要区、locale fallback 或共享组件树。
 - 因此 shared adapter 的职责是“编排与投影”，不是“重写业务协议”：它可以整理页面输入与服务响应，但不能改写领域字段含义、权限语义或模块私有校验规则。
+- 按最低位压缩口径，shared adapter 继续分三层处理：
+  - 共享最小层：冻结页面容器职责、`ListQueryState` 最小映射、共享页面原语稳定输入和集中 i18n 入口。
+  - 模块投影层：业务模块可在自身文档登记扩展查询键、摘要字段与页面投影规则，但不得回写成 M01 共享前置。
+  - 实现细节层：精确 props / callback / hook 组织与 resolved copy 承载形态继续留在后续模块或子任务设计，不作为本轮 M01 共享契约。
 
 ### 4.5 验证与治理层
 
 - 后端最小 pytest 用例验证健康检查。
 - 前端最小 vitest 用例验证 App Shell 与 DataTable 的可渲染性。
-- CI 只要求最小运行时/测试基线方向清晰，不在 M01 冻结完整流水线矩阵。
+- CI 只冻结 API lane / Web lane 两类最小校验入口，不在 M01 冻结完整流水线矩阵、lint / format gate、E2E 或多平台矩阵。
 - 文档治理遵循 `global -> module -> subtask` 分层，不允许在子任务文档中倒填模块缺口。
 
 ## 5. 核心对象模型
@@ -142,8 +146,8 @@
 
 ## 10. 进入 L5 前仍需补充
 
-- `PageHeaderModel`、Dashboard 摘要区与 `ListQueryState` 的 shared adapter 职责切分已补齐，但精确 props、request adapter 签名与 resolved copy 承载方式仍未冻结。
-- 根目录脚本与 CI 最小矩阵尚未细化到命令级和通过标准级。
+- `PageHeaderModel`、Dashboard 摘要区与 `ListQueryState` 的 shared adapter 三层边界已补齐；当前未冻结的只剩精确 props、request adapter 签名与 resolved copy 承载方式等实现级细节。
+- 根目录脚本命名、health check 与 API / Web 双 lane 已收敛为共享最小层；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - locale fallback、切换策略和消息命名空间已形成最小共享默认口径，但完整 i18n 架构仍未定稿，不足以直接安全拆子任务设计。
 
 ## 11. 关联文档

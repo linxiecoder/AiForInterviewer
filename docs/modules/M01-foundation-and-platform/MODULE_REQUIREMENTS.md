@@ -51,7 +51,7 @@
 - FastAPI 健康检查与日志初始化
 - Next.js 最小入口、Dashboard App Shell、页面头部、列表原语与基础页面样式
 - `apps/web/src/i18n/**` 统一文案入口与 locale seed
-- 根目录脚本、最小测试入口与 CI 基线方向
+- 根目录脚本命名、最小测试入口与 API / Web 双 lane CI 基线
 - 模块级文档治理约束与对下游模块的共享约束说明
 
 ## 6. 不在本模块范围内
@@ -80,7 +80,7 @@
 - `PageHeaderModel`：页面头部标题、说明和动作区的展示模型。
 - `ListViewState`：筛选、排序、分页、空态、错误态等列表原语共享状态。
 - `LocaleMessageBundle`：统一文案命名空间与 locale seed。
-- `VerificationEntry`：pytest / vitest / CI 等最小验证入口。
+- `VerificationEntry`：根目录 `dev:web` / `dev:api` / `test:web` / `test:api` 与 API / Web 双 lane 的最小验证入口。
 
 ## 8. 关键流程
 
@@ -89,7 +89,7 @@
 1. 开发者从 `.env.example` 派生本地 `.env`，只填本地安全占位值。
 2. 启动 `infra` 中的最小基础设施，并安装 `apps/web`、`apps/api` 依赖。
 3. 启动 FastAPI 最小入口与 Next.js 最小入口，确保健康检查与首页可用。
-4. 通过最小测试入口验证“仓库结构可运行、服务可存活、页面壳层可渲染”。
+4. 通过 `test:api` / `test:web` 或等价 API / Web 双 lane 入口验证“仓库结构可运行、服务可存活、页面壳层可渲染”。
 
 ### 8.2 工作台壳层加载
 
@@ -120,6 +120,8 @@
 
 - 首轮仓库结构按 monorepo 冻结，目录边界以 `apps/web`、`apps/api`、`infra` 为准。
 - 首轮只建立最小运行时、测试和 CI 基线，不要求在 M01 完成完整生产化设施。
+- 根目录统一脚本最小命名冻结为：`dev:web`、`dev:api`、`test:web`、`test:api`。
+- 最小验证入口类型冻结为：API=`pytest`、Web=`vitest`；CI 只冻结 API lane / Web lane，不扩张为完整 workflow、lint / format gate、E2E 或多平台矩阵。
 - 首轮视觉范围只沉淀壳层、头部、列表原语与基础页面样式，不负责完整业务页视觉定稿。
 - 所有页面可见文案都必须通过 `apps/web/src/i18n/**` 或等价集中入口读取。
 - 首轮 i18n 最小共享口径固定为：统一 `getMessages(locale)` 入口、locale seed=`zh-CN` / `en-US`、默认 locale=`zh-CN`、切换由 layout / App Shell 统一解析、fallback=`请求 locale -> zh-CN -> 记录缺失 key`。
@@ -144,14 +146,14 @@
 
 ## 13. 当前缺口
 
-- 根目录统一脚本与最小 CI 检查矩阵尚未冻结到命令级。
-- `PageHeader`、Dashboard 摘要区和列表查询状态的精确 props / callback 边界尚未冻结。
+- 根目录统一脚本命名、health check 与 API / Web 双 lane 已按 `OQ-019` 吸收；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
+- `PageHeader`、Dashboard 摘要区和列表查询状态的共享最小层已冻结；当前未冻结的只剩精确 props 命名、callback catalog 与 resolved copy 承载形态等实现级细节。
 - locale fallback、切换策略和命名空间约束已冻结到最小共享规则级别，但完整的 URL / 持久化 / formatter 级 i18n 架构仍未定稿，尚不能据此直接开放子任务设计。
 
 ## 14. 待确认问题
 
 - OQ-001 仓库结构是否最终固定为 monorepo（本轮按 `apps/web` + `apps/api` + `infra` 冻结推进）
-- OQ-002 首轮最小运行时 / 测试 / CI 基线的精确命令矩阵与覆盖范围
+- OQ-019 / M10：完整 workflow、lint / format gate、E2E 与多平台矩阵是否继续后置到治理模块，不作为 M01 共享前置
 - OQ-003 首轮视觉范围是否维持在壳层、头部、列表原语与基础页面样式，不进一步扩张到完整业务页组件库
 
 ## 15. 关联文档

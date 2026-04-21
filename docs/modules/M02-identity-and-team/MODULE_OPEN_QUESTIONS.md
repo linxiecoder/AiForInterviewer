@@ -26,7 +26,7 @@
 | `MQ-206` | `/login` 与 `/(dashboard)/members` 复用的 i18n namespace / locale fallback，是否已足以作为页面子任务输入下发 | `proposed-default` | `MODULE_DESIGN` / `MODULE_DEPENDENCIES` / `MT02_05` / `MT02_06` | 当前按全局 `OQ-022` 默认口径推进：继承 `M01` 的集中入口、locale seed、统一 fallback 与最小 namespace 边界；在模块完成吸收前，不补模块私有 namespace / fallback 规则 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
 | `MQ-207` | 在 `OQ-024` 默认口径下，`ST02_01 ~ ST02_03` 应如何映射到 `MT02_01 ~ MT02_08`，以及何时允许总控正式下发入口 | `proposed-default` | `MODULE_TASK_INDEX` / `MODULE_DEPENDENCIES` / `MODULE_DESIGN` / `MODULE_API_DESIGN` / 下一轮 `P03` 子任务设计窗口 | 已按全局 `OQ-024` 采用默认口径：`ST02_01 -> MT02_01/MT02_02/MT02_05`、`ST02_02 -> MT02_03/MT02_04/MT02_06`、`ST02_03 -> MT02_07/MT02_08`；旧目录只保留为历史容器，在总控正式下发前不得直开旧目录，也不得把 `MT02_*` 误写成正式入口 | 是 | `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_EXECUTION_LOG.md` |
 | `MQ-208` | `M02` 首轮是否需要独立成员详情页 UI，还是只冻结成员列表页 + 详情 API 语义 | `proposed-default` | `MODULE_DESIGN` / `MODULE_TASK_INDEX` / `MT02_04` / `MT02_06` | 当前建议只冻结成员列表页承接与 `GET /api/v1/members/{member_id}` 详情 API 语义，不单列成员详情页 UI；若后续确需页面，再新增微任务 | 否 | `MODULE_DESIGN.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` |
-| `MQ-209` | 在“候选白名单准备”轮中，`MT02_01` / `MT02_02` 的白名单观察面结论应如何与正式子任务开窗条件分离，避免被误回写为已放行入口 | `confirmed` | `MODULE_DEPENDENCIES` / `MODULE_TASK_INDEX` / `MODULE_EXECUTION_LOG` / 总控全局回写 | 已确认：白名单观察面只表示总控可继续跟踪的最小非页面变化面，不等于正式子任务设计候选；正式开窗仍需 `OQ-024` 正式映射、全局成熟度回写，以及 `CurrentUserContext` / `401/403` / route group 消费边界继续留在模块层 | 是 | `MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` |
+| `MQ-209` | 在“候选白名单准备”轮中，`MT02_01` / `MT02_02` 的白名单观察面结论应如何与正式子任务开窗条件分离，避免被误回写为已放行入口 | `confirmed` | `MODULE_API_DESIGN` / `MODULE_DEPENDENCIES` / `MODULE_TASK_INDEX` / `MODULE_EXECUTION_LOG` / 总控全局回写 | 已确认：白名单观察面只表示总控可继续跟踪的最小非页面变化面，不等于正式子任务设计候选；正式开窗仍需 `OQ-024` 正式映射、全局成熟度回写、`MODULE_API_DESIGN.md` 由高 `L4` 跨过 `L5`；复读遗留 `ST02_01 / ST02_02` 后也已确认其 `SUBTASK_DESIGN.md` 仍标注“当前成熟度：仅有骨架”，父模块行仍残留 `$(System.Collections.Specialized.OrderedDictionary.Id)` 占位符，`SUBTASK_IMPLEMENTATION.md` 仍为空白实施模板，因此旧容器不得充当 `MT02_01/MT02_02` 的正式入口证明；`CurrentUserContext` / `401/403` / route group 消费边界继续留在模块层 | 是 | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` |
 
 ## 4. 当前高优问题
 
@@ -36,7 +36,7 @@
 | `P0` | `MQ-206` | `MODULE_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` | 若页面 i18n 默认口径未被模块吸收，登录页与成员页子任务仍容易各写一套 namespace / fallback | 按总控 `proposed-default` 口径吸收，不在 `M02` 内私自扩张 i18n 规则 |
 | `P1` | `MQ-207` | `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md` | 若不把 `OQ-024` 的默认映射写死，非页面候选也会继续被旧入口拖回粗粒度任务包 | 本轮按 `proposed-default` 回写历史容器与映射关系，不重命名目录，也不放开子任务入口 |
 | `P1` | `MQ-208` | `MODULE_DESIGN.md`、`MODULE_TASK_INDEX.md` | 若成员详情页 UI 范围不收紧，新的成员目录微任务仍会把页面目标、API 语义和 schema 混成一个任务包 | 本轮先按“列表页 + 详情 API”默认口径收缩 |
-| `P1` | `MQ-209` | `MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` | 若不把白名单观察面和正式开窗条件拆开，总控与下游会把 `MT02_01/MT02_02` 误读为可立即创建子任务窗口 | 本轮按 `confirmed` 回写模块结论，并只建议总控同步全局状态，不开放子任务窗口 |
+| `P1` | `MQ-209` | `MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、`MODULE_EXECUTION_LOG.md` | 若不把白名单观察面和正式开窗条件拆开，总控与下游会把 `MT02_01/MT02_02` 误读为可立即创建子任务窗口，并把遗留 `ST02_*` 骨架设计文档 / 空白实施模板误当作正式入口证据 | 本轮按 `confirmed` 回写模块结论，并只建议总控同步全局状态，不开放子任务窗口 |
 
 ## 5. 需要升级到全局的问题
 
@@ -54,10 +54,11 @@
   - 本轮处理：已升级并对齐到全局 `OQ-024`；模块内只保留 `M02` 的具体映射与 readiness 影响，不再把“是否继续沿用旧入口”保持为 `open`。
 - `MQ-209`
   - 原因：涉及全局对白名单状态、正式开窗状态和模块成熟度状态的统一叙事。
-  - 本轮处理：模块内已确认 `MT02_01/MT02_02` 只属于观察面；需由总控同步 `DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 等全局状态文档。
+  - 本轮处理：模块内已确认 `MT02_01/MT02_02` 只属于观察面；且补充确认现有遗留 `ST02_01` 双文档仍是骨架 / 模板，不能作为正式入口依据。需由总控同步 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 等全局状态文档。
 
 ## 6. 当前判断
 
 - `M02` 模块内的业务边界、角色边界和 schema 口径已基本收口。
 - 当前剩余阻塞以共享契约问题、任务入口放行问题，以及“白名单观察面 vs 正式开窗状态”的治理边界为主：`MQ-205` / `OQ-021` 已转为 `proposed-default` 吸收阶段，`MQ-206` / `OQ-022` 仍是需继续吸收的共享默认口径，`MQ-207` / `OQ-024` 则要求旧入口继续停留在历史容器状态，`MQ-209` 已确认本轮只能给出观察结论而不是开窗结论。
+- 本轮补充复核后，`MT02_01/MT02_02` 仍不是正式子任务候选，原因不仅是全局映射与状态回写未完成，也包括复读遗留 `ST02_01 / ST02_02` 后确认其 `SUBTASK_DESIGN.md` 仍标注为“仅有骨架”且父模块行仍是占位符，`SUBTASK_IMPLEMENTATION.md` 仍为空白模板，不能作为正式入口的承接材料。
 - 因此 `M02` 当前判断应为“模块整体可为总控提供白名单观察输入，但 `MT02_01/MT02_02` 仍未达到正式子任务开窗条件”；非页面微任务最多只处于观察面或后续观察顺序，而不是“模块内问题已清空即可自动视为 `L5`”。

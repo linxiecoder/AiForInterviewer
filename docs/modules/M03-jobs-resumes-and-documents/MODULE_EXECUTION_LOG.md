@@ -25,6 +25,84 @@
 
 ## 3. 当前记录
 
+### 2026-04-21 / 轮次 R-LowestBit-02 / 任务包 MR-09
+
+- 当前模块：M03
+- 本轮目标：
+  - 继续压实最低位 `MODULE_API_DESIGN.md`
+  - 把 `OQ-021` 再压成“共享最小层 / 模块扩展层 / 实现细节层”的显式边界
+  - 把 `OQ-025` 再收紧为岗位接口最低位最小共享输入表述
+  - 只回写 `MODULE_OPEN_QUESTIONS.md` 与 `MODULE_EXECUTION_LOG.md`，不扩展到 M03 其他主题
+- 执行类型：最低位压缩 / 共享契约边界再显式化 / 模块状态回写
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中新增 `OQ-021` 的三层边界表，明确“URL / request 映射”在最低位只表示 query string key 到 request 字段的最小一一对应，不包含 route / callback / adapter 细节
+  - 在 `MODULE_API_DESIGN.md` 中新增 `OQ-025` 的最小共享输入表，写死 `jd_markdown`、`item_key` / `text`、`null / []`、数组顺序与写入责任，并显式排除扩展字段、派生摘要、页面投影和“岗位链整体 ready”含义
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中收紧 `MQ-304`、`MQ-307`、`MQ-308` 的当前建议，保证问题文案与最低位压缩后的 API 口径一字面对齐
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中收紧总控回写要求，明确全局状态文案需要同步三层边界和最小共享输入的排除项
+  - 在 `MODULE_EXECUTION_LOG.md` 记录本轮最低位压缩结论
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：高 `L4` 维持；最低位边界更硬，但当前仍是模块最低成熟度文档
+  - `MODULE_OPEN_QUESTIONS.md`：`L5` 维持；模块问题文案已与本轮最低位压缩结果重新对齐
+  - `MODULE_EXECUTION_LOG.md`：`L5` 维持；已稳定承载连续两轮最低位压缩结论与总控回写要求
+- 验证结果：
+  - 已对照根目录 `OPEN_QUESTIONS.md` 中 `OQ-021` / `OQ-025` 的最新 `proposed-default` 口径，确认本轮没有把模块最低位文档写成高于全局默认冻结的强结论
+  - 已检查本轮只修改 `docs/modules/M03-jobs-resumes-and-documents` 内允许写入的 3 份文档，未触碰全局主文档、其他模块文档或子任务文档
+  - 已按 UTF-8 回读本轮修改文件，并复查乱码特征、标题层级、表格与代码标记，未发现新的异常字符或 Markdown 结构破坏
+- 当前阻塞：
+  - `OQ-024`：旧 `ST03_*` 历史容器与 `MT03_*` 正式入口映射仍未由总控同步
+  - 当前模块最低成熟度文档仍是高 `L4` 的 `MODULE_API_DESIGN.md`；即使 `OQ-021 / OQ-025` 已被最低位稳定吸收，也还不足以直接放行正式候选
+  - 当前阶段仍关闭子任务设计窗口，因此 `MT03_01` / `MT03_03` 只能继续停留在白名单观察面
+- 当前待确认问题：
+  - `MQ-306`
+  - `MQ-309`
+- 下一步建议动作：
+  - 由总控窗口回写 `DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`，必要时同步 `OPEN_QUESTIONS.md`，说明 M03 已在最低位稳定吸收 `OQ-021` 三层边界与 `OQ-025` 最小共享输入
+  - 由总控窗口继续维持 `MT03_01` / `MT03_03` “只可白名单观察、不可正式开窗”的全局口径，直到 `OQ-024` 正式入口映射同步完成
+  - M03 本地下一步若继续做最低位压缩，仍只应围绕 `MODULE_API_DESIGN.md` 继续收口，不扩张到其他主题
+
+### 2026-04-21 / 轮次 R-LowestBit-01 / 任务包 MR-08
+
+- 当前模块：M03
+- 本轮目标：
+  - 继续压实最低位 `MODULE_API_DESIGN.md`
+  - 将 `OQ-021` 的最小 URL / request 映射稳定吸收到最低位文档
+  - 将 `OQ-025` 的最小共享输入收紧为岗位接口可稳定消费的最小输入 / 输出口径
+  - 只回写 `MODULE_OPEN_QUESTIONS.md` 与 `MODULE_EXECUTION_LOG.md`，不扩展到 M03 其他主题
+- 执行类型：最低位压缩 / 共享契约最小吸收 / 模块状态回写
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中把 `OQ-021` 压成显式的共享最小 URL / request 映射表，并再次写死 `updated_after / updated_before` 只属于 M03 模块级扩展，不得回写为共享最小映射
+  - 在 `MODULE_API_DESIGN.md` 中把 `OQ-025` 收紧到岗位接口的最小输入 / 输出稳定边界：只承认 `item_key` / `text`、`null / []` 语义、数组顺序与“仅岗位写模型可整体替换”；扩展字段、派生摘要与页面投影继续排除在稳定输入之外
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中回写 `MQ-304`、`MQ-307`、`MQ-308`、`MQ-309`：明确 `OQ-021 / OQ-025` 已被最低位文档稳定吸收，但 `MT03_01` / `MT03_03` 仍不能升级为正式候选
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中补充需要总控同步的全局状态文档范围
+  - 在 `MODULE_EXECUTION_LOG.md` 记录本轮最低位压缩结论
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：高 `L4` 维持；`OQ-021 / OQ-025` 已稳定吸收到最低位文档，但当前仍是模块最低成熟度文档
+  - `MODULE_OPEN_QUESTIONS.md`：`L5` 维持；模块级问题与总控回写要求已更新到本轮口径
+  - `MODULE_EXECUTION_LOG.md`：`L5` 维持；已能稳定承载本轮最低位压缩结论与后续回写建议
+- 验证结果：
+  - 已对照根目录 `OPEN_QUESTIONS.md` 中 `OQ-021` / `OQ-025` 的最新 `proposed-default` 口径，确认模块最低位吸收未偏离全局状态
+  - 已检查本轮只修改 `docs/modules/M03-jobs-resumes-and-documents` 内允许写入的 3 份文档，未触碰全局主文档、其他模块文档或子任务文档
+  - 已按 UTF-8 回读本轮修改文件，并完成乱码特征复查，未发现新的异常字符或 Markdown 结构破坏
+- 当前阻塞：
+  - `OQ-024`：旧 `ST03_*` 历史容器与 `MT03_*` 正式入口映射仍未由总控同步
+  - 当前模块最低成熟度文档仍是高 `L4` 的 `MODULE_API_DESIGN.md`；虽然最低位契约已收紧，但整体尚未到“正式候选可开窗”判断
+  - 当前阶段仍关闭子任务设计窗口，因此 `MT03_01` / `MT03_03` 只能继续停留在白名单观察面
+- 当前待确认问题：
+  - `MQ-306`
+  - `MQ-309`
+- 下一步建议动作：
+  - 由总控窗口回写 `DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`，必要时同步 `OPEN_QUESTIONS.md`，说明 M03 已在最低位稳定吸收 `OQ-021 / OQ-025`
+  - 由总控窗口继续维持 `MT03_01` / `MT03_03` “只可白名单观察、不可正式开窗”的全局口径，直到 `OQ-024` 正式入口映射同步完成
+  - M03 本地下一步若继续做压缩，应仍以 `MODULE_API_DESIGN.md` 为最低位，不扩张到其他主题
+
 ### 2026-04-21 / 轮次 R-Refactor-03 / 任务包 MR-07
 
 - 当前模块：M03

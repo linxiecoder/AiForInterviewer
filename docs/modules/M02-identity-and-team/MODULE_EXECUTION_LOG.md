@@ -230,6 +230,82 @@
   - 若继续推进 `M02`，仅继续围绕 `MT02_01/MT02_02` 做白名单复核，不打开任何子任务设计窗口
   - 页面类与验证类微任务继续保持后置，直到 `OQ-021`、`OQ-022` 与 `OQ-024` 的全局状态完成回写
 
+### 2026-04-21 / 轮次 MR-09
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 继续压实最低位 `MODULE_API_DESIGN.md`
+  - 复核 `MT02_01` / `MT02_02` 为什么仍只属于观察面而不是正式子任务候选
+  - 只更新本轮允许处理的模块级状态文档，不扩写页面、i18n、验证或其他模块主题
+- 执行类型：最低位压缩 / 白名单复核 / 模块状态回写
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中新增 `MT02_01 / MT02_02` 白名单复核表，分别写明当前已稳定的 auth 接口面、仍不能转为正式候选的直接原因，以及仍缺的推进条件
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中补强 `MQ-209`：把“`MODULE_API_DESIGN.md` 仍为高 `L4`”和“遗留 `ST02_01` 双文档仍是骨架 / 模板、不得充当正式入口证明”写入模块问题判断
+  - 在本日志中新增本轮记录，并显式记录本轮未修改 `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md` 与任何子任务双文档
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，但 `MT02_01/MT02_02` 仍只属观察面的原因已压实到可审计粒度
+  - `MODULE_OPEN_QUESTIONS.md`：维持 `L5` 候选，问题升级边界与总控回写要求更清晰
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，本轮最低位压缩证据已可直接供总控汇总
+- 验证结果：
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_API_DESIGN.md`、`MODULE_OPEN_QUESTIONS.md`、`MODULE_EXECUTION_LOG.md`
+  - 已复读 `ST02_01`、`ST02_02` 子任务双文档，确认两者仍是遗留容器，其中 `ST02_01` 仍存在骨架 / 模板内容，不能作为 `MT02_01/MT02_02` 的正式入口依据
+  - 本轮未运行代码或测试命令；本轮工作范围仅为文档最低位压缩与白名单复核
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`
+  - `MQ-209`
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控把 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 中与 `M02` 相关的“观察面 / 正式候选 / 开窗状态”继续写死，避免观察结论回流成放行结论
+  - `M02` 若继续推进，仍只允许围绕 `MODULE_API_DESIGN.md` 的最低位和 `MT02_01/MT02_02` 的观察条件复核，不扩写其他主题
+  - 在 `OQ-024` 未形成正式入口映射、且 `MODULE_API_DESIGN.md` 未整体跨过 `L5` 前，不得创建 `MT02_01/MT02_02` 的正式子任务窗口
+
+### 2026-04-21 / 轮次 MR-10
+
+- 当前模块：M02 鉴权、团队与成员
+- 本轮目标：
+  - 继续压实最低位 `MODULE_API_DESIGN.md`
+  - 用遗留子任务文档实证复核 `MT02_01` / `MT02_02` 为什么仍只属于观察面
+  - 只更新本轮允许处理的模块级状态文档，不扩写页面、i18n、验证或其他模块主题
+- 执行类型：最低位压缩 / 旧入口实证复核 / 模块状态回写
+- 修改内容：
+  - 在 `MODULE_API_DESIGN.md` 中补强 `MT02_01 / MT02_02` 白名单复核结论：把遗留 `ST02_01` 的骨架设计文档、占位符父模块行与空白实施模板写成直接证据，并新增“从观察面转为正式候选的硬闸门”
+  - 在 `MODULE_OPEN_QUESTIONS.md` 中补强 `MQ-209` 与当前判断：把复读 `ST02_01 / ST02_02` 后确认的骨架 / 模板状态写入问题结论
+  - 在本日志中新增本轮记录，并显式记录本轮未修改 `MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md` 与任何子任务双文档
+- 影响文件：
+  - `MODULE_API_DESIGN.md`
+  - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_EXECUTION_LOG.md`
+- 建议成熟度变化：
+  - `MODULE_API_DESIGN.md`：维持高 `L4`，但“为什么仍只是观察面”已从口头判断压到文档证据与放行闸门
+  - `MODULE_OPEN_QUESTIONS.md`：维持 `L5` 候选，问题结论与总控回写要求更具体
+  - `MODULE_EXECUTION_LOG.md`：维持 `L5` 候选，本轮最低位压缩证据已可直接供总控汇总
+- 验证结果：
+  - 已按 UTF-8 安全读写要求完成修改并回读 `MODULE_API_DESIGN.md`、`MODULE_OPEN_QUESTIONS.md`、`MODULE_EXECUTION_LOG.md`
+  - 已复读遗留 `ST02_01 / ST02_02` 子任务双文档，确认两份 `SUBTASK_DESIGN.md` 仍标注“当前成熟度：仅有骨架”且父模块行残留占位符，`SUBTASK_IMPLEMENTATION.md` 仍为空白实施模板
+  - 本轮未运行代码或测试命令；本轮工作范围仅为文档最低位压缩与白名单复核
+- 当前阻塞：
+  - `MQ-205` / `OQ-021`
+  - `MQ-206` / `OQ-022`
+  - `MQ-207` / `OQ-024`
+  - `MQ-209`
+- 当前待确认问题：
+  - `MQ-205`
+  - `MQ-206`
+  - `MQ-207`
+- 下一步建议动作：
+  - 由总控把 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`、`OPEN_QUESTIONS.md` 中与 `M02` 相关的“观察面 / 正式候选 / 开窗状态”继续写死，避免观察结论回流成放行结论
+  - `M02` 若继续推进，仍只允许围绕 `MODULE_API_DESIGN.md` 的最低位和 `MT02_01/MT02_02` 的观察条件复核，不扩写其他主题
+  - 在 `OQ-024` 未形成正式入口映射、且 `MODULE_API_DESIGN.md` 未整体跨过 `L5` 前，不得创建 `MT02_01/MT02_02` 的正式子任务窗口
+
 ## 4. 使用说明
 
 - 每完成一轮模块级工作后，应新增一条记录，而不是覆盖旧记录。

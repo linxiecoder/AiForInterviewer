@@ -4,9 +4,9 @@
 
 | Subtask ID | 子任务名称 | 当前目标 | 当前状态 | 主要输入 | 当前阻塞 | 下一步触发条件 | 是否具备子任务设计前置条件 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ST01_01 | 运行环境与仓库基线 | 收敛 monorepo 目录、环境模板、本地基础设施占位、FastAPI 最小入口与健康检查 | 等待模块 L5 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md` | 根目录脚本与最小 CI 命令矩阵未冻结；模块核心文档整体仍未到 `L5` | 冻结根目录脚本 / 验证矩阵，并将 M01 设计包推进到 `L5` | 否 |
-| ST01_02 | 工作台壳层与 i18n 基线 | 收敛 Dashboard 壳层、Page Header、i18n seed、列表原语与 shared adapter 边界 | 等待模块 L5 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` | shared adapter 职责边界虽已补写，但列表查询状态的实现级接口、locale 规则和视觉范围仍未冻结 | 吸收 shared adapter 默认口径，并继续冻结列表状态 / locale / 页面状态边界 | 否 |
-| ST01_03 | 测试、日志与文档治理基线 | 收敛 pytest / vitest / 最小 CI、结构化日志入口和模块回写约束 | 等待模块 L5 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md` | 最小验证矩阵与 CI 覆盖边界未冻结；shared adapter 相关验证面仍需与 ST01_02 对齐；与 M10 的治理加固边界仍需区分 | 冻结最小验证矩阵，并明确 shared adapter 与 M10 治理加固的职责切分 | 否 |
+| ST01_01 | 运行环境与仓库基线 | 收敛 monorepo 目录、环境模板、本地基础设施占位、FastAPI 最小入口与健康检查 | 等待模块 L5 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md` | 根目录最小脚本命名、health check 与 API / Web 双 lane 已冻结；当前仍等待 M01 整体 `L5` 候选判断，以及把完整 workflow / lint / E2E 后置到 M10 | 总控接受 M01 进入 `L5` 候选，并保持完整治理矩阵留在 M10 / 后续轮次 | 否 |
+| ST01_02 | 工作台壳层与 i18n 基线 | 收敛 Dashboard 壳层、Page Header、i18n seed、列表原语与 shared adapter 边界 | 等待模块 L5 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` | shared adapter 共享最小层已冻结；当前仍等待 M01 整体 `L5` 候选判断，精确 props / callback / hook 细节留待子任务设计收敛 | 总控接受 M01 共享最小层为下游输入，并正式开放 ST01_02 设计 | 否 |
+| ST01_03 | 测试、日志与文档治理基线 | 收敛 pytest / vitest / 最小 CI、结构化日志入口和模块回写约束 | 等待模块 L5 | `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md` | API / Web 双 lane 已冻结；shared adapter 最小验证面已可引用；当前仍等待 M01 整体 `L5` 候选判断，且完整 workflow / E2E / 可观测性治理边界需由 M10 承接 | 总控接受 M01 进入 `L5` 候选，并明确 M10 承接完整治理强化边界 | 否 |
 
 ## 2. 推荐推进顺序
 
@@ -19,9 +19,9 @@
 - 三个子任务都还不能进入子任务设计阶段。
 - 直接原因不是子任务目录缺失，而是 M01 的 `requirements / design / api / schema / logic` 仍未达到 `L5`。
 - 其中最关键的上游缺口是：
-  - 根目录脚本与最小 CI 命令矩阵未冻结。
-  - `PageHeader`、Dashboard 摘要区与 `ListQueryState` 的 shared adapter 职责边界已补写到模块层，但列表查询状态的完整实现级接口、request adapter 签名与 resolved copy 承载方式仍未冻结。
-  - locale 最小 fallback / namespace 已形成默认冻结口径，但完整的 URL / 持久化级策略仍未冻结。
+  - `MQ-001`、`MQ-003`、`MQ-005` 已压缩到共享最小层，不再要求继续扩张 M01 共享契约。
+  - 当前未开子任务设计，主要因为 M01 整体 `L5` 候选尚待总控复核与全局回写，而不是因为这三项仍缺少方向级口径。
+  - 完整 workflow / lint / E2E、多平台矩阵、精确 props / callback / hook 与完整 locale 持久化策略仍故意后置，不属于本轮 M01 共享前置。
 
 ## 4. 受 shared adapter 边界调整影响的旧入口与下游任务
 

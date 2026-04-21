@@ -37,24 +37,25 @@
 | OQ-018 | 管理台是否负责 search snapshot 导入与运维 | proposed-default | M06、M10 | 本轮先按负责导入与运维入口、不承担抓取本身推进 | `TECHNICAL_STANDARDS.md`、`MODULE_INDEX.md` |
 | OQ-019 | 根目录统一脚本与最小 CI 校验矩阵应冻结到什么粒度，才算满足平台基线的下游输入要求 | proposed-default | M01、M10 | 本轮先采用方案 B：冻结统一脚本命名（`dev:web` / `dev:api` / `test:web` / `test:api`）、最小存活检查（`GET /api/v1/health` -> `200 {"status":"ok"}`）与最小验证入口类型（API=`pytest`、Web=`vitest`），CI 只冻结 API/Web 两类最小校验 lane，不在当前轮冻结完整流水线矩阵 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 | OQ-020 | 共享页面原语（`PageHeader` / Dashboard 摘要区）应冻结到什么最小接口边界，才能支撑后续页面复用 | proposed-default | M01、M02、M03 | 本轮先采用方案 B：冻结最小共享页面原语边界；`PageHeader` 只承载标题/说明/主次动作，摘要区独立承载 `status_badge` / `updated_at` / `summary_items` 与最小状态表达，不扩张为完整 props catalog | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
-| OQ-021 | 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一 | proposed-default | M01、M02、M03、M04-M10 | 当前默认采用方案 B，并按三层状态分层：共享最小层固定为 `page` / `page_size` / `q` / `status` / `sort` / `order` 与统一分页响应骨架；模块扩展层允许单独登记扩展查询键（如 `updated_after` / `updated_before`），但不得回写成共享前提；实现细节层中的 route / callback / request adapter 细节继续留在各模块最低位文档处理。该口径已足够支撑本轮最低位压缩，但仍未达到可直接放行正式候选的程度 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
+| OQ-021 | 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一 | proposed-default | M01、M02、M03、M04-M10 | 当前默认采用方案 B，并按三层状态分层：共享最小层固定为 `page` / `page_size` / `q` / `status` / `sort` / `order` 与统一分页响应骨架；模块扩展层允许单独登记扩展查询键（如 `updated_after` / `updated_before`），但不得回写成共享前提；实现细节层中的 route / callback / request adapter 细节继续留在各模块最低位文档处理。该口径已足够支撑本轮最低位压缩，但仍未达到可直接放行正式候选的程度。本轮模块吸收摘要为：`M01` 已压到共享最小层输入，`M02` 仍卡在 `/members` 列表共享契约未闭合，`M03` 已在最低位 API 文档稳定吸收但仍未放行 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 | OQ-022 | locale fallback、切换策略与消息命名空间应冻结到什么程度，才能作为共享 Web 契约下发 | proposed-default | M01、M02、M03、M04-M10 | 本轮先采用方案 B：统一 `apps/web/src/i18n/**` + `getMessages(locale)` 入口，首轮 locale seed 固定为 `zh-CN` / `en-US`、默认 locale=`zh-CN`；切换由 layout / App Shell 统一解析 active locale；fallback 固定为“请求 locale -> `zh-CN` -> 记录缺失 key”，禁止组件硬编码兜底；namespace 只冻结“共享壳层一层、业务页面一层”的最小边界，不扩张为完整 i18n 架构 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 | OQ-023 | `/(dashboard)/admin/members` 与 `/api/v1/admin/members` 的完整实现应继续由 M02 承接，还是由后续治理模块承接 | proposed-default | M02、M10 | 本轮先采用方案 B：`M02` 只负责身份解析、授权规则、权限矩阵与最小鉴权契约，完整成员管理页面 / API 由后续治理模块承接 | `DESIGN_DECISIONS.md`、`MODULE_INDEX.md` |
-| OQ-024 | 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口 | proposed-default | M02、M03 | 当前按三层状态分层处理：历史容器层中，旧 `ST02_* / ST03_*` 目录只保留为历史容器且禁止直开；观察蓝本层中，`MT02_* / MT03_*` 只作为模块级白名单观察入口与最低位压缩引用，不是正式子任务 ID；正式开窗层中，只有在后续正式候选复评完成后，才允许由总控登记正式子任务 ID 与开窗资格。`MQ-209` 已吸收到本条叙事中。该问题当前继续阻塞正式候选提升与任何子任务窗口开放，但不阻塞模块级白名单观察 | `TASK_INDEX.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md` |
-| OQ-025 | `jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为 M04 / M06 的稳定输入 | proposed-default | M03、M04、M06 | 当前按三层状态分层处理：最小共享输入层固定为 `item_key` / `text`、`null / []` 语义、数组顺序即消费顺序，以及“仅岗位写模型可整体替换”；扩展字段层继续保持未冻结，不进入共享稳定输入；完整链路语义层继续留在 `M03` 的最低位文档压缩，不据此宣布完整岗位链 / 下游链 ready。该口径已被 `M03` 吸收为最小共享输入，但不等于 `MT03_01 / MT03_03` 已升格为正式候选 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
+| OQ-024 | 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口 | proposed-default | M02、M03 | 当前按三层状态分层处理：历史容器层中，旧 `ST02_* / ST03_*` 目录只保留为历史容器且禁止直开；观察蓝本层中，`MT02_* / MT03_*` 只作为模块级白名单观察入口与最低位压缩引用，不是正式子任务 ID；正式开窗层中，只有在后续正式候选复评完成后，才允许由总控登记正式子任务 ID 与开窗资格。`MQ-209` 已吸收到本条叙事中。当前三层状态已经清楚，但正式映射仍未被总控写死，因此 `M02` 与 `M03` 仍都只停留在观察面，不存在可正式开窗的模块 | `TASK_INDEX.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md` |
+| OQ-025 | `jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为 M04 / M06 的稳定输入 | proposed-default | M03、M04、M06 | 当前按三层状态分层处理：最小共享输入层固定为 `item_key` / `text`、`null / []` 语义、数组顺序即消费顺序，以及“仅岗位写模型可整体替换”；扩展字段层继续保持未冻结，不进入共享稳定输入；完整链路语义层继续留在 `M03` 的最低位文档压缩，不据此宣布完整岗位链 / 下游链 ready。该口径已被 `M03` 吸收为最小共享输入，但不等于 `MT03_01 / MT03_03` 已升格为正式候选；当前对 `M04 / M06` 只可作为最小设计输入，不足以支撑上传 / 导出微任务或完整岗位链 ready | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
 
 ## 3. 本轮高优问题处理判断
 
-- 本轮（最低位压缩轮）必须优先处理的问题：
+- 本轮（阶段 3 / 总控澄清 + 模块候选白名单准备轮的收口阶段）必须优先处理的问题：
   - `OQ-024` 旧入口退役后的全局映射与直开约束
   - `OQ-025` `jobs.requirement_items_json` 最小输入契约
   - `OQ-021` 共享最小映射与模块级扩展的边界澄清
 - 本轮检查结论：
-  - `OQ-021 / OQ-024 / OQ-025` 本轮统一继续保持 `proposed-default`，本轮目标是把三者的状态分层写死，而不是把三者推进到 `confirmed`
+  - `OQ-021 / OQ-024 / OQ-025` 本轮统一继续保持 `proposed-default`，本轮目标是把三者的状态分层与模块吸收结果写死，而不是把三者推进到 `confirmed`
   - `OQ-021` 继续保持 `proposed-default`，并正式分为“共享最小层 / 模块扩展层 / 实现细节层”；`updated_after` / `updated_before` 当前不属于共享最小层
   - `OQ-024` 继续保持 `proposed-default`，并正式分为“历史容器层 / 观察蓝本层 / 正式开窗层”；白名单观察面与正式子任务开窗条件必须显式分离
   - `OQ-025` 继续保持 `proposed-default`，并正式分为“最小共享输入层 / 扩展字段层 / 完整链路语义层”；当前只足够支撑最低位压缩与最小下游引用，不足以宣告岗位链整体 ready
-  - 本轮不新增全局 OQ；`MQ-007`、`MQ-209`、`MQ-308`、`MQ-309` 分别被吸收到既有全局叙事中
+  - 当前总控补充判断为：`M03` 对 `OQ-021 / OQ-025` 的最低位吸收已经基本稳定，应写成“已吸收但未放行”；`M02` 对 `OQ-021` 的最低位吸收仍未闭合；`M01` 已把 `OQ-021` 吸收为共享最小层输入，但这不等于模块整体候选已成立
+  - 本轮不新增全局 OQ；模块局部问题继续只作为吸收记录：`MQ-205 -> OQ-021`、`MQ-207 / MQ-209 -> OQ-024`、`MQ-307 / MQ-308 / MQ-309 -> OQ-025`
   - `OQ-019~OQ-023` 继续维持上一轮已登记的默认冻结口径，不再作为本轮主阻塞重复讨论
 
 | 优先级 | OQ ID | 当前状态 | 当前影响模块 | 本轮处理判断 |
@@ -63,9 +64,9 @@
 | P0 | OQ-004 | proposed-default | M02、M10 | 已按固定 Bearer token 冻结，可作为本轮 `M02` 输入 |
 | P0 | OQ-006、OQ-007 | proposed-default | M03、M10 | 已按共享渲染链与“上传同步/转换导出异步”冻结，可作为本轮 `M03` 输入 |
 | P0 | OQ-019 | proposed-default | M01、M10 | 已形成入口语义级默认冻结方案；可作为 `M01` 平台基线与 `M10` 治理边界切分输入，但暂不扩张为完整流水线定稿 |
-| P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成三层状态：共享最小映射维持 `page/page_size/q/status/sort/order`、分页骨架与页面容器 adapter 职责；模块扩展键单独登记；route / callback / request adapter 细节继续留在最低位文档处理 |
-| P0 | OQ-024 | proposed-default | M02、M03 | 已形成三层状态：旧 `ST02_* / ST03_*` 为历史容器、`MT02_* / MT03_*` 为观察蓝本、正式子任务 ID 与开窗资格继续后置到正式候选复评之后 |
-| P0 | OQ-025 | proposed-default | M03、M04、M06 | 已形成三层状态：`item_key` / `text`、`null` / `[]`、数组顺序与写入责任属于最小共享输入层；扩展字段继续未冻结；完整岗位链语义继续留在模块最低位文档处理 |
+| P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成三层状态：共享最小映射维持 `page/page_size/q/status/sort/order`、分页骨架与页面容器 adapter 职责；模块扩展键单独登记；route / callback / request adapter 细节继续留在最低位文档处理。模块吸收摘要：`M01` 已压到共享最小层输入，`M02` 仍未闭合，`M03` 已吸收但未放行 |
+| P0 | OQ-024 | proposed-default | M02、M03 | 已形成三层状态：旧 `ST02_* / ST03_*` 为历史容器、`MT02_* / MT03_*` 为观察蓝本、正式子任务 ID 与开窗资格继续后置到正式候选复评之后。当前仍缺总控写死正式映射，因此两模块都还只是观察面 |
+| P0 | OQ-025 | proposed-default | M03、M04、M06 | 已形成三层状态：`item_key` / `text`、`null` / `[]`、数组顺序与写入责任属于最小共享输入层；扩展字段继续未冻结；完整岗位链语义继续留在模块最低位文档处理。`M03` 已吸收最小共享输入，但该问题目前只足够支撑 `M04 / M06` 的最小设计输入 |
 | P1 | OQ-020 | proposed-default | M01、M02、M03 | 已形成方案 B 默认冻结候选；最小共享页面原语已足够支撑 `M01/M03` 继续推进，并为 `M02` 提供页面承接口径，但暂不升级为 `confirmed` |
 | P1 | OQ-022 | proposed-default | M01、M02、M03、M04-M10 | 已形成最小 i18n 共享默认口径；可作为模块设计输入，但完整 locale 切换持久化、URL 策略与 formatter 规则仍未冻结 |
 | P1 | OQ-023 | proposed-default | M02、M10 | 继续保持 `proposed-default`；本轮直接作为模块职责重切输入，不再回退为 `open` |

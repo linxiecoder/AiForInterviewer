@@ -72,7 +72,7 @@
   - 统一下载网关与对象写入顺序已冻结。
 - 进入本模块子任务设计前，至少需要：
   - `MODULE_REQUIREMENTS.md`、`MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md` 至少达到 `L5`。
-  - `PageHeader`、Dashboard 摘要区、列表查询状态、最小验证矩阵以及 i18n 最小共享规则已冻结到可下游引用。
+  - `PageHeader`、Dashboard 摘要区、列表查询状态、根目录最小脚本命名 / API-Web 双 lane 以及 i18n 最小共享规则已冻结到可下游引用。
 - 进入本模块子任务实施前，至少需要：
   - 相关 SUBTASK_DESIGN.md 达到可作为下游输入。
   - 对应 SUBTASK_IMPLEMENTATION.md 达到可直接用于实施。
@@ -80,10 +80,10 @@
 ## 6. 当前依赖风险
 
 - `DD-011~DD-014` 仍处于 proposed，说明平台基线、shared page primitive、list adapter 与 i18n 边界虽可按默认口径推进，但尚未形成完全稳定的全局 confirmed 输入。
-- `OQ-002` 只冻结了“最小运行时 / 测试 / CI 基线”，尚未冻结根目录脚本和 CI 命令矩阵。
+- `OQ-019` 已冻结最小脚本命名、health check 与 API / Web 双 lane；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - `OQ-003` 只冻结了壳层 / 头部 / 列表原语 / 基础页面样式，说明 `PageHeader` 和摘要区仍不能扩张成完整设计系统契约。
 - `OQ-021` 当前已在 M01 对齐到共享最小映射 `page / page_size / q / status / sort / order`；时间筛选等扩展仍应留在业务模块，不应被回灌为 M01 共享白名单。
-- shared adapter 的职责边界虽已补写到模块层，但 request adapter 签名、resolved copy 承载方式和页面级 service 组合仍未冻结到可直接实施。
+- shared adapter 的共享最小层已补写到模块层；request adapter 签名、resolved copy 承载方式和页面级 service 组合仍留在实现细节层，不再作为 M01 共享前置。
 - 共享下载 / 对象存储主题当前剩余风险已收缩到实现级细节：签名 URL TTL、代理流 / 重定向切换策略、对象生命周期与清理策略仍未冻结。
 - 共享下载网关只冻结了团队与 owner/source pointer 的最小校验边界；完整权限矩阵仍依赖 M02 / M10 后续治理口径。
 - 子任务文档当前仍是骨架，且模块核心设计文档尚未达到 `L5`，因此不能进入子任务设计阶段。
@@ -92,13 +92,14 @@
 
 - 就 M01 整体而言，本轮仍处于“设计可评审”，尚不是整体 `L5` confirmed。
 - 但就 SC-05 共享下载 / 对象存储主题而言，已经达到“可作为下游模块设计输入”的最低门槛。
+- 就 `MQ-001` / `MQ-003` / `MQ-005` 而言，本轮已压缩到 `proposed-default` 的共享最小层；模块内不再缺少新的结构性共享契约。
 - 当前最早可继续收敛的候选顺序仍为：
   1. ST01_01
   2. ST01_02
   3. ST01_03
 - 但在模块文档整体达到 `L5` 前，上述顺序只能作为下一轮设计收敛参考，不能视为已具备子任务设计前置条件。
 - `MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` 当前也只能把该边界当候选输入，不能因为本轮补写就视为 ready。
-- 当前真正阻塞 M01 整体逼近 `L5` 候选的，仍是 `MQ-001`、`MQ-003` 与 `MQ-005`。
+- 当前距离 M01 整体 `L5` 候选还差的最小集合，主要转为总控是否接受 `OQ-019` / `OQ-020~022` / `OQ-021` 的 `proposed-default` 作为共享最小层输入，以及同步回写全局成熟度 / 进展 / 问题文档。
 - 对 SC-05 主题的下游推进判断：
   - M03 可继续推进与 `storage_objects`、上传受理、导出下载投影相关的模块设计细化。
   - M05 可继续推进对象引用与来源链路相关设计，不必再等待 M01 补 bucket / key / source pointer 基线。

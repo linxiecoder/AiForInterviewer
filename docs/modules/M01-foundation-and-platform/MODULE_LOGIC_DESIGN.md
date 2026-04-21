@@ -32,8 +32,8 @@
 1. 从 `.env.example` 派生本地 `.env`，只使用安全占位值。
 2. 启动 `infra` 中的最小依赖服务。
 3. 安装并同步 `apps/web`、`apps/api` 依赖。
-4. 启动 FastAPI 最小入口和 Next.js 最小入口。
-5. 运行健康检查测试与前端壳层 / 列表原语测试，进入 `verified`。
+4. 通过根目录 `dev:api` / `dev:web` 启动 FastAPI 最小入口和 Next.js 最小入口。
+5. 运行 `test:api` / `test:web` 或等价 API / Web 双 lane 验证，进入 `verified`。
 
 ### 3.2 健康检查逻辑
 
@@ -103,6 +103,8 @@
 - 当筛选条件变化、排序变化或 `pageSize` 变化时，页面必须重置到第一页。
 - 当仅发生翻页时，不应清空既有筛选与排序状态。
 - 页面容器负责 `ListQueryState` 与 URL / request 之间的同步；共享列表原语不直接操作 router。
+- request adapter 只写回共享最小键集 `page / page_size / q / status / sort / order`；业务扩展查询键必须在各自模块文档单独登记。
+- shared adapter 负责把服务响应、页面态与 i18n 消费边界投影为共享原语稳定输入；resolved copy 承载方式不在 M01 冻结。
 - 时间筛选、复杂组合筛选以及 formatter / locale 级持久化策略当前只允许作为业务模块扩展，不属于 M01 共享列表状态的默认白名单。
 
 ### 4.4 对象写入或业务关联失败分支
@@ -142,14 +144,14 @@
 
 ## 7. 当前缺口
 
-- 根目录脚本、CI 基线与验证顺序尚未收敛为可直接执行矩阵。
+- 根目录脚本命名、health check 与 API / Web 双 lane 已收敛为最小共享验证顺序；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - 对象写入顺序、共享下载网关和最小 owner/source pointer 已形成稳定输入；当前未冻结的只剩签名 URL TTL、对象生命周期与清理策略。
 - Dashboard 摘要区和 `PageHeader` 的详细状态流仍停留在方向级。
-- 列表查询状态已与全局 `OQ-021` 对齐到最小共享行为口径，且当前白名单只覆盖 `page / page_size / q / status / sort / order`；完整实现级交互细节、时间筛选扩展与 URL / 持久化 / formatter 级 locale 策略仍未冻结。
+- 列表查询状态已与全局 `OQ-021` 对齐到最小共享行为口径，且当前白名单只覆盖 `page / page_size / q / status / sort / order`；完整实现级 route / callback、时间筛选扩展与 URL / 持久化 / formatter 级 locale 策略仍未冻结。
 
 ## 8. 进入可作为下游输入前需要补充
 
 - 共享下载 / 对象存储主题已足以支撑 M03 的对象引用与下载投影继续推进；后续若继续细化，应留在实现级适配与治理策略，不应回退共享边界。
-- 冻结最小验证矩阵与状态切换判定标准。
+- 若继续推进 MQ-001，只应补完整 workflow、lint / format gate、E2E 与多平台矩阵，不再回退根目录最小命名与 API / Web 双 lane。
 - 冻结壳层头部与摘要区的精确交互状态。
 - 将列表查询状态与 URL / callback 的默认行为口径继续吸收到页面样例与组件测试，并保持时间筛选等扩展不被误升格为共享前置。
