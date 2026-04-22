@@ -1,0 +1,1751 @@
+schema_version: 1
+global_policy:
+  auto_open_enabled: false
+  require_confirmation_for_state_writeback: true
+  strict_template_gate: true
+  formal_window_open: false
+  paths:
+    modules_root: docs/modules
+    open_questions_doc: OPEN_QUESTIONS.md
+    task_index_doc: TASK_INDEX.md
+oqs:
+  OQ-001:
+    title: 仓库结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`）
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-002:
+    title: 首轮是否只建立最小运行时、测试和 CI 基线
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-003:
+    title: 视觉规范首轮需要沉淀到什么粒度
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-004:
+    title: P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-005:
+    title: 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-006:
+    title: Markdown 预览与导出是否必须共用同一渲染链
+    status: proposed-default
+    affects:
+      modules:
+      - M03
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-007:
+    title: 上传、转换、导出在 P1 中哪些必须异步
+    status: proposed-default
+    affects:
+      modules:
+      - M03
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-008:
+    title: 匹配分析与评估规则是否需要版本化
+    status: proposed-default
+    affects:
+      modules:
+      - M04
+      - M07
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-009:
+    title: Embedding 与向量化来源如何确定
+    status: open
+    affects:
+      modules:
+      - M05
+      - M06
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-010:
+    title: 归档粒度是整份资产、片段还是题目级
+    status: open
+    affects:
+      modules:
+      - M05
+      - M08
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-011:
+    title: Search snapshot 的来源只做导入还是需要抓取
+    status: proposed-default
+    affects:
+      modules:
+      - M06
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-012:
+    title: 上下文包中的 source priority 与引用摘要规则如何定稿
+    status: open
+    affects:
+      modules:
+      - M06
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-013:
+    title: 打磨主题推荐是规则、LLM 还是混合
+    status: open
+    affects:
+      modules:
+      - M07
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-014:
+    title: 模拟面试、打磨模式和复盘是否共用同一评估口径
+    status: proposed-default
+    affects:
+      modules:
+      - M07
+      - M08
+      - M09
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-015:
+    title: 真实面试输入是结构化问答、自由 transcript 还是混合
+    status: open
+    affects:
+      modules:
+      - M08
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-016:
+    title: 薄弱项聚合 key、消减规则和停练规则如何定稿
+    status: open
+    affects:
+      modules:
+      - M09
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-017:
+    title: 管理台的模型推荐来源是本地 catalog 还是在线同步
+    status: proposed-default
+    affects:
+      modules:
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-018:
+    title: 管理台是否负责 search snapshot 导入与运维
+    status: proposed-default
+    affects:
+      modules:
+      - M06
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-019:
+    title: 根目录统一脚本与最小 CI 校验矩阵应冻结到什么粒度，才算满足平台基线的下游输入要求
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-020:
+    title: 共享页面原语（`PageHeader` / Dashboard 摘要区）应冻结到什么最小接口边界，才能支撑后续页面复用
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-021:
+    title: 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-022:
+    title: locale fallback、切换策略与消息命名空间应冻结到什么程度，才能作为共享 Web 契约下发
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-023:
+    title: '`/(dashboard)/admin/members` 与 `/api/v1/admin/members` 的完整实现应继续由 M02 承接，还是由后续治理模块承接'
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-024:
+    title: 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M03
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-025:
+    title: '`jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为 M04 / M06 的稳定输入'
+    status: proposed-default
+    affects:
+      modules:
+      - M03
+      - M04
+      - M06
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+modules:
+  M01:
+    meta:
+      path: docs/modules/M01-foundation-and-platform/
+    facts:
+      upstream_module_ids: []
+      related_oq_ids:
+      - OQ-001
+      - OQ-002
+      - OQ-003
+      - OQ-019
+      - OQ-020
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M02:
+    meta:
+      path: docs/modules/M02-identity-and-team/
+    facts:
+      upstream_module_ids:
+      - M01
+      related_oq_ids:
+      - OQ-001
+      - OQ-004
+      - OQ-005
+      - OQ-020
+      - OQ-021
+      - OQ-022
+      - OQ-023
+      - OQ-024
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: true
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: true
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M03:
+    meta:
+      path: docs/modules/M03-jobs-resumes-and-documents/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      related_oq_ids:
+      - OQ-001
+      - OQ-006
+      - OQ-007
+      - OQ-020
+      - OQ-021
+      - OQ-022
+      - OQ-024
+      - OQ-025
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M04:
+    meta:
+      path: docs/modules/M04-match-analysis-and-evidence/
+    facts:
+      upstream_module_ids:
+      - M03
+      related_oq_ids:
+      - OQ-001
+      - OQ-008
+      - OQ-021
+      - OQ-022
+      - OQ-025
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M05:
+    meta:
+      path: docs/modules/M05-assets-and-retrieval/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      related_oq_ids:
+      - OQ-001
+      - OQ-009
+      - OQ-010
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M06:
+    meta:
+      path: docs/modules/M06-simulated-interview-and-context/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      related_oq_ids:
+      - OQ-001
+      - OQ-009
+      - OQ-011
+      - OQ-012
+      - OQ-018
+      - OQ-021
+      - OQ-022
+      - OQ-025
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M07:
+    meta:
+      path: docs/modules/M07-polish-assessment-and-progress/
+    facts:
+      upstream_module_ids:
+      - M06
+      related_oq_ids:
+      - OQ-001
+      - OQ-008
+      - OQ-013
+      - OQ-014
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M08:
+    meta:
+      path: docs/modules/M08-review-and-replay/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      related_oq_ids:
+      - OQ-001
+      - OQ-010
+      - OQ-014
+      - OQ-015
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M09:
+    meta:
+      path: docs/modules/M09-training-and-weakness-lifecycle/
+    facts:
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      related_oq_ids:
+      - OQ-001
+      - OQ-014
+      - OQ-016
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M10:
+    meta:
+      path: docs/modules/M10-admin-governance-and-observability/
+    facts:
+      upstream_module_ids:
+      - M02
+      - M03
+      - M06
+      - M09
+      related_oq_ids:
+      - OQ-001
+      - OQ-002
+      - OQ-004
+      - OQ-005
+      - OQ-007
+      - OQ-008
+      - OQ-011
+      - OQ-017
+      - OQ-018
+      - OQ-019
+      - OQ-021
+      - OQ-022
+      - OQ-023
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+subtasks:
+  ST01_01:
+    meta:
+      module_id: M01
+      path: docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/
+    facts:
+      upstream_module_ids:
+      - M01
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST01_02:
+    meta:
+      module_id: M01
+      path: docs/modules/M01-foundation-and-platform/sub_modules/ST01_02-workspace-shell-and-i18n/
+    facts:
+      upstream_module_ids:
+      - M01
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST01_03:
+    meta:
+      module_id: M01
+      path: docs/modules/M01-foundation-and-platform/sub_modules/ST01_03-testing-logging-and-doc-governance/
+    facts:
+      upstream_module_ids:
+      - M01
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST02_01:
+    meta:
+      module_id: M02
+      path: docs/modules/M02-identity-and-team/sub_modules/ST02_01-auth-mechanism-boundary/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST02_02:
+    meta:
+      module_id: M02
+      path: docs/modules/M02-identity-and-team/sub_modules/ST02_02-team-user-member-domain/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST02_03:
+    meta:
+      module_id: M02
+      path: docs/modules/M02-identity-and-team/sub_modules/ST02_03-authorization-matrix/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: false
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST03_01:
+    meta:
+      module_id: M03
+      path: docs/modules/M03-jobs-resumes-and-documents/sub_modules/ST03_01-job-domain-and-pages/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      - M03
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST03_02:
+    meta:
+      module_id: M03
+      path: docs/modules/M03-jobs-resumes-and-documents/sub_modules/ST03_02-resume-domain-versioning-and-editor/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      - M03
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST03_03:
+    meta:
+      module_id: M03
+      path: docs/modules/M03-jobs-resumes-and-documents/sub_modules/ST03_03-upload-transform-export/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      - M03
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST04_01:
+    meta:
+      module_id: M04
+      path: docs/modules/M04-match-analysis-and-evidence/sub_modules/ST04_01-bindings-and-input-contract/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST04_02:
+    meta:
+      module_id: M04
+      path: docs/modules/M04-match-analysis-and-evidence/sub_modules/ST04_02-analysis-scoring-and-evidence/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST04_03:
+    meta:
+      module_id: M04
+      path: docs/modules/M04-match-analysis-and-evidence/sub_modules/ST04_03-analysis-ui-and-training-entry/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST05_01:
+    meta:
+      module_id: M05
+      path: docs/modules/M05-assets-and-retrieval/sub_modules/ST05_01-asset-type-and-asset-domain/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST05_02:
+    meta:
+      module_id: M05
+      path: docs/modules/M05-assets-and-retrieval/sub_modules/ST05_02-archive-records-and-source-linkage/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST05_03:
+    meta:
+      module_id: M05
+      path: docs/modules/M05-assets-and-retrieval/sub_modules/ST05_03-retrieval-chunking-and-index-ingestion/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST06_01:
+    meta:
+      module_id: M06
+      path: docs/modules/M06-simulated-interview-and-context/sub_modules/ST06_01-interview-session-bootstrap/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      - M06
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST06_02:
+    meta:
+      module_id: M06
+      path: docs/modules/M06-simulated-interview-and-context/sub_modules/ST06_02-context-pack-and-question-source/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      - M06
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST06_03:
+    meta:
+      module_id: M06
+      path: docs/modules/M06-simulated-interview-and-context/sub_modules/ST06_03-message-trace-report-and-export/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      - M06
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST07_01:
+    meta:
+      module_id: M07
+      path: docs/modules/M07-polish-assessment-and-progress/sub_modules/ST07_01-practice-topic-recommendation/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST07_02:
+    meta:
+      module_id: M07
+      path: docs/modules/M07-polish-assessment-and-progress/sub_modules/ST07_02-capability-tree-and-node-state/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST07_03:
+    meta:
+      module_id: M07
+      path: docs/modules/M07-polish-assessment-and-progress/sub_modules/ST07_03-assessment-and-progress/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST08_01:
+    meta:
+      module_id: M08
+      path: docs/modules/M08-review-and-replay/sub_modules/ST08_01-review-aggregate/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      - M08
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST08_02:
+    meta:
+      module_id: M08
+      path: docs/modules/M08-review-and-replay/sub_modules/ST08_02-real-interview-intake/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      - M08
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST08_03:
+    meta:
+      module_id: M08
+      path: docs/modules/M08-review-and-replay/sub_modules/ST08_03-simulated-review-replay/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      - M08
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST09_01:
+    meta:
+      module_id: M09
+      path: docs/modules/M09-training-and-weakness-lifecycle/sub_modules/ST09_01-weakness-aggregation/
+    facts:
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      - M09
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST09_02:
+    meta:
+      module_id: M09
+      path: docs/modules/M09-training-and-weakness-lifecycle/sub_modules/ST09_02-training-drawer-and-intake/
+    facts:
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      - M09
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST09_03:
+    meta:
+      module_id: M09
+      path: docs/modules/M09-training-and-weakness-lifecycle/sub_modules/ST09_03-lifecycle-rules/
+    facts:
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      - M09
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: false
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST10_01:
+    meta:
+      module_id: M10
+      path: docs/modules/M10-admin-governance-and-observability/sub_modules/ST10_01-admin-member-and-role-ops/
+    facts:
+      upstream_module_ids:
+      - M02
+      - M03
+      - M06
+      - M09
+      - M10
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST10_02:
+    meta:
+      module_id: M10
+      path: docs/modules/M10-admin-governance-and-observability/sub_modules/ST10_02-models-rules-and-settings/
+    facts:
+      upstream_module_ids:
+      - M02
+      - M03
+      - M06
+      - M09
+      - M10
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST10_03:
+    meta:
+      module_id: M10
+      path: docs/modules/M10-admin-governance-and-observability/sub_modules/ST10_03-observability-ci-and-snapshot-ops/
+    facts:
+      upstream_module_ids:
+      - M02
+      - M03
+      - M06
+      - M09
+      - M10
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: true
+      implementation_doc:
+        exists: true
+        template_like: true
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
