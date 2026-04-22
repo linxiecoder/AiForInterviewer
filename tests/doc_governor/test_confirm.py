@@ -83,6 +83,13 @@ class ConfirmTransitionTests(unittest.TestCase):
     def _read_state(self) -> dict:
         return yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
 
+    def _write_round_template(self, round_id: str, *, content: str | None = None) -> Path:
+        rounds_dir = self.temp_root / "docs" / "governance" / "rounds"
+        rounds_dir.mkdir(parents=True, exist_ok=True)
+        round_path = rounds_dir / f"{round_id}.md"
+        round_path.write_text(content or f"# Round\n\nDecision: summary\n", encoding="utf-8")
+        return round_path
+
     def _run_cli(self, *args: str) -> tuple[int, dict]:
         original = Path.cwd()
         os.chdir(self.temp_root)
@@ -418,6 +425,51 @@ class ConfirmTransitionTests(unittest.TestCase):
         self.assertEqual(payload["entity_type"], "module")
         self.assertEqual(payload["entity_id"], "M01")
         self.assertEqual(payload["transition_id"], payload.get("transition_id"))
+        self.assertTrue(payload["ok"])
+
+    def test_round_mode_requires_reason_with_decision_anchor(self) -> None:
+        self._write_round_template("R001")
+        exit_code, payload = self._run_cli(
+            "--entity-type",
+            "module",
+            "--entity-id",
+            "M01",
+            "--proposed-changes",
+            json.dumps({"review_status": "unreviewed"}),
+            "--mode",
+            "approve",
+            "--actor",
+            "alice",
+            "--round-id",
+            "R001",
+            "--reason",
+            "summary only",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "CONFIRM_REASON_MISSING_DECISION_ANCHOR",
+            {item["code"] for item in payload["diagnostics"]},
+        )
+
+    def test_round_mode_accepts_reason_with_decision_anchor(self) -> None:
+        self._write_round_template("R002")
+        exit_code, payload = self._run_cli(
+            "--entity-type",
+            "module",
+            "--entity-id",
+            "M01",
+            "--proposed-changes",
+            json.dumps({"review_status": "unreviewed"}),
+            "--mode",
+            "approve",
+            "--actor",
+            "alice",
+            "--round-id",
+            "R002",
+            "--reason",
+            "Decision: allow transition",
+        )
+        self.assertEqual(exit_code, 0)
         self.assertTrue(payload["ok"])
 
 

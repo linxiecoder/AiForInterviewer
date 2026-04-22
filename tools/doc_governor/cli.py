@@ -182,6 +182,14 @@ def main(argv: list[str] | None = None) -> int:
     plan_parser.add_argument("--entity-id")
     plan_parser.add_argument("--limit", type=int)
 
+    round_template_parser = subparsers.add_parser("generate-round-template")
+    round_template_parser.add_argument("--round-id", required=True)
+    round_template_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    round_template_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
+    round_template_parser.add_argument("--evaluate-json")
+    round_template_parser.add_argument("--entity-type")
+    round_template_parser.add_argument("--entity-id")
+    round_template_parser.add_argument("--limit", type=int)
     plan_round_parser = subparsers.add_parser("plan-round")
     plan_round_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
     plan_round_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
@@ -222,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
         return open_window(args)
     if args.command == "plan-open-window":
         return plan_open_window_command(args)
+    if args.command == "generate-round-template":
+        return generate_round_template_command(args)
     if args.command == "plan-round":
         return plan_round_command(args)
     if args.command == "apply-round":
@@ -608,6 +618,9 @@ def plan_open_window_command(args: argparse.Namespace) -> int:
     return 1 if not payload.get("ok", False) else 0
 
 
+def generate_round_template_command(args: argparse.Namespace) -> int:
+    payload = generate_round_template(
+        round_id=args.round_id,
 def plan_round_command(args: argparse.Namespace) -> int:
     preflight_payload = preflight_open_window(
         state=args.state,
@@ -624,6 +637,8 @@ def plan_round_command(args: argparse.Namespace) -> int:
         entity_id=args.entity_id,
         limit=args.limit,
     )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload.get("ok", False) else 0
 
     round_id = args.round_id or f"round-{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     must_review = [
