@@ -35,15 +35,22 @@ CANDIDATE_STATUSES = ("none", "observe", "candidate")
 REVIEW_STATUSES = ("unreviewed", "pending_confirmation", "approved", "rejected")
 READINESS_STATUSES = ("blocked", "not_ready", "downstream_ready", "implementation_ready")
 IMPLEMENTATION_DOC_STATES = ("missing", "inactive_template", "active_working_doc")
-GOVERNANCE_ROUND_STATUSES = ("open", "closed")
+DOCUMENT_TYPES = ("design", "plan")
+DOCUMENT_STATUSES = ("draft", "active", "blocked", "ready")
+GOVERNANCE_ROUND_STATUSES = ("open", "in_progress", "review", "closed")
 GOVERNANCE_ROUND_REQUIRED_FIELDS = (
     "round_id",
+    "workflow",
     "topic",
     "scope",
     "status",
     "opened_at",
     "opened_by",
     "decision_refs",
+    "target_documents",
+    "required_evidence_refs",
+    "exit_criteria",
+    "writeback_items",
 )
 
 TYPED_BLOCKER_REF_RE = re.compile(
@@ -54,7 +61,7 @@ TYPED_BLOCKER_REF_RE = re.compile(
     r"|subtask:ST\d{2}_\d{2}"
     r"|gate:[a-z0-9_]+"
     r"|policy:[a-z0-9_]+"
-    r"|doc:[a-z0-9_.]+"
+    r"|doc:[A-Za-z0-9_.-]+(?:#[A-Za-z0-9_.:-]+)?"
     r"|legacy:locked"
     r")$"
 )
@@ -121,6 +128,17 @@ _DEFAULT_CONFIRMED_STATE = {
         "window_opened_by": None,
         "window_reason": None,
         "blocker_refs": [],
+        "last_transition_id": None,
+        "last_confirmed_at": None,
+        "last_confirmed_by": None,
+    },
+    "document": {
+        "maturity": None,
+        "status": "draft",
+        "review_status": "unreviewed",
+        "blocker_refs": [],
+        "active_round_id": None,
+        "last_round_id": None,
         "last_transition_id": None,
         "last_confirmed_at": None,
         "last_confirmed_by": None,

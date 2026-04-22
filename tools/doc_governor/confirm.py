@@ -14,6 +14,7 @@ from .rules import evaluate_rules
 from .round_template import load_round_decision_anchor
 from .schema import (
     CANDIDATE_STATUSES,
+    DOCUMENT_STATUSES,
     IMPLEMENTATION_DOC_STATES,
     MATURITY_LEVELS,
     OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT,
@@ -26,16 +27,36 @@ from .schema import (
 from .validate import validate_state_file
 
 
-CONFIRM_ALLOWED_FIELDS = frozenset(
-    {
-        "maturity",
-        "candidate_status",
-        "review_status",
-        "readiness",
-        "blocker_refs",
-        "implementation_doc_state",
-    }
-)
+CONFIRM_ALLOWED_FIELDS_BY_ENTITY = {
+    "module": frozenset(
+        {
+            "maturity",
+            "candidate_status",
+            "review_status",
+            "readiness",
+            "blocker_refs",
+        }
+    ),
+    "subtask": frozenset(
+        {
+            "maturity",
+            "candidate_status",
+            "review_status",
+            "readiness",
+            "blocker_refs",
+            "implementation_doc_state",
+        }
+    ),
+    "document": frozenset(
+        {
+            "maturity",
+            "status",
+            "review_status",
+            "blocker_refs",
+            "active_round_id",
+        }
+    ),
+}
 CONFIRM_FORBIDDEN_FIELDS = frozenset(
     {
         "last_transition_id",
@@ -66,7 +87,7 @@ def confirm_transition(args: argparse.Namespace) -> int:
     evidence_refs = list(args.evidence_ref or [])
 
     diagnostics = _validate_input_paths(state_path, official_state_path)
-    if args.entity_type not in {"module", "subtask"}:
+    if args.entity_type not in {"module", "subtask", "document"}:
         diagnostics.append(
             make_diagnostic(
                 code="CONFIRM_ENTITY_TYPE_INVALID",
@@ -74,7 +95,7 @@ def confirm_transition(args: argparse.Namespace) -> int:
                 entity_type="system",
                 entity_id="GLOBAL",
                 field_path="entity_type",
-                message="entity_type must be module or subtask",
+                message="entity_type must be module, subtask, or document",
                 evidence=[
                     make_evidence(
                         type="cli",
@@ -327,8 +348,8 @@ def confirm_transition(args: argparse.Namespace) -> int:
 
     changed_fields = _collect_changed_fields(before_state, after_state)
 
-    candidate_promotion = _is_candidate_status_promotion(before_state, after_state)
-    readiness_promotion = _is_readiness_promotion(before_state, after_state)
+    candidate_promotion = entity_type in {"module", "subtask"} and _is_candidate_status_promotion(before_state, after_state)
+    readiness_promotion = entity_type in {"module", "subtask"} and _is_readiness_promotion(before_state, after_state)
     if candidate_promotion and not evidence_refs:
         diagnostics.append(
             make_diagnostic(
@@ -569,6 +590,7 @@ def _validate_state_change_inputs(
     evidence_refs: list[str],
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
+    allowed_fields = CONFIRM_ALLOWED_FIELDS_BY_ENTITY.get(entity_type, frozenset())
     for field in proposed_changes:
         if field in CONFIRM_FORBIDDEN_FIELDS:
             diagnostics.append(
@@ -590,7 +612,7 @@ def _validate_state_change_inputs(
                 )
             )
             continue
-        if field not in CONFIRM_ALLOWED_FIELDS:
+        if field not in allowed_fields:
             diagnostics.append(
                 make_diagnostic(
                     code="CONFIRM_FORBIDDEN_PROPOSED_CHANGE",
@@ -679,6 +701,25 @@ def _validate_state_change_inputs(
                     entity_id=entity_id,
                     field_path=f"state.confirmed.{field}",
                     message="Unknown review_status value",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="--proposed-changes",
+                            ref=field,
+                            value=proposed_changes.get(field),
+                        )
+                    ],
+                )
+            )
+        if field == "status" and proposed_changes.get(field) not in DOCUMENT_STATUSES:
+            diagnostics.append(
+                make_diagnostic(
+                    code="CONFIRM_UNKNOWN_ENUM",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"state.confirmed.{field}",
+                    message="Unknown document status value",
                     evidence=[
                         make_evidence(
                             type="cli",
@@ -788,6 +829,27 @@ def _validate_state_change_inputs(
                                 ],
                             )
                         )
+        if field == "active_round_id":
+            active_round_id = proposed_changes.get(field)
+            if active_round_id is not None and (not isinstance(active_round_id, str) or not active_round_id.strip()):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_UNKNOWN_ENUM",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path="state.confirmed.active_round_id",
+                        message="active_round_id must be a non-empty string when present",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=active_round_id,
+                            )
+                        ],
+                    )
+                )
 
     for ref in evidence_refs:
         if not TYPED_BLOCKER_REF_RE.fullmatch(ref):
@@ -812,6 +874,8 @@ def _validate_state_change_inputs(
 
     after_state = copy.deepcopy(before_state)
     after_state.update(proposed_changes)
+    if entity_type == "document":
+        return diagnostics
     candidate_status = str(after_state.get("candidate_status"))
     review_status = str(after_state.get("review_status"))
     readiness = str(after_state.get("readiness"))

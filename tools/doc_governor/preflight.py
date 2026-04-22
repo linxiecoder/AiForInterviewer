@@ -416,7 +416,7 @@ def _load_live_evaluate(state_path: Path) -> tuple[dict[str, Any], list[dict[str
             }
         ], False
 
-    return _evaluate_state_payload(payload_map), parse_errors, True
+    return _evaluate_state_payload(payload_map, state_path=state_path), parse_errors, True
 
 
 def _load_evaluate_json(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]], bool]:

@@ -61,6 +61,40 @@ def _base_confirm_state() -> dict:
                 "state": {"confirmed": schema.make_default_confirmed_state("subtask")},
             }
         },
+        "documents": {
+            "DOC-SPEC-P1": {
+                "meta": {
+                    "doc_type": "design",
+                    "title": "spec",
+                    "path": "docs/superpowers/specs/spec.md",
+                    "required_sections": [
+                        {"section_id": "goal", "heading": "## 1. 文档目标"},
+                    ],
+                    "relations": {
+                        "document_refs": [],
+                        "module_refs": [],
+                        "oq_refs": [],
+                    },
+                },
+                "facts": {
+                    "exists": True,
+                    "headings": [],
+                    "section_presence": {},
+                    "extracted_refs": {
+                        "document_refs": [],
+                        "module_refs": [],
+                        "oq_refs": [],
+                    },
+                    "marker_counts": {
+                        "todo": 0,
+                        "tbd": 0,
+                        "unresolved": 0,
+                    },
+                    "last_scanned_at": None,
+                },
+                "state": {"confirmed": schema.make_default_confirmed_state("document")},
+            }
+        },
     }
 
 
@@ -216,6 +250,41 @@ class ConfirmTransitionTests(unittest.TestCase):
         history_line = self.history_path.read_text(encoding="utf-8").strip().splitlines()[-1]
         history = json.loads(history_line)
         self.assertEqual(history["round_id"], "R-2026-04-01")
+
+    def test_document_approve_updates_state_and_history(self) -> None:
+        self._write_round_template("R-2026-04-02")
+        exit_code, payload = self._run_cli(
+            "--entity-type",
+            "document",
+            "--entity-id",
+            "DOC-SPEC-P1",
+            "--proposed-changes",
+            json.dumps(
+                {
+                    "status": "active",
+                    "review_status": "approved",
+                    "blocker_refs": [],
+                    "active_round_id": "R-2026-04-02",
+                }
+            ),
+            "--mode",
+            "approve",
+            "--actor",
+            "alice",
+            "--reason",
+            "Decision: spec refined",
+            "--round-id",
+            "R-2026-04-02",
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["entity_type"], "document")
+
+        state = self._read_state()
+        confirmed = state["documents"]["DOC-SPEC-P1"]["state"]["confirmed"]
+        self.assertEqual(confirmed["status"], "active")
+        self.assertEqual(confirmed["review_status"], "approved")
+        self.assertEqual(confirmed["active_round_id"], "R-2026-04-02")
+        self.assertEqual(confirmed["last_confirmed_by"], "alice")
 
     def test_reject_writes_history_only(self) -> None:
         before = self._read_state()

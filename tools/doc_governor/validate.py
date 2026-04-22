@@ -17,6 +17,8 @@ from .naming_rules import (
 from .rules import evaluate_rules
 from .schema import (
     CANDIDATE_STATUSES,
+    DOCUMENT_STATUSES,
+    DOCUMENT_TYPES,
     GOVERNANCE_ROUND_REQUIRED_FIELDS,
     GOVERNANCE_ROUND_STATUSES,
     IMPLEMENTATION_DOC_STATES,
@@ -77,7 +79,19 @@ REQUIRED_CONFIRMED_FIELDS = (
 )
 
 SUBTASK_CONFIRMED_REQUIRED_FIELDS = ("implementation_doc_state",) + REQUIRED_CONFIRMED_FIELDS
+DOCUMENT_CONFIRMED_REQUIRED_FIELDS = (
+    "maturity",
+    "status",
+    "review_status",
+    "blocker_refs",
+    "active_round_id",
+    "last_round_id",
+    "last_transition_id",
+    "last_confirmed_at",
+    "last_confirmed_by",
+)
 
+DOCUMENT_ID_RE = re.compile(r"^DOC-[A-Z0-9-]+$")
 
 def validate_state_file(state_path: Path) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
@@ -173,6 +187,7 @@ def validate_state_file(state_path: Path) -> list[Diagnostic]:
     diagnostics.extend(_validate_requirements(state.get("requirements"), state_path))
     diagnostics.extend(_validate_modules(state.get("modules"), state_path))
     diagnostics.extend(_validate_subtasks(state.get("subtasks"), state_path))
+    diagnostics.extend(_validate_documents(state.get("documents"), state_path))
 
     # Schema validation and rule validation are independent by design.
     diagnostics.extend(evaluate_rules(state))
@@ -426,7 +441,7 @@ def _validate_governance_rounds(rounds_obj: object, state_path: Path) -> list[Di
                     )
                 )
 
-        for key in ("round_id", "topic", "scope", "opened_by"):
+        for key in ("round_id", "workflow", "topic", "scope", "opened_by"):
             value = item.get(key)
             if value is not None and (not isinstance(value, str) or not value.strip()):
                 diagnostics.append(
@@ -457,7 +472,7 @@ def _validate_governance_rounds(rounds_obj: object, state_path: Path) -> list[Di
                     entity_type="system",
                     entity_id="GLOBAL",
                     field_path=f"{field_root}.status",
-                    message="governance round status must be one of open|closed.",
+                    message="governance round status must be one of open|in_progress|review|closed.",
                     evidence=[
                         make_evidence(
                             type="state_check",
@@ -489,6 +504,28 @@ def _validate_governance_rounds(rounds_obj: object, state_path: Path) -> list[Di
                     ],
                 )
             )
+
+        for key in ("started_at", "review_at", "closed_at"):
+            value = item.get(key)
+            if value is not None and not _is_iso_datetime(value):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_INVALID_GOVERNANCE_ROUND_TIME",
+                        severity="error",
+                        entity_type="system",
+                        entity_id="GLOBAL",
+                        field_path=f"{field_root}.{key}",
+                        message=f"{key} must be ISO-8601 datetime string.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{field_root}.{key}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
 
         decision_refs = item.get("decision_refs")
         if decision_refs is not None:
@@ -532,6 +569,116 @@ def _validate_governance_rounds(rounds_obj: object, state_path: Path) -> list[Di
                                 ],
                             )
                         )
+
+        target_documents = item.get("target_documents")
+        if not isinstance(target_documents, list):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                    severity="error",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path=f"{field_root}.target_documents",
+                    message="target_documents must be a list.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{field_root}.target_documents",
+                            value=type(target_documents).__name__,
+                        )
+                    ],
+                )
+            )
+        else:
+            for target_index, target in enumerate(target_documents):
+                target_root = f"{field_root}.target_documents[{target_index}]"
+                if not isinstance(target, dict):
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                            severity="error",
+                            entity_type="system",
+                            entity_id="GLOBAL",
+                            field_path=target_root,
+                            message="target_documents entry must be an object.",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=target_root,
+                                    value=type(target).__name__,
+                                )
+                            ],
+                        )
+                    )
+                    continue
+                document_id = target.get("document_id")
+                if not isinstance(document_id, str) or not document_id.strip():
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                            severity="error",
+                            entity_type="system",
+                            entity_id="GLOBAL",
+                            field_path=f"{target_root}.document_id",
+                            message="document_id must be a non-empty string.",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=f"{target_root}.document_id",
+                                    value=document_id,
+                                )
+                            ],
+                        )
+                    )
+                target_sections = target.get("target_sections")
+                if not isinstance(target_sections, list) or any(
+                    not isinstance(section, str) or not section.strip() for section in target_sections
+                ):
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                            severity="error",
+                            entity_type="system",
+                            entity_id="GLOBAL",
+                            field_path=f"{target_root}.target_sections",
+                            message="target_sections must be a list of non-empty strings.",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=f"{target_root}.target_sections",
+                                    value=target_sections,
+                                )
+                            ],
+                        )
+                    )
+
+        for list_field in ("required_evidence_refs", "exit_criteria", "writeback_items"):
+            value = item.get(list_field)
+            if not isinstance(value, list) or any(
+                not isinstance(entry, str) or not entry.strip() for entry in value
+            ):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                        severity="error",
+                        entity_type="system",
+                        entity_id="GLOBAL",
+                        field_path=f"{field_root}.{list_field}",
+                        message=f"{list_field} must be a list of non-empty strings.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{field_root}.{list_field}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
 
     return diagnostics
 
@@ -953,6 +1100,507 @@ def _validate_subtasks(subtasks_obj: object, state_path: Path) -> list[Diagnosti
                         ],
                     )
                 )
+
+    return diagnostics
+
+
+def _validate_documents(documents_obj: object, state_path: Path) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if documents_obj is None:
+        return diagnostics
+    if not isinstance(documents_obj, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="system",
+                entity_id="GLOBAL",
+                field_path="documents",
+                message="documents must be a mapping.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref="documents",
+                        value=type(documents_obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    for document_id, document_obj in documents_obj.items():
+        if not DOCUMENT_ID_RE.fullmatch(str(document_id)):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type="system",
+                    entity_id=str(document_id),
+                    field_path=f"documents.{document_id}",
+                    message="Invalid document id format.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref="document_id",
+                            value=document_id,
+                        )
+                    ],
+                )
+            )
+            continue
+        if not isinstance(document_obj, dict):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="document",
+                    entity_id=str(document_id),
+                    field_path=f"documents.{document_id}",
+                    message="document entry must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"documents.{document_id}",
+                            value=type(document_obj).__name__,
+                        )
+                    ],
+                )
+            )
+            continue
+
+        document = document_obj
+        diagnostics.extend(
+            _validate_document_meta(
+                document_id=str(document_id),
+                meta_obj=document.get("meta"),
+                state_path=state_path,
+            )
+        )
+        diagnostics.extend(
+            _validate_document_facts(
+                document_id=str(document_id),
+                facts_obj=document.get("facts"),
+                state_path=state_path,
+            )
+        )
+        diagnostics.extend(
+            _validate_confirmed_state(
+                entity_type="document",
+                entity_id=str(document_id),
+                state_obj=document.get("state"),
+                required_fields=DOCUMENT_CONFIRMED_REQUIRED_FIELDS,
+                state_path=state_path,
+            )
+        )
+
+    return diagnostics
+
+
+def _validate_document_meta(
+    *,
+    document_id: str,
+    meta_obj: object,
+    state_path: Path,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(meta_obj, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.meta",
+                message="meta must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.meta",
+                        value=type(meta_obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    doc_type = meta_obj.get("doc_type")
+    if doc_type not in DOCUMENT_TYPES:
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.meta.doc_type",
+                message="Unknown document doc_type.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.meta.doc_type",
+                        value=doc_type,
+                    )
+                ],
+            )
+        )
+
+    title = meta_obj.get("title")
+    if title is not None and (not isinstance(title, str) or not title.strip()):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.meta.title",
+                message="meta.title must be a non-empty string when present.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.meta.title",
+                        value=title,
+                    )
+                ],
+            )
+        )
+
+    path = meta_obj.get("path")
+    if not isinstance(path, str) or not path.strip():
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.meta.path",
+                message="meta.path must be a non-empty string.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.meta.path",
+                        value=path,
+                    )
+                ],
+            )
+        )
+
+    required_sections = meta_obj.get("required_sections")
+    if not isinstance(required_sections, list) or not required_sections:
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.meta.required_sections",
+                message="required_sections must be a non-empty list.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.meta.required_sections",
+                        value=required_sections,
+                    )
+                ],
+            )
+        )
+    else:
+        for index, section in enumerate(required_sections):
+            if not isinstance(section, dict):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_REQUIRED_FIELD",
+                        severity="error",
+                        entity_type="document",
+                        entity_id=document_id,
+                        field_path=f"documents.{document_id}.meta.required_sections[{index}]",
+                        message="required_sections entry must be an object.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"documents.{document_id}.meta.required_sections[{index}]",
+                                value=type(section).__name__,
+                            )
+                        ],
+                    )
+                )
+                continue
+            for key in ("section_id", "heading"):
+                value = section.get(key)
+                if not isinstance(value, str) or not value.strip():
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_MISSING_REQUIRED_FIELD",
+                            severity="error",
+                            entity_type="document",
+                            entity_id=document_id,
+                            field_path=f"documents.{document_id}.meta.required_sections[{index}].{key}",
+                            message=f"{key} must be a non-empty string.",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=f"documents.{document_id}.meta.required_sections[{index}].{key}",
+                                    value=value,
+                                )
+                            ],
+                        )
+                    )
+
+    relations = meta_obj.get("relations")
+    if not isinstance(relations, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.meta.relations",
+                message="relations must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.meta.relations",
+                        value=type(relations).__name__,
+                    )
+                ],
+            )
+        )
+    else:
+        for list_field in ("document_refs", "module_refs", "oq_refs"):
+            value = relations.get(list_field)
+            if not isinstance(value, list) or any(
+                not isinstance(entry, str) or not entry.strip() for entry in value
+            ):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_REQUIRED_FIELD",
+                        severity="error",
+                        entity_type="document",
+                        entity_id=document_id,
+                        field_path=f"documents.{document_id}.meta.relations.{list_field}",
+                        message=f"{list_field} must be a list of non-empty strings.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"documents.{document_id}.meta.relations.{list_field}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
+
+    return diagnostics
+
+
+def _validate_document_facts(
+    *,
+    document_id: str,
+    facts_obj: object,
+    state_path: Path,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(facts_obj, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.facts",
+                message="facts must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.facts",
+                        value=type(facts_obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    exists = facts_obj.get("exists")
+    if not isinstance(exists, bool):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.facts.exists",
+                message="exists must be a boolean.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.facts.exists",
+                        value=exists,
+                    )
+                ],
+            )
+        )
+
+    for list_field in ("headings",):
+        value = facts_obj.get(list_field)
+        if not isinstance(value, list) or any(not isinstance(entry, str) for entry in value):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="document",
+                    entity_id=document_id,
+                    field_path=f"documents.{document_id}.facts.{list_field}",
+                    message=f"{list_field} must be a list of strings.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"documents.{document_id}.facts.{list_field}",
+                            value=value,
+                        )
+                    ],
+                )
+            )
+
+    for dict_field in ("section_presence",):
+        value = facts_obj.get(dict_field)
+        if not isinstance(value, dict):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="document",
+                    entity_id=document_id,
+                    field_path=f"documents.{document_id}.facts.{dict_field}",
+                    message=f"{dict_field} must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"documents.{document_id}.facts.{dict_field}",
+                            value=type(value).__name__,
+                        )
+                    ],
+                )
+            )
+
+    extracted_refs = facts_obj.get("extracted_refs")
+    if not isinstance(extracted_refs, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.facts.extracted_refs",
+                message="extracted_refs must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.facts.extracted_refs",
+                        value=type(extracted_refs).__name__,
+                    )
+                ],
+            )
+        )
+    else:
+        for list_field in ("document_refs", "module_refs", "oq_refs"):
+            value = extracted_refs.get(list_field)
+            if not isinstance(value, list) or any(not isinstance(entry, str) for entry in value):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_REQUIRED_FIELD",
+                        severity="error",
+                        entity_type="document",
+                        entity_id=document_id,
+                        field_path=f"documents.{document_id}.facts.extracted_refs.{list_field}",
+                        message=f"{list_field} must be a list of strings.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"documents.{document_id}.facts.extracted_refs.{list_field}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
+
+    marker_counts = facts_obj.get("marker_counts")
+    if not isinstance(marker_counts, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.facts.marker_counts",
+                message="marker_counts must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.facts.marker_counts",
+                        value=type(marker_counts).__name__,
+                    )
+                ],
+            )
+        )
+    else:
+        for key in ("todo", "tbd", "unresolved"):
+            value = marker_counts.get(key)
+            if not isinstance(value, int):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_REQUIRED_FIELD",
+                        severity="error",
+                        entity_type="document",
+                        entity_id=document_id,
+                        field_path=f"documents.{document_id}.facts.marker_counts.{key}",
+                        message=f"{key} must be an integer.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"documents.{document_id}.facts.marker_counts.{key}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
+
+    last_scanned_at = facts_obj.get("last_scanned_at")
+    if last_scanned_at is not None and not _is_iso_datetime(last_scanned_at):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_INVALID_GOVERNANCE_ROUND_TIME",
+                severity="error",
+                entity_type="document",
+                entity_id=document_id,
+                field_path=f"documents.{document_id}.facts.last_scanned_at",
+                message="last_scanned_at must be ISO-8601 datetime string when present.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"documents.{document_id}.facts.last_scanned_at",
+                        value=last_scanned_at,
+                    )
+                ],
+            )
+        )
 
     return diagnostics
 
@@ -1914,6 +2562,116 @@ def _validate_confirmed_state(
                     ],
                 )
             )
+
+    if entity_type == "document":
+        status = confirmed.get("status")
+        if status not in DOCUMENT_STATUSES:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.confirmed.status",
+                    message="Unknown document status value.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.confirmed.status",
+                            value=status,
+                        )
+                    ],
+                )
+            )
+
+        review_status = str(confirmed.get("review_status"))
+        if review_status not in REVIEW_STATUSES:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.confirmed.review_status",
+                    message="Unknown review_status value.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.confirmed.review_status",
+                            value=confirmed.get("review_status"),
+                        )
+                    ],
+                )
+            )
+
+        maturity = confirmed.get("maturity")
+        if maturity is not None and maturity not in MATURITY_LEVELS:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.confirmed.maturity",
+                    message="Unknown maturity value.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.confirmed.maturity",
+                            value=maturity,
+                        )
+                    ],
+                )
+            )
+
+        for field_name in ("active_round_id", "last_round_id", "last_transition_id", "last_confirmed_at", "last_confirmed_by"):
+            value = confirmed.get(field_name)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_REQUIRED_FIELD",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"{entity_type}s.{entity_id}.state.confirmed.{field_name}",
+                        message=f"{field_name} must be a non-empty string when present.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{entity_type}s.{entity_id}.state.confirmed.{field_name}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
+
+        blocker_refs = confirmed.get("blocker_refs")
+        if isinstance(blocker_refs, list):
+            for index, ref in enumerate(blocker_refs):
+                if isinstance(ref, str) and not TYPED_BLOCKER_REF_RE.fullmatch(ref):
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_INVALID_TYPED_REF",
+                            severity="error",
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            field_path=f"{entity_type}s.{entity_id}.state.confirmed.blocker_refs[{index}]",
+                            message=f"Invalid typed blocker ref: {ref}",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref="state.confirmed.blocker_refs",
+                                    value=ref,
+                                )
+                            ],
+                        )
+                    )
+        return diagnostics
 
     candidate_status = str(confirmed.get("candidate_status"))
     if candidate_status not in CANDIDATE_STATUSES:

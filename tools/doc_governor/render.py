@@ -28,7 +28,9 @@ def render_from_payload(
     summary = _as_dict(payload.get("summary"))
     modules = _as_dict(payload.get("modules"))
     subtasks = _as_dict(payload.get("subtasks"))
+    documents = _as_dict(payload.get("documents"))
     oqs = _as_dict(payload.get("oqs"))
+    governance_rounds = _as_list(payload.get("governance_rounds"))
     delta_summary = _as_dict(payload.get("delta_summary"))
 
     if not isinstance(payload.get("summary"), dict):
@@ -36,6 +38,8 @@ def render_from_payload(
     if not isinstance(payload.get("modules"), dict):
         input_incomplete = True
     if not isinstance(payload.get("subtasks"), dict):
+        input_incomplete = True
+    if "documents" in payload and not isinstance(payload.get("documents"), dict):
         input_incomplete = True
     if not isinstance(payload.get("oqs"), dict):
         input_incomplete = True
@@ -48,13 +52,19 @@ def render_from_payload(
     lines.extend(_render_summary(summary))
     lines.extend(_render_review_section(modules, section_type="modules"))
     lines.extend(_render_review_section(subtasks, section_type="subtasks"))
+    lines.extend(_render_review_section(documents, section_type="documents"))
     lines.extend(_render_blocker_sections(modules=modules, subtasks=subtasks))
+    lines.extend(_render_document_blockers(documents=documents))
     lines.extend(_render_oq_summary(summary=summary, oqs=oqs))
+    lines.extend(_render_open_rounds(governance_rounds))
+    lines.extend(_render_round_delta(delta_summary))
     lines.extend(
         _render_next_round_agenda(
             modules=modules,
             subtasks=subtasks,
+            documents=documents,
             oqs=oqs,
+            governance_rounds=governance_rounds,
             agenda_limit=max(0, agenda_limit),
         )
     )
@@ -85,8 +95,13 @@ def _render_summary(summary: dict[str, Any]) -> list[str]:
         "",
         f"- modules_review_required: {summary.get('modules_review_required', 0)}",
         f"- subtasks_review_required: {summary.get('subtasks_review_required', 0)}",
+        f"- documents_review_required: {summary.get('documents_review_required', 0)}",
         f"- modules_blocked_count: {summary.get('modules_blocked_count', 0)}",
         f"- subtasks_blocked_count: {summary.get('subtasks_blocked_count', 0)}",
+        f"- documents_blocked_count: {summary.get('documents_blocked_count', 0)}",
+        f"- rounds_open_count: {summary.get('rounds_open_count', 0)}",
+        f"- rounds_in_progress_count: {summary.get('rounds_in_progress_count', 0)}",
+        f"- rounds_review_count: {summary.get('rounds_review_count', 0)}",
     ]
 
     blocked_by_reason_code = summary.get("blocked_by_reason_code")
@@ -105,9 +120,12 @@ def _render_summary(summary: dict[str, Any]) -> list[str]:
 
 
 def _render_review_section(entities: dict[str, Any], section_type: str) -> list[str]:
-    title = (
-        "Modules Requiring Review" if section_type == "modules" else "Subtasks Requiring Review"
-    )
+    title_map = {
+        "modules": "Modules Requiring Review",
+        "subtasks": "Subtasks Requiring Review",
+        "documents": "Documents Requiring Review",
+    }
+    title = title_map[section_type]
     lines = [f"## {title}", ""]
     rows: list[str] = []
     for entity_id in sorted(entities):
@@ -122,7 +140,9 @@ def _render_review_section(entities: dict[str, Any], section_type: str) -> list[
 
 
 def _render_blocker_sections(
-    *, modules: dict[str, Any], subtasks: dict[str, Any]
+    *,
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
 ) -> list[str]:
     module_candidate = _get_blockers(
         entities=modules,
@@ -166,6 +186,17 @@ def _render_blocker_sections(
     lines.extend(["", "## Implementation blockers by layer", ""])
     lines.extend(["### Subtasks", ""])
     _append_blocker_lines(lines, subtask_impl)
+    return lines + [""]
+
+
+def _render_document_blockers(*, documents: dict[str, Any]) -> list[str]:
+    blockers = _get_blockers(
+        entities=documents,
+        entity_type="document",
+        blocker_key="document_blockers",
+    )
+    lines = ["## Document blockers", "", "### Documents", ""]
+    _append_blocker_lines(lines, blockers)
     return lines + [""]
 
 
@@ -224,18 +255,82 @@ def _render_oq_summary(*, summary: dict[str, Any], oqs: dict[str, Any]) -> list[
     return lines + [""]
 
 
+def _render_open_rounds(governance_rounds: list[Any]) -> list[str]:
+    lines = ["## Open Rounds", ""]
+    rows: list[str] = []
+    for item in governance_rounds:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", ""))
+        if status not in {"open", "in_progress", "review"}:
+            continue
+        targets = []
+        for target in _as_list(item.get("target_documents")):
+            if not isinstance(target, dict):
+                continue
+            document_id = str(target.get("document_id", ""))
+            sections = ",".join(
+                section
+                for section in _as_list(target.get("target_sections"))
+                if isinstance(section, str) and section
+            )
+            targets.append(f"{document_id}:{sections}" if sections else document_id)
+        rows.append(
+            f"- `{item.get('round_id', '')}`: status={status} topic={item.get('topic', '')} "
+            f"targets=[{'; '.join(targets)}]"
+        )
+    lines.extend(rows if rows else ["- none"])
+    return lines + [""]
+
+
+def _render_round_delta(delta_summary: dict[str, Any]) -> list[str]:
+    lines = ["## Round Delta", ""]
+    if not delta_summary:
+        lines.append("- none")
+        return lines + [""]
+
+    blocker_changes = _as_dict(delta_summary.get("blocker_changes"))
+    lines.extend(["### Blocker changes"])
+    lines.append(f"- added_count: {blocker_changes.get('added_count', 0)}")
+    lines.append(f"- closed_count: {blocker_changes.get('closed_count', 0)}")
+
+    review_required_changes = _as_dict(delta_summary.get("review_required_changes"))
+    lines.extend(["", "### Review required changes"])
+    for key in ("modules", "subtasks"):
+        delta = _as_dict(review_required_changes.get(key))
+        lines.append(
+            f"- {key}: before={delta.get('before_true_count', 0)} after={delta.get('after_true_count', 0)} "
+            f"delta={delta.get('delta_true_count', 0)}"
+        )
+
+    readiness_changes = _as_dict(delta_summary.get("readiness_changes"))
+    lines.extend(["", "### Readiness changes"])
+    for key in ("modules_downstream", "subtasks_downstream", "subtasks_implementation"):
+        delta = _as_dict(readiness_changes.get(key))
+        lines.append(
+            f"- {key}: before={delta.get('before_true_count', 0)} after={delta.get('after_true_count', 0)} "
+            f"delta={delta.get('delta_true_count', 0)}"
+        )
+
+    return lines + [""]
+
+
 def _render_next_round_agenda(
     *,
     modules: dict[str, Any],
     subtasks: dict[str, Any],
+    documents: dict[str, Any],
     oqs: dict[str, Any],
+    governance_rounds: list[Any],
     agenda_limit: int,
 ) -> list[str]:
     lines = ["## Next Round Agenda", ""]
     agenda_items = _build_next_round_agenda(
         modules=modules,
         subtasks=subtasks,
+        documents=documents,
         oqs=oqs,
+        governance_rounds=governance_rounds,
         agenda_limit=agenda_limit,
     )
     if not agenda_items:
@@ -263,7 +358,9 @@ def _build_next_round_agenda(
     *,
     modules: dict[str, Any],
     subtasks: dict[str, Any],
+    documents: dict[str, Any],
     oqs: dict[str, Any],
+    governance_rounds: list[Any],
     agenda_limit: int,
 ) -> list[dict[str, Any]]:
     agenda: list[dict[str, Any]] = []
@@ -288,24 +385,97 @@ def _build_next_round_agenda(
                 "blocking_reason_codes": [reason_code] if reason_code else [],
                 "required_evidence": ["confirm OQ decision evidence (confirmed/manual override)"],
                 "suggested_owner": "governance-owner",
+                "_sort_group": 0,
+                "_sort_key": f"oq:{oq_id}",
             }
         )
 
+    for document_id in sorted(documents):
+        derived = _as_dict(_as_dict(documents.get(document_id)).get("derived"))
+        blocker_codes = _collect_blocker_reason_codes(derived)
+        if blocker_codes:
+            agenda.append(
+                {
+                    "category": "文档缺口待补齐",
+                    "entity": f"document:{document_id}",
+                    "current_state": (
+                        f"review_required={str(bool(derived.get('review_required'))).lower()}, "
+                        f"hard_blocker_count={len(blocker_codes)}"
+                    ),
+                    "blocking_reason_codes": blocker_codes,
+                    "required_evidence": ["document section completion evidence"],
+                    "suggested_owner": "document-owner",
+                    "_sort_group": 1,
+                    "_sort_key": f"document:{document_id}",
+                }
+            )
+        elif derived.get("review_required"):
+            agenda.append(
+                {
+                    "category": "文档待评审",
+                    "entity": f"document:{document_id}",
+                    "current_state": "review_required=true, hard_blocker_count=0",
+                    "blocking_reason_codes": [],
+                    "required_evidence": ["document review confirmation evidence"],
+                    "suggested_owner": "document-owner",
+                    "_sort_group": 2,
+                    "_sort_key": f"document:{document_id}",
+                }
+            )
+
     near_open_entities = _collect_entity_agenda(modules=modules, subtasks=subtasks, near_open_only=True)
-    for item in near_open_entities:
+    for index, item in enumerate(near_open_entities):
         item["category"] = "review_required 的 near-open 实体"
+        item["_sort_group"] = 3
+        item["_sort_key"] = f"{index:04d}"
         agenda.append(item)
 
     blocker_light_entities = _collect_entity_agenda(modules=modules, subtasks=subtasks, near_open_only=False)
-    for item in blocker_light_entities:
+    for index, item in enumerate(blocker_light_entities):
         if item.get("_hard_blocker_count", 0) <= 0:
             continue
         item["category"] = "hard blocker 最少、最接近可推进的实体"
+        item["_sort_group"] = 4
+        item["_sort_key"] = f"{index:04d}"
         agenda.append(item)
+
+    for item in governance_rounds:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", ""))
+        if status not in {"open", "in_progress", "review"}:
+            continue
+        agenda.append(
+            {
+                "category": "未关闭 round 的收口项",
+                "entity": f"round:{item.get('round_id', '')}",
+                "current_state": f"status={status}",
+                "blocking_reason_codes": [],
+                "required_evidence": [
+                    str(entry)
+                    for entry in _as_list(item.get("writeback_items"))
+                    if isinstance(entry, str) and entry
+                ],
+                "suggested_owner": "governance-owner",
+                "_sort_group": 5,
+                "_sort_key": str(item.get("round_id", "")),
+            }
+        )
 
     if agenda_limit <= 0:
         return []
-    return agenda[:agenda_limit]
+    for item in agenda:
+        item.setdefault("_sort_group", 99)
+        item.setdefault("_sort_key", item["entity"])
+    agenda.sort(key=lambda item: (item["_sort_group"], item["_sort_key"]))
+    return [
+        {
+            key: value
+            for key, value in item.items()
+            if not key.startswith("_")
+        }
+        for item in agenda[:agenda_limit]
+    ]
 
 
 def _collect_entity_agenda(
@@ -347,6 +517,7 @@ def _collect_entity_agenda(
         key=lambda item: (
             item["_hard_blocker_count"],
             0 if item["_review_required"] else 1,
+            0 if str(item["entity"]).startswith("subtask:") else 1,
             item["entity"],
         )
     )
@@ -355,7 +526,12 @@ def _collect_entity_agenda(
 
 def _collect_blocker_reason_codes(derived: dict[str, Any]) -> list[str]:
     reason_codes: list[str] = []
-    for blocker_key in ("candidate_blockers", "downstream_blockers", "implementation_blockers"):
+    for blocker_key in (
+        "candidate_blockers",
+        "downstream_blockers",
+        "implementation_blockers",
+        "document_blockers",
+    ):
         for blocker in _as_list(derived.get(blocker_key)):
             if not isinstance(blocker, dict):
                 continue
@@ -374,7 +550,7 @@ def _as_list(value: object) -> list[Any]:
 
 
 def build_render_diagnostics(
-    path: Path,
+    path: Any,
     code: str,
     message: str,
     severity: str = "error",

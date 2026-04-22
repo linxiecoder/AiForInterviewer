@@ -86,8 +86,11 @@ class RenderCommandTests(unittest.TestCase):
         self.assertIn("## Summary", text)
         self.assertIn("## Modules Requiring Review", text)
         self.assertIn("## Subtasks Requiring Review", text)
+        self.assertIn("## Documents Requiring Review", text)
         self.assertIn("## Candidate blockers by layer", text)
         self.assertIn("## OQ gate summary", text)
+        self.assertIn("## Open Rounds", text)
+        self.assertIn("## Round Delta", text)
         self.assertIn("- none", text)
         self.assertNotIn("render_input_incomplete=1", text)
         self.assertIn("modules_review_required: 0", text)
@@ -128,9 +131,26 @@ class RenderCommandTests(unittest.TestCase):
                 },
                 "ST01_02": {"derived": {"review_required": False, "review_reasons": []}},
             },
+            "documents": {
+                "DOC-SPEC-P1": {
+                    "derived": {
+                        "review_required": True,
+                        "review_reasons": ["document_ready_for_review"],
+                        "document_blockers": [],
+                    }
+                }
+            },
             "oqs": {
                 "OQ-01": {"derived_enforcement": "review_only"},
             },
+            "governance_rounds": [
+                {
+                    "round_id": "R-01",
+                    "status": "review",
+                    "topic": "spec review",
+                    "target_documents": [{"document_id": "DOC-SPEC-P1", "target_sections": ["goal"]}],
+                }
+            ],
             "diagnostics": [
                 {
                     "code": "DUMMY_WARNING",
@@ -171,10 +191,12 @@ class RenderCommandTests(unittest.TestCase):
             "## Summary",
             "## Modules Requiring Review",
             "## Subtasks Requiring Review",
+            "## Documents Requiring Review",
             "## Candidate blockers by layer",
             "## Downstream blockers by layer",
             "## Implementation blockers by layer",
             "## OQ gate summary",
+            "## Open Rounds",
             "## Round Delta",
             "## Next Round Agenda",
             "## Notes / interpretation boundary",
@@ -196,6 +218,13 @@ class RenderCommandTests(unittest.TestCase):
             if line.startswith("- ")
         ]
         self.assertEqual(subtask_rows[0], "- `ST01_10`: review_required=true reason=[implementation_doc_activation_recommended]")
+        document_rows = [
+            line.strip()
+            for line in self._section_lines(report, "## Documents Requiring Review")
+            if line.startswith("- ")
+        ]
+        self.assertEqual(document_rows[0], "- `DOC-SPEC-P1`: review_required=true reason=[document_ready_for_review]")
+        self.assertIn("- `R-01`: status=review topic=spec review targets=[DOC-SPEC-P1:goal]", report)
         self.assertIn("### Blocker changes", report)
         self.assertIn("- added_count: 2", report)
         self.assertIn("- modules: before=1 after=2 delta=1", report)

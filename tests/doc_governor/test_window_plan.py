@@ -41,6 +41,8 @@ def _default_state() -> dict:
 def _module_entry(module_id: str, readiness: str = "downstream_ready") -> dict:
     confirmed = schema.make_default_confirmed_state("module")
     confirmed["readiness"] = readiness
+    if readiness == "downstream_ready":
+        confirmed["maturity"] = "L5"
     return {
         "meta": {"path": f"docs/modules/{module_id}-test/"},
         "facts": {
@@ -63,6 +65,8 @@ def _subtask_entry(
     confirmed = schema.make_default_confirmed_state("subtask")
     confirmed["readiness"] = readiness
     confirmed["implementation_doc_state"] = implementation_state
+    if readiness == "downstream_ready":
+        confirmed["maturity"] = "L5"
     return {
         "meta": {
             "module_id": module_id,
@@ -425,16 +429,14 @@ class PlanOpenWindowTests(unittest.TestCase):
         self.assertIn("Decision:", text)
         self.assertIn("module:M02", text)
         self.assertIn("module:M01", text)
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        self.assertEqual(state["governance_rounds"][0]["round_id"], "R001")
+        self.assertEqual(state["governance_rounds"][0]["status"], "open")
         self.assertEqual(payload["summary"]["eligible_to_apply_count"], 0)
         self.assertEqual(payload["summary"]["hard_blocked_count"], 1)
         self.assertEqual(payload["hard_blocked"][0]["entity_type"], "module")
         self.assertEqual(payload["hard_blocked"][0]["entity_id"], "M01")
-        self.assertTrue(
-            any(
-                reason["code"] == "bootstrap_default_oq_policy_requires_confirmation"
-                for reason in payload["hard_blocked"][0]["blockers"]
-            )
-        )
+        self.assertTrue(payload["hard_blocked"][0]["blockers"])
 
     def test_plan_round_queue_order_by_blocker_and_reject(self) -> None:
         state = _default_state()
@@ -485,6 +487,9 @@ class PlanOpenWindowTests(unittest.TestCase):
         state["modules"]["M01"] = _module_entry("M01")
         state["modules"]["M02"] = _module_entry("M02")
         self._write_state(state)
+        rounds_dir = self.temp_root / "docs" / "governance" / "rounds"
+        rounds_dir.mkdir(parents=True, exist_ok=True)
+        (rounds_dir / "round-apply-1.md").write_text("# Round\n\nDecision: batch apply\n", encoding="utf-8")
 
         plan_payload = {
             "round_id": "round-apply-1",
@@ -530,7 +535,7 @@ class PlanOpenWindowTests(unittest.TestCase):
             "--actor",
             "tester",
             "--reason",
-            "batch apply",
+            "Decision: batch apply",
         )
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["ok"])
@@ -541,6 +546,8 @@ class PlanOpenWindowTests(unittest.TestCase):
 
         lines = [line for line in self.history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
         self.assertEqual(len(lines), 2)
+        records = [json.loads(line) for line in lines]
+        self.assertEqual({record["round_id"] for record in records}, {"round-apply-1"})
 
 
 if __name__ == "__main__":

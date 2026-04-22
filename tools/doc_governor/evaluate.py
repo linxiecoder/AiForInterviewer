@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .document_scan import scan_document
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
 from .schema import REQUIRED_MODULE_SLOTS, SCHEMA_VERSION, TYPED_BLOCKER_REF_RE
 from .validate import validate_state_file
@@ -22,12 +23,17 @@ BLOCKED_REASON_CODES = {
     "asset_hard_blocker",
     "language_non_compliant",
     "compliance_non_compliant",
+    "missing_required_section",
+    "missing_relation_ref",
+    "document_markers_pending",
+    "document_file_missing",
 }
 
 REVIEW_REASONS = {
     "downstream_ready_no_hard_blocker",
     "oq_review_only",
     "implementation_doc_activation_recommended",
+    "document_ready_for_review",
 }
 
 OQ_GATE_LEVELS = ("observe_only", "candidate_gate", "readiness_gate")
@@ -147,7 +153,7 @@ def evaluate_state_file(state_path: Path) -> tuple[list[Diagnostic], dict[str, A
     if any(item.severity == "error" for item in diagnostics):
         return diagnostics, {}
 
-    evaluated = _evaluate_state_payload(state)
+    evaluated = _evaluate_state_payload(state, state_path=state_path)
     return diagnostics, evaluated
 
 
@@ -285,7 +291,7 @@ def _validate_oq_persisted_fields(
     return diagnostics
 
 
-def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
+def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> dict[str, Any]:
     oqs = state.get("oqs")
     oqs = oqs if isinstance(oqs, dict) else {}
     requirements = state.get("requirements")
@@ -294,6 +300,10 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
     modules = modules if isinstance(modules, dict) else {}
     subtasks = state.get("subtasks")
     subtasks = subtasks if isinstance(subtasks, dict) else {}
+    documents = state.get("documents")
+    documents = documents if isinstance(documents, dict) else {}
+    governance_rounds = state.get("governance_rounds")
+    governance_rounds = governance_rounds if isinstance(governance_rounds, list) else []
 
     global_policy = state.get("global_policy")
     global_policy = global_policy if isinstance(global_policy, dict) else {}
@@ -373,12 +383,20 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
             )
         }
 
+    document_results = _evaluate_documents(
+        documents=documents,
+        repo_root=_resolve_repo_root(state_path),
+    )
+    rounds_summary = _summarize_rounds(governance_rounds)
+
     summary = _build_summary(
         requirement_results=requirement_derived_wrapped,
         module_results=module_derived_wrapped,
         subtask_results=subtask_derived_wrapped,
+        document_results=document_results,
         oq_payload=oq_payload,
         oq_source_map=oqs,
+        rounds_summary=rounds_summary,
     )
 
     return {
@@ -386,7 +404,10 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
         "requirements": requirement_derived_wrapped,
         "modules": module_derived_wrapped,
         "subtasks": subtask_derived_wrapped,
+        "documents": document_results,
         "oqs": oq_payload,
+        "governance_rounds": governance_rounds,
+        "rounds_summary": rounds_summary,
     }
 
 
@@ -880,6 +901,177 @@ def _finalize_requirement_derived(
     }
 
 
+def _evaluate_documents(
+    *,
+    documents: dict[str, object],
+    repo_root: Path,
+) -> dict[str, dict[str, Any]]:
+    document_registry: dict[str, str] = {}
+    for document_id, document_obj in documents.items():
+        if isinstance(document_obj, dict):
+            meta = document_obj.get("meta")
+            if isinstance(meta, dict) and isinstance(meta.get("path"), str):
+                document_registry[str(document_id)] = str(meta.get("path"))
+
+    results: dict[str, dict[str, Any]] = {}
+    for document_id, document_obj in documents.items():
+        if not isinstance(document_obj, dict):
+            continue
+        meta = document_obj.get("meta")
+        meta = meta if isinstance(meta, dict) else {}
+        required_sections = meta.get("required_sections")
+        required_sections = required_sections if isinstance(required_sections, list) else []
+        path = str(meta.get("path", ""))
+        facts = scan_document(
+            repo_root=repo_root,
+            path=path,
+            required_sections=required_sections,
+            document_registry=document_registry,
+        )
+        relations = meta.get("relations")
+        relations = relations if isinstance(relations, dict) else {}
+        derived = _derive_document_status(
+            document_id=str(document_id),
+            meta=meta,
+            facts=facts,
+            relations=relations,
+        )
+        results[str(document_id)] = {
+            "facts": facts,
+            "derived": derived,
+        }
+    return results
+
+
+def _derive_document_status(
+    *,
+    document_id: str,
+    meta: dict[str, Any],
+    facts: dict[str, Any],
+    relations: dict[str, Any],
+) -> dict[str, Any]:
+    document_blockers: list[dict[str, Any]] = []
+    missing_required_sections = sorted(
+        section_id
+        for section_id, present in _as_dict(facts.get("section_presence")).items()
+        if not bool(present)
+    )
+    for section_id in missing_required_sections:
+        document_blockers.append(
+            _make_blocker(
+                ref=f"doc:{document_id}#{section_id}",
+                kind="document_section",
+                reason_code="missing_required_section",
+                message=f"document {document_id} missing required section {section_id}",
+            )
+        )
+
+    if not bool(facts.get("exists")):
+        document_blockers.append(
+            _make_blocker(
+                ref=f"doc:{document_id}#exists",
+                kind="document",
+                reason_code="document_file_missing",
+                message=f"document {document_id} file is missing",
+            )
+        )
+
+    extracted_refs = _as_dict(facts.get("extracted_refs"))
+    missing_relation_refs: list[str] = []
+    for document_ref in _as_list(relations.get("document_refs")):
+        if document_ref not in _as_list(extracted_refs.get("document_refs")):
+            missing_relation_refs.append(f"doc:{document_ref}")
+            document_blockers.append(
+                _make_blocker(
+                    ref=f"doc:{document_ref}",
+                    kind="document_relation",
+                    reason_code="missing_relation_ref",
+                    message=f"document {document_id} missing relation ref {document_ref}",
+                )
+            )
+    for module_ref in _as_list(relations.get("module_refs")):
+        if module_ref not in _as_list(extracted_refs.get("module_refs")):
+            missing_relation_refs.append(f"module:{module_ref}")
+            document_blockers.append(
+                _make_blocker(
+                    ref=f"module:{module_ref}",
+                    kind="module_relation",
+                    reason_code="missing_relation_ref",
+                    message=f"document {document_id} missing relation ref {module_ref}",
+                )
+            )
+    for oq_ref in _as_list(relations.get("oq_refs")):
+        if oq_ref not in _as_list(extracted_refs.get("oq_refs")):
+            missing_relation_refs.append(f"oq:{oq_ref}")
+            document_blockers.append(
+                _make_blocker(
+                    ref=f"oq:{oq_ref}",
+                    kind="oq_relation",
+                    reason_code="missing_relation_ref",
+                    message=f"document {document_id} missing relation ref {oq_ref}",
+                )
+            )
+
+    marker_counts = _as_dict(facts.get("marker_counts"))
+    unresolved_markers = sum(
+        int(marker_counts.get(key, 0) or 0) for key in ("todo", "tbd", "unresolved")
+    )
+    if unresolved_markers > 0:
+        document_blockers.append(
+            _make_blocker(
+                ref=f"doc:{document_id}#markers",
+                kind="document_marker",
+                reason_code="document_markers_pending",
+                message=f"document {document_id} still contains unresolved markers",
+            )
+        )
+
+    review_reasons: list[str] = []
+    if not document_blockers:
+        review_reasons.append("document_ready_for_review")
+
+    return {
+        "required_section_ids": [
+            str(section.get("section_id"))
+            for section in _as_list(meta.get("required_sections"))
+            if isinstance(section, dict)
+        ],
+        "missing_required_sections": missing_required_sections,
+        "missing_relation_refs": sorted(set(missing_relation_refs)),
+        "document_blockers": _dedupe_blockers(document_blockers),
+        "review_required": bool(review_reasons),
+        "review_reasons": sorted(set(review_reasons) & REVIEW_REASONS),
+        "assessed_ready": not bool(document_blockers),
+    }
+
+
+def _summarize_rounds(rounds: list[object]) -> dict[str, Any]:
+    counts: Counter[str] = Counter()
+    open_rounds: list[dict[str, Any]] = []
+    for item in rounds:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", ""))
+        if status:
+            counts.update([status])
+        if status in {"open", "in_progress", "review"}:
+            open_rounds.append(item)
+    return {
+        "counts": {status: counts.get(status, 0) for status in ("open", "in_progress", "review", "closed")},
+        "open_round_count": len(open_rounds),
+    }
+
+
+def _resolve_repo_root(state_path: Path) -> Path:
+    normalized = state_path.resolve()
+    try:
+        if normalized.parent.name == "governance" and normalized.parent.parent.name == "docs":
+            return normalized.parent.parent.parent
+    except IndexError:
+        pass
+    return normalized.parent
+
+
 def _finalize_module_derived(
     *,
     module_id: str,
@@ -976,8 +1168,10 @@ def _build_summary(
     requirement_results: dict[str, dict[str, Any]],
     module_results: dict[str, dict[str, Any]],
     subtask_results: dict[str, dict[str, Any]],
+    document_results: dict[str, dict[str, Any]],
     oq_payload: dict[str, Any],
     oq_source_map: dict[str, object],
+    rounds_summary: dict[str, Any],
 ) -> dict[str, Any]:
     reason_counter: Counter[str] = Counter()
     for requirement in requirement_results.values():
@@ -998,6 +1192,10 @@ def _build_summary(
             reason_counter.update([blocker["reason_code"]])
         for blocker in derived.get("implementation_blockers", []):
             reason_counter.update([blocker["reason_code"]])
+    for document in document_results.values():
+        derived = document.get("derived", {})
+        for blocker in derived.get("document_blockers", []):
+            reason_counter.update([blocker["reason_code"]])
 
     summary = {
         "requirements_review_required": sum(
@@ -1014,6 +1212,9 @@ def _build_summary(
             for requirement in requirement_results.values()
             if requirement["derived"]["blocker_refs"]
         ),
+        "documents_review_required": sum(
+            1 for document in document_results.values() if document["derived"]["review_required"]
+        ),
         "modules_blocked_count": sum(
             1
             for module in module_results.values()
@@ -1026,6 +1227,11 @@ def _build_summary(
             if subtask["derived"]["candidate_blocker_refs"]
             or subtask["derived"]["downstream_blocker_refs"]
             or subtask["derived"]["implementation_blocker_refs"]
+        ),
+        "documents_blocked_count": sum(
+            1
+            for document in document_results.values()
+            if document["derived"]["document_blockers"]
         ),
         "blocked_by_reason_code": {
             reason: count
@@ -1042,6 +1248,9 @@ def _build_summary(
             "readiness_gate.review_only": 0,
             "readiness_gate.readiness_blocker": 0,
         },
+        "rounds_open_count": int(_as_dict(rounds_summary.get("counts")).get("open", 0)),
+        "rounds_in_progress_count": int(_as_dict(rounds_summary.get("counts")).get("in_progress", 0)),
+        "rounds_review_count": int(_as_dict(rounds_summary.get("counts")).get("review", 0)),
     }
 
     for oq_id, oq_info in sorted(oq_payload.items()):
@@ -1103,14 +1312,20 @@ def _collect_blocker_keys(payload: dict[str, Any]) -> set[str]:
         "requirement": _extract_entities(payload, key="requirements"),
         "module": _extract_entities(payload, key="modules"),
         "subtask": _extract_entities(payload, key="subtasks"),
+        "document": _extract_entities(payload, key="documents"),
     }
     for entity_type, entities in entity_maps.items():
         for entity_id, derived in entities.items():
-            blocker_keys = (
-                ("gate_blockers",)
-                if entity_type == "requirement"
-                else ("candidate_blockers", "downstream_blockers", "implementation_blockers")
-            )
+            if entity_type == "requirement":
+                blocker_keys = ("gate_blockers",)
+            elif entity_type == "document":
+                blocker_keys = ("document_blockers",)
+            else:
+                blocker_keys = (
+                    "candidate_blockers",
+                    "downstream_blockers",
+                    "implementation_blockers",
+                )
             for blocker_key in blocker_keys:
                 for blocker in derived.get(blocker_key, []):
                     if not isinstance(blocker, dict):
@@ -1121,6 +1336,14 @@ def _collect_blocker_keys(payload: dict[str, Any]) -> set[str]:
                         continue
                     blockers.add(f"{entity_type}:{entity_id}:{reason_code}:{ref}")
     return blockers
+
+
+def _as_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: object) -> list[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _diff_boolean_field(

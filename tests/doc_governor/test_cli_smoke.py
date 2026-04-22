@@ -1,6 +1,8 @@
 import io
 import json
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -11,6 +13,9 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _build_state() -> dict:
@@ -43,13 +48,7 @@ def _build_state() -> dict:
                         "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
                         "task_index": {"exists": True, "path": "TASK_INDEX.md"},
                     },
-                    "compliance": {
-                        "naming_ok": True,
-                        "path_ok": True,
-                        "relations_ok": True,
-                        "language_ok": True,
-                        "violations": [],
-                    },
+                    "compliance": schema.make_default_compliance_state(),
                 },
                 "state": {
                     "confirmed": requirement_state,
@@ -69,8 +68,12 @@ def _build_state() -> dict:
                         slot: {"exists": True, "template_like": False}
                         for slot in schema.MODULE_DOC_SLOTS
                     },
+                    "compliance": schema.make_default_compliance_state(),
                 },
-                "state": {"confirmed": module_state},
+                "state": {
+                    "confirmed": module_state,
+                    "tracking": schema.make_default_tracking_state(),
+                },
             }
         },
         "subtasks": {
@@ -86,8 +89,12 @@ def _build_state() -> dict:
                     "declared_blocker_refs": [],
                     "design_doc": {"exists": True, "template_like": False},
                     "implementation_doc": {"exists": True, "template_like": False},
+                    "compliance": schema.make_default_compliance_state(),
                 },
-                "state": {"confirmed": task_state},
+                "state": {
+                    "confirmed": task_state,
+                    "tracking": schema.make_default_tracking_state(),
+                },
             }
         },
     }
@@ -115,11 +122,31 @@ class CliSmokeTests(unittest.TestCase):
                 exit_code = int(exc.code)
         return exit_code, stdout.getvalue()
 
+    def _run_subprocess(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, *args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            encoding="utf-8",
+            stdin=subprocess.DEVNULL,
+        )
+
     def test_cli_help_runs(self) -> None:
         exit_code, output = self._run_cli("--help")
         self.assertEqual(exit_code, 0)
         self.assertIn("evaluate-state", output)
         self.assertIn("confirm-transition", output)
+
+    def test_module_entrypoint_help(self) -> None:
+        result = self._run_subprocess("-m", "tools.doc_governor.cli", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("doc-governor", result.stdout)
+
+    def test_script_entrypoint_help(self) -> None:
+        result = self._run_subprocess("tools/doc_governor/cli.py", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("doc-governor", result.stdout)
 
     def test_evaluate_state_supports_entity_type_and_entity_id(self) -> None:
         requirement_code, requirement_output = self._run_cli(

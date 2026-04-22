@@ -1,6 +1,6 @@
-import unittest
 import shutil
 import tempfile
+import unittest
 import uuid
 from pathlib import Path
 
@@ -8,6 +8,13 @@ import yaml
 
 
 class SchemaContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
+        self.temp_root.mkdir(exist_ok=True)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.temp_root, ignore_errors=True)
+
     def test_requirement_defaults_and_helpers_are_available(self) -> None:
         from tools.doc_governor import schema
 
@@ -75,6 +82,12 @@ class SchemaContractTests(unittest.TestCase):
         )
         self.assertEqual(set(schema.REQUIRED_SUBTASK_SLOTS), set(schema.SUBTASK_DOC_SLOTS))
 
+    def test_document_contract_constants_are_frozen(self) -> None:
+        from tools.doc_governor import schema
+
+        self.assertEqual(schema.DOCUMENT_TYPES, ("design", "plan"))
+        self.assertEqual(schema.DOCUMENT_STATUSES, ("draft", "active", "blocked", "ready"))
+
     def test_state_paths_and_schema_version_are_frozen(self) -> None:
         from tools.doc_governor import schema
 
@@ -134,6 +147,22 @@ class SchemaContractTests(unittest.TestCase):
             },
         )
 
+        document_state = schema.make_default_confirmed_state("document")
+        self.assertEqual(
+            document_state,
+            {
+                "maturity": None,
+                "status": "draft",
+                "review_status": "unreviewed",
+                "blocker_refs": [],
+                "active_round_id": None,
+                "last_round_id": None,
+                "last_transition_id": None,
+                "last_confirmed_at": None,
+                "last_confirmed_by": None,
+            },
+        )
+
     def test_typed_blocker_ref_regex_matches_expected_refs(self) -> None:
         from tools.doc_governor import schema
 
@@ -143,22 +172,33 @@ class SchemaContractTests(unittest.TestCase):
             schema.TYPED_BLOCKER_REF_RE.fullmatch("gate:formal_window_closed")
         )
         self.assertIsNotNone(schema.TYPED_BLOCKER_REF_RE.fullmatch("legacy:locked"))
+        self.assertIsNotNone(
+            schema.TYPED_BLOCKER_REF_RE.fullmatch("doc:DOC-SPEC-P1#architecture")
+        )
         self.assertIsNone(schema.TYPED_BLOCKER_REF_RE.fullmatch("OQ-021"))
 
     def test_governance_round_contract_constants_are_frozen(self) -> None:
         from tools.doc_governor import schema
 
-        self.assertEqual(schema.GOVERNANCE_ROUND_STATUSES, ("open", "closed"))
+        self.assertEqual(
+            schema.GOVERNANCE_ROUND_STATUSES,
+            ("open", "in_progress", "review", "closed"),
+        )
         self.assertEqual(
             schema.GOVERNANCE_ROUND_REQUIRED_FIELDS,
             (
                 "round_id",
+                "workflow",
                 "topic",
                 "scope",
                 "status",
                 "opened_at",
                 "opened_by",
                 "decision_refs",
+                "target_documents",
+                "required_evidence_refs",
+                "exit_criteria",
+                "writeback_items",
             ),
         )
 
@@ -166,14 +206,9 @@ class SchemaContractTests(unittest.TestCase):
         from tools.doc_governor.validate import validate_state_file
 
         state = _build_minimal_state()
-        temp_dir = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
-        temp_dir.mkdir(exist_ok=True)
-        try:
-            state_path = temp_dir / "DOC_STATE.yaml"
-            state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
-            diagnostics = validate_state_file(state_path)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        state_path = self.temp_root / "DOC_STATE.yaml"
+        state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        diagnostics = validate_state_file(state_path)
 
         self.assertFalse(
             [item for item in diagnostics if item.severity == "error"],
@@ -184,25 +219,36 @@ class SchemaContractTests(unittest.TestCase):
         from tools.doc_governor.validate import validate_state_file
 
         state = _build_minimal_state()
+        state["documents"] = {
+            "DOC-SPEC-P1": _build_document_entry(
+                doc_type="design",
+                path="docs/superpowers/specs/spec.md",
+            )
+        }
         state["governance_rounds"] = [
             {
                 "round_id": "R-2026-04-01",
+                "workflow": "document_refinement",
                 "topic": "Candidate gate review",
-                "scope": "ST01_01",
+                "scope": "documents:DOC-SPEC-P1",
                 "status": "open",
                 "opened_at": "2026-04-01T09:00:00Z",
                 "opened_by": "alice",
                 "decision_refs": ["decision:DR-001"],
+                "target_documents": [
+                    {
+                        "document_id": "DOC-SPEC-P1",
+                        "target_sections": ["goal", "architecture"],
+                    }
+                ],
+                "required_evidence_refs": ["doc:DOC-SPEC-P1#goal", "oq:OQ-004"],
+                "exit_criteria": ["required sections complete"],
+                "writeback_items": ["回写下一轮 agenda"],
             }
         ]
-        temp_dir = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
-        temp_dir.mkdir(exist_ok=True)
-        try:
-            state_path = temp_dir / "DOC_STATE.yaml"
-            state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
-            diagnostics = validate_state_file(state_path)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        state_path = self.temp_root / "DOC_STATE.yaml"
+        state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        diagnostics = validate_state_file(state_path)
 
         self.assertFalse(
             [item for item in diagnostics if item.severity == "error"],
@@ -213,29 +259,63 @@ class SchemaContractTests(unittest.TestCase):
         from tools.doc_governor.validate import validate_state_file
 
         state = _build_minimal_state()
+        state["documents"] = {
+            "DOC-SPEC-P1": _build_document_entry(
+                doc_type="design",
+                path="docs/superpowers/specs/spec.md",
+            )
+        }
         state["governance_rounds"] = [
             {
                 "round_id": "R-2026-04-01",
+                "workflow": "document_refinement",
                 "topic": "Candidate gate review",
-                "scope": "ST01_01",
+                "scope": "documents:DOC-SPEC-P1",
                 "status": "done",
                 "opened_at": "2026/04/01 09:00:00",
                 "opened_by": "alice",
                 "decision_refs": ["decision:DR-001"],
+                "target_documents": [
+                    {
+                        "document_id": "DOC-SPEC-P1",
+                        "target_sections": ["goal"],
+                    }
+                ],
+                "required_evidence_refs": ["doc:DOC-SPEC-P1#goal"],
+                "exit_criteria": ["required sections complete"],
+                "writeback_items": [],
             }
         ]
-        temp_dir = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
-        temp_dir.mkdir(exist_ok=True)
-        try:
-            state_path = temp_dir / "DOC_STATE.yaml"
-            state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
-            diagnostics = validate_state_file(state_path)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        state_path = self.temp_root / "DOC_STATE.yaml"
+        state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        diagnostics = validate_state_file(state_path)
 
         codes = {item.code for item in diagnostics}
         self.assertIn("SCHEMA_INVALID_GOVERNANCE_ROUND_ENUM", codes)
         self.assertIn("SCHEMA_INVALID_GOVERNANCE_ROUND_TIME", codes)
+
+    def test_validate_state_with_documents(self) -> None:
+        from tools.doc_governor.validate import validate_state_file
+
+        state = _build_minimal_state()
+        state["documents"] = {
+            "DOC-SPEC-P1": _build_document_entry(
+                doc_type="design",
+                path="docs/superpowers/specs/spec.md",
+            ),
+            "DOC-PLAN-P1": _build_document_entry(
+                doc_type="plan",
+                path="docs/superpowers/plans/plan.md",
+            ),
+        }
+        state_path = self.temp_root / "DOC_STATE.yaml"
+        state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        diagnostics = validate_state_file(state_path)
+
+        self.assertFalse(
+            [item for item in diagnostics if item.severity == "error"],
+            "Expected no schema errors for valid documents payload.",
+        )
 
 
 def _build_minimal_state() -> dict:
@@ -319,6 +399,44 @@ def _build_minimal_state() -> dict:
                 },
             }
         },
+    }
+
+
+def _build_document_entry(*, doc_type: str, path: str) -> dict:
+    from tools.doc_governor import schema
+
+    return {
+        "meta": {
+            "doc_type": doc_type,
+            "title": f"{doc_type} doc",
+            "path": path,
+            "required_sections": [
+                {"section_id": "goal", "heading": "## 1. 文档目标"},
+                {"section_id": "architecture", "heading": "## 5. 系统架构"},
+            ],
+            "relations": {
+                "document_refs": [],
+                "module_refs": [],
+                "oq_refs": [],
+            },
+        },
+        "facts": {
+            "exists": True,
+            "headings": [],
+            "section_presence": {},
+            "extracted_refs": {
+                "document_refs": [],
+                "module_refs": [],
+                "oq_refs": [],
+            },
+            "marker_counts": {
+                "todo": 0,
+                "tbd": 0,
+                "unresolved": 0,
+            },
+            "last_scanned_at": None,
+        },
+        "state": {"confirmed": schema.make_default_confirmed_state("document")},
     }
 
 
