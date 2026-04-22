@@ -22,7 +22,7 @@ if __package__ in {None, ""}:
         write_bootstrap_outputs,
     )
     from tools.doc_governor.confirm import confirm_transition
-    from tools.doc_governor.evaluate import evaluate_state_file
+    from tools.doc_governor.evaluate import build_delta_summary, evaluate_state_file
     from tools.doc_governor.history import (
         show_history,
         summarize_history,
@@ -56,7 +56,7 @@ else:
         write_bootstrap_outputs,
     )
     from .confirm import confirm_transition
-    from .evaluate import evaluate_state_file
+    from .evaluate import build_delta_summary, evaluate_state_file
     from .history import show_history, summarize_history
     from .init_state import init_official_state
     from .preflight import preflight_open_window
@@ -97,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         "--input",
         default=BOOTSTRAP_STATE_PATH,
     )
+    evaluate_parser.add_argument("--baseline-evaluate-json")
 
     render_parser = subparsers.add_parser("render-report")
     render_parser.add_argument("--evaluate-json")
@@ -322,6 +323,54 @@ def evaluate_state_command(args: argparse.Namespace) -> int:
     diagnostics, payload = evaluate_state_file(Path(args.input))
     if not isinstance(payload, dict):
         payload = {}
+    if args.baseline_evaluate_json:
+        baseline_path = Path(args.baseline_evaluate_json)
+        try:
+            baseline_raw = json.loads(baseline_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            diagnostics.append(
+                make_diagnostic(
+                    code="EVALUATE_BASELINE_FILE_NOT_FOUND",
+                    severity="error",
+                    entity_type="evaluate",
+                    entity_id="GLOBAL",
+                    field_path="--baseline-evaluate-json",
+                    message=f"baseline evaluate json not found: {exc}",
+                    evidence=[
+                        make_evidence(
+                            type="file_scan",
+                            path=baseline_path.as_posix(),
+                            ref="baseline-evaluate-json",
+                            value=baseline_path.as_posix(),
+                        )
+                    ],
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            diagnostics.append(
+                make_diagnostic(
+                    code="EVALUATE_BASELINE_INVALID_JSON",
+                    severity="error",
+                    entity_type="evaluate",
+                    entity_id="GLOBAL",
+                    field_path="--baseline-evaluate-json",
+                    message=f"baseline evaluate json parse failed: {exc}",
+                    evidence=[
+                        make_evidence(
+                            type="file_scan",
+                            path=baseline_path.as_posix(),
+                            ref="baseline-evaluate-json",
+                            value=str(exc),
+                        )
+                    ],
+                )
+            )
+        else:
+            baseline_payload = baseline_raw if isinstance(baseline_raw, dict) else {}
+            payload["delta_summary"] = build_delta_summary(
+                current_payload=payload,
+                baseline_payload=baseline_payload,
+            )
     has_error = any(item.severity == "error" for item in diagnostics)
     print(result_to_json(ok=not has_error, diagnostics=diagnostics, **payload))
     return 1 if has_error else 0
@@ -473,6 +522,7 @@ def render_report_command(args: argparse.Namespace) -> int:
     modules = input_payload.get("modules")
     subtasks = input_payload.get("subtasks")
     oqs = input_payload.get("oqs")
+    delta_summary = input_payload.get("delta_summary")
 
     if not isinstance(summary, dict):
         input_incomplete = True
@@ -488,6 +538,7 @@ def render_report_command(args: argparse.Namespace) -> int:
         "modules": modules if isinstance(modules, dict) else {},
         "subtasks": subtasks if isinstance(subtasks, dict) else {},
         "oqs": oqs if isinstance(oqs, dict) else {},
+        "delta_summary": delta_summary if isinstance(delta_summary, dict) else {},
         "diagnostics": report_input_diagnostics,
     }
     report_text = render_from_payload(

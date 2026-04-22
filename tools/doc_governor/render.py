@@ -28,6 +28,7 @@ def render_from_payload(
     modules = _as_dict(payload.get("modules"))
     subtasks = _as_dict(payload.get("subtasks"))
     oqs = _as_dict(payload.get("oqs"))
+    delta_summary = _as_dict(payload.get("delta_summary"))
 
     if not isinstance(payload.get("summary"), dict):
         input_incomplete = True
@@ -48,6 +49,7 @@ def render_from_payload(
     lines.extend(_render_review_section(subtasks, section_type="subtasks"))
     lines.extend(_render_blocker_sections(modules=modules, subtasks=subtasks))
     lines.extend(_render_oq_summary(summary=summary, oqs=oqs))
+    lines.extend(_render_round_delta(delta_summary))
     lines.append("## Notes / interpretation boundary")
     lines.extend(f"- {line}" for line in notes)
     return "\n".join(lines).rstrip() + "\n"
@@ -212,6 +214,65 @@ def _render_oq_summary(*, summary: dict[str, Any], oqs: dict[str, Any]) -> list[
     for key in GATE_COUNT_KEYS:
         lines.append(f"- {key}: {oq_gate_counts.get(key, 0)}")
     return lines + [""]
+
+
+def _render_round_delta(delta_summary: dict[str, Any]) -> list[str]:
+    lines = ["## Round Delta", ""]
+    if not delta_summary:
+        lines.append("- none")
+        return lines + [""]
+
+    blocker_changes = _as_dict(delta_summary.get("blocker_changes"))
+    lines.append("### Blocker changes")
+    lines.append(f"- added_count: {blocker_changes.get('added_count', 0)}")
+    lines.append(f"- closed_count: {blocker_changes.get('closed_count', 0)}")
+
+    lines.append("")
+    lines.append("### Review required changes")
+    lines.extend(
+        _render_delta_boolean(
+            label="modules",
+            payload=_as_dict(_as_dict(delta_summary.get("review_required_changes")).get("modules")),
+        )
+    )
+    lines.extend(
+        _render_delta_boolean(
+            label="subtasks",
+            payload=_as_dict(_as_dict(delta_summary.get("review_required_changes")).get("subtasks")),
+        )
+    )
+
+    lines.append("")
+    lines.append("### Readiness changes")
+    lines.extend(
+        _render_delta_boolean(
+            label="modules_downstream",
+            payload=_as_dict(_as_dict(delta_summary.get("readiness_changes")).get("modules_downstream")),
+        )
+    )
+    lines.extend(
+        _render_delta_boolean(
+            label="subtasks_downstream",
+            payload=_as_dict(_as_dict(delta_summary.get("readiness_changes")).get("subtasks_downstream")),
+        )
+    )
+    lines.extend(
+        _render_delta_boolean(
+            label="subtasks_implementation",
+            payload=_as_dict(_as_dict(delta_summary.get("readiness_changes")).get("subtasks_implementation")),
+        )
+    )
+    return lines + [""]
+
+
+def _render_delta_boolean(*, label: str, payload: dict[str, Any]) -> list[str]:
+    if not payload:
+        return [f"- {label}: before=0 after=0 delta=0"]
+    return [
+        f"- {label}: before={payload.get('before_true_count', 0)} after={payload.get('after_true_count', 0)} delta={payload.get('delta_true_count', 0)}",
+        f"  - changed_to_true: {len(_as_list(payload.get('changed_to_true')))}",
+        f"  - changed_to_false: {len(_as_list(payload.get('changed_to_false')))}",
+    ]
 
 
 def _as_dict(value: object) -> dict[str, Any]:

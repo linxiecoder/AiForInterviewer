@@ -329,6 +329,58 @@ class EvaluateStateTests(unittest.TestCase):
         self.assertEqual(summary["modules_blocked_count"], 1)
         self.assertEqual(summary["subtasks_blocked_count"], 2)
 
+    def test_baseline_delta_summary(self) -> None:
+        baseline_state = _base_state()
+        baseline_state["modules"] = {"M01": _module_entry("M01")}
+        baseline_state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        baseline_state["subtasks"]["ST01_01"]["facts"]["upstream_module_ids"] = []
+        baseline_state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = (
+            "active_working_doc"
+        )
+
+        baseline_path = _write_state(baseline_state, self.temp_root)
+        _, baseline_payload = self.run_cli("evaluate-state", "--input", str(baseline_path))
+        baseline_json_path = self.temp_root / "baseline-evaluate.json"
+        baseline_json_path.write_text(
+            json.dumps(baseline_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        current_state = _base_state()
+        current_state["modules"] = {"M01": _module_entry("M01")}
+        current_state["modules"]["M01"]["facts"]["docs"]["requirements"]["exists"] = False
+        current_state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        current_state["subtasks"]["ST01_01"]["facts"]["upstream_module_ids"] = []
+        current_state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = (
+            "inactive_template"
+        )
+        current_path = _write_state(current_state, self.temp_root)
+
+        exit_code, payload = self.run_cli(
+            "evaluate-state",
+            "--input",
+            str(current_path),
+            "--baseline-evaluate-json",
+            str(baseline_json_path),
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertIn("delta_summary", payload)
+        delta_summary = payload["delta_summary"]
+        self.assertGreaterEqual(delta_summary["blocker_changes"]["added_count"], 1)
+        self.assertEqual(delta_summary["blocker_changes"]["closed_count"], 0)
+        self.assertEqual(
+            delta_summary["review_required_changes"]["modules"]["after_true_count"],
+            0,
+        )
+        self.assertEqual(
+            delta_summary["readiness_changes"]["modules_downstream"]["before_true_count"],
+            1,
+        )
+        self.assertEqual(
+            delta_summary["readiness_changes"]["modules_downstream"]["after_true_count"],
+            0,
+        )
+
     def test_evaluate_state_does_not_write_back_state(self) -> None:
         state = _base_state()
         state["modules"] = {"M01": _module_entry("M01")}

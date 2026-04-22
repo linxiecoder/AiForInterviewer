@@ -66,6 +66,7 @@ Phase 2A evaluate-state is read-only report output.
 - Command outputs structured JSON only and does not write any state files.
 - It does not change DOC_STATE.bootstrap.yaml or DOC_STATE.yaml.
 - PyYAML is required for reading DOC_STATE*.yaml inputs.
+- `delta_summary`（含 blocker 增减、review_required 变化、readiness 变化）仅用于本轮讨论优先级，不可替代人工确认与 `confirm-transition` 审核。
 
 ## OQ Bootstrap Defaults and Evaluate Boundary
 
