@@ -55,6 +55,10 @@ class SchemaContractTests(unittest.TestCase):
             module_state,
             {
                 "maturity": None,
+                "window_status": "closed",
+                "window_opened_at": None,
+                "window_opened_by": None,
+                "window_reason": None,
                 "candidate_status": "none",
                 "review_status": "unreviewed",
                 "readiness": "blocked",
@@ -71,6 +75,10 @@ class SchemaContractTests(unittest.TestCase):
             {
                 "implementation_doc_state": "missing",
                 "maturity": None,
+                "window_status": "closed",
+                "window_opened_at": None,
+                "window_opened_by": None,
+                "window_reason": None,
                 "candidate_status": "none",
                 "review_status": "unreviewed",
                 "readiness": "blocked",

@@ -29,6 +29,8 @@ if __package__ in {None, ""}:
     )
     from tools.doc_governor.init_state import init_official_state
     from tools.doc_governor.preflight import preflight_open_window
+    from tools.doc_governor.open_window import open_window
+    from tools.doc_governor.window_plan import plan_open_window
     from tools.doc_governor.repo_scan import scan_repo
     from tools.doc_governor.render import (
         build_render_diagnostics,
@@ -58,6 +60,8 @@ else:
     from .history import show_history, summarize_history
     from .init_state import init_official_state
     from .preflight import preflight_open_window
+    from .open_window import open_window
+    from .window_plan import plan_open_window
     from .repo_scan import scan_repo
     from .render import (
         build_render_diagnostics,
@@ -156,6 +160,23 @@ def main(argv: list[str] | None = None) -> int:
     preflight_parser.add_argument("--entity-type")
     preflight_parser.add_argument("--entity-id")
 
+    open_parser = subparsers.add_parser("open-window")
+    open_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    open_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
+    open_parser.add_argument("--entity-type")
+    open_parser.add_argument("--entity-id")
+    open_parser.add_argument("--mode")
+    open_parser.add_argument("--actor")
+    open_parser.add_argument("--reason")
+
+    plan_parser = subparsers.add_parser("plan-open-window")
+    plan_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    plan_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
+    plan_parser.add_argument("--evaluate-json")
+    plan_parser.add_argument("--entity-type")
+    plan_parser.add_argument("--entity-id")
+    plan_parser.add_argument("--limit", type=int)
+
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
         return bootstrap_state(args)
@@ -175,6 +196,10 @@ def main(argv: list[str] | None = None) -> int:
         return summarize_history_command(args)
     if args.command == "preflight-open-window":
         return preflight_open_window_command(args)
+    if args.command == "open-window":
+        return open_window(args)
+    if args.command == "plan-open-window":
+        return plan_open_window_command(args)
 
     parser.print_help()
     return 1
@@ -538,6 +563,19 @@ def preflight_open_window_command(args: argparse.Namespace) -> int:
         history=args.history,
         entity_type=args.entity_type,
         entity_id=args.entity_id,
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload.get("ok", False) else 0
+
+
+def plan_open_window_command(args: argparse.Namespace) -> int:
+    payload = plan_open_window(
+        state=args.state,
+        history=args.history,
+        evaluate_json=args.evaluate_json,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+        limit=args.limit,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 1 if not payload.get("ok", False) else 0
