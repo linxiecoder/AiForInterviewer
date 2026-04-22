@@ -35,6 +35,16 @@ CANDIDATE_STATUSES = ("none", "observe", "candidate")
 REVIEW_STATUSES = ("unreviewed", "pending_confirmation", "approved", "rejected")
 READINESS_STATUSES = ("blocked", "not_ready", "downstream_ready", "implementation_ready")
 IMPLEMENTATION_DOC_STATES = ("missing", "inactive_template", "active_working_doc")
+GOVERNANCE_ROUND_STATUSES = ("open", "closed")
+GOVERNANCE_ROUND_REQUIRED_FIELDS = (
+    "round_id",
+    "topic",
+    "scope",
+    "status",
+    "opened_at",
+    "opened_by",
+    "decision_refs",
+)
 
 TYPED_BLOCKER_REF_RE = re.compile(
     r"^(?:"

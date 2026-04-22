@@ -115,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     confirm_parser.add_argument("--evidence-ref", action="append")
     confirm_parser.add_argument("--actor")
     confirm_parser.add_argument("--reason")
+    confirm_parser.add_argument("--round-id")
 
     init_state_parser = subparsers.add_parser("init-official-state")
     init_state_parser.add_argument(
