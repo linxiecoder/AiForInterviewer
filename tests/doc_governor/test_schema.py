@@ -1,4 +1,8 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import yaml
 
 
 class SchemaContractTests(unittest.TestCase):
@@ -98,6 +102,137 @@ class SchemaContractTests(unittest.TestCase):
         )
         self.assertIsNotNone(schema.TYPED_BLOCKER_REF_RE.fullmatch("legacy:locked"))
         self.assertIsNone(schema.TYPED_BLOCKER_REF_RE.fullmatch("OQ-021"))
+
+    def test_governance_round_contract_constants_are_frozen(self) -> None:
+        from tools.doc_governor import schema
+
+        self.assertEqual(schema.GOVERNANCE_ROUND_STATUSES, ("open", "closed"))
+        self.assertEqual(
+            schema.GOVERNANCE_ROUND_REQUIRED_FIELDS,
+            (
+                "round_id",
+                "topic",
+                "scope",
+                "status",
+                "opened_at",
+                "opened_by",
+                "decision_refs",
+            ),
+        )
+
+    def test_validate_state_without_governance_rounds_is_backward_compatible(self) -> None:
+        from tools.doc_governor.validate import validate_state_file
+
+        state = _build_minimal_state()
+        with TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "DOC_STATE.yaml"
+            state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+            diagnostics = validate_state_file(state_path)
+
+        self.assertFalse(
+            [item for item in diagnostics if item.severity == "error"],
+            "Expected no schema errors when governance_rounds is absent.",
+        )
+
+    def test_validate_state_with_valid_governance_rounds(self) -> None:
+        from tools.doc_governor.validate import validate_state_file
+
+        state = _build_minimal_state()
+        state["governance_rounds"] = [
+            {
+                "round_id": "R-2026-04-01",
+                "topic": "Candidate gate review",
+                "scope": "ST01_01",
+                "status": "open",
+                "opened_at": "2026-04-01T09:00:00Z",
+                "opened_by": "alice",
+                "decision_refs": ["decision:DR-001"],
+            }
+        ]
+        with TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "DOC_STATE.yaml"
+            state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+            diagnostics = validate_state_file(state_path)
+
+        self.assertFalse(
+            [item for item in diagnostics if item.severity == "error"],
+            "Expected no schema errors for a valid governance_rounds payload.",
+        )
+
+    def test_validate_state_with_invalid_governance_rounds(self) -> None:
+        from tools.doc_governor.validate import validate_state_file
+
+        state = _build_minimal_state()
+        state["governance_rounds"] = [
+            {
+                "round_id": "R-2026-04-01",
+                "topic": "Candidate gate review",
+                "scope": "ST01_01",
+                "status": "done",
+                "opened_at": "2026/04/01 09:00:00",
+                "opened_by": "alice",
+                "decision_refs": ["decision:DR-001"],
+            }
+        ]
+        with TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "DOC_STATE.yaml"
+            state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+            diagnostics = validate_state_file(state_path)
+
+        codes = {item.code for item in diagnostics}
+        self.assertIn("SCHEMA_INVALID_GOVERNANCE_ROUND_ENUM", codes)
+        self.assertIn("SCHEMA_INVALID_GOVERNANCE_ROUND_TIME", codes)
+
+
+def _build_minimal_state() -> dict:
+    from tools.doc_governor import schema
+
+    module_docs = {
+        slot: {"exists": True, "template_like": False}
+        for slot in schema.MODULE_DOC_SLOTS
+    }
+    return {
+        "schema_version": schema.SCHEMA_VERSION,
+        "global_policy": {
+            "auto_open_enabled": False,
+            "require_confirmation_for_state_writeback": True,
+            "strict_template_gate": True,
+            "formal_window_open": True,
+            "paths": {
+                "modules_root": "docs/modules",
+                "open_questions_doc": "OPEN_QUESTIONS.md",
+                "task_index_doc": "TASK_INDEX.md",
+            },
+        },
+        "oqs": {},
+        "modules": {
+            "M01": {
+                "meta": {"path": "docs/modules/M01-test/"},
+                "facts": {
+                    "upstream_module_ids": [],
+                    "related_oq_ids": [],
+                    "legacy_locked": False,
+                    "declared_blocker_refs": [],
+                    "docs": module_docs,
+                },
+                "state": {"confirmed": schema.make_default_confirmed_state("module")},
+            }
+        },
+        "subtasks": {
+            "ST01_01": {
+                "meta": {"module_id": "M01", "path": "docs/modules/M01/sub_modules/ST01_01-test/"},
+                "facts": {
+                    "upstream_module_ids": [],
+                    "related_oq_ids": [],
+                    "legacy_locked": False,
+                    "declared_blocker_refs": [],
+                    "design_doc": {"exists": True, "template_like": False},
+                    "implementation_doc": {"exists": True, "template_like": False},
+                },
+                "state": {"confirmed": schema.make_default_confirmed_state("subtask")},
+            }
+        },
+    }
 
 
 if __name__ == "__main__":

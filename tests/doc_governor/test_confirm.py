@@ -164,6 +164,7 @@ class ConfirmTransitionTests(unittest.TestCase):
         history = json.loads(history_line)
         self.assertEqual(history["entity_type"], "subtask")
         self.assertEqual(history["entity_id"], "ST01_01")
+        self.assertIsNone(history["round_id"])
         self.assertFalse(history["dry_run"])
         self.assertIn("transition_id", history)
         self.assertIn("transition_id", payload)
@@ -177,6 +178,35 @@ class ConfirmTransitionTests(unittest.TestCase):
         self.assertIsNotNone(confirmed["last_transition_id"])
         self.assertIsNotNone(confirmed["last_confirmed_at"])
         self.assertEqual(history["applied_state"]["last_confirmed_by"], "alice")
+
+    def test_approve_with_round_id_appends_history_round_reference(self) -> None:
+        exit_code, _payload = self._run_cli(
+            "--entity-type",
+            "subtask",
+            "--entity-id",
+            "ST01_01",
+            "--proposed-changes",
+            json.dumps(
+                {
+                    "candidate_status": "candidate",
+                    "review_status": "pending_confirmation",
+                }
+            ),
+            "--evidence-ref",
+            "oq:OQ-01",
+            "--mode",
+            "approve",
+            "--actor",
+            "alice",
+            "--reason",
+            "advance candidate",
+            "--round-id",
+            "R-2026-04-01",
+        )
+        self.assertEqual(exit_code, 0)
+        history_line = self.history_path.read_text(encoding="utf-8").strip().splitlines()[-1]
+        history = json.loads(history_line)
+        self.assertEqual(history["round_id"], "R-2026-04-01")
 
     def test_reject_writes_history_only(self) -> None:
         before = self._read_state()
