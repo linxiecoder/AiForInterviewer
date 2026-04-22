@@ -12,7 +12,7 @@ from typing import Any
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from diagnostics import (
+    from tools.doc_governor.diagnostics import (
         diagnostic_to_dict,
         make_diagnostic,
         make_evidence,
@@ -26,6 +26,12 @@ if __package__ in {None, ""}:
     )
     from tools.doc_governor.confirm import confirm_transition
     from tools.doc_governor.evaluate import build_delta_summary, evaluate_state_file
+    from tools.doc_governor.codex_packet import generate_codex_packet
+    from tools.doc_governor.governance_rounds import (
+        build_document_round_plan,
+        load_state as load_governance_state,
+        update_round_status,
+    )
     from tools.doc_governor.history import (
         show_history,
         summarize_history,
@@ -33,6 +39,7 @@ if __package__ in {None, ""}:
     from tools.doc_governor.init_state import init_official_state
     from tools.doc_governor.preflight import preflight_open_window
     from tools.doc_governor.open_window import open_window
+    from tools.doc_governor.round_template import generate_round_template
     from tools.doc_governor.window_plan import plan_open_window, sort_round_entities
     from tools.doc_governor.repo_scan import scan_repo
     from tools.doc_governor.render import (
@@ -60,10 +67,17 @@ else:
     )
     from .confirm import confirm_transition
     from .evaluate import build_delta_summary, evaluate_state_file
+    from .codex_packet import generate_codex_packet
+    from .governance_rounds import (
+        build_document_round_plan,
+        load_state as load_governance_state,
+        update_round_status,
+    )
     from .history import show_history, summarize_history
     from .init_state import init_official_state
     from .preflight import preflight_open_window
     from .open_window import open_window
+    from .round_template import generate_round_template
     from .window_plan import plan_open_window, sort_round_entities
     from .repo_scan import scan_repo
     from .render import (
@@ -98,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser = subparsers.add_parser("evaluate-state")
     evaluate_parser.add_argument(
         "--input",
-        default=BOOTSTRAP_STATE_PATH,
+        default=OFFICIAL_STATE_PATH,
     )
     evaluate_parser.add_argument("--baseline-evaluate-json")
 
@@ -191,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     round_template_parser.add_argument("--entity-type")
     round_template_parser.add_argument("--entity-id")
     round_template_parser.add_argument("--limit", type=int)
+    round_template_parser.add_argument("--from-plan")
     plan_round_parser = subparsers.add_parser("plan-round")
     plan_round_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
     plan_round_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
@@ -207,6 +222,19 @@ def main(argv: list[str] | None = None) -> int:
     apply_round_parser.add_argument("--state", default=OFFICIAL_STATE_PATH)
     apply_round_parser.add_argument("--actor", default="doc-governor-round")
     apply_round_parser.add_argument("--reason", default="apply-round")
+
+    update_round_parser = subparsers.add_parser("update-round-status")
+    update_round_parser.add_argument("--round-id", required=True)
+    update_round_parser.add_argument("--state", default=OFFICIAL_STATE_PATH)
+    update_round_parser.add_argument("--status", required=True)
+    update_round_parser.add_argument("--actor", required=True)
+    update_round_parser.add_argument("--close-reason")
+    update_round_parser.add_argument("--decision-ref", action="append")
+    update_round_parser.add_argument("--result-summary")
+
+    packet_parser = subparsers.add_parser("generate-codex-packet")
+    packet_parser.add_argument("--round-id", required=True)
+    packet_parser.add_argument("--state", default=OFFICIAL_STATE_PATH)
 
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
@@ -237,6 +265,10 @@ def main(argv: list[str] | None = None) -> int:
         return plan_round_command(args)
     if args.command == "apply-round":
         return apply_round_command(args)
+    if args.command == "update-round-status":
+        return update_round_status_command(args)
+    if args.command == "generate-codex-packet":
+        return generate_codex_packet_command(args)
 
     parser.print_help()
     return 1
@@ -557,7 +589,9 @@ def render_report_command(args: argparse.Namespace) -> int:
     summary = input_payload.get("summary")
     modules = input_payload.get("modules")
     subtasks = input_payload.get("subtasks")
+    documents = input_payload.get("documents")
     oqs = input_payload.get("oqs")
+    governance_rounds = input_payload.get("governance_rounds")
     delta_summary = input_payload.get("delta_summary")
 
     if not isinstance(summary, dict):
@@ -566,6 +600,8 @@ def render_report_command(args: argparse.Namespace) -> int:
         input_incomplete = True
     if not isinstance(subtasks, dict):
         input_incomplete = True
+    if "documents" in input_payload and not isinstance(documents, dict):
+        input_incomplete = True
     if not isinstance(oqs, dict):
         input_incomplete = True
 
@@ -573,7 +609,9 @@ def render_report_command(args: argparse.Namespace) -> int:
         "summary": summary if isinstance(summary, dict) else {},
         "modules": modules if isinstance(modules, dict) else {},
         "subtasks": subtasks if isinstance(subtasks, dict) else {},
+        "documents": documents if isinstance(documents, dict) else {},
         "oqs": oqs if isinstance(oqs, dict) else {},
+        "governance_rounds": governance_rounds if isinstance(governance_rounds, list) else [],
         "delta_summary": delta_summary if isinstance(delta_summary, dict) else {},
         "diagnostics": report_input_diagnostics,
     }
@@ -669,10 +707,85 @@ def plan_open_window_command(args: argparse.Namespace) -> int:
     return 1 if not payload.get("ok", False) else 0
 
 
+def _load_round_evaluate_payload(*, state: str, evaluate_json: str | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    diagnostics: list[dict[str, Any]] = []
+    if evaluate_json:
+        payload_path = Path(evaluate_json)
+        try:
+            raw_payload = json.loads(payload_path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            diagnostics.append(
+                {
+                    "code": "ROUND_EVALUATE_JSON_INVALID",
+                    "severity": "error",
+                    "field_path": "--evaluate-json",
+                    "message": f"evaluate json parse failed: {exc}",
+                }
+            )
+            return diagnostics, {}
+        return diagnostics, raw_payload if isinstance(raw_payload, dict) else {}
+
+    eval_diags, payload = evaluate_state_file(Path(state))
+    diagnostics.extend(diagnostic_to_dict(item) for item in eval_diags)
+    return diagnostics, payload if isinstance(payload, dict) else {}
+
+
 def generate_round_template_command(args: argparse.Namespace) -> int:
+    plan_payload: dict[str, Any] | None = None
+    diagnostics: list[dict[str, Any]] = []
+    if args.from_plan:
+        plan_payload = json.loads(Path(args.from_plan).read_text(encoding="utf-8"))
+    elif args.entity_type == "document":
+        state = load_governance_state(args.state)
+        eval_diagnostics, evaluate_payload = _load_round_evaluate_payload(
+            state=args.state,
+            evaluate_json=args.evaluate_json,
+        )
+        diagnostics.extend(eval_diagnostics)
+        if any(item.get("severity") == "error" for item in diagnostics):
+            print(json.dumps({"ok": False, "diagnostics": diagnostics}, ensure_ascii=False, indent=2))
+            return 1
+        plan_payload = build_document_round_plan(
+            round_id=args.round_id,
+            evaluate_payload=evaluate_payload,
+            state=state,
+            entity_id=args.entity_id,
+        )
     payload = generate_round_template(
         round_id=args.round_id,
+        state=args.state,
+        history=args.history,
+        evaluate_json=args.evaluate_json,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+        limit=args.limit,
+        plan_payload=plan_payload,
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload.get("ok", False) else 0
+
+
 def plan_round_command(args: argparse.Namespace) -> int:
+    if args.entity_type == "document":
+        state = load_governance_state(args.state)
+        diagnostics, evaluate_payload = _load_round_evaluate_payload(
+            state=args.state,
+            evaluate_json=args.evaluate_json,
+        )
+        if any(item.get("severity") == "error" for item in diagnostics):
+            print(json.dumps({"ok": False, "diagnostics": diagnostics}, ensure_ascii=False, indent=2))
+            return 1
+        round_id = args.round_id or f"round-{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
+        payload = build_document_round_plan(
+            round_id=round_id,
+            evaluate_payload=evaluate_payload,
+            state=state,
+            entity_id=args.entity_id,
+        )
+        payload["diagnostics"] = diagnostics
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 1 if not payload.get("ok", False) else 0
+
     preflight_payload = preflight_open_window(
         state=args.state,
         evaluate_json=args.evaluate_json,
@@ -688,8 +801,6 @@ def plan_round_command(args: argparse.Namespace) -> int:
         entity_id=args.entity_id,
         limit=args.limit,
     )
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 1 if not payload.get("ok", False) else 0
 
     round_id = args.round_id or f"round-{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     must_review = [
@@ -737,6 +848,37 @@ def plan_round_command(args: argparse.Namespace) -> int:
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 1 if not payload["ok"] else 0
+
+
+def update_round_status_command(args: argparse.Namespace) -> int:
+    try:
+        round_entry = update_round_status(
+            state_path=args.state,
+            round_id=args.round_id,
+            status=args.status,
+            actor=args.actor,
+            close_reason=args.close_reason,
+            decision_refs=list(args.decision_ref or []),
+            result_summary=args.result_summary,
+        )
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "diagnostics": [{"code": "ROUND_STATUS_UPDATE_FAILED", "severity": "error", "message": str(exc)}]}, ensure_ascii=False, indent=2))
+        return 1
+    print(json.dumps({"ok": True, "round": round_entry}, ensure_ascii=False, indent=2))
+    return 0
+
+
+def generate_codex_packet_command(args: argparse.Namespace) -> int:
+    try:
+        payload = generate_codex_packet(
+            state_path=args.state,
+            round_id=args.round_id,
+        )
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "diagnostics": [{"code": "CODEX_PACKET_GENERATION_FAILED", "severity": "error", "message": str(exc)}]}, ensure_ascii=False, indent=2))
+        return 1
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
 
 
 def apply_round_command(args: argparse.Namespace) -> int:
@@ -798,6 +940,9 @@ def apply_round_command(args: argparse.Namespace) -> int:
             skipped += 1
             results.append({**action, "ok": True, "skipped": True})
             continue
+        reason = args.reason
+        if "Decision:" not in reason:
+            reason = f"{reason} Decision: batch apply"
         namespace = argparse.Namespace(
             input=args.state,
             entity_type=action["entity_type"],
@@ -806,7 +951,8 @@ def apply_round_command(args: argparse.Namespace) -> int:
             mode=action["action"],
             evidence_ref=list(action.get("evidence_refs", [])),
             actor=args.actor,
-            reason=args.reason,
+            reason=reason,
+            round_id=args.round_id,
         )
         with io.StringIO() as buffer:
             with contextlib.redirect_stdout(buffer):
