@@ -33,6 +33,7 @@ if __package__ in {None, ""}:
     from tools.doc_governor.init_state import init_official_state
     from tools.doc_governor.preflight import preflight_open_window
     from tools.doc_governor.open_window import open_window
+    from tools.doc_governor.round_template import generate_round_template
     from tools.doc_governor.window_plan import plan_open_window, sort_round_entities
     from tools.doc_governor.repo_scan import scan_repo
     from tools.doc_governor.render import (
@@ -64,6 +65,7 @@ else:
     from .init_state import init_official_state
     from .preflight import preflight_open_window
     from .open_window import open_window
+    from .round_template import generate_round_template
     from .window_plan import plan_open_window, sort_round_entities
     from .repo_scan import scan_repo
     from .render import (
@@ -101,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
         default=BOOTSTRAP_STATE_PATH,
     )
     evaluate_parser.add_argument("--baseline-evaluate-json")
+    evaluate_parser.add_argument("--entity-type")
+    evaluate_parser.add_argument("--entity-id")
 
     render_parser = subparsers.add_parser("render-report")
     render_parser.add_argument("--evaluate-json")
@@ -407,9 +411,135 @@ def evaluate_state_command(args: argparse.Namespace) -> int:
                 current_payload=payload,
                 baseline_payload=baseline_payload,
             )
+    filtered_payload, filter_diagnostics = _filter_evaluate_payload(
+        payload=payload,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+    )
+    diagnostics.extend(filter_diagnostics)
+    payload = filtered_payload
     has_error = any(item.severity == "error" for item in diagnostics)
     print(result_to_json(ok=not has_error, diagnostics=diagnostics, **payload))
     return 1 if has_error else 0
+
+
+def _filter_evaluate_payload(
+    *,
+    payload: dict[str, Any],
+    entity_type: str | None,
+    entity_id: str | None,
+) -> tuple[dict[str, Any], list[Any]]:
+    diagnostics: list[Any] = []
+    normalized_type = _normalize_evaluate_entity_type(entity_type)
+    if entity_type and normalized_type is None:
+        diagnostics.append(
+            make_diagnostic(
+                code="EVALUATE_ENTITY_TYPE_INVALID",
+                severity="error",
+                entity_type="evaluate",
+                entity_id="GLOBAL",
+                field_path="--entity-type",
+                message="entity-type must be requirement, module, task, or subtask",
+                evidence=[
+                    make_evidence(
+                        type="cli",
+                        path="--entity-type",
+                        ref="value",
+                        value=entity_type,
+                    )
+                ],
+            )
+        )
+        return payload, diagnostics
+
+    filtered = dict(payload)
+    for key in ("requirements", "modules", "subtasks"):
+        value = payload.get(key)
+        filtered[key] = value if isinstance(value, dict) else {}
+
+    if normalized_type:
+        for key in ("requirements", "modules", "subtasks"):
+            if key != normalized_type:
+                filtered[key] = {}
+
+    if not entity_id:
+        return filtered, diagnostics
+
+    if normalized_type:
+        target_map = filtered.get(normalized_type)
+        target_map = target_map if isinstance(target_map, dict) else {}
+        if entity_id not in target_map:
+            diagnostics.append(
+                make_diagnostic(
+                    code="EVALUATE_ENTITY_NOT_FOUND",
+                    severity="error",
+                    entity_type="evaluate",
+                    entity_id=entity_id,
+                    field_path="--entity-id",
+                    message="entity-id not found in evaluate payload",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="--entity-id",
+                            ref="value",
+                            value=entity_id,
+                        )
+                    ],
+                )
+            )
+            return filtered, diagnostics
+        filtered[normalized_type] = {entity_id: target_map[entity_id]}
+        return filtered, diagnostics
+
+    matches = {
+        key: {entity_id: value[entity_id]}
+        for key, value in (
+            ("requirements", filtered.get("requirements", {})),
+            ("modules", filtered.get("modules", {})),
+            ("subtasks", filtered.get("subtasks", {})),
+        )
+        if isinstance(value, dict) and entity_id in value
+    }
+    if not matches:
+        diagnostics.append(
+            make_diagnostic(
+                code="EVALUATE_ENTITY_NOT_FOUND",
+                severity="error",
+                entity_type="evaluate",
+                entity_id=entity_id,
+                field_path="--entity-id",
+                message="entity-id not found in evaluate payload",
+                evidence=[
+                    make_evidence(
+                        type="cli",
+                        path="--entity-id",
+                        ref="value",
+                        value=entity_id,
+                    )
+                ],
+            )
+        )
+        return filtered, diagnostics
+    for key in ("requirements", "modules", "subtasks"):
+        filtered[key] = matches.get(key, {})
+    return filtered, diagnostics
+
+
+def _normalize_evaluate_entity_type(entity_type: str | None) -> str | None:
+    if entity_type is None:
+        return None
+    normalized = str(entity_type).strip().lower()
+    if normalized == "":
+        return None
+    if normalized == "task":
+        return "subtasks"
+    if normalized == "subtask":
+        return "subtasks"
+    if normalized == "module":
+        return "modules"
+    if normalized == "requirement":
+        return "requirements"
+    return None
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
@@ -672,6 +802,17 @@ def plan_open_window_command(args: argparse.Namespace) -> int:
 def generate_round_template_command(args: argparse.Namespace) -> int:
     payload = generate_round_template(
         round_id=args.round_id,
+        state=args.state,
+        history=args.history,
+        evaluate_json=args.evaluate_json,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+        limit=args.limit,
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload.get("ok", False) else 0
+
+
 def plan_round_command(args: argparse.Namespace) -> int:
     preflight_payload = preflight_open_window(
         state=args.state,
@@ -688,8 +829,6 @@ def plan_round_command(args: argparse.Namespace) -> int:
         entity_id=args.entity_id,
         limit=args.limit,
     )
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 1 if not payload.get("ok", False) else 0
 
     round_id = args.round_id or f"round-{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     must_review = [

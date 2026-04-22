@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import re
 from typing import Any
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
@@ -18,6 +19,9 @@ BLOCKED_REASON_CODES = {
     "oq_readiness_gate",
     "implementation_doc_not_active",
     "formal_window_closed",
+    "asset_hard_blocker",
+    "language_non_compliant",
+    "compliance_non_compliant",
 }
 
 REVIEW_REASONS = {
@@ -284,6 +288,8 @@ def _validate_oq_persisted_fields(
 def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
     oqs = state.get("oqs")
     oqs = oqs if isinstance(oqs, dict) else {}
+    requirements = state.get("requirements")
+    requirements = requirements if isinstance(requirements, dict) else {}
     modules = state.get("modules")
     modules = modules if isinstance(modules, dict) else {}
     subtasks = state.get("subtasks")
@@ -294,10 +300,38 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
     formal_window_open = bool(global_policy.get("formal_window_open", True))
 
     oq_payload = _evaluate_oqs(oqs)
+    requirement_derived_map: dict[str, dict[str, Any]] = {}
+    requirement_blockers_by_module: dict[str, list[dict[str, Any]]] = {}
+    requirement_blockers_by_task: dict[str, list[dict[str, Any]]] = {}
+    for requirement_id, requirement_obj in requirements.items():
+        if not isinstance(requirement_obj, dict):
+            continue
+        requirement_result = _evaluate_requirement(requirement_id, requirement_obj)
+        requirement_derived_map[requirement_id] = requirement_result
+        requirement_facts = requirement_obj.get("facts")
+        requirement_facts = requirement_facts if isinstance(requirement_facts, dict) else {}
+        for module_id in requirement_facts.get("module_ids", []):
+            if not isinstance(module_id, str):
+                continue
+            requirement_blockers_by_module.setdefault(module_id, []).extend(
+                _clone_blockers(requirement_result.get("gate_blockers", []))
+            )
+        for task_id in requirement_facts.get("task_ids", []):
+            if not isinstance(task_id, str):
+                continue
+            requirement_blockers_by_task.setdefault(task_id, []).extend(
+                _clone_blockers(requirement_result.get("gate_blockers", []))
+            )
+
     module_derived_map: dict[str, dict[str, Any]] = {}
     for module_id, module_obj in modules.items():
         if isinstance(module_obj, dict):
-            module_derived_map[module_id] = _evaluate_module(module_id, module_obj, oq_payload)
+            module_derived_map[module_id] = _evaluate_module(
+                module_id,
+                module_obj,
+                oq_payload,
+                requirement_blockers_by_module.get(str(module_id), []),
+            )
 
     subtask_derived_map: dict[str, dict[str, Any]] = {}
     for subtask_id, subtask_obj in subtasks.items():
@@ -307,8 +341,18 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
                 subtask_obj=subtask_obj,
                 oq_payload=oq_payload,
                 module_derived_map=module_derived_map,
+                direct_requirement_blockers=requirement_blockers_by_task.get(str(subtask_id), []),
                 formal_window_open=formal_window_open,
             )
+
+    requirement_derived_wrapped: dict[str, Any] = {}
+    for requirement_id, requirement_result in requirement_derived_map.items():
+        requirement_derived_wrapped[requirement_id] = {
+            "derived": _finalize_requirement_derived(
+                requirement_id=requirement_id,
+                requirement_result=requirement_result,
+            )
+        }
 
     module_derived_wrapped: dict[str, Any] = {}
     for module_id, module_result in module_derived_map.items():
@@ -330,6 +374,7 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
         }
 
     summary = _build_summary(
+        requirement_results=requirement_derived_wrapped,
         module_results=module_derived_wrapped,
         subtask_results=subtask_derived_wrapped,
         oq_payload=oq_payload,
@@ -338,6 +383,7 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
 
     return {
         "summary": summary,
+        "requirements": requirement_derived_wrapped,
         "modules": module_derived_wrapped,
         "subtasks": subtask_derived_wrapped,
         "oqs": oq_payload,
@@ -354,8 +400,10 @@ def build_delta_summary(
     added_blockers = sorted(current_blockers - baseline_blockers)
     closed_blockers = sorted(baseline_blockers - current_blockers)
 
+    current_requirements = _extract_entities(current_payload, key="requirements")
     current_modules = _extract_entities(current_payload, key="modules")
     current_subtasks = _extract_entities(current_payload, key="subtasks")
+    baseline_requirements = _extract_entities(baseline_payload, key="requirements")
     baseline_modules = _extract_entities(baseline_payload, key="modules")
     baseline_subtasks = _extract_entities(baseline_payload, key="subtasks")
 
@@ -367,6 +415,11 @@ def build_delta_summary(
             "closed_refs": closed_blockers,
         },
         "review_required_changes": {
+            "requirements": _diff_boolean_field(
+                current_entities=current_requirements,
+                baseline_entities=baseline_requirements,
+                field="review_required",
+            ),
             "modules": _diff_boolean_field(
                 current_entities=current_modules,
                 baseline_entities=baseline_modules,
@@ -379,6 +432,11 @@ def build_delta_summary(
             ),
         },
         "readiness_changes": {
+            "requirements_next_step": _diff_boolean_field(
+                current_entities=current_requirements,
+                baseline_entities=baseline_requirements,
+                field="ready_for_next_step",
+            ),
             "modules_downstream": _diff_boolean_field(
                 current_entities=current_modules,
                 baseline_entities=baseline_modules,
@@ -395,6 +453,82 @@ def build_delta_summary(
                 field="assessed_implementation_ready",
             ),
         },
+    }
+
+
+def _evaluate_requirement(
+    requirement_id: str,
+    requirement: dict[str, object],
+) -> dict[str, Any]:
+    facts = requirement.get("facts")
+    facts = facts if isinstance(facts, dict) else {}
+    asset_slots = facts.get("asset_slots")
+    asset_slots = asset_slots if isinstance(asset_slots, dict) else {}
+    compliance = facts.get("compliance")
+    compliance = compliance if isinstance(compliance, dict) else {}
+
+    gate_blockers: list[dict[str, Any]] = []
+
+    for slot_name, slot_value in asset_slots.items():
+        slot_value = slot_value if isinstance(slot_value, dict) else {}
+        if not bool(slot_value.get("exists", False)):
+            gate_blockers.append(
+                _make_blocker(
+                    ref=f"policy:asset_missing_{_normalize_policy_token(str(slot_name))}",
+                    kind="policy",
+                    reason_code="asset_hard_blocker",
+                    message=f"requirement {requirement_id} missing asset slot {slot_name}",
+                )
+            )
+
+    for compliance_key, ref_name in (
+        ("naming_ok", "naming_non_compliant"),
+        ("path_ok", "path_non_compliant"),
+        ("relations_ok", "relations_non_compliant"),
+    ):
+        if compliance.get(compliance_key) is False:
+            gate_blockers.append(
+                _make_blocker(
+                    ref=f"policy:{ref_name}",
+                    kind="policy",
+                    reason_code="compliance_non_compliant",
+                    message=f"requirement {requirement_id} compliance {compliance_key}=false",
+                )
+            )
+
+    if compliance.get("language_ok") is False:
+        gate_blockers.append(
+            _make_blocker(
+                ref="policy:language_non_compliant",
+                kind="policy",
+                reason_code="language_non_compliant",
+                message=f"requirement {requirement_id} compliance language_ok=false",
+            )
+        )
+
+    violations = compliance.get("violations")
+    violations = violations if isinstance(violations, list) else []
+    for violation in violations:
+        if not isinstance(violation, str) or not violation.strip():
+            continue
+        normalized = _normalize_policy_token(violation)
+        if not normalized:
+            continue
+        if normalized.startswith("language_non_compliant"):
+            reason_code = "language_non_compliant"
+        else:
+            reason_code = "compliance_non_compliant"
+        gate_blockers.append(
+            _make_blocker(
+                ref=f"policy:{normalized}",
+                kind="policy",
+                reason_code=reason_code,
+                message=f"requirement {requirement_id} compliance violation {violation}",
+            )
+        )
+
+    return {
+        "gate_blockers": _dedupe_blockers(gate_blockers),
     }
 
 
@@ -471,6 +605,7 @@ def _evaluate_module(
     module_id: str,
     module: dict[str, object],
     oq_payload: dict[str, Any],
+    requirement_blockers: list[dict[str, Any]],
 ) -> dict[str, Any]:
     facts = module.get("facts")
     facts = facts if isinstance(facts, dict) else {}
@@ -483,6 +618,8 @@ def _evaluate_module(
     candidate_blockers: list[dict[str, str]] = []
     downstream_blockers: list[dict[str, str]] = []
     oq_review_only_refs: list[str] = []
+
+    downstream_blockers.extend(_clone_blockers(requirement_blockers))
 
     for oq_id in related_oq_ids:
         oq_info = oq_payload.get(str(oq_id), {})
@@ -545,6 +682,7 @@ def _evaluate_module(
     return {
         "candidate_blockers": _dedupe_blockers(candidate_blockers),
         "downstream_blockers": _dedupe_blockers(downstream_blockers),
+        "gate_blockers": _dedupe_blockers(candidate_blockers + downstream_blockers),
         "oq_review_only_refs": sorted(set(oq_review_only_refs)),
         "assessed_downstream_ready": downstream_ready,
     }
@@ -556,6 +694,7 @@ def _evaluate_subtask(
     subtask_obj: dict[str, object],
     oq_payload: dict[str, Any],
     module_derived_map: dict[str, dict[str, Any]],
+    direct_requirement_blockers: list[dict[str, Any]],
     formal_window_open: bool,
 ) -> dict[str, Any]:
     facts = subtask_obj.get("facts")
@@ -576,6 +715,8 @@ def _evaluate_subtask(
     downstream_blockers: list[dict[str, str]] = []
     implementation_blockers: list[dict[str, str]] = []
     oq_review_only_refs: list[str] = []
+
+    downstream_blockers.extend(_clone_blockers(direct_requirement_blockers))
 
     for oq_id in related_oq_ids:
         oq_info = oq_payload.get(str(oq_id), {})
@@ -627,6 +768,7 @@ def _evaluate_subtask(
                     ),
                 )
             )
+            downstream_blockers.extend(_clone_blockers(upstream_module.get("gate_blockers", [])))
 
     for slot_name, slot_doc in (("design_doc", design_doc), ("implementation_doc", impl_doc)):
         if not isinstance(slot_doc, dict):
@@ -708,9 +850,33 @@ def _evaluate_subtask(
         "candidate_blockers": candidate_blockers,
         "downstream_blockers": downstream_blockers,
         "implementation_blockers": implementation_blockers,
+        "gate_blockers": _dedupe_blockers(
+            candidate_blockers + downstream_blockers + implementation_blockers
+        ),
         "oq_review_only_refs": sorted(set(oq_review_only_refs)),
         "implementation_doc_activation_recommended": implementation_doc_activation_recommended,
         "implementation_doc_activation_reason": implementation_doc_activation_reason,
+    }
+
+
+def _finalize_requirement_derived(
+    *,
+    requirement_id: str,
+    requirement_result: dict[str, Any],
+) -> dict[str, Any]:
+    gate_blockers = _dedupe_blockers(requirement_result.get("gate_blockers", []))
+    blocker_refs = sorted(blocker["ref"] for blocker in gate_blockers)
+    ready_for_next_step = not bool(blocker_refs)
+    review_reasons = ["downstream_ready_no_hard_blocker"] if ready_for_next_step else []
+    return {
+        "current_gate": "module_decomposition_ready",
+        "gate_result": "pass" if ready_for_next_step else "blocked",
+        "gate_blockers": gate_blockers,
+        "blocker_refs": blocker_refs,
+        "review_required": ready_for_next_step,
+        "review_reasons": review_reasons,
+        "ready_for_next_step": ready_for_next_step,
+        "implementation_ready": False,
     }
 
 
@@ -722,8 +888,10 @@ def _finalize_module_derived(
 ) -> dict[str, Any]:
     candidate_blockers = module_result.get("candidate_blockers", [])
     downstream_blockers = module_result.get("downstream_blockers", [])
+    gate_blockers = _dedupe_blockers(module_result.get("gate_blockers", []))
     candidate_blocker_refs = sorted(blocker["ref"] for blocker in candidate_blockers)
     downstream_blocker_refs = sorted(blocker["ref"] for blocker in downstream_blockers)
+    blocker_refs = sorted(blocker["ref"] for blocker in gate_blockers)
     downstream_ready = not bool(downstream_blocker_refs)
     oq_review_only = bool(module_result.get("oq_review_only_refs"))
 
@@ -735,13 +903,19 @@ def _finalize_module_derived(
 
     review_reasons = sorted(set(review_reasons) & REVIEW_REASONS)
     return {
+        "current_gate": "task_design_ready",
+        "gate_result": "pass" if not blocker_refs else "blocked",
         "candidate_blockers": candidate_blockers,
         "candidate_blocker_refs": candidate_blocker_refs,
         "assessed_downstream_ready": downstream_ready,
         "downstream_blockers": downstream_blockers,
         "downstream_blocker_refs": downstream_blocker_refs,
+        "gate_blockers": gate_blockers,
+        "blocker_refs": blocker_refs,
         "review_required": bool(review_reasons),
         "review_reasons": review_reasons,
+        "ready_for_next_step": not bool(blocker_refs),
+        "implementation_ready": False,
     }
 
 
@@ -753,10 +927,12 @@ def _finalize_subtask_derived(
     candidate_blockers = subtask_result.get("candidate_blockers", [])
     downstream_blockers = subtask_result.get("downstream_blockers", [])
     implementation_blockers = subtask_result.get("implementation_blockers", [])
+    gate_blockers = _dedupe_blockers(subtask_result.get("gate_blockers", []))
 
     candidate_blocker_refs = sorted(blocker["ref"] for blocker in candidate_blockers)
     downstream_blocker_refs = sorted(blocker["ref"] for blocker in downstream_blockers)
     implementation_blocker_refs = sorted(blocker["ref"] for blocker in implementation_blockers)
+    blocker_refs = sorted(blocker["ref"] for blocker in gate_blockers)
     downstream_ready = not bool(downstream_blocker_refs)
     assessed_implementation_ready = not bool(implementation_blocker_refs)
     oq_review_only = bool(subtask_result.get("oq_review_only_refs"))
@@ -772,12 +948,16 @@ def _finalize_subtask_derived(
     review_reasons = sorted(set(review_reasons) & REVIEW_REASONS)
 
     return {
+        "current_gate": "implementation_ready",
+        "gate_result": "pass" if not blocker_refs else "blocked",
         "candidate_blockers": candidate_blockers,
         "candidate_blocker_refs": candidate_blocker_refs,
         "downstream_blockers": downstream_blockers,
         "downstream_blocker_refs": downstream_blocker_refs,
         "implementation_blockers": implementation_blockers,
         "implementation_blocker_refs": implementation_blocker_refs,
+        "gate_blockers": gate_blockers,
+        "blocker_refs": blocker_refs,
         "assessed_downstream_ready": downstream_ready,
         "assessed_implementation_ready": assessed_implementation_ready,
         "implementation_doc_activation_recommended": impl_activation,
@@ -786,17 +966,24 @@ def _finalize_subtask_derived(
         ),
         "review_required": bool(review_reasons),
         "review_reasons": review_reasons,
+        "ready_for_next_step": not bool(blocker_refs),
+        "implementation_ready": not bool(blocker_refs),
     }
 
 
 def _build_summary(
     *,
+    requirement_results: dict[str, dict[str, Any]],
     module_results: dict[str, dict[str, Any]],
     subtask_results: dict[str, dict[str, Any]],
     oq_payload: dict[str, Any],
     oq_source_map: dict[str, object],
 ) -> dict[str, Any]:
     reason_counter: Counter[str] = Counter()
+    for requirement in requirement_results.values():
+        derived = requirement.get("derived", {})
+        for blocker in derived.get("gate_blockers", []):
+            reason_counter.update([blocker["reason_code"]])
     for module in module_results.values():
         derived = module.get("derived", {})
         for blocker in derived.get("candidate_blockers", []):
@@ -813,11 +1000,19 @@ def _build_summary(
             reason_counter.update([blocker["reason_code"]])
 
     summary = {
+        "requirements_review_required": sum(
+            1 for requirement in requirement_results.values() if requirement["derived"]["review_required"]
+        ),
         "modules_review_required": sum(
             1 for module in module_results.values() if module["derived"]["review_required"]
         ),
         "subtasks_review_required": sum(
             1 for subtask in subtask_results.values() if subtask["derived"]["review_required"]
+        ),
+        "requirements_blocked_count": sum(
+            1
+            for requirement in requirement_results.values()
+            if requirement["derived"]["blocker_refs"]
         ),
         "modules_blocked_count": sum(
             1
@@ -905,16 +1100,18 @@ def _extract_entities(payload: dict[str, Any], *, key: str) -> dict[str, dict[st
 def _collect_blocker_keys(payload: dict[str, Any]) -> set[str]:
     blockers: set[str] = set()
     entity_maps = {
+        "requirement": _extract_entities(payload, key="requirements"),
         "module": _extract_entities(payload, key="modules"),
         "subtask": _extract_entities(payload, key="subtasks"),
     }
     for entity_type, entities in entity_maps.items():
         for entity_id, derived in entities.items():
-            for blocker_key in (
-                "candidate_blockers",
-                "downstream_blockers",
-                "implementation_blockers",
-            ):
+            blocker_keys = (
+                ("gate_blockers",)
+                if entity_type == "requirement"
+                else ("candidate_blockers", "downstream_blockers", "implementation_blockers")
+            )
+            for blocker_key in blocker_keys:
                 for blocker in derived.get(blocker_key, []):
                     if not isinstance(blocker, dict):
                         continue
@@ -965,3 +1162,11 @@ def _diff_boolean_field(
         "unchanged_true_count": unchanged_true,
         "unchanged_false_count": unchanged_false,
     }
+
+
+def _normalize_policy_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "_", value.lower()).strip("_")
+
+
+def _clone_blockers(blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [dict(blocker) for blocker in blockers if isinstance(blocker, dict)]

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence, result_to_json
-from .evaluate import OQ_GATE_LEVELS, OQ_RESOLUTION_POLICIES
+from .evaluate import OQ_GATE_LEVELS, OQ_RESOLUTION_POLICIES, evaluate_state_file
 from .rules import evaluate_rules
 from .round_template import load_round_decision_anchor
 from .schema import (
@@ -57,6 +57,7 @@ CANDIDATE_RANK = {
     "observe": 1,
     "candidate": 2,
 }
+HARD_GATE_BLOCKER_PREFIXES = ("policy:asset_", "policy:language_non_compliant")
 
 
 def confirm_transition(args: argparse.Namespace) -> int:
@@ -371,6 +372,17 @@ def confirm_transition(args: argparse.Namespace) -> int:
     if any(item.severity == "error" for item in diagnostics):
         print(result_to_json(ok=False, diagnostics=diagnostics))
         return 1
+
+    if args.mode == "approve":
+        approve_gate_diagnostics = _validate_approve_gate_blockers(
+            state_path=state_path,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        diagnostics.extend(approve_gate_diagnostics)
+        if any(item.severity == "error" for item in approve_gate_diagnostics):
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
 
     draft = copy.deepcopy(state)
     draft[entity_type + "s"][entity_id]["state"]["confirmed"] = after_state
@@ -1015,6 +1027,60 @@ def _check_bootstrap_default_oq_blockers(
         )
 
     return diagnostics
+
+
+def _validate_approve_gate_blockers(
+    *,
+    state_path: Path,
+    entity_type: str,
+    entity_id: str,
+) -> list[Diagnostic]:
+    diagnostics, payload = evaluate_state_file(state_path)
+    evaluation_errors = [item for item in diagnostics if item.severity == "error"]
+    if evaluation_errors:
+        return evaluation_errors
+
+    entity_key = "subtasks" if entity_type == "subtask" else f"{entity_type}s"
+    entity_payload = payload.get(entity_key)
+    entity_payload = entity_payload if isinstance(entity_payload, dict) else {}
+    derived = entity_payload.get(entity_id)
+    derived = derived if isinstance(derived, dict) else {}
+    derived_state = derived.get("derived")
+    derived_state = derived_state if isinstance(derived_state, dict) else {}
+    blocker_refs = derived_state.get("blocker_refs")
+    blocker_refs = blocker_refs if isinstance(blocker_refs, list) else []
+
+    hard_blockers = sorted(
+        ref for ref in blocker_refs if isinstance(ref, str) and _is_hard_gate_blocker(ref)
+    )
+    if not hard_blockers:
+        return []
+
+    return [
+        make_diagnostic(
+            code="CONFIRM_HARD_GATE_BLOCKERS_PRESENT",
+            severity="error",
+            entity_type=entity_type,
+            entity_id=entity_id,
+            field_path=f"{entity_type}s.{entity_id}.state.confirmed",
+            message=(
+                "approve blocked by unresolved hard gate blockers: "
+                + ", ".join(hard_blockers)
+            ),
+            evidence=[
+                make_evidence(
+                    type="gate_evaluation",
+                    path=state_path.as_posix(),
+                    ref="blocker_refs",
+                    value=hard_blockers,
+                )
+            ],
+        )
+    ]
+
+
+def _is_hard_gate_blocker(ref: str) -> bool:
+    return any(ref.startswith(prefix) for prefix in HARD_GATE_BLOCKER_PREFIXES)
 
 
 def _oq_status_class(status: str) -> str:
