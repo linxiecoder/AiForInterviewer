@@ -163,6 +163,7 @@ class RenderCommandTests(unittest.TestCase):
             "## Downstream blockers by layer",
             "## Implementation blockers by layer",
             "## OQ gate summary",
+            "## Next Round Agenda",
             "## Notes / interpretation boundary",
         ]
         positions = [report.index(section) for section in expected_sections]
@@ -390,6 +391,94 @@ class RenderCommandTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertTrue(result["ok"])
         self.assertIn("render_input_invalid=1", report_path.read_text(encoding="utf-8"))
+
+    def test_next_round_agenda_snapshot(self) -> None:
+        payload = {
+            "summary": {},
+            "modules": {
+                "M01": {"derived": {"review_required": True, "candidate_blockers": []}},
+                "M02": {
+                    "derived": {
+                        "review_required": False,
+                        "candidate_blockers": [
+                            {"reason_code": "missing_required_doc_slot"},
+                        ],
+                    }
+                },
+            },
+            "subtasks": {
+                "ST01_01": {
+                    "derived": {
+                        "review_required": False,
+                        "candidate_blockers": [{"reason_code": "oq_candidate_gate"}],
+                        "downstream_blockers": [],
+                        "implementation_blockers": [],
+                    }
+                }
+            },
+            "oqs": {
+                "OQ-100": {
+                    "derived_status_class": "unresolved",
+                    "derived_enforcement": "candidate_blocker",
+                    "derived_reason_code": "oq_candidate_gate",
+                }
+            },
+            "diagnostics": [],
+        }
+        json_path = _write_json(self.temp_root / "evaluate.json", payload)
+        exit_code, _ = self._run_cli(
+            "render-report",
+            "--evaluate-json",
+            str(json_path),
+            "--agenda-limit",
+            "3",
+        )
+        self.assertEqual(exit_code, 0)
+
+        report = (self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME).read_text(encoding="utf-8")
+        lines = self._section_lines(report, "## Next Round Agenda")
+        snapshot = "\n".join([line for line in lines if line.strip()])
+        expected = """### Agenda 1: 必须先决策的 OQ（candidate/readiness gate）
+- entity: oq:OQ-100
+- current_state: status_class=unresolved, enforcement=candidate_blocker
+- blocking_reason_codes: oq_candidate_gate
+- required_evidence: confirm OQ decision evidence (confirmed/manual override)
+- suggested_owner: governance-owner
+### Agenda 2: review_required 的 near-open 实体
+- entity: module:M01
+- current_state: review_required=true, hard_blocker_count=0
+- blocking_reason_codes: none
+- required_evidence: review confirmation evidence
+- suggested_owner: module-owner
+### Agenda 3: hard blocker 最少、最接近可推进的实体
+- entity: subtask:ST01_01
+- current_state: review_required=false, hard_blocker_count=1
+- blocking_reason_codes: oq_candidate_gate
+- required_evidence: resolve blocker evidence, review confirmation evidence
+- suggested_owner: subtask-owner"""
+        self.assertEqual(snapshot, expected)
+
+    def test_next_round_agenda_safe_degrade_when_fields_missing(self) -> None:
+        payload = {
+            "summary": {},
+            "modules": {"M01": {"derived": {"review_required": True}}},
+            "subtasks": {"ST01_01": {"derived": {"candidate_blockers": ["bad-data"]}}},
+            "oqs": {"OQ-1": {"derived_enforcement": "candidate_blocker"}},
+            "diagnostics": [],
+        }
+        json_path = _write_json(self.temp_root / "evaluate.json", payload)
+        exit_code, _ = self._run_cli(
+            "render-report",
+            "--evaluate-json",
+            str(json_path),
+            "--agenda-limit",
+            "5",
+        )
+        self.assertEqual(exit_code, 0)
+        report = (self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME).read_text(encoding="utf-8")
+        self.assertIn("## Next Round Agenda", report)
+        self.assertIn("- current_state: status_class=unknown, enforcement=candidate_blocker", report)
+        self.assertIn("- blocking_reason_codes: none", report)
 
     def test_real_repo_render_summary(self) -> None:
         repo_root = self.temp_root / "real_repo"

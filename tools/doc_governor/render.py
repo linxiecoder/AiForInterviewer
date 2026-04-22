@@ -23,6 +23,7 @@ def render_from_payload(
     *,
     render_input_invalid: bool,
     input_incomplete: bool,
+    agenda_limit: int = 10,
 ) -> str:
     summary = _as_dict(payload.get("summary"))
     modules = _as_dict(payload.get("modules"))
@@ -48,6 +49,14 @@ def render_from_payload(
     lines.extend(_render_review_section(subtasks, section_type="subtasks"))
     lines.extend(_render_blocker_sections(modules=modules, subtasks=subtasks))
     lines.extend(_render_oq_summary(summary=summary, oqs=oqs))
+    lines.extend(
+        _render_next_round_agenda(
+            modules=modules,
+            subtasks=subtasks,
+            oqs=oqs,
+            agenda_limit=max(0, agenda_limit),
+        )
+    )
     lines.append("## Notes / interpretation boundary")
     lines.extend(f"- {line}" for line in notes)
     return "\n".join(lines).rstrip() + "\n"
@@ -212,6 +221,147 @@ def _render_oq_summary(*, summary: dict[str, Any], oqs: dict[str, Any]) -> list[
     for key in GATE_COUNT_KEYS:
         lines.append(f"- {key}: {oq_gate_counts.get(key, 0)}")
     return lines + [""]
+
+
+def _render_next_round_agenda(
+    *,
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
+    oqs: dict[str, Any],
+    agenda_limit: int,
+) -> list[str]:
+    lines = ["## Next Round Agenda", ""]
+    agenda_items = _build_next_round_agenda(
+        modules=modules,
+        subtasks=subtasks,
+        oqs=oqs,
+        agenda_limit=agenda_limit,
+    )
+    if not agenda_items:
+        lines.append("- none")
+        return lines + [""]
+
+    for idx, item in enumerate(agenda_items, start=1):
+        lines.append(f"### Agenda {idx}: {item['category']}")
+        lines.append(f"- entity: {item['entity']}")
+        lines.append(f"- current_state: {item['current_state']}")
+        lines.append(
+            "- blocking_reason_codes: "
+            + (", ".join(item["blocking_reason_codes"]) if item["blocking_reason_codes"] else "none")
+        )
+        lines.append(
+            "- required_evidence: "
+            + (", ".join(item["required_evidence"]) if item["required_evidence"] else "none")
+        )
+        lines.append(f"- suggested_owner: {item['suggested_owner']}")
+        lines.append("")
+    return lines
+
+
+def _build_next_round_agenda(
+    *,
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
+    oqs: dict[str, Any],
+    agenda_limit: int,
+) -> list[dict[str, Any]]:
+    agenda: list[dict[str, Any]] = []
+
+    for oq_id in sorted(oqs):
+        oq = _as_dict(oqs.get(oq_id))
+        enforcement = str(oq.get("derived_enforcement", ""))
+        reason_code = str(oq.get("derived_reason_code", ""))
+        if enforcement not in {"candidate_blocker", "readiness_blocker"} and reason_code not in {
+            "oq_candidate_gate",
+            "oq_readiness_gate",
+        }:
+            continue
+        agenda.append(
+            {
+                "category": "必须先决策的 OQ（candidate/readiness gate）",
+                "entity": f"oq:{oq_id}",
+                "current_state": (
+                    f"status_class={str(oq.get('derived_status_class', 'unknown'))}, "
+                    f"enforcement={enforcement or 'unknown'}"
+                ),
+                "blocking_reason_codes": [reason_code] if reason_code else [],
+                "required_evidence": ["confirm OQ decision evidence (confirmed/manual override)"],
+                "suggested_owner": "governance-owner",
+            }
+        )
+
+    near_open_entities = _collect_entity_agenda(modules=modules, subtasks=subtasks, near_open_only=True)
+    for item in near_open_entities:
+        item["category"] = "review_required 的 near-open 实体"
+        agenda.append(item)
+
+    blocker_light_entities = _collect_entity_agenda(modules=modules, subtasks=subtasks, near_open_only=False)
+    for item in blocker_light_entities:
+        if item.get("_hard_blocker_count", 0) <= 0:
+            continue
+        item["category"] = "hard blocker 最少、最接近可推进的实体"
+        agenda.append(item)
+
+    if agenda_limit <= 0:
+        return []
+    return agenda[:agenda_limit]
+
+
+def _collect_entity_agenda(
+    *,
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
+    near_open_only: bool,
+) -> list[dict[str, Any]]:
+    entities: list[dict[str, Any]] = []
+    for entity_type, source in (("module", modules), ("subtask", subtasks)):
+        for entity_id in sorted(source):
+            entity = _as_dict(source.get(entity_id))
+            derived = _as_dict(entity.get("derived"))
+            review_required = bool(derived.get("review_required"))
+            blocker_codes = _collect_blocker_reason_codes(derived)
+            hard_blocker_count = len(blocker_codes)
+            if near_open_only and (not review_required or hard_blocker_count != 0):
+                continue
+            entities.append(
+                {
+                    "entity": f"{entity_type}:{entity_id}",
+                    "current_state": (
+                        f"review_required={str(review_required).lower()}, "
+                        f"hard_blocker_count={hard_blocker_count}"
+                    ),
+                    "blocking_reason_codes": blocker_codes,
+                    "required_evidence": (
+                        ["review confirmation evidence"]
+                        if review_required
+                        else ["resolve blocker evidence", "review confirmation evidence"]
+                    ),
+                    "suggested_owner": f"{entity_type}-owner",
+                    "_hard_blocker_count": hard_blocker_count,
+                    "_review_required": review_required,
+                }
+            )
+
+    entities.sort(
+        key=lambda item: (
+            item["_hard_blocker_count"],
+            0 if item["_review_required"] else 1,
+            item["entity"],
+        )
+    )
+    return entities
+
+
+def _collect_blocker_reason_codes(derived: dict[str, Any]) -> list[str]:
+    reason_codes: list[str] = []
+    for blocker_key in ("candidate_blockers", "downstream_blockers", "implementation_blockers"):
+        for blocker in _as_list(derived.get(blocker_key)):
+            if not isinstance(blocker, dict):
+                continue
+            reason = str(blocker.get("reason_code", "")).strip()
+            if reason:
+                reason_codes.append(reason)
+    return sorted(set(reason_codes))
 
 
 def _as_dict(value: object) -> dict[str, Any]:

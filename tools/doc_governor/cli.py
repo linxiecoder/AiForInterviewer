@@ -105,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         "--report-path",
         default=str(Path("docs/governance") / RENDER_OUTPUT_DIR_NAME),
     )
+    render_parser.add_argument("--agenda-limit", type=int, default=10)
 
     confirm_parser = subparsers.add_parser("confirm-transition")
     confirm_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
@@ -494,6 +495,7 @@ def render_report_command(args: argparse.Namespace) -> int:
         payload,
         render_input_invalid=render_input_invalid,
         input_incomplete=input_incomplete,
+        agenda_limit=args.agenda_limit,
     )
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
