@@ -71,6 +71,10 @@ def plan_open_window(
         item for item in near_open_but_blocked if _entity_key(item) not in eligible_keys
     ]
 
+    eligible_to_apply = sort_round_entities(eligible_to_apply)
+    near_open_but_blocked = sort_round_entities(near_open_but_blocked)
+    hard_blocked = sort_round_entities(hard_blocked)
+
     if limit is not None:
         eligible_to_apply = _apply_limit(eligible_to_apply, limit)
         near_open_but_blocked = _apply_limit(near_open_but_blocked, limit)
@@ -122,6 +126,28 @@ def plan_open_window(
 
 def _entity_key(item: dict[str, Any]) -> str:
     return f"{item.get('entity_type')}::{item.get('entity_id')}"
+
+
+def sort_round_entities(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(items, key=_sort_key)
+
+
+def _sort_key(item: dict[str, Any]) -> tuple[int, int, int, str]:
+    blocker_count = len(_as_list(item.get("blockers")))
+    reject_count = int(_as_dict(item.get("history_signals")).get("rejected_count", 0) or 0)
+
+    upstream_dependency_count = 0
+    for blocker in _as_list(item.get("blockers")):
+        reference = _as_str(blocker.get("reference")).strip()
+        if reference.startswith("module:"):
+            upstream_dependency_count += 1
+
+    return (
+        -blocker_count,
+        -reject_count,
+        -upstream_dependency_count,
+        _entity_key(item),
+    )
 
 
 def _is_hard_blocker(item: dict[str, Any]) -> bool:
