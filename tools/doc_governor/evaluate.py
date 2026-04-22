@@ -344,6 +344,60 @@ def _evaluate_state_payload(state: dict[str, object]) -> dict[str, Any]:
     }
 
 
+def build_delta_summary(
+    *,
+    current_payload: dict[str, Any],
+    baseline_payload: dict[str, Any],
+) -> dict[str, Any]:
+    current_blockers = _collect_blocker_keys(current_payload)
+    baseline_blockers = _collect_blocker_keys(baseline_payload)
+    added_blockers = sorted(current_blockers - baseline_blockers)
+    closed_blockers = sorted(baseline_blockers - current_blockers)
+
+    current_modules = _extract_entities(current_payload, key="modules")
+    current_subtasks = _extract_entities(current_payload, key="subtasks")
+    baseline_modules = _extract_entities(baseline_payload, key="modules")
+    baseline_subtasks = _extract_entities(baseline_payload, key="subtasks")
+
+    return {
+        "blocker_changes": {
+            "added_count": len(added_blockers),
+            "closed_count": len(closed_blockers),
+            "added_refs": added_blockers,
+            "closed_refs": closed_blockers,
+        },
+        "review_required_changes": {
+            "modules": _diff_boolean_field(
+                current_entities=current_modules,
+                baseline_entities=baseline_modules,
+                field="review_required",
+            ),
+            "subtasks": _diff_boolean_field(
+                current_entities=current_subtasks,
+                baseline_entities=baseline_subtasks,
+                field="review_required",
+            ),
+        },
+        "readiness_changes": {
+            "modules_downstream": _diff_boolean_field(
+                current_entities=current_modules,
+                baseline_entities=baseline_modules,
+                field="assessed_downstream_ready",
+            ),
+            "subtasks_downstream": _diff_boolean_field(
+                current_entities=current_subtasks,
+                baseline_entities=baseline_subtasks,
+                field="assessed_downstream_ready",
+            ),
+            "subtasks_implementation": _diff_boolean_field(
+                current_entities=current_subtasks,
+                baseline_entities=baseline_subtasks,
+                field="assessed_implementation_ready",
+            ),
+        },
+    }
+
+
 def _evaluate_oqs(oqs: dict[str, object]) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for oq_id, oq in oqs.items():
@@ -833,3 +887,81 @@ def _dedupe_blockers(blockers: list[dict[str, Any]]) -> list[dict[str, str]]:
         ordered.append(blocker)
     ordered.sort(key=lambda item: (item["reason_code"], item["ref"], item["kind"], item["message"]))
     return ordered
+
+
+def _extract_entities(payload: dict[str, Any], *, key: str) -> dict[str, dict[str, Any]]:
+    entities = payload.get(key)
+    entities = entities if isinstance(entities, dict) else {}
+    extracted: dict[str, dict[str, Any]] = {}
+    for entity_id, entity_value in entities.items():
+        if not isinstance(entity_value, dict):
+            continue
+        derived = entity_value.get("derived")
+        if isinstance(derived, dict):
+            extracted[str(entity_id)] = derived
+    return extracted
+
+
+def _collect_blocker_keys(payload: dict[str, Any]) -> set[str]:
+    blockers: set[str] = set()
+    entity_maps = {
+        "module": _extract_entities(payload, key="modules"),
+        "subtask": _extract_entities(payload, key="subtasks"),
+    }
+    for entity_type, entities in entity_maps.items():
+        for entity_id, derived in entities.items():
+            for blocker_key in (
+                "candidate_blockers",
+                "downstream_blockers",
+                "implementation_blockers",
+            ):
+                for blocker in derived.get(blocker_key, []):
+                    if not isinstance(blocker, dict):
+                        continue
+                    ref = str(blocker.get("ref", ""))
+                    reason_code = str(blocker.get("reason_code", ""))
+                    if not ref:
+                        continue
+                    blockers.add(f"{entity_type}:{entity_id}:{reason_code}:{ref}")
+    return blockers
+
+
+def _diff_boolean_field(
+    *,
+    current_entities: dict[str, dict[str, Any]],
+    baseline_entities: dict[str, dict[str, Any]],
+    field: str,
+) -> dict[str, Any]:
+    ids = sorted(set(current_entities) | set(baseline_entities))
+    to_true: list[str] = []
+    to_false: list[str] = []
+    unchanged_true = 0
+    unchanged_false = 0
+    before_true = 0
+    after_true = 0
+
+    for entity_id in ids:
+        before = bool(baseline_entities.get(entity_id, {}).get(field, False))
+        after = bool(current_entities.get(entity_id, {}).get(field, False))
+        if before:
+            before_true += 1
+        if after:
+            after_true += 1
+        if before and not after:
+            to_false.append(entity_id)
+        elif not before and after:
+            to_true.append(entity_id)
+        elif before and after:
+            unchanged_true += 1
+        else:
+            unchanged_false += 1
+
+    return {
+        "before_true_count": before_true,
+        "after_true_count": after_true,
+        "delta_true_count": after_true - before_true,
+        "changed_to_true": to_true,
+        "changed_to_false": to_false,
+        "unchanged_true_count": unchanged_true,
+        "unchanged_false_count": unchanged_false,
+    }

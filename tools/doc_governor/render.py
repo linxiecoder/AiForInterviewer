@@ -29,6 +29,7 @@ def render_from_payload(
     modules = _as_dict(payload.get("modules"))
     subtasks = _as_dict(payload.get("subtasks"))
     oqs = _as_dict(payload.get("oqs"))
+    delta_summary = _as_dict(payload.get("delta_summary"))
 
     if not isinstance(payload.get("summary"), dict):
         input_incomplete = True

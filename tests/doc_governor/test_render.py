@@ -142,6 +142,18 @@ class RenderCommandTests(unittest.TestCase):
                     "evidence": [{"type": "file_scan", "path": "evaluate.json", "ref": "noop"}],
                 }
             ],
+            "delta_summary": {
+                "blocker_changes": {"added_count": 2, "closed_count": 1},
+                "review_required_changes": {
+                    "modules": {"before_true_count": 1, "after_true_count": 2, "delta_true_count": 1, "changed_to_true": ["M02"], "changed_to_false": []},
+                    "subtasks": {"before_true_count": 0, "after_true_count": 1, "delta_true_count": 1, "changed_to_true": ["ST01_10"], "changed_to_false": []},
+                },
+                "readiness_changes": {
+                    "modules_downstream": {"before_true_count": 2, "after_true_count": 1, "delta_true_count": -1, "changed_to_true": [], "changed_to_false": ["M02"]},
+                    "subtasks_downstream": {"before_true_count": 1, "after_true_count": 1, "delta_true_count": 0, "changed_to_true": [], "changed_to_false": []},
+                    "subtasks_implementation": {"before_true_count": 1, "after_true_count": 0, "delta_true_count": -1, "changed_to_true": [], "changed_to_false": ["ST01_10"]},
+                },
+            },
         }
         json_path = _write_json(self.temp_root / "evaluate.json", payload)
 
@@ -163,6 +175,7 @@ class RenderCommandTests(unittest.TestCase):
             "## Downstream blockers by layer",
             "## Implementation blockers by layer",
             "## OQ gate summary",
+            "## Round Delta",
             "## Next Round Agenda",
             "## Notes / interpretation boundary",
         ]
@@ -183,6 +196,9 @@ class RenderCommandTests(unittest.TestCase):
             if line.startswith("- ")
         ]
         self.assertEqual(subtask_rows[0], "- `ST01_10`: review_required=true reason=[implementation_doc_activation_recommended]")
+        self.assertIn("### Blocker changes", report)
+        self.assertIn("- added_count: 2", report)
+        self.assertIn("- modules: before=1 after=2 delta=1", report)
 
     def test_default_path_and_sorted_blockers(self) -> None:
         payload = {

@@ -28,6 +28,20 @@ TASK_INDEX_HEADERS = (
 OPEN_QUESTION_REQUIRED_HEADERS = ("oq_id", "title", "status", "affects")
 OPEN_QUESTION_OPTIONAL_HEADERS = ("gate_level", "resolution_policy")
 
+DOC_KIND_KEY_FIELDS = {
+    "module_design": ("目标", "范围", "约束"),
+    "module_doc": ("输入", "输出", "风险"),
+    "subtask_design": ("目标", "方案", "验收"),
+    "subtask_implementation": ("步骤", "验证", "回滚"),
+}
+
+DOC_KIND_TEMPLATE_HEADINGS = {
+    "module_design": {"背景", "目标", "范围", "约束", "风险"},
+    "module_doc": {"背景", "输入", "输出", "依赖", "风险"},
+    "subtask_design": {"目标", "方案", "边界", "验收"},
+    "subtask_implementation": {"步骤", "验证", "回滚"},
+}
+
 
 def scan_repo(repo_root: str | Path) -> dict[str, object]:
     root = Path(repo_root).resolve()
@@ -380,6 +394,27 @@ def _scan_doc_slots(
                         ],
                     )
                 )
+            weak_signals = _collect_doc_weak_signals(text=text, doc_kind=doc_kind)
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCAN_DOC_WEAK_SIGNALS",
+                    severity="warning",
+                    entity_type="doc_slot",
+                    entity_id=relative_path,
+                    field_path=f"facts.{slot_name}.weak_signals",
+                    message=(
+                        "文档弱信号仅用于诊断讨论，不会直接回写 confirmed state。"
+                    ),
+                    evidence=[
+                        make_evidence(
+                            type="doc_signal",
+                            path=relative_path,
+                            ref="weak_signals",
+                            value=weak_signals,
+                        )
+                    ],
+                )
+            )
         else:
             docs[slot_name] = {"exists": False, "template_like": False}
     return docs, diagnostics
@@ -654,3 +689,85 @@ def _row_as_dict(header_index: dict[str, int], row: list[str]) -> dict[str, str]
 
 def _default_module_path(module_id: str) -> str:
     return f"docs/modules/{module_id}"
+
+
+def _collect_doc_weak_signals(*, text: str, doc_kind: str) -> dict[str, object]:
+    heading_titles = _collect_headings(text)
+    sections_added = _count_added_sections(heading_titles, doc_kind)
+    paragraph_ratio = _calculate_non_template_paragraph_ratio(text)
+    key_fields = DOC_KIND_KEY_FIELDS.get(doc_kind, ())
+    field_hits = sum(1 for field in key_fields if field in text)
+    completeness = field_hits / len(key_fields) if key_fields else 0.0
+    return {
+        "added_section_count": sections_added,
+        "non_template_paragraph_ratio": round(paragraph_ratio, 4),
+        "key_fields_completeness": round(completeness, 4),
+        "key_fields_hit_count": field_hits,
+        "key_fields_total": len(key_fields),
+    }
+
+
+def _collect_headings(text: str) -> list[str]:
+    headings: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        title = stripped.lstrip("#").strip()
+        if title:
+            headings.append(title)
+    return headings
+
+
+def _count_added_sections(heading_titles: list[str], doc_kind: str) -> int:
+    baseline = {re.sub(r"\s+", "", item) for item in DOC_KIND_TEMPLATE_HEADINGS.get(doc_kind, set())}
+    if not heading_titles:
+        return 0
+    count = 0
+    for title in heading_titles:
+        normalized = re.sub(r"\s+", "", title)
+        if normalized and normalized not in baseline:
+            count += 1
+    return count
+
+
+def _calculate_non_template_paragraph_ratio(text: str) -> float:
+    paragraphs = _extract_plain_paragraphs(text)
+    if not paragraphs:
+        return 0.0
+    non_template_count = sum(1 for paragraph in paragraphs if not _is_template_paragraph(paragraph))
+    return non_template_count / len(paragraphs)
+
+
+def _extract_plain_paragraphs(text: str) -> list[str]:
+    chunks = re.split(r"\n\s*\n", text)
+    results: list[str] = []
+    for chunk in chunks:
+        lines = [line.strip() for line in chunk.splitlines() if line.strip()]
+        if not lines:
+            continue
+        if any(
+            line.startswith(("#", "-", "*", "|", "```", ">"))
+            or re.match(r"^\d+\.", line)
+            for line in lines
+        ):
+            continue
+        merged = " ".join(lines)
+        if merged:
+            results.append(merged)
+    return results
+
+
+def _is_template_paragraph(paragraph: str) -> bool:
+    tokens = (
+        "todo",
+        "tbd",
+        "placeholder",
+        "待补充",
+        "待完善",
+        "示例",
+        "模板",
+        "xxx",
+    )
+    lower = paragraph.lower()
+    return any(token in lower for token in tokens)
