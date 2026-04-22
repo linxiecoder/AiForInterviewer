@@ -96,6 +96,7 @@
 
 - [项目语言规范](docs/project-language-rules.md)
 - [文档治理自动化规则](docs/governance/DOC_AUTOMATION.md)
+- [讨论轮次工作流](docs/governance/DISCUSSION_WORKFLOW.md)
 
 ### 2.2 设计
 

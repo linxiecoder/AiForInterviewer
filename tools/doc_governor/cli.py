@@ -31,6 +31,7 @@ if __package__ in {None, ""}:
     from tools.doc_governor.preflight import preflight_open_window
     from tools.doc_governor.open_window import open_window
     from tools.doc_governor.window_plan import plan_open_window
+    from tools.doc_governor.round_template import generate_round_template
     from tools.doc_governor.repo_scan import scan_repo
     from tools.doc_governor.render import (
         build_render_diagnostics,
@@ -62,6 +63,7 @@ else:
     from .preflight import preflight_open_window
     from .open_window import open_window
     from .window_plan import plan_open_window
+    from .round_template import generate_round_template
     from .repo_scan import scan_repo
     from .render import (
         build_render_diagnostics,
@@ -115,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     confirm_parser.add_argument("--evidence-ref", action="append")
     confirm_parser.add_argument("--actor")
     confirm_parser.add_argument("--reason")
+    confirm_parser.add_argument("--round-id")
 
     init_state_parser = subparsers.add_parser("init-official-state")
     init_state_parser.add_argument(
@@ -177,6 +180,15 @@ def main(argv: list[str] | None = None) -> int:
     plan_parser.add_argument("--entity-id")
     plan_parser.add_argument("--limit", type=int)
 
+    round_template_parser = subparsers.add_parser("generate-round-template")
+    round_template_parser.add_argument("--round-id", required=True)
+    round_template_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    round_template_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
+    round_template_parser.add_argument("--evaluate-json")
+    round_template_parser.add_argument("--entity-type")
+    round_template_parser.add_argument("--entity-id")
+    round_template_parser.add_argument("--limit", type=int)
+
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
         return bootstrap_state(args)
@@ -200,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         return open_window(args)
     if args.command == "plan-open-window":
         return plan_open_window_command(args)
+    if args.command == "generate-round-template":
+        return generate_round_template_command(args)
 
     parser.print_help()
     return 1
@@ -570,6 +584,20 @@ def preflight_open_window_command(args: argparse.Namespace) -> int:
 
 def plan_open_window_command(args: argparse.Namespace) -> int:
     payload = plan_open_window(
+        state=args.state,
+        history=args.history,
+        evaluate_json=args.evaluate_json,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+        limit=args.limit,
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload.get("ok", False) else 0
+
+
+def generate_round_template_command(args: argparse.Namespace) -> int:
+    payload = generate_round_template(
+        round_id=args.round_id,
         state=args.state,
         history=args.history,
         evaluate_json=args.evaluate_json,

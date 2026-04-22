@@ -349,6 +349,68 @@ class PlanOpenWindowTests(unittest.TestCase):
         exit_code, payload = self._run_cli("--state", str(self.state_path))
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["ok"])
+
+    def test_generate_round_template_prefills_near_and_hard_lists(self) -> None:
+        state = _default_state()
+        state["modules"]["M01"] = _module_entry("M01", readiness="blocked")
+        state["modules"]["M02"] = _module_entry("M02", readiness="downstream_ready")
+        self._write_state(state)
+
+        evaluate_payload = {
+            "summary": {},
+            "modules": {
+                "M01": {
+                    "derived": {
+                        "candidate_blocker_refs": ["module:M00"],
+                        "downstream_blocker_refs": [],
+                        "implementation_blocker_refs": [],
+                        "oq_review_only_refs": [],
+                        "review_reasons": [],
+                    }
+                },
+                "M02": {
+                    "derived": {
+                        "candidate_blocker_refs": [],
+                        "downstream_blocker_refs": [],
+                        "implementation_blocker_refs": [],
+                        "oq_review_only_refs": [],
+                        "review_reasons": ["oq_review_only"],
+                    }
+                },
+            },
+            "subtasks": {},
+            "oqs": {},
+        }
+        evaluate_path = self._write_evaluate_json(evaluate_payload)
+
+        original = Path.cwd()
+        os.chdir(self.temp_root)
+        try:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "generate-round-template",
+                        "--round-id",
+                        "R001",
+                        "--state",
+                        str(self.state_path),
+                        "--evaluate-json",
+                        str(evaluate_path),
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+        finally:
+            os.chdir(original)
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["ok"])
+        round_path = self.temp_root / "docs" / "governance" / "rounds" / "R001.md"
+        self.assertTrue(round_path.exists())
+        text = round_path.read_text(encoding="utf-8")
+        self.assertIn("Decision:", text)
+        self.assertIn("module:M02", text)
+        self.assertIn("module:M01", text)
         self.assertEqual(payload["summary"]["eligible_to_apply_count"], 0)
         self.assertEqual(payload["summary"]["hard_blocked_count"], 1)
         self.assertEqual(payload["hard_blocked"][0]["entity_type"], "module")
