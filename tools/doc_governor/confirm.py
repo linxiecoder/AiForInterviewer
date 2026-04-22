@@ -11,6 +11,7 @@ from typing import Any
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence, result_to_json
 from .evaluate import OQ_GATE_LEVELS, OQ_RESOLUTION_POLICIES
 from .rules import evaluate_rules
+from .round_template import load_round_decision_anchor
 from .schema import (
     CANDIDATE_STATUSES,
     IMPLEMENTATION_DOC_STATES,
@@ -137,6 +138,48 @@ def confirm_transition(args: argparse.Namespace) -> int:
                             path="--reason",
                             ref="value",
                             value=args.reason,
+                        )
+                    ],
+                )
+            )
+
+    round_id = (getattr(args, "round_id", None) or "").strip()
+    if round_id:
+        anchor = load_round_decision_anchor(round_id=round_id)
+        if anchor is None:
+            diagnostics.append(
+                make_diagnostic(
+                    code="CONFIRM_ROUND_TEMPLATE_NOT_FOUND",
+                    severity="error",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path="--round-id",
+                    message="round template not found under docs/governance/rounds",
+                    evidence=[
+                        make_evidence(
+                            type="file_check",
+                            path=f"docs/governance/rounds/{round_id}.md",
+                            ref="exists",
+                            value=False,
+                        )
+                    ],
+                )
+            )
+        elif anchor not in str(args.reason or ""):
+            diagnostics.append(
+                make_diagnostic(
+                    code="CONFIRM_REASON_MISSING_DECISION_ANCHOR",
+                    severity="error",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path="--reason",
+                    message=f"reason must include decision anchor: {anchor}",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="--reason",
+                            ref="contains",
+                            value=anchor,
                         )
                     ],
                 )
@@ -374,6 +417,7 @@ def confirm_transition(args: argparse.Namespace) -> int:
         transition_id=transition_id,
         timestamp=timestamp,
         actor=actor,
+        round_id=(str(args.round_id).strip() or None) if args.round_id is not None else None,
         entity_type=entity_type,
         entity_id=entity_id,
         dry_run=False,
@@ -1065,6 +1109,7 @@ def _append_transition_history(
     transition_id: str,
     timestamp: str,
     actor: str,
+    round_id: str | None,
     entity_type: str,
     entity_id: str,
     dry_run: bool,
@@ -1080,6 +1125,7 @@ def _append_transition_history(
         "transition_id": transition_id,
         "timestamp": timestamp,
         "actor": actor,
+        "round_id": round_id,
         "entity_type": entity_type,
         "entity_id": entity_id,
         "dry_run": dry_run,

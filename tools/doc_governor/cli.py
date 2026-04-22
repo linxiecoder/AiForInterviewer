@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -30,7 +33,7 @@ if __package__ in {None, ""}:
     from tools.doc_governor.init_state import init_official_state
     from tools.doc_governor.preflight import preflight_open_window
     from tools.doc_governor.open_window import open_window
-    from tools.doc_governor.window_plan import plan_open_window
+    from tools.doc_governor.window_plan import plan_open_window, sort_round_entities
     from tools.doc_governor.repo_scan import scan_repo
     from tools.doc_governor.render import (
         build_render_diagnostics,
@@ -61,7 +64,7 @@ else:
     from .init_state import init_official_state
     from .preflight import preflight_open_window
     from .open_window import open_window
-    from .window_plan import plan_open_window
+    from .window_plan import plan_open_window, sort_round_entities
     from .repo_scan import scan_repo
     from .render import (
         build_render_diagnostics,
@@ -106,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         "--report-path",
         default=str(Path("docs/governance") / RENDER_OUTPUT_DIR_NAME),
     )
+    render_parser.add_argument("--agenda-limit", type=int, default=10)
 
     confirm_parser = subparsers.add_parser("confirm-transition")
     confirm_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
@@ -116,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     confirm_parser.add_argument("--evidence-ref", action="append")
     confirm_parser.add_argument("--actor")
     confirm_parser.add_argument("--reason")
+    confirm_parser.add_argument("--round-id")
 
     init_state_parser = subparsers.add_parser("init-official-state")
     init_state_parser.add_argument(
@@ -178,6 +183,31 @@ def main(argv: list[str] | None = None) -> int:
     plan_parser.add_argument("--entity-id")
     plan_parser.add_argument("--limit", type=int)
 
+    round_template_parser = subparsers.add_parser("generate-round-template")
+    round_template_parser.add_argument("--round-id", required=True)
+    round_template_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    round_template_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
+    round_template_parser.add_argument("--evaluate-json")
+    round_template_parser.add_argument("--entity-type")
+    round_template_parser.add_argument("--entity-id")
+    round_template_parser.add_argument("--limit", type=int)
+    plan_round_parser = subparsers.add_parser("plan-round")
+    plan_round_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    plan_round_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
+    plan_round_parser.add_argument("--evaluate-json")
+    plan_round_parser.add_argument("--entity-type")
+    plan_round_parser.add_argument("--entity-id")
+    plan_round_parser.add_argument("--limit", type=int)
+    plan_round_parser.add_argument("--round-id")
+
+    apply_round_parser = subparsers.add_parser("apply-round")
+    apply_round_parser.add_argument("--round-id", required=True)
+    apply_round_parser.add_argument("--plan-json")
+    apply_round_parser.add_argument("--from-plan")
+    apply_round_parser.add_argument("--state", default=OFFICIAL_STATE_PATH)
+    apply_round_parser.add_argument("--actor", default="doc-governor-round")
+    apply_round_parser.add_argument("--reason", default="apply-round")
+
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
         return bootstrap_state(args)
@@ -201,6 +231,12 @@ def main(argv: list[str] | None = None) -> int:
         return open_window(args)
     if args.command == "plan-open-window":
         return plan_open_window_command(args)
+    if args.command == "generate-round-template":
+        return generate_round_template_command(args)
+    if args.command == "plan-round":
+        return plan_round_command(args)
+    if args.command == "apply-round":
+        return apply_round_command(args)
 
     parser.print_help()
     return 1
@@ -545,6 +581,7 @@ def render_report_command(args: argparse.Namespace) -> int:
         payload,
         render_input_invalid=render_input_invalid,
         input_incomplete=input_incomplete,
+        agenda_limit=args.agenda_limit,
     )
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -630,6 +667,219 @@ def plan_open_window_command(args: argparse.Namespace) -> int:
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 1 if not payload.get("ok", False) else 0
+
+
+def generate_round_template_command(args: argparse.Namespace) -> int:
+    payload = generate_round_template(
+        round_id=args.round_id,
+def plan_round_command(args: argparse.Namespace) -> int:
+    preflight_payload = preflight_open_window(
+        state=args.state,
+        evaluate_json=args.evaluate_json,
+        history=args.history,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+    )
+    window_plan_payload = plan_open_window(
+        state=args.state,
+        history=args.history,
+        evaluate_json=args.evaluate_json,
+        entity_type=args.entity_type,
+        entity_id=args.entity_id,
+        limit=args.limit,
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload.get("ok", False) else 0
+
+    round_id = args.round_id or f"round-{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
+    must_review = [
+        _decorate_round_entity(item, recommended_action="defer")
+        for item in sort_round_entities(
+            list(window_plan_payload.get("near_open_but_blocked", [])),
+        )
+    ]
+    can_approve_now = [
+        _decorate_round_entity(item, recommended_action="approve")
+        for item in sort_round_entities(
+            list(window_plan_payload.get("eligible_to_apply", [])),
+        )
+    ]
+    blocked_hard = [
+        _decorate_round_entity(item, recommended_action="reject")
+        for item in sort_round_entities(
+            list(window_plan_payload.get("hard_blocked", [])),
+        )
+    ]
+    if args.limit is not None:
+        must_review = must_review[: args.limit]
+        can_approve_now = can_approve_now[: args.limit]
+        blocked_hard = blocked_hard[: args.limit]
+
+    payload = {
+        "ok": bool(preflight_payload.get("ok", False)) and bool(window_plan_payload.get("ok", False)),
+        "round_id": round_id,
+        "state_path": window_plan_payload.get("state_path"),
+        "history_path": window_plan_payload.get("history_path"),
+        "evaluation_source": window_plan_payload.get("evaluation_source"),
+        "scope": window_plan_payload.get("scope", {}),
+        "queues": {
+            "must_review": must_review,
+            "can_approve_now": can_approve_now,
+            "blocked_hard": blocked_hard,
+        },
+        "summary": {
+            "must_review_count": len(must_review),
+            "can_approve_now_count": len(can_approve_now),
+            "blocked_hard_count": len(blocked_hard),
+            "entities_scanned": window_plan_payload.get("summary", {}).get("entities_scanned", 0),
+        },
+        "parse_errors": window_plan_payload.get("parse_errors", []),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 1 if not payload["ok"] else 0
+
+
+def apply_round_command(args: argparse.Namespace) -> int:
+    if bool(args.plan_json) == bool(args.from_plan):
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="APPLY_ROUND_PLAN_INPUT_INVALID",
+                        severity="error",
+                        entity_type="system",
+                        entity_id="GLOBAL",
+                        field_path="apply-round",
+                        message="provide exactly one of --plan-json or --from-plan",
+                        evidence=[],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    raw_plan = args.plan_json
+    if args.from_plan:
+        raw_plan = Path(args.from_plan).read_text(encoding="utf-8")
+    try:
+        plan_payload = json.loads(raw_plan or "{}")
+    except json.JSONDecodeError as exc:
+        print(result_to_json(ok=False, diagnostics=[make_diagnostic(
+            code="APPLY_ROUND_PLAN_PARSE_ERROR",
+            severity="error",
+            entity_type="system",
+            entity_id="GLOBAL",
+            field_path="plan",
+            message=f"plan json parse failed: {exc}",
+            evidence=[],
+        )]))
+        return 1
+
+    if str(plan_payload.get("round_id")) != str(args.round_id):
+        print(result_to_json(ok=False, diagnostics=[make_diagnostic(
+            code="APPLY_ROUND_ID_MISMATCH",
+            severity="error",
+            entity_type="system",
+            entity_id="GLOBAL",
+            field_path="--round-id",
+            message="provided --round-id does not match plan round_id",
+            evidence=[],
+        )]))
+        return 1
+
+    actions = _collect_round_actions(plan_payload)
+    results: list[dict[str, Any]] = []
+    failed = 0
+    skipped = 0
+    applied = 0
+    for action in actions:
+        if action["action"] == "defer":
+            skipped += 1
+            results.append({**action, "ok": True, "skipped": True})
+            continue
+        namespace = argparse.Namespace(
+            input=args.state,
+            entity_type=action["entity_type"],
+            entity_id=action["entity_id"],
+            proposed_changes=json.dumps(action.get("proposed_changes", {}), ensure_ascii=False),
+            mode=action["action"],
+            evidence_ref=list(action.get("evidence_refs", [])),
+            actor=args.actor,
+            reason=args.reason,
+        )
+        with io.StringIO() as buffer:
+            with contextlib.redirect_stdout(buffer):
+                code = confirm_transition(namespace)
+            confirm_output = buffer.getvalue().strip()
+        confirm_payload = {}
+        if confirm_output:
+            try:
+                confirm_payload = json.loads(confirm_output)
+            except json.JSONDecodeError:
+                confirm_payload = {"raw_output": confirm_output}
+        if code == 0:
+            applied += 1
+        else:
+            failed += 1
+        results.append({**action, "ok": code == 0, "confirm": confirm_payload})
+
+    ok = failed == 0
+    print(
+        json.dumps(
+            {
+                "ok": ok,
+                "round_id": args.round_id,
+                "state_path": str(Path(args.state).resolve()),
+                "summary": {
+                    "total": len(actions),
+                    "applied": applied,
+                    "skipped": skipped,
+                    "failed": failed,
+                },
+                "results": results,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0 if ok else 1
+
+
+def _decorate_round_entity(item: dict[str, Any], *, recommended_action: str) -> dict[str, Any]:
+    payload = dict(item)
+    payload["recommended_action"] = recommended_action
+    payload["proposed_changes"] = payload.get("proposed_changes", {})
+    payload["evidence_refs"] = payload.get("evidence_refs", [])
+    return payload
+
+
+def _collect_round_actions(plan_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    queues = plan_payload.get("queues", {})
+    if not isinstance(queues, dict):
+        return []
+    output: list[dict[str, Any]] = []
+    for queue_name in ("can_approve_now", "blocked_hard", "must_review"):
+        raw_items = queues.get(queue_name, [])
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            action = str(item.get("recommended_action", "")).strip().lower()
+            if action not in {"approve", "reject", "defer"}:
+                continue
+            output.append(
+                {
+                    "queue": queue_name,
+                    "entity_type": item.get("entity_type"),
+                    "entity_id": item.get("entity_id"),
+                    "action": action,
+                    "proposed_changes": item.get("proposed_changes", {}),
+                    "evidence_refs": item.get("evidence_refs", []),
+                }
+            )
+    return output
 
 
 def _make_yaml_bootstrap_diagnostic(

@@ -84,6 +84,7 @@ Phase 2A evaluate-state is read-only report output.
 - `render-report --evaluate-json <PATH>` is the only primary render input.
 - `render-report --state <DOC_STATE.bootstrap.yaml>` is an optional wrapper and must share the same evaluate path internally.
 - `render-report` output is Markdown only and must only summarize fields in `summary/modules/subtasks/oqs/diagnostics`.
+- `render-report` 的 `## Next Round Agenda` 仅输出建议性议程，不可直接替代 `confirm-transition` 的审批与状态写回流程。
 - Default output path is `docs/governance/DOC_GOVERNOR_REPORT.md`.
 - `--report-path` may only target files under `docs/governance/` and must not target official state files.
 - The report must include fixed boundary notes stating it is report-only and not ready or ready-to-open status.

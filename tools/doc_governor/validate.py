@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
 from .rules import evaluate_rules
 from .schema import (
     CANDIDATE_STATUSES,
+    GOVERNANCE_ROUND_REQUIRED_FIELDS,
+    GOVERNANCE_ROUND_STATUSES,
     IMPLEMENTATION_DOC_STATES,
     MATURITY_LEVELS,
     MODULE_DOC_SLOTS,
@@ -162,6 +165,7 @@ def validate_state_file(state_path: Path) -> list[Diagnostic]:
     state: dict[str, object] = data
 
     diagnostics.extend(_validate_top_level(state, state_path))
+    diagnostics.extend(_validate_governance_rounds(state.get("governance_rounds"), state_path))
     diagnostics.extend(_validate_modules(state.get("modules"), state_path))
     diagnostics.extend(_validate_subtasks(state.get("subtasks"), state_path))
 
@@ -300,6 +304,196 @@ def _validate_top_level(state: dict[str, object], state_path: Path) -> list[Diag
         )
 
     return diagnostics
+
+
+def _validate_governance_rounds(rounds_obj: object, state_path: Path) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if rounds_obj is None:
+        return diagnostics
+    if not isinstance(rounds_obj, list):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                severity="error",
+                entity_type="system",
+                entity_id="GLOBAL",
+                field_path="governance_rounds",
+                message="governance_rounds must be a list.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref="governance_rounds",
+                        value=type(rounds_obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    for index, item in enumerate(rounds_obj):
+        field_root = f"governance_rounds[{index}]"
+        if not isinstance(item, dict):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                    severity="error",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path=field_root,
+                    message="governance_rounds entry must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=field_root,
+                            value=type(item).__name__,
+                        )
+                    ],
+                )
+            )
+            continue
+
+        for key in GOVERNANCE_ROUND_REQUIRED_FIELDS:
+            if key not in item:
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_GOVERNANCE_ROUND_FIELD",
+                        severity="error",
+                        entity_type="system",
+                        entity_id="GLOBAL",
+                        field_path=f"{field_root}.{key}",
+                        message=f"Missing governance round field: {key}",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{field_root}.{key}",
+                                value=None,
+                            )
+                        ],
+                    )
+                )
+
+        for key in ("round_id", "topic", "scope", "opened_by"):
+            value = item.get(key)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                        severity="error",
+                        entity_type="system",
+                        entity_id="GLOBAL",
+                        field_path=f"{field_root}.{key}",
+                        message=f"{key} must be a non-empty string.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{field_root}.{key}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
+
+        status = item.get("status")
+        if status is not None and status not in GOVERNANCE_ROUND_STATUSES:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_GOVERNANCE_ROUND_ENUM",
+                    severity="error",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path=f"{field_root}.status",
+                    message="governance round status must be one of open|closed.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{field_root}.status",
+                            value=status,
+                        )
+                    ],
+                )
+            )
+
+        opened_at = item.get("opened_at")
+        if opened_at is not None and not _is_iso_datetime(opened_at):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_GOVERNANCE_ROUND_TIME",
+                    severity="error",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path=f"{field_root}.opened_at",
+                    message="opened_at must be ISO-8601 datetime string.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{field_root}.opened_at",
+                            value=opened_at,
+                        )
+                    ],
+                )
+            )
+
+        decision_refs = item.get("decision_refs")
+        if decision_refs is not None:
+            if not isinstance(decision_refs, list):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                        severity="error",
+                        entity_type="system",
+                        entity_id="GLOBAL",
+                        field_path=f"{field_root}.decision_refs",
+                        message="decision_refs must be a list.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{field_root}.decision_refs",
+                                value=type(decision_refs).__name__,
+                            )
+                        ],
+                    )
+                )
+            else:
+                for ref_index, ref in enumerate(decision_refs):
+                    if not isinstance(ref, str) or not ref.strip():
+                        diagnostics.append(
+                            make_diagnostic(
+                                code="SCHEMA_INVALID_GOVERNANCE_ROUND_SHAPE",
+                                severity="error",
+                                entity_type="system",
+                                entity_id="GLOBAL",
+                                field_path=f"{field_root}.decision_refs[{ref_index}]",
+                                message="decision_refs entries must be non-empty strings.",
+                                evidence=[
+                                    make_evidence(
+                                        type="state_check",
+                                        path=state_path.as_posix(),
+                                        ref=f"{field_root}.decision_refs[{ref_index}]",
+                                        value=ref,
+                                    )
+                                ],
+                            )
+                        )
+
+    return diagnostics
+
+
+def _is_iso_datetime(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    normalized = value.replace("Z", "+00:00")
+    try:
+        datetime.fromisoformat(normalized)
+        return True
+    except ValueError:
+        return False
 
 
 def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]:
