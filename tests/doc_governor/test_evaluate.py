@@ -17,10 +17,6 @@ FIXTURES_REPO = Path(__file__).parent / "fixtures" / "repo" / "prose_contaminati
 
 
 def _base_state() -> dict:
-    module_docs = {
-        slot: {"exists": True, "template_like": False}
-        for slot in schema.MODULE_DOC_SLOTS
-    }
     subtask_state = schema.make_default_confirmed_state("subtask")
     subtask_state["implementation_doc_state"] = "active_working_doc"
     return {
@@ -37,8 +33,42 @@ def _base_state() -> dict:
             },
         },
         "oqs": {},
+        "requirements": {},
         "modules": {},
         "subtasks": {},
+    }
+
+
+def _requirement_entry(
+    requirement_id: str,
+    *,
+    module_ids: list[str] | None = None,
+    task_ids: list[str] | None = None,
+) -> dict:
+    compliance = schema.make_default_compliance_state()
+    compliance["naming_ok"] = True
+    compliance["path_ok"] = True
+    compliance["relations_ok"] = True
+    compliance["language_ok"] = True
+    return {
+        "meta": {
+            "path": ".",
+            "scope_kind": "root_requirement_cluster",
+        },
+        "facts": {
+            "module_ids": module_ids or [],
+            "task_ids": task_ids or [],
+            "asset_slots": {
+                "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+            },
+            "compliance": compliance,
+        },
+        "state": {
+            "confirmed": schema.make_default_confirmed_state("requirement"),
+            "tracking": schema.make_default_tracking_state(),
+        },
     }
 
 
@@ -148,6 +178,110 @@ class EvaluateStateTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["oq_gate_counts"]["candidate_gate.review_only"], 1)
         self.assertEqual(payload["summary"]["oq_gate_counts"]["candidate_gate.candidate_blocker"], 1)
         self.assertEqual(payload["summary"]["oq_gate_counts"]["readiness_gate.readiness_blocker"], 1)
+
+    def test_requirement_gate_outputs_pass_result_when_assets_and_compliance_clear(self) -> None:
+        state = _base_state()
+        state["requirements"] = {
+            "RQ01": _requirement_entry(
+                "RQ01",
+                module_ids=["M01"],
+                task_ids=["ST01_01"],
+            )
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+        self.assertEqual(exit_code, 0)
+        requirement_derived = payload["requirements"]["RQ01"]["derived"]
+        self.assertEqual(requirement_derived["current_gate"], "module_decomposition_ready")
+        self.assertEqual(requirement_derived["gate_result"], "pass")
+        self.assertEqual(requirement_derived["blocker_refs"], [])
+        self.assertTrue(requirement_derived["review_required"])
+        self.assertTrue(requirement_derived["ready_for_next_step"])
+        self.assertFalse(requirement_derived["implementation_ready"])
+
+    def test_requirement_gate_blocks_missing_asset_and_language_violation(self) -> None:
+        state = _base_state()
+        state["requirements"] = {
+            "RQ01": _requirement_entry(
+                "RQ01",
+                module_ids=["M01"],
+                task_ids=["ST01_01"],
+            )
+        }
+        requirement = state["requirements"]["RQ01"]
+        requirement["facts"]["asset_slots"]["plan_latest"]["exists"] = False
+        requirement["facts"]["compliance"]["language_ok"] = False
+        requirement["facts"]["compliance"]["violations"] = [
+            "language_non_compliant_missing_zh_cn",
+        ]
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+        self.assertEqual(exit_code, 0)
+        requirement_derived = payload["requirements"]["RQ01"]["derived"]
+        self.assertEqual(requirement_derived["gate_result"], "blocked")
+        self.assertFalse(requirement_derived["ready_for_next_step"])
+        self.assertIn("policy:asset_missing_plan_latest", requirement_derived["blocker_refs"])
+        self.assertIn(
+            "policy:language_non_compliant_missing_zh_cn",
+            requirement_derived["blocker_refs"],
+        )
+
+    def test_module_gate_propagates_requirement_blockers(self) -> None:
+        state = _base_state()
+        state["requirements"] = {
+            "RQ01": _requirement_entry("RQ01", module_ids=["M01"])
+        }
+        state["requirements"]["RQ01"]["facts"]["asset_slots"]["module_index"]["exists"] = False
+        state["modules"] = {"M01": _module_entry("M01")}
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+        self.assertEqual(exit_code, 0)
+        module_derived = payload["modules"]["M01"]["derived"]
+        self.assertEqual(module_derived["current_gate"], "task_design_ready")
+        self.assertEqual(module_derived["gate_result"], "blocked")
+        self.assertIn("policy:asset_missing_module_index", module_derived["blocker_refs"])
+        self.assertFalse(module_derived["ready_for_next_step"])
+
+    def test_task_gate_sets_implementation_ready_only_when_all_conditions_pass(self) -> None:
+        state = _base_state()
+        state["requirements"] = {
+            "RQ01": _requirement_entry(
+                "RQ01",
+                module_ids=["M01"],
+                task_ids=["ST01_01", "ST01_02"],
+            )
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {
+            "ST01_01": _subtask_entry("ST01_01", "M01"),
+            "ST01_02": _subtask_entry("ST01_02", "M01"),
+        }
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = (
+            "active_working_doc"
+        )
+        state["subtasks"]["ST01_02"]["state"]["confirmed"]["implementation_doc_state"] = (
+            "inactive_template"
+        )
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+        self.assertEqual(exit_code, 0)
+        task_ready = payload["subtasks"]["ST01_01"]["derived"]
+        task_blocked = payload["subtasks"]["ST01_02"]["derived"]
+        self.assertEqual(task_ready["current_gate"], "implementation_ready")
+        self.assertEqual(task_ready["gate_result"], "pass")
+        self.assertEqual(task_ready["blocker_refs"], [])
+        self.assertTrue(task_ready["ready_for_next_step"])
+        self.assertTrue(task_ready["implementation_ready"])
+        self.assertEqual(task_blocked["gate_result"], "blocked")
+        self.assertFalse(task_blocked["implementation_ready"])
 
     def test_review_required_truth_table(self) -> None:
         state = _base_state()

@@ -4,12 +4,11 @@ import re
 from pathlib import Path
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
+from .naming_rules import MODULE_DIR_RE, SUBTASK_DIR_RE
+from .requirement_scan import scan_requirements
 from .schema import MODULE_DOC_SLOTS, SUBTASK_DOC_SLOTS
 from .template_detection import detect_template_signals
 
-
-MODULE_DIR_RE = re.compile(r"^(M\d{2})-")
-SUBTASK_DIR_RE = re.compile(r"^(ST\d{2}_\d{2})-")
 MARKDOWN_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|(?:\s*:?-+:?\s*\|)+\s*$")
 
 
@@ -68,6 +67,12 @@ def scan_repo(repo_root: str | Path) -> dict[str, object]:
         table_subtasks=task_scan["subtasks"],
         oqs=oqs,
     )
+    requirement_scan = scan_requirements(
+        repo_root=root,
+        modules=modules,
+        subtasks=subtasks,
+    )
+    diagnostics.extend(requirement_scan["diagnostics"])
 
     template_like_doc_count = 0
     for module in modules.values():
@@ -88,9 +93,11 @@ def scan_repo(repo_root: str | Path) -> dict[str, object]:
         "repo_root": root,
         "diagnostics": diagnostics,
         "oqs": oqs,
+        "requirements": requirement_scan["requirements"],
         "modules": modules,
         "subtasks": subtasks,
         "counts": {
+            "requirement": requirement_scan["counts"]["requirement"],
             "module": len(modules),
             "subtask": len(subtasks),
             "oq": len(oqs),

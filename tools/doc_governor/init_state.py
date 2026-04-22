@@ -4,7 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
-from .schema import OFFICIAL_STATE_PATH, SCHEMA_VERSION, make_default_confirmed_state
+from .schema import (
+    OFFICIAL_STATE_PATH,
+    SCHEMA_VERSION,
+    make_default_compliance_state,
+    make_default_confirmed_state,
+    make_default_tracking_state,
+)
 from .validate import validate_state_file
 
 
@@ -142,19 +148,45 @@ def _build_official_state(bootstrap_state: dict[str, object]) -> dict[str, objec
         "schema_version": schema_version,
         "global_policy": _copy_dict(bootstrap_state.get("global_policy", {})),
         "oqs": _build_official_oqs(bootstrap_state.get("oqs", {})),
+        "requirements": {},
         "modules": {},
         "subtasks": {},
     }
+
+    for requirement_id, requirement in (bootstrap_state.get("requirements") or {}).items():
+        if not isinstance(requirement, dict):
+            continue
+        requirement_meta = (
+            requirement.get("meta") if isinstance(requirement.get("meta"), dict) else {}
+        )
+        requirement_facts = (
+            requirement.get("facts") if isinstance(requirement.get("facts"), dict) else {}
+        )
+        sanitized_requirement_facts = _copy_sanitized_facts(requirement_facts)
+        sanitized_requirement_facts.setdefault("compliance", make_default_compliance_state())
+        official_state["requirements"][requirement_id] = {
+            "meta": _copy_dict(requirement_meta),
+            "facts": sanitized_requirement_facts,
+            "state": {
+                "confirmed": make_default_confirmed_state("requirement"),
+                "tracking": make_default_tracking_state(),
+            },
+        }
 
     for module_id, module in (bootstrap_state.get("modules") or {}).items():
         if not isinstance(module, dict):
             continue
         module_meta = module.get("meta") if isinstance(module.get("meta"), dict) else {}
         module_facts = module.get("facts") if isinstance(module.get("facts"), dict) else {}
+        sanitized_module_facts = _copy_sanitized_facts(module_facts)
+        sanitized_module_facts.setdefault("compliance", make_default_compliance_state())
         official_state["modules"][module_id] = {
             "meta": _copy_dict(module_meta),
-            "facts": _copy_sanitized_facts(module_facts),
-            "state": {"confirmed": make_default_confirmed_state("module")},
+            "facts": sanitized_module_facts,
+            "state": {
+                "confirmed": make_default_confirmed_state("module"),
+                "tracking": make_default_tracking_state(),
+            },
         }
 
     for subtask_id, subtask in (bootstrap_state.get("subtasks") or {}).items():
@@ -162,10 +194,15 @@ def _build_official_state(bootstrap_state: dict[str, object]) -> dict[str, objec
             continue
         subtask_meta = subtask.get("meta") if isinstance(subtask.get("meta"), dict) else {}
         subtask_facts = subtask.get("facts") if isinstance(subtask.get("facts"), dict) else {}
+        sanitized_subtask_facts = _copy_sanitized_facts(subtask_facts)
+        sanitized_subtask_facts.setdefault("compliance", make_default_compliance_state())
         official_state["subtasks"][subtask_id] = {
             "meta": _copy_dict(subtask_meta),
-            "facts": _copy_sanitized_facts(subtask_facts),
-            "state": {"confirmed": make_default_confirmed_state("subtask")},
+            "facts": sanitized_subtask_facts,
+            "state": {
+                "confirmed": make_default_confirmed_state("subtask"),
+                "tracking": make_default_tracking_state(),
+            },
         }
 
     return official_state

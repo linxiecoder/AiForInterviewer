@@ -33,6 +33,7 @@ def _base_confirm_state() -> dict:
             },
         },
         "oqs": {},
+        "requirements": {},
         "modules": {
             "M01": {
                 "meta": {"path": "docs/modules/M01-test/"},
@@ -187,6 +188,7 @@ class ConfirmTransitionTests(unittest.TestCase):
         self.assertEqual(history["applied_state"]["last_confirmed_by"], "alice")
 
     def test_approve_with_round_id_appends_history_round_reference(self) -> None:
+        self._write_round_template("R-2026-04-01")
         exit_code, _payload = self._run_cli(
             "--entity-type",
             "subtask",
@@ -206,7 +208,7 @@ class ConfirmTransitionTests(unittest.TestCase):
             "--actor",
             "alice",
             "--reason",
-            "advance candidate",
+            "Decision: advance candidate",
             "--round-id",
             "R-2026-04-01",
         )
@@ -387,6 +389,124 @@ class ConfirmTransitionTests(unittest.TestCase):
         self.assertIn(
             "CONFIRM_BOOTSTRAP_DEFAULT_OQ_POLICY_BLOCKS_APPROVE",
             [item["code"] for item in payload["diagnostics"]],
+        )
+
+    def test_approve_rejects_when_requirement_asset_blocker_unresolved(self) -> None:
+        state = self._read_state()
+        state["requirements"] = {
+            "RQ01": {
+                "meta": {"path": ".", "scope_kind": "root_requirement_cluster"},
+                "facts": {
+                    "module_ids": ["M01"],
+                    "task_ids": [],
+                    "asset_slots": {
+                        "plan_latest": {"exists": False, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": {
+                        "naming_ok": True,
+                        "path_ok": True,
+                        "relations_ok": True,
+                        "language_ok": True,
+                        "violations": [],
+                    },
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            }
+        }
+        self._write_state(state)
+
+        exit_code, payload = self._run_cli(
+            "--entity-type",
+            "module",
+            "--entity-id",
+            "M01",
+            "--proposed-changes",
+            json.dumps({"review_status": "unreviewed"}),
+            "--mode",
+            "approve",
+            "--actor",
+            "alice",
+            "--reason",
+            "blocked by requirement asset",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "CONFIRM_HARD_GATE_BLOCKERS_PRESENT",
+            {item["code"] for item in payload["diagnostics"]},
+        )
+        self.assertTrue(
+            any(
+                "policy:asset_missing_plan_latest" in json.dumps(item["evidence"], ensure_ascii=False)
+                for item in payload["diagnostics"]
+            )
+        )
+
+    def test_approve_rejects_when_language_policy_blocker_unresolved(self) -> None:
+        state = self._read_state()
+        state["requirements"] = {
+            "RQ01": {
+                "meta": {"path": ".", "scope_kind": "root_requirement_cluster"},
+                "facts": {
+                    "module_ids": ["M01"],
+                    "task_ids": ["ST01_01"],
+                    "asset_slots": {
+                        "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": {
+                        "naming_ok": True,
+                        "path_ok": True,
+                        "relations_ok": True,
+                        "language_ok": False,
+                        "violations": ["language_non_compliant_missing_zh_cn"],
+                    },
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            }
+        }
+        self._write_state(state)
+
+        exit_code, payload = self._run_cli(
+            "--entity-type",
+            "subtask",
+            "--entity-id",
+            "ST01_01",
+            "--proposed-changes",
+            json.dumps(
+                {
+                    "candidate_status": "candidate",
+                    "review_status": "pending_confirmation",
+                }
+            ),
+            "--evidence-ref",
+            "oq:OQ-01",
+            "--mode",
+            "approve",
+            "--actor",
+            "alice",
+            "--reason",
+            "blocked by language policy",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "CONFIRM_HARD_GATE_BLOCKERS_PRESENT",
+            {item["code"] for item in payload["diagnostics"]},
+        )
+        self.assertTrue(
+            any(
+                "policy:language_non_compliant_missing_zh_cn"
+                in json.dumps(item["evidence"], ensure_ascii=False)
+                for item in payload["diagnostics"]
+            )
         )
 
     def test_reject_input_validation_output(self) -> None:

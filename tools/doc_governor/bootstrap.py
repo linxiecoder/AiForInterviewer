@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,9 @@ from .schema import (
     GLOBAL_POLICY_DEFAULTS,
     OFFICIAL_STATE_PATH,
     SCHEMA_VERSION,
+    make_default_compliance_state,
     make_default_confirmed_state,
+    make_default_tracking_state,
 )
 
 
@@ -26,29 +29,53 @@ def build_bootstrap_state(scan_result: dict[str, object]) -> tuple[dict[str, obj
 
     state: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
-        "global_policy": GLOBAL_POLICY_DEFAULTS,
+        "global_policy": copy.deepcopy(GLOBAL_POLICY_DEFAULTS),
         "oqs": oqs,
+        "requirements": {},
         "modules": {},
         "subtasks": {},
     }
 
+    for requirement_id, requirement in scan_result.get("requirements", {}).items():
+        requirement_meta = requirement.get("meta", {})
+        requirement_facts = dict(requirement.get("facts", {}))
+        requirement_facts.setdefault("compliance", make_default_compliance_state())
+        state["requirements"][requirement_id] = {
+            "meta": dict(requirement_meta),
+            "facts": requirement_facts,
+            "state": {
+                "confirmed": make_default_confirmed_state("requirement"),
+                "tracking": make_default_tracking_state(),
+            },
+        }
+
     for module_id, module in scan_result["modules"].items():
+        module_facts = dict(module["facts"])
+        module_facts.setdefault("compliance", make_default_compliance_state())
         state["modules"][module_id] = {
             "meta": {"path": module["meta"]["path"]},
-            "facts": module["facts"],
-            "state": {"confirmed": make_default_confirmed_state("module")},
+            "facts": module_facts,
+            "state": {
+                "confirmed": make_default_confirmed_state("module"),
+                "tracking": make_default_tracking_state(),
+            },
         }
 
     ambiguous_subtasks: list[str] = []
     for subtask_id, subtask in scan_result["subtasks"].items():
         confirmed_state = make_default_confirmed_state("subtask")
-        implementation_doc = subtask["facts"]["implementation_doc"]
+        subtask_facts = dict(subtask["facts"])
+        subtask_facts.setdefault("compliance", make_default_compliance_state())
+        implementation_doc = subtask_facts["implementation_doc"]
         if implementation_doc["exists"] and implementation_doc["template_like"]:
             confirmed_state["implementation_doc_state"] = "inactive_template"
         state["subtasks"][subtask_id] = {
             "meta": subtask["meta"],
-            "facts": subtask["facts"],
-            "state": {"confirmed": confirmed_state},
+            "facts": subtask_facts,
+            "state": {
+                "confirmed": confirmed_state,
+                "tracking": make_default_tracking_state(),
+            },
         }
         if implementation_doc["exists"] and not implementation_doc["template_like"]:
             ambiguous_subtasks.append(subtask_id)

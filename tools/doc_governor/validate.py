@@ -5,6 +5,15 @@ from datetime import datetime
 from pathlib import Path
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
+from .naming_rules import (
+    MODULE_ID_RE,
+    REQUIREMENT_ID_RE,
+    REQUIREMENT_SCOPE_KINDS,
+    SUBTASK_ID_RE,
+    extract_module_id_from_path,
+    extract_subtask_id_from_path,
+    is_valid_requirement_path,
+)
 from .rules import evaluate_rules
 from .schema import (
     CANDIDATE_STATUSES,
@@ -68,11 +77,6 @@ REQUIRED_CONFIRMED_FIELDS = (
 )
 
 SUBTASK_CONFIRMED_REQUIRED_FIELDS = ("implementation_doc_state",) + REQUIRED_CONFIRMED_FIELDS
-
-MODULE_ID_RE = re.compile(r"^M\d{2}$")
-SUBTASK_ID_RE = re.compile(r"^ST\d{2}_\d{2}$")
-PATH_MODULE_TOKEN_RE = re.compile(r"^(M\d{2})(?:-|$|/)")
-PATH_SUBTASK_TOKEN_RE = re.compile(r"^(ST\d{2}_\d{2})(?:-|$|/)")
 
 
 def validate_state_file(state_path: Path) -> list[Diagnostic]:
@@ -166,6 +170,7 @@ def validate_state_file(state_path: Path) -> list[Diagnostic]:
 
     diagnostics.extend(_validate_top_level(state, state_path))
     diagnostics.extend(_validate_governance_rounds(state.get("governance_rounds"), state_path))
+    diagnostics.extend(_validate_requirements(state.get("requirements"), state_path))
     diagnostics.extend(_validate_modules(state.get("modules"), state_path))
     diagnostics.extend(_validate_subtasks(state.get("subtasks"), state_path))
 
@@ -302,6 +307,52 @@ def _validate_top_level(state: dict[str, object], state_path: Path) -> list[Diag
                 ],
             )
         )
+
+    asset_policy = global_policy.get("asset_policy")
+    if asset_policy is not None:
+        if not isinstance(asset_policy, dict):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="global_policy",
+                    entity_id="GLOBAL",
+                    field_path="global_policy.asset_policy",
+                    message="global_policy.asset_policy must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref="global_policy.asset_policy",
+                            value=type(asset_policy).__name__,
+                        )
+                    ],
+                )
+            )
+        else:
+            requirement_mode = asset_policy.get("requirement_mode")
+            if requirement_mode is not None and (
+                not isinstance(requirement_mode, str)
+                or requirement_mode not in REQUIREMENT_SCOPE_KINDS
+            ):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                        severity="error",
+                        entity_type="global_policy",
+                        entity_id="GLOBAL",
+                        field_path="global_policy.asset_policy.requirement_mode",
+                        message="Unknown requirement_mode value.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref="global_policy.asset_policy.requirement_mode",
+                                value=requirement_mode,
+                            )
+                        ],
+                    )
+                )
 
     return diagnostics
 
@@ -496,6 +547,140 @@ def _is_iso_datetime(value: object) -> bool:
         return False
 
 
+def _validate_requirements(requirements_obj: object, state_path: Path) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if requirements_obj is None:
+        return diagnostics
+    if not isinstance(requirements_obj, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="system",
+                entity_id="GLOBAL",
+                field_path="requirements",
+                message="requirements must be a mapping.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref="requirements",
+                        value=type(requirements_obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    requirements: dict[str, object] = requirements_obj
+    for requirement_id, requirement_obj in requirements.items():
+        if not REQUIREMENT_ID_RE.fullmatch(str(requirement_id)):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type="system",
+                    entity_id=str(requirement_id),
+                    field_path=f"requirements.{requirement_id}",
+                    message="Invalid requirement id format.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref="requirement_id",
+                            value=requirement_id,
+                        )
+                    ],
+                )
+            )
+            continue
+
+        if not isinstance(requirement_obj, dict):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="requirement",
+                    entity_id=requirement_id,
+                    field_path=f"requirements.{requirement_id}",
+                    message="requirement entry must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"requirements.{requirement_id}",
+                            value=type(requirement_obj).__name__,
+                        )
+                    ],
+                )
+            )
+            continue
+
+        requirement: dict[str, object] = requirement_obj
+        path = _validate_meta_path(
+            entity_type="requirement",
+            entity_id=requirement_id,
+            obj=requirement.get("meta"),
+            diagnostics=diagnostics,
+            state_path=state_path,
+        )
+        scope_kind = _validate_requirement_scope_kind(
+            requirement_id=requirement_id,
+            obj=requirement.get("meta"),
+            diagnostics=diagnostics,
+            state_path=state_path,
+        )
+        diagnostics.extend(
+            _validate_requirement_facts(
+                requirement_id=requirement_id,
+                obj=requirement.get("facts"),
+                state_path=state_path,
+            )
+        )
+        diagnostics.extend(
+            _validate_confirmed_state(
+                entity_type="requirement",
+                entity_id=requirement_id,
+                state_obj=requirement.get("state"),
+                required_fields=REQUIRED_CONFIRMED_FIELDS,
+                state_path=state_path,
+            )
+        )
+        diagnostics.extend(
+            _validate_tracking_state(
+                entity_type="requirement",
+                entity_id=requirement_id,
+                state_obj=requirement.get("state"),
+                state_path=state_path,
+                required=True,
+            )
+        )
+
+        if path is not None and scope_kind is not None and not is_valid_requirement_path(
+            requirement_id=requirement_id,
+            path=path,
+            scope_kind=scope_kind,
+        ):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_PATH_ID_MISMATCH",
+                    severity="error",
+                    entity_type="requirement",
+                    entity_id=requirement_id,
+                    field_path=f"requirements.{requirement_id}.meta.path",
+                    message="requirement_id and path/scope_kind mismatch.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref="meta.path",
+                            value=path,
+                        )
+                    ],
+                )
+            )
+
+    return diagnostics
 def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(modules_obj, dict):
@@ -582,6 +767,15 @@ def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]
             )
         )
         diagnostics.extend(
+            _validate_compliance(
+                entity_type="module",
+                entity_id=module_id,
+                facts_obj=module.get("facts"),
+                state_path=state_path,
+                required=False,
+            )
+        )
+        diagnostics.extend(
             _validate_confirmed_state(
                 entity_type="module",
                 entity_id=module_id,
@@ -590,9 +784,18 @@ def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]
                 state_path=state_path,
             )
         )
+        diagnostics.extend(
+            _validate_tracking_state(
+                entity_type="module",
+                entity_id=module_id,
+                state_obj=module.get("state"),
+                state_path=state_path,
+                required=False,
+            )
+        )
 
-        if _extract_id_from_module_path(path) is not None:
-            expected_id = _extract_id_from_module_path(path)
+        if extract_module_id_from_path(path) is not None:
+            expected_id = extract_module_id_from_path(path)
             if expected_id != module_id:
                 diagnostics.append(
                     make_diagnostic(
@@ -702,6 +905,15 @@ def _validate_subtasks(subtasks_obj: object, state_path: Path) -> list[Diagnosti
             )
         )
         diagnostics.extend(
+            _validate_compliance(
+                entity_type="subtask",
+                entity_id=subtask_id,
+                facts_obj=subtask.get("facts"),
+                state_path=state_path,
+                required=False,
+            )
+        )
+        diagnostics.extend(
             _validate_confirmed_state(
                 entity_type="subtask",
                 entity_id=subtask_id,
@@ -710,9 +922,18 @@ def _validate_subtasks(subtasks_obj: object, state_path: Path) -> list[Diagnosti
                 state_path=state_path,
             )
         )
+        diagnostics.extend(
+            _validate_tracking_state(
+                entity_type="subtask",
+                entity_id=subtask_id,
+                state_obj=subtask.get("state"),
+                state_path=state_path,
+                required=False,
+            )
+        )
 
-        if _extract_id_from_subtask_path(path) is not None:
-            expected_id = _extract_id_from_subtask_path(path)
+        if extract_subtask_id_from_path(path) is not None:
+            expected_id = extract_subtask_id_from_path(path)
             if expected_id != subtask_id:
                 diagnostics.append(
                     make_diagnostic(
@@ -809,6 +1030,151 @@ def _validate_meta_path(
         return None
 
     return path
+
+
+def _validate_requirement_scope_kind(
+    *,
+    requirement_id: str,
+    obj: object,
+    diagnostics: list[Diagnostic],
+    state_path: Path,
+) -> str | None:
+    if not isinstance(obj, dict):
+        return None
+
+    scope_kind = obj.get("scope_kind")
+    if not isinstance(scope_kind, str):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="requirement",
+                entity_id=requirement_id,
+                field_path=f"requirements.{requirement_id}.meta.scope_kind",
+                message="meta.scope_kind must be a string.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"requirements.{requirement_id}.meta.scope_kind",
+                        value=type(scope_kind).__name__,
+                    )
+                ],
+            )
+        )
+        return None
+
+    if scope_kind not in REQUIREMENT_SCOPE_KINDS:
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                severity="error",
+                entity_type="requirement",
+                entity_id=requirement_id,
+                field_path=f"requirements.{requirement_id}.meta.scope_kind",
+                message="Unknown requirement scope_kind value.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"requirements.{requirement_id}.meta.scope_kind",
+                        value=scope_kind,
+                    )
+                ],
+            )
+        )
+        return None
+
+    return scope_kind
+
+
+def _validate_requirement_facts(
+    *,
+    requirement_id: str,
+    obj: object,
+    state_path: Path,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(obj, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="requirement",
+                entity_id=requirement_id,
+                field_path=f"requirements.{requirement_id}.facts",
+                message="facts must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"requirements.{requirement_id}.facts",
+                        value=type(obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    facts: dict[str, object] = obj
+    for field in ("module_ids", "task_ids", "asset_slots", "compliance"):
+        if field not in facts:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="requirement",
+                    entity_id=requirement_id,
+                    field_path=f"requirements.{requirement_id}.facts.{field}",
+                    message=f"Missing required facts field: {field}",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"requirements.{requirement_id}.facts.{field}",
+                            value=None,
+                        )
+                    ],
+                )
+            )
+
+    diagnostics.extend(
+        _validate_id_list(
+            entity_type="requirement",
+            entity_id=requirement_id,
+            field_name="module_ids",
+            values=facts.get("module_ids"),
+            state_path=state_path,
+            regex=MODULE_ID_RE,
+        )
+    )
+    diagnostics.extend(
+        _validate_id_list(
+            entity_type="requirement",
+            entity_id=requirement_id,
+            field_name="task_ids",
+            values=facts.get("task_ids"),
+            state_path=state_path,
+            regex=SUBTASK_ID_RE,
+        )
+    )
+    diagnostics.extend(
+        _validate_requirement_asset_slots(
+            requirement_id=requirement_id,
+            asset_slots_obj=facts.get("asset_slots"),
+            state_path=state_path,
+        )
+    )
+    diagnostics.extend(
+        _validate_compliance(
+            entity_type="requirement",
+            entity_id=requirement_id,
+            facts_obj=facts,
+            state_path=state_path,
+            required=True,
+        )
+    )
+    return diagnostics
 
 
 def _validate_facts(
@@ -1051,6 +1417,399 @@ def _validate_facts(
     return diagnostics
 
 
+def _validate_id_list(
+    *,
+    entity_type: str,
+    entity_id: str,
+    field_name: str,
+    values: object,
+    state_path: Path,
+    regex: re.Pattern[str],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(values, list):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_path=f"{entity_type}s.{entity_id}.facts.{field_name}",
+                message=f"{field_name} must be a list.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.facts.{field_name}",
+                        value=type(values).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    for index, value in enumerate(values):
+        if not isinstance(value, str) or not regex.fullmatch(value):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.facts.{field_name}[{index}]",
+                    message=f"Invalid id in {field_name}: {value}",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.facts.{field_name}",
+                            value=value,
+                        )
+                    ],
+                )
+            )
+    return diagnostics
+
+
+def _validate_requirement_asset_slots(
+    *,
+    requirement_id: str,
+    asset_slots_obj: object,
+    state_path: Path,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(asset_slots_obj, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_MISSING_REQUIRED_FIELD",
+                severity="error",
+                entity_type="requirement",
+                entity_id=requirement_id,
+                field_path=f"requirements.{requirement_id}.facts.asset_slots",
+                message="asset_slots must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"requirements.{requirement_id}.facts.asset_slots",
+                        value=type(asset_slots_obj).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    for slot_name in ("plan_latest", "module_index", "task_index"):
+        slot_value = asset_slots_obj.get(slot_name)
+        if not isinstance(slot_value, dict):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="requirement",
+                    entity_id=requirement_id,
+                    field_path=f"requirements.{requirement_id}.facts.asset_slots.{slot_name}",
+                    message=f"Missing asset slot fact for {slot_name}",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"requirements.{requirement_id}.facts.asset_slots.{slot_name}",
+                            value=type(slot_value).__name__,
+                        )
+                    ],
+                )
+            )
+            continue
+
+        if not isinstance(slot_value.get("exists"), bool):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="requirement",
+                    entity_id=requirement_id,
+                    field_path=(
+                        f"requirements.{requirement_id}.facts.asset_slots.{slot_name}.exists"
+                    ),
+                    message=f"asset_slots.{slot_name}.exists must be boolean.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=(
+                                f"requirements.{requirement_id}.facts.asset_slots.{slot_name}.exists"
+                            ),
+                            value=slot_value.get("exists"),
+                        )
+                    ],
+                )
+            )
+        if not isinstance(slot_value.get("path"), str) or not str(slot_value.get("path")).strip():
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type="requirement",
+                    entity_id=requirement_id,
+                    field_path=f"requirements.{requirement_id}.facts.asset_slots.{slot_name}.path",
+                    message=f"asset_slots.{slot_name}.path must be a non-empty string.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=(
+                                f"requirements.{requirement_id}.facts.asset_slots.{slot_name}.path"
+                            ),
+                            value=slot_value.get("path"),
+                        )
+                    ],
+                )
+            )
+
+    return diagnostics
+
+
+def _validate_tracking_state(
+    *,
+    entity_type: str,
+    entity_id: str,
+    state_obj: object,
+    state_path: Path,
+    required: bool,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(state_obj, dict):
+        return diagnostics
+
+    tracking = state_obj.get("tracking")
+    if tracking is None:
+        if required:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.tracking",
+                    message="state.tracking must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.tracking",
+                            value=None,
+                        )
+                    ],
+                )
+            )
+        return diagnostics
+
+    if not isinstance(tracking, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_INVALID_TRACKING_FIELD",
+                severity="error",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_path=f"{entity_type}s.{entity_id}.state.tracking",
+                message="state.tracking must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.state.tracking",
+                        value=type(tracking).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    for key in ("active_round_id", "last_round_id"):
+        value = tracking.get(key)
+        if key not in tracking and required:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_TRACKING_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.tracking.{key}",
+                    message=f"tracking.{key} is required.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.tracking.{key}",
+                            value=None,
+                        )
+                    ],
+                )
+            )
+            continue
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_TRACKING_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.tracking.{key}",
+                    message=f"tracking.{key} must be null or non-empty string.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.tracking.{key}",
+                            value=value,
+                        )
+                    ],
+                )
+            )
+    return diagnostics
+
+
+def _validate_compliance(
+    *,
+    entity_type: str,
+    entity_id: str,
+    facts_obj: object,
+    state_path: Path,
+    required: bool,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(facts_obj, dict):
+        return diagnostics
+
+    compliance = facts_obj.get("compliance")
+    if compliance is None:
+        if required:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.facts.compliance",
+                    message="facts.compliance must be an object.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.facts.compliance",
+                            value=None,
+                        )
+                    ],
+                )
+            )
+        return diagnostics
+
+    if not isinstance(compliance, dict):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_INVALID_COMPLIANCE_FIELD",
+                severity="error",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_path=f"{entity_type}s.{entity_id}.facts.compliance",
+                message="facts.compliance must be an object.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.facts.compliance",
+                        value=type(compliance).__name__,
+                    )
+                ],
+            )
+        )
+        return diagnostics
+
+    for key in ("naming_ok", "path_ok", "relations_ok", "language_ok"):
+        value = compliance.get(key)
+        if key not in compliance and required:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_COMPLIANCE_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.facts.compliance.{key}",
+                    message=f"compliance.{key} is required.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.facts.compliance.{key}",
+                            value=None,
+                        )
+                    ],
+                )
+            )
+            continue
+        if value is not None and not isinstance(value, bool):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_COMPLIANCE_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.facts.compliance.{key}",
+                    message=f"compliance.{key} must be null or boolean.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.facts.compliance.{key}",
+                            value=value,
+                        )
+                    ],
+                )
+            )
+
+    violations = compliance.get("violations")
+    if not isinstance(violations, list):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_INVALID_COMPLIANCE_FIELD",
+                severity="error",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_path=f"{entity_type}s.{entity_id}.facts.compliance.violations",
+                message="compliance.violations must be a list.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.facts.compliance.violations",
+                        value=type(violations).__name__,
+                    )
+                ],
+            )
+        )
+    elif any(not isinstance(item, str) for item in violations):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_INVALID_COMPLIANCE_FIELD",
+                severity="error",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_path=f"{entity_type}s.{entity_id}.facts.compliance.violations",
+                message="compliance.violations entries must be strings.",
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.facts.compliance.violations",
+                        value=violations,
+                    )
+                ],
+            )
+        )
+    return diagnostics
+
+
 def _validate_doc_flags(
     *,
     entity_type: str,
@@ -1288,25 +2047,3 @@ def _validate_confirmed_state(
                 )
 
     return diagnostics
-
-
-def _extract_id_from_module_path(path: str | None) -> str | None:
-    if path is None:
-        return None
-    normalized = path.strip().strip("/").replace("\\", "/")
-    for part in normalized.split("/"):
-        match = PATH_MODULE_TOKEN_RE.match(part)
-        if match:
-            return match.group(1)
-    return None
-
-
-def _extract_id_from_subtask_path(path: str | None) -> str | None:
-    if path is None:
-        return None
-    normalized = path.strip().strip("/").replace("\\", "/")
-    for part in normalized.split("/"):
-        match = PATH_SUBTASK_TOKEN_RE.match(part)
-        if match:
-            return match.group(1)
-    return None
