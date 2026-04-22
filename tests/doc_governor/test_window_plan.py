@@ -105,13 +105,13 @@ class PlanOpenWindowTests(unittest.TestCase):
         content = "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in lines)
         self.history_path.write_text(content, encoding="utf-8")
 
-    def _run_cli(self, *args: str) -> tuple[int, dict]:
+    def _run_cli(self, command: str, *args: str) -> tuple[int, dict]:
         original = Path.cwd()
         os.chdir(self.temp_root)
         try:
             output = io.StringIO()
             with redirect_stdout(output):
-                exit_code = main(["plan-open-window", *args])
+                exit_code = main([command, *args])
             payload = json.loads(output.getvalue())
             return exit_code, payload
         finally:
@@ -121,7 +121,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         return {f"{entity[entity_type_key]}::{entity[entity_id_key]}" for entity in entities}
 
     def test_missing_official_state_fails(self) -> None:
-        exit_code, payload = self._run_cli("--state", str(self.state_path))
+        exit_code, payload = self._run_cli("plan-open-window", "--state", str(self.state_path))
         self.assertEqual(exit_code, 1)
         self.assertFalse(payload["ok"])
         self.assertIn(
@@ -131,7 +131,7 @@ class PlanOpenWindowTests(unittest.TestCase):
 
     def test_empty_state_ok_with_empty_plan(self) -> None:
         self._write_state(_default_state())
-        exit_code, payload = self._run_cli("--state", str(self.state_path))
+        exit_code, payload = self._run_cli("plan-open-window", "--state", str(self.state_path))
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["eligible_to_apply"], [])
@@ -148,7 +148,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         state["subtasks"]["ST01_01"] = _subtask_entry("ST01_01", "M01", readiness="blocked")
         self._write_state(state)
 
-        exit_code, payload = self._run_cli("--state", str(self.state_path))
+        exit_code, payload = self._run_cli("plan-open-window", "--state", str(self.state_path))
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(len(payload["eligible_to_apply"]), 2)
@@ -203,6 +203,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         evaluate_path = self._write_evaluate_json(evaluate_payload)
 
         exit_code, payload = self._run_cli(
+            "plan-open-window",
             "--state",
             str(self.state_path),
             "--evaluate-json",
@@ -248,6 +249,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         evaluate_path = self._write_evaluate_json(evaluate_payload)
 
         exit_code, payload = self._run_cli(
+            "plan-open-window",
             "--state", str(self.state_path), "--evaluate-json", str(evaluate_path)
         )
         self.assertEqual(exit_code, 0)
@@ -264,7 +266,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         if self.history_path.exists():
             self.history_path.unlink()
 
-        exit_code, payload_missing = self._run_cli("--state", str(self.state_path))
+        exit_code, payload_missing = self._run_cli("plan-open-window", "--state", str(self.state_path))
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload_missing["ok"])
         self.assertEqual(payload_missing["summary"]["eligible_to_apply_count"], 1)
@@ -272,7 +274,13 @@ class PlanOpenWindowTests(unittest.TestCase):
         self.assertEqual(payload_missing["summary"]["near_open_but_blocked_count"], 0)
 
         self._write_history([])
-        exit_code, payload_with_history = self._run_cli("--state", str(self.state_path), "--history", str(self.history_path))
+        exit_code, payload_with_history = self._run_cli(
+            "plan-open-window",
+            "--state",
+            str(self.state_path),
+            "--history",
+            str(self.history_path),
+        )
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload_with_history["summary"]["eligible_to_apply_count"], 1)
         self.assertEqual(payload_with_history["summary"]["hard_blocked_count"], 0)
@@ -300,7 +308,13 @@ class PlanOpenWindowTests(unittest.TestCase):
         before_bootstrap = self.bootstrap_path.read_bytes()
         before_history = self.history_path.read_bytes()
 
-        exit_code, _ = self._run_cli("--state", str(self.state_path), "--history", str(self.history_path))
+        exit_code, _ = self._run_cli(
+            "plan-open-window",
+            "--state",
+            str(self.state_path),
+            "--history",
+            str(self.history_path),
+        )
         self.assertEqual(exit_code, 0)
         self.assertEqual(before_state, self.state_path.read_bytes())
         self.assertEqual(before_bootstrap, self.bootstrap_path.read_bytes())
@@ -312,7 +326,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         state["modules"]["M02"] = _module_entry("M02")
         self._write_state(state)
 
-        exit_code, payload = self._run_cli("--state", str(self.state_path))
+        exit_code, payload = self._run_cli("plan-open-window", "--state", str(self.state_path))
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["would_change_by_entity"])
         expected_keys = {
@@ -346,7 +360,7 @@ class PlanOpenWindowTests(unittest.TestCase):
         state["modules"]["M01"]["facts"]["related_oq_ids"] = ["OQ-01"]
         self._write_state(state)
 
-        exit_code, payload = self._run_cli("--state", str(self.state_path))
+        exit_code, payload = self._run_cli("plan-open-window", "--state", str(self.state_path))
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["ok"])
 
@@ -421,6 +435,112 @@ class PlanOpenWindowTests(unittest.TestCase):
                 for reason in payload["hard_blocked"][0]["blockers"]
             )
         )
+
+    def test_plan_round_queue_order_by_blocker_and_reject(self) -> None:
+        state = _default_state()
+        state["modules"]["M01"] = _module_entry("M01")
+        state["modules"]["M02"] = _module_entry("M02")
+        state["subtasks"]["ST01_01"] = _subtask_entry("ST01_01", "M01", readiness="blocked")
+        self._write_state(state)
+        self._write_history(
+            [
+                {"transition_id": "1", "timestamp": "2026-01-01T00:00:00Z", "entity_type": "subtask", "entity_id": "ST01_01", "result": "rejected", "actor": "a"},
+                {"transition_id": "2", "timestamp": "2026-01-02T00:00:00Z", "entity_type": "subtask", "entity_id": "ST01_01", "result": "rejected", "actor": "a"},
+            ]
+        )
+        evaluate_payload = {
+            "summary": {},
+            "modules": {
+                "M01": {"derived": {"candidate_blocker_refs": [], "downstream_blocker_refs": [], "implementation_blocker_refs": [], "oq_review_only_refs": [], "review_reasons": []}},
+                "M02": {"derived": {"candidate_blocker_refs": [], "downstream_blocker_refs": [], "implementation_blocker_refs": [], "oq_review_only_refs": [], "review_reasons": ["oq_review_only"]}},
+            },
+            "subtasks": {
+                "ST01_01": {"derived": {"candidate_blocker_refs": ["module:M00", "gate:x"], "downstream_blocker_refs": [], "implementation_blocker_refs": [], "oq_review_only_refs": [], "review_reasons": []}},
+            },
+            "oqs": {},
+        }
+        evaluate_path = self._write_evaluate_json(evaluate_payload)
+
+        exit_code, payload = self._run_cli(
+            "plan-round",
+            "--state",
+            str(self.state_path),
+            "--history",
+            str(self.history_path),
+            "--evaluate-json",
+            str(evaluate_path),
+            "--round-id",
+            "round-test",
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["round_id"], "round-test")
+        self.assertEqual(payload["queues"]["can_approve_now"][0]["recommended_action"], "approve")
+        self.assertEqual(payload["queues"]["must_review"][0]["recommended_action"], "defer")
+        self.assertEqual(payload["queues"]["blocked_hard"][0]["recommended_action"], "reject")
+        self.assertEqual(payload["queues"]["blocked_hard"][0]["entity_id"], "ST01_01")
+
+    def test_apply_round_batch_consistency(self) -> None:
+        state = _default_state()
+        state["modules"]["M01"] = _module_entry("M01")
+        state["modules"]["M02"] = _module_entry("M02")
+        self._write_state(state)
+
+        plan_payload = {
+            "round_id": "round-apply-1",
+            "queues": {
+                "can_approve_now": [
+                    {
+                        "entity_type": "module",
+                        "entity_id": "M01",
+                        "recommended_action": "approve",
+                        "proposed_changes": {},
+                        "evidence_refs": [],
+                    }
+                ],
+                "blocked_hard": [
+                    {
+                        "entity_type": "module",
+                        "entity_id": "M02",
+                        "recommended_action": "reject",
+                        "proposed_changes": {},
+                        "evidence_refs": [],
+                    }
+                ],
+                "must_review": [
+                    {
+                        "entity_type": "module",
+                        "entity_id": "M03",
+                        "recommended_action": "defer",
+                    }
+                ],
+            },
+        }
+        plan_path = self.temp_root / "round-plan.json"
+        plan_path.write_text(json.dumps(plan_payload, ensure_ascii=False), encoding="utf-8")
+
+        exit_code, payload = self._run_cli(
+            "apply-round",
+            "--round-id",
+            "round-apply-1",
+            "--from-plan",
+            str(plan_path),
+            "--state",
+            str(self.state_path),
+            "--actor",
+            "tester",
+            "--reason",
+            "batch apply",
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["summary"]["total"], 3)
+        self.assertEqual(payload["summary"]["applied"], 2)
+        self.assertEqual(payload["summary"]["skipped"], 1)
+        self.assertEqual(payload["summary"]["failed"], 0)
+
+        lines = [line for line in self.history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(lines), 2)
 
 
 if __name__ == "__main__":
