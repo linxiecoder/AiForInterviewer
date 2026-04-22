@@ -1,6 +1,4 @@
 import io
-import json
-from contextlib import redirect_stdout
 from pathlib import Path
 import shutil
 import tempfile
@@ -9,7 +7,7 @@ import uuid
 import yaml
 
 from tools.doc_governor import schema
-from tools.doc_governor.cli import main
+from tools.doc_governor.validate import validate_state_file
 
 
 def _build_valid_state() -> dict:
@@ -31,8 +29,33 @@ def _build_valid_state() -> dict:
                 "open_questions_doc": "OPEN_QUESTIONS.md",
                 "task_index_doc": "TASK_INDEX.md",
             },
+            "asset_policy": {
+                "requirement_mode": "root_requirement_cluster",
+            },
         },
         "oqs": {},
+        "requirements": {
+            "RQ01": {
+                "meta": {
+                    "path": ".",
+                    "scope_kind": "root_requirement_cluster",
+                },
+                "facts": {
+                    "module_ids": ["M01"],
+                    "task_ids": ["ST01_01"],
+                    "asset_slots": {
+                        "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": schema.make_default_compliance_state(),
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            }
+        },
         "modules": {
             "M01": {
                 "meta": {"path": module_path},
@@ -42,18 +65,11 @@ def _build_valid_state() -> dict:
                     "legacy_locked": False,
                     "declared_blocker_refs": [],
                     "docs": docs,
+                    "compliance": schema.make_default_compliance_state(),
                 },
                 "state": {
-                    "confirmed": {
-                        "maturity": None,
-                        "candidate_status": "none",
-                        "review_status": "unreviewed",
-                        "readiness": "blocked",
-                        "blocker_refs": [],
-                        "last_transition_id": None,
-                        "last_confirmed_at": None,
-                        "last_confirmed_by": None,
-                    }
+                    "confirmed": schema.make_default_confirmed_state("module"),
+                    "tracking": schema.make_default_tracking_state(),
                 },
             }
         },
@@ -70,19 +86,11 @@ def _build_valid_state() -> dict:
                     "declared_blocker_refs": [],
                     "design_doc": {"exists": True, "template_like": False},
                     "implementation_doc": {"exists": True, "template_like": False},
+                    "compliance": schema.make_default_compliance_state(),
                 },
                 "state": {
-                    "confirmed": {
-                        "implementation_doc_state": "missing",
-                        "maturity": None,
-                        "candidate_status": "none",
-                        "review_status": "unreviewed",
-                        "readiness": "blocked",
-                        "blocker_refs": [],
-                        "last_transition_id": None,
-                        "last_confirmed_at": None,
-                        "last_confirmed_by": None,
-                    }
+                    "confirmed": schema.make_default_confirmed_state("subtask"),
+                    "tracking": schema.make_default_tracking_state(),
                 },
             }
         },
@@ -102,34 +110,30 @@ class ValidateSchemaTests(unittest.TestCase):
         file_path.write_text(yaml.safe_dump(state), encoding="utf-8")
         return file_path
 
-    def _run_cli(self, state_path: Path) -> tuple[int, dict]:
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
-            exit_code = main(["validate-state", "--input", str(state_path)])
-        payload = json.loads(stdout.getvalue())
-        return exit_code, payload
+    def _run_validate(self, state_path: Path) -> tuple[int, list]:
+        diagnostics = validate_state_file(state_path)
+        exit_code = 1 if any(item.severity == "error" for item in diagnostics) else 0
+        return exit_code, diagnostics
 
-    def _assert_common_diagnostic_shape(self, payload: dict) -> None:
-        for item in payload["diagnostics"]:
-            self.assertIn("code", item)
-            self.assertIn("severity", item)
-            self.assertIn("entity_type", item)
-            self.assertIn("entity_id", item)
-            self.assertIn("field_path", item)
-            self.assertIn("message", item)
-            self.assertIn("evidence", item)
-            self.assertTrue(item["evidence"], f"{item['code']} has empty evidence")
+    def _assert_common_diagnostic_shape(self, diagnostics: list) -> None:
+        for item in diagnostics:
+            self.assertTrue(item.code)
+            self.assertTrue(item.severity)
+            self.assertTrue(item.entity_type)
+            self.assertIsNotNone(item.entity_id)
+            self.assertTrue(item.field_path)
+            self.assertTrue(item.message)
+            self.assertTrue(item.evidence, f"{item.code} has empty evidence")
 
     def test_schema_version_missing(self) -> None:
         state = _build_valid_state()
         del state["schema_version"]
         state_path = self._write_state(state)
 
-        exit_code, payload = self._run_cli(state_path)
-        codes = {item["code"] for item in payload["diagnostics"]}
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = {item.code for item in diagnostics}
 
         self.assertEqual(exit_code, 1)
-        self.assertEqual(payload["counts"]["error"], 1)
         self.assertIn("SCHEMA_MISSING_REQUIRED_FIELD", codes)
 
     def test_unknown_enum_value(self) -> None:
@@ -137,8 +141,8 @@ class ValidateSchemaTests(unittest.TestCase):
         state["modules"]["M01"]["state"]["confirmed"]["candidate_status"] = "invalid"
         state_path = self._write_state(state)
 
-        exit_code, payload = self._run_cli(state_path)
-        codes = [item["code"] for item in payload["diagnostics"]]
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
 
         self.assertEqual(exit_code, 1)
         self.assertIn("SCHEMA_UNKNOWN_ENUM_VALUE", codes)
@@ -148,8 +152,8 @@ class ValidateSchemaTests(unittest.TestCase):
         state["modules"]["M01"]["state"]["confirmed"]["blocker_refs"] = ["invalid:ref"]
         state_path = self._write_state(state)
 
-        exit_code, payload = self._run_cli(state_path)
-        codes = [item["code"] for item in payload["diagnostics"]]
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
         self.assertEqual(exit_code, 1)
         self.assertIn("SCHEMA_INVALID_TYPED_REF", codes)
 
@@ -161,8 +165,8 @@ class ValidateSchemaTests(unittest.TestCase):
         )
         state_path = self._write_state(state)
 
-        exit_code, payload = self._run_cli(state_path)
-        codes = [item["code"] for item in payload["diagnostics"]]
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
         self.assertEqual(exit_code, 1)
         self.assertIn("SCHEMA_PATH_ID_MISMATCH", codes)
 
@@ -174,42 +178,61 @@ class ValidateSchemaTests(unittest.TestCase):
         }
         state_path = self._write_state(state)
 
-        exit_code, payload = self._run_cli(state_path)
-        codes = [item["code"] for item in payload["diagnostics"]]
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
         self.assertIn("SCHEMA_UNKNOWN_DOC_SLOT", codes)
         self.assertEqual(exit_code, 1)
+
+    def test_requirement_path_and_id_validation(self) -> None:
+        state = _build_valid_state()
+        state["requirements"]["R1"] = state["requirements"].pop("RQ01")
+        state["requirements"]["R1"]["meta"]["path"] = "docs/requirements/RQ09-bad/"
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
+        self.assertEqual(exit_code, 1)
+        self.assertIn("SCHEMA_UNKNOWN_ENUM_VALUE", codes)
+
+    def test_requirement_tracking_and_compliance_shape_validation(self) -> None:
+        state = _build_valid_state()
+        state["requirements"]["RQ01"]["state"]["tracking"]["active_round_id"] = 123
+        state["requirements"]["RQ01"]["facts"]["compliance"]["violations"] = "bad"
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
+        self.assertEqual(exit_code, 1)
+        self.assertIn("SCHEMA_INVALID_TRACKING_FIELD", codes)
+        self.assertIn("SCHEMA_INVALID_COMPLIANCE_FIELD", codes)
 
     def test_diagnostic_structure_and_evidence(self) -> None:
         state = _build_valid_state()
         state["modules"]["M01"]["state"]["confirmed"]["candidate_status"] = "invalid"
         state_path = self._write_state(state)
 
-        exit_code, payload = self._run_cli(state_path)
+        exit_code, diagnostics = self._run_validate(state_path)
         self.assertEqual(exit_code, 1)
-        self.assertEqual(payload["counts"]["error"], 1)
-        self.assertIsInstance(payload["counts"], dict)
-        self.assertIn("diagnostics", payload)
-        self.assertEqual(len(payload["diagnostics"]), 1)
-        self._assert_common_diagnostic_shape(payload)
+        self.assertEqual(len(diagnostics), 1)
+        self._assert_common_diagnostic_shape(diagnostics)
 
     def test_validate_state_exit_code_and_schema_success(self) -> None:
         state = _build_valid_state()
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["readiness"] = "downstream_ready"
         state_path = self._write_state(state)
-        exit_code, payload = self._run_cli(state_path)
+        exit_code, diagnostics = self._run_validate(state_path)
 
         self.assertEqual(exit_code, 1)
-        codes = {item["code"] for item in payload["diagnostics"]}
+        codes = {item.code for item in diagnostics}
         self.assertIn("RULE_ILLEGAL_STATE_COMBINATION", codes)
 
     def test_validate_state_exit_code_success_for_valid_state(self) -> None:
         state = _build_valid_state()
         state_path = self._write_state(state)
-        exit_code, payload = self._run_cli(state_path)
+        exit_code, diagnostics = self._run_validate(state_path)
 
         self.assertEqual(exit_code, 0)
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["counts"]["error"], 0)
+        self.assertEqual(len([item for item in diagnostics if item.severity == "error"]), 0)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,52 @@
 import unittest
+import shutil
+import tempfile
+import uuid
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import yaml
 
 
 class SchemaContractTests(unittest.TestCase):
+    def test_requirement_defaults_and_helpers_are_available(self) -> None:
+        from tools.doc_governor import schema
+
+        requirement_state = schema.make_default_confirmed_state("requirement")
+        self.assertEqual(
+            requirement_state,
+            {
+                "maturity": None,
+                "window_status": "closed",
+                "window_opened_at": None,
+                "window_opened_by": None,
+                "window_reason": None,
+                "candidate_status": "none",
+                "review_status": "unreviewed",
+                "readiness": "blocked",
+                "blocker_refs": [],
+                "last_transition_id": None,
+                "last_confirmed_at": None,
+                "last_confirmed_by": None,
+            },
+        )
+        self.assertEqual(
+            schema.make_default_tracking_state(),
+            {
+                "active_round_id": None,
+                "last_round_id": None,
+            },
+        )
+        self.assertEqual(
+            schema.make_default_compliance_state(),
+            {
+                "naming_ok": None,
+                "path_ok": None,
+                "relations_ok": None,
+                "language_ok": None,
+                "violations": [],
+            },
+        )
+
     def test_module_doc_slots_are_frozen(self) -> None:
         from tools.doc_governor import schema
 
@@ -97,6 +138,7 @@ class SchemaContractTests(unittest.TestCase):
         from tools.doc_governor import schema
 
         self.assertIsNotNone(schema.TYPED_BLOCKER_REF_RE.fullmatch("oq:OQ-021"))
+        self.assertIsNotNone(schema.TYPED_BLOCKER_REF_RE.fullmatch("requirement:RQ01"))
         self.assertIsNotNone(
             schema.TYPED_BLOCKER_REF_RE.fullmatch("gate:formal_window_closed")
         )
@@ -124,10 +166,14 @@ class SchemaContractTests(unittest.TestCase):
         from tools.doc_governor.validate import validate_state_file
 
         state = _build_minimal_state()
-        with TemporaryDirectory() as temp_dir:
-            state_path = Path(temp_dir) / "DOC_STATE.yaml"
+        temp_dir = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
+        temp_dir.mkdir(exist_ok=True)
+        try:
+            state_path = temp_dir / "DOC_STATE.yaml"
             state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
             diagnostics = validate_state_file(state_path)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         self.assertFalse(
             [item for item in diagnostics if item.severity == "error"],
@@ -149,10 +195,14 @@ class SchemaContractTests(unittest.TestCase):
                 "decision_refs": ["decision:DR-001"],
             }
         ]
-        with TemporaryDirectory() as temp_dir:
-            state_path = Path(temp_dir) / "DOC_STATE.yaml"
+        temp_dir = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
+        temp_dir.mkdir(exist_ok=True)
+        try:
+            state_path = temp_dir / "DOC_STATE.yaml"
             state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
             diagnostics = validate_state_file(state_path)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         self.assertFalse(
             [item for item in diagnostics if item.severity == "error"],
@@ -174,10 +224,14 @@ class SchemaContractTests(unittest.TestCase):
                 "decision_refs": ["decision:DR-001"],
             }
         ]
-        with TemporaryDirectory() as temp_dir:
-            state_path = Path(temp_dir) / "DOC_STATE.yaml"
+        temp_dir = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
+        temp_dir.mkdir(exist_ok=True)
+        try:
+            state_path = temp_dir / "DOC_STATE.yaml"
             state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
             diagnostics = validate_state_file(state_path)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         codes = {item.code for item in diagnostics}
         self.assertIn("SCHEMA_INVALID_GOVERNANCE_ROUND_ENUM", codes)
@@ -203,8 +257,33 @@ def _build_minimal_state() -> dict:
                 "open_questions_doc": "OPEN_QUESTIONS.md",
                 "task_index_doc": "TASK_INDEX.md",
             },
+            "asset_policy": {
+                "requirement_mode": "root_requirement_cluster",
+            },
         },
         "oqs": {},
+        "requirements": {
+            "RQ01": {
+                "meta": {
+                    "path": ".",
+                    "scope_kind": "root_requirement_cluster",
+                },
+                "facts": {
+                    "module_ids": ["M01"],
+                    "task_ids": ["ST01_01"],
+                    "asset_slots": {
+                        "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": schema.make_default_compliance_state(),
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            }
+        },
         "modules": {
             "M01": {
                 "meta": {"path": "docs/modules/M01-test/"},
@@ -214,8 +293,12 @@ def _build_minimal_state() -> dict:
                     "legacy_locked": False,
                     "declared_blocker_refs": [],
                     "docs": module_docs,
+                    "compliance": schema.make_default_compliance_state(),
                 },
-                "state": {"confirmed": schema.make_default_confirmed_state("module")},
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("module"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
             }
         },
         "subtasks": {
@@ -228,8 +311,12 @@ def _build_minimal_state() -> dict:
                     "declared_blocker_refs": [],
                     "design_doc": {"exists": True, "template_like": False},
                     "implementation_doc": {"exists": True, "template_like": False},
+                    "compliance": schema.make_default_compliance_state(),
                 },
-                "state": {"confirmed": schema.make_default_confirmed_state("subtask")},
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("subtask"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
             }
         },
     }
