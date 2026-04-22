@@ -38,7 +38,7 @@ IMPLEMENTATION_DOC_STATES = ("missing", "inactive_template", "active_working_doc
 
 TYPED_BLOCKER_REF_RE = re.compile(
     r"^(?:"
-    r"oq:OQ-\d{3}"
+    r"oq:OQ-\d+"
     r"|module:M\d{2}"
     r"|subtask:ST\d{2}_\d{2}"
     r"|gate:[a-z0-9_]+"
@@ -59,6 +59,13 @@ GLOBAL_POLICY_DEFAULTS = {
         "task_index_doc": "TASK_INDEX.md",
     },
 }
+
+OQ_DEFAULT_GATE_LEVEL = "observe_only"
+OQ_DEFAULT_RESOLUTION_POLICY = "proposed_default_ok"
+OQ_POLICY_SOURCE_EXPLICIT = "explicit"
+OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT = "bootstrap_default"
+OQ_POLICY_SOURCES = (OQ_POLICY_SOURCE_EXPLICIT, OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT)
+OQ_DEFAULT_POLICY_SOURCE = OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT
 
 _DEFAULT_CONFIRMED_STATE = {
     "module": {

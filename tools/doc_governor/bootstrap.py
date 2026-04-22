@@ -7,6 +7,11 @@ from .diagnostics import Diagnostic, make_diagnostic, make_evidence
 from .schema import (
     BOOTSTRAP_REPORT_PATH,
     BOOTSTRAP_STATE_PATH,
+    OQ_DEFAULT_POLICY_SOURCE,
+    OQ_DEFAULT_GATE_LEVEL,
+    OQ_DEFAULT_RESOLUTION_POLICY,
+    OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT,
+    OQ_POLICY_SOURCE_EXPLICIT,
     GLOBAL_POLICY_DEFAULTS,
     OFFICIAL_STATE_PATH,
     SCHEMA_VERSION,
@@ -16,10 +21,13 @@ from .schema import (
 
 def build_bootstrap_state(scan_result: dict[str, object]) -> tuple[dict[str, object], list[Diagnostic]]:
     diagnostics = list(scan_result["diagnostics"])
+    oqs, oq_default_diagnostics = _normalize_oq_policy_fields(scan_result["oqs"])
+    diagnostics.extend(oq_default_diagnostics)
+
     state: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "global_policy": GLOBAL_POLICY_DEFAULTS,
-        "oqs": scan_result["oqs"],
+        "oqs": oqs,
         "modules": {},
         "subtasks": {},
     }
@@ -63,7 +71,87 @@ def build_bootstrap_state(scan_result: dict[str, object]) -> tuple[dict[str, obj
                 )
             )
 
+    diagnostics = _reorder_diagnostics(diagnostics)
     return state, diagnostics
+
+
+def _normalize_oq_policy_fields(oqs: object) -> tuple[dict[str, dict[str, object]], list[Diagnostic]]:
+    if not isinstance(oqs, dict):
+        return {}, []
+
+    normalized: dict[str, dict[str, object]] = {}
+    missing_gate_ids: list[str] = []
+    missing_resolution_ids: list[str] = []
+    missing_any_ids: list[str] = []
+
+    for oq_id, oq in oqs.items():
+        if not isinstance(oq_id, str):
+            continue
+        if not isinstance(oq, dict):
+            continue
+        normalized[oq_id] = dict(oq)
+
+        raw_gate_level = oq.get("gate_level")
+        has_gate_level = isinstance(raw_gate_level, str) and raw_gate_level.strip()
+        has_resolution_policy = (
+            isinstance(oq.get("resolution_policy"), str)
+            and str(oq.get("resolution_policy")).strip()
+        )
+        if not isinstance(raw_gate_level, str) or not raw_gate_level.strip():
+            normalized[oq_id]["gate_level"] = OQ_DEFAULT_GATE_LEVEL
+            missing_gate_ids.append(oq_id)
+            normalized[oq_id]["gate_policy_source"] = OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT
+        else:
+            normalized[oq_id]["gate_policy_source"] = OQ_POLICY_SOURCE_EXPLICIT
+
+        if not has_resolution_policy:
+            normalized[oq_id]["resolution_policy"] = OQ_DEFAULT_RESOLUTION_POLICY
+            missing_resolution_ids.append(oq_id)
+            if OQ_DEFAULT_POLICY_SOURCE == OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT:
+                normalized[oq_id]["gate_policy_source"] = OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT
+
+        if oq_id in missing_gate_ids or oq_id in missing_resolution_ids:
+            if oq_id not in missing_any_ids:
+                missing_any_ids.append(oq_id)
+        if "gate_policy_source" not in normalized[oq_id]:
+            normalized[oq_id]["gate_policy_source"] = OQ_POLICY_SOURCE_EXPLICIT
+
+    if not missing_any_ids:
+        return normalized, []
+
+    missing_any_ids = sorted(missing_any_ids)
+    applied_count = len(missing_any_ids)
+    diagnostics = [
+        make_diagnostic(
+            code="BOOTSTRAP_OQ_POLICY_DEFAULT_APPLIED",
+            severity="warning",
+            entity_type="system",
+            entity_id="GLOBAL",
+            field_path="oqs[*]",
+            message=(
+                f"Applied default OQ policy fields to {applied_count} OQ(s): "
+                f"gate_level={OQ_DEFAULT_GATE_LEVEL}, resolution_policy={OQ_DEFAULT_RESOLUTION_POLICY}"
+            ),
+            evidence=[
+                make_evidence(
+                    type="oq_policy_default",
+                    path="OPEN_QUESTIONS.md",
+                    ref="defaulted_oqs",
+                    value={
+                        "count": applied_count,
+                        "missing_gate_level_count": len(missing_gate_ids),
+                        "missing_resolution_policy_count": len(missing_resolution_ids),
+                        "defaults": {
+                            "gate_level": OQ_DEFAULT_GATE_LEVEL,
+                            "resolution_policy": OQ_DEFAULT_RESOLUTION_POLICY,
+                        },
+                        "oq_ids": missing_any_ids[:10],
+                    },
+                )
+            ],
+        )
+    ]
+    return normalized, diagnostics
 
 
 def render_bootstrap_report(
@@ -108,6 +196,23 @@ def render_bootstrap_report(
         lines.append("- none")
 
     lines.extend(["", "## Diagnostics snapshot", ""])
+    oq_policy_diag = [item for item in diagnostics if item.code == "BOOTSTRAP_OQ_POLICY_DEFAULT_APPLIED"]
+    if oq_policy_diag:
+        for item in oq_policy_diag:
+            evidence = item.evidence[0].value or {}
+            count = evidence.get("count", "n/a")
+            defaults = evidence.get("defaults", {})
+            oq_ids = evidence.get("oq_ids", [])
+            missing_gate = evidence.get("missing_gate_level_count", "n/a")
+            missing_policy = evidence.get("missing_resolution_policy_count", "n/a")
+            lines.append(
+                "- OQ policy defaults applied:"
+                f" count={count}"
+                f", defaults={defaults}"
+                f", missing_gate_level={missing_gate}"
+                f", missing_resolution_policy={missing_policy}"
+                f", sample_oq_ids={oq_ids}"
+            )
     if diagnostics:
         for diagnostic in diagnostics[:10]:
             lines.append(
@@ -145,6 +250,20 @@ def write_bootstrap_outputs(
     )
     output_path.write_text(yaml_text, encoding="utf-8")
     report_path.write_text(report_text, encoding="utf-8")
+
+
+def _reorder_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+    severity_rank = {"error": 0, "warning": 1}
+    return sorted(
+        diagnostics,
+        key=lambda item: (
+            severity_rank.get(item.severity, 9),
+            0 if item.code == "BOOTSTRAP_IMPL_DOC_STATE_AMBIGUOUS" else 1,
+            item.code,
+            item.entity_type,
+            item.entity_id,
+        ),
+    )
 
 
 def resolve_output_paths(

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
 from .schema import MODULE_DOC_SLOTS, SUBTASK_DOC_SLOTS
@@ -12,24 +12,21 @@ MODULE_DIR_RE = re.compile(r"^(M\d{2})-")
 SUBTASK_DIR_RE = re.compile(r"^(ST\d{2}_\d{2})-")
 MARKDOWN_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|(?:\s*:?-+:?\s*\|)+\s*$")
 
+
 OPEN_QUESTIONS_HEADERS = (
     "OQ ID",
     "问题",
     "状态",
     "关联模块",
-    "当前建议",
-    "需回写文档",
 )
+
 TASK_INDEX_HEADERS = (
     "Task ID",
-    "名称",
-    "父任务",
-    "前置依赖",
-    "状态",
-    "文档成熟度",
-    "是否具备实施条件",
     "对应文档路径",
 )
+
+OPEN_QUESTION_REQUIRED_HEADERS = ("oq_id", "title", "status", "affects")
+OPEN_QUESTION_OPTIONAL_HEADERS = ("gate_level", "resolution_policy")
 
 
 def scan_repo(repo_root: str | Path) -> dict[str, object]:
@@ -120,7 +117,9 @@ def scan_filesystem(repo_root: Path) -> dict[str, object]:
         if not sub_modules_dir.exists():
             continue
 
-        for subtask_dir in sorted(path for path in sub_modules_dir.iterdir() if path.is_dir()):
+        for subtask_dir in sorted(
+            path for path in sub_modules_dir.iterdir() if path.is_dir()
+        ):
             subtask_match = SUBTASK_DIR_RE.match(subtask_dir.name)
             if subtask_match is None:
                 continue
@@ -154,8 +153,15 @@ def scan_open_questions_table(path: Path) -> dict[str, object]:
                 entity_type="system",
                 entity_id="GLOBAL",
                 field_path="OPEN_QUESTIONS.md",
-                message="未找到 OPEN_QUESTIONS.md 结构化表，当前仅保留文件系统扫描结果。",
-                evidence=[make_evidence(type="file_scan", path=str(path), ref="exists", value=False)],
+                message="OPEN_QUESTIONS.md structured table not found.",
+                evidence=[
+                    make_evidence(
+                        type="file_scan",
+                        path=str(path),
+                        ref="exists",
+                        value=False,
+                    )
+                ],
             )
         )
         return {"oqs": oqs, "diagnostics": diagnostics}
@@ -169,26 +175,40 @@ def scan_open_questions_table(path: Path) -> dict[str, object]:
                 entity_type="system",
                 entity_id="GLOBAL",
                 field_path="OPEN_QUESTIONS.md",
-                message="未找到 OPEN_QUESTIONS.md 结构化表，当前仅保留文件系统扫描结果。",
+                message="OPEN_QUESTIONS.md structured table not found.",
                 evidence=[make_evidence(type="file_scan", path=str(path), ref="table_headers")],
             )
         )
         return {"oqs": oqs, "diagnostics": diagnostics}
 
     headers, rows = table
+    header_index = _build_oq_header_index(headers)
+
     for row_index, row in enumerate(rows, start=1):
         try:
-            row_map = dict(zip(headers, row, strict=True))
-            oq_id = row_map["OQ ID"].strip()
+            oq_id = _get_cell(header_index, row, "oq_id").strip()
             if not oq_id:
                 raise ValueError("Missing OQ ID")
-            affects = _parse_affected_entities(row_map["关联模块"])
-            oqs[oq_id] = {
-                "title": row_map["问题"].strip(),
-                "status": row_map["状态"].strip(),
+            affects = _parse_affected_entities(_get_cell(header_index, row, "affects"))
+            if not isinstance(affects, dict):
+                affects = {"modules": [], "subtasks": []}
+
+            oq_entry: dict[str, object] = {
+                "title": _get_cell(header_index, row, "title").strip(),
+                "status": _get_cell(header_index, row, "status").strip() or "open",
                 "affects": affects,
                 "declared_blocker_refs": [],
             }
+
+            gate_level = _get_cell(header_index, row, "gate_level").strip()
+            if gate_level:
+                oq_entry["gate_level"] = gate_level
+
+            resolution_policy = _get_cell(header_index, row, "resolution_policy").strip()
+            if resolution_policy:
+                oq_entry["resolution_policy"] = resolution_policy
+
+            oqs[oq_id] = oq_entry
         except Exception as exc:  # noqa: BLE001
             diagnostics.append(
                 make_diagnostic(
@@ -197,7 +217,7 @@ def scan_open_questions_table(path: Path) -> dict[str, object]:
                     entity_type="oq",
                     entity_id=f"ROW-{row_index}",
                     field_path=f"OPEN_QUESTIONS.md.row[{row_index}]",
-                    message=f"OPEN_QUESTIONS.md 第 {row_index} 行解析失败：{exc}",
+                    message=f"OPEN_QUESTIONS.md row {row_index} parse failed: {exc}",
                     evidence=[
                         make_evidence(
                             type="table_row",
@@ -225,8 +245,15 @@ def scan_task_index_table(path: Path) -> dict[str, object]:
                 entity_type="system",
                 entity_id="GLOBAL",
                 field_path="TASK_INDEX.md",
-                message="未找到 TASK_INDEX.md 结构化表，当前仅保留文件系统扫描结果。",
-                evidence=[make_evidence(type="file_scan", path=str(path), ref="exists", value=False)],
+                message="TASK_INDEX.md structured table not found.",
+                evidence=[
+                    make_evidence(
+                        type="file_scan",
+                        path=str(path),
+                        ref="exists",
+                        value=False,
+                    )
+                ],
             )
         )
         return {"modules": modules, "subtasks": subtasks, "diagnostics": diagnostics}
@@ -240,7 +267,7 @@ def scan_task_index_table(path: Path) -> dict[str, object]:
                 entity_type="system",
                 entity_id="GLOBAL",
                 field_path="TASK_INDEX.md",
-                message="未找到 TASK_INDEX.md 结构化表，当前仅保留文件系统扫描结果。",
+                message="TASK_INDEX.md structured table not found.",
                 evidence=[make_evidence(type="file_scan", path=str(path), ref="table_headers")],
             )
         )
@@ -248,26 +275,43 @@ def scan_task_index_table(path: Path) -> dict[str, object]:
 
     row_counter = 0
     for headers, rows in tables:
+        header_index = _build_task_index_header_index(headers)
+        if not header_index:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCAN_TASK_INDEX_TABLE_NOT_FOUND",
+                    severity="warning",
+                    entity_type="system",
+                    entity_id="GLOBAL",
+                    field_path="TASK_INDEX.md",
+                    message="TASK_INDEX table headers are not parsable.",
+                    evidence=[make_evidence(type="file_scan", path=str(path), ref="table_headers")],
+                )
+            )
+            continue
+
         for row in rows:
             row_counter += 1
             try:
-                row_map = dict(zip(headers, row, strict=True))
-                task_id = row_map["Task ID"].strip()
-                path_value = _clean_doc_path(row_map["对应文档路径"])
+                task_id = _get_cell(header_index, row, "task_id").strip()
+                path_value = _clean_doc_path(_get_cell(header_index, row, "path"))
                 if not task_id or not path_value:
                     raise ValueError("Task ID or path missing")
+
+                upstream = _parse_module_dependencies(_get_cell(header_index, row, "upstream"))
+                legacy_locked = _is_legacy_locked_row(_row_as_dict(header_index, row))
                 if task_id.startswith("M"):
                     modules[task_id] = {
                         "path": path_value,
-                        "upstream_module_ids": _parse_module_dependencies(row_map["前置依赖"]),
-                        "legacy_locked": False,
+                        "upstream_module_ids": upstream,
+                        "legacy_locked": legacy_locked,
                     }
                 elif task_id.startswith("ST"):
                     subtasks[task_id] = {
                         "path": path_value,
-                        "module_id": row_map["父任务"].strip(),
-                        "upstream_module_ids": _parse_module_dependencies(row_map["前置依赖"]),
-                        "legacy_locked": _is_legacy_locked_row(row_map),
+                        "module_id": _get_cell(header_index, row, "parent").strip(),
+                        "upstream_module_ids": upstream,
+                        "legacy_locked": legacy_locked,
                     }
             except Exception as exc:  # noqa: BLE001
                 diagnostics.append(
@@ -277,7 +321,7 @@ def scan_task_index_table(path: Path) -> dict[str, object]:
                         entity_type="system",
                         entity_id=f"ROW-{row_counter}",
                         field_path=f"TASK_INDEX.md.row[{row_counter}]",
-                        message=f"TASK_INDEX.md 第 {row_counter} 行解析失败：{exc}",
+                        message=f"TASK_INDEX.md row {row_counter} parse failed: {exc}",
                         evidence=[
                             make_evidence(
                                 type="table_row",
@@ -314,7 +358,28 @@ def _scan_doc_slots(
                 doc_kind=doc_kind,
             )
             docs[slot_name] = {"exists": True, "template_like": template_like}
-            diagnostics.extend(_diagnostic_dicts_to_objects(template_diagnostics))
+            for item in template_diagnostics:
+                diagnostics.append(
+                    make_diagnostic(
+                        code=str(item["code"]),
+                        severity=str(item["severity"]),
+                        entity_type="doc_slot",
+                        entity_id=relative_path,
+                        field_path=f"facts.{slot_name}",
+                        message=str(item["message"]),
+                        evidence=[
+                            make_evidence(
+                                type=str(evidence["type"]),
+                                path=str(evidence["path"]),
+                                ref=str(evidence["ref"]),
+                                value=evidence.get("value"),
+                                line=evidence.get("line"),
+                                snippet=evidence.get("snippet"),
+                            )
+                            for evidence in item["evidence"]
+                        ],
+                    )
+                )
         else:
             docs[slot_name] = {"exists": False, "template_like": False}
     return docs, diagnostics
@@ -339,7 +404,7 @@ def _merge_modules(
                 "related_oq_ids": sorted(
                     oq_id
                     for oq_id, oq in oqs.items()
-                    if module_id in oq["affects"]["modules"]
+                    if module_id in oq.get("affects", {}).get("modules", [])
                 ),
                 "legacy_locked": bool(table_entry.get("legacy_locked", False)),
                 "declared_blocker_refs": [],
@@ -381,7 +446,7 @@ def _merge_subtasks(
                 "related_oq_ids": sorted(
                     oq_id
                     for oq_id, oq in oqs.items()
-                    if subtask_id in oq["affects"]["subtasks"]
+                    if subtask_id in oq.get("affects", {}).get("subtasks", [])
                 ),
                 "legacy_locked": bool(table_entry.get("legacy_locked", False)),
                 "declared_blocker_refs": [],
@@ -392,44 +457,9 @@ def _merge_subtasks(
     return subtasks
 
 
-def _diagnostic_dicts_to_objects(items: list[dict[str, object]]) -> list[Diagnostic]:
-    diagnostics: list[Diagnostic] = []
-    for item in items:
-        diagnostics.append(
-            make_diagnostic(
-                code=str(item["code"]),
-                severity=str(item["severity"]),
-                entity_type=str(item["entity_type"]),
-                entity_id=str(item["entity_id"]),
-                field_path=str(item["field_path"]),
-                message=str(item["message"]),
-                evidence=[
-                    make_evidence(
-                        type=str(evidence["type"]),
-                        path=str(evidence["path"]),
-                        ref=str(evidence["ref"]),
-                        value=evidence.get("value"),
-                        line=evidence.get("line"),
-                        snippet=evidence.get("snippet"),
-                    )
-                    for evidence in item["evidence"]
-                ],
-            )
-        )
-    return diagnostics
-
-
-def _resolve_doc_kind(*, entity_type: str, slot_name: str) -> str:
-    if entity_type == "subtask" and slot_name == "implementation_doc":
-        return "subtask_implementation"
-    if entity_type == "subtask" and slot_name == "design_doc":
-        return "subtask_design"
-    if entity_type == "module" and slot_name == "design":
-        return "module_design"
-    return "module_doc"
-
-
-def _find_markdown_table(text: str, required_headers: tuple[str, ...]) -> tuple[list[str], list[list[str]]] | None:
+def _find_markdown_table(
+    text: str, required_headers: tuple[str, ...]
+) -> tuple[list[str], list[list[str]]] | None:
     tables = _find_all_markdown_tables(text, required_headers)
     return tables[0] if tables else None
 
@@ -439,13 +469,13 @@ def _find_all_markdown_tables(
     required_headers: tuple[str, ...],
 ) -> list[tuple[list[str], list[list[str]]]]:
     tables: list[tuple[list[str], list[list[str]]]] = []
+    normalized_required = {_normalize_header(h) for h in required_headers}
     for block in _extract_table_blocks(text):
         headers = _split_markdown_row(block[0])
-        if tuple(headers) != required_headers:
+        normalized = {_normalize_header(cell) for cell in headers}
+        if not normalized_required.issubset(normalized):
             continue
-        rows: list[list[str]] = []
-        for line in block[2:]:
-            rows.append(_split_markdown_row(line))
+        rows = [_split_markdown_row(line) for line in block[2:]]
         tables.append((headers, rows))
     return tables
 
@@ -470,11 +500,102 @@ def _split_markdown_row(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
+def _normalize_header(value: str) -> str:
+    normalized = (
+        value.strip()
+        .lower()
+        .replace("（", "(")
+        .replace("）", ")")
+        .replace("：", ":")
+        .replace("；", ";")
+        .replace(",", ",")
+        .replace("`", "")
+    )
+    return re.sub(r"[\s_-]+", "", normalized)
+
+
+def _build_oq_header_index(headers: list[str]) -> dict[str, int]:
+    header_index: dict[str, int] = {}
+    for index, raw_header in enumerate(headers):
+        normalized = _normalize_header(raw_header)
+        lowered = raw_header.strip().lower()
+        if normalized in {"oqid", "oq_id", "oqid"}:
+            header_index.setdefault("oq_id", index)
+        if normalized in {"qid", "issueid", "issue_id", "issueid", "title", "问题", "标题"} or "issue" in lowered or "title" in lowered:
+            header_index.setdefault("title", index)
+        if normalized in {"status", "state", "状态"} or "status" in lowered or "state" in lowered:
+            header_index.setdefault("status", index)
+        if normalized in {"affects", "related", "关联", "关联模块", "影响", "影响范围"} or "affect" in lowered or "关联" in lowered or "相关" in lowered:
+            header_index.setdefault("affects", index)
+        if normalized in {"gatelevel", "gate_level", "gatelevel", "gatelvl", "candidate_gate", "readiness_gate", "observe_only", "gatelvl", "gatel"} or "gate" in lowered:
+            header_index.setdefault("gate_level", index)
+        if "resolutionpolicy" in normalized or "resolution_policy" in normalized or "resolution policy" in lowered or "resolutionpolicy" in lowered:
+            header_index.setdefault("resolution_policy", index)
+
+    # Fallback by stable column order for tables that we don't recognize well.
+    fallback_order = ["oq_id", "title", "status", "affects"]
+    for fallback_index, field in enumerate(fallback_order):
+        if field not in header_index:
+            if fallback_index < len(headers):
+                header_index[field] = fallback_index
+
+    return header_index
+
+
+def _build_task_index_header_index(headers: list[str]) -> dict[str, int]:
+    normalized_to_index = {_normalize_header(value): index for index, value in enumerate(headers)}
+    header_index: dict[str, int] = {}
+
+    for raw in headers:
+        norm = _normalize_header(raw)
+        lowered = raw.strip().lower()
+        if "taskid" in norm or norm in {"taskid", "task_id", "task"} or "task id" in lowered:
+            header_index.setdefault("task_id", headers.index(raw))
+        if "parent" in lowered or "父任务" in raw:
+            header_index.setdefault("parent", headers.index(raw))
+        if "upstream" in lowered or "依赖" in raw:
+            header_index.setdefault("upstream", headers.index(raw))
+        if "path" in lowered or "文档路径" in raw:
+            header_index.setdefault("path", headers.index(raw))
+
+    # fallback to canonical positions in known layout:
+    # [Task ID, 名称, 父任务, 前置依赖, ..., ..., ..., 对应文档路径]
+    if "task_id" not in header_index and len(headers) > 0:
+        header_index["task_id"] = 0
+    if "path" not in header_index and len(headers) > 2:
+        header_index["path"] = len(headers) - 1
+    if "parent" not in header_index and len(headers) > 2:
+        header_index["parent"] = 2
+    if "upstream" not in header_index and len(headers) > 3:
+        header_index["upstream"] = 3
+
+    return header_index if header_index else {}
+
+
+def _resolve_doc_kind(*, entity_type: str, slot_name: str) -> str:
+    if entity_type == "subtask" and slot_name == "implementation_doc":
+        return "subtask_implementation"
+    if entity_type == "subtask" and slot_name == "design_doc":
+        return "subtask_design"
+    if entity_type == "module" and slot_name == "design":
+        return "module_design"
+    return "module_doc"
+
+
+def _get_cell(header_index: dict[str, int], row: list[str], key: str) -> str:
+    index = header_index.get(key, -1)
+    if index < 0 or index >= len(row):
+        return ""
+    return row[index]
+
+
 def _parse_affected_entities(value: str) -> dict[str, list[str]]:
     modules: set[str] = set()
     subtasks: set[str] = set()
-    normalized = value.replace("，", "、").replace(",", "、").replace("/", "、")
-    for token in [item.strip() for item in normalized.split("、") if item.strip()]:
+    if not isinstance(value, str):
+        return {"modules": [], "subtasks": []}
+    normalized = re.sub(r"[、,，;；/|]\s*", " ", value.strip())
+    for token in [item.strip() for item in normalized.split() if item.strip()]:
         if re.fullmatch(r"M\d{2}-M\d{2}", token):
             start = int(token[1:3])
             end = int(token[5:7])
@@ -488,11 +609,14 @@ def _parse_affected_entities(value: str) -> dict[str, list[str]]:
 
 
 def _parse_module_dependencies(value: str) -> list[str]:
-    if value.strip() in {"", "-"}:
+    if not isinstance(value, str):
         return []
-    normalized = value.replace("，", "、").replace(",", "、")
+    normalized = value.strip()
+    if normalized in {"", "-"}:
+        return []
+    normalized = re.sub(r"[、,，;；/|]\s*", " ", normalized)
     result: list[str] = []
-    for token in [item.strip() for item in normalized.split("、") if item.strip()]:
+    for token in [item.strip() for item in normalized.split() if item.strip()]:
         if re.fullmatch(r"M\d{2}", token):
             result.append(token)
     return result
@@ -505,12 +629,27 @@ def _clean_doc_path(value: str) -> str:
 def _is_legacy_locked_row(row_map: dict[str, str]) -> bool:
     combined = " ".join(
         [
+            row_map.get("Task ID", ""),
+            row_map.get("实现", ""),
             row_map.get("名称", ""),
-            row_map.get("文档成熟度", ""),
             row_map.get("状态", ""),
+            row_map.get("是否具备实施条件", ""),
         ]
-    )
-    return "历史容器" in combined or "禁止直开" in combined
+    ).lower()
+    return "legacy" in combined or "锁定" in combined
+
+
+def _row_as_dict(header_index: dict[str, int], row: list[str]) -> dict[str, str]:
+    return {
+        "Task ID": _get_cell(header_index, row, "task_id"),
+        "名称": _get_cell(header_index, row, "name"),
+        "父任务": _get_cell(header_index, row, "parent"),
+        "前置依赖": _get_cell(header_index, row, "upstream"),
+        "状态": _get_cell(header_index, row, "status"),
+        "文档成熟度": _get_cell(header_index, row, "maturity"),
+        "是否具备实施条件": _get_cell(header_index, row, "implementation_ready"),
+        "对应文档路径": _get_cell(header_index, row, "path"),
+    }
 
 
 def _default_module_path(module_id: str) -> str:

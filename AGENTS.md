@@ -67,6 +67,29 @@
 - 在 Windows 环境下处理 Markdown 时，必须显式使用 UTF-8 读写，并在写后从磁盘回读验证，避免把错误解码后的内容再次保存。
 - 发现 `�`、异常 `?` 或 `妯 / 鍏 / 鏂 / 鐩 / 锛 / 闂 / 鎴` 等典型乱码片段时，应先诊断根因，不要直接覆盖原文件。
 
+### 1.5 仓库指导
+
+#### Repo map
+- apps/web: 前端
+- apps/api: 后端接口
+- packages/shared: 跨端共享类型与工具
+- scripts/: 构建与发布脚本
+
+#### Guardrails
+- 不要直接改 generated/ 下文件
+- 涉及数据库 schema 的改动必须附带 migration
+- 涉及 shared 类型改动时，必须检查 web/api 两端影响
+
+#### Verification
+- 前端修改后运行: pnpm -C apps/web test
+- 后端修改后运行: pnpm -C apps/api test
+- 跨包改动后运行: pnpm test
+
+#### Preferred workflow
+- 先定位入口 symbol
+- 再看调用链和引用
+- 再改最小闭环
+
 ## 2. 当前文档索引
 
 ### 2.1 规范
@@ -104,3 +127,24 @@
 
 - 若后续规则与普通说明文档冲突，以本文档和用户最新要求为准。
 - 若新增文档会影响实现、协作或交付方式，应先更新本文档索引，再继续扩展实现。
+
+## Evaluate Command Contract
+Phase 2A evaluate-state is read-only report output.
+- Command outputs structured JSON only and does not write any state files.
+- It does not change DOC_STATE.bootstrap.yaml or DOC_STATE.yaml.
+- PyYAML is required for reading DOC_STATE*.yaml inputs.
+
+## 2.6 Phase 2B Render Command
+
+- `render-report --evaluate-json <PATH>` is the primary report render entry.
+- `render-report --state <DOC_STATE.bootstrap.yaml>` is only an optional wrapper and must call `evaluate_state_file` only; it must not re-implement evaluate rules.
+- Default output must be `docs/governance/DOC_GOVERNOR_REPORT.md`.
+- `--report-path` is only allowed under `docs/governance/` and must never target `DOC_STATE.yaml` or `DOC_STATE.bootstrap.yaml`.
+- Report output is read-only interpretation only; it is not confirmed state and must not drive confirm-transition or state write-back.
+
+## Confirm Transition (Phase 3A)
+- `confirm-transition` 默认输入为 `docs/governance/DOC_STATE.yaml`；若该文件不存在则直接失败。
+- `confirm-transition` 仅允许写入/更新 `DOC_STATE.yaml`，禁止写入/覆盖 `DOC_STATE.bootstrap.yaml`。
+- `proposed_changes` 不允许提交 `last_transition_id`、`last_confirmed_at`、`last_confirmed_by`，这三项必须由系统在 approve 成功时补齐。
+- `candidate_status` 提升（none/observe -> candidate）需至少一条 evidence。`
+- Bootstrap 默认补齐 OQ policy（`gate_policy_source=bootstrap_default`）只能作为审核输入，不得单独支撑批准路径。

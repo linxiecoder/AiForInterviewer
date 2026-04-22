@@ -60,3 +60,54 @@ Phase 1A 当前必须识别并拦截以下假信号：
 ```powershell
 python -X utf8 -c "import yaml"
 ```
+
+## Evaluate Command Contract
+Phase 2A evaluate-state is read-only report output.
+- Command outputs structured JSON only and does not write any state files.
+- It does not change DOC_STATE.bootstrap.yaml or DOC_STATE.yaml.
+- PyYAML is required for reading DOC_STATE*.yaml inputs.
+
+## OQ Bootstrap Defaults and Evaluate Boundary
+
+- `bootstrap-state` must persist for every OQ entry: `gate_level`, `resolution_policy`, `status`, `affects`.
+- Source priority is fixed:
+  - explicit values from structured `OPEN_QUESTIONS.md` columns first;
+  - fallback defaults only for missing OQ policy fields:
+    - `gate_level = observe_only`
+    - `resolution_policy = proposed_default_ok`
+- Missing policy fields must emit only one aggregated warning `BOOTSTRAP_OQ_POLICY_DEFAULT_APPLIED` (not per-OQ warnings).
+- `evaluate-state` is report-only and must not apply OQ policy defaults internally; missing policy fields should fail validation before evaluation.
+
+## Render Command Contract
+
+- `render-report --evaluate-json <PATH>` is the only primary render input.
+- `render-report --state <DOC_STATE.bootstrap.yaml>` is an optional wrapper and must share the same evaluate path internally.
+- `render-report` output is Markdown only and must only summarize fields in `summary/modules/subtasks/oqs/diagnostics`.
+- Default output path is `docs/governance/DOC_GOVERNOR_REPORT.md`.
+- `--report-path` may only target files under `docs/governance/` and must not target official state files.
+- The report must include fixed boundary notes stating it is report-only and not ready or ready-to-open status.
+
+## init-official-state (Phase 3A.1) Contract
+
+- Primary command: `python tools/doc_governor/cli.py init-official-state`.
+- Default input file is `docs/governance/DOC_STATE.bootstrap.yaml`.
+- Default output file is fixed to `docs/governance/DOC_STATE.yaml`; no alternate output paths are supported.
+- `--force-overwrite` is disabled by default and required to replace an existing official state file.
+- The official state copy includes:
+  - `schema_version`
+  - `global_policy`
+  - `oqs` (with `gate_policy_source` preserved)
+  - `modules[*].meta` / `modules[*].facts`
+  - `subtasks[*].meta` / `subtasks[*].facts`
+- `modules[*].state.confirmed` and `subtasks[*].state.confirmed` are initialized from factory defaults only (no auto-confirmed results import).
+- `subtask.state.confirmed.implementation_doc_state` defaults to `missing`.
+- `last_transition_id` / `last_confirmed_at` / `last_confirmed_by` are not imported from bootstrap.
+- `init-official-state` does not write `transition_history.jsonl`.
+
+## confirm-transition (Phase 3A) Contract
+- 默认输入文件为 `docs/governance/DOC_STATE.yaml`，若不存在直接失败。
+- `confirm-transition` 只允许写入 `docs/governance/DOC_STATE.yaml`，禁止写入/覆盖 `docs/governance/DOC_STATE.bootstrap.yaml`。
+- `--proposed-changes` 仅允许 `maturity`、`candidate_status`、`review_status`、`readiness`、`blocker_refs`、`implementation_doc_state`。
+- `last_transition_id`、`last_confirmed_at`、`last_confirmed_by` 仅由系统在 approve 时写入，不允许在 proposed_changes 输入中携带。
+- `candidate_status` 提升到更高态（例如 none/observe -> candidate）必须提供至少一条 `--evidence-ref`。
+- 当 OQ `gate_policy_source=bootstrap_default` 时，不能作为自动通过 `candidate/readiness` 推进的充分依据；仅作为 review 依据之一。
