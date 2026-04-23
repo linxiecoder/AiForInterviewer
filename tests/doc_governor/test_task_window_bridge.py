@@ -143,9 +143,9 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             (
                 "# 子任务设计文档\n\n"
                 "## 3. 子任务目标\n"
-                "- 为 bridge 分析提供接近 open-window 的样本。\n\n"
+                "- 作为接近 open-window 的样本。\n\n"
                 "## 5. 技术方案\n"
-                "- 当前内容 blocker 已基本收敛。\n"
+                "- 当前只差 implementation_doc_state 和 formal window。\n"
             ),
         )
         _write_text(
@@ -154,7 +154,7 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             (
                 "# 子任务实施文档\n\n"
                 "## 3. 本轮实施目标\n"
-                "- 让该 task 在 state 激活后只剩 formal window。\n\n"
+                "- 让 bridge 能判断激活后只剩 formal window。\n\n"
                 "## 5. 允许修改范围\n\n"
                 "### 5.1 允许修改\n"
                 "- `tools/doc_governor/task_window_bridge.py`\n\n"
@@ -173,9 +173,9 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             (
                 "# 子任务设计文档\n\n"
                 "## 3. 子任务目标\n"
-                "- 作为仍缺人工字段的内容 blocker 样本。\n\n"
+                "- 作为内容 blocker 样本。\n\n"
                 "## 5. 技术方案\n"
-                "- 结构已是中文，但故意不补 tests 和 acceptance。\n"
+                "- 故意保留后续人工字段缺口。\n"
             ),
         )
         _write_text(
@@ -184,7 +184,7 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             (
                 "# 子任务实施文档\n\n"
                 "## 3. 本轮实施目标\n"
-                "- 故意保留人工字段缺口。\n\n"
+                "- 故意不补 tests 与 acceptance。\n\n"
                 "## 5. 允许修改范围\n\n"
                 "### 5.1 允许修改\n"
                 "- `tools/doc_governor/task_window_bridge.py`\n\n"
@@ -201,7 +201,7 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
                 "## 3. 子任务目标\n"
                 "- 作为模块继承 blocker 样本。\n\n"
                 "## 5. 技术方案\n"
-                "- task 自身结构完整，但模块层仍有缺口。\n"
+                "- task 自身结构完整，但模块层仍未闭合。\n"
             ),
         )
         _write_text(
@@ -210,7 +210,7 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             (
                 "# 子任务实施文档\n\n"
                 "## 3. 本轮实施目标\n"
-                "- 用于验证模块 blocker 不会被误下沉到 task 文档层。\n\n"
+                "- 验证模块 blocker 不会被误判成 task 层局部问题。\n\n"
                 "## 5. 允许修改范围\n\n"
                 "### 5.1 允许修改\n"
                 "- `tools/doc_governor/task_window_bridge.py`\n\n"
@@ -219,7 +219,7 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
                 "## 7. 测试与验证\n"
                 "- `python -m pytest tests/doc_governor/test_task_window_bridge.py -q`\n\n"
                 "## 8. 完成判定\n"
-                "- 保持模块 blocker 解释留在模块层。\n"
+                "- 保持模块 blocker 留在模块层。\n"
             ),
         )
 
@@ -228,17 +228,22 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
         self.assertEqual([item for item in diagnostics if item.severity == "error"], [])
         return payload
 
-    def test_bridge_groups_candidates_and_blocked_tasks(self) -> None:
+    def test_distinguishes_candidate_and_blocked_tasks(self) -> None:
         payload = build_task_window_bridge(
             state_path=self.state_path,
             evaluate_payload=self._evaluate(),
             entity_ids=["ST09_03", "ST01_01", "ST02_03"],
         )
 
-        summary = payload["summary"]
-        self.assertEqual(summary["selected_task_count"], 3)
-        self.assertEqual(summary["candidate_after_state_activation_count"], 1)
-        self.assertEqual(summary["blocked_before_open_window_count"], 2)
+        self.assertEqual(payload["summary"]["selected_task_count"], 3)
+        self.assertEqual(
+            payload["summary"]["candidate_tasks_after_state_activation_count"],
+            1,
+        )
+        self.assertEqual(
+            payload["summary"]["blocked_before_open_window_count"],
+            2,
+        )
 
         candidate = payload["candidate_tasks_after_state_activation"][0]
         self.assertEqual(candidate["task_id"], "ST09_03")
@@ -251,26 +256,26 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             ["policy:formal_window_closed"],
         )
 
-        blocked_map = {
+        blocked = {
             item["task_id"]: item for item in payload["blocked_before_open_window"]
         }
-        self.assertEqual(blocked_map["ST01_01"]["classification"], "content_blocked")
-        self.assertIn("required_tests", blocked_map["ST01_01"]["manual_fill_fields"])
+        self.assertEqual(blocked["ST01_01"]["classification"], "content_blocked")
+        self.assertIn("required_tests", blocked["ST01_01"]["manual_fill_fields"])
         self.assertIn(
             "acceptance_criteria",
-            blocked_map["ST01_01"]["manual_fill_fields"],
+            blocked["ST01_01"]["manual_fill_fields"],
         )
 
         self.assertEqual(
-            blocked_map["ST02_03"]["classification"],
+            blocked["ST02_03"]["classification"],
             "module_level_blocked",
         )
         self.assertIn(
             "module:M02",
-            blocked_map["ST02_03"]["current_effective_blockers"],
+            blocked["ST02_03"]["current_effective_blockers"],
         )
 
-    def test_prerequisites_and_predictions_remain_task_specific(self) -> None:
+    def test_outputs_prerequisites_and_predictions(self) -> None:
         payload = build_task_window_bridge(
             state_path=self.state_path,
             evaluate_payload=self._evaluate(),
@@ -280,19 +285,19 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
         prerequisites = {
             item["task_id"]: item for item in payload["state_activation_prerequisites"]
         }
-        self.assertTrue(prerequisites["ST09_03"]["eligible_for_state_activation"])
-        self.assertFalse(prerequisites["ST01_01"]["eligible_for_state_activation"])
-        self.assertFalse(prerequisites["ST02_03"]["eligible_for_state_activation"])
+        self.assertTrue(prerequisites["ST09_03"]["content_blockers_cleared"])
+        self.assertFalse(prerequisites["ST01_01"]["content_blockers_cleared"])
+        self.assertFalse(prerequisites["ST02_03"]["module_level_blockers_cleared"])
 
         predicted = {
             item["task_id"]: item
             for item in payload["predicted_post_activation_blockers"]
         }
-        self.assertTrue(predicted["ST09_03"]["only_formal_window_after_activation"])
-        self.assertFalse(predicted["ST01_01"]["only_formal_window_after_activation"])
-        self.assertTrue(predicted["ST02_03"]["post_activation_still_blocked"])
+        self.assertTrue(predicted["ST09_03"]["window_only_after_state_activation"])
+        self.assertFalse(predicted["ST01_01"]["window_only_after_state_activation"])
+        self.assertFalse(predicted["ST02_03"]["window_only_after_state_activation"])
 
-    def test_examples_and_next_steps_explain_sample_differences(self) -> None:
+    def test_examples_and_next_steps_cover_named_samples(self) -> None:
         payload = build_task_window_bridge(
             state_path=self.state_path,
             evaluate_payload=self._evaluate(),
@@ -301,11 +306,11 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
 
         examples = {item["task_id"]: item for item in payload["task_examples"]}
         self.assertTrue(examples["ST09_03"]["why_close_to_open_window"])
-        self.assertTrue(examples["ST01_01"]["why_deferred"])
+        self.assertTrue(examples["ST01_01"]["why_not_open_window_yet"])
         self.assertIn("module:M02", examples["ST02_03"]["module_level_blockers"])
 
         titles = [item["title"] for item in payload["recommended_next_step"]]
-        self.assertIn("把 state activation dry-run 聚焦到首批候选", titles)
+        self.assertIn("优先看首批 state activation 候选", titles)
         self.assertIn("先继续处理内容层缺口", titles)
         self.assertIn("先解决模块继承 blocker", titles)
 
