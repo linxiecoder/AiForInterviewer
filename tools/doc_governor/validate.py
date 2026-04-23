@@ -25,6 +25,9 @@ from .schema import (
     MATURITY_LEVELS,
     MODULE_DOC_SLOTS,
     READINESS_STATUSES,
+    REQUIREMENT_RELATION_ENTITY_TYPES,
+    REQUIREMENT_RELATION_FACT_FIELD,
+    REQUIREMENT_RELATION_META_FIELD,
     REVIEW_STATUSES,
     SCHEMA_VERSION,
     SUBTASK_DOC_SLOTS,
@@ -185,14 +188,37 @@ def validate_state_file(state_path: Path) -> list[Diagnostic]:
     diagnostics.extend(_validate_top_level(state, state_path))
     diagnostics.extend(_validate_governance_rounds(state.get("governance_rounds"), state_path))
     diagnostics.extend(_validate_requirements(state.get("requirements"), state_path))
-    diagnostics.extend(_validate_modules(state.get("modules"), state_path))
-    diagnostics.extend(_validate_subtasks(state.get("subtasks"), state_path))
+    known_requirement_ids = _collect_known_requirement_ids(state.get("requirements"))
+    diagnostics.extend(
+        _validate_modules(
+            state.get("modules"),
+            state_path,
+            known_requirement_ids=known_requirement_ids,
+        )
+    )
+    diagnostics.extend(
+        _validate_subtasks(
+            state.get("subtasks"),
+            state_path,
+            known_requirement_ids=known_requirement_ids,
+        )
+    )
     diagnostics.extend(_validate_documents(state.get("documents"), state_path))
 
     # Schema validation and rule validation are independent by design.
     diagnostics.extend(evaluate_rules(state))
 
     return diagnostics
+
+
+def _collect_known_requirement_ids(requirements_obj: object) -> set[str]:
+    if not isinstance(requirements_obj, dict):
+        return set()
+    return {
+        str(requirement_id)
+        for requirement_id in requirements_obj.keys()
+        if REQUIREMENT_ID_RE.fullmatch(str(requirement_id))
+    }
 
 
 def _validate_top_level(state: dict[str, object], state_path: Path) -> list[Diagnostic]:
@@ -828,7 +854,12 @@ def _validate_requirements(requirements_obj: object, state_path: Path) -> list[D
             )
 
     return diagnostics
-def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]:
+def _validate_modules(
+    modules_obj: object,
+    state_path: Path,
+    *,
+    known_requirement_ids: set[str],
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(modules_obj, dict):
         diagnostics.append(
@@ -940,6 +971,16 @@ def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]
                 required=False,
             )
         )
+        diagnostics.extend(
+            _validate_requirement_relation_fields(
+                entity_type="module",
+                entity_id=module_id,
+                meta_obj=module.get("meta"),
+                facts_obj=module.get("facts"),
+                state_path=state_path,
+                known_requirement_ids=known_requirement_ids,
+            )
+        )
 
         if extract_module_id_from_path(path) is not None:
             expected_id = extract_module_id_from_path(path)
@@ -966,7 +1007,12 @@ def _validate_modules(modules_obj: object, state_path: Path) -> list[Diagnostic]
     return diagnostics
 
 
-def _validate_subtasks(subtasks_obj: object, state_path: Path) -> list[Diagnostic]:
+def _validate_subtasks(
+    subtasks_obj: object,
+    state_path: Path,
+    *,
+    known_requirement_ids: set[str],
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(subtasks_obj, dict):
         diagnostics.append(
@@ -1076,6 +1122,16 @@ def _validate_subtasks(subtasks_obj: object, state_path: Path) -> list[Diagnosti
                 state_obj=subtask.get("state"),
                 state_path=state_path,
                 required=False,
+            )
+        )
+        diagnostics.extend(
+            _validate_requirement_relation_fields(
+                entity_type="subtask",
+                entity_id=subtask_id,
+                meta_obj=subtask.get("meta"),
+                facts_obj=subtask.get("facts"),
+                state_path=state_path,
+                known_requirement_ids=known_requirement_ids,
             )
         )
 
@@ -2061,6 +2117,200 @@ def _validate_facts(
                         ],
                     )
                 )
+
+    return diagnostics
+
+
+def _validate_requirement_relation_fields(
+    *,
+    entity_type: str,
+    entity_id: str,
+    meta_obj: object,
+    facts_obj: object,
+    state_path: Path,
+    known_requirement_ids: set[str],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if entity_type not in REQUIREMENT_RELATION_ENTITY_TYPES:
+        return diagnostics
+
+    meta_requirement_id: str | None = None
+    facts_requirement_ids: list[str] | None = None
+
+    if isinstance(meta_obj, dict) and REQUIREMENT_RELATION_META_FIELD in meta_obj:
+        raw_meta_requirement_id = meta_obj.get(REQUIREMENT_RELATION_META_FIELD)
+        if not isinstance(raw_meta_requirement_id, str) or not REQUIREMENT_ID_RE.fullmatch(
+            raw_meta_requirement_id.strip()
+        ):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_INVALID_REQUIREMENT_RELATION_ID",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+                    message=f"meta.{REQUIREMENT_RELATION_META_FIELD} must be a valid requirement id.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+                            value=raw_meta_requirement_id,
+                        )
+                    ],
+                )
+            )
+        else:
+            meta_requirement_id = raw_meta_requirement_id.strip()
+            if meta_requirement_id not in known_requirement_ids:
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_UNKNOWN_REQUIREMENT_RELATION_ID",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+                        message=f"Unknown requirement relation id: {meta_requirement_id}",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+                                value=meta_requirement_id,
+                            )
+                        ],
+                    )
+                )
+
+    if isinstance(facts_obj, dict) and REQUIREMENT_RELATION_FACT_FIELD in facts_obj:
+        raw_requirement_ids = facts_obj.get(REQUIREMENT_RELATION_FACT_FIELD)
+        if not isinstance(raw_requirement_ids, list):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_MISSING_REQUIRED_FIELD",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                    message=f"{REQUIREMENT_RELATION_FACT_FIELD} must be a list when present.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                            value=type(raw_requirement_ids).__name__,
+                        )
+                    ],
+                )
+            )
+        else:
+            facts_requirement_ids = []
+            for index, value in enumerate(raw_requirement_ids):
+                if not isinstance(value, str) or not REQUIREMENT_ID_RE.fullmatch(value.strip()):
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_INVALID_REQUIREMENT_RELATION_ID",
+                            severity="error",
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            field_path=(
+                                f"{entity_type}s.{entity_id}.facts."
+                                f"{REQUIREMENT_RELATION_FACT_FIELD}[{index}]"
+                            ),
+                            message=f"Invalid requirement relation id: {value}",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                                    value=value,
+                                )
+                            ],
+                        )
+                    )
+                    continue
+                normalized_value = value.strip()
+                facts_requirement_ids.append(normalized_value)
+                if normalized_value not in known_requirement_ids:
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_UNKNOWN_REQUIREMENT_RELATION_ID",
+                            severity="error",
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            field_path=(
+                                f"{entity_type}s.{entity_id}.facts."
+                                f"{REQUIREMENT_RELATION_FACT_FIELD}[{index}]"
+                            ),
+                            message=f"Unknown requirement relation id: {normalized_value}",
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                                    value=normalized_value,
+                                )
+                            ],
+                        )
+                    )
+
+            if facts_requirement_ids is not None:
+                facts_requirement_ids = list(dict.fromkeys(facts_requirement_ids))
+                if len(facts_requirement_ids) > 1:
+                    diagnostics.append(
+                        make_diagnostic(
+                            code="SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS",
+                            severity="warning",
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            field_path=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                            message=(
+                                f"{REQUIREMENT_RELATION_FACT_FIELD} contains multiple requirement ids: "
+                                + ", ".join(facts_requirement_ids)
+                            ),
+                            evidence=[
+                                make_evidence(
+                                    type="state_check",
+                                    path=state_path.as_posix(),
+                                    ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                                    value=facts_requirement_ids,
+                                )
+                            ],
+                        )
+                    )
+
+    if (
+        meta_requirement_id is not None
+        and facts_requirement_ids is not None
+        and meta_requirement_id not in facts_requirement_ids
+    ):
+        diagnostics.append(
+            make_diagnostic(
+                code="SCHEMA_REQUIREMENT_RELATION_CONFLICT",
+                severity="error",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_path=f"{entity_type}s.{entity_id}",
+                message=(
+                    f"meta.{REQUIREMENT_RELATION_META_FIELD} is not compatible with "
+                    f"facts.{REQUIREMENT_RELATION_FACT_FIELD}."
+                ),
+                evidence=[
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+                        value=meta_requirement_id,
+                    ),
+                    make_evidence(
+                        type="state_check",
+                        path=state_path.as_posix(),
+                        ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                        value=facts_requirement_ids,
+                    ),
+                ],
+            )
+        )
 
     return diagnostics
 

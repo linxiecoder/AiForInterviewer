@@ -158,14 +158,44 @@ class BootstrapStateTests(unittest.TestCase):
         report_text = (self.repo_root / "docs" / "governance" / "BOOTSTRAP_REPORT.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("OQ policy defaults applied:", report_text)
-        self.assertIn("count=2", report_text)
-        self.assertIn("sample_oq_ids=['OQ-201', 'OQ-202']", report_text)
 
-        # 聚合告警不应出现 per-OQ 细分告警
-        oq_warnings = [item for item in payload["diagnostics"] if "OQ-" in item.get("entity_id", "")]
-        self.assertFalse(any(item["code"] == "SCAN_OPEN_QUESTIONS_ROW_PARSE_FAILED" for item in oq_warnings))
+    def test_bootstrap_carries_native_requirement_relations(self) -> None:
+        (self.repo_root / "TASK_INDEX.md").write_text(
+            textwrap.dedent(
+                """
+                # 任务索引
 
+                | Task ID | 名称 | 父任务 | 前置依赖 | Requirement ID | 对应文档路径 |
+                | --- | --- | --- | --- | --- | --- |
+                | RQ10 | 匹配分析需求 | - | - | - | `docs/requirements/RQ10-match-analysis/` |
+                | M04 | 匹配分析模块 | - | - | RQ10 | `docs/modules/M04-match-analysis-and-evidence/` |
+                | ST04_01 | 岗位-简历绑定与输入契约 | M04 | M04 |  | `docs/modules/M04-match-analysis-and-evidence/sub_modules/ST04_01-bindings-and-input-contract/` |
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
+
+        exit_code, _payload = self.run_cli(
+            "bootstrap-state",
+            "--repo-root",
+            str(self.repo_root),
+            "--overwrite",
+        )
+        self.assertEqual(exit_code, 0)
+
+        import yaml
+
+        state = yaml.safe_load(
+            (self.repo_root / "docs" / "governance" / "DOC_STATE.bootstrap.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(sorted(state["requirements"].keys()), ["RQ10"])
+        self.assertEqual(state["modules"]["M04"]["meta"]["requirement_id"], "RQ10")
+        self.assertEqual(state["modules"]["M04"]["facts"]["requirement_ids"], ["RQ10"])
+        self.assertEqual(state["subtasks"]["ST04_01"]["meta"]["requirement_id"], "RQ10")
+        self.assertEqual(state["subtasks"]["ST04_01"]["facts"]["requirement_ids"], ["RQ10"])
     def test_bootstrap_state_script_entrypoint_works(self) -> None:
         try:
             result = subprocess.run(

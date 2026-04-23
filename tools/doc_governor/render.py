@@ -26,6 +26,7 @@ def render_from_payload(
     agenda_limit: int = 10,
 ) -> str:
     summary = _as_dict(payload.get("summary"))
+    requirements = _as_dict(payload.get("requirements"))
     modules = _as_dict(payload.get("modules"))
     subtasks = _as_dict(payload.get("subtasks"))
     documents = _as_dict(payload.get("documents"))
@@ -50,6 +51,14 @@ def render_from_payload(
     )
     lines: list[str] = ["# DOC_GOVERNOR_REPORT", ""]
     lines.extend(_render_summary(summary))
+    lines.extend(
+        _render_requirement_mainflow(
+            summary=summary,
+            requirements=requirements,
+            modules=modules,
+            subtasks=subtasks,
+        )
+    )
     lines.extend(_render_review_section(modules, section_type="modules"))
     lines.extend(_render_review_section(subtasks, section_type="subtasks"))
     lines.extend(_render_review_section(documents, section_type="documents"))
@@ -93,9 +102,11 @@ def _render_summary(summary: dict[str, Any]) -> list[str]:
     lines = [
         "## Summary",
         "",
+        f"- requirements_review_required: {summary.get('requirements_review_required', 0)}",
         f"- modules_review_required: {summary.get('modules_review_required', 0)}",
         f"- subtasks_review_required: {summary.get('subtasks_review_required', 0)}",
         f"- documents_review_required: {summary.get('documents_review_required', 0)}",
+        f"- requirements_blocked_count: {summary.get('requirements_blocked_count', 0)}",
         f"- modules_blocked_count: {summary.get('modules_blocked_count', 0)}",
         f"- subtasks_blocked_count: {summary.get('subtasks_blocked_count', 0)}",
         f"- documents_blocked_count: {summary.get('documents_blocked_count', 0)}",
@@ -117,6 +128,131 @@ def _render_summary(summary: dict[str, Any]) -> list[str]:
     for key in GATE_COUNT_KEYS:
         lines.append(f"  - {key}: {oq_gate_counts.get(key, 0)}")
     return lines + [""]
+
+
+def _render_requirement_mainflow(
+    *,
+    summary: dict[str, Any],
+    requirements: dict[str, Any],
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
+) -> list[str]:
+    relation_counts = _summarize_requirement_relation_status(modules=modules, subtasks=subtasks)
+    lines = [
+        "## Requirement Mainflow",
+        "",
+        "### counts",
+        f"- requirement_entries: {len(requirements)}",
+        f"- requirements_review_required: {summary.get('requirements_review_required', 0)}",
+        f"- requirements_blocked_count: {summary.get('requirements_blocked_count', 0)}",
+        f"- modules_missing_requirement_relation: {relation_counts['modules_missing_requirement_relation']}",
+        f"- modules_ambiguous_requirement_relation: {relation_counts['modules_ambiguous_requirement_relation']}",
+        f"- subtasks_missing_requirement_relation: {relation_counts['subtasks_missing_requirement_relation']}",
+        f"- subtasks_ambiguous_requirement_relation: {relation_counts['subtasks_ambiguous_requirement_relation']}",
+        "",
+        "### relation overview",
+    ]
+
+    if requirements:
+        lines.append("")
+        for requirement_id in sorted(requirements):
+            derived = _as_dict(_as_dict(requirements.get(requirement_id)).get("derived"))
+            module_ids = _normalize_string_list(derived.get("module_ids"))
+            task_ids = _normalize_string_list(derived.get("task_ids"))
+            blocker_refs = _normalize_string_list(derived.get("blocker_refs"))
+            gate_result = str(derived.get("gate_result", "unknown"))
+            review_required = "true" if bool(derived.get("review_required")) else "false"
+            lines.append(
+                f"- `{requirement_id}`: gate={gate_result} review_required={review_required} "
+                f"modules={_format_inline_list(module_ids)} tasks={_format_inline_list(task_ids)} "
+                f"blockers={_format_inline_list(blocker_refs)}"
+            )
+    else:
+        lines.extend(["", "- none"])
+
+    lines.extend(["", "### relation alerts", ""])
+    alerts = _collect_requirement_relation_alerts(modules=modules, subtasks=subtasks)
+    lines.extend(alerts if alerts else ["- none"])
+    return lines + [""]
+
+
+def _summarize_requirement_relation_status(
+    *,
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
+) -> dict[str, int]:
+    counts = {
+        "modules_missing_requirement_relation": 0,
+        "modules_ambiguous_requirement_relation": 0,
+        "subtasks_missing_requirement_relation": 0,
+        "subtasks_ambiguous_requirement_relation": 0,
+    }
+    for entity_type, entities in (("modules", modules), ("subtasks", subtasks)):
+        for entity in entities.values():
+            derived = _as_dict(_as_dict(entity).get("derived"))
+            requirement_ids = _normalize_string_list(derived.get("requirement_ids"))
+            if not requirement_ids:
+                counts[f"{entity_type}_missing_requirement_relation"] += 1
+            elif len(requirement_ids) > 1:
+                counts[f"{entity_type}_ambiguous_requirement_relation"] += 1
+    return counts
+
+
+def _collect_requirement_relation_alerts(
+    *,
+    modules: dict[str, Any],
+    subtasks: dict[str, Any],
+) -> list[str]:
+    rows: list[str] = []
+    for entity_type, entities in (("module", modules), ("subtask", subtasks)):
+        for entity_id in sorted(entities):
+            derived = _as_dict(_as_dict(entities.get(entity_id)).get("derived"))
+            requirement_ids = _normalize_string_list(derived.get("requirement_ids"))
+            if not requirement_ids:
+                rows.append(f"- `{entity_type}:{entity_id}`: requirement_relation=missing")
+                continue
+            if len(requirement_ids) > 1:
+                blocker_refs = _collect_relation_alert_blocker_refs(derived)
+                suffix = (
+                    f" blockers={_format_inline_list(blocker_refs)}"
+                    if blocker_refs
+                    else ""
+                )
+                rows.append(
+                    f"- `{entity_type}:{entity_id}`: requirement_relation=ambiguous "
+                    f"ids={_format_inline_list(requirement_ids)}{suffix}"
+                )
+    return rows
+
+
+def _collect_relation_alert_blocker_refs(derived: dict[str, Any]) -> list[str]:
+    blocker_refs = _normalize_string_list(derived.get("blocker_refs"))
+    if blocker_refs:
+        return blocker_refs
+
+    collected: list[str] = []
+    for blocker_key in (
+        "candidate_blockers",
+        "downstream_blockers",
+        "implementation_blockers",
+    ):
+        for blocker in _as_list(derived.get(blocker_key)):
+            if not isinstance(blocker, dict):
+                continue
+            ref = str(blocker.get("ref", "")).strip()
+            if ref:
+                collected.append(ref)
+    return _normalize_string_list(collected)
+
+
+def _normalize_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _format_inline_list(values: list[str]) -> str:
+    return "[" + ", ".join(values) + "]"
 
 
 def _render_review_section(entities: dict[str, Any], section_type: str) -> list[str]:

@@ -11,6 +11,8 @@ from .task_state_writeback import (
 )
 
 
+BRIDGE_CONTRACT_VERSION = 1
+
 MODULE_LEVEL_BLOCKERS = {"doc:api", "doc:open_questions"}
 CONTENT_BLOCKERS = {
     "doc:implementation_doc",
@@ -18,6 +20,32 @@ CONTENT_BLOCKERS = {
     "gate:implementation_scope_unclear",
     "gate:required_tests_missing",
     "gate:acceptance_criteria_missing",
+}
+MANUAL_FIELD_ORDER = {
+    "design_key_sections": 10,
+    "allowed_modify_paths": 20,
+    "required_tests": 30,
+    "acceptance_criteria": 40,
+}
+CLASSIFICATION_ORDER = {
+    "already_window_only": 10,
+    "window_only_after_state_activation": 20,
+    "content_blocked": 30,
+    "requirement_relation_blocked": 40,
+    "module_level_blocked": 50,
+    "post_activation_still_blocked": 60,
+}
+ACTION_ORDER = {
+    "review_state_activation_candidates": 10,
+    "clear_content_blockers_before_window": 20,
+    "confirm_requirement_relation_before_window": 30,
+    "keep_module_blockers_at_module_level": 40,
+    "advance_state_activation_dry_run": 100,
+    "keep_as_open_window_candidate": 110,
+    "resolve_content_gaps": 120,
+    "confirm_requirement_relation": 130,
+    "resolve_module_level_blockers": 140,
+    "reassess_post_activation_blockers": 150,
 }
 
 
@@ -47,21 +75,11 @@ def build_task_window_bridge(
     resolved_map = _group_blockers_by_task(apply_summary.get("resolved_blockers"))
     manual_fill_map = _group_fields_by_task(apply_summary.get("manual_fill_remaining"))
 
-    candidate_tasks_after_state_activation: list[dict[str, Any]] = []
-    blocked_before_open_window: list[dict[str, Any]] = []
-    state_activation_prerequisites: list[dict[str, Any]] = []
-    predicted_post_activation_blockers: list[dict[str, Any]] = []
-    task_examples: list[dict[str, Any]] = []
-    recommended_next_step: list[dict[str, Any]] = []
-
-    summary_counters = {
-        "content_blocked_count": 0,
-        "window_only_after_state_activation_count": 0,
-        "post_activation_still_blocked_count": 0,
-        "already_window_only_count": 0,
-        "module_level_blocked_count": 0,
-        "requirement_relation_blocked_count": 0,
-    }
+    raw_records: list[dict[str, Any]] = []
+    prerequisites_by_task: dict[str, dict[str, Any]] = {}
+    predictions_by_task: dict[str, dict[str, Any]] = {}
+    examples_by_task: dict[str, dict[str, Any]] = {}
+    actions: list[dict[str, Any]] = []
 
     for item in _as_list_of_dicts(writeback_preview.get("tasks")):
         task_id = str(item.get("task_id", "")).strip()
@@ -69,153 +87,201 @@ def build_task_window_bridge(
             continue
         module_id = str(item.get("module_id", "")).strip()
         resolved_in_content = resolved_map.get(task_id, set())
-        manual_fill_fields = manual_fill_map.get(task_id, [])
+        manual_fill_fields = _sort_fields(manual_fill_map.get(task_id, []))
 
-        current_blockers = _as_string_list(item.get("current_blocker_refs"))
-        predicted_blockers = _as_string_list(
-            item.get("predicted_blocker_refs_after_writeback")
+        current_blockers = _sort_blockers(
+            [
+                blocker
+                for blocker in _as_string_list(item.get("current_blocker_refs"))
+                if blocker not in resolved_in_content
+            ]
         )
-        effective_current_blockers = [
-            blocker for blocker in current_blockers if blocker not in resolved_in_content
-        ]
-        effective_predicted_blockers = [
-            blocker for blocker in predicted_blockers if blocker not in resolved_in_content
-        ]
-        categories = _categorize_blockers(effective_current_blockers)
+        predicted_blockers = _sort_blockers(
+            [
+                blocker
+                for blocker in _as_string_list(
+                    item.get("predicted_blocker_refs_after_writeback")
+                )
+                if blocker not in resolved_in_content
+            ]
+        )
+        categories = _categorize_blockers(current_blockers)
         activation_needed = (
             str(item.get("current_implementation_doc_state", "")).strip()
             != "active_working_doc"
         )
-
         classification = _classify_task(
             activation_needed=activation_needed,
             categories=categories,
             manual_fill_fields=manual_fill_fields,
-            effective_predicted_blockers=effective_predicted_blockers,
+            predicted_blockers=predicted_blockers,
         )
-        summary_counters[f"{classification}_count"] = (
-            summary_counters.get(f"{classification}_count", 0) + 1
+        bucket = _bucket_for_classification(classification)
+        priority = CLASSIFICATION_ORDER[classification]
+        reason = _build_reason(
+            classification=classification,
+            categories=categories,
+            manual_fill_fields=manual_fill_fields,
+            predicted_blockers=predicted_blockers,
         )
 
-        record = {
+        raw_records.append(
+            {
+                "task_id": task_id,
+                "module_id": module_id,
+                "bucket": bucket,
+                "classification": classification,
+                "priority": priority,
+                "current_effective_blockers": current_blockers,
+                "predicted_post_activation_blockers": predicted_blockers,
+                "manual_fill_fields": manual_fill_fields,
+                "resolved_in_content": sorted(resolved_in_content),
+                "reason": reason,
+            }
+        )
+
+        prerequisites_by_task[task_id] = {
             "task_id": task_id,
             "module_id": module_id,
+            "bucket": bucket,
             "classification": classification,
-            "current_effective_blockers": effective_current_blockers,
-            "predicted_post_activation_blockers": effective_predicted_blockers,
-            "manual_fill_fields": manual_fill_fields,
-            "resolved_in_content": sorted(resolved_in_content),
-            "reason": _build_reason(
+            "activation_needed": activation_needed,
+            "state_activation_ready": (
+                activation_needed
+                and not categories["content"]
+                and not manual_fill_fields
+                and not categories["requirement"]
+                and not categories["module"]
+                and not categories["other"]
+            ),
+            "content_blockers_cleared": not categories["content"]
+            and not manual_fill_fields
+            and not categories["other"],
+            "requirement_relation_resolved": not categories["requirement"],
+            "module_level_blockers_cleared": not categories["module"],
+            "remaining_manual_fill_fields": manual_fill_fields,
+        }
+
+        predictions_by_task[task_id] = {
+            "task_id": task_id,
+            "module_id": module_id,
+            "bucket": bucket,
+            "classification": classification,
+            "activation_needed": activation_needed,
+            "predicted_post_activation_blockers": predicted_blockers,
+            "predicted_outcome": _predicted_outcome(
                 classification=classification,
-                manual_fill_fields=manual_fill_fields,
-                categories=categories,
-                effective_predicted_blockers=effective_predicted_blockers,
+                predicted_blockers=predicted_blockers,
+            ),
+            "window_only_after_state_activation": (
+                classification == "window_only_after_state_activation"
             ),
         }
 
-        state_activation_prerequisites.append(
-            {
-                "task_id": task_id,
-                "module_id": module_id,
-                "activation_needed": activation_needed,
-                "content_blockers_cleared": not categories["content"]
-                and not manual_fill_fields
-                and not categories["other"],
-                "requirement_relation_resolved": not categories["requirement"],
-                "module_level_blockers_cleared": not categories["module"],
-                "remaining_manual_fill_fields": manual_fill_fields,
-            }
-        )
-        predicted_post_activation_blockers.append(
-            {
-                "task_id": task_id,
-                "module_id": module_id,
-                "activation_needed": activation_needed,
-                "predicted_post_activation_blockers": effective_predicted_blockers,
-                "window_only_after_state_activation": (
-                    effective_predicted_blockers == [FORMAL_WINDOW_CLOSED]
-                ),
-            }
-        )
-        task_examples.append(
-            {
-                "task_id": task_id,
-                "module_id": module_id,
-                "classification": classification,
-                "reason": record["reason"],
-                "why_close_to_open_window": classification
-                in {
-                    "window_only_after_state_activation",
-                    "already_window_only",
-                },
-                "why_not_open_window_yet": classification
-                not in {
-                    "window_only_after_state_activation",
-                    "already_window_only",
-                },
-                "module_level_blockers": categories["module"],
-            }
-        )
-        recommended_next_step.extend(
+        examples_by_task[task_id] = {
+            "task_id": task_id,
+            "module_id": module_id,
+            "bucket": bucket,
+            "classification": classification,
+            "sample_role": _sample_role_for(classification),
+            "reason": reason,
+            "why_close_to_open_window": bucket == "candidate",
+            "why_not_open_window_yet": bucket == "deferred",
+            "module_level_blockers": categories["module"],
+            "content_blockers": categories["content"],
+            "manual_fill_fields": manual_fill_fields,
+            "predicted_post_activation_blockers": predicted_blockers,
+        }
+
+        actions.extend(
             _build_next_actions(
                 task_id=task_id,
                 module_id=module_id,
                 classification=classification,
-                categories=categories,
                 manual_fill_fields=manual_fill_fields,
             )
         )
 
-        if classification in {
-            "window_only_after_state_activation",
-            "already_window_only",
-        }:
-            candidate_tasks_after_state_activation.append(record)
-        else:
-            blocked_before_open_window.append(record)
+    sorted_records = sorted(raw_records, key=_record_sort_key)
+    candidate_tasks = [
+        _strip_internal_fields(record)
+        for record in sorted_records
+        if record["bucket"] == "candidate"
+    ]
+    deferred_tasks = [
+        _strip_internal_fields(record)
+        for record in sorted_records
+        if record["bucket"] == "deferred"
+    ]
 
-    recommended_next_step = _prepend_batch_actions(
-        next_actions=_dedupe_actions(recommended_next_step),
-        candidate_tasks=candidate_tasks_after_state_activation,
-        blocked_tasks=blocked_before_open_window,
+    task_order = {record["task_id"]: index for index, record in enumerate(sorted_records)}
+    prerequisites = _sort_by_task_order(prerequisites_by_task.values(), task_order)
+    predicted_post_activation_blockers = _sort_by_task_order(
+        predictions_by_task.values(),
+        task_order,
+    )
+    task_examples = _sort_by_task_order(examples_by_task.values(), task_order)
+
+    recommended_next_step = _finalize_actions(
+        _prepend_batch_actions(
+            next_actions=_dedupe_actions(actions),
+            candidate_tasks=candidate_tasks,
+            deferred_tasks=deferred_tasks,
+        )
     )
 
+    summary = {
+        "selected_task_count": len(sorted_records),
+        "candidate_task_count": len(candidate_tasks),
+        "deferred_task_count": len(deferred_tasks),
+        "candidate_tasks_after_state_activation_count": len(candidate_tasks),
+        "blocked_before_open_window_count": len(deferred_tasks),
+        "already_window_only_count": sum(
+            1 for record in sorted_records if record["classification"] == "already_window_only"
+        ),
+        "window_only_after_state_activation_count": sum(
+            1
+            for record in sorted_records
+            if record["classification"] == "window_only_after_state_activation"
+        ),
+        "content_blocked_count": sum(
+            1 for record in sorted_records if record["classification"] == "content_blocked"
+        ),
+        "requirement_relation_blocked_count": sum(
+            1
+            for record in sorted_records
+            if record["classification"] == "requirement_relation_blocked"
+        ),
+        "module_level_blocked_count": sum(
+            1
+            for record in sorted_records
+            if record["classification"] == "module_level_blocked"
+        ),
+        "post_activation_still_blocked_count": sum(
+            1
+            for record in sorted_records
+            if record["classification"] == "post_activation_still_blocked"
+        ),
+    }
+
     return {
-        "summary": {
-            "selected_task_count": len(task_ids),
-            "candidate_tasks_after_state_activation_count": len(
-                candidate_tasks_after_state_activation
-            ),
-            "blocked_before_open_window_count": len(blocked_before_open_window),
-            "content_blocked_count": summary_counters["content_blocked_count"],
-            "window_only_after_state_activation_count": summary_counters[
-                "window_only_after_state_activation_count"
-            ],
-            "post_activation_still_blocked_count": summary_counters[
-                "post_activation_still_blocked_count"
-            ],
-            "already_window_only_count": summary_counters[
-                "already_window_only_count"
-            ],
-            "module_level_blocked_count": summary_counters[
-                "module_level_blocked_count"
-            ],
-            "requirement_relation_blocked_count": summary_counters[
-                "requirement_relation_blocked_count"
-            ],
-        },
-        "candidate_tasks_after_state_activation": candidate_tasks_after_state_activation,
-        "blocked_before_open_window": blocked_before_open_window,
-        "state_activation_prerequisites": state_activation_prerequisites,
+        "contract_version": BRIDGE_CONTRACT_VERSION,
+        "summary": summary,
+        "prerequisites": prerequisites,
+        "state_activation_prerequisites": prerequisites,
         "predicted_post_activation_blockers": predicted_post_activation_blockers,
+        "candidate_tasks": candidate_tasks,
+        "candidate_tasks_after_state_activation": candidate_tasks,
+        "deferred_tasks": deferred_tasks,
+        "blocked_before_open_window": deferred_tasks,
         "recommended_next_step": recommended_next_step,
         "confidence": _build_confidence(
-            candidate_tasks=candidate_tasks_after_state_activation,
-            blocked_tasks=blocked_before_open_window,
+            candidate_tasks=candidate_tasks,
+            deferred_tasks=deferred_tasks,
         ),
         "reasoning_notes": [
-            "本桥接层只做分析，不写 state，不修改 preflight-open-window 行为。",
-            "判断是否接近 open-window 时，会剔除当前文档内容里已清掉但 formal gate 仍可能保留的旧 blocker 表象。",
+            "本桥接层只做分析，不写 state，也不修改 preflight-open-window 或 open-window 主链。",
+            "判断是否接近 open-window 时，会剔除已在内容层清掉、但 formal gate 仍可能保留的旧 blocker 表象。",
             "formal_window_closed 仍是独立 gate；即使内容 blocker 已收敛，也不等于窗口已经可直接打开。",
         ],
         "task_examples": task_examples,
@@ -227,7 +293,7 @@ def _classify_task(
     activation_needed: bool,
     categories: dict[str, list[str]],
     manual_fill_fields: list[str],
-    effective_predicted_blockers: list[str],
+    predicted_blockers: list[str],
 ) -> str:
     if categories["module"]:
         return "module_level_blocked"
@@ -235,19 +301,49 @@ def _classify_task(
         return "requirement_relation_blocked"
     if categories["content"] or categories["other"] or manual_fill_fields:
         return "content_blocked"
-    if not activation_needed and effective_predicted_blockers == [FORMAL_WINDOW_CLOSED]:
+    if not activation_needed and predicted_blockers == [FORMAL_WINDOW_CLOSED]:
         return "already_window_only"
-    if activation_needed and effective_predicted_blockers == [FORMAL_WINDOW_CLOSED]:
+    if activation_needed and predicted_blockers == [FORMAL_WINDOW_CLOSED]:
         return "window_only_after_state_activation"
     return "post_activation_still_blocked"
+
+
+def _bucket_for_classification(classification: str) -> str:
+    if classification in {
+        "already_window_only",
+        "window_only_after_state_activation",
+    }:
+        return "candidate"
+    return "deferred"
+
+
+def _predicted_outcome(*, classification: str, predicted_blockers: list[str]) -> str:
+    if classification == "already_window_only":
+        return "already_window_only"
+    if classification == "window_only_after_state_activation":
+        return "window_only"
+    if not predicted_blockers:
+        return "clear"
+    return "still_blocked"
+
+
+def _sample_role_for(classification: str) -> str:
+    return {
+        "already_window_only": "near_window_candidate",
+        "window_only_after_state_activation": "near_window_candidate",
+        "content_blocked": "content_blocked_example",
+        "requirement_relation_blocked": "requirement_relation_example",
+        "module_level_blocked": "module_inherited_example",
+        "post_activation_still_blocked": "post_activation_blocked_example",
+    }[classification]
 
 
 def _build_reason(
     *,
     classification: str,
-    manual_fill_fields: list[str],
     categories: dict[str, list[str]],
-    effective_predicted_blockers: list[str],
+    manual_fill_fields: list[str],
+    predicted_blockers: list[str],
 ) -> str:
     if classification == "window_only_after_state_activation":
         return "内容 blocker 已基本收敛；若推进 implementation_doc_state，预计只剩 formal_window_closed。"
@@ -264,7 +360,7 @@ def _build_reason(
     if classification == "requirement_relation_blocked":
         blockers = ", ".join(categories["requirement"]) or "requirement relation"
         return f"requirement 关系仍未闭合：{blockers}。"
-    blockers = ", ".join(effective_predicted_blockers) or "剩余 blocker"
+    blockers = ", ".join(predicted_blockers) or "剩余 blocker"
     return f"即使推进 implementation_doc_state，预计仍不适合进入 open-window：{blockers}。"
 
 
@@ -273,12 +369,12 @@ def _build_next_actions(
     task_id: str,
     module_id: str,
     classification: str,
-    categories: dict[str, list[str]],
     manual_fill_fields: list[str],
 ) -> list[dict[str, Any]]:
     if classification == "window_only_after_state_activation":
         return [
             {
+                "code": "advance_state_activation_dry_run",
                 "scope": "task",
                 "task_id": task_id,
                 "module_id": module_id,
@@ -289,6 +385,7 @@ def _build_next_actions(
     if classification == "already_window_only":
         return [
             {
+                "code": "keep_as_open_window_candidate",
                 "scope": "task",
                 "task_id": task_id,
                 "module_id": module_id,
@@ -299,6 +396,7 @@ def _build_next_actions(
     if classification == "module_level_blocked":
         return [
             {
+                "code": "resolve_module_level_blockers",
                 "scope": "module",
                 "task_id": task_id,
                 "module_id": module_id,
@@ -309,6 +407,7 @@ def _build_next_actions(
     if classification == "requirement_relation_blocked":
         return [
             {
+                "code": "confirm_requirement_relation",
                 "scope": "task",
                 "task_id": task_id,
                 "module_id": module_id,
@@ -324,6 +423,7 @@ def _build_next_actions(
         )
         return [
             {
+                "code": "resolve_content_gaps",
                 "scope": "task",
                 "task_id": task_id,
                 "module_id": module_id,
@@ -333,6 +433,7 @@ def _build_next_actions(
         ]
     return [
         {
+            "code": "reassess_post_activation_blockers",
             "scope": "task",
             "task_id": task_id,
             "module_id": module_id,
@@ -346,7 +447,7 @@ def _prepend_batch_actions(
     *,
     next_actions: list[dict[str, Any]],
     candidate_tasks: list[dict[str, Any]],
-    blocked_tasks: list[dict[str, Any]],
+    deferred_tasks: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     batch_actions: list[dict[str, Any]] = []
     if candidate_tasks:
@@ -355,6 +456,7 @@ def _prepend_batch_actions(
         )
         batch_actions.append(
             {
+                "code": "review_state_activation_candidates",
                 "scope": "batch",
                 "task_id": "",
                 "module_id": "",
@@ -362,9 +464,10 @@ def _prepend_batch_actions(
                 "reason": f"当前最接近 open-window 的 task 是：{task_ids}。",
             }
         )
-    if any(item.get("classification") == "content_blocked" for item in blocked_tasks):
+    if any(item.get("classification") == "content_blocked" for item in deferred_tasks):
         batch_actions.append(
             {
+                "code": "clear_content_blockers_before_window",
                 "scope": "batch",
                 "task_id": "",
                 "module_id": "",
@@ -372,9 +475,24 @@ def _prepend_batch_actions(
                 "reason": "仍有 task 停留在人工字段或内容层，不宜提前推进 formal window 视角。",
             }
         )
-    if any(item.get("classification") == "module_level_blocked" for item in blocked_tasks):
+    if any(
+        item.get("classification") == "requirement_relation_blocked"
+        for item in deferred_tasks
+    ):
         batch_actions.append(
             {
+                "code": "confirm_requirement_relation_before_window",
+                "scope": "batch",
+                "task_id": "",
+                "module_id": "",
+                "title": "先确认 requirement 关系，再谈 open-window",
+                "reason": "requirement 关系未闭合时，bridge 输出不能直接下放到窗口侧。",
+            }
+        )
+    if any(item.get("classification") == "module_level_blocked" for item in deferred_tasks):
+        batch_actions.append(
+            {
+                "code": "keep_module_blockers_at_module_level",
                 "scope": "batch",
                 "task_id": "",
                 "module_id": "",
@@ -382,24 +500,71 @@ def _prepend_batch_actions(
                 "reason": "模块继承问题不应通过 task 层桥接分析被误推成 open-window 候选。",
             }
         )
-    return _dedupe_actions(batch_actions + next_actions)
+    return batch_actions + next_actions
+
+
+def _finalize_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sorted_actions = sorted(
+        actions,
+        key=lambda item: (
+            ACTION_ORDER.get(str(item.get("code", "")).strip(), 999),
+            str(item.get("module_id", "")).strip(),
+            str(item.get("task_id", "")).strip(),
+            str(item.get("title", "")).strip(),
+        ),
+    )
+    output: list[dict[str, Any]] = []
+    for index, item in enumerate(sorted_actions, start=1):
+        normalized = dict(item)
+        normalized["step"] = index
+        output.append(normalized)
+    return output
 
 
 def _build_confidence(
     *,
     candidate_tasks: list[dict[str, Any]],
-    blocked_tasks: list[dict[str, Any]],
+    deferred_tasks: list[dict[str, Any]],
 ) -> dict[str, Any]:
     score = 0.82
     if candidate_tasks:
         score += 0.06
-    if any(item.get("classification") == "module_level_blocked" for item in blocked_tasks):
+    if any(item.get("classification") == "module_level_blocked" for item in deferred_tasks):
         score -= 0.03
-    if any(item.get("classification") == "content_blocked" for item in blocked_tasks):
+    if any(item.get("classification") == "content_blocked" for item in deferred_tasks):
         score -= 0.03
     score = round(max(0.0, min(1.0, score)), 2)
     level = "high" if score >= 0.85 else "medium" if score >= 0.7 else "low"
     return {"level": level, "score": score}
+
+
+def _record_sort_key(record: dict[str, Any]) -> tuple[int, str, str]:
+    return (
+        int(record.get("priority", 999)),
+        str(record.get("module_id", "")).strip(),
+        str(record.get("task_id", "")).strip(),
+    )
+
+
+def _sort_by_task_order(
+    items: Any,
+    task_order: dict[str, int],
+) -> list[dict[str, Any]]:
+    return sorted(
+        _as_list_of_dicts(list(items)),
+        key=lambda item: (
+            task_order.get(str(item.get("task_id", "")).strip(), 999),
+            str(item.get("task_id", "")).strip(),
+        ),
+    )
+
+
+def _strip_internal_fields(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in record.items()
+        if key not in {"priority"}
+    }
 
 
 def _group_blockers_by_task(items: Any) -> dict[str, set[str]]:
@@ -419,7 +584,7 @@ def _group_fields_by_task(items: Any) -> dict[str, list[str]]:
         task_id = str(item.get("task_id", "")).strip()
         if not task_id:
             continue
-        output[task_id] = _dedupe_strings(_as_string_list(item.get("fields")))
+        output[task_id] = _sort_fields(_as_string_list(item.get("fields")))
     return output
 
 
@@ -444,7 +609,30 @@ def _categorize_blockers(blockers: list[str]) -> dict[str, list[str]]:
             buckets["content"].append(blocker)
         else:
             buckets["other"].append(blocker)
-    return {key: _dedupe_strings(value) for key, value in buckets.items()}
+    return {key: _sort_blockers(value) for key, value in buckets.items()}
+
+
+def _sort_fields(fields: list[str]) -> list[str]:
+    return sorted(
+        _dedupe_strings(fields),
+        key=lambda item: (MANUAL_FIELD_ORDER.get(item, 999), item),
+    )
+
+
+def _sort_blockers(blockers: list[str]) -> list[str]:
+    return sorted(
+        _dedupe_strings(blockers),
+        key=lambda blocker: (
+            10 if blocker.startswith("gate:requirement_id_")
+            else 20 if blocker.startswith("module:") or blocker in MODULE_LEVEL_BLOCKERS
+            else 30
+            if blocker in CONTENT_BLOCKERS or blocker.startswith("policy:language_non_compliant")
+            else 40 if blocker == IMPLEMENTATION_DOC_NOT_ACTIVE
+            else 50 if blocker == FORMAL_WINDOW_CLOSED
+            else 90,
+            blocker,
+        ),
+    )
 
 
 def _dedupe_actions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -452,10 +640,10 @@ def _dedupe_actions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for item in items:
         key = (
+            str(item.get("code", "")).strip(),
             str(item.get("scope", "")).strip(),
             str(item.get("task_id", "")).strip(),
             str(item.get("module_id", "")).strip(),
-            str(item.get("title", "")).strip(),
         )
         if key in seen:
             continue

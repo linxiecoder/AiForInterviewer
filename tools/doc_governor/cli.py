@@ -83,6 +83,7 @@ if __package__ in {None, ""}:
         render_task_state_writeback_markdown,
         write_task_state_writeback_output,
     )
+    from tools.doc_governor.task_window_bridge import build_task_window_bridge
     from tools.doc_governor.governance_rounds import (
         build_document_round_plan,
         load_state as load_governance_state,
@@ -180,6 +181,7 @@ else:
         render_task_state_writeback_markdown,
         write_task_state_writeback_output,
     )
+    from .task_window_bridge import build_task_window_bridge
     from .governance_rounds import (
         build_document_round_plan,
         load_state as load_governance_state,
@@ -437,6 +439,14 @@ def main(argv: list[str] | None = None) -> int:
     state_apply_parser.add_argument("--reason")
     state_apply_parser.add_argument("--evaluate-json")
 
+    task_window_bridge_parser = subparsers.add_parser("plan-task-window-candidates")
+    task_window_bridge_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    task_window_bridge_parser.add_argument("--entity-id", action="append")
+    task_window_bridge_parser.add_argument(
+        "--format", choices=("json", "markdown"), default="json"
+    )
+    task_window_bridge_parser.add_argument("--output")
+
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
         return bootstrap_state(args)
@@ -496,6 +506,8 @@ def main(argv: list[str] | None = None) -> int:
         return preview_task_state_writeback_command(args)
     if args.command == "apply-task-state-writeback":
         return apply_task_state_writeback_command(args)
+    if args.command == "plan-task-window-candidates":
+        return plan_task_window_candidates_command(args)
 
     parser.print_help()
     return 1
@@ -940,6 +952,7 @@ def render_report_command(args: argparse.Namespace) -> int:
         return 1
 
     summary = input_payload.get("summary")
+    requirements = input_payload.get("requirements")
     modules = input_payload.get("modules")
     subtasks = input_payload.get("subtasks")
     documents = input_payload.get("documents")
@@ -960,6 +973,7 @@ def render_report_command(args: argparse.Namespace) -> int:
 
     payload = {
         "summary": summary if isinstance(summary, dict) else {},
+        "requirements": requirements if isinstance(requirements, dict) else {},
         "modules": modules if isinstance(modules, dict) else {},
         "subtasks": subtasks if isinstance(subtasks, dict) else {},
         "documents": documents if isinstance(documents, dict) else {},
@@ -2336,8 +2350,178 @@ def apply_task_state_writeback_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def plan_task_window_candidates_command(args: argparse.Namespace) -> int:
+    diagnostics, payload = evaluate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        bridge = build_task_window_bridge(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_WINDOW_BRIDGE_PLAN_FAILED",
+                        severity="error",
+                        entity_type="task_window_bridge",
+                        entity_id="GLOBAL",
+                        field_path="plan-task-window-candidates",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="plan-task-window-candidates",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {
+        "ok": True,
+        "diagnostics": [diagnostic_to_dict(item) for item in diagnostics],
+        **bridge,
+    }
+    if args.output:
+        write_task_window_bridge_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_window_bridge_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def render_task_window_bridge_markdown(payload: dict[str, Any]) -> str:
+    summary = _as_dict(payload.get("summary"))
+    confidence = _as_dict(payload.get("confidence"))
+    candidate_tasks = _as_list_of_dicts(payload.get("candidate_tasks_after_state_activation"))
+    blocked_tasks = _as_list_of_dicts(payload.get("blocked_before_open_window"))
+    next_actions = _as_list_of_dicts(payload.get("recommended_next_step"))
+    notes = _as_string_list(payload.get("reasoning_notes"))
+
+    lines = [
+        "# 任务开窗候选规划",
+        "",
+        "## 摘要",
+        "",
+        f"- 选中 task 数：{summary.get('selected_task_count', 0)}",
+        (
+            "- state 激活后候选数："
+            f"{summary.get('candidate_tasks_after_state_activation_count', 0)}"
+        ),
+        f"- 开窗前阻断数：{summary.get('blocked_before_open_window_count', 0)}",
+        (
+            "- 置信度："
+            f"{confidence.get('level', 'unknown')} ({confidence.get('score', 'n/a')})"
+        ),
+        "",
+        "## 候选任务",
+        "",
+    ]
+    if candidate_tasks:
+        for item in candidate_tasks:
+            lines.append(
+                "- "
+                + _format_task_bridge_item(
+                    task_id=str(item.get("task_id", "")).strip(),
+                    module_id=str(item.get("module_id", "")).strip(),
+                    reason=str(item.get("reason", "")).strip(),
+                )
+            )
+    else:
+        lines.append("- 无")
+
+    lines.extend(["", "## 阻断任务", ""])
+    if blocked_tasks:
+        for item in blocked_tasks:
+            lines.append(
+                "- "
+                + _format_task_bridge_item(
+                    task_id=str(item.get("task_id", "")).strip(),
+                    module_id=str(item.get("module_id", "")).strip(),
+                    reason=str(item.get("reason", "")).strip(),
+                )
+            )
+    else:
+        lines.append("- 无")
+
+    lines.extend(["", "## 下一步建议", ""])
+    if next_actions:
+        for item in next_actions:
+            title = str(item.get("title", "")).strip() or "未命名动作"
+            reason = str(item.get("reason", "")).strip()
+            task_id = str(item.get("task_id", "")).strip()
+            module_id = str(item.get("module_id", "")).strip()
+            scope = str(item.get("scope", "")).strip() or "task"
+            owner = task_id or module_id or "GLOBAL"
+            detail = f"{title}：{reason}" if reason else title
+            lines.append(f"- [{scope}] {owner} {detail}")
+    else:
+        lines.append("- 无")
+
+    if notes:
+        lines.extend(["", "## 说明", ""])
+        lines.extend(f"- {note}" for note in notes)
+
+    return "\n".join(lines) + "\n"
+
+
+def write_task_window_bridge_output(
+    *,
+    payload: dict[str, Any],
+    output_path: str | Path,
+    output_format: str,
+) -> None:
+    target = Path(output_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if output_format == "markdown":
+        content = render_task_window_bridge_markdown(payload)
+    else:
+        content = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    target.write_text(content, encoding="utf-8")
+
+
 def _as_dict(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _as_list_of_dicts(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _as_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    output: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            output.append(text)
+    return output
+
+
+def _format_task_bridge_item(*, task_id: str, module_id: str, reason: str) -> str:
+    owner = task_id or "UNKNOWN"
+    if module_id:
+        owner = f"{owner} ({module_id})"
+    return f"{owner}：{reason}" if reason else owner
 
 
 def apply_round_command(args: argparse.Namespace) -> int:

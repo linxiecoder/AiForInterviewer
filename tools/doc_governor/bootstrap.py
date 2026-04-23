@@ -26,6 +26,16 @@ def build_bootstrap_state(scan_result: dict[str, object]) -> tuple[dict[str, obj
     diagnostics = list(scan_result["diagnostics"])
     oqs, oq_default_diagnostics = _normalize_oq_policy_fields(scan_result["oqs"])
     diagnostics.extend(oq_default_diagnostics)
+    module_requirement_ids = _resolve_requirement_relations(
+        scan_result=scan_result,
+        relation_key="module_requirement_ids",
+        fact_field="module_ids",
+    )
+    subtask_requirement_ids = _resolve_requirement_relations(
+        scan_result=scan_result,
+        relation_key="subtask_requirement_ids",
+        fact_field="task_ids",
+    )
 
     state: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
@@ -52,8 +62,14 @@ def build_bootstrap_state(scan_result: dict[str, object]) -> tuple[dict[str, obj
     for module_id, module in scan_result["modules"].items():
         module_facts = dict(module["facts"])
         module_facts.setdefault("compliance", make_default_compliance_state())
+        requirement_ids = list(module_requirement_ids.get(str(module_id), []))
+        if requirement_ids:
+            module_facts["requirement_ids"] = requirement_ids
+        module_meta = {"path": module["meta"]["path"]}
+        if len(requirement_ids) == 1:
+            module_meta["requirement_id"] = requirement_ids[0]
         state["modules"][module_id] = {
-            "meta": {"path": module["meta"]["path"]},
+            "meta": module_meta,
             "facts": module_facts,
             "state": {
                 "confirmed": make_default_confirmed_state("module"),
@@ -66,11 +82,17 @@ def build_bootstrap_state(scan_result: dict[str, object]) -> tuple[dict[str, obj
         confirmed_state = make_default_confirmed_state("subtask")
         subtask_facts = dict(subtask["facts"])
         subtask_facts.setdefault("compliance", make_default_compliance_state())
+        requirement_ids = list(subtask_requirement_ids.get(str(subtask_id), []))
+        if requirement_ids:
+            subtask_facts["requirement_ids"] = requirement_ids
         implementation_doc = subtask_facts["implementation_doc"]
+        subtask_meta = dict(subtask["meta"])
+        if len(requirement_ids) == 1:
+            subtask_meta["requirement_id"] = requirement_ids[0]
         if implementation_doc["exists"] and implementation_doc["template_like"]:
             confirmed_state["implementation_doc_state"] = "inactive_template"
         state["subtasks"][subtask_id] = {
-            "meta": subtask["meta"],
+            "meta": subtask_meta,
             "facts": subtask_facts,
             "state": {
                 "confirmed": confirmed_state,
@@ -179,6 +201,46 @@ def _normalize_oq_policy_fields(oqs: object) -> tuple[dict[str, dict[str, object
         )
     ]
     return normalized, diagnostics
+
+
+def _resolve_requirement_relations(
+    *,
+    scan_result: dict[str, object],
+    relation_key: str,
+    fact_field: str,
+) -> dict[str, list[str]]:
+    raw_relation_map = scan_result.get(relation_key)
+    relation_map: dict[str, list[str]] = {}
+    if isinstance(raw_relation_map, dict):
+        for entity_id, requirement_ids in raw_relation_map.items():
+            if not isinstance(requirement_ids, list):
+                continue
+            normalized = [
+                str(requirement_id)
+                for requirement_id in requirement_ids
+                if isinstance(requirement_id, str) and str(requirement_id).strip()
+            ]
+            if normalized:
+                relation_map[str(entity_id)] = sorted(dict.fromkeys(normalized))
+
+    if relation_map:
+        return relation_map
+
+    requirements = scan_result.get("requirements")
+    requirements = requirements if isinstance(requirements, dict) else {}
+    for requirement_id, requirement in requirements.items():
+        if not isinstance(requirement, dict):
+            continue
+        facts = requirement.get("facts")
+        facts = facts if isinstance(facts, dict) else {}
+        for entity_id in facts.get(fact_field, []):
+            if not isinstance(entity_id, str):
+                continue
+            relation_map.setdefault(entity_id, []).append(str(requirement_id))
+
+    for entity_id, requirement_ids in list(relation_map.items()):
+        relation_map[entity_id] = sorted(dict.fromkeys(requirement_ids))
+    return relation_map
 
 
 def render_bootstrap_report(

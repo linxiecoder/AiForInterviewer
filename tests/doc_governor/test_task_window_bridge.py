@@ -5,7 +5,10 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.evaluate import evaluate_state_file
-from tools.doc_governor.task_window_bridge import build_task_window_bridge
+from tools.doc_governor.task_window_bridge import (
+    BRIDGE_CONTRACT_VERSION,
+    build_task_window_bridge,
+)
 from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
@@ -228,25 +231,49 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
         self.assertEqual([item for item in diagnostics if item.severity == "error"], [])
         return payload
 
-    def test_distinguishes_candidate_and_blocked_tasks(self) -> None:
+    def test_contract_fields_and_aliases_are_stable(self) -> None:
         payload = build_task_window_bridge(
             state_path=self.state_path,
             evaluate_payload=self._evaluate(),
             entity_ids=["ST09_03", "ST01_01", "ST02_03"],
         )
 
-        self.assertEqual(payload["summary"]["selected_task_count"], 3)
+        self.assertEqual(payload["contract_version"], BRIDGE_CONTRACT_VERSION)
+        self.assertIn("summary", payload)
+        self.assertIn("prerequisites", payload)
+        self.assertIn("predicted_post_activation_blockers", payload)
+        self.assertIn("recommended_next_step", payload)
+        self.assertIn("candidate_tasks", payload)
+        self.assertIn("deferred_tasks", payload)
+
+        self.assertEqual(payload["prerequisites"], payload["state_activation_prerequisites"])
         self.assertEqual(
-            payload["summary"]["candidate_tasks_after_state_activation_count"],
-            1,
+            payload["candidate_tasks"],
+            payload["candidate_tasks_after_state_activation"],
         )
-        self.assertEqual(
-            payload["summary"]["blocked_before_open_window_count"],
-            2,
+        self.assertEqual(payload["deferred_tasks"], payload["blocked_before_open_window"])
+
+        summary = payload["summary"]
+        self.assertEqual(summary["selected_task_count"], 3)
+        self.assertEqual(summary["candidate_task_count"], 1)
+        self.assertEqual(summary["deferred_task_count"], 2)
+        self.assertEqual(summary["candidate_tasks_after_state_activation_count"], 1)
+        self.assertEqual(summary["blocked_before_open_window_count"], 2)
+
+    def test_candidate_and_deferred_sorting_is_stable(self) -> None:
+        payload = build_task_window_bridge(
+            state_path=self.state_path,
+            evaluate_payload=self._evaluate(),
+            entity_ids=["ST09_03", "ST01_01", "ST02_03"],
         )
 
-        candidate = payload["candidate_tasks_after_state_activation"][0]
-        self.assertEqual(candidate["task_id"], "ST09_03")
+        candidate_ids = [item["task_id"] for item in payload["candidate_tasks"]]
+        deferred_ids = [item["task_id"] for item in payload["deferred_tasks"]]
+        self.assertEqual(candidate_ids, ["ST09_03"])
+        self.assertEqual(deferred_ids, ["ST01_01", "ST02_03"])
+
+        candidate = payload["candidate_tasks"][0]
+        self.assertEqual(candidate["bucket"], "candidate")
         self.assertEqual(
             candidate["classification"],
             "window_only_after_state_activation",
@@ -256,35 +283,14 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             ["policy:formal_window_closed"],
         )
 
-        blocked = {
-            item["task_id"]: item for item in payload["blocked_before_open_window"]
-        }
-        self.assertEqual(blocked["ST01_01"]["classification"], "content_blocked")
-        self.assertIn("required_tests", blocked["ST01_01"]["manual_fill_fields"])
-        self.assertIn(
-            "acceptance_criteria",
-            blocked["ST01_01"]["manual_fill_fields"],
-        )
-
-        self.assertEqual(
-            blocked["ST02_03"]["classification"],
-            "module_level_blocked",
-        )
-        self.assertIn(
-            "module:M02",
-            blocked["ST02_03"]["current_effective_blockers"],
-        )
-
-    def test_outputs_prerequisites_and_predictions(self) -> None:
+    def test_prerequisites_predictions_and_examples_cover_named_samples(self) -> None:
         payload = build_task_window_bridge(
             state_path=self.state_path,
             evaluate_payload=self._evaluate(),
             entity_ids=["ST09_03", "ST01_01", "ST02_03"],
         )
 
-        prerequisites = {
-            item["task_id"]: item for item in payload["state_activation_prerequisites"]
-        }
+        prerequisites = {item["task_id"]: item for item in payload["prerequisites"]}
         self.assertTrue(prerequisites["ST09_03"]["content_blockers_cleared"])
         self.assertFalse(prerequisites["ST01_01"]["content_blockers_cleared"])
         self.assertFalse(prerequisites["ST02_03"]["module_level_blockers_cleared"])
@@ -293,26 +299,38 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
             item["task_id"]: item
             for item in payload["predicted_post_activation_blockers"]
         }
-        self.assertTrue(predicted["ST09_03"]["window_only_after_state_activation"])
-        self.assertFalse(predicted["ST01_01"]["window_only_after_state_activation"])
-        self.assertFalse(predicted["ST02_03"]["window_only_after_state_activation"])
+        self.assertEqual(predicted["ST09_03"]["predicted_outcome"], "window_only")
+        self.assertEqual(predicted["ST01_01"]["predicted_outcome"], "still_blocked")
+        self.assertEqual(predicted["ST02_03"]["predicted_outcome"], "still_blocked")
 
-    def test_examples_and_next_steps_cover_named_samples(self) -> None:
+        examples = {item["task_id"]: item for item in payload["task_examples"]}
+        self.assertEqual(examples["ST09_03"]["sample_role"], "near_window_candidate")
+        self.assertEqual(examples["ST01_01"]["sample_role"], "content_blocked_example")
+        self.assertEqual(examples["ST02_03"]["sample_role"], "module_inherited_example")
+        self.assertTrue(examples["ST09_03"]["why_close_to_open_window"])
+        self.assertTrue(examples["ST01_01"]["why_not_open_window_yet"])
+        self.assertIn("module:M02", examples["ST02_03"]["module_level_blockers"])
+
+    def test_recommended_steps_have_codes_and_stable_order(self) -> None:
         payload = build_task_window_bridge(
             state_path=self.state_path,
             evaluate_payload=self._evaluate(),
             entity_ids=["ST09_03", "ST01_01", "ST02_03"],
         )
 
-        examples = {item["task_id"]: item for item in payload["task_examples"]}
-        self.assertTrue(examples["ST09_03"]["why_close_to_open_window"])
-        self.assertTrue(examples["ST01_01"]["why_not_open_window_yet"])
-        self.assertIn("module:M02", examples["ST02_03"]["module_level_blockers"])
-
-        titles = [item["title"] for item in payload["recommended_next_step"]]
-        self.assertIn("优先看首批 state activation 候选", titles)
-        self.assertIn("先继续处理内容层缺口", titles)
-        self.assertIn("先解决模块继承 blocker", titles)
+        steps = payload["recommended_next_step"]
+        self.assertEqual([item["step"] for item in steps], [1, 2, 3, 4, 5, 6])
+        self.assertEqual(
+            [item["code"] for item in steps],
+            [
+                "review_state_activation_candidates",
+                "clear_content_blockers_before_window",
+                "keep_module_blockers_at_module_level",
+                "advance_state_activation_dry_run",
+                "resolve_content_gaps",
+                "resolve_module_level_blockers",
+            ],
+        )
 
 
 if __name__ == "__main__":

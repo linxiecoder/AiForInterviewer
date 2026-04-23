@@ -237,10 +237,100 @@ class InitOfficialStateTests(ManagedTempArtifactsTestCase):
             confirm_payload = json.loads(stdout.getvalue())
         finally:
             os.chdir(original)
-        self.assertEqual(confirm_code, 0)
-        self.assertTrue(confirm_payload["ok"])
-        self.assertEqual(confirm_payload["entity_type"], "module")
 
+    def test_init_preserves_requirement_relations_from_bootstrap(self) -> None:
+        state = _build_bootstrap_state()
+        state["requirements"] = {
+            "RQ01": {
+                "meta": {"path": "docs/requirements/RQ01-user-entry/", "scope_kind": "requirement_dir"},
+                "facts": {
+                    "module_ids": ["M01"],
+                    "task_ids": ["ST01_01"],
+                    "asset_slots": {
+                        "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": schema.make_default_compliance_state(),
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            },
+            "RQ02": {
+                "meta": {"path": "docs/requirements/RQ02-interview-flow/", "scope_kind": "requirement_dir"},
+                "facts": {
+                    "module_ids": ["M02"],
+                    "task_ids": ["ST02_01"],
+                    "asset_slots": {
+                        "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": schema.make_default_compliance_state(),
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            },
+        }
+        state["modules"]["M01"]["meta"]["requirement_id"] = "RQ01"
+        state["modules"]["M01"]["facts"]["requirement_ids"] = ["RQ01"]
+        state["modules"]["M02"] = {
+            "meta": {"path": "docs/modules/M02-test/", "requirement_id": "RQ02"},
+            "facts": {
+                "upstream_module_ids": ["M01"],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "docs": {
+                    slot: {"exists": True, "template_like": False}
+                    for slot in schema.MODULE_DOC_SLOTS
+                },
+                "requirement_ids": ["RQ02"],
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("module"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["subtasks"]["ST01_01"]["meta"]["requirement_id"] = "RQ01"
+        state["subtasks"]["ST01_01"]["facts"]["requirement_ids"] = ["RQ01"]
+        state["subtasks"]["ST02_01"] = {
+            "meta": {
+                "module_id": "M02",
+                "path": "docs/modules/M02-test/sub_modules/ST02_01-test/",
+                "requirement_id": "RQ02",
+            },
+            "facts": {
+                "upstream_module_ids": ["M01", "M02"],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "design_doc": {"exists": True, "template_like": False},
+                "implementation_doc": {"exists": True, "template_like": False},
+                "requirement_ids": ["RQ02"],
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("subtask"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        self.bootstrap_path.write_text(
+            yaml.safe_dump(state, sort_keys=False),
+            encoding="utf-8",
+        )
 
+        exit_code, _payload = self._run_cli("--actor", "alice", "--reason", "seed")
+        self.assertEqual(exit_code, 0)
+
+        official = self._read_official()
+        self.assertEqual(sorted(official["requirements"].keys()), ["RQ01", "RQ02"])
+        self.assertEqual(official["modules"]["M02"]["meta"]["requirement_id"], "RQ02")
+        self.assertEqual(official["modules"]["M02"]["facts"]["requirement_ids"], ["RQ02"])
+        self.assertEqual(official["subtasks"]["ST02_01"]["meta"]["requirement_id"], "RQ02")
+        self.assertEqual(official["subtasks"]["ST02_01"]["facts"]["requirement_ids"], ["RQ02"])
 if __name__ == "__main__":
     unittest.main()

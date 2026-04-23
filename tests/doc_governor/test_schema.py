@@ -87,6 +87,13 @@ class SchemaContractTests(ManagedTempArtifactsTestCase):
         self.assertEqual(schema.DOCUMENT_TYPES, ("design", "plan"))
         self.assertEqual(schema.DOCUMENT_STATUSES, ("draft", "active", "blocked", "ready"))
 
+    def test_requirement_relation_contract_constants_are_frozen(self) -> None:
+        from tools.doc_governor import schema
+
+        self.assertEqual(schema.REQUIREMENT_RELATION_META_FIELD, "requirement_id")
+        self.assertEqual(schema.REQUIREMENT_RELATION_FACT_FIELD, "requirement_ids")
+        self.assertEqual(schema.REQUIREMENT_RELATION_ENTITY_TYPES, ("module", "subtask"))
+
     def test_state_paths_and_schema_version_are_frozen(self) -> None:
         from tools.doc_governor import schema
 

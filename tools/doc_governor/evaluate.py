@@ -322,29 +322,54 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
 
     oq_payload = _evaluate_oqs(oqs)
     requirement_derived_map: dict[str, dict[str, Any]] = {}
-    requirement_blockers_by_module: dict[str, list[dict[str, Any]]] = {}
-    requirement_blockers_by_task: dict[str, list[dict[str, Any]]] = {}
-    requirement_ids_by_task: dict[str, list[str]] = {}
+    known_requirement_ids: set[str] = set()
+    requirement_module_links: dict[str, list[str]] = {}
+    requirement_task_links: dict[str, list[str]] = {}
     for requirement_id, requirement_obj in requirements.items():
         if not isinstance(requirement_obj, dict):
             continue
         requirement_result = _evaluate_requirement(requirement_id, requirement_obj)
         requirement_derived_map[requirement_id] = requirement_result
+        known_requirement_ids.add(str(requirement_id))
         requirement_facts = requirement_obj.get("facts")
         requirement_facts = requirement_facts if isinstance(requirement_facts, dict) else {}
         for module_id in requirement_facts.get("module_ids", []):
             if not isinstance(module_id, str):
                 continue
-            requirement_blockers_by_module.setdefault(module_id, []).extend(
-                _clone_blockers(requirement_result.get("gate_blockers", []))
-            )
+            requirement_module_links.setdefault(str(module_id), []).append(str(requirement_id))
         for task_id in requirement_facts.get("task_ids", []):
             if not isinstance(task_id, str):
                 continue
-            requirement_ids_by_task.setdefault(task_id, []).append(str(requirement_id))
-            requirement_blockers_by_task.setdefault(task_id, []).extend(
-                _clone_blockers(requirement_result.get("gate_blockers", []))
-            )
+            requirement_task_links.setdefault(str(task_id), []).append(str(requirement_id))
+
+    module_requirement_ids = _prefer_native_requirement_relations(
+        fallback_relations=requirement_module_links,
+        native_relations=_collect_native_requirement_relations(modules),
+    )
+    module_requirement_ids = _filter_known_requirement_relations(
+        module_requirement_ids,
+        known_requirement_ids,
+    )
+    subtask_requirement_ids = _prefer_native_requirement_relations(
+        fallback_relations=requirement_task_links,
+        native_relations=_collect_native_requirement_relations(
+            subtasks,
+            inherited_relations=module_requirement_ids,
+            inherit_from_field="module_id",
+        ),
+    )
+    subtask_requirement_ids = _filter_known_requirement_relations(
+        subtask_requirement_ids,
+        known_requirement_ids,
+    )
+    requirement_blockers_by_module = _build_requirement_blocker_map(
+        module_requirement_ids,
+        requirement_derived_map,
+    )
+    requirement_blockers_by_task = _build_requirement_blocker_map(
+        subtask_requirement_ids,
+        requirement_derived_map,
+    )
 
     module_derived_map: dict[str, dict[str, Any]] = {}
     for module_id, module_obj in modules.items():
@@ -354,6 +379,7 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
                 module_obj,
                 oq_payload,
                 requirement_blockers_by_module.get(str(module_id), []),
+                requirement_ids=module_requirement_ids.get(str(module_id), []),
             )
 
     subtask_derived_map: dict[str, dict[str, Any]] = {}
@@ -367,7 +393,7 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
                 direct_requirement_blockers=requirement_blockers_by_task.get(str(subtask_id), []),
                 formal_window_open=formal_window_open,
                 repo_root=repo_root,
-                requirement_ids=sorted(set(requirement_ids_by_task.get(str(subtask_id), []))),
+                requirement_ids=subtask_requirement_ids.get(str(subtask_id), []),
             )
 
     requirement_derived_wrapped: dict[str, Any] = {}
@@ -502,6 +528,12 @@ def _evaluate_requirement(
     asset_slots = asset_slots if isinstance(asset_slots, dict) else {}
     compliance = facts.get("compliance")
     compliance = compliance if isinstance(compliance, dict) else {}
+    module_ids = _dedupe_strings(
+        [str(module_id) for module_id in _as_list(facts.get("module_ids")) if isinstance(module_id, str)]
+    )
+    task_ids = _dedupe_strings(
+        [str(task_id) for task_id in _as_list(facts.get("task_ids")) if isinstance(task_id, str)]
+    )
 
     gate_blockers: list[dict[str, Any]] = []
 
@@ -565,6 +597,8 @@ def _evaluate_requirement(
 
     return {
         "gate_blockers": _dedupe_blockers(gate_blockers),
+        "module_ids": module_ids,
+        "task_ids": task_ids,
     }
 
 
@@ -642,6 +676,7 @@ def _evaluate_module(
     module: dict[str, object],
     oq_payload: dict[str, Any],
     requirement_blockers: list[dict[str, Any]],
+    requirement_ids: list[str],
 ) -> dict[str, Any]:
     facts = module.get("facts")
     facts = facts if isinstance(facts, dict) else {}
@@ -721,6 +756,7 @@ def _evaluate_module(
         "gate_blockers": _dedupe_blockers(candidate_blockers + downstream_blockers),
         "oq_review_only_refs": sorted(set(oq_review_only_refs)),
         "assessed_downstream_ready": downstream_ready,
+        "requirement_ids": _dedupe_strings(requirement_ids),
     }
 
 
@@ -980,6 +1016,7 @@ def _evaluate_subtask(
         "implementation_doc_activation_recommended": implementation_doc_activation_recommended,
         "implementation_doc_activation_reason": implementation_doc_activation_reason,
         "implementation_packet_inputs": packet_inputs,
+        "requirement_ids": _dedupe_strings(requirement_ids),
     }
 
 
@@ -992,11 +1029,17 @@ def _finalize_requirement_derived(
     blocker_refs = sorted(blocker["ref"] for blocker in gate_blockers)
     ready_for_next_step = not bool(blocker_refs)
     review_reasons = ["downstream_ready_no_hard_blocker"] if ready_for_next_step else []
+    module_ids = _dedupe_strings(_as_list(requirement_result.get("module_ids")))
+    task_ids = _dedupe_strings(_as_list(requirement_result.get("task_ids")))
     return {
         "current_gate": "module_decomposition_ready",
         "gate_result": "pass" if ready_for_next_step else "blocked",
         "gate_blockers": gate_blockers,
         "blocker_refs": blocker_refs,
+        "module_ids": module_ids,
+        "task_ids": task_ids,
+        "module_count": len(module_ids),
+        "task_count": len(task_ids),
         "review_required": ready_for_next_step,
         "review_reasons": review_reasons,
         "ready_for_next_step": ready_for_next_step,
@@ -1197,6 +1240,7 @@ def _finalize_module_derived(
         review_reasons.append("oq_review_only")
 
     review_reasons = sorted(set(review_reasons) & REVIEW_REASONS)
+    requirement_ids = _dedupe_strings(_as_list(module_result.get("requirement_ids")))
     return {
         "current_gate": "task_design_ready",
         "gate_result": "pass" if not blocker_refs else "blocked",
@@ -1207,6 +1251,7 @@ def _finalize_module_derived(
         "downstream_blocker_refs": downstream_blocker_refs,
         "gate_blockers": gate_blockers,
         "blocker_refs": blocker_refs,
+        "requirement_ids": requirement_ids,
         "review_required": bool(review_reasons),
         "review_reasons": review_reasons,
         "ready_for_next_step": not bool(blocker_refs),
@@ -1241,6 +1286,7 @@ def _finalize_subtask_derived(
     if impl_activation:
         review_reasons.append("implementation_doc_activation_recommended")
     review_reasons = sorted(set(review_reasons) & REVIEW_REASONS)
+    requirement_ids = _dedupe_strings(_as_list(subtask_result.get("requirement_ids")))
 
     return {
         "current_gate": "implementation_ready",
@@ -1253,6 +1299,7 @@ def _finalize_subtask_derived(
         "implementation_blocker_refs": implementation_blocker_refs,
         "gate_blockers": gate_blockers,
         "blocker_refs": blocker_refs,
+        "requirement_ids": requirement_ids,
         "assessed_downstream_ready": downstream_ready,
         "assessed_implementation_ready": assessed_implementation_ready,
         "implementation_doc_activation_recommended": impl_activation,
@@ -1499,6 +1546,107 @@ def _normalize_policy_token(value: str) -> str:
 
 def _clone_blockers(blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(blocker) for blocker in blockers if isinstance(blocker, dict)]
+
+
+def _collect_native_requirement_relations(
+    entities: dict[str, object],
+    *,
+    inherited_relations: dict[str, list[str]] | None = None,
+    inherit_from_field: str | None = None,
+) -> dict[str, list[str]]:
+    relation_map: dict[str, list[str]] = {}
+    inherited_relations = inherited_relations or {}
+    for entity_id, entity_obj in entities.items():
+        if not isinstance(entity_obj, dict):
+            continue
+        meta = entity_obj.get("meta")
+        meta = meta if isinstance(meta, dict) else {}
+        facts = entity_obj.get("facts")
+        facts = facts if isinstance(facts, dict) else {}
+
+        requirement_ids: list[str] = []
+        meta_requirement_id = meta.get("requirement_id")
+        if isinstance(meta_requirement_id, str) and meta_requirement_id.strip():
+            requirement_ids.append(meta_requirement_id.strip())
+
+        fact_requirement_ids = facts.get("requirement_ids")
+        if isinstance(fact_requirement_ids, list):
+            requirement_ids.extend(
+                requirement_id.strip()
+                for requirement_id in fact_requirement_ids
+                if isinstance(requirement_id, str) and requirement_id.strip()
+            )
+
+        if not requirement_ids and inherit_from_field:
+            upstream_entity_id = str(meta.get(inherit_from_field) or "").strip()
+            if upstream_entity_id:
+                requirement_ids.extend(inherited_relations.get(upstream_entity_id, []))
+
+        normalized = _dedupe_strings(requirement_ids)
+        if normalized:
+            relation_map[str(entity_id)] = normalized
+    return relation_map
+
+
+def _prefer_native_requirement_relations(
+    *,
+    fallback_relations: dict[str, list[str]],
+    native_relations: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    merged: dict[str, list[str]] = {}
+    for entity_id, requirement_ids in fallback_relations.items():
+        normalized = _dedupe_strings(
+            [
+                requirement_id
+                for requirement_id in requirement_ids
+                if isinstance(requirement_id, str) and requirement_id.strip()
+            ]
+        )
+        if normalized:
+            merged[str(entity_id)] = normalized
+
+    for entity_id, requirement_ids in native_relations.items():
+        normalized = _dedupe_strings(
+            [
+                requirement_id
+                for requirement_id in requirement_ids
+                if isinstance(requirement_id, str) and requirement_id.strip()
+            ]
+        )
+        if normalized:
+            merged[str(entity_id)] = normalized
+    return merged
+
+
+def _filter_known_requirement_relations(
+    relation_map: dict[str, list[str]],
+    known_requirement_ids: set[str],
+) -> dict[str, list[str]]:
+    filtered: dict[str, list[str]] = {}
+    for entity_id, requirement_ids in relation_map.items():
+        normalized = [
+            requirement_id
+            for requirement_id in requirement_ids
+            if requirement_id in known_requirement_ids
+        ]
+        if normalized:
+            filtered[str(entity_id)] = normalized
+    return filtered
+
+
+def _build_requirement_blocker_map(
+    relation_map: dict[str, list[str]],
+    requirement_derived_map: dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    blockers_by_entity: dict[str, list[dict[str, Any]]] = {}
+    for entity_id, requirement_ids in relation_map.items():
+        blockers: list[dict[str, Any]] = []
+        for requirement_id in requirement_ids:
+            requirement_result = requirement_derived_map.get(str(requirement_id), {})
+            blockers.extend(_clone_blockers(requirement_result.get("gate_blockers", [])))
+        if blockers:
+            blockers_by_entity[str(entity_id)] = blockers
+    return blockers_by_entity
 
 
 def _build_subtask_packet_inputs(

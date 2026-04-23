@@ -184,6 +184,53 @@ class TaskPacketTests(ManagedTempArtifactsTestCase):
         self.assertIn("## 允许修改范围", markdown)
         self.assertIn("ST01_01", markdown)
 
+    def test_generate_implementation_packet_uses_native_subtask_requirement_relation(self) -> None:
+        state = _build_state()
+        state["requirements"] = {
+            "RQ01": state["requirements"]["RQ01"],
+            "RQ02": {
+                "meta": {
+                    "path": "docs/requirements/RQ02-interview-flow/",
+                    "scope_kind": "requirement_dir",
+                },
+                "facts": {
+                    "module_ids": ["M01"],
+                    "task_ids": [],
+                    "asset_slots": {
+                        "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                        "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                        "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                    },
+                    "compliance": {
+                        "naming_ok": True,
+                        "path_ok": True,
+                        "relations_ok": True,
+                        "language_ok": True,
+                        "violations": [],
+                    },
+                },
+                "state": {
+                    "confirmed": schema.make_default_confirmed_state("requirement"),
+                    "tracking": schema.make_default_tracking_state(),
+                },
+            },
+        }
+        state["modules"]["M01"]["meta"]["requirement_id"] = "RQ02"
+        state["modules"]["M01"]["facts"]["requirement_ids"] = ["RQ02"]
+        state["subtasks"]["ST01_01"]["meta"]["requirement_id"] = "RQ02"
+        state["subtasks"]["ST01_01"]["facts"]["requirement_ids"] = ["RQ02"]
+        self.state_path.write_text(
+            yaml.safe_dump(state, sort_keys=False),
+            encoding="utf-8",
+        )
+
+        diagnostics, payload = evaluate_state_file(self.state_path)
+        self.assertEqual([item for item in diagnostics if item.severity == "error"], [])
+        self.assertEqual(
+            payload["subtasks"]["ST01_01"]["derived"]["implementation_packet_inputs"]["requirement_id"],
+            "RQ02",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

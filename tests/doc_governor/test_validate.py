@@ -205,6 +205,64 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
         self.assertIn("SCHEMA_INVALID_TRACKING_FIELD", codes)
         self.assertIn("SCHEMA_INVALID_COMPLIANCE_FIELD", codes)
 
+    def test_requirement_relation_fields_accept_known_consistent_ids(self) -> None:
+        state = _build_valid_state()
+        state["modules"]["M01"]["meta"]["requirement_id"] = "RQ01"
+        state["modules"]["M01"]["facts"]["requirement_ids"] = ["RQ01"]
+        state["subtasks"]["ST01_01"]["meta"]["requirement_id"] = "RQ01"
+        state["subtasks"]["ST01_01"]["facts"]["requirement_ids"] = ["RQ01"]
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len([item for item in diagnostics if item.severity == "error"]), 0)
+
+    def test_requirement_relation_rejects_invalid_and_unknown_ids(self) -> None:
+        state = _build_valid_state()
+        state["modules"]["M01"]["meta"]["requirement_id"] = "BAD"
+        state["subtasks"]["ST01_01"]["facts"]["requirement_ids"] = ["RQ09"]
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
+        self.assertEqual(exit_code, 1)
+        self.assertIn("SCHEMA_INVALID_REQUIREMENT_RELATION_ID", codes)
+        self.assertIn("SCHEMA_UNKNOWN_REQUIREMENT_RELATION_ID", codes)
+
+    def test_requirement_relation_conflict_and_ambiguity_are_explicit(self) -> None:
+        state = _build_valid_state()
+        state["requirements"]["RQ02"] = {
+            "meta": {
+                "path": "docs/requirements/RQ02-second/",
+                "scope_kind": "requirement_dir",
+            },
+            "facts": {
+                "module_ids": [],
+                "task_ids": [],
+                "asset_slots": {
+                    "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                    "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                    "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                },
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("requirement"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["modules"]["M01"]["meta"]["requirement_id"] = "RQ01"
+        state["modules"]["M01"]["facts"]["requirement_ids"] = ["RQ01", "RQ02"]
+        state["subtasks"]["ST01_01"]["meta"]["requirement_id"] = "RQ02"
+        state["subtasks"]["ST01_01"]["facts"]["requirement_ids"] = ["RQ01"]
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
+        self.assertEqual(exit_code, 1)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS", codes)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_CONFLICT", codes)
+
     def test_diagnostic_structure_and_evidence(self) -> None:
         state = _build_valid_state()
         state["modules"]["M01"]["state"]["confirmed"]["candidate_status"] = "invalid"

@@ -280,6 +280,8 @@ class EvaluateStateTests(unittest.TestCase):
         self.assertEqual(requirement_derived["current_gate"], "module_decomposition_ready")
         self.assertEqual(requirement_derived["gate_result"], "pass")
         self.assertEqual(requirement_derived["blocker_refs"], [])
+        self.assertEqual(requirement_derived["module_ids"], ["M01"])
+        self.assertEqual(requirement_derived["task_ids"], ["ST01_01"])
         self.assertTrue(requirement_derived["review_required"])
         self.assertTrue(requirement_derived["ready_for_next_step"])
         self.assertFalse(requirement_derived["implementation_ready"])
@@ -364,6 +366,8 @@ class EvaluateStateTests(unittest.TestCase):
         self.assertEqual(task_ready["blocker_refs"], [])
         self.assertTrue(task_ready["ready_for_next_step"])
         self.assertTrue(task_ready["implementation_ready"])
+        self.assertEqual(payload["modules"]["M01"]["derived"]["requirement_ids"], ["RQ01"])
+        self.assertEqual(task_ready["requirement_ids"], ["RQ01"])
         self.assertEqual(task_ready["implementation_packet_inputs"]["requirement_id"], "RQ01")
         self.assertEqual(
             task_ready["implementation_packet_inputs"]["allowed_modify_paths"],

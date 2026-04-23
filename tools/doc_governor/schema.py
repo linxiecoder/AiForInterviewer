@@ -29,6 +29,9 @@ SUBTASK_DOC_SLOTS = {
 
 REQUIRED_MODULE_SLOTS = tuple(MODULE_DOC_SLOTS.keys())
 REQUIRED_SUBTASK_SLOTS = tuple(SUBTASK_DOC_SLOTS.keys())
+REQUIREMENT_RELATION_META_FIELD = "requirement_id"
+REQUIREMENT_RELATION_FACT_FIELD = "requirement_ids"
+REQUIREMENT_RELATION_ENTITY_TYPES = ("module", "subtask")
 
 MATURITY_LEVELS = tuple(f"L{index}" for index in range(8))
 CANDIDATE_STATUSES = ("none", "observe", "candidate")

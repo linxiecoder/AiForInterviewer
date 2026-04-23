@@ -65,6 +65,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
     def test_empty_result(self) -> None:
         payload = {
             "summary": {},
+            "requirements": {},
             "modules": {},
             "subtasks": {},
             "oqs": {},
@@ -83,6 +84,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         text = report_path.read_text(encoding="utf-8")
         self.assertIn("# DOC_GOVERNOR_REPORT", text)
         self.assertIn("## Summary", text)
+        self.assertIn("## Requirement Mainflow", text)
         self.assertIn("## Modules Requiring Review", text)
         self.assertIn("## Subtasks Requiring Review", text)
         self.assertIn("## Documents Requiring Review", text)
@@ -92,14 +94,17 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertIn("## Round Delta", text)
         self.assertIn("- none", text)
         self.assertNotIn("render_input_incomplete=1", text)
+        self.assertIn("requirement_entries: 0", text)
         self.assertIn("modules_review_required: 0", text)
         self.assertIn("subtasks_review_required: 0", text)
 
     def test_non_empty_render_and_section_order(self) -> None:
         payload = {
             "summary": {
+                "requirements_review_required": 1,
                 "modules_review_required": 1,
                 "subtasks_review_required": 1,
+                "requirements_blocked_count": 1,
                 "modules_blocked_count": 2,
                 "subtasks_blocked_count": 3,
                 "blocked_by_reason_code": {"legacy_locked": 1},
@@ -114,21 +119,69 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
                     "readiness_gate.readiness_blocker": 1,
                 },
             },
+            "requirements": {
+                "RQ01": {
+                    "derived": {
+                        "gate_result": "pass",
+                        "review_required": True,
+                        "module_ids": ["M01"],
+                        "task_ids": ["ST01_10"],
+                        "blocker_refs": [],
+                    }
+                },
+                "RQ02": {
+                    "derived": {
+                        "gate_result": "blocked",
+                        "review_required": False,
+                        "module_ids": ["M02"],
+                        "task_ids": ["ST02_01", "ST02_02"],
+                        "blocker_refs": ["policy:asset_missing_plan_latest"],
+                    }
+                },
+            },
             "modules": {
-                "M02": {"derived": {"review_required": True, "review_reasons": ["oq_review_only"]}},
-                "M01": {"derived": {"review_required": True, "review_reasons": ["downstream_ready_no_hard_blocker"]}},
+                "M02": {
+                    "derived": {
+                        "review_required": True,
+                        "review_reasons": ["oq_review_only"],
+                        "requirement_ids": [],
+                    }
+                },
+                "M01": {
+                    "derived": {
+                        "review_required": True,
+                        "review_reasons": ["downstream_ready_no_hard_blocker"],
+                        "requirement_ids": ["RQ01"],
+                    }
+                },
             },
             "subtasks": {
                 "ST01_10": {
                     "derived": {
                         "review_required": True,
                         "review_reasons": ["implementation_doc_activation_recommended"],
+                        "requirement_ids": ["RQ01"],
                         "candidate_blockers": [
                             {"ref": "gate:placeholder", "kind": "gate", "reason_code": "legacy_locked", "message": "legacy"},
                         ],
+                        "implementation_blockers": [],
                     }
                 },
-                "ST01_02": {"derived": {"review_required": False, "review_reasons": []}},
+                "ST01_02": {
+                    "derived": {
+                        "review_required": False,
+                        "review_reasons": [],
+                        "requirement_ids": ["RQ01", "RQ02"],
+                        "implementation_blockers": [
+                            {
+                                "ref": "gate:requirement_id_ambiguous",
+                                "kind": "gate",
+                                "reason_code": "requirement_id_unresolved",
+                                "message": "ambiguous",
+                            }
+                        ],
+                    }
+                },
             },
             "documents": {
                 "DOC-SPEC-P1": {
@@ -188,6 +241,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         report = report_path.read_text(encoding="utf-8")
         expected_sections = [
             "## Summary",
+            "## Requirement Mainflow",
             "## Modules Requiring Review",
             "## Subtasks Requiring Review",
             "## Documents Requiring Review",
@@ -202,6 +256,17 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         ]
         positions = [report.index(section) for section in expected_sections]
         self.assertEqual(positions, sorted(positions))
+        self.assertIn("- requirement_entries: 2", report)
+        self.assertIn("- `RQ01`: gate=pass review_required=true modules=[M01] tasks=[ST01_10] blockers=[]", report)
+        self.assertIn(
+            "- `RQ02`: gate=blocked review_required=false modules=[M02] tasks=[ST02_01, ST02_02] blockers=[policy:asset_missing_plan_latest]",
+            report,
+        )
+        self.assertIn("- `module:M02`: requirement_relation=missing", report)
+        self.assertIn(
+            "- `subtask:ST01_02`: requirement_relation=ambiguous ids=[RQ01, RQ02] blockers=[gate:requirement_id_ambiguous]",
+            report,
+        )
 
         module_rows = [
             line.strip()
@@ -231,6 +296,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
     def test_default_path_and_sorted_blockers(self) -> None:
         payload = {
             "summary": {"modules_review_required": 0, "subtasks_review_required": 0, "modules_blocked_count": 0, "subtasks_blocked_count": 0, "oq_gate_counts": {}},
+            "requirements": {},
             "modules": {
                 "M01": {
                     "derived": {
@@ -292,6 +358,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         }
         payload = {
             "summary": summary,
+            "requirements": {},
             "modules": {},
             "subtasks": {},
             "oqs": {},
@@ -321,7 +388,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertEqual(idxs, sorted(idxs))
 
     def test_invalid_path_forbidden(self) -> None:
-        payload = {"summary": {}, "modules": {}, "subtasks": {}, "oqs": {}}
+        payload = {"summary": {}, "requirements": {}, "modules": {}, "subtasks": {}, "oqs": {}}
         json_path = _write_json(self.temp_root / "evaluate.json", payload)
         exit_code, result = self._run_cli(
             "render-report",
@@ -334,7 +401,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertEqual(result["diagnostics"][0]["code"], "RENDER_REPORT_PATH_FORBIDDEN")
 
     def test_official_state_path_rejected(self) -> None:
-        payload = {"summary": {}, "modules": {}, "subtasks": {}, "oqs": {}}
+        payload = {"summary": {}, "requirements": {}, "modules": {}, "subtasks": {}, "oqs": {}}
         json_path = _write_json(self.temp_root / "evaluate.json", payload)
         official = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
         official.write_text("KEEP", encoding="utf-8")
@@ -363,6 +430,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
     def test_input_diagnostics_error_marked(self) -> None:
         payload = {
             "summary": {},
+            "requirements": {},
             "modules": {},
             "subtasks": {},
             "oqs": {},
@@ -394,6 +462,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
 
         payload = {
             "summary": {},
+            "requirements": {},
             "modules": {},
             "subtasks": {},
             "oqs": {},
@@ -439,6 +508,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
     def test_next_round_agenda_snapshot(self) -> None:
         payload = {
             "summary": {},
+            "requirements": {},
             "modules": {
                 "M01": {"derived": {"review_required": True, "candidate_blockers": []}},
                 "M02": {
@@ -505,6 +575,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
     def test_next_round_agenda_safe_degrade_when_fields_missing(self) -> None:
         payload = {
             "summary": {},
+            "requirements": {},
             "modules": {"M01": {"derived": {"review_required": True}}},
             "subtasks": {"ST01_01": {"derived": {"candidate_blockers": ["bad-data"]}}},
             "oqs": {"OQ-1": {"derived_enforcement": "candidate_blocker"}},

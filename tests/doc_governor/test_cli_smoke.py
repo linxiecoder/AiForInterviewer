@@ -574,6 +574,48 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(confirmed["implementation_doc_state"], "active_working_doc")
         self.assertTrue(history_path.exists())
 
+    def test_plan_task_window_candidates_supports_json_markdown_and_entity_filter(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["global_policy"]["formal_window_open"] = False
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        output_dir = self.temp_root / "task-window-candidates"
+        json_path = output_dir / "bridge.json"
+        exit_code, output = self._run_cli(
+            "plan-task-window-candidates",
+            "--input",
+            str(self.state_path),
+            "--format",
+            "json",
+            "--entity-id",
+            "ST01_01",
+            "--output",
+            str(json_path),
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["summary"]["selected_task_count"], 1)
+        self.assertEqual(payload["summary"]["candidate_tasks_after_state_activation_count"], 1)
+        self.assertTrue(json_path.exists())
+
+        md_path = output_dir / "bridge.md"
+        exit_code, markdown_output = self._run_cli(
+            "plan-task-window-candidates",
+            "--input",
+            str(self.state_path),
+            "--format",
+            "markdown",
+            "--entity-id",
+            "ST01_01",
+            "--output",
+            str(md_path),
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertIn("任务开窗候选规划", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
+        self.assertTrue(md_path.exists())
+
     def test_apply_task_readiness_fix_supports_dry_run_plan(self) -> None:
         output_plan = self.temp_root / "apply-plan.json"
         exit_code, output = self._run_cli(
