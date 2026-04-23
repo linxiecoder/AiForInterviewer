@@ -36,10 +36,24 @@ def _is_within(path: Path, parent: Path) -> bool:
         return False
 
 
-def _snapshot_child_directories(root: Path) -> set[str]:
+def _snapshot_child_directories(root: Path, *, recursive: bool = False) -> set[str]:
     if not root.exists():
         return set()
-    return {child.name for child in root.iterdir() if child.is_dir()}
+    if not recursive:
+        return {child.name for child in root.iterdir() if child.is_dir()}
+    return {
+        child.relative_to(root).as_posix()
+        for child in root.rglob("*")
+        if child.is_dir()
+    }
+
+
+def _matches_any_pattern(value: str, patterns: tuple[str, ...]) -> bool:
+    basename = Path(value).name
+    return any(
+        fnmatch.fnmatch(value, pattern) or fnmatch.fnmatch(basename, pattern)
+        for pattern in patterns
+    )
 
 
 def _prune_empty_parents(start: Path, *, stop_at: Path) -> None:
@@ -64,18 +78,23 @@ def _prune_empty_parents(start: Path, *, stop_at: Path) -> None:
 class DirectoryWatchSpec:
     root: Path
     ignore_name_patterns: tuple[str, ...] = ()
+    recursive: bool = False
 
     def resolved(self) -> "DirectoryWatchSpec":
         return DirectoryWatchSpec(
             root=self.root.resolve(),
             ignore_name_patterns=tuple(self.ignore_name_patterns),
+            recursive=self.recursive,
         )
 
 
 class DirectoryLeakGuard:
     def __init__(self, watch_specs: list[DirectoryWatchSpec]) -> None:
         self._watch_snapshots: list[tuple[DirectoryWatchSpec, set[str]]] = [
-            (spec.resolved(), _snapshot_child_directories(spec.root.resolve()))
+            (
+                spec.resolved(),
+                _snapshot_child_directories(spec.root.resolve(), recursive=spec.recursive),
+            )
             for spec in watch_specs
         ]
 
@@ -87,11 +106,11 @@ class DirectoryLeakGuard:
     def find_unexpected_directories(self) -> list[str]:
         leak_messages: list[str] = []
         for spec, before in self._watch_snapshots:
-            after = _snapshot_child_directories(spec.root)
+            after = _snapshot_child_directories(spec.root, recursive=spec.recursive)
             leaked = sorted(
                 name
                 for name in (after - before)
-                if not any(fnmatch.fnmatch(name, pattern) for pattern in spec.ignore_name_patterns)
+                if not _matches_any_pattern(name, spec.ignore_name_patterns)
             )
             if leaked:
                 leak_messages.append(f"{spec.root}: {', '.join(leaked)}")
@@ -110,19 +129,42 @@ def repo_temp_dir_guard_enabled() -> bool:
     return not _env_flag_enabled(ALLOW_TEST_DIR_LEAKS_ENV)
 
 
+def managed_temp_root_guard_enabled() -> bool:
+    return repo_temp_dir_guard_enabled() and not _env_flag_enabled(KEEP_TEST_ARTIFACTS_ENV)
+
+
+def resolve_managed_temp_root(temp_root: str | Path | None = None) -> Path:
+    configured_root = os.environ.get(TEST_TEMP_ROOT_ENV)
+    root_value = temp_root if temp_root is not None else configured_root
+    return (
+        Path(root_value)
+        if root_value is not None
+        else Path(tempfile.gettempdir()) / DEFAULT_TEST_TEMP_ROOT_NAME
+    ).resolve()
+
+
 def create_repo_temp_dir_guard(repo_root: str | Path | None = None) -> DirectoryLeakGuard:
     root = Path(repo_root).resolve() if repo_root is not None else _REPO_ROOT
     return DirectoryLeakGuard(
         [
             DirectoryWatchSpec(
                 root=root,
-                ignore_name_patterns=(".pytest_cache", "pytest-cache-files-*"),
+                ignore_name_patterns=(".pytest_cache",),
             ),
             DirectoryWatchSpec(
-                root=root / "tests" / "doc_governor",
+                root=root / "tests",
                 ignore_name_patterns=("__pycache__",),
+                recursive=True,
             ),
         ]
+    )
+
+
+def create_managed_temp_root_guard(
+    temp_root: str | Path | None = None,
+) -> DirectoryLeakGuard:
+    return DirectoryLeakGuard(
+        [DirectoryWatchSpec(root=resolve_managed_temp_root(temp_root))]
     )
 
 
@@ -135,13 +177,7 @@ class ManagedTempArtifacts:
         keep_artifacts: bool | None = None,
         watch_roots: list[str | Path] | None = None,
     ) -> None:
-        configured_root = os.environ.get(TEST_TEMP_ROOT_ENV)
-        root_value = temp_root if temp_root is not None else configured_root
-        self.artifacts_root = (
-            Path(root_value)
-            if root_value is not None
-            else Path(tempfile.gettempdir()) / DEFAULT_TEST_TEMP_ROOT_NAME
-        ).resolve()
+        self.artifacts_root = resolve_managed_temp_root(temp_root)
         self.artifacts_root.mkdir(parents=True, exist_ok=True)
         self.keep_artifacts = (
             _env_flag_enabled(KEEP_TEST_ARTIFACTS_ENV)

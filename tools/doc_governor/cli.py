@@ -77,6 +77,12 @@ if __package__ in {None, ""}:
         render_task_apply_summary_markdown,
         write_task_apply_summary_output,
     )
+    from tools.doc_governor.task_state_apply import execute_task_state_apply
+    from tools.doc_governor.task_state_writeback import (
+        build_task_state_writeback_preview,
+        render_task_state_writeback_markdown,
+        write_task_state_writeback_output,
+    )
     from tools.doc_governor.governance_rounds import (
         build_document_round_plan,
         load_state as load_governance_state,
@@ -167,6 +173,12 @@ else:
         build_task_apply_summary,
         render_task_apply_summary_markdown,
         write_task_apply_summary_output,
+    )
+    from .task_state_apply import execute_task_state_apply
+    from .task_state_writeback import (
+        build_task_state_writeback_preview,
+        render_task_state_writeback_markdown,
+        write_task_state_writeback_output,
     )
     from .governance_rounds import (
         build_document_round_plan,
@@ -410,6 +422,21 @@ def main(argv: list[str] | None = None) -> int:
     apply_summary_parser.add_argument("--output")
     apply_summary_parser.add_argument("--before-json")
 
+    state_writeback_preview_parser = subparsers.add_parser("preview-task-state-writeback")
+    state_writeback_preview_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    state_writeback_preview_parser.add_argument("--entity-id", action="append")
+    state_writeback_preview_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    state_writeback_preview_parser.add_argument("--output")
+    state_writeback_preview_parser.add_argument("--evaluate-json")
+
+    state_apply_parser = subparsers.add_parser("apply-task-state-writeback")
+    state_apply_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    state_apply_parser.add_argument("--entity-id", action="append", required=True)
+    state_apply_parser.add_argument("--apply", action="store_true")
+    state_apply_parser.add_argument("--actor")
+    state_apply_parser.add_argument("--reason")
+    state_apply_parser.add_argument("--evaluate-json")
+
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
         return bootstrap_state(args)
@@ -465,6 +492,10 @@ def main(argv: list[str] | None = None) -> int:
         return apply_task_readiness_fix_command(args)
     if args.command == "summarize-task-apply-result":
         return summarize_task_apply_result_command(args)
+    if args.command == "preview-task-state-writeback":
+        return preview_task_state_writeback_command(args)
+    if args.command == "apply-task-state-writeback":
+        return apply_task_state_writeback_command(args)
 
     parser.print_help()
     return 1
@@ -2076,6 +2107,232 @@ def summarize_task_apply_result_command(args: argparse.Namespace) -> int:
         print(render_task_apply_summary_markdown(output_payload), end="")
     else:
         print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def preview_task_state_writeback_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_STATE_WRITEBACK_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_state_writeback",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-state-writeback",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_STATE_WRITEBACK_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_state_writeback",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-state-writeback",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        preview = build_task_state_writeback_preview(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_STATE_WRITEBACK_PREVIEW_FAILED",
+                        severity="error",
+                        entity_type="task_state_writeback",
+                        entity_id="GLOBAL",
+                        field_path="preview-task-state-writeback",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="preview-task-state-writeback",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **preview}
+    if args.output:
+        write_task_state_writeback_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_state_writeback_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_state_writeback_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_STATE_APPLY_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_state_apply",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-state-writeback",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_STATE_APPLY_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_state_apply",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-state-writeback",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_state_apply(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+            actor=args.actor,
+            reason=args.reason,
+        )
+    except ValueError as exc:
+        try:
+            dry_run_plan = execute_task_state_apply(
+                state_path=args.input,
+                evaluate_payload=payload if isinstance(payload, dict) else {},
+                entity_ids=args.entity_id,
+                apply_changes=False,
+                actor=None,
+                reason=None,
+            )
+        except ValueError:
+            dry_run_plan = None
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_STATE_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="task_state_apply",
+                        entity_id="GLOBAL",
+                        field_path="apply-task-state-writeback",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-state-writeback",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                )
+            ],
+        }
+        if dry_run_plan is not None:
+            output_payload["plan"] = dry_run_plan
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
     return 0
 
 

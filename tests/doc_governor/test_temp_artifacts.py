@@ -8,6 +8,8 @@ from tools.testing.temp_artifacts import (
     DirectoryWatchSpec,
     ManagedTempArtifacts,
     ManagedTempArtifactsTestCase,
+    create_managed_temp_root_guard,
+    create_repo_temp_dir_guard,
 )
 
 
@@ -87,6 +89,36 @@ class ManagedTempArtifactsTests(unittest.TestCase):
         leaks = guard.find_unexpected_directories()
         self.assertEqual(len(leaks), 1)
         self.assertIn("_tmp-session-leak", leaks[0])
+
+    def test_recursive_directory_leak_guard_reports_nested_directory_leaks(self) -> None:
+        existing_parent = self.watch_root / "existing-parent"
+        existing_parent.mkdir()
+        guard = DirectoryLeakGuard([DirectoryWatchSpec(root=self.watch_root, recursive=True)])
+        leaked_dir = existing_parent / "nested-leak"
+        leaked_dir.mkdir()
+
+        leaks = guard.find_unexpected_directories()
+        self.assertEqual(len(leaks), 1)
+        self.assertIn("existing-parent/nested-leak", leaks[0])
+
+    def test_repo_guard_reports_pytest_cache_file_dirs(self) -> None:
+        guard = create_repo_temp_dir_guard(self.sandbox_root)
+        leaked_dir = self.sandbox_root / "pytest-cache-files-demo"
+        leaked_dir.mkdir()
+
+        leaks = guard.find_unexpected_directories()
+        self.assertEqual(len(leaks), 1)
+        self.assertIn("pytest-cache-files-demo", leaks[0])
+
+    def test_managed_temp_root_guard_reports_new_owner_directories(self) -> None:
+        managed_root = self.sandbox_root / "managed-root"
+        guard = create_managed_temp_root_guard(managed_root)
+        leaked_dir = managed_root / "tests-demo-owner"
+        leaked_dir.mkdir(parents=True)
+
+        leaks = guard.find_unexpected_directories()
+        self.assertEqual(len(leaks), 1)
+        self.assertIn("tests-demo-owner", leaks[0])
 
 
 class ManagedTempArtifactsTestCaseTests(ManagedTempArtifactsTestCase):

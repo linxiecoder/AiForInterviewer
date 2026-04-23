@@ -486,6 +486,94 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("任务 patch 预览", markdown_output)
         self.assertTrue(md_path.exists())
 
+    def test_preview_task_state_writeback_supports_json_markdown_and_entity_filter(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["global_policy"]["formal_window_open"] = False
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        output_dir = self.temp_root / "state-writeback-preview"
+        json_path = output_dir / "preview.json"
+        exit_code, output = self._run_cli(
+            "preview-task-state-writeback",
+            "--input",
+            str(self.state_path),
+            "--format",
+            "json",
+            "--entity-id",
+            "ST01_01",
+            "--output",
+            str(json_path),
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["summary"]["selected_task_count"], 1)
+        self.assertEqual(payload["summary"]["activation_candidate_count"], 1)
+        self.assertTrue(json_path.exists())
+
+        md_path = output_dir / "preview.md"
+        exit_code, markdown_output = self._run_cli(
+            "preview-task-state-writeback",
+            "--input",
+            str(self.state_path),
+            "--format",
+            "markdown",
+            "--entity-id",
+            "ST01_01",
+            "--output",
+            str(md_path),
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertIn("任务 state 写回预览", markdown_output)
+        self.assertTrue(md_path.exists())
+
+    def test_apply_task_state_writeback_supports_dry_run_and_apply_on_controlled_sample(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["global_policy"]["formal_window_open"] = False
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        official_state_path = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
+        official_state_path.parent.mkdir(parents=True, exist_ok=True)
+        official_state_path.write_text(
+            yaml.safe_dump(state, sort_keys=False),
+            encoding="utf-8",
+        )
+        history_path = official_state_path.parent / "transition_history.jsonl"
+
+        exit_code, output = self._run_cli(
+            "apply-task-state-writeback",
+            "--input",
+            str(official_state_path),
+            "--entity-id",
+            "ST01_01",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["summary"]["eligible_task_count"], 1)
+        self.assertFalse(history_path.exists())
+
+        exit_code, output = self._run_cli(
+            "apply-task-state-writeback",
+            "--input",
+            str(official_state_path),
+            "--entity-id",
+            "ST01_01",
+            "--apply",
+            "--actor",
+            "alice",
+            "--reason",
+            "activate implementation doc state",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "apply")
+        self.assertEqual(payload["summary"]["applied_task_count"], 1)
+
+        updated_state = yaml.safe_load(official_state_path.read_text(encoding="utf-8"))
+        confirmed = updated_state["subtasks"]["ST01_01"]["state"]["confirmed"]
+        self.assertEqual(confirmed["implementation_doc_state"], "active_working_doc")
+        self.assertTrue(history_path.exists())
+
     def test_apply_task_readiness_fix_supports_dry_run_plan(self) -> None:
         output_plan = self.temp_root / "apply-plan.json"
         exit_code, output = self._run_cli(
