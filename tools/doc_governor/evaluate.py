@@ -7,6 +7,7 @@ from typing import Any
 
 from .document_scan import scan_document
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
+from .language_check import check_markdown_language
 from .schema import REQUIRED_MODULE_SLOTS, SCHEMA_VERSION, TYPED_BLOCKER_REF_RE
 from .validate import validate_state_file
 
@@ -27,6 +28,10 @@ BLOCKED_REASON_CODES = {
     "missing_relation_ref",
     "document_markers_pending",
     "document_file_missing",
+    "requirement_id_unresolved",
+    "implementation_scope_unclear",
+    "required_tests_missing",
+    "acceptance_criteria_missing",
 }
 
 REVIEW_REASONS = {
@@ -42,6 +47,11 @@ OQ_RESOLUTION_POLICIES = (
     "confirmed_only",
     "manual_override_only",
 )
+
+MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*$")
+INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s*")
+HEADING_NUMBER_RE = re.compile(r"^\d+(?:\.\d+)*\.?\s*")
 
 
 def evaluate_state_file(state_path: Path) -> tuple[list[Diagnostic], dict[str, Any]]:
@@ -292,6 +302,7 @@ def _validate_oq_persisted_fields(
 
 
 def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> dict[str, Any]:
+    repo_root = _resolve_repo_root(state_path)
     oqs = state.get("oqs")
     oqs = oqs if isinstance(oqs, dict) else {}
     requirements = state.get("requirements")
@@ -313,6 +324,7 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
     requirement_derived_map: dict[str, dict[str, Any]] = {}
     requirement_blockers_by_module: dict[str, list[dict[str, Any]]] = {}
     requirement_blockers_by_task: dict[str, list[dict[str, Any]]] = {}
+    requirement_ids_by_task: dict[str, list[str]] = {}
     for requirement_id, requirement_obj in requirements.items():
         if not isinstance(requirement_obj, dict):
             continue
@@ -329,6 +341,7 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
         for task_id in requirement_facts.get("task_ids", []):
             if not isinstance(task_id, str):
                 continue
+            requirement_ids_by_task.setdefault(task_id, []).append(str(requirement_id))
             requirement_blockers_by_task.setdefault(task_id, []).extend(
                 _clone_blockers(requirement_result.get("gate_blockers", []))
             )
@@ -353,6 +366,8 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
                 module_derived_map=module_derived_map,
                 direct_requirement_blockers=requirement_blockers_by_task.get(str(subtask_id), []),
                 formal_window_open=formal_window_open,
+                repo_root=repo_root,
+                requirement_ids=sorted(set(requirement_ids_by_task.get(str(subtask_id), []))),
             )
 
     requirement_derived_wrapped: dict[str, Any] = {}
@@ -385,7 +400,7 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
 
     document_results = _evaluate_documents(
         documents=documents,
-        repo_root=_resolve_repo_root(state_path),
+        repo_root=repo_root,
     )
     rounds_summary = _summarize_rounds(governance_rounds)
 
@@ -717,9 +732,13 @@ def _evaluate_subtask(
     module_derived_map: dict[str, dict[str, Any]],
     direct_requirement_blockers: list[dict[str, Any]],
     formal_window_open: bool,
+    repo_root: Path,
+    requirement_ids: list[str],
 ) -> dict[str, Any]:
     facts = subtask_obj.get("facts")
     facts = facts if isinstance(facts, dict) else {}
+    meta = subtask_obj.get("meta")
+    meta = meta if isinstance(meta, dict) else {}
     state = subtask_obj.get("state")
     state = state if isinstance(state, dict) else {}
     confirmed = state.get("confirmed")
@@ -836,6 +855,89 @@ def _evaluate_subtask(
             )
         )
 
+    resolved_requirement_id = requirement_ids[0] if len(requirement_ids) == 1 else None
+    if resolved_requirement_id is None:
+        if requirement_ids:
+            implementation_blockers.append(
+                _make_blocker(
+                    ref="gate:requirement_id_ambiguous",
+                    kind="gate",
+                    reason_code="requirement_id_unresolved",
+                    message=(
+                        f"subtask {subtask_id} matches multiple requirement ids: "
+                        + ", ".join(sorted(requirement_ids))
+                    ),
+                )
+            )
+        else:
+            implementation_blockers.append(
+                _make_blocker(
+                    ref="gate:requirement_id_missing",
+                    kind="gate",
+                    reason_code="requirement_id_unresolved",
+                    message=f"subtask {subtask_id} cannot resolve a unique requirement id",
+                )
+            )
+
+    packet_inputs = _build_subtask_packet_inputs(
+        subtask_id=subtask_id,
+        module_id=str(meta.get("module_id", "")),
+        subtask_path=str(meta.get("path", "")),
+        repo_root=repo_root,
+        requirement_id=resolved_requirement_id,
+    )
+    missing_scope_fields: list[str] = []
+    if not packet_inputs.get("goal"):
+        missing_scope_fields.append("goal")
+    if not packet_inputs.get("allowed_modify_paths"):
+        missing_scope_fields.append("allowed_modify_paths")
+    if missing_scope_fields:
+        implementation_blockers.append(
+            _make_blocker(
+                ref="gate:implementation_scope_unclear",
+                kind="gate",
+                reason_code="implementation_scope_unclear",
+                message=(
+                    f"subtask {subtask_id} implementation scope is incomplete: "
+                    + ", ".join(missing_scope_fields)
+                ),
+            )
+        )
+    if not packet_inputs.get("required_tests"):
+        implementation_blockers.append(
+            _make_blocker(
+                ref="gate:required_tests_missing",
+                kind="gate",
+                reason_code="required_tests_missing",
+                message=f"subtask {subtask_id} implementation doc is missing required tests",
+            )
+        )
+    if not packet_inputs.get("acceptance_criteria"):
+        implementation_blockers.append(
+            _make_blocker(
+                ref="gate:acceptance_criteria_missing",
+                kind="gate",
+                reason_code="acceptance_criteria_missing",
+                message=(
+                    f"subtask {subtask_id} implementation doc is missing acceptance criteria"
+                ),
+            )
+        )
+    for violation in _as_list(packet_inputs.get("language_violations")):
+        if not isinstance(violation, dict):
+            continue
+        code = _normalize_policy_token(str(violation.get("code", "language_non_compliant")))
+        doc_path = str(violation.get("path", ""))
+        message = str(violation.get("message", "language policy violation"))
+        implementation_blockers.append(
+            _make_blocker(
+                ref=f"policy:{code or 'language_non_compliant'}",
+                kind="policy",
+                reason_code="language_non_compliant",
+                message=f"subtask {subtask_id} language violation in {doc_path}: {message}",
+            )
+        )
+
     candidate_blockers = _dedupe_blockers(candidate_blockers)
     downstream_blockers = _dedupe_blockers(downstream_blockers)
     implementation_blockers = _dedupe_blockers(implementation_blockers)
@@ -877,6 +979,7 @@ def _evaluate_subtask(
         "oq_review_only_refs": sorted(set(oq_review_only_refs)),
         "implementation_doc_activation_recommended": implementation_doc_activation_recommended,
         "implementation_doc_activation_reason": implementation_doc_activation_reason,
+        "implementation_packet_inputs": packet_inputs,
     }
 
 
@@ -1156,6 +1259,9 @@ def _finalize_subtask_derived(
         "implementation_doc_activation_reason": str(
             subtask_result.get("implementation_doc_activation_reason", "")
         ),
+        "implementation_packet_inputs": _as_dict(
+            subtask_result.get("implementation_packet_inputs")
+        ),
         "review_required": bool(review_reasons),
         "review_reasons": review_reasons,
         "ready_for_next_step": not bool(blocker_refs),
@@ -1393,3 +1499,142 @@ def _normalize_policy_token(value: str) -> str:
 
 def _clone_blockers(blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(blocker) for blocker in blockers if isinstance(blocker, dict)]
+
+
+def _build_subtask_packet_inputs(
+    *,
+    subtask_id: str,
+    module_id: str,
+    subtask_path: str,
+    repo_root: Path,
+    requirement_id: str | None,
+) -> dict[str, Any]:
+    design_relative_path = _join_relative_path(subtask_path, "SUBTASK_DESIGN.md")
+    implementation_relative_path = _join_relative_path(subtask_path, "SUBTASK_IMPLEMENTATION.md")
+    design_text = _read_text_if_exists(repo_root / design_relative_path)
+    implementation_text = _read_text_if_exists(repo_root / implementation_relative_path)
+    design_sections = _parse_markdown_sections(design_text)
+    implementation_sections = _parse_markdown_sections(implementation_text)
+
+    goal_items = _extract_section_items(implementation_sections.get("本轮实施目标", []))
+    if not goal_items:
+        goal_items = _extract_section_items(design_sections.get("子任务目标", []))
+
+    allowed_modify_paths = _extract_section_items(implementation_sections.get("允许修改", []))
+    if not allowed_modify_paths:
+        allowed_modify_paths = _extract_section_items(implementation_sections.get("允许修改范围", []))
+    forbidden_paths = _extract_section_items(implementation_sections.get("禁止修改", []))
+    required_tests = _dedupe_strings(
+        _extract_section_items(implementation_sections.get("自动化验证", []))
+        + _extract_section_items(implementation_sections.get("手动验证", []))
+    )
+    if not required_tests:
+        required_tests = _extract_section_items(implementation_sections.get("测试与验证", []))
+    acceptance_criteria = _extract_section_items(implementation_sections.get("完成判定", []))
+
+    language_violations: list[dict[str, str]] = []
+    for relative_path, text in (
+        (design_relative_path, design_text),
+        (implementation_relative_path, implementation_text),
+    ):
+        if not text.strip():
+            continue
+        for diagnostic in check_markdown_language(
+            path=relative_path,
+            text=text,
+            entity_type="subtask",
+            entity_id=subtask_id,
+        ):
+            language_violations.append(
+                {
+                    "code": f"language_non_compliant_{_normalize_policy_token(diagnostic.code)}",
+                    "path": relative_path,
+                    "message": diagnostic.message,
+                }
+            )
+
+    return {
+        "task_id": subtask_id,
+        "module_id": module_id,
+        "requirement_id": requirement_id,
+        "goal": "\n".join(goal_items).strip(),
+        "allowed_modify_paths": allowed_modify_paths,
+        "forbidden_paths": forbidden_paths,
+        "required_tests": required_tests,
+        "acceptance_criteria": acceptance_criteria,
+        "official_doc_paths": {
+            "design_doc": design_relative_path,
+            "implementation_doc": implementation_relative_path,
+        },
+        "language_violations": language_violations,
+    }
+
+
+def _join_relative_path(base_path: str, filename: str) -> str:
+    base = Path(base_path)
+    return (base / filename).as_posix()
+
+
+def _read_text_if_exists(path: Path) -> str:
+    try:
+        if path.exists() and path.is_file():
+            return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    return ""
+
+
+def _parse_markdown_sections(text: str) -> dict[str, list[str]]:
+    sections: dict[str, list[str]] = {}
+    current_key: str | None = None
+    for line in text.splitlines():
+        match = MARKDOWN_HEADING_RE.match(line)
+        if match:
+            current_key = _normalize_heading_key(match.group(1))
+            sections.setdefault(current_key, [])
+            continue
+        if current_key is not None:
+            sections[current_key].append(line)
+    return sections
+
+
+def _normalize_heading_key(value: str) -> str:
+    normalized = value.strip()
+    normalized = HEADING_NUMBER_RE.sub("", normalized)
+    return normalized.strip()
+
+
+def _extract_section_items(lines: list[str]) -> list[str]:
+    items: list[str] = []
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("|"):
+            continue
+        normalized = LIST_PREFIX_RE.sub("", stripped).strip()
+        if not normalized:
+            continue
+        code_spans = [item.strip() for item in INLINE_CODE_RE.findall(normalized) if item.strip()]
+        if code_spans:
+            items.extend(code_spans)
+            continue
+        value = normalized
+        if "：" in value:
+            value = value.split("：", 1)[1].strip()
+        elif ":" in value:
+            value = value.split(":", 1)[1].strip()
+        value = value.strip()
+        if value:
+            items.append(value)
+    return _dedupe_strings(items)
+
+
+def _dedupe_strings(items: list[str]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        ordered.append(text)
+    return ordered

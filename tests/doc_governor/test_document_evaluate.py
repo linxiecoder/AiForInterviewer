@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _base_state() -> dict:
@@ -84,15 +85,13 @@ def _document_entry(*, doc_type: str, path: str, required_sections: list[tuple[s
     }
 
 
-class DocumentEvaluateTests(unittest.TestCase):
+class DocumentEvaluateTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "document-evaluate"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-doc-eval-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         (self.temp_root / "docs" / "governance").mkdir(parents=True, exist_ok=True)
         self.state_path = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _run_cli(self, *args: str) -> tuple[int, dict]:
         original = Path.cwd()

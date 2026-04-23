@@ -12,7 +12,7 @@
 | DD-001 | 文档体系采用 `global -> module -> subtask` 分层 | confirmed | 全局文档负责约束与导航，模块文档承接设计，子任务文档承接实施准备 | 全局 | 所有新增文档继续遵循该分层 |
 | DD-002 | 原始设计稿与原始实现计划保留为上游源文档 | confirmed | `docs/superpowers/specs/...` 与 `docs/superpowers/plans/...` 不承担逐轮回写 | 全局 | 后续回写进入根目录全局文档与 `docs/modules/` |
 | DD-003 | 单次实施单位限定为一个子任务 | confirmed | 只有单个 `SUBTASK_IMPLEMENTATION.md` 达到可实施后，才进入代码执行 | 全局实施流程 | 在任务索引与成熟度文档中持续约束 |
-| DD-004 | 仓库结构默认采用 monorepo | proposed | 默认目录形态为 `apps/web`、`apps/api`、`infra` | M01-M10 | 待 OQ-001 确认后更新为 confirmed |
+| DD-004 | 目标产品代码结构默认采用 monorepo | proposed | 当前仓库继续以“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”作为治理与工具布局；若进入业务代码实施，默认目录形态为 `apps/web`、`apps/api`、`infra` | M01-M10 | 待 OQ-001 确认后更新为 confirmed |
 | DD-005 | 默认技术栈采用 Next.js + FastAPI | proposed | Web 负责工作台与交互，API 负责鉴权、领域服务与 AI 编排 | M01-M10 | 待 M01-M03 细化后收敛 |
 | DD-006 | 文档默认使用中文 | confirmed | 文档主体、界面文案和说明均使用中文，技术标识保持英文 | 全局 | 受 [AGENTS.md](AGENTS.md) 与 [docs/project-language-rules.md](docs/project-language-rules.md) 约束 |
 | DD-007 | Markdown 预览与导出共用同一渲染链 | proposed | 避免预览与导出结果不一致 | M03 | 待 OQ-006 确认 |

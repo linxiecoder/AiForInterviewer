@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _build_bootstrap_state() -> dict:
@@ -108,10 +109,11 @@ def _build_bootstrap_state() -> dict:
     }
 
 
-class InitOfficialStateTests(unittest.TestCase):
+class InitOfficialStateTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "init-state"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-init-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         self.docs_root = self.temp_root / "docs" / "governance"
         self.docs_root.mkdir(parents=True, exist_ok=True)
         self.bootstrap_path = self.docs_root / "DOC_STATE.bootstrap.yaml"
@@ -120,9 +122,6 @@ class InitOfficialStateTests(unittest.TestCase):
             yaml.safe_dump(_build_bootstrap_state(), sort_keys=False),
             encoding="utf-8",
         )
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _run_cli(self, *args: str) -> tuple[int, dict]:
         original = Path.cwd()

@@ -363,6 +363,59 @@ oqs:
     gate_level: observe_only
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
+requirements:
+  RQ01:
+    meta:
+      path: .
+      scope_kind: root_requirement_cluster
+    facts:
+      module_ids:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      task_ids:
+      - ST01_01
+      - ST09_03
+      asset_slots:
+        plan_latest:
+          exists: true
+          path: PLAN_LATEST.md
+        module_index:
+          exists: true
+          path: MODULE_INDEX.md
+        task_index:
+          exists: true
+          path: TASK_INDEX.md
+      compliance:
+        naming_ok: true
+        path_ok: true
+        relations_ok: true
+        language_ok: null
+        violations: []
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        window_status: closed
+        window_opened_at: null
+        window_opened_by: null
+        window_reason: null
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+      tracking:
+        active_round_id: null
+        last_round_id: null
 modules:
   M01:
     meta:

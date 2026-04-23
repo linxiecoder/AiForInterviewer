@@ -10,6 +10,7 @@ from pathlib import Path
 from contextlib import redirect_stdout
 
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _build_entry(
@@ -37,19 +38,17 @@ def _build_entry(
     }
 
 
-class HistoryCommandTests(unittest.TestCase):
+class HistoryCommandTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "history"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-history-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         (self.temp_root / "docs" / "governance").mkdir(parents=True, exist_ok=True)
         self.history_path = self.temp_root / "docs" / "governance" / "transition_history.jsonl"
         self.state_path = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
         self.bootstrap_path = self.temp_root / "docs" / "governance" / "DOC_STATE.bootstrap.yaml"
         self.state_path.write_text("STATE_SENTINEL", encoding="utf-8")
         self.bootstrap_path.write_text("BOOTSTRAP_SENTINEL", encoding="utf-8")
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _run_cli(self, *args: str) -> tuple[int, dict]:
         original = Path.cwd()

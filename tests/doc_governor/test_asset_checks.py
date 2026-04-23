@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tools.doc_governor.artifact_policy import ArtifactPolicy, AssetSlot
 from tools.doc_governor.asset_checks import check_repo_assets
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _build_policy() -> ArtifactPolicy:
@@ -46,13 +47,12 @@ def _build_policy() -> ArtifactPolicy:
     )
 
 
-class AssetChecksTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.repo_root = Path(tempfile.gettempdir()) / f"doc-governor-assets-{uuid.uuid4().hex}"
-        self.repo_root.mkdir(parents=True, exist_ok=True)
+class AssetChecksTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "asset-checks"
+    managed_temp_root_attr = "repo_root"
 
-    def tearDown(self) -> None:
-        shutil.rmtree(self.repo_root, ignore_errors=True)
+    def setUp(self) -> None:
+        super().setUp()
 
     def _write(self, relative_path: str, text: str) -> Path:
         path = self.repo_root / relative_path

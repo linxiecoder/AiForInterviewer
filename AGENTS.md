@@ -24,7 +24,7 @@
 
 ### 1.3 文档治理规则
 
-本仓库的文档治理细则定义在 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md)。
+本仓库的项目治理总则定义在 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md)。
 
 当任务涉及以下任一事项时，必须先阅读并遵守 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md)：
 - 文档成熟度评估
@@ -37,9 +37,21 @@
 - 子任务是否具备可实施条件的判断
 - 具体文档模板定义不在本文件重复维护；若模板已有独立文件或独立索引，应以模板文件为准。
 
-如果 `AGENTS.md` 与 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 看似冲突：
+需要特别说明：
+- [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 当前定位为人工协作总则、项目治理总则，不再充当完整 `doc-governor` 工具实现真值。
+- 当任务涉及 `doc-governor` 的命令行为、状态 schema、gate 规则、confirmed state 写回、document round、history、open-window 等结构化状态自动化行为时，必须同时阅读：
+  - [`docs/governance/DOC_AUTOMATION.md`](docs/governance/DOC_AUTOMATION.md)
+  - `tools/doc_governor/cli.py`
+  - `tools/doc_governor/schema.py`
+  - `tools/doc_governor/validate.py`
+  - `tools/doc_governor/evaluate.py`
+  - `tools/doc_governor/confirm.py`
+
+如果 `AGENTS.md`、[`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md)、[`docs/governance/DOC_AUTOMATION.md`](docs/governance/DOC_AUTOMATION.md) 或当前代码实现看似冲突：
 - 目录结构、角色边界、全局总则以 `AGENTS.md` 为准
-- 文档治理细节、成熟度规则、进展规则、回写规则以 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 为准
+- 人工协作流程、文档职责、项目治理口径以 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md) 为准
+- 自动化边界、状态文件规则、命令契约以 [`docs/governance/DOC_AUTOMATION.md`](docs/governance/DOC_AUTOMATION.md) 为准
+- 实际命令参数、对象模型、gate 判定与写回行为以 `tools/doc_governor/*.py` 当前实现为准
 
 ### 1.3.1 结构化状态自动化规则
 
@@ -72,20 +84,23 @@
 ### 1.5 仓库指导
 
 #### Repo map
-- apps/web: 前端
-- apps/api: 后端接口
-- packages/shared: 跨端共享类型与工具
-- scripts/: 构建与发布脚本
+- 根目录 `*.md`: 全局总控、索引、标准、决策、成熟度、进展与开放问题
+- `docs/governance/`: 文档治理规则、运行手册、状态文件与报告输出
+- `docs/modules/`: `M01-M10` 模块与子任务文档
+- `docs/superpowers/`: 上游设计稿与实现计划
+- `tools/doc_governor/`: 文档治理 CLI、状态流转、扫描、校验与报告渲染
+- `tests/doc_governor/`: `doc_governor` 对应测试、fixtures 与 smoke / integration 验证
+- `requirements.txt`: 当前 Python 依赖入口
 
 #### Guardrails
-- 不要直接改 generated/ 下文件
-- 涉及数据库 schema 的改动必须附带 migration
-- 涉及 shared 类型改动时，必须检查 web/api 两端影响
+- 不要直接改 `node_modules/`、`.serena/`、`.worktrees/`、`__pycache__/`、`pytest-cache-files-*` 等本地缓存或工作目录
+- `docs/governance/DOC_STATE.yaml` 是正式真值；`DOC_STATE.bootstrap.yaml` 只是 bootstrap 输出
+- 修改 `tools/doc_governor/` 时，必须同步检查 `tests/doc_governor/` 的影响
 
 #### Verification
-- 前端修改后运行: pnpm -C apps/web test
-- 后端修改后运行: pnpm -C apps/api test
-- 跨包改动后运行: pnpm test
+- 文档治理 / 工具改动后运行: `python -m pytest tests/doc_governor -q`
+- CLI 入口检查: `python -m tools.doc_governor.cli --help`
+- 涉及状态评估链路时运行: `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
 
 #### Preferred workflow
 - 先定位入口 symbol
@@ -132,23 +147,25 @@
 - 若后续规则与普通说明文档冲突，以本文档和用户最新要求为准。
 - 若新增文档会影响实现、协作或交付方式，应先更新本文档索引，再继续扩展实现。
 
-## Evaluate Command Contract
-Phase 2A evaluate-state is read-only report output.
-- Command outputs structured JSON only and does not write any state files.
-- It does not change DOC_STATE.bootstrap.yaml or DOC_STATE.yaml.
-- PyYAML is required for reading DOC_STATE*.yaml inputs.
+## 3.1 评估命令约束
 
-## 2.6 Phase 2B Render Command
+- `evaluate-state` 是只读评估命令。
+- 命令只输出结构化 JSON，不写任何状态文件。
+- 它不会修改 `DOC_STATE.bootstrap.yaml` 或 `DOC_STATE.yaml`。
+- 读取 `DOC_STATE*.yaml` 依赖 `PyYAML`。
 
-- `render-report --evaluate-json <PATH>` is the primary report render entry.
-- `render-report --state <DOC_STATE.bootstrap.yaml>` is only an optional wrapper and must call `evaluate_state_file` only; it must not re-implement evaluate rules.
-- Default output must be `docs/governance/DOC_GOVERNOR_REPORT.md`.
-- `--report-path` is only allowed under `docs/governance/` and must never target `DOC_STATE.yaml` or `DOC_STATE.bootstrap.yaml`.
-- Report output is read-only interpretation only; it is not confirmed state and must not drive confirm-transition or state write-back.
+## 3.2 报告渲染约束
 
-## Confirm Transition (Phase 3A)
+- `render-report --evaluate-json <PATH>` 是主渲染入口。
+- `render-report --state <PATH>` 只是共享 evaluate 路径的 wrapper，不得重写 evaluate 规则。
+- 默认输出必须是 `docs/governance/DOC_GOVERNOR_REPORT.md`。
+- `--report-path` 只允许写到 `docs/governance/` 下，且不得指向 `DOC_STATE.yaml` 或 `DOC_STATE.bootstrap.yaml`。
+- 报告输出只是解释性只读结果，不是 confirmed state，不得直接驱动 `confirm-transition` 或状态写回。
+
+## 3.3 状态确认约束
+
 - `confirm-transition` 默认输入为 `docs/governance/DOC_STATE.yaml`；若该文件不存在则直接失败。
 - `confirm-transition` 仅允许写入/更新 `DOC_STATE.yaml`，禁止写入/覆盖 `DOC_STATE.bootstrap.yaml`。
 - `proposed_changes` 不允许提交 `last_transition_id`、`last_confirmed_at`、`last_confirmed_by`，这三项必须由系统在 approve 成功时补齐。
-- `candidate_status` 提升（none/observe -> candidate）需至少一条 evidence。`
+- `candidate_status` 提升（none/observe -> candidate）需至少一条 `--evidence-ref`。
 - Bootstrap 默认补齐 OQ policy（`gate_policy_source=bootstrap_default`）只能作为审核输入，不得单独支撑批准路径。

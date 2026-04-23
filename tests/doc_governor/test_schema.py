@@ -5,15 +5,14 @@ import uuid
 from pathlib import Path
 
 import yaml
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
-class SchemaContractTests(unittest.TestCase):
+class SchemaContractTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "schema"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-schema-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
+        super().setUp()
 
     def test_requirement_defaults_and_helpers_are_available(self) -> None:
         from tools.doc_governor import schema

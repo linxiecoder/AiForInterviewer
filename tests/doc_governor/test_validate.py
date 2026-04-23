@@ -8,6 +8,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.validate import validate_state_file
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _build_valid_state() -> dict:
@@ -97,13 +98,11 @@ def _build_valid_state() -> dict:
     }
 
 
-class ValidateSchemaTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-validate-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+class ValidateSchemaTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "validate"
 
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
+    def setUp(self) -> None:
+        super().setUp()
 
     def _write_state(self, state: dict) -> Path:
         file_path = self.temp_root / "DOC_STATE.bootstrap.yaml"

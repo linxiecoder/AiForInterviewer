@@ -15,6 +15,7 @@ from tools.doc_governor.cli import main
 from tools.doc_governor.diagnostics import make_diagnostic, make_evidence
 
 from tools.doc_governor.render import RENDER_OUTPUT_DIR_NAME
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 REAL_REPO_FIXTURE = Path(__file__).parent / "fixtures" / "repo" / "prose_contamination"
 
@@ -24,14 +25,12 @@ def _write_json(path: Path, payload: dict) -> Path:
     return path
 
 
-class RenderCommandTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-render-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
-        (self.temp_root / "docs" / "governance").mkdir(parents=True, exist_ok=True)
+class RenderCommandTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "render"
 
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
+    def setUp(self) -> None:
+        super().setUp()
+        (self.temp_root / "docs" / "governance").mkdir(parents=True, exist_ok=True)
 
     def _run_cli(
         self,

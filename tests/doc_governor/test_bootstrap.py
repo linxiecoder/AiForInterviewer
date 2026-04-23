@@ -6,8 +6,9 @@ import shutil
 from contextlib import redirect_stdout
 from pathlib import Path
 import unittest
-import uuid
 import sys
+
+from tools.testing.temp_artifacts import ManagedTempArtifacts
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -15,9 +16,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 class BootstrapStateTests(unittest.TestCase):
     def setUp(self) -> None:
-        temp_root = Path(__file__).parent / "_tmp"
-        temp_root.mkdir(exist_ok=True)
-        self.repo_root = temp_root / f"repo_{uuid.uuid4().hex}"
+        self.temp_artifacts = ManagedTempArtifacts(
+            test_id=self.id(),
+            watch_roots=[Path(__file__).parent],
+        )
+        self.temp_root = self.temp_artifacts.make_temp_dir("bootstrap")
+        self.repo_root = self.temp_root / "repo"
         shutil.copytree(FIXTURES / "repo" / "prose_contamination", self.repo_root)
         for cleanup_file in [
             self.repo_root / "docs" / "governance" / "DOC_STATE.bootstrap.yaml",
@@ -26,7 +30,7 @@ class BootstrapStateTests(unittest.TestCase):
             cleanup_file.unlink(missing_ok=True)
 
     def tearDown(self) -> None:
-        shutil.rmtree(self.repo_root, ignore_errors=True)
+        self.temp_artifacts.cleanup()
 
     def _write_open_questions(self, text: str) -> None:
         (self.repo_root / "OPEN_QUESTIONS.md").write_text(

@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _base_confirm_state() -> dict:
@@ -98,19 +99,17 @@ def _base_confirm_state() -> dict:
     }
 
 
-class ConfirmTransitionTests(unittest.TestCase):
+class ConfirmTransitionTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "confirm"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-confirm-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         self.state_dir = self.temp_root / "docs" / "governance"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.state_dir / "DOC_STATE.yaml"
         self.bootstrap_path = self.state_dir / "DOC_STATE.bootstrap.yaml"
         self.history_path = self.state_dir / "transition_history.jsonl"
         self._write_state(_base_confirm_state())
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _write_state(self, state: dict) -> None:
         self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")

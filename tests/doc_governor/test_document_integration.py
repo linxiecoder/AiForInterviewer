@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _document_entry(
@@ -57,10 +58,11 @@ def _document_entry(
     }
 
 
-class DocumentIntegrationTests(unittest.TestCase):
+class DocumentIntegrationTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "document-integration"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-doc-int-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         (self.temp_root / "docs" / "governance").mkdir(parents=True, exist_ok=True)
         self.state_path = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
         state = {
@@ -129,9 +131,6 @@ class DocumentIntegrationTests(unittest.TestCase):
             "docs/superpowers/plans/plan.md",
             "# Plan\n\n## 范围说明\n\n引用 `OQ-004`。\n\n另见 `docs/superpowers/specs/spec.md`。\n",
         )
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _write_doc(self, relative_path: str, content: str) -> None:
         path = self.temp_root / relative_path

@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _base_docs() -> dict[str, dict[str, bool]]:
@@ -77,18 +78,16 @@ def _subtask_entry(
     }
 
 
-class PreflightOpenWindowTests(unittest.TestCase):
+class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "preflight"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-preflight-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         self.governance_root = self.temp_root / "docs" / "governance"
         self.governance_root.mkdir(parents=True, exist_ok=True)
         self.state_path = self.governance_root / "DOC_STATE.yaml"
         self.bootstrap_state_path = self.governance_root / "DOC_STATE.bootstrap.yaml"
         self.history_path = self.governance_root / "transition_history.jsonl"
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _write_state(self, state: dict) -> None:
         self.state_path.write_text(

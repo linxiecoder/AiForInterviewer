@@ -27,6 +27,56 @@ if __package__ in {None, ""}:
     from tools.doc_governor.confirm import confirm_transition
     from tools.doc_governor.evaluate import build_delta_summary, evaluate_state_file
     from tools.doc_governor.codex_packet import generate_codex_packet
+    from tools.doc_governor.task_packet import generate_implementation_packet
+    from tools.doc_governor.task_adaptation import (
+        build_task_adaptation_plan,
+        render_task_adaptation_markdown,
+        write_task_adaptation_output,
+    )
+    from tools.doc_governor.requirement_link_suggestions import (
+        build_requirement_link_suggestions,
+        render_requirement_link_suggestions_markdown,
+        write_requirement_link_suggestions_output,
+    )
+    from tools.doc_governor.requirement_container_seed import (
+        build_requirement_container_seed_plan,
+        execute_requirement_container_seed,
+        write_requirement_container_seed_output,
+    )
+    from tools.doc_governor.requirement_seed_apply import (
+        build_requirement_seed_apply_plan,
+        execute_requirement_seed_apply,
+        write_requirement_seed_apply_output,
+    )
+    from tools.doc_governor.task_remediation import (
+        build_task_remediation_plan,
+        render_task_remediation_markdown,
+        write_task_remediation_output,
+    )
+    from tools.doc_governor.task_readiness_plan import (
+        build_task_readiness_plan,
+        render_task_readiness_markdown,
+        write_task_readiness_output,
+    )
+    from tools.doc_governor.task_readiness_preview import (
+        build_task_readiness_preview,
+        render_task_readiness_preview_markdown,
+        write_task_readiness_preview_output,
+    )
+    from tools.doc_governor.task_patch_preview import (
+        build_task_patch_preview,
+        render_task_patch_preview_markdown,
+        write_task_patch_preview_output,
+    )
+    from tools.doc_governor.task_apply import (
+        execute_task_readiness_fix,
+        write_task_readiness_fix_plan_output,
+    )
+    from tools.doc_governor.task_apply_summary import (
+        build_task_apply_summary,
+        render_task_apply_summary_markdown,
+        write_task_apply_summary_output,
+    )
     from tools.doc_governor.governance_rounds import (
         build_document_round_plan,
         load_state as load_governance_state,
@@ -68,6 +118,56 @@ else:
     from .confirm import confirm_transition
     from .evaluate import build_delta_summary, evaluate_state_file
     from .codex_packet import generate_codex_packet
+    from .task_packet import generate_implementation_packet
+    from .task_adaptation import (
+        build_task_adaptation_plan,
+        render_task_adaptation_markdown,
+        write_task_adaptation_output,
+    )
+    from .requirement_link_suggestions import (
+        build_requirement_link_suggestions,
+        render_requirement_link_suggestions_markdown,
+        write_requirement_link_suggestions_output,
+    )
+    from .requirement_container_seed import (
+        build_requirement_container_seed_plan,
+        execute_requirement_container_seed,
+        write_requirement_container_seed_output,
+    )
+    from .requirement_seed_apply import (
+        build_requirement_seed_apply_plan,
+        execute_requirement_seed_apply,
+        write_requirement_seed_apply_output,
+    )
+    from .task_remediation import (
+        build_task_remediation_plan,
+        render_task_remediation_markdown,
+        write_task_remediation_output,
+    )
+    from .task_readiness_plan import (
+        build_task_readiness_plan,
+        render_task_readiness_markdown,
+        write_task_readiness_output,
+    )
+    from .task_readiness_preview import (
+        build_task_readiness_preview,
+        render_task_readiness_preview_markdown,
+        write_task_readiness_preview_output,
+    )
+    from .task_patch_preview import (
+        build_task_patch_preview,
+        render_task_patch_preview_markdown,
+        write_task_patch_preview_output,
+    )
+    from .task_apply import (
+        execute_task_readiness_fix,
+        write_task_readiness_fix_plan_output,
+    )
+    from .task_apply_summary import (
+        build_task_apply_summary,
+        render_task_apply_summary_markdown,
+        write_task_apply_summary_output,
+    )
     from .governance_rounds import (
         build_document_round_plan,
         load_state as load_governance_state,
@@ -238,6 +338,78 @@ def main(argv: list[str] | None = None) -> int:
     packet_parser.add_argument("--round-id", required=True)
     packet_parser.add_argument("--state", default=OFFICIAL_STATE_PATH)
 
+    implementation_packet_parser = subparsers.add_parser("generate-implementation-packet")
+    implementation_packet_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    implementation_packet_parser.add_argument("--entity-id", required=True)
+    implementation_packet_parser.add_argument("--evaluate-json")
+    implementation_packet_parser.add_argument("--output-dir")
+
+    adaptation_parser = subparsers.add_parser("plan-task-adaptation")
+    adaptation_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    adaptation_parser.add_argument("--entity-id")
+    adaptation_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    adaptation_parser.add_argument("--output")
+    adaptation_parser.add_argument("--evaluate-json")
+
+    requirement_link_parser = subparsers.add_parser("suggest-requirement-links")
+    requirement_link_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    requirement_link_parser.add_argument("--entity-id")
+    requirement_link_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    requirement_link_parser.add_argument("--output")
+
+    requirement_container_seed_parser = subparsers.add_parser("apply-requirement-container-seed")
+    requirement_container_seed_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    requirement_container_seed_parser.add_argument("--entity-id", action="append")
+    requirement_container_seed_parser.add_argument("--apply", action="store_true")
+    requirement_container_seed_parser.add_argument("--confirm-manual", action="store_true")
+    requirement_container_seed_parser.add_argument("--output-plan")
+
+    requirement_seed_apply_parser = subparsers.add_parser("apply-requirement-seed")
+    requirement_seed_apply_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    requirement_seed_apply_parser.add_argument("--entity-id", action="append", required=True)
+    requirement_seed_apply_parser.add_argument("--apply", action="store_true")
+    requirement_seed_apply_parser.add_argument("--confirm-manual", action="store_true")
+    requirement_seed_apply_parser.add_argument("--output-plan")
+
+    remediation_parser = subparsers.add_parser("plan-task-remediation")
+    remediation_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    remediation_parser.add_argument("--entity-id")
+    remediation_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    remediation_parser.add_argument("--output")
+    remediation_parser.add_argument("--evaluate-json")
+
+    readiness_parser = subparsers.add_parser("plan-task-readiness")
+    readiness_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    readiness_parser.add_argument("--entity-id")
+    readiness_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    readiness_parser.add_argument("--output")
+    readiness_parser.add_argument("--evaluate-json")
+
+    readiness_preview_parser = subparsers.add_parser("preview-task-readiness-fix")
+    readiness_preview_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    readiness_preview_parser.add_argument("--entity-id")
+    readiness_preview_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    readiness_preview_parser.add_argument("--output")
+
+    patch_preview_parser = subparsers.add_parser("preview-task-patches")
+    patch_preview_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    patch_preview_parser.add_argument("--entity-id")
+    patch_preview_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    patch_preview_parser.add_argument("--output")
+
+    apply_readiness_parser = subparsers.add_parser("apply-task-readiness-fix")
+    apply_readiness_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    apply_readiness_parser.add_argument("--entity-id", required=True)
+    apply_readiness_parser.add_argument("--apply", action="store_true")
+    apply_readiness_parser.add_argument("--output-plan")
+
+    apply_summary_parser = subparsers.add_parser("summarize-task-apply-result")
+    apply_summary_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    apply_summary_parser.add_argument("--entity-id", action="append", required=True)
+    apply_summary_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    apply_summary_parser.add_argument("--output")
+    apply_summary_parser.add_argument("--before-json")
+
     args = parser.parse_args(argv)
     if args.command == "bootstrap-state":
         return bootstrap_state(args)
@@ -271,6 +443,28 @@ def main(argv: list[str] | None = None) -> int:
         return update_round_status_command(args)
     if args.command == "generate-codex-packet":
         return generate_codex_packet_command(args)
+    if args.command == "generate-implementation-packet":
+        return generate_implementation_packet_command(args)
+    if args.command == "plan-task-adaptation":
+        return plan_task_adaptation_command(args)
+    if args.command == "suggest-requirement-links":
+        return suggest_requirement_links_command(args)
+    if args.command == "apply-requirement-container-seed":
+        return apply_requirement_container_seed_command(args)
+    if args.command == "apply-requirement-seed":
+        return apply_requirement_seed_command(args)
+    if args.command == "plan-task-remediation":
+        return plan_task_remediation_command(args)
+    if args.command == "plan-task-readiness":
+        return plan_task_readiness_command(args)
+    if args.command == "preview-task-readiness-fix":
+        return preview_task_readiness_fix_command(args)
+    if args.command == "preview-task-patches":
+        return preview_task_patches_command(args)
+    if args.command == "apply-task-readiness-fix":
+        return apply_task_readiness_fix_command(args)
+    if args.command == "summarize-task-apply-result":
+        return summarize_task_apply_result_command(args)
 
     parser.print_help()
     return 1
@@ -1007,6 +1201,886 @@ def generate_codex_packet_command(args: argparse.Namespace) -> int:
         return 1
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
+
+
+def generate_implementation_packet_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        evaluate_path = Path(args.evaluate_json)
+        try:
+            raw_payload = json.loads(evaluate_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            diagnostics.append(
+                make_diagnostic(
+                    code="IMPLEMENTATION_PACKET_EVALUATE_JSON_NOT_FOUND",
+                    severity="error",
+                    entity_type="subtask",
+                    entity_id=args.entity_id,
+                    field_path="--evaluate-json",
+                    message=f"evaluate json not found: {evaluate_path}",
+                    evidence=[
+                        make_evidence(
+                            type="file_scan",
+                            path=evaluate_path.as_posix(),
+                            ref="exists",
+                            value=False,
+                        )
+                    ],
+                )
+            )
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        except json.JSONDecodeError as exc:
+            diagnostics.append(
+                make_diagnostic(
+                    code="IMPLEMENTATION_PACKET_EVALUATE_JSON_INVALID",
+                    severity="error",
+                    entity_type="subtask",
+                    entity_id=args.entity_id,
+                    field_path="--evaluate-json",
+                    message=f"evaluate json parse failed: {exc}",
+                    evidence=[
+                        make_evidence(
+                            type="file_scan",
+                            path=evaluate_path.as_posix(),
+                            ref="json.parse",
+                            value=str(exc),
+                        )
+                    ],
+                )
+            )
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    filtered_payload, filter_diagnostics = _filter_evaluate_payload(
+        payload=payload if isinstance(payload, dict) else {},
+        entity_type="task",
+        entity_id=args.entity_id,
+    )
+    diagnostics.extend(filter_diagnostics)
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    derived = (
+        _as_dict(filtered_payload.get("subtasks"))
+        .get(args.entity_id, {})
+        .get("derived", {})
+    )
+    derived = derived if isinstance(derived, dict) else {}
+    if not bool(derived.get("implementation_ready")):
+        blocker_refs = derived.get("blocker_refs")
+        blocker_refs = blocker_refs if isinstance(blocker_refs, list) else []
+        implementation_blockers = derived.get("implementation_blockers")
+        implementation_blockers = (
+            implementation_blockers if isinstance(implementation_blockers, list) else []
+        )
+        refusal = [
+            make_diagnostic(
+                code="IMPLEMENTATION_PACKET_BLOCKED",
+                severity="error",
+                entity_type="subtask",
+                entity_id=args.entity_id,
+                field_path=f"subtasks.{args.entity_id}.derived.implementation_ready",
+                message="task is not implementation_ready; packet generation refused",
+                evidence=[
+                    make_evidence(
+                        type="evaluate",
+                        path=args.input,
+                        ref="blocker_refs",
+                        value=blocker_refs,
+                    )
+                ],
+            )
+        ]
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=refusal,
+                blocker_refs=blocker_refs,
+                implementation_blockers=implementation_blockers,
+            )
+        )
+        return 1
+
+    try:
+        result = generate_implementation_packet(
+            state_path=args.input,
+            entity_id=args.entity_id,
+            evaluate_payload=filtered_payload,
+            output_dir=args.output_dir,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="IMPLEMENTATION_PACKET_GENERATION_FAILED",
+                        severity="error",
+                        entity_type="subtask",
+                        entity_id=args.entity_id,
+                        field_path="generate-implementation-packet",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="generate-implementation-packet",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def plan_task_adaptation_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        evaluate_path = Path(args.evaluate_json)
+        try:
+            raw_payload = json.loads(evaluate_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            diagnostics.append(
+                make_diagnostic(
+                    code="TASK_ADAPTATION_EVALUATE_JSON_NOT_FOUND",
+                    severity="error",
+                    entity_type="adaptation",
+                    entity_id=args.entity_id or "GLOBAL",
+                    field_path="--evaluate-json",
+                    message=f"evaluate json not found: {evaluate_path}",
+                    evidence=[
+                        make_evidence(
+                            type="file_scan",
+                            path=evaluate_path.as_posix(),
+                            ref="exists",
+                            value=False,
+                        )
+                    ],
+                )
+            )
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        except json.JSONDecodeError as exc:
+            diagnostics.append(
+                make_diagnostic(
+                    code="TASK_ADAPTATION_EVALUATE_JSON_INVALID",
+                    severity="error",
+                    entity_type="adaptation",
+                    entity_id=args.entity_id or "GLOBAL",
+                    field_path="--evaluate-json",
+                    message=f"evaluate json parse failed: {exc}",
+                    evidence=[
+                        make_evidence(
+                            type="file_scan",
+                            path=evaluate_path.as_posix(),
+                            ref="json.parse",
+                            value=str(exc),
+                        )
+                    ],
+                )
+            )
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        plan = build_task_adaptation_plan(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_ADAPTATION_PLAN_FAILED",
+                        severity="error",
+                        entity_type="adaptation",
+                        entity_id=args.entity_id or "GLOBAL",
+                        field_path="plan-task-adaptation",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="plan-task-adaptation",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **plan}
+    if args.output:
+        write_task_adaptation_output(
+            plan=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+
+    if args.format == "markdown":
+        print(render_task_adaptation_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def suggest_requirement_links_command(args: argparse.Namespace) -> int:
+    try:
+        payload = build_requirement_link_suggestions(
+            state_path=args.input,
+            entity_id=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="REQUIREMENT_LINK_SUGGESTION_FAILED",
+                        severity="error",
+                        entity_type="requirement_link",
+                        entity_id=args.entity_id or "GLOBAL",
+                        field_path="suggest-requirement-links",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="suggest-requirement-links",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [], **payload}
+    if args.output:
+        write_requirement_link_suggestions_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_requirement_link_suggestions_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_requirement_container_seed_command(args: argparse.Namespace) -> int:
+    diagnostics = validate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_requirement_container_seed(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+            allow_manual_confirmation=bool(args.confirm_manual),
+        )
+    except ValueError as exc:
+        dry_run_plan = build_requirement_container_seed_plan(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            allow_manual_confirmation=bool(args.confirm_manual),
+        )
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="REQUIREMENT_CONTAINER_SEED_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="requirement_container_seed",
+                        entity_id=",".join(args.entity_id or []),
+                        field_path="apply-requirement-container-seed",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-requirement-container-seed",
+                                ref="entity_id",
+                                value=args.entity_id or [],
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan:
+            write_requirement_container_seed_output(
+                payload=output_payload["plan"],
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    if args.output_plan:
+        write_requirement_container_seed_output(
+            payload=result,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_requirement_seed_command(args: argparse.Namespace) -> int:
+    diagnostics = validate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_requirement_seed_apply(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+            allow_manual_confirmation=bool(args.confirm_manual),
+        )
+    except ValueError as exc:
+        dry_run_plan = build_requirement_seed_apply_plan(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            allow_manual_confirmation=bool(args.confirm_manual),
+        )
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="REQUIREMENT_SEED_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="requirement_seed_apply",
+                        entity_id=",".join(args.entity_id),
+                        field_path="apply-requirement-seed",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-requirement-seed",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan:
+            write_requirement_seed_apply_output(
+                payload=output_payload["plan"],
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    if args.output_plan:
+        write_requirement_seed_apply_output(
+            payload=result,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def plan_task_remediation_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            diagnostics = [
+                make_diagnostic(
+                    code="TASK_REMEDIATION_EVALUATE_JSON_NOT_FOUND",
+                    severity="error",
+                    entity_type="remediation",
+                    entity_id=args.entity_id or "GLOBAL",
+                    field_path="plan-task-remediation",
+                    message=f"evaluate json not found: {args.evaluate_json}",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="plan-task-remediation",
+                            ref="evaluate_json",
+                            value=args.evaluate_json,
+                        )
+                    ],
+                )
+            ]
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        except json.JSONDecodeError as exc:
+            diagnostics = [
+                make_diagnostic(
+                    code="TASK_REMEDIATION_EVALUATE_JSON_INVALID",
+                    severity="error",
+                    entity_type="remediation",
+                    entity_id=args.entity_id or "GLOBAL",
+                    field_path="plan-task-remediation",
+                    message=f"evaluate json parse failed: {exc}",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="plan-task-remediation",
+                            ref="evaluate_json",
+                            value=args.evaluate_json,
+                        )
+                    ],
+                )
+            ]
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        plan = build_task_remediation_plan(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_REMEDIATION_PLAN_FAILED",
+                        severity="error",
+                        entity_type="remediation",
+                        entity_id=args.entity_id or "GLOBAL",
+                        field_path="plan-task-remediation",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="plan-task-remediation",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **plan}
+    if args.output:
+        write_task_remediation_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_remediation_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def plan_task_readiness_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            diagnostics = [
+                make_diagnostic(
+                    code="TASK_READINESS_EVALUATE_JSON_NOT_FOUND",
+                    severity="error",
+                    entity_type="readiness",
+                    entity_id=args.entity_id or "GLOBAL",
+                    field_path="plan-task-readiness",
+                    message=f"evaluate json not found: {args.evaluate_json}",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="plan-task-readiness",
+                            ref="evaluate_json",
+                            value=args.evaluate_json,
+                        )
+                    ],
+                )
+            ]
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        except json.JSONDecodeError as exc:
+            diagnostics = [
+                make_diagnostic(
+                    code="TASK_READINESS_EVALUATE_JSON_INVALID",
+                    severity="error",
+                    entity_type="readiness",
+                    entity_id=args.entity_id or "GLOBAL",
+                    field_path="plan-task-readiness",
+                    message=f"evaluate json parse failed: {exc}",
+                    evidence=[
+                        make_evidence(
+                            type="cli",
+                            path="plan-task-readiness",
+                            ref="evaluate_json",
+                            value=args.evaluate_json,
+                        )
+                    ],
+                )
+            ]
+            print(result_to_json(ok=False, diagnostics=diagnostics))
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        plan = build_task_readiness_plan(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_READINESS_PLAN_FAILED",
+                        severity="error",
+                        entity_type="readiness",
+                        entity_id=args.entity_id or "GLOBAL",
+                        field_path="plan-task-readiness",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="plan-task-readiness",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **plan}
+    if args.output:
+        write_task_readiness_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_readiness_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def preview_task_readiness_fix_command(args: argparse.Namespace) -> int:
+    diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        preview = build_task_readiness_preview(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_READINESS_PREVIEW_FAILED",
+                        severity="error",
+                        entity_type="readiness_preview",
+                        entity_id=args.entity_id or "GLOBAL",
+                        field_path="preview-task-readiness-fix",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="preview-task-readiness-fix",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **preview}
+    if args.output:
+        write_task_readiness_preview_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_readiness_preview_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def preview_task_patches_command(args: argparse.Namespace) -> int:
+    diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        preview = build_task_patch_preview(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_PATCH_PREVIEW_FAILED",
+                        severity="error",
+                        entity_type="task_patch_preview",
+                        entity_id=args.entity_id or "GLOBAL",
+                        field_path="preview-task-patches",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="preview-task-patches",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **preview}
+    if args.output:
+        write_task_patch_preview_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_patch_preview_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_readiness_fix_command(args: argparse.Namespace) -> int:
+    diagnostics, payload = evaluate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_readiness_fix(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+            apply_changes=bool(args.apply),
+        )
+    except ValueError as exc:
+        dry_run_plan = execute_task_readiness_fix(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_id=args.entity_id,
+            apply_changes=False,
+        )
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_READINESS_FIX_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="task_apply",
+                        entity_id=args.entity_id,
+                        field_path="apply-task-readiness-fix",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-readiness-fix",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan:
+            write_task_readiness_fix_plan_output(
+                payload=output_payload["plan"],
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    if args.output_plan:
+        write_task_readiness_fix_plan_output(
+            payload=result,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def summarize_task_apply_result_command(args: argparse.Namespace) -> int:
+    diagnostics, payload = evaluate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    before_payload: dict[str, Any] | None = None
+    if args.before_json:
+        try:
+            raw_before = json.loads(Path(args.before_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_APPLY_SUMMARY_BEFORE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_apply_summary",
+                            entity_id="GLOBAL",
+                            field_path="--before-json",
+                            message=f"before json not found: {args.before_json}",
+                            evidence=[make_evidence(type="cli", path="summarize-task-apply-result", ref="before_json", value=args.before_json)],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_APPLY_SUMMARY_BEFORE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_apply_summary",
+                            entity_id="GLOBAL",
+                            field_path="--before-json",
+                            message=f"before json parse failed: {exc}",
+                            evidence=[make_evidence(type="cli", path="summarize-task-apply-result", ref="before_json", value=args.before_json)],
+                        )
+                    ],
+                )
+            )
+            return 1
+        before_payload = raw_before if isinstance(raw_before, dict) else None
+
+    try:
+        summary = build_task_apply_summary(
+            state_path=args.input,
+            after_evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+            before_payload=before_payload,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_APPLY_SUMMARY_FAILED",
+                        severity="error",
+                        entity_type="task_apply_summary",
+                        entity_id="GLOBAL",
+                        field_path="summarize-task-apply-result",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="summarize-task-apply-result",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **summary}
+    if args.output:
+        write_task_apply_summary_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_apply_summary_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _as_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def apply_round_command(args: argparse.Namespace) -> int:

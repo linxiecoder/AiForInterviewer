@@ -1,7 +1,7 @@
-# 文档治理规则（Document Governance）
+# 文档治理总则
 
 ## 一、适用范围
-本文档定义本项目中所有文档的治理细则，用于指导：
+本文档定义本项目中所有文档的人工协作总则与项目治理总则，用于指导：
 - 多 Codex 并行完善文档
 - 文档成熟度评估
 - 文档进展更新
@@ -17,14 +17,23 @@
 - 子任务 Codex
 - 评审 Codex
 
+边界说明：
+- 本文档不再充当当前 `doc-governor` CLI、状态 schema、gate 规则或命令参数的实现真值。
+- 当任务涉及 `DOC_STATE.yaml`、`confirm-transition`、`evaluate-state`、document round、history、open-window 或其他结构化状态自动化行为时，应回到以下真值来源：
+  - `docs/governance/DOC_AUTOMATION.md`
+  - `tools/doc_governor/cli.py`
+  - `tools/doc_governor/schema.py`
+  - `tools/doc_governor/validate.py`
+  - `tools/doc_governor/evaluate.py`
+  - `tools/doc_governor/confirm.py`
+- 若本文件与上述自动化真值来源出现冲突，以自动化文档与当前代码实现为准；本文件只保留人工协作、文档职责与项目治理层约束。
+
 ## 二、文档分层与职责
 
 ### 1. 全局层
 用于维护全项目统一视角。
 
 #### 文档
-- `ORIGINAL_REQUIREMENTS.md`
-- `ORIGINAL_PLAN.md`
 - `PLAN_LATEST.md`
 - `TASK_INDEX.md`
 - `EXECUTION_LOG.md`
@@ -34,6 +43,11 @@
 - `OPEN_QUESTIONS.md`
 - `DOCUMENT_MATURITY.md`
 - `DOCUMENT_PROGRESS.md`
+- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`
+- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`
+
+说明：
+- 历史上曾出现过 `ORIGINAL_REQUIREMENTS.md`、`ORIGINAL_PLAN.md` 这类命名；当前仓库已不再使用这些入口，不应继续把它们当作现行全局真值文档。
 
 #### 职责
 - 提供项目整体背景、计划、索引、规范、成熟度、进展和全局问题视图
@@ -307,19 +321,38 @@
 子任务双文档的字段要求、模板正文、使用方式统一见：
 - `docs/SUBTASK_DOC_TEMPLATES.md`
 
-## 九、子任务可实施判定规则
+## 九、子任务可实施判定与自动化边界
 
-一个子任务只有在以下条件都满足时，才应被视为“可实施”：
+本节只定义人工协作层的判断方式，不再定义当前 `doc-governor` 的正式 gate 真值。
 
-1. 模块需求文档至少达到 `L5`
-2. 模块设计文档至少达到 `L5`
-3. 模块 API / schema / logic 文档至少达到 `L5`
-4. `SUBTASK_DESIGN.md` 至少达到 `L5`
-5. `SUBTASK_IMPLEMENTATION.md` 至少达到 `L6`
-6. 不存在未处理的关键共享契约冲突
-7. 不存在阻塞性的待确认问题
+### 1. 人工协作层的建议判断
 
-若不满足上述条件，必须：
+在未进入结构化状态确认前，可先从以下维度判断某个子任务是否“值得继续补文档 / 值得进入评审”：
+
+1. 上游 requirement / module 文档是否足够稳定，且不存在明显互斥设计
+2. `SUBTASK_DESIGN.md` 是否已经形成可供下游阅读的稳定设计输入
+3. `SUBTASK_IMPLEMENTATION.md` 是否已经脱离空模板或占位骨架
+4. 共享契约、依赖关系与开放问题是否已收敛到可评审范围
+5. 当前阻塞项是否已被明确记录，而不是靠正文乐观表述掩盖
+
+上述判断只能作为人工协作与排队优先级参考，不能直接等价于结构化状态中的 `implementation_ready`、`candidate` 或“可开窗”。
+
+### 2. 结构化状态与工具 gate 的真值来源
+
+当任务需要判断以下任一正式状态时，必须回到自动化真值，而不是使用本节口径替代：
+
+- `candidate_status`
+- `review_status`
+- `readiness`
+- `implementation_doc_state`
+- `formal_window_open`
+- `blocker_refs`
+
+当前工具真值以 `docs/governance/DOC_AUTOMATION.md` 及 `tools/doc_governor/cli.py`、`schema.py`、`validate.py`、`evaluate.py`、`confirm.py` 为准；文档成熟度等级（如 `L5/L6`）只能作为人工评审输入之一，不能单独推出“已具备实施条件”。
+
+### 3. 若暂不满足条件，必须做什么
+
+若人工协作层仍判断为不宜推进，必须：
 - 明确标记缺失项
 - 记录阻塞原因
 - 记录建议先补哪些上游文档
@@ -408,13 +441,14 @@
 - 文档体系进入增量演进状态
 - 成熟度与进展持续更新
 
-## 十三、结构化状态与 bootstrap 规则
+## 十三、结构化状态与自动化真值提示
 
 ### 1. 真值优先级
 
-- 正式结构化状态真值文件预留为 `docs/governance/DOC_STATE.yaml`。
-- Phase 1A 当前只允许生成 `docs/governance/DOC_STATE.bootstrap.yaml`，该文件只用于 bootstrap / 审核，不等价于正式真值。
+- 正式结构化状态真值文件是 `docs/governance/DOC_STATE.yaml`。
+- `docs/governance/DOC_STATE.bootstrap.yaml` 只是 bootstrap 输出，只能作为审核输入或初始化输入，不等价于正式真值。
 - Markdown 正文叙述仍可作为说明材料，但不能直接覆盖结构化状态结论。
+- 当前自动化真值的维护位置不在本文件重复展开；命令、schema、gate 与 confirmed state 写回规则，应以 `docs/governance/DOC_AUTOMATION.md` 和 `tools/doc_governor/*.py` 的当前实现为准。
 
 ### 2. Phase 1A 白名单导入来源
 
@@ -441,3 +475,8 @@
 ### 5. 关联文档
 
 - `docs/governance/DOC_AUTOMATION.md`
+- `tools/doc_governor/cli.py`
+- `tools/doc_governor/schema.py`
+- `tools/doc_governor/validate.py`
+- `tools/doc_governor/evaluate.py`
+- `tools/doc_governor/confirm.py`

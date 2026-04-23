@@ -17,8 +17,11 @@
 
 ### 3.1 仓库结构
 
-- 默认建议：monorepo。
-- 目录建议：`apps/web`、`apps/api`、`infra`。
+- 当前仓库实现布局：以文档治理与 `doc_governor` 工具链为主，而不是已经落地的业务 monorepo。
+- 当前目录真值：根目录全局文档、`docs/governance/`、`docs/modules/`、`docs/superpowers/`、`tools/doc_governor/`、`tests/doc_governor/`、`requirements.txt`。
+- 当前不把 `node_modules/`、`.serena/`、`.worktrees/`、`__pycache__/`、临时缓存目录计入正式项目结构。
+- 目标产品代码结构默认建议：monorepo。
+- 目标产品代码目录建议：`apps/web`、`apps/api`、`infra`。
 - 待确认：OQ-001、OQ-002。
 
 ### 3.2 Web

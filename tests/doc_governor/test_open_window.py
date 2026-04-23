@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _base_docs() -> dict[str, dict[str, bool]]:
@@ -77,18 +78,36 @@ def _subtask_entry(
     }
 
 
-class OpenWindowTests(unittest.TestCase):
+def _requirement_entry(module_id: str, subtask_id: str) -> dict:
+    return {
+        "meta": {"path": ".", "scope_kind": "root_requirement_cluster"},
+        "facts": {
+            "module_ids": [module_id],
+            "task_ids": [subtask_id],
+            "asset_slots": {
+                "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+            },
+            "compliance": schema.make_default_compliance_state(),
+        },
+        "state": {
+            "confirmed": schema.make_default_confirmed_state("requirement"),
+            "tracking": schema.make_default_tracking_state(),
+        },
+    }
+
+
+class OpenWindowTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "open-window"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-open-window-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         self.governance_root = self.temp_root / "docs" / "governance"
         self.governance_root.mkdir(parents=True, exist_ok=True)
         self.state_path = self.governance_root / "DOC_STATE.yaml"
         self.bootstrap_path = self.governance_root / "DOC_STATE.bootstrap.yaml"
         self.history_path = self.governance_root / "transition_history.jsonl"
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _write_state(self, state: dict) -> None:
         self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
@@ -107,6 +126,36 @@ class OpenWindowTests(unittest.TestCase):
 
     def _read_state(self) -> dict:
         return yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+
+    def _write_text(self, relative_path: str, content: str) -> None:
+        path = self.temp_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    def _write_subtask_docs(self, module_id: str, subtask_id: str) -> None:
+        base = f"docs/modules/{module_id}/sub_modules/{subtask_id}-test"
+        self._write_text(
+            f"{base}/SUBTASK_DESIGN.md",
+            "# 子任务设计文档\n\n## 3. 子任务目标\n\n- 本子任务要解决的问题：验证 open-window 子任务记录。\n",
+        )
+        self._write_text(
+            f"{base}/SUBTASK_IMPLEMENTATION.md",
+            (
+                "# 子任务实施文档\n\n"
+                "## 3. 本轮实施目标\n\n"
+                "- 本轮准备完成什么：验证 open-window 子任务记录。\n\n"
+                "## 5. 允许修改范围\n\n"
+                "### 5.1 允许修改\n"
+                "- 允许修改的文件：`apps/api/app/main.py`\n\n"
+                "### 5.2 禁止修改\n"
+                "- 本轮不应修改的目录 / 文件：`docs/governance/DOC_STATE.yaml`\n\n"
+                "## 7. 测试与验证\n\n"
+                "### 7.1 自动化验证\n"
+                "- 计划运行的测试：`python -m pytest tests/doc_governor/test_open_window.py -q`\n\n"
+                "## 8. 完成判定\n\n"
+                "- 满足哪些条件可视为本轮完成：open-window 能写入 history。\n"
+            ),
+        )
 
     def test_single_entity_minimal_success(self) -> None:
         state = _default_state()
@@ -343,8 +392,13 @@ class OpenWindowTests(unittest.TestCase):
 
     def test_history_append_record_action_open_window(self) -> None:
         state = _default_state()
+        state["requirements"] = {"RQ01": _requirement_entry("M01", "ST01_01")}
+        state["modules"]["M01"] = _module_entry("M01")
         state["subtasks"]["ST01_01"] = _subtask_entry("ST01_01", "M01")
+        state["modules"]["M01"]["state"]["confirmed"]["maturity"] = "L5"
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["maturity"] = "L5"
         self._write_state(state)
+        self._write_subtask_docs("M01", "ST01_01")
 
         exit_code, _ = self._run_cli(
             "--state", str(self.state_path),

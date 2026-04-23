@@ -17,7 +17,7 @@
 
 | OQ ID | 问题 | 状态 | 关联模块 | 当前建议 | 需回写文档 |
 | --- | --- | --- | --- | --- | --- |
-| OQ-001 | 仓库结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`） | proposed-default | M01-M10 | 本轮先按 monorepo 推进，待确认后固化到设计决策 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
+| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | proposed-default | M01-M10 | 当前仓库继续保持“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”布局；若进入业务代码实施，目标产品代码目录先按 monorepo 推进，待确认后固化到设计决策 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | proposed-default | M01、M10 | 本轮先做最小可运行骨架与验证入口 | `PLAN_LATEST.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-003 | 视觉规范首轮需要沉淀到什么粒度 | proposed-default | M01 | 本轮只沉淀壳层、头部、列表原语与基础页面样式 | `TECHNICAL_STANDARDS.md` |
 | OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | proposed-default | M02、M10 | 本轮先采用开发态 Bearer adapter：统一 `Authorization: Bearer <token>`、`current_user / role / team_id` 上下文，业务层不得依赖 token 内部结构 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
@@ -60,7 +60,7 @@
 
 | 优先级 | OQ ID | 当前状态 | 当前影响模块 | 本轮处理判断 |
 | --- | --- | --- | --- | --- |
-| P0 | OQ-001 | proposed-default | M01-M10 | 已按默认 monorepo 冻结，可作为本轮 `M01-M03` 输入 |
+| P0 | OQ-001 | proposed-default | M01-M10 | 已按默认目标产品 monorepo 口径冻结，可作为本轮 `M01-M03` 输入；当前仓库布局仍以 `docs/` + `tools/doc_governor/` + `tests/doc_governor/` 为准 |
 | P0 | OQ-004 | proposed-default | M02、M10 | 已按固定 Bearer token 冻结，可作为本轮 `M02` 输入 |
 | P0 | OQ-006、OQ-007 | proposed-default | M03、M10 | 已按共享渲染链与“上传同步/转换导出异步”冻结，可作为本轮 `M03` 输入 |
 | P0 | OQ-019 | proposed-default | M01、M10 | 已形成入口语义级默认冻结方案；可作为 `M01` 平台基线与 `M10` 治理边界切分输入，但暂不扩张为完整流水线定稿 |

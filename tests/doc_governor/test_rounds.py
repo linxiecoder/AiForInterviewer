@@ -12,6 +12,7 @@ import yaml
 
 from tools.doc_governor import schema
 from tools.doc_governor.cli import main
+from tools.testing.temp_artifacts import ManagedTempArtifactsTestCase
 
 
 def _document_entry(*, doc_type: str, path: str) -> dict:
@@ -80,18 +81,16 @@ def _base_state() -> dict:
     }
 
 
-class GovernanceRoundsTests(unittest.TestCase):
+class GovernanceRoundsTests(ManagedTempArtifactsTestCase):
+    managed_temp_dir_label = "rounds"
+
     def setUp(self) -> None:
-        self.temp_root = Path(tempfile.gettempdir()) / f"doc-governor-rounds-{uuid.uuid4().hex}"
-        self.temp_root.mkdir(exist_ok=True)
+        super().setUp()
         (self.temp_root / "docs" / "governance").mkdir(parents=True, exist_ok=True)
         self.state_path = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
         self._write_doc("docs/superpowers/specs/spec.md", "# Spec\n\n## 1. 文档目标\n\n说明。\n")
         self._write_doc("docs/superpowers/plans/plan.md", "# Plan\n\n## 1. 文档目标\n\n说明。\n")
         self._write_state(_base_state())
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _write_state(self, state: dict) -> None:
         self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")

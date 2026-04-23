@@ -25,6 +25,35 @@
 
 ## 3. 当前记录
 
+### 2026-04-22 / 当前仓库结构同步 / 全局入口文档纠偏
+
+- 范围：同步当前仓库真实结构到全局入口文档；不修改任何模块目录或子任务目录文档。
+- 执行类型：全局文档纠偏、结构口径澄清、历史目标与当前仓库分层对齐。
+- 修改内容：
+  - 更新 `AGENTS.md` 的 `Repo map / Guardrails / Verification`，改为当前仓库真实布局：根目录全局文档、`docs/`、`tools/doc_governor/`、`tests/doc_governor/` 与 `requirements.txt`。
+  - 更新 `TECHNICAL_STANDARDS.md`，明确区分“当前仓库实现布局”和“目标产品代码结构”，避免把当前文档治理仓误写成已落地业务 monorepo。
+  - 更新 `OPEN_QUESTIONS.md` 的 `OQ-001` 与 `DESIGN_DECISIONS.md` 的 `DD-004`，把 monorepo 口径收敛为“目标产品代码结构”的 future-facing 决策，不再与当前仓库结构混写。
+- 影响文件：
+  - `AGENTS.md`
+  - `TECHNICAL_STANDARDS.md`
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `EXECUTION_LOG.md`
+- 成熟度变化（建议）：
+  - 无实质等级变化。
+  - 本轮提升的是全局入口文档对“当前仓库真值 vs 目标产品结构”的表达清晰度。
+- 进展变化（建议）：
+  - 当前仓库结构说明已与 Git 跟踪内容对齐。
+  - 历史产品设计 / 实现计划继续保留为 future-facing 上游文档，不再被入口文档误表述为当前仓库目录真值。
+- 验证结果：
+  - 已按 UTF-8 回读本轮修改的 Markdown 文件。
+  - 已复核当前 Git 跟踪的顶层结构为根目录全局文档、`docs/`、`tools/`、`tests/` 与 `requirements.txt`。
+  - 已确认 `AGENTS.md`、`TECHNICAL_STANDARDS.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 中不再把当前仓库直接写成 `apps/web + apps/api + infra`。
+- 遗留问题：
+  - 模块文档与历史计划文档中的 `apps/web / apps/api / infra` 仍表示目标产品代码结构，而不是当前仓库快照；若后续需要整体系改名或改叙事，应单独开全局重构轮处理。
+- 下一步建议动作：
+  - 若后续还要继续压实“当前仓库 vs 目标产品结构”的边界，可在专门的全局治理轮中评估是否需要补充 `PLAN_LATEST.md` 的显式说明。
+
 ### 2026-04-20 / 轮次 R001
 
 - 范围：全局文档体系与 2 个子任务文档。
