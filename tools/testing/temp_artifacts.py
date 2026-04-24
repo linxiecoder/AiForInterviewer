@@ -13,9 +13,19 @@ KEEP_TEST_ARTIFACTS_ENV = "AI_FOR_INTERVIEWER_KEEP_TEST_ARTIFACTS"
 TEST_TEMP_ROOT_ENV = "AI_FOR_INTERVIEWER_TEST_TEMP_ROOT"
 ALLOW_TEST_DIR_LEAKS_ENV = "AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS"
 DEFAULT_TEST_TEMP_ROOT_NAME = "ai-for-interviewer-test-artifacts"
+TEMP_DIR_NAME_REGEX = r"^(?:_?tmp|temp)(?:[-_].*)?$"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DOC_GOVERNOR_WATCH_ROOT = _REPO_ROOT / "tests" / "doc_governor"
+_TEMP_DIR_NAME_PATTERN = re.compile(TEMP_DIR_NAME_REGEX)
+_TEMP_DIR_SCAN_IGNORES = (
+    ".git",
+    ".venv",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "__pycache__",
+)
 
 
 def _slugify(value: str) -> str:
@@ -72,6 +82,53 @@ def _prune_empty_parents(start: Path, *, stop_at: Path) -> None:
             except FileNotFoundError:
                 pass
         current = current.parent
+
+
+def _is_temp_like_directory_name(name: str) -> bool:
+    return _TEMP_DIR_NAME_PATTERN.fullmatch(name) is not None
+
+
+def scan_temp_like_directories(
+    root: str | Path,
+    *,
+    recursive: bool = False,
+    ignore_names: tuple[str, ...] = _TEMP_DIR_SCAN_IGNORES,
+) -> list[str]:
+    root_path = Path(root).resolve()
+    if not root_path.exists():
+        return []
+
+    matches: list[str] = []
+    if recursive:
+        iterator = (path for path in root_path.rglob("*") if path.is_dir())
+    else:
+        iterator = (path for path in root_path.iterdir() if path.is_dir())
+
+    ignore_set = set(ignore_names)
+    for candidate in iterator:
+        basename = candidate.name
+        if basename in ignore_set:
+            continue
+        if _is_temp_like_directory_name(basename):
+            if recursive:
+                matches.append(candidate.relative_to(root_path).as_posix())
+            else:
+                matches.append(basename)
+    return sorted(set(matches))
+
+
+def find_repo_temp_dir_residuals(repo_root: str | Path | None = None) -> list[str]:
+    root = Path(repo_root).resolve() if repo_root is not None else _REPO_ROOT
+    residuals: list[str] = []
+
+    for name in scan_temp_like_directories(root, recursive=False):
+        residuals.append(f"{root}: {name}")
+
+    tests_root = root / "tests"
+    for name in scan_temp_like_directories(tests_root, recursive=True):
+        residuals.append(f"{tests_root}: {name}")
+
+    return sorted(set(residuals))
 
 
 @dataclass(frozen=True)

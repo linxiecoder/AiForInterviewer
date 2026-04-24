@@ -10,6 +10,8 @@ from .history import DEFAULT_HISTORY_PATH, show_history
 from .diagnostics import diagnostics_to_dicts
 from .validate import validate_state_file
 from .schema import OFFICIAL_STATE_PATH, OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT
+from .task_state_dependency_map import build_task_state_dependency_map
+from .task_window_bridge import build_task_window_bridge
 
 
 ALLOWED_OPEN_READINESS = {"downstream_ready", "implementation_ready"}
@@ -111,6 +113,41 @@ def preflight_open_window(
         official_state.get("oqs", {}) if isinstance(official_state.get("oqs"), dict) else {},
     )
 
+    bridge_payload: dict[str, Any] = {
+        "summary": {"selected_task_count": 0, "candidate_task_count": 0, "deferred_task_count": 0},
+        "candidate_tasks_after_state_activation": [],
+        "blocked_before_open_window": [],
+        "task_examples": [],
+        "prerequisites": [],
+    }
+    dependency_map_payload: dict[str, Any] = {
+        "summary": {"selected_task_count": 0},
+        "tasks": [],
+    }
+    bridge_by_task: dict[str, dict[str, Any]] = {}
+    dependency_by_task: dict[str, dict[str, Any]] = {}
+    if entity_type in {None, "subtask"}:
+        subtask_ids = [
+            str(item.get("entity_id", "")).strip()
+            for item in entities
+            if item.get("entity_type") == "subtask" and item.get("entity_id")
+        ]
+        if subtask_ids:
+            bridge_payload = build_task_window_bridge(
+                state_path=state_path,
+                evaluate_payload=o,
+                entity_ids=subtask_ids,
+            )
+            dependency_map_payload = build_task_state_dependency_map(
+                state_path=state_path,
+                evaluate_payload=o,
+                entity_ids=subtask_ids,
+            )
+            bridge_by_task = _index_task_bridge_payload(bridge_payload)
+            dependency_by_task = _index_by_task_id(
+                dependency_map_payload.get("tasks", []),
+            )
+
     eligible_entities: list[dict[str, Any]] = []
     blocked_entities: list[dict[str, Any]] = []
     blocker_reasons: list[dict[str, Any]] = []
@@ -144,6 +181,35 @@ def preflight_open_window(
 
         review_required_info = _build_review_required_info(official, derived)
         blockers = official_blockers + evaluate_blockers
+
+        task_bridge_info: dict[str, Any] | None = None
+        if ent_type == "subtask":
+            bridge_item = bridge_by_task.get(ent_id, {})
+            dependency_item = dependency_by_task.get(ent_id, {})
+            task_bridge_info = {
+                "classification": _as_str(bridge_item.get("classification")),
+                "reason": _as_str(bridge_item.get("reason")),
+                "dependency_stage": _as_str(dependency_item.get("dependency_stage")),
+                "current_effective_blockers": _coerce_str_list(
+                    bridge_item.get("current_effective_blockers")
+                ),
+                "predicted_post_activation_blockers": _coerce_str_list(
+                    bridge_item.get("predicted_post_activation_blockers")
+                ),
+                "content_blockers": _coerce_str_list(bridge_item.get("content_blockers")),
+                "module_level_blockers": _coerce_str_list(
+                    bridge_item.get("module_level_blockers")
+                ),
+                "manual_fill_fields": _coerce_str_list(bridge_item.get("manual_fill_fields")),
+            }
+            bridge_reason = _build_task_bridge_reason(
+                entity_id=ent_id,
+                formal_window_open=formal_window_open,
+                bridge_item=bridge_item,
+                dependency_item=dependency_item,
+            )
+            if bridge_reason is not None:
+                blockers.append(bridge_reason)
 
         history = history_signal_map.get(key, {})
         history_count = history.get("history_count", 0)
@@ -206,6 +272,8 @@ def preflight_open_window(
             "history_signals": history.get("signals", {}),
             "missing_requirements": [],
         }
+        if task_bridge_info is not None:
+            record["task_candidate_bridge"] = task_bridge_info
         if history_count == 0:
             record["missing_requirements"] = [
                 item for item in missing_requirements if item["entity_type"] == ent_type and item["entity_id"] == ent_id
@@ -285,6 +353,12 @@ def preflight_open_window(
             "history_records": len(history_records),
             "history_parse_error_count": len(history_parse_errors),
             "evaluation_source": evaluation_source,
+        },
+        "task_candidate_bridge": {
+            "summary": bridge_payload.get("summary", {}),
+            "candidate_tasks": bridge_payload.get("candidate_tasks_after_state_activation", []),
+            "deferred_tasks": bridge_payload.get("blocked_before_open_window", []),
+            "dependency_summary": dependency_map_payload.get("summary", {}),
         },
         "parse_errors": parse_errors,
         "history_recent": history_recent,
@@ -946,6 +1020,65 @@ def _dedupe_dicts(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         deduped.append(item)
 
     return deduped
+
+
+def _index_by_task_id(items: Any) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    if not isinstance(items, list):
+        return indexed
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        task_id = _as_str(item.get("task_id")).strip()
+        if task_id:
+            indexed[task_id] = item
+    return indexed
+
+
+def _index_task_bridge_payload(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    indexed = _index_by_task_id(payload.get("task_examples", []))
+    candidate_items = _index_by_task_id(payload.get("candidate_tasks_after_state_activation", []))
+    deferred_items = _index_by_task_id(payload.get("blocked_before_open_window", []))
+    prerequisite_items = _index_by_task_id(payload.get("prerequisites", []))
+    for task_id, item in candidate_items.items():
+        indexed.setdefault(task_id, {}).update(item)
+    for task_id, item in deferred_items.items():
+        indexed.setdefault(task_id, {}).update(item)
+    for task_id, item in prerequisite_items.items():
+        indexed.setdefault(task_id, {}).update(item)
+    return indexed
+
+
+def _build_task_bridge_reason(
+    *,
+    entity_id: str,
+    formal_window_open: bool,
+    bridge_item: dict[str, Any],
+    dependency_item: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not formal_window_open:
+        return None
+
+    classification = _as_str(bridge_item.get("classification"))
+    dependency_stage = _as_str(dependency_item.get("dependency_stage"))
+    if (
+        classification == "ready_for_preflight_open_window"
+        and dependency_stage == "ready_for_preflight_open_window"
+    ):
+        return None
+
+    reason = _as_str(bridge_item.get("reason")) or "task bridge still does not place this task in preflight candidate pool"
+    return _make_reason(
+        code="task_not_in_open_window_candidate_pool",
+        reference=f"subtask:{entity_id}.task_window_bridge",
+        level="hard",
+        sources=["task_window_bridge", "task_state_dependency_map"],
+        message=reason,
+        extra={
+            "classification": classification or "unknown",
+            "dependency_stage": dependency_stage or "unknown",
+        },
+    )
 
 
 def _as_str(value: Any) -> str:

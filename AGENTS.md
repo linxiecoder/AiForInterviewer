@@ -107,7 +107,7 @@
 - 再看调用链和引用
 - 再改最小闭环
 
-### 1.6. 上下文使用规则
+### 1.6 上下文使用规则
 
 遇到需求讨论、方案讨论、模块设计、任务拆分、实施计划时：
 - 优先读取本仓库 AGENTS.md
@@ -115,7 +115,7 @@
 - 若历史上下文与当前用户新要求冲突，以当前用户明确指令为准，同时指出冲突点
 - 讨论结束时，必须产出可复用的压缩总结，便于后续继续讨论
 
-### 1.7. 禁止偏移
+### 1.7 禁止偏移
 
 以下情况必须明确提醒用户并纠偏：
 - 需求尚未澄清就直接进入代码实现
@@ -123,12 +123,64 @@
 - 历史决策已存在却重复讨论且未说明变更原因
 - 当前讨论已偏离“模拟面试工具”主目标
 
+### 1.8 Basic Memory 目录路由规则
+
+写入 Basic Memory 时，必须显式指定 directory，不允许省略。
+
+目录映射如下：
+
+- 项目总目标、全局约束、项目说明 -> 00-project
+- 正式需求、需求边界、验收标准 -> 10-requirements
+- 已确认决策 -> 20-decisions
+- 尚未关闭的开放问题 -> 30-open-questions
+- 模块职责、模块边界、模块设计 -> 40-module-design
+- 实施计划、阶段计划、任务拆分 -> 50-plans
+- 风险、限制、依赖、假设 -> 60-risks-constraints
+- 每轮讨论总结 -> 90-session-summaries
+
+写入规则:
+
+- 新主题使用 write_note
+- 已存在同主题笔记时优先 edit_note，不重复创建近似笔记
+- 写入前先 search_notes，避免重复
+- 每轮有效讨论结束后，至少写入一条会话总结或更新一条已有笔记
+
+### 1.8.1 Basic Memory 自动读写补充规则
+
+当任务属于需求开发、文档治理、模块推进、设计讨论、任务拆分或任务总结时：
+
+- 开始前先读取 `AGENTS.md` 与必要的正式规则文档，再检索 `AiForInterviewer` 的 Basic Memory 上下文，不要直接凭当前聊天继续。
+- 若 `search_notes` 的 default / hybrid / vector 检索失败，必须降级到 `text -> title -> permalink -> recent_activity -> list_directory -> read_note/build_context`，不得把向量失败误判成“没有历史记忆”。
+- 写入时只允许使用白名单目录：`00-project`、`10-requirements`、`20-decisions`、`30-open-questions`、`40-module-design`、`50-plans`、`60-risks-constraints`、`90-session-summaries`。
+- 禁止写入根目录、空目录或 `notes/`。
+- 写入或更新后必须回读验证；若 Basic Memory 写入失败，必须输出可复制的待写入内容，不能让结论只停留在聊天上下文。
+
+### 1.8.2 Basic Memory 程序级包装器规则
+
+当需要以程序方式读写 Basic Memory，而不是只依赖 Skill 约束时：
+
+- 优先使用 `python -m tools.basic_memory_guard.cli`。
+- 程序级包装器当前只覆盖 `00-project`、`20-decisions`、`30-open-questions`、`60-risks-constraints`、`90-session-summaries` 五类长期上下文写入。
+- `safe-write` 必须先检索、后写入、再回读验证；若命中同标题笔记则默认更新，若存在歧义则拒绝写入并输出 fallback 包。
+- `20-decisions` 仅允许写入 `confirmed` / `accepted` / `approved` 的内容，包装器不得替代正式拍板。
+- Basic Memory 只是长期上下文层，不能反推 `doc_governor` / `DOC_STATE.yaml` 的正式结构化真值。
+- `vector search` 只是增强路径，不是唯一检索路径；向量失败不得阻断上下文读取。
+
+### 1.9 测试规则
+
+- 默认测试入口使用 `python -m tools.test_runner.run_tests`，避免散装 pytest 在仓库目录留下临时目录。
+- 禁止测试直接在仓库根目录创建 `tmp-*`、`tmp_*`、`temp-*`、`temp_*`、`M01-test`、`fake-repo`、`sample-project` 等目录。
+- 根目录与 `tests/` 下若存在匹配 `^(?:_?tmp|temp)(?:[-_].*)?$` 的目录残留，测试必须失败。
+- 详细约束与验证命令见 [`docs/governance/TEST_POLICY.md`](docs/governance/TEST_POLICY.md)。
+
 ## 2. 当前文档索引
 
 ### 2.1 规范
 
 - [项目语言规范](docs/project-language-rules.md)
 - [文档治理自动化规则](docs/governance/DOC_AUTOMATION.md)
+- [测试执行与临时产物治理规则](docs/governance/TEST_POLICY.md)
+- [Basic Memory Guard 运行说明](docs/governance/BASIC_MEMORY_GUARD.md)
 - [讨论轮次工作流](docs/governance/DISCUSSION_WORKFLOW.md)
 - [Doc Governor 运行手册](docs/governance/DOC_GOVERNOR_RUNBOOK.md)
 

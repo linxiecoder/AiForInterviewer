@@ -187,20 +187,34 @@ def validate_state_file(state_path: Path) -> list[Diagnostic]:
 
     diagnostics.extend(_validate_top_level(state, state_path))
     diagnostics.extend(_validate_governance_rounds(state.get("governance_rounds"), state_path))
-    diagnostics.extend(_validate_requirements(state.get("requirements"), state_path))
-    known_requirement_ids = _collect_known_requirement_ids(state.get("requirements"))
+    requirements_obj = state.get("requirements")
+    modules_obj = state.get("modules")
+    subtasks_obj = state.get("subtasks")
+
+    diagnostics.extend(_validate_requirements(requirements_obj, state_path))
+    known_requirement_ids = _collect_known_requirement_ids(requirements_obj)
     diagnostics.extend(
         _validate_modules(
-            state.get("modules"),
+            modules_obj,
             state_path,
             known_requirement_ids=known_requirement_ids,
         )
     )
     diagnostics.extend(
         _validate_subtasks(
-            state.get("subtasks"),
+            subtasks_obj,
             state_path,
             known_requirement_ids=known_requirement_ids,
+        )
+    )
+    diagnostics.extend(
+        _validate_requirement_relation_consistency(
+            requirements_obj=requirements_obj,
+            modules_obj=modules_obj,
+            subtasks_obj=subtasks_obj,
+            state_path=state_path,
+            known_requirement_ids=known_requirement_ids,
+            requirement_mode=_extract_requirement_mode(state.get("global_policy")),
         )
     )
     diagnostics.extend(_validate_documents(state.get("documents"), state_path))
@@ -219,6 +233,18 @@ def _collect_known_requirement_ids(requirements_obj: object) -> set[str]:
         for requirement_id in requirements_obj.keys()
         if REQUIREMENT_ID_RE.fullmatch(str(requirement_id))
     }
+
+
+def _extract_requirement_mode(global_policy_obj: object) -> str:
+    if not isinstance(global_policy_obj, dict):
+        return ""
+    asset_policy = global_policy_obj.get("asset_policy")
+    if not isinstance(asset_policy, dict):
+        return ""
+    requirement_mode = asset_policy.get("requirement_mode")
+    if not isinstance(requirement_mode, str):
+        return ""
+    return requirement_mode.strip()
 
 
 def _validate_top_level(state: dict[str, object], state_path: Path) -> list[Diagnostic]:
@@ -2313,6 +2339,325 @@ def _validate_requirement_relation_fields(
         )
 
     return diagnostics
+
+
+def _validate_requirement_relation_consistency(
+    *,
+    requirements_obj: object,
+    modules_obj: object,
+    subtasks_obj: object,
+    state_path: Path,
+    known_requirement_ids: set[str],
+    requirement_mode: str,
+) -> list[Diagnostic]:
+    if not isinstance(requirements_obj, dict):
+        return []
+
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(
+        _validate_entity_requirement_relation_consistency(
+            entity_type="module",
+            entities_obj=modules_obj,
+            container_relations=_collect_requirement_container_relations(
+                requirements_obj=requirements_obj,
+                relation_field="module_ids",
+                known_requirement_ids=known_requirement_ids,
+            ),
+            state_path=state_path,
+            known_requirement_ids=known_requirement_ids,
+            requirement_mode=requirement_mode,
+        )
+    )
+    diagnostics.extend(
+        _validate_entity_requirement_relation_consistency(
+            entity_type="subtask",
+            entities_obj=subtasks_obj,
+            container_relations=_collect_requirement_container_relations(
+                requirements_obj=requirements_obj,
+                relation_field="task_ids",
+                known_requirement_ids=known_requirement_ids,
+            ),
+            state_path=state_path,
+            known_requirement_ids=known_requirement_ids,
+            requirement_mode=requirement_mode,
+        )
+    )
+    return diagnostics
+
+
+def _collect_requirement_container_relations(
+    *,
+    requirements_obj: dict[str, object],
+    relation_field: str,
+    known_requirement_ids: set[str],
+) -> dict[str, list[str]]:
+    relation_map: dict[str, list[str]] = {}
+    for requirement_id, requirement_obj in requirements_obj.items():
+        normalized_requirement_id = str(requirement_id).strip()
+        if normalized_requirement_id not in known_requirement_ids:
+            continue
+        if not isinstance(requirement_obj, dict):
+            continue
+        facts = requirement_obj.get("facts")
+        if not isinstance(facts, dict):
+            continue
+        raw_values = facts.get(relation_field)
+        if not isinstance(raw_values, list):
+            continue
+        for raw_value in raw_values:
+            if not isinstance(raw_value, str) or not raw_value.strip():
+                continue
+            entity_id = raw_value.strip()
+            relation_map.setdefault(entity_id, [])
+            if normalized_requirement_id not in relation_map[entity_id]:
+                relation_map[entity_id].append(normalized_requirement_id)
+    return relation_map
+
+
+def _validate_entity_requirement_relation_consistency(
+    *,
+    entity_type: str,
+    entities_obj: object,
+    container_relations: dict[str, list[str]],
+    state_path: Path,
+    known_requirement_ids: set[str],
+    requirement_mode: str,
+) -> list[Diagnostic]:
+    if not isinstance(entities_obj, dict):
+        return []
+
+    relation_field = "module_ids" if entity_type == "module" else "task_ids"
+    diagnostics: list[Diagnostic] = []
+    for entity_id, entity_obj in entities_obj.items():
+        if not isinstance(entity_obj, dict):
+            continue
+        meta = entity_obj.get("meta")
+        facts = entity_obj.get("facts")
+        entity_requirement_ids = _collect_entity_requirement_relation_ids(
+            meta_obj=meta,
+            facts_obj=facts,
+            known_requirement_ids=known_requirement_ids,
+        )
+        container_requirement_ids = list(container_relations.get(str(entity_id), []))
+        container_requirement_ids = list(dict.fromkeys(container_requirement_ids))
+
+        if len(container_requirement_ids) > 1:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS",
+                    severity="warning",
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    field_path=f"{entity_type}s.{entity_id}",
+                    message=(
+                        "requirement container side contains multiple requirement ids: "
+                        + ", ".join(container_requirement_ids)
+                    ),
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"requirements.{requirement_id}.facts.{relation_field}",
+                            value=[str(entity_id)],
+                        )
+                        for requirement_id in container_requirement_ids
+                    ],
+                )
+            )
+
+        if not entity_requirement_ids and container_requirement_ids:
+            if _allow_legacy_root_requirement_container_only_relation(
+                requirement_mode=requirement_mode,
+                known_requirement_ids=known_requirement_ids,
+                container_requirement_ids=container_requirement_ids,
+            ):
+                continue
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING",
+                    severity="warning",
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    field_path=f"{entity_type}s.{entity_id}",
+                    message=(
+                        "entity side is missing requirement relation while requirement container declares "
+                        + ", ".join(container_requirement_ids)
+                    ),
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"requirements.{requirement_id}.facts.{relation_field}",
+                            value=[str(entity_id)],
+                        )
+                        for requirement_id in container_requirement_ids
+                    ],
+                )
+            )
+            continue
+
+        if entity_requirement_ids and not container_requirement_ids:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING",
+                    severity="warning",
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    field_path=f"{entity_type}s.{entity_id}",
+                    message=(
+                        "requirement container side is missing declared relation for "
+                        + ", ".join(entity_requirement_ids)
+                    ),
+                    evidence=_build_entity_requirement_relation_evidence(
+                        entity_type=entity_type,
+                        entity_id=str(entity_id),
+                        entity_requirement_ids=entity_requirement_ids,
+                        state_path=state_path,
+                    ),
+                )
+            )
+            continue
+
+        if not entity_requirement_ids or not container_requirement_ids:
+            continue
+
+        entity_set = set(entity_requirement_ids)
+        container_set = set(container_requirement_ids)
+        if entity_set.isdisjoint(container_set):
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_REQUIREMENT_RELATION_CONTAINER_CONFLICT",
+                    severity="warning",
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    field_path=f"{entity_type}s.{entity_id}",
+                    message="entity-side and requirement-container relations disagree.",
+                    evidence=_build_requirement_relation_consistency_evidence(
+                        entity_type=entity_type,
+                        entity_id=str(entity_id),
+                        entity_requirement_ids=entity_requirement_ids,
+                        container_requirement_ids=container_requirement_ids,
+                        state_path=state_path,
+                        relation_field=relation_field,
+                    ),
+                )
+            )
+            continue
+
+        if entity_set != container_set:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_REQUIREMENT_RELATION_DRIFT",
+                    severity="warning",
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    field_path=f"{entity_type}s.{entity_id}",
+                    message="entity-side and requirement-container relations only partially overlap.",
+                    evidence=_build_requirement_relation_consistency_evidence(
+                        entity_type=entity_type,
+                        entity_id=str(entity_id),
+                        entity_requirement_ids=entity_requirement_ids,
+                        container_requirement_ids=container_requirement_ids,
+                        state_path=state_path,
+                        relation_field=relation_field,
+                    ),
+                )
+            )
+
+    return diagnostics
+
+
+def _collect_entity_requirement_relation_ids(
+    *,
+    meta_obj: object,
+    facts_obj: object,
+    known_requirement_ids: set[str],
+) -> list[str]:
+    requirement_ids: list[str] = []
+    if isinstance(meta_obj, dict):
+        meta_requirement_id = meta_obj.get(REQUIREMENT_RELATION_META_FIELD)
+        if isinstance(meta_requirement_id, str):
+            normalized_value = meta_requirement_id.strip()
+            if REQUIREMENT_ID_RE.fullmatch(normalized_value) and normalized_value in known_requirement_ids:
+                requirement_ids.append(normalized_value)
+
+    if isinstance(facts_obj, dict):
+        raw_requirement_ids = facts_obj.get(REQUIREMENT_RELATION_FACT_FIELD)
+        if isinstance(raw_requirement_ids, list):
+            for raw_value in raw_requirement_ids:
+                if not isinstance(raw_value, str):
+                    continue
+                normalized_value = raw_value.strip()
+                if REQUIREMENT_ID_RE.fullmatch(normalized_value) and normalized_value in known_requirement_ids:
+                    requirement_ids.append(normalized_value)
+
+    return list(dict.fromkeys(requirement_ids))
+
+
+def _allow_legacy_root_requirement_container_only_relation(
+    *,
+    requirement_mode: str,
+    known_requirement_ids: set[str],
+    container_requirement_ids: list[str],
+) -> bool:
+    return (
+        requirement_mode == "root_requirement_cluster"
+        and known_requirement_ids == {"RQ01"}
+        and container_requirement_ids == ["RQ01"]
+    )
+
+
+def _build_entity_requirement_relation_evidence(
+    *,
+    entity_type: str,
+    entity_id: str,
+    entity_requirement_ids: list[str],
+    state_path: Path,
+) -> list[dict[str, object]]:
+    evidence = [
+        make_evidence(
+            type="state_check",
+            path=state_path.as_posix(),
+            ref=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+            value=entity_requirement_ids[0],
+        )
+    ]
+    evidence.append(
+        make_evidence(
+            type="state_check",
+            path=state_path.as_posix(),
+            ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+            value=entity_requirement_ids,
+        )
+    )
+    return evidence
+
+
+def _build_requirement_relation_consistency_evidence(
+    *,
+    entity_type: str,
+    entity_id: str,
+    entity_requirement_ids: list[str],
+    container_requirement_ids: list[str],
+    state_path: Path,
+    relation_field: str,
+) -> list[dict[str, object]]:
+    evidence = _build_entity_requirement_relation_evidence(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        entity_requirement_ids=entity_requirement_ids,
+        state_path=state_path,
+    )
+    evidence.extend(
+        make_evidence(
+            type="state_check",
+            path=state_path.as_posix(),
+            ref=f"requirements.{requirement_id}.facts.{relation_field}",
+            value=[entity_id],
+        )
+        for requirement_id in container_requirement_ids
+    )
+    return evidence
 
 
 def _validate_id_list(

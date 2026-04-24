@@ -17,6 +17,14 @@ GATE_COUNT_KEYS = [
     "readiness_gate.readiness_blocker",
 ]
 
+REQUIREMENT_RELATION_CONSISTENCY_CODES = {
+    "SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING": "entity_missing",
+    "SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING": "container_missing",
+    "SCHEMA_REQUIREMENT_RELATION_CONTAINER_CONFLICT": "container_conflict",
+    "SCHEMA_REQUIREMENT_RELATION_DRIFT": "drift",
+    "SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS": "ambiguous",
+}
+
 
 def render_from_payload(
     payload: dict[str, Any],
@@ -33,6 +41,7 @@ def render_from_payload(
     oqs = _as_dict(payload.get("oqs"))
     governance_rounds = _as_list(payload.get("governance_rounds"))
     delta_summary = _as_dict(payload.get("delta_summary"))
+    diagnostics = _as_list(payload.get("diagnostics"))
 
     if not isinstance(payload.get("summary"), dict):
         input_incomplete = True
@@ -57,6 +66,7 @@ def render_from_payload(
             requirements=requirements,
             modules=modules,
             subtasks=subtasks,
+            diagnostics=diagnostics,
         )
     )
     lines.extend(_render_review_section(modules, section_type="modules"))
@@ -136,8 +146,10 @@ def _render_requirement_mainflow(
     requirements: dict[str, Any],
     modules: dict[str, Any],
     subtasks: dict[str, Any],
+    diagnostics: list[Any],
 ) -> list[str]:
     relation_counts = _summarize_requirement_relation_status(modules=modules, subtasks=subtasks)
+    consistency_counts = _summarize_requirement_relation_consistency(diagnostics)
     lines = [
         "## Requirement Mainflow",
         "",
@@ -149,6 +161,10 @@ def _render_requirement_mainflow(
         f"- modules_ambiguous_requirement_relation: {relation_counts['modules_ambiguous_requirement_relation']}",
         f"- subtasks_missing_requirement_relation: {relation_counts['subtasks_missing_requirement_relation']}",
         f"- subtasks_ambiguous_requirement_relation: {relation_counts['subtasks_ambiguous_requirement_relation']}",
+        f"- modules_relation_consistency_errors: {consistency_counts['modules_relation_consistency_errors']}",
+        f"- modules_relation_consistency_warnings: {consistency_counts['modules_relation_consistency_warnings']}",
+        f"- subtasks_relation_consistency_errors: {consistency_counts['subtasks_relation_consistency_errors']}",
+        f"- subtasks_relation_consistency_warnings: {consistency_counts['subtasks_relation_consistency_warnings']}",
         "",
         "### relation overview",
     ]
@@ -172,6 +188,7 @@ def _render_requirement_mainflow(
 
     lines.extend(["", "### relation alerts", ""])
     alerts = _collect_requirement_relation_alerts(modules=modules, subtasks=subtasks)
+    alerts.extend(_collect_requirement_relation_consistency_alerts(diagnostics))
     lines.extend(alerts if alerts else ["- none"])
     return lines + [""]
 
@@ -222,6 +239,53 @@ def _collect_requirement_relation_alerts(
                     f"- `{entity_type}:{entity_id}`: requirement_relation=ambiguous "
                     f"ids={_format_inline_list(requirement_ids)}{suffix}"
                 )
+    return rows
+
+
+def _summarize_requirement_relation_consistency(diagnostics: list[Any]) -> dict[str, int]:
+    counts = {
+        "modules_relation_consistency_errors": 0,
+        "modules_relation_consistency_warnings": 0,
+        "subtasks_relation_consistency_errors": 0,
+        "subtasks_relation_consistency_warnings": 0,
+    }
+    for diagnostic in diagnostics:
+        diag = _as_dict(diagnostic)
+        code = str(diag.get("code", ""))
+        if code not in REQUIREMENT_RELATION_CONSISTENCY_CODES:
+            continue
+        entity_type = str(diag.get("entity_type", ""))
+        severity = str(diag.get("severity", "warning"))
+        if entity_type == "module":
+            key = "modules_relation_consistency_errors" if severity == "error" else "modules_relation_consistency_warnings"
+            counts[key] += 1
+        elif entity_type == "subtask":
+            key = "subtasks_relation_consistency_errors" if severity == "error" else "subtasks_relation_consistency_warnings"
+            counts[key] += 1
+    return counts
+
+
+def _collect_requirement_relation_consistency_alerts(diagnostics: list[Any]) -> list[str]:
+    sortable_rows: list[tuple[str, str, str, str]] = []
+    for diagnostic in diagnostics:
+        diag = _as_dict(diagnostic)
+        code = str(diag.get("code", ""))
+        if code not in REQUIREMENT_RELATION_CONSISTENCY_CODES:
+            continue
+        entity_type = str(diag.get("entity_type", "")).strip()
+        entity_id = str(diag.get("entity_id", "")).strip()
+        severity = str(diag.get("severity", "warning")).strip() or "warning"
+        if entity_type not in {"module", "subtask"} or not entity_id:
+            continue
+        sortable_rows.append((entity_type, entity_id, severity, code))
+
+    rows: list[str] = []
+    for entity_type, entity_id, severity, code in sorted(sortable_rows):
+        rows.append(
+            f"- `{entity_type}:{entity_id}`: relation_consistency="
+            f"{REQUIREMENT_RELATION_CONSISTENCY_CODES[code]} "
+            f"severity={severity} code={code}"
+        )
     return rows
 
 

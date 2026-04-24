@@ -41,6 +41,7 @@ def _default_state() -> dict:
 
 def _module_entry(module_id: str, readiness: str = "downstream_ready") -> dict:
     confirmed = schema.make_default_confirmed_state("module")
+    confirmed["maturity"] = "L4"
     confirmed["readiness"] = readiness
     return {
         "meta": {"path": f"docs/modules/{module_id}-test/"},
@@ -55,6 +56,27 @@ def _module_entry(module_id: str, readiness: str = "downstream_ready") -> dict:
     }
 
 
+def _requirement_entry(*, module_ids: list[str], task_ids: list[str]) -> dict:
+    confirmed = schema.make_default_confirmed_state("requirement")
+    return {
+        "meta": {"path": ".", "scope_kind": "root_requirement_cluster"},
+        "facts": {
+            "module_ids": module_ids,
+            "task_ids": task_ids,
+            "asset_slots": {
+                "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+            },
+            "compliance": schema.make_default_compliance_state(),
+        },
+        "state": {
+            "confirmed": confirmed,
+            "tracking": schema.make_default_tracking_state(),
+        },
+    }
+
+
 def _subtask_entry(
     subtask_id: str,
     module_id: str,
@@ -62,12 +84,13 @@ def _subtask_entry(
     implementation_state: str = "active_working_doc",
 ) -> dict:
     confirmed = schema.make_default_confirmed_state("subtask")
+    confirmed["maturity"] = "L4"
     confirmed["readiness"] = readiness
     confirmed["implementation_doc_state"] = implementation_state
     return {
         "meta": {"module_id": module_id, "path": f"docs/modules/{module_id}/sub_modules/{subtask_id}-test/"},
         "facts": {
-            "upstream_module_ids": [],
+            "upstream_module_ids": [module_id],
             "related_oq_ids": [],
             "legacy_locked": False,
             "declared_blocker_refs": [],
@@ -76,6 +99,12 @@ def _subtask_entry(
         },
         "state": {"confirmed": confirmed},
     }
+
+
+def _write_text(root: Path, relative_path: str, content: str) -> None:
+    path = root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
 
 
 class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
@@ -383,6 +412,96 @@ class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
         self.assertEqual(before_state, self.state_path.read_bytes())
         self.assertEqual(before_bootstrap, self.bootstrap_state_path.read_bytes())
         self.assertEqual(before_history, self.history_path.read_bytes())
+
+    def test_formal_window_open_consumes_task_candidate_bridge(self) -> None:
+        state = _default_state()
+        state["global_policy"]["formal_window_open"] = True
+        state["modules"]["M01"] = _module_entry("M01")
+        state["modules"]["M02"] = _module_entry("M02")
+        state["modules"]["M09"] = _module_entry("M09")
+        state["requirements"] = {
+            "RQ01": _requirement_entry(
+                module_ids=["M01", "M02", "M09"],
+                task_ids=["ST01_01", "ST02_03", "ST09_03"],
+            )
+        }
+        state["modules"]["M02"]["facts"]["docs"]["api"] = {"exists": False, "template_like": True}
+        state["modules"]["M02"]["facts"]["docs"]["open_questions"] = {"exists": False, "template_like": True}
+        state["subtasks"]["ST09_03"] = _subtask_entry("ST09_03", "M09", "downstream_ready", "active_working_doc")
+        state["subtasks"]["ST01_01"] = _subtask_entry("ST01_01", "M01", "downstream_ready", "active_working_doc")
+        state["subtasks"]["ST02_03"] = _subtask_entry("ST02_03", "M02", "downstream_ready", "active_working_doc")
+        self._write_state(state)
+
+        _write_text(
+            self.temp_root,
+            "docs/modules/M09/sub_modules/ST09_03-test/SUBTASK_DESIGN.md",
+            "# 子任务设计文档\n\n## 3. 子任务目标\n- 进入 preflight 候选。\n\n## 5. 技术方案\n- formal window 已满足。\n",
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M09/sub_modules/ST09_03-test/SUBTASK_IMPLEMENTATION.md",
+            "# 子任务实施文档\n\n## 3. 本轮实施目标\n- 进入 preflight 候选。\n\n## 5. 允许修改范围\n### 5.1 允许修改\n- 文件：`tools/doc_governor/preflight.py`\n\n### 5.2 禁止修改\n- 文件：`docs/governance/DOC_STATE.yaml`\n\n## 7. 测试与验证\n### 7.1 自动化验证\n- 运行：`python -m pytest tests/doc_governor/test_preflight.py -q`\n\n## 8. 完成判定\n- implementation packet 所需字段完整可读。\n",
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M01/sub_modules/ST01_01-test/SUBTASK_DESIGN.md",
+            "# 子任务设计文档\n\n## 3. 子任务目标\n- 仍保留内容缺口。\n\n## 5. 技术方案\n- 故意不补 tests 与 acceptance。\n",
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M01/sub_modules/ST01_01-test/SUBTASK_IMPLEMENTATION.md",
+            "# 子任务实施文档\n\n## 3. 本轮实施目标\n- 故意不补 tests 与 acceptance。\n\n## 5. 允许修改范围\n\n### 5.1 允许修改\n- `tools/doc_governor/preflight.py`\n\n### 5.2 禁止修改\n- `docs/governance/DOC_STATE.yaml`\n",
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M02/sub_modules/ST02_03-test/SUBTASK_DESIGN.md",
+            "# 子任务设计文档\n\n## 3. 子任务目标\n- 保持模块继承 blocker。\n\n## 5. 技术方案\n- task 自身结构完整，但模块层未闭合。\n",
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M02/sub_modules/ST02_03-test/SUBTASK_IMPLEMENTATION.md",
+            "# 子任务实施文档\n\n## 3. 本轮实施目标\n- 保持模块 blocker。\n\n## 5. 允许修改范围\n### 5.1 允许修改\n- 文件：`tools/doc_governor/preflight.py`\n\n### 5.2 禁止修改\n- 文件：`docs/governance/DOC_STATE.yaml`\n\n## 7. 测试与验证\n### 7.1 自动化验证\n- 运行：`python -m pytest tests/doc_governor/test_preflight.py -q`\n\n## 8. 完成判定\n- implementation packet 所需字段完整可读。\n",
+        )
+
+        exit_code, payload = self._run_cli("--state", str(self.state_path))
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["ok"])
+
+        bridge_summary = payload["task_candidate_bridge"]["summary"]
+        self.assertEqual(bridge_summary["ready_for_preflight_open_window_count"], 1)
+        candidate_ids = [item["task_id"] for item in payload["task_candidate_bridge"]["candidate_tasks"]]
+        self.assertEqual(candidate_ids, ["ST09_03"])
+
+        eligible_subtasks = {
+            item["entity_id"]: item
+            for item in payload["eligible_entities"]
+            if item["entity_type"] == "subtask"
+        }
+        self.assertEqual(list(eligible_subtasks.keys()), ["ST09_03"])
+        self.assertEqual(
+            eligible_subtasks["ST09_03"]["task_candidate_bridge"]["classification"],
+            "ready_for_preflight_open_window",
+        )
+
+        blocked_subtasks = {
+            item["entity_id"]: item
+            for item in payload["blocked_entities"]
+            if item["entity_type"] == "subtask"
+        }
+        self.assertEqual(
+            blocked_subtasks["ST01_01"]["task_candidate_bridge"]["dependency_stage"],
+            "stay_in_content_layer",
+        )
+        self.assertEqual(
+            blocked_subtasks["ST02_03"]["task_candidate_bridge"]["dependency_stage"],
+            "should_not_enter_open_window",
+        )
+        self.assertTrue(
+            any(item["code"] == "task_not_in_open_window_candidate_pool" for item in blocked_subtasks["ST01_01"]["blockers"])
+        )
+        self.assertTrue(
+            any(item["code"] == "task_not_in_open_window_candidate_pool" for item in blocked_subtasks["ST02_03"]["blockers"])
+        )
 
 
 if __name__ == "__main__":

@@ -263,6 +263,193 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
         self.assertIn("SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS", codes)
         self.assertIn("SCHEMA_REQUIREMENT_RELATION_CONFLICT", codes)
 
+    def test_requirement_relation_consistency_keeps_legacy_rq01_container_only_state_valid(self) -> None:
+        state = _build_valid_state()
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        consistency_codes = {
+            item.code
+            for item in diagnostics
+            if item.code.startswith("SCHEMA_REQUIREMENT_RELATION_")
+            and item.code
+            not in {
+                "SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS",
+                "SCHEMA_REQUIREMENT_RELATION_CONFLICT",
+            }
+        }
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(consistency_codes, set())
+
+    def test_requirement_relation_consistency_missing_sides_are_warnings(self) -> None:
+        state = _build_valid_state()
+        state["requirements"]["RQ02"] = {
+            "meta": {
+                "path": "docs/requirements/RQ02-second/",
+                "scope_kind": "requirement_dir",
+            },
+            "facts": {
+                "module_ids": ["M02"],
+                "task_ids": [],
+                "asset_slots": {
+                    "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                    "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                    "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                },
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("requirement"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["modules"]["M02"] = {
+            "meta": {"path": "docs/modules/M02-test/"},
+            "facts": {
+                "upstream_module_ids": [],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "docs": {
+                    slot: {"exists": True, "template_like": False}
+                    for slot in schema.MODULE_DOC_SLOTS
+                },
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("module"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["subtasks"]["ST02_01"] = {
+            "meta": {
+                "module_id": "M02",
+                "path": "docs/modules/M02-test/sub_modules/ST02_01-test/",
+                "requirement_id": "RQ02",
+            },
+            "facts": {
+                "upstream_module_ids": [],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "design_doc": {"exists": True, "template_like": False},
+                "implementation_doc": {"exists": True, "template_like": False},
+                "requirement_ids": ["RQ02"],
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("subtask"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        by_code = {}
+        for item in diagnostics:
+            by_code.setdefault(item.code, []).append(item)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING", by_code)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING", by_code)
+        self.assertTrue(
+            any(item.entity_type == "module" and item.entity_id == "M02" for item in by_code["SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING"])
+        )
+        self.assertTrue(
+            any(item.entity_type == "subtask" and item.entity_id == "ST02_01" for item in by_code["SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING"])
+        )
+        self.assertEqual(len([item for item in diagnostics if item.severity == "error"]), 0)
+
+    def test_requirement_relation_consistency_drift_conflict_and_container_ambiguity_are_explicit(self) -> None:
+        state = _build_valid_state()
+        state["requirements"]["RQ02"] = {
+            "meta": {
+                "path": "docs/requirements/RQ02-second/",
+                "scope_kind": "requirement_dir",
+            },
+            "facts": {
+                "module_ids": ["M02", "M03"],
+                "task_ids": ["ST03_01"],
+                "asset_slots": {
+                    "plan_latest": {"exists": True, "path": "PLAN_LATEST.md"},
+                    "module_index": {"exists": True, "path": "MODULE_INDEX.md"},
+                    "task_index": {"exists": True, "path": "TASK_INDEX.md"},
+                },
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("requirement"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["requirements"]["RQ01"]["facts"]["module_ids"] = ["M01", "M03"]
+        state["requirements"]["RQ01"]["facts"]["task_ids"] = ["ST01_01", "ST03_01"]
+        state["modules"]["M02"] = {
+            "meta": {"path": "docs/modules/M02-test/", "requirement_id": "RQ01"},
+            "facts": {
+                "upstream_module_ids": [],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "docs": {
+                    slot: {"exists": True, "template_like": False}
+                    for slot in schema.MODULE_DOC_SLOTS
+                },
+                "requirement_ids": ["RQ01"],
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("module"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["modules"]["M03"] = {
+            "meta": {"path": "docs/modules/M03-test/"},
+            "facts": {
+                "upstream_module_ids": [],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "docs": {
+                    slot: {"exists": True, "template_like": False}
+                    for slot in schema.MODULE_DOC_SLOTS
+                },
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("module"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state["subtasks"]["ST03_01"] = {
+            "meta": {
+                "module_id": "M03",
+                "path": "docs/modules/M03-test/sub_modules/ST03_01-test/",
+                "requirement_id": "RQ01",
+            },
+            "facts": {
+                "upstream_module_ids": [],
+                "related_oq_ids": [],
+                "legacy_locked": False,
+                "declared_blocker_refs": [],
+                "design_doc": {"exists": True, "template_like": False},
+                "implementation_doc": {"exists": True, "template_like": False},
+                "requirement_ids": ["RQ01"],
+                "compliance": schema.make_default_compliance_state(),
+            },
+            "state": {
+                "confirmed": schema.make_default_confirmed_state("subtask"),
+                "tracking": schema.make_default_tracking_state(),
+            },
+        }
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        codes = [item.code for item in diagnostics]
+        self.assertEqual(exit_code, 0)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_CONTAINER_CONFLICT", codes)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_DRIFT", codes)
+        self.assertIn("SCHEMA_REQUIREMENT_RELATION_AMBIGUOUS", codes)
+
     def test_diagnostic_structure_and_evidence(self) -> None:
         state = _build_valid_state()
         state["modules"]["M01"]["state"]["confirmed"]["candidate_status"] = "invalid"

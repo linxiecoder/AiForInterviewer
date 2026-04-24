@@ -56,6 +56,11 @@ CONFIRM_ALLOWED_FIELDS_BY_ENTITY = {
             "active_round_id",
         }
     ),
+    "policy": frozenset(
+        {
+            "formal_window_open",
+        }
+    ),
 }
 CONFIRM_FORBIDDEN_FIELDS = frozenset(
     {
@@ -87,7 +92,7 @@ def confirm_transition(args: argparse.Namespace) -> int:
     evidence_refs = list(args.evidence_ref or [])
 
     diagnostics = _validate_input_paths(state_path, official_state_path)
-    if args.entity_type not in {"module", "subtask", "document"}:
+    if args.entity_type not in {"module", "subtask", "document", "policy"}:
         diagnostics.append(
             make_diagnostic(
                 code="CONFIRM_ENTITY_TYPE_INVALID",
@@ -95,7 +100,7 @@ def confirm_transition(args: argparse.Namespace) -> int:
                 entity_type="system",
                 entity_id="GLOBAL",
                 field_path="entity_type",
-                message="entity_type must be module, subtask, or document",
+                message="entity_type must be module, subtask, document, or policy",
                 evidence=[
                     make_evidence(
                         type="cli",
@@ -406,7 +411,12 @@ def confirm_transition(args: argparse.Namespace) -> int:
             return 1
 
     draft = copy.deepcopy(state)
-    draft[entity_type + "s"][entity_id]["state"]["confirmed"] = after_state
+    _write_entity_confirmed_state(
+        draft=draft,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        confirmed_state=after_state,
+    )
     rule_diagnostics = evaluate_rules(draft)
     diagnostics.extend(rule_diagnostics)
     if any(item.severity == "error" for item in rule_diagnostics):
@@ -434,10 +444,16 @@ def confirm_transition(args: argparse.Namespace) -> int:
     reason = args.reason or ""
     if args.mode == "approve":
         applied_state = copy.deepcopy(after_state)
-        applied_state["last_transition_id"] = transition_id
-        applied_state["last_confirmed_at"] = timestamp
-        applied_state["last_confirmed_by"] = actor
-        draft[entity_type + "s"][entity_id]["state"]["confirmed"] = applied_state
+        if entity_type != "policy":
+            applied_state["last_transition_id"] = transition_id
+            applied_state["last_confirmed_at"] = timestamp
+            applied_state["last_confirmed_by"] = actor
+        _write_entity_confirmed_state(
+            draft=draft,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            confirmed_state=applied_state,
+        )
         if not _write_state_file(draft, state_path, diagnostics):
             print(result_to_json(ok=False, diagnostics=diagnostics))
             return 1
@@ -555,6 +571,13 @@ def _extract_entity(
     entity_type: str,
     entity_id: str,
 ) -> dict[str, object] | None:
+    if entity_type == "policy":
+        if entity_id != "global_policy":
+            return None
+        policy = state.get("global_policy")
+        if not isinstance(policy, dict):
+            return None
+        return {"state": {"confirmed": copy.deepcopy(policy)}}
     entities = state.get(f"{entity_type}s")
     if not isinstance(entities, dict):
         return None
@@ -652,6 +675,48 @@ def _validate_state_change_inputs(
                     ],
                 )
             )
+            continue
+
+        if field == "formal_window_open":
+            if entity_type != "policy":
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_FIELD_SCOPE_VIOLATION",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message="formal_window_open is valid only for policy",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=proposed_changes.get(field),
+                            )
+                        ],
+                    )
+                )
+                continue
+            if not isinstance(proposed_changes.get(field), bool):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_UNKNOWN_ENUM",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message="formal_window_open must be boolean",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=proposed_changes.get(field),
+                            )
+                        ],
+                    )
+                )
             continue
 
         if field == "maturity" and proposed_changes.get(field) not in MATURITY_LEVELS + (None,):
@@ -874,7 +939,7 @@ def _validate_state_change_inputs(
 
     after_state = copy.deepcopy(before_state)
     after_state.update(proposed_changes)
-    if entity_type == "document":
+    if entity_type in {"document", "policy"}:
         return diagnostics
     candidate_status = str(after_state.get("candidate_status"))
     review_status = str(after_state.get("review_status"))
@@ -1099,6 +1164,8 @@ def _validate_approve_gate_blockers(
     entity_type: str,
     entity_id: str,
 ) -> list[Diagnostic]:
+    if entity_type == "policy":
+        return []
     diagnostics, payload = evaluate_state_file(state_path)
     evaluation_errors = [item for item in diagnostics if item.severity == "error"]
     if evaluation_errors:
@@ -1141,6 +1208,19 @@ def _validate_approve_gate_blockers(
             ],
         )
     ]
+
+
+def _write_entity_confirmed_state(
+    *,
+    draft: dict[str, object],
+    entity_type: str,
+    entity_id: str,
+    confirmed_state: dict[str, object],
+) -> None:
+    if entity_type == "policy":
+        draft["global_policy"] = copy.deepcopy(confirmed_state)
+        return
+    draft[entity_type + "s"][entity_id]["state"]["confirmed"] = confirmed_state
 
 
 def _is_hard_gate_blocker(ref: str) -> bool:

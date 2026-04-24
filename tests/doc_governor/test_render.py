@@ -212,7 +212,53 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
                     "field_path": "noop",
                     "message": "ok",
                     "evidence": [{"type": "file_scan", "path": "evaluate.json", "ref": "noop"}],
-                }
+                },
+                {
+                    "code": "SCHEMA_REQUIREMENT_RELATION_CONTAINER_CONFLICT",
+                    "severity": "warning",
+                    "entity_type": "module",
+                    "entity_id": "M02",
+                    "field_path": "modules.M02",
+                    "message": "entity-side and requirement-container relations disagree.",
+                    "evidence": [
+                        {"type": "state_check", "path": "DOC_STATE.yaml", "ref": "modules.M02.facts.requirement_ids", "value": ["RQ01"]},
+                        {"type": "state_check", "path": "DOC_STATE.yaml", "ref": "requirements.RQ02.facts.module_ids", "value": ["M02"]},
+                    ],
+                },
+                {
+                    "code": "SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING",
+                    "severity": "warning",
+                    "entity_type": "subtask",
+                    "entity_id": "ST01_10",
+                    "field_path": "subtasks.ST01_10",
+                    "message": "requirement container side is missing declared relation.",
+                    "evidence": [
+                        {"type": "state_check", "path": "DOC_STATE.yaml", "ref": "subtasks.ST01_10.facts.requirement_ids", "value": ["RQ01"]},
+                    ],
+                },
+                {
+                    "code": "SCHEMA_REQUIREMENT_RELATION_DRIFT",
+                    "severity": "warning",
+                    "entity_type": "subtask",
+                    "entity_id": "ST01_02",
+                    "field_path": "subtasks.ST01_02",
+                    "message": "entity-side and requirement-container relations only partially overlap.",
+                    "evidence": [
+                        {"type": "state_check", "path": "DOC_STATE.yaml", "ref": "subtasks.ST01_02.facts.requirement_ids", "value": ["RQ01", "RQ02"]},
+                        {"type": "state_check", "path": "DOC_STATE.yaml", "ref": "requirements.RQ01.facts.task_ids", "value": ["ST01_02"]},
+                    ],
+                },
+                {
+                    "code": "SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING",
+                    "severity": "warning",
+                    "entity_type": "module",
+                    "entity_id": "M03",
+                    "field_path": "modules.M03",
+                    "message": "entity side is missing requirement relation while requirement container declares one.",
+                    "evidence": [
+                        {"type": "state_check", "path": "DOC_STATE.yaml", "ref": "requirements.RQ02.facts.module_ids", "value": ["M03"]},
+                    ],
+                },
             ],
             "delta_summary": {
                 "blocker_changes": {"added_count": 2, "closed_count": 1},
@@ -257,6 +303,10 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         positions = [report.index(section) for section in expected_sections]
         self.assertEqual(positions, sorted(positions))
         self.assertIn("- requirement_entries: 2", report)
+        self.assertIn("- modules_relation_consistency_errors: 0", report)
+        self.assertIn("- modules_relation_consistency_warnings: 2", report)
+        self.assertIn("- subtasks_relation_consistency_errors: 0", report)
+        self.assertIn("- subtasks_relation_consistency_warnings: 2", report)
         self.assertIn("- `RQ01`: gate=pass review_required=true modules=[M01] tasks=[ST01_10] blockers=[]", report)
         self.assertIn(
             "- `RQ02`: gate=blocked review_required=false modules=[M02] tasks=[ST02_01, ST02_02] blockers=[policy:asset_missing_plan_latest]",
@@ -265,6 +315,22 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertIn("- `module:M02`: requirement_relation=missing", report)
         self.assertIn(
             "- `subtask:ST01_02`: requirement_relation=ambiguous ids=[RQ01, RQ02] blockers=[gate:requirement_id_ambiguous]",
+            report,
+        )
+        self.assertIn(
+            "- `module:M02`: relation_consistency=container_conflict severity=warning code=SCHEMA_REQUIREMENT_RELATION_CONTAINER_CONFLICT",
+            report,
+        )
+        self.assertIn(
+            "- `subtask:ST01_10`: relation_consistency=container_missing severity=warning code=SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING",
+            report,
+        )
+        self.assertIn(
+            "- `subtask:ST01_02`: relation_consistency=drift severity=warning code=SCHEMA_REQUIREMENT_RELATION_DRIFT",
+            report,
+        )
+        self.assertIn(
+            "- `module:M03`: relation_consistency=entity_missing severity=warning code=SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING",
             report,
         )
 

@@ -1,4 +1,4 @@
-import io
+﻿import io
 import json
 import subprocess
 import sys
@@ -20,6 +20,7 @@ def _build_state() -> dict:
     requirement_state = schema.make_default_confirmed_state("requirement")
     module_state = schema.make_default_confirmed_state("module")
     task_state = schema.make_default_confirmed_state("subtask")
+    task_state["maturity"] = "L4"
     task_state["implementation_doc_state"] = "active_working_doc"
     return {
         "schema_version": schema.SCHEMA_VERSION,
@@ -130,30 +131,57 @@ def _write_task_docs(
         )
     else:
         allowed_block = (
-            "- 允许修改的文件：`apps/api/app/main.py`\n"
+            "- 鍏佽淇敼鐨勬枃浠讹細`apps/api/app/main.py`\n"
             if include_allowed_paths
-            else "- 允许修改的文件：\n"
+            else "- 鍏佽淇敼鐨勬枃浠讹細\n"
         )
         design_text = (
-            "# 子任务设计文档\n\n"
-            "## 3. 子任务目标\n\n"
-            "- 本子任务要解决的问题：补齐 task-centered packet。\n"
+            "# 瀛愪换鍔¤璁℃枃妗n\n"
+            "## 3. 瀛愪换鍔＄洰鏍嘰n\n"
+            "- 鏈瓙浠诲姟瑕佽В鍐崇殑闂锛氳ˉ榻?task-centered packet銆俓n"
         )
         implementation_text = (
-            "# 子任务实施文档\n\n"
-            "## 3. 本轮实施目标\n\n"
-            "- 本轮准备完成什么：生成 implementation packet。\n\n"
-            "## 5. 允许修改范围\n\n"
-            "### 5.1 允许修改\n"
+            "# 瀛愪换鍔″疄鏂芥枃妗n\n"
+            "## 3. 鏈疆瀹炴柦鐩爣\n\n"
+            "- 鏈疆鍑嗗瀹屾垚浠€涔堬細鐢熸垚 implementation packet銆俓n\n"
+            "## 5. 鍏佽淇敼鑼冨洿\n\n"
+            "### 5.1 鍏佽淇敼\n"
             f"{allowed_block}\n"
-            "### 5.2 禁止修改\n"
-            "- 本轮不应修改的目录 / 文件：`docs/governance/DOC_STATE.yaml`\n\n"
-            "## 7. 测试与验证\n\n"
-            "### 7.1 自动化验证\n"
-            "- 计划运行的测试：`python -m pytest tests/doc_governor/test_cli_smoke.py -q`\n\n"
-            "## 8. 完成判定\n\n"
-            "- 满足哪些条件可视为本轮完成：packet 成功生成。\n"
+            "### 5.2 绂佹淇敼\n"
+            "- 鏈疆涓嶅簲淇敼鐨勭洰褰?/ 鏂囦欢锛歚docs/governance/DOC_STATE.yaml`\n\n"
+            "## 7. 娴嬭瘯涓庨獙璇乗n\n"
+            "### 7.1 鑷姩鍖栭獙璇乗n"
+            "- 璁″垝杩愯鐨勬祴璇曪細`python -m pytest tests/doc_governor/test_cli_smoke.py -q`\n\n"
+            "## 8. 瀹屾垚鍒ゅ畾\n\n"
+            "- 婊¤冻鍝簺鏉′欢鍙涓烘湰杞畬鎴愶細packet 鎴愬姛鐢熸垚銆俓n"
         )
+    _write_text(root, f"{task_root}/SUBTASK_DESIGN.md", design_text)
+    _write_text(root, f"{task_root}/SUBTASK_IMPLEMENTATION.md", implementation_text)
+
+
+def _write_packet_ready_task_docs(root: Path) -> None:
+    task_root = "docs/modules/M01-test/sub_modules/ST01_01-test"
+    design_text = (
+        "# 子任务设计\n\n"
+        "## 目标\n"
+        "- 这是一个用于 CLI smoke 的受控样本。\n"
+        "- 设计与实施文档均保持中文主结构。\n"
+    )
+    implementation_text = (
+        "# 子任务实施文档\n\n"
+        "## 3. 本轮实施目标\n"
+        "- 产出一个可用于 implementation packet 的最小样本。\n\n"
+        "## 5. 允许修改范围\n"
+        "### 5.1 允许修改\n"
+        "- 文件：`apps/api/app/main.py`\n\n"
+        "### 5.2 禁止修改\n"
+        "- 文件：`docs/governance/DOC_STATE.yaml`\n\n"
+        "## 7. 测试与验证\n"
+        "### 7.1 自动化验证\n"
+        "- 运行：`python -m pytest tests/doc_governor/test_cli_smoke.py -q`\n\n"
+        "## 8. 完成判定\n"
+        "- implementation packet 所需字段完整可读。\n"
+    )
     _write_text(root, f"{task_root}/SUBTASK_DESIGN.md", design_text)
     _write_text(root, f"{task_root}/SUBTASK_IMPLEMENTATION.md", implementation_text)
 
@@ -240,6 +268,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(task_payload["modules"], {})
 
     def test_generate_implementation_packet_writes_json_and_markdown(self) -> None:
+        _write_packet_ready_task_docs(self.temp_root)
         output_dir = self.temp_root / "custom-packets"
         exit_code, output = self._run_cli(
             "generate-implementation-packet",
@@ -253,6 +282,8 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(output)
         self.assertTrue(payload["ok"])
+        self.assertEqual(payload["task_id"], "ST01_01")
+        self.assertEqual(payload["summary"]["acceptance_criteria_count"], 1)
         self.assertTrue((output_dir / "ST01_01.implementation.packet.json").exists())
         self.assertTrue((output_dir / "ST01_01.implementation.packet.md").exists())
 
@@ -305,8 +336,178 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务适配规划", markdown_output)
+        self.assertIn("# 任务适配规划", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
+
+    def test_apply_task_skeleton_seed_supports_dry_run_and_apply(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["subtasks"]["ST01_01"]["facts"]["design_doc"] = {"exists": False, "template_like": True}
+        state["subtasks"]["ST01_01"]["facts"]["implementation_doc"] = {"exists": False, "template_like": True}
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        task_root = self.temp_root / "docs/modules/M01-test/sub_modules/ST01_01-test"
+        for name in ("SUBTASK_DESIGN.md", "SUBTASK_IMPLEMENTATION.md"):
+            path = task_root / name
+            if path.exists():
+                path.unlink()
+
+        output_plan = self.temp_root / "task-skeleton-seed.json"
+        exit_code, output = self._run_cli(
+            "apply-task-skeleton-seed",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--output-plan",
+            str(output_plan),
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["summary"]["planned_file_count"], 2)
+        self.assertTrue(output_plan.exists())
+
+        exit_code, output = self._run_cli(
+            "apply-task-skeleton-seed",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--apply",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "apply")
+        self.assertEqual(payload["summary"]["written_file_count"], 2)
+        self.assertTrue((task_root / "SUBTASK_DESIGN.md").exists())
+        self.assertTrue((task_root / "SUBTASK_IMPLEMENTATION.md").exists())
+
+    def test_apply_task_doc_state_sync_supports_dry_run_and_apply(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["subtasks"]["ST01_01"]["facts"]["design_doc"] = {"exists": False, "template_like": True}
+        state["subtasks"]["ST01_01"]["facts"]["implementation_doc"] = {"exists": False, "template_like": True}
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        task_root = self.temp_root / "docs/modules/M01-test/sub_modules/ST01_01-test"
+        for name in ("SUBTASK_DESIGN.md", "SUBTASK_IMPLEMENTATION.md"):
+            path = task_root / name
+            if path.exists():
+                path.unlink()
+
+        exit_code, output = self._run_cli(
+            "apply-task-skeleton-seed",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--apply",
+        )
+        self.assertEqual(exit_code, 0)
+        seed_payload = json.loads(output)
+        self.assertEqual(seed_payload["summary"]["written_file_count"], 2)
+
+        output_plan = self.temp_root / "task-doc-state-sync.json"
+        exit_code, output = self._run_cli(
+            "apply-task-doc-state-sync",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--output-plan",
+            str(output_plan),
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["summary"]["planned_slot_count"], 2)
+        self.assertTrue(output_plan.exists())
+
+        exit_code, output = self._run_cli(
+            "apply-task-doc-state-sync",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--apply",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "apply")
+        self.assertEqual(payload["summary"]["written_slot_count"], 2)
+
+        synced_state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        synced_task = synced_state["subtasks"]["ST01_01"]
+        self.assertEqual(synced_task["facts"]["design_doc"], {"exists": True, "template_like": False})
+        self.assertEqual(
+            synced_task["facts"]["implementation_doc"],
+            {"exists": True, "template_like": False},
+        )
+        self.assertEqual(
+            synced_task["state"]["confirmed"]["implementation_doc_state"],
+            "missing",
+        )
+
+    def test_apply_task_implementation_state_sync_supports_dry_run_and_apply(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        output_plan = self.temp_root / "task-implementation-state-sync.json"
+        evaluate_payload_path = self.temp_root / "evaluate-task-implementation-state-sync.json"
+        evaluate_payload = {
+            "subtasks": {
+                "ST01_01": {
+                    "derived": {
+                        "requirement_ids": ["RQ01"],
+                        "implementation_blocker_refs": [],
+                    }
+                }
+            }
+        }
+        evaluate_payload_path.write_text(
+            json.dumps(evaluate_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        exit_code, output = self._run_cli(
+            "apply-task-implementation-state-sync",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--evaluate-json",
+            str(evaluate_payload_path),
+            "--output-plan",
+            str(output_plan),
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["summary"]["planned_task_count"], 1)
+        self.assertTrue(output_plan.exists())
+
+        exit_code, output = self._run_cli(
+            "apply-task-implementation-state-sync",
+            "--input",
+            str(self.state_path),
+            "--entity-id",
+            "ST01_01",
+            "--evaluate-json",
+            str(evaluate_payload_path),
+            "--apply",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "apply")
+        self.assertEqual(payload["summary"]["written_task_count"], 1)
+        synced_state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            synced_state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"],
+            "active_working_doc",
+        )
 
 
     def test_suggest_requirement_links_supports_json_markdown_and_entity_filter(self) -> None:
@@ -376,7 +577,8 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务文档整改规划", markdown_output)
+        self.assertIn("# 任务文档整改规划", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
 
@@ -412,7 +614,8 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务 readiness 规划", markdown_output)
+        self.assertIn("# 任务 readiness 规划", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
 
@@ -448,7 +651,8 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务 readiness 修复预览", markdown_output)
+        self.assertIn("# 任务 readiness 修复预览", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
     def test_preview_task_patches_supports_json_markdown_and_entity_filter(self) -> None:
@@ -483,10 +687,12 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务 patch 预览", markdown_output)
+        self.assertIn("# 任务 patch 预览", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
     def test_preview_task_state_writeback_supports_json_markdown_and_entity_filter(self) -> None:
+        _write_packet_ready_task_docs(self.temp_root)
         state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
         state["global_policy"]["formal_window_open"] = False
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
@@ -509,6 +715,8 @@ class CliSmokeTests(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["summary"]["selected_task_count"], 1)
         self.assertEqual(payload["summary"]["activation_candidate_count"], 1)
+        self.assertEqual(payload["tasks"][0]["task_id"], "ST01_01")
+        self.assertTrue(payload["tasks"][0]["eligible_for_writeback"])
         self.assertTrue(json_path.exists())
 
         md_path = output_dir / "preview.md"
@@ -524,10 +732,12 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务 state 写回预览", markdown_output)
+        self.assertIn("# 任务 state 写回预览", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
     def test_apply_task_state_writeback_supports_dry_run_and_apply_on_controlled_sample(self) -> None:
+        _write_packet_ready_task_docs(self.temp_root)
         state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
         state["global_policy"]["formal_window_open"] = False
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
@@ -550,6 +760,8 @@ class CliSmokeTests(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["mode"], "dry_run")
         self.assertEqual(payload["summary"]["eligible_task_count"], 1)
+        self.assertEqual(payload["tasks"][0]["task_id"], "ST01_01")
+        self.assertTrue(payload["tasks"][0]["apply_allowed"])
         self.assertFalse(history_path.exists())
 
         exit_code, output = self._run_cli(
@@ -568,6 +780,7 @@ class CliSmokeTests(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["mode"], "apply")
         self.assertEqual(payload["summary"]["applied_task_count"], 1)
+        self.assertEqual(payload["tasks"][0]["task_id"], "ST01_01")
 
         updated_state = yaml.safe_load(official_state_path.read_text(encoding="utf-8"))
         confirmed = updated_state["subtasks"]["ST01_01"]["state"]["confirmed"]
@@ -575,6 +788,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(history_path.exists())
 
     def test_plan_task_window_candidates_supports_json_markdown_and_entity_filter(self) -> None:
+        _write_packet_ready_task_docs(self.temp_root)
         state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
         state["global_policy"]["formal_window_open"] = False
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
@@ -596,7 +810,9 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(output)
         self.assertEqual(payload["summary"]["selected_task_count"], 1)
+        self.assertEqual(payload["summary"]["candidate_task_count"], 1)
         self.assertEqual(payload["summary"]["candidate_tasks_after_state_activation_count"], 1)
+        self.assertEqual(payload["candidate_tasks_after_state_activation"][0]["task_id"], "ST01_01")
         self.assertTrue(json_path.exists())
 
         md_path = output_dir / "bridge.md"
@@ -612,7 +828,7 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务开窗候选规划", markdown_output)
+        self.assertIn("# 任务开窗候选规划", markdown_output)
         self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
@@ -676,9 +892,80 @@ class CliSmokeTests(unittest.TestCase):
             str(md_path),
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn("任务 apply 结果总结", markdown_output)
+        self.assertIn("# 任务 apply 结果总结", markdown_output)
+        self.assertIn("ST01_01", markdown_output)
         self.assertTrue(md_path.exists())
 
 
+    def test_preview_task_readiness_state_sync_supports_dry_run_and_apply(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["global_policy"]["formal_window_open"] = False
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["readiness"] = "blocked"
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "active_working_doc"
+        official_state_path = self.temp_root / "docs" / "governance" / "DOC_STATE.yaml"
+        official_state_path.parent.mkdir(parents=True, exist_ok=True)
+        official_state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        evaluate_payload_path = self.temp_root / "evaluate-readiness-state-sync.json"
+        evaluate_payload_path.write_text(
+            json.dumps(
+                {
+                    "subtasks": {
+                        "ST01_01": {
+                            "derived": {
+                                "requirement_ids": ["RQ01"],
+                                "blocker_refs": ["policy:formal_window_closed"],
+                            }
+                        }
+                    },
+                    "requirements": {},
+                    "modules": {},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        exit_code, output = self._run_cli(
+            "preview-task-readiness-state-sync",
+            "--input",
+            str(official_state_path),
+            "--evaluate-json",
+            str(evaluate_payload_path),
+            "--entity-id",
+            "ST01_01",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["summary"]["readiness_apply_candidate_count"], 1)
+
+        exit_code, output = self._run_cli(
+            "apply-task-readiness-state-sync",
+            "--input",
+            str(official_state_path),
+            "--evaluate-json",
+            str(evaluate_payload_path),
+            "--entity-id",
+            "ST01_01",
+            "--apply",
+            "--actor",
+            "alice",
+            "--reason",
+            "advance task readiness",
+        )
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "apply")
+        self.assertEqual(payload["summary"]["applied_task_count"], 1)
+
+        updated = yaml.safe_load(official_state_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            updated["subtasks"]["ST01_01"]["state"]["confirmed"]["readiness"],
+            "downstream_ready",
+        )
+
 if __name__ == "__main__":
     unittest.main()
+

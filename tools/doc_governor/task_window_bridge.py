@@ -28,6 +28,7 @@ MANUAL_FIELD_ORDER = {
     "acceptance_criteria": 40,
 }
 CLASSIFICATION_ORDER = {
+    "ready_for_preflight_open_window": 5,
     "already_window_only": 10,
     "window_only_after_state_activation": 20,
     "content_blocked": 30,
@@ -36,11 +37,13 @@ CLASSIFICATION_ORDER = {
     "post_activation_still_blocked": 60,
 }
 ACTION_ORDER = {
+    "review_preflight_open_window_candidates": 5,
     "review_state_activation_candidates": 10,
     "clear_content_blockers_before_window": 20,
     "confirm_requirement_relation_before_window": 30,
     "keep_module_blockers_at_module_level": 40,
     "advance_state_activation_dry_run": 100,
+    "enter_preflight_open_window": 105,
     "keep_as_open_window_candidate": 110,
     "resolve_content_gaps": 120,
     "confirm_requirement_relation": 130,
@@ -236,6 +239,11 @@ def build_task_window_bridge(
         "deferred_task_count": len(deferred_tasks),
         "candidate_tasks_after_state_activation_count": len(candidate_tasks),
         "blocked_before_open_window_count": len(deferred_tasks),
+        "ready_for_preflight_open_window_count": sum(
+            1
+            for record in sorted_records
+            if record["classification"] == "ready_for_preflight_open_window"
+        ),
         "already_window_only_count": sum(
             1 for record in sorted_records if record["classification"] == "already_window_only"
         ),
@@ -301,6 +309,8 @@ def _classify_task(
         return "requirement_relation_blocked"
     if categories["content"] or categories["other"] or manual_fill_fields:
         return "content_blocked"
+    if not activation_needed and not predicted_blockers:
+        return "ready_for_preflight_open_window"
     if not activation_needed and predicted_blockers == [FORMAL_WINDOW_CLOSED]:
         return "already_window_only"
     if activation_needed and predicted_blockers == [FORMAL_WINDOW_CLOSED]:
@@ -310,6 +320,7 @@ def _classify_task(
 
 def _bucket_for_classification(classification: str) -> str:
     if classification in {
+        "ready_for_preflight_open_window",
         "already_window_only",
         "window_only_after_state_activation",
     }:
@@ -318,6 +329,8 @@ def _bucket_for_classification(classification: str) -> str:
 
 
 def _predicted_outcome(*, classification: str, predicted_blockers: list[str]) -> str:
+    if classification == "ready_for_preflight_open_window":
+        return "ready_for_preflight_open_window"
     if classification == "already_window_only":
         return "already_window_only"
     if classification == "window_only_after_state_activation":
@@ -329,6 +342,7 @@ def _predicted_outcome(*, classification: str, predicted_blockers: list[str]) ->
 
 def _sample_role_for(classification: str) -> str:
     return {
+        "ready_for_preflight_open_window": "near_window_candidate",
         "already_window_only": "near_window_candidate",
         "window_only_after_state_activation": "near_window_candidate",
         "content_blocked": "content_blocked_example",
@@ -345,6 +359,8 @@ def _build_reason(
     manual_fill_fields: list[str],
     predicted_blockers: list[str],
 ) -> str:
+    if classification == "ready_for_preflight_open_window":
+        return "formal window 已满足，当前已可进入 preflight-open-window 候选判断。"
     if classification == "window_only_after_state_activation":
         return "内容 blocker 已基本收敛；若推进 implementation_doc_state，预计只剩 formal_window_closed。"
     if classification == "already_window_only":
@@ -371,6 +387,17 @@ def _build_next_actions(
     classification: str,
     manual_fill_fields: list[str],
 ) -> list[dict[str, Any]]:
+    if classification == "ready_for_preflight_open_window":
+        return [
+            {
+                "code": "enter_preflight_open_window",
+                "scope": "task",
+                "task_id": task_id,
+                "module_id": module_id,
+                "title": "转入 preflight-open-window",
+                "reason": "formal window 已满足，当前 task 可进入正式 preflight 候选池。",
+            }
+        ]
     if classification == "window_only_after_state_activation":
         return [
             {
@@ -454,16 +481,31 @@ def _prepend_batch_actions(
         task_ids = ", ".join(
             item.get("task_id", "") for item in candidate_tasks if item.get("task_id")
         )
-        batch_actions.append(
-            {
-                "code": "review_state_activation_candidates",
-                "scope": "batch",
-                "task_id": "",
-                "module_id": "",
-                "title": "优先看首批 state activation 候选",
-                "reason": f"当前最接近 open-window 的 task 是：{task_ids}。",
-            }
-        )
+        if any(
+            item.get("classification") == "ready_for_preflight_open_window"
+            for item in candidate_tasks
+        ):
+            batch_actions.append(
+                {
+                    "code": "review_preflight_open_window_candidates",
+                    "scope": "batch",
+                    "task_id": "",
+                    "module_id": "",
+                    "title": "优先看首批 preflight-open-window 候选",
+                    "reason": f"当前已可进入 preflight-open-window 的 task 是：{task_ids}。",
+                }
+            )
+        else:
+            batch_actions.append(
+                {
+                    "code": "review_state_activation_candidates",
+                    "scope": "batch",
+                    "task_id": "",
+                    "module_id": "",
+                    "title": "优先看首批 state activation 候选",
+                    "reason": f"当前最接近 open-window 的 task 是：{task_ids}。",
+                }
+            )
     if any(item.get("classification") == "content_blocked" for item in deferred_tasks):
         batch_actions.append(
             {

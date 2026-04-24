@@ -9,6 +9,7 @@ ALLOWED_FILES = {
     TEST_ROOT / "doc_governor" / "test_temp_artifacts.py",
     TEST_ROOT / "test_temp_artifact_policy.py",
 }
+TEMP_DIR_NAME_REGEX = r"^(?:_?tmp|temp)(?:[-_].*)?$"
 PROHIBITED_PATTERNS = (
     (
         re.compile(r"\btempfile\.gettempdir\s*\("),
@@ -43,8 +44,16 @@ PROHIBITED_PATTERNS = (
         "测试不得手写 rmtree 清理测试目录；请改用 ManagedTempArtifacts / ManagedTempArtifactsTestCase。",
     ),
     (
-        re.compile(r"Path\(__file__\)[^\n]*[\"'](?:_tmp|tmp|temp)[\"']"),
+        re.compile(r"Path\(__file__\)[^\n]*[\"'](?:_?tmp|temp)(?:[-_].*)?[\"']"),
         "测试不得在仓库目录下直接拼接 _tmp/tmp/temp 目录名；请改用 ManagedTempArtifacts。",
+    ),
+    (
+        re.compile(r"\bPath\s*\(\s*[\"'](?:_?tmp|temp)(?:[-_][^\"']*)?[\"']\s*\)"),
+        "测试不得直接构造 Path('tmp...') / Path(\"tmp...\")；请改用 ManagedTempArtifacts 或 pytest tmp_path。",
+    ),
+    (
+        re.compile(r"\b(?:os\.)?mkdir\s*\(\s*[\"'](?:_?tmp|temp)(?:[-_][^\"']*)?[\"']"),
+        "测试不得直接 mkdir('tmp...') / os.mkdir('tmp...')；请改用 ManagedTempArtifacts 或 pytest tmp_path。",
     ),
 )
 
@@ -65,7 +74,11 @@ def _collect_policy_violations(path: Path, text: str) -> list[str]:
 class TestTempArtifactPolicyTests(unittest.TestCase):
     def test_tests_do_not_reintroduce_forbidden_temp_dir_patterns(self) -> None:
         violations: list[str] = []
-        for path in sorted(TEST_ROOT.rglob("test_*.py")):
+        policy_targets = list(TEST_ROOT.rglob("test_*.py"))
+        conftest_path = TEST_ROOT / "conftest.py"
+        if conftest_path.exists():
+            policy_targets.append(conftest_path)
+        for path in sorted(set(policy_targets)):
             text = path.read_text(encoding="utf-8")
             violations.extend(_collect_policy_violations(path, text))
 
@@ -105,6 +118,94 @@ def test_demo():
         )
         self.assertTrue(any("NamedTemporaryFile" in item for item in violations), violations)
         self.assertTrue(any("rmtree" in item for item in violations), violations)
+
+    def test_temp_dir_name_regex_covers_extended_variants(self) -> None:
+        pattern = re.compile(TEMP_DIR_NAME_REGEX)
+        should_match = [
+            "tmp",
+            "_tmp",
+            "temp",
+            "tmp-readiness-verify",
+            "tmp_inspect",
+            "tmp_official_scope",
+            "tmp_xxx",
+            "tmp-xxx",
+            "_tmp_xxx",
+            "temp_xxx",
+            "temp-xxx",
+        ]
+        should_not_match = [
+            ".tmp",
+            "template",
+            "attempt",
+            "tmpx",
+            "tempx",
+            "prod_tmp",
+            "my-temp",
+        ]
+        for name in should_match:
+            self.assertIsNotNone(pattern.fullmatch(name), name)
+        for name in should_not_match:
+            self.assertIsNone(pattern.fullmatch(name), name)
+
+    def test_policy_rejects_extended_tmp_temp_directory_literals(self) -> None:
+        variants = [
+            "tmp-readiness-verify",
+            "tmp_inspect",
+            "tmp_official_scope",
+            "tmp_xxx",
+            "tmp-xxx",
+            "_tmp_xxx",
+            "temp_xxx",
+            "temp-xxx",
+        ]
+        for name in variants:
+            source = f'''
+from pathlib import Path
+
+def test_demo():
+    p = Path(__file__).parent / "{name}"
+    return p
+'''
+            sample_name = name.replace("-", "_")
+            violations = _collect_policy_violations(
+                TEST_ROOT / f"policy_tmp_name_{sample_name}.py",
+                source,
+            )
+            self.assertTrue(
+                any("ManagedTempArtifacts" in item for item in violations),
+                (name, violations),
+            )
+
+    def test_policy_rejects_direct_path_tmp_constructor(self) -> None:
+        source = """
+from pathlib import Path
+
+def test_demo():
+    p = Path("tmp-readiness-verify")
+    return p
+"""
+        violations = _collect_policy_violations(
+            TEST_ROOT / "policy_path_tmp_constructor.py",
+            source,
+        )
+        self.assertTrue(
+            any("Path('tmp...')" in item or 'Path("tmp...")' in item for item in violations),
+            violations,
+        )
+
+    def test_policy_rejects_direct_mkdir_tmp_literal(self) -> None:
+        source = """
+import os
+
+def test_demo():
+    os.mkdir("tmp_inspect")
+"""
+        violations = _collect_policy_violations(
+            TEST_ROOT / "policy_mkdir_tmp_literal.py",
+            source,
+        )
+        self.assertTrue(any("mkdir('tmp...')" in item for item in violations), violations)
 
 
 if __name__ == "__main__":

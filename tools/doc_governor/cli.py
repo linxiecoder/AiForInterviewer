@@ -48,6 +48,26 @@ if __package__ in {None, ""}:
         execute_requirement_seed_apply,
         write_requirement_seed_apply_output,
     )
+    from tools.doc_governor.requirement_entity_sync import (
+        build_requirement_entity_sync_plan,
+        execute_requirement_entity_sync,
+        write_requirement_entity_sync_output,
+    )
+    from tools.doc_governor.task_skeleton_seed import (
+        build_task_skeleton_seed_plan,
+        execute_task_skeleton_seed,
+        write_task_skeleton_seed_output,
+    )
+    from tools.doc_governor.task_doc_state_sync import (
+        build_task_doc_state_sync_plan,
+        execute_task_doc_state_sync,
+        write_task_doc_state_sync_output,
+    )
+    from tools.doc_governor.task_implementation_state_sync import (
+        build_task_implementation_state_sync_plan,
+        execute_task_implementation_state_sync,
+        write_task_implementation_state_sync_output,
+    )
     from tools.doc_governor.task_remediation import (
         build_task_remediation_plan,
         render_task_remediation_markdown,
@@ -82,6 +102,23 @@ if __package__ in {None, ""}:
         build_task_state_writeback_preview,
         render_task_state_writeback_markdown,
         write_task_state_writeback_output,
+    )
+    from tools.doc_governor.task_readiness_state_sync import (
+        build_task_readiness_state_sync_preview,
+        execute_task_readiness_state_sync,
+        render_task_readiness_state_sync_markdown,
+        write_task_readiness_state_sync_output,
+    )
+    from tools.doc_governor.task_formal_window_sync import (
+        build_task_formal_window_sync_preview,
+        execute_task_formal_window_sync,
+        render_task_formal_window_sync_markdown,
+        write_task_formal_window_sync_output,
+    )
+    from tools.doc_governor.task_state_dependency_map import (
+        build_task_state_dependency_map,
+        render_task_state_dependency_map_markdown,
+        write_task_state_dependency_map_output,
     )
     from tools.doc_governor.task_window_bridge import build_task_window_bridge
     from tools.doc_governor.governance_rounds import (
@@ -146,6 +183,26 @@ else:
         execute_requirement_seed_apply,
         write_requirement_seed_apply_output,
     )
+    from .requirement_entity_sync import (
+        build_requirement_entity_sync_plan,
+        execute_requirement_entity_sync,
+        write_requirement_entity_sync_output,
+    )
+    from .task_skeleton_seed import (
+        build_task_skeleton_seed_plan,
+        execute_task_skeleton_seed,
+        write_task_skeleton_seed_output,
+    )
+    from .task_doc_state_sync import (
+        build_task_doc_state_sync_plan,
+        execute_task_doc_state_sync,
+        write_task_doc_state_sync_output,
+    )
+    from .task_implementation_state_sync import (
+        build_task_implementation_state_sync_plan,
+        execute_task_implementation_state_sync,
+        write_task_implementation_state_sync_output,
+    )
     from .task_remediation import (
         build_task_remediation_plan,
         render_task_remediation_markdown,
@@ -180,6 +237,23 @@ else:
         build_task_state_writeback_preview,
         render_task_state_writeback_markdown,
         write_task_state_writeback_output,
+    )
+    from .task_readiness_state_sync import (
+        build_task_readiness_state_sync_preview,
+        execute_task_readiness_state_sync,
+        render_task_readiness_state_sync_markdown,
+        write_task_readiness_state_sync_output,
+    )
+    from .task_formal_window_sync import (
+        build_task_formal_window_sync_preview,
+        execute_task_formal_window_sync,
+        render_task_formal_window_sync_markdown,
+        write_task_formal_window_sync_output,
+    )
+    from .task_state_dependency_map import (
+        build_task_state_dependency_map,
+        render_task_state_dependency_map_markdown,
+        write_task_state_dependency_map_output,
     )
     from .task_window_bridge import build_task_window_bridge
     from .governance_rounds import (
@@ -385,6 +459,37 @@ def main(argv: list[str] | None = None) -> int:
     requirement_seed_apply_parser.add_argument("--confirm-manual", action="store_true")
     requirement_seed_apply_parser.add_argument("--output-plan")
 
+    requirement_entity_sync_parser = subparsers.add_parser("apply-requirement-entity-sync")
+    requirement_entity_sync_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    requirement_entity_sync_parser.add_argument("--entity-id", action="append")
+    requirement_entity_sync_parser.add_argument("--apply", action="store_true")
+    requirement_entity_sync_parser.add_argument("--output-plan")
+
+    task_skeleton_seed_parser = subparsers.add_parser("apply-task-skeleton-seed")
+    task_skeleton_seed_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    task_skeleton_seed_parser.add_argument("--entity-id", action="append", required=True)
+    task_skeleton_seed_parser.add_argument("--apply", action="store_true")
+    task_skeleton_seed_parser.add_argument("--output-plan")
+
+    task_doc_state_sync_parser = subparsers.add_parser("apply-task-doc-state-sync")
+    task_doc_state_sync_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    task_doc_state_sync_parser.add_argument("--entity-id", action="append", required=True)
+    task_doc_state_sync_parser.add_argument("--apply", action="store_true")
+    task_doc_state_sync_parser.add_argument("--output-plan")
+
+    task_implementation_state_sync_parser = subparsers.add_parser(
+        "apply-task-implementation-state-sync"
+    )
+    task_implementation_state_sync_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    task_implementation_state_sync_parser.add_argument("--evaluate-json")
+    task_implementation_state_sync_parser.add_argument(
+        "--entity-id",
+        action="append",
+        required=True,
+    )
+    task_implementation_state_sync_parser.add_argument("--apply", action="store_true")
+    task_implementation_state_sync_parser.add_argument("--output-plan")
+
     remediation_parser = subparsers.add_parser("plan-task-remediation")
     remediation_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
     remediation_parser.add_argument("--entity-id")
@@ -431,6 +536,17 @@ def main(argv: list[str] | None = None) -> int:
     state_writeback_preview_parser.add_argument("--output")
     state_writeback_preview_parser.add_argument("--evaluate-json")
 
+    dependency_map_parser = subparsers.add_parser("preview-task-state-dependency-map")
+    dependency_map_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    dependency_map_parser.add_argument("--entity-id", action="append")
+    dependency_map_parser.add_argument(
+        "--format",
+        choices=("json", "markdown"),
+        default="json",
+    )
+    dependency_map_parser.add_argument("--output")
+    dependency_map_parser.add_argument("--evaluate-json")
+
     state_apply_parser = subparsers.add_parser("apply-task-state-writeback")
     state_apply_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
     state_apply_parser.add_argument("--entity-id", action="append", required=True)
@@ -438,6 +554,60 @@ def main(argv: list[str] | None = None) -> int:
     state_apply_parser.add_argument("--actor")
     state_apply_parser.add_argument("--reason")
     state_apply_parser.add_argument("--evaluate-json")
+
+    readiness_state_sync_preview_parser = subparsers.add_parser("preview-task-readiness-state-sync")
+    readiness_state_sync_preview_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    readiness_state_sync_preview_parser.add_argument(
+        "--entity-id",
+        action="append",
+        required=True,
+    )
+    readiness_state_sync_preview_parser.add_argument(
+        "--format",
+        choices=("json", "markdown"),
+        default="json",
+    )
+    readiness_state_sync_preview_parser.add_argument("--output")
+    readiness_state_sync_preview_parser.add_argument("--evaluate-json")
+
+    readiness_state_sync_apply_parser = subparsers.add_parser("apply-task-readiness-state-sync")
+    readiness_state_sync_apply_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    readiness_state_sync_apply_parser.add_argument(
+        "--entity-id",
+        action="append",
+        required=True,
+    )
+    readiness_state_sync_apply_parser.add_argument("--apply", action="store_true")
+    readiness_state_sync_apply_parser.add_argument("--actor")
+    readiness_state_sync_apply_parser.add_argument("--reason")
+    readiness_state_sync_apply_parser.add_argument("--evaluate-json")
+
+    formal_window_sync_preview_parser = subparsers.add_parser("preview-task-formal-window-sync")
+    formal_window_sync_preview_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    formal_window_sync_preview_parser.add_argument(
+        "--entity-id",
+        action="append",
+        required=True,
+    )
+    formal_window_sync_preview_parser.add_argument(
+        "--format",
+        choices=("json", "markdown"),
+        default="json",
+    )
+    formal_window_sync_preview_parser.add_argument("--output")
+    formal_window_sync_preview_parser.add_argument("--evaluate-json")
+
+    formal_window_sync_apply_parser = subparsers.add_parser("apply-task-formal-window-sync")
+    formal_window_sync_apply_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
+    formal_window_sync_apply_parser.add_argument(
+        "--entity-id",
+        action="append",
+        required=True,
+    )
+    formal_window_sync_apply_parser.add_argument("--apply", action="store_true")
+    formal_window_sync_apply_parser.add_argument("--actor")
+    formal_window_sync_apply_parser.add_argument("--reason")
+    formal_window_sync_apply_parser.add_argument("--evaluate-json")
 
     task_window_bridge_parser = subparsers.add_parser("plan-task-window-candidates")
     task_window_bridge_parser.add_argument("--input", default=OFFICIAL_STATE_PATH)
@@ -490,6 +660,14 @@ def main(argv: list[str] | None = None) -> int:
         return apply_requirement_container_seed_command(args)
     if args.command == "apply-requirement-seed":
         return apply_requirement_seed_command(args)
+    if args.command == "apply-requirement-entity-sync":
+        return apply_requirement_entity_sync_command(args)
+    if args.command == "apply-task-skeleton-seed":
+        return apply_task_skeleton_seed_command(args)
+    if args.command == "apply-task-doc-state-sync":
+        return apply_task_doc_state_sync_command(args)
+    if args.command == "apply-task-implementation-state-sync":
+        return apply_task_implementation_state_sync_command(args)
     if args.command == "plan-task-remediation":
         return plan_task_remediation_command(args)
     if args.command == "plan-task-readiness":
@@ -506,6 +684,16 @@ def main(argv: list[str] | None = None) -> int:
         return preview_task_state_writeback_command(args)
     if args.command == "apply-task-state-writeback":
         return apply_task_state_writeback_command(args)
+    if args.command == "preview-task-readiness-state-sync":
+        return preview_task_readiness_state_sync_command(args)
+    if args.command == "apply-task-readiness-state-sync":
+        return apply_task_readiness_state_sync_command(args)
+    if args.command == "preview-task-formal-window-sync":
+        return preview_task_formal_window_sync_command(args)
+    if args.command == "apply-task-formal-window-sync":
+        return apply_task_formal_window_sync_command(args)
+    if args.command == "preview-task-state-dependency-map":
+        return preview_task_state_dependency_map_command(args)
     if args.command == "plan-task-window-candidates":
         return plan_task_window_candidates_command(args)
 
@@ -1659,6 +1847,308 @@ def apply_requirement_seed_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def apply_requirement_entity_sync_command(args: argparse.Namespace) -> int:
+    diagnostics = validate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_requirement_entity_sync(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+        )
+    except ValueError as exc:
+        dry_run_plan = build_requirement_entity_sync_plan(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+        )
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="REQUIREMENT_ENTITY_SYNC_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="requirement_entity_sync",
+                        entity_id=",".join(args.entity_id or []),
+                        field_path="apply-requirement-entity-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-requirement-entity-sync",
+                                ref="entity_id",
+                                value=args.entity_id or [],
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan:
+            write_requirement_entity_sync_output(
+                payload=output_payload["plan"],
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    if args.output_plan:
+        write_requirement_entity_sync_output(
+            payload=result,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_skeleton_seed_command(args: argparse.Namespace) -> int:
+    diagnostics = validate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_skeleton_seed(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+        )
+    except ValueError as exc:
+        dry_run_plan = build_task_skeleton_seed_plan(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+        )
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_SKELETON_SEED_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="task_skeleton_seed",
+                        entity_id=",".join(args.entity_id or []),
+                        field_path="apply-task-skeleton-seed",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-skeleton-seed",
+                                ref="entity_id",
+                                value=args.entity_id or [],
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan:
+            write_task_skeleton_seed_output(
+                payload=output_payload["plan"],
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    if args.output_plan:
+        write_task_skeleton_seed_output(
+            payload=result,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_doc_state_sync_command(args: argparse.Namespace) -> int:
+    diagnostics = validate_state_file(Path(args.input))
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_doc_state_sync(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+        )
+    except ValueError as exc:
+        dry_run_plan = build_task_doc_state_sync_plan(
+            state_path=args.input,
+            entity_ids=args.entity_id,
+        )
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_DOC_STATE_SYNC_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="task_doc_state_sync",
+                        entity_id=",".join(args.entity_id or []),
+                        field_path="apply-task-doc-state-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-doc-state-sync",
+                                ref="entity_id",
+                                value=args.entity_id or [],
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan:
+            write_task_doc_state_sync_output(
+                payload=output_payload["plan"],
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    if args.output_plan:
+        write_task_doc_state_sync_output(
+            payload=result,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_implementation_state_sync_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if getattr(args, "evaluate_json", None):
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_IMPLEMENTATION_STATE_SYNC_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_implementation_state_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-implementation-state-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_IMPLEMENTATION_STATE_SYNC_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_implementation_state_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-implementation-state-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+            )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_implementation_state_sync(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+        )
+    except ValueError as exc:
+        try:
+            dry_run_plan = build_task_implementation_state_sync_plan(
+                state_path=args.input,
+                evaluate_payload=payload if isinstance(payload, dict) else {},
+                entity_ids=args.entity_id,
+            )
+        except ValueError:
+            dry_run_plan = None
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_IMPLEMENTATION_STATE_SYNC_REJECTED",
+                        severity="error",
+                        entity_type="task_implementation_state_sync",
+                        entity_id="GLOBAL",
+                        field_path="apply-task-implementation-state-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-implementation-state-sync",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                )
+            ],
+            "plan": dry_run_plan,
+        }
+        if args.output_plan and dry_run_plan is not None:
+            write_task_implementation_state_sync_output(
+                payload=dry_run_plan,
+                output_path=args.output_plan,
+            )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {
+        "ok": True,
+        "diagnostics": [diagnostic_to_dict(item) for item in diagnostics],
+        **result,
+    }
+    if args.output_plan:
+        write_task_implementation_state_sync_output(
+            payload=output_payload,
+            output_path=args.output_plan,
+        )
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def plan_task_remediation_command(args: argparse.Namespace) -> int:
     diagnostics: list[Any] = []
     if args.evaluate_json:
@@ -2347,6 +2837,571 @@ def apply_task_state_writeback_command(args: argparse.Namespace) -> int:
 
     output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
     print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def preview_task_readiness_state_sync_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_READINESS_STATE_SYNC_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_readiness_state_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-readiness-state-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_READINESS_STATE_SYNC_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_readiness_state_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-readiness-state-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        preview = build_task_readiness_state_sync_preview(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_READINESS_STATE_SYNC_PREVIEW_FAILED",
+                        severity="error",
+                        entity_type="task_readiness_state_sync",
+                        entity_id="GLOBAL",
+                        field_path="preview-task-readiness-state-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="preview-task-readiness-state-sync",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **preview}
+    if args.output:
+        write_task_readiness_state_sync_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_readiness_state_sync_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_readiness_state_sync_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_READINESS_STATE_SYNC_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_readiness_state_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-readiness-state-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_READINESS_STATE_SYNC_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_readiness_state_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-readiness-state-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_readiness_state_sync(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+            actor=args.actor,
+            reason=args.reason,
+        )
+    except ValueError as exc:
+        try:
+            dry_run_plan = execute_task_readiness_state_sync(
+                state_path=args.input,
+                evaluate_payload=payload if isinstance(payload, dict) else {},
+                entity_ids=args.entity_id,
+                apply_changes=False,
+                actor=None,
+                reason=None,
+            )
+        except ValueError:
+            dry_run_plan = None
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_READINESS_STATE_SYNC_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="task_readiness_state_sync",
+                        entity_id="GLOBAL",
+                        field_path="apply-task-readiness-state-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-readiness-state-sync",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                )
+            ],
+        }
+        if dry_run_plan is not None:
+            output_payload["plan"] = dry_run_plan
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def preview_task_formal_window_sync_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_FORMAL_WINDOW_SYNC_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_formal_window_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-formal-window-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_FORMAL_WINDOW_SYNC_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_formal_window_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-formal-window-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        preview = build_task_formal_window_sync_preview(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_FORMAL_WINDOW_SYNC_PREVIEW_FAILED",
+                        severity="error",
+                        entity_type="task_formal_window_sync",
+                        entity_id="GLOBAL",
+                        field_path="preview-task-formal-window-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="preview-task-formal-window-sync",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **preview}
+    if args.output:
+        write_task_formal_window_sync_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_formal_window_sync_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_task_formal_window_sync_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_FORMAL_WINDOW_SYNC_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_formal_window_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-formal-window-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_FORMAL_WINDOW_SYNC_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_formal_window_sync",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="apply-task-formal-window-sync",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        result = execute_task_formal_window_sync(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+            apply_changes=bool(args.apply),
+            actor=args.actor,
+            reason=args.reason,
+        )
+    except ValueError as exc:
+        try:
+            dry_run_plan = execute_task_formal_window_sync(
+                state_path=args.input,
+                evaluate_payload=payload if isinstance(payload, dict) else {},
+                entity_ids=args.entity_id,
+                apply_changes=False,
+                actor=None,
+                reason=None,
+            )
+        except ValueError:
+            dry_run_plan = None
+        output_payload = {
+            "ok": False,
+            "diagnostics": [
+                diagnostic_to_dict(
+                    make_diagnostic(
+                        code="TASK_FORMAL_WINDOW_SYNC_APPLY_REJECTED",
+                        severity="error",
+                        entity_type="task_formal_window_sync",
+                        entity_id="GLOBAL",
+                        field_path="apply-task-formal-window-sync",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="apply-task-formal-window-sync",
+                                ref="entity_id",
+                                value=args.entity_id,
+                            )
+                        ],
+                    )
+                )
+            ],
+        }
+        if dry_run_plan is not None:
+            output_payload["plan"] = dry_run_plan
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+        return 1
+
+    output_payload = {"ok": True, "diagnostics": [diagnostic_to_dict(item) for item in diagnostics], **result}
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def preview_task_state_dependency_map_command(args: argparse.Namespace) -> int:
+    diagnostics: list[Any] = []
+    if args.evaluate_json:
+        try:
+            raw_payload = json.loads(Path(args.evaluate_json).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_STATE_DEPENDENCY_MAP_EVALUATE_JSON_NOT_FOUND",
+                            severity="error",
+                            entity_type="task_state_dependency_map",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json not found: {args.evaluate_json}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-state-dependency-map",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        except json.JSONDecodeError as exc:
+            print(
+                result_to_json(
+                    ok=False,
+                    diagnostics=[
+                        make_diagnostic(
+                            code="TASK_STATE_DEPENDENCY_MAP_EVALUATE_JSON_INVALID",
+                            severity="error",
+                            entity_type="task_state_dependency_map",
+                            entity_id="GLOBAL",
+                            field_path="--evaluate-json",
+                            message=f"evaluate json parse failed: {exc}",
+                            evidence=[
+                                make_evidence(
+                                    type="cli",
+                                    path="preview-task-state-dependency-map",
+                                    ref="evaluate_json",
+                                    value=args.evaluate_json,
+                                )
+                            ],
+                        )
+                    ],
+                )
+            )
+            return 1
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+    else:
+        diagnostics, payload = evaluate_state_file(Path(args.input))
+
+    if any(getattr(item, "severity", None) == "error" for item in diagnostics):
+        print(result_to_json(ok=False, diagnostics=diagnostics))
+        return 1
+
+    try:
+        preview = build_task_state_dependency_map(
+            state_path=args.input,
+            evaluate_payload=payload if isinstance(payload, dict) else {},
+            entity_ids=args.entity_id,
+        )
+    except ValueError as exc:
+        print(
+            result_to_json(
+                ok=False,
+                diagnostics=[
+                    make_diagnostic(
+                        code="TASK_STATE_DEPENDENCY_MAP_PREVIEW_FAILED",
+                        severity="error",
+                        entity_type="task_state_dependency_map",
+                        entity_id="GLOBAL",
+                        field_path="preview-task-state-dependency-map",
+                        message=str(exc),
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="preview-task-state-dependency-map",
+                                ref="entity_id",
+                                value=args.entity_id or "ALL",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        return 1
+
+    output_payload = {
+        "ok": True,
+        "diagnostics": [diagnostic_to_dict(item) for item in diagnostics],
+        **preview,
+    }
+    if args.output:
+        write_task_state_dependency_map_output(
+            payload=output_payload,
+            output_path=args.output,
+            output_format=args.format,
+        )
+    if args.format == "markdown":
+        print(render_task_state_dependency_map_markdown(output_payload), end="")
+    else:
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
     return 0
 
 

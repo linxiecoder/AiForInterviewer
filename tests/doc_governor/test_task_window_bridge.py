@@ -68,6 +68,7 @@ def _subtask_entry(
     implementation_doc_state: str = "missing",
 ) -> dict:
     confirmed = schema.make_default_confirmed_state("subtask")
+    confirmed["maturity"] = "L4"
     confirmed["implementation_doc_state"] = implementation_doc_state
     return {
         "meta": {
@@ -331,6 +332,33 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
                 "resolve_module_level_blockers",
             ],
         )
+
+    def test_formal_window_open_promotes_ready_task_into_preflight_candidate(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["global_policy"]["formal_window_open"] = True
+        confirmed = state["subtasks"]["ST09_03"]["state"]["confirmed"]
+        confirmed["implementation_doc_state"] = "active_working_doc"
+        confirmed["readiness"] = "downstream_ready"
+        self.state_path.write_text(
+            yaml.safe_dump(state, sort_keys=False),
+            encoding="utf-8",
+        )
+
+        payload = build_task_window_bridge(
+            state_path=self.state_path,
+            evaluate_payload=self._evaluate(),
+            entity_ids=["ST09_03"],
+        )
+
+        self.assertEqual(payload["summary"]["selected_task_count"], 1)
+        self.assertEqual(payload["summary"]["candidate_task_count"], 1)
+        self.assertEqual(payload["summary"]["ready_for_preflight_open_window_count"], 1)
+        candidate = payload["candidate_tasks"][0]
+        self.assertEqual(candidate["task_id"], "ST09_03")
+        self.assertEqual(candidate["classification"], "ready_for_preflight_open_window")
+        self.assertEqual(candidate["predicted_post_activation_blockers"], [])
+        self.assertEqual(payload["recommended_next_step"][0]["code"], "review_preflight_open_window_candidates")
+        self.assertEqual(payload["recommended_next_step"][1]["code"], "enter_preflight_open_window")
 
 
 if __name__ == "__main__":

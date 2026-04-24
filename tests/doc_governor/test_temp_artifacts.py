@@ -10,6 +10,8 @@ from tools.testing.temp_artifacts import (
     ManagedTempArtifactsTestCase,
     create_managed_temp_root_guard,
     create_repo_temp_dir_guard,
+    find_repo_temp_dir_residuals,
+    scan_temp_like_directories,
 )
 
 
@@ -109,6 +111,59 @@ class ManagedTempArtifactsTests(unittest.TestCase):
         leaks = guard.find_unexpected_directories()
         self.assertEqual(len(leaks), 1)
         self.assertIn("pytest-cache-files-demo", leaks[0])
+
+    def test_repo_guard_reports_tmp_temp_name_variants(self) -> None:
+        guard = create_repo_temp_dir_guard(self.sandbox_root)
+        variants = [
+            "tmp-readiness-verify",
+            "tmp_inspect",
+            "tmp_official_scope",
+            "tmp_xxx",
+            "tmp-xxx",
+            "_tmp_xxx",
+            "temp_xxx",
+            "temp-xxx",
+        ]
+        for name in variants:
+            (self.sandbox_root / name).mkdir()
+
+        leaks = guard.find_unexpected_directories()
+        leak_text = " | ".join(leaks)
+        for name in variants:
+            self.assertIn(name, leak_text)
+
+    def test_scan_temp_like_directories_supports_extended_variants(self) -> None:
+        variants = [
+            "tmp-readiness-verify",
+            "tmp_inspect",
+            "tmp_official_scope",
+            "tmp_xxx",
+            "tmp-xxx",
+            "_tmp_xxx",
+            "temp_xxx",
+            "temp-xxx",
+        ]
+        for name in variants:
+            (self.watch_root / name).mkdir()
+
+        matches = scan_temp_like_directories(self.watch_root)
+        for name in variants:
+            self.assertIn(name, matches)
+
+    def test_find_repo_temp_dir_residuals_reports_root_and_tests(self) -> None:
+        (self.sandbox_root / "tmp-readiness-verify").mkdir()
+        tests_root = self.sandbox_root / "tests"
+        tests_root.mkdir(parents=True, exist_ok=True)
+        (tests_root / "module_a" / "tmp_inspect").mkdir(parents=True, exist_ok=True)
+        (self.sandbox_root / ".git").mkdir(parents=True, exist_ok=True)
+        (self.sandbox_root / ".venv").mkdir(parents=True, exist_ok=True)
+
+        leaks = find_repo_temp_dir_residuals(self.sandbox_root)
+        leak_text = " | ".join(leaks)
+        self.assertIn("tmp-readiness-verify", leak_text)
+        self.assertIn("module_a/tmp_inspect", leak_text)
+        self.assertNotIn(".git", leak_text)
+        self.assertNotIn(".venv", leak_text)
 
     def test_managed_temp_root_guard_reports_new_owner_directories(self) -> None:
         managed_root = self.sandbox_root / "managed-root"
