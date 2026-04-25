@@ -195,6 +195,8 @@
 - [AI 模拟面试一期工作台 MVP 信息架构与用户旅程](docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md)
 - [AI 模拟面试一期工作台 MVP 对象模型、RAG、多轮与后端边界草案](docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)
 - [AI 模拟面试一期工作台 MVP 评分、复盘、导出与 DoD 草案](docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md)
+- [AI 模拟面试一期工作台 MVP 任务重映射草案](docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md)
+- [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md)
 - [AI 模拟面试 P1 MVP 实现计划历史归档快照](archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md)
 
 ### 2.4 全局文档体系

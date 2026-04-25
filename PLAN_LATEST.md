@@ -8,8 +8,8 @@
 
 ## 2. 当前阶段
 
-- 当前阶段：`W13` 设计补齐、归档补链、状态层归档与后续任务重映射准备阶段。
-- 当前窗口：`W13-StateArchive`，负责旧 P1 设计稿状态层归档、历史迁移和旧 STxx_* 骨架迁移安全性判断。
+- 当前阶段：`W13-E2 / State Remap dry-run`，吸收用户已确认的 W13-E 推荐组合，检查 `WT13-xx` 状态层兼容性，细化旧 `STxx_*` superseded 映射，并建立长期 backlog-roadmap。
+- 当前窗口：`W13-E2`，只做状态层 dry-run、任务 ID 约束检查、旧 `STxx_*` 映射方案和项目待办路线图；不修改 `DOC_STATE.yaml`，不进入实现。
 - 代码开发状态：暂停。不得扩展 `apps/web/**`，不得创建 `apps/api/**`、`infra/**`，不得接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
 - W10 `apps/web/**` 原型只作为参考证据，不是正式一期 MVP 起点。
 
@@ -21,6 +21,8 @@
 | IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 任务重映射草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` |
+| 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | OQ / MQ 归并入口 | `OPEN_QUESTIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
@@ -42,26 +44,31 @@
 | W13-D | 已产出，作为当前评分 / 复盘 / 导出 / DoD 事实源 | 维护评分、复盘、导出、错误态、空状态和 DoD。 |
 | W13-Cleanup / W13-FC-RefAudit | 已完成项目级清理 | 清理旧 OQ/MQ、旧 DD、重复确认卡、孤立文档候选和唯一事实源引用。 |
 | W13-GOV-MergeArchive | 已完成 | 合并旧实现计划归档、M01-M10 旧 MQ/OQ 标记和模块子文档补链结果；确认剩余归档问题不阻断 W13 后续设计。 |
-| W13-StateArchive | 当前执行 | 将旧 P1 设计稿从当前 `documents` 受管集合移出并迁入 archive；旧 STxx_* 骨架因仍在状态层和索引层引用，本轮不迁移。 |
-| W13-F | 后续 | 只负责 Basic Memory / Superpowers 写回与实施包评估，不重新决定已 confirmed 的 OQ。 |
+| W13-StateArchive | 已完成 | 将旧 P1 设计稿从当前 `documents` 受管集合移出并迁入 archive；旧 STxx_* 骨架因仍在状态层和索引层引用，本轮不迁移。 |
+| W13-F | 已完成阶段收口核验 | 已验证 W13-D 存在且内容完整，完成 Basic Memory 写回与回读验证；Superpowers / 当前执行计划正文未在本轮扩写。 |
+| W13-E | 当前草案已形成 | 已新增任务重映射草案，建立 `WT13-xx` 候选任务树、旧 `STxx_*` 处理策略、模块映射、开窗顺序和 `DOC_STATE.yaml` 后续改造确认卡；仍不放行实现。 |
+| W13-E2 | 当前 dry-run 收口 | 已检查 `WT13-xx` 与当前 schema 不直接兼容，旧 `STxx_*` 到 `WT13` 映射草案形成，并新增 backlog-roadmap 作为后续事项追踪清单；仍不写 `DOC_STATE.yaml`。 |
 
 ## 6. 当前阻断与风险
 
-- 当前没有 active `open / proposed-default` OQ；`OPEN_QUESTIONS.md` 已回压为 `confirmed / historical` 归并索引。
+- 当前没有 active 产品范围 `open / proposed-default` OQ；`OQ-090~OQ-092` 已按用户确认吸收，`OQ-093` 记录 W13-E3 是否创建 preview YAML / 写入 `DOC_STATE.yaml` 的待确认项。
 - `DD-005` 与 `DD-007` 仍为 `needs-review`：后端 FastAPI 与导出形态已 confirmed，但完整 Web framework / 渲染链实现细节不得直接进入代码。
-- 正式开窗层仍为空；任何实现都必须等待 `TASK_INDEX.md` 写入明确任务 ID 和允许修改范围。
+- 正式开窗层仍为空；`TASK_INDEX.md` 仅新增 W13-E 候选任务树摘要，任何实现仍必须等待用户确认、状态层改造和正式开窗。
 - 旧实现计划正文已迁移到 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`；原路径只保留跳转说明，不作为当前事实源。
 - 旧 P1 设计稿已从 `DOC_STATE.yaml` 当前 `documents` 受管集合移出，并迁移到 `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`；原路径只保留跳转说明，不作为当前事实源。
 - M01-M10 的旧 MQ/OQ 标记和模块子文档补链已完成第一轮；旧 STxx_* 骨架仍在 `DOC_STATE.yaml`、`TASK_INDEX.md` 和模块索引中保留，当前不得迁移 archive。
-- Basic Memory / Superpowers 写回尚未做；本窗口禁止写 Basic Memory。
+- Basic Memory 已完成 W13-F 阶段收口摘要写回并回读验证；W13-E2 本轮不写 Basic Memory，W13-E2 增量如需沉淀由后续专门收口窗口统一写回。
+- `DOC_STATE.yaml` 尚未写入 W13 新任务；旧 `STxx_*` 仍留在正式 `subtasks` 容器，后续必须另开 W13-E3 / Preview YAML 或 State Write。
+- `WT13-xx` 可作为文档层候选任务域 ID，但当前 `doc_governor` 状态层 `subtasks` key 仍只接受 `STxx_yy` 格式，不能直接写入正式状态层。
+- `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` 已成为项目待办、状态层后续、二期 / 三期和归档后续事项的持续追踪入口。
 
 ## 7. 下一步
 
-1. 完成 W13-StateArchive 验证：`validate-state`、`evaluate-state` 和关键词复扫必须通过。
-2. 旧 STxx_* 骨架迁移需另开状态层 / 任务重映射窗口；在 `DOC_STATE.yaml` 与索引引用未重构前，不迁移 archive。
-3. 若继续推进评分 / 复盘 / 导出 / DoD 或任务重映射，可以使用 W13-D 与四份 W13 唯一事实源，但不得引用旧 P1 设计稿或旧实现计划作为当前事实。
-4. W13-F 仅写回 Basic Memory / Superpowers 和评估实施包，不再重新打开 `FC-01~FC-19`。
-5. 在 `TASK_INDEX.md` 写入明确正式任务 ID 前，不进入业务代码实施。
+1. 用户确认 W13-E3 路径：推荐先创建 preview YAML，不修改正式 `DOC_STATE.yaml`。
+2. 若用户确认方案 B，进入 W13-E3 / Preview YAML，验证 `WT13-xx`、状态层兼容 ID / 业务别名和旧 `STxx_*` superseded 表达。
+3. 旧 `STxx_*` 骨架迁移需在 `DOC_STATE.yaml`、`TASK_INDEX.md` 与模块索引引用重构后另开窗口。
+4. 持续维护 backlog-roadmap，不再把状态层后续、二期 / 三期或归档事项散落在聊天记录中。
+5. 在状态层写入 W13 新任务并明确正式开窗前，不进入业务代码实施。
 
 ## 8. 验证命令
 

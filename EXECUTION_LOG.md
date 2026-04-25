@@ -25,6 +25,88 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-E2 / State Remap dry-run、旧 ST 映射与 backlog-roadmap 建立
+
+- 执行类型：状态层 dry-run 分析与文档治理窗口；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`、`archive/**` 或 Basic Memory。
+- 基线验证：
+  - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`。
+  - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- 已吸收的用户确认：
+  - `W13-E-Q1`：任务 ID 命名采用 `WT13-xx`。
+  - `W13-E-Q2`：旧 `STxx_*` 后续映射为 `superseded`。
+  - `W13-E-Q3`：暂不直接写 `DOC_STATE.yaml`，先做 W13-E2 dry-run。
+- dry-run 结论：
+  - `WT13-xx` 可作为文档层候选任务域命名，但当前 `doc_governor` 状态层不直接接受 `WT13-xx` 作为 `DOC_STATE.yaml.subtasks` key；`validate-state` 仍要求 `STxx_yy` 格式。
+  - `WT13-xx` 只写在 `TASK_INDEX.md` / `MODULE_INDEX.md` 时不会直接导致 `validate-state` 失败，但当前 `evaluate-state` 不会把它识别为正式 subtask。
+  - 旧 `STxx_*` 当前仍是 state-bound 历史结构，不能删除、移动或重新激活；本轮只形成到 `WT13` 的 superseded 映射草案。
+- 本轮新增：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md`，作为项目待办、状态层后续事项、Task Remap 后续事项、实现前置条件、二期 / 三期候选能力和历史归档后续事项的持续追踪入口。
+- 本轮同步：
+  - `AGENTS.md`：补入 backlog-roadmap 索引。
+  - `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`：同步 W13-E2 当前状态、`WT13-xx` 兼容性结论、backlog-roadmap 和仍不进入实现的边界。
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`：补入 W13-E2 ID 约束检查、旧 `STxx_*` 到 `WT13` 的 dry-run 映射和 W13-E3 写入路径确认卡。
+  - `OPEN_QUESTIONS.md`：将 `OQ-090~OQ-092` 更新为用户已确认，新增 `OQ-093` 作为 W13-E3 preview / state write 待确认卡。
+  - `DESIGN_DECISIONS.md`：新增 `DD-033`，只确认 W13-E2 吸收结果与 dry-run 边界，不确认 preview YAML 或正式状态写入。
+  - `TASK_INDEX.md`、`MODULE_INDEX.md`：同步 `WT13-xx` 已确认为候选任务域命名，但状态层和 implementation-ready 尚未形成。
+- 遗留问题：
+  - 是否在 W13-E3 创建 preview YAML 仍需用户确认；推荐方案 B。
+  - 是否直接写正式 `DOC_STATE.yaml`、是否移出旧 `STxx_*`、是否迁入 archive 均未确认。
+  - 当前仍不能生成 implementation packet，不能进入业务代码实现窗口。
+- 下一轮建议：
+  - 开 W13-E3 / Preview YAML：构造单独 preview state，不修改正式 `DOC_STATE.yaml`，验证状态层兼容 ID / `WT13` 业务别名和旧 `STxx_*` superseded 表达。
+
+### 2026-04-25 / W13-E / 工作台级 MVP Task Remap 任务重映射草案
+
+- 执行类型：文档治理与任务重映射窗口；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`、`archive/**` 或 Basic Memory。
+- 基线验证：
+  - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`。
+  - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`，`documents_blocked_count=0`，`subtasks_blocked_count=30`。
+- 本轮新增：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`，完成旧任务结构审计、`WT13-01~WT13-25` 候选任务树、任务 ID 命名确认卡、旧 `STxx_*` 处理确认卡、模块映射、正式开窗顺序、未来窗口边界模板和 `DOC_STATE.yaml` 后续改造方案。
+- 本轮同步：
+  - `AGENTS.md`：补入 W13-E 任务重映射草案索引。
+  - `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`：同步当前进入 W13-E / Task Remap，代码开发仍暂停，`DOC_STATE.yaml` 尚未写入 W13 新任务。
+  - `TASK_INDEX.md`：写入 W13 候选任务树摘要，但所有候选任务均保持 `proposed-default` / 不具备实施条件。
+  - `MODULE_INDEX.md`：写入 W13 候选任务域到 M01-M10 的模块映射摘要，不改变模块成熟度为可实施。
+  - `OPEN_QUESTIONS.md`：新增 `OQ-090~OQ-092` 三张 W13-E 确认卡，状态均为 `proposed-default`。
+  - `DESIGN_DECISIONS.md`：新增 `DD-032`，只确认 W13-E 的草案性质和不放行实现边界。
+- 本轮结论：
+  - 旧 `RQ01 / STxx / MTxx` 只能作为历史骨架、结构参考或可复用证据，不适合作为 W13 工作台级 MVP 正式任务树。
+  - `WT13-xx` 是推荐候选命名，但 `DOC_AUTOMATION.md` 当前仍提示状态主链命名规则以 `STxx_yy` 为准，写入 `DOC_STATE.yaml` 前必须由 W13-E2 检查工具约束。
+  - 本轮没有新增 implementation-ready 任务，没有生成 implementation packet，没有开启正式实现窗口。
+- 遗留问题：
+  - 用户仍需确认 `W13-E-Q1~Q3`。
+  - `DOC_STATE.yaml` 仍未登记 W13 新任务，旧 `STxx_*` 仍保留在正式 `subtasks` 容器。
+  - Basic Memory / Superpowers 写回应交由 W13-F 或后续收口窗口统一处理。
+- 下一轮建议：
+  - 开启 W13-E2 / State Remap：先做 ID 格式、schema、validate/evaluate dry-run，再决定是否写入 W13 新任务和如何处理旧 `STxx_*`。
+
+### 2026-04-25 / W13-F / 阶段收口核验、缺口审计与 Basic Memory 写回验证
+
+- 执行类型：文档状态核验、阶段收口判断、缺口审计与 Basic Memory 写回验证；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**` 或 `DOC_STATE.yaml`。
+- 基线验证：
+  - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`。
+  - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- W13-D 核验：
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` 存在。
+  - 文档覆盖 `0-100` 多维评分、打磨模式题级反馈、压力面结束报告、真实面试复盘、模拟面试复盘、RAG 引用与评分证据、Markdown 导出、薄弱项 / 训练机制 DoD、错误态 / 空状态和一期 MVP DoD。
+  - 当前不应再将 W13-D 标记为缺失或部分缺失。
+- StateArchive 核验：
+  - 旧 P1 设计稿和旧实现计划均已迁入 `archive/`，原路径保留跳转说明。
+  - `DOC_STATE.yaml` 当前 `documents` 受管集合只登记 `DOC-PLAN-CURRENT-REPO-2026-04-25`；`DOC-SPEC-P1 / DOC-PLAN-P1` 只保留在已关闭 document round 的历史引用中。
+  - 旧 `STxx_*` 仍在状态层和索引层保留，后续迁移必须先做 Task Remap / 状态层重映射。
+- Basic Memory：
+  - 已写入 `90-session-summaries/2026-04-25 W13 工作台 MVP 设计补齐与历史归档阶段收口.md`。
+  - permalink：`ai-for-interviewer/90-session-summaries/2026-04-25-w13-工作台-mvp-设计补齐与历史归档阶段收口`。
+  - 已回读验证标题、目录、正文关键结论和验证结果。
+- 过时口径：
+  - 根入口中“当前窗口仍为 W13-StateArchive / Basic Memory 尚未做”的口径已在本轮最小同步。
+  - W10 首切片、固定 3 轮、旧 P1 路径等命中均为历史说明、archive 跳转或反向约束，未发现阻断 W13-F 的当前事实源误用。
+- 后续建议：
+  - 进入 W13-E / Task Remap，把四份 W13 唯一事实源映射为新的正式任务候选、允许修改范围和验证方式。
+  - 若先降低上下文负担，可先压缩 W13-D 的实现级 DoD 为可执行验收清单。
+  - 在 `TASK_INDEX.md` 写入明确正式任务 ID 前，继续暂停业务代码实施。
+
 ### 2026-04-25 / W13-StateArchive / DOC_STATE 状态层归档与历史设计稿迁移
 
 - 执行类型：高风险文档治理窗口；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**` 或 Basic Memory。

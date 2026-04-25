@@ -13,7 +13,7 @@
 | DD-001 | 文档体系采用 `global -> module -> subtask` 分层 | confirmed | 全局文档负责约束与导航，模块文档承接设计，子任务文档承接实施准备。 | 全局 | 所有新增文档继续遵循该分层。 |
 | DD-002 | 原始设计稿与原始实现计划保留为上游源文档 | confirmed | `docs/superpowers/specs/...` 与早期实现计划不再承担当轮事实源；当前事实源由 W13 四份计划文档承担。 | 全局 | 后续回写进入根目录全局文档、W13 事实源文档与 `docs/modules/`。 |
 | DD-003 | 单次实施单位限定为一个子任务 | confirmed | 只有单个 `SUBTASK_IMPLEMENTATION.md` 达到可实施后，才进入代码执行。 | 全局实施流程 | 在任务索引与成熟度文档中持续约束。 |
-| DD-004 | 目标产品代码结构采用 `apps/web + packages/shared + apps/api` | confirmed | `FC-01` 已确认目标结构；但本仓库当前仍是设计文档、治理状态、`tools/doc_governor/` 与 `tests/doc_governor/` 承载仓库，W13-F 前不得直接创建目录或实施服务。 | 全局、M01-M10 | 实现目录创建、后端服务和部署仍需 `TASK_INDEX.md` 写入明确任务 ID 与正式开窗资格。 |
+| DD-004 | 目标产品代码结构采用 `apps/web + packages/shared + apps/api` | confirmed | `FC-01` 已确认目标结构；但本仓库当前仍是设计文档、治理状态、`tools/doc_governor/` 与 `tests/doc_governor/` 承载仓库，正式任务与状态层开窗前不得直接创建目录或实施服务。 | 全局、M01-M10 | 实现目录创建、后端服务和部署仍需 `TASK_INDEX.md` 写入明确任务 ID 与正式开窗资格。 |
 | DD-005 | 后端采用 FastAPI；完整技术栈仍需实施包阶段复核 | needs-review | `FC-01` 已确认后端采用 FastAPI；Web framework、前端工程细节和共享包构建方式不得从旧实现计划或 W10 原型直接推导为 confirmed。 | M01-M10 | 后续实现包评估时再确认 Web framework、包管理、构建与测试矩阵。 |
 | DD-006 | 文档默认使用中文 | confirmed | 文档主体、界面文案和说明均使用中文，技术标识保持英文。 | 全局 | 受 [AGENTS.md](AGENTS.md) 与 [docs/project-language-rules.md](docs/project-language-rules.md) 约束。 |
 | DD-007 | Markdown 预览与导出是否共用同一渲染链仍需复核 | needs-review | `FC-12` 已确认复制 / Markdown 下载、导出范围和异步策略；但 Markdown 预览、下载、复制与未来 PDF 是否共用同一渲染链仍不直接升为 confirmed。 | M03、M08 | 由后续导出实现包在不扩展一期范围的前提下复核。 |
@@ -40,7 +40,9 @@
 | DD-028 | 薄弱项与训练抽屉进入一期训练闭环设计 | confirmed | `WeaknessItem` 是可训练、可累计、可消减、可停练的中粒度训练主题；薄弱项按岗位聚合、按主题归并、保留所有证据；状态包括 `active / low_priority / dismissed / resolved`；训练抽屉是统一训练入口。 | M04、M06、M07、M08、M09 | 唯一事实源见对象模型文档与评分 / 复盘 / 导出 / DoD 文档。 |
 | DD-029 | 多轮面试按打磨模式与压力面模式拆分，不采用固定 3 轮作为总规则 | confirmed | 此前 W13-C “多轮范围 = A：固定 3 轮”的推荐不再作为 confirmed 或默认总规则。 | M06、M07、M08、M09、W13-C、W13-D | 固定 3 轮最多只作为压力面题组策略候选。 |
 | DD-030 | W13-D 评分、复盘、导出与 MVP DoD 已由用户 confirmed 为当前事实源，但不放行实现 | confirmed | `FC-07`、`FC-08`、`FC-11`、`FC-12`、`FC-13`、`FC-14` 已确认评分维度、总分关系、真实面试复盘、Markdown 导出、训练闭环、资产库最小范围与五层 DoD。 | 全局、M03、M05、M06、M07、M08、M09、M10、W13-F | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` 是评分 / 复盘 / 导出 / DoD 唯一事实源；该确认不代表可以创建业务代码目录或 implementation packet。 |
-| DD-031 | W13 `FC-01~FC-19` confirmed 结果已成为当前 OQ / DD 清理基准 | confirmed | `OPEN_QUESTIONS.md` 已回压为 `confirmed / historical`，不再存在 active `open / proposed-default` 项；四份 W13 计划文档分别作为范围、IA、对象模型和评分复盘导出的唯一事实源。 | 全局、W13-B、W13-C、W13-D、W13-F | W13-F 只负责 Basic Memory / Superpowers 写回与实施包评估，不得重新打开已 confirmed 的 OQ。 |
+| DD-031 | W13 `FC-01~FC-19` confirmed 结果已成为当前 OQ / DD 清理基准 | confirmed | `OPEN_QUESTIONS.md` 已将 W13 产品事实回压为 `confirmed / historical`；W13-E 新增的 `OQ-090~OQ-092` 仅处理任务治理确认，不改变四份 W13 计划文档作为范围、IA、对象模型和评分复盘导出的唯一事实源。 | 全局、W13-B、W13-C、W13-D、W13-F、W13-E | W13-F 已完成阶段写回；W13-E 增量如需沉淀由后续收口窗口负责 Basic Memory / Superpowers 写回，不得重新打开已 confirmed 的产品范围 OQ。 |
+| DD-032 | W13-E Task Remap 只形成候选任务治理草案，不放行实现 | confirmed | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` 已将 W13 工作台级 MVP 映射为候选任务树、确认卡、模块映射和状态层后续改造方案；W13-E 本身不修改 `DOC_STATE.yaml`，不生成 implementation packet，不创建业务代码目录。 | 全局、M01-M10、W13-E | 已由 `DD-033` 吸收用户对 W13-E 推荐组合的确认；后续状态层写入仍需 W13-E3 / 用户确认。 |
+| DD-033 | W13-E2 吸收 W13-E 用户确认组合并完成状态层 dry-run，不放行实现 | confirmed | 用户已确认 `WT13-xx` 作为候选任务域命名、旧 `STxx_*` 后续映射为 `superseded`、暂不直接写 `DOC_STATE.yaml` 而先做 W13-E2 dry-run。W13-E2 结论是当前 `doc_governor` 状态层不直接接受 `WT13-xx` 作为 `subtasks` key，因此下一步推荐先创建 preview YAML。 | 全局、状态层、TASK_INDEX、MODULE_INDEX、W13-E2 | 不得把 preview YAML、正式 `DOC_STATE.yaml` 写入、旧 ST 迁移或实现开窗写成 confirmed；这些仍需 W13-E3 / 用户确认。 |
 
 ## 3. 当前唯一事实源索引
 
@@ -50,6 +52,8 @@
 | IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 任务重映射与状态层 dry-run | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` |
+| 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | OQ confirmed / historical 归并索引 | `OPEN_QUESTIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
 

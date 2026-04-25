@@ -5,7 +5,8 @@
 > 当前状态主要表示文档建设状态，不表示代码开发状态。
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
-> 当前正式开窗层仍为空；正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到本文件写入明确正式任务 ID、允许修改范围与开窗资格。
+> 用户已确认 `WT13-xx` 作为 W13 候选任务域命名，但当前 `doc_governor` 状态层仍不直接接受 `WT13-xx` 作为 `DOC_STATE.yaml.subtasks` key。
+> 当前正式开窗层仍为空；正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到状态层、允许修改范围与开窗资格全部确认。
 
 ## 1. 模块任务索引
 
@@ -100,6 +101,47 @@
 - `ST06_01 / ST06_02`：后续承接 `M06` 的单轮会话创建、问题来源约束与 `1` 轮问答记录，不扩展到 `ST06_03` 的报告 / 导出链。
 - `ST07_03`：后续承接 `M07` 的简版反馈摘要、逐题评估投影与最小改进建议，不等于训练中心或长期进度开窗。
 - 当前正式开窗层固定为空；W10 后续承接对象不得直接升级为 W13 一期工作台 MVP 正式子任务 ID。
+
+## 2.4 W13-E 工作台级任务重映射草案（候选）
+
+> 本节只登记 W13-E / W13-E2 候选任务树摘要，不等于正式子任务 ID，不等于 `implementation-ready`，也不等于已写入 `DOC_STATE.yaml`。
+> `WT13-xx` 已由用户确认为候选任务域命名；W13-E2 检查结论是当前 `doc_governor` 状态层 `subtasks` key 仍以 `STxx_yy` 为准，因此写入状态层前必须另开 W13-E3 / Preview YAML 或 State Write 窗口。
+> 下表 `当前状态` 中的 `proposed-default` 表示任务域本身仍未正式写入状态层，不表示 `WT13-xx` 命名仍待确认。
+
+| 候选 ID | 任务域 | 关联模块 | 当前状态 | 是否具备实施条件 | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| WT13-01 | 账号 / 登录 / 权限 | M02、M10、M01 | proposed-default | 否 | 承接 session cookie、普通用户 / 管理员、记录可见范围。 |
+| WT13-02 | 工作台首页 / 导航 / 权限入口 | M01、M02、M10 | proposed-default | 否 | 承接左侧导航、顶部账号区、行动型摘要和后续能力低干扰入口。 |
+| WT13-03 | 岗位管理 | M03、M04 | proposed-default | 否 | 承接 `Job` 列表、详情、创建编辑和发起必选输入。 |
+| WT13-04 | 简历管理 | M03、M10 | proposed-default | 否 | 承接 `Resume` 服务端保存、版本、上传 / 粘贴 / 编辑。 |
+| WT13-05 | 模拟记录列表 | M06、M08、M02 | proposed-default | 否 | 模拟面试模块默认入口，承接权限可见范围、继续、复盘、导出入口。 |
+| WT13-06 | 发起模拟面试 | M03、M04、M05、M06、M07 | proposed-default | 否 | 承接岗位、简历、知识库、模式选择和参考材料包。 |
+| WT13-07 | 面试台 | M06、M05、M07、M08 | proposed-default | 否 | 承接真实 LLM、多轮、RAG 引用、暂停 / 继续和完成触发。 |
+| WT13-08 | 打磨模式 | M07、M06、M09 | proposed-default | 否 | 承接 `ProgressTree`、题级反馈、下一题建议和用户结束决策。 |
+| WT13-09 | 压力面模式 | M06、M08、M07 | proposed-default | 否 | 承接 `InterviewQuestionSet`、题组完成和最终评估。 |
+| WT13-10 | RAG / 知识库 | M05、M06、M08、M10 | proposed-default | 否 | 承接知识库、检索、引用、无命中 / 失败降级。 |
+| WT13-11 | 真实 LLM provider / adapter | M10、M06、M04、M08 | proposed-default | 否 | 承接可插拔 provider、默认真实 provider、脱敏记录和失败重试。 |
+| WT13-12 | 多轮上下文 / 状态机 | M06、M07、M08 | proposed-default | 否 | 承接 `InterviewContext`、轮次、turn、暂停 / 继续和模式结束条件。 |
+| WT13-13 | 评分体系 | M04、M07、M08、M10 | proposed-default | 否 | 承接 `0-100` 多维评分、证据绑定、规则版本和重算 / 修订。 |
+| WT13-14 | 真实面试复盘 | M08、M09、M10 | proposed-default | 否 | 承接逐字稿输入、LLM 自动识别问答边界和逐题拆解。 |
+| WT13-15 | 模拟面试复盘 | M08、M06、M07、M09 | proposed-default | 否 | 承接整场判断、多维评分、岗位匹配、通过概率、逐题点评。 |
+| WT13-16 | 薄弱项 `WeaknessItem` | M09、M04、M07、M08 | proposed-default | 否 | 承接中粒度训练主题、证据、聚合、消减和停练。 |
+| WT13-17 | 训练抽屉 / 待打磨清单 | M09、M07、M08、M03 | proposed-default | 否 | 承接归并、加入待打磨、立即打磨、暂不处理和影响预览。 |
+| WT13-18 | 资产归档 | M05、M08、M10 | proposed-default | 否 | 承接整份 / 单题归档、资产类型和动态字段子集。 |
+| WT13-19 | Markdown 导出 / 复制 | M07、M08、M03、M10 | proposed-default | 否 | 承接 `ExportSnapshot`、复制内容和 Markdown 下载。 |
+| WT13-20 | 服务端保存 / 数据库 | M01、M02-M10 | proposed-default | 否 | 承接 PostgreSQL 和核心对象持久化。 |
+| WT13-21 | API / 后端服务边界 | M01、M10、M02-M09 | proposed-default | 否 | 承接 Auth、Job、Resume、Knowledge、Interview、Review、Score、Export 等 API contract。 |
+| WT13-22 | 日志 / 观测 / 运维 | M10、M01 | proposed-default | 否 | 承接应用日志、LLM 日志、RAG 日志、权限审计和配置边界。 |
+| WT13-23 | 前端工作台 UI / 页面集合 | M01-M10 | proposed-default | 否 | 承接登录、工作台、岗位、简历、知识库、记录、发起、面试台、复盘和导出页面。 |
+| WT13-24 | 测试 / 验收 / DoD | M01、M10、全模块 | proposed-default | 否 | 承接产品、数据、UI、工程、收口五层 DoD 测试矩阵。 |
+| WT13-25 | 文档治理 / 收口 / Basic Memory | global、M01、M10 | proposed-default | 否 | 承接任务索引、模块映射、状态层迁移方案、收口记录和后续写回。 |
+
+W13-E 当前确认卡：
+
+- `W13-E-Q1`：任务 ID 命名采用 `WT13-xx`，用户已确认。
+- `W13-E-Q2`：旧 `STxx_*` 后续映射为 `superseded`，用户已确认；正式状态层尚未写入。
+- `W13-E-Q3`：暂不直接写 `DOC_STATE.yaml`，先做 W13-E2 dry-run，用户已确认。
+- `W13-E2-Q1`：W13-E3 是否先创建 preview YAML，当前推荐方案为 B，等待用户确认。
 
 ## 3. 使用规则
 

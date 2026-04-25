@@ -4,7 +4,8 @@
 
 - 本文档是全局 OQ / MQ 的唯一归并入口，用于判断哪些问题仍需要用户确认、哪些已被 confirmed 结论覆盖、哪些只保留为历史来源追踪。
 - W13-Cleanup 后，`OQ-001~OQ-089` 已按 `FC-01~FC-19` 用户 confirmed 结果回压到问题层。
-- 当前没有 active `open / proposed-default` 项；后续新增未决问题必须显式写入本文件，并说明为什么未被现有 `FC` / `DD` / 唯一事实源覆盖。
+- W13-E 新增 `OQ-090~OQ-092`，仅用于任务 ID、旧 `STxx_*` 处理和 `DOC_STATE.yaml` 写入节奏确认；用户已确认三项 W13-E 结果，这些问题不改变 W13 产品范围 confirmed 事实。
+- W13-E2 新增 `OQ-093`，只处理 W13-E3 是否创建 preview YAML 或写入正式 `DOC_STATE.yaml`。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -16,10 +17,10 @@
 
 | 类别 | 数量 | 说明 |
 | --- | ---: | --- |
-| `confirmed` | 87 | 已由 `W13-A`、`DD-018~DD-030` 或 `FC-01~FC-18` 覆盖，不再作为待确认阻塞。 |
+| `confirmed` | 90 | 已由 `W13-A`、`DD-018~DD-033`、`FC-01~FC-18` 或 W13-E 用户确认覆盖，不再作为待确认阻塞。 |
 | `historical` | 2 | `OQ-002`、`OQ-003` 只保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。 |
 | `open` | 0 | 当前没有 active 待确认项。 |
-| `proposed-default` | 0 | 当前没有 active 默认候选项。 |
+| `proposed-default` | 1 | `OQ-093` 是 W13-E3 preview / state write 确认卡，等待用户确认。 |
 
 M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `confirmed / historical / superseded / open` 保留治理语义，模块索引和子文档父模块链接已补强。该处理不等于放行正式子任务窗口，也不等于旧 STxx_* 骨架已迁移到 archive。
 
@@ -31,6 +32,7 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
 
@@ -70,8 +72,19 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 - W10 首切片“JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈”已由 `DD-018` 的工作台级 MVP 取代。
 - W10 `apps/web/**` mock 原型只作参考证据，已由 `DD-019` 固定，不得作为正式一期 MVP 起点。
 
-## 6. 使用说明
+## 6. W13-E / W13-E2 任务治理确认卡
 
-- 新增或恢复待确认问题时，必须写入 `open`，并说明为什么没有被现有 `FC` / `DD` / 唯一事实源覆盖。
+这些确认卡来源于 `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`。它们只处理任务治理和状态层写入节奏，不改变 `FC-01~FC-19` 已 confirmed 的产品事实。
+
+| OQ ID | 问题 | 状态 | 推荐方案 | 备选方案 | 当前处理要求 |
+| --- | --- | --- | --- | --- | --- |
+| `OQ-090` | W13 工作台级任务 ID 如何命名？ | confirmed | 方案 A：使用 `WT13-xx`，例如 `WT13-01`、`WT13-02` | 方案 B：`WB-MVP-xx`；方案 C：`ST13_xx`；方案 D：用户自定义 | 用户已确认 `WT13-xx` 作为候选任务域命名；W13-E2 结论是当前状态层不能直接把它作为 `DOC_STATE.yaml.subtasks` key。 |
+| `OQ-091` | 旧 `STxx_*` 在 W13 Task Remap 中如何处理？ | confirmed | 方案 B：建立新 W13 任务后，将旧 `STxx_*` 映射为 `superseded`，后续状态层窗口迁入 archive | 方案 A：全部保留为 `historical-reference`；方案 C：逐个精审；方案 D：用户自定义 | 本窗口不删除、不迁移、不修改 `DOC_STATE.yaml`；旧 `STxx_*` 当前仍是 `state-bound`，正式 superseded 写入需后续状态层窗口。 |
+| `OQ-092` | W13 任务树是否应在下一窗口写入 `DOC_STATE.yaml`？ | confirmed | 方案 A：暂不写 `DOC_STATE.yaml`，先做 W13-E2 dry-run | 方案 B：下一窗口写入新任务但暂不移除旧 `STxx_*`；方案 C：同时写入新任务并移出旧 `STxx_*`；方案 D：用户自定义 | 用户已确认先做 W13-E2 dry-run；本轮不写正式 `DOC_STATE.yaml`。 |
+| `OQ-093` | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | proposed-default | 方案 B：下一窗口创建 preview YAML，不修改正式 `DOC_STATE.yaml` | 方案 A：仍不写 `DOC_STATE.yaml`，只维护索引和路线图；方案 C：下一窗口直接写正式 `DOC_STATE.yaml`，但不移除旧 `STxx_*`；方案 D：用户自定义 | 推荐先创建 preview YAML 验证结构；用户确认前不得写正式状态层、移出旧 ST 或进入实现窗口。 |
+
+## 7. 使用说明
+
+- 新增或恢复待确认问题时，必须写入 `open` 或 `proposed-default`，并说明为什么没有被现有 `FC` / `DD` / 唯一事实源覆盖；推荐方案不得在用户确认前写成 `confirmed`。
 - 不得把 W10 首切片、mock LLM、无登录、会话内临时数据、无数值评分、不导出、无 RAG、无多轮等旧原型边界重新写成当前一期 MVP 范围。
 - 读取本文件时，以第 3 节唯一事实源和第 4 节 OQ 归并索引为准，不再回溯已删除的确认前选项卡。
