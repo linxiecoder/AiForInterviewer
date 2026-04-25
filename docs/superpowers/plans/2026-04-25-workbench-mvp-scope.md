@@ -1,5 +1,7 @@
 # AI 模拟面试一期工作台 MVP 范围冻结草案
 
+> 唯一事实源定位：本文档是“一期 MVP 范围”的唯一事实源。IA / 用户旅程、对象模型 / RAG / 多轮 / 后端边界、评分 / 复盘 / 导出 / DoD 分别以对应 W13 文档为准，本文档不重复维护那些细节。
+
 ## 1. 文档定位
 
 - 本文档记录 `W13-A` 用户确认后的“一期工作台 MVP”范围冻结草案。
@@ -7,6 +9,7 @@
 - 本文档优先级高于 W10 首切片原型边界；W10 原型只作为探索证据保留。
 - `W13-B` 已新增 [`2026-04-25-workbench-mvp-ia-user-journey.md`](2026-04-25-workbench-mvp-ia-user-journey.md)，用于补齐一期工作台信息架构、页面集合、用户旅程与页面对象映射。
 - `W13-C` 已新增并更新 [`2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`](2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)，用于补齐一期工作台对象模型、服务端保存、权限、RAG / 知识库、多轮高阶面试、打磨模式、压力面模式、复盘、薄弱项、训练机制、资产归档、真实 LLM、API / 后端与运维边界确认卡。
+- `W13-D` 已新增 [`2026-04-25-workbench-mvp-scoring-review-export-dod.md`](2026-04-25-workbench-mvp-scoring-review-export-dod.md)，用于补齐一期工作台评分、复盘、导出、错误态 / 空状态与 MVP DoD 草案。
 
 ## 2. 用户确认结论
 
@@ -97,9 +100,9 @@
 - 模拟面试模块 IA：固定为“模拟记录列表 -> 发起模拟面试 -> 面试台 -> 评分 / 复盘详情 -> 回到模拟记录列表”，不得设计为直接开始新面试。
 - 核心用户旅程：覆盖登录、查看模拟记录列表、从列表发起面试、创建 / 选择岗位、创建 / 上传 / 粘贴简历、选择知识库、选择多轮模式、真实 LLM 出题、多轮问答、评分反馈、历史复盘、Markdown 导出和回到模拟记录列表继续训练。
 - 页面到对象映射：为 `W13-C` 的对象模型设计提供输入，新增覆盖 `KnowledgeBase`、`KnowledgeDocument`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`InterviewRound`、`InterviewTurn`、`RoundEvaluation`、`ProgressTree`、`PressureInterviewSession`、`InterviewQuestionSet` 等对象。
-- 后续确认卡：模拟记录列表范围、岗位 / 简历必选、RAG 上传与可见范围、RAG 失败降级、压力面题组数量 / 难度 / 题型组合、多轮暂停 / 继续、评分详情形态、Markdown 导出入口、工作台统计范围和后续占位区位置。
+- 历史确认卡已由 `OPEN_QUESTIONS.md` 的 FC 归并索引和对应 W13 事实源文档吸收，不再作为当前待确认入口。
 
-### 7.2 W13-C：对象模型与技术方案确认卡
+### 7.2 W13-C：对象模型与技术方案事实源
 
 预期产出：
 
@@ -117,86 +120,25 @@
 
 - 对象模型草案：覆盖 `User`、`Account`、`Role`、`Permission`、`Workspace / Organization`、`Job`、`Resume`、`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`IndexingJob`、`EmbeddingProvider`、`InterviewSession`、`InterviewLaunchContext`、`InterviewReferencePack`、`InterviewMode`、`InterviewStrategy`、`FirstQuestionGeneration`、`InterviewRound`、`InterviewTurn`、`InterviewQuestion`、`InterviewAnswer`、`FollowUpQuestion`、`InterviewContext`、`RoundEvaluation`、`PolishModeSession`、`ProgressTree`、`UserEndDecision`、`WeaknessItem`、`WeaknessEvidence`、`AbilityTree`、`TrainingProgress`、`LossPoint`、`ReferenceAnswer`、`NextQuestionRecommendation`、`SimulationModeSession`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`FinalMasteryAssessment / FinalAssessment`、`JobMatchAssessment`、`PassProbability`、`WeaknessSummary`、`SuggestedPolishTopic`、`RealInterviewReview`、`MockInterviewReview`、`QuestionReviewItem`、`TrainingQueue`、`TrainingTask`、`TrainingDrawerContext`、`TrainingAction`、`TrainingImpactPreview`、`Asset`、`AssetType`、`AssetSchema`、`AssetArchiveRequest`、`ArchivedQuestion`、`ArchivedReview`、`FeedbackSummary`、`ScoreReport`、`SessionRecord`、`ExportSnapshot / ExportRecord`、`LLMGenerationRequest`、`LLMGenerationResult`、`PromptTemplateVersion`、`LLMProviderConfig`、`AuditEvent / OperationLog` 等对象。
 - 对象生命周期草案：覆盖 `Job`、`Resume`、`KnowledgeDocument`、`IndexingJob`、`InterviewSession`、`InterviewRound`、`InterviewTurn`、`PolishModeSession`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`SimulationModeSession`、`WeaknessItem`、`TrainingTask`、`AssetArchiveRequest`、`ScoreReport`、`ExportSnapshot`。
-- 用户确认卡：覆盖账号来源、角色层级、模拟记录可见范围、知识库可见范围、登录机制、数据库类型、LLM 交互记录保存、RAG 检索证据保存、多轮上下文保存、知识库范围、检索技术路线、RAG 失败降级、多轮范围、高阶面试定义、暂停 / 继续、provider 选择、LLM 失败处理、prompt / 模型版本记录、后端框架、API 优先还是实现优先、前后端仓库结构、部署目标、日志与观测边界、面试模式范围、薄弱项是否作为一期核心对象、能力树是否进入一期、资产库归档范围、训练抽屉是否作为一期通用交互、真实面试复盘是否进入一期、岗位 / 简历是否必选、打磨模式每题反馈是否完整保存、薄弱项消减规则是否自动执行、资产类型 schema 是否一期支持动态字段、待打磨清单是否独立页面化。
-- 用户已确认多轮面试按模式拆分：打磨模式进展树驱动、用户决定结束；压力面模式题组驱动、题目完成后结束；固定 3 轮不再作为多轮总规则。除该补充确认外，其余推荐仍保持 `recommended / proposed-default`，等待用户确认，不写成 `confirmed`。
+- 账号、权限、RAG、LLM、对象模型、多轮、复盘、薄弱项、训练与资产等历史确认卡已压缩为对象模型文档第 17 节的吸收索引。
+- 用户已确认多轮面试按模式拆分：打磨模式进展树驱动、用户决定结束；压力面模式题组驱动、题目完成后结束；固定 3 轮不再作为多轮总规则。
 
 ### 7.3 W13-D：评分、复盘、导出与 MVP DoD
 
-预期产出：
+已完成产出：
 
-- `0-100` 多维评分维度、权重和证据绑定草案。
-- 复盘记录字段、列表与详情阅读路径。
-- 复制 / Markdown 下载的范围、结构与入口。
-- 一期工作台 MVP Definition of Done。
-- 分别覆盖打磨模式与压力面模式的评分、复盘、导出与 DoD：打磨模式验收进展树、能力树、薄弱点、下一题建议和用户结束决策；压力面模式验收题组完成、最终评估、多维评分、复盘报告和建议打磨主题。
+- 已补齐 `0-100` 多维评分维度、权重、证据绑定、评分版本、重算 / 修订和低置信度提示草案。
+- 已分别覆盖打磨模式与压力面模式的评分、复盘、导出与 DoD：打磨模式验收进展树、能力树、薄弱点、下一题建议和用户结束决策；压力面模式验收题组完成、最终评估、多维评分、复盘报告和建议打磨主题。
+- 已补齐真实面试复盘和模拟面试复盘结构、RAG 引用展示与评分证据、Markdown 复制 / 下载范围、薄弱项 / 训练机制 DoD、错误态 / 空状态和一期 MVP 五层 DoD。
+- 历史确认卡已压缩为评分 / 复盘 / 导出 / DoD 文档第 13 节的吸收索引；当前事实以该文档正文为准。
 
-## 8. 后续确认卡
+## 8. 历史确认卡吸收状态
 
-> 本节只作为 `W13-B / W13-C / W13-D` 的确认输入，不代表本轮已确认实现方案。
+本节原先包含具体 LLM provider、登录 / 权限、服务端保存、数据库、评分维度、API / 后端、导出形态、运维 / 部署等确认卡。W13-Cleanup 后不再在范围文档重复维护这些卡片正文：
 
-### 8.1 具体 LLM provider
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：单一主 provider | 快速形成真实 LLM 闭环，降低接入复杂度 | provider 故障或成本变化时弹性弱 | 容易把模型能力写死到业务逻辑 | `W13-C` 只需冻结一个 provider adapter | 推荐作为一期默认候选，理由是最小可验证 |
-| B：provider 抽象 + 单一默认 provider | 保留替换能力，同时只实现一个真实默认接入 | 抽象边界需要先设计 | 过早抽象可能增加实现量 | `W13-C` 需补 provider 接口、错误语义与配置模型 | 次推荐，适合保持工程弹性 |
-| C：多 provider 同期接入 | 支持成本、质量和可用性切换 | 一期实现量明显增加 | 容易拖慢 MVP | `W13-C` 需增加模型路由与观测设计 | 不推荐一期采用 |
-
-### 8.2 登录 / 权限实现方案
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：session cookie | 适合 Web 工作台登录态和服务端权限校验 | 需要 CSRF、会话存储与过期策略 | 多端 API 调用需额外设计 | `W13-C` 需冻结 session、用户、角色与资源权限模型 | 推荐作为 Web 一期候选 |
-| B：JWT | 适合前后端分离和 API 调用 | token 刷新、撤销和权限变更较复杂 | 容易把权限状态缓存过久 | `W13-C` 需补 token 生命周期与撤销策略 | 可作为备选 |
-| C：托管身份服务 | 降低认证实现负担 | 依赖外部平台与配置 | 本地开发、迁移和费用存在不确定性 | `W13-C` 需确认 vendor、回调和权限映射 | 仅在部署环境明确后考虑 |
-
-### 8.3 服务端保存方式
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：结构化数据全部入数据库 | 统一保存岗位、简历、面试、消息、复盘、评分 | 大文本和导出快照需字段设计 | 表结构膨胀或迁移频繁 | `W13-C` 需补核心对象模型和索引 | 推荐作为一期默认候选 |
-| B：数据库 + 文件 / 对象存储 | 大文本、附件和导出快照更自然 | 多存储一致性需要设计 | 删除、版本和备份更复杂 | `W13-C` 需补文件引用和生命周期 | 适合作为增强候选 |
-| C：先本地文件持久化 | 实现快，便于原型验证 | 不满足服务端保存的长期产品要求 | 后续迁移成本高 | 不建议作为正式一期方案 | 不推荐 |
-
-### 8.4 数据库方案
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：关系型数据库 | 适合用户、权限、岗位、简历、面试、评分等强关系对象 | schema 需要先设计 | 早期字段不稳时迁移频繁 | `W13-C` 需补 ERD、迁移策略和索引 | 推荐作为一期候选 |
-| B：文档数据库 | 适合变化快的大 JSON 对象 | 权限、查询和统计一致性较弱 | 评分和历史列表查询可能复杂 | `W13-C` 需补文档结构与查询边界 | 不作为默认 |
-| C：SQLite 本地单机 | 本地部署简单 | 多用户、权限和生产部署受限 | 容易偏离工作台级服务端目标 | 只适合开发态或演示态 | 不推荐正式一期 |
-
-### 8.5 评分维度和权重
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：固定 4-6 个一级维度 + 等权 | 快速形成 `0-100` 多维评分闭环 | 细粒度不足 | 可能不能覆盖所有岗位差异 | `W13-D` 可先冻结维度、证据和解释模板 | 推荐作为一期默认候选 |
-| B：岗位类型驱动权重 | 更贴合不同岗位 | 需要岗位分类和权重配置 | 设计复杂度上升 | `W13-D` 需补岗位分类与评分规则版本 | 二期增强候选 |
-| C：完全 AI 动态评分 | 灵活但难治理 | 可解释性和稳定性弱 | 分数漂移、复盘难对齐 | `W13-D` 需很强的评估和校准机制 | 不推荐一期采用 |
-
-### 8.6 API / 后端框架
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：独立 API 服务 | 清晰承接登录、权限、保存、LLM 编排 | 需要创建后端目录和运行链路 | 工程范围扩大 | `W13-C` 需补 API 模块、契约和部署边界 | 推荐作为工作台级一期候选 |
-| B：Web 内置 Route Handlers / BFF | 前后端启动简单 | 后端领域边界容易变薄 | 后续拆分成本较高 | `W13-C` 需补 BFF 与领域服务边界 | 适合小团队快速验证 |
-| C：无后端，仅前端直连服务 | 实现快 | 不满足登录、权限、服务端保存与密钥治理 | 安全风险高 | 不应进入正式一期 | 不推荐 |
-
-### 8.7 导出形态细节
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：复制当前复盘 / 面试摘要 Markdown | 最小满足分享和留存 | 只覆盖当前视图 | 用户可能需要完整记录 | `W13-D` 需定义复制范围和格式 | 推荐作为一期最小能力 |
-| B：下载完整 Markdown 文件 | 覆盖历史记录、评分和复盘详情 | 文件结构需设计 | 内容过长时可读性下降 | `W13-D` 需定义文件结构、命名和入口 | 推荐与 A 组合 |
-| C：完整 PDF | 更正式 | 实现量和排版校验成本高 | 容易拖慢 MVP | 当前用户已确认一期不做 | 不进入一期 |
-
-### 8.8 运维 / 部署边界
-
-| 方案 | 解决什么 | 限制 | 风险 | 对后续窗口影响 | 推荐 |
-| --- | --- | --- | --- | --- | --- |
-| A：本地开发 + 单环境部署说明 | 快速支撑一期验证 | 环境隔离弱 | 后续上线要补治理 | `W13-C/D` 只需冻结最小 env、secret、日志边界 | 推荐作为一期候选 |
-| B：开发 / 生产双环境 | 更接近真实交付 | 配置和 CI/CD 工作量增加 | 容易扩大 W13 范围 | 需要 W13-C 明确部署与密钥策略 | 作为增强候选 |
-| C：完整云原生运维 | 可扩展和可观测 | 一期成本过高 | 偏离 MVP | 不建议 W13 进入 | 不推荐 |
+- 已被用户 confirmed 的产品范围、IA、对象模型、多轮、复盘、资产、薄弱项与训练事实，分别回收到四份 W13 唯一事实源文档和 `DESIGN_DECISIONS.md`。
+- provider、数据库、部署、日志等实现级选型不在本轮范围文档中拍板；进入实现计划前由 W13-E/F 压缩成可执行验收清单。
+- 原确认卡正文只保留在 git 历史中，不再作为当前待确认任务池。
 
 ## 9. 当前禁止项
 

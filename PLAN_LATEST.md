@@ -2,186 +2,61 @@
 
 ## 1. 文档定位
 
-- 本文档用于说明当前仓库的推进目标、当前阶段、已完成项、阻断项和下一步。
-- 本文档是当前执行入口，不再继续以阶段 3 白名单治理叙事作为主导入口。
-- 历史治理轮次仍保留在 `EXECUTION_LOG.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md` 等文档中，本文件只保留“当前推进计划”所需信息。
+- 本文档是当前仓库推进入口，只保留当前阶段、事实源、阻断项和下一步。
+- 历史治理轮次、W10 原型探索和完整确认卡正文保留在 `EXECUTION_LOG.md` 或 Git 历史中，不在本文档重复展开。
+- 当前仓库仍以设计文档、治理状态、`doc_governor` 工具链和测试验证为主；不是可直接进入业务代码实施的 monorepo 实现仓库。
 
-## 2. 当前总目标
+## 2. 当前阶段
 
-- 围绕“AI 模拟面试系统”继续推进设计开发与治理工具链建设。
-- 保持“项目目标”和“当前仓库现实”分层表达，避免把未来产品蓝图误写成当前仓库落地计划。
-- 让当前主入口能够正确指导后续窗口先做状态校验、再做评估、再决定是否开启新一轮协作。
+- 当前阶段：`W13` 设计补齐与事实源清理阶段。
+- 当前窗口：`W13-Cleanup`，负责清理过时 OQ/MQ、旧 `proposed-default`、重复确认卡和 W10 原型口径。
+- 代码开发状态：暂停。不得扩展 `apps/web/**`，不得创建 `apps/api/**`、`infra/**`，不得接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
+- W10 `apps/web/**` 原型只作为参考证据，不是正式一期 MVP 起点。
 
-## 3. 当前仓库阶段
+## 3. 当前唯一事实源
 
-- 当前阶段：`W13` 产品范围重估与一期工作台 MVP 重新定义阶段。
-- 当前仓库现实：仓库当前承载设计文档、治理状态、`doc_governor` / `doc_governance` 工具、测试与验证机制，并保留 `apps/web/**` 首切片最小原型作为探索证据。
-- 当前仓库限制：`apps/web/**` 不再作为一期 MVP 的直接开发起点；当前仓库尚不是完整 `apps/web`、`apps/api`、`infra` monorepo 实现仓库。
-- 当前活动窗口：`W13-C` 一期工作台 MVP 对象模型、服务端保存、权限、RAG / 知识库、多轮高阶面试、真实 LLM、API / 后端与运维边界确认卡；当前暂停代码开发，回到设计文档补齐。
+| 内容类别 | 唯一事实源 |
+| --- | --- |
+| 一期 MVP 范围 | `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
+| 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 决策索引 | `DESIGN_DECISIONS.md` |
+| OQ / MQ 归并入口 | `OPEN_QUESTIONS.md` |
+| 历史执行记录 | `EXECUTION_LOG.md` |
 
-## 4. 当前执行入口与历史叙事边界
+## 4. 当前 confirmed 主口径
 
-### 4.1 当前执行入口
+- 一期 MVP 是工作台级，包含服务端历史 / 复盘记录、真实 LLM、完整登录 / 权限、简历与面试记录服务端保存、完整 `0-100` 多维评分、复制 / Markdown 下载、RAG / 知识库和多轮高阶面试。
+- 模拟面试默认入口是历史模拟记录列表；可从岗位详情或模拟面试模块发起；发起时选择岗位、简历、模式；系统整理参考材料包并生成策略与首题。
+- 打磨模式由 `ProgressTree` 驱动，用户决定继续或结束；压力面模式由 `InterviewQuestionSet` 驱动，题目完成后结束；固定 3 轮不再是多轮总规则。
+- 真实面试复盘与模拟面试复盘都进入一期复盘设计；复盘、评分、RAG 证据、训练建议和 Markdown 导出以评分 / 复盘 / 导出 / DoD 文档为准。
+- `WeaknessItem`、训练抽屉、资产库归档动作和最小资产列表 / 详情进入一期设计闭环。
 
-当前应以以下入口理解和推进仓库：
+## 5. 当前主线窗口
 
-1. `README.md`
-2. `AGENTS.md`
-3. `PLAN_LATEST.md`
-4. `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
-5. `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
-6. `docs/DOC_GOVERNANCE.md`
-7. `docs/governance/DOC_AUTOMATION.md`
-8. `docs/governance/DOC_GOVERNOR_RUNBOOK.md`
-9. `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
-10. `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
-
-### 4.2 上游产品蓝图
-
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 继续作为上游产品设计输入。
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 继续保留，但当前已明确降级为未来 monorepo 蓝图，不再充当当前仓库可直接执行计划。
-- 当前仓库执行计划入口改为 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`。
-- `W9` 已完成状态层同步：`DOC_STATE.yaml` 的当前受管 plan 入口已切换到 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`，`DOC-PLAN-P1` 不再作为当前仓库受管 execution plan 参与 document evaluate。
-
-### 4.3 历史治理记录
-
-- 阶段 3、白名单、formal window、`M01-M03` 等叙事应视为历史治理背景与阶段记录。
-- 这些记录仍有审计价值，但当前不再作为本文件的主叙事。
-- 若需要查看历史治理收口链路，应转到 `EXECUTION_LOG.md` 与相关治理状态文档，而不是从本文件继续展开旧轮次。
-
-### 4.4 当前 `doc_governor` 工具链定位
-
-- `doc_governor` 当前是协同 Codex 推进设计开发、文档治理、任务拆分、状态评估、执行交接和验证收口的宽 CLI 工具链。
-- 按 W2 已确认结论，命令面应区分：
-  - 主链命令
-  - 扩展命令
-  - 生成类命令
-  - preview/apply/sync/seed 类命令
-  - 实验性或需谨慎使用命令
-- preview/apply/sync/seed 类命令、`generate-implementation-packet`、`apply-round` 不应被写成默认主链 SOP。
-- `render-report` 和生成报告属于解释性治理产物，不是 confirmed state 真值。
-
-## 5. 本轮已完成
-
-### 5.1 W2 工具文档对齐
-
-- `docs/DOC_GOVERNANCE.md`、`docs/governance/DOC_AUTOMATION.md`、`docs/governance/DOC_GOVERNOR_RUNBOOK.md` 已完成命令面对齐。
-- `DOC_AUTOMATION.md` 与 `DOC_GOVERNOR_RUNBOOK.md` 已覆盖 CLI 全量 39 个顶层子命令。
-- 命令角色分层已明确，默认主链与谨慎使用命令的边界已明确。
-
-### 5.2 W3 工具代码 P0
-
-- `validate-state` 当前结果为 `ok=true, error=0, warning=0`。
-- `evaluate-state` 当前结果为 `ok=true, error=0, warning=0`。
-- 定向 pytest 当前结果为 `43 passed`。
-- 已补入 `repo_truth.referenced_paths`、`repo_truth.existing_paths`、`repo_truth.missing_paths`。
-- 已补入 `direction_drift.future_blueprint_terms`、`direction_drift.governance_term_count`。
-- 已新增 `document_repo_truth_mismatch` blocker，用于识别“未来蓝图路径”和“当前仓库现实”不一致。
-
-### 5.3 W4 测试规则统一
-
-- `docs/governance/TEST_POLICY.md` 与 `tests/test_temp_artifact_policy.py` 已完成统一。
-- 当前仓库测试临时产物规则已经收敛到 `ManagedTempArtifacts` / `ManagedTempArtifactsTestCase` + `tools.test_runner.run_tests` + pytest 会话级残留守卫。
-
-### 5.4 W1 主入口收口
-
-- 新建 `README.md`，补上当前项目、当前仓库、当前限制、推荐工作流与测试规则入口说明。
-- 重写 `PLAN_LATEST.md`，切换为“当前推进计划”文档。
-- 在 `EXECUTION_LOG.md` 追加本轮 W1 收口记录，并列出 W5 与后续窗口事项。
-
-### 5.5 W5-W7 验证、清理与中文化收口
-
-- `W5` 已完成主入口只读复核，通过当前仓库真相与执行入口口径检查。
-- `W6-A` 已清理 4 个基线未跟踪项。
-- `W6-B` 已完成本轮结论收口保存。
-- `W7` 已完成 `render.py` / `bootstrap.py` 生成报告中文化。
-
-### 5.6 W8 计划分层决策
-
-- 已选择方案 `C`：拆分未来蓝图与当前仓库执行计划。
-- `DOC-PLAN-P1` 现明确定位为未来 monorepo / 产品落地蓝图。
-- 已新增 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`，作为当前仓库执行计划入口。
-
-### 5.7 W10 首切片冻结与关系补齐
-
-- `W10-A` 已冻结“最小功能切片优先”的推进路线，并明确当前不创建业务代码目录。
-- `W10-B` 已压实首切片的输入、处理、输出、排除项、验收标准与未来蓝图边界。
-- `W10-C` 已补齐 `RQ01 -> M03 / M04 / M06 / M07 (+ 条件性 M01)` 关系层，写清 `MT03_01 / MT03_03` 仅为观察蓝本、`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 仅为后续承接对象，且正式开窗层仍为空。
-
-### 5.8 W10-D-Gate 用户确认完成
-
-- 用户已确认 `Q1=B Q2=A Q3=A Q4=A Q5=A Q6=A Q7=B Q8=B`。
-- 当前允许进入的只是不代表正式实施完成的“首切片最小原型探索”复核路径。
-- 若下一窗口复核通过，只允许创建 `apps/web/**` 最小原型骨架；`apps/api/**`、`infra/**` 继续禁止。
-- 当前明确采用：mock LLM、无登录、会话内临时数据、文字反馈、Markdown 兼容文本、不做导出，并继续排除 RAG / 资产库 / 管理台 / 多轮面试 / 完整权限体系 / 完整 CI/CD。
-- `W10-D` 前仍需保持 `git status` 干净，并再次通过 `validate-state` / `evaluate-state`；`W10-D` 后必须进入 `W10-E / W10-F`。
-
-### 5.9 W10-D/W10-E 首切片原型与 UI 核验
-
-- `W10-D` 已以 commit `0c1f4c8` 实现 `apps/web/**` 最小原型：mock LLM、单用户临时会话、会话内临时数据、文字反馈与 Markdown 兼容文本。
-- `W10-E` 已以 commit `b3c66d3` 完成 UI 规范核验与最小修复，核验入口包括 P1 设计稿第 16 节、第 19 节、第 19.12 节、第 19.13 节与第 19.21 节。
-- `web:test` 与 `web:build` 均已通过，浏览器真实测试已覆盖无 console error、390px 移动宽度无横向溢出与 UI 状态完整性。
-- 当前仍未进入正式实施完成；`apps/web/**` 仅表示首切片最小原型探索，后续真实 LLM、登录、持久化、评分、导出、`apps/api/**`、`infra/**` 必须重新走用户确认模式。
-
-### 5.10 W13-A 工作台级 MVP 范围重新冻结与后续 confirmed 范围
-
-- 用户已确认组合 `1B2C3C4C5C6C7B8A9B10B11B12B`。
-- 一期 MVP 不再是 W10 首切片“JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈”，而是工作台级 MVP。
-- 一期范围已确认包含：服务端历史记录 / 复盘记录、真实 LLM、完整登录 / 权限、简历和面试记录服务端保存、完整 `0-100` 多维评分，以及复制 / Markdown 下载导出。
-- 一期范围已确认包含 RAG / 知识库能力，不能只写成后续占位。
-- 一期范围已确认包含多轮高阶面试能力，不能只写成后续占位。
-- 模拟面试模块默认入口已确认是当前用户权限范围内可见的历史所有模拟记录 / 复盘记录列表；用户从列表发起模拟面试，再进入面试台，完成后回写历史记录 / 复盘记录。
-- 当前 `apps/web/**` 原型降级为原型探索参考证据，不直接扩展为正式一期开发起点。
-- 当前暂停代码开发；在 `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不继续 `W11-B` 代码布局重构，不扩展 `apps/web/**`，不创建 `apps/api/**`，不接真实 LLM，不做数据库、登录、评分或后端实现。
-
-### 5.11 W13-B 工作台 IA、模拟记录入口、RAG / 知识库与多轮高阶面试设计
-
-- 已更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`，补齐一期工作台 MVP 信息架构、模拟面试模块 IA、历史模拟记录列表、发起模拟面试流程、面试台流程、RAG / 知识库 IA、多轮高阶面试 IA、页面集合、核心用户旅程、页面到对象映射和后续确认卡。
-- 一期 IA 明确包含登录 / 权限入口、工作台首页、岗位管理、简历管理、模拟记录列表、发起模拟面试、面试台、RAG / 知识库、多轮高阶面试、反馈与评分、历史记录 / 复盘、复制 / Markdown 下载、用户 / 权限区域。
-- 模拟面试模块默认入口固定为模拟记录列表，主链为“模拟记录列表 -> 发起模拟面试 -> 面试台 -> 评分 / 复盘详情 -> 回到模拟记录列表”。
-- RAG / 知识库和多轮高阶面试已纳入一期 MVP 设计主链，不再作为后续默认占位；用户已补充确认多轮面试按模式拆分：打磨模式由进展树驱动并由用户决定结束，压力面模式由题组驱动并在题目完成后结束；具体上传、可见范围、检索失败降级、压力面题组数量 / 难度 / 题型组合、暂停 / 继续和上下文保存仍需用户确认。
-- 后续能力只作为占位：资产库、训练中心、管理台、高级报表、更完整导出、运维 / 配置不得被写成一期已实现能力。
-- W10 `apps/web/**` 原型继续只作为原型探索参考证据，不作为正式一期 MVP 代码起点，不直接扩展。
-- 当前仍暂停代码开发；`W13-C` 之前不得进入对象模型实现、API / 数据库 / 登录 / LLM 代码实现。
-
-### 5.12 W13-C 对象模型、RAG、多轮与后端边界草案
-
-- 已新增并更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`，补齐一期工作台 MVP 对象模型草案、对象生命周期草案、模拟面试启动边界、打磨模式、压力面模式、真实 / 模拟复盘、薄弱项体系、训练机制、资产归档、RAG / 知识库对象与流程、多轮高阶面试状态机、真实 LLM provider / adapter 边界、API / 后端服务边界、部署 / 运维 / 配置边界和 `W13-D` 输入。
-- W13-C 对象模型覆盖 `User`、`Account`、`Role`、`Permission`、`Workspace / Organization`、`Job`、`Resume`、`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`InterviewSession`、`PolishModeSession`、`ProgressTree`、`UserEndDecision`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`WeaknessItem`、`TrainingDrawerContext`、`AssetArchiveRequest`、`ScoreReport`、`SessionRecord`、`LLMGenerationRequest`、`LLMProviderConfig`、`AuditEvent / OperationLog` 等对象；该草案不是数据库 schema，也不是实现契约。
-- 除“多轮面试按打磨模式 / 压力面模式拆分、固定 3 轮不再作为总规则”已由用户补充确认为 `confirmed` 外，其余推荐方案仍只能标为 `recommended / proposed-default`；账号来源、角色层级、记录可见范围、知识库可见范围、登录机制、数据库、LLM 保存、RAG 检索证据、多轮上下文、知识库范围、检索路线、RAG 失败降级、压力面题组策略、薄弱项 / 能力树 / 资产库 / 训练抽屉 / 真实复盘深度、provider、后端框架、API contract、目录结构、部署和日志观测等仍需用户确认。
-- 当前仍暂停代码开发；不得创建 `apps/api/**`、`infra/**`，不得接真实 LLM、实现数据库、登录、RAG、多轮、打磨模式、压力面模式、薄弱项、训练抽屉、资产库或后端。
+| 窗口 | 状态 | 作用 |
+| --- | --- | --- |
+| W13-B | 已产出，作为当前 IA / 用户旅程事实源 | 维护工作台 IA、模拟记录入口、RAG / 知识库入口、多轮入口和页面流转。 |
+| W13-C | 已产出，作为当前对象模型 / RAG / 多轮 / 后端边界事实源 | 维护对象模型、服务端保存、权限、RAG、LLM、多轮状态机和后端边界。 |
+| W13-D | 已产出，作为当前评分 / 复盘 / 导出 / DoD 事实源 | 维护评分、复盘、导出、错误态、空状态和 DoD。 |
+| W13-Cleanup | 当前执行 | 清理旧 OQ/MQ、旧 DD、重复确认卡和唯一事实源引用。 |
+| W13-F | 后续 | 只负责 Basic Memory / Superpowers 写回与实施包评估，不重新决定已 confirmed 的 OQ。 |
 
 ## 6. 当前阻断与风险
 
-- `DOC-PLAN-P1` 已从当前受管 `documents` 集合移出，保留为未来 monorepo / 产品落地蓝图文件与历史 round 引用。
-- `evaluate-state` 已不再报告 `DOC-PLAN-P1 -> document_repo_truth_mismatch`；已关闭 round 中保留的 `DOC-PLAN-P1` target / evidence 仅作为历史记录。
-- 当前状态层、主入口层与当前仓库执行计划入口已重新对齐，不再存在由旧 plan 造成的 document blocker。
-- W10 首切片与 `apps/web/**` mock 原型只表示原型探索成果，不再代表当前一期 MVP 范围。
-- 当前一期 MVP 已冻结到工作台级范围，`W13-B` 已补齐 IA / 用户旅程草案，`W13-C` 已补齐对象模型、RAG / 多轮 / 复盘 / 薄弱项 / 训练机制 / 资产归档 / 后端边界草案，并已吸收用户对多轮模式拆分的补充确认；但 `W13-C` 的其余确认卡尚未得到用户确认，`W13-D` 的评分 / 复盘 / 导出 DoD 仍未完成，不具备实施开工条件。
-- 具体 LLM provider、数据库类型、登录方案、账号来源、权限模型细节、服务端保存方式细节、RAG / 知识库上传与可见范围、检索技术路线、检索失败降级策略、压力面题组数量 / 难度 / 题型组合、暂停 / 继续规则、打磨 / 压力面模式一期深度、薄弱项 / 能力树 / 资产库 / 训练抽屉实现深度、真实面试复盘深度、评分维度和权重、API / 后端框架、前后端目录结构、导出细节、运维 / 部署 / 日志边界仍未确认，不能由 Codex 在本轮自行决定。
-- 当前暂停代码开发；继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分、RAG、多轮、薄弱项、训练机制、资产库或后端实现都属于越界。
+- 当前没有 active `open / proposed-default` OQ；`OPEN_QUESTIONS.md` 已回压为 `confirmed / historical` 归并索引。
+- `DD-005` 与 `DD-007` 仍为 `needs-review`：后端 FastAPI 与导出形态已 confirmed，但完整 Web framework / 渲染链实现细节不得直接进入代码。
+- 正式开窗层仍为空；任何实现都必须等待 `TASK_INDEX.md` 写入明确任务 ID 和允许修改范围。
+- Basic Memory / Superpowers 写回尚未做；本窗口禁止写 Basic Memory。
 
-## 7. 当前推荐推进路径
+## 7. 下一步
 
-1. 当前主入口统一以 `PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 与 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` 为准。
-2. `W13-A` 已完成用户确认结果写回与一期工作台 MVP 范围冻结草案，不进入代码实施。
-3. `W13-B` 已补工作台 IA、模拟记录列表默认入口、发起模拟面试、面试台、RAG / 知识库、多轮高阶面试、核心用户旅程和页面对象关系。
-4. `W13-C` 已补对象模型、生命周期、模拟面试启动、打磨模式、压力面模式、复盘、薄弱项、训练机制、资产归档、服务端保存边界、登录 / 权限方案确认卡、RAG / 知识库对象与检索边界、多轮高阶面试状态机、真实 LLM provider / API / 后端框架确认卡；其中多轮模式拆分已按用户补充确认写回，其余确认卡仍需用户确认。
-5. `W13-D` 建议在用户确认 `W13-C` 其余卡片后，先做阶段 0 校验，再分别补打磨模式与压力面模式的 `0-100` 多维评分体系、每轮 / 结束评价、复盘记录、RAG 引用展示、Markdown 导出范围细节和 MVP DoD。
-6. `W13-F` 建议在 W13-B/C/D 经用户确认后统一写回 Basic Memory / Superpowers。
-7. `W13-C / W13-D` 完成并经用户再次确认前，不继续 `W11-B` 代码布局重构，不扩展 `apps/web/**`，不创建 `apps/api/**`，不接真实 LLM，不做数据库、登录、评分或后端实现。
+1. 完成 W13-Cleanup 验证：`validate-state`、`evaluate-state` 和关键词复扫必须通过。
+2. 若验证通过，进入 W13-E 或 W13-F 前，先确认是否还需要用户压缩复核当前唯一事实源。
+3. W13-F 仅写回 Basic Memory / Superpowers 和评估实施包，不再重新打开 `FC-01~FC-19`。
+4. 在 `TASK_INDEX.md` 写入明确正式任务 ID 前，不进入业务代码实施。
 
-## 8. 当前不作为默认主链的内容
+## 8. 验证命令
 
-以下内容当前不应在主入口中被写成默认闭环：
-
-- preview/apply/sync/seed 类命令
-- `generate-implementation-packet`
-- `apply-round`
-- 任何把 generated report 直接等同于 confirmed state 的叙述
-
-## 9. 维护要求
-
-- 若后续“当前仓库真相”发生变化，应优先更新 `README.md`、`PLAN_LATEST.md` 与 `EXECUTION_LOG.md` 的主入口叙事。
-- 若后续处理计划入口，必须同时维护 `DOC-PLAN-P1` 的未来蓝图定位与 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 的当前执行计划定位。
-- 若后续新增正式入口文档，应先补入 `AGENTS.md` 索引，再继续扩展。
+验证命令以执行窗口的实际输出为准；本文档不再内嵌关键字复扫表达式，避免验证命令本身成为误命中来源。

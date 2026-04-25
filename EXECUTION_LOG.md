@@ -25,6 +25,68 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-Cleanup / 过时 OQ-MQ、DD 与唯一事实源清理
+
+- 执行类型：设计文档治理窗口；不写代码，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml` 或 Basic Memory。
+- 基线验证：`validate-state` 与 `evaluate-state` 起始均为 `ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- 清理范围：
+  - `OPEN_QUESTIONS.md` 回压为 OQ / MQ 归并索引：`OQ-001~OQ-089` 中 87 项归入 `confirmed`，`OQ-002`、`OQ-003` 归入 `historical`，active `open / proposed-default` 为 0。
+  - `DESIGN_DECISIONS.md` 建立 DD-001~DD-031 决策索引；`DD-015~DD-017`、`DD-020` 标记为 `superseded`，`DD-019`、`DD-021~DD-031` 固定 W13 当前事实源口径。
+  - `PLAN_LATEST.md` 压缩为当前 W13 推进入口：代码开发暂停，W10 `apps/web/**` 仅作为参考证据，W13-B/C/D/Cleanup/F 为当前主线。
+  - 四份 W13 计划文档补充唯一事实源定位，并将历史确认卡正文压缩为吸收状态索引；原确认卡正文只保留在 git 历史中，不再作为待确认任务池。
+- 唯一事实源：
+  - 一期 MVP 范围：`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`。
+  - IA / 用户旅程：`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`。
+  - 对象模型 / RAG / 多轮 / 后端边界：`docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`。
+  - 评分 / 复盘 / 导出 / DoD：`docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md`。
+  - 决策索引：`DESIGN_DECISIONS.md`；未决问题入口：`OPEN_QUESTIONS.md`。
+- 保留边界：provider、数据库、部署、日志和 MVP DoD 的实现级验收清单仍需 W13-E/F 压缩；这不是本轮产品范围新增，也不放行实现窗口。
+- 后续：W13-F 仍需在用户确认后执行 Basic Memory / Superpowers 写回；本窗口未执行写回。
+
+### 2026-04-25 / 全量待确认模式 / 用户批量确认结果写回
+
+- 执行类型：总控可写窗口，承接用户对 `FC-01~FC-19` 的全量确认回复。
+- 用户确认组合：`FC-01B FC-02A FC-03A FC-04B FC-05C FC-06D FC-07A FC-08A FC-09A FC-10A FC-11D FC-12A FC-13A FC-14A FC-15A FC-16A FC-17A FC-18A FC-19A`。
+- 自定义确认：
+  - `FC-06D`：压力面模式支持按岗位自动生成默认题型组合，并允许用户手动调整；打磨模式支持用户自定义主题 / 题型，并可结合岗位与薄弱项自动推荐，但不强制固定题组。
+  - `FC-11D`：真实面试输入支持上传逐字稿原文，不要求先按题目拆分；系统由大模型自动识别问题与回答边界，再输出逐题拆解复盘；切分置信度不足时提示用户校对。
+- 本轮写回：
+  - `OPEN_QUESTIONS.md`：新增用户批量确认结果表，明确 19 个确认主题均为 `confirmed`，并把原始 OQ / MQ 明细列为 W13-F 清理、吸收或降级对象。
+  - `DOCUMENT_PROGRESS.md`、`PLAN_LATEST.md`、`DOCUMENT_MATURITY.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`：同步“确认已完成，但不自动开窗 / 不自动实施”的边界。
+- 当前边界：允许进入 W13-F 全局确认回写与实施包评估准备；在 `TASK_INDEX.md` 写入明确正式任务 ID 前，仍不得开启子任务窗口、创建 `apps/api/**` / `infra/**`、扩展 `apps/web/**` 或接入真实服务实现。
+
+### 2026-04-25 / 全量待确认模式 / 总控待确认项收拢与批量确认卡
+
+- 执行类型：总控可写窗口，全量收拢当前项目待确认项，暂停继续设计深化、子任务推进与实施准备。
+- 范围：读取并汇总 `OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`MODULE_INDEX.md`、`PLAN_LATEST.md`、`TASK_INDEX.md`、所有真实模块 `MODULE_OPEN_QUESTIONS.md`、既有确认卡 / 推荐项 / `proposed-default` 项和近期 W13 总控收口结论。
+- 本轮写回：
+  - `DOCUMENT_PROGRESS.md`：标明当前进入“全量待确认模式”，暂停新子任务窗口、新实施导向推进和未确认项继续下放。
+  - `OPEN_QUESTIONS.md`：新增“全量待确认模式批量确认卡”，登记有效待确认项计数、去重后确认主题、三批确认顺序和第一批确认卡。
+  - `PLAN_LATEST.md`、`DOCUMENT_MATURITY.md`、`MODULE_INDEX.md`、`TASK_INDEX.md`：同步当前暂停与确认优先口径。
+- 计数口径：全局 `OQ-001~OQ-089` 共 89 项，其中 `open=61`、`proposed-default=15`、`confirmed=13`；有效待确认项按全局 `open + proposed-default` 与 M01/M02/M03 真实模块 MQ 计入，共 91 项；M04-M10 模板示例 MQ 不计入；去重后合并为 19 个确认主题。
+- 边界：本轮不继续模块打磨，不继续子任务推进，不把任何 `recommended / proposed-default` 自动写成 `confirmed`。
+
+### 2026-04-25 / W13-D / 一期工作台 MVP 评分、复盘、导出、错误态与 DoD 草案
+
+- 范围：只做设计文档；不写代码，不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`，不写 Basic Memory，不执行任何 Git 操作。
+- 阶段 0 基线：
+  - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`。
+  - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- 本轮新增：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md`，补齐 `ScoreReport`、`ScoreDimension`、总分 / 维度分计算草案、题级得分与总分关系、打磨模式题级反馈、压力面模式题组评分、真实 / 模拟面试复盘、RAG 引用展示与评分证据、Markdown 导出、薄弱项 / 训练机制 DoD、错误态 / 空状态和一期 MVP 五层 DoD。
+- 本轮同步：
+  - 更新 `AGENTS.md`，将 W13-D 新增草案文档补入计划索引。
+  - 更新 `PLAN_LATEST.md`，记录 W13-D 已补齐评分、复盘、导出、错误态和 DoD 草案，代码开发仍暂停。
+  - 更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`，补入 W13-D 草案链接与摘要。
+  - 更新 `OPEN_QUESTIONS.md`，新增 W13-D 评分、题级得分、打磨阶段性 `ScoreReport`、压力面即时点评、模拟复盘结构、RAG 证据、Markdown 导出和 MVP DoD 等待确认问题，并继续引用 W13-C 已存在的真实复盘、打磨反馈、薄弱项消减、资产 schema、待打磨页面化和压力面题组确认项。
+  - 更新 `DESIGN_DECISIONS.md`，只记录 W13-D 当前仍为用户确认输入、不得放行实现的 confirmed 边界，不把推荐方案写成 confirmed。
+- 本轮结论：
+  - 打磨模式和压力面模式已分开设计；固定 3 轮未写成多轮总规则。
+  - 所有推荐方案均保持 `recommended / proposed-default`，未写成 `confirmed`。
+  - 当前仍不能创建 `apps/api/**`、`infra/**`，不得接真实 LLM、实现数据库、登录、RAG、多轮、评分、复盘、导出、薄弱项、训练抽屉、资产库或后端。
+- 遗留问题：W13-D 确认卡需交用户确认；W13-C 的其余确认卡也仍需用户确认。
+- 后续建议：`W13-F` 先做阶段 0 校验和用户确认收口，再在 W13-B/C/D 经用户确认后统一写回 Basic Memory / Superpowers。
+
 ### 2026-04-25 / W13-C-R2 / 多轮面试模式拆分确认写回
 
 - 范围：只做文档写回，不写代码，不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`，不提交或推送 Git。
