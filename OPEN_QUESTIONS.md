@@ -17,7 +17,7 @@
 
 | OQ ID | 问题 | 状态 | 关联模块 | 当前建议 | 需回写文档 |
 | --- | --- | --- | --- | --- | --- |
-| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | proposed-default | M01-M10 | 当前仓库继续保持“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”布局；`W10-A` 先冻结首个 MVP 切片并明确当前不创建业务代码目录；若后续进入业务代码实施，仍按 monorepo 目标形态推进，但必须等待 `W10-B / W10-C` 完成边界与关系补齐后再判定 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
+| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | proposed-default | M01-M10 | 当前仓库继续保持“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”布局；`W10-D-Gate` 已确认当前阶段只允许在正式开窗层为空时进入首切片最小原型探索，且仅允许创建 `apps/web/**` 最小原型骨架，`apps/api/**` 与 `infra/**` 本轮继续禁止；若后续进入更完整业务代码实施，monorepo 目标形态仍只作为后续阶段候选推进 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | proposed-default | M01、M10 | 最小运行时、测试和 CI 基线只在 `W10-D` 被条件放行时作为最小骨架输入使用，不构成 `W10-A` 直接创建业务代码目录的依据 | `PLAN_LATEST.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-003 | 视觉规范首轮需要沉淀到什么粒度 | proposed-default | M01 | 本轮只沉淀壳层、头部、列表原语与基础页面样式 | `TECHNICAL_STANDARDS.md` |
 | OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | proposed-default | M02、M10 | 本轮先采用开发态 Bearer adapter：统一 `Authorization: Bearer <token>`、`current_user / role / team_id` 上下文，业务层不得依赖 token 内部结构 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
@@ -130,9 +130,9 @@
 
 ### 5.3 需要用户确认（当前不得由 Codex 自行确认）
 
-- `OQ-004 / OQ-005`：用户登录、会话与权限矩阵属于产品范围决定，当前不进入首切片确认层。
-- `OQ-008`：匹配分析 / 评分规则是否版本化涉及评分标准，本轮不由 Codex 自行确认，只保留最小证据组织与问题生成关系。
-- 真实 LLM API 是否接入、是否允许长期记录用户数据、是否需要导出能力常开、是否把 RAG / search snapshot 纳入首切片，当前都需用户或总控明确确认后再开新问题或变更既有问题状态。
+- `OQ-004 / OQ-005`：在 `W10-D-Gate` 前，用户登录、会话与权限矩阵确需用户确认；本轮用户已确认 `W10-D` 不做登录，只保留轻量 `session / user context` 边界，但未来鉴权机制与权限矩阵仍未在本轮定稿。
+- `OQ-008`：匹配分析 / 评分规则是否版本化在 `W10-D-Gate` 前确需用户确认；本轮用户已确认不生成数值评分、只输出文字反馈，但评分维度、评分版本化与正式评分标准仍未在本轮定稿。
+- 真实 LLM API、长期记录 / 导出、RAG / search snapshot 是否进入当前切片，在 `W10-D-Gate` 前均需用户或总控明确确认；本轮用户已确认不接真实 LLM、只做会话内临时保存、不做导出，并继续排除 RAG / search snapshot / 资产库 / 管理台，详见 5.5。
 
 ### 5.4 本轮明确排除（不进入首切片关系主链）
 
@@ -141,6 +141,20 @@
 - `OQ-011 / OQ-012 / OQ-018`：search snapshot 导入 / 运维、上下文包多源优先级与引用摘要规则不进入当前只依赖 JD + 简历的最小链路。
 - `OQ-013 / OQ-014 / OQ-016`：主题推荐、跨场景评估框架、长期进度与停练规则不进入本轮最小反馈摘要范围。
 - `OQ-015 / OQ-017`：真实面试复盘输入模型与管理台模型目录继续排除在首切片之外。
+
+### 5.5 W10-D-Gate 已确认（用户确认结果）
+
+> 以下 8 项是用户在 `W10-D-Gate` 中已明确确认的当前阶段结论；它们属于 confirmed 的原型实施边界，不自动把其他未来阶段 OQ 一并升级为 confirmed。
+
+- `Q1 / confirmed`：允许在正式开窗层为空时进入原型探索，但仅限首切片最小原型骨架；该探索不代表正式实施完成。
+- `Q2 / confirmed`：首切片暂不接入真实 LLM API，必须保留 LLM adapter / provider 边界，并以 mock 输出驱动原型。
+- `Q3 / confirmed`：本轮不做登录；只保留 `session / user context` 的轻量边界，避免后续接登录时大改。
+- `Q4 / confirmed`：简历和问答记录只在单次会话内临时保存，不做长期持久化；数据结构需可迁移到本地或服务端存储。
+- `Q5 / confirmed`：本轮不生成数值评分，只输出文字反馈；反馈模型可预留 optional `score` / `dimensions` 字段，但 UI 不展示评分。
+- `Q6 / confirmed`：本轮不做导出，只页面返回 Markdown 兼容文本；复制或导出能力只作为后续阶段候选。
+- `Q7 / confirmed`：只允许创建 `apps/web/**` 最小原型骨架；`apps/api/**`、`infra/**` 本轮继续明确禁止。
+- `Q8 / confirmed`：首切片完成标准固定为“JD + 简历 Markdown -> 3 条首轮问题 -> 第 1 题问答 -> 简版反馈”。
+- 本轮继续明确排除：RAG、资产库、管理台、多轮面试、完整权限体系、完整 CI/CD。
 
 ## 6. 使用说明
 

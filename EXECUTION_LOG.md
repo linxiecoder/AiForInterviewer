@@ -25,6 +25,38 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W10-D-Gate / W10-C 提交推送 + 用户确认写回 + 原型放行复核
+
+- 范围：阶段 0 提交并推送 `W10-C` 的 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；阶段 1 修改 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`；不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**` 与任何业务代码目录。
+- 执行类型：`W10-C` 阶段 0 校验 / 提交 / 推送、用户确认结果写回、`W10-D` 放行复核。
+- 修改内容：
+  - 阶段 0：确认工作区只包含 `W10-C` 允许范围内的 6 个文件，执行 `validate-state` / `evaluate-state` 通过后，以 `docs: 补齐首切片需求模块关系` 提交并推送；提交 hash 为 `6758a90`，push 到 `origin/main` 成功，远端对齐结果为 `0 0`。
+  - 在 `OPEN_QUESTIONS.md` 中追加 `W10-D-Gate` 已确认分类，写入 `Q1=B Q2=A Q3=A Q4=A Q5=A Q6=A Q7=B Q8=B` 的当前阶段 confirmed 边界，并保持未来阶段 OQ 不被误升格。
+  - 在 `DESIGN_DECISIONS.md` 中新增 `DD-017`，明确“正式开窗层为空时允许首切片最小 Web 原型探索，但不代表正式实施完成”的约束，并同步 `apps/web/**` 允许、`apps/api/**` / `infra/**` 禁止、mock LLM、无登录、会话内临时数据、无数值评分、无导出与 `W10-E / W10-F` 强制收口要求。
+  - 在 `PLAN_LATEST.md` 与 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 中同步 `W10-D` 只允许 `apps/web/**` 最小原型骨架、二期 / 三期候选边界与“下一个窗口需先提交本轮写回结果”的闸门要求。
+- 影响文件：
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+  - `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+- 成熟度变化（建议）：
+  - 本轮不改变 `DOC_STATE.yaml` 正式状态，不新增 blocker，不新增正式子任务 ID，不打开正式开窗层。
+  - 本轮提升的是 `W10-D` 原型探索边界、目录允许范围与后续窗口顺序的全局可判读性。
+- 进展变化（建议）：
+  - 当前已从“`W10-C` 未提交且 `W10-D` 用户确认待定”推进到“`W10-C` 已提交推送、`W10-D-Gate` 已完成用户确认写回、可进入最小 Web 原型骨架放行复核路径”。
+  - 当前仍未进入业务代码实施；下一个窗口必须先提交本轮写回结果，再决定是否进入 `apps/web/**` 原型骨架。
+- 验证结果：
+  - 阶段 0：`git status --short` 范围校验通过，`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml` 与 `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml` 均为 `ok=true, error=0, warning=0`，且 `documents_blocked_count=0`。
+  - 阶段 0：`git push` 成功，`git rev-list --left-right --count origin/main...HEAD` 结果为 `0 0`。
+  - 阶段 1：已再次执行 `git status --short`、`validate-state`、`evaluate-state` 与关键词回归 `rg`；当前工作区只包含 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 五个允许修改文件，`validate-state` / `evaluate-state` 继续为 `ok=true, error=0, warning=0`，且 `documents_blocked_count=0`。
+- 遗留问题：
+  - 本轮写回结果尚未提交；下一个窗口必须先提交 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`。
+  - `W10-D` 仍只允许作为 `apps/web/**` 最小原型探索；`apps/api/**`、`infra/**`、真实 LLM、登录、长期持久化、数值评分、导出、RAG、资产库、管理台继续排除在当前阶段之外。
+- 下一步建议动作：
+  - 下一个窗口先以 `docs: 写回首切片原型确认结果` 提交本轮写回文件，再重新执行 `git status --short`、`validate-state`、`evaluate-state`。
+  - 只有在下一个窗口阶段 0 提交完成且复核仍通过后，才允许进入 `W10-D` 的 `apps/web/**` 最小原型骨架。
+
 ### 2026-04-25 / W10-C 关系层补齐 / `RQ01` 到模块与后续承接对象映射固定
 
 - 范围：修改 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`、`docs/modules/**`、`apps/**`、`infra/**` 与任何业务代码目录。
