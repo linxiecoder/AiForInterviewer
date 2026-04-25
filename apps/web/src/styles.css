@@ -1,0 +1,269 @@
+:root {
+  color: #20242c;
+  background: #f4f7f8;
+  font-family:
+    "Segoe UI",
+    "Microsoft YaHei",
+    "PingFang SC",
+    sans-serif;
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: geometricPrecision;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(31, 89, 116, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(31, 89, 116, 0.06) 1px, transparent 1px),
+    #f4f7f8;
+  background-size: 28px 28px;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #c8d3d8;
+  border-radius: 6px;
+  padding: 12px;
+  color: #20242c;
+  background: #fbfdfd;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: #2374ab;
+  box-shadow: 0 0 0 3px rgba(35, 116, 171, 0.16);
+}
+
+.app-shell {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 0 24px;
+  border-bottom: 1px solid rgba(32, 36, 44, 0.14);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #24745c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  color: #18222b;
+  font-size: 32px;
+  font-weight: 750;
+}
+
+h2 {
+  color: #20242c;
+  font-size: 18px;
+}
+
+.status-pill {
+  flex: none;
+  border: 1px solid rgba(36, 116, 92, 0.28);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #1f684f;
+  background: #e9f5f0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.35fr);
+  gap: 24px;
+  padding-top: 24px;
+}
+
+.input-column,
+.output-column {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.field-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field-block > span {
+  color: #4c5963;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.field-block.compact > span {
+  color: #20242c;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.primary-action,
+.secondary-action {
+  color: #fff;
+  font-weight: 750;
+}
+
+.primary-action {
+  background: #2374ab;
+}
+
+.secondary-action {
+  background: #24745c;
+}
+
+.panel {
+  border: 1px solid rgba(32, 36, 44, 0.12);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 32px rgba(34, 48, 60, 0.08);
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-heading span {
+  color: #6a4e19;
+  background: #fff2d1;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.question-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.question-list li {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: start;
+  gap: 12px;
+  min-height: 68px;
+  border: 1px solid rgba(32, 36, 44, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f9fbfb;
+}
+
+.question-list li > span {
+  white-space: nowrap;
+  color: #5c4d21;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.question-order {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  background: #2374ab;
+  font-weight: 800;
+}
+
+.question-list .empty-state {
+  display: block;
+  min-height: 68px;
+  color: #697782;
+}
+
+.feedback-panel pre {
+  min-height: 280px;
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid rgba(32, 36, 44, 0.1);
+  border-radius: 8px;
+  padding: 14px;
+  color: #20242c;
+  background: #f8faf9;
+  font-family:
+    "Cascadia Mono",
+    "Consolas",
+    monospace;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 20px;
+  }
+
+  .workspace-header,
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-header {
+    display: grid;
+    align-items: start;
+  }
+
+  .question-list li {
+    grid-template-columns: 44px 1fr;
+  }
+
+  .question-list li > span {
+    grid-column: 2;
+    white-space: normal;
+  }
+}
