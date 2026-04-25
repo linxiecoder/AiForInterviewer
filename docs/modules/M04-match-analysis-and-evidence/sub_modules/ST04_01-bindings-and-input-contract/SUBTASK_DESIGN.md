@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 匹配分析与训练证据。
+- M04 匹配分析与训练证据；父级索引见 ../../MODULE_TASK_INDEX.md。
 
 ## 3. 子任务目标
 

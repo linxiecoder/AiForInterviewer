@@ -25,37 +25,35 @@
 
 ## 3. 当前记录
 
-### 2026-04-20 / 轮次 MXX-R001
+### 2026-04-25 / W13-GOV-ModuleArchiveLink
 
-- 当前模块：MXX
+- 当前模块：M09 训练中心与薄弱项生命周期
 - 本轮目标：
-  - 建立模块基础文档骨架
-  - 明确模块需求边界
-  - 判断当前最低成熟度文档
-- 执行类型：模块文档初始化 / 模块文档完善
+  - 清理模板 MQ 和旧 OQ 阻塞语义
+  - 将当前事实改为引用 W13 唯一事实源
+  - 给模块任务索引补显式子目录链接
+- 执行类型：低风险文档治理 / 旧问题清理 / 孤立补链
 - 修改内容：
-  - 新建或补全 `MODULE_REQUIREMENTS.md`
-  - 新建或补全 `MODULE_DESIGN.md`
-  - 新建或补全 `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_OPEN_QUESTIONS.md` 将模板 `MQ-001` / `MQ-002` 标记为 `superseded`
+  - `MODULE_REQUIREMENTS.md` 将 OQ-014 / OQ-016 改为 W13 confirmed 事实引用
+  - `MODULE_TASK_INDEX.md` 将子任务目录改为显式链接，并保留 `todo` / 不具备实施条件状态
 - 影响文件：
-  - `MODULE_REQUIREMENTS.md`
-  - `MODULE_DESIGN.md`
   - `MODULE_OPEN_QUESTIONS.md`
+  - `MODULE_REQUIREMENTS.md`
+  - `MODULE_TASK_INDEX.md`
   - `MODULE_EXECUTION_LOG.md`
 - 建议成熟度变化：
-  - `MODULE_REQUIREMENTS.md`：L1 -> L2
-  - `MODULE_DESIGN.md`：L0 -> L1
+  - 无成熟度提升建议；本轮仅清理旧问题语义与索引链接
 - 验证结果：
-  - 已检查文档结构完整性
-  - 已检查模块文档是否与全局索引一致
+  - `validate-state`：ok=true，error=0，warning=0
+  - `evaluate-state`：ok=true，error=0，warning=0，documents_blocked_count=0
+  - 模块范围 `rg` 扫描命中项均为 confirmed / historical / superseded 分类说明
 - 当前阻塞：
-  - OQ-XXX
+  - 无新增 blocker
 - 当前待确认问题：
-  - 本模块边界是否包含 XXX
-  - 本模块是否依赖上游模块的 XXX 契约
+  - 无模块内 open 问题；旧 OQ 已按 W13 confirmed 分类
 - 下一步建议动作：
-  - 继续补齐 API / schema / logic 文档
-  - 等待 OQ-XXX 默认口径冻结后再推进设计细化
+  - 由总控窗口统一合并验证后，再决定是否开启后续设计补齐窗口
 
 ## 4. 使用说明
 

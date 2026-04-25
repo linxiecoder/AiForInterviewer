@@ -8,6 +8,8 @@
 
 ## 2. 来源文档
 
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+
 ### 2.1 原始需求引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：5.4 日志与可观测性组件
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：12 权限与治理
@@ -59,13 +61,16 @@
 - 仍需把原始文档中的细节进一步提纯到稳定边界。
 - 仍需把跨模块耦合点从“描述性要求”转为“可引用的文档输入”。
 
-## 10. 待确认问题
-- OQ-002 首轮是否只建立最小运行时、测试和 CI 基线
-- OQ-004 P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie
-- OQ-005 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面
-- OQ-007 上传、转换、导出在 P1 中哪些必须异步
-- OQ-017 管理台的模型推荐来源是本地 catalog 还是在线同步
-- OQ-018 管理台是否负责 search snapshot 导入与运维
+## 10. 旧待确认问题处理
+
+- 当前无模块内 open 问题。
+- OQ-002 已由 W13 `FC-19` 标记为 historical：仅保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。
+- OQ-004 已由 W13 `FC-02` confirmed 覆盖：一期采用 session cookie。
+- OQ-005 已由 W13 `FC-02` confirmed 覆盖：一期角色为普通用户 / 管理员两级，管理员可额外按团队筛选。
+- OQ-007 已由 W13 `FC-12` confirmed 覆盖：上传同步入库，转换和导出异步。
+- OQ-017 已由 W13 `FC-18` confirmed 覆盖：模型采用本地 catalog / seed。
+- OQ-018 已由 W13 `FC-18` confirmed 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口。
+- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 W13 唯一事实源文档为准，不再作为当前阻塞。
 
 ## 11. 关联文档
 

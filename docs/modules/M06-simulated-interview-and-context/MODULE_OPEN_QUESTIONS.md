@@ -10,23 +10,26 @@
 ## 2. 状态定义
 
 - `open`：问题已识别，但尚无明确默认方案
-- `proposed-default`：已有默认建议，可在未正式确认前先按该口径继续推进
 - `confirmed`：问题已确认，后续文档应按确认结果回写
+- `historical`：历史问题，当前事实已回收到 W13 唯一事实源或全局确认层
 - `superseded`：问题已失效或已被其他新口径替代
 
 ## 3. 问题表
 
 | MQ ID | 问题 | 状态 | 影响范围 | 当前建议 | 是否需上升到全局 | 需回写文档 |
 | --- | --- | --- | --- | --- | --- | --- |
-| MQ-001 | 示例：本模块是否负责 XXX | open | MODULE_REQUIREMENTS / MODULE_DESIGN | 默认先不纳入本模块边界 | 否 | `MODULE_REQUIREMENTS.md` |
-| MQ-002 | 示例：异常路径是否需要回滚 | proposed-default | MODULE_LOGIC / 子任务设计 | 默认需要定义最小回滚策略 | 否 | `MODULE_LOGIC_DESIGN.md`、子任务设计文档 |
+| MQ-001 | 模板占位：本模块是否负责 XXX | superseded | 无当前影响 | 这是旧模板示例，不作为当前模块问题 | 否 | 无 |
+| MQ-002 | 模板占位：异常路径是否需要回滚 | superseded | 无当前影响 | 这是旧模板示例，不作为当前模块问题 | 否 | 无 |
+| OQ-009 | Embedding 与向量化来源如何确定 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST06_02` | 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖：RAG / 知识库进入一期，支持混合检索，失败时降级继续并标注证据缺口 | 否 | 已在本模块文档改为历史引用 |
+| OQ-011 | Search snapshot 的来源只做导入还是需要抓取 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST06_02` | 已由 W13 唯一事实源和 `FC-18` / `DD-008` 覆盖：Search snapshot 只导入不抓取 | 否 | 已在本模块文档改为历史引用 |
+| OQ-012 | 上下文包中的 source priority 与引用摘要规则如何固定 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST06_02`、`ST06_03` | 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖：RAG 引用、检索结果与证据缺口进入面试、评分和复盘证据链 | 否 | 已在本模块文档改为历史引用 |
+| OQ-018 | 管理台是否负责 search snapshot 导入与运维 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST06_02` | 已由 W13 唯一事实源和 `FC-18` 覆盖：管理台负责导入与运维入口，完整运维能力低干扰占位 | 否 | 已在本模块文档改为历史引用 |
 
 ## 4. 当前高优问题
 
 | 优先级 | MQ ID | 当前阻塞文档 | 原因 | 本轮处理要求 |
 | --- | --- | --- | --- | --- |
-| P0 | MQ-001 | `MODULE_REQUIREMENTS.md` | 模块边界不清会导致后续设计漂移 | 优先冻结默认边界 |
-| P1 | MQ-002 | `MODULE_LOGIC_DESIGN.md` | 逻辑分支和回滚策略未定 | 在逻辑设计细化前先给默认方案 |
+| - | - | - | 当前无模块级 open 问题 | 旧 MQ/OQ 只保留 historical / superseded 记录，不阻断模块文档继续补齐 |
 
 ## 5. 需要升级到全局的问题
 
@@ -39,4 +42,4 @@
 - 模块 Codex 每轮推进模块文档时，都应检查是否新增了模块级问题。
 - 若问题只影响当前模块，优先记录在本文件。
 - 若问题已影响多个模块、共享契约或全局技术口径，应在本文件记录后，同时上报总控 Codex，并推动更新根目录 `OPEN_QUESTIONS.md`。
-- 当问题状态从 `open` 变为 `proposed-default` 或 `confirmed` 时，应同步回写受影响模块文档。
+- 当问题状态从 `open` 变为 `confirmed`、`historical` 或 `superseded` 时，应同步回写受影响模块文档。

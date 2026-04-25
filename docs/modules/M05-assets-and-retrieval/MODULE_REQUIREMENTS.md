@@ -8,6 +8,8 @@
 
 ## 2. 来源文档
 
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+
 ### 2.1 原始需求引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：6 问题生成与参考材料原则
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.4 资产库
@@ -60,8 +62,9 @@
 - 仍需把跨模块耦合点从“描述性要求”转为“可引用的文档输入”。
 
 ## 10. 待确认问题
-- OQ-009 Embedding 与向量化来源如何确定
-- OQ-010 归档粒度是整份资产、片段还是题目级
+- 当前无模块级 open 问题。
+- historical：旧 `OQ-009` 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖；当前口径为 RAG / 知识库进入一期，支持混合检索，失败时降级继续并标注证据缺口。
+- historical：旧 `OQ-010` 已由 W13 唯一事实源和 `FC-14` / `DD-027` 覆盖；当前口径为一期支持整份和单题归档到资产库，归档时选择资产类型，类型带 schema 时动态渲染字段表单。
 
 ## 11. 关联文档
 

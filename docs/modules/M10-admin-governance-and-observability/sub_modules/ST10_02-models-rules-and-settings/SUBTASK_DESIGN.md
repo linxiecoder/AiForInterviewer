@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 管理台、治理与可观测性。
+- M10 管理台、治理与可观测性；父级索引：[MODULE_TASK_INDEX.md](../../MODULE_TASK_INDEX.md)。
 
 ## 3. 子任务目标
 
@@ -50,9 +50,12 @@
 - 验证目标可描述。
 - 没有阻塞级待确认问题。
 
-## 10. 当前待确认内容
-- OQ-007 上传、转换、导出在 P1 中哪些必须异步
-- OQ-017 管理台的模型推荐来源是本地 catalog 还是在线同步
+## 10. 旧待确认内容处理
+
+- 当前无子任务内 open 问题。
+- OQ-007 已由 W13 `FC-12` confirmed 覆盖：上传同步入库，转换和导出异步。
+- OQ-017 已由 W13 `FC-18` confirmed 覆盖：模型采用本地 catalog / seed，在线同步后置。
+- 该确认不激活本 ST，也不改变“当前成熟度：仅有骨架”的状态。
 
 ## 11. 下一轮建议补充
 

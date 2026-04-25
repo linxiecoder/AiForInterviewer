@@ -2,8 +2,10 @@
 
 ## 1. 文档定位
 
-- 本文档沉淀当前项目的全局技术标准与默认口径。
-- 对于尚未最终确认的内容，使用“默认建议”或“待确认”表述，不把未决项伪装成最终结论。
+- 本文档沉淀当前项目的全局技术标准与默认工程口径。
+- 本文档不承载一期 MVP 范围、IA、对象模型、评分、复盘、导出或 DoD 的完整事实正文；这些内容以 `PLAN_LATEST.md` 和四份 W13 唯一事实源为准。
+- `FC-01~FC-19` 已完成用户确认；历史 OQ / MQ 不再在本文档中作为 active `open` 或 `proposed-default` 技术阻塞出现。
+- 仍需复核的技术细节必须写成 `needs-review` 或 implementation packet 输入，不得写成 confirmed。
 
 ## 2. 已确认标准
 
@@ -12,75 +14,73 @@
 - 文档体系采用 `global -> module -> subtask` 分层。
 - 子任务设计文档与实施文档必须分离。
 - 单次执行单位必须是一个子任务目录中的 `SUBTASK_IMPLEMENTATION.md`。
+- Markdown 正文中的成熟度、readiness、candidate 或 review 自我宣称不得反推 `DOC_STATE.yaml`。
 
-## 3. 默认技术口径
+## 3. confirmed 技术口径
 
-### 3.1 仓库结构
+### 3.1 仓库与目标代码结构
 
-- 当前仓库实现布局：以文档治理与 `doc_governor` 工具链为主，而不是已经落地的业务 monorepo。
+- 当前仓库实现布局：以设计文档、治理状态、`doc_governor` 工具链和测试验证为主，而不是已经落地的业务 monorepo。
 - 当前目录真值：根目录全局文档、`docs/governance/`、`docs/modules/`、`docs/superpowers/`、`tools/doc_governor/`、`tests/doc_governor/`、`requirements.txt`。
 - 当前不把 `node_modules/`、`.serena/`、`.worktrees/`、`__pycache__/`、临时缓存目录计入正式项目结构。
-- 目标产品代码结构默认建议：monorepo。
-- 目标产品代码目录建议：`apps/web`、`apps/api`、`infra`。
-- 待确认：OQ-001、OQ-002。
+- 目标产品代码结构采用 `apps/web + packages/shared + apps/api`。
+- 在 `TASK_INDEX.md` 写入明确正式任务 ID 和允许修改范围前，不得创建或扩展业务实现目录。
 
-### 3.2 Web
+### 3.2 后端、数据与部署
 
-- 默认建议：Next.js + TypeScript。
-- 工作台壳层、列表原语和页面模板应先沉淀为全局可复用能力，再进入具体业务模块。
-- 共享页面原语默认采用方案 B：`PageHeader` 只冻结标题、可选说明、主动作与次动作四类语义区，不冻结精确 props 命名。
-- Dashboard 摘要区默认独立于 `PageHeader`，只冻结 `status_badge`、`updated_at`、`summary_items` 与最小状态表达，不并入正文卡片体系。
-- 页面原语最小状态表达默认冻结为 `loading` / `ready` / `empty` / `error`，动作可见性仅冻结到 `enabled` / `disabled` / `hidden`。
-- 不在当前轮冻结完整设计系统 props catalog、slot tree、视觉 token 与业务专属摘要卡 schema。
-- Web 可见文案统一从 `apps/web/src/i18n/**` 读取，并通过 `getMessages(locale)` 作为集中取词入口。
-- 首轮 locale seed 默认冻结为 `zh-CN`、`en-US`，默认 locale 为 `zh-CN`。
-- locale 切换默认由 layout / App Shell 统一解析 active locale，下游页面和组件只消费，不自行定义切换策略。
-- locale fallback 默认冻结为“请求 locale -> `zh-CN` -> 记录缺失 key”，缺失 key 视为消息资源缺口，不允许组件硬编码兜底。
-- 消息命名空间默认只冻结“共享壳层一层、业务页面一层”的最小边界；共享壳层使用稳定共享 namespace，业务页面按稳定路由或领域根命名，不在当前轮扩张为完整 i18n 架构。
-- 列表查询与分页默认采用方案 B：
-  - 共享 `ListQueryState` 作为 canonical state，字段为 `page`、`pageSize`、`sortBy`、`sortDirection`、`filters`。
-  - 页面容器负责 state / URL / request adapter，共享列表原语不直接耦合 router。
-  - URL / request 默认最小映射为：`page -> page`、`pageSize -> page_size`、`sortBy -> sort`、`sortDirection -> order`、`filters.q -> q`、`filters.status -> status`，时间筛选统一使用 `updated_after`、`updated_before`。
-  - 多值筛选首轮默认使用重复 query key 表达，不引入模块私有编码格式。
-  - 服务端分页响应默认复用统一骨架：`items`、`page`、`page_size`、`total`、`total_pages`。
-  - 当筛选条件变化、排序变化或 `pageSize` 变化时，页面必须重置到第一页；仅翻页时不清空既有筛选与排序。
-  - 本轮不冻结完整 props / callback catalog、高级筛选 DSL、cursor pagination 或 infinite scroll。
-- 已形成 `proposed-default` 但仍待实现级细化：OQ-003、OQ-020、OQ-021、OQ-022。
+- 后端采用 FastAPI。
+- 数据库采用 PostgreSQL。
+- API contract 先行。
+- 部署目标为单机服务器。
+- 日志覆盖应用、LLM 与 RAG。
+- 简历、面试记录、复盘、脱敏 LLM 记录、RAG query/topK、完整问答、摘要与评分证据都由服务端保存。
 
-### 3.3 API
+### 3.3 登录、权限与可见范围
 
-- 默认建议：FastAPI + Python。
-- API、Schema、Service、Task 的分层需要在 M01-M03 中先稳定下来。
-- 待确认：OQ-004。
+- 一期采用 session cookie。
+- 账号由管理员创建。
+- 角色为普通用户 / 管理员两级。
+- 记录默认展示“我的记录”，管理员可额外按团队筛选。
 
-### 3.4 数据与存储
+### 3.4 LLM 与 RAG
 
-- 默认建议：结构化数据使用 PostgreSQL。
-- 默认建议：缓存与异步协调使用 Redis。
-- 默认建议：对象存储走 S3-compatible 抽象，本地以 MinIO 模拟。
-- 待确认：OQ-007、OQ-009、OQ-010。
+- LLM 采用可插拔 provider 抽象，并先接一个默认 provider。
+- 系统记录脱敏 prompt、模型名和模板版本。
+- LLM 失败状态可重新生成。
+- RAG 支持用户私有上传 + 管理员公共知识库，团队共享后置。
+- RAG 采用混合检索。
+- RAG 失败时降级继续，并标注证据缺口。
+- RAG 进入评分证据，但不直接决定分数。
 
-### 3.5 内容与渲染
+### 3.5 Web 最小共享层
 
-- Markdown 预览与导出默认共用同一渲染链。
-- Search snapshot 默认仅消费导入数据，不做在线抓取。
-- 打磨主题推荐默认先采用规则推荐。
-- 待确认：OQ-006、OQ-011、OQ-013。
+- 共享 Web 契约维持最小共享层，不扩展为完整设计系统。
+- `PageHeader` / 摘要区只承载最小语义，不冻结完整 props catalog。
+- 列表查询状态采用最小共享查询层：`page`、`page_size`、`q`、`status`、`sort`、`order`。
+- 分页响应复用统一骨架：`items`、`page`、`page_size`、`total`、`total_pages`。
+- Web 可见文案统一通过 `getMessages(locale)` 与最小 namespace 读取。
+- 首轮 locale seed 为 `zh-CN`、`en-US`，默认 locale 为 `zh-CN`。
 
-### 3.6 治理与可观测性
+### 3.6 导出与渲染边界
 
-- 需要保留管理员与普通成员的权限矩阵验证入口。
-- 需要保留模块级和子任务级验证入口。
-- 根目录统一脚本最小命名默认冻结为：`dev:web`、`dev:api`、`test:web`、`test:api`。
-- 最小存活检查默认冻结为 `GET /api/v1/health` 返回 `200` 与 `{ "status": "ok" }`，仅用于服务存活确认，不探测数据库、Redis、对象存储等外部依赖。
-- 最小验证入口类型默认冻结为：API 使用 `pytest`，Web 使用 `vitest`。
-- 最小 CI 校验矩阵默认只冻结 `API lane` 与 `Web lane` 两类入口，不在当前轮冻结完整 workflow、E2E、lint / format gate、多平台矩阵与缓存策略。
-- 文档建设阶段也必须维护成熟度、进展和执行日志，而不是只维护任务状态。
-- 待确认：OQ-005、OQ-014、OQ-016、OQ-017、OQ-018、OQ-019。
+- 一期导出采用复制 / Markdown 下载。
+- 详情页提供复制 / 下载，列表只保留快捷入口。
+- 导出内容为完整复盘 + RAG 引用 + 训练建议。
+- 导出包含原始回答，但不包含真实面试材料原文。
+- 上传同步入库，转换和导出异步。
 
-## 4. 标准变更后需要同步回写
+## 4. 仍需 implementation packet 复核的内容
+
+- Web framework、包管理、构建方式、测试矩阵和共享包构建方式仍为 `DD-005` 的 `needs-review` 范围。
+- Markdown 预览、下载、复制与未来 PDF 是否共用同一渲染链仍为 `DD-007` 的 `needs-review` 范围。
+- 具体 API 路由、schema 字段、错误码、CI/E2E、对象存储部署、缓存、任务队列与运维脚本仍需在正式任务 ID 和 implementation packet 中细化。
+- 本节内容不得绕过 `TASK_INDEX.md` 的正式开窗资格进入代码实施。
+
+## 5. 标准变更后需要同步回写
 
 - `DESIGN_DECISIONS.md`
 - `OPEN_QUESTIONS.md`
 - `MODULE_INDEX.md`
+- `DOCUMENT_PROGRESS.md`
+- `DOCUMENT_MATURITY.md`
 - 受影响的模块文档

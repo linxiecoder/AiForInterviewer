@@ -1836,59 +1836,6 @@ subtasks:
         last_confirmed_at: null
         last_confirmed_by: null
 documents:
-  DOC-SPEC-P1:
-    meta:
-      doc_type: design
-      title: "AI \u6A21\u62DF\u9762\u8BD5 P1 \u6587\u672C\u7248\u95ED\u73AF\u8BBE\u8BA1\
-        \u7A3F"
-      path: docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md
-      required_sections:
-      - section_id: goal
-        heading: "## 1. \u6587\u6863\u76EE\u6807"
-      - section_id: boundary
-        heading: "## 3. \u4EA7\u54C1\u8FB9\u754C"
-      - section_id: tech_stack
-        heading: "## 4. \u63A8\u8350\u6280\u672F\u65B9\u6848"
-      - section_id: architecture
-        heading: "## 5. \u7CFB\u7EDF\u67B6\u6784"
-      - section_id: data_model
-        heading: "## 7. \u6838\u5FC3\u6570\u636E\u6A21\u578B"
-      - section_id: flows
-        heading: "## 9. \u6838\u5FC3\u4E1A\u52A1\u6D41\u7A0B"
-      - section_id: governance
-        heading: "## 12. \u6743\u9650\u4E0E\u6CBB\u7406"
-      - section_id: page_arch
-        heading: "## 14. \u9875\u9762\u4FE1\u606F\u67B6\u6784"
-      - section_id: conclusion
-        heading: "## 18. \u8BBE\u8BA1\u7ED3\u8BBA"
-      relations:
-        document_refs: []
-        module_refs: []
-        oq_refs: []
-    facts:
-      exists: true
-      headings: []
-      section_presence: {}
-      extracted_refs:
-        document_refs: []
-        module_refs: []
-        oq_refs: []
-      marker_counts:
-        todo: 0
-        tbd: 0
-        unresolved: 0
-      last_scanned_at: null
-    state:
-      confirmed:
-        maturity: null
-        status: active
-        review_status: approved
-        blocker_refs: []
-        active_round_id: null
-        last_round_id: R-2026-04-22-SPECPLAN-01
-        last_transition_id: fcf8510a1f15432cba1164f56f81a02c
-        last_confirmed_at: '2026-04-22T08:48:54.458597+00:00'
-        last_confirmed_by: manual-review
   DOC-PLAN-CURRENT-REPO-2026-04-25:
     meta:
       doc_type: plan

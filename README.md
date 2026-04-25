@@ -19,7 +19,7 @@
 
 - 当前仓库不是已经完整落地的 `apps/web`、`apps/api`、`infra` monorepo 业务实现仓库。
 - 当前仓库也不应被表述为“已经具备完整 Web/API/infra 运行结构”的代码仓。
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 中出现的大量 `apps/web`、`apps/api`、`infra`、`.github/workflows` 等路径，当前应视为未来 monorepo 蓝图，而不是当前仓库现实。
+- `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 与 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 是历史蓝图归档，不是当前仓库现实或 W13 一期工作台 MVP 的实施依据；原 `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 与 `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 仅保留跳转说明。
 
 ## 4. 四层叙事边界
 
@@ -30,9 +30,9 @@
 
 ### 4.2 上游产品蓝图
 
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 和 `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 仍服务“AI 模拟面试系统”主目标。
-- 其中设计稿仍可作为产品目标和体验方向输入。
-- 其中实现计划当前必须视为“上游产品蓝图 / 未来 monorepo 目标”，不能直接当作当前仓库的落地实施计划。
+- `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 与 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 仅作为历史产品蓝图 / 历史实施蓝图追溯材料。
+- 旧设计稿和旧实现计划不得作为当前 W13 一期工作台 MVP 的事实源；当前事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+- 其中历史实现计划当前必须视为“上游产品蓝图 / 未来 monorepo 目标”，不能直接当作当前仓库的落地实施计划。
 - 根据 W3 已证实结果，`DOC-PLAN-P1` 当前命中 `document_repo_truth_mismatch`，因此不能继续被主入口表述为“当前仓库可直接执行计划”。
 
 ### 4.3 阶段 3 白名单治理历史
@@ -91,7 +91,7 @@ python -m tools.doc_governor.cli render-report --state docs/governance/DOC_STATE
 
 ## 7. 当前风险与待后续处理事项
 
-- `DOC-PLAN-P1` 当前命中 `document_repo_truth_mismatch`，旧 P1 implementation plan 暂不能作为当前仓库直接执行计划。
+- 旧 P1 设计稿和旧 P1 implementation plan 已归档为历史蓝图，不能作为当前仓库直接执行计划或当前 W13 事实源。
 - `render.py` / `bootstrap.py` 的生成标题与说明性正文中文化仍需后续窗口处理；W1 本轮只记录，不改工具代码。
 - 基线已有 4 个未跟踪项：`.tmp_dbg_impl_state/`、`artifacts/`、`tmp_readiness_case.yaml`、`tmp_test_state2.yaml`。它们不在 W1 本轮清理范围。
 

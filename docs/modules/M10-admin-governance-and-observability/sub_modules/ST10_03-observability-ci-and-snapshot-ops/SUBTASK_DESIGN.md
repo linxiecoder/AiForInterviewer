@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 管理台、治理与可观测性。
+- M10 管理台、治理与可观测性；父级索引：[MODULE_TASK_INDEX.md](../../MODULE_TASK_INDEX.md)。
 
 ## 3. 子任务目标
 
@@ -50,9 +50,12 @@
 - 验证目标可描述。
 - 没有阻塞级待确认问题。
 
-## 10. 当前待确认内容
-- OQ-002 首轮是否只建立最小运行时、测试和 CI 基线
-- OQ-018 管理台是否负责 search snapshot 导入与运维
+## 10. 旧待确认内容处理
+
+- 当前无子任务内 open 问题。
+- OQ-002 已由 W13 `FC-19` 标记为 historical：仅保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。
+- OQ-018 已由 W13 `FC-18` confirmed 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口。
+- 该确认不激活本 ST，也不改变“当前成熟度：仅有骨架”的状态。
 
 ## 11. 下一轮建议补充
 

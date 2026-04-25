@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 模拟面试、上下文与导出。
+- M06 模拟面试、上下文与导出；父级索引见 ../../MODULE_TASK_INDEX.md。
 
 ## 3. 子任务目标
 
@@ -50,10 +50,11 @@
 - 没有阻塞级待确认问题。
 
 ## 10. 当前待确认内容
-- OQ-009 Embedding 与向量化来源如何确定
-- OQ-011 Search snapshot 的来源只做导入还是需要抓取
-- OQ-012 上下文包中的 source priority 与引用摘要规则如何固定
-- OQ-018 管理台是否负责 search snapshot 导入与运维
+- 无阻塞级待确认问题。
+- historical：旧 `OQ-009` 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖；当前口径为 RAG / 知识库进入一期，支持混合检索，失败时降级继续并标注证据缺口。
+- historical：旧 `OQ-011` 已由 W13 唯一事实源和 `FC-18` / `DD-008` 覆盖；当前口径为 Search snapshot 只导入不抓取。
+- historical：旧 `OQ-012` 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖；当前口径为 RAG 引用、检索结果与证据缺口进入面试、评分和复盘证据链。
+- historical：旧 `OQ-018` 已由 W13 唯一事实源和 `FC-18` 覆盖；当前口径为管理台负责导入与运维入口，完整运维能力低干扰占位。
 
 ## 11. 下一轮建议补充
 

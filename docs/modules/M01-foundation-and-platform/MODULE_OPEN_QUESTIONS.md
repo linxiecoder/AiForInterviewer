@@ -1,5 +1,7 @@
 # 模块待确认问题
 
+> W13 事实源对齐：本文只保留 M01 模块内 MQ/OQ 治理记录。凡涉及一期 MVP 范围、IA / 用户旅程、对象模型 / RAG / 多轮 / 后端边界、评分 / 复盘 / 导出 / DoD 的当前事实，统一引用 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md`。旧 MQ/OQ 中若出现 W10 `apps/web` 原型、首切片 MVP、RAG / 知识库后续、多轮固定三轮或直接发起模拟面试等产品范围判断，一律按 historical / superseded 理解，不作为当前事实源。
+
 ## 1. 文档定位
 
 - 本文档用于记录当前模块内部仍未收敛、会影响模块设计或子任务推进的问题。

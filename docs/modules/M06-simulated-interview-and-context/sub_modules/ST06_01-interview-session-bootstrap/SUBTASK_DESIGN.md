@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 模拟面试、上下文与导出。
+- M06 模拟面试、上下文与导出；父级索引见 ../../MODULE_TASK_INDEX.md。
 
 ## 3. 子任务目标
 

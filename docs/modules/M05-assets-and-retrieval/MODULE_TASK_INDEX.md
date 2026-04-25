@@ -5,8 +5,8 @@
 | Subtask ID | 子任务名称 | 状态 | 文档成熟度 | 待确认问题 | 目录 | 是否具备实施条件 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ST05_01 | 资产类型与资产域 | todo | 仅有骨架 | - | sub_modules/ST05_01-asset-type-and-asset-domain/ | 否 |
-| ST05_02 | 归档记录与来源追踪 | todo | 仅有骨架 | OQ-010 | sub_modules/ST05_02-archive-records-and-source-linkage/ | 否 |
-| ST05_03 | 检索分块与索引入库 | todo | 仅有骨架 | OQ-009 | sub_modules/ST05_03-retrieval-chunking-and-index-ingestion/ | 否 |
+| ST05_02 | 归档记录与来源追踪 | todo | 仅有骨架 | historical：OQ-010 已由 FC-14 / DD-027 覆盖 | sub_modules/ST05_02-archive-records-and-source-linkage/ | 否 |
+| ST05_03 | 检索分块与索引入库 | todo | 仅有骨架 | historical：OQ-009 已由 FC-05 / DD-021 覆盖 | sub_modules/ST05_03-retrieval-chunking-and-index-ingestion/ | 否 |
 
 ## 2. 使用规则
 

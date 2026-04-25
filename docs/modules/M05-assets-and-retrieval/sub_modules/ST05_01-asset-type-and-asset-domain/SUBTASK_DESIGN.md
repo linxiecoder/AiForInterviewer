@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 资产库、归档与检索。
+- M05 资产库、归档与检索；父级索引见 ../../MODULE_TASK_INDEX.md。
 
 ## 3. 子任务目标
 

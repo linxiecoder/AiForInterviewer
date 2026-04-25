@@ -1,5 +1,17 @@
 # M02 鉴权、团队与成员 - 模块任务索引
 
+## 0. W13 事实源与父级索引边界
+
+- 当前产品范围事实只引用 W13 唯一事实源；本文件中的 `ST02_*` / `MT02_*` 仅用于模块内历史索引、观察蓝本和结构归属说明，不激活旧任务，不新增正式子任务 ID。
+- W10 `apps/web` 原型只能作为参考证据；当前仍暂停代码开发，回到设计文档补齐。
+- 旧 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 若仍为骨架或模板，不因被本索引链接而获得正式入口、candidate 或开窗资格。
+
+| 历史 / 骨架文档 | 父级索引 | 当前用途 |
+| --- | --- | --- |
+| [`ST02_01/SUBTASK_DESIGN.md`](sub_modules/ST02_01-auth-mechanism-boundary/SUBTASK_DESIGN.md)、[`ST02_01/SUBTASK_IMPLEMENTATION.md`](sub_modules/ST02_01-auth-mechanism-boundary/SUBTASK_IMPLEMENTATION.md) | 本文件第 1 节 `ST02_01` 与第 2.1 节映射表 | 历史容器与骨架留存，不作为正式子任务入口 |
+| [`ST02_02/SUBTASK_DESIGN.md`](sub_modules/ST02_02-team-user-member-domain/SUBTASK_DESIGN.md)、[`ST02_02/SUBTASK_IMPLEMENTATION.md`](sub_modules/ST02_02-team-user-member-domain/SUBTASK_IMPLEMENTATION.md) | 本文件第 1 节 `ST02_02` 与第 2.1 节映射表 | 历史容器与骨架留存，不作为正式子任务入口 |
+| [`ST02_03/SUBTASK_DESIGN.md`](sub_modules/ST02_03-authorization-matrix/SUBTASK_DESIGN.md)、[`ST02_03/SUBTASK_IMPLEMENTATION.md`](sub_modules/ST02_03-authorization-matrix/SUBTASK_IMPLEMENTATION.md) | 本文件第 1 节 `ST02_03` 与第 2.1 节映射表 | 历史容器与骨架留存，不作为正式子任务入口 |
+
 ## 1. 遗留子任务诊断
 
 | 遗留任务 | 当前覆盖面 | 问题类型 | 为什么不适合作为下一轮入口 | 建议动作 |

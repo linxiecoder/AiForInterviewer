@@ -8,6 +8,8 @@
 
 ## 2. 上游输入
 
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+
 ### 2.1 原始需求与计划引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：4 推荐技术方案
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：5.1 前端 Web 层

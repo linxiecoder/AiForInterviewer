@@ -8,6 +8,8 @@
 
 ## 2. 来源文档
 
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+
 ### 2.1 原始需求引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.3 岗位-简历分析
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：8 评分与评估体系
@@ -55,7 +57,8 @@
 - 仍需把跨模块耦合点从“描述性要求”转为“可引用的文档输入”。
 
 ## 10. 待确认问题
-- OQ-008 匹配分析与评估规则是否需要版本化
+- 当前无模块级 open 问题。
+- historical：旧 `OQ-008` 已由 W13 唯一事实源和 `FC-17` / `DD-009` 覆盖；当前口径为匹配分析与评估采用规则版本化 + 共享核心评估框架 + 规则推荐优先。
 
 ## 11. 关联文档
 

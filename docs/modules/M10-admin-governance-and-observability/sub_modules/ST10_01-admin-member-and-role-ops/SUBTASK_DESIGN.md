@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 管理台、治理与可观测性。
+- M10 管理台、治理与可观测性；父级索引：[MODULE_TASK_INDEX.md](../../MODULE_TASK_INDEX.md)。
 
 ## 3. 子任务目标
 
@@ -49,9 +49,12 @@
 - 验证目标可描述。
 - 没有阻塞级待确认问题。
 
-## 10. 当前待确认内容
-- OQ-004 P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie
-- OQ-005 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面
+## 10. 旧待确认内容处理
+
+- 当前无子任务内 open 问题。
+- OQ-004 已由 W13 `FC-02` confirmed 覆盖：一期采用 session cookie。
+- OQ-005 已由 W13 `FC-02` confirmed 覆盖：一期角色为普通用户 / 管理员两级，管理员可额外按团队筛选。
+- 该确认不激活本 ST，也不改变“当前成熟度：仅有骨架”的状态。
 
 ## 11. 下一轮建议补充
 

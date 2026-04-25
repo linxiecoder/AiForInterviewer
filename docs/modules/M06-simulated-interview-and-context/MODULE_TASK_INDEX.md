@@ -5,8 +5,8 @@
 | Subtask ID | 子任务名称 | 状态 | 文档成熟度 | 待确认问题 | 目录 | 是否具备实施条件 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ST06_01 | 面试会话创建与列表 | todo | 仅有骨架 | - | sub_modules/ST06_01-interview-session-bootstrap/ | 否 |
-| ST06_02 | 上下文包与问题来源规则 | todo | 仅有骨架 | OQ-009、OQ-011、OQ-012、OQ-018 | sub_modules/ST06_02-context-pack-and-question-source/ | 否 |
-| ST06_03 | 消息流、trace、报告与导出 | todo | 仅有骨架 | OQ-012 | sub_modules/ST06_03-message-trace-report-and-export/ | 否 |
+| ST06_02 | 上下文包与问题来源规则 | todo | 仅有骨架 | historical：OQ-009 / OQ-011 / OQ-012 / OQ-018 已由 FC-05 / FC-18 / DD-008 / DD-021 覆盖 | sub_modules/ST06_02-context-pack-and-question-source/ | 否 |
+| ST06_03 | 消息流、trace、报告与导出 | todo | 仅有骨架 | historical：OQ-012 已由 FC-05 / DD-021 覆盖 | sub_modules/ST06_03-message-trace-report-and-export/ | 否 |
 
 ## 2. 使用规则
 

@@ -14,6 +14,8 @@
 
 ## 2. 来源文档
 
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+
 ### 2.1 原始需求引用
 - `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：3.3 简历处理边界
 - `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：7.2 岗位与简历

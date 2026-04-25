@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 模拟面试、上下文与导出。
+- M06 模拟面试、上下文与导出；父级索引见 ../../MODULE_TASK_INDEX.md。
 
 ## 3. 子任务目标
 
@@ -51,7 +51,8 @@
 - 没有阻塞级待确认问题。
 
 ## 10. 当前待确认内容
-- OQ-012 上下文包中的 source priority 与引用摘要规则如何固定
+- 无阻塞级待确认问题。
+- historical：旧 `OQ-012` 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖；当前口径为 RAG 引用、检索结果与证据缺口进入面试、评分和复盘证据链。
 
 ## 11. 下一轮建议补充
 

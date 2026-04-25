@@ -7,7 +7,7 @@
 
 ## 2. 父模块
 
-- $(System.Collections.Specialized.OrderedDictionary.Id) 复盘与回放。
+- M08 复盘与回放；父级索引：[MODULE_TASK_INDEX.md](../../MODULE_TASK_INDEX.md)。
 
 ## 3. 子任务目标
 
@@ -50,7 +50,11 @@
 - 验证目标可描述。
 - 没有阻塞级待确认问题。
 
-## 10. 当前待确认内容
+## 10. 旧待确认内容处理
+
+- 当前无子任务内 open 问题。
+- 复盘结构、评分展示、RAG 引用和 Markdown 导出以 W13 评分 / 复盘 / 导出 / DoD 事实源为准。
+- 该说明不激活本 ST，也不改变“当前成熟度：仅有骨架”的状态。
 - 无
 
 ## 11. 下一轮建议补充

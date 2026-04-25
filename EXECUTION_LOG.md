@@ -25,6 +25,42 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-StateArchive / DOC_STATE 状态层归档与历史设计稿迁移
+
+- 执行类型：高风险文档治理窗口；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**` 或 Basic Memory。
+- 基线验证：开始前 `validate-state` 与 `evaluate-state` 均为 `ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- 状态层处理：
+  - 现有 document status 枚举仅支持 `draft / active / blocked / ready`，不支持 `historical / reference / blueprint`。
+  - 复用旧 `DOC-PLAN-P1` 的安全处理模式：将 `DOC-SPEC-P1` 从当前 `documents` 受管集合移出；保留已关闭 `R-2026-04-22-SPECPLAN-01` round 中的 `target_documents` 与 `required_evidence_refs` 作为历史记录。
+- 迁移结果：
+  - 旧 P1 设计稿原正文迁移到 `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`。
+  - 原路径 `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 保留跳转说明，只用于历史追溯和断链保护。
+  - 根入口、当前计划、进展、成熟度与自动化执行计划已同步“旧 P1 设计稿不再作为当前事实源”的口径。
+- STxx_* 处理结论：
+  - 30 个 `STxx_*` 仍存在于 `DOC_STATE.yaml` 的正式 `subtasks` 容器，并被 `TASK_INDEX.md` 与模块索引引用。
+  - 本轮不迁移旧 STxx_* 骨架到 archive；若后续迁移，必须先完成状态层 / 任务索引 / 模块索引的统一重映射。
+- 后续：可以进入 W13-D / W13-E 类设计或任务重映射窗口；不得把旧设计稿、旧实现计划或旧 STxx_* 骨架当作当前 W13 事实源。
+
+### 2026-04-25 / W13-GOV-MergeArchive / 并行归档与模块补链结果合并验证
+
+- 执行类型：文档治理合并验证窗口；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml` 或 Basic Memory。
+- 基线验证：`validate-state` 与 `evaluate-state` 起始均为 `ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- 合并输入：
+  - 窗口 A：旧 W10 实现计划正文已迁移到 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`，原路径保留跳转说明；旧 P1 设计稿因 `DOC-SPEC-P1` active 暂未迁移。
+  - 窗口 C1：M01-M03 的旧 MQ/OQ 已标记为 historical / superseded / confirmed / open，旧 ST01/ST02/ST03 骨架由父索引显式链接为历史骨架 / 结构参考。
+  - 窗口 C2：M04-M06 的旧 MQ/OQ 与 9 个子任务设计文档父模块链接已完成第一轮补链。
+  - 窗口 C3：M07-M10 的旧 MQ/OQ 与 12 个子任务设计文档父模块链接已完成第一轮补链。
+- 本轮同步：
+  - `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`OPEN_QUESTIONS.md`、`README.md`、`AGENTS.md` 和当前仓库执行计划同步归档 / 补链状态。
+  - 明确旧实现计划 archive 文件只作历史追溯，W13 当前事实仍以四份 W13 计划文档、`OPEN_QUESTIONS.md` 和 `DESIGN_DECISIONS.md` 为准。
+- 遗留问题：
+  - 旧 P1 设计稿仍被 `DOC_STATE.yaml` 登记为 `DOC-SPEC-P1` active；本轮不迁移，不修改状态层。
+  - 旧 STxx_* 骨架文档是否迁移到 `archive/docs/modules/**` 仍需用户确认；当前只通过模块索引标记为历史 / 结构参考。
+  - `docs/modules/**/MODULE_REQUIREMENTS.md` 仍有旧实现计划原路径引用；当前原路径是跳转说明，后续模块同步时应按用途改为 W13 事实源或 archive 历史引用。
+- 下一步建议动作：
+  - 若只推进评分 / 复盘 / 导出 / DoD 设计，可继续使用 W13-D 事实源，但不得引用旧 P1 设计稿或旧实现计划作为当前事实源。
+  - 若推进文档结构收口，先由用户确认旧 P1 设计稿 active 处理方案和旧 STxx_* 骨架归档方案。
+
 ### 2026-04-25 / W13-Cleanup / 过时 OQ-MQ、DD 与唯一事实源清理
 
 - 执行类型：设计文档治理窗口；不写代码，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml` 或 Basic Memory。

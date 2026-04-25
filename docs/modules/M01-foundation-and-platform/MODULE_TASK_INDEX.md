@@ -1,5 +1,17 @@
 # M01 基础平台与工作台壳层 - 模块任务索引
 
+## 0. W13 事实源与父级索引边界
+
+- 当前产品范围事实只引用 W13 唯一事实源；本文件中的 `ST01_*` 仅用于模块内历史索引和结构归属说明，不激活旧任务，不新增正式子任务 ID。
+- W10 `apps/web` 原型只能作为参考证据；当前仍暂停代码开发，回到设计文档补齐。
+- 旧 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 若仍为骨架或模板，不因被本索引链接而获得正式入口、candidate 或开窗资格。
+
+| 历史 / 骨架文档 | 父级索引 | 当前用途 |
+| --- | --- | --- |
+| [`ST01_01/SUBTASK_DESIGN.md`](sub_modules/ST01_01-runtime-and-repo-baseline/SUBTASK_DESIGN.md)、[`ST01_01/SUBTASK_IMPLEMENTATION.md`](sub_modules/ST01_01-runtime-and-repo-baseline/SUBTASK_IMPLEMENTATION.md) | 本文件第 1 节 `ST01_01` | 历史结构归属与骨架留存，不作为正式子任务入口 |
+| [`ST01_02/SUBTASK_DESIGN.md`](sub_modules/ST01_02-workspace-shell-and-i18n/SUBTASK_DESIGN.md)、[`ST01_02/SUBTASK_IMPLEMENTATION.md`](sub_modules/ST01_02-workspace-shell-and-i18n/SUBTASK_IMPLEMENTATION.md) | 本文件第 1 节 `ST01_02` | 历史结构归属与骨架留存，不作为正式子任务入口 |
+| [`ST01_03/SUBTASK_DESIGN.md`](sub_modules/ST01_03-testing-logging-and-doc-governance/SUBTASK_DESIGN.md)、[`ST01_03/SUBTASK_IMPLEMENTATION.md`](sub_modules/ST01_03-testing-logging-and-doc-governance/SUBTASK_IMPLEMENTATION.md) | 本文件第 1 节 `ST01_03` | 历史结构归属与骨架留存，不作为正式子任务入口 |
+
 ## 1. 模块任务总表
 
 | Subtask ID | 子任务名称 | 当前目标 | 当前状态 | 主要输入 | 当前阻塞 | 下一步触发条件 | 是否具备子任务设计前置条件 |
