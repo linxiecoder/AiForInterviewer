@@ -25,6 +25,30 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-C / 一期工作台 MVP 对象模型、RAG、多轮与后端边界草案
+
+- 范围：只做设计前置分析、对象模型草案、生命周期草案、模拟面试启动、打磨模式、模拟模式、复盘、薄弱项体系、训练机制、资产归档、服务端保存边界、RAG / 知识库、多轮高阶面试、真实 LLM、API / 后端、部署 / 运维 / 配置边界和用户确认卡；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`，不进入实现窗口，不提交或推送 Git。
+- 阶段 0 基线：
+  - `git status --short` 显示的改动仅限 W13-C 允许范围内的文档：`AGENTS.md`、`EXECUTION_LOG.md`、`OPEN_QUESTIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` 和新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`；未发现不明文件、代码文件、工具文件、测试文件或 `DOC_STATE.yaml` 修改。
+  - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`。
+  - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true, error=0, warning=0`，`documents_blocked_count=0`。
+- 本轮新增：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`，补齐一期工作台 MVP 44 条 confirmed 范围、85 个对象的对象模型草案、14 类对象生命周期草案、模拟面试启动、打磨模式、模拟模式、复盘模型、薄弱项体系、训练机制、资产归档、RAG / 知识库对象与流程、多轮高阶面试对象与状态机、LLM provider / adapter 边界、API / 后端服务边界、部署 / 运维 / 配置边界、34 张用户确认卡、推荐方案汇总、`W13-D` 输入和“不进入实现”说明。
+- 本轮同步：
+  - 更新 `AGENTS.md`，将 W13-C 新增草案文档补入计划索引。
+  - 更新 `PLAN_LATEST.md`，记录 W13-C 已补齐对象模型、RAG / 多轮 / 复盘 / 薄弱项 / 训练机制 / 资产归档 / 后端边界，但 34 张确认卡仍等待用户确认，代码开发仍暂停。
+  - 更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`，补入 W13-C 草案链接、对象模型摘要、生命周期摘要和确认卡范围。
+  - 更新 `OPEN_QUESTIONS.md`，保留 `OQ-052` 至 `OQ-066` 并新增 `OQ-067` 至 `OQ-078`，覆盖数据库、LLM 保存、RAG 证据、多轮上下文、检索路线、高阶定义、provider、LLM 失败、prompt / 模型版本、登录机制、后端框架、API contract、目录结构、部署目标、日志观测、账号来源、角色层级、面试模式、薄弱项、能力树、资产库、训练抽屉、真实复盘、打磨反馈保存、消减规则、资产 schema 和待打磨页面化等 W13-C 待确认问题。
+  - 更新 `DESIGN_DECISIONS.md`，仅记录已 confirmed 的高层设计决策，不把未确认实现细节写成 confirmed。
+- 本轮结论：
+  - 一期对象模型可作为用户确认输入，但不能作为数据库 schema 或实现契约。
+  - 所有推荐方案均保持 `recommended / proposed-default`，未写成 `confirmed`。
+  - 当前仍不能创建 `apps/api/**`、数据库、登录、LLM、RAG、多轮、打磨模式、模拟模式、薄弱项、训练抽屉、资产库或后端实现。
+- 后续建议：
+  - 先交给用户确认 W13-C 的 34 张确认卡。
+  - 用户确认后，再由 `W13-D` 做阶段 0 校验，并承接 `0-100` 多维评分、每轮评价、复盘记录、RAG 引用展示、Markdown 导出范围细节和 MVP DoD。
+  - `W13-F` 在 W13-B/C/D 经用户确认后统一写回 Basic Memory / Superpowers。
+
 ### 2026-04-25 / W13-B-R2 / 一期工作台 MVP 模拟记录入口、RAG / 知识库与多轮高阶面试 IA 修订
 
 - 基线验证：

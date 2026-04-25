@@ -193,6 +193,7 @@
 - [AI 模拟面试系统当前仓库执行计划](docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md)
 - [AI 模拟面试一期工作台 MVP 范围冻结草案](docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md)
 - [AI 模拟面试一期工作台 MVP 信息架构与用户旅程](docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md)
+- [AI 模拟面试一期工作台 MVP 对象模型、RAG、多轮与后端边界草案](docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)
 - [AI 模拟面试 P1 MVP 实现计划](docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md)
 
 ### 2.4 全局文档体系
