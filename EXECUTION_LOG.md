@@ -25,6 +25,50 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-B-R2 / 一期工作台 MVP 模拟记录入口、RAG / 知识库与多轮高阶面试 IA 修订
+
+- 基线验证：
+  - `git status --short` 为空。
+  - `validate-state` 结果为 `ok=true, error=0, warning=0`。
+  - `evaluate-state` 结果为 `ok=true, error=0, warning=0, documents_blocked_count=0`。
+- 范围：只做设计文档；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`，不写 Basic Memory。
+- 执行类型：在用户新增 confirmed 范围后，修订一期工作台 MVP 信息架构、模拟面试模块入口、RAG / 知识库 IA、多轮高阶面试 IA、核心用户旅程、页面到对象映射和后续确认卡。
+- 本轮吸收的 confirmed 结论：
+  - 一期 MVP 必须包含 RAG / 知识库能力。
+  - 一期 MVP 必须包含多轮高阶面试能力。
+  - 模拟面试模块默认入口必须是当前用户权限范围内可见的历史所有模拟记录 / 复盘记录列表；用户从列表发起模拟面试，再进入面试台，完成后回写历史记录 / 复盘记录。
+- 修改内容：
+  - 更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`，将 RAG / 知识库、多轮高阶面试和模拟记录列表优先入口纳入一期主链，不再作为后续默认占位。
+  - 更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`，同步 `10B / 11B / 12B` confirmed 范围和 W13-B-R2 设计结论。
+  - 更新 `PLAN_LATEST.md`，说明 W13-B 已补齐模拟记录入口、RAG / 知识库、多轮高阶面试和用户旅程，代码开发仍暂停。
+  - 更新 `DESIGN_DECISIONS.md`，记录 `DD-021` 至 `DD-023` 为 confirmed 高层设计决策，并修订 `DD-018 / DD-020`。
+  - 更新 `OPEN_QUESTIONS.md`，新增 `OQ-043` 至 `OQ-051`，其中 `OQ-043 / OQ-044 / OQ-045` 为 confirmed，高层范围已确认；`OQ-046` 至 `OQ-051` 保持 open，作为 W13-C / W13-D 的细节确认输入。
+- 影响文件：
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`
+- 成熟度变化（建议）：
+  - 本轮不修改 `DOC_STATE.yaml`，不新增状态层 blocker，不打开正式实施窗口。
+  - 本轮提升的是一期工作台 IA、模拟面试模块 IA、RAG / 知识库、多轮高阶面试和页面对象映射的可评审性。
+- 进展变化（建议）：
+  - `W13-B` 已从一般工作台 IA 补齐，进一步修订为“模拟记录列表优先 + RAG / 知识库 + 多轮高阶面试”主链 IA。
+  - 后续应进入 `W13-C` 对象模型、权限、RAG / 知识库、检索引用、多轮状态机、服务端保存、真实 LLM provider、API / 后端边界确认卡。
+  - `W13-D` 需要承接每轮评价、完整 `0-100` 多维评分、复盘引用来源、Markdown 导出和 MVP DoD。
+- 验证结果：
+  - `git status --short` 显示本轮待提交范围仅限 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`。
+  - `validate-state` 结果为 `ok=true, error=0, warning=0`。
+  - `evaluate-state` 结果为 `ok=true, error=0, warning=0, documents_blocked_count=0`。
+  - W13-B 关键词回归已执行，命中工作台、一期 MVP、模拟记录、发起模拟面试、面试台、RAG、知识库、多轮、高阶面试、对象名、Markdown、导出、W10、`apps/web`、用户旅程和信息架构等关键口径。
+- 遗留问题：
+  - `OQ-046` 至 `OQ-051` 需要用户或后续窗口确认。
+  - 具体 LLM provider、数据库类型、登录方案、权限模型细节、评分维度和权重、API / 后端框架、导出形态细节、运维 / 部署边界仍需后续确认。
+- 下一轮建议动作：
+  - `W13-C` 阶段 0 先校验并提交 W13-B-R2 成果，再补对象模型与技术方案确认卡。
+  - `W13-F` 在 W13-B/C/D 经用户确认后统一写回 Basic Memory / Superpowers。
+
 ### 2026-04-25 / W13-B / 一期工作台 MVP 信息架构与用户旅程设计
 
 - 阶段 0：已校验、提交并推送 `W13-A` 用户确认结果写回成果；提交 hash 为 `d30a334`，push 到 `origin/main` 成功。

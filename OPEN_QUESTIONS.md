@@ -56,9 +56,18 @@
 | OQ-037 | 岗位和简历是否都必须列表化管理 | open | M03、M04、M06 | `W13-B` 推荐岗位与简历都列表化管理，以支撑服务端保存、复用、历史记录和工作台总览；是否允许更轻量的简历内嵌管理需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | OQ-038 | 复盘记录是否按 `InterviewSession` 展示，还是作为独立复盘对象展示 | open | M06、M08 | `W13-B` 推荐统一历史记录列表展示会话、评分和复盘，并在详情中保留清晰对象关系；具体 `InterviewSession` / `SessionRecord` / 复盘对象边界需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | OQ-039 | 评分报告是否独立页面，还是并入复盘详情 | open | M07、M08、M09 | `W13-B` 推荐面试结束后先显示轻量评分，复盘详情显示完整评分报告；具体评分报告结构与验收交 `W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| OQ-040 | Markdown 下载入口和导出范围应如何确定 | open | M03、M06、M08 | `W13-B` 推荐一期先在复盘 / 评分详情中提供复制 / Markdown 下载，不设独立导出中心；具体文件结构、命名、复制范围和导出快照需 `W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-040 | Markdown 下载入口和导出范围应如何确定 | open | M03、M06、M08 | `W13-B` 推荐一期在评分 / 复盘详情中提供复制 / Markdown 下载，列表提供导出状态或快捷入口但必要时进入详情确认；具体文件结构、命名、复制范围和导出快照需 `W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | OQ-041 | 工作台首页是否需要统计卡片，以及一期统计范围是什么 | open | M01、M04、M07、M08 | `W13-B` 推荐只做行动型摘要：待复盘、进行中面试、最近岗位、最近评分；完整趋势分析和 BI 仪表盘后置 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| OQ-042 | 资产库、RAG / 知识库、管理台、训练中心、多轮高级面试、更完整导出、运维 / 配置占位放在哪里 | open | M05、M06、M09、M10 | `W13-B` 推荐统一放入“后续能力”折叠菜单或低干扰占位区，不放大为一期主闭环；具体导航呈现需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-042 | 资产库、训练中心、管理台、高级报表、更完整导出、运维 / 配置等后续占位放在哪里 | open | M05、M09、M10 | `W13-B` 推荐统一放入“后续能力”折叠菜单或低干扰占位区；RAG / 知识库和多轮高阶面试已进入一期主链，不再归入本占位问题 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-043 | 一期 MVP 是否必须包含 RAG / 知识库能力 | confirmed | M05、M06、M08、M10 | 用户已确认一期 MVP 必须包含 RAG / 知识库；知识库入口、发起面试时选择上下文、面试台引用证据和复盘引用来源进入一期 IA。具体上传、切片、检索、权限和引用回溯仍未确认 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-044 | 一期 MVP 是否必须包含多轮高阶面试能力 | confirmed | M06、M07、M08、M09 | 用户已确认一期 MVP 必须包含多轮高阶面试；多轮策略选择、面试台轮次 / 追问 / 上下文、每轮评价和复盘回写进入一期 IA。具体策略、轮次数、暂停 / 继续和结束条件仍未确认 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-045 | 模拟面试模块默认入口是否必须是历史所有模拟记录列表 | confirmed | M02、M06、M08 | 用户已确认模拟面试模块默认入口必须是当前用户权限范围内可见的历史所有模拟记录 / 复盘记录列表；发起模拟面试是列表主操作，面试完成后必须回写历史记录 / 复盘记录。具体筛选、角色范围、归档 / 删除和团队视图仍未确认 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-046 | 模拟记录列表默认筛选范围与普通用户 / 管理员可见范围如何确定 | open | M02、M06、M08 | `W13-B` 推荐普通用户和管理员默认都进入“我的记录”，管理员额外有团队 / 组织筛选；具体角色、资源范围、审计和列表查询交 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-047 | 发起模拟面试是否必须先选择岗位和简历 | open | M03、M04、M06、M07 | `W13-B` 推荐岗位和简历都必选，并提供就地创建入口，以保证评分、RAG 和复盘证据可解释；是否允许缺失输入仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-048 | RAG / 知识库是否支持用户上传，以及知识库是个人私有、团队共享还是管理员公共 | open | M05、M06、M10 | `W13-B` 推荐一期支持用户私有上传 + 管理员公共知识库，团队共享后置；上传、解析、切片、删除、权限和引用回溯需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-049 | RAG 无命中或检索失败时是否允许继续面试 | open | M05、M06、M07、M08 | `W13-B` 推荐降级为岗位 + 简历上下文继续，但在面试台和复盘中明确证据缺口；具体错误码、重试和降级条件需 `W13-C / W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-050 | 多轮高阶面试采用固定轮次、岗位驱动、弱项驱动还是混合策略 | open | M06、M07、M08、M09 | `W13-B` 推荐一期采用固定模板 + 岗位驱动，弱项驱动作为后续增强入口；具体轮次、追问和结束条件需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-051 | 多轮高阶面试是否允许中途暂停 / 继续 | open | M06、M08 | `W13-B` 推荐一期支持轮次边界暂停 / 继续，题目中途暂停后置；具体状态机、恢复上下文和记录列表操作需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 
 ## 3. 本轮高优问题处理判断
 
@@ -80,6 +89,8 @@
 | P0 | OQ-001 | open | M01-M10 | W13-A 已确认一期 MVP 是工作台级且包含服务端能力，但目标代码结构、`apps/api/**` / `infra/**` 是否创建、API 框架、数据库与部署边界仍未确认 |
 | P0 | OQ-004 / OQ-005 | open | M02、M10 | W13-A 已确认完整登录 / 权限进入一期范围，但登录方案、会话机制、权限矩阵和管理员边界仍未确认 |
 | P0 | OQ-006、OQ-007 | open / proposed-default | M03、M10 | W13-A 只确认一期导出采用复制 / Markdown 下载、不做完整 PDF；Markdown 渲染链、上传 / 转换 / 导出异步策略仍需后续确认 |
+| P0 | OQ-043 / OQ-044 / OQ-045 | confirmed | M05、M06、M07、M08、M09、M10 | 用户已确认 RAG / 知识库、多轮高阶面试和模拟记录列表默认入口进入一期主链；这些不是 proposed-default，也不再归入后续占位 |
+| P0 | OQ-046 / OQ-047 / OQ-048 / OQ-049 / OQ-050 / OQ-051 | open | M02、M03、M04、M05、M06、M07、M08、M09、M10 | 这些是 W13-B 从已确认范围中拆出的实现细节问题：记录范围、岗位简历必选、知识库上传与可见范围、RAG 失败降级、多轮策略、多轮暂停 / 继续；不得在 W13-B 中自行写成 confirmed |
 | P0 | OQ-019 | proposed-default | M01、M10 | 已形成入口语义级默认冻结方案；可作为 `M01` 平台基线与 `M10` 治理边界切分输入，但暂不扩张为完整流水线定稿 |
 | P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成三层状态：共享最小映射维持 `page/page_size/q/status/sort/order`、分页骨架与页面容器 adapter 职责；模块扩展键单独登记；route / callback / request adapter 细节继续留在最低位文档处理。模块吸收摘要：`M01` 已压到共享最小层输入且当前目标项已清理完成，`M02` 已在模块内闭合到共享最小层但 `GET /api/v1/members` 当前仍只停留在默认治理层、尚未升格为正式候选输入，`M03` 已吸收但未放行 |
 | P0 | OQ-024 | proposed-default | M02、M03 | 已形成并写死三层状态：旧 `ST02_* / ST03_*` 为历史容器、`M02` 当前只允许 `MT02_01 / MT02_02`、`M03` 当前只允许 `MT03_01 / MT03_03` 作为观察蓝本、正式子任务 ID 与开窗资格继续后置到正式候选复评之后；当前正式开窗名单固定为空。`MR-18 / MR-23 / RV-09` 已把 `M03` 的现行口径压稳为“已吸收但未放行”，当前剩余只保留正式开窗层为空所形成的治理性结构阻塞，不再重开全局映射讨论 |
@@ -175,9 +186,9 @@
 - `Q8 / confirmed`：首切片完成标准固定为“JD + 简历 Markdown -> 3 条首轮问题 -> 第 1 题问答 -> 简版反馈”。
 - 本轮继续明确排除：RAG、资产库、管理台、多轮面试、完整权限体系、完整 CI/CD。
 
-### 5.6 W13-A 用户确认结果（当前一期工作台 MVP 范围）
+### 5.6 W13-A 与后续用户 confirmed 结果（当前一期工作台 MVP 范围）
 
-> 以下 9 项是用户已确认结论，状态为 `confirmed`，不再是 `proposed-default`。本节只冻结范围层，不冻结具体实现方案。
+> 以下 12 项是用户已确认结论，状态为 `confirmed`，不再是 `proposed-default`。本节只冻结范围层，不冻结具体实现方案。
 
 - `1B / confirmed`：最小项目范围必须是工作台级，一期 MVP 不再是 W10 首切片。
 - `2C / confirmed`：一期 MVP 必须包含服务端历史记录 / 复盘记录。
@@ -188,8 +199,11 @@
 - `7B / confirmed`：导出采用复制 / Markdown 下载，不做完整 PDF。
 - `8A / confirmed`：当前 `apps/web/**` 原型保留为原型探索参考证据，不直接扩展。
 - `9B / confirmed`：暂停代码开发，回到设计文档补齐。
+- `10B / confirmed`：一期 MVP 必须包含 RAG / 知识库能力。
+- `11B / confirmed`：一期 MVP 必须包含多轮高阶面试能力。
+- `12B / confirmed`：模拟面试模块默认入口必须是历史所有模拟记录列表；用户从历史记录列表发起模拟面试，再进入面试台，完成后回写历史记录 / 复盘记录。
 
-当前仍未确认的实现方案包括：具体 LLM provider、数据库类型、登录方案、权限模型细节、评分维度和权重、API / 后端框架、导出形态细节、运维 / 部署边界。
+当前仍未确认的实现方案包括：具体 LLM provider、数据库类型、登录方案、权限模型细节、RAG / 知识库上传与可见范围、检索失败降级策略、多轮高阶面试策略、暂停 / 继续规则、评分维度和权重、API / 后端框架、导出形态细节、运维 / 部署边界。
 
 ### 5.7 W13-B 信息架构与用户旅程待确认项
 
@@ -203,6 +217,15 @@
 - `OQ-040`：Markdown 导出入口与范围。
 - `OQ-041`：工作台首页统计卡片范围。
 - `OQ-042`：后续占位能力在导航中的位置。
+- `OQ-043`：一期包含 RAG / 知识库能力，已 confirmed。
+- `OQ-044`：一期包含多轮高阶面试能力，已 confirmed。
+- `OQ-045`：模拟面试模块默认入口是历史所有模拟记录列表，已 confirmed。
+- `OQ-046`：模拟记录列表默认筛选范围与权限可见范围。
+- `OQ-047`：发起模拟面试是否必须先选择岗位和简历。
+- `OQ-048`：RAG / 知识库上传能力与个人 / 团队 / 公共可见范围。
+- `OQ-049`：RAG 无命中或检索失败时是否允许继续面试。
+- `OQ-050`：多轮高阶面试策略类型和结束条件。
+- `OQ-051`：多轮高阶面试是否允许中途暂停 / 继续。
 
 ## 6. 使用说明
 
