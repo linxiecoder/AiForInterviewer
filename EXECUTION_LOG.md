@@ -25,6 +25,39 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W10-C 关系层补齐 / `RQ01` 到模块与后续承接对象映射固定
+
+- 范围：修改 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`、`docs/modules/**`、`apps/**`、`infra/**` 与任何业务代码目录。
+- 执行类型：首切片 requirement / module / subtask 关系补齐、开放问题分层、全局状态同步。
+- 修改内容：
+  - 在 `TASK_INDEX.md` 中补齐 `RQ01 -> M03 / M04 / M06 / M07 (+ 条件性 M01)` 的首切片关系映射，并明确 `MT03_01 / MT03_03` 仅为观察蓝本、`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 仅为后续承接对象、正式开窗层继续为空。
+  - 在 `MODULE_INDEX.md` 中补齐首切片模块角色说明，并明确 `M02 / M05 / M08 / M09 / M10` 是本轮明确排除，不是遗漏。
+  - 在 `OPEN_QUESTIONS.md` 中新增 `W10-C` 分类说明：把首切片相关问题区分为已确认事实、可沿用 `proposed-default` 的输入、需要用户确认的范围与本轮明确排除项，但不改写原问题表状态列。
+  - 在 `DESIGN_DECISIONS.md` 中登记“关系层固定为 `RQ01 -> M03 / M04 / M06 / M07 (+ 条件性 M01)`、正式开窗层为空、未来 monorepo 蓝图不是当前实施依据、`W10-D` 仍需总控二次判定”的当前决策。
+  - 在 `PLAN_LATEST.md` 中把 `W10-C` 标记为已完成关系补齐，并把当前真正待定收缩为“是否进入 `W10-D` 的总控二次判定”。
+- 影响文件：
+  - `TASK_INDEX.md`
+  - `MODULE_INDEX.md`
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+- 成熟度变化（建议）：
+  - 本轮不改变 `DOC_STATE.yaml` 正式状态，不新增 blocker，不新增正式子任务 ID，不把观察蓝本提升为正式开窗对象。
+  - 本轮提升的是首切片关系层、问题分类和后续判断点的全局可判读性。
+- 进展变化（建议）：
+  - 当前已从“`W10-B` 已交接但关系层未闭合”推进到“`W10-C` 已闭合首切片关系层，正式开窗层仍为空”。
+  - 当前阶段仍停留在文档与关系层收口；`W10-D` 仍不是默认下一步。
+- 验证结果：
+  - 开始前已执行 `git status --short`、`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`、`python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`，结果均允许继续。
+  - 本轮完成后需再次执行上述三条命令，并执行 `rg -n "RQ01|M03|M04|M06|M07|M01|M02|M05|M08|M09|M10|MT03_01|MT03_03|ST04_01|ST04_02|ST06_01|ST06_02|ST07_03|正式开窗|观察蓝本|首切片" TASK_INDEX.md MODULE_INDEX.md OPEN_QUESTIONS.md DESIGN_DECISIONS.md PLAN_LATEST.md EXECUTION_LOG.md`，确认关系口径仅落在允许修改文件。
+- 遗留问题：
+  - `W10-D` 是否需要最小代码骨架仍需总控二次判定。
+  - 登录 / 权限、真实 LLM API、长期记录 / 导出 / RAG / 管理台等仍未进入首切片确认范围。
+- 下一步建议动作：
+  - 若只做阶段 0 校验提交，下一窗口应仅提交 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`。
+  - 由总控基于当前干净状态与关系层结论决定是否允许 `W10-D` 进入最小代码骨架判断。
+
 ### 2026-04-25 / W10-B 主项目文档细化 / 首切片输入处理输出与交接压实
 
 - 范围：修改 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`apps/**`、`infra/**` 与任何业务代码目录。
