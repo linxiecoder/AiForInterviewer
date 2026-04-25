@@ -105,15 +105,17 @@
 - `DOC-PLAN-P1` 已从当前受管 `documents` 集合移出，保留为未来 monorepo / 产品落地蓝图文件与历史 round 引用。
 - `evaluate-state` 已不再报告 `DOC-PLAN-P1 -> document_repo_truth_mismatch`；已关闭 round 中保留的 `DOC-PLAN-P1` target / evidence 仅作为历史记录。
 - 当前状态层、主入口层与当前仓库执行计划入口已重新对齐，不再存在由旧 plan 造成的 document blocker。
-- 当前真正待定的是：是否创建 `apps/web` / `apps/api` / `infra` 结构、首批开发落在哪一层、是否先继续模块与关系补齐。
+- `W10-A` 已冻结当前优先级：先收敛首个 MVP 切片与关系层，不直接创建业务代码目录。
+- 当前真正待定的只剩两类问题：首切片边界能否在全局文档中压实、以及 `RQ01 -> module -> subtask/观察蓝本` 能否在不重开正式开窗层的前提下闭合。
 
 ## 7. 当前推荐推进路径
 
 1. 当前主入口统一以 `PLAN_LATEST.md` + `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 为准。
-2. `W9` 已完成状态回写 / 全局治理同步：当前受管 plan 以 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 为准，`DOC-PLAN-P1` 只保留为历史蓝图引用。
-3. 在创建 `apps/web` / `apps/api` / `infra` 前，先冻结当前仓库的落地路径决策，不把未来蓝图路径伪装成当前仓库事实。
-4. 若继续推进主项目设计开发，优先明确模块优先级、需求到模块到子任务的落地链路，以及第一批真实代码落点。
-5. 在落地路径冻结后，再进入下一阶段主项目设计开发窗口。
+2. `W10-A` 已确认下一轮采用“最小功能切片优先”，首切片固定为“岗位 JD 手工输入 + 简历 Markdown 粘贴/编辑 -> 首轮问题 -> 1 轮问答 -> 简版反馈摘要”。
+3. `W10-B` 先细化首切片边界、排除项、验收口径与文档口径。
+4. `W10-C` 再补齐 `RQ01 -> M03/M04/M06/M07 (+ 条件性 M01)` 的关系链与观察蓝本映射，保持正式开窗层为空。
+5. `W10-D` 必须等待 `W10-B / W10-C` 完成且 `validate-state` / `evaluate-state` 仍为干净结果后，才允许总控重新判断是否需要最小代码骨架；当前不默认触发。
+6. `W10-E / W10-F` 只在 `W10-D` 的条件判断之后依序进入；若 `W10-D` 被取消，则继续停留在文档与关系层收口。
 
 ## 8. 当前不作为默认主链的内容
 

@@ -25,6 +25,38 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W10-A 总控路线冻结 / 首个 MVP 切片与代码目录 gating 固定
+
+- 范围：修改 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`PLAN_LATEST.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`EXECUTION_LOG.md`；不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`、`docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`、`apps/**`、`infra/**` 与任何业务代码目录。
+- 执行类型：总控规划冻结、首切片边界收敛、业务代码目录条件闸门固化。
+- 修改内容：
+  - 冻结下一轮路线为“最小功能切片优先”，并明确默认首切片采用“岗位 JD 手工输入 + 简历 Markdown 粘贴/编辑 -> 生成首轮模拟面试问题 -> 记录 1 轮问答 -> 输出简版反馈摘要”。
+  - 明确首切片的直接设计范围为 `M03 / M04 / M06 / M07`，`M01` 只作为条件性最小壳层支撑模块；`M02 / M05 / M08 / M09 / M10` 不进入首切片。
+  - 明确当前正式 requirement 层仍以 `RQ01` 为入口，正式开窗层继续保持为空；`M03` 只允许继续引用 `MT03_01 / MT03_03` 作为观察蓝本，不把旧 `ST03_*` 或观察蓝本当作实施入口。
+  - 明确 `W10-A` 当前不允许创建业务代码目录；仅当 `W10-B / W10-C` 完成边界与关系补齐，且 `validate-state / evaluate-state` 仍保持干净结果后，才允许总控重新判断 `W10-D` 是否需要最小代码骨架。
+  - 明确后续顺序：`W10-B` 文档细化、`W10-C` 关系补齐、`W10-D` 条件触发的最小代码骨架、`W10-E` 验证、`W10-F` 收口。
+- 影响文件：
+  - `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+  - `PLAN_LATEST.md`
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `EXECUTION_LOG.md`
+- 成熟度变化（建议）：
+  - 本轮不改变 `DOC_STATE.yaml` 正式状态，不改变模块成熟度，不把任何观察蓝本提升为正式候选。
+  - 本轮提升的是“下一轮推进路径、首切片边界与目录开工条件”的全局清晰度。
+- 进展变化（建议）：
+  - 当前已从“可以进入下一轮设计开发，但首切片与目录开工条件未冻结”推进到“首切片已冻结、目录 gating 已固定、后续窗口顺序已明确”。
+  - 当前阶段仍是业务设计细化，不进入业务代码实施。
+- 验证结果：
+  - 开始前已执行 `git status --short`、`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`、`python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`，结果均允许继续。
+  - 本轮完成后需再次执行上述三条命令，并确认 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`、`apps/**`、`infra/**` 未被修改。
+- 遗留问题：
+  - 当前仍未形成可直接开窗的正式子任务 ID；`M03` 仍只有 `MT03_01 / MT03_03` 观察蓝本，`M04 / M06 / M07` 的子任务仍停留在骨架状态。
+  - 业务代码目录是否需要最小骨架，仍是 `W10-D` 的条件判断问题，不是 `W10-A` 的默认动作。
+- 下一步建议动作：
+  - 优先启动 `W10-B` 与 `W10-C`，二者可在相同冻结边界下并行推进。
+  - 只有在 `W10-B / W10-C` 均完成且状态评估仍干净后，才允许总控判断是否开启 `W10-D`。
+
 ### 2026-04-25 / W8 DOC-PLAN-P1 修正或退役决策 / 方案 C 拆分蓝图与当前执行计划
 
 - 范围：修改 `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`、新增 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、更新 `PLAN_LATEST.md`、更新 `EXECUTION_LOG.md`，并为新计划文档最小补记 `AGENTS.md` 索引；不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`、`docs/superpowers/specs/**`。

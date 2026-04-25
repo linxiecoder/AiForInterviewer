@@ -17,8 +17,8 @@
 
 | OQ ID | 问题 | 状态 | 关联模块 | 当前建议 | 需回写文档 |
 | --- | --- | --- | --- | --- | --- |
-| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | proposed-default | M01-M10 | 当前仓库继续保持“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”布局；若进入业务代码实施，目标产品代码目录先按 monorepo 推进，待确认后固化到设计决策 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
-| OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | proposed-default | M01、M10 | 本轮先做最小可运行骨架与验证入口 | `PLAN_LATEST.md`、`TECHNICAL_STANDARDS.md` |
+| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | proposed-default | M01-M10 | 当前仓库继续保持“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”布局；`W10-A` 先冻结首个 MVP 切片并明确当前不创建业务代码目录；若后续进入业务代码实施，仍按 monorepo 目标形态推进，但必须等待 `W10-B / W10-C` 完成边界与关系补齐后再判定 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
+| OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | proposed-default | M01、M10 | 最小运行时、测试和 CI 基线只在 `W10-D` 被条件放行时作为最小骨架输入使用，不构成 `W10-A` 直接创建业务代码目录的依据 | `PLAN_LATEST.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-003 | 视觉规范首轮需要沉淀到什么粒度 | proposed-default | M01 | 本轮只沉淀壳层、头部、列表原语与基础页面样式 | `TECHNICAL_STANDARDS.md` |
 | OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | proposed-default | M02、M10 | 本轮先采用开发态 Bearer adapter：统一 `Authorization: Bearer <token>`、`current_user / role / team_id` 上下文，业务层不得依赖 token 内部结构 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-005 | 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面 | proposed-default | M02、M10 | 本轮先覆盖 P1 页面与 API，不扩展未来多租户治理场景 | `DESIGN_DECISIONS.md`、`MODULE_INDEX.md` |
@@ -83,8 +83,8 @@
 
 | OQ ID | 本轮处理 | 默认方案是否足以继续推进 | 若冻结后优先推进模块 |
 | --- | --- | --- | --- |
-| OQ-001 | 已标记 `proposed-default` | 是 | M01-M03 |
-| OQ-002 | 已标记 `proposed-default` | 是 | M01、M10 |
+| OQ-001 | 已标记 `proposed-default` | 是，但当前只足够支撑首切片设计冻结，不足以在 `W10-A` 直接创建业务代码目录 | M01-M03 |
+| OQ-002 | 已标记 `proposed-default` | 是，但仅在 `W10-D` 被条件放行后才进入最小骨架输入 | M01、M10 |
 | OQ-003 | 已标记 `proposed-default` | 是 | M01 |
 | OQ-004 | 已标记 `proposed-default` | 是，但需在设计决策中显式记录 | M02、M10 |
 | OQ-005 | 已标记 `proposed-default` | 是 | M02 |
