@@ -1,5 +1,11 @@
 ﻿# AI 模拟面试 P1 MVP 实现计划
 
+> **状态说明（W8 / 2026-04-25）：**
+> - 本文档当前定位为 `AI 模拟面试系统` 的未来 monorepo / 产品落地蓝图。
+> - 文中出现的 `apps/web`、`apps/api`、`infra`、`.github/workflows` 等路径代表未来目标结构，不代表当前仓库现实。
+> - 当前仓库的直接执行计划请以 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 与 `PLAN_LATEST.md` 为准。
+> - 在后续状态回写窗口更新 `docs/governance/DOC_STATE.yaml` 前，`DOC-PLAN-P1` 仍可能继续出现在 `document_repo_truth_mismatch` 诊断中；这不应再被误读为当前仓库应直接落地这些路径。
+
 > **给执行代理的要求：** 必须使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 按任务逐步实现本计划。所有步骤均使用复选框语法 `- [ ]` 进行跟踪。
 
 **目标：** 交付一套可运行的 `AI 模拟面试 P1 文本版闭环 MVP`，覆盖岗位、简历、岗位匹配分析、模拟面试、打磨面试、复盘、薄弱项、资产库和管理台基础能力。
@@ -17,9 +23,11 @@
 
 ## 范围说明
 
-设计稿覆盖多个子系统，但当前仓库为空，且 P1 目标是一个闭环产品而不是一组孤立服务。这里不再拆成多份独立计划，而是拆成 `11 个可运行纵切片`，每个切片都会在前一个切片基础上增加一条真实可走通的用户链路。
+设计稿覆盖多个子系统。本文档描述的是未来 monorepo 落地蓝图，而不是当前仓库的真实目录或即时执行面。这里不再拆成多份独立计划，而是拆成 `11 个可运行纵切片`，每个切片都会在前一个切片基础上增加一条真实可走通的用户链路；当前仓库现实执行计划请改看 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`。
 
 ## 目标仓库结构
+
+以下结构用于描述未来产品落地目标，不代表当前仓库已存在这些路径。
 
 ### 根目录
 
@@ -95,6 +103,8 @@
   - Playwright 用例
 
 ## 完整仓库目录规划
+
+以下目录树用于锁定未来 monorepo 的目标边界；当前仓库现实请以 `README.md`、`PLAN_LATEST.md` 与 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 为准。
 
 以下目录树用于锁定 `P1` 的**完整仓库边界**。如果后续实现新增正式目录或核心文件，需要先回补本节，再继续扩展实现。
 
@@ -280,6 +290,8 @@ ai-for-interviewer/
 ```
 
 ## 环境基线
+
+以下环境与命令用于未来 monorepo 落地阶段，当前仓库尚未直接执行这些目录级命令。
 
 实施前统一准备：
 

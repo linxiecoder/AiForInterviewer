@@ -178,7 +178,7 @@ def _normalize_oq_policy_fields(oqs: object) -> tuple[dict[str, dict[str, object
             entity_id="GLOBAL",
             field_path="oqs[*]",
             message=(
-                f"Applied default OQ policy fields to {applied_count} OQ(s): "
+                f"已为 {applied_count} 个 OQ 应用默认策略字段: "
                 f"gate_level={OQ_DEFAULT_GATE_LEVEL}, resolution_policy={OQ_DEFAULT_RESOLUTION_POLICY}"
             ),
             evidence=[
@@ -254,37 +254,37 @@ def render_bootstrap_report(
     ambiguous_impl_docs = _collect_ambiguous_implementation_docs(scan_result)
     counts = scan_result["counts"]
     lines = [
-        "# Bootstrap Report",
+        "# Bootstrap 扫描报告",
         "",
-        "## Summary",
+        "## 摘要",
         "",
         f"- repo_root: `{Path(scan_result['repo_root']).as_posix()}`",
         f"- output_path: `{output_path.as_posix()}`",
         f"- report_path: `{report_path.as_posix()}`",
         f"- diagnostics: error={sum(1 for item in diagnostics if item.severity == 'error')}, warning={sum(1 for item in diagnostics if item.severity == 'warning')}",
         "",
-        "## Scan counts",
+        "## 扫描计数",
         "",
         f"- modules: {counts['module']}",
         f"- subtasks: {counts['subtask']}",
         f"- oqs: {counts['oq']}",
         f"- template_like_docs: {counts['template_like_doc']}",
         "",
-        "## Detected template-like docs",
+        "## 检测到的模板化文档",
         "",
     ]
     if template_docs:
         lines.extend(f"- `{item}`" for item in template_docs)
     else:
-        lines.append("- none")
+        lines.append("- 无")
 
-    lines.extend(["", "## Ambiguous implementation docs", ""])
+    lines.extend(["", "## 存在歧义的实施文档", ""])
     if ambiguous_impl_docs:
         lines.extend(f"- `{item}`" for item in ambiguous_impl_docs)
     else:
-        lines.append("- none")
+        lines.append("- 无")
 
-    lines.extend(["", "## Diagnostics snapshot", ""])
+    lines.extend(["", "## 诊断快照", ""])
     oq_policy_diag = [item for item in diagnostics if item.code == "BOOTSTRAP_OQ_POLICY_DEFAULT_APPLIED"]
     if oq_policy_diag:
         for item in oq_policy_diag:
@@ -295,7 +295,7 @@ def render_bootstrap_report(
             missing_gate = evidence.get("missing_gate_level_count", "n/a")
             missing_policy = evidence.get("missing_resolution_policy_count", "n/a")
             lines.append(
-                "- OQ policy defaults applied:"
+                "- 已应用 OQ 默认策略字段:"
                 f" count={count}"
                 f", defaults={defaults}"
                 f", missing_gate_level={missing_gate}"
@@ -308,7 +308,7 @@ def render_bootstrap_report(
                 f"- `{diagnostic.code}` [{diagnostic.severity}] {diagnostic.entity_type}:{diagnostic.entity_id} -> {diagnostic.message}"
             )
     else:
-        lines.append("- none")
+        lines.append("- 无")
     lines.append("")
     return "\n".join(lines)
 

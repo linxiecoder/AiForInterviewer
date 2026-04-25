@@ -1,55 +1,131 @@
-# AI 模拟面试 P1 最新文档总控
+# AI 模拟面试系统当前推进计划
 
 ## 1. 文档定位
 
-- 本文档是当前项目全局文档体系的总控入口，用于说明目标、范围、模块顺序和维护规则。
-- 上游源文档为：
-  - [AI 模拟面试 P1 文本版闭环设计稿](docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md)
-  - [AI 模拟面试 P1 MVP 实现计划](docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md)
-- `docs/modules/` 下的模块文档和子任务文档，是后续设计细化、实施准备与执行回写的主承接区。
+- 本文档用于说明当前仓库的推进目标、当前阶段、已完成项、阻断项和下一步。
+- 本文档是当前执行入口，不再继续以阶段 3 白名单治理叙事作为主导入口。
+- 历史治理轮次仍保留在 `EXECUTION_LOG.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md` 等文档中，本文件只保留“当前推进计划”所需信息。
 
-## 2. 当前阶段
+## 2. 当前总目标
 
-- 当前状态：当前仍处于“阶段 3 / 总控澄清 + 模块候选白名单准备轮”。
-- 当前目标：在 `GC-11 / MR-28` 已完成任务包时间线对齐、认领状态固化与局部时间线清零的基础上，继续把 `M02 / M03` 的最低位 API 结构性主阻塞固定为“放行前置条件层”问题；若继续推进，不重开同类结构性复核。
-- 当前限制：仓库尚未进入稳定代码实施阶段；本轮仍不开放任何子任务实施窗口，也不允许把白名单观察面误写成正式子任务候选。
-- 当前说明：`最低位压缩` 只是本轮模块窗口采用的执行方法，不是新的全局阶段名；`GC-07 / MR-20 / MR-21 / RV-08 / GC-08 / MR-22 / MR-23 / RV-09 / GC-09 / MR-24 / MR-25 / RV-10 / GC-10 / MR-26 / MR-27 / RV-11 / GC-11` 已完成收口，`OQ-024` 的正式映射已被总控写死，且当前正式开窗名单仍为空；当前仍不进入“候选放行判定轮”。
+- 围绕“AI 模拟面试系统”继续推进设计开发与治理工具链建设。
+- 保持“项目目标”和“当前仓库现实”分层表达，避免把未来产品蓝图误写成当前仓库落地计划。
+- 让当前主入口能够正确指导后续窗口先做状态校验、再做评估、再决定是否开启新一轮协作。
 
-## 3. 执行原则
+## 3. 当前仓库阶段
 
-- 文档体系采用 `global -> module -> subtask` 分层。
-- 源设计稿与源实现计划保留为历史上游，不直接承担逐轮回写。
-- 当前轮次优先处理总控状态分层与全局叙事收口，而不是继续按源任务顺序平推。
-- 单次实施单位应收敛到一个子任务。
-- 只有当 `SUBTASK_DESIGN.md` 可作为下游输入，且 `SUBTASK_IMPLEMENTATION.md` 可直接用于实施后，才进入代码执行。
-- 每轮执行后需要同步回写 `TASK_INDEX.md`、`EXECUTION_LOG.md`、`DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`。
+- 当前阶段：主入口、工具文档、工具代码、测试规则的 P0 对齐收口阶段。
+- 当前仓库现实：仓库当前承载设计文档、治理状态、`doc_governor` / `doc_governance` 工具、测试与验证机制。
+- 当前仓库限制：当前仓库尚不是完整 `apps/web`、`apps/api`、`infra` monorepo 实现仓库。
 
-## 4. 模块地图
+## 4. 当前执行入口与历史叙事边界
 
-| Module ID | 模块名称 | 目标摘要 | 模块目录 |
-| --- | --- | --- | --- |
-| M01 | 基础平台与工作台壳层 | 建立仓库结构、运行时、i18n、测试与文档治理基线 | `docs/modules/M01-foundation-and-platform/` |
-| M02 | 鉴权、团队与成员 | 明确身份模型、团队隔离、成员目录与权限矩阵 | `docs/modules/M02-identity-and-team/` |
-| M03 | 岗位、简历与文档处理 | 建立岗位、简历、版本、上传、转换与导出链路 | `docs/modules/M03-jobs-resumes-and-documents/` |
-| M04 | 匹配分析与训练证据 | 建立岗位-简历绑定、分析评分和训练证据输出 | `docs/modules/M04-match-analysis-and-evidence/` |
-| M05 | 资产库、归档与检索 | 建立资产类型、资产对象、归档和检索入库机制 | `docs/modules/M05-assets-and-retrieval/` |
-| M06 | 模拟面试、上下文与导出 | 建立会话、上下文包、题目来源、消息流与导出 | `docs/modules/M06-simulated-interview-and-context/` |
-| M07 | 打磨模式、评估与进度 | 建立主题推荐、能力树、逐题评估与进度快照 | `docs/modules/M07-polish-assessment-and-progress/` |
-| M08 | 复盘与回放 | 建立复盘对象、真实面试导入、模拟面试回放与导出 | `docs/modules/M08-review-and-replay/` |
-| M09 | 训练中心与薄弱项生命周期 | 建立薄弱项聚合、训练抽屉与生命周期流转 | `docs/modules/M09-training-and-weakness-lifecycle/` |
-| M10 | 管理台、治理与可观测性 | 建立成员治理、模型/规则配置、可观测性与运维入口 | `docs/modules/M10-admin-governance-and-observability/` |
+### 4.1 当前执行入口
 
-## 5. 推荐执行顺序
+当前应以以下入口理解和推进仓库：
 
-1. `GC-08 / MR-22 / MR-23 / RV-09 / GC-09 / MR-24 / MR-25 / RV-10 / GC-10 / MR-26 / MR-27 / RV-11 / GC-11` 已完成，当前放行路径总览、模块侧文案降噪、结构性主阻塞重排、最低位 API 复核、放行前置条件再压实与总控认领状态固化都已收口
-2. 若继续推进，默认不再开新的总控澄清窗，也不默认再开最小模块修正窗；只有在 `M02 / M03` 的放行前置条件本身出现新事实变化时，才重新开窗
-3. 当前不存在默认必开的局部时间线修正动作；`MR-28` 已完成
-4. `M02` 当前模块侧精炼结论已由总控认领为 `MR-26` 等价收口结果，默认不再要求新增模块窗补记
-5. `M01` 当前目标项已清理完成；下一轮默认不再单独开 `M01` 模块清理窗
-6. 在 `M02` 的 `/members` 共享最小层尚未升格为正式候选输入、`M03` 的正式开窗层仍为空且上传 / 导出链依赖未实质收口前，仍不开放任何子任务窗口
+1. `README.md`
+2. `AGENTS.md`
+3. `PLAN_LATEST.md`
+4. `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+5. `docs/DOC_GOVERNANCE.md`
+6. `docs/governance/DOC_AUTOMATION.md`
+7. `docs/governance/DOC_GOVERNOR_RUNBOOK.md`
+8. `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+9. `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
 
-## 6. 维护规则
+### 4.2 上游产品蓝图
 
-- 全局规则变化时，先更新 `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md` 和 `OPEN_QUESTIONS.md`。
-- 模块边界变化时，先更新对应模块目录下的模块文档，再回写 `MODULE_INDEX.md` 与 `TASK_INDEX.md`。
-- 子任务成熟度变化时，回写 `DOCUMENT_MATURITY.md` 与 `DOCUMENT_PROGRESS.md`。
+- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 继续作为上游产品设计输入。
+- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 继续保留，但当前已明确降级为未来 monorepo 蓝图，不再充当当前仓库可直接执行计划。
+- 当前仓库执行计划入口改为 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`。
+- `W9` 已完成状态层同步：`DOC_STATE.yaml` 的当前受管 plan 入口已切换到 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`，`DOC-PLAN-P1` 不再作为当前仓库受管 execution plan 参与 document evaluate。
+
+### 4.3 历史治理记录
+
+- 阶段 3、白名单、formal window、`M01-M03` 等叙事应视为历史治理背景与阶段记录。
+- 这些记录仍有审计价值，但当前不再作为本文件的主叙事。
+- 若需要查看历史治理收口链路，应转到 `EXECUTION_LOG.md` 与相关治理状态文档，而不是从本文件继续展开旧轮次。
+
+### 4.4 当前 `doc_governor` 工具链定位
+
+- `doc_governor` 当前是协同 Codex 推进设计开发、文档治理、任务拆分、状态评估、执行交接和验证收口的宽 CLI 工具链。
+- 按 W2 已确认结论，命令面应区分：
+  - 主链命令
+  - 扩展命令
+  - 生成类命令
+  - preview/apply/sync/seed 类命令
+  - 实验性或需谨慎使用命令
+- preview/apply/sync/seed 类命令、`generate-implementation-packet`、`apply-round` 不应被写成默认主链 SOP。
+- `render-report` 和生成报告属于解释性治理产物，不是 confirmed state 真值。
+
+## 5. 本轮已完成
+
+### 5.1 W2 工具文档对齐
+
+- `docs/DOC_GOVERNANCE.md`、`docs/governance/DOC_AUTOMATION.md`、`docs/governance/DOC_GOVERNOR_RUNBOOK.md` 已完成命令面对齐。
+- `DOC_AUTOMATION.md` 与 `DOC_GOVERNOR_RUNBOOK.md` 已覆盖 CLI 全量 39 个顶层子命令。
+- 命令角色分层已明确，默认主链与谨慎使用命令的边界已明确。
+
+### 5.2 W3 工具代码 P0
+
+- `validate-state` 当前结果为 `ok=true, error=0, warning=0`。
+- `evaluate-state` 当前结果为 `ok=true, error=0, warning=0`。
+- 定向 pytest 当前结果为 `43 passed`。
+- 已补入 `repo_truth.referenced_paths`、`repo_truth.existing_paths`、`repo_truth.missing_paths`。
+- 已补入 `direction_drift.future_blueprint_terms`、`direction_drift.governance_term_count`。
+- 已新增 `document_repo_truth_mismatch` blocker，用于识别“未来蓝图路径”和“当前仓库现实”不一致。
+
+### 5.3 W4 测试规则统一
+
+- `docs/governance/TEST_POLICY.md` 与 `tests/test_temp_artifact_policy.py` 已完成统一。
+- 当前仓库测试临时产物规则已经收敛到 `ManagedTempArtifacts` / `ManagedTempArtifactsTestCase` + `tools.test_runner.run_tests` + pytest 会话级残留守卫。
+
+### 5.4 W1 主入口收口
+
+- 新建 `README.md`，补上当前项目、当前仓库、当前限制、推荐工作流与测试规则入口说明。
+- 重写 `PLAN_LATEST.md`，切换为“当前推进计划”文档。
+- 在 `EXECUTION_LOG.md` 追加本轮 W1 收口记录，并列出 W5 与后续窗口事项。
+
+### 5.5 W5-W7 验证、清理与中文化收口
+
+- `W5` 已完成主入口只读复核，通过当前仓库真相与执行入口口径检查。
+- `W6-A` 已清理 4 个基线未跟踪项。
+- `W6-B` 已完成本轮结论收口保存。
+- `W7` 已完成 `render.py` / `bootstrap.py` 生成报告中文化。
+
+### 5.6 W8 计划分层决策
+
+- 已选择方案 `C`：拆分未来蓝图与当前仓库执行计划。
+- `DOC-PLAN-P1` 现明确定位为未来 monorepo / 产品落地蓝图。
+- 已新增 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`，作为当前仓库执行计划入口。
+
+## 6. 当前阻断与风险
+
+- `DOC-PLAN-P1` 已从当前受管 `documents` 集合移出，保留为未来 monorepo / 产品落地蓝图文件与历史 round 引用。
+- `evaluate-state` 已不再报告 `DOC-PLAN-P1 -> document_repo_truth_mismatch`；已关闭 round 中保留的 `DOC-PLAN-P1` target / evidence 仅作为历史记录。
+- 当前状态层、主入口层与当前仓库执行计划入口已重新对齐，不再存在由旧 plan 造成的 document blocker。
+- 当前真正待定的是：是否创建 `apps/web` / `apps/api` / `infra` 结构、首批开发落在哪一层、是否先继续模块与关系补齐。
+
+## 7. 当前推荐推进路径
+
+1. 当前主入口统一以 `PLAN_LATEST.md` + `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 为准。
+2. `W9` 已完成状态回写 / 全局治理同步：当前受管 plan 以 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 为准，`DOC-PLAN-P1` 只保留为历史蓝图引用。
+3. 在创建 `apps/web` / `apps/api` / `infra` 前，先冻结当前仓库的落地路径决策，不把未来蓝图路径伪装成当前仓库事实。
+4. 若继续推进主项目设计开发，优先明确模块优先级、需求到模块到子任务的落地链路，以及第一批真实代码落点。
+5. 在落地路径冻结后，再进入下一阶段主项目设计开发窗口。
+
+## 8. 当前不作为默认主链的内容
+
+以下内容当前不应在主入口中被写成默认闭环：
+
+- preview/apply/sync/seed 类命令
+- `generate-implementation-packet`
+- `apply-round`
+- 任何把 generated report 直接等同于 confirmed state 的叙述
+
+## 9. 维护要求
+
+- 若后续“当前仓库真相”发生变化，应优先更新 `README.md`、`PLAN_LATEST.md` 与 `EXECUTION_LOG.md` 的主入口叙事。
+- 若后续处理计划入口，必须同时维护 `DOC-PLAN-P1` 的未来蓝图定位与 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 的当前执行计划定位。
+- 若后续新增正式入口文档，应先补入 `AGENTS.md` 索引，再继续扩展。

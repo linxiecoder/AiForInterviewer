@@ -203,6 +203,41 @@ class DocumentEvaluateTests(ManagedTempArtifactsTestCase):
         self.assertEqual(document["facts"]["extracted_refs"]["oq_refs"], ["OQ-004"])
         self.assertEqual(document["derived"]["missing_relation_refs"], [])
 
+    def test_document_repo_truth_mismatch_blocks_stale_target(self) -> None:
+        state = _base_state()
+        state["documents"]["DOC-PLAN-P1"] = _document_entry(
+            doc_type="plan",
+            path="docs/superpowers/plans/plan.md",
+            required_sections=[
+                ("scope", "## Scope"),
+            ],
+        )
+        self._write_state(state)
+        self._write_doc(
+            "docs/superpowers/plans/plan.md",
+            (
+                "# Plan\n\n"
+                "## Scope\n\n"
+                "Current implementation still targets `apps/api/app/main.py` and "
+                "`apps/web/src/app/page.tsx` in a monorepo layout.\n"
+            ),
+        )
+
+        exit_code, payload = self._run_cli("evaluate-state", "--input", str(self.state_path))
+        self.assertEqual(exit_code, 0)
+        document = payload["documents"]["DOC-PLAN-P1"]
+        blocker_codes = {item["reason_code"] for item in document["derived"]["document_blockers"]}
+        self.assertIn("document_repo_truth_mismatch", blocker_codes)
+        self.assertEqual(
+            document["facts"]["repo_truth"]["missing_paths"],
+            ["apps/api/app/main.py", "apps/web/src/app/page.tsx"],
+        )
+        self.assertEqual(
+            document["facts"]["direction_drift"]["future_blueprint_terms"],
+            ["apps/api", "apps/web", "monorepo"],
+        )
+        self.assertFalse(document["derived"]["assessed_ready"])
+
 
 if __name__ == "__main__":
     unittest.main()

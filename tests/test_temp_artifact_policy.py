@@ -5,6 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = REPO_ROOT / "tests"
+DOC_POLICY_PATH = REPO_ROOT / "docs" / "governance" / "TEST_POLICY.md"
 ALLOWED_FILES = {
     TEST_ROOT / "doc_governor" / "test_temp_artifacts.py",
     TEST_ROOT / "test_temp_artifact_policy.py",
@@ -49,11 +50,11 @@ PROHIBITED_PATTERNS = (
     ),
     (
         re.compile(r"\bPath\s*\(\s*[\"'](?:_?tmp|temp)(?:[-_][^\"']*)?[\"']\s*\)"),
-        "测试不得直接构造 Path('tmp...') / Path(\"tmp...\")；请改用 ManagedTempArtifacts 或 pytest tmp_path。",
+        "测试不得直接构造 Path('tmp...') / Path(\"tmp...\")；请改用 ManagedTempArtifacts / ManagedTempArtifactsTestCase。",
     ),
     (
         re.compile(r"\b(?:os\.)?mkdir\s*\(\s*[\"'](?:_?tmp|temp)(?:[-_][^\"']*)?[\"']"),
-        "测试不得直接 mkdir('tmp...') / os.mkdir('tmp...')；请改用 ManagedTempArtifacts 或 pytest tmp_path。",
+        "测试不得直接 mkdir('tmp...') / os.mkdir('tmp...')；请改用 ManagedTempArtifacts / ManagedTempArtifactsTestCase。",
     ),
 )
 
@@ -83,6 +84,21 @@ class TestTempArtifactPolicyTests(unittest.TestCase):
             violations.extend(_collect_policy_violations(path, text))
 
         self.assertEqual([], violations, "\n".join(violations))
+
+    def test_policy_messages_do_not_suggest_banned_pytest_temp_fixtures(self) -> None:
+        messages = "\n".join(message for _, message in PROHIBITED_PATTERNS)
+        self.assertNotIn("pytest tmp_path", messages)
+        self.assertNotIn("pytest 提供的 `tmp_path` / `tmp_path_factory`", messages)
+
+    def test_test_policy_doc_matches_managed_temp_strategy(self) -> None:
+        text = DOC_POLICY_PATH.read_text(encoding="utf-8")
+        self.assertIn("`ManagedTempArtifacts` / `ManagedTempArtifactsTestCase`", text)
+        self.assertIn("不得直接使用 `tmp_path` / `tmp_path_factory`", text)
+        self.assertIn("AI_FOR_INTERVIEWER_KEEP_TEST_ARTIFACTS", text)
+        self.assertIn("AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS", text)
+        self.assertIn("tests/test_temp_artifact_policy.py", text)
+        self.assertIn("tests/doc_governor/test_temp_artifacts.py", text)
+        self.assertNotIn("或 pytest 提供的 `tmp_path` / `tmp_path_factory`", text)
 
     def test_policy_rejects_pytest_temp_fixtures(self) -> None:
         source = """

@@ -190,6 +190,7 @@
 
 ### 2.3 计划
 
+- [AI 模拟面试系统当前仓库执行计划](docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md)
 - [AI 模拟面试 P1 MVP 实现计划](docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md)
 
 ### 2.4 全局文档体系

@@ -82,17 +82,18 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
 
         report_path = self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME
         text = report_path.read_text(encoding="utf-8")
-        self.assertIn("# DOC_GOVERNOR_REPORT", text)
-        self.assertIn("## Summary", text)
-        self.assertIn("## Requirement Mainflow", text)
-        self.assertIn("## Modules Requiring Review", text)
-        self.assertIn("## Subtasks Requiring Review", text)
-        self.assertIn("## Documents Requiring Review", text)
-        self.assertIn("## Candidate blockers by layer", text)
-        self.assertIn("## OQ gate summary", text)
-        self.assertIn("## Open Rounds", text)
-        self.assertIn("## Round Delta", text)
-        self.assertIn("- none", text)
+        self.assertIn("# Doc Governor 解释性治理报告", text)
+        self.assertIn("## 摘要", text)
+        self.assertIn("## 需求主链", text)
+        self.assertIn("## 需评审模块", text)
+        self.assertIn("## 需评审子任务", text)
+        self.assertIn("## 需评审文档", text)
+        self.assertIn("## 按层级汇总的 candidate blockers", text)
+        self.assertIn("## OQ 门控摘要", text)
+        self.assertIn("## 未关闭轮次", text)
+        self.assertIn("## 轮次变化摘要", text)
+        self.assertIn("- 无", text)
+        self.assertNotIn("## Summary", text)
         self.assertNotIn("render_input_incomplete=1", text)
         self.assertIn("requirement_entries: 0", text)
         self.assertIn("modules_review_required: 0", text)
@@ -286,19 +287,19 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         report_path = self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME
         report = report_path.read_text(encoding="utf-8")
         expected_sections = [
-            "## Summary",
-            "## Requirement Mainflow",
-            "## Modules Requiring Review",
-            "## Subtasks Requiring Review",
-            "## Documents Requiring Review",
-            "## Candidate blockers by layer",
-            "## Downstream blockers by layer",
-            "## Implementation blockers by layer",
-            "## OQ gate summary",
-            "## Open Rounds",
-            "## Round Delta",
-            "## Next Round Agenda",
-            "## Notes / interpretation boundary",
+            "## 摘要",
+            "## 需求主链",
+            "## 需评审模块",
+            "## 需评审子任务",
+            "## 需评审文档",
+            "## 按层级汇总的 candidate blockers",
+            "## 按层级汇总的 downstream blockers",
+            "## 按层级汇总的 implementation blockers",
+            "## OQ 门控摘要",
+            "## 未关闭轮次",
+            "## 轮次变化摘要",
+            "## 下一轮议程",
+            "## 说明与解释边界",
         ]
         positions = [report.index(section) for section in expected_sections]
         self.assertEqual(positions, sorted(positions))
@@ -336,7 +337,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
 
         module_rows = [
             line.strip()
-            for line in self._section_lines(report, "## Modules Requiring Review")
+            for line in self._section_lines(report, "## 需评审模块")
             if line.startswith("- ")
         ]
         self.assertEqual(module_rows[0], "- `M01`: review_required=true reason=[downstream_ready_no_hard_blocker]")
@@ -344,18 +345,18 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
 
         subtask_rows = [
             line.strip()
-            for line in self._section_lines(report, "## Subtasks Requiring Review")
+            for line in self._section_lines(report, "## 需评审子任务")
             if line.startswith("- ")
         ]
         self.assertEqual(subtask_rows[0], "- `ST01_10`: review_required=true reason=[implementation_doc_activation_recommended]")
         document_rows = [
             line.strip()
-            for line in self._section_lines(report, "## Documents Requiring Review")
+            for line in self._section_lines(report, "## 需评审文档")
             if line.startswith("- ")
         ]
         self.assertEqual(document_rows[0], "- `DOC-SPEC-P1`: review_required=true reason=[document_ready_for_review]")
         self.assertIn("- `R-01`: status=review topic=spec review targets=[DOC-SPEC-P1:goal]", report)
-        self.assertIn("### Blocker changes", report)
+        self.assertIn("### 阻塞项变化", report)
         self.assertIn("- added_count: 2", report)
         self.assertIn("- modules: before=1 after=2 delta=1", report)
 
@@ -393,7 +394,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         report = report_path.read_text(encoding="utf-8")
         module_blocker_lines = [
             line
-            for line in self._section_lines(report, "### Modules")
+            for line in self._section_lines(report, "### 模块")
             if line.startswith("- [")
         ]
         self.assertEqual(
@@ -616,25 +617,25 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertEqual(exit_code, 0)
 
         report = (self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME).read_text(encoding="utf-8")
-        lines = self._section_lines(report, "## Next Round Agenda")
+        lines = self._section_lines(report, "## 下一轮议程")
         snapshot = "\n".join([line for line in lines if line.strip()])
-        expected = """### Agenda 1: 必须先决策的 OQ（candidate/readiness gate）
+        expected = """### 议程 1: 必须先决策的 OQ（candidate/readiness gate）
 - entity: oq:OQ-100
 - current_state: status_class=unresolved, enforcement=candidate_blocker
 - blocking_reason_codes: oq_candidate_gate
-- required_evidence: confirm OQ decision evidence (confirmed/manual override)
+- required_evidence: 已确认的 OQ 决策证据（confirmed/manual override）
 - suggested_owner: governance-owner
-### Agenda 2: review_required 的 near-open 实体
+### 议程 2: review_required 的 near-open 实体
 - entity: module:M01
 - current_state: review_required=true, hard_blocker_count=0
-- blocking_reason_codes: none
-- required_evidence: review confirmation evidence
+- blocking_reason_codes: 无
+- required_evidence: 评审确认依据
 - suggested_owner: module-owner
-### Agenda 3: hard blocker 最少、最接近可推进的实体
+### 议程 3: hard blocker 最少、最接近可推进的实体
 - entity: subtask:ST01_01
 - current_state: review_required=false, hard_blocker_count=1
 - blocking_reason_codes: oq_candidate_gate
-- required_evidence: resolve blocker evidence, review confirmation evidence
+- required_evidence: 阻塞项消解证据, 评审确认依据
 - suggested_owner: subtask-owner"""
         self.assertEqual(snapshot, expected)
 
@@ -657,9 +658,9 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         )
         self.assertEqual(exit_code, 0)
         report = (self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME).read_text(encoding="utf-8")
-        self.assertIn("## Next Round Agenda", report)
+        self.assertIn("## 下一轮议程", report)
         self.assertIn("- current_state: status_class=unknown, enforcement=candidate_blocker", report)
-        self.assertIn("- blocking_reason_codes: none", report)
+        self.assertIn("- blocking_reason_codes: 无", report)
 
     def test_real_repo_render_summary(self) -> None:
         repo_root = self.temp_root / "real_repo"
@@ -698,7 +699,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
 
         report_path = repo_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME
         report_text = report_path.read_text(encoding="utf-8")
-        self.assertIn("## Summary", report_text)
-        self.assertIn("## OQ gate summary", report_text)
+        self.assertIn("## 摘要", report_text)
+        self.assertIn("## OQ 门控摘要", report_text)
         self.assertIn("modules_review_required", report_text)
         self.assertIn("subtasks_review_required", report_text)

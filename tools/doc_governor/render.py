@@ -58,7 +58,7 @@ def render_from_payload(
         render_input_invalid=render_input_invalid,
         input_incomplete=input_incomplete,
     )
-    lines: list[str] = ["# DOC_GOVERNOR_REPORT", ""]
+    lines: list[str] = ["# Doc Governor 解释性治理报告", ""]
     lines.extend(_render_summary(summary))
     lines.extend(
         _render_requirement_mainflow(
@@ -87,30 +87,30 @@ def render_from_payload(
             agenda_limit=max(0, agenda_limit),
         )
     )
-    lines.append("## Notes / interpretation boundary")
+    lines.append("## 说明与解释边界")
     lines.extend(f"- {line}" for line in notes)
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _build_notes(*, render_input_invalid: bool, input_incomplete: bool) -> list[str]:
     notes: list[str] = [
-        "This is report-only derived output and does not represent confirmed governance state.",
-        "This report is a read-only interpretation snapshot and is not the source of truth for DOC_STATE files.",
-        "The report cannot be used as a direct readiness or auto-open-window signal.",
-        "Do not use this file for state write-back and do not treat it as an execution trigger for confirm-transition.",
+        "这是仅供报告使用的派生输出，不代表已确认的治理状态。",
+        "本报告是只读的解释性快照，不是 DOC_STATE 文件的真值来源。",
+        "本报告不能直接作为 readiness 判断或自动 open-window 的信号。",
+        "不要使用该文件执行状态回写，也不要把它当作 confirm-transition 的触发依据。",
     ]
     if render_input_invalid:
-        notes.append("render_input_invalid=1: input diagnostics contains error.")
+        notes.append("render_input_invalid=1: 输入诊断中存在 error。")
     if input_incomplete:
         notes.append(
-            "render_input_incomplete=1: required blocks summary/modules/subtasks/oqs were missing and rendered as empty."
+            "render_input_incomplete=1: 必需区块 summary/modules/subtasks/oqs 缺失，已按空内容渲染。"
         )
     return notes
 
 
 def _render_summary(summary: dict[str, Any]) -> list[str]:
     lines = [
-        "## Summary",
+        "## 摘要",
         "",
         f"- requirements_review_required: {summary.get('requirements_review_required', 0)}",
         f"- modules_review_required: {summary.get('modules_review_required', 0)}",
@@ -151,9 +151,9 @@ def _render_requirement_mainflow(
     relation_counts = _summarize_requirement_relation_status(modules=modules, subtasks=subtasks)
     consistency_counts = _summarize_requirement_relation_consistency(diagnostics)
     lines = [
-        "## Requirement Mainflow",
+        "## 需求主链",
         "",
-        "### counts",
+        "### 计数",
         f"- requirement_entries: {len(requirements)}",
         f"- requirements_review_required: {summary.get('requirements_review_required', 0)}",
         f"- requirements_blocked_count: {summary.get('requirements_blocked_count', 0)}",
@@ -166,7 +166,7 @@ def _render_requirement_mainflow(
         f"- subtasks_relation_consistency_errors: {consistency_counts['subtasks_relation_consistency_errors']}",
         f"- subtasks_relation_consistency_warnings: {consistency_counts['subtasks_relation_consistency_warnings']}",
         "",
-        "### relation overview",
+        "### 关联总览",
     ]
 
     if requirements:
@@ -184,12 +184,12 @@ def _render_requirement_mainflow(
                 f"blockers={_format_inline_list(blocker_refs)}"
             )
     else:
-        lines.extend(["", "- none"])
+        lines.extend(["", "- 无"])
 
-    lines.extend(["", "### relation alerts", ""])
+    lines.extend(["", "### 关联告警", ""])
     alerts = _collect_requirement_relation_alerts(modules=modules, subtasks=subtasks)
     alerts.extend(_collect_requirement_relation_consistency_alerts(diagnostics))
-    lines.extend(alerts if alerts else ["- none"])
+    lines.extend(alerts if alerts else ["- 无"])
     return lines + [""]
 
 
@@ -321,9 +321,9 @@ def _format_inline_list(values: list[str]) -> str:
 
 def _render_review_section(entities: dict[str, Any], section_type: str) -> list[str]:
     title_map = {
-        "modules": "Modules Requiring Review",
-        "subtasks": "Subtasks Requiring Review",
-        "documents": "Documents Requiring Review",
+        "modules": "需评审模块",
+        "subtasks": "需评审子任务",
+        "documents": "需评审文档",
     }
     title = title_map[section_type]
     lines = [f"## {title}", ""]
@@ -335,7 +335,7 @@ def _render_review_section(entities: dict[str, Any], section_type: str) -> list[
             continue
         reasons = ", ".join(str(item) for item in _as_list(derived.get("review_reasons")))
         rows.append(f"- `{entity_id}`: review_required=true reason=[{reasons}]")
-    lines.extend(rows if rows else ["- none"])
+    lines.extend(rows if rows else ["- 无"])
     return lines + [""]
 
 
@@ -371,20 +371,20 @@ def _render_blocker_sections(
         blocker_key="implementation_blockers",
     )
 
-    lines: list[str] = ["## Candidate blockers by layer", ""]
-    lines.extend(["### Modules", ""])
+    lines: list[str] = ["## 按层级汇总的 candidate blockers", ""]
+    lines.extend(["### 模块", ""])
     _append_blocker_lines(lines, module_candidate)
-    lines.extend(["### Subtasks", ""])
+    lines.extend(["### 子任务", ""])
     _append_blocker_lines(lines, subtask_candidate)
 
-    lines.extend(["", "## Downstream blockers by layer", ""])
-    lines.extend(["### Modules", ""])
+    lines.extend(["", "## 按层级汇总的 downstream blockers", ""])
+    lines.extend(["### 模块", ""])
     _append_blocker_lines(lines, module_downstream)
-    lines.extend(["### Subtasks", ""])
+    lines.extend(["### 子任务", ""])
     _append_blocker_lines(lines, subtask_downstream)
 
-    lines.extend(["", "## Implementation blockers by layer", ""])
-    lines.extend(["### Subtasks", ""])
+    lines.extend(["", "## 按层级汇总的 implementation blockers", ""])
+    lines.extend(["### 子任务", ""])
     _append_blocker_lines(lines, subtask_impl)
     return lines + [""]
 
@@ -395,7 +395,7 @@ def _render_document_blockers(*, documents: dict[str, Any]) -> list[str]:
         entity_type="document",
         blocker_key="document_blockers",
     )
-    lines = ["## Document blockers", "", "### Documents", ""]
+    lines = ["## 文档阻塞项", "", "### 文档", ""]
     _append_blocker_lines(lines, blockers)
     return lines + [""]
 
@@ -431,7 +431,7 @@ def _get_blockers(
 
 def _append_blocker_lines(lines: list[str], blockers: list[dict[str, Any]]) -> None:
     if not blockers:
-        lines.append("- none")
+        lines.append("- 无")
         return
     for blocker in blockers:
         lines.append(
@@ -442,11 +442,11 @@ def _append_blocker_lines(lines: list[str], blockers: list[dict[str, Any]]) -> N
 
 
 def _render_oq_summary(*, summary: dict[str, Any], oqs: dict[str, Any]) -> list[str]:
-    lines = ["## OQ gate summary", "", "### counts"]
+    lines = ["## OQ 门控摘要", "", "### 计数"]
     oq_gate_counts = _as_dict(summary.get("oq_gate_counts"))
 
     if not oq_gate_counts and not oqs:
-        lines.append("- none")
+        lines.append("- 无")
         lines.append("")
         return lines
 
@@ -456,7 +456,7 @@ def _render_oq_summary(*, summary: dict[str, Any], oqs: dict[str, Any]) -> list[
 
 
 def _render_open_rounds(governance_rounds: list[Any]) -> list[str]:
-    lines = ["## Open Rounds", ""]
+    lines = ["## 未关闭轮次", ""]
     rows: list[str] = []
     for item in governance_rounds:
         if not isinstance(item, dict):
@@ -479,23 +479,23 @@ def _render_open_rounds(governance_rounds: list[Any]) -> list[str]:
             f"- `{item.get('round_id', '')}`: status={status} topic={item.get('topic', '')} "
             f"targets=[{'; '.join(targets)}]"
         )
-    lines.extend(rows if rows else ["- none"])
+    lines.extend(rows if rows else ["- 无"])
     return lines + [""]
 
 
 def _render_round_delta(delta_summary: dict[str, Any]) -> list[str]:
-    lines = ["## Round Delta", ""]
+    lines = ["## 轮次变化摘要", ""]
     if not delta_summary:
-        lines.append("- none")
+        lines.append("- 无")
         return lines + [""]
 
     blocker_changes = _as_dict(delta_summary.get("blocker_changes"))
-    lines.extend(["### Blocker changes"])
+    lines.extend(["### 阻塞项变化"])
     lines.append(f"- added_count: {blocker_changes.get('added_count', 0)}")
     lines.append(f"- closed_count: {blocker_changes.get('closed_count', 0)}")
 
     review_required_changes = _as_dict(delta_summary.get("review_required_changes"))
-    lines.extend(["", "### Review required changes"])
+    lines.extend(["", "### 需评审变化"])
     for key in ("modules", "subtasks"):
         delta = _as_dict(review_required_changes.get(key))
         lines.append(
@@ -504,7 +504,7 @@ def _render_round_delta(delta_summary: dict[str, Any]) -> list[str]:
         )
 
     readiness_changes = _as_dict(delta_summary.get("readiness_changes"))
-    lines.extend(["", "### Readiness changes"])
+    lines.extend(["", "### 就绪度变化"])
     for key in ("modules_downstream", "subtasks_downstream", "subtasks_implementation"):
         delta = _as_dict(readiness_changes.get(key))
         lines.append(
@@ -524,7 +524,7 @@ def _render_next_round_agenda(
     governance_rounds: list[Any],
     agenda_limit: int,
 ) -> list[str]:
-    lines = ["## Next Round Agenda", ""]
+    lines = ["## 下一轮议程", ""]
     agenda_items = _build_next_round_agenda(
         modules=modules,
         subtasks=subtasks,
@@ -534,20 +534,20 @@ def _render_next_round_agenda(
         agenda_limit=agenda_limit,
     )
     if not agenda_items:
-        lines.append("- none")
+        lines.append("- 无")
         return lines + [""]
 
     for idx, item in enumerate(agenda_items, start=1):
-        lines.append(f"### Agenda {idx}: {item['category']}")
+        lines.append(f"### 议程 {idx}: {item['category']}")
         lines.append(f"- entity: {item['entity']}")
         lines.append(f"- current_state: {item['current_state']}")
         lines.append(
             "- blocking_reason_codes: "
-            + (", ".join(item["blocking_reason_codes"]) if item["blocking_reason_codes"] else "none")
+            + (", ".join(item["blocking_reason_codes"]) if item["blocking_reason_codes"] else "无")
         )
         lines.append(
             "- required_evidence: "
-            + (", ".join(item["required_evidence"]) if item["required_evidence"] else "none")
+            + (", ".join(item["required_evidence"]) if item["required_evidence"] else "无")
         )
         lines.append(f"- suggested_owner: {item['suggested_owner']}")
         lines.append("")
@@ -583,7 +583,7 @@ def _build_next_round_agenda(
                     f"enforcement={enforcement or 'unknown'}"
                 ),
                 "blocking_reason_codes": [reason_code] if reason_code else [],
-                "required_evidence": ["confirm OQ decision evidence (confirmed/manual override)"],
+                "required_evidence": ["已确认的 OQ 决策证据（confirmed/manual override）"],
                 "suggested_owner": "governance-owner",
                 "_sort_group": 0,
                 "_sort_key": f"oq:{oq_id}",
@@ -603,7 +603,7 @@ def _build_next_round_agenda(
                         f"hard_blocker_count={len(blocker_codes)}"
                     ),
                     "blocking_reason_codes": blocker_codes,
-                    "required_evidence": ["document section completion evidence"],
+                    "required_evidence": ["文档章节补齐证据"],
                     "suggested_owner": "document-owner",
                     "_sort_group": 1,
                     "_sort_key": f"document:{document_id}",
@@ -616,7 +616,7 @@ def _build_next_round_agenda(
                     "entity": f"document:{document_id}",
                     "current_state": "review_required=true, hard_blocker_count=0",
                     "blocking_reason_codes": [],
-                    "required_evidence": ["document review confirmation evidence"],
+                    "required_evidence": ["文档评审确认依据"],
                     "suggested_owner": "document-owner",
                     "_sort_group": 2,
                     "_sort_key": f"document:{document_id}",
@@ -703,9 +703,9 @@ def _collect_entity_agenda(
                     ),
                     "blocking_reason_codes": blocker_codes,
                     "required_evidence": (
-                        ["review confirmation evidence"]
+                        ["评审确认依据"]
                         if review_required
-                        else ["resolve blocker evidence", "review confirmation evidence"]
+                        else ["阻塞项消解证据", "评审确认依据"]
                     ),
                     "suggested_owner": f"{entity_type}-owner",
                     "_hard_blocker_count": hard_blocker_count,

@@ -35,6 +35,31 @@
 
 后文若描述 requirement / asset / compliance / language governance / render 扩展，必须明确标注属于哪一类，不能默认视为“主链当前已自动生效”。
 
+### 1.2 当前 CLI 命令分层
+
+当前 `python -m tools.doc_governor.cli --help` 暴露的命令面应按下列层次理解，不得把“命令已存在”直接等价成“当前默认主链已经闭环”：
+
+| 分层 | 命令 | 当前定位 |
+| --- | --- | --- |
+| 主链状态治理 | `bootstrap-state`、`validate-state`、`init-official-state`、`evaluate-state`、`render-report`、`confirm-transition` | 当前最小 golden path 的状态扫描、official state 初始化、校验、评估、解释性报告与确认写回 |
+| 主链历史 / readiness / 开窗 | `show-history`、`summarize-history`、`preflight-open-window`、`plan-open-window`、`open-window` | 服务于讨论回溯、ready 检查、开窗排队与正式开窗执行 |
+| 主链轮次 / 多窗口协作 | `plan-round`、`generate-round-template`、`apply-round`、`update-round-status`、`generate-codex-packet` | 服务于 document round、审批队列、Codex 交接包与 round 生命周期维护 |
+| 生成类扩展命令 | `generate-implementation-packet`、`plan-task-adaptation`、`suggest-requirement-links`、`plan-task-remediation`、`plan-task-readiness`、`summarize-task-apply-result`、`plan-task-window-candidates` | 面向 implementation window、task 适配 / readiness 规划、requirement link 建议、窗口候选桥接与结果汇总；当前属于扩展分析 / 生成能力，不自动成为主链默认步骤 |
+| `preview/apply/sync/seed` 命令族 | `apply-requirement-container-seed`、`apply-requirement-seed`、`apply-requirement-entity-sync`、`apply-task-skeleton-seed`、`apply-task-doc-state-sync`、`apply-task-implementation-state-sync`、`preview-task-readiness-fix`、`preview-task-patches`、`apply-task-readiness-fix`、`preview-task-state-writeback`、`preview-task-state-dependency-map`、`apply-task-state-writeback`、`preview-task-readiness-state-sync`、`apply-task-readiness-state-sync`、`preview-task-formal-window-sync`、`apply-task-formal-window-sync` | 主要服务于 requirement / task 的 seed、preview、state writeback、state sync 与 formal-window sync；其中多条命令带 `--apply` 或直接准备 writeback，必须与人工确认、证据审阅、最小范围执行搭配使用 |
+
+### 1.3 当前工作流服务映射
+
+当前 `doc-governor` 对外服务范围可按如下方式理解：
+
+- 讨论：优先使用 `evaluate-state`、`render-report`、`plan-open-window`、`plan-round`、`plan-task-adaptation`、`plan-task-readiness` 形成讨论输入，而不是直接写回状态。
+- 状态校验：使用 `validate-state` 对 bootstrap / official state 做 schema 与规则校验。
+- 状态评估：使用 `evaluate-state` 生成只读 evaluate payload，供报告、ready 检查、任务规划与 packet 使用。
+- readiness：使用 `preflight-open-window`、`plan-open-window`、`open-window`，以及 `plan-task-readiness`、`preview-task-readiness-fix`、`preview-task-readiness-state-sync` 等扩展命令做排队、修复预演与同步。
+- packet：使用 `generate-codex-packet` 服务 document round；使用 `generate-implementation-packet` 服务已满足 `implementation_ready` 的 task。
+- Codex 多窗口实施：使用 `plan-round`、`generate-round-template`、`generate-codex-packet`、`plan-task-window-candidates` 生成窗口边界、交接包与候选桥接结果。
+- 验证：使用 `validate-state`、`evaluate-state`、`show-history`、`summarize-history`、`preview-task-state-dependency-map`、`summarize-task-apply-result` 做回归核对与上下文审计。
+- 上下文回收：使用 `render-report`、`show-history`、`summarize-history` 以及支持 Markdown 输出的 task 规划命令回收讨论上下文，而不是只依赖聊天线程。
+
 ## 2. 真值优先级
 
 当前结构化真值优先级固定为：
@@ -92,6 +117,8 @@ Phase 1A 明确禁止：
 - 若输出文件已存在且未显式传 `--overwrite`，bootstrap 必须失败。
 - bootstrap 无论如何不得写入或覆盖 `docs/governance/DOC_STATE.yaml`。
 - 只要任意子任务命中 `implementation_doc.exists=true 且 template_like=false`，bootstrap 就必须整体失败，并且不得写出半可信的 `DOC_STATE.bootstrap.yaml`。
+- `BOOTSTRAP_REPORT.md` 只是解释性生成报告，不是 official state；但它位于 `docs/governance/` 正式治理目录下，标题与说明性正文仍应默认使用中文。
+- 若 bootstrap 报告的语言样式与正式文档语言规则冲突，应修正生成器实现或模板来源，而不是把手工改 `BOOTSTRAP_REPORT.md` 当作长期方案。
 
 ## 6. Evaluate Command Contract
 
@@ -117,6 +144,8 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 - `render-report` 只输出解释性 Markdown，不能直接驱动 `confirm-transition`。
 - `## Next Round Agenda` 只输出建议性议程，不可直接替代审批与状态写回流程。
 - 当前 render 主链输出范围以 `summary / modules / subtasks / documents / oqs / open rounds / round delta / next round agenda / diagnostics notes` 为准；requirement / asset / compliance 摘要与来源分类展示尚未成为当前主链固定输出。
+- `DOC_GOVERNOR_REPORT.md` 属于生成型治理报告，不是 confirmed state；其标题、章节标题与说明性正文默认应遵循中文规则，命令名、路径、JSON key、diagnostic code 可保留英文。
+- 若当前渲染输出仍存在英文标题或英文自然语言段落，应视为 `render.py` 的实现漂移并在生成器层修复，而不是手工维护报告文件。
 
 ## 8. Round Lifecycle Contract
 

@@ -480,3 +480,10 @@
 - `tools/doc_governor/validate.py`
 - `tools/doc_governor/evaluate.py`
 - `tools/doc_governor/confirm.py`
+
+### 6. 生成治理报告与语言规则
+
+- `docs/governance/BOOTSTRAP_REPORT.md` 与 `docs/governance/DOC_GOVERNOR_REPORT.md` 都属于生成型治理产物，只能作为解释性结果与讨论输入，不能替代 `DOC_STATE.yaml`、`confirm-transition` 或其他 confirmed state 真值。
+- 虽然它们由工具生成，但仍位于 `docs/governance/` 正式治理目录下；标题、章节标题与说明性正文默认必须使用中文，并遵循 `docs/project-language-rules.md` 的正式文档语言规则。
+- 允许保留英文的内容仅限必要技术对象，例如命令名、文件路径、schema 字段、JSON key、diagnostic code、evidence ref。
+- 若生成报告出现语言漂移，应修改生成器代码或模板来源，而不是把手工改报告文件当成长期修复方案。

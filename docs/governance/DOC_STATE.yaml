@@ -1862,8 +1862,7 @@ documents:
       - section_id: conclusion
         heading: "## 18. \u8BBE\u8BA1\u7ED3\u8BBA"
       relations:
-        document_refs:
-        - DOC-PLAN-P1
+        document_refs: []
         module_refs: []
         oq_refs: []
     facts:
@@ -1890,31 +1889,30 @@ documents:
         last_transition_id: fcf8510a1f15432cba1164f56f81a02c
         last_confirmed_at: '2026-04-22T08:48:54.458597+00:00'
         last_confirmed_by: manual-review
-  DOC-PLAN-P1:
+  DOC-PLAN-CURRENT-REPO-2026-04-25:
     meta:
       doc_type: plan
-      title: "AI \u6A21\u62DF\u9762\u8BD5 P1 MVP \u5B9E\u73B0\u8BA1\u5212"
-      path: docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md
+      title: "AI \u6A21\u62DF\u9762\u8BD5\u7CFB\u7EDF\u5F53\u524D\u4ED3\u5E93\u6267\u884C\u8BA1\u5212"
+      path: docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md
       required_sections:
-      - section_id: scope
-        heading: "## \u8303\u56F4\u8BF4\u660E"
-      - section_id: repo_structure
-        heading: "## \u76EE\u6807\u4ED3\u5E93\u7ED3\u6784"
-      - section_id: env_baseline
-        heading: "## \u73AF\u5883\u57FA\u7EBF"
-      - section_id: cross_task_constraints
-        heading: "## \u8DE8\u4EFB\u52A1\u7EA6\u675F"
-      - section_id: api_baseline
-        heading: "## \u5B8C\u6574\u843D\u5E93\u5BF9\u8C61\u4E0E API \u57FA\u7EBF"
-      - section_id: milestones
-        heading: "## \u4E8C\u7EA7\u4EFB\u52A1\u5206\u89E3\u4E0E\u6267\u884C\u987A\u5E8F"
-      - section_id: design_coverage
-        heading: "## \u8BBE\u8BA1\u7A3F\u8986\u76D6\u6E05\u5355"
-      - section_id: execution_notes
-        heading: "## \u6267\u884C\u8BF4\u660E"
+      - section_id: doc_positioning
+        heading: "## 1. \u6587\u6863\u5B9A\u4F4D"
+      - section_id: current_repo_positioning
+        heading: "## 2. \u5F53\u524D\u4ED3\u5E93\u5B9A\u4F4D"
+      - section_id: completed_work
+        heading: "## 3. W0-W7 \u5DF2\u5B8C\u6210\u4E8B\u9879"
+      - section_id: current_prerequisites
+        heading: "## 4. \u5F53\u524D\u4E3B\u9879\u76EE\u8BBE\u8BA1\u5F00\u53D1\u7684\u771F\u5B9E\u524D\u7F6E\u6761\u4EF6"
+      - section_id: defer_monorepo_reason
+        heading: "## 5. \u5F53\u524D\u4E0D\u76F4\u63A5\u843D\u672A\u6765\u4E1A\u52A1\u76EE\u5F55\u7ED3\u6784\u7684\u539F\u56E0"
+      - section_id: next_steps
+        heading: "## 6. \u4E0B\u4E00\u6B65\u5EFA\u8BAE"
+      - section_id: verification
+        heading: "## 7. \u9A8C\u8BC1\u547D\u4EE4"
+      - section_id: blueprint_relation
+        heading: "## 8. \u4E0E `DOC-PLAN-P1` \u7684\u5173\u7CFB"
       relations:
-        document_refs:
-        - DOC-SPEC-P1
+        document_refs: []
         module_refs: []
         oq_refs: []
     facts:
@@ -1937,10 +1935,10 @@ documents:
         review_status: approved
         blocker_refs: []
         active_round_id: null
-        last_round_id: R-2026-04-22-SPECPLAN-01
-        last_transition_id: 9e16c7c1f0f14507ac62eb157ee42b5f
-        last_confirmed_at: '2026-04-22T08:49:04.044673+00:00'
-        last_confirmed_by: manual-review
+        last_round_id: null
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
 governance_rounds:
 - round_id: R-2026-04-22-SPECPLAN-01
   workflow: document_refinement

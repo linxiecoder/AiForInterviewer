@@ -60,11 +60,14 @@ class BootstrapStateTests(unittest.TestCase):
         self.assertTrue(output_path.exists())
         self.assertTrue(report_path.exists())
         report_text = report_path.read_text(encoding="utf-8")
-        self.assertIn("## Summary", report_text)
-        self.assertIn("## Scan counts", report_text)
-        self.assertIn("## Detected template-like docs", report_text)
-        self.assertIn("## Ambiguous implementation docs", report_text)
-        self.assertIn("## Diagnostics snapshot", report_text)
+        self.assertIn("# Bootstrap 扫描报告", report_text)
+        self.assertIn("## 摘要", report_text)
+        self.assertIn("## 扫描计数", report_text)
+        self.assertIn("## 检测到的模板化文档", report_text)
+        self.assertIn("## 存在歧义的实施文档", report_text)
+        self.assertIn("## 诊断快照", report_text)
+        self.assertIn("- report_path:", report_text)
+        self.assertNotIn("## Summary", report_text)
 
     def test_bootstrap_imports_explicit_oq_policy_fields(self) -> None:
         self._write_open_questions(
@@ -158,6 +161,9 @@ class BootstrapStateTests(unittest.TestCase):
         report_text = (self.repo_root / "docs" / "governance" / "BOOTSTRAP_REPORT.md").read_text(
             encoding="utf-8"
         )
+        self.assertIn("已应用 OQ 默认策略字段", report_text)
+        self.assertIn("gate_level=observe_only", report_text)
+        self.assertIn("resolution_policy=proposed_default_ok", report_text)
 
     def test_bootstrap_carries_native_requirement_relations(self) -> None:
         (self.repo_root / "TASK_INDEX.md").write_text(

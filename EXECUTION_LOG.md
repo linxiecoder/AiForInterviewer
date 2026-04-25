@@ -25,6 +25,155 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W8 DOC-PLAN-P1 修正或退役决策 / 方案 C 拆分蓝图与当前执行计划
+
+- 范围：修改 `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`、新增 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、更新 `PLAN_LATEST.md`、更新 `EXECUTION_LOG.md`，并为新计划文档最小补记 `AGENTS.md` 索引；不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`、`docs/superpowers/specs/**`。
+- 执行类型：计划定位决策、蓝图与现实分层、当前执行入口补建、只读状态解释。
+- 修改内容：
+  - 选择方案 `C`，不把旧 `DOC-PLAN-P1` 强行改写成当前仓库现实执行计划，也不删除其产品蓝图价值。
+  - 在 `DOC-PLAN-P1` 文件头补充状态说明，明确其定位为未来 monorepo / 产品落地蓝图；并把“目标仓库结构 / 完整仓库目录规划 / 环境基线”统一标注为未来目标表达。
+  - 新增 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`，作为当前仓库现实执行计划入口，覆盖当前仓库定位、W0-W7 已完成事项、真实前置条件、当前不直接落 `apps/web` / `apps/api` / `infra` 的原因、下一步建议、验证命令以及与 `DOC-PLAN-P1` 的关系。
+  - 更新 `PLAN_LATEST.md`，把当前执行入口显式指向新文档，并同步记录：W8 已完成方案 C；当前剩余风险已从“主入口误用旧 plan”收敛为“状态层仍把旧 plan 当作当前受管 plan”。
+  - 最小更新 `AGENTS.md` 的计划索引，补入当前仓库执行计划文档，避免正式入口断链。
+- 影响文件：
+  - `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`
+  - `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+  - `AGENTS.md`
+- 成熟度变化（建议）：
+  - 本轮不改变模块成熟度等级，也不改变 `DOC_STATE.yaml` 正式状态。
+  - 本轮提升的是“未来蓝图 vs 当前执行计划”的入口清晰度，避免把未来目录蓝图继续误读为当前仓库直接实施面。
+- 进展变化（建议）：
+  - 当前已从“主入口层知道 `DOC-PLAN-P1` 有问题，但还没有专门替代入口”推进到“旧蓝图已降级 + 当前仓库执行计划入口已补齐”。
+  - 当前剩余问题已从“计划定位不清”缩小为“状态层仍未同步更新”。
+- 验证结果：
+  - 开始前已执行 `git status --short`、`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`、`python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`。
+  - 本轮完成后需再次执行上述三条命令，并用 `rg` 检查 `apps/web|apps/api|infra|\\.github/workflows|monorepo|未来蓝图|当前仓库执行计划|DOC-PLAN-P1|document_repo_truth_mismatch` 在计划与入口文档中的解释是否已分层清楚。
+- 遗留问题：
+  - `evaluate-state` 预计仍会保留 `DOC-PLAN-P1 -> document_repo_truth_mismatch`，因为 `DOC_STATE.yaml` 仍把 `DOC-PLAN-P1` 注册为当前受管 plan，且既有 round / evidence 仍指向它。
+  - 该问题不应再由工具代码消除，而应交给后续状态回写 / 全局治理窗口处理。
+- 下一步建议动作：
+  - 先开启“状态回写 / 全局治理窗口”，处理 `DOC_STATE.yaml` 与 round target 仍指向 `DOC-PLAN-P1` 的问题。
+  - 再进入主项目设计开发窗口，并以 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 作为当前仓库执行计划入口。
+
+### 2026-04-25 / W9 状态回写与全局治理同步 / 当前执行计划入口切换
+
+- 范围：修改 `docs/governance/DOC_STATE.yaml`、最小更新 `PLAN_LATEST.md`、追加 `EXECUTION_LOG.md`，并对 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 做极小措辞修补以消除 `repo_truth` 误判；不修改 `tools/**`、`tests/**`、`docs/modules/**`、`docs/superpowers/specs/**`、`docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`。
+- 执行类型：治理状态同步、当前受管 plan 入口切换、历史蓝图降级为非当前受管引用。
+- 修改内容：
+  - 在 `DOC_STATE.yaml` 中新增 `DOC-PLAN-CURRENT-REPO-2026-04-25`，路径指向 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`，作为当前仓库受管 plan 入口。
+  - 将 `DOC-PLAN-P1` 从当前受管 `documents` 集合移出，保留其在正文与已关闭 `R-2026-04-22-SPECPLAN-01` round 中的历史蓝图引用，不篡改历史 round 事实。
+  - 同步清理 `DOC-SPEC-P1` 的状态层旧 plan 强依赖，使当前受管文档集合不再因为历史蓝图已移出 registry 而触发 `missing_relation_ref`。
+  - 最小修补 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 中会被扫描器误识别为当前仓库缺失路径的字面量目录名与 `monorepo` 表述，仅保留语义，不改变 W8 的计划结论。
+  - 最小更新 `PLAN_LATEST.md`，把“待状态回写”改为“W9 已完成状态同步”，同步当前 blocker 已消除的说明。
+- 影响文件：
+  - `docs/governance/DOC_STATE.yaml`
+  - `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+- 验证结果：
+  - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml` -> `ok=true, error=0, warning=0`。
+  - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml` -> `ok=true, error=0, warning=0, documents_blocked_count=0`。
+  - `document_repo_truth_mismatch` 已不再出现；closed round 中保留的 `DOC-PLAN-P1` target / evidence 只作为历史记录。
+- 遗留问题：
+  - 若未来要把蓝图类文档重新纳入正式受管 `documents`，需要先定义“future blueprint / historical blueprint”的治理口径；当前 schema 与 evaluate 规则还没有这类角色。
+- 下一步建议动作：
+  - 可以进入 `W10` 主项目下一轮设计开发规划窗口，并以 `PLAN_LATEST.md` + `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 作为当前仓库执行入口。
+
+### 2026-04-25 / W1 主入口收口 / README 与当前推进计划纠偏
+
+- 范围：只修改 `README.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；不修改 `docs/governance/**`、`tools/**`、`tests/**`、`docs/superpowers/**`、`docs/modules/**`、`docs/governance/DOC_STATE.yaml`。
+- 执行类型：主入口收口、仓库定位纠偏、当前推进计划重写、只读事实吸收。
+- 修改内容：
+  - 新建 `README.md`，明确当前项目是“AI 模拟面试系统”，当前仓库承载设计文档、治理状态、`doc_governor` 工具与测试验证机制，而不是完整 `apps/web`、`apps/api`、`infra` monorepo。
+  - 在 `README.md` 中显式切开四层叙事：当前仓库真相、上游产品蓝图、阶段 3 白名单治理历史、当前 `doc_governor` 宽 CLI 工具链。
+  - 在 `README.md` 中吸收 W2 结论，明确主链命令与谨慎使用命令的边界，不把 preview/apply/sync/seed、`generate-implementation-packet`、`apply-round` 写成默认主链 SOP，不把 generated report 写成 confirmed state。
+  - 在 `README.md` 中吸收 W4 结论，补入统一后的测试临时产物规则与默认测试入口。
+  - 重写 `PLAN_LATEST.md`，把文档定位切换为“当前推进计划”，不再继续由阶段 3 白名单治理叙事主导。
+  - 在 `PLAN_LATEST.md` 中吸收 W3 结论，明确 `DOC-PLAN-P1` 当前命中 `document_repo_truth_mismatch`，应视为未来 monorepo 蓝图，而不是当前仓库直接执行计划。
+  - 在本日志中补记 W2/W3/W4 结果摘要、W1 主入口收口动作、给 W5 的验证事项和后续窗口事项。
+- 影响文件：
+  - `README.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+- 成熟度变化（建议）：
+  - 本轮不改变模块成熟度等级。
+  - 本轮提升的是主入口对“当前仓库真相 vs 上游蓝图 vs 历史治理记录 vs 当前工具链”的表达清晰度。
+- 进展变化（建议）：
+  - 当前主入口已从“缺失 README + PLAN 叙事漂移”推进到“可用的当前仓库入口 + 当前推进计划”。
+  - W2/W3/W4 已证实的关键结论已被吸收到主入口层。
+- 验证结果：
+  - 开始前已执行 `git status --short`，确认本窗口之外已有 W2/W3/W4 改动与 4 个基线未跟踪项。
+  - 本轮完成后需再次执行 `git status --short`。
+  - 本轮完成后需执行：
+    - `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+    - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
+  - 已确认 `python -m tools.doc_governor.cli --help` 当前可正常输出 39 个顶层子命令。
+- W2 结果摘要：
+  - `docs/DOC_GOVERNANCE.md`、`docs/governance/DOC_AUTOMATION.md`、`docs/governance/DOC_GOVERNOR_RUNBOOK.md` 已完成对齐。
+  - CLI 39 个顶层子命令已被治理文档覆盖。
+  - 命令分层已明确；preview/apply/sync/seed、`generate-implementation-packet`、`apply-round` 不应写成默认主链 SOP。
+  - `render-report` 与 generated report 仅是解释性治理产物，不是 confirmed state。
+- W3 结果摘要：
+  - `document_scan.py`、`evaluate.py`、`validate.py` 第一批 P0 已完成。
+  - `repo_truth.*`、`direction_drift.*` 与 `document_repo_truth_mismatch` blocker 已加入。
+  - 当前已证实 `DOC-PLAN-P1` 与当前仓库现实不一致，必须在主入口中改写其定位。
+- W4 结果摘要：
+  - `TEST_POLICY.md` 与测试守卫口径已统一。
+  - 常规临时目录机制固定为 `ManagedTempArtifacts` / `ManagedTempArtifactsTestCase`。
+  - 默认测试入口为 `python -m tools.test_runner.run_tests`，并由 pytest 会话级守卫统一处理残留检查。
+- 未处理事项：
+  - 本轮未修改 `docs/governance/**`、`tools/**`、`tests/**`、`docs/superpowers/**`、`docs/modules/**`、`docs/governance/DOC_STATE.yaml`。
+  - 本轮未处理 `render.py` / `bootstrap.py` 中文化生成问题。
+  - 本轮未处理 `DOC-PLAN-P1` 的正文修正或退役动作。
+  - 本轮未清理基线 4 个未跟踪项：`.tmp_dbg_impl_state/`、`artifacts/`、`tmp_readiness_case.yaml`、`tmp_test_state2.yaml`。
+- 给 W5 的验证事项：
+  - 验证 `README.md` 是否已清楚说明当前项目、当前仓库、当前限制、推荐工作流与测试规则。
+  - 验证 `PLAN_LATEST.md` 是否已切换为“当前推进计划”，且不再被阶段 3 白名单治理叙事主导。
+  - 验证 `DOC-PLAN-P1` 是否已在主入口中被明确归类为未来蓝图 / 非当前仓库直接执行计划。
+  - 验证本窗口是否仅修改了 `README.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`。
+  - 验证 4 个基线未跟踪项是否保持未被清理、未被新增扩散。
+- 给后续窗口的事项：
+  - 单独处理 `render.py` / `bootstrap.py` 中文化生成标题与说明性正文。
+  - 单独决定 `DOC-PLAN-P1` 是修正为当前仓库现实，还是显式退役为旧蓝图。
+  - 判断基线 4 个未跟踪项是否需要在后续维护窗口中清理。
+  - 评估本轮是否需要做 Basic Memory 写回。
+- 下一步建议动作：
+  - 当前可以进入 W5 只读验证。
+  - W5 完成后，再决定是否开启 `DOC-PLAN-P1` 处置窗口与生成器中文化窗口。
+
+### 2026-04-25 / W6-B 状态回写与上下文回收 / W0-W6-A 收口保存
+
+- 范围：只修改 `EXECUTION_LOG.md`；执行 Basic Memory 写回与回读验证；不修改 `README.md`、`PLAN_LATEST.md`、`docs/governance/DOC_STATE.yaml`、`docs/**`、`tools/**`、`tests/**`。
+- 执行类型：轮次收口、状态回写建议、Basic Memory 会话总结写回、上下文回收。
+- 修改内容：
+  - 汇总并固化本轮 W0-W6-A 的最终结论：W0 冻结 P0 对齐范围，W2 完成治理文档与 39 个 CLI 顶层命令的命令面分层，W3 修复 direction drift / repo-truth / requirement relation warning 并把 `DOC-PLAN-P1` 识别为未来蓝图，W4 统一测试临时产物规则，W1 完成 `README.md` 与 `PLAN_LATEST.md` 主入口收口，W5 只读复核通过并补齐 W6-A / W6-B 后续路径，W6-A 完成基线未跟踪项清理。
+  - 在本日志中登记 W6-A 清理结果：`.tmp_dbg_impl_state/`、`artifacts/`、`tmp_readiness_case.yaml`、`tmp_test_state2.yaml` 已判定为根目录调试/临时样本残留并删除；W6-A 未修改 `.gitignore`，未迁移 fixture，未新增 `tests/fixtures/` 或 `tests/doc_governor/fixtures/`，未制造新的 `tmp/temp` 残留。
+  - 明确状态文件与治理日志处理结论：`docs/governance/DOC_STATE.yaml` 当前无需直接更新，因为 `validate-state` / `evaluate-state` 仍为干净结果，W6-A 只清理临时残留，不改变 official state；本轮治理日志只需在 `EXECUTION_LOG.md` 补记，无需额外改动其他治理文档。
+  - 记录 Basic Memory 写回结果：已在 `AiForInterviewer` 项目的 `90-session-summaries` 目录新增《2026-04-25 项目 P0 对齐与主入口收口完成记录》，permalink 为 `ai-for-interviewer/90-session-summaries/2026-04-25-项目-p0-对齐与主入口收口完成记录`。
+  - 明确 `PLAN_LATEST.md` 本轮不修改：其当前第 7 节已正确把 `W6-A` 与 `W6-B` 作为后续路径列出；W6-A 的实际完成结果不会改变当前推荐路径，只会把该路径从“待执行”推进到“已收口”。
+- 影响文件：
+  - `EXECUTION_LOG.md`
+- 成熟度变化（建议）：
+  - 本轮不改变模块成熟度或正式状态。
+  - 本轮保存的是已验证事实与收口结论，不新增新的候选、开窗或放行判断。
+- 进展变化（建议）：
+  - 当前已从“W5 复核通过、等待后续清理与上下文回收”推进到“W6-A 已清理完成、W6-B 已完成结论保存与长期记忆写回”。
+  - 本轮 P0 对齐结果已同时沉淀到仓库执行日志与 Basic Memory，不再只依赖聊天上下文。
+- 验证结果：
+  - 开始前已执行 `git status --short`，确认当前工作树中除 W1/W2/W3/W4 既有改动外，未跟踪项为 `README.md` 与 `tests/doc_governor/test_document_scan.py`，且 W6-A 指定的 4 个基线未跟踪项已不再存在。
+  - Basic Memory 已完成检索去重、写入与回读验证；标题检索与按 permalink 回读均成功。
+  - 本轮完成后已再次执行 `git status --short`、`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml` 与 `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`；当前无新增 `tmp/temp` 残留，且两条状态命令均返回 `ok=true, error=0, warning=0`。
+- 遗留问题：
+  - `render.py` / `bootstrap.py` 中文化生成问题仍需单独窗口处理。
+  - `DOC-PLAN-P1` 仍需后续决定：修正为当前仓库现实，或正式退役为旧蓝图。
+  - 当前剩余未跟踪项仍是 `README.md`（来自 W1）与 `tests/doc_governor/test_document_scan.py`（来自 W3）；它们应作为本轮成果文件纳入后续提交检查，而不是临时污染。
+- 下一步建议动作：
+  - 先开启 `W7：render.py / bootstrap.py 中文化生成修复`。
+  - 再开启 `W8：DOC-PLAN-P1 修正或退役`。
+  - 待上述两项单独收口后，再进入主项目设计开发窗口。
+
 ### 2026-04-22 / 当前仓库结构同步 / 全局入口文档纠偏
 
 - 范围：同步当前仓库真实结构到全局入口文档；不修改任何模块目录或子任务目录文档。

@@ -32,38 +32,80 @@ C:\Users\Administrator\AppData\Roaming\npm\codex.cmd exec
 
 ## 3. 当前命令族总览
 
-### 3.1 状态与报告
+### 3.1 主链命令
 
-- `bootstrap-state`
-- `validate-state`
-- `evaluate-state`
-- `render-report`
-- `init-official-state`
-- `confirm-transition`
+当前最小闭环直接依赖的主链命令包括：
 
-### 3.2 历史查询
+- 状态治理：`bootstrap-state`、`validate-state`、`init-official-state`、`evaluate-state`、`render-report`、`confirm-transition`
+- 历史与上下文回收：`show-history`、`summarize-history`
+- readiness / 开窗：`preflight-open-window`、`plan-open-window`、`open-window`
+- round / 多窗口协作：`plan-round`、`generate-round-template`、`apply-round`、`update-round-status`、`generate-codex-packet`
 
-- `show-history`
-- `summarize-history`
+### 3.2 生成类命令
 
-### 3.3 开窗预检与执行
+以下命令都属于“生成产物或生成规划”的命令，但不应被误写成“已经自动完成后续审批或写回”：
 
-- `preflight-open-window`
-- `plan-open-window`
-- `open-window`
-
-### 3.4 轮次与批量审批
-
-- `plan-round`
 - `generate-round-template`
 - `generate-codex-packet`
+- `generate-implementation-packet`
+
+当前边界：
+
+- `generate-round-template` 生成 round 模板并登记 round 跟踪信息，不替代 `confirm-transition`。
+- `generate-codex-packet` 生成文档轮次交接包，当前主要服务 document round。
+- `generate-implementation-packet` 只面向已满足 `implementation_ready` 的 task；若 task 仍 blocked，会直接拒绝生成 packet。
+
+### 3.3 扩展分析与建议命令
+
+以下命令已在 CLI 中存在，但当前定位是扩展分析、建议输出或任务治理辅助，不应被描述成默认主链：
+
+- `plan-task-adaptation`
+- `suggest-requirement-links`
+- `plan-task-remediation`
+- `plan-task-readiness`
+- `summarize-task-apply-result`
+- `plan-task-window-candidates`
+
+这些命令大多支持 `json/markdown` 输出，更适合作为讨论输入、窗口规划输入或实施前审阅材料。
+
+### 3.4 `preview/apply/sync/seed` 命令族
+
+以下命令主要服务于 requirement / task 的 seed、preview、state writeback 与 state sync：
+
+- requirement 相关：`apply-requirement-container-seed`、`apply-requirement-seed`、`apply-requirement-entity-sync`
+- task 骨架 / 文档 / 实施状态相关：`apply-task-skeleton-seed`、`apply-task-doc-state-sync`、`apply-task-implementation-state-sync`
+- readiness 修复相关：`preview-task-readiness-fix`、`preview-task-patches`、`apply-task-readiness-fix`
+- task state writeback 相关：`preview-task-state-writeback`、`preview-task-state-dependency-map`、`apply-task-state-writeback`
+- readiness state sync 相关：`preview-task-readiness-state-sync`、`apply-task-readiness-state-sync`
+- formal window sync 相关：`preview-task-formal-window-sync`、`apply-task-formal-window-sync`
+
+### 3.5 当前需要谨慎使用的命令
+
+以下命令虽然已经暴露在 CLI 中，但默认都不应被写成“主链自动执行”的既成事实：
+
+- 所有带 `--apply` 的 requirement/task seed、writeback、sync 命令
+- `generate-implementation-packet`
 - `apply-round`
-- `update-round-status`
 
-说明：
+谨慎使用原则：
 
-- `generate-codex-packet` 当前主要服务于文档轮次流程。
-- `apply-round` 当前用于消费 `plan-round` 产出的审批队列计划，不会替代 `confirm-transition` 的字段校验与写回规则。
+- 先 `validate-state` / `evaluate-state`，再 preview / plan，最后才考虑 apply。
+- 优先保留 dry-run、preview、plan 输出，避免直接把扩展命令当成正式审批替代品。
+- `apply-round` 是“批量消费审批计划”的执行器，不是完整 round 生命周期。
+- `generate-implementation-packet` 只在 task 已满足 `implementation_ready` 时成立，不能把命令存在误读成“任意 task 都已可生成实施包”。
+
+### 3.6 按工作目标选择命令
+
+| 工作目标 | 推荐命令 | 当前说明 |
+| --- | --- | --- |
+| 讨论 | `evaluate-state`、`render-report`、`plan-open-window`、`plan-round`、`plan-task-adaptation`、`plan-task-readiness` | 先生成讨论输入，不直接写回状态 |
+| 状态校验 | `validate-state` | 校验 bootstrap / official state 的 schema 与规则约束 |
+| 状态评估 | `evaluate-state` | 生成只读 evaluate payload，供报告、开窗、task 规划与 packet 消费 |
+| readiness | `preflight-open-window`、`plan-open-window`、`open-window`、`plan-task-readiness`、`preview-task-readiness-fix`、`preview-task-readiness-state-sync` | 区分 ready 检查、排优先级、正式开窗与修复预演 |
+| packet | `generate-codex-packet`、`generate-implementation-packet` | 前者服务 document round，后者只服务 implementation-ready task |
+| Codex 多窗口实施 | `plan-round`、`generate-round-template`、`generate-codex-packet`、`plan-task-window-candidates` | 用于明确窗口边界、交接包与候选桥接结果 |
+| 验证 | `validate-state`、`evaluate-state`、`show-history`、`summarize-history`、`preview-task-state-dependency-map`、`summarize-task-apply-result` | 用于回归核对、历史审计与写回结果复盘 |
+| 上下文回收 | `render-report`、`show-history`、`summarize-history`、支持 Markdown 输出的 task 规划命令 | 用于把讨论、历史和 task 规划重新压回可复用文本产物 |
 
 ## 4. 常用只读命令
 
@@ -317,7 +359,36 @@ python -m tools.doc_governor.cli apply-round --round-id round-batch-01 --from-pl
 - `generate-round-template` 目前不会把 `plan-round` 的 `queues.can_approve_now / must_review / blocked_hard` 自动展开成一套更丰富的模板区块。
 - `generate-codex-packet` 当前仍以文档轮次为主要使用场景。
 
-## 9. 关键文件
+## 9. 子任务实施与状态回写扩展命令
+
+### 9.1 implementation packet 与 task 规划
+
+- `generate-implementation-packet`：可从 `--input` 或 `--evaluate-json` 读取数据，但会先检查目标 task 的 `derived.implementation_ready`；未满足时直接拒绝生成。
+- `plan-task-adaptation`：基于 official state / evaluate payload 生成 task adaptation plan，支持 `json/markdown` 输出。
+- `plan-task-remediation`：生成 task 修复规划，用于讨论“先补什么、怎么补”。
+- `plan-task-readiness`：生成 task readiness 规划，适合在 implementation window 前做收敛。
+- `suggest-requirement-links`：生成 requirement link 建议；它是建议输出，不会直接改状态。
+- `plan-task-window-candidates`：生成 task window 候选桥接结果，用于多窗口实施前的边界收敛。
+
+### 9.2 requirement / task seed、preview、sync
+
+这一组命令当前已经存在，但应理解为“辅助 writeback / sync 工具”，而不是默认主链：
+
+- requirement：`apply-requirement-container-seed`、`apply-requirement-seed`、`apply-requirement-entity-sync`
+- task seed / state：`apply-task-skeleton-seed`、`apply-task-doc-state-sync`、`apply-task-implementation-state-sync`
+- readiness 修复：`preview-task-readiness-fix`、`preview-task-patches`、`apply-task-readiness-fix`
+- task state writeback：`preview-task-state-writeback`、`preview-task-state-dependency-map`、`apply-task-state-writeback`
+- readiness state sync：`preview-task-readiness-state-sync`、`apply-task-readiness-state-sync`
+- formal window sync：`preview-task-formal-window-sync`、`apply-task-formal-window-sync`
+- 回写结果汇总：`summarize-task-apply-result`
+
+使用这些命令时，建议固定遵守：
+
+1. 先保留 `preview` / `plan` 输出，再决定是否 `--apply`。
+2. 对 state writeback / state sync / formal-window sync 类命令，优先显式保留 `actor`、`reason` 和 evaluate 证据来源。
+3. 不要把这些命令生成的 patch / plan / sync 结果直接视为 confirmed state；正式真值仍回到 `DOC_STATE.yaml` 与 `confirm-transition` / round 生命周期。
+
+## 10. 关键文件
 
 - 官方状态：`docs/governance/DOC_STATE.yaml`
 - bootstrap 输出：`docs/governance/DOC_STATE.bootstrap.yaml`
@@ -326,17 +397,17 @@ python -m tools.doc_governor.cli apply-round --round-id round-batch-01 --from-pl
 - packets：`docs/governance/packets/*`
 - 历史：`docs/governance/transition_history.jsonl`
 
-## 10. 常见故障
+## 11. 常见故障
 
-### 10.1 `codex.ps1` 被执行策略拦截
+### 11.1 `codex.ps1` 被执行策略拦截
 
 不要切到 `codex.ps1`，统一使用 `codex.cmd`。
 
-### 10.2 `confirm-transition` 提示缺少 `Decision:`
+### 11.2 `confirm-transition` 提示缺少 `Decision:`
 
 如果传入了 `--round-id`，则 `--reason` 必须包含 `Decision:` 锚点。
 
-### 10.3 `open-window` 无法 apply
+### 11.3 `open-window` 无法 apply
 
 优先检查：
 
@@ -345,7 +416,7 @@ python -m tools.doc_governor.cli apply-round --round-id round-batch-01 --from-pl
 - 是否仍位于 `review_required_before_open`
 - `apply` 模式下是否提供了 `--actor` 与 `--reason`
 
-### 10.4 `apply-round` 报计划输入错误
+### 11.4 `apply-round` 报计划输入错误
 
 检查：
 
@@ -353,7 +424,7 @@ python -m tools.doc_governor.cli apply-round --round-id round-batch-01 --from-pl
 - 是否两个都没传
 - `--round-id` 是否与计划中的 `round_id` 一致
 
-### 10.5 设计稿或计划文档没有被 evaluate 到
+### 11.5 设计稿或计划文档没有被 evaluate 到
 
 检查：
 

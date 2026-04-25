@@ -214,7 +214,11 @@ def validate_state_file(state_path: Path) -> list[Diagnostic]:
             subtasks_obj=subtasks_obj,
             state_path=state_path,
             known_requirement_ids=known_requirement_ids,
-            requirement_mode=_extract_requirement_mode(state.get("global_policy")),
+            requirement_mode=_resolve_requirement_mode(
+                global_policy_obj=state.get("global_policy"),
+                requirements_obj=requirements_obj,
+                known_requirement_ids=known_requirement_ids,
+            ),
         )
     )
     diagnostics.extend(_validate_documents(state.get("documents"), state_path))
@@ -245,6 +249,40 @@ def _extract_requirement_mode(global_policy_obj: object) -> str:
     if not isinstance(requirement_mode, str):
         return ""
     return requirement_mode.strip()
+
+
+def _resolve_requirement_mode(
+    *,
+    global_policy_obj: object,
+    requirements_obj: object,
+    known_requirement_ids: set[str],
+) -> str:
+    configured_mode = _extract_requirement_mode(global_policy_obj)
+    if configured_mode:
+        return configured_mode
+    return _infer_legacy_requirement_mode(
+        requirements_obj=requirements_obj,
+        known_requirement_ids=known_requirement_ids,
+    )
+
+
+def _infer_legacy_requirement_mode(
+    *,
+    requirements_obj: object,
+    known_requirement_ids: set[str],
+) -> str:
+    if known_requirement_ids != {"RQ01"} or not isinstance(requirements_obj, dict):
+        return ""
+    requirement_obj = requirements_obj.get("RQ01")
+    if not isinstance(requirement_obj, dict):
+        return ""
+    meta = requirement_obj.get("meta")
+    if not isinstance(meta, dict):
+        return ""
+    scope_kind = meta.get("scope_kind")
+    if isinstance(scope_kind, str) and scope_kind.strip() == "root_requirement_cluster":
+        return "root_requirement_cluster"
+    return ""
 
 
 def _validate_top_level(state: dict[str, object], state_path: Path) -> list[Diagnostic]:
@@ -2466,6 +2504,8 @@ def _validate_entity_requirement_relation_consistency(
             )
 
         if not entity_requirement_ids and container_requirement_ids:
+            if len(container_requirement_ids) > 1:
+                continue
             if _allow_legacy_root_requirement_container_only_relation(
                 requirement_mode=requirement_mode,
                 known_requirement_ids=known_requirement_ids,
@@ -2480,7 +2520,8 @@ def _validate_entity_requirement_relation_consistency(
                     entity_id=str(entity_id),
                     field_path=f"{entity_type}s.{entity_id}",
                     message=(
-                        "entity side is missing requirement relation while requirement container declares "
+                        "entity back-link is missing in meta.requirement_id / facts.requirement_ids while "
+                        "requirement container declares "
                         + ", ".join(container_requirement_ids)
                     ),
                     evidence=[
@@ -2491,6 +2532,20 @@ def _validate_entity_requirement_relation_consistency(
                             value=[str(entity_id)],
                         )
                         for requirement_id in container_requirement_ids
+                    ]
+                    + [
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.meta.{REQUIREMENT_RELATION_META_FIELD}",
+                            value=None,
+                        ),
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.facts.{REQUIREMENT_RELATION_FACT_FIELD}",
+                            value=[],
+                        ),
                     ],
                 )
             )

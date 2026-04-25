@@ -281,6 +281,20 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(consistency_codes, set())
 
+    def test_requirement_relation_consistency_infers_legacy_root_cluster_without_policy(self) -> None:
+        state = _build_valid_state()
+        del state["global_policy"]["asset_policy"]
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+        consistency_codes = {
+            item.code
+            for item in diagnostics
+            if item.code.startswith("SCHEMA_REQUIREMENT_RELATION_")
+        }
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(consistency_codes, set())
+
     def test_requirement_relation_consistency_missing_sides_are_warnings(self) -> None:
         state = _build_valid_state()
         state["requirements"]["RQ02"] = {
@@ -356,6 +370,12 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
         )
         self.assertTrue(
             any(item.entity_type == "subtask" and item.entity_id == "ST02_01" for item in by_code["SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING"])
+        )
+        self.assertTrue(
+            any(
+                "entity back-link is missing" in item.message
+                for item in by_code["SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING"]
+            )
         )
         self.assertEqual(len([item for item in diagnostics if item.severity == "error"]), 0)
 

@@ -28,6 +28,7 @@ BLOCKED_REASON_CODES = {
     "missing_relation_ref",
     "document_markers_pending",
     "document_file_missing",
+    "document_repo_truth_mismatch",
     "requirement_id_unresolved",
     "implementation_scope_unclear",
     "required_tests_missing",
@@ -1169,6 +1170,37 @@ def _derive_document_status(
                 kind="document_marker",
                 reason_code="document_markers_pending",
                 message=f"document {document_id} still contains unresolved markers",
+            )
+        )
+
+    repo_truth = _as_dict(facts.get("repo_truth"))
+    missing_paths = sorted(
+        {
+            str(path)
+            for path in _as_list(repo_truth.get("missing_paths"))
+            if isinstance(path, str) and path.strip()
+        }
+    )
+    direction_drift = _as_dict(facts.get("direction_drift"))
+    future_terms = sorted(
+        {
+            str(term)
+            for term in _as_list(direction_drift.get("future_blueprint_terms"))
+            if isinstance(term, str) and term.strip()
+        }
+    )
+    doc_type = str(meta.get("doc_type", "")).strip()
+    if doc_type in {"design", "plan"} and (len(missing_paths) >= 2 or (missing_paths and future_terms)):
+        missing_sample = ", ".join(missing_paths[:5])
+        message = f"document {document_id} references repo paths not present in current repo: {missing_sample}"
+        if future_terms:
+            message += f"; future-target terms: {', '.join(future_terms)}"
+        document_blockers.append(
+            _make_blocker(
+                ref=f"doc:{document_id}#repo_truth",
+                kind="document_repo_truth",
+                reason_code="document_repo_truth_mismatch",
+                message=message,
             )
         )
 
