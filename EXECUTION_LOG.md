@@ -25,6 +25,45 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-B / 一期工作台 MVP 信息架构与用户旅程设计
+
+- 阶段 0：已校验、提交并推送 `W13-A` 用户确认结果写回成果；提交 hash 为 `d30a334`，push 到 `origin/main` 成功。
+- 范围：只做设计文档；不写代码，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`，不写 Basic Memory。
+- 执行类型：一期工作台 MVP 信息架构、页面集合、核心用户旅程、页面到对象映射、W10 原型定位和后续确认卡补齐。
+- 修改内容：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`，定义一期工作台 IA、页面集合、十条核心用户旅程、页面到对象映射、当前 `apps/web/**` 原型定位、后续占位能力、用户确认卡、`W13-C` 输入与 `W13-D` 输入。
+  - 在 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` 中补充 `W13-B` 输出链接与摘要。
+  - 在 `PLAN_LATEST.md` 中把当前活动窗口更新为 `W13-B`，并记录 IA / 用户旅程已补齐但代码开发仍暂停。
+  - 在 `DESIGN_DECISIONS.md` 中新增 `DD-020`，把 `W13-B` IA 草案记录为 `proposed` 设计输入。
+  - 在 `OPEN_QUESTIONS.md` 中新增 `OQ-035` 至 `OQ-042`，记录账号来源、角色层级、岗位 / 简历列表化、复盘主对象、评分报告页面形态、Markdown 导出入口、工作台统计范围和后续占位区位置等待确认项。
+  - 在 `AGENTS.md` 计划索引中新增 W13-B IA / 用户旅程文档。
+- 影响文件：
+  - `AGENTS.md`
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`
+- 成熟度变化（建议）：
+  - 本轮不修改 `DOC_STATE.yaml`，不新增状态层 blocker，不打开正式实施窗口。
+  - 本轮提升的是一期工作台 IA、页面集合、用户旅程和对象模型输入的可评审性。
+- 进展变化（建议）：
+  - `W13-B` 已补齐工作台 IA 与用户旅程草案。
+  - 后续应进入 `W13-C` 对象模型、服务端保存、登录 / 权限、真实 LLM provider、API / 后端框架确认卡。
+- 验证结果：
+  - `git status --short` 显示本轮待提交范围仅限 `AGENTS.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`。
+  - `validate-state` 结果为 `ok=true, error=0, warning=0`。
+  - `evaluate-state` 结果为 `ok=true, error=0, warning=0, documents_blocked_count=0`。
+  - W13-B 关键词回归已执行，命中工作台、一期 MVP、登录、权限、岗位、简历、模拟面试、评分、历史记录、复盘、Markdown、导出、资产库、RAG、管理台、W10、`apps/web`、用户旅程、信息架构等关键词。
+- 遗留问题：
+  - `OQ-035` 至 `OQ-042` 需要用户确认。
+  - `W13-C` 仍需确认对象模型、登录 / 权限、服务端保存、真实 LLM provider、API / 后端框架、数据库与部署边界。
+  - `W13-D` 仍需确认评分维度、复盘详情、Markdown 导出范围和一期 MVP DoD。
+- 下一轮建议动作：
+  - `W13-C` 阶段 0 先校验并提交 W13-B 成果，再补对象模型与技术方案确认卡。
+  - `W13-F` 在 W13-B/C/D 经用户确认后统一写回 Basic Memory / Superpowers。
+
 ### 2026-04-25 / W13-A / 用户确认结果写回与一期工作台 MVP 范围冻结草案
 
 - 范围：只做文档写回与范围冻结；不写代码，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`，不创建后端，不接真实 LLM，不做数据库、登录、评分实现。

@@ -51,6 +51,14 @@
 | OQ-032 | 一期导出形态是否做完整 PDF | confirmed | M03、M06、M08 | 用户已确认一期导出采用复制 / Markdown 下载，不做完整 PDF；具体 Markdown 文件结构、命名、复制范围、导出入口与历史记录关系仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
 | OQ-033 | 当前 `apps/web/**` 原型是否作为正式 MVP 开发起点 | confirmed | M01、M03、M06、M07 | 用户已确认当前 `apps/web/**` 原型保留为原型探索参考证据，不直接扩展为正式一期 MVP；后续若复用任何交互或组件，需要先在设计文档中重新裁剪和确认 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
 | OQ-034 | 当前是否继续代码开发 | confirmed | 全局 | 用户已确认暂停代码开发，回到设计文档补齐；在 `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不允许继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分或后端实现 | `PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` |
+| OQ-035 | 一期登录是否支持用户自助注册，还是由管理员创建账号 | open | M02、M10 | `W13-B` 推荐一期采用“管理员创建账号”作为默认候选，以保持账号和权限边界受控；自助注册或注册审核作为备选，需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`、`DESIGN_DECISIONS.md` |
+| OQ-036 | 一期权限是否只有普通用户 / 管理员两级 | open | M02、M10 | `W13-B` 推荐一期采用普通用户 / 管理员两级，避免过早进入复杂组织治理；Owner / Admin / Member 或资源级权限留作备选，需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-037 | 岗位和简历是否都必须列表化管理 | open | M03、M04、M06 | `W13-B` 推荐岗位与简历都列表化管理，以支撑服务端保存、复用、历史记录和工作台总览；是否允许更轻量的简历内嵌管理需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-038 | 复盘记录是否按 `InterviewSession` 展示，还是作为独立复盘对象展示 | open | M06、M08 | `W13-B` 推荐统一历史记录列表展示会话、评分和复盘，并在详情中保留清晰对象关系；具体 `InterviewSession` / `SessionRecord` / 复盘对象边界需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-039 | 评分报告是否独立页面，还是并入复盘详情 | open | M07、M08、M09 | `W13-B` 推荐面试结束后先显示轻量评分，复盘详情显示完整评分报告；具体评分报告结构与验收交 `W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-040 | Markdown 下载入口和导出范围应如何确定 | open | M03、M06、M08 | `W13-B` 推荐一期先在复盘 / 评分详情中提供复制 / Markdown 下载，不设独立导出中心；具体文件结构、命名、复制范围和导出快照需 `W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-041 | 工作台首页是否需要统计卡片，以及一期统计范围是什么 | open | M01、M04、M07、M08 | `W13-B` 推荐只做行动型摘要：待复盘、进行中面试、最近岗位、最近评分；完整趋势分析和 BI 仪表盘后置 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-042 | 资产库、RAG / 知识库、管理台、训练中心、多轮高级面试、更完整导出、运维 / 配置占位放在哪里 | open | M05、M06、M09、M10 | `W13-B` 推荐统一放入“后续能力”折叠菜单或低干扰占位区，不放大为一期主闭环；具体导航呈现需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 
 ## 3. 本轮高优问题处理判断
 
@@ -182,6 +190,19 @@
 - `9B / confirmed`：暂停代码开发，回到设计文档补齐。
 
 当前仍未确认的实现方案包括：具体 LLM provider、数据库类型、登录方案、权限模型细节、评分维度和权重、API / 后端框架、导出形态细节、运维 / 部署边界。
+
+### 5.7 W13-B 信息架构与用户旅程待确认项
+
+> 以下问题由 `W13-B` 在补齐一期工作台 IA、页面集合、用户旅程和页面到对象映射时识别。它们不改变 `W13-A` 已确认的一期范围，只影响 `W13-C / W13-D` 的对象模型、页面细化和验收标准。
+
+- `OQ-035`：一期登录账号来源。
+- `OQ-036`：一期角色层级。
+- `OQ-037`：岗位与简历是否都列表化管理。
+- `OQ-038`：复盘记录主组织方式。
+- `OQ-039`：评分报告页面形态。
+- `OQ-040`：Markdown 导出入口与范围。
+- `OQ-041`：工作台首页统计卡片范围。
+- `OQ-042`：后续占位能力在导航中的位置。
 
 ## 6. 使用说明
 
