@@ -55,6 +55,17 @@
 43. 训练抽屉支持归并到薄弱项、加入待打磨、立即发起打磨、暂不处理。
 44. 训练抽屉展示来源摘要、严重度、关联岗位、证据摘要、推荐归并主题、操作影响预览。
 
+### 2.1 用户补充确认：多轮面试按模式拆分
+
+用户已补充确认：一期 MVP 中“多轮面试”不再按此前推荐的“固定 3 轮”作为总规则处理。此前“多轮范围 = A：固定 3 轮”不得写成 `confirmed`，也不再作为 `recommended / proposed-default` 总规则。
+
+当前 confirmed 口径为：
+
+- 打磨模式是训练型模式：根据 `ProgressTree / 进展树` 持续出题；系统根据用户每轮回答更新能力树、当前进展、薄弱点和建议下一题方向；用户决定是否继续或结束；不固定轮次数。
+- 压力面模式是模拟真实面试节奏的模式：系统生成模拟面试题组；用户按题完成面试；题目完成后面试结束；过程中不强调每题即时打断；结束后输出最终掌握情况、岗位匹配度、薄弱点、通过概率、建议打磨主题、多维评分和复盘报告。
+- 题目数量、难度、题型组合仍可后续确认。
+- 固定 3 轮最多只能作为压力面模式的一种候选题组策略，不是一期多轮面试总规则。
+
 ## 3. 一期 MVP 对象模型草案
 
 本节只定义对象职责与关系，不定义完整数据库 schema。字段族中的实现细节仍需用户确认或由 `W13-D` 承接。
@@ -79,7 +90,7 @@
 | `InterviewSession` | 表示一次模拟面试会话主对象 | 是 | 是 | 是，含面试与评价数据 | 关联用户、岗位、简历、知识库、模式、轮次、评分、复盘 | 状态、暂停 / 继续、归档、可见范围 | 是 | 完整记录、评分、复盘和导出以它为主线 |
 | `InterviewLaunchContext` | 表示发起面试时选择的岗位、简历、模式、来源入口和约束 | 是 | 是 | 中到高 | 生成 `InterviewReferencePack`、`InterviewStrategy`、首题 | 岗位 / 简历缺失是否允许、默认值、入口来源 | 是 | 发起流程和缺失输入错误态可验收 |
 | `InterviewReferencePack` | 表示系统整理出的参考材料包 | 是 | 是 | 高，含岗位、简历、知识库摘要 | 由发起上下文、RAG、简历、岗位生成，被策略和首题使用 | 包含范围、摘要策略、证据引用 | 是 | 首题、评分、复盘需能回看参考材料来源 |
-| `InterviewMode` | 表示打磨模式、模拟模式及后续模式枚举 | 是 | 是 | 低 | 约束 `InterviewSession`、`PolishModeSession`、`SimulationModeSession` | 模式枚举、默认模式、模式切换 | 是 | 模式差异必须影响反馈时机和报告内容 |
+| `InterviewMode` | 表示打磨模式、压力面模式及后续模式枚举 | 是 | 是 | 低 | 约束 `InterviewSession`、`PolishModeSession`、`PressureInterviewSession` | 模式枚举、默认模式、模式切换 | 是 | 模式差异必须影响反馈时机、结束条件和报告内容 |
 | `InterviewStrategy` | 表示面试策略、轮次规则、难度和高阶定义 | 是 | 是 | 低到中 | 由 `InterviewLaunchContext` 生成，约束轮次和问题 | 固定轮次、岗位驱动、弱项驱动、结束条件 | 是 | 策略如何影响评分和复盘由 W13-D 验收 |
 | `FirstQuestionGeneration` | 表示首题生成过程和结果 | 是 | 是 | 中到高 | 依赖 `InterviewReferencePack`、RAG、LLM 请求 | 失败重试、候选数量、引用显示 | 是 | 首题必须可追溯 LLM / RAG 证据 |
 | `InterviewRound` | 表示多轮高阶面试中的一轮 | 是 | 是 | 中 | 属于 `InterviewSession`，包含多个 `InterviewTurn` | 轮次策略、跳过规则、结束条件 | 是 | 每轮评价如何进入总分由 W13-D 验收 |
@@ -89,7 +100,8 @@
 | `FollowUpQuestion` | 表示追问或深挖问题 | 是，多轮高阶要求 | 是 | 中 | 关联父问题、回答和轮次策略 | 追问深度、生成条件、最大次数 | 是 | 高阶面试需能验收追问链 |
 | `InterviewContext` | 表示当前面试上下文摘要与可恢复状态 | 是，暂停 / 继续和多轮需要 | 是，保存方式待确认 | 是，含摘要和证据 | 汇总岗位、简历、RAG、历史 turns、策略 | 完整上下文 / 摘要 / token 裁剪 | 是 | 暂停 / 继续与复盘可信度依赖该对象 |
 | `RoundEvaluation` | 表示单轮评价结果 | 是，多轮和评分要求 | 是 | 中 | 属于 `InterviewRound`，汇总到 `ScoreReport` | 维度、权重、证据、是否可修订 | 是 | 每轮评价如何进入总分是 W13-D 输入 |
-| `PolishModeSession` | 表示一次打磨模式训练会话 | 是 | 是 | 高，含弱项、回答、反馈 | 是 `InterviewSession` 的模式化子对象，关联 `WeaknessItem`、`TrainingTask` | 开启来源、保存粒度、结束条件 | 是 | 每题即时反馈、进展更新和下一题建议可验收 |
+| `PolishModeSession` | 表示一次打磨模式训练会话 | 是 | 是 | 高，含弱项、回答、反馈 | 是 `InterviewSession` 的模式化子对象，关联 `WeaknessItem`、`TrainingTask`、`ProgressTree`、`UserEndDecision` | 开启来源、保存粒度、用户结束决策 | 是 | 每题即时反馈、进展更新、用户决定继续 / 结束和下一题建议可验收 |
+| `ProgressTree` | 表示打磨模式中的进展树 | 是，用户已确认打磨模式按进展树持续出题 | 是 | 中 | 关联 `PolishModeSession`、`AbilityTree`、`TrainingProgress`、`NextQuestionRecommendation` | 节点粒度、进展计算、展示层级 | 是 | W13-D 需区分进展树驱动的持续训练与压力面题组完成 |
 | `WeaknessItem` | 表示中粒度、可训练、可累计、可消减、可停练的薄弱主题 | 是 | 待确认，推荐服务端保存 | 中到高 | 聚合 `WeaknessEvidence`，关联岗位、训练、复盘 | 聚合 key、状态、消减、归并、停练 | 是，需确认实现深度 | 弱项如何影响打磨建议和复盘输出 |
 | `WeaknessEvidence` | 表示薄弱项的所有来源证据 | 是 | 是 | 高，可能含回答与复盘片段 | 来自岗位-简历匹配、模拟报告、复盘报告 | 证据类型、置信度、引用摘要、权限 | 是 | 弱项结论必须可回看证据 |
 | `WeaknessStatus` | 表示 `active`、`low_priority`、`dismissed`、`resolved` 状态 | 是 | 是 | 低 | 属于 `WeaknessItem` | 状态变更条件、恢复 active 条件 | 是 | 训练建议需尊重状态 |
@@ -99,17 +111,22 @@
 | `AbilityTree` | 表示能力树总结构 | 是，打磨同步更新能力树 | 待确认 | 中 | 包含 `AbilityNode`、`AbilityLevel`、训练进展 | 完整树 / 轻量树、岗位差异 | 是，需确认深度 | 能力树是否进入一期由确认卡决定 |
 | `AbilityNode` | 表示能力树中的能力节点 | 是 | 待确认 | 中 | 被弱项、评分、训练进展引用 | 节点粒度、层级、标签 | 取决于能力树深度 | 评分和训练建议是否能映射节点 |
 | `AbilityLevel` | 表示能力节点等级或掌握度 | 是 | 待确认 | 中 | 属于 `AbilityNode`，由评分和训练更新 | 等级范围、计算规则、显示方式 | 取决于能力树深度 | 掌握度展示和变化趋势可验收 |
-| `TrainingProgress` | 表示打磨会话和弱项训练进展 | 是 | 是 | 中 | 关联 `PolishModeSession`、`TrainingTask`、能力树 | 当前进展、连续训练、完成条件 | 是 | 打磨后当前进展必须可回写 |
+| `TrainingProgress` | 表示打磨会话和弱项训练进展 | 是 | 是 | 中 | 关联 `PolishModeSession`、`TrainingTask`、`ProgressTree`、能力树 | 当前进展、连续训练、完成条件 | 是 | 打磨后当前进展必须可回写 |
 | `LossPoint` | 表示单题失分点 | 是 | 是，保存粒度待确认 | 中 | 属于打磨反馈或题目复盘 | 失分类别、严重度、证据引用 | 是 | 每题反馈必须列出失分点 |
 | `LossEvidence` | 表示支持失分点的证据 | 是 | 是 | 高 | 指向回答、岗位、简历、RAG、复盘材料 | 引用摘要、证据强度、显示范围 | 是 | 失分点不得无证据 |
 | `ReferenceAnswer` | 表示参考回答 | 是 | 是，保存粒度待确认 | 中 | 关联问题、失分点、技术原理 | 完整回答、框架、版本、引用 | 是 | 每题反馈必须展示参考回答 |
 | `AnswerImprovementRationale` | 说明为什么参考回答更好 | 是 | 是 | 中 | 关联参考回答和失分点 | 对应关系、解释深度、技术原理 | 是 | 打磨反馈必须解释“为什么更好” |
-| `NextQuestionRecommendation` | 表示下一题方向建议 | 是 | 是 | 中 | 由打磨反馈、弱项、训练进展生成 | 推荐方向、依据、难度 | 是 | 每轮打磨后必须能生成下一题方向 |
-| `SimulationModeSession` | 表示一次模拟模式会话 | 是 | 是 | 高 | 是 `InterviewSession` 的模式化子对象 | 反馈时机、结束条件、报告范围 | 是 | 中途弱化打断、结束后报告可验收 |
-| `FinalMasteryAssessment` | 表示最终掌握情况 | 是 | 是 | 中 | 属于模拟模式报告和复盘 | 维度、证据、等级 | 是 | 模拟结束必须输出掌握情况 |
+| `NextQuestionRecommendation` | 表示下一题方向建议 | 是 | 是 | 中 | 由打磨反馈、弱项、训练进展和 `ProgressTree` 生成 | 推荐方向、依据、难度 | 是 | 每轮打磨后必须能生成下一题方向 |
+| `UserEndDecision` | 表示用户在打磨模式中继续或结束的显式决策 | 是，用户已确认打磨模式由用户决定是否继续 / 结束 | 是 | 中 | 关联 `PolishModeSession`、`InterviewTurn`、`TrainingProgress` | 继续 / 结束动作、结束原因、是否生成总结 | 是 | 打磨模式不得被固定轮次自动结束 |
+| `SimulationModeSession` | 表示原“模拟模式”会话的历史命名，当前设计中应按压力面模式收敛 | 是 | 是 | 高 | 与 `PressureInterviewSession` 对齐 | 是否保留别名、迁移命名 | 否，命名可由后续实现统一 | 不得继续用该对象表达固定 3 轮总规则 |
+| `PressureInterviewSession` | 表示一次压力面模式会话 | 是，用户已确认压力面模式模拟真实面试节奏 | 是 | 高 | 是 `InterviewSession` 的模式化子对象，包含 `InterviewQuestionSet`、`InterviewCompletion` | 题目数量、难度、题型组合 | 是 | 题组完成后结束，结束后集中生成评分和复盘 |
+| `InterviewQuestionSet` | 表示压力面模式题组 | 是 | 是 | 中 | 包含多个 `InterviewQuestion`，由 `PressureInterviewSession` 使用 | 题目数量、题型、难度、生成策略 | 是 | 题组完成是压力面结束条件 |
+| `FinalMasteryAssessment / FinalAssessment` | 表示最终掌握情况和整场最终评估 | 是 | 是 | 中 | 属于压力面模式报告和复盘 | 维度、证据、等级 | 是 | 压力面结束必须输出最终掌握情况 |
 | `JobMatchAssessment` | 表示岗位匹配度判断 | 是 | 是 | 中 | 关联岗位、简历、回答、评分 | 匹配维度、权重、证据 | 是 | 模拟报告必须展示岗位匹配度 |
 | `PassProbability` | 表示通过概率 | 是 | 是 | 中 | 由评分、岗位匹配、风险点生成 | 概率模型、区间、解释 | 是，W13-D 细化 | 通过概率需有证据与说明 |
 | `SuggestedPolishTopic` | 表示建议打磨主题 | 是 | 是 | 中 | 可转入 `WeaknessItem` 或 `TrainingTask` | 生成条件、去重、优先级 | 是 | 模拟结束后必须可生成建议主题 |
+| `WeaknessSummary` | 表示压力面模式结束后的薄弱点汇总 | 是 | 是 | 中 | 汇总 `WeaknessItem`、`RoundEvaluation`、`ScoreReport` | 汇总粒度、证据映射、去重 | 是 | W13-D 需将薄弱点汇总纳入复盘报告 |
+| `InterviewCompletion` | 表示压力面模式题组完成后的结束事件 | 是 | 是 | 中 | 连接 `PressureInterviewSession`、`InterviewQuestionSet`、`ScoreReport`、`MockInterviewReview` | 完成条件、失败态、是否允许补答 | 是 | 压力面模式以题组完成结束，而非固定轮次结束 |
 | `ReviewSource` | 表示复盘来源，真实面试材料或模拟面试结果 | 是 | 是 | 高 | 指向 `RealInterviewReview` 或 `MockInterviewReview` | 来源录入、权限、原始材料类型 | 是 | 复盘必须区分真实 / 模拟来源 |
 | `RealInterviewReview` | 表示真实面试复盘 | 是 | 待确认实现深度 | 高 | 包含多个 `QuestionReviewItem` | 录入方式、逐题完整度、导出 | 是，需确认深度 | 真实复盘是否进入一期需用户确认 |
 | `MockInterviewReview` | 表示模拟面试复盘 | 是 | 是 | 高 | 来自 `InterviewSession` 和 `ScoreReport` | 报告范围、逐题点评、建议 | 是 | 模拟复盘必须覆盖整场和逐题 |
@@ -160,6 +177,9 @@
 | `InterviewTurn` | `asked -> answered -> evaluated -> revised` | 问题提出、用户回答、被评价、可选修订 | 是，是否允许修订和题中暂停待确认 |
 | `PolishModeSession` | `draft -> active -> paused -> completed -> archived` | 打磨准备、训练中、暂停、完成、归档 | 是，暂停 / 保存粒度 / 结束条件待确认 |
 | `SimulationModeSession` | `draft -> active -> completed -> reviewed -> archived` | 模拟准备、执行中、完成、已复盘、归档 | 是，即时评分和结束后总结范围待确认 |
+| `PressureInterviewSession` | `draft -> active -> completed -> reviewed -> archived` | 压力面准备、题组作答中、题组完成、已复盘、归档 | 是，题目数量、难度和题型组合仍待确认 |
+| `InterviewQuestionSet` | `draft -> generated -> active -> completed -> archived` | 题组草稿、已生成、作答中、全部完成、归档 | 是，固定 3 轮只能作为题组策略候选，不是总规则 |
+| `InterviewCompletion` | `pending -> completed -> reviewed -> archived` | 等待题组完成、已完成、已进入复盘、归档 | 是，失败态和补答策略仍待确认 |
 | `WeaknessItem` | `active -> low_priority -> dismissed -> resolved` | 活跃、低优先级、用户停练、已解决 | 是，消减自动化和恢复 active 规则待确认 |
 | `TrainingTask` | `queued -> active -> completed -> dismissed` | 待打磨、执行中、完成、暂不处理 | 是，独立页面化和排序规则待确认 |
 | `AssetArchiveRequest` | `draft -> submitted -> archived -> failed` | 草稿、提交、归档成功、归档失败 | 是，字段校验、重试和失败展示待确认 |
@@ -202,6 +222,10 @@
 - 基于自定义主题开启。
 - 基于岗位 / 简历自动推荐开启。
 - 薄弱项不是必填输入。
+- 根据 `ProgressTree / 进展树` 持续出题。
+- 每轮回答后更新能力树、当前进展、薄弱点和建议下一题方向。
+- 用户通过 `UserEndDecision` 决定继续或结束。
+- 不固定轮次数，不得把“固定 3 轮”写成打磨模式规则。
 
 每轮回答后必须输出：
 
@@ -224,10 +248,12 @@ PolishModeSession
 -> InterviewTurn / InterviewAnswer
 -> LossPoint + LossEvidence
 -> ReferenceAnswer + AnswerImprovementRationale
+-> ProgressTree
 -> AbilityTree / AbilityNode / AbilityLevel
 -> TrainingProgress
 -> WeaknessItem / TrainingTask
 -> NextQuestionRecommendation
+-> UserEndDecision
 ```
 
 边界说明：
@@ -237,23 +263,31 @@ PolishModeSession
 - 打磨模式可以消耗或生成 `TrainingTask`，但待打磨清单只是执行层，不等于薄弱项中心。
 - 打磨模式每题反馈是否完整保存仍需确认。推荐保存结构化反馈和证据，而不是只保存在当前会话 UI。
 - 打磨模式是否进入 `ScoreReport` 由 `W13-D` 细化；当前草案建议打磨模式有题级得分，但整场 `ScoreReport` 与模拟模式区分展示。
+- 打磨模式结束条件已确认由用户决定是否继续或结束，不再按固定轮次自动结束。
 
-## 7. 模拟模式边界
+## 7. 压力面模式边界
 
-模拟模式确认进入一期，目标是更接近真实面试节奏：
+压力面模式确认进入一期，目标是更接近真实面试节奏。它承接原 W13-C “模拟模式”的真实面试节奏语义，但不继承“固定 3 轮”作为总规则：
 
+- 系统生成模拟面试题组。
+- 用户按题完成面试。
+- 题目完成后面试结束。
 - 面试过程中弱化中途打断。
 - 仍保留必要的错误状态、暂停状态和保存状态。
-- 结束后输出最终掌握情况、岗位匹配度、薄弱点、通过概率、建议打磨主题。
+- 结束后输出最终掌握情况、岗位匹配度、薄弱点、通过概率、建议打磨主题、多维评分和复盘报告。
 
 对象关系草案：
 
 ```text
-SimulationModeSession
--> InterviewRound / InterviewTurn
--> FinalMasteryAssessment
+PressureInterviewSession
+-> InterviewQuestionSet
+-> InterviewQuestion / InterviewAnswer
+-> InterviewCompletion
+-> FinalAssessment / FinalMasteryAssessment
 -> JobMatchAssessment
 -> PassProbability
+-> ScoreReport
+-> WeaknessSummary
 -> SuggestedPolishTopic
 -> MockInterviewReview
 -> WeaknessItem / TrainingDrawerContext
@@ -261,10 +295,11 @@ SimulationModeSession
 
 边界说明：
 
-- 模拟模式是多轮高阶面试的主要承载形态之一；具体轮次和高阶定义仍需确认。
-- 模拟模式是否每题即时评分仍需确认。推荐过程中弱化展示，只在后台保留必要评价证据，结束后集中展示。
+- 压力面模式是多轮高阶面试的主要承载形态之一；题目数量、难度、题型组合仍需确认。
+- 固定 3 轮最多只能作为压力面模式的一种候选题组策略，不是一期多轮面试总规则。
+- 压力面模式过程中不强调每题即时打断；必要评价证据可后台保留，结束后集中展示。
 - `SuggestedPolishTopic` 由整场表现、岗位匹配、失分点和弱项证据生成，可进入训练抽屉。
-- 模拟模式如何回写 `WeaknessItem` 取决于薄弱项是否作为一期核心服务端对象和消减规则是否自动执行。
+- 压力面模式如何回写 `WeaknessItem` 取决于薄弱项是否作为一期核心服务端对象和消减规则是否自动执行。
 
 ## 8. 复盘模型
 
@@ -416,17 +451,28 @@ SessionRecord 列表或 Job 详情发起
 -> InterviewReferencePack
 -> InterviewStrategy
 -> InterviewSession draft/ready/in_progress
--> InterviewRound pending/active/completed/skipped
--> InterviewTurn asked/answered/evaluated/revised
--> FollowUpQuestion
--> RoundEvaluation
--> ScoreReport / FeedbackSummary / SessionRecord 回写
+-> 按模式分支
+   -> PolishModeSession active
+      -> ProgressTree
+      -> InterviewTurn asked/answered/evaluated/revised
+      -> RoundEvaluation
+      -> AbilityTree / TrainingProgress / WeaknessItem
+      -> NextQuestionRecommendation
+      -> UserEndDecision continue/end
+   -> PressureInterviewSession active
+      -> InterviewQuestionSet generated/active/completed
+      -> InterviewQuestion / InterviewAnswer
+      -> InterviewCompletion
+      -> FinalAssessment / ScoreReport / MockInterviewReview
+-> SessionRecord 回写
 ```
 
 边界说明：
 
-- 多轮范围、高阶定义、暂停 / 继续策略仍需确认。
-- 模拟模式建议承载更真实的多轮流程，打磨模式建议承载逐题即时反馈和训练路径。
+- 多轮范围已由用户补充确认拆分为两类：打磨模式按 `ProgressTree / 进展树` 持续出题并由用户决定结束；压力面模式按 `InterviewQuestionSet / 题组` 完成后结束。
+- “固定 3 轮”不再作为多轮面试总规则，也不再作为 W13-C 推荐总方案；它最多只能作为压力面模式题组策略的一种后续候选。
+- 压力面模式的题目数量、难度、题型组合仍需确认，不得由 Codex 自行决定。
+- 高阶面试定义、多轮上下文保存方式、压力面模式暂停 / 继续策略仍需确认；打磨模式中“用户决定继续 / 结束”已 confirmed。
 - `InterviewContext` 必须让暂停 / 继续、复盘和评分证据链可恢复，但完整 prompt / response 或完整上下文保存仍需确认。
 
 ## 14. LLM provider / adapter 边界草案
@@ -683,18 +729,18 @@ SessionRecord 列表或 Job 详情发起
 
 | 项 | 内容 |
 | --- | --- |
-| 背景 | 一期必须包含多轮高阶面试，但轮次数和策略深度未确认。 |
-| 方案 A | 固定 3 轮：解决多轮可验收；限制是灵活度低；风险是不适配所有岗位；影响是状态机稳定。 |
-| 方案 B | 岗位驱动动态轮次：解决岗位适配；限制是策略更复杂；风险是结束条件不稳定；影响是评分和复盘要处理变长轮次。 |
-| 方案 C | 混合策略，固定下限 + 动态追问：解决稳定和适配平衡；限制是规则更多；风险是一期测试复杂；影响是实现更重。 |
+| 背景 | 用户已补充确认：一期 MVP 中“多轮面试”不再按“固定 3 轮”作为总规则；应拆分为打磨模式与压力面模式。 |
+| 方案 A | 已确认口径：打磨模式由 `ProgressTree / 进展树` 持续出题，用户决定继续或结束；压力面模式由 `InterviewQuestionSet / 题组` 驱动，题目完成后结束。 |
+| 方案 B | 后续压力面题组策略候选：固定 3 题 / 3 轮只可作为压力面模式的一种候选题组策略，不可作为多轮总规则。 |
+| 方案 C | 后续题组配置确认：题目数量、难度、题型组合独立确认，不由 Codex 自行决定。 |
 | 方案 D | 自定义方案 / 其他：由用户补充 |
-| 解决什么 | A 验收稳定；B 岗位适配；C 平衡；D 特殊策略。 |
-| 限制 | A 灵活低；B 复杂；C 测试重；D 需评估。 |
-| 风险 | A 不适配；B 不稳定；C 过度设计；D 扩大。 |
-| 后续影响 | 影响 `InterviewRound`、`InterviewStrategy`、`RoundEvaluation` 和 W13-D 评分。 |
-| 推荐 | A（recommended / proposed-default） |
-| 推荐理由 | 固定 3 轮最容易证明“多轮高阶”进入一期，并让状态机、评分和复盘验收稳定。 |
-| 等待用户确认 | 是 |
+| 解决什么 | A 解决两种模式的结束条件和状态机分歧；B 解决压力面模式可验收题组策略候选；C 解决题组策略仍需业务确认；D 处理特殊面试策略。 |
+| 限制 | A 只确认模式级规则，不确认题目数量、难度、题型组合；B 不能外推到打磨模式或多轮总规则；C 仍会阻塞压力面题组细节实施；D 需重新评估对象和 DoD。 |
+| 风险 | A 若 W13-D 未分开验收，仍可能把两种模式混写；B 容易被误读为固定轮次总规则；C 若迟迟不确认，会影响压力面题组生成和测试；D 可能扩大一期范围。 |
+| 后续影响 | 影响 `ProgressTree`、`UserEndDecision`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`RoundEvaluation`、`ScoreReport` 和 W13-D 评分 / 复盘 / DoD。 |
+| 推荐 | A（confirmed）；B / C 作为后续待确认题组策略，不是 confirmed |
+| 推荐理由 | A 是用户新增确认口径，能避免把打磨训练流误写成固定轮次，同时保留压力面模式的真实面试节奏；题组数量、难度和题型组合仍需另行确认。 |
+| 等待用户确认 | A 否；B / C 是 |
 
 ### 确认卡：高阶面试定义
 
@@ -870,18 +916,18 @@ SessionRecord 列表或 Job 详情发起
 
 | 项 | 内容 |
 | --- | --- |
-| 背景 | 一期至少包含打磨模式和模拟模式，但两种模式的一期深度未确认。 |
-| 方案 A | 仅做模式入口差异，反馈结构尽量共用：解决实现轻；限制是模式体验差异弱；风险是打磨 / 模拟边界不清；影响是 W13-D 验收难区分。 |
-| 方案 B | 打磨模式即时反馈，模拟模式结束后报告：解决两种模式核心差异；限制是需要两套报告节奏；风险是对象关系更复杂；影响是最符合 confirmed 范围。 |
+| 背景 | 一期至少包含打磨模式和模拟真实面试节奏的压力面模式；用户已确认两者的结束条件不同，但两种模式的一期实现深度仍有未确认部分。 |
+| 方案 A | 仅做模式入口差异，反馈结构尽量共用：解决实现轻；限制是模式体验差异弱；风险是打磨 / 压力面边界不清；影响是 W13-D 验收难区分。 |
+| 方案 B | 已确认方向：打磨模式按进展树训练并逐题反馈，压力面模式按题组完成并结束后报告；限制是需要两套报告节奏；风险是对象关系更复杂；影响是最符合当前 confirmed 范围。 |
 | 方案 C | 两种模式都做完整独立流程：解决体验完整；限制是一期范围重；风险是设计和测试膨胀；影响是实现窗口拆分更多。 |
 | 方案 D | 自定义方案 / 其他：由用户补充 |
 | 解决什么 | A 轻量模式；B 核心差异；C 完整体验；D 特殊模式范围。 |
 | 限制 | A 差异弱；B 节奏双轨；C 过重；D 需评估。 |
 | 风险 | A 模式名义化；B 状态复杂；C 范围膨胀；D 扩大。 |
-| 后续影响 | 影响 `PolishModeSession`、`SimulationModeSession`、评分、复盘、训练建议和 W13-D DoD。 |
-| 推荐 | B（recommended / proposed-default） |
-| 推荐理由 | 用户已确认两种模式的不同输出节奏，B 能保留核心价值且不做过度独立化。 |
-| 等待用户确认 | 是 |
+| 后续影响 | 影响 `PolishModeSession`、`ProgressTree`、`UserEndDecision`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、评分、复盘、训练建议和 W13-D DoD。 |
+| 推荐 | B 中“模式拆分与结束条件”为 confirmed；B 中题组数量、难度、题型组合仍等待确认 |
+| 推荐理由 | 用户已确认两种模式的核心节奏和结束条件，B 能避免把打磨模式做成固定轮次，也能保留压力面模式的真实面试节奏。 |
+| 等待用户确认 | 模式拆分否；实现深度和题组策略是 |
 
 ### 确认卡：薄弱项是否作为一期核心对象
 
@@ -1069,7 +1115,7 @@ SessionRecord 列表或 Job 详情发起
 | 一期知识库范围 | C 管理员公共知识库 + 用户个人知识库 |
 | 检索技术路线 | C 混合检索 |
 | RAG 失败降级 | C 使用岗位 / 简历上下文继续并标注证据缺口 |
-| 多轮范围 | A 固定 3 轮 |
+| 多轮范围 | 已确认：打磨模式由进展树驱动并由用户决定结束；压力面模式由题组驱动并在题目完成后结束；固定 3 轮仅可作为压力面题组策略候选 |
 | 高阶面试定义 | B 技术 / 专业能力深挖 |
 | 暂停 / 继续 | B 支持暂停并从当前轮继续 |
 | provider 选择 | B 可插拔 provider 抽象，默认先接一个 provider |
@@ -1080,7 +1126,7 @@ SessionRecord 列表或 Job 详情发起
 | 前后端仓库结构 | B `apps/web + packages/shared + apps/api` |
 | 一期部署目标 | B 单机服务器 |
 | 日志与观测边界 | C 应用日志 + LLM + RAG 检索日志 |
-| 面试模式范围 | B 打磨模式即时反馈，模拟模式结束后报告 |
+| 面试模式范围 | 已确认方向：打磨模式为训练型进展树驱动；压力面模式为题组驱动并在结束后输出报告 |
 | 薄弱项是否作为一期核心对象 | A 作为一期核心对象服务端保存 |
 | 能力树是否进入一期 | B 轻量能力树 |
 | 资产库归档范围 | B 归档动作 + 最小资产列表 / 详情 |
@@ -1092,7 +1138,7 @@ SessionRecord 列表或 Job 详情发起
 | 资产类型 schema 是否一期支持动态字段 | B 支持 schema 子集动态字段 |
 | 待打磨清单是否独立页面化 | B 工作台首页 / 详情页提供最小待打磨清单 |
 
-以上全部只是 `recommended / proposed-default`，等待用户确认，不是 `confirmed`。
+除“多轮范围”行中用户已补充确认的模式拆分与结束条件外，以上其余推荐仍只是 `recommended / proposed-default`，等待用户确认，不是 `confirmed`。
 
 ## 19. W13-D 输入
 
@@ -1102,7 +1148,9 @@ SessionRecord 列表或 Job 详情发起
 - `FeedbackSummary` 的复盘摘要、逐轮反馈、逐题反馈、岗位 / 简历 / RAG 证据说明。
 - `SessionRecord` 列表中的评分、复盘、导出状态、权限不足、归档 / 删除、训练入口和弱项入口。
 - `ExportSnapshot / ExportRecord` 的复制 / Markdown 下载范围、快照保存、文件命名、失败态和敏感信息处理。
-- 打磨模式题级反馈是否进入导出、模拟模式结束报告是否完整导出、真实面试复盘是否导出。
+- 打磨模式需要单独验收：`ProgressTree` 驱动出题、每题反馈、能力树 / 当前进展 / 薄弱点更新、`NextQuestionRecommendation` 和 `UserEndDecision` 是否进入评分、复盘、导出与 DoD。
+- 压力面模式需要单独验收：`InterviewQuestionSet` 题组完成、`InterviewCompletion` 结束、`FinalAssessment`、`ScoreReport`、`WeaknessSummary`、`SuggestedPolishTopic` 和 `MockInterviewReview` 是否完整进入评分、复盘、导出与 DoD。
+- 打磨模式题级反馈是否进入导出、压力面模式结束报告是否完整导出、真实面试复盘是否导出。
 - RAG 无命中、多轮暂停 / 继续、LLM 失败、评分失败、复盘生成失败、归档失败的 MVP DoD。
 - 训练抽屉、弱项消减建议、资产归档和动态 schema 字段在复盘 / 报告 / 导出中的展示边界。
 - 在用户确认本文档确认卡前，`W13-D` 不应把推荐方案写成 confirmed。
@@ -1113,8 +1161,8 @@ SessionRecord 列表或 Job 详情发起
 
 - 具体 LLM provider、数据库类型、登录方案、账号来源、权限模型细节仍未 confirmed。
 - 服务端保存方式、RAG 上传范围、检索技术路线、知识库权限、RAG 失败降级仍未 confirmed。
-- 多轮策略、暂停 / 继续、多轮上下文保存、高阶面试定义仍未 confirmed。
-- 打磨模式和模拟模式的一期深度、打磨反馈存储粒度、薄弱项核心对象、能力树深度仍未 confirmed。
+- 多轮面试已 confirmed 按模式拆分：打磨模式由进展树驱动并由用户决定结束，压力面模式由题组驱动并在题目完成后结束；但压力面题目数量、难度、题型组合、压力面暂停 / 继续、多轮上下文保存和高阶面试定义仍未 confirmed。
+- 打磨模式和压力面模式的一期实现深度、打磨反馈存储粒度、薄弱项核心对象、能力树深度仍未 confirmed。
 - 真实面试复盘实现深度、资产库归档范围、资产 schema 动态字段、训练抽屉通用交互、待打磨清单页面化仍未 confirmed。
 - API / 后端框架、前后端目录结构、部署 / 运维 / 日志边界仍未 confirmed。
 - `W13-D` 仍需补齐评分、复盘、导出和 MVP DoD。

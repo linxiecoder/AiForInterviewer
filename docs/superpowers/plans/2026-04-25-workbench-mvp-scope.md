@@ -6,7 +6,7 @@
 - 本文档只冻结产品范围层，不冻结具体实现方案，不作为代码实施入口。
 - 本文档优先级高于 W10 首切片原型边界；W10 原型只作为探索证据保留。
 - `W13-B` 已新增 [`2026-04-25-workbench-mvp-ia-user-journey.md`](2026-04-25-workbench-mvp-ia-user-journey.md)，用于补齐一期工作台信息架构、页面集合、用户旅程与页面对象映射。
-- `W13-C` 已新增 [`2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`](2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)，用于补齐一期工作台对象模型、服务端保存、权限、RAG / 知识库、多轮高阶面试、打磨模式、模拟模式、复盘、薄弱项、训练机制、资产归档、真实 LLM、API / 后端与运维边界确认卡。
+- `W13-C` 已新增并更新 [`2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`](2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)，用于补齐一期工作台对象模型、服务端保存、权限、RAG / 知识库、多轮高阶面试、打磨模式、压力面模式、复盘、薄弱项、训练机制、资产归档、真实 LLM、API / 后端与运维边界确认卡。
 
 ## 2. 用户确认结论
 
@@ -40,7 +40,7 @@
 - 历史记录能力：面试过程、回答、轮次、RAG 引用、评分、复盘结果和关键状态需要服务端保存。
 - 复盘能力：支持从历史记录进入复盘，沉淀可回看的诊断结果。
 - RAG / 知识库能力：一期主链需要支持知识库入口、发起面试时选择知识库上下文、面试台展示 RAG 证据 / 引用、复盘详情回看引用来源。
-- 多轮高阶面试能力：一期主链需要支持发起面试时选择多轮策略、面试台展示轮次 / 追问 / 上下文、每轮结果进入评分和复盘。
+- 多轮高阶面试能力：一期主链需要支持打磨模式和压力面模式两条多轮路径；打磨模式按进展树持续出题并由用户决定继续 / 结束，压力面模式按题组完成后结束；每轮或整场结果按模式进入评分和复盘。
 - 登录 / 权限能力：一期必须具备完整登录与权限边界。
 - 评分能力：输出完整 `0-100` 多维评分，并保留评分解释和证据依据。
 - 导出能力：一期只做复制 / Markdown 下载，不做完整 PDF。
@@ -56,7 +56,7 @@
 - API / 后端框架，例如 FastAPI、Next.js Route Handlers、BFF 或其他组合。
 - 评分维度、权重、通过线、证据绑定、版本化与解释模板。
 - RAG / 知识库细节，例如是否支持用户上传、知识库可见范围、检索失败降级策略、引用摘要规则、证据回溯和权限过滤。
-- 多轮高阶面试细节，例如固定轮次、岗位驱动、弱项驱动、暂停 / 继续、结束条件、每轮评分和追问规则。
+- 多轮高阶面试细节：模式级结束条件已确认拆分为打磨模式进展树驱动、压力面模式题组驱动；压力面题目数量、难度、题型组合、暂停 / 继续、上下文保存、每轮评分和追问规则仍需确认。
 - 模拟记录列表细节，例如默认筛选范围、管理员团队 / 组织视图、归档 / 删除是否进入一期、列表快捷导出范围。
 - Markdown 下载的文件结构、命名规则、导出入口、复制范围。
 - 运维 / 部署边界，例如本地部署、云部署、CI/CD、密钥管理与日志保留。
@@ -95,15 +95,15 @@
 - 一期工作台 IA：登录 / 权限、工作台首页、岗位、简历、模拟记录列表、发起模拟面试、面试台、RAG / 知识库、多轮高阶面试、反馈评分、历史复盘、复制 / Markdown 下载、用户 / 权限入口。
 - 页面集合：区分一期必须页面、一期可合并页面和后续占位页面。
 - 模拟面试模块 IA：固定为“模拟记录列表 -> 发起模拟面试 -> 面试台 -> 评分 / 复盘详情 -> 回到模拟记录列表”，不得设计为直接开始新面试。
-- 核心用户旅程：覆盖登录、查看模拟记录列表、从列表发起面试、创建 / 选择岗位、创建 / 上传 / 粘贴简历、选择知识库、选择多轮策略、真实 LLM 出题、多轮问答、评分反馈、历史复盘、Markdown 导出和回到模拟记录列表继续训练。
-- 页面到对象映射：为 `W13-C` 的对象模型设计提供输入，新增覆盖 `KnowledgeBase`、`KnowledgeDocument`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`InterviewRound`、`InterviewTurn`、`RoundEvaluation` 等对象。
-- 后续确认卡：模拟记录列表范围、岗位 / 简历必选、RAG 上传与可见范围、RAG 失败降级、多轮策略、多轮暂停 / 继续、评分详情形态、Markdown 导出入口、工作台统计范围和后续占位区位置。
+- 核心用户旅程：覆盖登录、查看模拟记录列表、从列表发起面试、创建 / 选择岗位、创建 / 上传 / 粘贴简历、选择知识库、选择多轮模式、真实 LLM 出题、多轮问答、评分反馈、历史复盘、Markdown 导出和回到模拟记录列表继续训练。
+- 页面到对象映射：为 `W13-C` 的对象模型设计提供输入，新增覆盖 `KnowledgeBase`、`KnowledgeDocument`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`InterviewRound`、`InterviewTurn`、`RoundEvaluation`、`ProgressTree`、`PressureInterviewSession`、`InterviewQuestionSet` 等对象。
+- 后续确认卡：模拟记录列表范围、岗位 / 简历必选、RAG 上传与可见范围、RAG 失败降级、压力面题组数量 / 难度 / 题型组合、多轮暂停 / 继续、评分详情形态、Markdown 导出入口、工作台统计范围和后续占位区位置。
 
 ### 7.2 W13-C：对象模型与技术方案确认卡
 
 预期产出：
 
-- 岗位、简历、知识库、检索、面试、多轮、打磨、模拟、复盘、薄弱项、训练、资产、评分、用户、权限、LLM 与审计的对象模型草案。
+- 岗位、简历、知识库、检索、面试、多轮、打磨、压力面、复盘、薄弱项、训练、资产、评分、用户、权限、LLM 与审计的对象模型草案。
 - 对象生命周期草案。
 - 服务端保存方式确认卡。
 - 具体 LLM provider / 模型策略确认卡。
@@ -115,10 +115,10 @@
 
 当前 W13-C 已补充：
 
-- 对象模型草案：覆盖 `User`、`Account`、`Role`、`Permission`、`Workspace / Organization`、`Job`、`Resume`、`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`IndexingJob`、`EmbeddingProvider`、`InterviewSession`、`InterviewLaunchContext`、`InterviewReferencePack`、`InterviewMode`、`InterviewStrategy`、`FirstQuestionGeneration`、`InterviewRound`、`InterviewTurn`、`InterviewQuestion`、`InterviewAnswer`、`FollowUpQuestion`、`InterviewContext`、`RoundEvaluation`、`PolishModeSession`、`WeaknessItem`、`WeaknessEvidence`、`AbilityTree`、`TrainingProgress`、`LossPoint`、`ReferenceAnswer`、`NextQuestionRecommendation`、`SimulationModeSession`、`FinalMasteryAssessment`、`JobMatchAssessment`、`PassProbability`、`SuggestedPolishTopic`、`RealInterviewReview`、`MockInterviewReview`、`QuestionReviewItem`、`TrainingQueue`、`TrainingTask`、`TrainingDrawerContext`、`TrainingAction`、`TrainingImpactPreview`、`Asset`、`AssetType`、`AssetSchema`、`AssetArchiveRequest`、`ArchivedQuestion`、`ArchivedReview`、`FeedbackSummary`、`ScoreReport`、`SessionRecord`、`ExportSnapshot / ExportRecord`、`LLMGenerationRequest`、`LLMGenerationResult`、`PromptTemplateVersion`、`LLMProviderConfig`、`AuditEvent / OperationLog` 等 85 个对象。
-- 对象生命周期草案：覆盖 `Job`、`Resume`、`KnowledgeDocument`、`IndexingJob`、`InterviewSession`、`InterviewRound`、`InterviewTurn`、`PolishModeSession`、`SimulationModeSession`、`WeaknessItem`、`TrainingTask`、`AssetArchiveRequest`、`ScoreReport`、`ExportSnapshot`。
+- 对象模型草案：覆盖 `User`、`Account`、`Role`、`Permission`、`Workspace / Organization`、`Job`、`Resume`、`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`IndexingJob`、`EmbeddingProvider`、`InterviewSession`、`InterviewLaunchContext`、`InterviewReferencePack`、`InterviewMode`、`InterviewStrategy`、`FirstQuestionGeneration`、`InterviewRound`、`InterviewTurn`、`InterviewQuestion`、`InterviewAnswer`、`FollowUpQuestion`、`InterviewContext`、`RoundEvaluation`、`PolishModeSession`、`ProgressTree`、`UserEndDecision`、`WeaknessItem`、`WeaknessEvidence`、`AbilityTree`、`TrainingProgress`、`LossPoint`、`ReferenceAnswer`、`NextQuestionRecommendation`、`SimulationModeSession`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`FinalMasteryAssessment / FinalAssessment`、`JobMatchAssessment`、`PassProbability`、`WeaknessSummary`、`SuggestedPolishTopic`、`RealInterviewReview`、`MockInterviewReview`、`QuestionReviewItem`、`TrainingQueue`、`TrainingTask`、`TrainingDrawerContext`、`TrainingAction`、`TrainingImpactPreview`、`Asset`、`AssetType`、`AssetSchema`、`AssetArchiveRequest`、`ArchivedQuestion`、`ArchivedReview`、`FeedbackSummary`、`ScoreReport`、`SessionRecord`、`ExportSnapshot / ExportRecord`、`LLMGenerationRequest`、`LLMGenerationResult`、`PromptTemplateVersion`、`LLMProviderConfig`、`AuditEvent / OperationLog` 等对象。
+- 对象生命周期草案：覆盖 `Job`、`Resume`、`KnowledgeDocument`、`IndexingJob`、`InterviewSession`、`InterviewRound`、`InterviewTurn`、`PolishModeSession`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`SimulationModeSession`、`WeaknessItem`、`TrainingTask`、`AssetArchiveRequest`、`ScoreReport`、`ExportSnapshot`。
 - 用户确认卡：覆盖账号来源、角色层级、模拟记录可见范围、知识库可见范围、登录机制、数据库类型、LLM 交互记录保存、RAG 检索证据保存、多轮上下文保存、知识库范围、检索技术路线、RAG 失败降级、多轮范围、高阶面试定义、暂停 / 继续、provider 选择、LLM 失败处理、prompt / 模型版本记录、后端框架、API 优先还是实现优先、前后端仓库结构、部署目标、日志与观测边界、面试模式范围、薄弱项是否作为一期核心对象、能力树是否进入一期、资产库归档范围、训练抽屉是否作为一期通用交互、真实面试复盘是否进入一期、岗位 / 简历是否必选、打磨模式每题反馈是否完整保存、薄弱项消减规则是否自动执行、资产类型 schema 是否一期支持动态字段、待打磨清单是否独立页面化。
-- 当前所有推荐均保持 `recommended / proposed-default`，等待用户确认，不写成 `confirmed`。
+- 用户已确认多轮面试按模式拆分：打磨模式进展树驱动、用户决定结束；压力面模式题组驱动、题目完成后结束；固定 3 轮不再作为多轮总规则。除该补充确认外，其余推荐仍保持 `recommended / proposed-default`，等待用户确认，不写成 `confirmed`。
 
 ### 7.3 W13-D：评分、复盘、导出与 MVP DoD
 
@@ -128,6 +128,7 @@
 - 复盘记录字段、列表与详情阅读路径。
 - 复制 / Markdown 下载的范围、结构与入口。
 - 一期工作台 MVP Definition of Done。
+- 分别覆盖打磨模式与压力面模式的评分、复盘、导出与 DoD：打磨模式验收进展树、能力树、薄弱点、下一题建议和用户结束决策；压力面模式验收题组完成、最终评估、多维评分、复盘报告和建议打磨主题。
 
 ## 8. 后续确认卡
 

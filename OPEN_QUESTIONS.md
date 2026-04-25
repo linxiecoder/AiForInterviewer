@@ -66,7 +66,7 @@
 | OQ-047 | 发起模拟面试是否必须先选择岗位和简历 | open | M03、M04、M06、M07 | `W13-B` 推荐岗位和简历都必选，并提供就地创建入口，以保证评分、RAG 和复盘证据可解释；是否允许缺失输入仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | OQ-048 | RAG / 知识库是否支持用户上传，以及知识库是个人私有、团队共享还是管理员公共 | open | M05、M06、M10 | `W13-B` 推荐一期支持用户私有上传 + 管理员公共知识库，团队共享后置；上传、解析、切片、删除、权限和引用回溯需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | OQ-049 | RAG 无命中或检索失败时是否允许继续面试 | open | M05、M06、M07、M08 | `W13-B` 推荐降级为岗位 + 简历上下文继续，但在面试台和复盘中明确证据缺口；具体错误码、重试和降级条件需 `W13-C / W13-D` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| OQ-050 | 多轮高阶面试采用固定轮次、岗位驱动、弱项驱动还是混合策略 | open | M06、M07、M08、M09 | `W13-B` 推荐一期采用固定模板 + 岗位驱动，弱项驱动作为后续增强入口；具体轮次、追问和结束条件需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
+| OQ-050 | 多轮高阶面试采用固定轮次、岗位驱动、弱项驱动还是混合策略 | confirmed | M06、M07、M08、M09 | 用户已补充确认：一期多轮面试不再按“固定 3 轮”作为总规则；打磨模式由 `ProgressTree / 进展树` 持续出题并由用户决定继续 / 结束；压力面模式由 `InterviewQuestionSet / 题组` 驱动并在题目完成后结束。固定 3 轮最多只能作为压力面模式题组策略候选，不得写成多轮总规则。压力面题目数量、难度、题型组合另见 `OQ-079` | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-051 | 多轮高阶面试是否允许中途暂停 / 继续 | open | M06、M08 | `W13-B` 推荐一期支持轮次边界暂停 / 继续，题目中途暂停后置；具体状态机、恢复上下文和记录列表操作需 `W13-C` 确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
 | OQ-052 | 一期服务端保存采用什么数据库类型 | open | M01、M02、M03、M05、M06、M07、M08、M10 | `W13-C` 推荐 PostgreSQL 作为 `recommended / proposed-default`，因为登录 / 权限、历史记录、评分、RAG、审计和列表查询都是强关系场景；SQLite、本地轻量数据库或文档数据库仍作为备选，需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-053 | LLM prompt / response 是否保存以及保存到什么程度 | open | M06、M07、M08、M10 | `W13-C` 推荐保存脱敏后的 prompt / response 作为 `recommended / proposed-default`，既保留真实 LLM 审计能力，也降低简历、回答和知识库材料暴露风险；不保存完整内容或完整保存仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
@@ -86,7 +86,7 @@
 
 | OQ-067 | 一期账号来源采用用户自助注册、管理员创建账号还是邀请制 | open | M02、M10 | `W13-C` 推荐管理员创建账号作为 `recommended / proposed-default`，以降低一期注册风控和权限初始化复杂度；用户自助注册、邀请制或自定义账号来源仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-068 | 一期角色层级采用两级、三级还是细粒度 permission 模型 | open | M02、M10 | `W13-C` 推荐普通用户 / 管理员两级作为 `recommended / proposed-default`，以支撑最小工作台管理；owner/admin/member 三级、细粒度 permission 或自定义模型仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
-| OQ-069 | 一期打磨模式和模拟模式做到什么深度 | open | M06、M07、M08、M09 | `W13-C` 推荐打磨模式即时反馈、模拟模式结束后报告作为 `recommended / proposed-default`；仅做入口差异或两种模式完整独立流程仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
+| OQ-069 | 一期打磨模式和压力面模式做到什么深度 | open | M06、M07、M08、M09 | 用户已确认模式级差异：打磨模式是进展树驱动的训练型模式，用户决定是否继续 / 结束；压力面模式模拟真实面试节奏，题组完成后结束并输出最终掌握情况、岗位匹配度、薄弱点、通过概率、建议打磨主题、多维评分和复盘报告。仍待确认的是两种模式一期实现深度、压力面题组策略、反馈保存粒度和 W13-D DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-070 | `WeaknessItem` 是否作为一期核心对象独立服务端保存 | open | M07、M08、M09、M10 | `W13-C` 推荐作为一期核心对象服务端保存，支撑累计、消减、停练和训练闭环；仅报告建议或轻量建议对象仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-071 | 能力树是否进入一期以及进入到什么深度 | open | M07、M08、M09 | `W13-C` 推荐轻量能力树作为 `recommended / proposed-default`，仅包含能力节点、等级和训练进展；不做能力树或完整 ontology 仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-072 | 一期资产库归档范围是只做归档动作、最小资产列表 / 详情还是完整资产库 | open | M05、M07、M08、M10 | `W13-C` 推荐归档动作 + 最小资产列表 / 详情作为 `recommended / proposed-default`；只做动作或完整资产库仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
@@ -96,6 +96,7 @@
 | OQ-076 | 薄弱项消减规则一期自动执行还是推荐后用户确认 | open | M07、M08、M09 | `W13-C` 推荐系统给出消减建议、用户确认后生效作为 `recommended / proposed-default`；自动消减或只记录进展仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-077 | 资产类型 schema 一期是否支持动态字段以及支持到什么子集 | open | M05、M08、M10 | `W13-C` 推荐支持文本、枚举、标签、日期、引用等 schema 子集动态字段；固定字段或完整 JSON Schema 仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | OQ-078 | 待打磨清单是否独立页面化 | open | M04、M07、M08、M09 | `W13-C` 推荐工作台首页 / 详情页提供最小待打磨清单，不做完整独立训练中心；不页面化或独立训练中心仍需用户确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
+| OQ-079 | 压力面模式题组数量、难度和题型组合如何确定 | open | M06、M07、M08、M09 | 用户已确认压力面模式按题组驱动并在题目完成后结束，但题目数量、难度、题型组合仍未确认；固定 3 轮只可作为候选题组策略之一，不得作为一期多轮面试总规则 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 
 ## 3. 本轮高优问题处理判断
 
@@ -109,7 +110,7 @@
   - `OQ-024` 继续保持 `proposed-default`，并正式分为“历史容器层 / 观察蓝本层 / 正式开窗层”；当前该三层映射已被总控写死，白名单观察面与正式子任务开窗条件必须显式分离
   - `OQ-025` 继续保持 `proposed-default`，并正式分为“最小共享输入层 / 扩展字段层 / 完整链路语义层”；当前只足够支撑最低位压缩与最小下游引用，不足以宣告岗位链整体 ready
   - 当前总控补充判断为：`M03` 对 `OQ-021 / OQ-025` 的最低位吸收已经基本稳定，应写成“已吸收但未放行”，且 `OQ-024` 不应再被写成“待同步”；`M02` 已在模块内把 `/members` 闭合到共享最小层，但当前最小剩余缺口已进一步压实为“该共享最小层尚未从 `proposed-default` 治理层升格为正式候选输入”；`M01` 已把 `OQ-021` 吸收为共享最小层输入，且当前目标项已清理完成，但这不等于模块整体候选已成立
-  - 本轮不新增全局 OQ；模块局部问题继续只作为吸收记录：`MQ-205 -> OQ-021`、`MQ-207 / MQ-209 -> OQ-024`、`MQ-307 / MQ-308 / MQ-309 -> OQ-025`
+  - W13-C 用户补充确认后新增 `OQ-079`，用于承接压力面模式题目数量、难度和题型组合确认；此前模块局部问题继续只作为吸收记录：`MQ-205 -> OQ-021`、`MQ-207 / MQ-209 -> OQ-024`、`MQ-307 / MQ-308 / MQ-309 -> OQ-025`
   - `OQ-019~OQ-023` 继续维持上一轮已登记的默认冻结口径，不再作为本轮主阻塞重复讨论
 
 | 优先级 | OQ ID | 当前状态 | 当前影响模块 | 本轮处理判断 |
@@ -118,9 +119,9 @@
 | P0 | OQ-004 / OQ-005 | open | M02、M10 | W13-A 已确认完整登录 / 权限进入一期范围，但登录方案、会话机制、权限矩阵和管理员边界仍未确认 |
 | P0 | OQ-006、OQ-007 | open / proposed-default | M03、M10 | W13-A 只确认一期导出采用复制 / Markdown 下载、不做完整 PDF；Markdown 渲染链、上传 / 转换 / 导出异步策略仍需后续确认 |
 | P0 | OQ-043 / OQ-044 / OQ-045 | confirmed | M05、M06、M07、M08、M09、M10 | 用户已确认 RAG / 知识库、多轮高阶面试和模拟记录列表默认入口进入一期主链；这些不是 proposed-default，也不再归入后续占位 |
-| P0 | OQ-046 / OQ-047 / OQ-048 / OQ-049 / OQ-050 / OQ-051 | open | M02、M03、M04、M05、M06、M07、M08、M09、M10 | 这些是 W13-B 从已确认范围中拆出的实现细节问题：记录范围、岗位简历必选、知识库上传与可见范围、RAG 失败降级、多轮策略、多轮暂停 / 继续；不得在 W13-B 中自行写成 confirmed |
+| P0 | OQ-046 / OQ-047 / OQ-048 / OQ-049 / OQ-051 | open | M02、M03、M04、M05、M06、M07、M08、M09、M10 | 这些是 W13-B 从已确认范围中拆出的实现细节问题：记录范围、岗位简历必选、知识库上传与可见范围、RAG 失败降级、多轮暂停 / 继续；`OQ-050` 已被用户补充确认覆盖为“打磨模式进展树驱动、压力面模式题组驱动”，不得再按固定 3 轮总规则处理 |
 | P0 | OQ-052 / OQ-053 / OQ-054 / OQ-055 / OQ-056 / OQ-057 / OQ-058 / OQ-059 / OQ-060 / OQ-061 / OQ-062 / OQ-063 / OQ-064 / OQ-065 / OQ-066 | open | M01-M10 | 这些是 W13-C 从已确认范围中拆出的对象模型、服务端保存、RAG、多轮、LLM、API / 后端和运维边界确认问题；推荐方案只可作为 `recommended / proposed-default`，不得写成 confirmed，也不得据此进入实现窗口 |
-| P0 | OQ-067 / OQ-068 / OQ-069 / OQ-070 / OQ-071 / OQ-072 / OQ-073 / OQ-074 / OQ-075 / OQ-076 / OQ-077 / OQ-078 | open | M02-M10 | 这些是 W13-C 补齐的账号来源、角色层级、面试模式、薄弱项、能力树、资产归档、训练抽屉、真实面试复盘、打磨反馈保存、薄弱项消减、资产 schema 和待打磨清单页面化确认问题；推荐方案只可作为 `recommended / proposed-default`，不得写成 confirmed，也不得据此进入实现窗口 |
+| P0 | OQ-067 / OQ-068 / OQ-069 / OQ-070 / OQ-071 / OQ-072 / OQ-073 / OQ-074 / OQ-075 / OQ-076 / OQ-077 / OQ-078 / OQ-079 | open | M02-M10 | 这些是 W13-C 补齐的账号来源、角色层级、面试模式、薄弱项、能力树、资产归档、训练抽屉、真实面试复盘、打磨反馈保存、薄弱项消减、资产 schema、待打磨清单页面化和压力面题组策略确认问题；推荐方案只可作为 `recommended / proposed-default`，不得写成 confirmed，也不得据此进入实现窗口 |
 | P0 | OQ-019 | proposed-default | M01、M10 | 已形成入口语义级默认冻结方案；可作为 `M01` 平台基线与 `M10` 治理边界切分输入，但暂不扩张为完整流水线定稿 |
 | P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成三层状态：共享最小映射维持 `page/page_size/q/status/sort/order`、分页骨架与页面容器 adapter 职责；模块扩展键单独登记；route / callback / request adapter 细节继续留在最低位文档处理。模块吸收摘要：`M01` 已压到共享最小层输入且当前目标项已清理完成，`M02` 已在模块内闭合到共享最小层但 `GET /api/v1/members` 当前仍只停留在默认治理层、尚未升格为正式候选输入，`M03` 已吸收但未放行 |
 | P0 | OQ-024 | proposed-default | M02、M03 | 已形成并写死三层状态：旧 `ST02_* / ST03_*` 为历史容器、`M02` 当前只允许 `MT02_01 / MT02_02`、`M03` 当前只允许 `MT03_01 / MT03_03` 作为观察蓝本、正式子任务 ID 与开窗资格继续后置到正式候选复评之后；当前正式开窗名单固定为空。`MR-18 / MR-23 / RV-09` 已把 `M03` 的现行口径压稳为“已吸收但未放行”，当前剩余只保留正式开窗层为空所形成的治理性结构阻塞，不再重开全局映射讨论 |
@@ -254,7 +255,7 @@
 - `OQ-047`：发起模拟面试是否必须先选择岗位和简历。
 - `OQ-048`：RAG / 知识库上传能力与个人 / 团队 / 公共可见范围。
 - `OQ-049`：RAG 无命中或检索失败时是否允许继续面试。
-- `OQ-050`：多轮高阶面试策略类型和结束条件。
+- `OQ-050`：多轮高阶面试策略类型和结束条件，已按用户补充确认拆分为打磨模式进展树驱动、压力面模式题组驱动。
 - `OQ-051`：多轮高阶面试是否允许中途暂停 / 继续。
 
 ## 6. 使用说明

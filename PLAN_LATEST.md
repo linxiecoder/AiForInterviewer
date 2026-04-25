@@ -139,17 +139,17 @@
 - 已更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`，补齐一期工作台 MVP 信息架构、模拟面试模块 IA、历史模拟记录列表、发起模拟面试流程、面试台流程、RAG / 知识库 IA、多轮高阶面试 IA、页面集合、核心用户旅程、页面到对象映射和后续确认卡。
 - 一期 IA 明确包含登录 / 权限入口、工作台首页、岗位管理、简历管理、模拟记录列表、发起模拟面试、面试台、RAG / 知识库、多轮高阶面试、反馈与评分、历史记录 / 复盘、复制 / Markdown 下载、用户 / 权限区域。
 - 模拟面试模块默认入口固定为模拟记录列表，主链为“模拟记录列表 -> 发起模拟面试 -> 面试台 -> 评分 / 复盘详情 -> 回到模拟记录列表”。
-- RAG / 知识库和多轮高阶面试已纳入一期 MVP 设计主链，不再作为后续默认占位；具体上传、可见范围、检索失败降级、多轮策略、暂停 / 继续和结束条件仍需用户确认。
+- RAG / 知识库和多轮高阶面试已纳入一期 MVP 设计主链，不再作为后续默认占位；用户已补充确认多轮面试按模式拆分：打磨模式由进展树驱动并由用户决定结束，压力面模式由题组驱动并在题目完成后结束；具体上传、可见范围、检索失败降级、压力面题组数量 / 难度 / 题型组合、暂停 / 继续和上下文保存仍需用户确认。
 - 后续能力只作为占位：资产库、训练中心、管理台、高级报表、更完整导出、运维 / 配置不得被写成一期已实现能力。
 - W10 `apps/web/**` 原型继续只作为原型探索参考证据，不作为正式一期 MVP 代码起点，不直接扩展。
 - 当前仍暂停代码开发；`W13-C` 之前不得进入对象模型实现、API / 数据库 / 登录 / LLM 代码实现。
 
 ### 5.12 W13-C 对象模型、RAG、多轮与后端边界草案
 
-- 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`，补齐一期工作台 MVP 对象模型草案、对象生命周期草案、模拟面试启动边界、打磨模式、模拟模式、真实 / 模拟复盘、薄弱项体系、训练机制、资产归档、RAG / 知识库对象与流程、多轮高阶面试状态机、真实 LLM provider / adapter 边界、API / 后端服务边界、部署 / 运维 / 配置边界和 `W13-D` 输入。
-- W13-C 对象模型覆盖 `User`、`Account`、`Role`、`Permission`、`Workspace / Organization`、`Job`、`Resume`、`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`InterviewSession`、`PolishModeSession`、`SimulationModeSession`、`WeaknessItem`、`TrainingDrawerContext`、`AssetArchiveRequest`、`ScoreReport`、`SessionRecord`、`LLMGenerationRequest`、`LLMProviderConfig`、`AuditEvent / OperationLog` 等 85 个对象；该草案不是数据库 schema，也不是实现契约。
-- 本轮只把推荐方案标为 `recommended / proposed-default`，不写成 `confirmed`；账号来源、角色层级、记录可见范围、知识库可见范围、登录机制、数据库、LLM 保存、RAG 检索证据、多轮上下文、知识库范围、检索路线、RAG 失败降级、多轮策略、面试模式范围、薄弱项 / 能力树 / 资产库 / 训练抽屉 / 真实复盘深度、provider、后端框架、API contract、目录结构、部署和日志观测等 34 张确认卡仍需用户确认。
-- 当前仍暂停代码开发；不得创建 `apps/api/**`、`infra/**`，不得接真实 LLM、实现数据库、登录、RAG、多轮、打磨模式、模拟模式、薄弱项、训练抽屉、资产库或后端。
+- 已新增并更新 `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`，补齐一期工作台 MVP 对象模型草案、对象生命周期草案、模拟面试启动边界、打磨模式、压力面模式、真实 / 模拟复盘、薄弱项体系、训练机制、资产归档、RAG / 知识库对象与流程、多轮高阶面试状态机、真实 LLM provider / adapter 边界、API / 后端服务边界、部署 / 运维 / 配置边界和 `W13-D` 输入。
+- W13-C 对象模型覆盖 `User`、`Account`、`Role`、`Permission`、`Workspace / Organization`、`Job`、`Resume`、`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence`、`InterviewSession`、`PolishModeSession`、`ProgressTree`、`UserEndDecision`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion`、`WeaknessItem`、`TrainingDrawerContext`、`AssetArchiveRequest`、`ScoreReport`、`SessionRecord`、`LLMGenerationRequest`、`LLMProviderConfig`、`AuditEvent / OperationLog` 等对象；该草案不是数据库 schema，也不是实现契约。
+- 除“多轮面试按打磨模式 / 压力面模式拆分、固定 3 轮不再作为总规则”已由用户补充确认为 `confirmed` 外，其余推荐方案仍只能标为 `recommended / proposed-default`；账号来源、角色层级、记录可见范围、知识库可见范围、登录机制、数据库、LLM 保存、RAG 检索证据、多轮上下文、知识库范围、检索路线、RAG 失败降级、压力面题组策略、薄弱项 / 能力树 / 资产库 / 训练抽屉 / 真实复盘深度、provider、后端框架、API contract、目录结构、部署和日志观测等仍需用户确认。
+- 当前仍暂停代码开发；不得创建 `apps/api/**`、`infra/**`，不得接真实 LLM、实现数据库、登录、RAG、多轮、打磨模式、压力面模式、薄弱项、训练抽屉、资产库或后端。
 
 ## 6. 当前阻断与风险
 
@@ -157,8 +157,8 @@
 - `evaluate-state` 已不再报告 `DOC-PLAN-P1 -> document_repo_truth_mismatch`；已关闭 round 中保留的 `DOC-PLAN-P1` target / evidence 仅作为历史记录。
 - 当前状态层、主入口层与当前仓库执行计划入口已重新对齐，不再存在由旧 plan 造成的 document blocker。
 - W10 首切片与 `apps/web/**` mock 原型只表示原型探索成果，不再代表当前一期 MVP 范围。
-- 当前一期 MVP 已冻结到工作台级范围，`W13-B` 已补齐 IA / 用户旅程草案，`W13-C` 已补齐对象模型、RAG / 多轮 / 复盘 / 薄弱项 / 训练机制 / 资产归档 / 后端边界草案；但 `W13-C` 的 34 张确认卡尚未得到用户确认，`W13-D` 的评分 / 复盘 / 导出 DoD 仍未完成，不具备实施开工条件。
-- 具体 LLM provider、数据库类型、登录方案、账号来源、权限模型细节、服务端保存方式细节、RAG / 知识库上传与可见范围、检索技术路线、检索失败降级策略、多轮高阶面试策略、暂停 / 继续规则、打磨 / 模拟模式一期深度、薄弱项 / 能力树 / 资产库 / 训练抽屉实现深度、真实面试复盘深度、评分维度和权重、API / 后端框架、前后端目录结构、导出细节、运维 / 部署 / 日志边界仍未确认，不能由 Codex 在本轮自行决定。
+- 当前一期 MVP 已冻结到工作台级范围，`W13-B` 已补齐 IA / 用户旅程草案，`W13-C` 已补齐对象模型、RAG / 多轮 / 复盘 / 薄弱项 / 训练机制 / 资产归档 / 后端边界草案，并已吸收用户对多轮模式拆分的补充确认；但 `W13-C` 的其余确认卡尚未得到用户确认，`W13-D` 的评分 / 复盘 / 导出 DoD 仍未完成，不具备实施开工条件。
+- 具体 LLM provider、数据库类型、登录方案、账号来源、权限模型细节、服务端保存方式细节、RAG / 知识库上传与可见范围、检索技术路线、检索失败降级策略、压力面题组数量 / 难度 / 题型组合、暂停 / 继续规则、打磨 / 压力面模式一期深度、薄弱项 / 能力树 / 资产库 / 训练抽屉实现深度、真实面试复盘深度、评分维度和权重、API / 后端框架、前后端目录结构、导出细节、运维 / 部署 / 日志边界仍未确认，不能由 Codex 在本轮自行决定。
 - 当前暂停代码开发；继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分、RAG、多轮、薄弱项、训练机制、资产库或后端实现都属于越界。
 
 ## 7. 当前推荐推进路径
@@ -166,8 +166,8 @@
 1. 当前主入口统一以 `PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 与 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` 为准。
 2. `W13-A` 已完成用户确认结果写回与一期工作台 MVP 范围冻结草案，不进入代码实施。
 3. `W13-B` 已补工作台 IA、模拟记录列表默认入口、发起模拟面试、面试台、RAG / 知识库、多轮高阶面试、核心用户旅程和页面对象关系。
-4. `W13-C` 已补对象模型、生命周期、模拟面试启动、打磨模式、模拟模式、复盘、薄弱项、训练机制、资产归档、服务端保存边界、登录 / 权限方案确认卡、RAG / 知识库对象与检索边界、多轮高阶面试状态机、真实 LLM provider / API / 后端框架确认卡；下一步应先交给用户确认 34 张确认卡。
-5. `W13-D` 建议在用户确认 `W13-C` 卡片后，先做阶段 0 校验，再补 `0-100` 多维评分体系、每轮评价、复盘记录、RAG 引用展示、Markdown 导出范围细节和 MVP DoD。
+4. `W13-C` 已补对象模型、生命周期、模拟面试启动、打磨模式、压力面模式、复盘、薄弱项、训练机制、资产归档、服务端保存边界、登录 / 权限方案确认卡、RAG / 知识库对象与检索边界、多轮高阶面试状态机、真实 LLM provider / API / 后端框架确认卡；其中多轮模式拆分已按用户补充确认写回，其余确认卡仍需用户确认。
+5. `W13-D` 建议在用户确认 `W13-C` 其余卡片后，先做阶段 0 校验，再分别补打磨模式与压力面模式的 `0-100` 多维评分体系、每轮 / 结束评价、复盘记录、RAG 引用展示、Markdown 导出范围细节和 MVP DoD。
 6. `W13-F` 建议在 W13-B/C/D 经用户确认后统一写回 Basic Memory / Superpowers。
 7. `W13-C / W13-D` 完成并经用户再次确认前，不继续 `W11-B` 代码布局重构，不扩展 `apps/web/**`，不创建 `apps/api/**`，不接真实 LLM，不做数据库、登录、评分或后端实现。
 

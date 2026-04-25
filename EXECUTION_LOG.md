@@ -25,6 +25,18 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-C-R2 / 多轮面试模式拆分确认写回
+
+- 范围：只做文档写回，不写代码，不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`，不提交或推送 Git。
+- 用户补充确认：一期 MVP 中“多轮面试”不再按此前 W13-C 推荐的“固定 3 轮”作为总规则；打磨模式是训练型模式，由 `ProgressTree / 进展树` 持续出题并由用户决定继续 / 结束；压力面模式模拟真实面试节奏，由 `InterviewQuestionSet / 题组` 驱动并在题目完成后结束。
+- 已写回：
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`：补充 `ProgressTree`、`UserEndDecision`、`PressureInterviewSession`、`InterviewQuestionSet`、`InterviewCompletion` 等对象和状态机，撤销“固定 3 轮”为多轮总推荐规则。
+  - `OPEN_QUESTIONS.md`：将 `OQ-050` 更新为 confirmed，新增 `OQ-079` 承接压力面题组数量、难度、题型组合确认。
+  - `DESIGN_DECISIONS.md`：新增 `DD-029`，明确固定 3 轮不再作为 confirmed 或 recommended 总规则。
+  - `PLAN_LATEST.md` 与 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`：同步 W13-C / W13-D 后续边界。
+- 当前结论：固定 3 轮最多只能作为压力面模式题组策略的一种后续候选；不得用于打磨模式，也不得作为一期多轮面试总规则。
+- 遗留问题：压力面模式题目数量、难度、题型组合仍需用户确认；`W13-D` 仍需分别补打磨模式和压力面模式的评分、复盘、导出与 MVP DoD。
+
 ### 2026-04-25 / W13-C / 一期工作台 MVP 对象模型、RAG、多轮与后端边界草案
 
 - 范围：只做设计前置分析、对象模型草案、生命周期草案、模拟面试启动、打磨模式、模拟模式、复盘、薄弱项体系、训练机制、资产归档、服务端保存边界、RAG / 知识库、多轮高阶面试、真实 LLM、API / 后端、部署 / 运维 / 配置边界和用户确认卡；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`，不进入实现窗口，不提交或推送 Git。
