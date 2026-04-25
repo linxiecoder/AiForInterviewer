@@ -25,6 +25,35 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W10-B 主项目文档细化 / 首切片输入处理输出与交接压实
+
+- 范围：修改 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；不修改 `tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`apps/**`、`infra/**` 与任何业务代码目录。
+- 执行类型：主项目文档细化、首切片输入输出压实、`W10-C` 关系补齐交接准备。
+- 修改内容：
+  - 把当前仓库执行计划中的首切片边界从总表扩展为可执行口径，明确输入最小字段、缺失输入处理、最小处理链、输出件、排除项、验收标准与未来蓝图边界。
+  - 在当前执行计划中补齐 `W10-C` 必须继承的固定输入：`RQ01`、`M03 / M04 / M06 / M07`、条件性 `M01`、`MT03_01 / MT03_03` 观察蓝本、`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 后续承接对象，以及“正式开窗层为空”的冻结约束。
+  - 更新 `PLAN_LATEST.md`，把当前主入口改写为“`W10-B` 已完成、`W10-C` 待承接、`W10-D` 仍禁止自动进入”的摘要状态。
+  - 保持 `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 不变，因为当前执行计划已能独立表达首切片边界，无需改主规格。
+- 影响文件：
+  - `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+- 成熟度变化（建议）：
+  - 本轮不改变 `DOC_STATE.yaml` 正式状态，不改变 requirement / module / subtask 成熟度，不把观察蓝本提升为正式候选或正式开窗对象。
+  - 本轮提升的是“首切片输入、处理、输出、排除项、验收与关系交接”的全局可执行清晰度。
+- 进展变化（建议）：
+  - 当前已从“首切片只有冻结总表”推进到“首切片已具备主项目级可执行描述与 `W10-C` 交接输入”。
+  - 当前阶段仍停留在文档与关系层收口，不进入业务代码实施。
+- 验证结果：
+  - 开始前已执行 `git status --short`、`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`、`python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`，结果均允许继续。
+  - 本轮完成后已再次执行上述三条命令与 `rg -n "岗位 JD|简历 Markdown|首轮问题|1 轮问答|简版反馈|排除|验收|apps/web|apps/api|infra|DOC-PLAN-P1|当前执行计划" docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md PLAN_LATEST.md EXECUTION_LOG.md`，结果为：仅命中 3 个允许修改文件，`validate-state` / `evaluate-state` 仍为 `ok=true, error=0, warning=0`。
+- 遗留问题：
+  - `W10-C` 仍需在不改变冻结口径的前提下，把首切片 requirement、模块、观察蓝本与后续承接对象的关系写清。
+  - `W10-D` 仍是条件判断问题，不因 `W10-B` 完成而自动放行。
+- 下一步建议动作：
+  - 优先启动 `W10-C`，只做关系补齐与固定约束承接，不回改 `W10-A / W10-B` 已冻结口径。
+  - 待 `W10-C` 完成并再次通过状态校验后，再由总控判断是否仍需要 `W10-D`。
+
 ### 2026-04-25 / W10-A 总控路线冻结 / 首个 MVP 切片与代码目录 gating 固定
 
 - 范围：修改 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`PLAN_LATEST.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`EXECUTION_LOG.md`；不修改 `tools/**`、`tests/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`、`docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`、`apps/**`、`infra/**` 与任何业务代码目录。
