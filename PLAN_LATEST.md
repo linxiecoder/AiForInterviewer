@@ -14,10 +14,10 @@
 
 ## 3. 当前仓库阶段
 
-- 当前阶段：`W10` 首切片最小原型探索收口阶段。
-- 当前仓库现实：仓库当前承载设计文档、治理状态、`doc_governor` / `doc_governance` 工具、测试与验证机制，并已出现 `apps/web/**` 首切片最小原型。
-- 当前仓库限制：`apps/web/**` 仅代表首切片 mock 原型探索，当前仓库尚不是完整 `apps/web`、`apps/api`、`infra` monorepo 实现仓库。
-- 当前活动窗口：`W10-F` 首切片原型收口、状态复核与 Basic Memory 回收；尚未进入正式实施完成。
+- 当前阶段：`W13` 产品范围重估与一期工作台 MVP 重新定义阶段。
+- 当前仓库现实：仓库当前承载设计文档、治理状态、`doc_governor` / `doc_governance` 工具、测试与验证机制，并保留 `apps/web/**` 首切片最小原型作为探索证据。
+- 当前仓库限制：`apps/web/**` 不再作为一期 MVP 的直接开发起点；当前仓库尚不是完整 `apps/web`、`apps/api`、`infra` monorepo 实现仓库。
+- 当前活动窗口：`W13-A` 用户确认结果写回与一期工作台 MVP 范围冻结草案；当前暂停代码开发，回到设计文档补齐。
 
 ## 4. 当前执行入口与历史叙事边界
 
@@ -29,11 +29,12 @@
 2. `AGENTS.md`
 3. `PLAN_LATEST.md`
 4. `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
-5. `docs/DOC_GOVERNANCE.md`
-6. `docs/governance/DOC_AUTOMATION.md`
-7. `docs/governance/DOC_GOVERNOR_RUNBOOK.md`
-8. `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
-9. `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
+5. `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
+6. `docs/DOC_GOVERNANCE.md`
+7. `docs/governance/DOC_AUTOMATION.md`
+8. `docs/governance/DOC_GOVERNOR_RUNBOOK.md`
+9. `python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+10. `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
 
 ### 4.2 上游产品蓝图
 
@@ -122,28 +123,32 @@
 - `web:test` 与 `web:build` 均已通过，浏览器真实测试已覆盖无 console error、390px 移动宽度无横向溢出与 UI 状态完整性。
 - 当前仍未进入正式实施完成；`apps/web/**` 仅表示首切片最小原型探索，后续真实 LLM、登录、持久化、评分、导出、`apps/api/**`、`infra/**` 必须重新走用户确认模式。
 
+### 5.10 W13-A 工作台级 MVP 范围重新冻结
+
+- 用户已确认组合 `1B2C3C4C5C6C7B8A9B`。
+- 一期 MVP 不再是 W10 首切片“JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈”，而是工作台级 MVP。
+- 一期范围已确认包含：服务端历史记录 / 复盘记录、真实 LLM、完整登录 / 权限、简历和面试记录服务端保存、完整 `0-100` 多维评分，以及复制 / Markdown 下载导出。
+- 当前 `apps/web/**` 原型降级为原型探索参考证据，不直接扩展为正式一期开发起点。
+- 当前暂停代码开发；在 `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不继续 `W11-B` 代码布局重构，不扩展 `apps/web/**`，不创建 `apps/api/**`，不接真实 LLM，不做数据库、登录、评分或后端实现。
+
 ## 6. 当前阻断与风险
 
 - `DOC-PLAN-P1` 已从当前受管 `documents` 集合移出，保留为未来 monorepo / 产品落地蓝图文件与历史 round 引用。
 - `evaluate-state` 已不再报告 `DOC-PLAN-P1 -> document_repo_truth_mismatch`；已关闭 round 中保留的 `DOC-PLAN-P1` target / evidence 仅作为历史记录。
 - 当前状态层、主入口层与当前仓库执行计划入口已重新对齐，不再存在由旧 plan 造成的 document blocker。
-- `W10-A` 已冻结当前优先级：先收敛首个 MVP 切片与关系层，不横向铺开完整业务仓库。
-- `W10-B` 已把首切片输入边界压实为“岗位 JD 文本 + 简历 Markdown + 可选面试方向”，并明确岗位等级、公司类型、面试轮次不是本轮必需参数；关键字段缺失时只能返回补全提示，不进入问题生成。
-- `W10-B` 已把最小处理链压实为“JD 提取 -> 简历提取 -> 最小对齐 -> 首轮问题生成 -> 1 轮问答记录 -> 简版反馈摘要”，并固定排除多轮会话、长期记忆、检索增强、资产归档、训练中心、管理台与未来业务目录全量落地。
-- `W10-C` 已完成关系补齐：当前已把 `RQ01 -> M03 / M04 / M06 / M07 (+ 条件性 M01)`、`MT03_01 / MT03_03` 观察蓝本、`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 后续承接对象与“正式开窗层为空”写成当前主口径。
-- `W10-D-Gate` 已完成用户确认写回，`W10-D / W10-E` 已完成 `apps/web/**` 最小原型与 UI 核验。
-- 当前 W10 仍只是最小原型探索，不代表正式实施完成；`apps/api/**`、`infra/**`、真实 LLM、登录、持久化、评分与导出仍未放行。
+- W10 首切片与 `apps/web/**` mock 原型只表示原型探索成果，不再代表当前一期 MVP 范围。
+- 当前一期 MVP 已冻结到工作台级范围，但仍停留在范围草案与设计补齐层，不具备实施开工条件。
+- 具体 LLM provider、数据库类型、登录方案、权限模型细节、评分维度和权重、API / 后端框架、导出细节、运维 / 部署边界仍未确认，不能由 Codex 在本轮自行决定。
+- 当前暂停代码开发；继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分或后端实现都属于越界。
 
 ## 7. 当前推荐推进路径
 
-1. 当前主入口统一以 `PLAN_LATEST.md` + `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 为准。
-2. `W10-A` 已确认下一轮采用“最小功能切片优先”，首切片固定为“岗位 JD 手工输入 + 简历 Markdown 粘贴/编辑 -> 首轮问题 -> 1 轮问答 -> 简版反馈摘要”。
-3. `W10-B` 已完成主项目文档细化：当前执行计划中已写死输入、处理、输出、排除项、验收标准、未来蓝图边界与 `W10-C` 交接输入。
-4. `W10-C` 已完成关系补齐：`RQ01 -> M03 / M04 / M06 / M07 (+ 条件性 M01)`、`MT03_01 / MT03_03` 观察蓝本、`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 后续承接对象与“正式开窗层为空”已同步到全局入口。
-5. `W10-D-Gate` 已完成用户确认写回，确认组合为 `Q1=B Q2=A Q3=A Q4=A Q5=A Q6=A Q7=B Q8=B`。
-6. `W10-D / W10-E` 已完成 `apps/web/**` 最小原型与 UI 核验；该结果仍只属于首切片最小原型探索。
-7. `W10-F` 负责本轮收口、状态复核与 Basic Memory 回收，不继续扩大业务范围。
-8. W10 后续路线必须回到用户确认模式，在原型体验审查、真实 LLM、轻量持久化或后端边界之间重新选择。
+1. 当前主入口统一以 `PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 与 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` 为准。
+2. `W13-A` 只完成用户确认结果写回与一期工作台 MVP 范围冻结草案，不进入代码实施。
+3. `W13-B` 建议补工作台 IA、核心用户旅程、页面对象关系和一期工作台信息架构。
+4. `W13-C` 建议补对象模型、服务端保存边界、登录 / 权限方案确认卡、真实 LLM provider / API / 后端框架确认卡。
+5. `W13-D` 建议补 `0-100` 多维评分体系、复盘记录、导出范围细节和 MVP DoD。
+6. `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不继续 `W11-B` 代码布局重构，不扩展 `apps/web/**`，不创建 `apps/api/**`，不接真实 LLM，不做数据库、登录、评分或后端实现。
 
 ## 8. 当前不作为默认主链的内容
 

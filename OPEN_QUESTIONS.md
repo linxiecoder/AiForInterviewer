@@ -17,12 +17,12 @@
 
 | OQ ID | 问题 | 状态 | 关联模块 | 当前建议 | 需回写文档 |
 | --- | --- | --- | --- | --- | --- |
-| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | proposed-default | M01-M10 | 当前仓库继续保持“根目录全局文档 + `docs/` + `tools/doc_governor/` + `tests/doc_governor/`”布局；`W10-D-Gate` 已确认当前阶段只允许在正式开窗层为空时进入首切片最小原型探索，且仅允许创建 `apps/web/**` 最小原型骨架，`apps/api/**` 与 `infra/**` 本轮继续禁止；若后续进入更完整业务代码实施，monorepo 目标形态仍只作为后续阶段候选推进 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
+| OQ-001 | 目标产品代码结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`），并与当前文档治理仓分层共存 | open | M01-M10 | `W13-A` 已确认一期 MVP 必须重新定义为工作台级，且真实 LLM、登录 / 权限、服务端保存、服务端历史 / 复盘记录和评分系统进入一期范围；但具体代码结构、是否创建 `apps/api/**` / `infra/**`、API 框架、数据库与部署边界仍未确认。本轮暂停代码开发，不得继续扩展 `apps/web/**` 或创建后端目录 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
 | OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | proposed-default | M01、M10 | 最小运行时、测试和 CI 基线只在 `W10-D` 被条件放行时作为最小骨架输入使用，不构成 `W10-A` 直接创建业务代码目录的依据 | `PLAN_LATEST.md`、`TECHNICAL_STANDARDS.md` |
 | OQ-003 | 视觉规范首轮需要沉淀到什么粒度 | proposed-default | M01 | 本轮只沉淀壳层、头部、列表原语与基础页面样式 | `TECHNICAL_STANDARDS.md` |
-| OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | proposed-default | M02、M10 | 本轮先采用开发态 Bearer adapter：统一 `Authorization: Bearer <token>`、`current_user / role / team_id` 上下文，业务层不得依赖 token 内部结构 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
-| OQ-005 | 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面 | proposed-default | M02、M10 | 本轮先覆盖 P1 页面与 API，不扩展未来多租户治理场景 | `DESIGN_DECISIONS.md`、`MODULE_INDEX.md` |
-| OQ-006 | Markdown 预览与导出是否必须共用同一渲染链 | proposed-default | M03 | 本轮按共用同一渲染链推进，以避免结果偏差 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md` |
+| OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | open | M02、M10 | `W13-A` 已确认一期 MVP 必须包含完整登录 / 权限，但登录方案尚未确认；固定 Bearer token、JWT、session cookie 或托管身份服务仍需在 `W13-C` 中形成确认卡，不能在本轮写成 confirmed 实现方案 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-005 | 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面 | open | M02、M10 | `W13-A` 已确认一期 MVP 必须有完整权限能力，但角色集合、权限矩阵粒度、管理台职责与多团队预留仍未确认；后续只可在设计文档中补齐，不得直接实施 | `DESIGN_DECISIONS.md`、`MODULE_INDEX.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-006 | Markdown 预览与导出是否必须共用同一渲染链 | open | M03 | `W13-A` 已确认一期导出采用复制 / Markdown 下载，不做完整 PDF；但 Markdown 预览、Markdown 下载、复制内容与未来 PDF 是否共用同一渲染链仍未确认，需由 `W13-D` 明确 | `DESIGN_DECISIONS.md`、`TECHNICAL_STANDARDS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
 | OQ-007 | 上传、转换、导出在 P1 中哪些必须异步 | proposed-default | M03、M10 | 本轮按“上传同步入库，转换与导出异步”推进 | `TECHNICAL_STANDARDS.md` |
 | OQ-008 | 匹配分析与评估规则是否需要版本化 | proposed-default | M04、M07、M10 | 本轮先按保留规则版本推进，便于解释与回放 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md` |
 | OQ-009 | Embedding 与向量化来源如何确定 | open | M05、M06 | 默认先抽象 provider 接口，并使用本地配置驱动 | `TECHNICAL_STANDARDS.md` |
@@ -42,6 +42,15 @@
 | OQ-023 | `/(dashboard)/admin/members` 与 `/api/v1/admin/members` 的完整实现应继续由 M02 承接，还是由后续治理模块承接 | proposed-default | M02、M10 | 本轮先采用方案 B：`M02` 只负责身份解析、授权规则、权限矩阵与最小鉴权契约，完整成员管理页面 / API 由后续治理模块承接 | `DESIGN_DECISIONS.md`、`MODULE_INDEX.md` |
 | OQ-024 | 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口 | proposed-default | M02、M03 | 当前按总控固定映射处理，并已写死为默认治理口径：历史容器层中，`ST02_01 / ST02_02 / ST02_03 / ST03_01 / ST03_02 / ST03_03` 全部固定为历史容器且禁止直开；观察蓝本层中，`M02` 当前只允许 `MT02_01 / MT02_02`，`M03` 当前只允许 `MT03_01 / MT03_03` 作为白名单观察入口，其余蓝本不得自行上推；正式开窗层中，本轮正式子任务 ID 名单固定为空，只有总控在后续正式候选复评完成后才能在 `TASK_INDEX.md` 中新增正式子任务 ID 与开窗资格。`MQ-209` 已吸收到本条叙事中。当前 `M01 / M02 / M03` 都不是正式子任务设计候选；本轮后续残余已不再是映射未同步或模块侧文案残差，而是正式开窗层持续为空所形成的治理性结构阻塞 | `TASK_INDEX.md`、`DOCUMENT_PROGRESS.md`、`MODULE_INDEX.md` |
 | OQ-025 | `jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为 M04 / M06 的稳定输入 | proposed-default | M03、M04、M06 | 当前按三层状态分层处理：最小共享输入层固定为 `item_key` / `text`、`null / []` 语义、数组顺序即消费顺序，以及“仅岗位写模型可整体替换”；扩展字段层继续保持未冻结，不进入共享稳定输入；完整链路语义层继续留在 `M03` 的最低位文档压缩，不据此宣布完整岗位链 / 下游链 ready。该口径已被 `M03` 吸收为最小共享输入，但不等于 `MT03_01 / MT03_03` 已升级为正式候选；当前对 `M04 / M06` 只可作为最小设计输入，不足以支撑上传 / 导出微任务或完整岗位链 ready。本轮状态补充为：`M03` 的直接结构性主阻塞已统一写成“正式开窗层为空 + 当前阶段关窗 + 上传 / 导出链依赖未变”，而最低位 API 高 `L4` 只是结果态 | `TECHNICAL_STANDARDS.md`、`DESIGN_DECISIONS.md`、`DOCUMENT_PROGRESS.md` |
+| OQ-026 | 一期 MVP 是否继续沿用 W10 首切片“JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈” | confirmed | 全局 | 用户已确认组合 `1B2C3C4C5C6C7B8A9B`：一期 MVP 不再是 W10 首切片，必须重新定义为工作台级 MVP；W10 `apps/web/**` 原型只保留为原型探索证据，不直接扩展为正式一期开发起点 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-027 | 一期 MVP 是否必须包含服务端历史记录 / 复盘记录 | confirmed | M06、M08 | 用户已确认一期 MVP 必须包含服务端历史记录 / 复盘记录；具体对象模型、查询维度、复盘生成边界、保留周期与后端实现仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-028 | 一期 MVP 是否必须接真实 LLM | confirmed | M06、M07、M10 | 用户已确认一期 MVP 必须接真实 LLM；具体 LLM provider、模型选择、调用策略、成本控制、失败重试与配置管理仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-029 | 一期 MVP 是否必须有完整登录 / 权限 | confirmed | M02、M10 | 用户已确认一期 MVP 必须有完整登录 / 权限；具体登录方案、会话机制、权限矩阵、管理员边界与审计策略仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-030 | 简历和面试记录是否必须服务端保存 | confirmed | M03、M06、M08 | 用户已确认简历和面试记录都需要服务端保存；具体数据库类型、文件存储方式、版本模型、数据迁移与备份策略仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-031 | 一期 MVP 是否需要完整 `0-100` 多维评分 | confirmed | M04、M07、M08、M09 | 用户已确认一期 MVP 需要完整 `0-100` 多维评分；具体评分维度、权重、证据绑定、解释模板、通过线与版本化规则仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-032 | 一期导出形态是否做完整 PDF | confirmed | M03、M06、M08 | 用户已确认一期导出采用复制 / Markdown 下载，不做完整 PDF；具体 Markdown 文件结构、命名、复制范围、导出入口与历史记录关系仍未确认 | `DESIGN_DECISIONS.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-033 | 当前 `apps/web/**` 原型是否作为正式 MVP 开发起点 | confirmed | M01、M03、M06、M07 | 用户已确认当前 `apps/web/**` 原型保留为原型探索参考证据，不直接扩展为正式一期 MVP；后续若复用任何交互或组件，需要先在设计文档中重新裁剪和确认 | `DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
+| OQ-034 | 当前是否继续代码开发 | confirmed | 全局 | 用户已确认暂停代码开发，回到设计文档补齐；在 `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不允许继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分或后端实现 | `PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` |
 
 ## 3. 本轮高优问题处理判断
 
@@ -60,9 +69,9 @@
 
 | 优先级 | OQ ID | 当前状态 | 当前影响模块 | 本轮处理判断 |
 | --- | --- | --- | --- | --- |
-| P0 | OQ-001 | proposed-default | M01-M10 | 已按默认目标产品 monorepo 口径冻结，可作为本轮 `M01-M03` 输入；当前仓库布局仍以 `docs/` + `tools/doc_governor/` + `tests/doc_governor/` 为准 |
-| P0 | OQ-004 | proposed-default | M02、M10 | 已按固定 Bearer token 冻结，可作为本轮 `M02` 输入 |
-| P0 | OQ-006、OQ-007 | proposed-default | M03、M10 | 已按共享渲染链与“上传同步/转换导出异步”冻结，可作为本轮 `M03` 输入 |
+| P0 | OQ-001 | open | M01-M10 | W13-A 已确认一期 MVP 是工作台级且包含服务端能力，但目标代码结构、`apps/api/**` / `infra/**` 是否创建、API 框架、数据库与部署边界仍未确认 |
+| P0 | OQ-004 / OQ-005 | open | M02、M10 | W13-A 已确认完整登录 / 权限进入一期范围，但登录方案、会话机制、权限矩阵和管理员边界仍未确认 |
+| P0 | OQ-006、OQ-007 | open / proposed-default | M03、M10 | W13-A 只确认一期导出采用复制 / Markdown 下载、不做完整 PDF；Markdown 渲染链、上传 / 转换 / 导出异步策略仍需后续确认 |
 | P0 | OQ-019 | proposed-default | M01、M10 | 已形成入口语义级默认冻结方案；可作为 `M01` 平台基线与 `M10` 治理边界切分输入，但暂不扩张为完整流水线定稿 |
 | P0 | OQ-021 | proposed-default | M01、M02、M03、M04-M10 | 已形成三层状态：共享最小映射维持 `page/page_size/q/status/sort/order`、分页骨架与页面容器 adapter 职责；模块扩展键单独登记；route / callback / request adapter 细节继续留在最低位文档处理。模块吸收摘要：`M01` 已压到共享最小层输入且当前目标项已清理完成，`M02` 已在模块内闭合到共享最小层但 `GET /api/v1/members` 当前仍只停留在默认治理层、尚未升格为正式候选输入，`M03` 已吸收但未放行 |
 | P0 | OQ-024 | proposed-default | M02、M03 | 已形成并写死三层状态：旧 `ST02_* / ST03_*` 为历史容器、`M02` 当前只允许 `MT02_01 / MT02_02`、`M03` 当前只允许 `MT03_01 / MT03_03` 作为观察蓝本、正式子任务 ID 与开窗资格继续后置到正式候选复评之后；当前正式开窗名单固定为空。`MR-18 / MR-23 / RV-09` 已把 `M03` 的现行口径压稳为“已吸收但未放行”，当前剩余只保留正式开窗层为空所形成的治理性结构阻塞，不再重开全局映射讨论 |
@@ -83,12 +92,12 @@
 
 | OQ ID | 本轮处理 | 默认方案是否足以继续推进 | 若冻结后优先推进模块 |
 | --- | --- | --- | --- |
-| OQ-001 | 已标记 `proposed-default` | 是，但当前只足够支撑首切片设计冻结，不足以在 `W10-A` 直接创建业务代码目录 | M01-M03 |
+| OQ-001 | 保持 `open` | 否；W13-A 只确认工作台级范围，不确认代码结构、API 框架、数据库或部署边界 | W13-C |
 | OQ-002 | 已标记 `proposed-default` | 是，但仅在 `W10-D` 被条件放行后才进入最小骨架输入 | M01、M10 |
 | OQ-003 | 已标记 `proposed-default` | 是 | M01 |
-| OQ-004 | 已标记 `proposed-default` | 是，但需在设计决策中显式记录 | M02、M10 |
-| OQ-005 | 已标记 `proposed-default` | 是 | M02 |
-| OQ-006 | 已标记 `proposed-default` | 是 | M03 |
+| OQ-004 | 保持 `open` | 否；W13-A 确认登录进入范围，但未确认固定 Bearer token、JWT、session cookie 或托管身份服务 | W13-C |
+| OQ-005 | 保持 `open` | 否；W13-A 确认权限进入范围，但未确认角色集合、权限矩阵粒度和管理员边界 | W13-C |
+| OQ-006 | 保持 `open` | 否；W13-A 确认复制 / Markdown 下载，不确认 Markdown 预览、下载和未来 PDF 是否共用同一渲染链 | W13-D |
 | OQ-007 | 已标记 `proposed-default` | 是 | M03 |
 | OQ-008 | 已标记 `proposed-default` | 是 | M04、M07 |
 | OQ-009 | 保持 `open` | 本轮暂不需要 | M05 |
@@ -110,6 +119,8 @@
 | OQ-025 | 已标记 `proposed-default` | 是，可作为 `M03 -> M04/M06` 的最小共享输入；扩展字段继续保持未冻结，完整链路语义继续留在模块最低位压缩，不据此宣告整体 ready | M03、M04、M06 |
 
 ## 5. W10-C 首切片问题分类
+
+> 本节 `5.1` 至 `5.5` 只记录 W10 首切片与原型探索历史口径。`W13-A` 之后，当前一期 MVP 范围以 `5.6` 和 `OQ-026` 至 `OQ-034` 为准，W10 首切片不得再被误读为用户认可的一期 MVP。
 
 > 以下分类用于本轮关系补齐，不改变上方问题表的原始状态列。
 
@@ -144,7 +155,7 @@
 
 ### 5.5 W10-D-Gate 已确认（用户确认结果）
 
-> 以下 8 项是用户在 `W10-D-Gate` 中已明确确认的当前阶段结论；它们属于 confirmed 的原型实施边界，不自动把其他未来阶段 OQ 一并升级为 confirmed。
+> 以下 8 项是用户在 `W10-D-Gate` 中已明确确认的历史原型探索边界；`W13-A` 已重新确认一期 MVP 必须是工作台级，因此这些内容不再代表当前一期 MVP 范围。
 
 - `Q1 / confirmed`：允许在正式开窗层为空时进入原型探索，但仅限首切片最小原型骨架；该探索不代表正式实施完成。
 - `Q2 / confirmed`：首切片暂不接入真实 LLM API，必须保留 LLM adapter / provider 边界，并以 mock 输出驱动原型。
@@ -155,6 +166,22 @@
 - `Q7 / confirmed`：只允许创建 `apps/web/**` 最小原型骨架；`apps/api/**`、`infra/**` 本轮继续明确禁止。
 - `Q8 / confirmed`：首切片完成标准固定为“JD + 简历 Markdown -> 3 条首轮问题 -> 第 1 题问答 -> 简版反馈”。
 - 本轮继续明确排除：RAG、资产库、管理台、多轮面试、完整权限体系、完整 CI/CD。
+
+### 5.6 W13-A 用户确认结果（当前一期工作台 MVP 范围）
+
+> 以下 9 项是用户已确认结论，状态为 `confirmed`，不再是 `proposed-default`。本节只冻结范围层，不冻结具体实现方案。
+
+- `1B / confirmed`：最小项目范围必须是工作台级，一期 MVP 不再是 W10 首切片。
+- `2C / confirmed`：一期 MVP 必须包含服务端历史记录 / 复盘记录。
+- `3C / confirmed`：一期 MVP 必须接真实 LLM。
+- `4C / confirmed`：一期 MVP 必须有完整登录 / 权限。
+- `5C / confirmed`：简历和面试记录都需要服务端保存。
+- `6C / confirmed`：一期 MVP 需要完整 `0-100` 多维评分。
+- `7B / confirmed`：导出采用复制 / Markdown 下载，不做完整 PDF。
+- `8A / confirmed`：当前 `apps/web/**` 原型保留为原型探索参考证据，不直接扩展。
+- `9B / confirmed`：暂停代码开发，回到设计文档补齐。
+
+当前仍未确认的实现方案包括：具体 LLM provider、数据库类型、登录方案、权限模型细节、评分维度和权重、API / 后端框架、导出形态细节、运维 / 部署边界。
 
 ## 6. 使用说明
 

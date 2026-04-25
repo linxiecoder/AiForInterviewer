@@ -25,6 +25,53 @@
 
 ## 3. 当前记录
 
+### 2026-04-25 / W13-A / 用户确认结果写回与一期工作台 MVP 范围冻结草案
+
+- 范围：只做文档写回与范围冻结；不写代码，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**`，不创建后端，不接真实 LLM，不做数据库、登录、评分实现。
+- 执行类型：用户确认结果写回、一期 MVP 范围重新定义、W10 原型定位降级、后续设计窗口分派。
+- 用户确认组合：`1B2C3C4C5C6C7B8A9B`。
+- 当前决策含义：
+  - 一期 MVP 不再是 W10 首切片“JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈”。
+  - 一期 MVP 必须重新定义为工作台级。
+  - 一期范围已确认包含服务端历史记录 / 复盘记录、真实 LLM、完整登录 / 权限、简历和面试记录服务端保存、完整 `0-100` 多维评分。
+  - 导出采用复制 / Markdown 下载，不做完整 PDF。
+  - 具体 LLM provider、数据库、登录方案、权限模型细节、评分维度和权重、API / 后端框架、运维 / 部署仍未确认。
+- 暂停代码开发：
+  - 当前不继续 `W11-B` 代码布局重构。
+  - 在 `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不扩展 `apps/web/**`、不创建 `apps/api/**`、不接真实 LLM、不做数据库、登录、评分或后端实现。
+- 当前 `apps/web/**` 原型定位：
+  - W10 `apps/web/**` 原型只作为原型探索参考证据保留。
+  - 原型中的 mock LLM、无登录、会话内临时数据、无数值评分、不导出的边界不得继续前推为当前一期 MVP。
+- 修改内容：
+  - 在 `OPEN_QUESTIONS.md` 中新增 `OQ-026` 至 `OQ-034`，把用户确认的 9 项范围结论写成 `confirmed`，并把登录方案、权限细节、导出渲染链等具体实现问题继续保留为未确认。
+  - 在 `DESIGN_DECISIONS.md` 中将 `DD-015` 至 `DD-017` 降为被 W13 取代的 W10 历史原型口径，并新增 `DD-018 / DD-019` 记录工作台级 MVP 与暂停代码开发决策。
+  - 在 `PLAN_LATEST.md` 与当前执行计划中同步当前阶段切换为 W13 产品范围重估与一期 MVP 重新定义。
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` 作为一期工作台 MVP 范围冻结草案，并同步 `AGENTS.md` 计划索引。
+- 影响文件：
+  - `AGENTS.md`
+  - `OPEN_QUESTIONS.md`
+  - `DESIGN_DECISIONS.md`
+  - `PLAN_LATEST.md`
+  - `EXECUTION_LOG.md`
+  - `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
+- 成熟度变化（建议）：
+  - 本轮不改变 `DOC_STATE.yaml` 正式状态，不新增状态层 blocker，不打开正式实施窗口。
+  - 本轮提升的是一期 MVP 范围层和后续设计窗口边界的可判读性。
+- 进展变化（建议）：
+  - 当前已从“W10 首切片原型探索后是否继续扩代码”切换为“W13 工作台级 MVP 范围冻结与设计补齐”。
+  - 当前开发暂停，下一步优先补产品设计文档。
+- 验证结果：
+  - 开始前已执行 `git status --short`、`python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`、`python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`；初始工作区干净，状态命令均为 `ok=true, error=0, warning=0`。
+  - 本轮完成后需再次执行上述三条命令，并执行 W13 关键词回归。
+- 遗留问题：
+  - 具体 LLM provider、数据库类型、登录方案、权限模型细节、评分维度和权重、API / 后端框架、导出形态细节、运维 / 部署边界仍需确认。
+  - Basic Memory 本窗口不写入；建议交由后续 `W13-F` 统一写回。
+- 下一步建议动作：
+  - `W13-B`：补工作台 IA、核心用户旅程、页面对象关系和一期信息架构。
+  - `W13-C`：补对象模型、服务端保存边界、登录 / 权限方案确认卡、真实 LLM provider / API / 后端框架确认卡。
+  - `W13-D`：补 `0-100` 多维评分体系、复盘记录、导出范围细节和 MVP DoD。
+
 ### 2026-04-25 / W10-D-Gate / W10-C 提交推送 + 用户确认写回 + 原型放行复核
 
 - 范围：阶段 0 提交并推送 `W10-C` 的 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`；阶段 1 修改 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`PLAN_LATEST.md`、`EXECUTION_LOG.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`；不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`docs/governance/DOC_STATE.yaml`、`docs/modules/**` 与任何业务代码目录。

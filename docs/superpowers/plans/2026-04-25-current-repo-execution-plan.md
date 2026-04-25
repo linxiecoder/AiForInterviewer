@@ -10,7 +10,7 @@
 
 - 当前仓库主要承载 `AI 模拟面试系统` 的设计文档、治理状态、`doc_governor` / `doc_governance` 工具链，以及对应测试与验证工具。
 - 当前仓库真实可核验的主结构仍是根目录治理文档、`docs/`、`tools/doc_governor/`、`tests/`、`requirements.txt` 与 `apps/web/**` 首切片最小原型。
-- 当前仓库不是已经落地完成的“Web 端目录 / API 端目录 / 基础设施目录”一体化业务实现仓库；`apps/web/**` 当前只代表 W10 首切片 mock 原型探索。
+- 当前仓库不是已经落地完成的“Web 端目录 / API 端目录 / 基础设施目录”一体化业务实现仓库；`apps/web/**` 当前只代表 W10 首切片 mock 原型探索，`W13-A` 后仅作为原型探索证据。
 
 ## 3. W0-W7 已完成事项
 
@@ -26,16 +26,18 @@
 
 ## 4. 当前主项目设计开发的真实前置条件
 
-- 已冻结首个 MVP 切片的范围、排除项与验收口径，避免从完整产品蓝图横向铺开。
-- 当前正式 requirement 层仍只有 `RQ01`；首切片已稳定映射到模块层与关系层，并在 `W10-D` 中仅下放为 `apps/web/**` 最小原型探索。
-- 当前首切片直接涉及 `M03`、`M04`、`M06`、`M07`；`M01` 只作为最小壳层 / i18n / 共享页面原语的条件性支撑。
+- W10 已冻结并验证首切片原型探索路径，但该路径已被 W13-A 明确降级为原型探索成果，不再作为一期 MVP 范围。
+- 一期 MVP 已重新定义为工作台级，当前真实前置条件转为补齐工作台 IA、对象模型、用户旅程、评分 / 复盘 / 导出与 MVP DoD。
+- 当前正式 requirement 层仍只有 `RQ01`；W10 首切片曾稳定映射到模块层与关系层，并在 `W10-D` 中仅下放为 `apps/web/**` 最小原型探索。
+- W10 首切片直接涉及 `M03`、`M04`、`M06`、`M07`；`M01` 只作为最小壳层 / i18n / 共享页面原语的条件性支撑。
 - 当前正式开窗层仍为空；`M03` 只允许继续引用 `MT03_01 / MT03_03` 作为观察蓝本，不得把旧 `ST03_*` 或观察蓝本直接当作正式实施入口。
 
 ## 5. 当前不直接落未来业务目录结构的原因
 
 - `apps/web/**` 已在 `W10-D` 中作为首切片最小原型出现，但这不等于完整 Web 端、API 端或基础设施目录已经落地。
 - 继续创建 `apps/api/**`、`infra/**` 或完整多应用仓库结构，会把未来蓝图伪装成当前事实。
-- 当前更缺的是围绕真实 LLM、轻量持久化、评分、导出与前后端边界的下一轮用户确认，而不是把未来多应用仓库目录一次性铺开。
+- 当前更缺的是围绕工作台级 MVP 的信息架构、服务端保存、真实 LLM、登录 / 权限、评分、导出与前后端边界的设计补齐和用户确认，而不是把未来多应用仓库目录一次性铺开。
+- `W13-A` 之后代码开发暂停；在 `W13-B / W13-C / W13-D` 完成并经用户再次确认前，不继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分或后端实现。
 
 ## 6. 下一步建议
 
@@ -168,15 +170,28 @@
 - W10 已完成从边界冻结到首切片最小原型的探索闭环；后续不得直接扩大范围，必须回到用户确认模式。
 - 如需使用 `doc_governor`，当前只建议用于文档 round 的 `validate-state`、`evaluate-state`、必要时 `plan-round` / `generate-codex-packet`；不进入 implementation packet。
 
+### 6.5 W13-A 当前范围冻结
+
+- 用户已确认组合 `1B2C3C4C5C6C7B8A9B`。
+- 一期 MVP 不再是 W10 首切片“岗位 JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈”，而是工作台级 MVP。
+- 一期工作台 MVP 范围已确认包含：服务端历史记录 / 复盘记录、真实 LLM、完整登录 / 权限、简历和面试记录服务端保存、完整 `0-100` 多维评分，以及复制 / Markdown 下载导出。
+- 当前 `apps/web/**` 原型仅作为原型探索参考证据，不直接扩展为正式一期 MVP。
+- 当前暂停代码开发；不继续 `W11-B` 代码布局重构，不创建后端，不接真实 LLM，不做数据库、登录、评分或后端实现。
+
+### 6.6 W13 后续窗口顺序
+
+1. `W13-B`：补工作台 IA、核心用户旅程、页面对象关系和一期信息架构。
+2. `W13-C`：补对象模型、服务端保存边界、登录 / 权限方案确认卡、真实 LLM provider / API / 后端框架确认卡。
+3. `W13-D`：补 `0-100` 多维评分体系、复盘记录、导出范围细节和 MVP DoD。
+4. `W13-F`：在 W13-B/C/D 经用户确认后，统一做 Basic Memory 写回或提供 fallback 包。
+
 ## 7. 验证命令
 
 ```powershell
 git status --short
 python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml
 python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml
-npm.cmd run web:test
-npm.cmd run web:build
-rg -n "未来蓝图|多应用仓库|当前仓库执行计划|DOC-PLAN-P1|document_repo_truth_mismatch" docs/superpowers/plans PLAN_LATEST.md EXECUTION_LOG.md README.md
+rg -n "1B2C3C4C5C6C7B8A9B|工作台级|一期 MVP|服务端历史|真实 LLM|登录|权限|服务端保存|0-100|Markdown 下载|原型探索|暂停代码|W13" OPEN_QUESTIONS.md DESIGN_DECISIONS.md PLAN_LATEST.md EXECUTION_LOG.md docs/superpowers/plans
 ```
 
 ## 8. 与 `DOC-PLAN-P1` 的关系
