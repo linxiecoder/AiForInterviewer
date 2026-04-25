@@ -42,6 +42,23 @@ export function App() {
     jobDescriptionText.trim().length > 0 && resumeMarkdownText.trim().length > 0;
   const firstQuestion = session?.questions[0];
   const canGenerateFeedback = Boolean(firstQuestion && firstAnswer.trim().length > 0);
+  const missingInputLabels = [
+    jobDescriptionText.trim().length === 0 ? "岗位 JD" : undefined,
+    resumeMarkdownText.trim().length === 0 ? "简历 Markdown" : undefined,
+  ].filter((label): label is string => Boolean(label));
+  const missingInputText =
+    missingInputLabels.length === 2
+      ? `${missingInputLabels[0]} 和${missingInputLabels[1]}`
+      : missingInputLabels[0];
+  const questionGenerationHint =
+    missingInputLabels.length > 0
+      ? `请先填写${missingInputText}。`
+      : "已填写岗位 JD 和简历 Markdown，可以生成 3 条 mock 首轮问题。";
+  const feedbackGenerationHint = !firstQuestion
+    ? "请先生成首轮问题。"
+    : firstAnswer.trim().length === 0
+      ? "请填写第 1 题回答后再生成简版反馈。"
+      : "第 1 题回答已就绪，可以生成简版反馈。";
 
   const handleGenerateQuestions = () => {
     const now = new Date().toISOString();
@@ -105,8 +122,16 @@ export function App() {
         <div>
           <p className="eyebrow">W10-D / apps/web</p>
           <h1 id="page-title">AI 模拟面试首切片原型</h1>
+          <p className="header-copy">
+            仅用于首切片 mock 原型验证，不连接真实 LLM，不做登录或长期保存。
+          </p>
         </div>
         <div className="status-pill">Mock Provider</div>
+      </section>
+
+      <section className="boundary-note" aria-label="原型边界">
+        <strong>原型边界</strong>
+        <span>当前数据只保存在浏览器页面状态中，刷新后会回到示例输入。</span>
       </section>
 
       <section className="workbench" aria-label="首切片输入与输出">
@@ -129,11 +154,15 @@ export function App() {
             />
           </label>
 
+          <p className="helper-text" id="question-generation-hint" aria-live="polite">
+            {questionGenerationHint}
+          </p>
           <button
             className="primary-action"
             type="button"
             onClick={handleGenerateQuestions}
             disabled={!canGenerateQuestions}
+            aria-describedby="question-generation-hint"
           >
             生成首轮问题
           </button>
@@ -173,11 +202,15 @@ export function App() {
               />
             </label>
 
+            <p className="helper-text" id="feedback-generation-hint" aria-live="polite">
+              {feedbackGenerationHint}
+            </p>
             <button
               className="secondary-action"
               type="button"
               onClick={handleGenerateFeedback}
               disabled={!canGenerateFeedback}
+              aria-describedby="feedback-generation-hint"
             >
               生成简版反馈
             </button>

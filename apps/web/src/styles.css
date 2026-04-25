@@ -43,6 +43,11 @@ button:disabled {
   opacity: 0.45;
 }
 
+button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.26);
+  outline-offset: 2px;
+}
+
 textarea {
   width: 100%;
   resize: vertical;
@@ -98,6 +103,13 @@ h2 {
   font-size: 18px;
 }
 
+.header-copy {
+  max-width: 720px;
+  margin-top: 10px;
+  color: #475467;
+  font-size: 14px;
+}
+
 .status-pill {
   flex: none;
   border: 1px solid rgba(36, 116, 92, 0.28);
@@ -107,6 +119,23 @@ h2 {
   background: #e9f5f0;
   font-size: 13px;
   font-weight: 700;
+}
+
+.boundary-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  border: 1px solid rgba(3, 105, 161, 0.18);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #1849a9;
+  background: #eff6ff;
+  font-size: 13px;
+}
+
+.boundary-note strong {
+  flex: none;
 }
 
 .workbench {
@@ -141,6 +170,12 @@ h2 {
   font-weight: 650;
 }
 
+.helper-text {
+  margin: -4px 0 0;
+  color: #667085;
+  font-size: 13px;
+}
+
 .primary-action,
 .secondary-action {
   color: #fff;
@@ -148,11 +183,11 @@ h2 {
 }
 
 .primary-action {
-  background: #2374ab;
+  background: #2563eb;
 }
 
 .secondary-action {
-  background: #24745c;
+  background: #1849a9;
 }
 
 .panel {
@@ -214,7 +249,7 @@ h2 {
   place-items: center;
   border-radius: 6px;
   color: #fff;
-  background: #2374ab;
+  background: #2563eb;
   font-weight: 800;
 }
 
@@ -256,6 +291,11 @@ h2 {
   .workspace-header {
     display: grid;
     align-items: start;
+  }
+
+  .boundary-note {
+    align-items: start;
+    flex-direction: column;
   }
 
   .question-list li {
