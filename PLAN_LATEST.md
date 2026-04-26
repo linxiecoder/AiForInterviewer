@@ -88,6 +88,7 @@
 | W13-E13.5 | Candidate State 表达策略修正已完成 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`；`OQ-121=A` 已吸收，`W13-E14` 暂不执行。后续优先创建 facts-only Candidate Preview，备选验证 `candidate_status=observe`；正式 `DOC_STATE.yaml` 未修改。 |
 | W13-E13.6 | facts-only Candidate Preview 已创建 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`；`ST13_24 / ST13_25` 仅写入 facts-only candidate 推荐字段，`ST13_21 / ST13_20` 保持正式状态原样。Preview `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，但 `documents_blocked_count=1` 来自 plan-path Preview 的 document 扫描根目录副作用；正式 `DOC_STATE.yaml` 未修改，仍不放行实现。 |
 | W13-E13.8 | docs/governance/previews 路径 Preview 与 facts-only 正式 State Update 已完成 | 已新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`；Preview 与正式 `DOC_STATE.yaml` 均通过 `validate-state / evaluate-state`，且 `documents_blocked_count=0`。正式状态层只为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段；`ST13_21 / ST13_20` 仍不写 candidate，formal window、implementation packet 和实现仍关闭。 |
+| W13-E14-Merge | formal window 前置补齐合并已完成 | 已接收并复核 W13-E14-A/B/C/D 四个并行窗口结果。`ST13_24 / ST13_25` 的 formal window 前置材料进一步补齐；`ST13_21 / ST13_20` 的 near-ready blocker 进一步明确。未修改 `DOC_STATE.yaml`，未创建实现目录，仍不能实现、不能生成 implementation packet、不能打开 formal window。 |
 
 ## 6. 当前阻断与风险
 
@@ -106,11 +107,12 @@
 - W13-E5 审计确认：25 个 ST13 均缺 ST13 专属设计 / 实施双文档、acceptance criteria、required tests 和 formal window；其中 `ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` 仅可作为下一窗口任务包准备候选，不表示可实现。
 - W13-E6 任务包草案确认：第一批四个 ST13 已形成任务包草案，但状态仍为 `task_packet_draft_created` / `not_ready_for_implementation`；`DOC_STATE.yaml` 中 25 个 ST13 仍 blocked。
 - W13-E13.8 facts-only State Update：`OQ-124` 已确认并吸收；`ST13_24 / ST13_25` 的 candidate 推荐已以 facts-only 字段进入正式状态层，但不等于 `candidate_status=candidate`、不等于 formal window open、也不等于 implementation-ready。
+- W13-E14-Merge 已完成四个并行前置补齐窗口的合并核验：`ST13_24 / ST13_25` 已补齐 formal window 前置材料，`ST13_21 / ST13_20` 已补齐 near-ready blocker 和升级条件；该结论仍只属于文档层前置补齐，不等于开窗、packet 或 implementation-ready。
 
 ## 7. 下一步
 
-1. 下一轮可由总控窗口决定是否进入 formal window 前置确认，但不得把 facts-only 推荐误读为 formal window 已打开。
-2. 在 formal window 另行确认前，仍不能生成 implementation packet，不能标记 implementation-ready，不能创建 `apps/**`、`infra/**`、`tests/**` 或进入实现。
+1. 下一轮适合进入 formal window open 确认窗口，但该窗口只能确认是否允许后续状态治理动作，不得直接把 formal window 写成已打开。
+2. 在 formal window 另行确认并通过状态层 gate 前，仍不能生成 implementation packet，不能标记 implementation-ready，不能创建 `apps/**`、`infra/**`、`tests/**` 或进入实现。
 3. 不得因文档层 candidate 推荐或 facts-only Preview 而生成 implementation packet、打开 formal window 或进入实现。
 4. 当前不建议并行；若后续要并行，只能在总控先冻结范围后，让子窗口做只读/文档层同步，最终由合并窗口统一验证。
 5. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧文档。

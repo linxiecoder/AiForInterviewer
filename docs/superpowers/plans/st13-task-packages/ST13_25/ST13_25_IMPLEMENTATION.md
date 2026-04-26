@@ -36,6 +36,7 @@
 - 治理写回 checklist、验证命令、fallback 包和交接格式已明确。
 - allowed modify paths、forbidden paths、required tests、acceptance criteria 均已填实。
 - 当前窗口不生成 implementation packet。
+- 文档治理任务通常不生成业务 implementation packet；若未来确需治理 packet，必须由用户单独确认 packet 类型、目标、允许路径、禁止路径、required tests、acceptance criteria、回退策略和是否涉及 Basic Memory 写回。
 
 ## 6. 允许修改范围
 
@@ -51,11 +52,24 @@
 
 - 当前不写 Basic Memory。
 - 当前不调用 Basic Memory。
+- 当前不调用外部记忆写回流程。
 - 不修改 `DOC_STATE.yaml`。
 - 不生成 implementation packet。
 - 不打开 formal window。
 - 不创建 `apps/**`、`infra/**`、`tools/**`、`tests/**`。
 - 不执行 Git 提交或推送。
+
+### 7.1 W13-E14-B 当前窗口硬约束
+
+当前 W13-E14-B 只补齐 formal window 前置材料，不进入实现：
+
+- 当前不写 Basic Memory，不执行 Basic Memory 写入、更新或回读。
+- 当前不调用外部记忆写回流程，不把聊天内容视为已写记忆。
+- 当前不修改 `docs/governance/DOC_STATE.yaml` 或 `docs/governance/**`。
+- 当前不生成 implementation packet，不调用 open-window，不标记 implementation-ready。
+- 当前 formal window 保持 closed；facts-only candidate 推荐不等于 formal window open。
+- 当前只允许修改 `ST13_25_DESIGN.md` 与 `ST13_25_IMPLEMENTATION.md`。
+- 当前发现父索引、State Update、Basic Memory、Superpowers 或 archive 需要同步时，只交接给 W13-E14-Merge 或后续授权窗口。
 
 ## 8. 预期实现步骤
 
@@ -66,6 +80,17 @@
 5. 输出收口报告和 fallback 包。
 
 以上步骤中的 Basic Memory 写回当前不执行。
+
+### 8.1 未来写回执行顺序
+
+未来如用户另窗授权 Basic Memory / Superpowers 写回，执行顺序必须固定为：
+
+1. 先确认授权范围：是否允许写 Basic Memory、是否允许更新 Superpowers、是否允许修改父索引、是否允许触碰 archive。
+2. 先检索：查找同主题笔记、近似会话总结、已确认决策和风险约束，避免重复写入。
+3. 再写入：只写 confirmed 结论、风险、下一步和验证结果，不写 proposed-default 为 confirmed，不写未授权实现事实。
+4. 再回读验证：确认写入路径、标题、正文摘要和关键结论可读。
+5. 写回失败时输出 fallback 包：包含主题、目录建议、摘要、confirmed 结论、遗留风险、验证结果、下一步建议和后续补写正文。
+6. 最终提交和整体收口由未来 merge 总控窗口负责，本文件不替代总控提交、状态写回或 Basic Memory 授权。
 
 ## 9. 验证命令
 
@@ -117,9 +142,12 @@ python -m tools.test_runner.run_tests
 
 未来治理收口窗口必须输出：
 
+- 收口类型：完整收口、部分收口、失败收口或回退收口。
 - confirmed 结论。
+- 修改范围。
 - 风险和限制。
 - 验证结果。
+- 剩余风险。
 - 后续 State Update / Basic Memory / formal window 建议。
 - fallback 包，如写回失败。
 
@@ -131,8 +159,10 @@ python -m tools.test_runner.run_tests
 - 写入 confirmed、风险、下一步、验证结果。
 - 回读验证。
 - 显式使用白名单目录。
+- 只更新当前事实源或对应计划，不更新 archive 历史文档作为当前事实。
+- 不把 proposed-default、near-ready 或 facts-only candidate 推荐写成 confirmed。
 
-当前 W13-E9 不写 Basic Memory，不调用 Basic Memory，不更新 Superpowers 外部状态。
+当前 W13-E14-B 不写 Basic Memory，不调用 Basic Memory，不调用外部记忆写回流程，不更新 Superpowers 外部状态。
 
 ## 16. 当前未放行实现说明
 

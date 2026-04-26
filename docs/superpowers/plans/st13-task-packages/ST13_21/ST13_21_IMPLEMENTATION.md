@@ -147,3 +147,57 @@ W13-E13.8 只对 `ST13_24 / ST13_25` 执行 facts-only candidate 推荐字段写
 该保持策略不改变本文件的 implementation plan only 定位。`ST13_21` 仍不得创建 `apps/api/**`、OpenAPI 或 schema，不得生成 implementation packet，不得打开 formal window。
 
 该策略不新增实现任务，不改变本文件的 implementation plan only 定位。当前仍不创建 `apps/api/**`、OpenAPI、schema、implementation packet 或业务代码。
+
+## 19. W13-E14-C 未来实现窗口约束复核
+
+本节只同步 W13-E14-C 的 near-ready blocker 复核结论；不把本文件升级为 active implementation doc，不生成 implementation packet，不创建任何实现文件。
+
+### 19.1 当前硬约束
+
+- 当前不创建 `apps/api/**`。
+- 当前不创建 OpenAPI 文件。
+- 当前不创建 schema、DTO、shared contract 或类型文件。
+- 当前不创建 `tests/**`。
+- 当前不生成 implementation packet。
+- 当前不打开 formal window。
+- 当前不修改 `DOC_STATE.yaml`。
+- 当前不把 `ST13_21` 标记为 implementation-ready。
+
+### 19.2 未来实现前必须等待的确认
+
+未来实现窗口至少需要用户明确确认：
+
+1. 是否打开 `ST13_21` formal window。
+2. 是否允许创建 `apps/api/**` 或其他后端服务目录。
+3. 是否允许创建 OpenAPI 文件，并确认路径、版本策略和维护责任。
+4. 是否允许创建 schema / DTO / shared contract 文件。
+5. 是否允许生成 implementation packet。
+6. 是否允许修改 `DOC_STATE.yaml` 中与 `ST13_21` 相关的 candidate、readiness、formal window 或 implementation doc 字段。
+7. 是否扩大 ST13 范围，或只限 `ST13_21` API / 后端服务边界。
+
+在上述确认前，任何实现步骤都只能作为未来计划，不得执行。
+
+### 19.3 preflight gate 要求
+
+未来实现窗口必须先通过状态层或等价 gate：
+
+- `validate-state` 必须保持 `ok=true,error=0,warning=0`。
+- `evaluate-state` 必须保持 `ok=true,error=0,warning=0`，且不得新增 documents blocker。
+- `preflight-open-window` 或同等开窗检查必须确认 `formal_window_open`、candidate 表达、implementation doc activation、allowed paths、forbidden paths、required tests 和 acceptance criteria 均满足开窗要求。
+- `generate-implementation-packet` 只能在 formal window 已打开、implementation doc 已激活、implementation packet inputs 已闭合后执行。
+
+不得用本文档正文声明替代工具 gate。
+
+### 19.4 与 ST13_20 数据 contract 的对齐要求
+
+未来实现前必须复核 `ST13_20`：
+
+- API request / response 字段必须能映射到 `ST13_20` 的保存、不保存、脱敏、归档或审计策略。
+- `User / Account / Role / Permission / Session` 必须与 M02 权限边界和 `ST13_20` 数据保存策略一致。
+- `SessionRecord`、`ScoreReport`、`ExportSnapshot`、`LLMGenerationRequest / Result` 的 API 状态必须与数据状态机一致。
+- RAG / LLM / provider 失败语义必须能被数据状态、审计事件和 `ST13_24` required tests 覆盖。
+- 若 `ST13_20` 仍保持 near-ready 或 schema / migration / ORM 未授权，`ST13_21` 不得单独进入实现。
+
+### 19.5 当前执行结论
+
+`ST13_21` 当前仍保持 `near_ready_for_formal_window_candidate_confirmed` 的文档层口径；正式状态层不写 candidate，不写 `readiness=downstream_ready`，不打开 formal window，不生成 implementation packet，不进入实现。

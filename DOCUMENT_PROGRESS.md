@@ -11,13 +11,13 @@
 
 ## 2. 当前阶段摘要
 
-- 当前阶段：`W13-E13.8 / docs/governance/previews 路径 facts-only Candidate Preview + 正式 State Update 窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
-- 当前边界：本轮只执行 Preview 验证与 facts-only State Update；未生成 implementation packet，未打开 formal window，未标记 implementation-ready，未创建 `apps/**` / `infra/**` / `tests/**`，未进入实现。
+- 当前阶段：`W13-E14-Merge / formal window 前置补齐并行结果合并窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
+- 当前边界：本轮只合并 W13-E14-A/B/C/D 的 8 个 ST13 双文档补齐结果并同步总控文档；未修改 `DOC_STATE.yaml`，未生成 implementation packet，未打开 formal window，未标记 implementation-ready，未创建 `apps/**` / `infra/**` / `tools/**` / `tests/**`，未进入实现。
 - Preview 与正式写入：`ST13_24 / ST13_25` 已在 docs/governance/previews 路径 Preview 和正式 `DOC_STATE.yaml` 的 `facts` 字段写入 `formal_window_candidate_recommended=true`、来源、review status、document layer state 和禁止 packet/实现说明；正式状态本轮为幂等确认，未写 `candidate_status=candidate` 或 `readiness=downstream_ready`。
 - 验证结论：Preview 与正式 `DOC_STATE.yaml` 的 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`；W13-E13 的 state rule error 与 W13-E13.6 的 path-scan blocker 均未复现。
 - 代码开发状态：暂停。
 - 当前不允许扩展 `apps/web/**`，不允许创建 `apps/api/**` / `infra/**`，不允许接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
-- 正式开窗层：为空；本轮只完成第一批 contract 细化，不生成 implementation packet，不进入实现。
+- 正式开窗层：为空；本轮只完成 formal window 前置材料补齐合并，不生成 implementation packet，不进入实现。
 - 当前没有可直接进入代码实施的子任务。
 
 ## 3. 当前 confirmed 摘要
@@ -75,6 +75,7 @@
 - `W13-E5` 已完成 ST13 readiness audit；25 个 ST13 均仍不具备 implementation-ready，下一步只能进入用户确认后的任务包准备窗口。
 - `W13-E6` 已完成第一批任务包草案；`ST13_21 / ST13_20 / ST13_24 / ST13_25` 仍只是 `task_packet_draft_created`，不能视为 implementation-ready。
 - `W13-E13.5` 已吸收 `OQ-121=A` 并完成 candidate 状态表达策略修正；`ST13_24 / ST13_25` 仍只保持文档层 `formal_window_candidate_recommended`，正式状态层尚未写入 candidate，下一轮需优先验证 facts-only Candidate Preview。
+- `W13-E14-Merge` 已复核四个并行窗口结果：`ST13_24 / ST13_25` 的 formal window 前置材料进一步补齐，`ST13_21 / ST13_20` 的 near-ready blocker 和 candidate 升级条件进一步明确；该合并不改变正式状态层和 implementation-ready 结论。
 
 ## 6. 当前完成事项
 
@@ -108,6 +109,7 @@
 - 已完成 W13-E13.5 Candidate State 表达策略修正：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`，确认 `OQ-121=A` 已吸收，`W13-E14` 暂不执行，下一轮优先创建 facts-only Candidate Preview，备选验证 `candidate_status=observe`。
 - 已完成 W13-E13.6 facts-only Candidate Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`，吸收 `OQ-122=A`、`OQ-123=A`；`ST13_24 / ST13_25` 仅写 facts-only candidate 推荐字段，Preview `validate-state / evaluate-state` 为 `ok=true,error=0,warning=0`，但 `documents_blocked_count=1` 来自 plan-path Preview 的 document 扫描根目录副作用；正式 `DOC_STATE.yaml` 未修改。
 - 已完成 W13-E13.8 docs/governance/previews 路径 facts-only Candidate Preview 与正式 State Update：新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，吸收 `OQ-124`；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段，写入后验证仍为 `ok=true,error=0,warning=0,documents_blocked_count=0`。
+- 已完成 W13-E14-Merge formal window 前置补齐合并：8 个双文档均已复核通过，禁止范围 diff 为空，风险扫描未发现非法放行表述；总控文档已同步该合并结论。
 
 ## 7. 历史归档说明
 
@@ -120,8 +122,8 @@
 
 ## 8. 下一步建议
 
-1. 下一轮由总控窗口决定是否进入 formal window 前置确认；当前 facts-only 推荐只表示状态层记录了候选推荐事实，不表示 formal window 已打开。
-2. `ST13_24 / ST13_25` 当前只能作为 facts-only candidate 推荐事实的后续状态层写入候选；`ST13_21 / ST13_20` 默认保持 near-ready 文档层结论，等待 M02 blocker、OpenAPI / schema / apps 授权闭合后再评估。
+1. 下一轮适合进入 formal window open 确认窗口，但该窗口只能确认是否允许后续状态治理动作，不得直接生成 packet 或进入实现。
+2. `ST13_24 / ST13_25` 当前已完成一轮 formal window 前置材料补齐；`ST13_21 / ST13_20` 默认保持 near-ready 文档层结论，等待 M02 blocker、OpenAPI / schema / apps 授权闭合后再评估。
 3. 若后续要打开 formal window，必须逐个 ST13 补齐任务包、双文档、验收标准、required tests、状态层 required doc slot、formal window 用户确认和 implementation-ready gate。
 4. 当前不建议并行；若后续并行，必须由总控先冻结范围，子窗口不得共同修改总控文件或 `DOC_STATE.yaml`。
 5. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。

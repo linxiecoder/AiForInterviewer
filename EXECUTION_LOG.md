@@ -2096,6 +2096,25 @@
   - 可进入 archive 迁移评估，但必须另开确认窗口。
   - 可进入任务包 / 子任务双文档 / 验收与测试矩阵准备，但在 formal window 和 implementation-ready 形成前仍不得实施。
 
+### 2026-04-27 / W13-E14-Merge / formal window 前置补齐合并
+
+- 范围：合并并核验 W13-E14-A/B/C/D 四个并行窗口结果；允许同步总控文档；不写代码，不修改 `docs/governance/DOC_STATE.yaml`，不创建 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`archive/**` 或 `docs/modules/**`，不生成 implementation packet，不打开 formal window，不标记 implementation-ready。
+- 开始状态：
+  - `git status --short` 仅显示 8 个 ST13 双文档修改。
+  - 禁止范围 diff 为空。
+- 合并结果：
+  - `ST13_24`：acceptance criteria、required tests、implementation scope、allowed / forbidden paths、formal window 前置条件、implementation packet 前置条件和回退策略已补齐；仍不创建 `tests/**`，仍为 `not implementation-ready`。
+  - `ST13_25`：收口标准、Basic Memory 授权边界、fallback 包、Superpowers 更新规则、文档治理 DoD、allowed / forbidden paths、formal window 前置条件和 implementation packet 前置条件已补齐；当前仍不写 Basic Memory，不打开 formal window。
+  - `ST13_21`：near-ready blocker、API contract readiness、candidate 升级条件、allowed / forbidden paths、OpenAPI / `apps/api/**` / schema / M02 / ST13_20 依赖已明确；仍保持文档层 near-ready。
+  - `ST13_20`：near-ready blocker、数据 contract readiness、candidate 升级条件、allowed / forbidden paths、schema / migration / ORM / PostgreSQL / M02 / ST13_21 依赖已明确；仍保持文档层 near-ready。
+- 验证结果：
+  - `validate-state`：`ok=true,error=0,warning=0`。
+  - `evaluate-state`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`。
+  - 风险关键词命中均归类为合法禁止说明、合法前置条件或合法未来可能项；未发现非法放行表述。
+- 下一步建议：
+  - 适合进入 formal window open 确认窗口，用于确认后续是否允许状态治理窗口处理开窗。
+  - 仍不能直接打开 formal window，不能生成 implementation packet，不能标记 implementation-ready，不能进入代码实现。
+
 ## 4. 使用说明
 
 - 每完成一轮全局性工作后，应新增一条记录，而不是覆盖旧记录。

@@ -304,6 +304,19 @@ Preview facts-only 字段未导致 implementation-ready 或 formal window 误判
 
 正式写入后 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`；formal window、implementation packet 和代码实现仍需后续单独窗口确认。
 
+### 6.15 W13-E14-Merge formal window 前置补齐模块影响
+
+> W13-E14-Merge 只合并并复核四个并行双文档补齐窗口，不修改 `docs/modules/**`，不改变 M01-M10 成熟度，不解除 M02 blocker，不打开 formal window，不生成 implementation packet，不进入实现。
+
+| ST13 | WT13 alias | 模块映射 | W13-E14-Merge 结果 | 模块层结论 |
+| --- | --- | --- | --- | --- |
+| `ST13_20` | `WT13-20` | M01、M03、M05、M06、M08、M10 | near-ready blocker、数据 contract readiness、candidate 升级条件和 schema / migration / ORM / PostgreSQL 依赖已进一步明确 | 数据 contract 仍只处于文档层 near-ready；不创建数据库、migration、ORM 或 SQL。 |
+| `ST13_21` | `WT13-21` | M01、M02、M03、M04、M05、M06、M07、M08、M09、M10 | near-ready blocker、API contract readiness、candidate 升级条件和 OpenAPI / `apps/api/**` / schema / M02 / ST13_20 依赖已进一步明确 | API contract 仍只处于文档层 near-ready；不创建 `apps/api/**`、OpenAPI 或 schema。 |
+| `ST13_24` | `WT13-24` | M01、M10、全模块 | acceptance criteria、required tests、implementation scope、allowed / forbidden paths、formal window 前置条件和 implementation packet 前置条件已进一步补齐 | 测试 / DoD contract 可作为后续确认窗口输入；不创建 `tests/**`，不升级为 implementation-ready。 |
+| `ST13_25` | `WT13-25` | global、M01、M10 | 收口标准、Basic Memory 授权边界、fallback 包、Superpowers 更新规则、文档治理 DoD 和 formal window 前置条件已进一步补齐 | 治理收口 contract 可作为后续确认窗口输入；当前不写 Basic Memory，不做 Superpowers 外部写回。 |
+
+当前适合进入 formal window open 确认窗口，但该窗口只能处理用户确认与状态治理边界，不得直接进入代码实现。M01-M10 仍无模块升级为实现就绪。
+
 ## 7. 使用说明
 
 - 模块状态变化后，应同步更新本文档、`TASK_INDEX.md` 和 `DOCUMENT_MATURITY.md`。

@@ -273,7 +273,8 @@
 
 - `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
 - `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
-- 用户授权的父索引与 W13 计划文档同步。
+
+本 W13-E14-D 复核窗口仅允许继续细化上述两个文档。若需要同步父索引、总控计划、状态层或模块文档，应记录给 `W13-E14-Merge`，不得由本窗口直接修改。
 
 ## 18. 禁止修改范围
 
@@ -283,8 +284,11 @@
 - `tests/**`
 - `docs/governance/**`
 - `docs/governance/DOC_STATE.yaml`
+- schema 文件
 - 数据库配置、migration、ORM、repository 代码
+- `apps/api/**`
 - `docs/modules/**`
+- Basic Memory
 - `package.json`、`package-lock.json`、`pnpm-lock.yaml`
 
 ## 19. 用户确认项
@@ -314,3 +318,107 @@ W13-E13.5 后，`ST13_20` 继续保持文档层 `near_ready_for_formal_window_ca
 W13-E13.8 只对 `ST13_24 / ST13_25` 执行 facts-only candidate 推荐字段写入；`ST13_20` 保持正式 `DOC_STATE.yaml` 原样，未写 candidate facts，未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未写 near-ready 状态。
 
 `ST13_20` 仍仅在文档层保持 `near_ready_for_formal_window_candidate_confirmed` 口径。后续必须先关闭 M02 blocker、schema / migration / ORM 授权和 formal window 前置条件，才可重新评估状态层 candidate 表达；当前仍不得创建数据库、migration、ORM、SQL、implementation packet 或 formal window。
+
+## 24. W13-E14-D near-ready blocker 复核
+
+### 24.1 当前结论
+
+`ST13_20 / WT13-20` 当前只能保持文档层 `near_ready_for_formal_window_candidate_confirmed`。该口径表示数据 contract 已具备继续复核价值，但不等于 `formal_window_candidate`，不等于正式状态层 `candidate_status=candidate`，不等于 `readiness=downstream_ready`，不等于 implementation-ready。
+
+### 24.2 near-ready blocker 清单
+
+| blocker | 当前状态 | 对 candidate 升级的影响 |
+| --- | --- | --- |
+| schema 文件授权 | 未授权任何 schema 文件路径，也未确认 schema 文件命名、目录、格式或维护方式 | 不能创建 schema 文件，不能把文档字段写成已落地数据库字段 |
+| migration / ORM 授权 | 未授权 migration 文件、ORM model、repository 或 persistence 代码 | 不能创建 migration、ORM、repository，也不能生成 SQL 或数据库初始化脚本 |
+| PostgreSQL 连接 / 配置 / migration 策略 | PostgreSQL 主路线已确认，但连接配置、环境变量、迁移工具、up/down 策略、dry-run 策略和回滚责任未闭合 | 只能保留 contract，不能进入数据库实现或 formal window candidate |
+| M02 权限 / user / role / tenant 依赖 | 当前 `evaluate-state` 对 M02 仍报告 `doc:api`、`doc:open_questions` template-like blocker，且 `module:M02` 对 `ST13_20` 仍是 upstream blocker | `User / Account / Role / Permission` 与 workspace / tenant 隔离字段不能升级为正式 schema |
+| `ST13_21` API contract 依赖 | API domain、request / response、权限上下文、错误态和数据保存字段仍需与 `ST13_21` 同步闭合 | API 未确认字段不得被本任务写成数据库字段或 migration 输入 |
+| 数据脱敏 / 删除 / 审计 / 保留策略 | 已有 contract 边界，但硬删除、审计保留周期、日志脱敏粒度和导出快照保留策略仍需用户确认 | 不能把保留周期、硬删除策略或审计字段写成 formal schema |
+| LLM / RAG 记录保存边界 | 已确认需要保存脱敏 LLM 记录、RAG query/topK、retrieval result 和 evidence，但完整 prompt / response、embedding、provider 细节和向量库策略未确认 | 不能创建 LLM / RAG persistence schema，也不能固定 provider 字段或向量存储结构 |
+| 数据回退边界 | 未来 migration 必须有可恢复方案，但具体 rollback、数据修复、历史快照兼容和失败恢复策略未确认 | 不能生成 migration，也不能进入 formal window open 前置确认 |
+| 状态层 / 工具 gate | 当前正式状态未写 near-ready facts，未写 candidate；`formal_window_open=false`，`implementation_doc_state` 未激活，implementation packet inputs 仍缺 goal、allowed paths、forbidden paths、required tests、acceptance criteria | 当前 gate 仍阻止 implementation-ready、packet-ready 和 formal window candidate 写入 |
+
+### 24.3 数据 contract readiness
+
+已清楚的数据对象 contract：
+
+- 账号与权限：`User`、`Account`、`Role`、`Permission`、`Session` 的保存目标、权限摘要、资源可见范围和审计入口。
+- 业务输入：`Job`、`Resume` 的版本、归档、历史引用和脱敏要求。
+- RAG / 知识库：`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`RetrievalQuery`、`RetrievalResult`、`Citation / Evidence` 的保存目标和权限过滤要求。
+- 面试与反馈：`InterviewSession`、`InterviewRound`、`InterviewTurn`、`InterviewAnswer`、`FeedbackSummary`、`ScoreReport`、`ScoreDimension` 的状态和证据关系。
+- 复盘、训练、资产、导出和审计：`WeaknessItem`、`TrainingTask`、`Asset`、`AssetArchive`、`ExportSnapshot`、`ExportRecord`、`LLMGenerationRequest / Result`、`AuditEvent / OperationLog` 的边界。
+
+仍需 schema 确认的字段族：
+
+- 表名、主键、外键、唯一约束、索引、枚举映射、nullable 策略和时间字段精度。
+- `owner_id`、`created_by`、`updated_by`、visibility、workspace / tenant scope、role / permission snapshot 等权限字段。
+- schema version、migration version、归档标记、软删除标记、审计 retention、导出快照 retention 和数据修复字段。
+- LLM / RAG 的脱敏摘要字段、token / cost 候选字段、provider 字段、embedding 状态字段和 evidence 引用字段。
+
+必须等待 `ST13_21` API / M02 的内容：
+
+- `ST13_21` 需要先稳定核心 API domain、request / response 字段、权限上下文、错误 reason、异步状态和降级语义。
+- M02 需要闭合 user、account、role、permission、session、workspace / tenant 隔离和资源可见范围的模块级 blocker。
+- `ST13_21` 未确认的 API 字段、M02 未闭合的权限字段，都不能提前写成数据库 schema 或 migration。
+
+formal window 前不能创建的文件：
+
+- schema 文件。
+- migration 文件。
+- ORM / repository / persistence 代码。
+- `apps/api/**`。
+- `tests/**`。
+- SQL、数据库配置或连接配置。
+
+### 24.4 candidate 升级条件
+
+`ST13_20` 从 `near_ready_for_formal_window_candidate_confirmed` 升级为 `formal_window_candidate` 至少需要同时满足：
+
+1. 用户明确确认是否允许 `ST13_20` 升级为 candidate，且确认不把 near-ready 误写成 implementation-ready。
+2. 用户明确确认 schema 文件、migration、ORM、`apps/api/**`、`tests/**`、implementation packet、formal window open 和 `DOC_STATE.yaml` 写入边界。
+3. M02 权限 blocker 已消除，或由用户另窗确认其对 `ST13_20` candidate 不再构成阻断；状态评估中不再由 `doc:api`、`doc:open_questions`、`module:M02` 阻断 `ST13_20`。
+4. `ST13_21` API contract 已稳定，且 API 字段与本数据 contract 的保存 / 不保存策略完成双向对齐。
+5. PostgreSQL 连接、配置、migration 工具、up/down 策略、dry-run、回滚和审计 retention 已形成可评审方案。
+6. 数据脱敏、删除 / 归档、审计、保留周期、LLM / RAG 保存边界和数据回退边界已有用户确认或总控确认。
+7. `validate-state` / `evaluate-state` 继续全绿；若需要状态层表达 candidate 或 facts，必须先通过 preview。
+8. formal window 仍需另窗确认；candidate 升级本身不得自动打开 formal window、生成 implementation packet 或进入实现。
+
+当前未通过的工具 gate 包括：
+
+- `gate:acceptance_criteria_missing`
+- `policy:formal_window_closed`
+- `gate:implementation_doc_not_active`
+- `gate:implementation_scope_unclear`
+- `gate:required_tests_missing`
+- M02 相关 `doc:api`、`doc:open_questions`、`module:M02` upstream blocker
+
+### 24.5 allowed / forbidden paths 复核
+
+当前 W13-E14-D 窗口 allowed paths 仅限：
+
+- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
+- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
+
+当前仍 forbidden：
+
+- `docs/governance/**` 与 `docs/governance/DOC_STATE.yaml`
+- `PLAN_LATEST.md`、`EXECUTION_LOG.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`
+- schema 文件、migration 文件、ORM / repository / persistence 代码、SQL、数据库配置
+- `apps/api/**`、`apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/modules/**`
+- `ST13_21 / ST13_24 / ST13_25` 目录
+- Basic Memory
+- Git 提交、推送、reset、stash、merge、rebase、checkout
+
+### 24.6 formal window 前置条件
+
+进入 `ST13_20` formal window open 确认前，至少需要：
+
+1. 本文档与 `ST13_20_IMPLEMENTATION.md` 完成 near-ready blocker 复核并交给 `W13-E14-Merge`。
+2. M02 权限、user / role / tenant blocker 已消除或被用户明确接受为非阻断。
+3. `ST13_21` API contract 已确认可作为数据 schema 的上游输入。
+4. schema 文件、migration、ORM、PostgreSQL 连接 / 配置 / migration 策略、rollback 策略均有独立确认卡结论。
+5. 数据脱敏、删除 / 归档、审计、保留周期、LLM / RAG 记录保存边界均有明确方案。
+6. formal window open 已由用户另窗确认，且状态层 preview / preflight gate 通过。
+7. `DOC_STATE.yaml` 的任何写入均由专门状态窗口处理，本窗口不修改。
+8. implementation packet 只能在 formal window open 且 packet inputs 完整后由后续窗口生成。

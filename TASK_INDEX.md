@@ -6,7 +6,7 @@
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
 > 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 已正式将旧 `STxx_*` 从 current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。
-> 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，W13-E8.5 已登记 required doc slot，W13-E9 已完成第一批 contract 细化，W13-E10 已完成第一批 readiness review，W13-E11 已完成第一批文档层 formal window candidate 评估，W13-E12 已完成 State Update 准备和确认卡输出，W13-E13 已创建 candidate state preview 但验证失败，W13-E13.5 已完成 candidate 状态表达策略修正，W13-E13.6 已完成 facts-only Preview，W13-E13.8 已在 docs/governance/previews 路径 Preview 严格全绿后完成 `ST13_24 / ST13_25` facts-only 正式 State Update。状态只能记为 `facts_only_candidate_recommendation_recorded` / `not implementation-ready`，formal window、implementation packet 和真实服务接入仍需后续单独窗口。
+> 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，W13-E8.5 已登记 required doc slot，W13-E9 已完成第一批 contract 细化，W13-E10 已完成第一批 readiness review，W13-E11 已完成第一批文档层 formal window candidate 评估，W13-E12 已完成 State Update 准备和确认卡输出，W13-E13 已创建 candidate state preview 但验证失败，W13-E13.5 已完成 candidate 状态表达策略修正，W13-E13.6 已完成 facts-only Preview，W13-E13.8 已在 docs/governance/previews 路径 Preview 严格全绿后完成 `ST13_24 / ST13_25` facts-only 正式 State Update，W13-E14-Merge 已完成四个并行 formal window 前置补齐窗口的合并核验。状态只能记为 `formal_window_preconditions_refined` / `near-ready blocker refined` / `not implementation-ready`，formal window、implementation packet 和真实服务接入仍需后续单独窗口。
 
 ## 1. 模块任务索引
 
@@ -326,7 +326,20 @@ W13-E8.5 已另窗把上述 8 个文档路径登记到 `DOC_STATE.yaml` 既有 `
 
 当前仍不得写 `candidate_status=candidate`、`readiness=downstream_ready`、`formal_window_open=true` 或 `implementation_ready=true`；仍不得创建 `apps/**`、`infra/**`、`tests/**`，不得进入实现。
 
-### 2.4.14 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
+### 2.4.14 W13-E14-Merge formal window 前置补齐合并摘要
+
+> W13-E14-Merge 已接收 W13-E14-A/B/C/D 四个并行窗口结果，并以最终 diff 为准复核 8 个双文档。并行窗口报告的其他文件修改属于并行结果集中到同一工作区；最终禁止范围 diff 为空，未发现越权实现修改。
+
+| ST13 | WT13 alias | W13-E14-Merge 状态 | 仍未闭合项 | 是否具备实施条件 |
+| --- | --- | --- | --- | --- |
+| `ST13_20` | `WT13-20` | `near-ready blocker refined` | M02 blocker、schema / migration / ORM / PostgreSQL 策略授权、`ST13_21` API contract 联动、formal window 用户确认 | 否 |
+| `ST13_21` | `WT13-21` | `near-ready blocker refined` | M02 blocker、OpenAPI 授权、`apps/api/**` 授权、schema / DTO / shared contract 授权、`ST13_20` 数据 contract 联动、formal window 用户确认 | 否 |
+| `ST13_24` | `WT13-24` | `formal_window_preconditions_refined` | formal window 用户确认、状态层 gate、implementation_doc activation、packet inputs 激活、测试目录授权 | 否 |
+| `ST13_25` | `WT13-25` | `formal_window_preconditions_refined` | formal window 用户确认、Basic Memory / Superpowers 明确授权、状态层 gate、implementation_doc activation、packet inputs 激活 | 否 |
+
+当前结论：四个 ST13 的双文档补齐可接受，适合进入 formal window open 确认窗口；但该结论不等于 `formal_window_open=true`，不等于可以生成 implementation packet，不等于 implementation-ready。`DOC_STATE.yaml` 未在本合并窗口修改。
+
+### 2.4.15 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
 
 > 完整旧 ST 到 `ST13 / WT13` 映射见 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 第 6 节和 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`。
 > 本节只做任务索引级同步：旧 `STxx_*` 已从正式状态层 current `subtasks` 容器移出，仍保留为历史可追溯对象、reusable evidence 和 archive candidate，不再作为 W13 当前实施入口。

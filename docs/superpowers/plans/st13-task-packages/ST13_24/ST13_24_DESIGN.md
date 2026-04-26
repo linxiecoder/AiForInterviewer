@@ -248,65 +248,170 @@
 - 每个后续 ST13 必须列出空态、失败态、权限态和恢复路径。
 - 错误态验收不得只依赖 happy path。
 
-## 15. 验收标准
+## 15. acceptance criteria / 验收标准
 
-- 五层 DoD 均有定义。
-- API、数据库、RAG、LLM provider、多轮、打磨、压力面、评分 / 复盘、Markdown 导出、错误态 / 空状态均有测试要求。
-- 权限 / 登录、安全 / 隐私、临时产物、浏览器真实验证、失败回退、自动化 / 手工分层均有 contract。
-- 明确当前不创建 `tests/**`。
+本节只补齐 ST13_24 的 formal window 前置材料，不等于 formal window 已打开，也不等于 `implementation_ready=true`。所有验收标准必须满足三条规则：可被后续窗口验证、失败时能明确阻断、失败后有回退或停止说明。
 
-## 16. 测试要求
+### 15.1 formal window 前必须具备的验收标准
 
-本任务未来 required tests 包括：
+| 维度 | acceptance criteria | 可验证方式 | 失败判定 |
+| --- | --- | --- | --- |
+| 产品 DoD | 登录 / 权限、工作台、岗位、简历、知识库、记录列表、发起、面试台、复盘、评分、复制 / Markdown 下载均有验收项；模拟面试默认从历史记录列表进入，完成后回写历史记录 / 复盘。 | DESIGN / IMPLEMENTATION 中能追溯到 W13 scope、IA、object-model、scoring DoD。 | 任一主链入口、输出或回写缺验收项，formal window 前不得放行。 |
+| 数据 DoD | 服务端保存、权限过滤、RAG evidence、LLM 脱敏记录、评分证据、导出快照、schema/version、删除 / 归档、审计日志均有验收项。 | 与 `ST13_20` 数据 contract 逐项对齐。 | 数据对象不可追溯、权限隔离缺项或导出快照不一致，阻断 packet 准备。 |
+| UI DoD | IA 主链、错误态、空状态、记录列表、发起、面试台、复盘详情、桌面 / 移动视口、无横向溢出、文本不重叠均有验收项。 | 后续 browser verification 清单非空。 | 只验证页面存在、未覆盖移动 / 错误态 / 空状态，不能进入实现验证。 |
+| 工程 DoD | 默认测试入口、governance validation、contract tests、unit tests、integration tests、browser verification、manual acceptance 的层级与失败停止规则明确。 | required tests matrix 非空，且能映射到后续执行命令或人工验收证据。 | 测试层级缺失或失败处理不清，formal window 前不得生成 implementation packet。 |
+| 收口 DoD | 修改清单、验证结果、失败摘要、未完成项、风险、回退说明、W13-E14-Merge 交接项明确；不把 candidate 推荐写成实现放行。 | 收口输出模板可复用。 | 收口无法说明失败原因、影响文件或下一窗口边界，视为验收失败。 |
 
-- doc-governor validate/evaluate 不退化。
-- 每个 ST13 的 acceptance criteria 与 required tests 可追溯到 W13 事实源。
-- 临时产物治理符合 `TEST_POLICY.md`。
+### 15.2 实现窗口后验证的验收标准
 
-本窗口只运行状态验证和关键词 / 禁止范围检查，不创建测试代码。
+以下标准只有在总控另窗打开 formal window、允许创建测试代码或业务实现后才可执行验证；当前窗口只记录前置材料：
 
-## 17. 允许修改范围
+| 覆盖面 | 实现窗口后必须验证 | 失败处理 |
+| --- | --- | --- |
+| API | Auth、Account / Role / Permission、Job、Resume、Knowledge、Retrieval、Interview、Generation、Feedback / Score、SessionRecord、Markdown Export、Admin / Ops 的 request / response、权限、错误 taxonomy、幂等、状态冲突和异步状态。 | API contract 失败时停止下游 UI / browser 验收，先回退到 contract 修正。 |
+| 数据库 | schema relation、migration up/down dry-run、权限过滤、数据一致性、导出快照一致性、evidence 引用完整性。 | migration 或一致性失败时不得继续业务写入验证；状态回退需另开治理窗口。 |
+| RAG | 私有 / 公共知识库权限、混合检索、无命中降级、引用回溯、证据进入评分但不直接决定分数。 | RAG 无命中、索引未完成或权限过滤后为空必须展示独立状态，不得伪装为成功。 |
+| LLM | provider 失败、重试、脱敏日志、模型名 / prompt 模板版本、成本字段候选。 | provider 失败不得把 fallback 内容标为真实 LLM 成功。 |
+| 多轮 | 暂停 / 继续、上下文保存、轮次 / turn 状态、模式切换、RAG evidence / 回答 / 追问 / 评分 / 复盘追溯。 | 多轮上下文丢失或状态混淆时停止复盘和导出验收。 |
+| 打磨模式 | `ProgressTree` 驱动、每题反馈、能力树 / 当前进展 / 薄弱点更新、下一题建议、用户结束决策。 | 未生成评分或复盘时必须展示明确状态，不得显示为完成。 |
+| 压力面模式 | `InterviewQuestionSet` 驱动、题组生成、作答进度、最终评估、岗位匹配、通过概率、多维评分、建议打磨主题。 | 题组生成失败、部分回答缺失或复盘失败必须进入错误态。 |
+| 评分 / 复盘 | `0-100` 多维评分、证据绑定、真实 / 模拟复盘、弱项和训练建议。 | 评分失败不得丢失回答和历史记录；复盘失败不得伪装成已完成。 |
+| Markdown 导出 | 复制 / Markdown 下载、完整复盘、RAG 引用、训练建议、权限过滤、脱敏、文件名候选、空内容、导出失败、重复导出。 | 导出失败不得阻断查看，但必须保留失败状态和重试入口。 |
+| 权限 / 安全 / 隐私 | session 过期、未登录、权限不足、资源不可见、管理员筛选公共知识库、他人记录隔离、简历 / LLM / RAG / export 脱敏。 | 任何越权读取、敏感摘要泄露或真实 provider key 进入 fixture 均为硬失败。 |
+| 错误态 / 空状态 | 空记录、空知识库、RAG 无命中、LLM 失败、导出失败、复盘未生成、权限范围为空。 | 空状态不得用 mock 成功数据替代；错误态必须有恢复动作或阻断原因。 |
 
-本窗口允许：
+## 16. required tests / 测试要求
+
+本节定义后续测试层级，不创建 `tests/**`，不写测试代码，不运行业务实现测试。
+
+| 测试层级 | 后续必须覆盖 | 当前窗口动作 | 失败处理 |
+| --- | --- | --- | --- |
+| governance tests | `validate-state`、`evaluate-state`、关键词检查、禁止范围检查、UTF-8 回读。 | 只运行状态验证和关键词 / 禁止范围检查。 | 失败时停止并输出失败命令、原因和受影响文件。 |
+| contract tests | API schema、权限矩阵、错误 taxonomy、数据对象关系、RAG evidence、LLM 失败语义、评分 / 复盘、Markdown 导出权限过滤。 | 仅定义 required tests matrix。 | contract tests 失败时不得进入集成或 browser 验收。 |
+| unit tests | 后续被授权实现中的纯函数、状态转换、校验、格式化、导出内容组装、权限判断。 | 当前不创建。 | 单元失败先修正对应最小实现，不扩大到无关模块。 |
+| integration tests | API + 数据库 + RAG + LLM provider mock / stub + 评分复盘 + 导出链路。 | 当前不创建。 | 集成失败需记录依赖、数据状态和回退路径。 |
+| browser verification | 真实浏览器桌面 / 移动视口、面试台交互、复盘详情、错误态 / 空状态、导出入口。 | 当前不启动 dev server，不执行 Playwright。 | browser 失败需保留截图 / trace 位置和复现路径，未授权时不得补代码。 |
+| manual acceptance | 主链体验、复杂 UI、文案可读性、复盘解释性、训练建议质量、管理员运营边界。 | 当前只定义验收项。 | 手工验收必须记录证据，不能只写“已看过”。 |
+
+后续所有测试必须遵守 `docs/governance/TEST_POLICY.md`：不得在仓库根目录或 `tests/` 下遗留 `tmp-*`、`tmp_*`、`temp-*`、`temp_*`、debug 目录或等价临时产物。若测试需要临时目录，必须使用测试策略允许的位置，并在收口时执行残留检查。
+
+## 17. implementation scope / allowed paths
+
+### 17.1 当前窗口允许修改范围
+
+当前 W13-E14-A 只允许修改：
 
 - `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md`
 - `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md`
-- 用户授权的父索引与 W13 计划文档同步。
 
-## 18. 禁止修改范围
+当前窗口不允许同步父索引、不允许修改状态层、不允许创建测试或实现目录。若发现父索引、状态层或其他任务包需要同步，只记录给 `W13-E14-Merge`。
+
+### 17.2 未来 formal window 可能允许的路径
+
+以下只是未来 formal window 的初步路径边界，不构成本窗口授权：
+
+- `tests/**` 中被 formal window 明确授权的测试文件。
+- 与 ST13_24 required tests 直接相关、且由总控批准的测试 fixture / helper。
+- 被正式 implementation packet 点名的窄范围文档更新。
+- 后续如需 browser verification 配置或测试命令补充，必须由总控另窗确认。
+
+未来一旦允许 `tests/**`，必须另窗确认测试代码创建范围、临时产物目录、验证命令、失败回退和禁止范围。
+
+## 18. forbidden paths / 禁止修改范围
+
+当前窗口和未开 formal window 前均禁止：
 
 - `tests/**`
-- `tools/**`
 - `apps/**`
 - `infra/**`
+- `tools/**`
 - `docs/governance/**`
 - `docs/governance/DOC_STATE.yaml`
-- test runner、pytest fixture、CI 配置
+- `PLAN_LATEST.md`
+- `EXECUTION_LOG.md`
+- `DOCUMENT_PROGRESS.md`
+- `DOCUMENT_MATURITY.md`
+- `TASK_INDEX.md`
+- `MODULE_INDEX.md`
+- `OPEN_QUESTIONS.md`
+- `DESIGN_DECISIONS.md`
+- `AGENTS.md`
+- `docs/superpowers/plans/st13-task-packages/ST13_20/**`
+- `docs/superpowers/plans/st13-task-packages/ST13_21/**`
+- `docs/superpowers/plans/st13-task-packages/ST13_25/**`
+- `docs/modules/**`
+- `archive/**`
+- `package.json`
+- `package-lock.json`
+- `pnpm-lock.yaml`
+- Basic Memory 写入或外部记忆写回
+- test runner、pytest fixture、CI 配置、dev server 配置
 
-## 19. 用户确认项
+## 19. formal window 前置条件
+
+`ST13_24` 进入 formal window open 前，必须同时满足：
+
+1. 总控窗口明确授权打开 `ST13_24 / WT13-24` formal window，且授权文本包含 allowed paths、forbidden paths、验证命令、失败回退和收口格式。
+2. `DOC_STATE.yaml` 在单独状态治理窗口中通过正式流程处理 formal window 相关字段；本文件不得自行声明 `formal_window_open=true`。
+3. `validate-state` / `evaluate-state` 基于正式 `DOC_STATE.yaml` 重新执行且为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`。
+4. acceptance criteria、required tests、implementation scope、allowed paths、forbidden paths 均已由总控确认可被后续 packet 消费。
+5. 是否允许创建 `tests/**`、是否允许测试代码、是否允许 browser verification 配置、是否允许测试 fixture，均已有用户确认。
+6. `ST13_21` API contract 与 `ST13_20` 数据 contract 的后续影响已复核；若二者仍有会阻断测试矩阵的未决项，必须在 formal window 前记录为 blocker。
+7. 当前 facts-only candidate 推荐不得被误读为 `candidate_status=candidate`、`readiness=downstream_ready` 或 implementation-ready。
+
+任一条件不满足时，只能继续文档治理或输出确认卡，不得打开 formal window。
+
+## 20. implementation packet 前置条件
+
+implementation packet 只能在 formal window open 后、且 gate 全部通过后生成。生成前必须满足：
+
+1. 正式 `DOC_STATE.yaml` 中 `formal_window_open=true`，且该状态由总控 / 状态治理窗口写入，不由本窗口写入。
+2. `implementation_doc_state` 已进入当前工具认可的有效工作态；双文档存在或 `template_like=false` 仍不足以生成 packet。
+3. `implementation_packet_inputs.goal`、`allowed_modify_paths`、`forbidden_paths`、`required_tests`、`acceptance_criteria` 均已非空并通过评估。
+4. required tests 已拆分到 governance、contract、unit、integration、browser verification、manual acceptance 层级，并给出失败停止条件。
+5. allowed paths 中如包含 `tests/**`，必须有单独用户确认和临时产物治理要求。
+6. packet 生成前重新执行 `validate-state` / `evaluate-state`；若有 error、warning 或新增 blocker，停止生成。
+7. packet 输出不得把测试 contract 直接扩展成应用实现、后端实现、infra 或工具修改范围。
+
+当前窗口不满足上述条件，因此仍不能生成 implementation packet。
+
+## 21. 回退策略
+
+未来如果测试 / 验收体系修改失败，按以下边界回退：
+
+| 类型 | 回退方式 | 需要确认 |
+| --- | --- | --- |
+| 文档补齐失败 | 回退 ST13_24 双文档中本次补齐段落，保留已存在的 W13-E8 / E8.5 / E9 / E10 / E11 / E13.8 历史事实。 | 若涉及父索引或状态层，交给 `W13-E14-Merge` 或状态治理窗口。 |
+| 测试代码失败 | 仅在未来授权窗口中回退被授权的测试文件；当前窗口不创建测试代码。 | 创建或删除 `tests/**` 必须另行确认。 |
+| 临时产物失败 | 清理测试策略允许位置中的临时目录，并记录残留检查结果。 | 若残留在仓库根目录或 `tests/`，必须停止并输出路径。 |
+| 状态写回失败 | 停止状态写入，保留失败 preview / diagnostics，另开 State Update 或治理窗口处理。 | 本文档不得直接修改 `DOC_STATE.yaml`。 |
+| browser verification 失败 | 保留截图 / trace / 复现路径，停止声称 UI DoD 通过。 | 未授权时不得顺手修 UI 或测试。 |
+| 验收标准冲突 | 输出冲突项、事实源、建议方案和确认卡。 | 不自行改变 ST13_24 任务范围。 |
+
+## 22. 用户确认项
 
 - `OQ-111=A`：采用集中任务包目录。
 - `OQ-112=A`：允许创建第一批正式双文档。
 - `OQ-113=B`：required doc slot 由 W13-E8.5 单独 State Update 完成；本窗口不修改 `DOC_STATE.yaml`。
 
-## 20. 下游任务
+## 23. 下游任务
 
 - 所有 ST13 formal window。
 - W13-E9 contract 细化。
 - W13-E10 readiness 复核。
 - W13-E11 formal window 候选评估。
 
-## 21. 当前不进入实现说明
+## 24. 当前不进入实现说明
 
 本文件经 W13-E9 contract 细化后，`ST13_24` 仍是 `not implementation-ready`。当前不创建 `tests/**`，不写测试代码，不生成 implementation packet，不打开 formal window。
 
-## 22. W13-E13.5 candidate 表达策略同步
+## 25. W13-E13.5 candidate 表达策略同步
 
 W13-E13.5 后，`ST13_24` 继续保留文档层 `formal_window_candidate_recommended`，但正式 `DOC_STATE.yaml` 暂不写 `candidate_status=candidate`，也不直接写 `readiness=downstream_ready`。
 
 下一轮 Candidate Preview 优先验证 facts-only 表达，例如 `facts.formal_window_candidate_recommended=true` 或等价现有 facts 字段；备选验证 `candidate_status=observe`。`formal_window_open` 必须保持 `false`，implementation-ready 必须保持 `false`，implementation packet 仍 forbidden。
 
-## 23. W13-E13.8 facts-only 正式 State Update 同步
+## 26. W13-E13.8 facts-only 正式 State Update 同步
 
 W13-E13.8 已在 docs/governance/previews 路径创建 `DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过严格验证；随后正式 `DOC_STATE.yaml` 已为 `ST13_24.facts` 写入 facts-only candidate 推荐字段：
 
