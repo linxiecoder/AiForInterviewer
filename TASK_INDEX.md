@@ -3,7 +3,7 @@
 > 本索引用于全局任务导航，不替代模块目录下的 `MODULE_TASK_INDEX.md`。  
 > 状态使用：`todo` / `doing` / `done` / `blocked` / `need-clarification`。  
 > 当前状态主要表示文档建设状态，不表示代码开发状态。
-> `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
+> `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 `docs/design/workbench-mvp/` 正式设计事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
 > 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 已正式将旧 `STxx_*` 从 current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。
 > 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，W13-E8.5 已登记 required doc slot，W13-E9 已完成第一批 contract 细化，W13-E10 已完成第一批 readiness review，W13-E11 已完成第一批文档层 formal window candidate 评估，W13-E12 已完成 State Update 准备和确认卡输出，W13-E13 已创建 candidate state preview 但验证失败，W13-E13.5 已完成 candidate 状态表达策略修正，W13-E13.6 已完成 facts-only Preview，W13-E13.8 已在 docs/governance/previews 路径 Preview 严格全绿后完成 `ST13_24 / ST13_25` facts-only 正式 State Update，W13-E14-Merge 已完成四个并行 formal window 前置补齐窗口的合并核验，W13-E15 已完成 formal window open 前置确认和用户确认卡输出。状态只能记为 `formal_window_open_precheck_done` / `near-ready maintained` / `not implementation-ready`，formal window、implementation packet 和真实服务接入仍需后续单独窗口。
@@ -25,7 +25,7 @@
 
 ## 1.1 `RQ01` 首切片关系映射（W10-C，历史参考）
 
-> 本节仅解释 W10 原型探索期间的 `RQ01` 关系层来源。该关系已被 `DD-018`、`DD-019` 和 W13 唯一事实源取代，不再作为当前一期工作台 MVP 范围、模块优先级或正式开窗依据。
+> 本节仅解释 W10 原型探索期间的 `RQ01` 关系层来源。该关系已被 `DD-018`、`DD-019` 和 Workbench MVP 正式设计事实源取代，不再作为当前一期工作台 MVP 范围、模块优先级或正式开窗依据。
 
 | 层级 | 对象 | 当前角色 | 当前结论 |
 | --- | --- | --- | --- |

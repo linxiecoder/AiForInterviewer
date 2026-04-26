@@ -1,5 +1,13 @@
 # M07 打磨模式、评估与进度 - 模块任务索引
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：打磨模式、ProgressTree、题级反馈、能力树、训练入口和部分导出。
+- 后续补齐项：明确打磨模式不固定轮次，并与压力面评分和训练闭环分离。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 模块任务总表
 
 | Subtask ID | 子任务名称 | 状态 | 文档成熟度 | 关联问题 / W13 事实源 | 目录 | 是否具备实施条件 |

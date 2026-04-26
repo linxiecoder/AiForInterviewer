@@ -11,7 +11,7 @@
 
 - `open`：问题已识别，但尚无明确默认方案
 - `confirmed`：问题已确认，后续文档应按确认结果回写
-- `historical`：历史问题，当前事实已回收到 W13 唯一事实源或全局确认层
+- `historical`：历史问题，当前事实已回收到 Workbench MVP 正式设计事实源或全局确认层
 - `superseded`：问题已失效或已被其他新口径替代
 
 ## 3. 问题表
@@ -20,8 +20,8 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | MQ-001 | 模板占位：本模块是否负责 XXX | superseded | 无当前影响 | 这是旧模板示例，不作为当前模块问题 | 否 | 无 |
 | MQ-002 | 模板占位：异常路径是否需要回滚 | superseded | 无当前影响 | 这是旧模板示例，不作为当前模块问题 | 否 | 无 |
-| OQ-009 | Embedding 与向量化来源如何确定 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST05_03` | 已由 W13 唯一事实源和 `FC-05` / `DD-021` 覆盖：RAG / 知识库进入一期，支持混合检索，失败时降级继续并标注证据缺口 | 否 | 已在本模块文档改为历史引用 |
-| OQ-010 | 归档粒度是整份资产、片段还是题目级 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST05_02` | 已由 W13 唯一事实源和 `FC-14` / `DD-027` 覆盖：一期支持整份和单题归档到资产库，归档时选择资产类型，类型带 schema 时动态渲染字段表单 | 否 | 已在本模块文档改为历史引用 |
+| OQ-009 | Embedding 与向量化来源如何确定 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST05_03` | 已由 Workbench MVP 正式设计事实源和 `FC-05` / `DD-021` 覆盖：RAG / 知识库进入一期，支持混合检索，失败时降级继续并标注证据缺口 | 否 | 已在本模块文档改为历史引用 |
+| OQ-010 | 归档粒度是整份资产、片段还是题目级 | historical | `MODULE_REQUIREMENTS.md`、`MODULE_TASK_INDEX.md`、`ST05_02` | 已由 Workbench MVP 正式设计事实源和 `FC-14` / `DD-027` 覆盖：一期支持整份和单题归档到资产库，归档时选择资产类型，类型带 schema 时动态渲染字段表单 | 否 | 已在本模块文档改为历史引用 |
 
 ## 4. 当前高优问题
 

@@ -23,12 +23,12 @@
 - 相关模块：M10、全模块
 - 本任务是横向验收与测试 contract，不创建测试代码。
 
-## 4. 关联 W13 事实源
+## 4. 关联正式设计事实源
 
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md`
+- `docs/design/workbench-mvp/scope.md`
+- `docs/design/workbench-mvp/information-architecture.md`
+- `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`
+- `docs/design/workbench-mvp/scoring-review-export-dod.md`
 - `docs/governance/TEST_POLICY.md`
 - `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
 - `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
@@ -53,7 +53,7 @@
 
 ## 8. 输入
 
-- W13 四份事实源。
+- `docs/design/workbench-mvp/` 正式设计事实源。
 - `ST13_21` API contract 设计。
 - `ST13_20` 数据 contract 设计。
 - `docs/governance/TEST_POLICY.md`。

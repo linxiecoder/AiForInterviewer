@@ -1,5 +1,13 @@
 # M02 鉴权、团队与成员 - 模块需求
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`。
+- 模块承接摘要：登录、session、角色、权限、记录可见范围和管理员入口。
+- 后续补齐项：补齐权限消费边界，尤其是 API / 数据 contract 对 M02 的依赖。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把原始设计稿、原始实现计划与当前全局冻结口径中属于 `M02` 的部分收敛为模块级需求基线。
@@ -14,7 +22,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
 

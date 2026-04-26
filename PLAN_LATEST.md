@@ -8,7 +8,10 @@
 
 ## 2. 当前阶段
 
-- 当前阶段：`W13-E15 / formal window open 前置确认窗口` 已完成；已新增前置确认文档，复核 `ST13_24 / ST13_25` 可进入用户确认窗口，但不直接打开 formal window。
+- 当前阶段：`W13-DesignCanon-Step2 / 正式设计事实源迁移窗口` 已完成；已创建 `docs/design/workbench-mvp/`，并将四份原 W13 plans 降级为短桥接文档。
+- 当前边界：本窗口只执行设计事实源迁移、中心化废弃记录、索引同步、引用清理和模块承接摘要；未修改 `DOC_STATE.yaml`，未打开 formal window，未生成 implementation packet，未进入实现，未写 Basic Memory，未执行 git add / commit / push。
+- 上一步：`W13-DesignCanon-Plan / 正式设计文档归位与模块承接计划窗口` 已完成；计划文件冻结了本步骤目录、降级、模块承接、引用替换、验证与回退方案。
+- 上一阶段：`W13-E15 / formal window open 前置确认窗口` 已完成；已新增前置确认文档，复核 `ST13_24 / ST13_25` 可进入用户确认窗口，但不直接打开 formal window。
 - 当前边界：正式 `DOC_STATE.yaml` 未在本窗口修改；`ST13_24 / ST13_25` 仍只保留 facts-only candidate 推荐字段，未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未打开 formal window，未标记 implementation-ready，未生成 implementation packet，未创建 `apps/**` / `infra/**` / `tests/**`，未进入实现。
 - 验证结论：`git status --short` 为空，`main...origin/main` 为 `0 0`；正式 `DOC_STATE.yaml` 的 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`。
 - preflight 结论：`ST13_24 / ST13_25` 均为 `gate_result=blocked`，`can_open_formal_window=false`、`can_generate_implementation_packet=false`、`can_mark_implementation_ready=false`；主要 blockers 包含 `formal_window_closed`、`official_readiness_blocked`、`implementation_doc_not_active`、`acceptance_criteria_missing`、`required_tests_missing` 和 `implementation_scope_unclear`。
@@ -20,10 +23,10 @@
 
 | 内容类别 | 唯一事实源 |
 | --- | --- |
-| 一期 MVP 范围 | `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
-| IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
-| 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 一期 MVP 范围 | `docs/design/workbench-mvp/scope.md` |
+| IA / 用户旅程 | `docs/design/workbench-mvp/information-architecture.md` |
+| 对象模型 / RAG / 多轮 / 后端边界 | `docs/design/workbench-mvp/object-model-rag-multiround-backend.md` |
+| 评分 / 复盘 / 导出 / DoD | `docs/design/workbench-mvp/scoring-review-export-dod.md` |
 | 任务重映射草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` |
 | ST13 readiness audit | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` |
 | ST13 第一批 contract 任务包草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` |
@@ -35,6 +38,7 @@
 | ST13 candidate State Update Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml` |
 | ST13 candidate 状态表达策略修正 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` |
 | ST13 formal window open 前置确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md` |
+| 正式设计文档归位与模块承接计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-design-canon-plan.md` |
 | ST13 第一批正式双文档 / contract 细化 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`、`docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`、`docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md`、`docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` |
 | 状态层 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` |
 | State Write 分阶段计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md` |
@@ -60,9 +64,9 @@
 
 | 窗口 | 状态 | 作用 |
 | --- | --- | --- |
-| W13-B | 已产出，作为当前 IA / 用户旅程事实源 | 维护工作台 IA、模拟记录入口、RAG / 知识库入口、多轮入口和页面流转。 |
-| W13-C | 已产出，作为当前对象模型 / RAG / 多轮 / 后端边界事实源 | 维护对象模型、服务端保存、权限、RAG、LLM、多轮状态机和后端边界。 |
-| W13-D | 已产出，作为当前评分 / 复盘 / 导出 / DoD 事实源 | 维护评分、复盘、导出、错误态、空状态和 DoD。 |
+| W13-B | 已产出，作为 IA / 用户旅程迁移来源 | 结论已迁入 `docs/design/workbench-mvp/information-architecture.md`。 |
+| W13-C | 已产出，作为对象模型 / RAG / 多轮 / 后端边界迁移来源 | 结论已迁入 `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`。 |
+| W13-D | 已产出，作为评分 / 复盘 / 导出 / DoD 迁移来源 | 结论已迁入 `docs/design/workbench-mvp/scoring-review-export-dod.md`。 |
 | W13-Cleanup / W13-FC-RefAudit | 已完成项目级清理 | 清理旧 OQ/MQ、旧 DD、重复确认卡、孤立文档候选和唯一事实源引用。 |
 | W13-GOV-MergeArchive | 已完成 | 合并旧实现计划归档、M01-M10 旧 MQ/OQ 标记和模块子文档补链结果；确认剩余归档问题不阻断 W13 后续设计。 |
 | W13-StateArchive | 已完成 | 将旧 P1 设计稿从当前 `documents` 受管集合移出并迁入 archive；旧 STxx_* 骨架因仍在状态层和索引层引用，本轮不迁移。 |
@@ -91,6 +95,7 @@
 | W13-E13.8 | docs/governance/previews 路径 Preview 与 facts-only 正式 State Update 已完成 | 已新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`；Preview 与正式 `DOC_STATE.yaml` 均通过 `validate-state / evaluate-state`，且 `documents_blocked_count=0`。正式状态层只为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段；`ST13_21 / ST13_20` 仍不写 candidate，formal window、implementation packet 和实现仍关闭。 |
 | W13-E14-Merge | formal window 前置补齐合并已完成 | 已接收并复核 W13-E14-A/B/C/D 四个并行窗口结果。`ST13_24 / ST13_25` 的 formal window 前置材料进一步补齐；`ST13_21 / ST13_20` 的 near-ready blocker 进一步明确。未修改 `DOC_STATE.yaml`，未创建实现目录，仍不能实现、不能生成 implementation packet、不能打开 formal window。 |
 | W13-E15 | formal window open 前置确认已完成 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md`，确认 `ST13_24 / ST13_25` 可进入 formal window open 用户确认窗口；推荐后续单独窗口只打开 `ST13_24` 作为试点，packet 和实现继续拆窗。未修改 `DOC_STATE.yaml`，未打开 formal window，未生成 implementation packet，未进入实现。 |
+| W13-DesignCanon-Step2 | 正式设计事实源迁移已完成 | 已创建 `docs/design/workbench-mvp/` 五份正式设计文档，四份原 W13 plans 已降级为桥接文档，current fact source 已改指正式目录；未修改状态层、未提交。 |
 
 ## 6. 当前阻断与风险
 
@@ -114,13 +119,11 @@
 
 ## 7. 下一步
 
-1. 等待用户确认 `OQ-125~OQ-127`：是否允许后续 formal window open 执行窗口、packet 是否拆窗、实现是否拆窗。
-2. 推荐下一窗口只执行 `ST13_24` formal window open 状态治理试点；该窗口仍不得生成 implementation packet 或进入实现。
-3. 在 formal window 另行确认并通过状态层 gate 前，仍不能生成 implementation packet，不能标记 implementation-ready，不能创建 `apps/**`、`infra/**`、`tests/**` 或进入实现。
-4. 不得因文档层 candidate 推荐、facts-only 状态记录或 W13-E15 推荐方案而写 `candidate_status=candidate`、打开 formal window 或进入实现。
-5. `ST13_25` 可作为第二个治理任务候选，但 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
-6. `ST13_21 / ST13_20` 继续保持 near-ready，等待 M02、OpenAPI、schema、`apps/api/**`、migration / ORM 等授权闭合后再评估。
-7. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧文档。
+1. 对本次 Design Canon 迁移 diff 做审阅，确认是否允许后续单独提交。
+2. 后续如进入 formal window open 链，仍需另窗确认 `OQ-125~OQ-127`；不得因 Design Canon 迁移完成而写 `formal_window_open=true` 或生成 packet。
+3. `ST13_25` 可作为第二个治理任务候选，但 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
+4. `ST13_21 / ST13_20` 继续保持 near-ready，等待 M02、OpenAPI、schema、`apps/api/**`、migration / ORM 等授权闭合后再评估。
+5. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧文档。
 
 ## 8. 验证命令
 

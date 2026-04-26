@@ -11,7 +11,7 @@
 | 决策 ID | 决策 | 状态 | 当前口径 | 影响范围 | 后续动作 |
 | --- | --- | --- | --- | --- | --- |
 | DD-001 | 文档体系采用 `global -> module -> subtask` 分层 | confirmed | 全局文档负责约束与导航，模块文档承接设计，子任务文档承接实施准备。 | 全局 | 所有新增文档继续遵循该分层。 |
-| DD-002 | 原始设计稿与原始实现计划保留为上游源文档 | confirmed | `docs/superpowers/specs/...` 与早期实现计划不再承担当轮事实源；当前事实源由 W13 四份计划文档承担。 | 全局 | 后续回写进入根目录全局文档、W13 事实源文档与 `docs/modules/`。 |
+| DD-002 | 原始设计稿与原始实现计划保留为上游源文档 | confirmed | `docs/superpowers/specs/...` 与早期实现计划不再承担当轮事实源；当前设计事实源由 `docs/design/workbench-mvp/` 承担。 | 全局 | 后续回写进入根目录全局文档、Workbench MVP 正式设计事实源文档与 `docs/modules/`。 |
 | DD-003 | 单次实施单位限定为一个子任务 | confirmed | 只有单个 `SUBTASK_IMPLEMENTATION.md` 达到可实施后，才进入代码执行。 | 全局实施流程 | 在任务索引与成熟度文档中持续约束。 |
 | DD-004 | 目标产品代码结构采用 `apps/web + packages/shared + apps/api` | confirmed | `FC-01` 已确认目标结构；但本仓库当前仍是设计文档、治理状态、`tools/doc_governor/` 与 `tests/doc_governor/` 承载仓库，正式任务与状态层开窗前不得直接创建目录或实施服务。 | 全局、M01-M10 | 实现目录创建、后端服务和部署仍需 `TASK_INDEX.md` 写入明确任务 ID 与正式开窗资格。 |
 | DD-005 | 后端采用 FastAPI；完整技术栈仍需实施包阶段复核 | needs-review | `FC-01` 已确认后端采用 FastAPI；Web framework、前端工程细节和共享包构建方式不得从旧实现计划或 W10 原型直接推导为 confirmed。 | M01-M10 | 后续实现包评估时再确认 Web framework、包管理、构建与测试矩阵。 |
@@ -27,9 +27,9 @@
 | DD-015 | W10 “最小功能切片优先”首切片 | superseded | W10 首切片固定为“岗位 JD 手工输入 + 简历 Markdown 粘贴/编辑 -> 生成首轮模拟面试问题 -> 记录 1 轮问答 -> 输出简版反馈摘要”；该口径已被 `DD-018` 取代。 | W10 历史原型 | 保留为历史记录，不再作为当前一期 MVP 范围。 |
 | DD-016 | W10 首切片关系层 `RQ01 -> M03 / M04 / M06 / M07 (+ 条件性 M01)` | superseded | 该关系层只解释 W10 原型探索如何落到最小 mock 原型，不再作为一期工作台 MVP 的模块关系依据。 | W10 历史原型 | 后续以 W13 事实源重新建模。 |
 | DD-017 | `W10-D` 首切片最小 Web 原型探索闸门 | superseded | W10 `apps/web/**` mock 原型只作为参考证据；mock LLM、无登录、会话内临时数据、无数值评分、不导出等边界不得继续前推为当前一期 MVP。 | `apps/web/**` 原型、W10 历史记录 | 后续若复用交互或组件，必须先经 W13 事实源重新裁剪。 |
-| DD-018 | 一期 MVP 重新定义为工作台级 MVP | confirmed | 一期必须包含服务端历史 / 复盘记录、真实 LLM、完整登录 / 权限、简历与面试记录服务端保存、完整 `0-100` 多维评分、复制 / Markdown 下载、RAG / 知识库、多轮高阶面试和历史模拟记录列表入口。 | 全局产品范围、M02-M10 | 唯一事实源见 `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`。 |
+| DD-018 | 一期 MVP 重新定义为工作台级 MVP | confirmed | 一期必须包含服务端历史 / 复盘记录、真实 LLM、完整登录 / 权限、简历与面试记录服务端保存、完整 `0-100` 多维评分、复制 / Markdown 下载、RAG / 知识库、多轮高阶面试和历史模拟记录列表入口。 | 全局产品范围、M02-M10 | 唯一事实源见 `docs/design/workbench-mvp/scope.md`。 |
 | DD-019 | W10 `apps/web/**` 原型降级为参考证据并暂停代码开发 | confirmed | `apps/web/**` 原型不作为正式一期 MVP 开发起点；当前暂停代码开发，直到 W13 事实源和正式任务开窗完成。 | 当前推进路径、`apps/web/**` | 不得继续扩展 `apps/web/**`、创建 `apps/api/**`、接真实 LLM、做数据库、登录、评分或后端实现。 |
-| DD-020 | W13-B 初稿 IA 口径 | superseded | 该条保留为 W13-B 初稿历史记录；其中“资产库、训练中心、管理台等仍作为后续占位”的旧口径已被 `FC-13`、`FC-14`、`FC-18` 与当前唯一事实源取代。 | W13-B、IA | 当前 IA 事实源为 `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`。 |
+| DD-020 | W13-B 初稿 IA 口径 | superseded | 该条保留为 W13-B 初稿历史记录；其中“资产库、训练中心、管理台等仍作为后续占位”的旧口径已被 `FC-13`、`FC-14`、`FC-18` 与当前唯一事实源取代。 | W13-B、IA | 当前 IA 事实源为 `docs/design/workbench-mvp/information-architecture.md`。 |
 | DD-021 | 一期 MVP 包含 RAG / 知识库能力 | confirmed | RAG / 知识库进入一期 MVP；支持用户私有上传 + 管理员公共知识库，团队共享后置，混合检索，失败时降级继续并标注证据缺口。 | M05、M06、M08、M10 | 唯一事实源见对象模型文档与评分 / 复盘 / 导出 / DoD 文档。 |
 | DD-022 | 一期 MVP 包含多轮高阶面试能力 | confirmed | 多轮高阶面试进入一期 MVP；固定 3 轮不再是总规则，只能作为压力面题组策略候选。 | M06、M07、M08、M09 | 唯一事实源见 IA、对象模型和评分 / 复盘 / 导出 / DoD 文档。 |
 | DD-023 | 模拟面试模块默认入口为历史模拟记录列表 | confirmed | 发起模拟面试从记录列表进入，面试完成后回写历史记录 / 复盘。 | M02、M06、M08 | W13-C 补记录列表查询、权限过滤、状态机和归档 / 删除边界。 |
@@ -39,8 +39,8 @@
 | DD-027 | 一期支持整份和单题归档到资产库 | confirmed | 归档时选择资产类型；类型带 schema 时动态渲染字段表单；资产库采用归档动作 + 最小资产列表 / 详情 + schema 子集动态字段。 | M05、M08、M10 | 唯一事实源见对象模型文档。 |
 | DD-028 | 薄弱项与训练抽屉进入一期训练闭环设计 | confirmed | `WeaknessItem` 是可训练、可累计、可消减、可停练的中粒度训练主题；薄弱项按岗位聚合、按主题归并、保留所有证据；状态包括 `active / low_priority / dismissed / resolved`；训练抽屉是统一训练入口。 | M04、M06、M07、M08、M09 | 唯一事实源见对象模型文档与评分 / 复盘 / 导出 / DoD 文档。 |
 | DD-029 | 多轮面试按打磨模式与压力面模式拆分，不采用固定 3 轮作为总规则 | confirmed | 此前 W13-C “多轮范围 = A：固定 3 轮”的推荐不再作为 confirmed 或默认总规则。 | M06、M07、M08、M09、W13-C、W13-D | 固定 3 轮最多只作为压力面题组策略候选。 |
-| DD-030 | W13-D 评分、复盘、导出与 MVP DoD 已由用户 confirmed 为当前事实源，但不放行实现 | confirmed | `FC-07`、`FC-08`、`FC-11`、`FC-12`、`FC-13`、`FC-14` 已确认评分维度、总分关系、真实面试复盘、Markdown 导出、训练闭环、资产库最小范围与五层 DoD。 | 全局、M03、M05、M06、M07、M08、M09、M10、W13-F | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` 是评分 / 复盘 / 导出 / DoD 唯一事实源；该确认不代表可以创建业务代码目录或 implementation packet。 |
-| DD-031 | W13 `FC-01~FC-19` confirmed 结果已成为当前 OQ / DD 清理基准 | confirmed | `OPEN_QUESTIONS.md` 已将 W13 产品事实回压为 `confirmed / historical`；W13-E 新增的 `OQ-090~OQ-092` 仅处理任务治理确认，不改变四份 W13 计划文档作为范围、IA、对象模型和评分复盘导出的唯一事实源。 | 全局、W13-B、W13-C、W13-D、W13-F、W13-E | W13-F 已完成阶段写回；W13-E 增量如需沉淀由后续收口窗口负责 Basic Memory / Superpowers 写回，不得重新打开已 confirmed 的产品范围 OQ。 |
+| DD-030 | W13-D 评分、复盘、导出与 MVP DoD 已由用户 confirmed 为当前事实源，但不放行实现 | confirmed | `FC-07`、`FC-08`、`FC-11`、`FC-12`、`FC-13`、`FC-14` 已确认评分维度、总分关系、真实面试复盘、Markdown 导出、训练闭环、资产库最小范围与五层 DoD。 | 全局、M03、M05、M06、M07、M08、M09、M10、W13-F | `docs/design/workbench-mvp/scoring-review-export-dod.md` 是评分 / 复盘 / 导出 / DoD 唯一事实源；该确认不代表可以创建业务代码目录或 implementation packet。 |
+| DD-031 | W13 `FC-01~FC-19` confirmed 结果已成为当前 OQ / DD 清理基准 | confirmed | `OPEN_QUESTIONS.md` 已将 W13 产品事实回压为 `confirmed / historical`；W13-E 新增的 `OQ-090~OQ-092` 仅处理任务治理确认，不改变 `docs/design/workbench-mvp/` 作为范围、IA、对象模型和评分复盘导出的当前事实源。 | 全局、W13-B、W13-C、W13-D、W13-F、W13-E | W13-F 已完成阶段写回；W13-E 增量如需沉淀由后续收口窗口负责 Basic Memory / Superpowers 写回，不得重新打开已 confirmed 的产品范围 OQ。 |
 | DD-032 | W13-E Task Remap 只形成候选任务治理草案，不放行实现 | confirmed | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` 已将 W13 工作台级 MVP 映射为候选任务树、确认卡、模块映射和状态层后续改造方案；W13-E 本身不修改 `DOC_STATE.yaml`，不生成 implementation packet，不创建业务代码目录。 | 全局、M01-M10、W13-E | 已由 `DD-033` 吸收用户对 W13-E 推荐组合的确认；Preview YAML 确认结果见 `DD-034`，正式状态层写入仍需后续 State Write 确认。 |
 | 状态层 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` |
 | DD-033 | W13-E2 吸收 W13-E 用户确认组合并完成状态层 dry-run，不放行实现 | confirmed | 用户已确认 `WT13-xx` 作为候选任务域命名、旧 `STxx_*` 后续映射为 `superseded`、暂不直接写 `DOC_STATE.yaml` 而先做 W13-E2 dry-run。W13-E2 结论是当前 `doc_governor` 状态层不直接接受 `WT13-xx` 作为 `subtasks` key，因此下一步推荐先创建 preview YAML。 | 全局、状态层、TASK_INDEX、MODULE_INDEX、W13-E2 | Preview YAML 已由 `DD-034` 确认；正式 `DOC_STATE.yaml` 写入、旧 ST 迁移或实现开窗仍不得写成 confirmed。 |
@@ -62,15 +62,16 @@
 | DD-049 | W13-E13.6 创建 facts-only Candidate Preview，但不执行正式 State Update | confirmed | 用户已确认 `OQ-122=A`、`OQ-123=A`：下一轮 Candidate Preview 采用 facts-only 方案，并继续禁止 W13-E14 直到新 Preview 全绿。W13-E13.6 已创建 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`，仅在 `ST13_24 / ST13_25.facts` 写入 `formal_window_candidate_recommended=true` 等推荐事实，不写 `candidate_status=candidate`，不写 `readiness=downstream_ready`。 | W13-E13.6、OPEN_QUESTIONS、facts-only candidate preview、State Update plan | 正式 `DOC_STATE.yaml` 未修改；Preview `validate-state / evaluate-state` 为 `ok=true,error=0,warning=0`，但完整 Preview `documents_blocked_count=1`；进入 W13-E14 需先处理或确认该 path-scan blocker，并由 `OQ-124` 单独确认。 |
 | DD-050 | W13-E13.8 使用 docs/governance/previews 路径 Preview 后执行 facts-only 正式 State Update | confirmed | 用户已确认 `OQ-124` 方案 A：把 facts-only Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，再把相同 facts-only candidate 推荐字段正式写入 `DOC_STATE.yaml`。W13-E13.8 已新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，Preview 与正式状态写入后均 `validate-state / evaluate-state` 全绿且 `documents_blocked_count=0`。 | W13-E13.8、OPEN_QUESTIONS、DOC_STATE.yaml、facts-only candidate preview、State Update plan | 正式写入只覆盖 `ST13_24 / ST13_25.facts.formal_window_candidate_*`；不得误读为 `candidate_status=candidate`、`readiness=downstream_ready`、formal window open、implementation-ready 或 implementation packet 可生成。`ST13_21 / ST13_20` 仍只保留文档层 near-ready。 |
 | DD-051 | W13-E14-Merge 合并 formal window 前置补齐结果但不打开 formal window | confirmed | W13-E14-Merge 已合并并复核 W13-E14-A/B/C/D 四个并行窗口结果：`ST13_24 / ST13_25` 的 formal window 前置材料进一步补齐，`ST13_21 / ST13_20` 的 near-ready blocker、contract readiness 和 candidate 升级条件进一步明确；最终 diff 仅包含授权的 8 个双文档与总控同步文档。 | W13-E14-Merge、TASK_INDEX、MODULE_INDEX、DOCUMENT_PROGRESS、DOCUMENT_MATURITY、PLAN_LATEST | 该决策只确认文档层前置补齐合并可接受；不得写成 formal window open，不得写成 implementation packet 可生成，不得写成 implementation-ready，`DOC_STATE.yaml` 未在本窗口修改。 |
+| DD-052 | Workbench MVP Design Canon 已迁移到正式设计目录 | confirmed | `docs/design/workbench-mvp/` 是当前 Workbench MVP current design fact source；四份原 W13 plans 仅作为桥接文档和迁移来源，不再承载 current 设计正文。 | 全局、M01-M10、ST13、索引与任务治理 | 当前不修改 `DOC_STATE.yaml`，不打开 formal window，不生成 packet，不进入实现。 |
 
 ## 3. 当前唯一事实源索引
 
 | 内容类别 | 唯一事实源 |
 | --- | --- |
-| 一期 MVP 范围 | `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
-| IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
-| 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 一期 MVP 范围 | `docs/design/workbench-mvp/scope.md` |
+| IA / 用户旅程 | `docs/design/workbench-mvp/information-architecture.md` |
+| 对象模型 / RAG / 多轮 / 后端边界 | `docs/design/workbench-mvp/object-model-rag-multiround-backend.md` |
+| 评分 / 复盘 / 导出 / DoD | `docs/design/workbench-mvp/scoring-review-export-dod.md` |
 | 任务重映射与状态层 dry-run | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` |
 | State Write 分阶段计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md` |
 | State Write 阶段 1 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md` |

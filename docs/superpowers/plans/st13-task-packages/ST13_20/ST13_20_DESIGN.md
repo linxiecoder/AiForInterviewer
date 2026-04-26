@@ -23,12 +23,12 @@
 - 横向关联：M01-M10
 - 关键 blocker：M02 权限边界仍需后续模块同步；数据 contract 可以创建文档，但不能进入实现。
 
-## 4. 关联 W13 事实源
+## 4. 关联正式设计事实源
 
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md`
+- `docs/design/workbench-mvp/scope.md`
+- `docs/design/workbench-mvp/information-architecture.md`
+- `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`
+- `docs/design/workbench-mvp/scoring-review-export-dod.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`
 - `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
@@ -54,7 +54,7 @@
 
 ## 8. 输入
 
-- W13 四份事实源。
+- `docs/design/workbench-mvp/` 正式设计事实源。
 - `ST13_21` API / 后端服务边界设计。
 - W13-E5 readiness audit 和 W13-E6 / E7 任务包文档。
 - 当前状态层中 `ST13_20` 的 blocked 事实；W13-E8.5 已登记 `facts.design_doc` / `facts.implementation_doc`，但 `implementation_doc_state` 仍为 `missing`，`readiness` 仍为 `blocked`。

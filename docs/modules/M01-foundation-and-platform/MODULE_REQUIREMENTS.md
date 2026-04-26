@@ -1,5 +1,13 @@
 # M01 基础平台与工作台壳层 - 模块需求
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`README.md`、`scope.md`、`information-architecture.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：工作台壳层、运行时边界、i18n、测试与文档治理基线。
+- 后续补齐项：复核当前仓库与未来 monorepo 边界，保持不创建业务代码目录。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把原始需求和原始实施计划中与“基础平台与工作台壳层”相关的内容提炼成模块级需求。
@@ -8,7 +16,7 @@
 
 ## 2. 上游输入
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求与计划引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：4 推荐技术方案

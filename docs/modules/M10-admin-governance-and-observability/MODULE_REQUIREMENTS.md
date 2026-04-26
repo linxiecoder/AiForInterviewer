@@ -1,5 +1,13 @@
 # M10 管理台、治理与可观测性 - 模块需求
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`README.md`、`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：管理员入口、公共知识库、LLM provider、日志、审计、配置、测试与治理收口。
+- 后续补齐项：补齐最小运维 / 观测边界，完整管理台和 Basic Memory 写回继续后置。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把原始需求和原始实施计划中与“管理台、治理与可观测性”相关的内容提炼成模块级需求。
@@ -8,7 +16,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：5.4 日志与可观测性组件
@@ -70,7 +78,7 @@
 - OQ-007 已由 W13 `FC-12` confirmed 覆盖：上传同步入库，转换和导出异步。
 - OQ-017 已由 W13 `FC-18` confirmed 覆盖：模型采用本地 catalog / seed。
 - OQ-018 已由 W13 `FC-18` confirmed 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口。
-- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 W13 唯一事实源文档为准，不再作为当前阻塞。
+- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 正式设计事实源文档为准，不再作为当前阻塞。
 
 ## 11. 关联文档
 

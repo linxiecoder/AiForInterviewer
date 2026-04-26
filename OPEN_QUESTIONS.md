@@ -38,10 +38,10 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 
 | 内容类别 | 唯一事实源 |
 | --- | --- |
-| 一期 MVP 范围 | `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
-| IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
-| 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 一期 MVP 范围 | `docs/design/workbench-mvp/scope.md` |
+| IA / 用户旅程 | `docs/design/workbench-mvp/information-architecture.md` |
+| 对象模型 / RAG / 多轮 / 后端边界 | `docs/design/workbench-mvp/object-model-rag-multiround-backend.md` |
+| 评分 / 复盘 / 导出 / DoD | `docs/design/workbench-mvp/scoring-review-export-dod.md` |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 状态层 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` |
 | State Write 分阶段计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md` |
@@ -85,7 +85,7 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | `FC-16` 正式开窗层、历史容器与观察面 | `OQ-024` 与 M01/M02/M03 相关 MQ | confirmed | 历史容器禁止直开；观察蓝本仅观察；正式开窗层仍为空；只有总控后续写入正式子任务 ID 才能开窗。 |
 | `FC-17` 匹配分析、评估版本化与主题推荐 | `OQ-008`、`OQ-013`、`OQ-014` | confirmed | 匹配分析与评估采用规则版本化 + 共享核心评估框架 + 规则推荐优先。 |
 | `FC-18` 管理台、snapshot、模型 catalog 与运维占位 | `OQ-011`、`OQ-017`、`OQ-018`、`OQ-023`、`OQ-042` | confirmed | Snapshot 只导入不抓取；管理台负责导入与运维入口；模型采用本地 catalog / seed；完整成员管理由治理模块承接；后续能力低干扰占位。 |
-| `FC-19` 历史 W10 proposed-default 清理策略 | `OQ-002`、`OQ-003` 与 W10 历史段落 | historical | 历史 W10 `proposed-default` 保留为历史 / 辅助输入，并已在本轮降级或吸收到 W13 唯一事实源。 |
+| `FC-19` 历史 W10 proposed-default 清理策略 | `OQ-002`、`OQ-003` 与 W10 历史段落 | historical | 历史 W10 `proposed-default` 保留为历史 / 辅助输入，并已在本轮降级或吸收到 Workbench MVP 正式设计事实源。 |
 
 ## 5. 已标记为 historical / superseded 的内容
 

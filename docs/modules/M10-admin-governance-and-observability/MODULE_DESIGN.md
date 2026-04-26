@@ -1,5 +1,13 @@
 # M10 管理台、治理与可观测性 - 模块设计
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`README.md`、`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：管理员入口、公共知识库、LLM provider、日志、审计、配置、测试与治理收口。
+- 后续补齐项：补齐最小运维 / 观测边界，完整管理台和 Basic Memory 写回继续后置。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把模块需求转为模块级结构设计。

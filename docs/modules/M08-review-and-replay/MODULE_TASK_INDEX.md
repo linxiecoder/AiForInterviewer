@@ -1,5 +1,13 @@
 # M08 复盘与回放 - 模块任务索引
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`information-architecture.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：模拟复盘、真实面试复盘、逐题拆解、导出和归档入口。
+- 后续补齐项：按真实 / 模拟复盘、低置信度校对、Markdown 导出和证据展示补齐模块设计。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 模块任务总表
 
 | Subtask ID | 子任务名称 | 状态 | 文档成熟度 | 关联问题 / W13 事实源 | 目录 | 是否具备实施条件 |

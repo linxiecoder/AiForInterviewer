@@ -120,7 +120,7 @@
 - `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 已作为旧 P1 设计稿历史快照保留；原 `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 仅保留跳转说明，`DOC_STATE.yaml` 当前 `documents` 受管集合不再登记 `DOC-SPEC-P1`。
 - 旧设计稿和旧实现计划只作为历史产品蓝图 / 历史实施蓝图追溯材料；当前 W13 一期工作台 MVP 事实以 `2026-04-25-workbench-mvp-scope.md`、`2026-04-25-workbench-mvp-ia-user-journey.md`、`2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`、`2026-04-25-workbench-mvp-scoring-review-export-dod.md` 为准。
 - 旧设计稿中的 `PDF -> MD`、PDF 导出链、管理员与成员角色、打磨模式 / 模拟模式全量能力、复盘、资产库、训练中心、管理台与完整评分体系，不得直接回写成“W10 本轮已落地事实”；若与 W13 confirmed 结论冲突，以 W13 confirmed 结论为准。
-- 若后续确需创建新的业务代码目录或扩大 `apps/web/**` 范围，必须基于 W13 唯一事实源重新生成正式实施计划或状态回写，不得由 W10 首切片原型结果直接前推。
+- 若后续确需创建新的业务代码目录或扩大 `apps/web/**` 范围，必须基于 Workbench MVP 正式设计事实源重新生成正式实施计划或状态回写，不得由 W10 首切片原型结果直接前推。
 
 #### 6.2.7 W10-D-Gate 已确认边界
 
@@ -200,4 +200,4 @@ rg -n "1B2C3C4C5C6C7B8A9B|工作台级|一期 MVP|服务端历史|真实 LLM|登
 
 - `DOC-PLAN-P1` 的历史正文已迁移到 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`，仅作为历史实施蓝图追溯材料。
 - 本文档负责描述当前仓库现实下的执行计划与下一阶段入口。
-- 若未来正式决定创建新的业务目录结构，应由后续总控窗口基于 W13 唯一事实源与当前仓库状态共同生成新的正式实施计划或状态回写，而不是把旧蓝图直接继续当作当前仓库真相。
+- 若未来正式决定创建新的业务目录结构，应由后续总控窗口基于 Workbench MVP 正式设计事实源与当前仓库状态共同生成新的正式实施计划或状态回写，而不是把旧蓝图直接继续当作当前仓库真相。

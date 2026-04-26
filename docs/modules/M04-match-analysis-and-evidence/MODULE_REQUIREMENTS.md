@@ -1,5 +1,13 @@
 # M04 匹配分析与训练证据 - 模块需求
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：岗位-简历绑定、匹配分析、评分证据、规则版本和训练信号输入。
+- 后续补齐项：补齐评分证据、规则版本、WeaknessItem 输入和异常路径。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把原始需求和原始实施计划中与“匹配分析与训练证据”相关的内容提炼成模块级需求。
@@ -8,7 +16,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.3 岗位-简历分析
@@ -58,7 +66,7 @@
 
 ## 10. 待确认问题
 - 当前无模块级 open 问题。
-- historical：旧 `OQ-008` 已由 W13 唯一事实源和 `FC-17` / `DD-009` 覆盖；当前口径为匹配分析与评估采用规则版本化 + 共享核心评估框架 + 规则推荐优先。
+- historical：旧 `OQ-008` 已由 Workbench MVP 正式设计事实源和 `FC-17` / `DD-009` 覆盖；当前口径为匹配分析与评估采用规则版本化 + 共享核心评估框架 + 规则推荐优先。
 
 ## 11. 关联文档
 

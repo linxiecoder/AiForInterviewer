@@ -60,7 +60,7 @@
 
 | ID | 标题 | 类别 | 状态 | 优先级 | 来源 | 负责人或处理窗口 | 阻断关系 | 目标解决窗口 | 最近更新时间 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BR-REMAP-001 | `WT13-01~WT13-25` 与模块映射复核 | Task Remap 后续事项 | in_review | P0 | task-remap | W13-E2 | 依赖四份 W13 唯一事实源 | W13-E2 | 2026-04-25 | 当前只作为候选任务域映射，不是正式开窗任务。 |
+| BR-REMAP-001 | `WT13-01~WT13-25` 与模块映射复核 | Task Remap 后续事项 | in_review | P0 | task-remap | W13-E2 | 依赖 `docs/design/workbench-mvp/` 正式设计事实源 | W13-E2 | 2026-04-25 | 当前只作为候选任务域映射，不是正式开窗任务。 |
 | BR-REMAP-002 | `TASK_INDEX.md` 后续正式化 | Task Remap 后续事项 | open | P0 | W13-E2 | W13-E3+ | 依赖状态层方案确认 | W13-E3+ | 2026-04-25 | 后续需补允许修改范围、验证命令、DoD 和开窗资格。 |
 | BR-REMAP-003 | `MODULE_INDEX.md` 后续正式化 | Task Remap 后续事项 | open | P1 | W13-E2 | 模块同步窗口 | 依赖 W13 新任务结构 | W13-E3+ | 2026-04-25 | 不得误激活旧 `STxx_*` 或模块 L5 候选。 |
 | BR-REMAP-004 | 任务开窗顺序确认 | Task Remap 后续事项 | open | P1 | task-remap | 总控窗口 | 依赖状态层与 contract 任务确认 | W13-E3+ | 2026-04-25 | 当前仍停留在设计 / contract 前置阶段。 |

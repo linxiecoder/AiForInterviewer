@@ -49,7 +49,7 @@ W13-E8.5 更新：已按 `OQ-113=B` 在单独 State Update 窗口中把第一批
 | 缺允许修改范围 | 需区分文档准备、contract 细化、未来实现范围 | 同左，并明确不得建库或写 migration | 同左，并明确不得新增测试代码 | 同左，并明确不得写 `DOC_STATE.yaml` 或 Basic Memory |
 | 缺禁止修改范围 | 需列出 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**` 等 | 同左 | 同左 | 同左，并额外禁止 Git 写操作和状态层写回 |
 | 缺 formal window 条件 | 需双文档、验收、required tests、用户确认、required doc slot | 需 `ST13_21` contract 稳定后再评估 | 需 API / 数据 contract 稳定后再评估 | 需前三个任务包状态和治理卡确认后再评估 |
-| 是否依赖其他 ST13 | 作为第一前置，依赖 W13 四份事实源和 W13-E6 草案 | 依赖 `ST13_21` API domain 边界 | 依赖 `ST13_21` 与 `ST13_20` | 依赖 `ST13_21 / ST13_20 / ST13_24` 的治理输入 |
+| 是否依赖其他 ST13 | 作为第一前置，依赖 `docs/design/workbench-mvp/` 正式设计事实源和 W13-E6 草案 | 依赖 `ST13_21` API domain 边界 | 依赖 `ST13_21` 与 `ST13_20` | 依赖 `ST13_21 / ST13_20 / ST13_24` 的治理输入 |
 | 是否可并行准备 | 可与路径 / 模板审计并行，但应先完成 API 摘要 | 可在 API domain 初稿后并行补数据草案 | 可在 API / 数据草案存在后并行 | 可与前三项同步准备治理框架 |
 | 是否可进入正式双文档准备 | 是，但仅限 W13-E8 在用户确认路径后创建文档 | 是，但仅限 W13-E8 在用户确认路径后创建文档 | 是，但仅限 W13-E8 在用户确认路径后创建文档 | 是，但仅限 W13-E8 在用户确认路径后创建文档 |
 | 是否可进入实现 | 否 | 否 | 否 | 否 |
@@ -68,7 +68,7 @@ W13-E8.5 更新：已按 `OQ-113=B` 在单独 State Update 窗口中把第一批
 1. 文档状态：作者写作态、非 official state、自身不能声明 implementation-ready。
 2. 关联 ST13 / WT13：`ST13_XX`、`WT13-XX`、任务名称。
 3. 关联模块：主模块、相关模块、上游模块 blocker。
-4. 关联 W13 事实源：四份 W13 事实源、W13-E5 audit、W13-E6 task package。
+4. 关联 W13 事实源：`docs/design/workbench-mvp/` 正式设计事实源、W13-E5 audit、W13-E6 task package。
 5. 背景：为什么该任务需要先做 contract / 测试 / 治理准备。
 6. 目标：当前双文档设计要解决的问题。
 7. 非目标：不实现、不创建代码目录、不写 `DOC_STATE.yaml`。
@@ -171,7 +171,7 @@ W13-E8 确认结果：`OQ-111=A`，采用集中任务包目录。正式路径为
 ### 7.1 `ST13_21 / WT13-21`：API / 后端服务边界
 
 - 任务目标：形成一期工作台 MVP API contract，覆盖 Auth、User、Role、Job、Resume、Knowledge、Interview、QuestionSet、ProgressTree、Score、Review、Weakness、Training、Asset、Export、Ops。
-- 输入文档：四份 W13 事实源、W13-E5 readiness audit、W13-E6 第一批任务包草案、`DOC_STATE.yaml` 当前状态摘录。
+- 输入文档：`docs/design/workbench-mvp/` 正式设计事实源、W13-E5 readiness audit、W13-E6 第一批任务包草案、`DOC_STATE.yaml` 当前状态摘录。
 - 输出物：API domain list、endpoint / command / query 边界、DTO 草案、权限上下文、错误码、幂等、异步任务状态、版本策略。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 与 `ST13_21_IMPLEMENTATION.md`。
 - 关联 contract：API / domain / state / validation / documentation / testing contract。
@@ -192,7 +192,7 @@ W13-E8 确认结果：`OQ-111=A`，采用集中任务包目录。正式路径为
 ### 7.2 `ST13_20 / WT13-20`：服务端保存 / 数据库
 
 - 任务目标：形成 PostgreSQL 数据模型与服务端保存 contract，覆盖用户、岗位、简历、知识库资产、模拟记录、轮次、题目、回答、评分、复盘、薄弱项、训练动作、资产归档、导出记录。
-- 输入文档：四份 W13 事实源、`ST13_21` API contract 摘要、W13-E5 audit、W13-E6 草案。
+- 输入文档：`docs/design/workbench-mvp/` 正式设计事实源、`ST13_21` API contract 摘要、W13-E5 audit、W13-E6 草案。
 - 输出物：数据域清单、核心实体关系、关键字段、索引、唯一约束、审计字段、migration 策略和回退策略草案。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` 与 `ST13_20_IMPLEMENTATION.md`。
 - 关联 contract：domain / schema / migration / repository / privacy / testing contract。
@@ -213,7 +213,7 @@ W13-E8 确认结果：`OQ-111=A`，采用集中任务包目录。正式路径为
 ### 7.3 `ST13_24 / WT13-24`：测试 / 验收 / DoD
 
 - 任务目标：形成一期工作台 MVP required tests、验收标准和五层 DoD 草案。
-- 输入文档：四份 W13 事实源、`ST13_21` API contract 摘要、`ST13_20` 数据 contract 摘要、`docs/governance/TEST_POLICY.md`、W13-E5 audit。
+- 输入文档：`docs/design/workbench-mvp/` 正式设计事实源、`ST13_21` API contract 摘要、`ST13_20` 数据 contract 摘要、`docs/governance/TEST_POLICY.md`、W13-E5 audit。
 - 输出物：ST13 required tests matrix、文档 / contract / 功能 / 体验 / 安全运维五层 DoD、P0/P1/P2/P3 验收分级、formal window 前检查清单。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` 与 `ST13_24_IMPLEMENTATION.md`。
 - 关联 contract：testing / acceptance / DoD / validation / temporary artifact governance contract。
@@ -260,7 +260,7 @@ W13-E8 确认结果：`OQ-111=A`，采用集中任务包目录。正式路径为
 - 所属模块：主模块 M01；横向关联 M01-M10，M02 权限模块是关键 blocker。
 - contract 类型：API、domain、state、validation、testing、documentation。
 - 关联对象：`User`、`Role`、`Job`、`Resume`、`KnowledgeAsset`、`InterviewSession`、`InterviewQuestionSet`、`ProgressTree`、`ScoreReport`、`ReviewReport`、`WeaknessItem`、`TrainingAction`、`ExportRecord`、`OperationLog`。
-- 上游依赖：W13 四份事实源、W13-E5 readiness audit、W13-E6 草案、`OQ-101~OQ-110` confirmed 边界。
+- 上游依赖：`docs/design/workbench-mvp/` 正式设计事实源、W13-E5 readiness audit、W13-E6 草案、`OQ-101~OQ-110` confirmed 边界。
 - 下游依赖：`ST13_20`、`ST13_23`、`ST13_24` 和后续业务 ST13。
 - 需要的 API / domain / state / validation contract：endpoint 分层、request / response DTO、权限上下文、分页过滤排序、错误码、幂等、异步任务状态、版本策略。
 - 需要的测试 contract：contract schema validation、权限矩阵、错误 taxonomy、幂等状态流转、异步任务状态。

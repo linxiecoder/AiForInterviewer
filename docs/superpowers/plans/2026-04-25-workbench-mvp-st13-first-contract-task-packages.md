@@ -99,10 +99,10 @@
 
 ### 5.3 输入文档
 
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md`
+- `docs/design/workbench-mvp/scope.md`
+- `docs/design/workbench-mvp/information-architecture.md`
+- `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`
+- `docs/design/workbench-mvp/scoring-review-export-dod.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`
 - M01-M10 的模块 API / schema / task index 文档，作为参考输入。
 
@@ -138,7 +138,7 @@
 
 ### 5.7 依赖关系
 
-- 前置依赖：W13 四份事实源、W13-E5 readiness audit、用户确认 `OQ-101~OQ-110`。
+- 前置依赖：`docs/design/workbench-mvp/` 正式设计事实源、W13-E5 readiness audit、用户确认 `OQ-101~OQ-110`。
 - 后置依赖：`ST13_20` 数据库 schema、`ST13_23` 页面规格、`ST13_24` 测试矩阵、`ST13_01` 权限 contract。
 - blocked_by：`module:M02` 仍需后续模块同步；不阻断 contract 草案，但阻断 implementation-ready。
 
@@ -168,7 +168,7 @@
 - UI 边界：为 `ST13_23` 提供页面调用约束，不做页面规格。
 - 安全 / 隐私：必须包含 session、用户可见范围、管理员公共知识库、私有资产隔离。
 - 日志 / 观测：必须定义 request_id、task_id、provider、latency、error_code、cost token 等候选字段。
-- 回退策略：contract 草案可回退到 W13 四份事实源与 W13-E5 audit，不影响正式状态层。
+- 回退策略：contract 草案可回退到 `docs/design/workbench-mvp/` 正式设计事实源与 W13-E5 audit，不影响正式状态层。
 - Basic Memory / Superpowers：任务包正式确认后再写入会话总结；本草案只记录写回要求。
 
 ## 6. ST13_20 任务包草案：服务端保存 / 数据库
@@ -191,7 +191,7 @@
 
 ### 6.3 输入文档
 
-- W13 四份事实源。
+- `docs/design/workbench-mvp/` 正式设计事实源。
 - `ST13_21` API contract 草案。
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`
 - M01-M10 的模块 schema 文档，作为历史参考。
@@ -277,7 +277,7 @@
 
 ### 7.3 输入文档
 
-- W13 四份事实源。
+- `docs/design/workbench-mvp/` 正式设计事实源。
 - `ST13_21` API contract 草案。
 - `ST13_20` 数据库 contract 草案。
 - `docs/governance/TEST_POLICY.md`

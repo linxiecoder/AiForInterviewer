@@ -25,6 +25,49 @@
 
 ## 3. 当前记录
 
+### 2026-04-27 / W13-DesignCanon-Step2 / 正式设计事实源迁移窗口
+
+- 执行类型：正式设计事实源迁移、桥接降级、索引同步、模块承接摘要、引用清理和验证；不写代码，不写 Basic Memory，不提交。
+- 范围：
+  - 新增 `docs/design/workbench-mvp/README.md`、`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+  - 将四份原 W13 facts source 降级为短桥接文档：`workbench-mvp-scope.md`、`workbench-mvp-ia-user-journey.md`、`workbench-mvp-object-model-rag-multiround-backend.md`、`workbench-mvp-scoring-review-export-dod.md`。
+  - 同步根入口、事实源索引、ST13 任务治理文档和 M01-M10 模块承接摘要。
+  - 不修改 `docs/governance/DOC_STATE.yaml`、`docs/governance/DOC_STATE.bootstrap.yaml`、`tools/**`、`tests/**`、`apps/**`、`infra/**`、`archive/**`。
+- 废弃文档处理表：
+
+| old path | new canonical path | action | reason | current fact source? | historical references allowed? | reference sites modified | notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` | `docs/design/workbench-mvp/scope.md` | bridge | 迁移一期 MVP 范围正文 | 否 | 是 | current 引用已改新路径；历史记录保留 | 旧路径只作桥接和迁移来源 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` | `docs/design/workbench-mvp/information-architecture.md` | bridge | 迁移 IA / 用户旅程正文 | 否 | 是 | current 引用已改新路径；历史记录保留 | 旧路径只作桥接和迁移来源 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` | `docs/design/workbench-mvp/object-model-rag-multiround-backend.md` | bridge | 迁移对象模型 / RAG / 多轮 / 后端边界正文 | 否 | 是 | current 引用已改新路径；历史记录保留 | 旧路径只作桥接和迁移来源 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` | `docs/design/workbench-mvp/scoring-review-export-dod.md` | bridge | 迁移评分 / 复盘 / 导出 / DoD 正文 | 否 | 是 | current 引用已改新路径；历史记录保留 | 旧路径只作桥接和迁移来源 |
+
+- 当前结论：
+  - `docs/design/workbench-mvp/` 是唯一 current design fact source。
+  - 旧 W13 plans 不再承载 current 设计正文。
+  - 历史执行记录、迁移来源和桥接文档本体中的旧路径保留为 historical / bridge / migration-source。
+  - 本轮未进入 formal window、packet 或实现。
+
+### 2026-04-27 / W13-DesignCanon-Plan / 正式设计文档归位与模块承接计划窗口
+
+- 执行类型：计划冻结、依赖分析、迁移方案、模块承接方案、引用替换规则、验证方案、回退方案和步骤 2 输入包；不执行正式迁移。
+- 范围：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-design-canon-plan.md`。
+  - 最小同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md` 和本文件。
+  - 不创建 `docs/design/workbench-mvp/`，不降级四份原 W13 plans，不修改 `docs/modules/**`，不修改 `docs/governance/DOC_STATE.yaml`，不写 Basic Memory，不执行 Git 提交或推送。
+- 基线验证：
+  - `git status --short` 为空；当前分支为 `main`；`origin/main...HEAD = 0 0`。
+  - `validate-state`：`ok=true,error=0,warning=0`。
+  - `evaluate-state`：`ok=true,error=0,warning=0,documents_blocked_count=0`。
+- 计划冻结结果：
+  - 正式设计目录冻结为 `docs/design/workbench-mvp/`，包含 `README.md`、`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+  - 四份原 W13 plans 后续降级为短桥接文档，只保留 W13 设计推进历史、迁移来源和执行过程证据。
+  - M01-M10 模块承接以实际仓库路径为准；本轮已记录用户给定路径与实际路径不一致的 M04、M07、M09、M10 风险。
+  - 步骤 2 必须完成引用替换、双事实源风险消除、validate/evaluate、禁止范围检查和回退方案验证。
+- 当前结论：
+  - 本计划可以作为步骤 2 实现窗口输入。
+  - 进入步骤 2 前仍需用户确认；确认前不得执行迁移、创建正式设计目录、修改模块正文、修改状态层或提交。
+
 ### 2026-04-27 / W13-E15 / formal window open 前置确认窗口
 
 - 执行类型：formal window open 前置确认、候选范围判断、风险复核、状态写入方案设计和用户确认卡输出；不写正式状态层，不写代码。

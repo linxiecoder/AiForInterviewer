@@ -1,5 +1,13 @@
 # M09 训练中心与薄弱项生命周期 - 模块需求
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：WeaknessItem、训练抽屉、证据聚合、消减、停练和训练生命周期。
+- 后续补齐项：区分薄弱项中心与待打磨执行层，补齐训练状态和回写边界。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把原始需求和原始实施计划中与“训练中心与薄弱项生命周期”相关的内容提炼成模块级需求。
@@ -8,7 +16,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
 - docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：10 薄弱项体系
@@ -63,7 +71,7 @@
 - 当前无模块内 open 问题。
 - OQ-014 已由 W13 `FC-17` confirmed 覆盖：模拟面试、打磨模式和复盘共享核心评估框架，具体模式差异按评分 / 复盘 / 导出 / DoD 事实源承接。
 - OQ-016 已由 W13 `FC-13` confirmed 覆盖：`WeaknessItem` 是可训练、可累计、可消减、可停练的中粒度训练主题；状态包括 `active / low_priority / dismissed / resolved`，消减建议由用户确认后生效。
-- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 W13 唯一事实源文档为准，不再作为当前阻塞。
+- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 正式设计事实源文档为准，不再作为当前阻塞。
 
 ## 11. 关联文档
 

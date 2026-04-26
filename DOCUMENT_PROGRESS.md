@@ -4,14 +4,17 @@
 
 - 本文档用于记录当前文档治理进展摘要和历史归档入口。
 - 本文档不再承载完整产品事实、完整 OQ/MQ 明细、完整确认卡正文或模块放行判断正文。
-- 当前产品事实以 `PLAN_LATEST.md` 和四份 W13 唯一事实源为准。
+- 当前产品事实以 `docs/design/workbench-mvp/`、`PLAN_LATEST.md`、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 - 当前 OQ / MQ 归并状态以 `OPEN_QUESTIONS.md` 为准。
 - 当前 DD 状态以 `DESIGN_DECISIONS.md` 为准。
 - 当前模块成熟度以 `DOCUMENT_MATURITY.md` 的当前摘要为准。
 
 ## 2. 当前阶段摘要
 
-- 当前阶段：`W13-E15 / formal window open 前置确认窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
+- 当前阶段：`W13-DesignCanon-Step2 / 正式设计事实源迁移窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
+- 本轮已创建 `docs/design/workbench-mvp/` 五份正式设计文档，四份原 W13 plans 已降级为短桥接文档，current fact source 已改指正式目录。
+- 当前未修改 `DOC_STATE.yaml`，未打开 formal window，未生成 implementation packet，未进入实现，未写 Basic Memory，未执行 git add / commit / push。
+- 上一阶段：`W13-E15 / formal window open 前置确认窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
 - 当前边界：本轮只复核 `ST13_24 / ST13_25` 是否具备进入 formal window open 后续状态治理动作的确认条件，并输出确认卡；未修改 `DOC_STATE.yaml`，未生成 implementation packet，未打开 formal window，未标记 implementation-ready，未创建 `apps/**` / `infra/**` / `tools/**` / `tests/**`，未进入实现。
 - Preview 与正式写入：`ST13_24 / ST13_25` 已在 docs/governance/previews 路径 Preview 和正式 `DOC_STATE.yaml` 的 `facts` 字段写入 `formal_window_candidate_recommended=true`、来源、review status、document layer state 和禁止 packet/实现说明；正式状态本轮为幂等确认，未写 `candidate_status=candidate` 或 `readiness=downstream_ready`。
 - 验证结论：正式 `DOC_STATE.yaml` 的 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`；`ST13_24 / ST13_25` 的 `preflight-open-window` 均为 `gate_result=blocked`，且 `can_open_formal_window=false`、`can_generate_implementation_packet=false`、`can_mark_implementation_ready=false`。
@@ -35,10 +38,10 @@
 
 | 内容类别 | 唯一事实源 |
 | --- | --- |
-| 一期 MVP 范围 | `docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md` |
-| IA / 用户旅程 | `docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md` |
-| 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
-| 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
+| 一期 MVP 范围 | `docs/design/workbench-mvp/scope.md` |
+| IA / 用户旅程 | `docs/design/workbench-mvp/information-architecture.md` |
+| 对象模型 / RAG / 多轮 / 后端边界 | `docs/design/workbench-mvp/object-model-rag-multiround-backend.md` |
+| 评分 / 复盘 / 导出 / DoD | `docs/design/workbench-mvp/scoring-review-export-dod.md` |
 | 任务重映射草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` |
 | 状态层 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` |
 | State Write 分阶段计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md` |
@@ -55,6 +58,7 @@
 | ST13 candidate State Update Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml` |
 | ST13 candidate 状态表达策略修正 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` |
 | ST13 formal window open 前置确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md` |
+| 正式设计文档归位与模块承接计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-design-canon-plan.md` |
 | ST13 第一批正式双文档 / contract 细化 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 等 8 个双文档 |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
@@ -68,7 +72,7 @@
 - `MODULE_INDEX.md` 已写入 W13 候选任务域到 M01-M10 的映射摘要；M01-M10 已完成第一轮旧 MQ/OQ 标记和子文档补链，但这不等于模块成熟度升级。
 - `DD-005` 与 `DD-007` 仍为 `needs-review`：后端 FastAPI 和导出形态已 confirmed，但完整 Web framework / 渲染链实现细节不能直接进入代码。
 - `M01-M03` 仍不因 FC confirmed 自动升级为 L5 或正式候选。
-- `M04-M10` 仍多为 L1 / 骨架级，需要后续模块窗口按 W13 唯一事实源继续补齐模块级设计。
+- `M04-M10` 仍多为 L1 / 骨架级，需要后续模块窗口按 `docs/design/workbench-mvp/` 继续补齐模块级设计。
 - `docs/modules/**` 中仍存在旧设计稿、旧实现计划路径引用和历史 OQ/MQ/ST/MT 引用；其中历史引用可保留，但不能作为当前事实源。
 - 旧 P1 设计稿已从当前 `documents` 受管集合移出并迁入 archive；旧 `STxx_*` 骨架已从正式 `DOC_STATE.yaml.subtasks` current 容器移出，但仍被索引层和阶段说明文档作为历史引用保留，本轮不迁移 archive。
 - W13-E 的任务 ID 命名、旧 `STxx_*` 后续处理、先做 W13-E2 dry-run、`OQ-093=B` Preview YAML 和 `OQ-094~OQ-100` State Write 口径均已确认；旧 `STxx_*` 的正式 current 容器移出已在阶段 3 完成。
@@ -113,6 +117,7 @@
 - 已完成 W13-E13.8 docs/governance/previews 路径 facts-only Candidate Preview 与正式 State Update：新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，吸收 `OQ-124`；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段，写入后验证仍为 `ok=true,error=0,warning=0,documents_blocked_count=0`。
 - 已完成 W13-E14-Merge formal window 前置补齐合并：8 个双文档均已复核通过，禁止范围 diff 为空，风险扫描未发现非法放行表述；总控文档已同步该合并结论。
 - 已完成 W13-E15 formal window open 前置确认：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md`，输出 `ST13_24 / ST13_25` 前置复核、`ST13_21 / ST13_20` near-ready 保持说明、formal window open 方案、packet / 实现拆窗确认卡和 State Update 执行方案草案；本轮未修改 `DOC_STATE.yaml`。
+- 已完成 W13-DesignCanon-Step2：创建 `docs/design/workbench-mvp/` 五份正式设计文档，四份原 W13 plans 降级为短桥接文档，M01-M10 模块承接摘要和 current fact source 引用已同步；本轮未修改状态层、未进入实现、未提交。
 
 ## 7. 历史归档说明
 
@@ -125,10 +130,11 @@
 
 ## 8. 下一步建议
 
-1. 等待用户确认 `OQ-125~OQ-127`；推荐组合为只让后续单独窗口打开 `ST13_24`，packet 和实现均拆窗。
-2. `ST13_24 / ST13_25` 当前可进入 formal window open 用户确认窗口，但不能直接打开 formal window、生成 packet 或进入实现。
-3. `ST13_21 / ST13_20` 默认保持 near-ready 文档层结论，等待 M02 blocker、OpenAPI / schema / apps / migration / ORM 授权闭合后再评估。
-4. 当前不建议并行执行 open-window；若后续并行，必须由总控先冻结范围，子窗口不得共同修改总控文件或 `DOC_STATE.yaml`。
-5. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
-6. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
-7. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。
+1. 先审阅本次 Design Canon 迁移 diff，确认是否允许后续单独提交。
+2. 等待用户确认 `OQ-125~OQ-127`；推荐组合为只让后续单独窗口打开 `ST13_24`，packet 和实现均拆窗。
+3. `ST13_24 / ST13_25` 当前可进入 formal window open 用户确认窗口，但不能直接打开 formal window、生成 packet 或进入实现。
+4. `ST13_21 / ST13_20` 默认保持 near-ready 文档层结论，等待 M02 blocker、OpenAPI / schema / apps / migration / ORM 授权闭合后再评估。
+5. 当前不建议并行执行 open-window；若后续并行，必须由总控先冻结范围，子窗口不得共同修改总控文件或 `DOC_STATE.yaml`。
+6. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
+7. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
+8. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。

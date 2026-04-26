@@ -6,7 +6,7 @@
 - 本文档是模块级问题清单，不代替根目录 `OPEN_QUESTIONS.md` 的全局问题总表。
 - 当前模块主责 Codex 在推进模块文档时，若发现新的模块级问题，应优先记录在这里。
 - 若问题已明显影响多个模块、多个子任务或共享契约，应进一步上升到根目录 `OPEN_QUESTIONS.md`。
-- W13 后当前事实以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和四份 W13 唯一事实源为准；本文件不再保留模板 MQ 作为当前 open 问题。
+- W13 后当前事实以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 `docs/design/workbench-mvp/` 正式设计事实源为准；本文件不再保留模板 MQ 作为当前 open 问题。
 
 ## 2. 状态定义
 

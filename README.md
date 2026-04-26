@@ -10,6 +10,7 @@
 当前仓库当前承载的核心内容包括：
 
 - 根目录全局文档：项目计划、执行日志、设计决策、开放问题、成熟度与进展等治理入口。
+- `docs/design/workbench-mvp/`：一期工作台 MVP 当前正式设计事实源。
 - `docs/governance/`：文档治理规则、自动化规则、运行手册、测试政策等正式治理文档。
 - `docs/superpowers/`：AI 模拟面试系统的上游产品设计稿与上游实现蓝图。
 - `tools/doc_governor/`：辅助 Codex 做文档治理、任务拆分、状态评估、交接和验证收口的 CLI 工具链。
@@ -31,7 +32,7 @@
 ### 4.2 上游产品蓝图
 
 - `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` 与 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md` 仅作为历史产品蓝图 / 历史实施蓝图追溯材料。
-- 旧设计稿和旧实现计划不得作为当前 W13 一期工作台 MVP 的事实源；当前事实以 `PLAN_LATEST.md`、四份 W13 唯一事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+- 旧设计稿、旧实现计划和旧 W13 plans 不得作为当前一期工作台 MVP 的事实源；当前设计事实以 `docs/design/workbench-mvp/`、`PLAN_LATEST.md`、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 - 其中历史实现计划当前必须视为“上游产品蓝图 / 未来 monorepo 目标”，不能直接当作当前仓库的落地实施计划。
 - 根据 W3 已证实结果，`DOC-PLAN-P1` 当前命中 `document_repo_truth_mismatch`，因此不能继续被主入口表述为“当前仓库可直接执行计划”。
 
@@ -92,12 +93,14 @@ python -m tools.doc_governor.cli render-report --state docs/governance/DOC_STATE
 ## 7. 当前风险与待后续处理事项
 
 - 旧 P1 设计稿和旧 P1 implementation plan 已归档为历史蓝图，不能作为当前仓库直接执行计划或当前 W13 事实源。
+- 旧 W13 plans 已降级为桥接文档，不能作为当前一期工作台 MVP 的 current design fact source。
 - `render.py` / `bootstrap.py` 的生成标题与说明性正文中文化仍需后续窗口处理；W1 本轮只记录，不改工具代码。
 - 基线已有 4 个未跟踪项：`.tmp_dbg_impl_state/`、`artifacts/`、`tmp_readiness_case.yaml`、`tmp_test_state2.yaml`。它们不在 W1 本轮清理范围。
 
 ## 8. 相关入口
 
 - 协作规则入口：`AGENTS.md`
+- Workbench MVP 正式设计事实源：`docs/design/workbench-mvp/`
 - 当前推进计划：`PLAN_LATEST.md`
 - 全局执行日志：`EXECUTION_LOG.md`
 - 人工治理总则：`docs/DOC_GOVERNANCE.md`

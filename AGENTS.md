@@ -187,15 +187,16 @@
 
 ### 2.2 设计
 
+- [AI 模拟面试一期工作台 MVP Design Canon](docs/design/workbench-mvp/README.md)
+- [AI 模拟面试一期工作台 MVP 范围正式设计](docs/design/workbench-mvp/scope.md)
+- [AI 模拟面试一期工作台 MVP 信息架构正式设计](docs/design/workbench-mvp/information-architecture.md)
+- [AI 模拟面试一期工作台 MVP 对象模型、RAG、多轮与后端边界正式设计](docs/design/workbench-mvp/object-model-rag-multiround-backend.md)
+- [AI 模拟面试一期工作台 MVP 评分、复盘、导出与 DoD 正式设计](docs/design/workbench-mvp/scoring-review-export-dod.md)
 - [AI 模拟面试 P1 文本版闭环设计稿历史归档快照](archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md)
 
 ### 2.3 计划
 
 - [AI 模拟面试系统当前仓库执行计划](docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md)
-- [AI 模拟面试一期工作台 MVP 范围冻结草案](docs/superpowers/plans/2026-04-25-workbench-mvp-scope.md)
-- [AI 模拟面试一期工作台 MVP 信息架构与用户旅程](docs/superpowers/plans/2026-04-25-workbench-mvp-ia-user-journey.md)
-- [AI 模拟面试一期工作台 MVP 对象模型、RAG、多轮与后端边界草案](docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)
-- [AI 模拟面试一期工作台 MVP 评分、复盘、导出与 DoD 草案](docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md)
 - [AI 模拟面试一期工作台 MVP 任务重映射草案](docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md)
 - [AI 模拟面试一期工作台 MVP 状态层 Preview YAML](docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml)
 - [AI 模拟面试一期工作台 MVP State Write 分阶段计划](docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md)
@@ -215,6 +216,7 @@
 - [AI 模拟面试一期工作台 MVP ST13 candidate 状态表达策略修正](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md)
 - [AI 模拟面试一期工作台 MVP ST13 facts-only Candidate Preview YAML](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml)（preview 文件，不是正式 `DOC_STATE.yaml`，不作为治理真值）
 - [AI 模拟面试一期工作台 MVP ST13 formal window open 前置确认](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md)
+- [AI 模拟面试一期工作台 MVP 正式设计文档归位与模块承接计划](docs/superpowers/plans/2026-04-25-workbench-mvp-design-canon-plan.md)
 - [AI 模拟面试一期工作台 MVP ST13_21 API / 后端服务边界双文档](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md)
 - [AI 模拟面试一期工作台 MVP ST13_20 服务端保存 / 数据库双文档](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md)
 - [AI 模拟面试一期工作台 MVP ST13_24 测试 / 验收 / DoD 双文档](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md)

@@ -1,5 +1,13 @@
 # M05 资产库、归档与检索 - 模块设计
 
+## 0. Workbench MVP Design Canon 承接
+
+- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 重点引用：`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
+- 模块承接摘要：知识库、RAG、检索引用、资产归档和动态 schema 子集。
+- 后续补齐项：补齐知识库索引、检索失败降级、资产归档和引用证据边界。
+- 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
+
 ## 1. 文档定位
 
 - 本文档用于把模块需求转为模块级结构设计。
