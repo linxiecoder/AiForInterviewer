@@ -14,7 +14,7 @@
 - W13-E10 新增 `OQ-114~OQ-117`：用于确认第一批 ST13 formal window candidate 分级、后续 State Update 节奏、是否需要 W13-E10.5 补文档，以及是否继续禁止实现类动作；用户已在 W13-E11 确认 `OQ-114=A`、`OQ-115=B`、`OQ-116=A`、`OQ-117=A`。
 - W13-E12 新增 `OQ-118~OQ-120`：用于确认是否允许下一窗口为 `ST13_24 / ST13_25` 准备 candidate 状态 preview、`ST13_21 / ST13_20` 是否写入状态层 near-ready，以及后续是否先创建 preview YAML；用户已确认 `OQ-118=B`、`OQ-119=A`、`OQ-120=B`。W13-E13 已创建 preview，但验证发现当前规则不允许在 `formal_window_open=false` 时写入 `candidate_status=candidate`。
 - W13-E13 新增 `OQ-121`：用于确认 Preview 失败后的下一步处理；用户已确认 `OQ-121=A`，即暂不执行正式 State Update，只保留失败 Preview，并先修正后续状态表达策略。
-- W13-E13.8 已吸收 `OQ-124`：用户确认采用方案 A，把 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，已执行 facts-only 正式 State Update。
+- W13-E13.8 已吸收 `OQ-124`：用户确认采用方案 A，把 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，已执行 facts-only 正式 State Update。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -160,7 +160,7 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | `OQ-121` | 是否基于 W13-E13 Preview 执行 W13-E14 正式 State Update？ | confirmed | 方案 A：暂不执行正式 State Update，只保留失败 Preview 并修正后续策略 | 方案 B：执行 W13-E14 正式 State Update；方案 C：执行 State Update 并准备 formal window open；方案 D：用户自定义 | 用户已确认 `OQ-121=A`；W13-E13.5 只修正表达策略，不进入 W13-E14。 |
 | `OQ-122` | W13-E13.5 后是否创建新的 Candidate State Preview？ | confirmed | 方案 A：创建 facts-only Candidate Preview，`ST13_24 / ST13_25` 只用 facts 字段表达 `formal_window_candidate_recommended`，不写 `candidate_status=candidate`，不写 `readiness=downstream_ready` | 方案 B：创建 `candidate_status=observe` Preview；方案 C：创建 maturity + downstream_ready Preview；方案 D：用户自定义 | 用户已确认 `OQ-122=A`；W13-E13.6 已创建 facts-only Preview。 |
 | `OQ-123` | 是否继续禁止 W13-E14 正式 State Update？ | confirmed | 方案 A：继续禁止，直到新的 Preview 全绿 | 方案 B：允许在 facts-only 方案下直接正式写入；方案 C：formal window open 前置确认后再写 `candidate_status=candidate`；方案 D：用户自定义 | 用户已确认 `OQ-123=A`；W13-E13.6 不进入 W13-E14，正式 `DOC_STATE.yaml` 未修改。 |
-| `OQ-124` | 是否基于 W13-E13.6 facts-only Preview 执行后续 facts-only 正式 State Update？ | confirmed | 方案 A：把 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update | 方案 B：继续只保留 Preview；方案 C：继续尝试 `candidate_status=observe` Preview；方案 D：用户自定义 | 用户已确认方案 A；W13-E13.8 已创建 `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过 validate/evaluate，随后仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未打开 formal window，未形成 implementation-ready。 |
+| `OQ-124` | 是否基于 W13-E13.6 facts-only Preview 执行后续 facts-only 正式 State Update？ | confirmed | 方案 A：把 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update | 方案 B：继续只保留 Preview；方案 C：继续尝试 `candidate_status=observe` Preview；方案 D：用户自定义 | 用户已确认方案 A；W13-E13.8 已创建 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过 validate/evaluate，随后仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未打开 formal window，未形成 implementation-ready。 |
 
 ## 7. 使用说明
 

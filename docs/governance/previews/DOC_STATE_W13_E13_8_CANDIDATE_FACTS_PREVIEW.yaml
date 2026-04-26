@@ -1,0 +1,2186 @@
+# Preview only: this file is not the official governance truth.
+# Source: W13-E13.8 docs/governance/previews facts-only Candidate Preview rerun.
+# Formal docs/governance/DOC_STATE.yaml remains the only confirmed state.
+schema_version: 1
+global_policy:
+  auto_open_enabled: false
+  require_confirmation_for_state_writeback: true
+  strict_template_gate: true
+  formal_window_open: false
+  paths:
+    modules_root: docs/modules
+    open_questions_doc: OPEN_QUESTIONS.md
+    task_index_doc: TASK_INDEX.md
+oqs:
+  OQ-001:
+    title: "\u4ED3\u5E93\u7ED3\u6784\u662F\u5426\u56FA\u5B9A\u4E3A monorepo\uFF08\
+      `apps/web` + `apps/api` + `infra`\uFF09"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-002:
+    title: "\u9996\u8F6E\u662F\u5426\u53EA\u5EFA\u7ACB\u6700\u5C0F\u8FD0\u884C\u65F6\
+      \u3001\u6D4B\u8BD5\u548C CI \u57FA\u7EBF"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-003:
+    title: "\u89C6\u89C9\u89C4\u8303\u9996\u8F6E\u9700\u8981\u6C89\u6DC0\u5230\u4EC0\
+      \u4E48\u7C92\u5EA6"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-004:
+    title: "P1 \u9274\u6743\u673A\u5236\u91C7\u7528\u56FA\u5B9A Bearer token\u3001\
+      JWT \u8FD8\u662F session cookie"
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-005:
+    title: "\u56E2\u961F\u7BA1\u7406\u5458\u4E0E\u666E\u901A\u6210\u5458\u7684\u6743\
+      \u9650\u77E9\u9635\u662F\u5426\u5148\u53EA\u8986\u76D6 P1 \u9875\u9762"
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-006:
+    title: "Markdown \u9884\u89C8\u4E0E\u5BFC\u51FA\u662F\u5426\u5FC5\u987B\u5171\u7528\
+      \u540C\u4E00\u6E32\u67D3\u94FE"
+    status: proposed-default
+    affects:
+      modules:
+      - M03
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-007:
+    title: "\u4E0A\u4F20\u3001\u8F6C\u6362\u3001\u5BFC\u51FA\u5728 P1 \u4E2D\u54EA\
+      \u4E9B\u5FC5\u987B\u5F02\u6B65"
+    status: proposed-default
+    affects:
+      modules:
+      - M03
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-008:
+    title: "\u5339\u914D\u5206\u6790\u4E0E\u8BC4\u4F30\u89C4\u5219\u662F\u5426\u9700\
+      \u8981\u7248\u672C\u5316"
+    status: proposed-default
+    affects:
+      modules:
+      - M04
+      - M07
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-009:
+    title: "Embedding \u4E0E\u5411\u91CF\u5316\u6765\u6E90\u5982\u4F55\u786E\u5B9A"
+    status: open
+    affects:
+      modules:
+      - M05
+      - M06
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-010:
+    title: "\u5F52\u6863\u7C92\u5EA6\u662F\u6574\u4EFD\u8D44\u4EA7\u3001\u7247\u6BB5\
+      \u8FD8\u662F\u9898\u76EE\u7EA7"
+    status: open
+    affects:
+      modules:
+      - M05
+      - M08
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-011:
+    title: "Search snapshot \u7684\u6765\u6E90\u53EA\u505A\u5BFC\u5165\u8FD8\u662F\
+      \u9700\u8981\u6293\u53D6"
+    status: proposed-default
+    affects:
+      modules:
+      - M06
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-012:
+    title: "\u4E0A\u4E0B\u6587\u5305\u4E2D\u7684 source priority \u4E0E\u5F15\u7528\
+      \u6458\u8981\u89C4\u5219\u5982\u4F55\u5B9A\u7A3F"
+    status: open
+    affects:
+      modules:
+      - M06
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-013:
+    title: "\u6253\u78E8\u4E3B\u9898\u63A8\u8350\u662F\u89C4\u5219\u3001LLM \u8FD8\
+      \u662F\u6DF7\u5408"
+    status: open
+    affects:
+      modules:
+      - M07
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-014:
+    title: "\u6A21\u62DF\u9762\u8BD5\u3001\u6253\u78E8\u6A21\u5F0F\u548C\u590D\u76D8\
+      \u662F\u5426\u5171\u7528\u540C\u4E00\u8BC4\u4F30\u53E3\u5F84"
+    status: proposed-default
+    affects:
+      modules:
+      - M07
+      - M08
+      - M09
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-015:
+    title: "\u771F\u5B9E\u9762\u8BD5\u8F93\u5165\u662F\u7ED3\u6784\u5316\u95EE\u7B54\
+      \u3001\u81EA\u7531 transcript \u8FD8\u662F\u6DF7\u5408"
+    status: open
+    affects:
+      modules:
+      - M08
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-016:
+    title: "\u8584\u5F31\u9879\u805A\u5408 key\u3001\u6D88\u51CF\u89C4\u5219\u548C\
+      \u505C\u7EC3\u89C4\u5219\u5982\u4F55\u5B9A\u7A3F"
+    status: open
+    affects:
+      modules:
+      - M09
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-017:
+    title: "\u7BA1\u7406\u53F0\u7684\u6A21\u578B\u63A8\u8350\u6765\u6E90\u662F\u672C\
+      \u5730 catalog \u8FD8\u662F\u5728\u7EBF\u540C\u6B65"
+    status: proposed-default
+    affects:
+      modules:
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-018:
+    title: "\u7BA1\u7406\u53F0\u662F\u5426\u8D1F\u8D23 search snapshot \u5BFC\u5165\
+      \u4E0E\u8FD0\u7EF4"
+    status: proposed-default
+    affects:
+      modules:
+      - M06
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-019:
+    title: "\u6839\u76EE\u5F55\u7EDF\u4E00\u811A\u672C\u4E0E\u6700\u5C0F CI \u6821\
+      \u9A8C\u77E9\u9635\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u7C92\u5EA6\uFF0C\u624D\
+      \u7B97\u6EE1\u8DB3\u5E73\u53F0\u57FA\u7EBF\u7684\u4E0B\u6E38\u8F93\u5165\u8981\
+      \u6C42"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-020:
+    title: "\u5171\u4EAB\u9875\u9762\u539F\u8BED\uFF08`PageHeader` / Dashboard \u6458\
+      \u8981\u533A\uFF09\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u6700\u5C0F\u63A5\u53E3\
+      \u8FB9\u754C\uFF0C\u624D\u80FD\u652F\u6491\u540E\u7EED\u9875\u9762\u590D\u7528"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-021:
+    title: "\u5217\u8868\u67E5\u8BE2\u72B6\u6001\u3001\u5206\u9875\u4EA4\u4E92\u4E0E\
+      \ URL / callback \u7684\u6620\u5C04\u89C4\u5219\u5E94\u5982\u4F55\u7EDF\u4E00"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-022:
+    title: "locale fallback\u3001\u5207\u6362\u7B56\u7565\u4E0E\u6D88\u606F\u547D\u540D\
+      \u7A7A\u95F4\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u7A0B\u5EA6\uFF0C\u624D\u80FD\
+      \u4F5C\u4E3A\u5171\u4EAB Web \u5951\u7EA6\u4E0B\u53D1"
+    status: proposed-default
+    affects:
+      modules:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-023:
+    title: "`/(dashboard)/admin/members` \u4E0E `/api/v1/admin/members` \u7684\u5B8C\
+      \u6574\u5B9E\u73B0\u5E94\u7EE7\u7EED\u7531 M02 \u627F\u63A5\uFF0C\u8FD8\u662F\
+      \u7531\u540E\u7EED\u6CBB\u7406\u6A21\u5757\u627F\u63A5"
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M10
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-024:
+    title: "\u8BA1\u5212\u91CD\u6784\u540E\uFF0C\u65E7 `ST02_* / ST03_*` \u5B50\u4EFB\
+      \u52A1\u76EE\u5F55\u662F\u5426\u5E94\u9000\u5F79\u4E3A\u5386\u53F2\u5BB9\u5668\
+      \uFF0C\u5E76\u6309\u65B0\u7684\u5FAE\u4EFB\u52A1\u84DD\u672C\u91CD\u5EFA\u6B63\
+      \u5F0F\u5165\u53E3"
+    status: proposed-default
+    affects:
+      modules:
+      - M02
+      - M03
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+  OQ-025:
+    title: "`jobs.requirement_items_json` \u7684\u6700\u5C0F item \u7ED3\u6784\u3001\
+      \u7A7A\u503C\u8BED\u4E49\u3001\u6392\u5E8F\u89C4\u5219\u4E0E\u5199\u5165\u8D23\
+      \u4EFB\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u7A0B\u5EA6\uFF0C\u624D\u80FD\u4F5C\
+      \u4E3A M04 / M06 \u7684\u7A33\u5B9A\u8F93\u5165"
+    status: proposed-default
+    affects:
+      modules:
+      - M03
+      - M04
+      - M06
+      subtasks: []
+    declared_blocker_refs: []
+    gate_level: observe_only
+    gate_policy_source: bootstrap_default
+    resolution_policy: proposed_default_ok
+requirements:
+  RQ01:
+    meta:
+      path: .
+      scope_kind: root_requirement_cluster
+    facts:
+      module_ids:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      task_ids:
+      - ST13_01
+      - ST13_02
+      - ST13_03
+      - ST13_04
+      - ST13_05
+      - ST13_06
+      - ST13_07
+      - ST13_08
+      - ST13_09
+      - ST13_10
+      - ST13_11
+      - ST13_12
+      - ST13_13
+      - ST13_14
+      - ST13_15
+      - ST13_16
+      - ST13_17
+      - ST13_18
+      - ST13_19
+      - ST13_20
+      - ST13_21
+      - ST13_22
+      - ST13_23
+      - ST13_24
+      - ST13_25
+      asset_slots:
+        plan_latest:
+          exists: true
+          path: PLAN_LATEST.md
+        module_index:
+          exists: true
+          path: MODULE_INDEX.md
+        task_index:
+          exists: true
+          path: TASK_INDEX.md
+      compliance:
+        naming_ok: true
+        path_ok: true
+        relations_ok: true
+        language_ok: null
+        violations: []
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        window_status: closed
+        window_opened_at: null
+        window_opened_by: null
+        window_reason: null
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+      tracking:
+        active_round_id: null
+        last_round_id: null
+modules:
+  M01:
+    meta:
+      path: docs/modules/M01-foundation-and-platform/
+    facts:
+      upstream_module_ids: []
+      related_oq_ids:
+      - OQ-001
+      - OQ-002
+      - OQ-003
+      - OQ-019
+      - OQ-020
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M02:
+    meta:
+      path: docs/modules/M02-identity-and-team/
+    facts:
+      upstream_module_ids:
+      - M01
+      related_oq_ids:
+      - OQ-001
+      - OQ-004
+      - OQ-005
+      - OQ-020
+      - OQ-021
+      - OQ-022
+      - OQ-023
+      - OQ-024
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: true
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: true
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M03:
+    meta:
+      path: docs/modules/M03-jobs-resumes-and-documents/
+    facts:
+      upstream_module_ids:
+      - M01
+      - M02
+      related_oq_ids:
+      - OQ-001
+      - OQ-006
+      - OQ-007
+      - OQ-020
+      - OQ-021
+      - OQ-022
+      - OQ-024
+      - OQ-025
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M04:
+    meta:
+      path: docs/modules/M04-match-analysis-and-evidence/
+    facts:
+      upstream_module_ids:
+      - M03
+      related_oq_ids:
+      - OQ-001
+      - OQ-008
+      - OQ-021
+      - OQ-022
+      - OQ-025
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M05:
+    meta:
+      path: docs/modules/M05-assets-and-retrieval/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      related_oq_ids:
+      - OQ-001
+      - OQ-009
+      - OQ-010
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M06:
+    meta:
+      path: docs/modules/M06-simulated-interview-and-context/
+    facts:
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      related_oq_ids:
+      - OQ-001
+      - OQ-009
+      - OQ-011
+      - OQ-012
+      - OQ-018
+      - OQ-021
+      - OQ-022
+      - OQ-025
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M07:
+    meta:
+      path: docs/modules/M07-polish-assessment-and-progress/
+    facts:
+      upstream_module_ids:
+      - M06
+      related_oq_ids:
+      - OQ-001
+      - OQ-008
+      - OQ-013
+      - OQ-014
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M08:
+    meta:
+      path: docs/modules/M08-review-and-replay/
+    facts:
+      upstream_module_ids:
+      - M06
+      - M07
+      related_oq_ids:
+      - OQ-001
+      - OQ-010
+      - OQ-014
+      - OQ-015
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M09:
+    meta:
+      path: docs/modules/M09-training-and-weakness-lifecycle/
+    facts:
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      related_oq_ids:
+      - OQ-001
+      - OQ-014
+      - OQ-016
+      - OQ-021
+      - OQ-022
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  M10:
+    meta:
+      path: docs/modules/M10-admin-governance-and-observability/
+    facts:
+      upstream_module_ids:
+      - M02
+      - M03
+      - M06
+      - M09
+      related_oq_ids:
+      - OQ-001
+      - OQ-002
+      - OQ-004
+      - OQ-005
+      - OQ-007
+      - OQ-008
+      - OQ-011
+      - OQ-017
+      - OQ-018
+      - OQ-019
+      - OQ-021
+      - OQ-022
+      - OQ-023
+      legacy_locked: false
+      declared_blocker_refs: []
+      docs:
+        requirements:
+          exists: true
+          template_like: false
+        design:
+          exists: true
+          template_like: false
+        api:
+          exists: true
+          template_like: false
+        schema:
+          exists: true
+          template_like: false
+        logic:
+          exists: true
+          template_like: false
+        task_index:
+          exists: true
+          template_like: false
+        dependencies:
+          exists: true
+          template_like: false
+        open_questions:
+          exists: true
+          template_like: false
+        execution_log:
+          exists: true
+          template_like: false
+    state:
+      confirmed:
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+subtasks:
+  ST13_01:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M02
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-01
+        state_preview_alias: ST13_01
+        task_domain_title: 账号 / 登录 / 权限
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_02:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M02
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-02
+        state_preview_alias: ST13_02
+        task_domain_title: 工作台首页 / 导航 / 权限入口
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_03:
+    meta:
+      module_id: M03
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M03
+      - M04
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-03
+        state_preview_alias: ST13_03
+        task_domain_title: 岗位管理
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_04:
+    meta:
+      module_id: M03
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M03
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-04
+        state_preview_alias: ST13_04
+        task_domain_title: 简历管理
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_05:
+    meta:
+      module_id: M02
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M02
+      - M06
+      - M08
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-05
+        state_preview_alias: ST13_05
+        task_domain_title: 模拟记录列表
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_06:
+    meta:
+      module_id: M03
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-06
+        state_preview_alias: ST13_06
+        task_domain_title: 发起模拟面试
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_07:
+    meta:
+      module_id: M05
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M05
+      - M06
+      - M07
+      - M08
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-07
+        state_preview_alias: ST13_07
+        task_domain_title: 面试台
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_08:
+    meta:
+      module_id: M06
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M06
+      - M07
+      - M09
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-08
+        state_preview_alias: ST13_08
+        task_domain_title: 打磨模式
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_09:
+    meta:
+      module_id: M06
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M06
+      - M07
+      - M08
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-09
+        state_preview_alias: ST13_09
+        task_domain_title: 压力面模式
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_10:
+    meta:
+      module_id: M05
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M05
+      - M06
+      - M08
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-10
+        state_preview_alias: ST13_10
+        task_domain_title: RAG / 知识库
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_11:
+    meta:
+      module_id: M04
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M04
+      - M06
+      - M08
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-11
+        state_preview_alias: ST13_11
+        task_domain_title: 真实 LLM provider / adapter
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_12:
+    meta:
+      module_id: M06
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M06
+      - M07
+      - M08
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-12
+        state_preview_alias: ST13_12
+        task_domain_title: 多轮上下文 / 状态机
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_13:
+    meta:
+      module_id: M04
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-13
+        state_preview_alias: ST13_13
+        task_domain_title: 评分体系
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_14:
+    meta:
+      module_id: M08
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M08
+      - M09
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-14
+        state_preview_alias: ST13_14
+        task_domain_title: 真实面试复盘
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_15:
+    meta:
+      module_id: M06
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M06
+      - M07
+      - M08
+      - M09
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-15
+        state_preview_alias: ST13_15
+        task_domain_title: 模拟面试复盘
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_16:
+    meta:
+      module_id: M04
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M04
+      - M07
+      - M08
+      - M09
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-16
+        state_preview_alias: ST13_16
+        task_domain_title: 薄弱项 `WeaknessItem
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_17:
+    meta:
+      module_id: M03
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M03
+      - M07
+      - M08
+      - M09
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-17
+        state_preview_alias: ST13_17
+        task_domain_title: 训练抽屉 / 待打磨清单
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_18:
+    meta:
+      module_id: M05
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M05
+      - M08
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-18
+        state_preview_alias: ST13_18
+        task_domain_title: 资产归档
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_19:
+    meta:
+      module_id: M03
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M03
+      - M07
+      - M08
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-19
+        state_preview_alias: ST13_19
+        task_domain_title: Markdown 导出 / 复制
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_20:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md
+        template_like: false
+      implementation_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-20
+        state_preview_alias: ST13_20
+        task_domain_title: 服务端保存 / 数据库
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_21:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md
+        template_like: false
+      implementation_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-21
+        state_preview_alias: ST13_21
+        task_domain_title: API / 后端服务边界
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_22:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-22
+        state_preview_alias: ST13_22
+        task_domain_title: 日志 / 观测 / 运维
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_23:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M02
+      - M03
+      - M04
+      - M05
+      - M06
+      - M07
+      - M08
+      - M09
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: false
+        template_like: false
+      implementation_doc:
+        exists: false
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-23
+        state_preview_alias: ST13_23
+        task_domain_title: 前端工作台 UI / 页面集合
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_24:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md
+        template_like: false
+      implementation_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-24
+        state_preview_alias: ST13_24
+        task_domain_title: 测试 / 验收 / DoD
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+      formal_window_candidate_recommended: true
+      formal_window_candidate_source: W13-E11 candidate evaluation
+      formal_window_candidate_review_status: pending_confirmation
+      formal_window_candidate_state: document_layer_recommended
+      formal_window_candidate_notes: formal window closed; implementation-ready false; implementation packet forbidden
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+  ST13_25:
+    meta:
+      module_id: M01
+      requirement_id: RQ01
+      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+    facts:
+      requirement_ids:
+      - RQ01
+      upstream_module_ids:
+      - M01
+      - M10
+      related_oq_ids:
+      - OQ-093
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md
+        template_like: false
+      implementation_doc:
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md
+        template_like: false
+      w13_preview:
+        wt13_id: WT13-25
+        state_preview_alias: ST13_25
+        task_domain_title: 文档治理 / 收口 / Basic Memory
+        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_decision: OQ-093=B
+        formal_doc_state_write: true
+        implementation_ready: false
+      formal_window_candidate_recommended: true
+      formal_window_candidate_source: W13-E11 candidate evaluation
+      formal_window_candidate_review_status: pending_confirmation
+      formal_window_candidate_state: document_layer_recommended
+      formal_window_candidate_notes: formal window closed; implementation-ready false; implementation packet forbidden
+    state:
+      confirmed:
+        implementation_doc_state: missing
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+documents:
+  DOC-PLAN-CURRENT-REPO-2026-04-25:
+    meta:
+      doc_type: plan
+      title: "AI \u6A21\u62DF\u9762\u8BD5\u7CFB\u7EDF\u5F53\u524D\u4ED3\u5E93\u6267\u884C\u8BA1\u5212"
+      path: docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md
+      required_sections:
+      - section_id: doc_positioning
+        heading: "## 1. \u6587\u6863\u5B9A\u4F4D"
+      - section_id: current_repo_positioning
+        heading: "## 2. \u5F53\u524D\u4ED3\u5E93\u5B9A\u4F4D"
+      - section_id: completed_work
+        heading: "## 3. W0-W7 \u5DF2\u5B8C\u6210\u4E8B\u9879"
+      - section_id: current_prerequisites
+        heading: "## 4. \u5F53\u524D\u4E3B\u9879\u76EE\u8BBE\u8BA1\u5F00\u53D1\u7684\u771F\u5B9E\u524D\u7F6E\u6761\u4EF6"
+      - section_id: defer_monorepo_reason
+        heading: "## 5. \u5F53\u524D\u4E0D\u76F4\u63A5\u843D\u672A\u6765\u4E1A\u52A1\u76EE\u5F55\u7ED3\u6784\u7684\u539F\u56E0"
+      - section_id: next_steps
+        heading: "## 6. \u4E0B\u4E00\u6B65\u5EFA\u8BAE"
+      - section_id: verification
+        heading: "## 7. \u9A8C\u8BC1\u547D\u4EE4"
+      - section_id: blueprint_relation
+        heading: "## 8. \u4E0E `DOC-PLAN-P1` \u7684\u5173\u7CFB"
+      relations:
+        document_refs: []
+        module_refs: []
+        oq_refs: []
+    facts:
+      exists: true
+      headings: []
+      section_presence: {}
+      extracted_refs:
+        document_refs: []
+        module_refs: []
+        oq_refs: []
+      marker_counts:
+        todo: 0
+        tbd: 0
+        unresolved: 0
+      last_scanned_at: null
+    state:
+      confirmed:
+        maturity: null
+        status: active
+        review_status: approved
+        blocker_refs: []
+        active_round_id: null
+        last_round_id: null
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
+governance_rounds:
+- round_id: R-2026-04-22-SPECPLAN-01
+  workflow: document_refinement
+  topic: spec/plan document refinement
+  scope: documents:DOC-PLAN-P1,DOC-SPEC-P1
+  status: closed
+  opened_at: '2026-04-22T08:14:55Z'
+  opened_by: doc-governor
+  started_at: '2026-04-22T08:15:00Z'
+  review_at: '2026-04-22T08:46:25Z'
+  closed_at: '2026-04-22T08:53:05Z'
+  closed_by: manual-review
+  close_reason: completed
+  decision_refs:
+  - decision:DR-R-2026-04-22-SPECPLAN-01
+  target_documents:
+  - document_id: DOC-PLAN-P1
+    target_sections:
+    - scope
+    - repo_structure
+    - env_baseline
+    - cross_task_constraints
+    - api_baseline
+    - milestones
+    - design_coverage
+    - execution_notes
+  - document_id: DOC-SPEC-P1
+    target_sections:
+    - goal
+    - boundary
+    - tech_stack
+    - architecture
+    - data_model
+    - flows
+    - governance
+    - page_arch
+    - conclusion
+  required_evidence_refs:
+  - doc:DOC-PLAN-P1
+  - doc:DOC-PLAN-P1#api_baseline
+  - doc:DOC-PLAN-P1#cross_task_constraints
+  - doc:DOC-PLAN-P1#design_coverage
+  - doc:DOC-PLAN-P1#env_baseline
+  - doc:DOC-PLAN-P1#execution_notes
+  - doc:DOC-PLAN-P1#milestones
+  - doc:DOC-PLAN-P1#repo_structure
+  - doc:DOC-PLAN-P1#scope
+  - doc:DOC-SPEC-P1
+  - doc:DOC-SPEC-P1#architecture
+  - doc:DOC-SPEC-P1#boundary
+  - doc:DOC-SPEC-P1#conclusion
+  - doc:DOC-SPEC-P1#data_model
+  - doc:DOC-SPEC-P1#flows
+  - doc:DOC-SPEC-P1#goal
+  - doc:DOC-SPEC-P1#governance
+  - doc:DOC-SPEC-P1#page_arch
+  - doc:DOC-SPEC-P1#tech_stack
+  exit_criteria:
+  - required sections complete
+  - declared relation refs present
+  - no unresolved hard blockers remain
+  writeback_items:
+  - "DOC-SPEC-P1: \u8865\u9F50\u5F15\u7528 doc:DOC-PLAN-P1"
+  packet_paths:
+    round_plan_json: null
+    packet_json: docs/governance/packets/R-2026-04-22-SPECPLAN-01.packet.json
+    prompt_md: docs/governance/packets/R-2026-04-22-SPECPLAN-01.prompt.md
+    exec_cmd_txt: docs/governance/packets/R-2026-04-22-SPECPLAN-01.exec.txt
+  result_summary: "DOC-SPEC-P1 \u4E0E DOC-PLAN-P1 \u5DF2\u5B8C\u6210\u4EBA\u5DE5 review\uFF0C\
+    \u5E76\u5B8C\u6210 confirm-transition\u3002"

@@ -8,9 +8,9 @@
 
 ## 2. 当前阶段
 
-- 当前阶段：`W13-E13.8 / docs/governance 直下 facts-only Candidate Preview + 正式 State Update 窗口` 已完成；已基于用户确认的方案 A 创建路径等价 Preview，并在 Preview 严格全绿后执行 facts-only 正式 State Update。
+- 当前阶段：`W13-E13.8 / docs/governance/previews 路径 facts-only Candidate Preview + 正式 State Update 窗口` 已完成；已基于用户确认的方案 A 创建路径等价 Preview，并在 Preview 严格全绿后执行 facts-only 正式 State Update。
 - 当前边界：正式 `DOC_STATE.yaml` 仅写入 `ST13_24 / ST13_25` 的 facts-only candidate 推荐字段；未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未打开 formal window，未标记 implementation-ready，未生成 implementation packet，未创建 `apps/**` / `infra/**`，未进入实现。
-- Preview 结果：`docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 直接位于 `docs/governance/` 下，`validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`，未复现 W13-E13.6 的路径解析副作用。
+- Preview 结果：`docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 位于 `docs/governance/previews/` 下，`validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`，未复现 W13-E13.6 的路径解析副作用；正式 `DOC_STATE.yaml` 已含同一组 facts-only 字段，本轮对正式状态执行幂等确认。
 - 验证结论：正式 `DOC_STATE.yaml` 写入后再次 `validate-state / evaluate-state` 全绿，`documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25`；`ST13_21 / ST13_20` 仍保持文档层 near-ready，未写入 candidate facts 或 candidate 状态。
 - 当前边界：W13-E8.5 已登记 required doc slot，但 formal window、implementation doc activation、acceptance criteria、required tests 和 implementation scope 仍未闭合。
 - 代码开发状态：暂停。不得扩展 `apps/web/**`，不得创建 `apps/api/**`、`infra/**`，不得接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
@@ -87,11 +87,11 @@
 | W13-E13 | ST13 candidate State Preview 已创建但验证失败 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml`；preview 中仅尝试更新 `ST13_24 / ST13_25` candidate 相关字段，`ST13_21 / ST13_20` 保持原样。验证失败原因是 `formal_window_open=false` 时禁止 candidate，且 `downstream_ready` 需要非空 maturity。正式 `DOC_STATE.yaml` 未修改。 |
 | W13-E13.5 | Candidate State 表达策略修正已完成 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`；`OQ-121=A` 已吸收，`W13-E14` 暂不执行。后续优先创建 facts-only Candidate Preview，备选验证 `candidate_status=observe`；正式 `DOC_STATE.yaml` 未修改。 |
 | W13-E13.6 | facts-only Candidate Preview 已创建 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`；`ST13_24 / ST13_25` 仅写入 facts-only candidate 推荐字段，`ST13_21 / ST13_20` 保持正式状态原样。Preview `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，但 `documents_blocked_count=1` 来自 plan-path Preview 的 document 扫描根目录副作用；正式 `DOC_STATE.yaml` 未修改，仍不放行实现。 |
-| W13-E13.8 | docs/governance 直下 Preview 与 facts-only 正式 State Update 已完成 | 已新增 `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`；Preview 与正式 `DOC_STATE.yaml` 均通过 `validate-state / evaluate-state`，且 `documents_blocked_count=0`。正式状态层只为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段；`ST13_21 / ST13_20` 仍不写 candidate，formal window、implementation packet 和实现仍关闭。 |
+| W13-E13.8 | docs/governance/previews 路径 Preview 与 facts-only 正式 State Update 已完成 | 已新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`；Preview 与正式 `DOC_STATE.yaml` 均通过 `validate-state / evaluate-state`，且 `documents_blocked_count=0`。正式状态层只为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段；`ST13_21 / ST13_20` 仍不写 candidate，formal window、implementation packet 和实现仍关闭。 |
 
 ## 6. 当前阻断与风险
 
-- 当前没有 active 产品范围 `open` OQ；`OQ-111~OQ-124` 已由用户确认并写回 confirmed，`OQ-124` 已由 W13-E13.8 吸收为 docs/governance 直下 Preview 严格全绿后执行 facts-only 正式 State Update。
+- 当前没有 active 产品范围 `open` OQ；`OQ-111~OQ-124` 已由用户确认并写回 confirmed，`OQ-124` 已由 W13-E13.8 吸收为 docs/governance/previews 路径 Preview 严格全绿后执行 facts-only 正式 State Update。
 - `OQ-090~OQ-110` 已按用户确认吸收，其中 `OQ-097~OQ-099` 已落实到 Stage3 Preview 创建与验证，`OQ-100` 已落实到正式 Stage 3 写入，`OQ-101~OQ-110` 已落实到 W13-E6 第一批任务包草案边界。
 - `DD-005` 与 `DD-007` 仍为 `needs-review`：后端 FastAPI 与导出形态已 confirmed，但完整 Web framework / 渲染链实现细节不得直接进入代码。
 - 正式开窗层仍为空；`TASK_INDEX.md` 仅新增 W13-E 候选任务树摘要，任何实现仍必须等待用户确认、状态层改造和正式开窗。

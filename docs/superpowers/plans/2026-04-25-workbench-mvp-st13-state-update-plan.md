@@ -478,11 +478,11 @@ Preview 写入范围：
 
 ## 16. W13-E13.8 facts-only 正式 State Update 执行结果
 
-用户已确认 `OQ-124` 方案 A：将 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update。
+用户已确认 `OQ-124` 方案 A：将 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update。
 
 本轮已新增：
 
-- `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`
+- `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`
 
 本轮正式写入：
 
@@ -496,8 +496,8 @@ Preview 写入范围：
 | --- | --- | --- |
 | 正式 `DOC_STATE.yaml` 基线 | `validate-state` | `ok=true,error=0,warning=0` |
 | 正式 `DOC_STATE.yaml` 基线 | `evaluate-state` | `ok=true,error=0,warning=0,documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25` |
-| docs/governance 直下 Preview | `validate-state` | `ok=true,error=0,warning=0` |
-| docs/governance 直下 Preview | `evaluate-state` | `ok=true,error=0,warning=0,documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25` |
+| docs/governance/previews 路径 Preview | `validate-state` | `ok=true,error=0,warning=0` |
+| docs/governance/previews 路径 Preview | `evaluate-state` | `ok=true,error=0,warning=0,documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25` |
 | 正式 `DOC_STATE.yaml` 写入后 | `validate-state` | `ok=true,error=0,warning=0` |
 | 正式 `DOC_STATE.yaml` 写入后 | `evaluate-state` | `ok=true,error=0,warning=0,documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25` |
 

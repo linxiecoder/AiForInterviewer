@@ -293,7 +293,7 @@ Preview facts-only 字段未导致 implementation-ready 或 formal window 误判
 
 ### 6.14 W13-E13.8 facts-only State Update 模块影响
 
-> W13-E13.8 已吸收 `OQ-124`。docs/governance 直下 Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。本节只记录模块影响，不改变 M01-M10 成熟度，不解除 M02 blocker，不放行实现。
+> W13-E13.8 已吸收 `OQ-124`。docs/governance/previews 路径 Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。本节只记录模块影响，不改变 M01-M10 成熟度，不解除 M02 blocker，不放行实现。
 
 | ST13 | WT13 alias | 模块映射 | W13-E13.8 正式状态层结果 | 模块层结论 |
 | --- | --- | --- | --- | --- |

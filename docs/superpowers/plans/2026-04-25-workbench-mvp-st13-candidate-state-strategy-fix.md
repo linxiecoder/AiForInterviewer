@@ -231,15 +231,15 @@ Preview 只在 `ST13_24 / ST13_25.facts` 下写入：
 
 ## 13. W13-E13.8 执行结果回写
 
-用户已确认 `OQ-124` 方案 A：把 facts-only Candidate Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update。
+用户已确认 `OQ-124` 方案 A：把 facts-only Candidate Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update。
 
 W13-E13.8 已创建：
 
-- `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`
+- `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`
 
 执行结果：
 
-1. docs/governance 直下 Preview `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`。
+1. docs/governance/previews 路径 Preview `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`。
 2. 正式 `DOC_STATE.yaml` 已仅为 `ST13_24 / ST13_25.facts` 写入 `formal_window_candidate_*` 推荐事实。
 3. 正式写入后 `validate-state / evaluate-state` 仍为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`。
 4. `ST13_21 / ST13_20` 保持正式状态原样，不写 candidate facts，不写 near-ready 状态。

@@ -308,7 +308,7 @@ W13-E13.5 后，`ST13_24` 继续保留文档层 `formal_window_candidate_recomme
 
 ## 23. W13-E13.8 facts-only 正式 State Update 同步
 
-W13-E13.8 已在 docs/governance 直下创建 `DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过严格验证；随后正式 `DOC_STATE.yaml` 已为 `ST13_24.facts` 写入 facts-only candidate 推荐字段：
+W13-E13.8 已在 docs/governance/previews 路径创建 `DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过严格验证；随后正式 `DOC_STATE.yaml` 已为 `ST13_24.facts` 写入 facts-only candidate 推荐字段：
 
 - `formal_window_candidate_recommended=true`
 - `formal_window_candidate_source=W13-E11 candidate evaluation`

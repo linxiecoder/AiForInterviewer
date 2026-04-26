@@ -6,7 +6,7 @@
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
 > 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 已正式将旧 `STxx_*` 从 current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。
-> 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，W13-E8.5 已登记 required doc slot，W13-E9 已完成第一批 contract 细化，W13-E10 已完成第一批 readiness review，W13-E11 已完成第一批文档层 formal window candidate 评估，W13-E12 已完成 State Update 准备和确认卡输出，W13-E13 已创建 candidate state preview 但验证失败，W13-E13.5 已完成 candidate 状态表达策略修正，W13-E13.6 已完成 facts-only Preview，W13-E13.8 已在 docs/governance 直下 Preview 严格全绿后完成 `ST13_24 / ST13_25` facts-only 正式 State Update。状态只能记为 `facts_only_candidate_recommendation_recorded` / `not implementation-ready`，formal window、implementation packet 和真实服务接入仍需后续单独窗口。
+> 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，W13-E8.5 已登记 required doc slot，W13-E9 已完成第一批 contract 细化，W13-E10 已完成第一批 readiness review，W13-E11 已完成第一批文档层 formal window candidate 评估，W13-E12 已完成 State Update 准备和确认卡输出，W13-E13 已创建 candidate state preview 但验证失败，W13-E13.5 已完成 candidate 状态表达策略修正，W13-E13.6 已完成 facts-only Preview，W13-E13.8 已在 docs/governance/previews 路径 Preview 严格全绿后完成 `ST13_24 / ST13_25` facts-only 正式 State Update。状态只能记为 `facts_only_candidate_recommendation_recorded` / `not implementation-ready`，formal window、implementation packet 和真实服务接入仍需后续单独窗口。
 
 ## 1. 模块任务索引
 
@@ -313,9 +313,9 @@ W13-E8.5 已另窗把上述 8 个文档路径登记到 `DOC_STATE.yaml` 既有 `
 
 当前结论：facts-only candidate 推荐已在 Preview 中验证为 schema 可接受；正式 `DOC_STATE.yaml` 仍未写入 candidate，formal window 仍关闭，implementation-ready 未形成，implementation packet 仍禁止生成。
 
-### 2.4.13 W13-E13.8 docs-governance 直下 facts-only State Update 摘要
+### 2.4.13 W13-E13.8 docs/governance/previews 路径 facts-only State Update 摘要
 
-> 用户已确认 `OQ-124` 方案 A。W13-E13.8 已将 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅对 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。该写入不等于 formal window open，不等于 implementation-ready，不生成 implementation packet。
+> 用户已确认 `OQ-124` 方案 A。W13-E13.8 已将 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅对 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。该写入不等于 formal window open，不等于 implementation-ready，不生成 implementation packet。
 
 | ST13 | WT13 alias | 正式状态层写入 | 验证结果 | 是否 implementation-ready |
 | --- | --- | --- | --- | --- |

@@ -11,9 +11,9 @@
 
 ## 2. 当前阶段摘要
 
-- 当前阶段：`W13-E13.8 / docs/governance 直下 facts-only Candidate Preview + 正式 State Update 窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
+- 当前阶段：`W13-E13.8 / docs/governance/previews 路径 facts-only Candidate Preview + 正式 State Update 窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
 - 当前边界：本轮只执行 Preview 验证与 facts-only State Update；未生成 implementation packet，未打开 formal window，未标记 implementation-ready，未创建 `apps/**` / `infra/**` / `tests/**`，未进入实现。
-- Preview 与正式写入：`ST13_24 / ST13_25` 已在 docs/governance 直下 Preview 和正式 `DOC_STATE.yaml` 的 `facts` 字段写入 `formal_window_candidate_recommended=true`、来源、review status、document layer state 和禁止 packet/实现说明；未写 `candidate_status=candidate` 或 `readiness=downstream_ready`。
+- Preview 与正式写入：`ST13_24 / ST13_25` 已在 docs/governance/previews 路径 Preview 和正式 `DOC_STATE.yaml` 的 `facts` 字段写入 `formal_window_candidate_recommended=true`、来源、review status、document layer state 和禁止 packet/实现说明；正式状态本轮为幂等确认，未写 `candidate_status=candidate` 或 `readiness=downstream_ready`。
 - 验证结论：Preview 与正式 `DOC_STATE.yaml` 的 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`；W13-E13 的 state rule error 与 W13-E13.6 的 path-scan blocker 均未复现。
 - 代码开发状态：暂停。
 - 当前不允许扩展 `apps/web/**`，不允许创建 `apps/api/**` / `infra/**`，不允许接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
@@ -107,7 +107,7 @@
 - 已完成 W13-E13 candidate State Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml`，验证结果为 `ok=false,error=4,warning=0`；失败原因是 `formal_window_open=false` 时禁止 `candidate_status=candidate`，且 `readiness=downstream_ready` 要求 `maturity` 非空；正式 `DOC_STATE.yaml` 未修改。
 - 已完成 W13-E13.5 Candidate State 表达策略修正：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`，确认 `OQ-121=A` 已吸收，`W13-E14` 暂不执行，下一轮优先创建 facts-only Candidate Preview，备选验证 `candidate_status=observe`。
 - 已完成 W13-E13.6 facts-only Candidate Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`，吸收 `OQ-122=A`、`OQ-123=A`；`ST13_24 / ST13_25` 仅写 facts-only candidate 推荐字段，Preview `validate-state / evaluate-state` 为 `ok=true,error=0,warning=0`，但 `documents_blocked_count=1` 来自 plan-path Preview 的 document 扫描根目录副作用；正式 `DOC_STATE.yaml` 未修改。
-- 已完成 W13-E13.8 docs/governance 直下 facts-only Candidate Preview 与正式 State Update：新增 `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，吸收 `OQ-124`；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段，写入后验证仍为 `ok=true,error=0,warning=0,documents_blocked_count=0`。
+- 已完成 W13-E13.8 docs/governance/previews 路径 facts-only Candidate Preview 与正式 State Update：新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，吸收 `OQ-124`；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段，写入后验证仍为 `ok=true,error=0,warning=0,documents_blocked_count=0`。
 
 ## 7. 历史归档说明
 

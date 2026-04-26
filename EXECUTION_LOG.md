@@ -25,11 +25,11 @@
 
 ## 3. 当前记录
 
-### 2026-04-26 / W13-E13.8 / docs-governance 直下 facts-only Candidate Preview + 正式 State Update
+### 2026-04-26 / W13-E13.8 / docs/governance/previews 路径 facts-only Candidate Preview + 正式 State Update
 
-- 执行类型：门禁式两阶段状态层窗口；阶段 1 创建 `docs/governance/` 直下路径等价 Preview 并验证，阶段 2 仅在 Preview 严格全绿后执行 facts-only 正式 State Update；不写代码，不进入实现。
+- 执行类型：门禁式两阶段状态层窗口；阶段 1 创建 `docs/governance/previews/` 下路径等价 Preview 并验证，阶段 2 仅在 Preview 严格全绿后执行 facts-only 正式 State Update；不写代码，不进入实现。
 - 范围：
-  - 新增 `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`。
+  - 新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`。
   - 修改 `docs/governance/DOC_STATE.yaml`，仅为 `ST13_24 / ST13_25.facts` 写入 `formal_window_candidate_*` 推荐事实。
   - 同步全局索引、进展、成熟度、开放问题、设计决策、backlog-roadmap、State Update 计划、candidate 策略文档和四个 ST13 双文档。
   - 未修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`archive/**`、`docs/modules/**`、`package*.json` 或 lockfile。
@@ -45,11 +45,12 @@
   - 未出现 schema error、parse error、missing reference、stale target、formal_window_open 误开或 implementation-ready 误判；未复现 W13-E13 的 candidate/readiness 规则错误，未复现 W13-E13.6 / docs/governance/previews 的 path-scan blocker。
 - 正式写入与验证：
   - 已将相同 facts-only 字段写入正式 `DOC_STATE.yaml` 的 `ST13_24 / ST13_25.facts`。
+  - 本次 `docs/governance/previews/` 路径重跑开始前，正式 `DOC_STATE.yaml` 已包含同一组字段；本轮未对正式状态文件产生新增 diff，只做幂等确认与重新验证。
   - 正式写入后 `validate-state`：`ok=true,error=0,warning=0`。
   - 正式写入后 `evaluate-state`：`ok=true,error=0,warning=0,documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25`。
   - 未发生回退。
 - 用户确认吸收：
-  - `OQ-124` 写回为 `confirmed`：采用方案 A，把 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后执行 facts-only 正式 State Update。
+  - `OQ-124` 写回为 `confirmed`：采用方案 A，把 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后执行 facts-only 正式 State Update。
   - `DD-050` 已记录本次状态层决策。
 - 当前结论：
   - formal window 仍关闭。

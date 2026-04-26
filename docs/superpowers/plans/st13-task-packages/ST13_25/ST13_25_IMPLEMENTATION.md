@@ -146,7 +146,7 @@ python -m tools.test_runner.run_tests
 
 ## 18. W13-E13.8 facts-only 正式 State Update 同步
 
-W13-E13.8 已在 docs/governance 直下 Preview 严格全绿后，将 `ST13_25.facts` 的 facts-only candidate 推荐字段写入正式 `DOC_STATE.yaml`：
+W13-E13.8 已在 docs/governance/previews 路径 Preview 严格全绿后，将 `ST13_25.facts` 的 facts-only candidate 推荐字段写入正式 `DOC_STATE.yaml`：
 
 - `formal_window_candidate_recommended=true`
 - `formal_window_candidate_source=W13-E11 candidate evaluation`
