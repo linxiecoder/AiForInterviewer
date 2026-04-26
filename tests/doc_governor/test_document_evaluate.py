@@ -108,10 +108,18 @@ class DocumentEvaluateTests(ManagedTempArtifactsTestCase):
     def _write_state(self, state: dict) -> None:
         self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
 
+    def _write_state_at(self, state_path: Path, state: dict) -> None:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
     def _write_doc(self, relative_path: str, content: str) -> None:
         path = self.temp_root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def _write_repo_markers(self) -> None:
+        (self.temp_root / "AGENTS.md").write_text("# Test Repo\n", encoding="utf-8")
+        (self.temp_root / "tools" / "doc_governor").mkdir(parents=True, exist_ok=True)
 
     def test_design_document_required_sections_present(self) -> None:
         state = _base_state()
@@ -237,6 +245,79 @@ class DocumentEvaluateTests(ManagedTempArtifactsTestCase):
             ["apps/api", "apps/web", "monorepo"],
         )
         self.assertFalse(document["derived"]["assessed_ready"])
+
+    def test_preview_under_governance_previews_uses_repo_root_for_document_paths(self) -> None:
+        self._write_repo_markers()
+        preview_path = self.temp_root / "docs" / "governance" / "previews" / "DOC_STATE.preview.yaml"
+        state = _base_state()
+        state["documents"]["DOC-PLAN-PREVIEW"] = _document_entry(
+            doc_type="plan",
+            path="docs/superpowers/plans/plan.md",
+            required_sections=[
+                ("scope", "## Scope"),
+            ],
+        )
+        self._write_state_at(preview_path, state)
+        self._write_doc(
+            "docs/superpowers/plans/plan.md",
+            "# Plan\n\n## Scope\n\nPreview state should resolve paths from repo root.\n",
+        )
+
+        exit_code, payload = self._run_cli("evaluate-state", "--input", str(preview_path))
+
+        self.assertEqual(exit_code, 0)
+        document = payload["documents"]["DOC-PLAN-PREVIEW"]
+        self.assertTrue(document["facts"]["exists"])
+        self.assertTrue(document["facts"]["section_presence"]["scope"])
+        self.assertEqual(document["derived"]["document_blockers"], [])
+
+    def test_preview_under_superpowers_plans_uses_repo_root_for_document_paths(self) -> None:
+        self._write_repo_markers()
+        preview_path = (
+            self.temp_root / "docs" / "superpowers" / "plans" / "DOC_STATE.preview.yaml"
+        )
+        state = _base_state()
+        state["documents"]["DOC-PLAN-PREVIEW"] = _document_entry(
+            doc_type="plan",
+            path="docs/superpowers/plans/plan.md",
+            required_sections=[
+                ("scope", "## Scope"),
+            ],
+        )
+        self._write_state_at(preview_path, state)
+        self._write_doc(
+            "docs/superpowers/plans/plan.md",
+            "# Plan\n\n## Scope\n\nPreview state should resolve paths from repo root.\n",
+        )
+
+        exit_code, payload = self._run_cli("evaluate-state", "--input", str(preview_path))
+
+        self.assertEqual(exit_code, 0)
+        document = payload["documents"]["DOC-PLAN-PREVIEW"]
+        self.assertTrue(document["facts"]["exists"])
+        self.assertTrue(document["facts"]["section_presence"]["scope"])
+        self.assertEqual(document["derived"]["document_blockers"], [])
+
+    def test_missing_document_path_still_reports_document_file_missing(self) -> None:
+        self._write_repo_markers()
+        preview_path = self.temp_root / "docs" / "governance" / "previews" / "DOC_STATE.preview.yaml"
+        state = _base_state()
+        state["documents"]["DOC-MISSING"] = _document_entry(
+            doc_type="plan",
+            path="docs/superpowers/plans/missing.md",
+            required_sections=[
+                ("scope", "## Scope"),
+            ],
+        )
+        self._write_state_at(preview_path, state)
+
+        exit_code, payload = self._run_cli("evaluate-state", "--input", str(preview_path))
+
+        self.assertEqual(exit_code, 0)
+        document = payload["documents"]["DOC-MISSING"]
+        self.assertFalse(document["facts"]["exists"])
+        blocker_codes = {item["reason_code"] for item in document["derived"]["document_blockers"]}
+        self.assertIn("document_file_missing", blocker_codes)
 
 
 if __name__ == "__main__":

@@ -490,6 +490,24 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
         codes = {item.code for item in diagnostics}
         self.assertIn("RULE_ILLEGAL_STATE_COMBINATION", codes)
 
+    def test_state_rule_diagnostics_explain_candidate_and_readiness_gates(self) -> None:
+        state = _build_valid_state()
+        confirmed = state["subtasks"]["ST01_01"]["state"]["confirmed"]
+        confirmed["candidate_status"] = "candidate"
+        confirmed["review_status"] = "pending_confirmation"
+        confirmed["readiness"] = "downstream_ready"
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+
+        self.assertEqual(exit_code, 1)
+        messages = "\n".join(item.message for item in diagnostics)
+        self.assertIn(
+            "candidate_status=candidate requires global_policy.formal_window_open=true",
+            messages,
+        )
+        self.assertIn("readiness=downstream_ready requires maturity to be set", messages)
+
     def test_validate_state_exit_code_success_for_valid_state(self) -> None:
         state = _build_valid_state()
         state_path = self._write_state(state)

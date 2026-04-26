@@ -72,6 +72,22 @@
 - bootstrap 文件不得被直接当成 readiness / candidate / maturity / document status 的最终结论。
 - `confirm-transition` 负责 confirmed business state 的正式审批写回；round lifecycle 还会维护 document tracking 字段，例如 `active_round_id`、`last_round_id`。
 
+### 2.1 Official / Preview / Dry-run 分层
+
+- official state：`docs/governance/DOC_STATE.yaml` 是唯一正式状态真值，只能通过已确认的 `confirm-transition`、round lifecycle 写回或显式 seed / apply 流程维护。
+- preview state：repo 内的 preview YAML 可作为 `validate-state` / `evaluate-state` 输入，用于验证结构、规则和 document path 影响，但不是 governance truth，不得被当成正式状态写回结果。
+- preview state 的 `documents.*.meta.path` 按仓库根解析；当前支持 `docs/governance/*.yaml`、`docs/governance/previews/*.yaml` 以及 repo 内其他 preview YAML 路径，不要求 preview 文件与正式 `DOC_STATE.yaml` 位于同一目录。
+- dry-run：只用于影响分析和回退预演，不写正式状态，不替代人工确认。
+- apply / official write：必须在用户确认后的单独窗口执行，且只能写授权目标；preview 通过不等于 official state 已变更。
+
+### 2.2 State rule 可见值与禁止误读
+
+- `candidate_status` 的正式值仍为 `none` / `observe` / `candidate`；本轮不新增 `near_ready`，也不扩展枚举。
+- `readiness` 的正式值仍为 `blocked` / `not_ready` / `downstream_ready` / `implementation_ready`。
+- `formal_window_open=false` 时，`candidate_status=candidate` 不能作为正式状态使用；facts-only candidate 只能作为事实记录或 preview 观察，不等于 formal window open。
+- `readiness=downstream_ready` 要求对应对象已有非空 `maturity`，不能只靠文档正文自评或 preview 说明推导。
+- `near_ready`、`formal_window_candidate_recommended` 之类表达只能作为 planner / backlog 语义，除非后续另行批准状态模型扩展，否则不得写入 confirmed state。
+
 ## 3. 白名单扫描来源
 
 Phase 1A 的 `repo_scan` 仍只允许读取以下来源：

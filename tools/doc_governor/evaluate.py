@@ -1242,12 +1242,33 @@ def _summarize_rounds(rounds: list[object]) -> dict[str, Any]:
 
 def _resolve_repo_root(state_path: Path) -> Path:
     normalized = state_path.resolve()
+    for candidate in (normalized.parent, *normalized.parents):
+        if _looks_like_repo_root(candidate):
+            return candidate
+
     try:
         if normalized.parent.name == "governance" and normalized.parent.parent.name == "docs":
             return normalized.parent.parent.parent
     except IndexError:
         pass
     return normalized.parent
+
+
+def _looks_like_repo_root(path: Path) -> bool:
+    if (path / ".git").exists():
+        return True
+
+    has_agents = (path / "AGENTS.md").is_file()
+    has_state = (path / "docs" / "governance" / "DOC_STATE.yaml").is_file()
+    has_doc_governor = (path / "tools" / "doc_governor").is_dir()
+    has_python_project = (path / "pytest.ini").is_file() or (path / "pyproject.toml").is_file()
+
+    return (
+        (has_agents and has_doc_governor)
+        or (has_agents and has_state)
+        or (has_state and has_doc_governor)
+        or (has_python_project and has_doc_governor)
+    )
 
 
 def _finalize_module_derived(

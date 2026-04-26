@@ -107,6 +107,16 @@ C:\Users\Administrator\AppData\Roaming\npm\codex.cmd exec
 | 验证 | `validate-state`、`evaluate-state`、`show-history`、`summarize-history`、`preview-task-state-dependency-map`、`summarize-task-apply-result` | 用于回归核对、历史审计与写回结果复盘 |
 | 上下文回收 | `render-report`、`show-history`、`summarize-history`、支持 Markdown 输出的 task 规划命令 | 用于把讨论、历史和 task 规划重新压回可复用文本产物 |
 
+### 3.7 Official / Preview / Dry-run 操作分层
+
+- official state 固定为 `docs/governance/DOC_STATE.yaml`，是唯一正式状态真值。
+- preview state 可以用 `validate-state --input <preview.yaml>` 与 `evaluate-state --input <preview.yaml>` 做结构、规则和 document path 验证；preview 文件不是 governance truth。
+- preview state 可放在 `docs/governance/previews/`、`docs/governance/` 或 repo 内其他受支持的 preview 路径；其中 `documents.*.meta.path` 按仓库根解析，不按 preview 文件所在目录解析。
+- dry-run 只做影响分析，不写正式状态；apply / official write 必须在用户确认后的单独窗口执行。
+- `candidate_status` 只支持 `none` / `observe` / `candidate`，`readiness` 只支持 `blocked` / `not_ready` / `downstream_ready` / `implementation_ready`；`near_ready` 不是状态层正式值。
+- `formal_window_open=false` 时不得把 `candidate_status=candidate` 作为正式状态；`readiness=downstream_ready` 要求 confirmed `maturity` 已设置。
+- facts-only candidate preview 只表示事实记录或候选观察，不等于 formal window open，也不等于 implementation packet 可生成。
+
 ## 4. 常用只读命令
 
 ### 4.1 评估官方状态并渲染报告

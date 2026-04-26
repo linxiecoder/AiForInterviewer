@@ -172,7 +172,8 @@ def _evaluate_formal_window_closed_gate(
                 entity_id=entity_id,
                 field_path=_state_path(entity_type, entity_id, "candidate_status"),
                 message=(
-                    "Candidate status candidate is not allowed when formal window is closed"
+                    "candidate_status=candidate requires global_policy.formal_window_open=true; "
+                    "facts-only candidate previews must not be treated as formal-window-open"
                 ),
                 evidence=make_evidence(
                     type="policy_check",
@@ -331,7 +332,7 @@ def _evaluate_illegal_state_combinations(
                 entity_type=entity_type,
                 entity_id=entity_id,
                 field_path=_state_path(entity_type, entity_id, "maturity"),
-                message="maturity must be set when readiness is downstream_ready",
+                message="readiness=downstream_ready requires maturity to be set",
                 evidence=make_evidence(
                     type="state_check",
                     path=f"{entity_type}:{entity_id}",
