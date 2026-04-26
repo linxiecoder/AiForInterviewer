@@ -7,8 +7,9 @@
 - W13-E 新增 `OQ-090~OQ-092`，仅用于任务 ID、旧 `STxx_*` 处理和 `DOC_STATE.yaml` 写入节奏确认；用户已确认三项 W13-E 结果，这些问题不改变 W13 产品范围 confirmed 事实。
 - W13-E2 新增 `OQ-093`，用户已确认方案 B：先创建 preview YAML，不修改正式 `DOC_STATE.yaml`；W13-E3 已据此新增状态层 Preview YAML。
 - W13-E4-A 新增 `OQ-094~OQ-096`，用于确认后续 State Write 的阶段 1 写入、旧 `STxx_*` superseded 表达和备份方式；用户已确认 `OQ-094=B`、`OQ-095` 阶段 1 方案 C / 阶段 2 方案 B、`OQ-096=B`，且 `W13-E4-C` 已按该确认执行阶段 2。
-- W13-E4-D 新增 `OQ-097~OQ-099`，用于确认是否创建 Stage3 Preview YAML、旧 `STxx_*` 正式移出策略和 `RQ01.facts.task_ids` 旧任务处理；用户已确认 `OQ-097=B`、`OQ-098=先做方案B的Preview，不正式移出旧STxx_*`、`OQ-099=先做方案B的Preview，在Preview中移除旧ST01_01、ST09_03`。W13-E4-E 已创建并验证 Stage3 Preview YAML，但这不表示旧 `STxx_*` 已正式移出或正式 `RQ01.facts.task_ids` 已改写。
-- W13-E4-E 新增 `OQ-100`，用于确认是否基于已通过的 Stage3 Preview 执行正式 Stage 3；该项当前仍待用户确认。
+- W13-E4-D 新增 `OQ-097~OQ-099`，用于确认是否创建 Stage3 Preview YAML、旧 `STxx_*` 正式移出策略和 `RQ01.facts.task_ids` 旧任务处理；用户已确认 `OQ-097=B`、`OQ-098=先做方案B的Preview，不正式移出旧STxx_*`、`OQ-099=先做方案B的Preview，在Preview中移除旧ST01_01、ST09_03`。W13-E4-E 已创建并验证 Stage3 Preview YAML，W13-E4-F 已基于该 preview 执行正式 Stage 3。
+- W13-E4-E 新增 `OQ-100`，用于确认是否基于已通过的 Stage3 Preview 执行正式 Stage 3；用户已确认方案 B，W13-E4-F 已正式移出旧 `STxx_*` 并改写 `RQ01.facts.task_ids`。
+- W13-E6 已确认 `OQ-101~OQ-110`：第一批只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的横向 contract / 测试 / 治理任务包草案；任务包准备与实现严格拆窗；formal window、implementation packet、实现目录创建仍禁止，直到后续逐项满足 gate 并再次确认。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -20,10 +21,10 @@
 
 | 类别 | 数量 | 说明 |
 | --- | ---: | --- |
-| `confirmed` | 97 | 已由 `W13-A`、`DD-018~DD-040`、`FC-01~FC-18` 或 W13-E / W13-E3 / W13-E4-A / W13-E4-B / W13-E4-C / W13-E4-D / W13-E4-E 过程确认覆盖，不再作为待确认阻塞。 |
+| `confirmed` | 108 | 已由 `W13-A`、`DD-018~DD-043`、`FC-01~FC-18` 或 W13-E / W13-E3 / W13-E4-A / W13-E4-B / W13-E4-C / W13-E4-D / W13-E4-E / W13-E4-F / W13-E6 过程确认覆盖，不再作为待确认阻塞。 |
 | `historical` | 2 | `OQ-002`、`OQ-003` 只保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。 |
 | `open` | 0 | 当前没有 active 产品范围待确认项。 |
-| `proposed-default` | 1 | `OQ-100` 等待用户确认是否基于 Stage3 Preview 执行正式 Stage 3；旧 `STxx_*` 尚未正式移出，正式 `RQ01.facts.task_ids` 尚未改写。 |
+| `proposed-default` | 0 | 当前无 W13-E5 任务包准备确认卡保持 proposed-default。 |
 
 M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `confirmed / historical / superseded / open` 保留治理语义，模块索引和子文档父模块链接已补强。该处理不等于放行正式子任务窗口，也不等于旧 STxx_* 骨架已迁移到 archive。
 
@@ -41,6 +42,7 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | State Write 阶段 1 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md` |
 | State Write 阶段 2 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` |
 | State Write 阶段 3 dry-run 与影响分析 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md` |
+| State Write 阶段 3 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
 
@@ -94,9 +96,26 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | `OQ-095` | 旧 `STxx_*` superseded 表达方式如何处理？ | confirmed | 第一阶段采用方案 C：先不表达 superseded，只并存新旧任务；第二阶段采用方案 B：在 `DOC_STATE.yaml` 中用现有字段表达 superseded / historical-reference | 方案 A：只在索引和 task-remap 表达；方案 D：用户自定义 | 用户已确认该分阶段口径；`W13-E4-B` 已完成阶段 1，`W13-E4-C` 已完成阶段 2，用旧任务 facts 写入 `w13_status`、`w13_role`、`w13_superseded_by` 与 `w13_alias_target`。 |
 | `OQ-096` | 是否创建正式 State Write 备份文件？ | confirmed | 方案 B：在 `docs/superpowers/plans` 下创建 State Write 变更说明和回退说明，不复制 `DOC_STATE` | 方案 A：不创建备份；方案 C：创建写入前快照副本到 preview / backup 目录；方案 D：用户自定义 | 用户已确认方案 B；已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md`，未复制正式 `DOC_STATE.yaml`。 |
 | `OQ-097` | 是否创建 Stage3 Preview YAML？ | confirmed | 方案 B：下一窗口创建 Stage3 Preview YAML，不修改正式 `DOC_STATE.yaml` | 方案 A：不创建 Preview YAML，只保留 dry-run；方案 C：跳过 preview 直接正式移出旧 `STxx_*`；方案 D：用户自定义 | 用户已确认 `OQ-097=B`，且 W13-E4-E 已创建并验证 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`；正式 `DOC_STATE.yaml` 未修改。 |
-| `OQ-098` | 旧 `STxx_*` 正式移出策略如何处理？ | confirmed | 先做方案 B 的 preview：正式阶段 3 移出旧 `STxx_*`，同时保留合法历史引用 | 方案 A：暂不移出；方案 C：只移出确认无引用风险的旧任务；方案 D：用户自定义 | 用户已确认先做方案 B 的 Preview，不正式移出旧 `STxx_*`。全部 30 个旧 ST 可进入 preview 候选，但正式移出前必须先验证 `TASK_INDEX.md`、`MODULE_INDEX.md`、模块索引和 `RQ01.facts.task_ids`。 |
-| `OQ-099` | `RQ01.facts.task_ids` 中旧 `ST01_01`、`ST09_03` 如何处理？ | confirmed | 方案 B：阶段 3 preview 中移除 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25` | 方案 A：暂时保留；方案 C：移到历史说明字段，如果 schema 支持；方案 D：用户自定义 | 用户已确认先做方案 B 的 Preview，并在 Preview 中移除旧 `ST01_01`、`ST09_03`；正式 `RQ01.facts.task_ids` 仍不得在本确认写回中修改。 |
-| `OQ-100` | 是否基于 Stage3 Preview 执行正式 Stage 3？ | proposed-default | 推荐方案 B：执行正式 Stage 3，移出旧 `STxx_*`，并从 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03` | 方案 A：暂不执行正式 Stage 3；方案 C：只移出 `RQ01.facts.task_ids` 的旧任务但旧 `STxx_*` 暂留；方案 D：用户自定义 | Stage3 Preview 已通过 `validate-state / evaluate-state`，preview `subtasks=25`、旧 ST 容器数为 0、`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；正式执行仍需用户确认。 |
+| `OQ-098` | 旧 `STxx_*` 正式移出策略如何处理？ | confirmed | 先做方案 B 的 preview：正式阶段 3 移出旧 `STxx_*`，同时保留合法历史引用 | 方案 A：暂不移出；方案 C：只移出确认无引用风险的旧任务；方案 D：用户自定义 | 用户已确认先做方案 B 的 Preview；W13-E4-E 已验证，W13-E4-F 已正式移出旧 `STxx_*`。旧任务只保留为历史参考 / reusable evidence / archive candidate。 |
+| `OQ-099` | `RQ01.facts.task_ids` 中旧 `ST01_01`、`ST09_03` 如何处理？ | confirmed | 方案 B：阶段 3 preview 中移除 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25` | 方案 A：暂时保留；方案 C：移到历史说明字段，如果 schema 支持；方案 D：用户自定义 | 用户已确认先做方案 B 的 Preview；W13-E4-F 已在正式 `RQ01.facts.task_ids` 中移除旧 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25`。 |
+| `OQ-100` | 是否基于 Stage3 Preview 执行正式 Stage 3？ | confirmed | 方案 B：执行正式 Stage 3，移出旧 `STxx_*`，并从 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03` | 方案 A：暂不执行正式 Stage 3；方案 C：只移出 `RQ01.facts.task_ids` 的旧任务但旧 `STxx_*` 暂留；方案 D：用户自定义 | 用户已确认方案 B；W13-E4-F 已完成正式 Stage 3 写入，验证结果为 `ok=true,error=0,warning=0`，且仍不放行 implementation-ready。 |
+
+### 6.1 W13-E5 ST13 readiness audit 确认卡
+
+完整卡片见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` 第 11 节；用户已在 W13-E6 确认 `OQ-101=A`、`OQ-102=A`、`OQ-103=A`、`OQ-104=B`、`OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C`。确认结果只放行任务包草案，不放行 implementation packet、formal window 或代码实现。
+
+| OQ ID | 问题 | 状态 | 推荐方案 | 备选方案 | 当前处理要求 |
+| --- | --- | --- | --- | --- | --- |
+| `OQ-101` | 是否允许生成 ST13 任务包草案？ | confirmed | 方案 A：先只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 四个横向 contract / 测试 / 治理任务包草案 | 方案 B：全量生成；方案 C：先补模块同步；方案 D：用户自定义 | 用户已确认 `A`；W13-E6 只生成第一批任务包草案，不生成 implementation packet。 |
+| `OQ-102` | ST13 任务包生成顺序如何确定？ | confirmed | 方案 A：横向 contract 先行 | 方案 B：用户旅程先行；方案 C：模块成熟度先行；方案 D：用户自定义 | 用户已确认 `A`；第一批顺序为 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25`。 |
+| `OQ-103` | 哪些 ST13 可先做 contract？ | confirmed | 方案 A：只做 `ST13_21 / ST13_20 / ST13_24 / ST13_25` | 方案 B：加入 `ST13_01 / ST13_10 / ST13_11 / ST13_12 / ST13_13`；方案 C：页面优先；方案 D：用户自定义 | 用户已确认 `A`；不得扩大到其他 ST13 或实现窗口。 |
+| `OQ-104` | 是否允许创建 ST13 专属子任务文档？ | confirmed | 方案 B：先在 `docs/superpowers/plans/**` 生成任务包草案，不创建模块子任务目录 | 方案 A：直接创建专属子任务文档；方案 C：先更新模块任务索引；方案 D：用户自定义 | 用户已确认 `B`；W13-E6 不创建模块子任务目录或正式双文档。 |
+| `OQ-105` | 何时允许创建 `apps/api/**`、`apps/web/**` 或 `infra/**`？ | confirmed | 方案 A：formal window 和 implementation packet 前一律禁止创建 | 方案 B：允许空骨架；方案 C：contract 后创建最小骨架；方案 D：用户自定义 | 用户已确认 `A`；当前仍禁止创建实现目录。 |
+| `OQ-106` | 何时允许生成 implementation packet？ | confirmed | 方案 A：所有 P0 gate 补齐前禁止生成 | 方案 B：dry-run packet；方案 C：contract packet 草案；方案 D：用户自定义 | 用户已确认 `A`；当前禁止生成 implementation packet。 |
+| `OQ-107` | formal window 何时打开？ | confirmed | 方案 A：每个 ST13 的任务包、双文档、验收、测试和用户确认齐备后逐个打开 | 方案 B：按阶段批量打开；方案 C：全量任务包完成后统一打开；方案 D：用户自定义 | 用户已确认 `A`；当前 formal window 仍关闭。 |
+| `OQ-108` | 任务包准备与实现是否拆窗？ | confirmed | 方案 A：严格拆窗，任务包准备窗口不写代码 | 方案 B：同窗准备后继续实现；方案 C：contract 任务同窗实现；方案 D：用户自定义 | 用户已确认 `A`；任务包准备窗口不写代码。 |
+| `OQ-109` | 先做 API contract 还是 UI skeleton？ | confirmed | 方案 A：API contract 先行 | 方案 B：UI skeleton 先行；方案 C：二者并行但只写文档；方案 D：用户自定义 | 用户已确认 `A`；不得绕过 API contract。 |
+| `OQ-110` | 一期 MVP 实现准备先做后端还是前端？ | confirmed | 方案 C：后端 contract 与前端页面规格并行，等 contract 合并后再实现 | 方案 A：后端 / API / 数据先行；方案 B：前端页面规格先行；方案 D：用户自定义 | 用户已确认 `C`；后续可并行准备前端页面规格文档，但 contract 合并前不实现。 |
 
 ## 7. 使用说明
 

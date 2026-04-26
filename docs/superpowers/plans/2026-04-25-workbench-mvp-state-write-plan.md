@@ -1,6 +1,6 @@
 # AI 模拟面试一期工作台 MVP State Write 分阶段计划
 
-> 本文档是 `W13-E4-A / State Write 分阶段计划、测试矩阵与回退方案` 的正式计划产物。`W13-E4-B` 已按本计划执行阶段 1：写入 `ST13_01~ST13_25`，保留旧 `STxx_*`；`W13-E4-C` 已执行阶段 2：用旧任务 facts 表达 `historical-reference / superseded`；`W13-E4-D` 已完成阶段 3 dry-run / 影响分析；`W13-E4-E` 已创建并验证 Stage3 Preview YAML，但未正式移出旧 `STxx_*`。本文档仍不生成 implementation packet，不放行实现。
+> 本文档是 `W13-E4-A / State Write 分阶段计划、测试矩阵与回退方案` 的正式计划产物。`W13-E4-B` 已按本计划执行阶段 1：写入 `ST13_01~ST13_25`，保留旧 `STxx_*`；`W13-E4-C` 已执行阶段 2：用旧任务 facts 表达 `historical-reference / superseded`；`W13-E4-D` 已完成阶段 3 dry-run / 影响分析；`W13-E4-E` 已创建并验证 Stage3 Preview YAML；`W13-E4-F` 已执行正式 Stage 3，将旧 `STxx_*` 从 formal current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。本文档仍不生成 implementation packet，不放行实现。
 
 ## 1. 背景
 
@@ -12,13 +12,15 @@
 2. 不写代码，不修改 `tools/**`、`tests/**`，不创建 `apps/**` 或 `infra/**`。
 3. 不执行 Git 提交、推送或任何破坏性 Git 操作。
 4. 不生成 implementation packet。
-5. 阶段 3 / 4 仍必须等待后续窗口再次确认。
+5. 阶段 3 已由 `W13-E4-F` 按用户确认执行；阶段 4 仍必须等待后续窗口再次确认。
 
 `W13-E4-B` 执行注记：用户已确认 `OQ-094=B`、`OQ-095` 阶段 1 方案 C / 阶段 2 方案 B、`OQ-096=B`。阶段 1 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md` 记录变更与回退说明，旧 `STxx_*` 未移除、未改写、未标记 superseded。
 
-`W13-E4-C` 执行注记：用户已确认进入阶段 2 并采用方案 B。阶段 2 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md`，并在 30 个旧 `STxx_*` 的 `facts` 中写入 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by` 与 `w13_alias_target`。旧任务仍未移出正式容器，未迁移 archive。
+`W13-E4-C` 执行注记：用户已确认进入阶段 2 并采用方案 B。阶段 2 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md`，并在 30 个旧 `STxx_*` 的 `facts` 中写入 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by` 与 `w13_alias_target`。阶段 2 完成时旧任务仍未移出正式容器，未迁移 archive；后续 `W13-E4-F` 已执行正式移出。
 
 `W13-E4-E` 执行注记：已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`，并在 preview 中验证 `subtasks` 只保留 `ST13_01~ST13_25`、`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25` 后仍保持 `validate-state / evaluate-state` 绿灯。正式 `DOC_STATE.yaml` 未修改；是否执行正式 Stage 3 仍需用户确认。
+
+`W13-E4-F` 执行注记：用户已确认 `OQ-100` 方案 B。正式 Stage 3 已将 `DOC_STATE.yaml.subtasks` 收敛为 `ST13_01~ST13_25`，并从正式 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03`。新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` 记录变更与回退说明；未迁移 archive，未生成 implementation packet，未放行实现。
 
 ## 2. W13-E3 Preview 结果摘要
 
@@ -142,7 +144,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/superpowers/plans/2
 
 ### 4.3 阶段 3：旧 `STxx_*` 移出正式任务容器
 
-当前执行状态：`W13-E4-E` 已完成 Stage3 Preview；正式移出尚未执行，正式 `RQ01.facts.task_ids` 尚未改写。下一步应先由用户确认是否执行正式 Stage 3，不得直接修改正式 `DOC_STATE.yaml`。
+当前执行状态：`W13-E4-F` 已完成正式 Stage 3。正式 `DOC_STATE.yaml.subtasks` 当前只保留 `ST13_01~ST13_25`，正式 `RQ01.facts.task_ids` 当前只保留 `ST13_01~ST13_25`。旧 `STxx_*` 仍保留为历史参考、reusable evidence 和 archive candidate，不得误读为 archive 迁移完成或 implementation-ready。
 
 1. 修改目标：
    - 让正式 `subtasks` 容器只承载 W13 新任务。
@@ -174,7 +176,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/superpowers/plans/2
    - 恢复 `TASK_INDEX.md / MODULE_INDEX.md / task-remap` 中本阶段涉及旧任务移出语义的文字。
    - 重新运行正式 `validate-state / evaluate-state`，并复查 closed round。
 10. 是否需要用户确认：
-   - 需要，且建议比阶段 1 / 阶段 2 更严格；当前由 `OQ-100` 承接是否基于 Stage3 Preview 执行正式 Stage 3。
+   - 已由 `OQ-100` 确认方案 B，并由 `W13-E4-F` 执行完成；后续 archive 迁移仍需另行确认。
 11. 是否可进入下一阶段：
    - 只有旧任务引用解除后仍可追溯，且 `subtasks_blocked_count` 可解释，才可进入阶段 4。
 

@@ -11,17 +11,17 @@
 
 ## 2. 当前阶段摘要
 
-- 当前阶段：`W13-E4-E / Stage3 Preview` 已完成；已新增并验证 Stage3 Preview YAML，正式 `DOC_STATE.yaml` 未修改。
-- 当前边界：本轮只做 Preview YAML 创建、验证、对比和分析；不正式移出旧 `STxx_*`，不正式改写 `RQ01.facts.task_ids`，不进入实现。
+- 当前阶段：`W13-E6 / ST13 第一批 contract 任务包草案` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口，本轮只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 四个任务包草案。
+- 当前边界：本轮只做任务包草案和确认写回；不创建 ST13 专属子任务目录，不生成 implementation packet，不打开 formal window，不创建 `apps/**` / `infra/**`，不进入实现。
 - 代码开发状态：暂停。
 - 当前不允许扩展 `apps/web/**`，不允许创建 `apps/api/**` / `infra/**`，不允许接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
-- 正式开窗层：为空；本轮只完成 Stage3 Preview 创建与验证，不修改正式 `DOC_STATE.yaml`，不生成 implementation packet，不进入实现。
+- 正式开窗层：为空；本轮只完成第一批任务包草案，不生成 implementation packet，不进入实现。
 - 当前没有可直接进入代码实施的子任务。
 
 ## 3. 当前 confirmed 摘要
 
 - `FC-01~FC-19` 已完成用户确认。
-- `OPEN_QUESTIONS.md` 已回压 W13 产品事实为 confirmed / historical 归并索引；当前 active 产品范围 `open=0`，`OQ-097~OQ-099` 的 preview 路径已完成验证，但正式 Stage 3 是否执行仍需用户确认。
+- `OPEN_QUESTIONS.md` 已回压 W13 产品事实为 confirmed / historical 归并索引；当前 active 产品范围 `open=0`，`OQ-097~OQ-100` 已按用户确认完成 Stage3 Preview 与正式 Stage 3 写入。
 - 一期 MVP 是工作台级，不再是 W10 首切片。
 - W10 `apps/web/**` 原型只作为参考证据，不作为正式一期 MVP 起点。
 - 一期包含服务端历史 / 复盘记录、真实 LLM、完整登录 / 权限、服务端保存、完整 `0-100` 多维评分、复制 / Markdown 下载、RAG / 知识库和多轮高阶面试。
@@ -44,6 +44,9 @@
 | State Write 阶段 2 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` |
 | State Write 阶段 3 dry-run 与影响分析 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md` |
 | Stage3 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml` |
+| State Write 阶段 3 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` |
+| ST13 readiness audit | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` |
+| ST13 第一批 contract 任务包草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | OQ / MQ 归并入口 | `OPEN_QUESTIONS.md` |
@@ -58,9 +61,11 @@
 - `M01-M03` 仍不因 FC confirmed 自动升级为 L5 或正式候选。
 - `M04-M10` 仍多为 L1 / 骨架级，需要后续模块窗口按 W13 唯一事实源继续补齐模块级设计。
 - `docs/modules/**` 中仍存在旧设计稿、旧实现计划路径引用和历史 OQ/MQ/ST/MT 引用；其中历史引用可保留，但不能作为当前事实源。
-- 旧 P1 设计稿已从当前 `documents` 受管集合移出并迁入 archive；旧 `STxx_*` 骨架仍被 `DOC_STATE.yaml` 和索引层引用，本轮不迁移 archive。
-- W13-E 的任务 ID 命名、旧 `STxx_*` 后续处理、先做 W13-E2 dry-run、`OQ-093=B` Preview YAML 和 `OQ-094~OQ-096` State Write 口径均已确认；旧 `STxx_*` 的正式 superseded / historical-reference 表达已在阶段 2 完成，但旧任务仍未移出正式容器。
-- `W13-E4-E` 已完成 Stage3 Preview YAML 创建与验证：preview 中旧 `STxx_*` 已从正式 `subtasks` 容器移出，`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；正式状态仍未改写。
+- 旧 P1 设计稿已从当前 `documents` 受管集合移出并迁入 archive；旧 `STxx_*` 骨架已从正式 `DOC_STATE.yaml.subtasks` current 容器移出，但仍被索引层和阶段说明文档作为历史引用保留，本轮不迁移 archive。
+- W13-E 的任务 ID 命名、旧 `STxx_*` 后续处理、先做 W13-E2 dry-run、`OQ-093=B` Preview YAML 和 `OQ-094~OQ-100` State Write 口径均已确认；旧 `STxx_*` 的正式 current 容器移出已在阶段 3 完成。
+- `W13-E4-E` Stage3 Preview YAML 已完成创建与验证；`W13-E4-F` 已将 preview 证明过的状态层结果正式写入。
+- `W13-E5` 已完成 ST13 readiness audit；25 个 ST13 均仍不具备 implementation-ready，下一步只能进入用户确认后的任务包准备窗口。
+- `W13-E6` 已完成第一批任务包草案；`ST13_21 / ST13_20 / ST13_24 / ST13_25` 仍只是 `task_packet_draft_created`，不能视为 implementation-ready。
 
 ## 6. 当前完成事项
 
@@ -80,6 +85,9 @@
 - 已完成 W13-E4-C State Write 阶段 2：30 个旧 `STxx_*` 仍保留在正式 `DOC_STATE.yaml.subtasks`，并已在各自 `facts` 中写入 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by`、`w13_alias_target` 和 `w13_archive_candidate=true`；新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 记录变更与回退说明。
 - 已完成 W13-E4-D State Write 阶段 3 dry-run：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md`，确认旧 `STxx_*` 仍被索引层全量历史引用，closed round 未直接引用旧 ST；用户已确认在 Stage3 Preview 中验证移除 `RQ01.facts.task_ids` 中旧 `ST01_01`、`ST09_03` 的方案。正式 `DOC_STATE.yaml` 未修改，旧任务未移出。
 - 已完成 W13-E4-E Stage3 Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`；preview `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，preview `subtasks_blocked_count=25`，未出现 missing reference、stale target、schema error、implementation-ready 误判或 formal window 误开。
+- 已完成 W13-E4-F State Write 阶段 3 正式写入：正式 `DOC_STATE.yaml.subtasks` 只保留 `ST13_01~ST13_25`，旧 `ST01_01~ST10_03` 已从 current 容器移出，`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` 记录变更与回退说明。
+- 已完成 W13-E5 ST13 readiness audit：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`，逐项审计 `ST13_01~ST13_25` 的缺口、依赖、任务包准备状态、formal window 条件、实现前置依赖和模块文档映射；本轮未生成 implementation packet，未进入实现。
+- 已完成 W13-E6 第一批 contract 任务包草案：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`，吸收 `OQ-101~OQ-110` confirmed 结果，并生成 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25` 的草案顺序。
 
 ## 7. 历史归档说明
 
@@ -92,8 +100,8 @@
 
 ## 8. 下一步建议
 
-1. 下一步建议由用户确认是否基于 Stage3 Preview 执行正式 Stage 3；确认前不得直接修改正式 `DOC_STATE.yaml`。
-2. 若后续要迁移旧 `STxx_*` 骨架，必须先完成阶段 3 正式移出，重构 `DOC_STATE.yaml`、`TASK_INDEX.md` 和模块索引中的正式引用关系。
-3. 开模块同步窗口，优先同步 `M06 / M08 / M09 / M05 / M10` 中与多轮、复盘、评分、训练、RAG、资产库和管理台入口相关的 W13 confirmed 范围。
-4. 持续维护 backlog-roadmap 中的状态层、实现前置、二期 / 三期和归档待办。
+1. 进入 W13-E7：基于 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 草案准备正式子任务双文档路径方案；该窗口仍不得实现。
+2. 根据 `OQ-110=C`，可另开并行文档窗口准备 `ST13_23` 前端页面规格，但 contract 合并前不得实现。
+3. 若后续要打开 formal window，必须逐个 ST13 补齐任务包、双文档、验收标准、required tests 和用户确认。
+4. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
 5. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。

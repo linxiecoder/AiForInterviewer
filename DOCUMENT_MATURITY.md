@@ -31,8 +31,8 @@
 | `OPEN_QUESTIONS.md` | L5 | OQ / MQ confirmed / historical 归并入口 | 是 | 否 |
 | `DESIGN_DECISIONS.md` | L5 | DD confirmed / superseded / needs-review 决策索引 | 是 | 否 |
 | `TECHNICAL_STANDARDS.md` | L4 | confirmed 技术标准摘要，仍保留 implementation packet 复核边界 | 部分 | 否 |
-| `TASK_INDEX.md` | L4 | 当前任务索引；已同步 `ST13_01~ST13_25` 正式状态层入口、`WT13-xx` alias 和旧 `STxx_*` facts historical / superseded 摘要，但未形成正式开窗或 implementation-ready | 部分 | 否 |
-| `MODULE_INDEX.md` | L4 | 当前模块索引；已写入 W13 候选任务域、`ST13_*` 模块映射和旧 `STxx_*` 历史参考角色，但模块同步仍待后续窗口 | 部分 | 否 |
+| `TASK_INDEX.md` | L4 | 当前任务索引；已同步 `ST13_01~ST13_25` 正式状态层入口、`WT13-xx` alias 和旧 `STxx_*` 已从 formal current `subtasks` 容器移出的历史参考口径，但未形成正式开窗或 implementation-ready | 部分 | 否 |
+| `MODULE_INDEX.md` | L4 | 当前模块索引；已写入 W13 候选任务域、`ST13 / WT13` 模块映射和旧 `STxx_*` 仅作历史参考的阶段 3 口径，但模块同步仍待后续窗口 | 部分 | 否 |
 | `DOCUMENT_PROGRESS.md` | L4 | 当前进展摘要 + 历史归档和补链入口 | 部分 | 否 |
 | `DOCUMENT_MATURITY.md` | L4 | 当前成熟度摘要 + 历史归档和补链入口 | 部分 | 否 |
 | `EXECUTION_LOG.md` | L4 | 历史执行记录 | 部分 | 否 |
@@ -43,6 +43,9 @@
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` | L4 | W13-E4-C State Write 阶段 2 变更与回退说明，记录旧任务 facts historical / superseded 写入、完整映射、验证结果和回退步骤 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md` | L4 | W13-E4-D State Write 阶段 3 dry-run 与影响分析，记录旧 ST 引用链、RQ01 task_ids 影响、Preview 方案和正式阶段 3 执行草案 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml` | L3 | W13-E4-E Stage3 Preview YAML；仅用于验证旧 `STxx_*` 移出与 `RQ01.facts.task_ids` 收敛影响，不是正式状态真值 | 部分 | 否 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` | L4 | W13-E4-F State Write 阶段 3 变更与回退说明，记录正式移出旧 `STxx_*`、收敛 `RQ01.facts.task_ids`、验证结果和回退步骤 | 部分 | 否 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` | L4 | W13-E5 ST13 任务包准备前置审计，记录 `ST13_01~ST13_25` 缺口、依赖、formal window 条件、实现前置依赖、模块映射和用户确认卡 | 部分 | 否 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` | L4 | W13-E6 第一批 contract 任务包草案，记录 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的任务目标、输入输出、边界、依赖、验收和测试要求 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` | L4 | 项目待办、状态层后续、二期 / 三期和历史归档后续事项追踪清单 | 部分 | 否 |
 | `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` | L4 | 历史设计稿归档快照 | 部分 | 否 |
 
@@ -85,12 +88,14 @@
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`
+- `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`
+- `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`
 
 说明：
 - 上述“可作为下游输入”仅表示可用于继续做文档设计、任务重映射和模块同步。
 - 这不等于可以直接进入代码实施。
 - 当前没有任何模块或子任务被登记为可直接实施。
-- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run 和 W13-E4-E Stage3 Preview 可作为后续 State Write 的输入；正式状态层入口仍以 `DOC_STATE.yaml` 为准，旧 `STxx_*` 尚未正式移出。
+- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit 和 W13-E6 第一批 contract 任务包草案可作为后续 archive 迁移评估、任务包准备、正式双文档准备和模块同步输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
 
 ## 7. 当前可直接用于实施的子任务
 
@@ -102,14 +107,13 @@
 - 上述历史内容不再作为当前一期 MVP 范围、模块优先级、正式开窗或 implementation readiness 的依据。
 - 旧实现计划正文已迁移到 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`；原路径只保留跳转说明。
 - 旧 P1 设计稿已迁移到 `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`；原路径只保留跳转说明，`DOC_STATE.yaml` 当前 `documents` 受管集合不再登记 `DOC-SPEC-P1`。
-- 旧 STxx_* 骨架当前通过正式 `DOC_STATE.yaml`、`TASK_INDEX.md` 和模块索引保留为状态层 / 结构参考；阶段 1 已写入新 `ST13_*` 任务，阶段 2 已用 facts 表达旧任务 historical / superseded，W13-E4-E 已在 preview 中验证移出可行，但正式移出和 archive 准备仍需逐阶段确认。
+- 旧 STxx_* 骨架已从正式 `DOC_STATE.yaml.subtasks` current 容器移出；阶段 1 已写入新 `ST13_*` 任务，阶段 2 已用 facts 表达旧任务 historical / superseded，阶段 3 已正式收敛 current 任务入口。旧 STxx_* 仍通过 `TASK_INDEX.md`、`MODULE_INDEX.md`、阶段说明文档和 Git 历史保留追溯，archive 准备仍需另行确认。
 - 需要追溯历史判断时，优先查看 `EXECUTION_LOG.md`、Git 历史和对应模块目录下的 `MODULE_EXECUTION_LOG.md`。
 
 ## 9. 下一等级所需动作
 
-1. 下一步由用户确认是否基于 Stage3 Preview 执行正式 Stage 3；确认前不得修改正式 `DOC_STATE.yaml`。
-2. `TASK_INDEX.md` 后续仍需补允许修改范围、前置条件和验证方式；阶段 1 只完成正式状态层入口同步。
-3. `MODULE_INDEX.md` 需要在模块同步窗口后回写 W13 模块优先级，而不是继续沿用 W10 首切片顺序。
-4. `M05 / M06 / M08 / M09 / M10` 需要优先按 confirmed 范围补齐模块级设计，尤其是 RAG、多轮、复盘、训练、资产归档和管理台入口。
-5. 旧 `STxx_*` 骨架如需归档，必须先完成状态层 / 任务索引 / 模块索引的统一重映射；确认前不直接移动这些文档。
-6. 正式开窗层写入前，所有子任务仍不得进入实施准备或代码实施。
+1. `TASK_INDEX.md` 后续仍需把 W13-E6 第一批任务包草案转化为正式子任务双文档准备窗口；不得标记 implementation-ready。
+2. `MODULE_INDEX.md` 需要在模块同步窗口后回写 W13 模块优先级，而不是继续沿用 W10 首切片顺序。
+3. `M02` 需要优先修正 API / open_questions 模块 blocker；`M05 / M06 / M08 / M09 / M10` 需要按 confirmed 范围补齐模块级设计，尤其是 RAG、多轮、复盘、训练、资产归档和管理台入口。
+4. 旧 `STxx_*` 骨架如需归档，必须另行执行 archive 迁移评估与确认；确认前不直接移动这些文档。
+5. 正式开窗层写入前，所有子任务仍不得进入 implementation-ready 或代码实施。

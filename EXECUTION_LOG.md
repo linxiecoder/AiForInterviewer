@@ -25,6 +25,41 @@
 
 ## 3. 当前记录
 
+### 2026-04-26 / W13-E6 / ST13 第一批 contract 任务包草案
+
+- 执行类型：用户确认吸收、第一批任务包草案生成、计划与索引同步；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作。
+- 用户确认：
+  - `OQ-101=A`、`OQ-102=A`、`OQ-103=A`、`OQ-104=B`、`OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C`。
+- 修改：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`。
+  - 将 `OPEN_QUESTIONS.md` 中 `OQ-101~OQ-110` 从 `proposed-default` 写回为 `confirmed`。
+  - 同步 `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`DESIGN_DECISIONS.md`、`AGENTS.md` 和 backlog-roadmap 的 W13-E6 摘要。
+- 结论：
+  - 第一批任务包草案顺序为 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25`。
+  - 本轮仅达到 `task_packet_draft_created`，仍为 `not_ready_for_implementation`。
+  - `DOC_STATE.yaml` 未修改，25 个 ST13 在状态层仍 blocked。
+- 验证：
+  - 已执行基线 `validate-state` / `evaluate-state`，均为 `ok=true,error=0,warning=0`。
+  - 完成后复跑 `validate-state` / `evaluate-state`，均为 `ok=true,error=0,warning=0`；关键词扫描已覆盖 W13-E6、`OQ-101=A`、`OQ-110=C`、四个 ST13、任务包草案和禁止实现边界。
+
+### 2026-04-26 / W13-E5 / ST13 任务包准备前置审计
+
+- 执行类型：任务包准备前置审计、缺口分类、依赖排序、formal window 条件审计和用户确认卡输出；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不生成 implementation packet，不执行 Git 写操作，不写 Basic Memory。
+- 基线验证：
+  - `validate-state ok=true,error=0,warning=0`。
+  - `evaluate-state ok=true,error=0,warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=25`。
+- 修改内容：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`，逐项审计 `ST13_01~ST13_25` 的任务包准备缺口、formal window 条件、实现前置依赖和 ST13 到模块文档映射。
+  - 同步 `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`AGENTS.md`、task-remap 和 backlog-roadmap 的 W13-E5 摘要。
+- 审计结论：
+  - 25 个 ST13 均缺 ST13 专属设计 / 实施双文档、acceptance criteria、required tests 和 formal window。
+  - `ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` 仅可作为下一窗口任务包准备候选，不代表可以生成 implementation packet 或进入实现。
+  - `ST13_01`、`ST13_02`、`ST13_05`、`ST13_20`、`ST13_21`、`ST13_23` 额外带 `module:M02` 上游 blocker。
+- 遗留问题：
+  - 需要用户确认是否生成 ST13 任务包、生成顺序、哪些 ST13 先做 contract、是否创建 ST13 专属子任务文档、何时允许 implementation packet 和 formal window。
+- 下一轮建议：
+  - 推荐 `W13-E6 / ST13 第一批任务包准备窗口`，默认只处理 `ST13_21`、`ST13_20`、`ST13_24`、`ST13_25` 的任务包草案，不进入实现。
+
 ### 2026-04-26 / W13-E4-E / Stage3 Preview YAML 创建与验证
 
 - 执行类型：Preview YAML 创建、验证、对比和分析窗口；不修改正式 `docs/governance/DOC_STATE.yaml`，不正式移出旧 `STxx_*`，不正式改写 `RQ01.facts.task_ids`，不进入实现。
@@ -1731,6 +1766,39 @@
 - 下一步建议动作：
   - 用户先确认 `OQ-094`。推荐方案 B：允许 `W13-E4-B` 写入 `ST13_01~ST13_25`，但不移除旧 `STxx_*`。
   - 若用户确认，再开 `W13-E4-B` 执行阶段 1，并在写入前后运行正式与 Preview 的 `validate-state / evaluate-state`。
+
+### 2026-04-26 / W13-E4-F / State Write Stage 3 正式写入
+
+- 范围：只做状态层 Stage 3 写入和必要同步；修改 `docs/governance/DOC_STATE.yaml`、根索引 / 进展 / 成熟度 / OQ / DD 文档和 W13 state-write 计划文档；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/modules/**`、`archive/**`，不执行 Git 操作，不写 Basic Memory。
+- Stage3 Preview 依据：
+  - Preview `validate-state` 为 `ok=true, error=0, warning=0`。
+  - Preview `evaluate-state` 为 `ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=25`。
+  - Preview `subtasks` 只保留 `ST13_01~ST13_25`，旧 `STxx_*` 数量为 `0`，`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`。
+- 正式写入结果：
+  - 正式 `DOC_STATE.yaml.subtasks` 已从 `55` 个任务收敛为 `25` 个任务。
+  - 旧 `ST01_01~ST10_03` 已从正式 current `subtasks` 容器移出。
+  - `ST13_01~ST13_25` 全部保留。
+  - `RQ01.facts.task_ids` 已移除旧 `ST01_01`、`ST09_03`，最终只保留 `ST13_01~ST13_25`。
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`，记录正式修改、验证结果、历史追溯和回退步骤。
+- 验证结果：
+  - 正式 `DOC_STATE.yaml`：`validate-state` 为 `ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state` 为 `ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=25`。
+- 风险检查：
+  - 未出现 schema error、missing reference、stale target 或 parse error。
+  - 未出现 implementation-ready 误判。
+  - 未出现 formal window 误开。
+  - 未发现 requirement relation / module relation 丢失。
+  - closed round 历史引用未修改。
+- 当前仍不允许：
+  - 不进入 implementation-ready。
+  - 不生成 implementation packet。
+  - 不打开 formal window。
+  - 不迁移 archive。
+  - 不删除旧 `STxx_*` 文档。
+  - 不进入业务代码实现。
+- 下一步建议动作：
+  - 可进入 archive 迁移评估，但必须另开确认窗口。
+  - 可进入任务包 / 子任务双文档 / 验收与测试矩阵准备，但在 formal window 和 implementation-ready 形成前仍不得实施。
 
 ## 4. 使用说明
 

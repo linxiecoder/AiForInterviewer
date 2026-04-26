@@ -5,7 +5,7 @@
 > 当前状态主要表示文档建设状态，不表示代码开发状态。
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
-> 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 目前只完成 dry-run / 影响分析，旧任务尚未移出正式容器。
+> 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 已正式将旧 `STxx_*` 从 current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。
 > 当前正式开窗层仍为空；正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到允许修改范围、实施文档与开窗资格全部确认。
 
 ## 1. 模块任务索引
@@ -40,12 +40,13 @@
 ## 2. 子任务索引
 
 > 当前轮次口径：
-> - `RQ01` 只承载 W10 首切片历史来源；当前一期工作台 MVP 的正式任务拆分仍待按 W13 唯一事实源重新建立。
+> - `RQ01` 已承载 W13 工作台级当前任务入口 `ST13_01~ST13_25`；W10 首切片只保留为历史来源追踪。
 > - `ST02_*`、`ST03_*` 只保留为历史容器，禁止作为当前及后续直开窗口。
 > - `OQ-024 / FC-16` 的总控正式映射已写死；`M02`、`M03` 的观察蓝本当前仍不是正式子任务 ID。
 > - 白名单观察面 != 正式子任务 ID != 可开窗任务；本轮仍不允许开启任何子任务窗口。
 > - `M03` 仍只观察 `MT03_01 / MT03_03`；`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 仅为历史后续承接对象，不等于当前 W13 正式开窗任务。
-> - 本轮收口后正式开窗层仍为空；阶段 1 仅新增正式状态层入口 `ST13_01~ST13_25`，阶段 2 仅历史化旧 `STxx_*` facts，均不等于可开实施窗口。
+> - 本轮收口后正式开窗层仍为空；阶段 3 已将正式状态层 current 任务入口收敛为 `ST13_01~ST13_25`，但仍不等于可开实施窗口。
+> - 下表中的旧 `STxx_*` 行只保留为历史索引 / reusable evidence / archive candidate，不再对应正式 `DOC_STATE.yaml.subtasks` current entity，也不再是 current implementation entry。
 
 | Task ID | 名称 | 父任务 | 前置依赖 | 状态 | 文档成熟度 | 是否具备实施条件 | 对应文档路径 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -102,13 +103,13 @@
 - `ST07_03`：后续承接 `M07` 的简版反馈摘要、逐题评估投影与最小改进建议，不等于训练中心或长期进度开窗。
 - 当前正式开窗层固定为空；W10 后续承接对象不得直接升级为 W13 一期工作台 MVP 正式子任务 ID。
 
-## 2.4 W13-E 工作台级任务重映射草案（阶段 1 已写入状态层）
+## 2.4 W13-E 工作台级任务重映射草案（阶段 3 已收敛状态层）
 
 > 本节登记 W13-E / W13-E2 候选任务树摘要，以及 W13-E4-B 阶段 1 已写入的正式状态层入口。
 > `WT13-xx` 已由用户确认为候选任务域命名；正式 `DOC_STATE.yaml.subtasks` key 使用兼容的 `ST13_01~ST13_25`。
-> W13-E4-C 阶段 2 已用旧 `STxx_*` facts 表达 historical / superseded；旧任务仍保留在正式容器中，不作为当前 W13 实施入口。
+> W13-E4-C 阶段 2 曾用旧 `STxx_*` facts 表达 historical / superseded；W13-E4-F 阶段 3 已将旧任务从正式 current `subtasks` 容器移出，旧任务不作为当前 W13 实施入口。
 > W13-E4-D 阶段 3 dry-run 已确认：旧 `STxx_*` 仍被全局索引和模块任务索引作为历史追溯引用；用户已确认下一步先做 Stage3 Preview，并在 Preview 中同步验证 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03` 的方案。
-> W13-E4-E Stage3 Preview 已通过：preview `subtasks` 只保留 `ST13_01~ST13_25`，旧 `STxx_*` 容器数为 0，preview `RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；正式 `DOC_STATE.yaml` 未修改。
+> W13-E4-E Stage3 Preview 已通过；W13-E4-F 已基于用户确认方案 B 正式写入：formal `subtasks` 只保留 `ST13_01~ST13_25`，旧 `STxx_*` formal current 数量为 0，formal `RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`。
 > 下表 `当前状态=blocked` 表示已写入正式状态层但仍不具备实施条件，不表示 `WT13-xx` 命名待确认。
 
 | 候选 ID | 任务域 | 关联模块 | 当前状态 | 是否具备实施条件 | 说明 |
@@ -169,10 +170,32 @@
 | ST13_24 | WT13-24 | M01 | blocked | 否 |
 | ST13_25 | WT13-25 | M01 | blocked | 否 |
 
-### 2.4.2 W13-E4-C 旧 `STxx_*` historical / superseded 同步摘要
+### 2.4.2 W13-E5 readiness audit 摘要
 
-> 完整旧 ST 到 `ST13 / WT13` 映射见 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 第 6 节。
-> 本节只做任务索引级同步：旧 `STxx_*` 仍保留为历史可追溯对象，不再作为 W13 当前实施入口；后续是否移出正式容器留到阶段 3。
+> W13-E5 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`。该审计只判断任务包准备前置条件，不生成 implementation packet，不打开 formal window，不标记 implementation-ready。
+
+| 分类 | ST13 | 结论 |
+| --- | --- | --- |
+| `ready_for_task_packet_candidate` | `ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` | 仅表示可作为下一窗口任务包草案候选；仍需用户确认、双文档、验收标准和 required tests。 |
+| `blocked_by` 上游 | `ST13_01`、`ST13_02`、`ST13_05`、`ST13_20`、`ST13_21`、`ST13_23` | 额外带 `module:M02` blocker；不得据此进入实现。 |
+| `not_ready` | 其余 `ST13_*` | 依赖 API contract、数据 / 权限、LLM / RAG、状态机、评分、复盘、UI 或测试任务包。 |
+
+当前统一缺口：25 个 ST13 均缺 ST13 专属任务设计文档、实施说明文档、验收标准、测试要求和 formal window。任何 `ready_for_task_packet_candidate` 都不是 `ready_for_implementation`。
+
+### 2.4.3 W13-E6 第一批 contract 任务包草案摘要
+
+> W13-E6 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`。该文档只生成第一批任务包草案，不创建正式子任务目录，不生成 implementation packet，不打开 formal window，不标记 implementation-ready。
+
+- 用户确认：`OQ-101=A`、`OQ-102=A`、`OQ-103=A`、`OQ-104=B`、`OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C`。
+- 第一批顺序：`ST13_21 -> ST13_20 -> ST13_24 -> ST13_25`。
+- 当前状态：四个任务均为 `task_packet_draft_created` / `not_ready_for_implementation`；正式状态层中的 25 个 ST13 仍 blocked。
+- 后续建议：进入 W13-E7，为第一批任务准备正式双文档路径方案；仍不得实现。
+
+### 2.4.4 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
+
+> 完整旧 ST 到 `ST13 / WT13` 映射见 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 第 6 节和 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`。
+> 本节只做任务索引级同步：旧 `STxx_*` 已从正式状态层 current `subtasks` 容器移出，仍保留为历史可追溯对象、reusable evidence 和 archive candidate，不再作为 W13 当前实施入口。
+> 下表中的“facts 表达”是阶段 2 历史写入和阶段文档追溯依据，不表示旧 `STxx_*` 仍存在于 formal current `subtasks` 容器。
 
 | 旧 ST 范围 | 当前角色 | facts 表达 | 当前 W13 承接入口 | archive-candidate | 是否具备实施条件 |
 | --- | --- | --- | --- | --- | --- |
@@ -197,6 +220,7 @@ W13-E 当前确认卡：
 - `W13-E4-C`：阶段 2 已用旧任务 facts 写入 `historical-reference / superseded`，但未移出旧 `STxx_*`，未迁移 archive，未放行 implementation-ready。
 - `W13-E4-D`：阶段 3 dry-run / 影响分析已完成；确认卡 `OQ-097~OQ-099` 已由用户确认进入 Stage3 Preview 路径。
 - `W13-E4-E`：Stage3 Preview YAML 已创建并验证通过；正式 `DOC_STATE.yaml` 仍未移出旧 `STxx_*`，正式 `RQ01.facts.task_ids` 仍未改写，是否执行正式 Stage 3 等待 `OQ-100` 用户确认。
+- `W13-E4-F`：用户已确认方案 B 并完成正式 Stage 3；正式 `DOC_STATE.yaml.subtasks` 只保留 `ST13_01~ST13_25`，正式 `RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`，旧 `STxx_*` 只作历史参考和 archive candidate。
 
 ## 3. 使用规则
 

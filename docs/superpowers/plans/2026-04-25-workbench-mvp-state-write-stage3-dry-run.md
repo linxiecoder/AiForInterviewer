@@ -5,6 +5,8 @@
 > 用户后续已确认 `OQ-097=B`、`OQ-098=先做方案B的Preview，不正式移出旧STxx_*`、`OQ-099=先做方案B的Preview，在Preview中移除旧ST01_01、ST09_03`。该确认只放行下一窗口创建并验证 Stage3 Preview YAML，不改变本文档的 dry-run 边界。
 >
 > 后续 `W13-E4-E` 已创建并验证 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`：preview `validate-state / evaluate-state` 全绿，preview `subtasks` 只保留 `ST13_01~ST13_25`，preview `RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`。正式 `DOC_STATE.yaml` 仍未修改。
+>
+> 后续 `W13-E4-F` 已基于用户确认方案 B 执行正式 Stage 3：正式 `DOC_STATE.yaml.subtasks` 已只保留 `ST13_01~ST13_25`，正式 `RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`。旧 `STxx_*` 仍保留为历史参考 / reusable evidence / archive candidate，未迁移 archive，未放行实现。
 
 ## 1. 背景
 
@@ -185,7 +187,9 @@ python -m tools.doc_governor.cli evaluate-state --input docs/superpowers/plans/2
 
 ## 7. 正式阶段 3 执行计划草案
 
-建议窗口名：`W13-E4-E` 或 `W13-StateWrite-Stage3`。
+建议窗口名：`W13-E4-F` 或 `W13-StateWrite-Stage3`。
+
+当前执行状态：已由 `W13-E4-F` 执行完成；正式变更与回退说明见 [`2026-04-25-workbench-mvp-state-write-stage3.md`](2026-04-25-workbench-mvp-state-write-stage3.md)。
 
 ### 7.1 执行目标
 

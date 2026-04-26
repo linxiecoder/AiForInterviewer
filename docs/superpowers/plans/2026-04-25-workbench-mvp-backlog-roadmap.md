@@ -5,8 +5,8 @@
 ## 1. 文档定位
 
 - 维护范围：项目待办、状态层后续事项、任务重映射后续事项、实现前置条件、二期 / 三期候选能力、历史归档后续事项和用户确认待办。
-- 当前状态：W13-E4-E / Stage3 Preview 已完成；正式 `DOC_STATE.yaml` 已新增 `ST13_01~ST13_25`，旧 `STxx_*` 仍保留且已用 facts 表达 `historical-reference / superseded`，但尚未移出正式 `subtasks` 容器。
-- 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不移出旧 `STxx_*`，不迁移 archive。
+- 当前状态：W13-E6 / ST13 第一批 contract 任务包草案已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；当前仍不能生成 implementation packet、打开 formal window 或进入实现。
+- 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不迁移 archive，不删除旧 `STxx_*` 文档。
 - 更新原则：每轮总控或收口窗口可按同一字段规范增量更新；不得只把后续事项写在聊天记录、`EXECUTION_LOG.md` 或一次性确认卡中。
 
 ## 2. 跟踪字段规范
@@ -35,7 +35,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | BR-BLK-001 | W13-E2 State Remap dry-run 收口 | 当前 MVP 阻断项 | done | P0 | W13-E2 | W13-E2 | 已解除 W13-E3 输入质量阻断 | W13-E2 | 2026-04-25 | dry-run 分析已收口；不放行实现。 |
 | BR-BLK-002 | `DOC_STATE.yaml` 尚未写入 W13 新任务 | 当前 MVP 阻断项 | done | P0 | W13-E / W13-E2 / W13-E4-A | W13-E4-B / State Write 阶段 1 | 阶段 1 已解除“新任务未写入”阻断，但不放行 implementation-ready | W13-E4-B | 2026-04-25 | 已写入 `ST13_01~ST13_25`，不移除旧 `STxx_*`。 |
-| BR-BLK-003 | 旧 `STxx_*` 尚未在状态层正式 superseded | 当前 MVP 阻断项 | done | P0 | W13-StateArchive / W13-E / W13-E4-A | W13-E4-C / State Write 阶段 2 | 已用旧任务 facts 表达 historical / superseded | W13-E4-C | 2026-04-25 | 阶段 2 已完成；旧任务仍未移出正式容器，不移动文件。 |
+| BR-BLK-003 | 旧 `STxx_*` 尚未在状态层正式 superseded | 当前 MVP 阻断项 | done | P0 | W13-StateArchive / W13-E / W13-E4-A | W13-E4-C / State Write 阶段 2 | 已用旧任务 facts 表达 historical / superseded | W13-E4-C | 2026-04-25 | 阶段 2 已完成；后续 W13-E4-F 已将旧任务从正式 current 容器移出，但不移动文件。 |
 | BR-BLK-004 | implementation-ready 尚未形成 | 当前 MVP 阻断项 | blocked | P0 | `evaluate-state` | 后续正式开窗窗口 | 依赖状态层、任务包、实施文档和 formal window | W13-E3+ | 2026-04-25 | 当前不能生成 implementation packet。 |
 
 ## 4. 状态层后续事项
@@ -51,7 +51,8 @@
 | BR-STATE-007 | 执行 State Write 阶段 2 | 状态层后续事项 | done | P0 | W13-E4-A / OQ-095 | W13-E4-C | 阶段 1 已通过验证 | W13-E4-C | 2026-04-25 | 已在 30 个旧 `STxx_*` facts 中写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target`；不进入阶段 3。 |
 | BR-STATE-008 | 执行 State Write 阶段 3 dry-run / 影响分析 | 状态层后续事项 | done | P0 | W13-E4-C | W13-E4-D | 用户确认只分析不移出 | W13-E4-D | 2026-04-26 | 已新增 stage3 dry-run 文档；该阶段不移出旧任务、不创建 preview。 |
 | BR-STATE-009 | 创建 Stage3 Preview YAML | 状态层后续事项 | done | P0 | W13-E4-D / OQ-097 | W13-E4-E / Stage3 Preview | 用户已确认 `OQ-097=B` | W13-E4-E | 2026-04-26 | 已创建 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`；preview `validate/evaluate` 全绿，正式 `DOC_STATE.yaml` 未修改。 |
-| BR-STATE-010 | 确认是否执行正式 Stage 3 | 状态层后续事项 | open | P0 | W13-E4-E / OQ-100 | 后续正式 Stage 3 确认窗口 | Stage3 Preview 已通过 | 后续窗口 | 2026-04-26 | 用户确认前不得正式移出旧 `STxx_*`，不得正式改写 `RQ01.facts.task_ids`。 |
+| BR-STATE-010 | 执行正式 Stage 3 | 状态层后续事项 | done | P0 | W13-E4-E / OQ-100 | W13-E4-F / State Write Stage 3 | 用户已确认方案 B | W13-E4-F | 2026-04-26 | 已正式移出旧 `STxx_*`，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`；不放行实现。 |
+| BR-STATE-011 | 评估旧 `STxx_*` archive 迁移 | 状态层后续事项 | open | P1 | W13-E4-F | 后续 Archive Cleanup 确认窗口 | 依赖 Stage 3 已完成 | 后续窗口 | 2026-04-26 | 只可评估，不得在未确认窗口中迁移 archive 或删除旧文档。 |
 
 ## 5. Task Remap 后续事项
 
@@ -62,6 +63,9 @@
 | BR-REMAP-003 | `MODULE_INDEX.md` 后续正式化 | Task Remap 后续事项 | open | P1 | W13-E2 | 模块同步窗口 | 依赖 W13 新任务结构 | W13-E3+ | 2026-04-25 | 不得误激活旧 `STxx_*` 或模块 L5 候选。 |
 | BR-REMAP-004 | 任务开窗顺序确认 | Task Remap 后续事项 | open | P1 | task-remap | 总控窗口 | 依赖状态层与 contract 任务确认 | W13-E3+ | 2026-04-25 | 当前仍停留在设计 / contract 前置阶段。 |
 | BR-REMAP-005 | 窗口边界模板细化 | Task Remap 后续事项 | backlog | P2 | task-remap | 后续窗口编排 | 依赖正式任务包 | 后续实施准备 | 2026-04-25 | 需要按前端、后端、RAG、LLM、评分、权限、数据、导出、运维分别细化。 |
+| BR-REMAP-006 | ST13 readiness audit | Task Remap 后续事项 | done | P0 | W13-E5 | W13-E5 | 已完成 `ST13_01~ST13_25` 前置审计，不放行 implementation-ready | W13-E5 | 2026-04-26 | 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`；`OQ-101~OQ-110` 已由 W13-E6 确认。 |
+| BR-REMAP-007 | 第一批 ST13 任务包准备 | Task Remap 后续事项 | done | P0 | W13-E5 | W13-E6 | 用户已确认 `OQ-101~OQ-110`，已生成第一批任务包草案 | W13-E6 | 2026-04-26 | 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`；不得生成 implementation packet。 |
+| BR-REMAP-008 | 第一批 ST13 正式双文档准备 | Task Remap 后续事项 | open | P0 | W13-E6 | W13-E7 | 依赖第一批任务包草案 | 后续 W13-E7 | 2026-04-26 | 建议为 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 准备正式子任务双文档路径方案；仍不得实现。 |
 
 ## 6. 实现前置条件
 
@@ -108,7 +112,12 @@
 | UC-W13-E4-D-001 | 是否创建 Stage3 Preview YAML？ | 方案 B：下一窗口创建 Preview YAML，不修改正式 `DOC_STATE.yaml`。 | confirmed | 用户已确认 `OQ-097=B`；W13-E4-E 已创建并验证 Preview | W13-E4-E |
 | UC-W13-E4-D-002 | 旧 `STxx_*` 移出策略 | 先做方案 B 的 preview；preview 通过后再确认是否正式移出。 | confirmed | 用户已确认 `OQ-098`：先做 Preview，不正式移出旧 `STxx_*` | W13-E4-E |
 | UC-W13-E4-D-003 | `RQ01.facts.task_ids` 旧任务处理 | 方案 B：preview 中移除 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25`。 | confirmed | 用户已确认 `OQ-099`：只在 Preview 中验证，正式状态暂不改写 | W13-E4-E |
-| UC-W13-E4-E-001 | 是否基于 Stage3 Preview 执行正式 Stage 3？ | 推荐方案 B：正式移出旧 `STxx_*`，并从 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03`。 | proposed-default | Preview 已通过；正式执行仍需用户确认 | 后续正式 Stage 3 确认窗口 |
+| UC-W13-E4-E-001 | 是否基于 Stage3 Preview 执行正式 Stage 3？ | 方案 B：正式移出旧 `STxx_*`，并从 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03`。 | confirmed | 用户已确认，W13-E4-F 已执行正式 Stage 3 | W13-E4-F |
+| UC-W13-E5-001 | 是否允许生成 ST13 任务包草案？ | 方案 A：先只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 四个横向任务包草案。 | confirmed | `OQ-101=A` 已确认；W13-E6 已完成 | W13-E6 |
+| UC-W13-E5-002 | ST13 任务包生成顺序如何确定？ | 方案 A：横向 contract 先行。 | confirmed | `OQ-102=A` 已确认；第一批顺序为 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25` | W13-E6 |
+| UC-W13-E5-003 | 哪些 ST13 可先做 contract？ | 方案 A：只做 `ST13_21 / ST13_20 / ST13_24 / ST13_25`。 | confirmed | `OQ-103=A` 已确认；不得扩大到其他 ST13 | W13-E6 |
+| UC-W13-E5-004 | 是否允许创建 ST13 专属子任务文档？ | 方案 B：先生成任务包草案，不创建模块子任务目录。 | confirmed | `OQ-104=B` 已确认；本轮不创建正式子任务目录 | W13-E6 |
+| UC-W13-E5-005 | 何时允许创建实现目录、生成 packet、打开 formal window 和进入实现？ | 继续禁止，逐项满足 gate 后再确认。 | confirmed | `OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C` 已确认；当前仍不实现 | 后续正式开窗窗口 |
 | UC-ARCH-001 | 是否把旧 `STxx_*` 迁入 archive？ | 不在状态层仍引用时迁移；解除引用后另开归档窗口。 | open | `docs/modules/**`、archive、根索引 | Archive Cleanup |
 | UC-IMPL-001 | 是否进入实现窗口？ | 否；正式状态层和 implementation-ready 形成前不进入实现。 | confirmed | `apps/**`、`infra/**`、实现包 | 后续正式开窗后 |
 
