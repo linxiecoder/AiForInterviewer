@@ -11,11 +11,11 @@
 
 ## 2. 当前阶段摘要
 
-- 当前阶段：`W13-E8 / 第一批 ST13 正式双文档创建` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口，本轮已为 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 创建集中任务包目录和 8 个正式双文档。
-- 当前边界：本轮只做双文档创建和父索引同步；不更新 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window，不创建 `apps/**` / `infra/**`，不进入实现。
+- 当前阶段：`W13-E9 / 第一批 ST13 contract 细化` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口，本轮已把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 8 个正式双文档从 `double_doc_registered` 细化为 `contract_refined`。
+- 当前边界：本轮只做双文档 required doc slot 过时表述清理和 API、数据、测试、治理 contract 细化；不生成 implementation packet，不打开 formal window，不创建 `apps/**` / `infra/**`，不进入实现。
 - 代码开发状态：暂停。
 - 当前不允许扩展 `apps/web/**`，不允许创建 `apps/api/**` / `infra/**`，不允许接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
-- 正式开窗层：为空；本轮只完成第一批任务包草案，不生成 implementation packet，不进入实现。
+- 正式开窗层：为空；本轮只完成第一批 contract 细化，不生成 implementation packet，不进入实现。
 - 当前没有可直接进入代码实施的子任务。
 
 ## 3. 当前 confirmed 摘要
@@ -48,7 +48,8 @@
 | ST13 readiness audit | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` |
 | ST13 第一批 contract 任务包草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` |
 | ST13 第一批 contract 双文档准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` |
-| ST13 第一批正式双文档 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 等 8 个双文档 |
+| ST13 required doc slot State Update | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-required-doc-slot-update.md` |
+| ST13 第一批正式双文档 / contract 细化 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 等 8 个双文档 |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | OQ / MQ 归并入口 | `OPEN_QUESTIONS.md` |
@@ -68,7 +69,7 @@
 - `W13-E4-E` Stage3 Preview YAML 已完成创建与验证；`W13-E4-F` 已将 preview 证明过的状态层结果正式写入。
 - `W13-E5` 已完成 ST13 readiness audit；25 个 ST13 均仍不具备 implementation-ready，下一步只能进入用户确认后的任务包准备窗口。
 - `W13-E6` 已完成第一批任务包草案；`ST13_21 / ST13_20 / ST13_24 / ST13_25` 仍只是 `task_packet_draft_created`，不能视为 implementation-ready。
-- `W13-E8` 已创建第一批正式双文档；四个 ST13 当前只达到 `double_doc_created`，仍不能视为 required doc slot 已补齐或 implementation-ready。
+- `W13-E9` 已细化第一批四个 ST13 的 API、数据、测试和治理 contract；四个 ST13 当前达到 `contract_refined`，但仍不能视为 formal window open、implementation packet ready 或 implementation-ready。
 
 ## 6. 当前完成事项
 
@@ -93,6 +94,8 @@
 - 已完成 W13-E6 第一批 contract 任务包草案：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`，吸收 `OQ-101~OQ-110` confirmed 结果，并生成 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25` 的草案顺序。
 - 已完成 W13-E7 第一批 contract 双文档准备方案：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`，审计四个 ST13 草案缺口，定义双文档模板、路径方案、任务包前置清单、contract 摘要、父索引同步方案、W13-E8~W13-E11 后续窗口和 `OQ-111~OQ-113` 确认卡；本轮未创建正式双文档，未更新 `DOC_STATE.yaml`。
 - 已完成 W13-E8 第一批 ST13 正式双文档创建：用户确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B` 后，新增 `docs/superpowers/plans/st13-task-packages/ST13_21/`、`ST13_20/`、`ST13_24/`、`ST13_25/` 四个目录和 8 个 `DESIGN` / `IMPLEMENTATION` 文档；本轮未更新 `DOC_STATE.yaml`。
+- 已完成 W13-E8.5 第一批 ST13 required doc slot State Update：仅把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 DESIGN / IMPLEMENTATION 路径登记到 `DOC_STATE.yaml` 既有 required doc slot；未修改其他 ST13，未打开 formal window，未生成 implementation packet。
+- 已完成 W13-E9 第一批 ST13 contract 细化：清理 8 个双文档 required doc slot 过时表述，并细化 `ST13_21` API contract、`ST13_20` 数据 contract、`ST13_24` 测试 / DoD contract、`ST13_25` 文档治理 / 收口 / Basic Memory contract；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
 
 ## 7. 历史归档说明
 
@@ -105,9 +108,9 @@
 
 ## 8. 下一步建议
 
-1. 进入 W13-E9：细化 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 API、数据、测试和治理 contract；该窗口仍不得实现。
-2. 单独开 State Update 窗口更新 `DOC_STATE.yaml` required doc slot，并独立验证 validate/evaluate。
-3. 根据 `OQ-110=C`，可另开并行文档窗口准备 `ST13_23` 前端页面规格，但 contract 合并前不得实现。
-4. 若后续要打开 formal window，必须逐个 ST13 补齐任务包、双文档、验收标准、required tests、状态层 required doc slot 和用户确认。
+1. 进入 W13-E10：复核 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 contract_refined 文档是否足以支撑 acceptance criteria、required tests、implementation scope 和 formal window 候选输入。
+2. 根据 `OQ-110=C`，可另开并行文档窗口准备 `ST13_23` 前端页面规格，但 contract readiness 复核前不得实现。
+3. 若后续要打开 formal window，必须逐个 ST13 补齐任务包、双文档、验收标准、required tests、状态层 required doc slot 和用户确认。
+4. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
 5. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
 6. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。

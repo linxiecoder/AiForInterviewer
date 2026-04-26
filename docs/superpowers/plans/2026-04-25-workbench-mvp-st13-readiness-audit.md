@@ -53,6 +53,8 @@
 - 所有 `ST13_*` 均为 `readiness=blocked`、`candidate_status=none`、`review_status=unreviewed`、`implementation_doc_state=missing`。
 - 当前没有任何 `ST13_*` 可进入 implementation-ready。
 
+W13-E8.5 更新：`ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 DESIGN / IMPLEMENTATION 路径已登记到 `DOC_STATE.yaml` required doc slot；其他 ST13 不受本窗口影响，formal window、implementation doc activation、acceptance criteria、required tests 和 implementation scope 仍未闭合。
+
 ## 3. 审计字段说明
 
 下表每行覆盖以下字段：`ST13 ID`、`WT13 alias`、任务名称、所属模块、对应事实源、当前 `DOC_STATE` 状态、当前 blocker、任务设计文档、实施说明文档、验收标准、测试要求、允许修改范围、禁止修改范围、前置依赖、后置依赖、是否可并行、是否需要用户确认、是否可进入任务包准备、是否可进入 implementation-ready、缺口清单。

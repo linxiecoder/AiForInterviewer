@@ -7,7 +7,9 @@
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
+- contract 状态：`contract_refined`
 - 本文件只描述未来测试 / 验收窗口如何执行；当前不创建测试代码。
+- W13-E8.5 已将本文件登记到 `DOC_STATE.yaml` 既有 `facts.implementation_doc` slot，`exists=true`，`template_like=false`；该登记不改变 `implementation_doc_state=missing`、`readiness=blocked` 或 formal window 状态。
 
 ## 2. 关联 ST13 / WT13
 
@@ -20,12 +22,12 @@
 - `ST13_24_DESIGN.md` 完成评审。
 - `ST13_21` API contract 和 `ST13_20` 数据 contract 至少形成可引用版本。
 - 每个目标 ST13 的 acceptance criteria 和 required tests 非空。
-- 测试临时产物规则已明确。
+- 测试临时产物规则、浏览器真实验证要求、失败回退要求和自动化 / 手工分层已明确。
 
 ## 4. formal window 前置条件
 
 - 用户另窗确认可以打开 `ST13_24` formal window。
-- `DOC_STATE.yaml` required doc slot 已由 State Update 窗口写入并通过 validate/evaluate。
+- `DOC_STATE.yaml` required doc slot 已由 W13-E8.5 State Update 窗口写入并通过 validate/evaluate；后续仍需单独状态窗口处理 formal window。
 - 本文档不得自行声明 formal window open。
 
 ## 5. implementation packet 前置条件
@@ -43,7 +45,7 @@
 - 与测试说明直接相关的文档。
 - 必要的 fixture 或 helper，但必须遵守临时产物治理规则。
 
-当前 W13-E8 不允许创建测试代码。
+当前 W13-E9 不允许创建测试代码。
 
 ## 7. 禁止修改范围
 
@@ -81,6 +83,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 - 不得在仓库根目录或 `tests/` 下遗留 `tmp/temp`。
 - 失败时停止并输出失败原因。
 - 不得用散装 pytest 绕过统一入口，除非是窄范围调试且明确说明。
+- 浏览器真实验证、API contract 测试和数据测试只能在后续授权窗口执行。
 
 ## 11. 回退策略
 
@@ -118,8 +121,8 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 
 未来收口窗口如获授权，必须先检索、后写入、再回读验证。写回内容至少包含 confirmed 测试策略、风险、下一步和验证结果。
 
-当前 W13-E8 不写 Basic Memory。
+当前 W13-E9 不写 Basic Memory。
 
 ## 16. 当前未放行实现说明
 
-`ST13_24_IMPLEMENTATION.md` 的存在不等于 implementation-ready。当前不创建测试代码，不生成 implementation packet，不打开 formal window。
+`ST13_24_IMPLEMENTATION.md` 的存在和 contract_refined 状态都不等于 implementation-ready。当前不创建 `tests/**`，不写测试代码，不生成 implementation packet，不打开 formal window。

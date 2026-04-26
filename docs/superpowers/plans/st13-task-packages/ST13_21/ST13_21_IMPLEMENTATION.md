@@ -7,7 +7,9 @@
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
+- contract 状态：`contract_refined`
 - 本文件只描述未来实现窗口如何执行；当前不放行代码。
+- W13-E8.5 已将本文件登记到 `DOC_STATE.yaml` 既有 `facts.implementation_doc` slot，`exists=true`，`template_like=false`；该登记不改变 `implementation_doc_state=missing`、`readiness=blocked` 或 formal window 状态。
 
 ## 2. 关联 ST13 / WT13
 
@@ -19,13 +21,14 @@
 
 - `ST13_21_DESIGN.md` 完成评审并形成稳定 API contract。
 - Auth、Account / Role / Permission、Job、Resume、Knowledge、Interview、Score、Review、Export、Ops domain 已有非空验收标准。
+- API error contract、权限错误 contract、LLM / RAG 失败 contract 已被 `ST13_24` 纳入 required tests。
 - `ST13_20` 至少提供数据 contract 输入，避免 API 与 schema 互相漂移。
 - required tests 已由 `ST13_24` 或后续测试窗口明确。
 
 ## 4. formal window 前置条件
 
 - 用户另窗确认可以打开 `ST13_21` formal window。
-- `DOC_STATE.yaml` required doc slot 已由 State Update 窗口写入并通过 validate/evaluate。
+- `DOC_STATE.yaml` required doc slot 已由 W13-E8.5 State Update 窗口写入并通过 validate/evaluate；后续仍需单独状态窗口处理 formal window。
 - `formal_window_open` 相关状态不得由本文档自行声明。
 - M02 权限 blocker 已被评估为可接受或已另窗消除。
 
@@ -44,11 +47,12 @@
 - 共享 contract 或类型目录，若后续仓库结构确认存在。
 - 与 API contract 直接相关的文档和测试。
 
-当前 W13-E8 禁止创建上述目录。
+当前 W13-E9 禁止创建上述目录。
 
 ## 7. 禁止修改范围
 
 - 未经 formal window 授权不得创建 `apps/api/**`。
+- 不得创建 OpenAPI 文件、schema 文件、路由文件、service、repository 或测试代码。
 - 不得顺手实现 `ST13_20` 数据库、`ST13_23` 前端、`ST13_24` 测试代码。
 - 不得修改 `docs/governance/DOC_STATE.yaml`。
 - 不得生成 implementation packet。
@@ -57,10 +61,10 @@
 ## 8. 预期实现步骤
 
 1. 复核 `ST13_21_DESIGN.md` 与 `ST13_20` 数据 contract。
-2. 固定 API domain、DTO、错误码、权限上下文、异步任务状态。
-3. 生成或维护后端服务边界，优先 contract-first。
-4. 补齐 API contract tests、权限 tests、错误态 tests。
-5. 与 `ST13_24` 对齐验收矩阵。
+2. 固定 API domain、DTO、错误码、权限上下文、异步任务状态和 request / response 最小字段。
+3. 在 formal window 明确授权后，才可生成或维护后端服务边界，优先 contract-first。
+4. 补齐 API contract tests、权限 tests、错误态 tests、LLM / RAG 失败 tests。
+5. 与 `ST13_20` 对齐数据保存字段，与 `ST13_24` 对齐验收矩阵，与 `ST13_25` 对齐收口写回要求。
 
 以上步骤当前均不执行。
 
@@ -83,6 +87,8 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 - API error taxonomy 测试。
 - 幂等和状态流转测试。
 - LLM / RAG / scoring / export 异步任务状态测试。
+- request / response 字段最小一致性测试。
+- API 与数据 contract 字段漂移检查。
 - 失败时停止，不得继续扩展实现。
 
 ## 11. 回退策略
@@ -124,8 +130,8 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 
 未来收口窗口如获授权，必须先检索、后写入、再回读验证。写回内容至少包含 confirmed 结论、风险、下一步和验证结果。
 
-当前 W13-E8 不写 Basic Memory。
+当前 W13-E9 不写 Basic Memory。
 
 ## 16. 当前未放行实现说明
 
-`ST13_21_IMPLEMENTATION.md` 的存在不等于 implementation-ready。当前不创建 `apps/api/**`，不生成 implementation packet，不打开 formal window，不实现 API。
+`ST13_21_IMPLEMENTATION.md` 的存在和 contract_refined 状态都不等于 implementation-ready。当前不创建 `apps/api/**`，不生成 OpenAPI 文件，不生成 schema 文件，不生成 implementation packet，不打开 formal window，不实现 API。

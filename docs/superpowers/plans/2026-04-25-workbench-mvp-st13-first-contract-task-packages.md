@@ -443,7 +443,7 @@
 仍未完成：
 
 1. W13-E8 已创建正式 `ST13_XX_DESIGN.md` / `ST13_XX_IMPLEMENTATION.md`；本 W13-E6 草案本身仍只作为任务包草案来源。
-2. 未修改 `DOC_STATE.yaml` required doc slot，后续单独 State Update。
+2. W13-E8 未修改 `DOC_STATE.yaml` required doc slot；W13-E8.5 已通过单独 State Update 窗口完成第一批四个 ST13 的 required doc slot 登记。
 3. 未打开 formal window，未生成 implementation packet，未进入实现。
 
 ### 9.2 W13-E8：第一批 ST13 正式双文档创建
@@ -461,7 +461,13 @@
 
 限制：W13-E8 不修改 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window，不进入实现。
 
-### 9.3 ST13_23 前端页面规格并行准备
+### 9.3 W13-E8.5：第一批 required doc slot 登记
+
+W13-E8.5 已把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 DESIGN / IMPLEMENTATION 路径登记到正式 `DOC_STATE.yaml` required doc slot。
+
+该状态只表示 `double_doc_registered`，不表示 implementation-ready，不打开 formal window，不允许生成 implementation packet。
+
+### 9.4 ST13_23 前端页面规格并行准备
 
 在 `OQ-110=C` 下，后续可并行准备 `ST13_23` 前端工作台页面集合规格，但必须等待 `ST13_21` API contract 合并后再进入实现。
 

@@ -161,7 +161,7 @@
 | M09 | 支撑 WeaknessItem、训练抽屉、消减和停练规则；需区分薄弱项中心与待打磨执行层。 | 是。 |
 | M10 | 支撑 provider、日志、模型 catalog、审计、配置、测试和治理收口；完整管理台后置。 | 是。 |
 
-当前没有任何模块因 W13-E5 / W13-E8 而升级为可进入实现；`ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` 已创建集中任务包双文档，但仍不是 implementation-ready。
+当前没有任何模块因 W13-E5 / W13-E8 / W13-E8.5 / W13-E9 而升级为可进入实现；`ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` 已创建集中任务包双文档、登记 required doc slot，并完成第一批 contract 细化，但仍不是 implementation-ready。
 
 ### 6.4 W13-E6 第一批 contract 任务包草案模块影响
 
@@ -193,12 +193,25 @@
 
 | ST13 | WT13 alias | 模块映射 | DESIGN 文档 | IMPLEMENTATION 文档 | 模块层结论 |
 | --- | --- | --- | --- | --- | --- |
-| `ST13_21` | `WT13-21` | M01-M10；M02 权限边界仍是重点 blocker | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | 已创建双文档；不能实现 |
-| `ST13_20` | `WT13-20` | M01-M10；权限、RAG、资产、导出和复盘均会消费数据 contract | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` | 已创建双文档；不能实现 |
-| `ST13_24` | `WT13-24` | M01、M10、全模块 | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` | 已创建双文档；不能创建测试代码 |
-| `ST13_25` | `WT13-25` | global、M01、M10 | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` | 已创建双文档；不能写 `DOC_STATE.yaml` 或 Basic Memory |
+| `ST13_21` | `WT13-21` | M01-M10；M02 权限边界仍是重点 blocker | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | `contract_refined`；不能实现 |
+| `ST13_20` | `WT13-20` | M01-M10；权限、RAG、资产、导出和复盘均会消费数据 contract | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` | `contract_refined`；不能实现 |
+| `ST13_24` | `WT13-24` | M01、M10、全模块 | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` | `contract_refined`；不能创建测试代码 |
+| `ST13_25` | `WT13-25` | global、M01、M10 | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` | `contract_refined`；不能写 Basic Memory 或进入实现 |
 
-后续 required doc slot 更新必须由单独 State Update 窗口执行；本轮不修改 `docs/governance/DOC_STATE.yaml`。
+W13-E8.5 已由单独 State Update 窗口完成 required doc slot 登记；该登记不改变模块成熟度，不创建 `docs/modules/**` 子任务目录，不打开 formal window。
+
+### 6.7 W13-E9 第一批 contract 细化模块影响
+
+> W13-E9 只细化集中任务包双文档，不修改 `docs/modules/**`，不改变模块成熟度，不放行子任务设计或代码实施。
+
+| ST13 | WT13 alias | 模块映射 | W13-E9 状态 | 模块层结论 |
+| --- | --- | --- | --- | --- |
+| `ST13_21` | `WT13-21` | M01-M10；M02 权限边界仍需后续同步 | `contract_refined` | API contract 可作为 W13-E10 readiness 复核输入；不能创建 `apps/api/**`。 |
+| `ST13_20` | `WT13-20` | M01-M10；权限、RAG、资产、导出和复盘均会消费数据 contract | `contract_refined` | 数据 contract 可作为 API / 测试复核输入；不能创建数据库、migration、ORM 或 SQL。 |
+| `ST13_24` | `WT13-24` | M01、M10、全模块 | `contract_refined` | 测试 / DoD contract 可作为 required tests 拆分输入；不能创建 `tests/**`。 |
+| `ST13_25` | `WT13-25` | global、M01、M10 | `contract_refined` | 治理收口 contract 可作为 W13-E10 / 后续写回窗口输入；当前不写 Basic Memory。 |
+
+W13-E9 不改变 M01-M10 当前成熟度，不解除 M02 模块 blocker，不打开 formal window，不生成 implementation packet。
 
 ## 7. 使用说明
 

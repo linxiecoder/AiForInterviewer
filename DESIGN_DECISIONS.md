@@ -55,6 +55,7 @@
 | DD-042 | W13-E5 仅完成 ST13 readiness audit，不放行任务包以外的后续动作 | confirmed | W13-E5 只审计 `ST13_01~ST13_25` 的任务包准备缺口、依赖排序、formal window 条件、实现前置依赖和模块文档映射；25 个 ST13 均仍不具备 implementation-ready。 | W13-E5、TASK_INDEX、MODULE_INDEX、OPEN_QUESTIONS、后续任务包窗口 | `OQ-101~OQ-110` 已由 W13-E6 / `DD-043` 承接确认；W13-E5 的不放行 implementation-ready 结论仍有效。 |
 | DD-043 | W13-E6 确认第一批只生成四个横向 contract 任务包草案 | confirmed | 用户已确认 `OQ-101=A`、`OQ-102=A`、`OQ-103=A`、`OQ-104=B`、`OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C`；W13-E6 只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 四个任务包草案，顺序为 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25`。 | W13-E6、OPEN_QUESTIONS、TASK_INDEX、后续 W13-E7 | 该决策不放行实现，不创建 `apps/**` / `infra/**`，不创建正式子任务目录，不生成 implementation packet，不打开 formal window；后续正式双文档和状态层动作仍需另开窗口。 |
 | DD-044 | W13-E8 确认集中任务包目录并创建第一批 ST13 正式双文档 | confirmed | 用户已确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B`；本轮在 `docs/superpowers/plans/st13-task-packages/` 下创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 四个任务包目录和 8 个 `ST13_XX_DESIGN.md` / `ST13_XX_IMPLEMENTATION.md` 双文档。 | W13-E8、OPEN_QUESTIONS、TASK_INDEX、MODULE_INDEX、AGENTS、后续 State Update | 双文档创建只表示 `double_doc_created`；`DOC_STATE.yaml` required doc slot 仍需后续单独 State Update，formal window 仍关闭，implementation packet 仍禁止，仍不得进入实现。 |
+| DD-045 | W13-E8.5 第一批 ST13 required doc slot 已登记但不放行实现 | confirmed | 已按 `OQ-113=B` 在单独 State Update 窗口中，把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 DESIGN / IMPLEMENTATION 文档路径写入 `DOC_STATE.yaml` 既有 `facts.design_doc` / `facts.implementation_doc` slot。 | W13-E8.5、DOC_STATE.yaml、TASK_INDEX、MODULE_INDEX、PLAN_LATEST、后续 W13-E9 | 该登记只表示 `double_doc_registered`；不得写成 implementation-ready，不得写成 formal window open，不得生成 implementation packet，不得进入代码实现。 |
 
 ## 3. 当前唯一事实源索引
 
@@ -73,6 +74,8 @@
 | State Write 阶段 3 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` |
 | ST13 readiness audit | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` |
 | ST13 第一批 contract 任务包草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` |
+| ST13 第一批 contract 双文档准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` |
+| ST13 required doc slot State Update | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-required-doc-slot-update.md` |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | OQ confirmed / historical 归并索引 | `OPEN_QUESTIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |

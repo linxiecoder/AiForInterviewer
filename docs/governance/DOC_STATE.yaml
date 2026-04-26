@@ -1802,10 +1802,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-20
@@ -1850,10 +1852,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-21
@@ -1978,10 +1982,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-24
@@ -2018,10 +2024,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-25

@@ -10,7 +10,7 @@
 - W13-E4-D 新增 `OQ-097~OQ-099`，用于确认是否创建 Stage3 Preview YAML、旧 `STxx_*` 正式移出策略和 `RQ01.facts.task_ids` 旧任务处理；用户已确认 `OQ-097=B`、`OQ-098=先做方案B的Preview，不正式移出旧STxx_*`、`OQ-099=先做方案B的Preview，在Preview中移除旧ST01_01、ST09_03`。W13-E4-E 已创建并验证 Stage3 Preview YAML，W13-E4-F 已基于该 preview 执行正式 Stage 3。
 - W13-E4-E 新增 `OQ-100`，用于确认是否基于已通过的 Stage3 Preview 执行正式 Stage 3；用户已确认方案 B，W13-E4-F 已正式移出旧 `STxx_*` 并改写 `RQ01.facts.task_ids`。
 - W13-E6 已确认 `OQ-101~OQ-110`：第一批只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的横向 contract / 测试 / 治理任务包草案；任务包准备与实现严格拆窗；formal window、implementation packet、实现目录创建仍禁止，直到后续逐项满足 gate 并再次确认。
-- W13-E8 已确认并吸收 `OQ-111~OQ-113`：ST13 双文档路径采用集中任务包目录，允许创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 正式双文档，required doc slot 后续单独 State Update；三项均为 `confirmed`。
+- W13-E8 已确认并吸收 `OQ-111~OQ-113`：ST13 双文档路径采用集中任务包目录，允许创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 正式双文档，required doc slot 后续单独 State Update；三项均为 `confirmed`。W13-E8.5 已承接 `OQ-113=B` 完成第一批 required doc slot 登记。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -121,13 +121,13 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 
 ### 6.2 W13-E7 ST13 双文档准备确认卡
 
-完整卡片见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` 第 11 节。用户已在 W13-E8 确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B`；本轮只创建正式双文档，不更新 `DOC_STATE.yaml` required doc slot。
+完整卡片见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` 第 11 节。用户已在 W13-E8 确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B`；W13-E8 创建正式双文档，W13-E8.5 已按 `OQ-113=B` 更新 `DOC_STATE.yaml` required doc slot。
 
 | OQ ID | 问题 | 状态 | 推荐方案 | 备选方案 | 当前处理要求 |
 | --- | --- | --- | --- | --- | --- |
 | `OQ-111` | ST13 双文档路径方案如何选择？ | confirmed | 方案 A：集中任务包目录，路径为 `docs/superpowers/plans/st13-task-packages/ST13_XX/ST13_XX_DESIGN.md` 与 `ST13_XX_IMPLEMENTATION.md` | 方案 B：模块子任务目录；方案 C：只冻结路径和模板；方案 D：用户自定义 | 用户已确认 `OQ-111=A`；W13-E8 已按集中任务包目录创建第一批双文档。 |
 | `OQ-112` | 是否允许下一窗口创建第一批正式双文档？ | confirmed | 方案 A：允许 W13-E8 创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的正式双文档 | 方案 B：暂不创建；方案 C：只创建一个试点；方案 D：用户自定义 | 用户已确认 `OQ-112=A`；本轮只创建文档，仍不实现。 |
-| `OQ-113` | 是否允许下一窗口更新 `DOC_STATE.yaml` 的 required doc slot？ | confirmed | 方案 B：创建双文档后，在后续单独 State Update 窗口更新 required doc slot | 方案 A：暂不更新 state；方案 C：创建双文档同窗更新 state；方案 D：用户自定义 | 用户已确认 `OQ-113=B`；W13-E8 不修改 `DOC_STATE.yaml`，后续另开 State Update。 |
+| `OQ-113` | 是否允许下一窗口更新 `DOC_STATE.yaml` 的 required doc slot？ | confirmed | 方案 B：创建双文档后，在后续单独 State Update 窗口更新 required doc slot | 方案 A：暂不更新 state；方案 C：创建双文档同窗更新 state；方案 D：用户自定义 | 用户已确认 `OQ-113=B`；W13-E8 不修改 `DOC_STATE.yaml`，W13-E8.5 已另窗完成第一批 required doc slot 登记。 |
 
 ## 7. 使用说明
 

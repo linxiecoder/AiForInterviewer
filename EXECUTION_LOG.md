@@ -25,6 +25,58 @@
 
 ## 3. 当前记录
 
+### 2026-04-26 / W13-E9 / 第一批 ST13 contract 细化
+
+- 执行类型：文档清理和 contract 细化；不写代码，不进入实现，不创建 `apps/**`、`infra/**`、`tools/**`、`tests/**`，不修改 `docs/governance/DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作，不写 Basic Memory。
+- 基线验证：
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`，`modules_blocked_count=1`，`subtasks_blocked_count=25`。
+- 阶段 0 清理：
+  - 已清理 8 个 ST13 双文档中的 required doc slot 待登记旧口径。
+  - 当前统一口径：W13-E8.5 已将四个目标 ST13 的 `facts.design_doc` / `facts.implementation_doc` 登记到正式 `DOC_STATE.yaml`，`exists=true`，`template_like=false`。
+  - 清理后仍保持 `not implementation-ready`、`formal window closed`、`implementation packet forbidden`。
+- 本轮 contract 细化：
+  - `ST13_21`：细化 API / 后端服务边界 contract，覆盖 Auth、Account / Role / Permission、Job、Resume、Knowledge、Retrieval、Interview、Question / Follow-up、Answer、Feedback / Score、SessionRecord、Markdown Export、Admin / Ops、错误和 LLM / RAG 失败语义。
+  - `ST13_20`：细化服务端保存 / 数据库 contract，覆盖账号权限、岗位、简历、知识库、检索、面试、回答、反馈评分、弱项训练、资产导出、LLM 生成、脱敏、归档、审计和 schema version。
+  - `ST13_24`：细化测试 / 验收 / DoD contract，覆盖产品、数据、UI、工程、收口、API、数据库、RAG、LLM、多轮、打磨、压力面、评分复盘、Markdown 导出、错误态、权限、安全、临时产物、浏览器验证和分层测试。
+  - `ST13_25`：细化文档治理 / 收口 / Basic Memory contract，覆盖唯一事实源、OQ/DD/backlog、State Write 记录、archive、Basic Memory 检索与回读、fallback 包、Superpowers、确认项闭环、收口报告、过时检查、引用检查和未来写回窗口。
+- 同步内容：
+  - `TASK_INDEX.md`：四个 ST13 同步为 `contract_refined` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden`。
+  - `MODULE_INDEX.md`：同步 W13-E9 第一批 contract 细化模块影响，不改变模块成熟度，不放行实现。
+  - `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、backlog-roadmap：同步当前阶段、成熟度摘要、下一步从 W13-E9 转为 W13-E10 readiness 复核。
+- 当前结论：
+  - 第一批四个 ST13 可作为 W13-E10 readiness 复核输入。
+  - 本轮未修改 `DOC_STATE.yaml`，未创建 forbidden 目录或文件，未写代码。
+  - formal window 仍关闭，implementation packet 仍禁止，implementation-ready 仍未形成。
+- 验证结果：
+  - 完成后 `validate-state`：`ok=true,error=0,warning=0`。
+  - 完成后 `evaluate-state`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`，`modules_blocked_count=1`，`subtasks_blocked_count=25`。
+- 后续建议：
+  - 进入 W13-E10 readiness 复核，检查四个 contract_refined 双文档是否足以补 acceptance criteria、required tests、implementation scope 和 formal window 候选输入。
+  - Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
+
+### 2026-04-26 / W13-E8.5 / 第一批 ST13 required doc slot State Update
+
+- 执行类型：状态层 required doc slot 更新和必要索引同步；不写代码，不进入实现，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/modules/**`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作，不写 Basic Memory。
+- 用户确认承接：`OQ-113=B`，即 W13-E8 创建双文档后，由后续单独 State Update 窗口更新 `DOC_STATE.yaml` required doc slot。
+- 基线验证：
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`，`modules_blocked_count=1`，`subtasks_blocked_count=25`，`missing_required_doc_slot=50`。
+- 文件存在性检查：8 个 W13-E8 正式双文档均存在。
+- 本轮改动：
+  - `docs/governance/DOC_STATE.yaml`：仅更新 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 `facts.design_doc` 与 `facts.implementation_doc` slot，写入对应文档路径并设置 `exists=true`、`template_like=false`。
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-required-doc-slot-update.md`，记录更新范围、验证、blocked count 变化、回退说明和不实现边界。
+  - 同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、W13-E5 / W13-E6 / W13-E7 文档和 backlog-roadmap。
+- 当前结论：
+  - 第一批四个 ST13 达到 `double_doc_registered`。
+  - `implementation_doc_state` 仍为 `missing`，`readiness` 仍为 `blocked`，formal window 仍关闭，implementation packet 仍禁止。
+- 验证结果：
+  - 完成后 `validate-state`：`ok=true,error=0,warning=0`。
+  - 完成后 `evaluate-state`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`，`modules_blocked_count=1`，`subtasks_blocked_count=25`，`missing_required_doc_slot=42`。
+- 后续建议：
+  - 可以进入 W13-E9 contract 细化窗口；仍不实现。
+  - W13-E10 以后再复核 readiness、acceptance criteria、required tests、implementation scope 和 formal window 候选。
+
 ### 2026-04-26 / W13-E8 / 第一批 ST13 正式双文档创建
 
 - 执行类型：正式双文档创建、父索引同步、OQ/DD 写回；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不修改 `DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作。

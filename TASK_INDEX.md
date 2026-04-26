@@ -6,7 +6,7 @@
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
 > 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 已正式将旧 `STxx_*` 从 current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。
-> 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，状态只能记为 `double_doc_created` / `not implementation-ready`，required doc slot、formal window、implementation packet 和真实服务接入仍需后续单独窗口。
+> 当前正式开窗层仍为空；W13-E8 已创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的集中任务包双文档，W13-E8.5 已登记 required doc slot，W13-E9 已完成第一批 contract 细化，状态只能记为 `contract_refined` / `not implementation-ready`，formal window、implementation packet 和真实服务接入仍需后续单独窗口。
 
 ## 1. 模块任务索引
 
@@ -191,6 +191,8 @@
 - 当前状态：四个任务均为 `task_packet_draft_created` / `not_ready_for_implementation`；正式状态层中的 25 个 ST13 仍 blocked。
 - W13-E7 结果：已形成第一批双文档路径和模板准备方案；当时状态为 `double_doc_path_planned` / `not_ready_for_implementation`。
 - W13-E8 结果：用户已确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B`，并已创建第一批正式双文档；仍不得实现。
+- W13-E8.5 结果：已把第一批 8 个双文档登记到 required doc slot；仍不得实现。
+- W13-E9 结果：已细化第一批四个 ST13 的 API、数据、测试和治理 contract；仍不得实现、不得生成 implementation packet、不得打开 formal window。
 
 ### 2.4.4 W13-E7 第一批 contract 双文档准备摘要
 
@@ -203,22 +205,35 @@
 | `ST13_24` | `WT13-24` | `task_packet_draft_created` / `double_doc_path_planned` | 方案 C：先只在 W13-E7 plan 冻结路径和模板 | 否 |
 | `ST13_25` | `WT13-25` | `task_packet_draft_created` / `double_doc_path_planned` | 方案 C：先只在 W13-E7 plan 冻结路径和模板 | 否 |
 
-截至 W13-E7 仍缺正式 `DESIGN` / `IMPLEMENTATION` 双文档实体、required doc slot 写回、验收标准落盘、required tests 落盘和用户确认；W13-E8 已补齐第一批四个 ST13 的双文档实体，但 required doc slot、formal window 和 implementation-ready 仍未形成。
+截至 W13-E7 仍缺正式 `DESIGN` / `IMPLEMENTATION` 双文档实体、required doc slot 写回、验收标准落盘、required tests 落盘和用户确认；W13-E8 已补齐第一批四个 ST13 的双文档实体，W13-E8.5 已补齐 required doc slot，但 formal window 和 implementation-ready 仍未形成。
 
 ### 2.4.5 W13-E8 第一批 ST13 正式双文档创建摘要
 
-> W13-E8 已按用户确认的 `OQ-111=A`、`OQ-112=A`、`OQ-113=B` 创建集中任务包目录和正式双文档。该状态只表示 `double_doc_created`，不表示 required doc slot 已写入，不表示 formal window open，不表示 implementation-ready。
+> W13-E8 已按用户确认的 `OQ-111=A`、`OQ-112=A`、`OQ-113=B` 创建集中任务包目录和正式双文档。W13-E8.5 已登记 required doc slot。W13-E9 已完成第一批 contract 细化。当前状态只表示 `contract_refined`，不表示 formal window open，不表示 implementation-ready。
 
 | ST13 | WT13 alias | DESIGN 文档 | IMPLEMENTATION 文档 | 当前状态 | 是否具备实施条件 |
 | --- | --- | --- | --- | --- | --- |
-| `ST13_21` | `WT13-21` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | `double_doc_created` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
-| `ST13_20` | `WT13-20` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` | `double_doc_created` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
-| `ST13_24` | `WT13-24` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` | `double_doc_created` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
-| `ST13_25` | `WT13-25` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` | `double_doc_created` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
+| `ST13_21` | `WT13-21` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | `contract_refined` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
+| `ST13_20` | `WT13-20` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` | `contract_refined` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
+| `ST13_24` | `WT13-24` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` | `contract_refined` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
+| `ST13_25` | `WT13-25` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` | `contract_refined` / `not implementation-ready` / `formal window closed` / `implementation packet forbidden` | 否 |
 
-后续必须另开 State Update 窗口写入 `DOC_STATE.yaml` required doc slot；本轮不得以双文档创建替代状态层写回。
+W13-E8.5 已另窗把上述 8 个文档路径登记到 `DOC_STATE.yaml` 既有 `facts.design_doc` / `facts.implementation_doc` slot；这只解除第一批四个 ST13 的 required doc slot 缺口，不解除 formal window、implementation doc activation、acceptance criteria、required tests 或 implementation scope blocker。
 
-### 2.4.6 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
+### 2.4.6 W13-E9 第一批 ST13 contract 细化摘要
+
+> W13-E9 只做文档清理和 contract 细化，不写代码，不创建 `apps/**`、`infra/**`、`tools/**`、`tests/**`，不修改 `DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window。
+
+| ST13 | WT13 alias | contract_refined 摘要 | 仍未闭合事项 | 是否具备实施条件 |
+| --- | --- | --- | --- | --- |
+| `ST13_21` | `WT13-21` | API / 后端服务边界已细化 Auth、Account / Role / Permission、Job、Resume、Knowledge、Retrieval、Interview、Question / Follow-up、Answer、Feedback / Score、SessionRecord、Markdown Export、Admin / Ops、错误和 LLM / RAG 失败 contract。 | formal window、implementation doc activation、acceptance criteria、required tests、implementation scope、M02 权限 blocker。 | 否 |
+| `ST13_20` | `WT13-20` | 服务端保存 / 数据库 contract 已细化账号权限、岗位、简历、知识库、检索、面试、回答、反馈评分、弱项训练、资产导出、LLM 生成、脱敏、归档、审计和 schema version。 | formal window、schema / migration / ORM 授权、required tests、implementation scope、M02 权限 blocker。 | 否 |
+| `ST13_24` | `WT13-24` | 测试 / 验收 / DoD contract 已细化产品、数据、UI、工程、收口、API、数据库、RAG、LLM、多轮、打磨、压力面、评分复盘、Markdown 导出、错误态、权限、安全、临时产物、浏览器验证和分层测试。 | formal window、测试代码授权、required tests 落到每个实施窗口、implementation scope。 | 否 |
+| `ST13_25` | `WT13-25` | 文档治理 / 收口 / Basic Memory contract 已细化唯一事实源、OQ/DD/backlog、State Write 记录、archive、Basic Memory 检索与回读、fallback 包、Superpowers、确认项闭环、收口报告、过时检查、引用检查和未来写回窗口。 | formal window、Basic Memory 写回授权、后续收口窗口、implementation scope。 | 否 |
+
+当前结论：第一批 contract 可作为 W13-E10 readiness 复核输入，但不能生成 implementation packet，不能打开 formal window，不能进入实现。
+
+### 2.4.7 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
 
 > 完整旧 ST 到 `ST13 / WT13` 映射见 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 第 6 节和 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`。
 > 本节只做任务索引级同步：旧 `STxx_*` 已从正式状态层 current `subtasks` 容器移出，仍保留为历史可追溯对象、reusable evidence 和 archive candidate，不再作为 W13 当前实施入口。
