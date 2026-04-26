@@ -5,8 +5,8 @@
 ## 1. 文档定位
 
 - 维护范围：项目待办、状态层后续事项、任务重映射后续事项、实现前置条件、二期 / 三期候选能力、历史归档后续事项和用户确认待办。
-- 当前状态：W13-E2 / State Remap dry-run 正在把 W13-E 确认组合吸收到文档层；正式状态层仍未写入 W13 新任务。
-- 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不修改 `docs/governance/**` 或 `DOC_STATE.yaml`，不生成 implementation packet。
+- 当前状态：W13-E4-E / Stage3 Preview 已完成；正式 `DOC_STATE.yaml` 已新增 `ST13_01~ST13_25`，旧 `STxx_*` 仍保留且已用 facts 表达 `historical-reference / superseded`，但尚未移出正式 `subtasks` 容器。
+- 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不移出旧 `STxx_*`，不迁移 archive。
 - 更新原则：每轮总控或收口窗口可按同一字段规范增量更新；不得只把后续事项写在聊天记录、`EXECUTION_LOG.md` 或一次性确认卡中。
 
 ## 2. 跟踪字段规范
@@ -33,9 +33,9 @@
 
 | ID | 标题 | 类别 | 状态 | 优先级 | 来源 | 负责人或处理窗口 | 阻断关系 | 目标解决窗口 | 最近更新时间 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BR-BLK-001 | W13-E2 State Remap dry-run 收口 | 当前 MVP 阻断项 | in_review | P0 | W13-E2 | W13-E2 | 阻断 W13-E3 输入质量 | W13-E2 | 2026-04-25 | 完成后仅解除 dry-run 分析阻断，不放行实现。 |
-| BR-BLK-002 | `DOC_STATE.yaml` 尚未写入 W13 新任务 | 当前 MVP 阻断项 | blocked | P0 | W13-E / W13-E2 | W13-E3 / State Write | 阻断正式开窗和 implementation-ready | W13-E3 | 2026-04-25 | 当前 `subtasks` 容器仍是旧 `STxx_*`。 |
-| BR-BLK-003 | 旧 `STxx_*` 尚未在状态层正式 superseded | 当前 MVP 阻断项 | blocked | P0 | W13-StateArchive / W13-E | W13-E3 或后续 State Cleanup | 依赖 W13 新任务 preview / write | W13-E3+ | 2026-04-25 | 本轮只形成 superseded 映射草案，不移动文件。 |
+| BR-BLK-001 | W13-E2 State Remap dry-run 收口 | 当前 MVP 阻断项 | done | P0 | W13-E2 | W13-E2 | 已解除 W13-E3 输入质量阻断 | W13-E2 | 2026-04-25 | dry-run 分析已收口；不放行实现。 |
+| BR-BLK-002 | `DOC_STATE.yaml` 尚未写入 W13 新任务 | 当前 MVP 阻断项 | done | P0 | W13-E / W13-E2 / W13-E4-A | W13-E4-B / State Write 阶段 1 | 阶段 1 已解除“新任务未写入”阻断，但不放行 implementation-ready | W13-E4-B | 2026-04-25 | 已写入 `ST13_01~ST13_25`，不移除旧 `STxx_*`。 |
+| BR-BLK-003 | 旧 `STxx_*` 尚未在状态层正式 superseded | 当前 MVP 阻断项 | done | P0 | W13-StateArchive / W13-E / W13-E4-A | W13-E4-C / State Write 阶段 2 | 已用旧任务 facts 表达 historical / superseded | W13-E4-C | 2026-04-25 | 阶段 2 已完成；旧任务仍未移出正式容器，不移动文件。 |
 | BR-BLK-004 | implementation-ready 尚未形成 | 当前 MVP 阻断项 | blocked | P0 | `evaluate-state` | 后续正式开窗窗口 | 依赖状态层、任务包、实施文档和 formal window | W13-E3+ | 2026-04-25 | 当前不能生成 implementation packet。 |
 
 ## 4. 状态层后续事项
@@ -43,10 +43,15 @@
 | ID | 标题 | 类别 | 状态 | 优先级 | 来源 | 负责人或处理窗口 | 阻断关系 | 目标解决窗口 | 最近更新时间 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | BR-STATE-001 | 检查 `WT13-xx` 是否兼容当前 schema | 状态层后续事项 | done | P0 | W13-E2 | W13-E2 | 无 | W13-E2 | 2026-04-25 | 结论：可作 Markdown 候选任务域 ID；不能直接作为当前 `DOC_STATE.yaml.subtasks` key。 |
-| BR-STATE-002 | 创建 preview YAML 验证 W13 新任务结构 | 状态层后续事项 | open | P0 | W13-E2 | W13-E3 / Preview YAML | 依赖用户确认 | W13-E3 | 2026-04-25 | 推荐先创建单独 preview YAML，不直接覆盖正式状态。 |
-| BR-STATE-003 | 设计 W13-E3 / State Write 窗口 | 状态层后续事项 | open | P0 | W13-E2 | W13-E3 | 依赖 BR-STATE-002 | W13-E3 | 2026-04-25 | 需明确是否使用别名、兼容 ID 或工具 schema 变更。 |
-| BR-STATE-004 | 决定旧 `STxx_*` 状态层保留、移出或 superseded 表达 | 状态层后续事项 | open | P0 | W13-E2 | W13-E3 / State Cleanup | 依赖 W13 新任务结构 | W13-E3+ | 2026-04-25 | 用户已确认后续映射为 superseded，但正式写入节奏仍需确认。 |
-| BR-STATE-005 | 处理 archive-candidate 的状态层解除引用条件 | 状态层后续事项 | open | P1 | W13-StateArchive / W13-E2 | 后续 Archive Cleanup | 依赖 BR-STATE-004 | W13-E3+ | 2026-04-25 | 解除 `DOC_STATE.yaml`、`TASK_INDEX.md`、`MODULE_INDEX.md` 引用前不得移动旧 ST 文档。 |
+| BR-STATE-002 | 创建 preview YAML 验证 W13 新任务结构 | 状态层后续事项 | done | P0 | W13-E2 / OQ-093 | W13-E3 / Preview YAML | 用户已确认方案 B | W13-E3 | 2026-04-25 | 已创建 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` 并通过预检。 |
+| BR-STATE-003 | 设计后续 State Write 窗口 | 状态层后续事项 | done | P0 | W13-E3 Preview YAML | W13-E4-A | 已形成 C-Phased 分阶段计划 | W13-E4-A | 2026-04-25 | 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md`。 |
+| BR-STATE-004 | 决定旧 `STxx_*` 状态层保留、移出或 superseded 表达 | 状态层后续事项 | done | P0 | W13-E2 / W13-E4-A | W13-E4-C / State Write 阶段 2 | 阶段 2 已按用户确认方案 B 执行 | W13-E4-C | 2026-04-25 | 已用现有 `facts` 字段表达旧任务 `historical-reference / superseded`，不移出旧任务。 |
+| BR-STATE-005 | 处理 archive-candidate 的状态层解除引用条件 | 状态层后续事项 | open | P1 | W13-StateArchive / W13-E2 / W13-E4-A | 后续 Archive Cleanup | 依赖阶段 3 | W13-E4+ | 2026-04-25 | 解除 `DOC_STATE.yaml`、`TASK_INDEX.md`、`MODULE_INDEX.md` 引用前不得移动旧 ST 文档。 |
+| BR-STATE-006 | 执行 State Write 阶段 1 | 状态层后续事项 | done | P0 | W13-E4-A | W13-E4-B | 用户已确认 `OQ-094=B` | W13-E4-B | 2026-04-25 | 已写入 `ST13_01~ST13_25`，不移除旧 `STxx_*`，不处理旧任务 superseded。 |
+| BR-STATE-007 | 执行 State Write 阶段 2 | 状态层后续事项 | done | P0 | W13-E4-A / OQ-095 | W13-E4-C | 阶段 1 已通过验证 | W13-E4-C | 2026-04-25 | 已在 30 个旧 `STxx_*` facts 中写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target`；不进入阶段 3。 |
+| BR-STATE-008 | 执行 State Write 阶段 3 dry-run / 影响分析 | 状态层后续事项 | done | P0 | W13-E4-C | W13-E4-D | 用户确认只分析不移出 | W13-E4-D | 2026-04-26 | 已新增 stage3 dry-run 文档；该阶段不移出旧任务、不创建 preview。 |
+| BR-STATE-009 | 创建 Stage3 Preview YAML | 状态层后续事项 | done | P0 | W13-E4-D / OQ-097 | W13-E4-E / Stage3 Preview | 用户已确认 `OQ-097=B` | W13-E4-E | 2026-04-26 | 已创建 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`；preview `validate/evaluate` 全绿，正式 `DOC_STATE.yaml` 未修改。 |
+| BR-STATE-010 | 确认是否执行正式 Stage 3 | 状态层后续事项 | open | P0 | W13-E4-E / OQ-100 | 后续正式 Stage 3 确认窗口 | Stage3 Preview 已通过 | 后续窗口 | 2026-04-26 | 用户确认前不得正式移出旧 `STxx_*`，不得正式改写 `RQ01.facts.task_ids`。 |
 
 ## 5. Task Remap 后续事项
 
@@ -95,8 +100,15 @@
 
 | 编号 | 问题 | 当前推荐 | 状态 | 影响范围 | 预计处理窗口 |
 | --- | --- | --- | --- | --- | --- |
-| UC-W13-E3-001 | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | 方案 B：下一窗口创建 preview YAML，不修改正式 `DOC_STATE.yaml`。 | proposed-default | 状态层、任务索引、正式开窗 | W13-E3 / Preview YAML |
-| UC-W13-E3-002 | 是否移出旧 `STxx_*`？ | 先不移出；等 W13 新任务 preview 通过后再决定。 | open | `DOC_STATE.yaml`、`TASK_INDEX.md`、`MODULE_INDEX.md` | W13-E3+ |
+| UC-W13-E3-001 | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | 方案 B：创建 preview YAML，不修改正式 `DOC_STATE.yaml`；Preview YAML 已创建。 | confirmed | 状态层、任务索引、正式开窗 | W13-E3 / Preview YAML |
+| UC-W13-E3-002 | 是否移出旧 `STxx_*`？ | 已被 `OQ-097~OQ-099` 细化为 Stage3 Preview、移出策略和 `RQ01.facts.task_ids` 三张确认卡。 | superseded | `DOC_STATE.yaml`、`TASK_INDEX.md`、`MODULE_INDEX.md` | W13-E4-D |
+| UC-W13-E4-001 | 是否允许 `W13-E4-B` 写入 `ST13_01~ST13_25`，但不移除旧 `STxx_*`？ | 方案 B：写入新任务，不移除旧任务。 | confirmed | `DOC_STATE.yaml`、正式开窗治理 | W13-E4-B |
+| UC-W13-E4-002 | 旧 `STxx_*` superseded 如何表达？ | 第一阶段不处理，第二阶段用现有 `facts` 字段表达；W13-E4-C 已完成。 | confirmed | `DOC_STATE.yaml`、索引层、task-remap | W13-E4-C |
+| UC-W13-E4-003 | 是否创建正式 State Write 备份文件？ | 方案 B：创建变更说明和回退说明，不复制 `DOC_STATE`。 | confirmed | 回退证据、状态副本治理 | W13-E4-B |
+| UC-W13-E4-D-001 | 是否创建 Stage3 Preview YAML？ | 方案 B：下一窗口创建 Preview YAML，不修改正式 `DOC_STATE.yaml`。 | confirmed | 用户已确认 `OQ-097=B`；W13-E4-E 已创建并验证 Preview | W13-E4-E |
+| UC-W13-E4-D-002 | 旧 `STxx_*` 移出策略 | 先做方案 B 的 preview；preview 通过后再确认是否正式移出。 | confirmed | 用户已确认 `OQ-098`：先做 Preview，不正式移出旧 `STxx_*` | W13-E4-E |
+| UC-W13-E4-D-003 | `RQ01.facts.task_ids` 旧任务处理 | 方案 B：preview 中移除 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25`。 | confirmed | 用户已确认 `OQ-099`：只在 Preview 中验证，正式状态暂不改写 | W13-E4-E |
+| UC-W13-E4-E-001 | 是否基于 Stage3 Preview 执行正式 Stage 3？ | 推荐方案 B：正式移出旧 `STxx_*`，并从 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03`。 | proposed-default | Preview 已通过；正式执行仍需用户确认 | 后续正式 Stage 3 确认窗口 |
 | UC-ARCH-001 | 是否把旧 `STxx_*` 迁入 archive？ | 不在状态层仍引用时迁移；解除引用后另开归档窗口。 | open | `docs/modules/**`、archive、根索引 | Archive Cleanup |
 | UC-IMPL-001 | 是否进入实现窗口？ | 否；正式状态层和 implementation-ready 形成前不进入实现。 | confirmed | `apps/**`、`infra/**`、实现包 | 后续正式开窗后 |
 

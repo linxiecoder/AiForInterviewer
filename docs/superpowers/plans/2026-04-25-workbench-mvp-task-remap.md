@@ -1,6 +1,6 @@
 # AI 模拟面试一期工作台 MVP 任务重映射草案
 
-> 本文档是 `W13-E / Task Remap` 与 `W13-E2 / State Remap dry-run` 草案，用于把四份 W13 唯一事实源转换为可治理、可验证、可开窗前审查的候选任务结构，并记录状态层 dry-run 结论。本文档不是 implementation packet，不写入 `DOC_STATE.yaml`，不放行任何实现窗口。
+> 本文档是 `W13-E / Task Remap` 与 `W13-E2 / State Remap dry-run` 草案，用于把四份 W13 唯一事实源转换为可治理、可验证、可开窗前审查的候选任务结构，并记录状态层 dry-run 结论。`W13-E4-B` 已按阶段 1 将 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml`，`W13-E4-C` 已按阶段 2 用旧 `STxx_*` facts 表达 `historical-reference / superseded`；本文档仍不是 implementation packet，不放行任何实现窗口。
 
 ## 1. 背景
 
@@ -8,9 +8,10 @@
 
 当前剩余阻断不是产品事实源缺失，而是任务治理层尚未重映射：
 
-- `TASK_INDEX.md` 尚未按 W13 工作台级 MVP 写入正式任务 ID。
-- `MODULE_INDEX.md` 尚未按 W13 工作台级 MVP 建立模块到任务域的候选映射。
-- `DOC_STATE.yaml` 的正式 `subtasks` 容器仍登记旧 `STxx_*`。
+- `TASK_INDEX.md` 已同步 `ST13_01~ST13_25` 正式状态层入口与 `WT13-xx` alias，但仍未形成 implementation-ready 或开窗资格。
+- `MODULE_INDEX.md` 已同步 `ST13_*` 到 M01-M10 的模块映射摘要，但模块成熟度和下游设计入口仍未放行。
+- `DOC_STATE.yaml` 的正式 `subtasks` 容器仍登记旧 `STxx_*`，并已在阶段 1 新增 `ST13_01~ST13_25`，阶段 2 为旧任务写入 `w13_status=superseded` 与 `w13_role=historical-reference`。
+- `W13-E4-B` 已将 `ST13_01~ST13_25` 作为 `WT13-01~WT13-25` 的正式状态层兼容入口写入 `DOC_STATE.yaml`。
 - 旧 `STxx_*` 仍被状态层和索引层引用，当前不能迁入 archive。
 - 当前不等于 `implementation-ready`，不能直接进入业务代码实现。
 
@@ -127,7 +128,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 - 旧 `RQ01` 与旧 `STxx_*` 只解释 W10 首切片或早期模块骨架，不能作为 W13 工作台级 MVP 的正式任务树。
 - W10 首切片任务仍被索引保留，但已有明确历史 / 反向约束，不应再被误认为当前任务。
 - `RQ01 / STxx / MTxx` 与 W13 事实源的主要冲突是范围粒度：W13 已包含登录、权限、服务端保存、RAG、真实 LLM、多轮、评分、复盘、导出和训练闭环，远大于 W10 首切片。
-- 模块索引与任务索引在“旧关系已历史化、正式开窗层为空”上基本一致，但都尚未写入 W13 新任务域。
+- 模块索引与任务索引在“旧关系已历史化、正式开窗层为空”上基本一致；W13-E4-B 已将 `ST13_01~ST13_25` 写入正式状态层，W13-E4-C 已将旧 `STxx_*` 通过 facts 表达为 `historical-reference / superseded`，但仍保留在正式容器中。
 - 旧 `STxx_*` 暂不能迁移 archive，因为仍被 `DOC_STATE.yaml`、`TASK_INDEX.md` 和模块索引引用。
 
 ## 4. 新 W13 工作台级任务树草案
@@ -359,7 +360,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 
 推荐理由：先完成 task-remap 草案和用户确认，再写 `DOC_STATE.yaml`，更符合当前高风险状态层修改节奏。
 
-当前状态：用户已确认采用方案 A 作为 W13-E2 前置动作；W13-E2 不写 `DOC_STATE.yaml`。下一步是否创建 preview YAML 或写入正式状态，见第 10.4 节。
+当前状态：用户已确认采用方案 A 作为 W13-E2 前置动作；W13-E2 不写 `DOC_STATE.yaml`。用户后续又确认第 10.4 节方案 B，W13-E3 已创建独立 Preview YAML；W13-E4-B 已在正式 `DOC_STATE.yaml` 中写入 `ST13_01~ST13_25`，旧 `STxx_*` 保留。
 
 ### 10.2 `WT13-xx` 兼容性检查结论
 
@@ -418,7 +419,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 
 问题：W13-E3 是否允许写入 `DOC_STATE.yaml`？
 
-背景：W13-E2 已确认 `WT13-xx` 不能直接作为当前 `DOC_STATE.yaml.subtasks` key；旧 `STxx_*` 后续映射为 `superseded` 已确认，但尚未写入正式状态层。
+背景：W13-E2 已确认 `WT13-xx` 不能直接作为当前 `DOC_STATE.yaml.subtasks` key；旧 `STxx_*` 后续映射为 `superseded` 已确认。W13-E4-B 阶段 1 只并存写入新 `ST13_*`，暂不表达旧任务 superseded。
 
 | 方案 | 解决什么 | 限制 | 风险 | 后续影响 |
 | --- | --- | --- | --- | --- |
@@ -431,26 +432,53 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 
 推荐理由：符合 dry-run 目标，风险低，可验证 `WT13-xx`、状态层兼容 ID / 业务别名和旧 `STxx_*` superseded 表达是否兼容。
 
-等待用户确认：是。
+当前确认结果：用户已确认方案 B；W13-E3 已创建 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml`。该轮未修改正式 `DOC_STATE.yaml`，后续 W13-E4-B 已执行阶段 1 正式写入。
+
+### 10.5 W13-E4-A C-Phased State Write 计划
+
+用户已确认采用方案 C 的分阶段版本：最终把 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml`，并将旧 `STxx_*` 标记为 `superseded / historical-reference` 或移出正式任务容器，但不得一次性粗暴切换。
+
+W13-E4-A 已新增 [`2026-04-25-workbench-mvp-state-write-plan.md`](2026-04-25-workbench-mvp-state-write-plan.md)，作为后续 State Write 的阶段计划、验证矩阵、回退方案和确认卡入口。该计划本身不修改正式 `DOC_STATE.yaml`，不放行实现；W13-E4-B 已按阶段 1 执行正式状态层写入，W13-E4-C 已按阶段 2 执行旧任务 facts historical / superseded 表达，W13-E4-D 已完成阶段 3 dry-run / 影响分析并新增 [`2026-04-25-workbench-mvp-state-write-stage3-dry-run.md`](2026-04-25-workbench-mvp-state-write-stage3-dry-run.md)，W13-E4-E 已创建并验证 [`2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`](2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml)。
+
+当前推荐执行顺序：
+
+1. 阶段 1：`W13-E4-B` 已写入 `ST13_01~ST13_25`，但不移除旧 `STxx_*`。
+2. 阶段 2：`W13-E4-C` 已完成，旧 `STxx_*` 标记为 `superseded / historical-reference`，仍不迁移 archive。
+3. 阶段 3：`W13-E4-D` 已完成 dry-run，`W13-E4-E` 已完成 Stage3 Preview；preview 验证旧 `STxx_*` 移出、`RQ01.facts.task_ids` 移除旧 `ST01_01` / `ST09_03` 后仍为 `ok=true,error=0,warning=0`。
+4. 阶段 4：只做旧 `STxx_*` archive 迁移准备，不直接迁移。
+
+当前确认结果：
+
+- `OQ-094=B`：允许 `W13-E4-B` 执行阶段 1，只写入新任务并保留旧任务。
+- `OQ-095`：阶段 1 按 C 只并存新旧任务；阶段 2 按 B 再表达旧 `STxx_*` superseded / historical-reference。
+- `OQ-096=B`：创建 State Write 变更说明和回退说明，不复制正式 `DOC_STATE.yaml`。
+- `OQ-097~OQ-099`：由 `W13-E4-D` 新增，用户已确认进入 Stage3 Preview 路径；`W13-E4-E` 已创建 Stage3 Preview YAML，并验证旧 `ST01_01`、`ST09_03` 从 preview `RQ01.facts.task_ids` 移除后的状态层结果。
 
 ## 11. 需要用户确认的问题
 
 | 确认卡 ID | 问题 | 推荐方案 | 当前状态 | 写回位置建议 |
 | --- | --- | --- | --- | --- |
 | `W13-E-Q1` | W13 工作台级任务 ID 如何命名？ | A: `WT13-xx` | `confirmed` | 已吸收为候选任务域命名；状态层写入仍需 W13-E3 preview / write 决策 |
-| `W13-E-Q2` | 旧 `STxx_*` 在 W13 Task Remap 中如何处理？ | B: 新任务树建立后映射为 `superseded`，后续状态层迁移 | `confirmed` | 已形成本文件第 10.3 节映射草案；正式状态层尚未写入 |
+| `W13-E-Q2` | 旧 `STxx_*` 在 W13 Task Remap 中如何处理？ | B: 新任务树建立后映射为 `superseded`，后续状态层迁移 | `confirmed` | 已形成本文件第 10.3 节映射草案；阶段 1 已写入新 `ST13_*`，阶段 2 已写入旧任务 facts historical / superseded |
 | `W13-E-Q3` | W13 任务树是否应在下一窗口写入 `DOC_STATE.yaml`？ | A: 暂不写，先完成 W13-E2 dry-run | `confirmed` | 本轮执行 W13-E2，不修改 `DOC_STATE.yaml` |
-| `W13-E2-Q1` | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | B: 先创建 preview YAML，不修改正式状态 | `proposed-default` | 等待用户确认后另开 W13-E3 / Preview YAML 或 State Write 窗口 |
+| `W13-E2-Q1` | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | B: 先创建 preview YAML，不修改正式状态 | `confirmed` | 用户已确认方案 B；W13-E3 已创建 Preview YAML，后续 State Write 仍需另开确认 |
+| `W13-E4-Q1` | 是否允许 W13-E4-B 写入 `ST13_01~ST13_25`，但不移除旧 `STxx_*`？ | B: 写入新任务，不移除旧任务 | `confirmed` | 对应 `OQ-094=B`；阶段 1 已执行 |
+| `W13-E4-Q2` | 旧 `STxx_*` superseded 表达方式 | 第一阶段 C，第二阶段 B | `confirmed` | 对应 `OQ-095`；阶段 1 不处理旧任务 superseded，阶段 2 已由 `W13-E4-C` 完成 |
+| `W13-E4-Q3` | 是否创建正式 State Write 备份文件 | B: 创建变更说明和回退说明，不复制 `DOC_STATE` | `confirmed` | 对应 `OQ-096=B`；已新增阶段 1 变更说明和回退说明 |
+| `W13-E4-D-Q1` | 是否创建 Stage3 Preview YAML？ | B: 下一窗口创建 Preview YAML，不修改正式 `DOC_STATE.yaml` | `confirmed` | 对应 `OQ-097`；用户已确认，W13-E4-E 已创建并验证 preview |
+| `W13-E4-D-Q2` | 旧 `STxx_*` 移出策略 | 先做 B 的 preview，再决定是否正式移出 | `confirmed` | 对应 `OQ-098`；用户已确认先做 Preview，不正式移出旧任务 |
+| `W13-E4-D-Q3` | `RQ01.facts.task_ids` 中旧任务处理 | B: preview 中移除 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25` | `confirmed` | 对应 `OQ-099`；用户已确认在 Preview 中验证，本轮未修改正式 `RQ01.facts.task_ids` |
+| `W13-E4-E-Q1` | 是否基于 Stage3 Preview 执行正式 Stage 3？ | 待用户确认；推荐 B: 正式移出旧 `STxx_*` 并同步改写 `RQ01.facts.task_ids` | `proposed-default` | 对应 `OQ-100`；preview 已通过，但正式状态仍未改写 |
 
 ## 12. 当前不进入实现说明
 
 当前不能进入实现，原因是：
 
 - `WT13-xx` 任务域命名虽已 confirmed，但当前 `doc_governor` 状态层不直接接受 `WT13-xx` 作为 `subtasks` key。
-- 旧 `STxx_*` 后续映射为 `superseded` 虽已 confirmed，但尚未写入 `DOC_STATE.yaml`。
-- `DOC_STATE.yaml` 尚未登记 W13 新任务。
+- 旧 `STxx_*` 后续映射为 `superseded` 已在阶段 2 通过 facts 写入；阶段 3 目前只完成 dry-run / 影响分析，旧任务仍留在正式容器中。
+- `DOC_STATE.yaml` 已登记 `ST13_01~ST13_25`，但这些入口仍为 blocked / review-required 状态。
 - `formal_window_open=false`。
 - 30 个旧 `STxx_*` 仍处于 blocked，且不应被误认为 W13 新任务。
 - 未来实现窗口还需要明确允许修改范围、禁止修改范围、验证命令和 DoD。
 
-因此，本文档完成后最多可进入 W13-E3 / Preview YAML 或 State Write 讨论窗口；不能进入业务代码实现窗口。
+因此，本文档完成后最多可进入正式 Stage 3 确认窗口；确认前不能直接正式移出旧任务，也不能进入业务代码实现窗口。

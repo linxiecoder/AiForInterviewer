@@ -25,6 +25,135 @@
 
 ## 3. 当前记录
 
+### 2026-04-26 / W13-E4-E / Stage3 Preview YAML 创建与验证
+
+- 执行类型：Preview YAML 创建、验证、对比和分析窗口；不修改正式 `docs/governance/DOC_STATE.yaml`，不正式移出旧 `STxx_*`，不正式改写 `RQ01.facts.task_ids`，不进入实现。
+- 修改内容：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`。
+  - Preview 中 `subtasks` 只保留 `ST13_01~ST13_25`，30 个旧 `STxx_*` 不再出现在 preview 正式任务容器。
+  - Preview 中 `requirements.RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`，不再包含旧 `ST01_01`、`ST09_03`。
+  - 同步更新 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`TASK_INDEX.md`、`MODULE_INDEX.md` 和 W13 计划文档摘要。
+- 验证结果：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true,error=0,warning=0`；`evaluate-state ok=true,error=0,warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+  - Stage3 Preview：`validate-state ok=true,error=0,warning=0`；`evaluate-state ok=true,error=0,warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=25`。
+- 风险检查：
+  - 未发现 schema error、missing reference、stale target、parse error。
+  - 未出现 implementation-ready 误判；preview 中无 subtask `implementation_ready=true`。
+  - 未出现 formal window 误开；`global_policy.formal_window_open=false`。
+  - Preview 沿用 W13-E3 策略，不携带正式 `documents` 分支，避免非 governance 输入路径导致 `repo_root` 解析差异污染结论。
+- 结论：
+  - 可以进入“是否执行正式 Stage 3”的用户确认轮。
+  - 不能进入实现，不能生成 implementation packet，不能标记 implementation-ready。
+
+### 2026-04-26 / W13-E4-D-Confirm / OQ-097~OQ-099 用户确认吸收
+
+- 执行类型：确认卡写回窗口；只同步文档口径，不创建 Stage3 Preview YAML，不修改正式 `docs/governance/DOC_STATE.yaml`，不移出旧 `STxx_*`，不改写正式 `RQ01.facts.task_ids`，不进入实现。
+- 用户确认：
+  - `OQ-097=B`：下一窗口创建 Stage3 Preview YAML，不修改正式 `DOC_STATE.yaml`。
+  - `OQ-098=先做方案B的Preview，不正式移出旧STxx_*`。
+  - `OQ-099=先做方案B的Preview，在Preview中移除旧ST01_01、ST09_03`。
+- 修改内容：
+  - 将 `OPEN_QUESTIONS.md` 中 `OQ-097~OQ-099` 从 `proposed-default` 更新为 `confirmed`，并说明 confirmed 仅表示 Preview 路径已确认。
+  - 在 `DESIGN_DECISIONS.md` 新增 `DD-039`，记录 Stage3 Preview 路径确认，同时保留“不正式移出、不正式改写、不进入实现”的边界。
+  - 同步 `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md` 与 W13 计划文档中的下一步口径。
+- 验证结果：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+- 结论：
+  - 可以进入 `W13-E4-E / Stage3 Preview` 窗口。
+  - 仍不能正式移出旧 `STxx_*`，不能正式改写 `RQ01.facts.task_ids`，不能进入实现。
+
+### 2026-04-26 / W13-E4-D / State Write 阶段 3 dry-run 与影响分析
+
+- 执行类型：状态层阶段 3 dry-run / 影响分析窗口；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/modules/**`、`archive/**`，不修改正式 `docs/governance/DOC_STATE.yaml`，不生成 implementation packet，不执行 Git 写操作，不写 Basic Memory。
+- 用户确认：
+  - 进入 `W13-E4-D`。
+  - 采用方案 B：只做阶段 3 dry-run / 影响分析，不正式移出旧 `STxx_*`。
+- 基线验证：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+- 修改内容：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md`，记录旧 `STxx_*` 引用链、`RQ01.facts.task_ids` 影响分析、`subtasks` 容器移出候选策略、Stage3 Preview 方案、正式阶段 3 执行计划草案、验证矩阵、回退方案和用户确认卡。
+  - 同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md`。
+- 审计结论：
+  - 30 个旧 `STxx_*` 全部仍存在于正式 `subtasks` 容器，且全部已具备 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by`、`w13_alias_target`。
+  - `TASK_INDEX.md`、`MODULE_INDEX.md` 和模块级 `MODULE_TASK_INDEX.md` 仍全量引用旧 `STxx_*`；这些引用应保留为历史追溯，不能在本窗口删除。
+  - `DOC_STATE.yaml.governance_rounds` closed round target/evidence 与 `transition_history.jsonl` 未直接引用旧 `STxx_*`。
+  - `RQ01.facts.task_ids` 仍包含旧 `ST01_01`、`ST09_03`；若后续从 `subtasks` 容器移出旧任务，应先在 Stage3 Preview 中验证只保留 `ST13_01~ST13_25`。
+- 结论：
+  - 本窗口未修改正式 `DOC_STATE.yaml`，未移出旧 `STxx_*`，未创建 Stage3 Preview YAML。
+  - 可以进入 `W13-E4-E / Stage3 Preview` 窗口。
+  - 不能直接进入正式移出窗口；正式移出需先通过 preview 并再次确认。
+  - 仍不能进入实现，不能生成 implementation packet。
+
+### 2026-04-25 / W13-E4-C / State Write 阶段 2 旧 ST historical / superseded 表达
+
+- 执行类型：状态层阶段 2 历史化关系表达窗口；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/modules/**`、`archive/**`，不生成 implementation packet，不执行 Git 写操作，不写 Basic Memory。
+- 用户确认：
+  - 采用方案 B：旧 `STxx_*` 仍保留在正式 `subtasks` 容器中。
+  - 只用 `DOC_STATE.yaml` 现有 `facts` 字段表达 `historical-reference / superseded`。
+  - 不新增 schema 字段，不修改 validate/evaluate，不进入阶段 3。
+- 基线验证：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+- 修改内容：
+  - `docs/governance/DOC_STATE.yaml`：为 30 个旧 `ST01_01~ST10_03` 的 `facts` 写入 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by`、`w13_alias_target`、`w13_archive_candidate=true`、`w13_current_implementation_entry=false` 等字段。
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md`，记录阶段 2 背景、完整映射清单、验证结果、不可接受 blocker 检查和回退步骤。
+  - 同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md`。
+- 写入后验证：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+  - 结构检查：`ST13_01~ST13_25` 仍存在；30 个旧 `STxx_*` 仍存在，且均写入 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by` 与 `w13_alias_target`。
+- 结论：
+  - 阶段 2 已完成，旧 `STxx_*` 已被标记为 historical / superseded，但仍保留在正式 `subtasks` 容器中。
+  - 新增 blocker 为 0；现有 blocker 均为预期可解释 blocker，主要来自 `formal_window_open=false`、实施文档未 active、缺少实施级输入和模块上游未 ready。
+  - 未发生回退。
+  - 可以进入 `W13-E4-D` 阶段 3 的确认 / 审计窗口；仍不能进入实现，不能生成 implementation packet。
+
+### 2026-04-25 / W13-E4-B / State Write 阶段 1 正式写入
+
+- 执行类型：状态层阶段 1 写入窗口；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/modules/**`、`archive/**`，不生成 implementation packet，不执行 Git 写操作，不写 Basic Memory。
+- 用户确认：
+  - `OQ-094=B`：写入 `ST13_01~ST13_25`，不移除旧 `STxx_*`。
+  - `OQ-095`：阶段 1 按方案 C，只并存新旧任务；阶段 2 再按方案 B 用现有 `facts` 字段表达旧任务 `superseded / historical-reference`。
+  - `OQ-096=B`：创建 State Write 变更说明和回退说明，不复制正式 `DOC_STATE.yaml`。
+- 基线验证：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=30`。
+  - Preview YAML：`validate-state ok=true, error=0, warning=0`。
+  - Preview YAML：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+- 修改内容：
+  - `docs/governance/DOC_STATE.yaml`：新增 `ST13_01~ST13_25`，保留 `WT13-01~WT13-25` alias，设置 `facts.w13_preview.formal_doc_state_write=true`，并将 `ST13_01~ST13_25` 追加到 `RQ01.facts.task_ids`。
+  - 旧 `STxx_*`：保留不动，未移除、未改写、未标记 superseded。
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md`，记录阶段 1 变更、验证结果、旧任务保留说明和回退步骤。
+  - 同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md`。
+- 写入后验证：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=55`。
+- 结论：
+  - `ST13_01~ST13_25` 已成为正式状态层入口，但全部仍为 blocked / 非 implementation-ready。
+  - 新增 blocker 均为预期可解释 blocker，主要来自 `formal_window_open=false`、`implementation_doc_state=missing`、缺少子任务双文档和 implementation packet 输入。
+  - 未发生回退。
+  - 阶段 2 可作为下一窗口讨论 / 执行目标，但仍需用户明确确认；当前仍不能进入实现。
+
+### 2026-04-25 / W13-E3 / Preview YAML 建立与 OQ-093=B 同步
+
+- 执行类型：状态层 preview 窗口；不写正式 `DOC_STATE.yaml`，不进入实现，不执行 Git 写操作。
+- 用户确认：`OQ-093=B`，即先创建 preview YAML，不修改正式 `DOC_STATE.yaml`。
+- 新增文件：
+  - `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml`：用 `ST13_01~ST13_25` 作为 `WT13-01~WT13-25` 的状态层兼容别名；旧 `STxx_*` 仅写入 `w13_superseded_preview` 预览信息。
+- 同步文件：
+  - `OPEN_QUESTIONS.md`：将 `OQ-093` 从 `proposed-default` 更新为 `confirmed`。
+  - `DESIGN_DECISIONS.md`：新增 `DD-034`，只确认 Preview YAML 路径与正式状态未修改边界。
+  - `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md`、`AGENTS.md`：同步 preview 路径、后续 State Write 边界和不进入实现限制。
+- 当前边界：
+  - 正式 `docs/governance/DOC_STATE.yaml` 未修改。
+  - Preview YAML 不是 confirmed state，不能替代正式 State Write。
+  - `implementation-ready` 尚未形成，不能生成 implementation packet，不能进入业务代码实现窗口。
+- 验证结果：
+  - 正式 `DOC_STATE.yaml`：`validate-state ok=true, error=0, warning=0`；`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`，`subtasks_blocked_count=30`。
+  - Preview YAML：`validate-state ok=true, error=0, warning=0`；`evaluate-state ok=true, error=0, warning=0`，`documents_blocked_count=0`，`subtasks_blocked_count=55`。
+
 ### 2026-04-25 / W13-E2 / State Remap dry-run、旧 ST 映射与 backlog-roadmap 建立
 
 - 执行类型：状态层 dry-run 分析与文档治理窗口；不写代码，不执行 Git 写操作，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`、`archive/**` 或 Basic Memory。
@@ -1572,6 +1701,36 @@
   - 若继续产品验证，进入原型体验审查 / 用户路径打磨。
   - 若进入二期，先做真实 LLM 或轻量持久化的用户确认。
   - 若进入工程化增强，进一步拆 `shared/domain`、测试与运行说明。
+
+### 2026-04-25 / W13-E4-A / State Write 分阶段计划、测试矩阵与回退方案
+
+- 范围：只做 C-Phased State Write 分阶段计划、验证矩阵、回退方案、风险分级、执行顺序和确认卡；不修改 `docs/governance/DOC_STATE.yaml`，不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/modules/**`、`archive/**`，不执行 Git 操作，不写 Basic Memory。
+- 执行类型：状态层正式写入前的计划窗口。
+- 基线验证：
+  - 正式 `DOC_STATE.yaml`：`validate-state` 为 `ok=true, error=0, warning=0`。
+  - 正式 `DOC_STATE.yaml`：`evaluate-state` 为 `ok=true, error=0, warning=0`，当前 `documents_blocked_count=0`、`modules_blocked_count=1`、`subtasks_blocked_count=30`。
+  - Preview YAML：`validate-state` 为 `ok=true, error=0, warning=0`。
+  - Preview YAML：`evaluate-state` 为 `ok=true, error=0, warning=0`，当前 `subtasks_blocked_count=55`，属于 `ST13_01~ST13_25` 尚未 implementation-ready 的预期结果。
+- 修改内容：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md`，记录 W13-E3 Preview 摘要、用户确认的 C-Phased 高层策略、四阶段 State Write 计划、验证矩阵、回退方案、`ST13_01~ST13_25` 写入草案、旧 `STxx_*` superseded / 移出策略、用户确认卡和 `W13-E4-B` 输入。
+  - 更新 `AGENTS.md`，将 State Write 分阶段计划补入计划索引。
+  - 更新 `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`，将当前阶段切换为 `W13-E4-A / C-Phased State Write 计划`，并明确本窗口不写正式 `DOC_STATE.yaml`。
+  - 更新 `OPEN_QUESTIONS.md`，新增 `OQ-094~OQ-096`，分别对应阶段 1 是否写入 `ST13_01~ST13_25`、旧 `STxx_*` superseded 表达方式、是否创建 State Write 备份文件；三项均为 `proposed-default`，不得视为 confirmed。
+  - 更新 `DESIGN_DECISIONS.md`，新增 `DD-035`，只记录用户已确认的 C-Phased 高层策略，不确认 `W13-E4-B` 具体写入方案。
+  - 更新 task-remap 与 backlog-roadmap，增加 W13-E4-A 计划入口、阶段顺序和后续待办。
+- 结论：
+  - 推荐下一步只执行阶段 1：`W13-E4-B` 写入 `ST13_01~ST13_25`，不移除旧 `STxx_*`，不处理旧任务 superseded。
+  - 阶段 2 再处理旧 `STxx_*` superseded / historical-reference。
+  - 阶段 3 再移出旧 `STxx_*` 正式任务容器。
+  - 阶段 4 只做 archive 迁移准备，不直接迁移。
+- 当前仍不允许：
+  - 不进入 implementation-ready。
+  - 不生成 implementation packet。
+  - 不创建业务代码目录或基础设施目录。
+  - 不修改 `tools/**`、`tests/**` 或正式状态文件。
+- 下一步建议动作：
+  - 用户先确认 `OQ-094`。推荐方案 B：允许 `W13-E4-B` 写入 `ST13_01~ST13_25`，但不移除旧 `STxx_*`。
+  - 若用户确认，再开 `W13-E4-B` 执行阶段 1，并在写入前后运行正式与 Preview 的 `validate-state / evaluate-state`。
 
 ## 4. 使用说明
 

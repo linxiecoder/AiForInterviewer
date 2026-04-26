@@ -196,6 +196,12 @@
 - [AI 模拟面试一期工作台 MVP 对象模型、RAG、多轮与后端边界草案](docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md)
 - [AI 模拟面试一期工作台 MVP 评分、复盘、导出与 DoD 草案](docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md)
 - [AI 模拟面试一期工作台 MVP 任务重映射草案](docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md)
+- [AI 模拟面试一期工作台 MVP 状态层 Preview YAML](docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml)
+- [AI 模拟面试一期工作台 MVP State Write 分阶段计划](docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md)
+- [AI 模拟面试一期工作台 MVP State Write 阶段 1 变更与回退说明](docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md)
+- [AI 模拟面试一期工作台 MVP State Write 阶段 2 变更与回退说明](docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md)
+- [AI 模拟面试一期工作台 MVP State Write 阶段 3 dry-run 与影响分析](docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md)
+- [AI 模拟面试一期工作台 MVP State Write 阶段 3 Preview YAML](docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml)（preview 文件，不是正式状态真值）
 - [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md)
 - [AI 模拟面试 P1 MVP 实现计划历史归档快照](archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md)
 

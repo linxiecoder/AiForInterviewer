@@ -5,7 +5,10 @@
 - 本文档是全局 OQ / MQ 的唯一归并入口，用于判断哪些问题仍需要用户确认、哪些已被 confirmed 结论覆盖、哪些只保留为历史来源追踪。
 - W13-Cleanup 后，`OQ-001~OQ-089` 已按 `FC-01~FC-19` 用户 confirmed 结果回压到问题层。
 - W13-E 新增 `OQ-090~OQ-092`，仅用于任务 ID、旧 `STxx_*` 处理和 `DOC_STATE.yaml` 写入节奏确认；用户已确认三项 W13-E 结果，这些问题不改变 W13 产品范围 confirmed 事实。
-- W13-E2 新增 `OQ-093`，只处理 W13-E3 是否创建 preview YAML 或写入正式 `DOC_STATE.yaml`。
+- W13-E2 新增 `OQ-093`，用户已确认方案 B：先创建 preview YAML，不修改正式 `DOC_STATE.yaml`；W13-E3 已据此新增状态层 Preview YAML。
+- W13-E4-A 新增 `OQ-094~OQ-096`，用于确认后续 State Write 的阶段 1 写入、旧 `STxx_*` superseded 表达和备份方式；用户已确认 `OQ-094=B`、`OQ-095` 阶段 1 方案 C / 阶段 2 方案 B、`OQ-096=B`，且 `W13-E4-C` 已按该确认执行阶段 2。
+- W13-E4-D 新增 `OQ-097~OQ-099`，用于确认是否创建 Stage3 Preview YAML、旧 `STxx_*` 正式移出策略和 `RQ01.facts.task_ids` 旧任务处理；用户已确认 `OQ-097=B`、`OQ-098=先做方案B的Preview，不正式移出旧STxx_*`、`OQ-099=先做方案B的Preview，在Preview中移除旧ST01_01、ST09_03`。W13-E4-E 已创建并验证 Stage3 Preview YAML，但这不表示旧 `STxx_*` 已正式移出或正式 `RQ01.facts.task_ids` 已改写。
+- W13-E4-E 新增 `OQ-100`，用于确认是否基于已通过的 Stage3 Preview 执行正式 Stage 3；该项当前仍待用户确认。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -17,10 +20,10 @@
 
 | 类别 | 数量 | 说明 |
 | --- | ---: | --- |
-| `confirmed` | 90 | 已由 `W13-A`、`DD-018~DD-033`、`FC-01~FC-18` 或 W13-E 用户确认覆盖，不再作为待确认阻塞。 |
+| `confirmed` | 97 | 已由 `W13-A`、`DD-018~DD-040`、`FC-01~FC-18` 或 W13-E / W13-E3 / W13-E4-A / W13-E4-B / W13-E4-C / W13-E4-D / W13-E4-E 过程确认覆盖，不再作为待确认阻塞。 |
 | `historical` | 2 | `OQ-002`、`OQ-003` 只保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。 |
-| `open` | 0 | 当前没有 active 待确认项。 |
-| `proposed-default` | 1 | `OQ-093` 是 W13-E3 preview / state write 确认卡，等待用户确认。 |
+| `open` | 0 | 当前没有 active 产品范围待确认项。 |
+| `proposed-default` | 1 | `OQ-100` 等待用户确认是否基于 Stage3 Preview 执行正式 Stage 3；旧 `STxx_*` 尚未正式移出，正式 `RQ01.facts.task_ids` 尚未改写。 |
 
 M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `confirmed / historical / superseded / open` 保留治理语义，模块索引和子文档父模块链接已补强。该处理不等于放行正式子任务窗口，也不等于旧 STxx_* 骨架已迁移到 archive。
 
@@ -33,6 +36,11 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | 对象模型 / RAG / 多轮 / 后端边界 | `docs/superpowers/plans/2026-04-25-workbench-mvp-object-model-rag-multiround-backend.md` |
 | 评分 / 复盘 / 导出 / DoD | `docs/superpowers/plans/2026-04-25-workbench-mvp-scoring-review-export-dod.md` |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
+| 状态层 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` |
+| State Write 分阶段计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md` |
+| State Write 阶段 1 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md` |
+| State Write 阶段 2 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` |
+| State Write 阶段 3 dry-run 与影响分析 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
 
@@ -72,16 +80,23 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 - W10 首切片“JD + 简历 Markdown -> 3 条问题 -> 第 1 题问答 -> 简版反馈”已由 `DD-018` 的工作台级 MVP 取代。
 - W10 `apps/web/**` mock 原型只作参考证据，已由 `DD-019` 固定，不得作为正式一期 MVP 起点。
 
-## 6. W13-E / W13-E2 任务治理确认卡
+## 6. W13-E / W13-E2 / W13-E4 任务治理确认卡
 
 这些确认卡来源于 `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`。它们只处理任务治理和状态层写入节奏，不改变 `FC-01~FC-19` 已 confirmed 的产品事实。
 
 | OQ ID | 问题 | 状态 | 推荐方案 | 备选方案 | 当前处理要求 |
 | --- | --- | --- | --- | --- | --- |
 | `OQ-090` | W13 工作台级任务 ID 如何命名？ | confirmed | 方案 A：使用 `WT13-xx`，例如 `WT13-01`、`WT13-02` | 方案 B：`WB-MVP-xx`；方案 C：`ST13_xx`；方案 D：用户自定义 | 用户已确认 `WT13-xx` 作为候选任务域命名；W13-E2 结论是当前状态层不能直接把它作为 `DOC_STATE.yaml.subtasks` key。 |
-| `OQ-091` | 旧 `STxx_*` 在 W13 Task Remap 中如何处理？ | confirmed | 方案 B：建立新 W13 任务后，将旧 `STxx_*` 映射为 `superseded`，后续状态层窗口迁入 archive | 方案 A：全部保留为 `historical-reference`；方案 C：逐个精审；方案 D：用户自定义 | 本窗口不删除、不迁移、不修改 `DOC_STATE.yaml`；旧 `STxx_*` 当前仍是 `state-bound`，正式 superseded 写入需后续状态层窗口。 |
+| `OQ-091` | 旧 `STxx_*` 在 W13 Task Remap 中如何处理？ | confirmed | 方案 B：建立新 W13 任务后，将旧 `STxx_*` 映射为 `superseded`，后续状态层窗口迁入 archive | 方案 A：全部保留为 `historical-reference`；方案 C：逐个精审；方案 D：用户自定义 | `W13-E4-C` 已用 `DOC_STATE.yaml.facts` 表达旧 `STxx_*` 的 `historical-reference / superseded`；本阶段不删除、不迁移、不移出正式容器。 |
 | `OQ-092` | W13 任务树是否应在下一窗口写入 `DOC_STATE.yaml`？ | confirmed | 方案 A：暂不写 `DOC_STATE.yaml`，先做 W13-E2 dry-run | 方案 B：下一窗口写入新任务但暂不移除旧 `STxx_*`；方案 C：同时写入新任务并移出旧 `STxx_*`；方案 D：用户自定义 | 用户已确认先做 W13-E2 dry-run；本轮不写正式 `DOC_STATE.yaml`。 |
-| `OQ-093` | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | proposed-default | 方案 B：下一窗口创建 preview YAML，不修改正式 `DOC_STATE.yaml` | 方案 A：仍不写 `DOC_STATE.yaml`，只维护索引和路线图；方案 C：下一窗口直接写正式 `DOC_STATE.yaml`，但不移除旧 `STxx_*`；方案 D：用户自定义 | 推荐先创建 preview YAML 验证结构；用户确认前不得写正式状态层、移出旧 ST 或进入实现窗口。 |
+| `OQ-093` | W13-E3 是否允许写入 `DOC_STATE.yaml`？ | confirmed | 方案 B：创建 preview YAML，不修改正式 `DOC_STATE.yaml` | 方案 A：仍不写 `DOC_STATE.yaml`，只维护索引和路线图；方案 C：直接写正式 `DOC_STATE.yaml`，但不移除旧 `STxx_*`；方案 D：用户自定义 | 用户已确认 `OQ-093=B`；已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` 并完成预检。正式 `DOC_STATE.yaml` 未修改。用户已确认后续采用 C-Phased 高层策略，但具体 State Write 阶段仍需以下确认卡。 |
+| `OQ-094` | 是否允许 W13-E4-B 写入 `ST13_01~ST13_25`，但不移除旧 `STxx_*`？ | confirmed | 方案 B：写入 `ST13_01~ST13_25`，不移除旧 `STxx_*` | 方案 A：继续只保留 Preview；方案 C：写入新任务并同时标记旧任务 superseded；方案 D：用户自定义 | 用户已确认方案 B；W13-E4-B 阶段 1 已写入正式 `DOC_STATE.yaml`，旧 `STxx_*` 保持未修改。 |
+| `OQ-095` | 旧 `STxx_*` superseded 表达方式如何处理？ | confirmed | 第一阶段采用方案 C：先不表达 superseded，只并存新旧任务；第二阶段采用方案 B：在 `DOC_STATE.yaml` 中用现有字段表达 superseded / historical-reference | 方案 A：只在索引和 task-remap 表达；方案 D：用户自定义 | 用户已确认该分阶段口径；`W13-E4-B` 已完成阶段 1，`W13-E4-C` 已完成阶段 2，用旧任务 facts 写入 `w13_status`、`w13_role`、`w13_superseded_by` 与 `w13_alias_target`。 |
+| `OQ-096` | 是否创建正式 State Write 备份文件？ | confirmed | 方案 B：在 `docs/superpowers/plans` 下创建 State Write 变更说明和回退说明，不复制 `DOC_STATE` | 方案 A：不创建备份；方案 C：创建写入前快照副本到 preview / backup 目录；方案 D：用户自定义 | 用户已确认方案 B；已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md`，未复制正式 `DOC_STATE.yaml`。 |
+| `OQ-097` | 是否创建 Stage3 Preview YAML？ | confirmed | 方案 B：下一窗口创建 Stage3 Preview YAML，不修改正式 `DOC_STATE.yaml` | 方案 A：不创建 Preview YAML，只保留 dry-run；方案 C：跳过 preview 直接正式移出旧 `STxx_*`；方案 D：用户自定义 | 用户已确认 `OQ-097=B`，且 W13-E4-E 已创建并验证 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`；正式 `DOC_STATE.yaml` 未修改。 |
+| `OQ-098` | 旧 `STxx_*` 正式移出策略如何处理？ | confirmed | 先做方案 B 的 preview：正式阶段 3 移出旧 `STxx_*`，同时保留合法历史引用 | 方案 A：暂不移出；方案 C：只移出确认无引用风险的旧任务；方案 D：用户自定义 | 用户已确认先做方案 B 的 Preview，不正式移出旧 `STxx_*`。全部 30 个旧 ST 可进入 preview 候选，但正式移出前必须先验证 `TASK_INDEX.md`、`MODULE_INDEX.md`、模块索引和 `RQ01.facts.task_ids`。 |
+| `OQ-099` | `RQ01.facts.task_ids` 中旧 `ST01_01`、`ST09_03` 如何处理？ | confirmed | 方案 B：阶段 3 preview 中移除 `ST01_01`、`ST09_03`，只保留 `ST13_01~ST13_25` | 方案 A：暂时保留；方案 C：移到历史说明字段，如果 schema 支持；方案 D：用户自定义 | 用户已确认先做方案 B 的 Preview，并在 Preview 中移除旧 `ST01_01`、`ST09_03`；正式 `RQ01.facts.task_ids` 仍不得在本确认写回中修改。 |
+| `OQ-100` | 是否基于 Stage3 Preview 执行正式 Stage 3？ | proposed-default | 推荐方案 B：执行正式 Stage 3，移出旧 `STxx_*`，并从 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03` | 方案 A：暂不执行正式 Stage 3；方案 C：只移出 `RQ01.facts.task_ids` 的旧任务但旧 `STxx_*` 暂留；方案 D：用户自定义 | Stage3 Preview 已通过 `validate-state / evaluate-state`，preview `subtasks=25`、旧 ST 容器数为 0、`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；正式执行仍需用户确认。 |
 
 ## 7. 使用说明
 

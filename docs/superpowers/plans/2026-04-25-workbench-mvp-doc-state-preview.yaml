@@ -1,3 +1,8 @@
+# Preview YAML generated for W13-E3 dry-run.
+# Source decision: OQ-093=B confirmed by user on 2026-04-25.
+# This file is not the formal state truth. Do not use it to replace docs/governance/DOC_STATE.yaml without a separate State Write window.
+# Preview design: keep WT13-xx as document-layer task-domain IDs and use ST13_xx as state-compatible preview aliases.
+# Note: the formal documents branch is intentionally omitted here because evaluate-state resolves repo_root from non-governance input paths.
 schema_version: 1
 global_policy:
   auto_open_enabled: false
@@ -10,8 +15,7 @@ global_policy:
     task_index_doc: TASK_INDEX.md
 oqs:
   OQ-001:
-    title: "\u4ED3\u5E93\u7ED3\u6784\u662F\u5426\u56FA\u5B9A\u4E3A monorepo\uFF08\
-      `apps/web` + `apps/api` + `infra`\uFF09"
+    title: 仓库结构是否固定为 monorepo（`apps/web` + `apps/api` + `infra`）
     status: proposed-default
     affects:
       modules:
@@ -31,8 +35,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-002:
-    title: "\u9996\u8F6E\u662F\u5426\u53EA\u5EFA\u7ACB\u6700\u5C0F\u8FD0\u884C\u65F6\
-      \u3001\u6D4B\u8BD5\u548C CI \u57FA\u7EBF"
+    title: 首轮是否只建立最小运行时、测试和 CI 基线
     status: proposed-default
     affects:
       modules:
@@ -44,8 +47,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-003:
-    title: "\u89C6\u89C9\u89C4\u8303\u9996\u8F6E\u9700\u8981\u6C89\u6DC0\u5230\u4EC0\
-      \u4E48\u7C92\u5EA6"
+    title: 视觉规范首轮需要沉淀到什么粒度
     status: proposed-default
     affects:
       modules:
@@ -56,8 +58,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-004:
-    title: "P1 \u9274\u6743\u673A\u5236\u91C7\u7528\u56FA\u5B9A Bearer token\u3001\
-      JWT \u8FD8\u662F session cookie"
+    title: P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie
     status: proposed-default
     affects:
       modules:
@@ -69,8 +70,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-005:
-    title: "\u56E2\u961F\u7BA1\u7406\u5458\u4E0E\u666E\u901A\u6210\u5458\u7684\u6743\
-      \u9650\u77E9\u9635\u662F\u5426\u5148\u53EA\u8986\u76D6 P1 \u9875\u9762"
+    title: 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面
     status: proposed-default
     affects:
       modules:
@@ -82,8 +82,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-006:
-    title: "Markdown \u9884\u89C8\u4E0E\u5BFC\u51FA\u662F\u5426\u5FC5\u987B\u5171\u7528\
-      \u540C\u4E00\u6E32\u67D3\u94FE"
+    title: Markdown 预览与导出是否必须共用同一渲染链
     status: proposed-default
     affects:
       modules:
@@ -94,8 +93,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-007:
-    title: "\u4E0A\u4F20\u3001\u8F6C\u6362\u3001\u5BFC\u51FA\u5728 P1 \u4E2D\u54EA\
-      \u4E9B\u5FC5\u987B\u5F02\u6B65"
+    title: 上传、转换、导出在 P1 中哪些必须异步
     status: proposed-default
     affects:
       modules:
@@ -107,8 +105,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-008:
-    title: "\u5339\u914D\u5206\u6790\u4E0E\u8BC4\u4F30\u89C4\u5219\u662F\u5426\u9700\
-      \u8981\u7248\u672C\u5316"
+    title: 匹配分析与评估规则是否需要版本化
     status: proposed-default
     affects:
       modules:
@@ -121,7 +118,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-009:
-    title: "Embedding \u4E0E\u5411\u91CF\u5316\u6765\u6E90\u5982\u4F55\u786E\u5B9A"
+    title: Embedding 与向量化来源如何确定
     status: open
     affects:
       modules:
@@ -133,8 +130,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-010:
-    title: "\u5F52\u6863\u7C92\u5EA6\u662F\u6574\u4EFD\u8D44\u4EA7\u3001\u7247\u6BB5\
-      \u8FD8\u662F\u9898\u76EE\u7EA7"
+    title: 归档粒度是整份资产、片段还是题目级
     status: open
     affects:
       modules:
@@ -146,8 +142,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-011:
-    title: "Search snapshot \u7684\u6765\u6E90\u53EA\u505A\u5BFC\u5165\u8FD8\u662F\
-      \u9700\u8981\u6293\u53D6"
+    title: Search snapshot 的来源只做导入还是需要抓取
     status: proposed-default
     affects:
       modules:
@@ -159,8 +154,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-012:
-    title: "\u4E0A\u4E0B\u6587\u5305\u4E2D\u7684 source priority \u4E0E\u5F15\u7528\
-      \u6458\u8981\u89C4\u5219\u5982\u4F55\u5B9A\u7A3F"
+    title: 上下文包中的 source priority 与引用摘要规则如何定稿
     status: open
     affects:
       modules:
@@ -171,8 +165,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-013:
-    title: "\u6253\u78E8\u4E3B\u9898\u63A8\u8350\u662F\u89C4\u5219\u3001LLM \u8FD8\
-      \u662F\u6DF7\u5408"
+    title: 打磨主题推荐是规则、LLM 还是混合
     status: open
     affects:
       modules:
@@ -183,8 +176,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-014:
-    title: "\u6A21\u62DF\u9762\u8BD5\u3001\u6253\u78E8\u6A21\u5F0F\u548C\u590D\u76D8\
-      \u662F\u5426\u5171\u7528\u540C\u4E00\u8BC4\u4F30\u53E3\u5F84"
+    title: 模拟面试、打磨模式和复盘是否共用同一评估口径
     status: proposed-default
     affects:
       modules:
@@ -197,8 +189,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-015:
-    title: "\u771F\u5B9E\u9762\u8BD5\u8F93\u5165\u662F\u7ED3\u6784\u5316\u95EE\u7B54\
-      \u3001\u81EA\u7531 transcript \u8FD8\u662F\u6DF7\u5408"
+    title: 真实面试输入是结构化问答、自由 transcript 还是混合
     status: open
     affects:
       modules:
@@ -209,8 +200,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-016:
-    title: "\u8584\u5F31\u9879\u805A\u5408 key\u3001\u6D88\u51CF\u89C4\u5219\u548C\
-      \u505C\u7EC3\u89C4\u5219\u5982\u4F55\u5B9A\u7A3F"
+    title: 薄弱项聚合 key、消减规则和停练规则如何定稿
     status: open
     affects:
       modules:
@@ -221,8 +211,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-017:
-    title: "\u7BA1\u7406\u53F0\u7684\u6A21\u578B\u63A8\u8350\u6765\u6E90\u662F\u672C\
-      \u5730 catalog \u8FD8\u662F\u5728\u7EBF\u540C\u6B65"
+    title: 管理台的模型推荐来源是本地 catalog 还是在线同步
     status: proposed-default
     affects:
       modules:
@@ -233,8 +222,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-018:
-    title: "\u7BA1\u7406\u53F0\u662F\u5426\u8D1F\u8D23 search snapshot \u5BFC\u5165\
-      \u4E0E\u8FD0\u7EF4"
+    title: 管理台是否负责 search snapshot 导入与运维
     status: proposed-default
     affects:
       modules:
@@ -246,10 +234,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-019:
-    title: "\u6839\u76EE\u5F55\u7EDF\u4E00\u811A\u672C\u4E0E\u6700\u5C0F CI \u6821\
-      \u9A8C\u77E9\u9635\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u7C92\u5EA6\uFF0C\u624D\
-      \u7B97\u6EE1\u8DB3\u5E73\u53F0\u57FA\u7EBF\u7684\u4E0B\u6E38\u8F93\u5165\u8981\
-      \u6C42"
+    title: 根目录统一脚本与最小 CI 校验矩阵应冻结到什么粒度，才算满足平台基线的下游输入要求
     status: proposed-default
     affects:
       modules:
@@ -261,9 +246,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-020:
-    title: "\u5171\u4EAB\u9875\u9762\u539F\u8BED\uFF08`PageHeader` / Dashboard \u6458\
-      \u8981\u533A\uFF09\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u6700\u5C0F\u63A5\u53E3\
-      \u8FB9\u754C\uFF0C\u624D\u80FD\u652F\u6491\u540E\u7EED\u9875\u9762\u590D\u7528"
+    title: 共享页面原语（`PageHeader` / Dashboard 摘要区）应冻结到什么最小接口边界，才能支撑后续页面复用
     status: proposed-default
     affects:
       modules:
@@ -276,8 +259,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-021:
-    title: "\u5217\u8868\u67E5\u8BE2\u72B6\u6001\u3001\u5206\u9875\u4EA4\u4E92\u4E0E\
-      \ URL / callback \u7684\u6620\u5C04\u89C4\u5219\u5E94\u5982\u4F55\u7EDF\u4E00"
+    title: 列表查询状态、分页交互与 URL / callback 的映射规则应如何统一
     status: proposed-default
     affects:
       modules:
@@ -297,9 +279,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-022:
-    title: "locale fallback\u3001\u5207\u6362\u7B56\u7565\u4E0E\u6D88\u606F\u547D\u540D\
-      \u7A7A\u95F4\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u7A0B\u5EA6\uFF0C\u624D\u80FD\
-      \u4F5C\u4E3A\u5171\u4EAB Web \u5951\u7EA6\u4E0B\u53D1"
+    title: locale fallback、切换策略与消息命名空间应冻结到什么程度，才能作为共享 Web 契约下发
     status: proposed-default
     affects:
       modules:
@@ -319,9 +299,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-023:
-    title: "`/(dashboard)/admin/members` \u4E0E `/api/v1/admin/members` \u7684\u5B8C\
-      \u6574\u5B9E\u73B0\u5E94\u7EE7\u7EED\u7531 M02 \u627F\u63A5\uFF0C\u8FD8\u662F\
-      \u7531\u540E\u7EED\u6CBB\u7406\u6A21\u5757\u627F\u63A5"
+    title: '`/(dashboard)/admin/members` 与 `/api/v1/admin/members` 的完整实现应继续由 M02 承接，还是由后续治理模块承接'
     status: proposed-default
     affects:
       modules:
@@ -333,10 +311,7 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-024:
-    title: "\u8BA1\u5212\u91CD\u6784\u540E\uFF0C\u65E7 `ST02_* / ST03_*` \u5B50\u4EFB\
-      \u52A1\u76EE\u5F55\u662F\u5426\u5E94\u9000\u5F79\u4E3A\u5386\u53F2\u5BB9\u5668\
-      \uFF0C\u5E76\u6309\u65B0\u7684\u5FAE\u4EFB\u52A1\u84DD\u672C\u91CD\u5EFA\u6B63\
-      \u5F0F\u5165\u53E3"
+    title: 计划重构后，旧 `ST02_* / ST03_*` 子任务目录是否应退役为历史容器，并按新的微任务蓝本重建正式入口
     status: proposed-default
     affects:
       modules:
@@ -348,10 +323,8 @@ oqs:
     gate_policy_source: bootstrap_default
     resolution_policy: proposed_default_ok
   OQ-025:
-    title: "`jobs.requirement_items_json` \u7684\u6700\u5C0F item \u7ED3\u6784\u3001\
-      \u7A7A\u503C\u8BED\u4E49\u3001\u6392\u5E8F\u89C4\u5219\u4E0E\u5199\u5165\u8D23\
-      \u4EFB\u5E94\u51BB\u7ED3\u5230\u4EC0\u4E48\u7A0B\u5EA6\uFF0C\u624D\u80FD\u4F5C\
-      \u4E3A M04 / M06 \u7684\u7A33\u5B9A\u8F93\u5165"
+    title: '`jobs.requirement_items_json` 的最小 item 结构、空值语义、排序规则与写入责任应冻结到什么程度，才能作为
+      M04 / M06 的稳定输入'
     status: proposed-default
     affects:
       modules:
@@ -424,6 +397,16 @@ requirements:
         relations_ok: true
         language_ok: null
         violations: []
+      w13_preview:
+        source_decision: OQ-093=B
+        source_decision_status: confirmed
+        formal_doc_state_write: false
+        preview_yaml_path: docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml
+        preview_alias_rule: WT13-xx remains the doc-layer task-domain ID; ST13_xx
+          is only a doc_governor-compatible preview alias under the existing root
+          requirement container.
+        task_remap_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        backlog_roadmap_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md
     state:
       confirmed:
         maturity: null
@@ -485,6 +468,19 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_01
+        - ST13_02
+        - ST13_20
+        - ST13_21
+        - ST13_22
+        - ST13_23
+        - ST13_24
+        - ST13_25
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -540,6 +536,17 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_01
+        - ST13_02
+        - ST13_05
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -596,6 +603,19 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_03
+        - ST13_04
+        - ST13_06
+        - ST13_17
+        - ST13_19
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -648,6 +668,19 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_03
+        - ST13_06
+        - ST13_11
+        - ST13_13
+        - ST13_16
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -701,6 +734,18 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_06
+        - ST13_07
+        - ST13_10
+        - ST13_18
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -758,6 +803,23 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_05
+        - ST13_06
+        - ST13_07
+        - ST13_08
+        - ST13_09
+        - ST13_10
+        - ST13_11
+        - ST13_12
+        - ST13_15
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -811,6 +873,24 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_06
+        - ST13_07
+        - ST13_08
+        - ST13_09
+        - ST13_12
+        - ST13_13
+        - ST13_15
+        - ST13_16
+        - ST13_17
+        - ST13_19
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -865,6 +945,27 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_05
+        - ST13_07
+        - ST13_09
+        - ST13_10
+        - ST13_11
+        - ST13_12
+        - ST13_13
+        - ST13_14
+        - ST13_15
+        - ST13_16
+        - ST13_17
+        - ST13_18
+        - ST13_19
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -919,6 +1020,19 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_08
+        - ST13_14
+        - ST13_15
+        - ST13_16
+        - ST13_17
+        - ST13_20
+        - ST13_21
+        - ST13_23
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -982,6 +1096,26 @@ modules:
         execution_log:
           exists: true
           template_like: false
+      w13_preview:
+        source_decision: OQ-093=B
+        preview_requirement_id: RQ01
+        preview_task_ids:
+        - ST13_01
+        - ST13_02
+        - ST13_04
+        - ST13_10
+        - ST13_11
+        - ST13_13
+        - ST13_14
+        - ST13_18
+        - ST13_19
+        - ST13_20
+        - ST13_21
+        - ST13_22
+        - ST13_23
+        - ST13_24
+        - ST13_25
+        formal_doc_state_write: false
     state:
       confirmed:
         maturity: null
@@ -1003,29 +1137,29 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_20
-      - ST13_21
-      - ST13_24
-      - ST13_25
-      w13_alias_target:
-      - WT13-20
-      - WT13-21
-      - WT13-24
-      - WT13-25
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-20
+        - WT13-21
+        - WT13-24
+        - WT13-25
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1047,25 +1181,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_02
-      - ST13_23
-      w13_alias_target:
-      - WT13-02
-      - WT13-23
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-02
+        - WT13-23
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1087,27 +1223,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_22
-      - ST13_24
-      - ST13_25
-      w13_alias_target:
-      - WT13-22
-      - WT13-24
-      - WT13-25
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-22
+        - WT13-24
+        - WT13-25
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1130,25 +1267,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_01
-      - ST13_21
-      w13_alias_target:
-      - WT13-01
-      - WT13-21
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-01
+        - WT13-21
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1171,25 +1310,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_01
-      - ST13_21
-      w13_alias_target:
-      - WT13-01
-      - WT13-21
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-01
+        - WT13-21
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1212,25 +1353,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_01
-      - ST13_22
-      w13_alias_target:
-      - WT13-01
-      - WT13-22
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: false
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-01
+        - WT13-22
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1254,27 +1397,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_03
-      - ST13_06
-      - ST13_23
-      w13_alias_target:
-      - WT13-03
-      - WT13-06
-      - WT13-23
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-03
+        - WT13-06
+        - WT13-23
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1298,27 +1442,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_04
-      - ST13_06
-      - ST13_23
-      w13_alias_target:
-      - WT13-04
-      - WT13-06
-      - WT13-23
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-04
+        - WT13-06
+        - WT13-23
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1342,27 +1487,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_04
-      - ST13_19
-      - ST13_20
-      w13_alias_target:
-      - WT13-04
-      - WT13-19
-      - WT13-20
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-04
+        - WT13-19
+        - WT13-20
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1385,27 +1531,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_06
-      - ST13_13
-      - ST13_21
-      w13_alias_target:
-      - WT13-06
-      - WT13-13
-      - WT13-21
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-06
+        - WT13-13
+        - WT13-21
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1428,25 +1575,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_13
-      - ST13_16
-      w13_alias_target:
-      - WT13-13
-      - WT13-16
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-13
+        - WT13-16
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1469,25 +1618,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_17
-      - ST13_23
-      w13_alias_target:
-      - WT13-17
-      - WT13-23
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-17
+        - WT13-23
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1511,23 +1662,26 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_18
-      w13_alias_target:
-      - WT13-18
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-18
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1551,25 +1705,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_18
-      - ST13_20
-      w13_alias_target:
-      - WT13-18
-      - WT13-20
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-18
+        - WT13-20
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1593,25 +1749,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_10
-      - ST13_20
-      w13_alias_target:
-      - WT13-10
-      - WT13-20
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-10
+        - WT13-20
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1636,27 +1794,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_05
-      - ST13_06
-      - ST13_07
-      w13_alias_target:
-      - WT13-05
-      - WT13-06
-      - WT13-07
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-05
+        - WT13-06
+        - WT13-07
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1681,31 +1840,30 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_06
-      - ST13_07
-      - ST13_10
-      - ST13_11
-      - ST13_12
-      w13_alias_target:
-      - WT13-06
-      - WT13-07
-      - WT13-10
-      - WT13-11
-      - WT13-12
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-06
+        - WT13-07
+        - WT13-10
+        - WT13-11
+        - WT13-12
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1730,29 +1888,29 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_12
-      - ST13_15
-      - ST13_19
-      - ST13_22
-      w13_alias_target:
-      - WT13-12
-      - WT13-15
-      - WT13-19
-      - WT13-22
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-12
+        - WT13-15
+        - WT13-19
+        - WT13-22
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1775,27 +1933,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_08
-      - ST13_16
-      - ST13_17
-      w13_alias_target:
-      - WT13-08
-      - WT13-16
-      - WT13-17
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-08
+        - WT13-16
+        - WT13-17
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1818,25 +1977,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_08
-      - ST13_16
-      w13_alias_target:
-      - WT13-08
-      - WT13-16
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-08
+        - WT13-16
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1859,29 +2020,29 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_08
-      - ST13_13
-      - ST13_16
-      - ST13_17
-      w13_alias_target:
-      - WT13-08
-      - WT13-13
-      - WT13-16
-      - WT13-17
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-08
+        - WT13-13
+        - WT13-16
+        - WT13-17
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1905,29 +2066,29 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_14
-      - ST13_15
-      - ST13_18
-      - ST13_19
-      w13_alias_target:
-      - WT13-14
-      - WT13-15
-      - WT13-18
-      - WT13-19
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-14
+        - WT13-15
+        - WT13-18
+        - WT13-19
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1951,25 +2112,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_14
-      - ST13_16
-      w13_alias_target:
-      - WT13-14
-      - WT13-16
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-14
+        - WT13-16
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -1993,27 +2156,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_15
-      - ST13_18
-      - ST13_19
-      w13_alias_target:
-      - WT13-15
-      - WT13-18
-      - WT13-19
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-15
+        - WT13-18
+        - WT13-19
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2038,23 +2202,26 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_16
-      w13_alias_target:
-      - WT13-16
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-16
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2079,23 +2246,26 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_17
-      w13_alias_target:
-      - WT13-17
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-17
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2120,25 +2290,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_16
-      - ST13_17
-      w13_alias_target:
-      - WT13-16
-      - WT13-17
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: false
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-16
+        - WT13-17
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2164,25 +2336,27 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_01
-      - ST13_22
-      w13_alias_target:
-      - WT13-01
-      - WT13-22
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-01
+        - WT13-22
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2208,27 +2382,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_11
-      - ST13_13
-      - ST13_22
-      w13_alias_target:
-      - WT13-11
-      - WT13-13
-      - WT13-22
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-11
+        - WT13-13
+        - WT13-22
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2254,27 +2429,28 @@ subtasks:
       related_oq_ids: []
       legacy_locked: false
       declared_blocker_refs: []
-      w13_status: superseded
-      w13_role: historical-reference
-      w13_superseded_by:
-      - ST13_22
-      - ST13_24
-      - ST13_25
-      w13_alias_target:
-      - WT13-22
-      - WT13-24
-      - WT13-25
-      w13_archive_candidate: true
-      w13_mapping_review_required: false
-      w13_current_implementation_entry: false
-      w13_retention_reason: 保留旧任务的状态层路径和历史证据，避免断开早期模块骨架追溯。
-      w13_notes: 旧任务仅作历史参考，当前 W13 任务以 ST13 / WT13 为准；本阶段不移出正式 subtasks 容器，不迁移 archive。
       design_doc:
         exists: true
         template_like: true
       implementation_doc:
         exists: true
         template_like: true
+      w13_superseded_preview:
+        source_decision: W13-E-Q2
+        source_decision_status: confirmed
+        state_layer_role: state-bound historical reference; not reactivated
+        suggested_classification:
+        - historical-reference
+        - reusable-evidence
+        - state-bound
+        - superseded-candidate
+        - archive-candidate
+        mapped_wt13_task_domains:
+        - WT13-22
+        - WT13-24
+        - WT13-25
+        formal_doc_state_write: false
+        archive_move: false
     state:
       confirmed:
         implementation_doc_state: missing
@@ -2314,7 +2490,7 @@ subtasks:
         task_domain_title: 账号 / 登录 / 权限
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2355,7 +2531,7 @@ subtasks:
         task_domain_title: 工作台首页 / 导航 / 权限入口
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2395,7 +2571,7 @@ subtasks:
         task_domain_title: 岗位管理
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2435,7 +2611,7 @@ subtasks:
         task_domain_title: 简历管理
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2476,7 +2652,7 @@ subtasks:
         task_domain_title: 模拟记录列表
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2519,7 +2695,7 @@ subtasks:
         task_domain_title: 发起模拟面试
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2561,7 +2737,7 @@ subtasks:
         task_domain_title: 面试台
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2602,7 +2778,7 @@ subtasks:
         task_domain_title: 打磨模式
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2643,7 +2819,7 @@ subtasks:
         task_domain_title: 压力面模式
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2685,7 +2861,7 @@ subtasks:
         task_domain_title: RAG / 知识库
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2727,7 +2903,7 @@ subtasks:
         task_domain_title: 真实 LLM provider / adapter
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2768,7 +2944,7 @@ subtasks:
         task_domain_title: 多轮上下文 / 状态机
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2810,7 +2986,7 @@ subtasks:
         task_domain_title: 评分体系
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2851,7 +3027,7 @@ subtasks:
         task_domain_title: 真实面试复盘
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2893,7 +3069,7 @@ subtasks:
         task_domain_title: 模拟面试复盘
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2935,7 +3111,7 @@ subtasks:
         task_domain_title: 薄弱项 `WeaknessItem
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -2977,7 +3153,7 @@ subtasks:
         task_domain_title: 训练抽屉 / 待打磨清单
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3018,7 +3194,7 @@ subtasks:
         task_domain_title: 资产归档
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3060,7 +3236,7 @@ subtasks:
         task_domain_title: Markdown 导出 / 复制
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3108,7 +3284,7 @@ subtasks:
         task_domain_title: 服务端保存 / 数据库
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3156,7 +3332,7 @@ subtasks:
         task_domain_title: API / 后端服务边界
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3196,7 +3372,7 @@ subtasks:
         task_domain_title: 日志 / 观测 / 运维
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3244,7 +3420,7 @@ subtasks:
         task_domain_title: 前端工作台 UI / 页面集合
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3284,7 +3460,7 @@ subtasks:
         task_domain_title: 测试 / 验收 / DoD
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3324,7 +3500,7 @@ subtasks:
         task_domain_title: 文档治理 / 收口 / Basic Memory
         source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
-        formal_doc_state_write: true
+        formal_doc_state_write: false
         implementation_ready: false
     state:
       confirmed:
@@ -3334,57 +3510,6 @@ subtasks:
         review_status: unreviewed
         readiness: blocked
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
-documents:
-  DOC-PLAN-CURRENT-REPO-2026-04-25:
-    meta:
-      doc_type: plan
-      title: "AI \u6A21\u62DF\u9762\u8BD5\u7CFB\u7EDF\u5F53\u524D\u4ED3\u5E93\u6267\u884C\u8BA1\u5212"
-      path: docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md
-      required_sections:
-      - section_id: doc_positioning
-        heading: "## 1. \u6587\u6863\u5B9A\u4F4D"
-      - section_id: current_repo_positioning
-        heading: "## 2. \u5F53\u524D\u4ED3\u5E93\u5B9A\u4F4D"
-      - section_id: completed_work
-        heading: "## 3. W0-W7 \u5DF2\u5B8C\u6210\u4E8B\u9879"
-      - section_id: current_prerequisites
-        heading: "## 4. \u5F53\u524D\u4E3B\u9879\u76EE\u8BBE\u8BA1\u5F00\u53D1\u7684\u771F\u5B9E\u524D\u7F6E\u6761\u4EF6"
-      - section_id: defer_monorepo_reason
-        heading: "## 5. \u5F53\u524D\u4E0D\u76F4\u63A5\u843D\u672A\u6765\u4E1A\u52A1\u76EE\u5F55\u7ED3\u6784\u7684\u539F\u56E0"
-      - section_id: next_steps
-        heading: "## 6. \u4E0B\u4E00\u6B65\u5EFA\u8BAE"
-      - section_id: verification
-        heading: "## 7. \u9A8C\u8BC1\u547D\u4EE4"
-      - section_id: blueprint_relation
-        heading: "## 8. \u4E0E `DOC-PLAN-P1` \u7684\u5173\u7CFB"
-      relations:
-        document_refs: []
-        module_refs: []
-        oq_refs: []
-    facts:
-      exists: true
-      headings: []
-      section_presence: {}
-      extracted_refs:
-        document_refs: []
-        module_refs: []
-        oq_refs: []
-      marker_counts:
-        todo: 0
-        tbd: 0
-        unresolved: 0
-      last_scanned_at: null
-    state:
-      confirmed:
-        maturity: null
-        status: active
-        review_status: approved
-        blocker_refs: []
-        active_round_id: null
-        last_round_id: null
         last_transition_id: null
         last_confirmed_at: null
         last_confirmed_by: null
@@ -3450,11 +3575,10 @@ governance_rounds:
   - declared relation refs present
   - no unresolved hard blockers remain
   writeback_items:
-  - "DOC-SPEC-P1: \u8865\u9F50\u5F15\u7528 doc:DOC-PLAN-P1"
+  - 'DOC-SPEC-P1: 补齐引用 doc:DOC-PLAN-P1'
   packet_paths:
     round_plan_json: null
     packet_json: docs/governance/packets/R-2026-04-22-SPECPLAN-01.packet.json
     prompt_md: docs/governance/packets/R-2026-04-22-SPECPLAN-01.prompt.md
     exec_cmd_txt: docs/governance/packets/R-2026-04-22-SPECPLAN-01.exec.txt
-  result_summary: "DOC-SPEC-P1 \u4E0E DOC-PLAN-P1 \u5DF2\u5B8C\u6210\u4EBA\u5DE5 review\uFF0C\
-    \u5E76\u5B8C\u6210 confirm-transition\u3002"
+  result_summary: DOC-SPEC-P1 与 DOC-PLAN-P1 已完成人工 review，并完成 confirm-transition。

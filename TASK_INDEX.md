@@ -5,8 +5,8 @@
 > 当前状态主要表示文档建设状态，不表示代码开发状态。
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
-> 用户已确认 `WT13-xx` 作为 W13 候选任务域命名，但当前 `doc_governor` 状态层仍不直接接受 `WT13-xx` 作为 `DOC_STATE.yaml.subtasks` key。
-> 当前正式开窗层仍为空；正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到状态层、允许修改范围与开窗资格全部确认。
+> 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 目前只完成 dry-run / 影响分析，旧任务尚未移出正式容器。
+> 当前正式开窗层仍为空；正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到允许修改范围、实施文档与开窗资格全部确认。
 
 ## 1. 模块任务索引
 
@@ -45,7 +45,7 @@
 > - `OQ-024 / FC-16` 的总控正式映射已写死；`M02`、`M03` 的观察蓝本当前仍不是正式子任务 ID。
 > - 白名单观察面 != 正式子任务 ID != 可开窗任务；本轮仍不允许开启任何子任务窗口。
 > - `M03` 仍只观察 `MT03_01 / MT03_03`；`ST04_01 / ST04_02 / ST06_01 / ST06_02 / ST07_03` 仅为历史后续承接对象，不等于当前 W13 正式开窗任务。
-> - 本轮收口后正式开窗层仍为空，不新增正式子任务 ID；W13 后续任务必须先完成全局任务重映射。
+> - 本轮收口后正式开窗层仍为空；阶段 1 仅新增正式状态层入口 `ST13_01~ST13_25`，阶段 2 仅历史化旧 `STxx_*` facts，均不等于可开实施窗口。
 
 | Task ID | 名称 | 父任务 | 前置依赖 | 状态 | 文档成熟度 | 是否具备实施条件 | 对应文档路径 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -102,46 +102,101 @@
 - `ST07_03`：后续承接 `M07` 的简版反馈摘要、逐题评估投影与最小改进建议，不等于训练中心或长期进度开窗。
 - 当前正式开窗层固定为空；W10 后续承接对象不得直接升级为 W13 一期工作台 MVP 正式子任务 ID。
 
-## 2.4 W13-E 工作台级任务重映射草案（候选）
+## 2.4 W13-E 工作台级任务重映射草案（阶段 1 已写入状态层）
 
-> 本节只登记 W13-E / W13-E2 候选任务树摘要，不等于正式子任务 ID，不等于 `implementation-ready`，也不等于已写入 `DOC_STATE.yaml`。
-> `WT13-xx` 已由用户确认为候选任务域命名；W13-E2 检查结论是当前 `doc_governor` 状态层 `subtasks` key 仍以 `STxx_yy` 为准，因此写入状态层前必须另开 W13-E3 / Preview YAML 或 State Write 窗口。
-> 下表 `当前状态` 中的 `proposed-default` 表示任务域本身仍未正式写入状态层，不表示 `WT13-xx` 命名仍待确认。
+> 本节登记 W13-E / W13-E2 候选任务树摘要，以及 W13-E4-B 阶段 1 已写入的正式状态层入口。
+> `WT13-xx` 已由用户确认为候选任务域命名；正式 `DOC_STATE.yaml.subtasks` key 使用兼容的 `ST13_01~ST13_25`。
+> W13-E4-C 阶段 2 已用旧 `STxx_*` facts 表达 historical / superseded；旧任务仍保留在正式容器中，不作为当前 W13 实施入口。
+> W13-E4-D 阶段 3 dry-run 已确认：旧 `STxx_*` 仍被全局索引和模块任务索引作为历史追溯引用；用户已确认下一步先做 Stage3 Preview，并在 Preview 中同步验证 `RQ01.facts.task_ids` 移除旧 `ST01_01`、`ST09_03` 的方案。
+> W13-E4-E Stage3 Preview 已通过：preview `subtasks` 只保留 `ST13_01~ST13_25`，旧 `STxx_*` 容器数为 0，preview `RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；正式 `DOC_STATE.yaml` 未修改。
+> 下表 `当前状态=blocked` 表示已写入正式状态层但仍不具备实施条件，不表示 `WT13-xx` 命名待确认。
 
 | 候选 ID | 任务域 | 关联模块 | 当前状态 | 是否具备实施条件 | 说明 |
 | --- | --- | --- | --- | --- | --- |
-| WT13-01 | 账号 / 登录 / 权限 | M02、M10、M01 | proposed-default | 否 | 承接 session cookie、普通用户 / 管理员、记录可见范围。 |
-| WT13-02 | 工作台首页 / 导航 / 权限入口 | M01、M02、M10 | proposed-default | 否 | 承接左侧导航、顶部账号区、行动型摘要和后续能力低干扰入口。 |
-| WT13-03 | 岗位管理 | M03、M04 | proposed-default | 否 | 承接 `Job` 列表、详情、创建编辑和发起必选输入。 |
-| WT13-04 | 简历管理 | M03、M10 | proposed-default | 否 | 承接 `Resume` 服务端保存、版本、上传 / 粘贴 / 编辑。 |
-| WT13-05 | 模拟记录列表 | M06、M08、M02 | proposed-default | 否 | 模拟面试模块默认入口，承接权限可见范围、继续、复盘、导出入口。 |
-| WT13-06 | 发起模拟面试 | M03、M04、M05、M06、M07 | proposed-default | 否 | 承接岗位、简历、知识库、模式选择和参考材料包。 |
-| WT13-07 | 面试台 | M06、M05、M07、M08 | proposed-default | 否 | 承接真实 LLM、多轮、RAG 引用、暂停 / 继续和完成触发。 |
-| WT13-08 | 打磨模式 | M07、M06、M09 | proposed-default | 否 | 承接 `ProgressTree`、题级反馈、下一题建议和用户结束决策。 |
-| WT13-09 | 压力面模式 | M06、M08、M07 | proposed-default | 否 | 承接 `InterviewQuestionSet`、题组完成和最终评估。 |
-| WT13-10 | RAG / 知识库 | M05、M06、M08、M10 | proposed-default | 否 | 承接知识库、检索、引用、无命中 / 失败降级。 |
-| WT13-11 | 真实 LLM provider / adapter | M10、M06、M04、M08 | proposed-default | 否 | 承接可插拔 provider、默认真实 provider、脱敏记录和失败重试。 |
-| WT13-12 | 多轮上下文 / 状态机 | M06、M07、M08 | proposed-default | 否 | 承接 `InterviewContext`、轮次、turn、暂停 / 继续和模式结束条件。 |
-| WT13-13 | 评分体系 | M04、M07、M08、M10 | proposed-default | 否 | 承接 `0-100` 多维评分、证据绑定、规则版本和重算 / 修订。 |
-| WT13-14 | 真实面试复盘 | M08、M09、M10 | proposed-default | 否 | 承接逐字稿输入、LLM 自动识别问答边界和逐题拆解。 |
-| WT13-15 | 模拟面试复盘 | M08、M06、M07、M09 | proposed-default | 否 | 承接整场判断、多维评分、岗位匹配、通过概率、逐题点评。 |
-| WT13-16 | 薄弱项 `WeaknessItem` | M09、M04、M07、M08 | proposed-default | 否 | 承接中粒度训练主题、证据、聚合、消减和停练。 |
-| WT13-17 | 训练抽屉 / 待打磨清单 | M09、M07、M08、M03 | proposed-default | 否 | 承接归并、加入待打磨、立即打磨、暂不处理和影响预览。 |
-| WT13-18 | 资产归档 | M05、M08、M10 | proposed-default | 否 | 承接整份 / 单题归档、资产类型和动态字段子集。 |
-| WT13-19 | Markdown 导出 / 复制 | M07、M08、M03、M10 | proposed-default | 否 | 承接 `ExportSnapshot`、复制内容和 Markdown 下载。 |
-| WT13-20 | 服务端保存 / 数据库 | M01、M02-M10 | proposed-default | 否 | 承接 PostgreSQL 和核心对象持久化。 |
-| WT13-21 | API / 后端服务边界 | M01、M10、M02-M09 | proposed-default | 否 | 承接 Auth、Job、Resume、Knowledge、Interview、Review、Score、Export 等 API contract。 |
-| WT13-22 | 日志 / 观测 / 运维 | M10、M01 | proposed-default | 否 | 承接应用日志、LLM 日志、RAG 日志、权限审计和配置边界。 |
-| WT13-23 | 前端工作台 UI / 页面集合 | M01-M10 | proposed-default | 否 | 承接登录、工作台、岗位、简历、知识库、记录、发起、面试台、复盘和导出页面。 |
-| WT13-24 | 测试 / 验收 / DoD | M01、M10、全模块 | proposed-default | 否 | 承接产品、数据、UI、工程、收口五层 DoD 测试矩阵。 |
-| WT13-25 | 文档治理 / 收口 / Basic Memory | global、M01、M10 | proposed-default | 否 | 承接任务索引、模块映射、状态层迁移方案、收口记录和后续写回。 |
+| WT13-01 | 账号 / 登录 / 权限 | M02、M10、M01 | blocked | 否 | 承接 session cookie、普通用户 / 管理员、记录可见范围。 |
+| WT13-02 | 工作台首页 / 导航 / 权限入口 | M01、M02、M10 | blocked | 否 | 承接左侧导航、顶部账号区、行动型摘要和后续能力低干扰入口。 |
+| WT13-03 | 岗位管理 | M03、M04 | blocked | 否 | 承接 `Job` 列表、详情、创建编辑和发起必选输入。 |
+| WT13-04 | 简历管理 | M03、M10 | blocked | 否 | 承接 `Resume` 服务端保存、版本、上传 / 粘贴 / 编辑。 |
+| WT13-05 | 模拟记录列表 | M06、M08、M02 | blocked | 否 | 模拟面试模块默认入口，承接权限可见范围、继续、复盘、导出入口。 |
+| WT13-06 | 发起模拟面试 | M03、M04、M05、M06、M07 | blocked | 否 | 承接岗位、简历、知识库、模式选择和参考材料包。 |
+| WT13-07 | 面试台 | M06、M05、M07、M08 | blocked | 否 | 承接真实 LLM、多轮、RAG 引用、暂停 / 继续和完成触发。 |
+| WT13-08 | 打磨模式 | M07、M06、M09 | blocked | 否 | 承接 `ProgressTree`、题级反馈、下一题建议和用户结束决策。 |
+| WT13-09 | 压力面模式 | M06、M08、M07 | blocked | 否 | 承接 `InterviewQuestionSet`、题组完成和最终评估。 |
+| WT13-10 | RAG / 知识库 | M05、M06、M08、M10 | blocked | 否 | 承接知识库、检索、引用、无命中 / 失败降级。 |
+| WT13-11 | 真实 LLM provider / adapter | M10、M06、M04、M08 | blocked | 否 | 承接可插拔 provider、默认真实 provider、脱敏记录和失败重试。 |
+| WT13-12 | 多轮上下文 / 状态机 | M06、M07、M08 | blocked | 否 | 承接 `InterviewContext`、轮次、turn、暂停 / 继续和模式结束条件。 |
+| WT13-13 | 评分体系 | M04、M07、M08、M10 | blocked | 否 | 承接 `0-100` 多维评分、证据绑定、规则版本和重算 / 修订。 |
+| WT13-14 | 真实面试复盘 | M08、M09、M10 | blocked | 否 | 承接逐字稿输入、LLM 自动识别问答边界和逐题拆解。 |
+| WT13-15 | 模拟面试复盘 | M08、M06、M07、M09 | blocked | 否 | 承接整场判断、多维评分、岗位匹配、通过概率、逐题点评。 |
+| WT13-16 | 薄弱项 `WeaknessItem` | M09、M04、M07、M08 | blocked | 否 | 承接中粒度训练主题、证据、聚合、消减和停练。 |
+| WT13-17 | 训练抽屉 / 待打磨清单 | M09、M07、M08、M03 | blocked | 否 | 承接归并、加入待打磨、立即打磨、暂不处理和影响预览。 |
+| WT13-18 | 资产归档 | M05、M08、M10 | blocked | 否 | 承接整份 / 单题归档、资产类型和动态字段子集。 |
+| WT13-19 | Markdown 导出 / 复制 | M07、M08、M03、M10 | blocked | 否 | 承接 `ExportSnapshot`、复制内容和 Markdown 下载。 |
+| WT13-20 | 服务端保存 / 数据库 | M01、M02-M10 | blocked | 否 | 承接 PostgreSQL 和核心对象持久化。 |
+| WT13-21 | API / 后端服务边界 | M01、M10、M02-M09 | blocked | 否 | 承接 Auth、Job、Resume、Knowledge、Interview、Review、Score、Export 等 API contract。 |
+| WT13-22 | 日志 / 观测 / 运维 | M10、M01 | blocked | 否 | 承接应用日志、LLM 日志、RAG 日志、权限审计和配置边界。 |
+| WT13-23 | 前端工作台 UI / 页面集合 | M01-M10 | blocked | 否 | 承接登录、工作台、岗位、简历、知识库、记录、发起、面试台、复盘和导出页面。 |
+| WT13-24 | 测试 / 验收 / DoD | M01、M10、全模块 | blocked | 否 | 承接产品、数据、UI、工程、收口五层 DoD 测试矩阵。 |
+| WT13-25 | 文档治理 / 收口 / Basic Memory | global、M01、M10 | blocked | 否 | 承接任务索引、模块映射、状态层迁移方案、收口记录和后续写回。 |
+
+### 2.4.1 W13-E4-B 正式状态层入口
+
+| 正式状态层 ID | WT13 alias | 主模块 | 当前状态 | 是否具备实施条件 |
+| --- | --- | --- | --- | --- |
+| ST13_01 | WT13-01 | M01 | blocked | 否 |
+| ST13_02 | WT13-02 | M01 | blocked | 否 |
+| ST13_03 | WT13-03 | M03 | blocked | 否 |
+| ST13_04 | WT13-04 | M03 | blocked | 否 |
+| ST13_05 | WT13-05 | M02 | blocked | 否 |
+| ST13_06 | WT13-06 | M03 | blocked | 否 |
+| ST13_07 | WT13-07 | M05 | blocked | 否 |
+| ST13_08 | WT13-08 | M06 | blocked | 否 |
+| ST13_09 | WT13-09 | M06 | blocked | 否 |
+| ST13_10 | WT13-10 | M05 | blocked | 否 |
+| ST13_11 | WT13-11 | M04 | blocked | 否 |
+| ST13_12 | WT13-12 | M06 | blocked | 否 |
+| ST13_13 | WT13-13 | M04 | blocked | 否 |
+| ST13_14 | WT13-14 | M08 | blocked | 否 |
+| ST13_15 | WT13-15 | M06 | blocked | 否 |
+| ST13_16 | WT13-16 | M04 | blocked | 否 |
+| ST13_17 | WT13-17 | M03 | blocked | 否 |
+| ST13_18 | WT13-18 | M05 | blocked | 否 |
+| ST13_19 | WT13-19 | M03 | blocked | 否 |
+| ST13_20 | WT13-20 | M01 | blocked | 否 |
+| ST13_21 | WT13-21 | M01 | blocked | 否 |
+| ST13_22 | WT13-22 | M01 | blocked | 否 |
+| ST13_23 | WT13-23 | M01 | blocked | 否 |
+| ST13_24 | WT13-24 | M01 | blocked | 否 |
+| ST13_25 | WT13-25 | M01 | blocked | 否 |
+
+### 2.4.2 W13-E4-C 旧 `STxx_*` historical / superseded 同步摘要
+
+> 完整旧 ST 到 `ST13 / WT13` 映射见 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 第 6 节。
+> 本节只做任务索引级同步：旧 `STxx_*` 仍保留为历史可追溯对象，不再作为 W13 当前实施入口；后续是否移出正式容器留到阶段 3。
+
+| 旧 ST 范围 | 当前角色 | facts 表达 | 当前 W13 承接入口 | archive-candidate | 是否具备实施条件 |
+| --- | --- | --- | --- | --- | --- |
+| `ST01_01~ST01_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_02`、`ST13_20~ST13_25` / `WT13-02`、`WT13-20~WT13-25` | 是 | 否 |
+| `ST02_01~ST02_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_01`、`ST13_21`、`ST13_22` / `WT13-01`、`WT13-21`、`WT13-22` | 是 | 否 |
+| `ST03_01~ST03_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_03`、`ST13_04`、`ST13_06`、`ST13_19`、`ST13_20`、`ST13_23` | 是 | 否 |
+| `ST04_01~ST04_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_06`、`ST13_13`、`ST13_16`、`ST13_17`、`ST13_21`、`ST13_23` | 是 | 否 |
+| `ST05_01~ST05_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_10`、`ST13_18`、`ST13_20` / `WT13-10`、`WT13-18`、`WT13-20` | 是 | 否 |
+| `ST06_01~ST06_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_05~ST13_07`、`ST13_10~ST13_12`、`ST13_15`、`ST13_19`、`ST13_22` | 是 | 否 |
+| `ST07_01~ST07_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_08`、`ST13_13`、`ST13_16`、`ST13_17` / `WT13-08`、`WT13-13`、`WT13-16`、`WT13-17` | 是 | 否 |
+| `ST08_01~ST08_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_14~ST13_16`、`ST13_18`、`ST13_19` / `WT13-14~WT13-16`、`WT13-18`、`WT13-19` | 是 | 否 |
+| `ST09_01~ST09_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_16`、`ST13_17` / `WT13-16`、`WT13-17` | 是 | 否 |
+| `ST10_01~ST10_03` | historical-reference / superseded | 已写入 `w13_status`、`w13_role`、`w13_superseded_by`、`w13_alias_target` | `ST13_01`、`ST13_11`、`ST13_13`、`ST13_22`、`ST13_24`、`ST13_25` | 是 | 否 |
 
 W13-E 当前确认卡：
 
 - `W13-E-Q1`：任务 ID 命名采用 `WT13-xx`，用户已确认。
-- `W13-E-Q2`：旧 `STxx_*` 后续映射为 `superseded`，用户已确认；正式状态层尚未写入。
+- `W13-E-Q2`：旧 `STxx_*` 后续映射为 `superseded`，用户已确认；新 `ST13_*` 已写入正式状态层，旧任务 superseded / historical-reference 已在阶段 2 写入 facts。
 - `W13-E-Q3`：暂不直接写 `DOC_STATE.yaml`，先做 W13-E2 dry-run，用户已确认。
-- `W13-E2-Q1`：W13-E3 是否先创建 preview YAML，当前推荐方案为 B，等待用户确认。
+- `W13-E2-Q1`：W13-E3 是否先创建 preview YAML，用户已确认方案 B；Preview YAML 已创建，正式 `DOC_STATE.yaml` 未修改。
+- `W13-E4-B`：用户已确认 `OQ-094=B`、`OQ-095` 阶段 1 方案 C / 阶段 2 方案 B、`OQ-096=B`；阶段 1 已写入 `ST13_01~ST13_25`。
+- `W13-E4-C`：阶段 2 已用旧任务 facts 写入 `historical-reference / superseded`，但未移出旧 `STxx_*`，未迁移 archive，未放行 implementation-ready。
+- `W13-E4-D`：阶段 3 dry-run / 影响分析已完成；确认卡 `OQ-097~OQ-099` 已由用户确认进入 Stage3 Preview 路径。
+- `W13-E4-E`：Stage3 Preview YAML 已创建并验证通过；正式 `DOC_STATE.yaml` 仍未移出旧 `STxx_*`，正式 `RQ01.facts.task_ids` 仍未改写，是否执行正式 Stage 3 等待 `OQ-100` 用户确认。
 
 ## 3. 使用规则
 
