@@ -25,6 +25,33 @@
 
 ## 3. 当前记录
 
+### 2026-04-27 / W13-E15 / formal window open 前置确认窗口
+
+- 执行类型：formal window open 前置确认、候选范围判断、风险复核、状态写入方案设计和用户确认卡输出；不写正式状态层，不写代码。
+- 范围：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md`。
+  - 同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 backlog-roadmap。
+  - 不修改 `docs/governance/DOC_STATE.yaml`，不修改 `apps/**`、`infra/**`、`tools/**`、`tests/**`、`archive/**`、`docs/modules/**`，不写 Basic Memory。
+- 基线验证：
+  - `git status --short` 为空；当前分支为 `main`；`origin/main...HEAD = 0 0`。
+  - `validate-state`：`ok=true,error=0,warning=0`。
+  - `evaluate-state`：`ok=true,error=0,warning=0,documents_blocked_count=0,modules_blocked_count=1,subtasks_blocked_count=25`。
+- 前置复核：
+  - `ST13_24`：facts-only candidate 推荐、双文档、required doc slot 和文档层 acceptance criteria / required tests / implementation scope / allowed / forbidden paths / formal window 前置条件 / packet 前置条件 / 回退策略均已存在；当前 preflight 仍 blocked。
+  - `ST13_25`：facts-only candidate 推荐、双文档、required doc slot 和文档层收口标准 / Basic Memory 授权边界 / fallback 包 / Superpowers 更新规则 / 文档治理 DoD / allowed / forbidden paths / formal window 前置条件 / packet 前置条件均已存在；当前 preflight 仍 blocked。
+  - `ST13_21 / ST13_20`：继续保持文档层 near-ready，不写 candidate_status，不写 facts-only formal window candidate，不进入本轮 open-window。
+- preflight 结果：
+  - `ST13_24 / ST13_25` 均为 `gate_result=blocked`，`can_open_formal_window=false`、`can_generate_implementation_packet=false`、`can_mark_implementation_ready=false`。
+  - 主要 blockers：`formal_window_closed`、`official_readiness_blocked`、`implementation_doc_not_active`、`acceptance_criteria_missing`、`required_tests_missing`、`implementation_scope_unclear`。
+- 新增确认卡：
+  - `OQ-125`：是否允许后续单独窗口打开 formal window；推荐方案 B，只打开 `ST13_24`。
+  - `OQ-126`：formal window open 后是否允许同窗生成 packet；推荐方案 A，不允许，packet 另开窗口。
+  - `OQ-127`：formal window open 后是否允许同窗进入实现；推荐方案 A，不允许，仍需 packet 准备和用户确认。
+- 当前结论：
+  - 可以进入 formal window open 执行窗口的用户确认阶段。
+  - 推荐后续单独窗口只打开 `ST13_24` 作为保守试点。
+  - 本窗口未打开 formal window，未生成 implementation packet，未进入实现，未修改 `DOC_STATE.yaml`。
+
 ### 2026-04-26 / W13-E13.8 / docs/governance/previews 路径 facts-only Candidate Preview + 正式 State Update
 
 - 执行类型：门禁式两阶段状态层窗口；阶段 1 创建 `docs/governance/previews/` 下路径等价 Preview 并验证，阶段 2 仅在 Preview 严格全绿后执行 facts-only 正式 State Update；不写代码，不进入实现。

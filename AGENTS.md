@@ -214,6 +214,7 @@
 - [AI 模拟面试一期工作台 MVP ST13 candidate State Update Preview YAML](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml)（preview 文件，不是正式状态真值）
 - [AI 模拟面试一期工作台 MVP ST13 candidate 状态表达策略修正](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md)
 - [AI 模拟面试一期工作台 MVP ST13 facts-only Candidate Preview YAML](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml)（preview 文件，不是正式 `DOC_STATE.yaml`，不作为治理真值）
+- [AI 模拟面试一期工作台 MVP ST13 formal window open 前置确认](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md)
 - [AI 模拟面试一期工作台 MVP ST13_21 API / 后端服务边界双文档](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md)
 - [AI 模拟面试一期工作台 MVP ST13_20 服务端保存 / 数据库双文档](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md)
 - [AI 模拟面试一期工作台 MVP ST13_24 测试 / 验收 / DoD 双文档](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md)

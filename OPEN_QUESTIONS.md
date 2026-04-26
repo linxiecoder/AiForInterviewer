@@ -15,6 +15,7 @@
 - W13-E12 新增 `OQ-118~OQ-120`：用于确认是否允许下一窗口为 `ST13_24 / ST13_25` 准备 candidate 状态 preview、`ST13_21 / ST13_20` 是否写入状态层 near-ready，以及后续是否先创建 preview YAML；用户已确认 `OQ-118=B`、`OQ-119=A`、`OQ-120=B`。W13-E13 已创建 preview，但验证发现当前规则不允许在 `formal_window_open=false` 时写入 `candidate_status=candidate`。
 - W13-E13 新增 `OQ-121`：用于确认 Preview 失败后的下一步处理；用户已确认 `OQ-121=A`，即暂不执行正式 State Update，只保留失败 Preview，并先修正后续状态表达策略。
 - W13-E13.8 已吸收 `OQ-124`：用户确认采用方案 A，把 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，已执行 facts-only 正式 State Update。
+- W13-E15 新增 `OQ-125~OQ-127`：用于确认是否允许后续单独窗口打开 formal window、formal window open 后是否允许同窗生成 implementation packet、formal window open 后是否允许同窗进入实现；三项均为 `proposed-default`，等待用户确认，不得写成 `confirmed`。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -29,7 +30,7 @@
 | `confirmed` | 122 | 已由 `W13-A`、`DD-018~DD-050`、`FC-01~FC-18` 或 W13-E / W13-E3 / W13-E4-A / W13-E4-B / W13-E4-C / W13-E4-D / W13-E4-E / W13-E4-F / W13-E6 / W13-E8 / W13-E11 / W13-E13 / W13-E13.5 / W13-E13.6 / W13-E13.8 过程确认覆盖，不再作为待确认阻塞。 |
 | `historical` | 2 | `OQ-002`、`OQ-003` 只保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。 |
 | `open` | 0 | 当前没有 active 产品范围待确认项。 |
-| `proposed-default` | 0 | 当前无待确认 proposed-default；新增确认卡需另行登记，确认前不得写成 confirmed。 |
+| `proposed-default` | 3 | `OQ-125~OQ-127` 为 W13-E15 formal window open 前置确认卡；确认前不得写成 confirmed。 |
 
 M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `confirmed / historical / superseded / open` 保留治理语义，模块索引和子文档父模块链接已补强。该处理不等于放行正式子任务窗口，也不等于旧 STxx_* 骨架已迁移到 archive。
 
@@ -53,6 +54,7 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | ST13 第一批 formal window candidate 评估 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-formal-window-candidate-evaluation.md` |
 | ST13 第一批 State Update 准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md` |
 | ST13 candidate 状态表达策略修正 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` |
+| ST13 formal window open 前置确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
 
@@ -161,6 +163,16 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | `OQ-122` | W13-E13.5 后是否创建新的 Candidate State Preview？ | confirmed | 方案 A：创建 facts-only Candidate Preview，`ST13_24 / ST13_25` 只用 facts 字段表达 `formal_window_candidate_recommended`，不写 `candidate_status=candidate`，不写 `readiness=downstream_ready` | 方案 B：创建 `candidate_status=observe` Preview；方案 C：创建 maturity + downstream_ready Preview；方案 D：用户自定义 | 用户已确认 `OQ-122=A`；W13-E13.6 已创建 facts-only Preview。 |
 | `OQ-123` | 是否继续禁止 W13-E14 正式 State Update？ | confirmed | 方案 A：继续禁止，直到新的 Preview 全绿 | 方案 B：允许在 facts-only 方案下直接正式写入；方案 C：formal window open 前置确认后再写 `candidate_status=candidate`；方案 D：用户自定义 | 用户已确认 `OQ-123=A`；W13-E13.6 不进入 W13-E14，正式 `DOC_STATE.yaml` 未修改。 |
 | `OQ-124` | 是否基于 W13-E13.6 facts-only Preview 执行后续 facts-only 正式 State Update？ | confirmed | 方案 A：把 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update | 方案 B：继续只保留 Preview；方案 C：继续尝试 `candidate_status=observe` Preview；方案 D：用户自定义 | 用户已确认方案 A；W13-E13.8 已创建 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过 validate/evaluate，随后仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未打开 formal window，未形成 implementation-ready。 |
+
+### 6.5 W13-E15 formal window open 前置确认卡
+
+完整卡片见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md` 第 9 节。W13-E15 只输出前置确认卡，不修改 `DOC_STATE.yaml`，不打开 formal window，不生成 implementation packet，不进入实现。
+
+| ID | 问题 | 状态 | 推荐方案 | 其他方案 | 当前处理 |
+| --- | --- | --- | --- | --- | --- |
+| `OQ-125` | 是否允许后续单独窗口打开 `ST13_24 / ST13_25` 的 formal window？ | proposed-default | 方案 B：后续单独开 formal window open 窗口，只打开 `ST13_24`。 | 方案 A：暂不进入 formal window open；方案 C：只打开 `ST13_25`；方案 D：同时打开 `ST13_24 / ST13_25`；方案 E：用户自定义。 | 推荐 `ST13_24` 作为测试 / 验收 / DoD 试点；确认前不得执行状态写入，不得写成 `formal_window_open=true`。 |
+| `OQ-126` | 如果后续打开 formal window，是否允许同一窗口生成 implementation packet？ | proposed-default | 方案 A：不允许。同一窗口只打开 formal window，packet 必须另开窗口并通过 preflight / packet gate。 | 方案 B：同窗尝试 packet dry-run；方案 C：直接生成正式 packet；方案 D：用户自定义。 | 推荐拆窗；确认前不得生成 packet，方案 C 不推荐且不得作为默认。 |
+| `OQ-127` | 如果后续 formal window open 成功，是否允许立刻进入代码实现？ | proposed-default | 方案 A：不允许。formal window open 后仍需 packet 准备和用户确认。 | 方案 B：允许同窗进入实现；方案 C：只做文档实现；方案 D：用户自定义。 | 推荐保持 open-window、packet、实现三段式门禁；确认前不得创建 `apps/**`、`infra/**`、`tests/**` 或进入实现。 |
 
 ## 7. 使用说明
 

@@ -5,7 +5,7 @@
 ## 1. 文档定位
 
 - 维护范围：项目待办、状态层后续事项、任务重映射后续事项、实现前置条件、二期 / 三期候选能力、历史归档后续事项和用户确认待办。
-- 当前状态：W13-E13.8 / docs/governance/previews 路径 facts-only Candidate Preview + 正式 State Update 已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；第一批 `ST13_24 / ST13_25` 已以 facts-only 方式把 candidate 推荐字段写入正式状态层，但当前仍不能生成 implementation packet、打开 formal window 或进入实现。
+- 当前状态：W13-E15 / formal window open 前置确认已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；第一批 `ST13_24 / ST13_25` 已以 facts-only 方式把 candidate 推荐字段写入正式状态层，并已完成前置确认卡输出，但当前仍不能生成 implementation packet、打开 formal window 或进入实现。
 - 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不迁移 archive，不删除旧 `STxx_*` 文档。
 - 更新原则：每轮总控或收口窗口可按同一字段规范增量更新；不得只把后续事项写在聊天记录、`EXECUTION_LOG.md` 或一次性确认卡中。
 - 工具治理 backlog 已迁入 `docs/governance/DOC_GOVERNOR_TOOL_DEBT.md`，本文件不复制工具债正文。
@@ -77,7 +77,8 @@
 | BR-REMAP-015 | 修正第一批 ST13 candidate 状态表达策略 | Task Remap 后续事项 | done | P0 | W13-E13 Preview 失败 / `OQ-121=A` | W13-E13.5 | 用户已确认 `OQ-121=A` | W13-E13.5 | 2026-04-26 | 已新增 candidate strategy fix 文档；后续优先 facts-only Preview，备选 `candidate_status=observe`。 |
 | BR-REMAP-016 | 创建修正后的 Candidate State Preview | Task Remap 后续事项 | done | P0 | W13-E13.5 / `OQ-122~OQ-123` | W13-E13.6 | 用户已确认 `OQ-122=A`、`OQ-123=A` | W13-E13.6 | 2026-04-26 | 已创建 facts-only Candidate Preview；facts-only 字段验证通过，但完整 Preview `documents_blocked_count=1`，不直接进入 W13-E14。 |
 | BR-REMAP-017 | 决定是否执行 facts-only 正式 State Update | Task Remap 后续事项 | done | P0 | W13-E13.6 / `OQ-124` | W13-E13.8 | 用户已确认方案 A：docs/governance/previews 路径 Preview 严格全绿后执行 facts-only 正式 State Update | W13-E13.8 | 2026-04-26 | 已完成；仅写 `ST13_24 / ST13_25` facts-only candidate 推荐字段，未写 `candidate_status=candidate`、`readiness=downstream_ready`、formal window open 或 implementation-ready。 |
-| BR-REMAP-018 | facts-only State Update 后续 formal window 前置确认 | Task Remap 后续事项 | open | P0 | W13-E13.8 | 后续总控窗口 | 依赖 formal window 前置条件、implementation scope、required tests 与 acceptance criteria 继续收敛 | formal window 确认前置 | 2026-04-26 | 只允许文档治理和确认卡推进；不得直接生成 implementation packet 或进入实现。 |
+| BR-REMAP-018 | facts-only State Update 后续 formal window 前置确认 | Task Remap 后续事项 | done | P0 | W13-E13.8 | W13-E15 | 依赖 formal window 前置条件、implementation scope、required tests 与 acceptance criteria 继续收敛 | formal window 确认前置 | 2026-04-27 | 已新增 W13-E15 formal window open 前置确认文档；只输出确认卡，不修改 `DOC_STATE.yaml`，不直接生成 implementation packet 或进入实现。 |
+| BR-REMAP-019 | `ST13_24` formal window open 执行窗口确认 | Task Remap 后续事项 | open | P0 | W13-E15 / `OQ-125~OQ-127` | 后续 State Update 执行窗口 | 依赖用户确认 `OQ-125~OQ-127` | formal window open 执行窗口 | 2026-04-27 | 推荐只打开 `ST13_24` 作为保守试点；同窗不生成 packet，不进入实现。 |
 
 ## 6. 实现前置条件
 
@@ -144,6 +145,9 @@
 | UC-W13-E13.5-001 | W13-E13.5 后是否创建新的 Candidate State Preview？ | 方案 A：创建 facts-only Candidate Preview；备选方案 B：创建 `candidate_status=observe` Preview；方案 C：maturity + downstream_ready Preview 不推荐优先。 | confirmed | 用户已确认 `OQ-122=A`；W13-E13.6 已创建 facts-only Preview。 | W13-E13.6 |
 | UC-W13-E13.5-002 | 是否继续禁止 W13-E14 正式 State Update？ | 方案 A：继续禁止，直到新的 Preview 全绿；方案 B：facts-only 方案直接正式写入；方案 C：formal window open 前置确认后再写 candidate。 | confirmed | 用户已确认 `OQ-123=A`；W13-E13.6 未进入 W13-E14，正式 `DOC_STATE.yaml` 未修改。 | W13-E13.6 |
 | UC-W13-E13.6-001 | 是否基于 W13-E13.6 facts-only Preview 执行后续 facts-only 正式 State Update？ | 用户确认方案 A：把 Preview 放到 `docs/governance/previews/` 下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update。 | confirmed | `OQ-124` 已由 W13-E13.8 吸收；正式状态层仅写入 `ST13_24 / ST13_25` facts-only candidate 推荐字段，未打开 formal window，未形成 implementation-ready。 | W13-E13.8 |
+| UC-W13-E15-001 | 是否允许后续单独窗口打开 `ST13_24 / ST13_25` 的 formal window？ | 方案 B：后续单独开 formal window open 窗口，只打开 `ST13_24`。 | proposed-default | `OQ-125` 等待用户确认；确认前不得写 `formal_window_open=true`。 | 后续 State Update 执行窗口 |
+| UC-W13-E15-002 | formal window open 后是否允许同窗生成 implementation packet？ | 方案 A：不允许；packet 必须另开窗口并通过 preflight / packet gate。 | proposed-default | `OQ-126` 等待用户确认；确认前不得生成 packet。 | 后续 packet 准备窗口 |
+| UC-W13-E15-003 | formal window open 后是否允许立刻进入代码实现？ | 方案 A：不允许；open-window 后仍需 packet 准备和用户确认。 | proposed-default | `OQ-127` 等待用户确认；确认前不得创建实现目录或进入实现。 | 后续实现准备窗口 |
 | UC-ARCH-001 | 是否把旧 `STxx_*` 迁入 archive？ | 不在状态层仍引用时迁移；解除引用后另开归档窗口。 | open | `docs/modules/**`、archive、根索引 | Archive Cleanup |
 | UC-IMPL-001 | 是否进入实现窗口？ | 否；正式状态层和 implementation-ready 形成前不进入实现。 | confirmed | `apps/**`、`infra/**`、实现包 | 后续正式开窗后 |
 

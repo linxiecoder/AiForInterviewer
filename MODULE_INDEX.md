@@ -317,6 +317,19 @@ Preview facts-only 字段未导致 implementation-ready 或 formal window 误判
 
 当前适合进入 formal window open 确认窗口，但该窗口只能处理用户确认与状态治理边界，不得直接进入代码实现。M01-M10 仍无模块升级为实现就绪。
 
+### 6.16 W13-E15 formal window open 前置确认模块影响
+
+> W13-E15 只做 formal window open 前置确认和确认卡输出，不修改 `docs/modules/**`，不改变 M01-M10 成熟度，不解除 M02 blocker，不打开 formal window，不生成 implementation packet，不进入实现。
+
+| ST13 | WT13 alias | 模块映射 | W13-E15 结果 | 模块层结论 |
+| --- | --- | --- | --- | --- |
+| `ST13_24` | `WT13-24` | M01、M10、全模块 | 前置材料在文档层已具备进入用户确认窗口的条件；preflight 仍 blocked，主要因为 formal window closed、official readiness blocked、implementation doc 未激活、packet inputs 未进入状态层 gate。 | 可作为后续 formal window open 执行窗口的保守试点；不创建 `tests/**`，不升级任何模块成熟度。 |
+| `ST13_25` | `WT13-25` | global、M01、M10 | 前置材料在文档层已具备进入用户确认窗口的条件；preflight 仍 blocked，且 Basic Memory / Superpowers 写回必须另行授权。 | 可作为后续候选，但默认不作为第一试点；当前不写 Basic Memory，不做外部技能写回。 |
+| `ST13_21` | `WT13-21` | M01-M10；M02 权限边界仍需后续同步 | 保持文档层 near-ready，不写 candidate_status，不写 facts-only formal window candidate。 | 仍需 M02、OpenAPI、`apps/api/**`、schema / DTO / shared contract 授权闭合后再评估。 |
+| `ST13_20` | `WT13-20` | M01-M10；权限、RAG、资产、导出和复盘均会消费数据 contract | 保持文档层 near-ready，不写 candidate_status，不写 facts-only formal window candidate。 | 仍需 M02、schema、migration、ORM、PostgreSQL 和 `ST13_21` API contract 联动闭合后再评估。 |
+
+W13-E15 推荐后续只对 `ST13_24` 开启单独 formal window open 执行窗口，并继续把 packet 与实现拆窗；该推荐仍需用户确认，不能视为模块可进入实现。
+
 ## 7. 使用说明
 
 - 模块状态变化后，应同步更新本文档、`TASK_INDEX.md` 和 `DOCUMENT_MATURITY.md`。

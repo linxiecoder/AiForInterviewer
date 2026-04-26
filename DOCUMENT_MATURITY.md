@@ -31,8 +31,8 @@
 | `OPEN_QUESTIONS.md` | L5 | OQ / MQ confirmed / historical 归并入口 | 是 | 否 |
 | `DESIGN_DECISIONS.md` | L5 | DD confirmed / superseded / needs-review 决策索引 | 是 | 否 |
 | `TECHNICAL_STANDARDS.md` | L4 | confirmed 技术标准摘要，仍保留 implementation packet 复核边界 | 部分 | 否 |
-| `TASK_INDEX.md` | L4 | 当前任务索引；已同步 `ST13_01~ST13_25` 正式状态层入口、`WT13-xx` alias、旧 `STxx_*` historical 口径、第一批 `ST13_20/21/24/25` contract_refined 状态、W13-E13 candidate preview 失败结果、W13-E13.5 candidate 状态表达策略修正和 W13-E14-Merge formal window 前置补齐合并结果，但未形成正式开窗或 implementation-ready | 部分 | 否 |
-| `MODULE_INDEX.md` | L4 | 当前模块索引；已写入 W13 候选任务域、`ST13 / WT13` 模块映射、旧 `STxx_*` 历史参考口径、第一批 contract_refined 模块影响、W13-E13.5 candidate 状态表达策略对 M01/M10 的非放行结论和 W13-E14-Merge 模块影响，但模块同步仍待后续窗口 | 部分 | 否 |
+| `TASK_INDEX.md` | L4 | 当前任务索引；已同步 `ST13_01~ST13_25` 正式状态层入口、`WT13-xx` alias、旧 `STxx_*` historical 口径、第一批 `ST13_20/21/24/25` contract_refined 状态、W13-E13 candidate preview 失败结果、W13-E13.5 candidate 状态表达策略修正、W13-E14-Merge formal window 前置补齐合并结果和 W13-E15 formal window open 前置确认结果，但未形成正式开窗或 implementation-ready | 部分 | 否 |
+| `MODULE_INDEX.md` | L4 | 当前模块索引；已写入 W13 候选任务域、`ST13 / WT13` 模块映射、旧 `STxx_*` 历史参考口径、第一批 contract_refined 模块影响、W13-E13.5 candidate 状态表达策略对 M01/M10 的非放行结论、W13-E14-Merge 模块影响和 W13-E15 formal window open 前置确认模块影响，但模块同步仍待后续窗口 | 部分 | 否 |
 | `DOCUMENT_PROGRESS.md` | L4 | 当前进展摘要 + 历史归档和补链入口 | 部分 | 否 |
 | `DOCUMENT_MATURITY.md` | L4 | 当前成熟度摘要 + 历史归档和补链入口 | 部分 | 否 |
 | `EXECUTION_LOG.md` | L4 | 历史执行记录 | 部分 | 否 |
@@ -55,6 +55,7 @@
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` | L4 | W13-E13.5 candidate 状态表达策略修正文档，记录 Preview 失败复盘、规则分析、facts-only / observe / maturity 候选方案、确认卡和不进入实现边界；不写正式状态 | 部分，供下一轮 Candidate Preview 使用 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml` | L2 | W13-E13.6 facts-only Candidate Preview YAML；仅用于验证 `ST13_24 / ST13_25` 的 facts-only candidate 推荐字段，`validate-state / evaluate-state` 为 `ok=true,error=0,warning=0`，但完整 Preview `documents_blocked_count=1`；不是正式状态真值 | 部分，供后续确认卡评估 | 否 |
 | `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` | L2 | W13-E13.8 docs/governance/previews 路径 facts-only Candidate Preview YAML；验证 `ST13_24 / ST13_25` 的 facts-only candidate 推荐字段在路径等价位置下 `validate-state / evaluate-state` 全绿，`documents_blocked_count=0`；不是正式状态真值 | 是，已作为正式 State Update 前置验证证据 | 否 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md` | L4 | W13-E15 formal window open 前置确认文档；记录 `ST13_24 / ST13_25` 前置复核、`ST13_21 / ST13_20` near-ready 保持说明、preflight blocker、用户确认卡和 State Update 执行方案草案 | 是，供用户确认和后续 formal window open 执行窗口使用 | 否 |
 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | L4 | W13-E14-Merge 已复核的 `ST13_21 / WT13-21` API / 后端服务边界设计文档；near-ready blocker、API contract readiness 和升级条件已进一步明确，仍 not implementation-ready | 是，供 formal window 前置确认 | 否 |
 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | L4 | W13-E14-Merge 已复核的 `ST13_21 / WT13-21` API / 后端服务边界实施说明；implementation plan only，未来实现窗口约束已更新 | 是，供 formal window 前置确认 | 否 |
 | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | L4 | W13-E14-Merge 已复核的 `ST13_20 / WT13-20` 服务端保存 / 数据库设计文档；near-ready blocker、数据 contract readiness 和升级条件已进一步明确，仍 not implementation-ready | 是，供 formal window 前置确认 | 否 |
@@ -112,13 +113,14 @@
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-required-doc-slot-update.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`
+- `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md`
 
 说明：
 - 上述“可作为下游输入”仅表示可用于继续做文档设计、任务重映射和模块同步。
 - 这不等于可以直接进入代码实施。
 - 当前没有任何模块或子任务被登记为可直接实施。
-- W13-E13.8 已完成第一批 `ST13_24 / ST13_25` candidate 推荐的 facts-only 正式状态层写入；该写入只记录推荐事实，不写 `candidate_status=candidate`，不写 `readiness=downstream_ready`，不打开 formal window，25 个 ST13 的 implementation-ready 仍未形成。
-- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit、W13-E6 第一批 contract 任务包草案、W13-E7 第一批 contract 双文档准备方案、W13-E8 第一批正式双文档、W13-E8.5 required doc slot update、W13-E9 contract_refined 双文档、W13-E10 readiness review、W13-E11 candidate evaluation、W13-E12 State Update plan、W13-E13 failed preview、W13-E13.5 strategy fix、W13-E13.6 facts-only Preview、W13-E13.8 facts-only State Update 和 W13-E14-Merge formal window 前置补齐合并可作为后续确认卡输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
+- W13-E15 已完成第一批 `ST13_24 / ST13_25` formal window open 前置确认；该确认只说明可以进入用户确认窗口，不写 `formal_window_open=true`，不生成 implementation packet，25 个 ST13 的 implementation-ready 仍未形成。
+- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit、W13-E6 第一批 contract 任务包草案、W13-E7 第一批 contract 双文档准备方案、W13-E8 第一批正式双文档、W13-E8.5 required doc slot update、W13-E9 contract_refined 双文档、W13-E10 readiness review、W13-E11 candidate evaluation、W13-E12 State Update plan、W13-E13 failed preview、W13-E13.5 strategy fix、W13-E13.6 facts-only Preview、W13-E13.8 facts-only State Update、W13-E14-Merge formal window 前置补齐合并和 W13-E15 formal window open 前置确认可作为后续确认卡输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
 
 ## 7. 当前可直接用于实施的子任务
 
@@ -135,9 +137,9 @@
 
 ## 9. 下一等级所需动作
 
-1. W13-E14-Merge 已完成 formal window 前置补齐合并；下一轮如继续推进，适合进入 formal window open 确认窗口，但仍不得把 facts-only 推荐或双文档补齐写成 `candidate_status=candidate`、`readiness=downstream_ready`、formal window open 或 implementation-ready。
+1. W13-E15 已完成 formal window open 前置确认；下一轮如继续推进，应先等待用户确认 `OQ-125~OQ-127`，推荐只让后续单独窗口打开 `ST13_24`，且 packet 与实现继续拆窗。
 2. `MODULE_INDEX.md` 需要在模块同步窗口后回写 W13 模块优先级，而不是继续沿用 W10 首切片顺序。
 3. `M02` 需要优先修正 API / open_questions 模块 blocker；`M05 / M06 / M08 / M09 / M10` 需要按 confirmed 范围补齐模块级设计，尤其是 RAG、多轮、复盘、训练、资产归档和管理台入口。
 4. 旧 `STxx_*` 骨架如需归档，必须另行执行 archive 迁移评估与确认；确认前不直接移动这些文档。
 5. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
-6. 正式开窗层写入前，所有子任务仍不得进入 implementation-ready 或代码实施；当前仍不能 formal window open、生成 implementation packet 或进入实现。
+6. 正式开窗层写入前，所有子任务仍不得进入 implementation-ready 或代码实施；当前仍不能生成 implementation packet 或进入实现。
