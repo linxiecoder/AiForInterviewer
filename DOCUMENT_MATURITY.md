@@ -46,6 +46,7 @@
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` | L4 | W13-E4-F State Write 阶段 3 变更与回退说明，记录正式移出旧 `STxx_*`、收敛 `RQ01.facts.task_ids`、验证结果和回退步骤 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` | L4 | W13-E5 ST13 任务包准备前置审计，记录 `ST13_01~ST13_25` 缺口、依赖、formal window 条件、实现前置依赖、模块映射和用户确认卡 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` | L4 | W13-E6 第一批 contract 任务包草案，记录 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的任务目标、输入输出、边界、依赖、验收和测试要求 | 部分 | 否 |
+| `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` | L4 | W13-E7 第一批 contract 双文档准备方案，记录四个 ST13 的草案审计、双文档模板、路径方案、前置清单、contract 摘要、父索引同步方案和确认卡 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` | L4 | 项目待办、状态层后续、二期 / 三期和历史归档后续事项追踪清单 | 部分 | 否 |
 | `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` | L4 | 历史设计稿归档快照 | 部分 | 否 |
 
@@ -90,12 +91,14 @@
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`
 - `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`
+- `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`
+- `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`
 
 说明：
 - 上述“可作为下游输入”仅表示可用于继续做文档设计、任务重映射和模块同步。
 - 这不等于可以直接进入代码实施。
 - 当前没有任何模块或子任务被登记为可直接实施。
-- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit 和 W13-E6 第一批 contract 任务包草案可作为后续 archive 迁移评估、任务包准备、正式双文档准备和模块同步输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
+- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit、W13-E6 第一批 contract 任务包草案和 W13-E7 第一批 contract 双文档准备方案可作为后续 archive 迁移评估、任务包准备、正式双文档创建和模块同步输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
 
 ## 7. 当前可直接用于实施的子任务
 
@@ -112,7 +115,7 @@
 
 ## 9. 下一等级所需动作
 
-1. `TASK_INDEX.md` 后续仍需把 W13-E6 第一批任务包草案转化为正式子任务双文档准备窗口；不得标记 implementation-ready。
+1. `TASK_INDEX.md` 后续仍需把 W13-E7 第一批双文档准备方案转化为正式双文档创建窗口；不得标记 implementation-ready。
 2. `MODULE_INDEX.md` 需要在模块同步窗口后回写 W13 模块优先级，而不是继续沿用 W10 首切片顺序。
 3. `M02` 需要优先修正 API / open_questions 模块 blocker；`M05 / M06 / M08 / M09 / M10` 需要按 confirmed 范围补齐模块级设计，尤其是 RAG、多轮、复盘、训练、资产归档和管理台入口。
 4. 旧 `STxx_*` 骨架如需归档，必须另行执行 archive 迁移评估与确认；确认前不直接移动这些文档。

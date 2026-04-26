@@ -5,7 +5,7 @@
 ## 1. 文档定位
 
 - 维护范围：项目待办、状态层后续事项、任务重映射后续事项、实现前置条件、二期 / 三期候选能力、历史归档后续事项和用户确认待办。
-- 当前状态：W13-E6 / ST13 第一批 contract 任务包草案已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；当前仍不能生成 implementation packet、打开 formal window 或进入实现。
+- 当前状态：W13-E7 / ST13 第一批 contract 双文档准备方案已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；当前仍不能生成 implementation packet、打开 formal window 或进入实现。
 - 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不迁移 archive，不删除旧 `STxx_*` 文档。
 - 更新原则：每轮总控或收口窗口可按同一字段规范增量更新；不得只把后续事项写在聊天记录、`EXECUTION_LOG.md` 或一次性确认卡中。
 
@@ -65,7 +65,8 @@
 | BR-REMAP-005 | 窗口边界模板细化 | Task Remap 后续事项 | backlog | P2 | task-remap | 后续窗口编排 | 依赖正式任务包 | 后续实施准备 | 2026-04-25 | 需要按前端、后端、RAG、LLM、评分、权限、数据、导出、运维分别细化。 |
 | BR-REMAP-006 | ST13 readiness audit | Task Remap 后续事项 | done | P0 | W13-E5 | W13-E5 | 已完成 `ST13_01~ST13_25` 前置审计，不放行 implementation-ready | W13-E5 | 2026-04-26 | 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`；`OQ-101~OQ-110` 已由 W13-E6 确认。 |
 | BR-REMAP-007 | 第一批 ST13 任务包准备 | Task Remap 后续事项 | done | P0 | W13-E5 | W13-E6 | 用户已确认 `OQ-101~OQ-110`，已生成第一批任务包草案 | W13-E6 | 2026-04-26 | 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`；不得生成 implementation packet。 |
-| BR-REMAP-008 | 第一批 ST13 正式双文档准备 | Task Remap 后续事项 | open | P0 | W13-E6 | W13-E7 | 依赖第一批任务包草案 | 后续 W13-E7 | 2026-04-26 | 建议为 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 准备正式子任务双文档路径方案；仍不得实现。 |
+| BR-REMAP-008 | 第一批 ST13 正式双文档准备 | Task Remap 后续事项 | done | P0 | W13-E6 | W13-E7 | 已形成双文档路径和模板准备方案 | W13-E7 | 2026-04-26 | 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`；状态只到 `double_doc_path_planned`，仍不得实现。 |
+| BR-REMAP-009 | 第一批 ST13 正式双文档创建 | Task Remap 后续事项 | open | P0 | W13-E7 | W13-E8 | 依赖 `OQ-111~OQ-113` 用户确认 | 后续 W13-E8 | 2026-04-26 | 只允许创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 双文档；不生成 implementation packet。 |
 
 ## 6. 实现前置条件
 
@@ -118,6 +119,9 @@
 | UC-W13-E5-003 | 哪些 ST13 可先做 contract？ | 方案 A：只做 `ST13_21 / ST13_20 / ST13_24 / ST13_25`。 | confirmed | `OQ-103=A` 已确认；不得扩大到其他 ST13 | W13-E6 |
 | UC-W13-E5-004 | 是否允许创建 ST13 专属子任务文档？ | 方案 B：先生成任务包草案，不创建模块子任务目录。 | confirmed | `OQ-104=B` 已确认；本轮不创建正式子任务目录 | W13-E6 |
 | UC-W13-E5-005 | 何时允许创建实现目录、生成 packet、打开 formal window 和进入实现？ | 继续禁止，逐项满足 gate 后再确认。 | confirmed | `OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C` 已确认；当前仍不实现 | 后续正式开窗窗口 |
+| UC-W13-E7-001 | ST13 双文档路径方案如何选择？ | 方案 C：先只在 W13-E7 plan 中设计路径和模板，不创建具体双文档。 | proposed-default | 对应 `OQ-111`；等待用户确认 | W13-E8 前 |
+| UC-W13-E7-002 | 是否允许下一窗口创建第一批正式双文档？ | 方案 A：允许 W13-E8 创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的正式双文档。 | proposed-default | 对应 `OQ-112`；需先确认路径 | W13-E8 |
+| UC-W13-E7-003 | 是否允许下一窗口更新 `DOC_STATE.yaml` required doc slot？ | 方案 B：创建双文档后，在后续单独 State Update 窗口更新 required doc slot。 | proposed-default | 对应 `OQ-113`；当前不修改 `DOC_STATE.yaml` | W13-E8 后 |
 | UC-ARCH-001 | 是否把旧 `STxx_*` 迁入 archive？ | 不在状态层仍引用时迁移；解除引用后另开归档窗口。 | open | `docs/modules/**`、archive、根索引 | Archive Cleanup |
 | UC-IMPL-001 | 是否进入实现窗口？ | 否；正式状态层和 implementation-ready 形成前不进入实现。 | confirmed | `apps/**`、`infra/**`、实现包 | 后续正式开窗后 |
 

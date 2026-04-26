@@ -432,12 +432,19 @@
 
 ### 9.1 W13-E7：第一批 contract 正式子任务双文档准备
 
-建议目标：
+当前状态：已完成，输出见 [`2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`](2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md)。
+
+已完成内容：
 
 1. 基于本文档为 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 生成正式子任务双文档路径方案。
-2. 若用户确认，创建正式 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md`，但仍不实现。
-3. 将每个任务的验收标准、required tests、允许修改范围、禁止修改范围写入正式双文档。
-4. 不修改 `DOC_STATE.yaml`，不打开 formal window，不生成 implementation packet。
+2. 定义 ST13 子任务设计文档与实施说明文档模板。
+3. 补充四个任务的前置清单、contract 摘要、父索引同步方案和确认卡。
+
+仍未完成：
+
+1. 未创建正式 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 或 `ST13_XX_DESIGN.md` / `ST13_XX_IMPLEMENTATION.md`。
+2. 未修改 `DOC_STATE.yaml` required doc slot。
+3. 未打开 formal window，未生成 implementation packet，未进入实现。
 
 ### 9.2 W13-E8：ST13_23 前端页面规格并行准备
 

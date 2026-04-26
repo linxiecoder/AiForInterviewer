@@ -6,7 +6,7 @@
 > `FC-01~FC-19` 已完成用户确认；当前一期 MVP 任务拆分必须以 W13 四份唯一事实源为准。
 > W10 `RQ01` 首切片关系层只保留为历史参考，不再作为当前一期工作台 MVP 的正式任务映射。
 > 用户已确认 `WT13-xx` 作为 W13 候选任务域命名；阶段 1 已用兼容的 `ST13_01~ST13_25` 写入正式 `DOC_STATE.yaml.subtasks`，阶段 2 已在旧 `STxx_*` facts 中表达 `historical-reference / superseded`，阶段 3 已正式将旧 `STxx_*` 从 current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。
-> 当前正式开窗层仍为空；正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到允许修改范围、实施文档与开窗资格全部确认。
+> 当前正式开窗层仍为空；W13-E7 只完成第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 `double_doc_path_planned`，正式子任务窗口、新实施导向推进、目录创建和真实服务接入仍暂停，直到允许修改范围、实施文档与开窗资格全部确认。
 
 ## 1. 模块任务索引
 
@@ -189,9 +189,23 @@
 - 用户确认：`OQ-101=A`、`OQ-102=A`、`OQ-103=A`、`OQ-104=B`、`OQ-105=A`、`OQ-106=A`、`OQ-107=A`、`OQ-108=A`、`OQ-109=A`、`OQ-110=C`。
 - 第一批顺序：`ST13_21 -> ST13_20 -> ST13_24 -> ST13_25`。
 - 当前状态：四个任务均为 `task_packet_draft_created` / `not_ready_for_implementation`；正式状态层中的 25 个 ST13 仍 blocked。
-- 后续建议：进入 W13-E7，为第一批任务准备正式双文档路径方案；仍不得实现。
+- W13-E7 结果：已形成第一批双文档路径和模板准备方案；当前状态为 `double_doc_path_planned` / `not_ready_for_implementation`。
+- 后续建议：等待用户确认 `OQ-111~OQ-113` 后，进入 W13-E8 创建正式双文档；仍不得实现。
 
-### 2.4.4 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
+### 2.4.4 W13-E7 第一批 contract 双文档准备摘要
+
+> W13-E7 已新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`。该文档只冻结路径方案、模板结构、任务包前置清单、contract 摘要、父索引同步方案和确认卡，不创建正式双文档，不更新 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window。
+
+| ST13 | WT13 alias | 当前 W13-E7 状态 | 推荐路径方案 | 是否具备实施条件 |
+| --- | --- | --- | --- | --- |
+| `ST13_21` | `WT13-21` | `task_packet_draft_created` / `double_doc_path_planned` | 方案 C：先只在 W13-E7 plan 冻结路径和模板 | 否 |
+| `ST13_20` | `WT13-20` | `task_packet_draft_created` / `double_doc_path_planned` | 方案 C：先只在 W13-E7 plan 冻结路径和模板 | 否 |
+| `ST13_24` | `WT13-24` | `task_packet_draft_created` / `double_doc_path_planned` | 方案 C：先只在 W13-E7 plan 冻结路径和模板 | 否 |
+| `ST13_25` | `WT13-25` | `task_packet_draft_created` / `double_doc_path_planned` | 方案 C：先只在 W13-E7 plan 冻结路径和模板 | 否 |
+
+当前仍缺正式 `DESIGN` / `IMPLEMENTATION` 双文档实体、required doc slot 写回、验收标准落盘、required tests 落盘和用户确认。不得把 `double_doc_path_planned` 写成 implementation-ready。
+
+### 2.4.5 W13-E4-F 旧 `STxx_*` historical / superseded 同步摘要
 
 > 完整旧 ST 到 `ST13 / WT13` 映射见 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 第 6 节和 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md`。
 > 本节只做任务索引级同步：旧 `STxx_*` 已从正式状态层 current `subtasks` 容器移出，仍保留为历史可追溯对象、reusable evidence 和 archive candidate，不再作为 W13 当前实施入口。

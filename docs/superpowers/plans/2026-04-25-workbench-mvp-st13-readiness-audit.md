@@ -608,6 +608,12 @@ P3 后续完善：
 默认第一批候选为 ST13_21、ST13_20、ST13_24、ST13_25；若用户确认其他顺序，以用户最新确认优先。
 ```
 
+后续状态更新：
+
+- `W13-E6` 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`](2026-04-25-workbench-mvp-st13-first-contract-task-packages.md)，只生成第一批任务包草案。
+- `W13-E7` 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`](2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md)，只形成双文档路径和模板准备方案。
+- 上述两个后续文档均不表示 formal window open、implementation packet 生成或 implementation-ready。
+
 ## 13. 当前不进入实现说明
 
 本审计结束后仍不能进入实现：

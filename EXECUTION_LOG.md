@@ -25,6 +25,26 @@
 
 ## 3. 当前记录
 
+### 2026-04-26 / W13-E7 / 第一批 contract 正式子任务双文档准备
+
+- 执行类型：文档准备、路径方案、模板设计、任务包准备审计；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不修改 `DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作。
+- 基线验证：
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`，`modules_blocked_count=1`，`subtasks_blocked_count=25`。
+- 本轮改动：
+  - 新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`。
+  - 审计 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的草案缺口、依赖、双文档、contract、验收、测试、允许 / 禁止修改范围和 formal window 条件。
+  - 定义 ST13 双文档模板结构、路径方案 A-D、四个任务包前置清单、contract 草案摘要、父索引和状态同步方案、W13-E8~W13-E11 后续窗口序列。
+  - 新增 `OQ-111~OQ-113` 确认卡，状态均为 `proposed-default`，未写成 confirmed。
+  - 同步 `PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`AGENTS.md` 和 backlog-roadmap 的 W13-E7 摘要。
+- 当前结论：
+  - 第一批四个 ST13 当前只达到 `double_doc_path_planned`，仍为 `not_ready_for_implementation`。
+  - 推荐路径方案为 C：先只在 W13-E7 plan 中冻结路径和模板，下一窗口再按用户确认创建正式双文档。
+  - 本轮未创建正式双文档，未更新 required doc slot，未减少状态层 blocker。
+- 后续建议：
+  - 等待用户确认 `OQ-111~OQ-113`。
+  - 若确认通过，进入 W13-E8 创建第一批正式双文档；仍不实现、不生成 packet、不打开 formal window。
+
 ### 2026-04-26 / W13-E6 / ST13 第一批 contract 任务包草案
 
 - 执行类型：用户确认吸收、第一批任务包草案生成、计划与索引同步；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作。

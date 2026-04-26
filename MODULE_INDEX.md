@@ -174,6 +174,19 @@
 
 本轮不创建模块子任务目录，不修改 `docs/modules/**`，不改变旧 `STxx_*` 的历史参考定位。
 
+### 6.5 W13-E7 第一批 contract 双文档准备模块影响
+
+> 完整方案见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`。本节只记录模块索引级映射，不创建模块子任务目录，不改变模块成熟度，不放行子任务设计或实现。
+
+| ST13 | WT13 alias | 模块映射 | W13-E7 状态 | 模块层结论 |
+| --- | --- | --- | --- | --- |
+| `ST13_21` | `WT13-21` | M01-M10；M02 权限边界仍是重点 blocker | `double_doc_path_planned` | 可作为 API contract 双文档创建候选；不能实现 |
+| `ST13_20` | `WT13-20` | M01-M10；权限、RAG、资产、导出和复盘均会消费数据 contract | `double_doc_path_planned` | 可作为数据 contract 双文档创建候选；不能实现 |
+| `ST13_24` | `WT13-24` | M01、M10、全模块 | `double_doc_path_planned` | 可作为 testing / DoD 双文档创建候选；不能创建测试代码 |
+| `ST13_25` | `WT13-25` | global、M01、M10 | `double_doc_path_planned` | 可作为治理双文档创建候选；不能写 `DOC_STATE.yaml` 或 Basic Memory |
+
+当前推荐路径方案为方案 C：先只在 W13-E7 plan 中冻结路径和模板。若后续 W13-E8 采用方案 A 或用户自定义路径，应回写本节与 `TASK_INDEX.md`；若采用方案 B 创建模块子任务目录，必须额外防止被误读为 formal window open。
+
 ## 7. 使用说明
 
 - 模块状态变化后，应同步更新本文档、`TASK_INDEX.md` 和 `DOCUMENT_MATURITY.md`。

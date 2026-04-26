@@ -507,6 +507,16 @@ W13-E4-A 已新增 [`2026-04-25-workbench-mvp-state-write-plan.md`](2026-04-25-w
 
 W13-E6 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`](2026-04-25-workbench-mvp-st13-first-contract-task-packages.md)。该文档只是任务包草案，不是 implementation packet，不表示 formal window open 或 implementation-ready。
 
+### 11.3 W13-E7 双文档准备方案
+
+W13-E7 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`](2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md)。该文档只为 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 形成 `double_doc_path_planned` 路径和模板准备方案，不创建正式双文档，不修改 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window，不表示 implementation-ready。
+
+新增确认卡：
+
+- `OQ-111`：ST13 双文档路径方案，推荐方案 C，状态 `proposed-default`。
+- `OQ-112`：是否允许 W13-E8 创建第一批正式双文档，推荐方案 A，状态 `proposed-default`。
+- `OQ-113`：是否允许后续更新 `DOC_STATE.yaml` required doc slot，推荐方案 B，状态 `proposed-default`。
+
 ## 12. 当前不进入实现说明
 
 当前不能进入实现，原因是：
