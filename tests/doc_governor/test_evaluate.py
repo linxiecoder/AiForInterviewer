@@ -633,6 +633,53 @@ class EvaluateStateTests(unittest.TestCase):
             ]
         )
 
+    def test_candidate_and_near_ready_facts_are_document_layer_only(self) -> None:
+        state = _base_state()
+        state["global_policy"]["formal_window_open"] = False
+        state["requirements"] = {
+            "RQ01": _requirement_entry(
+                "RQ01",
+                module_ids=["M01"],
+                task_ids=["ST13_20", "ST13_21", "ST13_24", "ST13_25"],
+            )
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {
+            "ST13_24": _subtask_entry("ST13_24", "M01"),
+            "ST13_25": _subtask_entry("ST13_25", "M01"),
+            "ST13_21": _subtask_entry("ST13_21", "M01"),
+            "ST13_20": _subtask_entry("ST13_20", "M01"),
+        }
+        for task_id in ("ST13_24", "ST13_25"):
+            facts = state["subtasks"][task_id]["facts"]
+            facts["formal_window_candidate_recommended"] = True
+            facts["formal_window_candidate_source"] = "facts-preview"
+            facts["formal_window_candidate_review_status"] = "pending_confirmation"
+            facts["formal_window_candidate_state"] = "document_layer_recommended"
+            facts["formal_window_candidate_notes"] = "facts-only candidate preview"
+        for task_id in ("ST13_21", "ST13_20"):
+            facts = state["subtasks"][task_id]["facts"]
+            facts["near_ready_for_formal_window_candidate"] = True
+            facts["near_ready_reason"] = "仍有 blocker"
+            facts["near_ready_blockers"] = ["gate:implementation_doc_not_active"]
+            facts["near_ready_state"] = "document_layer_only"
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+
+        self.assertEqual(exit_code, 0)
+        st13_24 = payload["subtasks"]["ST13_24"]["derived"]
+        st13_21 = payload["subtasks"]["ST13_21"]["derived"]
+        self.assertEqual(
+            st13_24["formal_window_candidate_recommendation"]["state"],
+            "document_layer_recommended",
+        )
+        self.assertEqual(st13_24["formal_window_candidate_recommendation"]["tool_effect"], "facts_only")
+        self.assertEqual(st13_21["near_ready_for_formal_window_candidate"]["state"], "document_layer_only")
+        self.assertFalse(st13_21["formal_window_candidate_recommendation"]["recommended"])
+        self.assertFalse(st13_24["implementation_ready"])
+        self.assertFalse(st13_21["implementation_ready"])
+
     def test_summary_fields_and_counts(self) -> None:
         state = _base_state()
         state["modules"] = {"M01": _module_entry("M01"), "M02": _module_entry("M02")}

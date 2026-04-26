@@ -184,6 +184,32 @@ class TaskPacketTests(ManagedTempArtifactsTestCase):
         self.assertIn("## 允许修改范围", markdown)
         self.assertIn("ST01_01", markdown)
 
+    def test_generate_implementation_packet_refuses_forged_ready_payload(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["global_policy"]["formal_window_open"] = False
+        self.state_path.write_text(
+            yaml.safe_dump(state, sort_keys=False),
+            encoding="utf-8",
+        )
+        diagnostics, payload = evaluate_state_file(self.state_path)
+        self.assertEqual([item for item in diagnostics if item.severity == "error"], [])
+        forged_payload = json.loads(json.dumps(payload))
+        derived = forged_payload["subtasks"]["ST01_01"]["derived"]
+        derived["implementation_ready"] = True
+        derived["blocker_refs"] = []
+        derived["implementation_blockers"] = []
+        output_dir = self.temp_root / "forged-packets"
+
+        with self.assertRaisesRegex(ValueError, "formal_window_open=true"):
+            generate_implementation_packet(
+                state_path=str(self.state_path),
+                entity_id="ST01_01",
+                evaluate_payload=forged_payload,
+                output_dir=str(output_dir),
+            )
+
+        self.assertFalse(output_dir.exists())
+
     def test_generate_implementation_packet_uses_native_subtask_requirement_relation(self) -> None:
         state = _build_state()
         state["requirements"] = {

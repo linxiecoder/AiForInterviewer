@@ -173,7 +173,9 @@ def _evaluate_formal_window_closed_gate(
                 field_path=_state_path(entity_type, entity_id, "candidate_status"),
                 message=(
                     "candidate_status=candidate requires global_policy.formal_window_open=true; "
-                    "facts-only candidate previews must not be treated as formal-window-open"
+                    "if the intent is only document-layer candidate recommendation, use "
+                    "facts.formal_window_candidate_recommended=true or candidate_status=observe "
+                    "when observe has been confirmed for that workflow"
                 ),
                 evidence=make_evidence(
                     type="policy_check",
@@ -332,7 +334,11 @@ def _evaluate_illegal_state_combinations(
                 entity_type=entity_type,
                 entity_id=entity_id,
                 field_path=_state_path(entity_type, entity_id, "maturity"),
-                message="readiness=downstream_ready requires maturity to be set",
+                message=(
+                    "readiness=downstream_ready requires maturity to be set; if the intent is "
+                    "only near-ready, use facts.near_ready_for_formal_window_candidate=true "
+                    "instead of downstream_ready"
+                ),
                 evidence=make_evidence(
                     type="state_check",
                     path=f"{entity_type}:{entity_id}",

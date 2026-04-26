@@ -879,7 +879,11 @@ def _evaluate_subtask(
                 ref="gate:implementation_doc_not_active",
                 kind="gate",
                 reason_code="implementation_doc_not_active",
-                message=f"subtask {subtask_id} implementation_doc_state is not active_working_doc",
+                message=(
+                    f"subtask {subtask_id} IMPLEMENTATION document exists does not imply "
+                    "implementation-ready or packet-ready; implementation_doc_state is not "
+                    "active_working_doc"
+                ),
             )
         )
     if not formal_window_open:
@@ -888,7 +892,10 @@ def _evaluate_subtask(
                 ref="policy:formal_window_closed",
                 kind="policy",
                 reason_code="formal_window_closed",
-                message=f"formal window is closed for subtask {subtask_id}",
+                message=(
+                    f"formal_window_open=false prevents implementation packet generation "
+                    f"and implementation-ready for subtask {subtask_id}"
+                ),
             )
         )
 
@@ -928,6 +935,8 @@ def _evaluate_subtask(
         missing_scope_fields.append("goal")
     if not packet_inputs.get("allowed_modify_paths"):
         missing_scope_fields.append("allowed_modify_paths")
+    if not packet_inputs.get("forbidden_paths"):
+        missing_scope_fields.append("forbidden_paths")
     if missing_scope_fields:
         implementation_blockers.append(
             _make_blocker(
@@ -1018,6 +1027,11 @@ def _evaluate_subtask(
         "implementation_doc_activation_reason": implementation_doc_activation_reason,
         "implementation_packet_inputs": packet_inputs,
         "requirement_ids": _dedupe_strings(requirement_ids),
+        "formal_window_candidate_recommendation": _build_candidate_recommendation(
+            facts=facts,
+            confirmed=confirmed,
+        ),
+        "near_ready_for_formal_window_candidate": _build_near_ready_recommendation(facts),
     }
 
 
@@ -1362,6 +1376,12 @@ def _finalize_subtask_derived(
         "implementation_packet_inputs": _as_dict(
             subtask_result.get("implementation_packet_inputs")
         ),
+        "formal_window_candidate_recommendation": _as_dict(
+            subtask_result.get("formal_window_candidate_recommendation")
+        ),
+        "near_ready_for_formal_window_candidate": _as_dict(
+            subtask_result.get("near_ready_for_formal_window_candidate")
+        ),
         "review_required": bool(review_reasons),
         "review_reasons": review_reasons,
         "ready_for_next_step": not bool(blocker_refs),
@@ -1685,6 +1705,53 @@ def _filter_known_requirement_relations(
         if normalized:
             filtered[str(entity_id)] = normalized
     return filtered
+
+
+def _build_candidate_recommendation(
+    *,
+    facts: dict[str, Any],
+    confirmed: dict[str, Any],
+) -> dict[str, Any]:
+    recommended = bool(facts.get("formal_window_candidate_recommended", False))
+    candidate_status = str(confirmed.get("candidate_status", "none") or "none")
+    state = str(facts.get("formal_window_candidate_state", "") or "").strip()
+    if not state:
+        state = "document_layer_recommended" if recommended else "none"
+    return {
+        "recommended": recommended,
+        "source": str(facts.get("formal_window_candidate_source", "") or "").strip(),
+        "review_status": str(
+            facts.get("formal_window_candidate_review_status", "") or ""
+        ).strip(),
+        "state": state,
+        "notes": str(facts.get("formal_window_candidate_notes", "") or "").strip(),
+        "candidate_status": candidate_status,
+        "tool_effect": "facts_only" if recommended else "state_only",
+        "means_formal_window_open": False,
+        "means_implementation_ready": False,
+        "means_packet_ready": False,
+    }
+
+
+def _build_near_ready_recommendation(facts: dict[str, Any]) -> dict[str, Any]:
+    enabled = bool(facts.get("near_ready_for_formal_window_candidate", False))
+    state = str(facts.get("near_ready_state", "") or "").strip()
+    if not state:
+        state = "document_layer_only" if enabled else "none"
+    return {
+        "enabled": enabled,
+        "reason": str(facts.get("near_ready_reason", "") or "").strip(),
+        "blockers": _dedupe_strings(
+            [str(item) for item in _as_list(facts.get("near_ready_blockers"))]
+        ),
+        "state": state,
+        "tool_effect": "facts_only" if enabled else "none",
+        "means_candidate_status_candidate": False,
+        "means_downstream_ready": False,
+        "means_formal_window_open": False,
+        "means_implementation_ready": False,
+        "means_packet_ready": False,
+    }
 
 
 def _build_requirement_blocker_map(

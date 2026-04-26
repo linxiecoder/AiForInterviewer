@@ -116,6 +116,10 @@ C:\Users\Administrator\AppData\Roaming\npm\codex.cmd exec
 - `candidate_status` 只支持 `none` / `observe` / `candidate`，`readiness` 只支持 `blocked` / `not_ready` / `downstream_ready` / `implementation_ready`；`near_ready` 不是状态层正式值。
 - `formal_window_open=false` 时不得把 `candidate_status=candidate` 作为正式状态；`readiness=downstream_ready` 要求 confirmed `maturity` 已设置。
 - facts-only candidate preview 只表示事实记录或候选观察，不等于 formal window open，也不等于 implementation packet 可生成。
+- 文档层 formal-window candidate 推荐统一写入 `facts.formal_window_candidate_recommended=true`、`facts.formal_window_candidate_source`、`facts.formal_window_candidate_review_status=pending_confirmation`、`facts.formal_window_candidate_state=document_layer_recommended` 与 `facts.formal_window_candidate_notes`。
+- near-ready 统一写入 `facts.near_ready_for_formal_window_candidate=true`、`facts.near_ready_reason`、`facts.near_ready_blockers` 与 `facts.near_ready_state=document_layer_only`；不要写成 `readiness=near_ready`。
+- `design_doc.exists=true` / `implementation_doc.exists=true` 只是 required doc slot 存在，不是 readiness；`implementation_doc` 也不是 implementation packet。
+- formal window open 只是 packet / implementation-ready 的必要条件，不是充分条件；`implementation_doc_state`、acceptance criteria、required tests、implementation scope、allowed paths、forbidden paths 与 blocker diagnostics 仍必须全部闭合。
 
 ## 4. 常用只读命令
 
@@ -166,6 +170,12 @@ python -m tools.doc_governor.cli summarize-history --history docs/governance/tra
 python -m tools.doc_governor.cli preflight-open-window --state docs/governance/DOC_STATE.yaml
 ```
 
+按子任务预检：
+
+```powershell
+python -m tools.doc_governor.cli preflight-open-window --input docs/governance/DOC_STATE.yaml --subtask ST13_24
+```
+
 规划：
 
 ```powershell
@@ -182,6 +192,22 @@ python -m tools.doc_governor.cli plan-open-window --state docs/governance/DOC_ST
   - `missing_requirements`
   - `history_signals`
   - `summary`
+- 当使用 `--subtask <ID>` 时，还会返回目标子任务 gate 摘要：
+  - `gate_result`
+  - `can_open_formal_window`
+  - `can_generate_implementation_packet`
+  - `can_mark_implementation_ready`
+  - `required_doc_slots`
+  - `design_doc`
+  - `implementation_doc`
+  - `acceptance_criteria`
+  - `required_tests`
+  - `implementation_scope`
+  - `formal_window_open`
+  - `candidate`
+  - `near_ready`
+  - `blockers`
+  - `next_required_actions`
 - `plan-open-window` 在 preflight 基础上进一步整理为：
   - `eligible_to_apply`
   - `near_open_but_blocked`
@@ -195,6 +221,7 @@ python -m tools.doc_governor.cli plan-open-window --state docs/governance/DOC_ST
 
 - `preflight-open-window` 是“是否能开窗”的只读预检。
 - `plan-open-window` 是“如果要开窗 / 排优先级 / 讨论下一轮”的分类规划。
+- `preflight-open-window` 不打开 formal window，不写 `DOC_STATE.yaml`，不生成 packet。
 
 ## 5. open-window 执行
 
@@ -373,7 +400,7 @@ python -m tools.doc_governor.cli apply-round --round-id round-batch-01 --from-pl
 
 ### 9.1 implementation packet 与 task 规划
 
-- `generate-implementation-packet`：可从 `--input` 或 `--evaluate-json` 读取数据，但会先检查目标 task 的 `derived.implementation_ready`；未满足时直接拒绝生成。
+- `generate-implementation-packet`：可从 `--input` 或 `--evaluate-json` 读取数据，但会基于 official state 重新执行 validate/evaluate gate，并检查目标 task 的 `derived.implementation_ready`、`formal_window_open=true`、`implementation_doc_state=active_working_doc`、非模板双文档、acceptance criteria、required tests、implementation scope、allowed/forbidden paths 与 blocking diagnostics；未满足时直接拒绝生成。
 - `plan-task-adaptation`：基于 official state / evaluate payload 生成 task adaptation plan，支持 `json/markdown` 输出。
 - `plan-task-remediation`：生成 task 修复规划，用于讨论“先补什么、怎么补”。
 - `plan-task-readiness`：生成 task readiness 规划，适合在 implementation window 前做收敛。

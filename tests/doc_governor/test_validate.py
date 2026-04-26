@@ -506,7 +506,29 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
             "candidate_status=candidate requires global_policy.formal_window_open=true",
             messages,
         )
+        self.assertIn("facts.formal_window_candidate_recommended=true", messages)
+        self.assertIn("candidate_status=observe", messages)
         self.assertIn("readiness=downstream_ready requires maturity to be set", messages)
+        self.assertIn("facts.near_ready_for_formal_window_candidate=true", messages)
+
+    def test_facts_only_candidate_and_near_ready_do_not_require_formal_window_open(self) -> None:
+        state = _build_valid_state()
+        facts = state["subtasks"]["ST01_01"]["facts"]
+        facts["formal_window_candidate_recommended"] = True
+        facts["formal_window_candidate_source"] = "readiness-review"
+        facts["formal_window_candidate_review_status"] = "pending_confirmation"
+        facts["formal_window_candidate_state"] = "document_layer_recommended"
+        facts["formal_window_candidate_notes"] = "文档层推荐，不代表开窗。"
+        facts["near_ready_for_formal_window_candidate"] = True
+        facts["near_ready_reason"] = "只差人工确认。"
+        facts["near_ready_blockers"] = ["policy:formal_window_closed"]
+        facts["near_ready_state"] = "document_layer_only"
+        state_path = self._write_state(state)
+
+        exit_code, diagnostics = self._run_validate(state_path)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len([item for item in diagnostics if item.severity == "error"]), 0)
 
     def test_validate_state_exit_code_success_for_valid_state(self) -> None:
         state = _build_valid_state()

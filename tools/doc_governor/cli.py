@@ -364,11 +364,17 @@ def main(argv: list[str] | None = None) -> int:
     summarize_history_parser.add_argument("--top-rejected", default=10, type=int)
 
     preflight_parser = subparsers.add_parser("preflight-open-window")
-    preflight_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
+    preflight_parser.add_argument(
+        "--state",
+        "--input",
+        dest="state",
+        default="docs/governance/DOC_STATE.yaml",
+    )
     preflight_parser.add_argument("--evaluate-json")
     preflight_parser.add_argument("--history", default="docs/governance/transition_history.jsonl")
     preflight_parser.add_argument("--entity-type")
     preflight_parser.add_argument("--entity-id")
+    preflight_parser.add_argument("--subtask")
 
     open_parser = subparsers.add_parser("open-window")
     open_parser.add_argument("--state", default="docs/governance/DOC_STATE.yaml")
@@ -1238,12 +1244,14 @@ def init_official_state_command(args: argparse.Namespace) -> int:
 
 
 def preflight_open_window_command(args: argparse.Namespace) -> int:
+    entity_type = "subtask" if getattr(args, "subtask", None) else args.entity_type
+    entity_id = getattr(args, "subtask", None) or args.entity_id
     payload = preflight_open_window(
         state=args.state,
         evaluate_json=args.evaluate_json,
         history=args.history,
-        entity_type=args.entity_type,
-        entity_id=args.entity_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 1 if not payload.get("ok", False) else 0

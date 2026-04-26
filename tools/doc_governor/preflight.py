@@ -329,7 +329,7 @@ def preflight_open_window(
         "history_absent": [item["entity_id"] for item in missing_requirements],
     }
 
-    return {
+    payload = {
         "ok": evaluate_ok,
         "state_path": state_path.as_posix(),
         "history_path": history_path.as_posix(),
@@ -364,6 +364,18 @@ def preflight_open_window(
         "history_recent": history_recent,
         "history_signals": history_signals,
     }
+    if entity_type == "subtask" and entity_id:
+        payload.update(
+            _build_subtask_gate_summary(
+                subtask_id=entity_id,
+                official_state=official_state,
+                evaluate_payload=o,
+                formal_window_open=formal_window_open,
+                eligible_entities=eligible_entities,
+                blocked_entities=blocked_entities,
+            )
+        )
+    return payload
 
 
 def _has_errors(raw_errors: list[dict[str, Any]]) -> bool:
@@ -582,6 +594,216 @@ def _collect_official_entities(
                 }
             )
     return entities
+
+
+def _build_subtask_gate_summary(
+    *,
+    subtask_id: str,
+    official_state: dict[str, Any],
+    evaluate_payload: dict[str, Any],
+    formal_window_open: bool,
+    eligible_entities: list[dict[str, Any]],
+    blocked_entities: list[dict[str, Any]],
+) -> dict[str, Any]:
+    subtasks = _coerce_dict(official_state.get("subtasks"))
+    subtask = _coerce_dict(subtasks.get(subtask_id))
+    facts = _coerce_dict(subtask.get("facts"))
+    state_obj = _coerce_dict(subtask.get("state"))
+    confirmed = _coerce_dict(state_obj.get("confirmed"))
+    derived = _get_derived(evaluate_payload, "subtask", subtask_id)
+    packet_inputs = _coerce_dict(derived.get("implementation_packet_inputs"))
+
+    target_record = _find_entity_record(
+        entity_id=subtask_id,
+        eligible_entities=eligible_entities,
+        blocked_entities=blocked_entities,
+    )
+    blockers = list(target_record.get("blockers", [])) if target_record else []
+    hard_blockers = [item for item in blockers if item.get("level") == "hard"]
+
+    design_doc = _doc_slot_gate_summary("design_doc", facts.get("design_doc"))
+    implementation_doc = _doc_slot_gate_summary(
+        "implementation_doc",
+        facts.get("implementation_doc"),
+    )
+    implementation_doc["state"] = _as_str(confirmed.get("implementation_doc_state"))
+
+    acceptance_criteria = _coerce_str_list(packet_inputs.get("acceptance_criteria"))
+    required_tests = _coerce_str_list(packet_inputs.get("required_tests"))
+    goal = _as_str(packet_inputs.get("goal"))
+    allowed_modify_paths = _coerce_str_list(packet_inputs.get("allowed_modify_paths"))
+    forbidden_paths = _coerce_str_list(packet_inputs.get("forbidden_paths"))
+
+    implementation_scope = {
+        "clear": bool(goal and allowed_modify_paths and forbidden_paths),
+        "goal_present": bool(goal),
+        "allowed_modify_paths_present": bool(allowed_modify_paths),
+        "forbidden_paths_present": bool(forbidden_paths),
+        "goal": goal,
+        "allowed_modify_paths": allowed_modify_paths,
+        "forbidden_paths": forbidden_paths,
+    }
+    required_doc_slots = {
+        "all_present": bool(design_doc["exists"] and implementation_doc["exists"]),
+        "all_non_template": bool(
+            design_doc["exists"]
+            and implementation_doc["exists"]
+            and not design_doc["template_like"]
+            and not implementation_doc["template_like"]
+        ),
+        "necessary_not_sufficient": True,
+        "slots": {
+            "design_doc": design_doc,
+            "implementation_doc": implementation_doc,
+        },
+        "message": (
+            "required doc slot present is necessary but not sufficient for formal window "
+            "or implementation-ready"
+        ),
+    }
+
+    no_hard_blockers = not hard_blockers
+    packet_inputs_complete = bool(
+        required_doc_slots["all_non_template"]
+        and implementation_doc["state"] == "active_working_doc"
+        and implementation_scope["clear"]
+        and acceptance_criteria
+        and required_tests
+    )
+    can_generate_packet = bool(formal_window_open and no_hard_blockers and packet_inputs_complete)
+    can_mark_ready = can_generate_packet
+    can_open_formal_window = bool(no_hard_blockers)
+
+    candidate = {
+        "candidate_status": _as_str(confirmed.get("candidate_status")) or "none",
+        "review_status": _as_str(confirmed.get("review_status")),
+        "formal_window_candidate_recommended": bool(
+            facts.get("formal_window_candidate_recommended", False)
+        ),
+        "source": _as_str(facts.get("formal_window_candidate_source")),
+        "review_status_from_facts": _as_str(
+            facts.get("formal_window_candidate_review_status")
+        ),
+        "state": _as_str(facts.get("formal_window_candidate_state"))
+        or (
+            "document_layer_recommended"
+            if facts.get("formal_window_candidate_recommended")
+            else "none"
+        ),
+        "notes": _as_str(facts.get("formal_window_candidate_notes")),
+        "formal_window_candidate_is_open": False,
+        "implementation_ready": False,
+        "packet_ready": False,
+    }
+
+    near_ready = {
+        "enabled": bool(facts.get("near_ready_for_formal_window_candidate", False)),
+        "reason": _as_str(facts.get("near_ready_reason")),
+        "blockers": _coerce_str_list(facts.get("near_ready_blockers")),
+        "state": _as_str(facts.get("near_ready_state"))
+        or (
+            "document_layer_only"
+            if facts.get("near_ready_for_formal_window_candidate")
+            else "none"
+        ),
+        "candidate_status_candidate": False,
+        "downstream_ready": False,
+    }
+
+    return {
+        "subtask_id": subtask_id,
+        "gate_result": "pass" if can_open_formal_window else "blocked",
+        "can_open_formal_window": can_open_formal_window,
+        "can_generate_implementation_packet": can_generate_packet,
+        "can_mark_implementation_ready": can_mark_ready,
+        "required_doc_slots": required_doc_slots,
+        "design_doc": design_doc,
+        "implementation_doc": implementation_doc,
+        "acceptance_criteria": {
+            "present": bool(acceptance_criteria),
+            "count": len(acceptance_criteria),
+            "items": acceptance_criteria,
+        },
+        "required_tests": {
+            "present": bool(required_tests),
+            "count": len(required_tests),
+            "items": required_tests,
+        },
+        "implementation_scope": implementation_scope,
+        "formal_window_open": formal_window_open,
+        "candidate": candidate,
+        "near_ready": near_ready,
+        "blockers": blockers,
+        "next_required_actions": _build_next_required_actions(
+            blockers=blockers,
+            formal_window_open=formal_window_open,
+            implementation_doc=implementation_doc,
+            acceptance_criteria=acceptance_criteria,
+            required_tests=required_tests,
+            implementation_scope=implementation_scope,
+        ),
+    }
+
+
+def _find_entity_record(
+    *,
+    entity_id: str,
+    eligible_entities: list[dict[str, Any]],
+    blocked_entities: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for record in blocked_entities + eligible_entities:
+        if record.get("entity_type") == "subtask" and record.get("entity_id") == entity_id:
+            return record
+    return None
+
+
+def _doc_slot_gate_summary(slot_name: str, raw_slot: object) -> dict[str, Any]:
+    slot = _coerce_dict(raw_slot)
+    return {
+        "slot": slot_name,
+        "exists": bool(slot.get("exists", False)),
+        "template_like": bool(slot.get("template_like", False)),
+        "present_non_template": bool(
+            slot.get("exists", False) and not slot.get("template_like", False)
+        ),
+        "necessary_not_sufficient": True,
+        "message": (
+            f"{slot_name} exists=true is necessary but not sufficient for formal window "
+            "or implementation-ready"
+        ),
+    }
+
+
+def _build_next_required_actions(
+    *,
+    blockers: list[dict[str, Any]],
+    formal_window_open: bool,
+    implementation_doc: dict[str, Any],
+    acceptance_criteria: list[str],
+    required_tests: list[str],
+    implementation_scope: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    blocker_codes = {str(item.get("code", "")) for item in blockers}
+    if not formal_window_open or "formal_window_closed" in blocker_codes:
+        actions.append("confirm and open the formal window before any implementation packet")
+    if not implementation_doc.get("exists") or implementation_doc.get("template_like"):
+        actions.append("create a non-template implementation_doc slot")
+    if implementation_doc.get("state") != "active_working_doc":
+        actions.append("activate implementation_doc_state only after review confirmation")
+    if not acceptance_criteria:
+        actions.append("add acceptance criteria before marking implementation-ready")
+    if not required_tests:
+        actions.append("add required tests before marking implementation-ready")
+    if not implementation_scope.get("clear"):
+        actions.append("clarify goal, allowed_modify_paths, and forbidden_paths")
+    if not actions:
+        actions.append("preflight is clear; use the formal confirmation workflow for any state change")
+    return actions
+
+
+def _coerce_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _collect_history_records(
@@ -834,7 +1056,10 @@ def _reason_from_blocker_ref(
             reference=ref,
             level="hard",
             sources=["evaluate", "rules"],
-            message="formal_window_closed blocks candidate/open-window",
+            message=(
+                "formal_window_open=false prevents implementation packet generation, "
+                "implementation-ready, and formal-window progression"
+            ),
         )
 
     if ref.startswith("module:"):
@@ -847,12 +1072,30 @@ def _reason_from_blocker_ref(
         )
 
     if ref.startswith("gate:"):
+        gate_code = ref.split(":", 1)[1]
+        messages = {
+            "implementation_doc_not_active": (
+                "IMPLEMENTATION document exists does not imply implementation-ready or "
+                "packet-ready; implementation_doc_state must be active_working_doc"
+            ),
+            "acceptance_criteria_missing": (
+                "acceptance criteria missing prevents implementation-ready and packet generation"
+            ),
+            "required_tests_missing": (
+                "required tests missing prevents implementation-ready and packet generation"
+            ),
+            "implementation_scope_unclear": (
+                "implementation scope is unclear; goal, allowed paths, and forbidden paths "
+                "must be explicit before implementation-ready"
+            ),
+            "requirement_id_unresolved": "unique requirement_id is required before packet generation",
+        }
         return _make_reason(
-            code="implementation_doc_not_active" if "implementation_doc_not_active" in ref else "gate_policy_block",
+            code=gate_code or "gate_policy_block",
             reference=ref,
             level="hard",
             sources=["evaluate", "rules"],
-            message=f"gate blocker: {ref}",
+            message=messages.get(gate_code, f"gate blocker: {ref}"),
         )
 
     if ref.startswith("doc:"):
@@ -861,7 +1104,9 @@ def _reason_from_blocker_ref(
             reference=ref,
             level="hard",
             sources=["evaluate", "rules"],
-            message=f"doc blocker: {ref}",
+            message=(
+                f"required doc slot present is necessary but not sufficient; doc blocker: {ref}"
+            ),
         )
 
     if ref.startswith("legacy:"):

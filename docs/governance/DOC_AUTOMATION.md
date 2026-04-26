@@ -88,6 +88,33 @@
 - `readiness=downstream_ready` 要求对应对象已有非空 `maturity`，不能只靠文档正文自评或 preview 说明推导。
 - `near_ready`、`formal_window_candidate_recommended` 之类表达只能作为 planner / backlog 语义，除非后续另行批准状态模型扩展，否则不得写入 confirmed state。
 
+### 2.3 Candidate / Near-ready facts 标准表达
+
+当前不扩展 `candidate_status` 或 `readiness` 枚举。若只需要表达文档层推荐，应写入 `facts`，不得提升 confirmed state：
+
+- formal-window candidate 推荐使用：
+  - `facts.formal_window_candidate_recommended=true`
+  - `facts.formal_window_candidate_source=<source>`
+  - `facts.formal_window_candidate_review_status=pending_confirmation`
+  - `facts.formal_window_candidate_state=document_layer_recommended`
+  - `facts.formal_window_candidate_notes=<说明>`
+- near-ready 推荐使用：
+  - `facts.near_ready_for_formal_window_candidate=true`
+  - `facts.near_ready_reason=<reason>`
+  - `facts.near_ready_blockers=<list>`
+  - `facts.near_ready_state=document_layer_only`
+
+上述 facts 只代表文档层观察或推荐：不等于 `candidate_status=candidate`，不等于 `formal_window_open=true`，不等于 `readiness=downstream_ready`，不等于 `implementation_ready`，也不等于 implementation packet ready。
+
+### 2.4 Formal window / Packet / Implementation-ready gate
+
+- `formal_window_open=false` 会阻断 implementation packet 生成与 `implementation_ready`。
+- `formal_window_open=true` 只是后续 gate 的必要条件，不自动等于 `implementation_ready`。
+- `implementation_doc.exists=true` 只表示 doc slot 存在；若 `implementation_doc_state` 不是 `active_working_doc`，仍不得生成 implementation packet。
+- `design_doc.exists=true` 与 `implementation_doc.exists=true` 是必要条件，但不是 formal window 或 implementation-ready 的充分条件。
+- implementation-ready 至少还要求 acceptance criteria、required tests、implementation scope、allowed paths、forbidden paths、上游依赖和 blocking diagnostics 全部闭合。
+- `generate-implementation-packet` 必须基于 official state 重新执行 validate/evaluate gate；不得只信任外部传入的 evaluate JSON 或人工断言。
+
 ## 3. 白名单扫描来源
 
 Phase 1A 的 `repo_scan` 仍只允许读取以下来源：

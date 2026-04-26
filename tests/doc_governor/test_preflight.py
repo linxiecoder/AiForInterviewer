@@ -190,6 +190,107 @@ class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
             )
         )
 
+    def test_subtask_gate_summary_separates_candidate_packet_and_ready(self) -> None:
+        state = _default_state()
+        state["global_policy"]["formal_window_open"] = False
+        state["modules"]["M01"] = _module_entry("M01")
+        state["requirements"] = {
+            "RQ01": _requirement_entry(module_ids=["M01"], task_ids=["ST13_24"])
+        }
+        state["subtasks"]["ST13_24"] = _subtask_entry(
+            "ST13_24",
+            "M01",
+            readiness="downstream_ready",
+            implementation_state="inactive_template",
+        )
+        facts = state["subtasks"]["ST13_24"]["facts"]
+        facts["formal_window_candidate_recommended"] = True
+        facts["formal_window_candidate_source"] = "facts-preview"
+        facts["formal_window_candidate_review_status"] = "pending_confirmation"
+        facts["formal_window_candidate_state"] = "document_layer_recommended"
+        facts["formal_window_candidate_notes"] = "文档层推荐，不代表开窗。"
+        self._write_state(state)
+
+        exit_code, payload = self._run_cli(
+            "--input",
+            str(self.state_path),
+            "--subtask",
+            "ST13_24",
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["subtask_id"], "ST13_24")
+        self.assertEqual(payload["gate_result"], "blocked")
+        self.assertFalse(payload["can_open_formal_window"])
+        self.assertFalse(payload["can_generate_implementation_packet"])
+        self.assertFalse(payload["can_mark_implementation_ready"])
+        self.assertFalse(payload["formal_window_open"])
+        self.assertTrue(payload["required_doc_slots"]["all_present"])
+        self.assertTrue(payload["design_doc"]["exists"])
+        self.assertEqual(payload["implementation_doc"]["state"], "inactive_template")
+        self.assertFalse(payload["acceptance_criteria"]["present"])
+        self.assertFalse(payload["required_tests"]["present"])
+        self.assertFalse(payload["implementation_scope"]["clear"])
+        self.assertTrue(payload["candidate"]["formal_window_candidate_recommended"])
+        self.assertEqual(payload["candidate"]["state"], "document_layer_recommended")
+        blocker_codes = {item["code"] for item in payload["blockers"]}
+        self.assertIn("formal_window_closed", blocker_codes)
+        self.assertIn("implementation_doc_not_active", blocker_codes)
+        self.assertIn("acceptance_criteria_missing", blocker_codes)
+        self.assertIn("required_tests_missing", blocker_codes)
+        self.assertIn("implementation_scope_unclear", blocker_codes)
+        self.assertTrue(payload["next_required_actions"])
+
+    def test_subtask_gate_summary_can_pass_without_writing_state(self) -> None:
+        state = _default_state()
+        state["global_policy"]["formal_window_open"] = True
+        state["modules"]["M01"] = _module_entry("M01")
+        state["requirements"] = {
+            "RQ01": _requirement_entry(module_ids=["M01"], task_ids=["ST13_24"])
+        }
+        state["subtasks"]["ST13_24"] = _subtask_entry(
+            "ST13_24",
+            "M01",
+            readiness="downstream_ready",
+            implementation_state="active_working_doc",
+        )
+        self._write_state(state)
+        _write_text(
+            self.temp_root,
+            "docs/modules/M01/sub_modules/ST13_24-test/SUBTASK_DESIGN.md",
+            "# 子任务设计文档\n\n## 3. 子任务目标\n- 用于 preflight 通过样本。\n",
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M01/sub_modules/ST13_24-test/SUBTASK_IMPLEMENTATION.md",
+            "# 子任务实施文档\n\n"
+            "## 3. 本轮实施目标\n- 用于 preflight 通过样本。\n\n"
+            "## 5. 允许修改范围\n### 5.1 允许修改\n"
+            "- 文件：`tools/doc_governor/preflight.py`\n\n"
+            "### 5.2 禁止修改\n"
+            "- 文件：`docs/governance/DOC_STATE.yaml`\n\n"
+            "## 7. 测试与验证\n### 7.1 自动化验证\n"
+            "- 运行：`python -m pytest tests/doc_governor/test_preflight.py -q`\n\n"
+            "## 8. 完成判定\n- preflight 只返回通过结论，不写状态。\n",
+        )
+        before_state = self.state_path.read_bytes()
+
+        exit_code, payload = self._run_cli(
+            "--input",
+            str(self.state_path),
+            "--subtask",
+            "ST13_24",
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["gate_result"], "pass")
+        self.assertTrue(payload["can_open_formal_window"])
+        self.assertTrue(payload["can_generate_implementation_packet"])
+        self.assertTrue(payload["can_mark_implementation_ready"])
+        self.assertEqual(before_state, self.state_path.read_bytes())
+
     def test_bootstrap_default_oq_policy_cannot_auto_enable_open(self) -> None:
         state = _default_state()
         state["oqs"] = {

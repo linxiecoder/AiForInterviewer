@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .evaluate import evaluate_state_file
+
 
 DEFAULT_PACKET_DIR = Path("docs/governance/packets")
 
@@ -16,13 +18,30 @@ def generate_implementation_packet(
     evaluate_payload: dict[str, Any],
     output_dir: str | None = None,
 ) -> dict[str, Any]:
-    state = _load_state(Path(state_path))
+    state_file = Path(state_path)
+    state = _load_state(state_file)
     subtasks = state.get("subtasks")
     subtasks = subtasks if isinstance(subtasks, dict) else {}
     subtask = subtasks.get(entity_id)
     if not isinstance(subtask, dict):
         raise ValueError(f"subtask not found: {entity_id}")
 
+    live_diagnostics, live_payload = evaluate_state_file(state_file)
+    errors = [item for item in live_diagnostics if item.severity == "error"]
+    if errors:
+        raise ValueError(
+            "validate/evaluate gate failed; errors="
+            + ", ".join(item.code for item in errors)
+        )
+
+    global_policy = state.get("global_policy")
+    global_policy = global_policy if isinstance(global_policy, dict) else {}
+    if not bool(global_policy.get("formal_window_open", False)):
+        raise ValueError(
+            "implementation packet requires global_policy.formal_window_open=true"
+        )
+
+    evaluate_payload = live_payload if isinstance(live_payload, dict) else evaluate_payload
     evaluate_subtasks = evaluate_payload.get("subtasks")
     evaluate_subtasks = evaluate_subtasks if isinstance(evaluate_subtasks, dict) else {}
     evaluate_entry = evaluate_subtasks.get(entity_id)
@@ -39,6 +58,12 @@ def generate_implementation_packet(
 
     packet_inputs = derived.get("implementation_packet_inputs")
     packet_inputs = packet_inputs if isinstance(packet_inputs, dict) else {}
+    _assert_packet_inputs_ready(
+        entity_id=entity_id,
+        subtask=subtask,
+        derived=derived,
+        packet_inputs=packet_inputs,
+    )
     requirement_id = packet_inputs.get("requirement_id")
     requirement_id = requirement_id if isinstance(requirement_id, str) and requirement_id else None
     if requirement_id is None:
@@ -115,7 +140,7 @@ def generate_implementation_packet(
         },
     }
 
-    output_dir_path = _resolve_output_dir(Path(state_path), output_dir)
+    output_dir_path = _resolve_output_dir(state_file, output_dir)
     output_dir_path.mkdir(parents=True, exist_ok=True)
     packet_json_path = output_dir_path / f"{entity_id}.implementation.packet.json"
     packet_md_path = output_dir_path / f"{entity_id}.implementation.packet.md"
@@ -134,6 +159,52 @@ def generate_implementation_packet(
             "acceptance_criteria_count": len(packet["acceptance_criteria"]),
         },
     }
+
+
+def _assert_packet_inputs_ready(
+    *,
+    entity_id: str,
+    subtask: dict[str, Any],
+    derived: dict[str, Any],
+    packet_inputs: dict[str, Any],
+) -> None:
+    facts = _as_dict(subtask.get("facts"))
+    state = _as_dict(subtask.get("state"))
+    confirmed = _as_dict(state.get("confirmed"))
+    design_doc = _as_dict(facts.get("design_doc"))
+    implementation_doc = _as_dict(facts.get("implementation_doc"))
+    blockers: list[str] = []
+
+    if not bool(design_doc.get("exists")):
+        blockers.append("design_doc missing")
+    if bool(design_doc.get("template_like")):
+        blockers.append("design_doc template-like")
+    if not bool(implementation_doc.get("exists")):
+        blockers.append("implementation_doc missing")
+    if bool(implementation_doc.get("template_like")):
+        blockers.append("implementation_doc template-like")
+    if confirmed.get("implementation_doc_state") != "active_working_doc":
+        blockers.append("implementation_doc_state must be active_working_doc")
+    if not _as_string_list(packet_inputs.get("acceptance_criteria")):
+        blockers.append("acceptance criteria missing")
+    if not _as_string_list(packet_inputs.get("required_tests")):
+        blockers.append("required tests missing")
+    if not str(packet_inputs.get("goal", "")).strip():
+        blockers.append("implementation goal missing")
+    if not _as_string_list(packet_inputs.get("allowed_modify_paths")):
+        blockers.append("allowed_modify_paths missing")
+    if not _as_string_list(packet_inputs.get("forbidden_paths")):
+        blockers.append("forbidden_paths missing")
+    if _as_list_of_dicts(packet_inputs.get("language_violations")):
+        blockers.append("language violations present")
+    if _as_string_list(derived.get("blocker_refs")):
+        blockers.append("blocking diagnostics present")
+
+    if blockers:
+        raise ValueError(
+            f"implementation packet gate failed for {entity_id}: "
+            + "; ".join(blockers)
+        )
 
 
 def _render_markdown(packet: dict[str, Any]) -> str:
