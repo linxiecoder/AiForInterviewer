@@ -11,6 +11,10 @@
 - W13-E4-E 新增 `OQ-100`，用于确认是否基于已通过的 Stage3 Preview 执行正式 Stage 3；用户已确认方案 B，W13-E4-F 已正式移出旧 `STxx_*` 并改写 `RQ01.facts.task_ids`。
 - W13-E6 已确认 `OQ-101~OQ-110`：第一批只生成 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的横向 contract / 测试 / 治理任务包草案；任务包准备与实现严格拆窗；formal window、implementation packet、实现目录创建仍禁止，直到后续逐项满足 gate 并再次确认。
 - W13-E8 已确认并吸收 `OQ-111~OQ-113`：ST13 双文档路径采用集中任务包目录，允许创建第一批 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 正式双文档，required doc slot 后续单独 State Update；三项均为 `confirmed`。W13-E8.5 已承接 `OQ-113=B` 完成第一批 required doc slot 登记。
+- W13-E10 新增 `OQ-114~OQ-117`：用于确认第一批 ST13 formal window candidate 分级、后续 State Update 节奏、是否需要 W13-E10.5 补文档，以及是否继续禁止实现类动作；用户已在 W13-E11 确认 `OQ-114=A`、`OQ-115=B`、`OQ-116=A`、`OQ-117=A`。
+- W13-E12 新增 `OQ-118~OQ-120`：用于确认是否允许下一窗口为 `ST13_24 / ST13_25` 准备 candidate 状态 preview、`ST13_21 / ST13_20` 是否写入状态层 near-ready，以及后续是否先创建 preview YAML；用户已确认 `OQ-118=B`、`OQ-119=A`、`OQ-120=B`。W13-E13 已创建 preview，但验证发现当前规则不允许在 `formal_window_open=false` 时写入 `candidate_status=candidate`。
+- W13-E13 新增 `OQ-121`：用于确认 Preview 失败后的下一步处理；用户已确认 `OQ-121=A`，即暂不执行正式 State Update，只保留失败 Preview，并先修正后续状态表达策略。
+- W13-E13.8 已吸收 `OQ-124`：用户确认采用方案 A，把 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，已执行 facts-only 正式 State Update。
 - 状态使用：
   - `open`
   - `proposed-default`
@@ -22,10 +26,10 @@
 
 | 类别 | 数量 | 说明 |
 | --- | ---: | --- |
-| `confirmed` | 111 | 已由 `W13-A`、`DD-018~DD-044`、`FC-01~FC-18` 或 W13-E / W13-E3 / W13-E4-A / W13-E4-B / W13-E4-C / W13-E4-D / W13-E4-E / W13-E4-F / W13-E6 / W13-E8 过程确认覆盖，不再作为待确认阻塞。 |
+| `confirmed` | 122 | 已由 `W13-A`、`DD-018~DD-050`、`FC-01~FC-18` 或 W13-E / W13-E3 / W13-E4-A / W13-E4-B / W13-E4-C / W13-E4-D / W13-E4-E / W13-E4-F / W13-E6 / W13-E8 / W13-E11 / W13-E13 / W13-E13.5 / W13-E13.6 / W13-E13.8 过程确认覆盖，不再作为待确认阻塞。 |
 | `historical` | 2 | `OQ-002`、`OQ-003` 只保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。 |
 | `open` | 0 | 当前没有 active 产品范围待确认项。 |
-| `proposed-default` | 0 | 当前无 active proposed-default；后续新增确认卡不得在用户确认前写成 confirmed。 |
+| `proposed-default` | 0 | 当前无待确认 proposed-default；新增确认卡需另行登记，确认前不得写成 confirmed。 |
 
 M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `confirmed / historical / superseded / open` 保留治理语义，模块索引和子文档父模块链接已补强。该处理不等于放行正式子任务窗口，也不等于旧 STxx_* 骨架已迁移到 archive。
 
@@ -45,6 +49,10 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | State Write 阶段 3 dry-run 与影响分析 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md` |
 | State Write 阶段 3 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` |
 | ST13 第一批 contract 双文档准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` |
+| ST13 第一批 contract readiness 复核 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-readiness-review.md` |
+| ST13 第一批 formal window candidate 评估 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-formal-window-candidate-evaluation.md` |
+| ST13 第一批 State Update 准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md` |
+| ST13 candidate 状态表达策略修正 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
 | 历史执行记录 | `EXECUTION_LOG.md` |
 
@@ -128,6 +136,31 @@ M01-M10 的旧 MQ/OQ 已完成第一轮模块侧标记和补链：旧问题按 `
 | `OQ-111` | ST13 双文档路径方案如何选择？ | confirmed | 方案 A：集中任务包目录，路径为 `docs/superpowers/plans/st13-task-packages/ST13_XX/ST13_XX_DESIGN.md` 与 `ST13_XX_IMPLEMENTATION.md` | 方案 B：模块子任务目录；方案 C：只冻结路径和模板；方案 D：用户自定义 | 用户已确认 `OQ-111=A`；W13-E8 已按集中任务包目录创建第一批双文档。 |
 | `OQ-112` | 是否允许下一窗口创建第一批正式双文档？ | confirmed | 方案 A：允许 W13-E8 创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的正式双文档 | 方案 B：暂不创建；方案 C：只创建一个试点；方案 D：用户自定义 | 用户已确认 `OQ-112=A`；本轮只创建文档，仍不实现。 |
 | `OQ-113` | 是否允许下一窗口更新 `DOC_STATE.yaml` 的 required doc slot？ | confirmed | 方案 B：创建双文档后，在后续单独 State Update 窗口更新 required doc slot | 方案 A：暂不更新 state；方案 C：创建双文档同窗更新 state；方案 D：用户自定义 | 用户已确认 `OQ-113=B`；W13-E8 不修改 `DOC_STATE.yaml`，W13-E8.5 已另窗完成第一批 required doc slot 登记。 |
+
+### 6.3 W13-E10 readiness review 确认卡
+
+完整卡片见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-readiness-review.md` 第 14 节；用户已在 W13-E11 确认四项推荐方案。
+
+| ID | 问题 | 状态 | 推荐方案 | 其他方案 | 当前处理 |
+| --- | --- | --- | --- | --- | --- |
+| `OQ-114` | 是否接受 W13-E10 formal window candidate 分级？ | confirmed | 方案 A：接受 `ST13_24 / ST13_25 = ready_for_formal_window_candidate`，`ST13_21 / ST13_20 = near_ready_for_formal_window_candidate`，进入 W13-E11 candidate 评估 | 方案 B：四个全部 near-ready；方案 C：四个全部 not-ready；方案 D：用户自定义 | 用户已确认 A；W13-E11 只形成文档层 candidate 评估，不直接写 `candidate_status`，不打开 formal window。 |
+| `OQ-115` | 是否允许后续 State Update 处理 readiness / candidate_status？ | confirmed | 方案 B：W13-E11 后再开 State Update | 方案 A：暂不 State Update；方案 C：先 State Update 再 W13-E11；方案 D：用户自定义 | 用户已确认 B；本窗口不修改 `DOC_STATE.yaml`，后续另开 State Update。 |
+| `OQ-116` | 是否需要 W13-E10.5 补齐 acceptance criteria / required tests / implementation scope？ | confirmed | 方案 A：不新增 W13-E10.5，直接进入 W13-E11 candidate 评估 | 方案 B：只补 `ST13_21 / ST13_20`；方案 C：四个全部补；方案 D：用户自定义 | 用户已确认 A；不新增 W13-E10.5。 |
+| `OQ-117` | 是否保持 OpenAPI、schema、`tests/**`、`apps/**`、implementation packet、formal window open 和实现继续禁止？ | confirmed | 方案 A：继续全部禁止，直到用户另窗确认 formal window 和 implementation packet 条件 | 方案 B：允许后续仅创建 OpenAPI / schema 文档；方案 C：允许后续创建测试文件或应用目录骨架；方案 D：用户自定义 | 用户已确认 A；当前仍不写代码、不创建目录、不生成 packet、不打开 formal window。 |
+
+### 6.4 W13-E12 State Update 准备确认卡
+
+完整卡片见 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md` 第 7 节；W13-E12 只输出确认卡，不修改 `DOC_STATE.yaml`。
+
+| ID | 问题 | 状态 | 推荐方案 | 其他方案 | 当前处理 |
+| --- | --- | --- | --- | --- | --- |
+| `OQ-118` | 是否允许后续 W13-E13 在 `DOC_STATE.yaml` 中为 `ST13_24 / ST13_25` 写入 formal_window_candidate 相关状态？ | confirmed | 方案 B：下一窗口仅在 preview 中测试 `ST13_24 / ST13_25` 的 candidate 相关字段，保持 `formal_window_open=false`、`implementation-ready=false`，且不修改正式 `DOC_STATE.yaml` | 方案 A：暂不更新 `DOC_STATE.yaml`；方案 C：同时准备 formal window open；方案 D：用户自定义 | 用户已确认 `OQ-118=B`；W13-E13 已创建 preview，验证结果显示该组合当前不兼容。 |
+| `OQ-119` | 是否允许后续 W13-E13 在 `DOC_STATE.yaml` 中为 `ST13_21 / ST13_20` 写入 near-ready 状态？ | confirmed | 方案 A：暂不写入状态层 near-ready，只保留文档层 near-ready | 方案 B：用 `facts` 字段表达 near_ready_for_formal_window_candidate 但不写 `candidate_status`；方案 C：直接写 `candidate_status` 但标记 near-ready；方案 D：用户自定义 | 用户已确认 `OQ-119=A`；`ST13_21 / ST13_20` 不写状态层 near-ready，也不写 candidate。 |
+| `OQ-120` | 后续 State Update 是否需要先创建 preview YAML？ | confirmed | 方案 B：先创建 State Update preview YAML，不修改正式 `DOC_STATE.yaml` | 方案 A：不做 preview 直接写正式状态；方案 C：同一窗口先 preview 后正式写入；方案 D：用户自定义 | 用户已确认 `OQ-120=B`；W13-E13 已创建 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml`，正式状态未修改。 |
+| `OQ-121` | 是否基于 W13-E13 Preview 执行 W13-E14 正式 State Update？ | confirmed | 方案 A：暂不执行正式 State Update，只保留失败 Preview 并修正后续策略 | 方案 B：执行 W13-E14 正式 State Update；方案 C：执行 State Update 并准备 formal window open；方案 D：用户自定义 | 用户已确认 `OQ-121=A`；W13-E13.5 只修正表达策略，不进入 W13-E14。 |
+| `OQ-122` | W13-E13.5 后是否创建新的 Candidate State Preview？ | confirmed | 方案 A：创建 facts-only Candidate Preview，`ST13_24 / ST13_25` 只用 facts 字段表达 `formal_window_candidate_recommended`，不写 `candidate_status=candidate`，不写 `readiness=downstream_ready` | 方案 B：创建 `candidate_status=observe` Preview；方案 C：创建 maturity + downstream_ready Preview；方案 D：用户自定义 | 用户已确认 `OQ-122=A`；W13-E13.6 已创建 facts-only Preview。 |
+| `OQ-123` | 是否继续禁止 W13-E14 正式 State Update？ | confirmed | 方案 A：继续禁止，直到新的 Preview 全绿 | 方案 B：允许在 facts-only 方案下直接正式写入；方案 C：formal window open 前置确认后再写 `candidate_status=candidate`；方案 D：用户自定义 | 用户已确认 `OQ-123=A`；W13-E13.6 不进入 W13-E14，正式 `DOC_STATE.yaml` 未修改。 |
+| `OQ-124` | 是否基于 W13-E13.6 facts-only Preview 执行后续 facts-only 正式 State Update？ | confirmed | 方案 A：把 Preview 放到 `docs/governance/` 直下重新验证；Preview 严格全绿后，再执行 facts-only 正式 State Update | 方案 B：继续只保留 Preview；方案 C：继续尝试 `candidate_status=observe` Preview；方案 D：用户自定义 | 用户已确认方案 A；W13-E13.8 已创建 `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过 validate/evaluate，随后仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段。未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未打开 formal window，未形成 implementation-ready。 |
 
 ## 7. 使用说明
 

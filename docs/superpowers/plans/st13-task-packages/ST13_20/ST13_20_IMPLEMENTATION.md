@@ -34,7 +34,7 @@
 
 ## 5. implementation packet 前置条件
 
-- formal window 已打开。
+- formal window open 前置确认已完成。
 - implementation doc 不再只是计划文档。
 - allowed modify paths、forbidden paths、required tests、acceptance criteria 均已填实。
 - 当前窗口不生成 implementation packet。
@@ -134,3 +134,15 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 ## 16. 当前未放行实现说明
 
 `ST13_20_IMPLEMENTATION.md` 的存在和 contract_refined 状态都不等于 implementation-ready。当前不创建数据库，不创建 migration，不创建 ORM，不写 SQL，不生成 implementation packet，不打开 formal window。
+
+## 17. W13-E13.5 candidate 表达策略同步
+
+`ST13_20` 在 W13-E13.5 后继续只保留文档层 near-ready：不写正式状态层 `candidate_status`，不写 `readiness=downstream_ready`，不写 formal window candidate，不写 implementation-ready。
+
+## 18. W13-E13.8 facts-only State Update 保持策略
+
+W13-E13.8 只对 `ST13_24 / ST13_25` 执行 facts-only candidate 推荐字段写入；`ST13_20` 保持正式 `DOC_STATE.yaml` 原样，未写 candidate facts，未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未写 near-ready 状态。
+
+该保持策略不改变本文件的 implementation plan only 定位。`ST13_20` 仍不得创建数据库、migration、ORM、SQL，不得生成 implementation packet，不得打开 formal window。
+
+该策略不新增实现任务，不改变本文件的 implementation plan only 定位。当前仍不创建数据库、migration、ORM、SQL、implementation packet 或业务代码。

@@ -1,3 +1,5 @@
+# Preview only: this file is not the official governance truth.
+# Source: W13-E13.7 path-equivalent facts-only Candidate Preview.
 schema_version: 1
 global_policy:
   auto_open_enabled: false

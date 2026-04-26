@@ -299,3 +299,21 @@
 ## 21. 当前不进入实现说明
 
 本文件经 W13-E9 contract 细化后，`ST13_24` 仍是 `not implementation-ready`。当前不创建 `tests/**`，不写测试代码，不生成 implementation packet，不打开 formal window。
+
+## 22. W13-E13.5 candidate 表达策略同步
+
+W13-E13.5 后，`ST13_24` 继续保留文档层 `formal_window_candidate_recommended`，但正式 `DOC_STATE.yaml` 暂不写 `candidate_status=candidate`，也不直接写 `readiness=downstream_ready`。
+
+下一轮 Candidate Preview 优先验证 facts-only 表达，例如 `facts.formal_window_candidate_recommended=true` 或等价现有 facts 字段；备选验证 `candidate_status=observe`。`formal_window_open` 必须保持 `false`，implementation-ready 必须保持 `false`，implementation packet 仍 forbidden。
+
+## 23. W13-E13.8 facts-only 正式 State Update 同步
+
+W13-E13.8 已在 docs/governance 直下创建 `DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml` 并通过严格验证；随后正式 `DOC_STATE.yaml` 已为 `ST13_24.facts` 写入 facts-only candidate 推荐字段：
+
+- `formal_window_candidate_recommended=true`
+- `formal_window_candidate_source=W13-E11 candidate evaluation`
+- `formal_window_candidate_review_status=pending_confirmation`
+- `formal_window_candidate_state=document_layer_recommended`
+- `formal_window_candidate_notes=formal window closed; implementation-ready false; implementation packet forbidden`
+
+该写入只表示测试 / 验收 / DoD contract 的 candidate 推荐事实进入正式状态层；不等于 `candidate_status=candidate`，不等于 `readiness=downstream_ready`，不打开 formal window，不生成 implementation packet，不创建 `tests/**`，不进入实现。

@@ -302,3 +302,15 @@
 ## 21. 当前不进入实现说明
 
 本文件经 W13-E9 contract 细化后，`ST13_20` 仍是 `not implementation-ready`。当前不创建数据库，不创建 migration，不创建 ORM，不写 SQL，不生成 implementation packet，不打开 formal window。
+
+## 22. W13-E13.5 candidate 表达策略同步
+
+W13-E13.5 后，`ST13_20` 继续保持文档层 `near_ready_for_formal_window_candidate_confirmed`，但不写正式状态层 `candidate_status`，不写 `readiness=downstream_ready`，不写 formal window candidate，不写 implementation-ready。
+
+后续只有在 M02 blocker、schema / migration / ORM 授权和 formal window 前置条件闭合后，才重新评估是否进入 candidate 状态表达。当前不创建数据库、migration、ORM、SQL、implementation packet 或 formal window。
+
+## 23. W13-E13.8 facts-only State Update 保持策略
+
+W13-E13.8 只对 `ST13_24 / ST13_25` 执行 facts-only candidate 推荐字段写入；`ST13_20` 保持正式 `DOC_STATE.yaml` 原样，未写 candidate facts，未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未写 near-ready 状态。
+
+`ST13_20` 仍仅在文档层保持 `near_ready_for_formal_window_candidate_confirmed` 口径。后续必须先关闭 M02 blocker、schema / migration / ORM 授权和 formal window 前置条件，才可重新评估状态层 candidate 表达；当前仍不得创建数据库、migration、ORM、SQL、implementation packet 或 formal window。

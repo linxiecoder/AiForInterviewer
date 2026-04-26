@@ -32,7 +32,7 @@
 
 ## 5. implementation packet 前置条件
 
-- formal window 已打开。
+- formal window open 前置确认已完成。
 - required tests 可执行或明确可补齐。
 - allowed modify paths、forbidden paths、acceptance criteria 均已填实。
 - 当前窗口不生成 implementation packet。
@@ -126,3 +126,21 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 ## 16. 当前未放行实现说明
 
 `ST13_24_IMPLEMENTATION.md` 的存在和 contract_refined 状态都不等于 implementation-ready。当前不创建 `tests/**`，不写测试代码，不生成 implementation packet，不打开 formal window。
+
+## 17. W13-E13.5 candidate 表达策略同步
+
+`ST13_24` 在 W13-E13.5 后继续只保留文档层 `formal_window_candidate_recommended`。正式状态层暂不写 `candidate_status=candidate`，不直接写 `readiness=downstream_ready`。
+
+该策略不新增测试实现任务，不改变本文件的 implementation plan only 定位。下一轮如继续，只能先验证 facts-only Candidate Preview；当前仍不创建 `tests/**`，不生成 implementation packet，不打开 formal window。
+
+## 18. W13-E13.8 facts-only 正式 State Update 同步
+
+W13-E13.8 已在 docs/governance 直下 Preview 严格全绿后，将 `ST13_24.facts` 的 facts-only candidate 推荐字段写入正式 `DOC_STATE.yaml`：
+
+- `formal_window_candidate_recommended=true`
+- `formal_window_candidate_source=W13-E11 candidate evaluation`
+- `formal_window_candidate_review_status=pending_confirmation`
+- `formal_window_candidate_state=document_layer_recommended`
+- `formal_window_candidate_notes=formal window closed; implementation-ready false; implementation packet forbidden`
+
+该写入不改变本文件的实施边界：formal window 仍关闭，implementation-ready 仍为 false，implementation packet 仍禁止，`tests/**` 仍不得创建。

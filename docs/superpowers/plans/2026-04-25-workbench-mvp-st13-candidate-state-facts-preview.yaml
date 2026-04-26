@@ -1,3 +1,8 @@
+# W13-E13.6 facts-only Candidate Preview YAML.
+# This file is a preview artifact, not docs/governance/DOC_STATE.yaml.
+# It is not governance truth and must not be used as confirmed state.
+# It only validates facts-only candidate recommendation expression for ST13_24 / ST13_25.
+# Formal docs/governance/DOC_STATE.yaml is intentionally not modified by this preview.
 schema_version: 1
 global_policy:
   auto_open_enabled: false

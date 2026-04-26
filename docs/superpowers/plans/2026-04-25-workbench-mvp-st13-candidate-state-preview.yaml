@@ -1,3 +1,8 @@
+# W13-E13 candidate State Update Preview YAML.
+# Preview only; this file is not the official governance truth.
+# Official state remains docs/governance/DOC_STATE.yaml.
+# Purpose: validate ST13_24 / ST13_25 candidate_status, review_status, and readiness changes.
+# Do not use this file to open formal windows, generate implementation packets, or mark implementation-ready.
 schema_version: 1
 global_policy:
   auto_open_enabled: false
@@ -1997,18 +2002,13 @@ subtasks:
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
-      formal_window_candidate_recommended: true
-      formal_window_candidate_source: W13-E11 candidate evaluation
-      formal_window_candidate_review_status: pending_confirmation
-      formal_window_candidate_state: document_layer_recommended
-      formal_window_candidate_notes: formal window closed; implementation-ready false; implementation packet forbidden
     state:
       confirmed:
         implementation_doc_state: missing
         maturity: null
-        candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        candidate_status: candidate
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
         last_transition_id: null
         last_confirmed_at: null
@@ -2044,18 +2044,13 @@ subtasks:
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
-      formal_window_candidate_recommended: true
-      formal_window_candidate_source: W13-E11 candidate evaluation
-      formal_window_candidate_review_status: pending_confirmation
-      formal_window_candidate_state: document_layer_recommended
-      formal_window_candidate_notes: formal window closed; implementation-ready false; implementation packet forbidden
     state:
       confirmed:
         implementation_doc_state: missing
         maturity: null
-        candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        candidate_status: candidate
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
         last_transition_id: null
         last_confirmed_at: null

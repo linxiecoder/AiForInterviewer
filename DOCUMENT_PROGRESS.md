@@ -11,8 +11,10 @@
 
 ## 2. 当前阶段摘要
 
-- 当前阶段：`W13-E9 / 第一批 ST13 contract 细化` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口，本轮已把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 8 个正式双文档从 `double_doc_registered` 细化为 `contract_refined`。
-- 当前边界：本轮只做双文档 required doc slot 过时表述清理和 API、数据、测试、治理 contract 细化；不生成 implementation packet，不打开 formal window，不创建 `apps/**` / `infra/**`，不进入实现。
+- 当前阶段：`W13-E13.8 / docs/governance 直下 facts-only Candidate Preview + 正式 State Update 窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
+- 当前边界：本轮只执行 Preview 验证与 facts-only State Update；未生成 implementation packet，未打开 formal window，未标记 implementation-ready，未创建 `apps/**` / `infra/**` / `tests/**`，未进入实现。
+- Preview 与正式写入：`ST13_24 / ST13_25` 已在 docs/governance 直下 Preview 和正式 `DOC_STATE.yaml` 的 `facts` 字段写入 `formal_window_candidate_recommended=true`、来源、review status、document layer state 和禁止 packet/实现说明；未写 `candidate_status=candidate` 或 `readiness=downstream_ready`。
+- 验证结论：Preview 与正式 `DOC_STATE.yaml` 的 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`；W13-E13 的 state rule error 与 W13-E13.6 的 path-scan blocker 均未复现。
 - 代码开发状态：暂停。
 - 当前不允许扩展 `apps/web/**`，不允许创建 `apps/api/**` / `infra/**`，不允许接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
 - 正式开窗层：为空；本轮只完成第一批 contract 细化，不生成 implementation packet，不进入实现。
@@ -49,6 +51,9 @@
 | ST13 第一批 contract 任务包草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` |
 | ST13 第一批 contract 双文档准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` |
 | ST13 required doc slot State Update | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-required-doc-slot-update.md` |
+| ST13 candidate State Update 准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md` |
+| ST13 candidate State Update Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml` |
+| ST13 candidate 状态表达策略修正 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` |
 | ST13 第一批正式双文档 / contract 细化 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 等 8 个双文档 |
 | 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
 | 决策索引 | `DESIGN_DECISIONS.md` |
@@ -69,7 +74,7 @@
 - `W13-E4-E` Stage3 Preview YAML 已完成创建与验证；`W13-E4-F` 已将 preview 证明过的状态层结果正式写入。
 - `W13-E5` 已完成 ST13 readiness audit；25 个 ST13 均仍不具备 implementation-ready，下一步只能进入用户确认后的任务包准备窗口。
 - `W13-E6` 已完成第一批任务包草案；`ST13_21 / ST13_20 / ST13_24 / ST13_25` 仍只是 `task_packet_draft_created`，不能视为 implementation-ready。
-- `W13-E9` 已细化第一批四个 ST13 的 API、数据、测试和治理 contract；四个 ST13 当前达到 `contract_refined`，但仍不能视为 formal window open、implementation packet ready 或 implementation-ready。
+- `W13-E13.5` 已吸收 `OQ-121=A` 并完成 candidate 状态表达策略修正；`ST13_24 / ST13_25` 仍只保持文档层 `formal_window_candidate_recommended`，正式状态层尚未写入 candidate，下一轮需优先验证 facts-only Candidate Preview。
 
 ## 6. 当前完成事项
 
@@ -96,6 +101,13 @@
 - 已完成 W13-E8 第一批 ST13 正式双文档创建：用户确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B` 后，新增 `docs/superpowers/plans/st13-task-packages/ST13_21/`、`ST13_20/`、`ST13_24/`、`ST13_25/` 四个目录和 8 个 `DESIGN` / `IMPLEMENTATION` 文档；本轮未更新 `DOC_STATE.yaml`。
 - 已完成 W13-E8.5 第一批 ST13 required doc slot State Update：仅把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 DESIGN / IMPLEMENTATION 路径登记到 `DOC_STATE.yaml` 既有 required doc slot；未修改其他 ST13，未打开 formal window，未生成 implementation packet。
 - 已完成 W13-E9 第一批 ST13 contract 细化：清理 8 个双文档 required doc slot 过时表述，并细化 `ST13_21` API contract、`ST13_20` 数据 contract、`ST13_24` 测试 / DoD contract、`ST13_25` 文档治理 / 收口 / Basic Memory contract；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
+- 已完成 W13-E10 第一批 ST13 readiness 复核：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-readiness-review.md`，复核四个 contract_refined 双文档的文档层 readiness、状态层缺口、formal window candidate 建议、后续 State Update 需求和用户确认卡；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
+- 已完成 W13-E11 第一批 ST13 formal window candidate 评估：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-formal-window-candidate-evaluation.md`，吸收 `OQ-114=A`、`OQ-115=B`、`OQ-116=A`、`OQ-117=A`，并形成后续 State Update 建议；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
+- 已完成 W13-E12 ST13 candidate State Update 准备：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md`，分析 `DOC_STATE.yaml` 当前字段、提出 `ST13_24 / ST13_25` candidate preview 方案、`ST13_21 / ST13_20` near-ready 保持策略、`OQ-118~OQ-120` 确认卡、Preview 验证矩阵和回退方案；本轮未修改 `DOC_STATE.yaml`，未创建 preview YAML，未写代码，未打开 formal window，未生成 implementation packet。
+- 已完成 W13-E13 candidate State Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml`，验证结果为 `ok=false,error=4,warning=0`；失败原因是 `formal_window_open=false` 时禁止 `candidate_status=candidate`，且 `readiness=downstream_ready` 要求 `maturity` 非空；正式 `DOC_STATE.yaml` 未修改。
+- 已完成 W13-E13.5 Candidate State 表达策略修正：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`，确认 `OQ-121=A` 已吸收，`W13-E14` 暂不执行，下一轮优先创建 facts-only Candidate Preview，备选验证 `candidate_status=observe`。
+- 已完成 W13-E13.6 facts-only Candidate Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`，吸收 `OQ-122=A`、`OQ-123=A`；`ST13_24 / ST13_25` 仅写 facts-only candidate 推荐字段，Preview `validate-state / evaluate-state` 为 `ok=true,error=0,warning=0`，但 `documents_blocked_count=1` 来自 plan-path Preview 的 document 扫描根目录副作用；正式 `DOC_STATE.yaml` 未修改。
+- 已完成 W13-E13.8 docs/governance 直下 facts-only Candidate Preview 与正式 State Update：新增 `docs/governance/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，吸收 `OQ-124`；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段，写入后验证仍为 `ok=true,error=0,warning=0,documents_blocked_count=0`。
 
 ## 7. 历史归档说明
 
@@ -108,9 +120,10 @@
 
 ## 8. 下一步建议
 
-1. 进入 W13-E10：复核 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 contract_refined 文档是否足以支撑 acceptance criteria、required tests、implementation scope 和 formal window 候选输入。
-2. 根据 `OQ-110=C`，可另开并行文档窗口准备 `ST13_23` 前端页面规格，但 contract readiness 复核前不得实现。
-3. 若后续要打开 formal window，必须逐个 ST13 补齐任务包、双文档、验收标准、required tests、状态层 required doc slot 和用户确认。
-4. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
-5. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
-6. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。
+1. 下一轮由总控窗口决定是否进入 formal window 前置确认；当前 facts-only 推荐只表示状态层记录了候选推荐事实，不表示 formal window 已打开。
+2. `ST13_24 / ST13_25` 当前只能作为 facts-only candidate 推荐事实的后续状态层写入候选；`ST13_21 / ST13_20` 默认保持 near-ready 文档层结论，等待 M02 blocker、OpenAPI / schema / apps 授权闭合后再评估。
+3. 若后续要打开 formal window，必须逐个 ST13 补齐任务包、双文档、验收标准、required tests、状态层 required doc slot、formal window 用户确认和 implementation-ready gate。
+4. 当前不建议并行；若后续并行，必须由总控先冻结范围，子窗口不得共同修改总控文件或 `DOC_STATE.yaml`。
+5. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
+6. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
+7. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。
