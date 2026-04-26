@@ -98,10 +98,14 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
         )
         item = preview["tasks"][0]
         self.assertEqual(item["dependency_stage"], "can_consider_readiness_but_not_formal")
+        self.assertEqual(item["gate_result"], "blocked")
         self.assertEqual(item["open_window_gap_blockers"], ["policy:formal_window_closed"])
         self.assertEqual(item["formal_window_blockers"], ["policy:formal_window_closed"])
         self.assertTrue(item["can_continue_readiness"])
         self.assertFalse(item["can_enter_preflight_open_window"])
+        self.assertFalse(item["can_open_formal_window"])
+        self.assertFalse(item["can_generate_implementation_packet"])
+        self.assertFalse(item["can_mark_implementation_ready"])
 
     def test_dependency_stage_ready_for_preflight_open_window(self) -> None:
         preview = self._run_preview(
@@ -118,9 +122,13 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
         )
         item = preview["tasks"][0]
         self.assertEqual(item["dependency_stage"], "ready_for_preflight_open_window")
+        self.assertEqual(item["gate_result"], "pass")
         self.assertEqual(item["open_window_gap_blockers"], [])
         self.assertFalse(item["formal_window_blockers"])
         self.assertTrue(item["can_enter_preflight_open_window"])
+        self.assertTrue(item["can_open_formal_window"])
+        self.assertTrue(item["can_generate_implementation_packet"])
+        self.assertTrue(item["can_mark_implementation_ready"])
 
     def test_dependency_stage_should_not_enter_open_window(self) -> None:
         preview = self._run_preview(
@@ -195,4 +203,6 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 0)
         self.assertIn("T05", output)
+        self.assertIn("gate_result: pass", output)
+        self.assertIn("can_generate_implementation_packet=true", output)
         self.assertIn("可转向 preflight-open-window", output)

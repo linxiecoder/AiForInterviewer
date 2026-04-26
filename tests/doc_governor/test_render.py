@@ -88,6 +88,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertIn("## 需评审模块", text)
         self.assertIn("## 需评审子任务", text)
         self.assertIn("## 需评审文档", text)
+        self.assertIn("## 子任务 gate 摘要", text)
         self.assertIn("## 按层级汇总的 candidate blockers", text)
         self.assertIn("## OQ 门控摘要", text)
         self.assertIn("## 未关闭轮次", text)
@@ -292,6 +293,7 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
             "## 需评审模块",
             "## 需评审子任务",
             "## 需评审文档",
+            "## 子任务 gate 摘要",
             "## 按层级汇总的 candidate blockers",
             "## 按层级汇总的 downstream blockers",
             "## 按层级汇总的 implementation blockers",
@@ -359,6 +361,64 @@ class RenderCommandTests(ManagedTempArtifactsTestCase):
         self.assertIn("### 阻塞项变化", report)
         self.assertIn("- added_count: 2", report)
         self.assertIn("- modules: before=1 after=2 delta=1", report)
+
+    def test_subtask_gate_summary_keeps_facts_only_candidate_blocked(self) -> None:
+        payload = {
+            "summary": {},
+            "requirements": {},
+            "modules": {},
+            "subtasks": {
+                "ST13_24": {
+                    "derived": {
+                        "gate_result": "blocked",
+                        "blocker_refs": [
+                            "gate:acceptance_criteria_missing",
+                            "gate:implementation_doc_not_active",
+                            "gate:implementation_scope_unclear",
+                            "gate:required_tests_missing",
+                            "policy:formal_window_closed",
+                        ],
+                        "implementation_ready": False,
+                        "formal_window_candidate_recommendation": {
+                            "recommended": True,
+                            "state": "document_layer_recommended",
+                            "tool_effect": "facts_only",
+                            "means_formal_window_open": False,
+                            "means_packet_ready": False,
+                        },
+                        "near_ready_for_formal_window_candidate": {
+                            "enabled": False,
+                            "state": "none",
+                            "means_candidate_status_candidate": False,
+                        },
+                    }
+                }
+            },
+            "oqs": {},
+            "diagnostics": [],
+        }
+        json_path = _write_json(self.temp_root / "evaluate.json", payload)
+
+        exit_code, _ = self._run_cli(
+            "render-report",
+            "--evaluate-json",
+            str(json_path),
+        )
+
+        self.assertEqual(exit_code, 0)
+        report = (self.temp_root / "docs" / "governance" / RENDER_OUTPUT_DIR_NAME).read_text(encoding="utf-8")
+        self.assertIn("## 子任务 gate 摘要", report)
+        self.assertIn("`ST13_24`: gate_result=blocked", report)
+        self.assertIn("can_open_formal_window=false", report)
+        self.assertIn("can_generate_implementation_packet=false", report)
+        self.assertIn("can_mark_implementation_ready=false", report)
+        self.assertIn("candidate=recommended=true,state=document_layer_recommended,effect=facts_only", report)
+        self.assertIn("means_formal_window_open=false", report)
+        self.assertIn("means_packet_ready=false", report)
+        self.assertIn("top_blockers=[gate:acceptance_criteria_missing", report)
+        self.assertIn("补齐 acceptance_criteria", report)
+        self.assertNotIn("formal_window_open=true", report)
+        self.assertNotIn("can_mark_implementation_ready=true", report)
 
     def test_default_path_and_sorted_blockers(self) -> None:
         payload = {

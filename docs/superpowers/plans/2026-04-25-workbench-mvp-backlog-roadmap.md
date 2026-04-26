@@ -8,6 +8,7 @@
 - 当前状态：W13-E13.8 / docs-governance 直下 facts-only Candidate Preview + 正式 State Update 已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；第一批 `ST13_24 / ST13_25` 已以 facts-only 方式把 candidate 推荐字段写入正式状态层，但当前仍不能生成 implementation packet、打开 formal window 或进入实现。
 - 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不迁移 archive，不删除旧 `STxx_*` 文档。
 - 更新原则：每轮总控或收口窗口可按同一字段规范增量更新；不得只把后续事项写在聊天记录、`EXECUTION_LOG.md` 或一次性确认卡中。
+- 工具治理 backlog 已迁入 `docs/governance/DOC_GOVERNOR_TOOL_DEBT.md`，本文件不复制工具债正文。
 
 ## 2. 跟踪字段规范
 

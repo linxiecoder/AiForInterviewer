@@ -57,6 +57,12 @@ def build_task_readiness_state_sync_preview(
         blocker_refs = _as_string_list(evaluated.get("blocker_refs"))
 
         dep_item = _as_dict(dependency_items.get(task_id))
+        gate_result = _as_str(dep_item.get("gate_result")) or "blocked"
+        can_open_formal_window = bool(dep_item.get("can_open_formal_window"))
+        can_generate_implementation_packet = bool(
+            dep_item.get("can_generate_implementation_packet")
+        )
+        can_mark_implementation_ready = bool(dep_item.get("can_mark_implementation_ready"))
         readiness_gap_blockers = _as_string_list(dep_item.get("readiness_gap_blockers"))
         open_window_gap_blockers = _as_string_list(dep_item.get("open_window_gap_blockers"))
         dependency_stage = str(dep_item.get("dependency_stage", "should_not_enter_open_window")).strip()
@@ -191,6 +197,10 @@ def build_task_readiness_state_sync_preview(
                 "maturity_state_valid": maturity_state_valid,
                 "current_readiness": current_readiness,
                 "target_readiness": target_readiness or None,
+                "gate_result": gate_result,
+                "can_open_formal_window": can_open_formal_window,
+                "can_generate_implementation_packet": can_generate_implementation_packet,
+                "can_mark_implementation_ready": can_mark_implementation_ready,
                 "dependency_stage": dependency_stage,
                 "requirement_ids": requirement_ids,
                 "requirement_relation_unique": requirement_relation_unique,
@@ -373,6 +383,12 @@ def render_task_readiness_state_sync_markdown(payload: dict[str, Any]) -> str:
                 (
                     f"  - current={item.get('current_readiness', '')}, "
                     f"target={target_readiness}, stage={item.get('dependency_stage', '')}"
+                ),
+                (
+                    f"  - gate_result={item.get('gate_result', 'blocked')}, "
+                    f"can_open_formal_window={_format_bool(item.get('can_open_formal_window'))}, "
+                    f"can_generate_implementation_packet={_format_bool(item.get('can_generate_implementation_packet'))}, "
+                    f"can_mark_implementation_ready={_format_bool(item.get('can_mark_implementation_ready'))}"
                 ),
                 f"  - remaining_blockers_after_writeback: {remaining_blockers}",
             ]
@@ -568,6 +584,10 @@ def _as_str(value: object) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _format_bool(value: object) -> str:
+    return "true" if bool(value) else "false"
 
 
 def _dedupe_strings(items: list[str]) -> list[str]:

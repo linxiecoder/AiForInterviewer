@@ -91,11 +91,18 @@ def build_task_state_dependency_map(
             module_id=module_id,
             dependency_stage=dependency_stage,
         )
+        can_open_formal_window = dependency_stage == "ready_for_preflight_open_window"
+        can_generate_implementation_packet = can_open_formal_window
+        can_mark_implementation_ready = can_open_formal_window
 
         map_items.append(
             {
                 "task_id": task_id,
                 "module_id": module_id,
+                "gate_result": "pass" if can_open_formal_window else "blocked",
+                "can_open_formal_window": can_open_formal_window,
+                "can_generate_implementation_packet": can_generate_implementation_packet,
+                "can_mark_implementation_ready": can_mark_implementation_ready,
                 "is_active_working_doc": is_active_working_doc,
                 "current_readiness": current_readiness or "blocked",
                 "current_blocker_refs": current_blockers,
@@ -179,6 +186,12 @@ def render_task_state_dependency_map_markdown(payload: dict[str, Any]) -> str:
                 f"- {owner}：{item.get('dependency_stage', '').replace('_', ' ')}",
                 f"  - active_working_doc: {item.get('is_active_working_doc', False)}",
                 f"  - 当前 readiness: {item.get('current_readiness', 'blocked')}",
+                (
+                    f"  - gate_result: {item.get('gate_result', 'blocked')}; "
+                    f"can_open_formal_window={_format_bool(item.get('can_open_formal_window'))}; "
+                    f"can_generate_implementation_packet={_format_bool(item.get('can_generate_implementation_packet'))}; "
+                    f"can_mark_implementation_ready={_format_bool(item.get('can_mark_implementation_ready'))}"
+                ),
                 (
                     "  - 离 readiness 差距："
                     f"{', '.join(_as_string_list(item.get('readiness_gap_blockers'))) or '无'}"
@@ -379,3 +392,7 @@ def _as_str(value: object) -> str:
     if isinstance(value, str):
         return value
     return str(value)
+
+
+def _format_bool(value: object) -> str:
+    return "true" if bool(value) else "false"

@@ -183,6 +183,7 @@
 - [Basic Memory Guard 运行说明](docs/governance/BASIC_MEMORY_GUARD.md)
 - [讨论轮次工作流](docs/governance/DISCUSSION_WORKFLOW.md)
 - [Doc Governor 运行手册](docs/governance/DOC_GOVERNOR_RUNBOOK.md)
+- [Doc Governor 工具债追踪](docs/governance/DOC_GOVERNOR_TOOL_DEBT.md)
 
 ### 2.2 设计
 

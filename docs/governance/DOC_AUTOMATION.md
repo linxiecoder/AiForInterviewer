@@ -186,7 +186,8 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 - `--report-path` 只允许写到 `docs/governance/` 下，且不得指向 `DOC_STATE.yaml` 或 `DOC_STATE.bootstrap.yaml`。
 - `render-report` 只输出解释性 Markdown，不能直接驱动 `confirm-transition`。
 - `## Next Round Agenda` 只输出建议性议程，不可直接替代审批与状态写回流程。
-- 当前 render 主链输出范围以 `summary / modules / subtasks / documents / oqs / open rounds / round delta / next round agenda / diagnostics notes` 为准；requirement / asset / compliance 摘要与来源分类展示尚未成为当前主链固定输出。
+- 当前 render 主链输出范围以 `summary / modules / subtasks / documents / subtask gate summary / oqs / open rounds / round delta / next round agenda / diagnostics notes` 为准；requirement / asset / compliance 摘要与来源分类展示尚未成为当前主链固定输出。
+- `subtask gate summary` 只读展示 evaluate 派生的 `gate_result`、`can_open_formal_window`、`can_generate_implementation_packet`、`can_mark_implementation_ready`、top blockers 与 next actions；它不替代 `preflight-open-window`，也不直接授权 packet 或 implementation-ready。
 - `DOC_GOVERNOR_REPORT.md` 属于生成型治理报告，不是 confirmed state；其标题、章节标题与说明性正文默认应遵循中文规则，命令名、路径、JSON key、diagnostic code 可保留英文。
 - 若当前渲染输出仍存在英文标题或英文自然语言段落，应视为 `render.py` 的实现漂移并在生成器层修复，而不是手工维护报告文件。
 
@@ -299,6 +300,8 @@ python -m tools.doc_governor.cli --help
 
 当前主链下，task 对象的正式容器仍是 `subtasks`，命名规则仍以 `STxx_yy` 为准；`implementation_ready` 还受 `implementation_doc_state`、`formal_window_open`、`blocker_refs` 等正式状态约束，不能仅靠文档等级或人工描述推出。
 
+task readiness / sync 相关的只读输出必须优先对齐 preflight gate 语义。当前 `preview-task-state-dependency-map` 与 `preview-task-readiness-state-sync` 已展示 `gate_result`、`can_open_formal_window`、`can_generate_implementation_packet`、`can_mark_implementation_ready`；其他 wrapper 若尚未展示同字段，应进入 P1 工具债，而不是扩大本窗口写状态行为。
+
 ### 12.2 已实现但仍属独立检查器 / 待接线能力
 
 当前仓库内已经存在以下实现，但它们不应被描述成“默认已由主链自动执行”：
@@ -336,6 +339,14 @@ python -m tools.doc_governor.cli --help
 - task 对象容器：`subtasks`
 - typed blocker refs：继续按当前 schema 校验
 
+alias 标准：
+
+- 状态层 ID 使用 schema 支持的 `STxx_yy`。
+- 业务任务 alias 使用 `facts.business_task_id` 或 `facts.wt13_alias`。
+- legacy alias 使用 `facts.legacy_task_ids` 或文档层映射。
+- `MTxx_yy` 若后续进入状态层，必须先确认 schema 与 alias 策略。
+- alias 只可作为只读展示或映射辅助，不得作为 `subtasks` 主键使用。
+
 若后续要推进 `MTxx_yy`、完整资产注册区或更强 render 契约，应先同步修改 `schema.py`、`validate.py`、`evaluate.py`、`render.py` 以及对应测试，再回写本文件。
 
 ### 12.4 当前 render、asset、compliance 的真实边界
@@ -344,11 +355,23 @@ python -m tools.doc_governor.cli --help
 
 - `render-report --evaluate-json <PATH>` 是主入口
 - `render-report --state <PATH>` 只是共享 evaluate 路径的 wrapper
-- 报告当前主链输出范围以 `summary / modules / subtasks / documents / oqs / open rounds / round delta / next round agenda / diagnostics notes` 为准
+- 报告当前主链输出范围以 `summary / modules / subtasks / documents / subtask gate summary / oqs / open rounds / round delta / next round agenda / diagnostics notes` 为准
 - 报告当前不会自动新增 requirement / asset / compliance 摘要区块
 - 报告当前不会按三类来源固定分栏显示 `official state`、`runtime artifacts`、`curated examples`
 
 因此，任何关于“asset governance 已完整纳入 render 报告”“language compliance 已在 render 中固定展示”“报告已显式分离三类来源”的描述，都只能作为规划项，不能作为当前行为描述。
+
+### 12.4.1 stale / outdated 文档识别边界
+
+当前工具主要检查结构、状态、引用和已登记事实，不完全判断文档内容方向是否过时。
+
+- `repo_truth`、missing path、template-like、required section、document blocker 等检查只能证明结构或登记事实是否一致。
+- `archive`、`superseded`、`historical-reference`、唯一事实源和 current-vs-archive 仍需要文档治理流程维护。
+- 后续可增强 stale OQ/DD/MQ/FC、current vs archive、unique fact source 检查，但不得在当前主线中把未实现能力写成 hard gate。
+
+### 12.4.2 工具债追踪入口
+
+P1 / P2 工具债统一追踪在 [`DOC_GOVERNOR_TOOL_DEBT.md`](DOC_GOVERNOR_TOOL_DEBT.md)。该文件只记录工具链与治理文档债务，不得反向修改 W13 产品事实源或正式 `DOC_STATE.yaml`。
 
 ### 12.5 文档语言规则（强制）
 

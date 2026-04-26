@@ -17,6 +17,15 @@ GATE_COUNT_KEYS = [
     "readiness_gate.readiness_blocker",
 ]
 
+GATE_NEXT_ACTIONS = {
+    "policy:formal_window_closed": "先通过 preflight/open-window 链路确认 formal window",
+    "gate:implementation_doc_not_active": "评审后激活 implementation_doc_state",
+    "gate:implementation_scope_unclear": "补齐 goal/allowed_modify_paths/forbidden_paths",
+    "gate:required_tests_missing": "补齐 required_tests",
+    "gate:acceptance_criteria_missing": "补齐 acceptance_criteria",
+    "state:official_readiness_not_ready": "先收敛 official readiness",
+}
+
 REQUIREMENT_RELATION_CONSISTENCY_CODES = {
     "SCHEMA_REQUIREMENT_RELATION_ENTITY_MISSING": "entity_missing",
     "SCHEMA_REQUIREMENT_RELATION_CONTAINER_MISSING": "container_missing",
@@ -72,6 +81,7 @@ def render_from_payload(
     lines.extend(_render_review_section(modules, section_type="modules"))
     lines.extend(_render_review_section(subtasks, section_type="subtasks"))
     lines.extend(_render_review_section(documents, section_type="documents"))
+    lines.extend(_render_subtask_gate_summary(subtasks))
     lines.extend(_render_blocker_sections(modules=modules, subtasks=subtasks))
     lines.extend(_render_document_blockers(documents=documents))
     lines.extend(_render_oq_summary(summary=summary, oqs=oqs))
@@ -309,6 +319,77 @@ def _collect_relation_alert_blocker_refs(derived: dict[str, Any]) -> list[str]:
     return _normalize_string_list(collected)
 
 
+def _collect_gate_blocker_refs(derived: dict[str, Any]) -> list[str]:
+    blocker_refs = _normalize_string_list(derived.get("blocker_refs"))
+    if blocker_refs:
+        return blocker_refs
+
+    collected: list[str] = []
+    for blocker_key in (
+        "gate_blockers",
+        "implementation_blockers",
+        "downstream_blockers",
+        "candidate_blockers",
+    ):
+        for blocker in _as_list(derived.get(blocker_key)):
+            if not isinstance(blocker, dict):
+                continue
+            ref = str(blocker.get("ref", "")).strip()
+            if ref:
+                collected.append(ref)
+    return _normalize_string_list(collected)
+
+
+def _next_actions_for_blockers(blocker_refs: list[str]) -> list[str]:
+    actions: list[str] = []
+    for ref in blocker_refs:
+        action = GATE_NEXT_ACTIONS.get(ref)
+        if action:
+            actions.append(action)
+    return _normalize_string_list(actions)
+
+
+def _format_candidate_summary(derived: dict[str, Any]) -> str:
+    candidate = _as_dict(derived.get("formal_window_candidate_recommendation"))
+    if not candidate:
+        return "none"
+    recommended = _format_bool(bool(candidate.get("recommended")))
+    state = str(candidate.get("state") or "none")
+    effect = str(candidate.get("tool_effect") or "state_only")
+    means_window = _format_bool(bool(candidate.get("means_formal_window_open")))
+    means_packet = _format_bool(bool(candidate.get("means_packet_ready")))
+    return (
+        f"recommended={recommended},state={state},effect={effect},"
+        f"means_formal_window_open={means_window},means_packet_ready={means_packet}"
+    )
+
+
+def _format_near_ready_summary(derived: dict[str, Any]) -> str:
+    near_ready = _as_dict(derived.get("near_ready_for_formal_window_candidate"))
+    if not near_ready:
+        return "none"
+    enabled = _format_bool(bool(near_ready.get("enabled")))
+    state = str(near_ready.get("state") or "none")
+    means_candidate = _format_bool(bool(near_ready.get("means_candidate_status_candidate")))
+    return f"enabled={enabled},state={state},means_candidate_status_candidate={means_candidate}"
+
+
+def _coerce_bool_field(value: object, *, fallback: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes"}:
+            return True
+        if lowered in {"false", "0", "no"}:
+            return False
+    return fallback
+
+
+def _format_bool(value: bool) -> str:
+    return "true" if value else "false"
+
+
 def _normalize_string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -335,6 +416,49 @@ def _render_review_section(entities: dict[str, Any], section_type: str) -> list[
             continue
         reasons = ", ".join(str(item) for item in _as_list(derived.get("review_reasons")))
         rows.append(f"- `{entity_id}`: review_required=true reason=[{reasons}]")
+    lines.extend(rows if rows else ["- 无"])
+    return lines + [""]
+
+
+def _render_subtask_gate_summary(subtasks: dict[str, Any]) -> list[str]:
+    lines = ["## 子任务 gate 摘要", ""]
+    rows: list[str] = []
+    for subtask_id in sorted(subtasks):
+        subtask = _as_dict(subtasks.get(subtask_id))
+        derived = _as_dict(subtask.get("derived"))
+        if not derived:
+            continue
+
+        blocker_refs = _collect_gate_blocker_refs(derived)
+        gate_result = str(derived.get("gate_result") or "unknown")
+        fallback_can_open = gate_result == "pass" and not blocker_refs
+        can_open = _coerce_bool_field(
+            derived.get("can_open_formal_window"),
+            fallback=fallback_can_open,
+        )
+        implementation_ready = bool(derived.get("implementation_ready"))
+        fallback_packet_ready = bool(implementation_ready and can_open)
+        can_generate_packet = _coerce_bool_field(
+            derived.get("can_generate_implementation_packet"),
+            fallback=fallback_packet_ready,
+        )
+        can_mark_ready = _coerce_bool_field(
+            derived.get("can_mark_implementation_ready"),
+            fallback=fallback_packet_ready,
+        )
+        top_blockers = blocker_refs[:5]
+        next_actions = _next_actions_for_blockers(top_blockers)
+        rows.append(
+            f"- `{subtask_id}`: gate_result={gate_result} "
+            f"can_open_formal_window={_format_bool(can_open)} "
+            f"can_generate_implementation_packet={_format_bool(can_generate_packet)} "
+            f"can_mark_implementation_ready={_format_bool(can_mark_ready)} "
+            f"candidate={_format_candidate_summary(derived)} "
+            f"near_ready={_format_near_ready_summary(derived)} "
+            f"top_blockers={_format_inline_list(top_blockers)} "
+            f"next_actions={_format_inline_list(next_actions)}"
+        )
+
     lines.extend(rows if rows else ["- 无"])
     return lines + [""]
 

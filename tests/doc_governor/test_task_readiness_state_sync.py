@@ -178,8 +178,31 @@ class TaskReadinessStateSyncTests(ManagedTempArtifactsTestCase):
 
         task = payload["tasks"][0]
         self.assertEqual(task["dependency_stage"], "ready_for_preflight_open_window")
+        self.assertEqual(task["gate_result"], "pass")
+        self.assertTrue(task["can_open_formal_window"])
+        self.assertTrue(task["can_generate_implementation_packet"])
+        self.assertTrue(task["can_mark_implementation_ready"])
         self.assertEqual(task["target_readiness"], "implementation_ready")
         self.assertEqual(task["status"], "can_advance_to_implementation_ready")
+
+    def test_preview_exposes_blocked_gate_flags_when_formal_window_closed(self) -> None:
+        state_path = self._write_state(
+            _build_state(readiness="downstream_ready", formal_window_open=False)
+        )
+        evaluate_payload = _evaluate_payload()
+        payload = build_task_readiness_state_sync_preview(
+            state_path=state_path,
+            evaluate_payload=evaluate_payload,
+            entity_ids=["ST01_01"],
+        )
+
+        task = payload["tasks"][0]
+        self.assertEqual(task["gate_result"], "blocked")
+        self.assertFalse(task["can_open_formal_window"])
+        self.assertFalse(task["can_generate_implementation_packet"])
+        self.assertFalse(task["can_mark_implementation_ready"])
+        self.assertEqual(task["status"], "blocked_before_preflight_open_window")
+        self.assertIn("policy:formal_window_closed", task["remaining_blockers_after_writeback"])
 
     def test_apply_writes_only_readiness(self) -> None:
         state_path = self._write_state(

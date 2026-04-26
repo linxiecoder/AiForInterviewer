@@ -120,6 +120,7 @@ C:\Users\Administrator\AppData\Roaming\npm\codex.cmd exec
 - near-ready 统一写入 `facts.near_ready_for_formal_window_candidate=true`、`facts.near_ready_reason`、`facts.near_ready_blockers` 与 `facts.near_ready_state=document_layer_only`；不要写成 `readiness=near_ready`。
 - `design_doc.exists=true` / `implementation_doc.exists=true` 只是 required doc slot 存在，不是 readiness；`implementation_doc` 也不是 implementation packet。
 - formal window open 只是 packet / implementation-ready 的必要条件，不是充分条件；`implementation_doc_state`、acceptance criteria、required tests、implementation scope、allowed paths、forbidden paths 与 blocker diagnostics 仍必须全部闭合。
+- `render-report` 的子任务 gate 摘要、`preview-task-state-dependency-map` 与 `preview-task-readiness-state-sync` 会展示 `gate_result`、`can_open_formal_window`、`can_generate_implementation_packet`、`can_mark_implementation_ready`；这些字段是只读判断摘要，不是正式开窗或 packet 授权。
 
 ## 4. 常用只读命令
 
@@ -135,6 +136,8 @@ python -m tools.doc_governor.cli render-report --evaluate-json tmp_eval.json
 ```powershell
 python -m tools.doc_governor.cli render-report --state docs/governance/DOC_STATE.yaml
 ```
+
+报告中的“子任务 gate 摘要”用于快速查看 top blockers 与 next actions。若摘要显示 `can_generate_implementation_packet=false` 或 `can_mark_implementation_ready=false`，不得生成 implementation packet，也不得把 facts-only candidate 当成 formal window open。
 
 ### 4.2 查询 transition history
 
@@ -424,12 +427,14 @@ python -m tools.doc_governor.cli apply-round --round-id round-batch-01 --from-pl
 1. 先保留 `preview` / `plan` 输出，再决定是否 `--apply`。
 2. 对 state writeback / state sync / formal-window sync 类命令，优先显式保留 `actor`、`reason` 和 evaluate 证据来源。
 3. 不要把这些命令生成的 patch / plan / sync 结果直接视为 confirmed state；正式真值仍回到 `DOC_STATE.yaml` 与 `confirm-transition` / round 生命周期。
+4. `preview-task-state-dependency-map` 与 `preview-task-readiness-state-sync` 的 `gate_result/can_*` 字段只用于只读对齐 preflight 语义；其他 wrapper 若暂未显示同字段，应记录为 P1 工具债，不得因此扩大写状态行为。
 
 ## 10. 关键文件
 
 - 官方状态：`docs/governance/DOC_STATE.yaml`
 - bootstrap 输出：`docs/governance/DOC_STATE.bootstrap.yaml`
 - 报告：`docs/governance/DOC_GOVERNOR_REPORT.md`
+- 工具债：`docs/governance/DOC_GOVERNOR_TOOL_DEBT.md`
 - rounds：`docs/governance/rounds/*.md`
 - packets：`docs/governance/packets/*`
 - 历史：`docs/governance/transition_history.jsonl`
