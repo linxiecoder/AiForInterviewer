@@ -511,11 +511,14 @@ W13-E6 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-task-packages.md
 
 W13-E7 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`](2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md)。该文档只为 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 形成 `double_doc_path_planned` 路径和模板准备方案，不创建正式双文档，不修改 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window，不表示 implementation-ready。
 
-新增确认卡：
+W13-E8 已吸收确认结果并创建第一批正式双文档：
 
-- `OQ-111`：ST13 双文档路径方案，推荐方案 C，状态 `proposed-default`。
-- `OQ-112`：是否允许 W13-E8 创建第一批正式双文档，推荐方案 A，状态 `proposed-default`。
-- `OQ-113`：是否允许后续更新 `DOC_STATE.yaml` required doc slot，推荐方案 B，状态 `proposed-default`。
+- `OQ-111=A`：采用集中任务包目录。
+- `OQ-112=A`：允许创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 正式双文档。
+- `OQ-113=B`：required doc slot 后续单独 State Update。
+- 正式双文档路径位于 `docs/superpowers/plans/st13-task-packages/ST13_XX/ST13_XX_DESIGN.md` 与 `ST13_XX_IMPLEMENTATION.md`。
+
+该结果只表示 `double_doc_created`，不修改 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window，不表示 implementation-ready。
 
 ## 12. 当前不进入实现说明
 
@@ -524,6 +527,7 @@ W13-E7 已新增 [`2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.
 - `WT13-xx` 任务域命名虽已 confirmed，但当前 `doc_governor` 状态层不直接接受 `WT13-xx` 作为 `subtasks` key。
 - 旧 `STxx_*` 后续映射为 `superseded` 已在阶段 2 通过 facts 写入；阶段 3 已由 `W13-E4-F` 正式执行，旧任务不再留在 formal current `subtasks` 容器中。
 - `DOC_STATE.yaml` 已登记 `ST13_01~ST13_25`，但这些入口仍为 blocked / review-required 状态。
+- `ST13_21 / ST13_20 / ST13_24 / ST13_25` 已创建正式双文档，但 required doc slot 尚未写入 `DOC_STATE.yaml`，仍不能进入实现。
 - `formal_window_open=false`。
 - 30 个旧 `STxx_*` 已从 formal current `subtasks` 容器移出，且不应被误认为 W13 新任务或 current implementation entry。
 - 未来实现窗口还需要明确允许修改范围、禁止修改范围、验证命令和 DoD。

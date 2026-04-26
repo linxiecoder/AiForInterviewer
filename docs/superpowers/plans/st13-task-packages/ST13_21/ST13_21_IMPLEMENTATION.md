@@ -1,0 +1,131 @@
+# ST13_21 IMPLEMENTATION：API / 后端服务边界
+
+## 1. 文档状态
+
+- 状态：`draft`
+- 文档性质：`implementation plan only`
+- 实施状态：`not implementation-ready`
+- formal window：`formal window closed`
+- implementation packet：`implementation packet forbidden`
+- 本文件只描述未来实现窗口如何执行；当前不放行代码。
+
+## 2. 关联 ST13 / WT13
+
+- ST13：`ST13_21`
+- WT13 alias：`WT13-21`
+- 设计文档：`docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+
+## 3. 进入实现前置条件
+
+- `ST13_21_DESIGN.md` 完成评审并形成稳定 API contract。
+- Auth、Account / Role / Permission、Job、Resume、Knowledge、Interview、Score、Review、Export、Ops domain 已有非空验收标准。
+- `ST13_20` 至少提供数据 contract 输入，避免 API 与 schema 互相漂移。
+- required tests 已由 `ST13_24` 或后续测试窗口明确。
+
+## 4. formal window 前置条件
+
+- 用户另窗确认可以打开 `ST13_21` formal window。
+- `DOC_STATE.yaml` required doc slot 已由 State Update 窗口写入并通过 validate/evaluate。
+- `formal_window_open` 相关状态不得由本文档自行声明。
+- M02 权限 blocker 已被评估为可接受或已另窗消除。
+
+## 5. implementation packet 前置条件
+
+- formal window 已打开。
+- implementation doc 不再只是计划文档，且允许修改范围、禁止范围、required tests、acceptance criteria 均非空。
+- `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml` 对该任务不再给出 implementation-ready blocker。
+- 当前窗口不生成 implementation packet。
+
+## 6. 允许修改范围
+
+未来实现窗口才可能允许：
+
+- `apps/api/**`，但必须由 formal window 明确授权。
+- 共享 contract 或类型目录，若后续仓库结构确认存在。
+- 与 API contract 直接相关的文档和测试。
+
+当前 W13-E8 禁止创建上述目录。
+
+## 7. 禁止修改范围
+
+- 未经 formal window 授权不得创建 `apps/api/**`。
+- 不得顺手实现 `ST13_20` 数据库、`ST13_23` 前端、`ST13_24` 测试代码。
+- 不得修改 `docs/governance/DOC_STATE.yaml`。
+- 不得生成 implementation packet。
+- 不得写 provider key、真实用户简历、私有知识库内容到代码、日志或测试 fixture。
+
+## 8. 预期实现步骤
+
+1. 复核 `ST13_21_DESIGN.md` 与 `ST13_20` 数据 contract。
+2. 固定 API domain、DTO、错误码、权限上下文、异步任务状态。
+3. 生成或维护后端服务边界，优先 contract-first。
+4. 补齐 API contract tests、权限 tests、错误态 tests。
+5. 与 `ST13_24` 对齐验收矩阵。
+
+以上步骤当前均不执行。
+
+## 9. 验证命令
+
+未来实现窗口至少需要：
+
+```bash
+python -m tools.test_runner.run_tests
+python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml
+python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml
+```
+
+若后续新增 API 测试，必须补充对应窄范围命令。
+
+## 10. 测试要求
+
+- contract schema validation。
+- 权限矩阵测试。
+- API error taxonomy 测试。
+- 幂等和状态流转测试。
+- LLM / RAG / scoring / export 异步任务状态测试。
+- 失败时停止，不得继续扩展实现。
+
+## 11. 回退策略
+
+- 文档回退：回退本双文档和父索引引用。
+- 代码回退：仅限未来实现窗口中被授权的 `apps/api/**` 变更。
+- 状态回退：必须另开 State Update 或治理窗口；本文档不得直接修改 `DOC_STATE.yaml`。
+
+## 12. 日志 / 观测要求
+
+未来实现应保留：
+
+- `request_id`
+- `task_id`
+- `user_id` 或脱敏用户引用
+- `provider`
+- `latency_ms`
+- `error_code`
+- token / cost 候选字段
+
+## 13. 安全 / 隐私检查
+
+- session cookie 与权限过滤必须覆盖全部业务 API。
+- LLM prompt / response 日志必须脱敏。
+- RAG evidence 必须按用户可见范围过滤。
+- Markdown export 不得导出无权限原文。
+
+## 14. 交接输出格式
+
+未来实现窗口收口时必须输出：
+
+- 修改文件清单。
+- API domain / endpoint 变更摘要。
+- 验证命令和结果。
+- 未完成项和 blocker。
+- 是否仍可进入下一个 ST13。
+
+## 15. Basic Memory / Superpowers 写回要求
+
+未来收口窗口如获授权，必须先检索、后写入、再回读验证。写回内容至少包含 confirmed 结论、风险、下一步和验证结果。
+
+当前 W13-E8 不写 Basic Memory。
+
+## 16. 当前未放行实现说明
+
+`ST13_21_IMPLEMENTATION.md` 的存在不等于 implementation-ready。当前不创建 `apps/api/**`，不生成 implementation packet，不打开 formal window，不实现 API。

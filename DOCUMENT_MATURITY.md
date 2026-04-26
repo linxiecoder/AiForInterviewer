@@ -47,6 +47,14 @@
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` | L4 | W13-E5 ST13 任务包准备前置审计，记录 `ST13_01~ST13_25` 缺口、依赖、formal window 条件、实现前置依赖、模块映射和用户确认卡 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` | L4 | W13-E6 第一批 contract 任务包草案，记录 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的任务目标、输入输出、边界、依赖、验收和测试要求 | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` | L4 | W13-E7 第一批 contract 双文档准备方案，记录四个 ST13 的草案审计、双文档模板、路径方案、前置清单、contract 摘要、父索引同步方案和确认卡 | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | L3 | W13-E8 `ST13_21 / WT13-21` API / 后端服务边界正式设计文档；已创建但未写 required doc slot | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | L3 | W13-E8 `ST13_21 / WT13-21` API / 后端服务边界实施说明；implementation plan only | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | L3 | W13-E8 `ST13_20 / WT13-20` 服务端保存 / 数据库正式设计文档；已创建但未写 required doc slot | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` | L3 | W13-E8 `ST13_20 / WT13-20` 服务端保存 / 数据库实施说明；implementation plan only | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | L3 | W13-E8 `ST13_24 / WT13-24` 测试 / 验收 / DoD 正式设计文档；已创建但不创建测试代码 | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` | L3 | W13-E8 `ST13_24 / WT13-24` 测试 / 验收 / DoD 实施说明；implementation plan only | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | L3 | W13-E8 `ST13_25 / WT13-25` 文档治理 / 收口 / Basic Memory 正式设计文档；本轮禁止 Basic Memory 写回 | 部分 | 否 |
+| `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` | L3 | W13-E8 `ST13_25 / WT13-25` 文档治理 / 收口 / Basic Memory 实施说明；implementation plan only | 部分 | 否 |
 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` | L4 | 项目待办、状态层后续、二期 / 三期和历史归档后续事项追踪清单 | 部分 | 否 |
 | `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` | L4 | 历史设计稿归档快照 | 部分 | 否 |
 
@@ -98,7 +106,7 @@
 - 上述“可作为下游输入”仅表示可用于继续做文档设计、任务重映射和模块同步。
 - 这不等于可以直接进入代码实施。
 - 当前没有任何模块或子任务被登记为可直接实施。
-- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit、W13-E6 第一批 contract 任务包草案和 W13-E7 第一批 contract 双文档准备方案可作为后续 archive 迁移评估、任务包准备、正式双文档创建和模块同步输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
+- `W13-E` 任务重映射草案、W13-E2 backlog-roadmap、W13-E3 Preview YAML、W13-E4-A State Write 计划、W13-E4-B 阶段 1说明、W13-E4-C 阶段 2说明、W13-E4-D 阶段 3 dry-run、W13-E4-E Stage3 Preview、W13-E4-F 阶段 3正式写入说明、W13-E5 readiness audit、W13-E6 第一批 contract 任务包草案、W13-E7 第一批 contract 双文档准备方案和 W13-E8 第一批正式双文档可作为后续 contract 细化、State Update 和模块同步输入；正式状态层入口仍以 `DOC_STATE.yaml` 中的 `ST13_01~ST13_25` 为准。
 
 ## 7. 当前可直接用于实施的子任务
 
@@ -115,7 +123,7 @@
 
 ## 9. 下一等级所需动作
 
-1. `TASK_INDEX.md` 后续仍需把 W13-E7 第一批双文档准备方案转化为正式双文档创建窗口；不得标记 implementation-ready。
+1. `TASK_INDEX.md` 已把 W13-E7 第一批双文档准备方案转化为 W13-E8 正式双文档创建记录；后续仍需单独 State Update 写入 required doc slot，不得标记 implementation-ready。
 2. `MODULE_INDEX.md` 需要在模块同步窗口后回写 W13 模块优先级，而不是继续沿用 W10 首切片顺序。
 3. `M02` 需要优先修正 API / open_questions 模块 blocker；`M05 / M06 / M08 / M09 / M10` 需要按 confirmed 范围补齐模块级设计，尤其是 RAG、多轮、复盘、训练、资产归档和管理台入口。
 4. 旧 `STxx_*` 骨架如需归档，必须另行执行 archive 迁移评估与确认；确认前不直接移动这些文档。

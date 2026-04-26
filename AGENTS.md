@@ -206,6 +206,10 @@
 - [AI 模拟面试一期工作台 MVP ST13 readiness audit](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md)
 - [AI 模拟面试一期工作台 MVP ST13 第一批 contract 任务包草案](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md)
 - [AI 模拟面试一期工作台 MVP ST13 第一批 contract 双文档准备方案](docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md)
+- [AI 模拟面试一期工作台 MVP ST13_21 API / 后端服务边界双文档](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP ST13_20 服务端保存 / 数据库双文档](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP ST13_24 测试 / 验收 / DoD 双文档](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP ST13_25 文档治理 / 收口 / Basic Memory 双文档](docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md)
 - [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md)
 - [AI 模拟面试 P1 MVP 实现计划历史归档快照](archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md)
 

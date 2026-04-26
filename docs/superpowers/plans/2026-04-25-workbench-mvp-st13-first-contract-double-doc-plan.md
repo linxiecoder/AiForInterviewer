@@ -8,6 +8,8 @@
 
 本窗口不写代码，不进入实现，不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不修改 `docs/governance/DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window，不标记 implementation-ready。
 
+W13-E8 更新：用户已确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B`。第一批正式双文档已按集中任务包目录创建；`DOC_STATE.yaml` required doc slot 仍留给后续单独 State Update。
+
 ## 2. 第一批 ST13 范围
 
 本窗口只处理以下四个 ST13，顺序固定为：
@@ -24,9 +26,9 @@
 - W13 confirmed 边界不回退：一期 MVP 是工作台级，包含真实 LLM、登录 / 权限、服务端保存、历史 / 复盘、`0-100` 多维评分、RAG / 知识库、多轮高阶面试和 Markdown 下载 / 复制。
 - `apps/web/**` 仅作为 W10 原型探索参考证据，不作为正式一期 MVP 代码起点。
 - `DOC_STATE.yaml` 当前正式状态层入口为 `ST13_01~ST13_25`，但 25 个 ST13 仍 blocked。
-- 第一批四个任务当前只达到 `task_packet_draft_created`，本窗口推进到 `double_doc_path_planned`，仍为 `not_ready_for_implementation`。
+- 第一批四个任务在 W13-E7 达到 `double_doc_path_planned`；W13-E8 已推进到 `double_doc_created`，仍为 `not_ready_for_implementation`。
 - 四个目标任务仍缺正式 `SUBTASK_DESIGN.md`、正式 `SUBTASK_IMPLEMENTATION.md`、required doc slot 写回、验收标准、required tests、允许修改范围、formal window 用户确认和 implementation packet 前置。
-- 当前推荐路径方案为方案 C：先只在本文档冻结路径和模板，不创建具体双文档。
+- W13-E7 当时推荐路径方案为方案 C；W13-E8 用户已确认方案 A：集中任务包目录，并已创建具体双文档。
 
 ## 4. 第一批四个 ST13 当前草案审计
 
@@ -154,9 +156,9 @@
 
 后续影响：适合本窗口。
 
-推荐方案：C。
+W13-E7 推荐方案：C。
 
-推荐理由：本窗口是准备窗口，不应直接批量创建双文档。先冻结路径和模板，下一窗口再根据用户确认创建第一批正式双文档，风险最低。
+W13-E8 确认结果：`OQ-111=A`，采用集中任务包目录。正式路径为 `docs/superpowers/plans/st13-task-packages/ST13_XX/ST13_XX_DESIGN.md` 与 `ST13_XX_IMPLEMENTATION.md`。
 
 ### 6.4 方案 D：自定义方案
 
@@ -171,7 +173,7 @@
 - 输出物：API domain list、endpoint / command / query 边界、DTO 草案、权限上下文、错误码、幂等、异步任务状态、版本策略。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 与 `ST13_21_IMPLEMENTATION.md`。
 - 关联 contract：API / domain / state / validation / documentation / testing contract。
-- 允许修改范围：W13-E8 前仅限本文档和父索引；后续 contract 细化可修改 plans 下正式双文档。
+- 允许修改范围：W13-E7 准备阶段仅限本文档和父索引；W13-E8 已创建 plans 下正式双文档，后续 contract 细化仍不得进入实现。
 - 禁止修改范围：`apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`、`docs/modules/**` 实现目录。
 - 验收标准：API domain 覆盖完整，权限、错误、分页、幂等、异步状态和下游依赖清晰。
 - 测试要求：未来 required tests 至少包含 contract schema validation、权限矩阵、API error taxonomy、幂等与状态流转、LLM / RAG / scoring 异步状态。
@@ -192,7 +194,7 @@
 - 输出物：数据域清单、核心实体关系、关键字段、索引、唯一约束、审计字段、migration 策略和回退策略草案。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` 与 `ST13_20_IMPLEMENTATION.md`。
 - 关联 contract：domain / schema / migration / repository / privacy / testing contract。
-- 允许修改范围：W13-E8 前仅限本文档和父索引；后续双文档窗口仍不建库、不写 migration。
+- 允许修改范围：W13-E7 准备阶段仅限本文档和父索引；W13-E8 已创建 plans 下正式双文档，后续 contract 细化仍不建库、不写 migration。
 - 禁止修改范围：数据库配置、migration 文件、ORM 模型、repository 代码、`apps/**`、`infra/**`、`tools/**`、`tests/**`、`docs/governance/**`。
 - 验收标准：核心实体、关系、可见范围、软删除、审计字段、导出和删除策略清晰。
 - 测试要求：未来 required tests 至少包含 schema relation validation、migration up/down dry-run、权限过滤数据可见性、模拟记录 / 评分 / 复盘 / 导出数据一致性、RAG evidence 引用完整性。
@@ -213,7 +215,7 @@
 - 输出物：ST13 required tests matrix、文档 / contract / 功能 / 体验 / 安全运维五层 DoD、P0/P1/P2/P3 验收分级、formal window 前检查清单。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` 与 `ST13_24_IMPLEMENTATION.md`。
 - 关联 contract：testing / acceptance / DoD / validation / temporary artifact governance contract。
-- 允许修改范围：W13-E8 前仅限本文档和父索引；后续双文档窗口只写测试策略文档。
+- 允许修改范围：W13-E7 准备阶段仅限本文档和父索引；W13-E8 已创建 plans 下正式双文档，后续 contract 细化只写测试策略文档。
 - 禁止修改范围：`tests/**`、`tools/**`、test runner、pytest fixture、CI 配置、`apps/**`、`infra/**`、`docs/governance/DOC_STATE.yaml`。
 - 验收标准：每个 ST13 至少有验收目标、required tests 类别、最低验证命令和失败停止条件。
 - 测试要求：本任务未来 required tests 包括 doc-governor validate/evaluate 不退化、required tests 字段非空、acceptance criteria 可追溯、临时产物治理符合 `TEST_POLICY.md`。
@@ -234,7 +236,7 @@
 - 输出物：formal window 前置条件清单、implementation packet 禁止与放行条件清单、任务包草案到双文档的迁移策略、父索引同步方案、后续窗口计划。
 - 双文档路径候选：优先方案 C；后续若采用方案 A，则为 `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` 与 `ST13_25_IMPLEMENTATION.md`。
 - 关联 contract：governance / writeback / formal-window / packet / memory / index synchronization contract。
-- 允许修改范围：W13-E8 前仅限本文档和父索引；后续治理双文档仍不写 state。
+- 允许修改范围：W13-E7 准备阶段仅限本文档和父索引；W13-E8 已创建 plans 下正式双文档，后续治理细化仍不写 state。
 - 禁止修改范围：`docs/governance/DOC_STATE.yaml`、`docs/governance/**` 自动化状态文件、`tools/**`、`tests/**`、`apps/**`、`infra/**`、Git 写操作、Basic Memory 写入。
 - 验收标准：明确任务包草案、正式双文档、formal window、implementation packet、实现窗口之间的先后关系。
 - 测试要求：validate-state、evaluate-state、关键词扫描、Markdown UTF-8 / mojibake 扫描；后续不执行 open-window 或 packet dry-run，除非另窗授权。
@@ -346,9 +348,9 @@
 | C | 先只在本文档中设计路径和模板，不创建具体双文档 | 风险最低，先冻结路径方案 | 还不能满足 required doc slot | 后续还需 W13-E8 创建正式双文档 | 适合本窗口 |
 | D | 自定义方案 / 其他 | 由用户补充 | 由用户补充 | 由用户补充 | 由用户补充 |
 
-推荐方案：C。
+W13-E7 推荐方案：C。
 
-等待用户确认。
+W13-E8 确认结果：用户已确认 `OQ-111=A`，实际采用方案 A 集中任务包目录。
 
 ### 11.2 确认卡 2：是否允许下一窗口创建第一批正式双文档
 
@@ -359,9 +361,9 @@
 | C | 只创建一个 ST13 的双文档试点 | 降低批量风险 | 进度较慢 | 后续仍需批量复制 | 适合对模板不放心时 |
 | D | 自定义方案 / 其他 | 由用户补充 | 由用户补充 | 由用户补充 | 由用户补充 |
 
-推荐方案：A，前提是确认卡 1 选 C 或用户指定路径后执行。
+W13-E7 推荐方案：A，前提是确认卡 1 路径确认后执行。
 
-等待用户确认。
+W13-E8 确认结果：用户已确认 `OQ-112=A`，已创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 正式双文档。
 
 ### 11.3 确认卡 3：是否允许下一窗口更新 `DOC_STATE.yaml` 的 required doc slot
 
@@ -372,27 +374,30 @@
 | C | 创建双文档同窗更新 `DOC_STATE.yaml` required doc slot | 最快减少 blocker | 风险较高 | 路径或字段错误可能导致 blocker | 不推荐当前执行 |
 | D | 自定义方案 / 其他 | 由用户补充 | 由用户补充 | 由用户补充 | 由用户补充 |
 
-推荐方案：B。
+W13-E7 推荐方案：B。
 
-等待用户确认。
+W13-E8 确认结果：用户已确认 `OQ-113=B`，required doc slot 留给后续单独 State Update，本窗口不修改 `DOC_STATE.yaml`。
 
 ## 12. 当前不进入实现说明
 
-截至 W13-E7：
+截至 W13-E8：
 
 - 已审计 `ST13_21 / ST13_20 / ST13_24 / ST13_25`。
 - 已定义正式双文档结构。
-- 已提出双文档路径方案，推荐方案 C。
+- 已确认双文档路径方案 A：集中任务包目录。
 - 已定义四个 ST13 的任务包前置清单。
 - 已形成四个 ST13 的 contract 草案摘要。
 - 已形成父索引和状态同步方案。
 - 已输出后续窗口计划和用户确认卡。
+- 已创建 `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 与 `ST13_21_IMPLEMENTATION.md`。
+- 已创建 `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` 与 `ST13_20_IMPLEMENTATION.md`。
+- 已创建 `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` 与 `ST13_24_IMPLEMENTATION.md`。
+- 已创建 `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` 与 `ST13_25_IMPLEMENTATION.md`。
 - 未创建 `apps/**`、`infra/**`。
 - 未修改 `tools/**`、`tests/**`。
 - 未修改 `docs/governance/DOC_STATE.yaml`。
-- 未创建正式双文档。
 - 未生成 implementation packet。
 - 未打开 formal window。
 - 未标记 implementation-ready。
 
-当前状态建议写法为：`double_doc_path_planned` / `not_ready_for_implementation`。
+当前状态建议写法为：`double_doc_created` / `not_ready_for_implementation`。

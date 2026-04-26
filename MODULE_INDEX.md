@@ -161,7 +161,7 @@
 | M09 | 支撑 WeaknessItem、训练抽屉、消减和停练规则；需区分薄弱项中心与待打磨执行层。 | 是。 |
 | M10 | 支撑 provider、日志、模型 catalog、审计、配置、测试和治理收口；完整管理台后置。 | 是。 |
 
-当前没有任何模块因 W13-E5 审计而升级为可进入实现；`ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` 只是下一窗口任务包草案候选。
+当前没有任何模块因 W13-E5 / W13-E8 而升级为可进入实现；`ST13_20`、`ST13_21`、`ST13_24`、`ST13_25` 已创建集中任务包双文档，但仍不是 implementation-ready。
 
 ### 6.4 W13-E6 第一批 contract 任务包草案模块影响
 
@@ -186,6 +186,19 @@
 | `ST13_25` | `WT13-25` | global、M01、M10 | `double_doc_path_planned` | 可作为治理双文档创建候选；不能写 `DOC_STATE.yaml` 或 Basic Memory |
 
 当前推荐路径方案为方案 C：先只在 W13-E7 plan 中冻结路径和模板。若后续 W13-E8 采用方案 A 或用户自定义路径，应回写本节与 `TASK_INDEX.md`；若采用方案 B 创建模块子任务目录，必须额外防止被误读为 formal window open。
+
+### 6.6 W13-E8 第一批 contract 双文档创建模块影响
+
+> W13-E8 已采用 `OQ-111=A` 的集中任务包目录方案创建双文档。本节只做模块映射，不创建 `docs/modules/**` 子任务目录，不改变模块成熟度，不放行实现。
+
+| ST13 | WT13 alias | 模块映射 | DESIGN 文档 | IMPLEMENTATION 文档 | 模块层结论 |
+| --- | --- | --- | --- | --- | --- |
+| `ST13_21` | `WT13-21` | M01-M10；M02 权限边界仍是重点 blocker | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` | 已创建双文档；不能实现 |
+| `ST13_20` | `WT13-20` | M01-M10；权限、RAG、资产、导出和复盘均会消费数据 contract | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` | 已创建双文档；不能实现 |
+| `ST13_24` | `WT13-24` | M01、M10、全模块 | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` | 已创建双文档；不能创建测试代码 |
+| `ST13_25` | `WT13-25` | global、M01、M10 | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` | 已创建双文档；不能写 `DOC_STATE.yaml` 或 Basic Memory |
+
+后续 required doc slot 更新必须由单独 State Update 窗口执行；本轮不修改 `docs/governance/DOC_STATE.yaml`。
 
 ## 7. 使用说明
 

@@ -25,6 +25,29 @@
 
 ## 3. 当前记录
 
+### 2026-04-26 / W13-E8 / 第一批 ST13 正式双文档创建
+
+- 执行类型：正式双文档创建、父索引同步、OQ/DD 写回；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不修改 `DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作。
+- 用户确认：
+  - `OQ-111=A`：ST13 双文档路径采用集中任务包目录。
+  - `OQ-112=A`：允许 W13-E8 创建 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的正式双文档。
+  - `OQ-113=B`：required doc slot 后续单独 State Update，本窗口不修改 `DOC_STATE.yaml`。
+- 基线验证：
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`，`modules_blocked_count=1`，`subtasks_blocked_count=25`。
+- 本轮改动：
+  - 新增 `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 与 `ST13_21_IMPLEMENTATION.md`。
+  - 新增 `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` 与 `ST13_20_IMPLEMENTATION.md`。
+  - 新增 `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` 与 `ST13_24_IMPLEMENTATION.md`。
+  - 新增 `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` 与 `ST13_25_IMPLEMENTATION.md`。
+  - 同步 `AGENTS.md`、`PLAN_LATEST.md`、`DOCUMENT_PROGRESS.md`、`DOCUMENT_MATURITY.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md`、W13-E6 / W13-E7 文档和 backlog-roadmap。
+- 当前结论：
+  - 第一批四个 ST13 达到 `double_doc_created`，仍为 `not implementation-ready`。
+  - `DOC_STATE.yaml` required doc slot 未在本窗口更新，formal window 仍关闭，implementation packet 仍禁止。
+- 后续建议：
+  - 可进入 W13-E9 contract 细化窗口；仍不实现。
+  - 需要单独 State Update 窗口写入 required doc slot。
+
 ### 2026-04-26 / W13-E7 / 第一批 contract 正式子任务双文档准备
 
 - 执行类型：文档准备、路径方案、模板设计、任务包准备审计；不写代码，不创建 `apps/**` 或 `infra/**`，不修改 `tools/**`、`tests/**`、`docs/governance/**`，不修改 `DOC_STATE.yaml`，不生成 implementation packet，不打开 formal window，不执行 Git 写操作。

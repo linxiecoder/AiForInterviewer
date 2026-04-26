@@ -442,11 +442,26 @@
 
 仍未完成：
 
-1. 未创建正式 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 或 `ST13_XX_DESIGN.md` / `ST13_XX_IMPLEMENTATION.md`。
-2. 未修改 `DOC_STATE.yaml` required doc slot。
+1. W13-E8 已创建正式 `ST13_XX_DESIGN.md` / `ST13_XX_IMPLEMENTATION.md`；本 W13-E6 草案本身仍只作为任务包草案来源。
+2. 未修改 `DOC_STATE.yaml` required doc slot，后续单独 State Update。
 3. 未打开 formal window，未生成 implementation packet，未进入实现。
 
-### 9.2 W13-E8：ST13_23 前端页面规格并行准备
+### 9.2 W13-E8：第一批 ST13 正式双文档创建
+
+当前状态：已完成。
+
+正式双文档路径：
+
+| ST13 | DESIGN | IMPLEMENTATION |
+| --- | --- | --- |
+| `ST13_21` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md` |
+| `ST13_20` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md` |
+| `ST13_24` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md` |
+| `ST13_25` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md` | `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md` |
+
+限制：W13-E8 不修改 `DOC_STATE.yaml` required doc slot，不生成 implementation packet，不打开 formal window，不进入实现。
+
+### 9.3 ST13_23 前端页面规格并行准备
 
 在 `OQ-110=C` 下，后续可并行准备 `ST13_23` 前端工作台页面集合规格，但必须等待 `ST13_21` API contract 合并后再进入实现。
 
