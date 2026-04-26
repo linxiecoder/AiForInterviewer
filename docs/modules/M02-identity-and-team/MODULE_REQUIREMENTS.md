@@ -22,11 +22,11 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
 
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`
+- `历史 P1 设计材料`
   - `3.1 用户与团队模型`
   - `7.1 团队与用户`
   - `12 权限与治理`
@@ -34,7 +34,7 @@
 
 ### 2.2 原始实施计划引用
 
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`
+- `历史 P1 实现计划材料`
   - `数据对象总表 -> 身份与团队域`
   - `API 总表 -> 鉴权与成员`
   - `里程碑 3：鉴权、团队与成员目录`

@@ -22,23 +22,23 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：3.3 简历处理边界
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：7.2 岗位与简历
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：9.1 简历导入与编辑
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：9.2 岗位创建与简历绑定
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：15.2 岗位模块
-- `docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`：15.3 简历模块
+- `历史 P1 设计材料`：3.3 简历处理边界
+- `历史 P1 设计材料`：7.2 岗位与简历
+- `历史 P1 设计材料`：9.1 简历导入与编辑
+- `历史 P1 设计材料`：9.2 岗位创建与简历绑定
+- `历史 P1 设计材料`：15.2 岗位模块
+- `历史 P1 设计材料`：15.3 简历模块
 
 ### 2.2 原始实施计划引用
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`：326-334 岗位与简历域
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`：389-411 岗位与简历 API
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`：479-505 页面与路由总表
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`：506-576 通用模型字段与核心表字段设计
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`：722-778 对象存储、Markdown 预览与导出约束
-- `docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`：1937-2334 任务 4
+- `历史 P1 实现计划材料`：326-334 岗位与简历域
+- `历史 P1 实现计划材料`：389-411 岗位与简历 API
+- `历史 P1 实现计划材料`：479-505 页面与路由总表
+- `历史 P1 实现计划材料`：506-576 通用模型字段与核心表字段设计
+- `历史 P1 实现计划材料`：722-778 对象存储、Markdown 预览与导出约束
+- `历史 P1 实现计划材料`：1937-2334 任务 4
 
 ### 2.3 全局与上游约束引用
 - `PLAN_LATEST.md`：M03 在 `M01 -> M02 -> M03` 顺序中承接岗位、简历与文档链路。

@@ -16,22 +16,22 @@
 
 ## 2. 上游输入
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求与计划引用
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：4 推荐技术方案
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：5.1 前端 Web 层
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：5.2 前端 UI 组件层
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：14 页面信息架构
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：16 全局交互规范
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：19 视觉风格规范
+- 历史 P1 设计材料：4 推荐技术方案
+- 历史 P1 设计材料：5.1 前端 Web 层
+- 历史 P1 设计材料：5.2 前端 UI 组件层
+- 历史 P1 设计材料：14 页面信息架构
+- 历史 P1 设计材料：16 全局交互规范
+- 历史 P1 设计材料：19 视觉风格规范
 
 ### 2.2 原始实施计划引用
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：22-282 目标仓库结构与完整仓库目录规划
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：282-303 环境基线
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：303-310 跨任务约束
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：1003-1391 任务 1
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：1392-1644 任务 2
+- 历史 P1 实现计划材料：22-282 目标仓库结构与完整仓库目录规划
+- 历史 P1 实现计划材料：282-303 环境基线
+- 历史 P1 实现计划材料：303-310 跨任务约束
+- 历史 P1 实现计划材料：1003-1391 任务 1
+- 历史 P1 实现计划材料：1392-1644 任务 2
 
 ### 2.3 全局治理与冻结口径
 

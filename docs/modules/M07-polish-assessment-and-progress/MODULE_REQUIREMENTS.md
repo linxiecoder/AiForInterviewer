@@ -16,20 +16,20 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.6 评估与进展
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.8 薄弱项与打磨主题
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：8 评分与评估体系
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：9.4 打磨模式
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：15.4 打磨模式面试页/启动页
+- 历史 P1 设计材料：7.6 评估与进展
+- 历史 P1 设计材料：7.8 薄弱项与打磨主题
+- 历史 P1 设计材料：8 评分与评估体系
+- 历史 P1 设计材料：9.4 打磨模式
+- 历史 P1 设计材料：15.4 打磨模式面试页/启动页
 
 ### 2.2 原始实施计划引用
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：346-358 模拟面试与打磨域
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：397-433 评分与评估体系
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：923-944 里程碑 8
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：3246-3543 任务 8
+- 历史 P1 实现计划材料：346-358 模拟面试与打磨域
+- 历史 P1 实现计划材料：397-433 评分与评估体系
+- 历史 P1 实现计划材料：923-944 里程碑 8
+- 历史 P1 实现计划材料：3246-3543 任务 8
 
 ## 3. 模块目标
 

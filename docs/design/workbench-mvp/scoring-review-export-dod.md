@@ -67,10 +67,10 @@
 | 工程 | 后续实现必须通过对应测试、状态验证、错误态验证和禁止范围检查。 |
 | 治理 | `validate-state` / `evaluate-state` 继续保持通过；formal window 和 implementation packet 仍需单独授权。 |
 
-## 8. 验收标准
+## 8. 与需求验收的关系
 
-- current design fact 只引用 `docs/design/workbench-mvp/`。
-- 旧 W13 plans 只作为桥接或历史来源。
-- 模块文档只承接摘要，不复制本目录正文。
-- 评分、复盘、导出和训练闭环有可解释对象和状态。
+- 需求层验收口径以 `docs/requirements/workbench-mvp/scope-and-acceptance.md` 为准。
+- 本文档只定义评分、复盘、导出和质量门禁的设计结构。
+- 后续模块与 ST13 任务引用本目录作为设计输入，引用需求目录作为验收输入。
+- 评分、复盘、导出和训练闭环必须有可解释对象和状态。
 - 本文不放行实现，不替代 `DOC_STATE.yaml`、formal window 或 packet。

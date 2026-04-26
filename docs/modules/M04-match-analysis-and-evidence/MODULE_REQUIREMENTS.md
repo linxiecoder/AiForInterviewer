@@ -16,18 +16,18 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.3 岗位-简历分析
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：8 评分与评估体系
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：10.2 来源
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：15.2 岗位详情页
+- 历史 P1 设计材料：7.3 岗位-简历分析
+- 历史 P1 设计材料：8 评分与评估体系
+- 历史 P1 设计材料：10.2 来源
+- 历史 P1 设计材料：15.2 岗位详情页
 
 ### 2.2 原始实施计划引用
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：335-339 匹配分析与训练证据域
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：669-681 岗位-简历匹配分析技术路线
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：2335-2581 任务 5
+- 历史 P1 实现计划材料：335-339 匹配分析与训练证据域
+- 历史 P1 实现计划材料：669-681 岗位-简历匹配分析技术路线
+- 历史 P1 实现计划材料：2335-2581 任务 5
 
 ## 3. 模块目标
 

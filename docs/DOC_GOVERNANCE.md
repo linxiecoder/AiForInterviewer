@@ -43,8 +43,6 @@
 - `OPEN_QUESTIONS.md`
 - `DOCUMENT_MATURITY.md`
 - `DOCUMENT_PROGRESS.md`
-- `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`（历史归档）
-- `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`（历史归档）
 
 说明：
 - 历史上曾出现过 `ORIGINAL_REQUIREMENTS.md`、`ORIGINAL_PLAN.md` 这类命名；当前仓库已不再使用这些入口，不应继续把它们当作现行全局真值文档。

@@ -3,7 +3,7 @@
 ## 1. 文档定位
 
 - 本文档沉淀当前项目的全局技术标准与默认工程口径。
-- 本文档不承载一期 MVP 范围、IA、对象模型、评分、复盘、导出或 DoD 的完整事实正文；这些内容以 `PLAN_LATEST.md` 和四份 W13 唯一事实源为准。
+- 本文档不承载一期 MVP 范围、IA、对象模型、评分、复盘、导出或 DoD 的完整事实正文；需求事实以 `docs/requirements/workbench-mvp/**` 为准，设计事实以 `docs/design/workbench-mvp/**` 为准。
 - `FC-01~FC-19` 已完成用户确认；历史 OQ / MQ 不再在本文档中作为 active `open` 或 `proposed-default` 技术阻塞出现。
 - 仍需复核的技术细节必须写成 `needs-review` 或 implementation packet 输入，不得写成 confirmed。
 

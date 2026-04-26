@@ -16,21 +16,21 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：6 问题生成与参考材料原则
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.4 资产库
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.9 搜索快照
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：9.7 归档到资产库
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：15.6 资产库模块
+- 历史 P1 设计材料：6 问题生成与参考材料原则
+- 历史 P1 设计材料：7.4 资产库
+- 历史 P1 设计材料：7.9 搜索快照
+- 历史 P1 设计材料：9.7 归档到资产库
+- 历史 P1 设计材料：15.6 资产库模块
 
 ### 2.2 原始实施计划引用
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：340-345 资产库域
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：412-424 资产库 API
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：682-692 资产库与向量数据库
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：887-902 里程碑 6
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：2582-2884 任务 6
+- 历史 P1 实现计划材料：340-345 资产库域
+- 历史 P1 实现计划材料：412-424 资产库 API
+- 历史 P1 实现计划材料：682-692 资产库与向量数据库
+- 历史 P1 实现计划材料：887-902 里程碑 6
+- 历史 P1 实现计划材料：2582-2884 任务 6
 
 ## 3. 模块目标
 

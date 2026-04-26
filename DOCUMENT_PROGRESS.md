@@ -1,140 +1,33 @@
-# AI 模拟面试 P1 文档进展
+# AI 模拟面试项目文档进展
 
 ## 1. 文档定位
 
-- 本文档用于记录当前文档治理进展摘要和历史归档入口。
-- 本文档不再承载完整产品事实、完整 OQ/MQ 明细、完整确认卡正文或模块放行判断正文。
-- 当前产品事实以 `docs/design/workbench-mvp/`、`PLAN_LATEST.md`、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
-- 当前 OQ / MQ 归并状态以 `OPEN_QUESTIONS.md` 为准。
-- 当前 DD 状态以 `DESIGN_DECISIONS.md` 为准。
-- 当前模块成熟度以 `DOCUMENT_MATURITY.md` 的当前摘要为准。
+本文档只记录文档体系进展、当前阶段和阻断摘要，不承载需求正文、设计正文、任务正文或执行日志。
 
-## 2. 当前阶段摘要
+## 2. 当前进展摘要
 
-- 当前阶段：`W13-DesignCanon-Step2 / 正式设计事实源迁移窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
-- 本轮已创建 `docs/design/workbench-mvp/` 五份正式设计文档，四份原 W13 plans 已降级为短桥接文档，current fact source 已改指正式目录。
-- 当前未修改 `DOC_STATE.yaml`，未打开 formal window，未生成 implementation packet，未进入实现，未写 Basic Memory，未执行 git add / commit / push。
-- 上一阶段：`W13-E15 / formal window open 前置确认窗口` 已完成；正式状态层仍以 `ST13_01~ST13_25` 为当前任务入口。
-- 当前边界：本轮只复核 `ST13_24 / ST13_25` 是否具备进入 formal window open 后续状态治理动作的确认条件，并输出确认卡；未修改 `DOC_STATE.yaml`，未生成 implementation packet，未打开 formal window，未标记 implementation-ready，未创建 `apps/**` / `infra/**` / `tools/**` / `tests/**`，未进入实现。
-- Preview 与正式写入：`ST13_24 / ST13_25` 已在 docs/governance/previews 路径 Preview 和正式 `DOC_STATE.yaml` 的 `facts` 字段写入 `formal_window_candidate_recommended=true`、来源、review status、document layer state 和禁止 packet/实现说明；正式状态本轮为幂等确认，未写 `candidate_status=candidate` 或 `readiness=downstream_ready`。
-- 验证结论：正式 `DOC_STATE.yaml` 的 `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，`documents_blocked_count=0`；`ST13_24 / ST13_25` 的 `preflight-open-window` 均为 `gate_result=blocked`，且 `can_open_formal_window=false`、`can_generate_implementation_packet=false`、`can_mark_implementation_ready=false`。
-- 代码开发状态：暂停。
-- 当前不允许扩展 `apps/web/**`，不允许创建 `apps/api/**` / `infra/**`，不允许接真实 LLM、数据库、登录、评分、RAG、多轮、复盘、导出、薄弱项、训练抽屉、资产库或后端实现。
-- 正式开窗层：为空；本轮只完成 formal window open 前置确认，不执行 open-window，不生成 implementation packet，不进入实现。
-- 当前没有可直接进入代码实施的子任务。
+| area | status | notes |
+| --- | --- | --- |
+| requirements | active | Workbench MVP 需求层已独立到 `docs/requirements/workbench-mvp/**` |
+| design | active | Workbench MVP 设计层继续由 `docs/design/workbench-mvp/**` 承载 |
+| planning | active | 当前规划入口为 `PLAN_LATEST.md` 与状态层引用的 planning 文档 |
+| task | blocked by state gate | ST13 任务文档保持原路径，不自动进入 implementation-ready |
+| process | active | 过程记录进入 `EXECUTION_LOG.md` |
+| governance | active | 规则入口保持 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`docs/governance/**` |
+| archive | separated | 归档材料不作为当前事实来源 |
 
-## 3. 当前 confirmed 摘要
+## 3. 当前阻断
 
-- `FC-01~FC-19` 已完成用户确认。
-- `OPEN_QUESTIONS.md` 已回压 W13 产品事实为 confirmed / historical 归并索引；当前 active 产品范围 `open=0`，`OQ-097~OQ-100` 已按用户确认完成 Stage3 Preview 与正式 Stage 3 写入。
-- 一期 MVP 是工作台级，不再是 W10 首切片。
-- W10 `apps/web/**` 原型只作为参考证据，不作为正式一期 MVP 起点。
-- 一期包含服务端历史 / 复盘记录、真实 LLM、完整登录 / 权限、服务端保存、完整 `0-100` 多维评分、复制 / Markdown 下载、RAG / 知识库和多轮高阶面试。
-- 模拟面试模块默认入口是历史模拟记录列表；发起模拟面试从记录列表进入，面试完成后回写历史记录 / 复盘。
-- `FC-06D`：压力面模式支持按岗位自动生成默认题型组合，并允许用户手动调整；打磨模式支持用户自定义主题 / 题型，并可结合岗位与薄弱项自动推荐，但不强制固定题组。
-- `FC-11D`：真实面试输入支持用户上传逐字稿原文，不要求用户先按题目拆分；系统由大模型自动识别问题与回答边界，再输出逐题拆解复盘；若切分置信度不足，提示用户校对。
+| blocker | impact | next action |
+| --- | --- | --- |
+| ST13 task docs path locked by state | 不能直接迁出 plans 子目录 | 后续另开状态迁移窗口 |
+| current-repo execution plan path locked by state | 不能直接归档或改路径 | 后续另开状态迁移窗口 |
+| formal window not open | 不能生成 implementation packet 或进入实现 | 先完成文档与状态 gate |
 
-## 4. 当前唯一事实源
+## 4. 验证入口
 
-| 内容类别 | 唯一事实源 |
-| --- | --- |
-| 一期 MVP 范围 | `docs/design/workbench-mvp/scope.md` |
-| IA / 用户旅程 | `docs/design/workbench-mvp/information-architecture.md` |
-| 对象模型 / RAG / 多轮 / 后端边界 | `docs/design/workbench-mvp/object-model-rag-multiround-backend.md` |
-| 评分 / 复盘 / 导出 / DoD | `docs/design/workbench-mvp/scoring-review-export-dod.md` |
-| 任务重映射草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` |
-| 状态层 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-preview.yaml` |
-| State Write 分阶段计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md` |
-| State Write 阶段 1 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md` |
-| State Write 阶段 2 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` |
-| State Write 阶段 3 dry-run 与影响分析 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md` |
-| Stage3 Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml` |
-| State Write 阶段 3 变更与回退说明 | `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` |
-| ST13 readiness audit | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md` |
-| ST13 第一批 contract 任务包草案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md` |
-| ST13 第一批 contract 双文档准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md` |
-| ST13 required doc slot State Update | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-required-doc-slot-update.md` |
-| ST13 candidate State Update 准备方案 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md` |
-| ST13 candidate State Update Preview YAML | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml` |
-| ST13 candidate 状态表达策略修正 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md` |
-| ST13 formal window open 前置确认 | `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md` |
-| 正式设计文档归位与模块承接计划 | `docs/superpowers/plans/2026-04-25-workbench-mvp-design-canon-plan.md` |
-| ST13 第一批正式双文档 / contract 细化 | `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md` 等 8 个双文档 |
-| 待办与路线图清单 | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` |
-| 决策索引 | `DESIGN_DECISIONS.md` |
-| OQ / MQ 归并入口 | `OPEN_QUESTIONS.md` |
-| 技术标准摘要 | `TECHNICAL_STANDARDS.md` |
-| 历史执行记录 | `EXECUTION_LOG.md` |
-
-## 5. 当前阻断与风险
-
-- `TASK_INDEX.md` 已同步 `ST13_01~ST13_25` 正式状态层入口与 `WT13-xx` alias，并同步旧 `STxx_*` 已通过 facts 表达 historical / superseded；这些入口仍不具备实施条件。
-- `MODULE_INDEX.md` 已写入 W13 候选任务域到 M01-M10 的映射摘要；M01-M10 已完成第一轮旧 MQ/OQ 标记和子文档补链，但这不等于模块成熟度升级。
-- `DD-005` 与 `DD-007` 仍为 `needs-review`：后端 FastAPI 和导出形态已 confirmed，但完整 Web framework / 渲染链实现细节不能直接进入代码。
-- `M01-M03` 仍不因 FC confirmed 自动升级为 L5 或正式候选。
-- `M04-M10` 仍多为 L1 / 骨架级，需要后续模块窗口按 `docs/design/workbench-mvp/` 继续补齐模块级设计。
-- `docs/modules/**` 中仍存在旧设计稿、旧实现计划路径引用和历史 OQ/MQ/ST/MT 引用；其中历史引用可保留，但不能作为当前事实源。
-- 旧 P1 设计稿已从当前 `documents` 受管集合移出并迁入 archive；旧 `STxx_*` 骨架已从正式 `DOC_STATE.yaml.subtasks` current 容器移出，但仍被索引层和阶段说明文档作为历史引用保留，本轮不迁移 archive。
-- W13-E 的任务 ID 命名、旧 `STxx_*` 后续处理、先做 W13-E2 dry-run、`OQ-093=B` Preview YAML 和 `OQ-094~OQ-100` State Write 口径均已确认；旧 `STxx_*` 的正式 current 容器移出已在阶段 3 完成。
-- `W13-E4-E` Stage3 Preview YAML 已完成创建与验证；`W13-E4-F` 已将 preview 证明过的状态层结果正式写入。
-- `W13-E5` 已完成 ST13 readiness audit；25 个 ST13 均仍不具备 implementation-ready，下一步只能进入用户确认后的任务包准备窗口。
-- `W13-E6` 已完成第一批任务包草案；`ST13_21 / ST13_20 / ST13_24 / ST13_25` 仍只是 `task_packet_draft_created`，不能视为 implementation-ready。
-- `W13-E13.5` 已吸收 `OQ-121=A` 并完成 candidate 状态表达策略修正；`ST13_24 / ST13_25` 仍只保持文档层 `formal_window_candidate_recommended`，正式状态层尚未写入 candidate，下一轮需优先验证 facts-only Candidate Preview。
-- `W13-E14-Merge` 已复核四个并行窗口结果：`ST13_24 / ST13_25` 的 formal window 前置材料进一步补齐，`ST13_21 / ST13_20` 的 near-ready blocker 和 candidate 升级条件进一步明确；该合并不改变正式状态层和 implementation-ready 结论。
-- `W13-E15` 已复核 `ST13_24 / ST13_25` formal window open 前置确认条件，确认二者可进入用户确认窗口，但 preflight 仍 blocked，不能直接打开 formal window、生成 packet 或进入实现。
-
-## 6. 当前完成事项
-
-- 已完成 `validate-state` / `evaluate-state` 开始前验证，状态层仍为 `ok=true` 且 `documents_blocked_count=0`。
-- 已扫描根目录与 `docs/**` 下全部 Markdown 文档。
-- 已确认 `FC-01~FC-19` 在项目级文档中有 confirmed 或 historical 写回位置。
-- 已将 `DOCUMENT_PROGRESS.md` 从旧进展正文降级为当前摘要 + 历史归档入口。
-- 已将 W10 首切片、旧 OQ/MQ、旧 proposed-default、固定 3 轮等内容从当前事实源判断中剥离。
-- 已确认旧实现计划正文迁移到 `archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md`，原路径保留跳转说明。
-- 已确认旧 P1 设计稿迁移到 `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md`，原路径保留跳转说明，`DOC_STATE.yaml` 当前 `documents` 受管集合不再登记 `DOC-SPEC-P1`。
-- 已汇总 A/C1/C2/C3：M01-M10 的旧 MQ/OQ 状态标记和子文档父模块补链已完成第一轮，未迁移模块文档到 archive。
-- 已完成 W13-F 阶段收口核验：W13-D 文件存在且覆盖评分、复盘、导出、错误态 / 空状态和一期 MVP DoD；Basic Memory 已写入阶段收口摘要并回读验证。
-- 已完成 W13-E 任务重映射草案：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`，形成 `WT13-01~WT13-25` 候选任务树、旧 `STxx_*` 处理策略、模块映射、开窗顺序、窗口边界模板和状态层后续改造方案。
-- 已完成 W13-E2 状态层 dry-run 文档收口：确认 `WT13-xx` 不能直接作为当前 `DOC_STATE.yaml.subtasks` key，形成旧 `STxx_*` 到 `WT13` 映射草案，并新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` 作为长期待办与路线图入口。
-- 已完成 W13-E4-A State Write 计划窗口：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-plan.md`，定义阶段 1 写入 `ST13_01~ST13_25` 且不移除旧 `STxx_*`、阶段 2 标记旧任务 superseded、阶段 3 移出旧任务正式容器、阶段 4 archive 迁移准备，并补充验证矩阵、回退方案、写入草案和用户确认卡。
-- 已完成 W13-E4-B State Write 阶段 1：正式 `DOC_STATE.yaml` 已新增 `ST13_01~ST13_25`，`RQ01.facts.task_ids` 已追加新任务，旧 `STxx_*` 保持并存，新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage1.md` 记录变更与回退说明。
-- 已完成 W13-E4-C State Write 阶段 2：30 个旧 `STxx_*` 仍保留在正式 `DOC_STATE.yaml.subtasks`，并已在各自 `facts` 中写入 `w13_status=superseded`、`w13_role=historical-reference`、`w13_superseded_by`、`w13_alias_target` 和 `w13_archive_candidate=true`；新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage2.md` 记录变更与回退说明。
-- 已完成 W13-E4-D State Write 阶段 3 dry-run：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3-dry-run.md`，确认旧 `STxx_*` 仍被索引层全量历史引用，closed round 未直接引用旧 ST；用户已确认在 Stage3 Preview 中验证移除 `RQ01.facts.task_ids` 中旧 `ST01_01`、`ST09_03` 的方案。正式 `DOC_STATE.yaml` 未修改，旧任务未移出。
-- 已完成 W13-E4-E Stage3 Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-doc-state-stage3-preview.yaml`；preview `validate-state / evaluate-state` 均为 `ok=true,error=0,warning=0`，preview `subtasks_blocked_count=25`，未出现 missing reference、stale target、schema error、implementation-ready 误判或 formal window 误开。
-- 已完成 W13-E4-F State Write 阶段 3 正式写入：正式 `DOC_STATE.yaml.subtasks` 只保留 `ST13_01~ST13_25`，旧 `ST01_01~ST10_03` 已从 current 容器移出，`RQ01.facts.task_ids` 只保留 `ST13_01~ST13_25`；新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-state-write-stage3.md` 记录变更与回退说明。
-- 已完成 W13-E5 ST13 readiness audit：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`，逐项审计 `ST13_01~ST13_25` 的缺口、依赖、任务包准备状态、formal window 条件、实现前置依赖和模块文档映射；本轮未生成 implementation packet，未进入实现。
-- 已完成 W13-E6 第一批 contract 任务包草案：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`，吸收 `OQ-101~OQ-110` confirmed 结果，并生成 `ST13_21 -> ST13_20 -> ST13_24 -> ST13_25` 的草案顺序。
-- 已完成 W13-E7 第一批 contract 双文档准备方案：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan.md`，审计四个 ST13 草案缺口，定义双文档模板、路径方案、任务包前置清单、contract 摘要、父索引同步方案、W13-E8~W13-E11 后续窗口和 `OQ-111~OQ-113` 确认卡；本轮未创建正式双文档，未更新 `DOC_STATE.yaml`。
-- 已完成 W13-E8 第一批 ST13 正式双文档创建：用户确认 `OQ-111=A`、`OQ-112=A`、`OQ-113=B` 后，新增 `docs/superpowers/plans/st13-task-packages/ST13_21/`、`ST13_20/`、`ST13_24/`、`ST13_25/` 四个目录和 8 个 `DESIGN` / `IMPLEMENTATION` 文档；本轮未更新 `DOC_STATE.yaml`。
-- 已完成 W13-E8.5 第一批 ST13 required doc slot State Update：仅把 `ST13_21 / ST13_20 / ST13_24 / ST13_25` 的 DESIGN / IMPLEMENTATION 路径登记到 `DOC_STATE.yaml` 既有 required doc slot；未修改其他 ST13，未打开 formal window，未生成 implementation packet。
-- 已完成 W13-E9 第一批 ST13 contract 细化：清理 8 个双文档 required doc slot 过时表述，并细化 `ST13_21` API contract、`ST13_20` 数据 contract、`ST13_24` 测试 / DoD contract、`ST13_25` 文档治理 / 收口 / Basic Memory contract；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
-- 已完成 W13-E10 第一批 ST13 readiness 复核：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-readiness-review.md`，复核四个 contract_refined 双文档的文档层 readiness、状态层缺口、formal window candidate 建议、后续 State Update 需求和用户确认卡；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
-- 已完成 W13-E11 第一批 ST13 formal window candidate 评估：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-formal-window-candidate-evaluation.md`，吸收 `OQ-114=A`、`OQ-115=B`、`OQ-116=A`、`OQ-117=A`，并形成后续 State Update 建议；本轮未修改 `DOC_STATE.yaml`，未写代码，未打开 formal window，未生成 implementation packet。
-- 已完成 W13-E12 ST13 candidate State Update 准备：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-state-update-plan.md`，分析 `DOC_STATE.yaml` 当前字段、提出 `ST13_24 / ST13_25` candidate preview 方案、`ST13_21 / ST13_20` near-ready 保持策略、`OQ-118~OQ-120` 确认卡、Preview 验证矩阵和回退方案；本轮未修改 `DOC_STATE.yaml`，未创建 preview YAML，未写代码，未打开 formal window，未生成 implementation packet。
-- 已完成 W13-E13 candidate State Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-preview.yaml`，验证结果为 `ok=false,error=4,warning=0`；失败原因是 `formal_window_open=false` 时禁止 `candidate_status=candidate`，且 `readiness=downstream_ready` 要求 `maturity` 非空；正式 `DOC_STATE.yaml` 未修改。
-- 已完成 W13-E13.5 Candidate State 表达策略修正：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix.md`，确认 `OQ-121=A` 已吸收，`W13-E14` 暂不执行，下一轮优先创建 facts-only Candidate Preview，备选验证 `candidate_status=observe`。
-- 已完成 W13-E13.6 facts-only Candidate Preview：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-candidate-state-facts-preview.yaml`，吸收 `OQ-122=A`、`OQ-123=A`；`ST13_24 / ST13_25` 仅写 facts-only candidate 推荐字段，Preview `validate-state / evaluate-state` 为 `ok=true,error=0,warning=0`，但 `documents_blocked_count=1` 来自 plan-path Preview 的 document 扫描根目录副作用；正式 `DOC_STATE.yaml` 未修改。
-- 已完成 W13-E13.8 docs/governance/previews 路径 facts-only Candidate Preview 与正式 State Update：新增 `docs/governance/previews/DOC_STATE_W13_E13_8_CANDIDATE_FACTS_PREVIEW.yaml`，吸收 `OQ-124`；Preview 严格全绿后，正式 `DOC_STATE.yaml` 仅为 `ST13_24 / ST13_25` 写入 facts-only candidate 推荐字段，写入后验证仍为 `ok=true,error=0,warning=0,documents_blocked_count=0`。
-- 已完成 W13-E14-Merge formal window 前置补齐合并：8 个双文档均已复核通过，禁止范围 diff 为空，风险扫描未发现非法放行表述；总控文档已同步该合并结论。
-- 已完成 W13-E15 formal window open 前置确认：新增 `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-formal-window-open-precheck.md`，输出 `ST13_24 / ST13_25` 前置复核、`ST13_21 / ST13_20` near-ready 保持说明、formal window open 方案、packet / 实现拆窗确认卡和 State Update 执行方案草案；本轮未修改 `DOC_STATE.yaml`。
-- 已完成 W13-DesignCanon-Step2：创建 `docs/design/workbench-mvp/` 五份正式设计文档，四份原 W13 plans 降级为短桥接文档，M01-M10 模块承接摘要和 current fact source 引用已同步；本轮未修改状态层、未进入实现、未提交。
-
-## 7. 历史归档说明
-
-- W10 首切片、阶段 3 白名单治理、模块最低位压缩、`MR-*` / `RV-*` / `GC-*` 细节均属于历史治理过程。
-- 上述历史过程不再作为当前一期 MVP 范围、模块优先级、正式开窗或 implementation readiness 的依据。
-- 需要追溯历史过程时，优先查看：
-  - `EXECUTION_LOG.md`
-  - Git 历史
-  - 对应模块目录下的 `MODULE_EXECUTION_LOG.md`
-
-## 8. 下一步建议
-
-1. 先审阅本次 Design Canon 迁移 diff，确认是否允许后续单独提交。
-2. 等待用户确认 `OQ-125~OQ-127`；推荐组合为只让后续单独窗口打开 `ST13_24`，packet 和实现均拆窗。
-3. `ST13_24 / ST13_25` 当前可进入 formal window open 用户确认窗口，但不能直接打开 formal window、生成 packet 或进入实现。
-4. `ST13_21 / ST13_20` 默认保持 near-ready 文档层结论，等待 M02 blocker、OpenAPI / schema / apps / migration / ORM 授权闭合后再评估。
-5. 当前不建议并行执行 open-window；若后续并行，必须由总控先冻结范围，子窗口不得共同修改总控文件或 `DOC_STATE.yaml`。
-6. 后续 Basic Memory / Superpowers 写回必须另开授权窗口；当前不写 Basic Memory。
-7. 旧 `STxx_*` archive 迁移评估必须另开确认窗口；当前不得直接迁移旧骨架。
-8. 在正式开窗层和 implementation-ready 形成前，继续暂停代码实施。
+```powershell
+python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml
+python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml
+git diff --check
+```

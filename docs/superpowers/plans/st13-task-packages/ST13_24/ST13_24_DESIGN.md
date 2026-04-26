@@ -340,7 +340,7 @@
 - `docs/superpowers/plans/st13-task-packages/ST13_21/**`
 - `docs/superpowers/plans/st13-task-packages/ST13_25/**`
 - `docs/modules/**`
-- `archive/**`
+- 历史材料目录
 - `package.json`
 - `package-lock.json`
 - `pnpm-lock.yaml`

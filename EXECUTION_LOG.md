@@ -25,6 +25,19 @@
 
 ## 3. 当前记录
 
+### 2026-04-27 / DocumentSystemRefactor-Step2 / 全量文档体系职责分离
+
+- 执行类型：需求层创建、设计层职责清理、根入口瘦身、状态锁定文档原地清理、过程文档归档、引用扫描；不写 Basic Memory，不提交，不推送。
+- 范围：
+  - 新增 `docs/requirements/workbench-mvp/README.md` 与 `docs/requirements/workbench-mvp/scope-and-acceptance.md`，承载 Workbench MVP 需求范围与验收口径。
+  - 保留 `docs/design/workbench-mvp/**` 作为当前设计事实源，并把需求边界、验收口径指回 requirements 层。
+  - 原地清理 `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` 与 `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`，不移动被 `DOC_STATE.yaml` 引用的路径。
+  - 使用 `git mv` 将旧 W13 bridge、已完成 state-write、readiness、candidate、precheck 等过程文档移动到 `archive/docs/superpowers/plans/2026-04-25/`。
+  - 删除两个旧 P1 active jump stub；对应历史正文已存在于 archive 目录。
+  - 不修改 `docs/governance/DOC_STATE.yaml`、`docs/governance/DOC_STATE.bootstrap.yaml`、`tools/**`、`tests/**`、`apps/**`、`infra/**`。
+- 验证：本轮末尾以 `validate-state`、`evaluate-state`、`git diff --check`、引用扫描和 forbidden scope diff 为准。
+- 遗留问题：`docs/superpowers/plans/2026-04-27-document-system-refactor-plan.md` 是步骤 1 冻结计划，正文包含归档计划与扫描命令；若按字面扫描 `docs/**`，该计划文件会继续命中历史引用文本，需要用户确认是否将冻结计划排除在活动引用扫描之外或另行归档。
+
 ### 2026-04-27 / W13-DesignCanon-Step2 / 正式设计事实源迁移窗口
 
 - 执行类型：正式设计事实源迁移、桥接降级、索引同步、模块承接摘要、引用清理和验证；不写代码，不写 Basic Memory，不提交。

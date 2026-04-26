@@ -16,22 +16,22 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：3.4 面试模式边界
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：6 问题生成与参考材料原则
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.5 模拟面试与消息
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：9.3 模拟面试启动
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：9.5 模拟模式
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：15.4 模拟面试模块
+- 历史 P1 设计材料：3.4 面试模式边界
+- 历史 P1 设计材料：6 问题生成与参考材料原则
+- 历史 P1 设计材料：7.5 模拟面试与消息
+- 历史 P1 设计材料：9.3 模拟面试启动
+- 历史 P1 设计材料：9.5 模拟模式
+- 历史 P1 设计材料：15.4 模拟面试模块
 
 ### 2.2 原始实施计划引用
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：346-358 模拟面试与打磨域
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：425-441 模拟面试与打磨 API
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：693-710 模拟面试/打磨上下文包
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：903-922 里程碑 7
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：2885-3245 任务 7
+- 历史 P1 实现计划材料：346-358 模拟面试与打磨域
+- 历史 P1 实现计划材料：425-441 模拟面试与打磨 API
+- 历史 P1 实现计划材料：693-710 模拟面试/打磨上下文包
+- 历史 P1 实现计划材料：903-922 里程碑 7
+- 历史 P1 实现计划材料：2885-3245 任务 7
 
 ## 3. 模块目标
 

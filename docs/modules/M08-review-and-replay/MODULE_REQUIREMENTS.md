@@ -16,18 +16,18 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的旧 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
 
 ### 2.1 原始需求引用
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：7.7 复盘
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：9.6 复盘
-- docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md：15.5 复盘模块
+- 历史 P1 设计材料：7.7 复盘
+- 历史 P1 设计材料：9.6 复盘
+- 历史 P1 设计材料：15.5 复盘模块
 
 ### 2.2 原始实施计划引用
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：359-364 复盘与薄弱项域
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：442-453 复盘 API
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：945-964 里程碑 9
-- docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation.md：3544-3797 任务 9
+- 历史 P1 实现计划材料：359-364 复盘与薄弱项域
+- 历史 P1 实现计划材料：442-453 复盘 API
+- 历史 P1 实现计划材料：945-964 里程碑 9
+- 历史 P1 实现计划材料：3544-3797 任务 9
 
 ## 3. 模块目标
 
