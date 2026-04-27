@@ -15,7 +15,7 @@
 
 - ST13：`ST13_21`
 - WT13 alias：`WT13-21`
-- 设计文档：`docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+- 设计文档：`docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
 
 ## 3. 进入实现前置条件
 

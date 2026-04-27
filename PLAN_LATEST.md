@@ -11,26 +11,25 @@
 | requirements | `docs/requirements/workbench-mvp/**` | 输入范围、边界和验收口径 |
 | design | `docs/design/workbench-mvp/**` | 输入设计约束和设计分解依据 |
 | state truth | `docs/governance/DOC_STATE.yaml` | 判断正式状态、required docs 和 gate |
-| execution plan | `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` | 当前仓库执行顺序；路径被状态层引用，保持原位 |
-| task remap | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` | Workbench MVP 任务重映射；路径被状态层引用，保持原位 |
-| task docs | `docs/superpowers/plans/st13-task-packages/**` | ST13 当前任务双文档；路径被状态层引用，保持原位 |
-| backlog | `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md` | 后续 backlog 与路线图 |
+| execution plan | `docs/planning/2026-04-25-current-repo-execution-plan.md` | 当前仓库执行顺序；状态层路径已同步 |
+| task remap | `docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md` | Workbench MVP 任务重映射；状态层路径已同步 |
+| task docs | `docs/tasks/workbench-mvp/st13-task-packages/**` | ST13 当前任务双文档；状态层路径已同步 |
+| backlog | `docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md` | 后续 backlog 与路线图 |
 
 ## 3. 当前阶段
 
-当前仓库处于文档体系重构与任务开窗前置治理阶段。
+当前仓库处于文档体系重构收口与任务开窗前置治理阶段。planning / task 文档目录迁移已完成，正式状态层路径已同步。
 
 当前阶段允许：
 
 - 清理需求、设计、规划、任务、过程、治理、索引、归档职责边界。
 - 创建或校准 Workbench MVP 需求层。
-- 原地清理被状态层引用文档的过时措辞。
+- 校准 planning / task 文档迁移后的索引和内部引用。
 - 归档已完成且不再作为当前入口的过程文档。
 - 运行只读状态验证和引用扫描。
 
 当前阶段不允许：
 
-- 修改 `docs/governance/DOC_STATE.yaml`。
 - 打开 formal window。
 - 生成 implementation packet。
 - 进入业务代码实现。
@@ -38,10 +37,10 @@
 
 ## 4. 下一步推进顺序
 
-1. 完成文档体系重构和引用清理。
-2. 人工 review 本轮 diff，确认职责分离没有误删事实。
-3. 另开状态窗口处理仍被状态层锁定但目录职责不理想的任务文档。
-4. 状态层允许后，再进入 formal window / implementation packet 的独立流程。
+1. 完成文档体系迁移后的人工 diff review。
+2. 确认 `validate-state` / `evaluate-state`、引用扫描和禁止范围检查均为绿。
+3. 进入 commit 准备。
+4. 后续如需 formal window / implementation packet，必须由独立状态流程开启。
 
 ## 5. 验证入口
 

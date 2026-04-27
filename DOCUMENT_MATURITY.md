@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | Workbench MVP requirements | L5 | usable as requirement input | 需求范围与验收口径已独立成层 |
 | Workbench MVP design | L5 | usable as design input | 五份设计文档继续承载设计事实 |
-| current planning | L4 | usable for governance planning | 部分 planning path 被状态层锁定 |
+| current planning | L4 | usable for governance planning | 当前 planning 文档已迁入 `docs/planning/**` |
 | current task docs | L3-L4 | not implementation-ready | formal window 未打开 |
 | module docs | L3-L5 | module-dependent | 模块文档保持原路径，不自动放行 |
 | governance docs | L5 | usable as collaboration rules | 状态自动化以 `docs/governance/**` 与工具实现为准 |
@@ -20,8 +20,6 @@
 
 | risk | severity | mitigation |
 | --- | --- | --- |
-| task docs path still under plans | medium | 另开状态迁移窗口处理 |
-| generated reports may contain old wording until rerendered | low | 后续由 doc-governor 工具窗口重渲染 |
 | implementation readiness may be misread from task docs | medium | 继续以 `DOC_STATE.yaml` 和 gate 为准 |
 
 ## 4. 使用规则

@@ -32,9 +32,9 @@
 - `docs/design/workbench-mvp/information-architecture.md`
 - `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`
 - `docs/design/workbench-mvp/scoring-review-export-dod.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-readiness-audit.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-st13-first-contract-task-packages.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+- `W13-E5 readiness audit 过程记录`
+- `W13-E6 第一批任务包草案`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
 
 ## 5. 背景
 
@@ -274,8 +274,8 @@
 
 本窗口允许：
 
-- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
 
 本 W13-E14-D 复核窗口仅允许继续细化上述两个文档。若需要同步父索引、总控计划、状态层或模块文档，应记录给 `W13-E14-Merge`，不得由本窗口直接修改。
 
@@ -400,8 +400,8 @@ formal window 前不能创建的文件：
 
 当前 W13-E14-D 窗口 allowed paths 仅限：
 
-- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
 
 当前仍 forbidden：
 

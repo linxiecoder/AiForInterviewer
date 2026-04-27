@@ -229,8 +229,8 @@ ST13_25 的文档治理 DoD 至少包括：
 
 当前 W13-E14-B 窗口只允许修改：
 
-- `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md`
 
 未来若用户另窗授权 formal window 或治理收口窗口，才可按授权范围考虑以下文档治理文件：
 
@@ -242,7 +242,7 @@ ST13_25 的文档治理 DoD 至少包括：
 - `MODULE_INDEX.md`
 - `OPEN_QUESTIONS.md`
 - `DESIGN_DECISIONS.md`
-- `docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md`
+- `docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md`
 - 经用户明确授权的 Basic Memory 白名单目录写回。
 
 当前窗口仍禁止：
@@ -314,8 +314,8 @@ ST13_25 的文档治理 DoD 至少包括：
 
 当前 W13-E14-B 窗口允许：
 
-- `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md`
 
 父索引、W13 计划文档、状态层文件和 Basic Memory 均不在当前窗口写入范围内；如发现需要修改，只记录给 W13-E14-Merge。
 

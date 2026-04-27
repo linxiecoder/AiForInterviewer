@@ -46,4 +46,4 @@
 - 模块文档不得引用历史材料作为当前 source。
 - 模块文档不得提升 maturity 或 implementation readiness。
 - 模块文档不得打开子任务窗口。
-- 被状态层引用的任务文档需要另开状态迁移窗口处理路径问题。
+- 当前跨模块任务文档入口为 `docs/tasks/workbench-mvp/**`，任务是否可实施仍以状态层 gate 为准。

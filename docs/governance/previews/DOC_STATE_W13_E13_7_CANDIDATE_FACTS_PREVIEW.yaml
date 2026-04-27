@@ -997,7 +997,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1019,7 +1019,7 @@ subtasks:
         wt13_id: WT13-01
         state_preview_alias: ST13_01
         task_domain_title: 账号 / 登录 / 权限
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1038,7 +1038,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1060,7 +1060,7 @@ subtasks:
         wt13_id: WT13-02
         state_preview_alias: ST13_02
         task_domain_title: 工作台首页 / 导航 / 权限入口
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1079,7 +1079,7 @@ subtasks:
     meta:
       module_id: M03
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1100,7 +1100,7 @@ subtasks:
         wt13_id: WT13-03
         state_preview_alias: ST13_03
         task_domain_title: 岗位管理
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1119,7 +1119,7 @@ subtasks:
     meta:
       module_id: M03
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1140,7 +1140,7 @@ subtasks:
         wt13_id: WT13-04
         state_preview_alias: ST13_04
         task_domain_title: 简历管理
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1159,7 +1159,7 @@ subtasks:
     meta:
       module_id: M02
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1181,7 +1181,7 @@ subtasks:
         wt13_id: WT13-05
         state_preview_alias: ST13_05
         task_domain_title: 模拟记录列表
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1200,7 +1200,7 @@ subtasks:
     meta:
       module_id: M03
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1224,7 +1224,7 @@ subtasks:
         wt13_id: WT13-06
         state_preview_alias: ST13_06
         task_domain_title: 发起模拟面试
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1243,7 +1243,7 @@ subtasks:
     meta:
       module_id: M05
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1266,7 +1266,7 @@ subtasks:
         wt13_id: WT13-07
         state_preview_alias: ST13_07
         task_domain_title: 面试台
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1285,7 +1285,7 @@ subtasks:
     meta:
       module_id: M06
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1307,7 +1307,7 @@ subtasks:
         wt13_id: WT13-08
         state_preview_alias: ST13_08
         task_domain_title: 打磨模式
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1326,7 +1326,7 @@ subtasks:
     meta:
       module_id: M06
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1348,7 +1348,7 @@ subtasks:
         wt13_id: WT13-09
         state_preview_alias: ST13_09
         task_domain_title: 压力面模式
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1367,7 +1367,7 @@ subtasks:
     meta:
       module_id: M05
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1390,7 +1390,7 @@ subtasks:
         wt13_id: WT13-10
         state_preview_alias: ST13_10
         task_domain_title: RAG / 知识库
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1409,7 +1409,7 @@ subtasks:
     meta:
       module_id: M04
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1432,7 +1432,7 @@ subtasks:
         wt13_id: WT13-11
         state_preview_alias: ST13_11
         task_domain_title: 真实 LLM provider / adapter
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1451,7 +1451,7 @@ subtasks:
     meta:
       module_id: M06
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1473,7 +1473,7 @@ subtasks:
         wt13_id: WT13-12
         state_preview_alias: ST13_12
         task_domain_title: 多轮上下文 / 状态机
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1492,7 +1492,7 @@ subtasks:
     meta:
       module_id: M04
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1515,7 +1515,7 @@ subtasks:
         wt13_id: WT13-13
         state_preview_alias: ST13_13
         task_domain_title: 评分体系
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1534,7 +1534,7 @@ subtasks:
     meta:
       module_id: M08
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1556,7 +1556,7 @@ subtasks:
         wt13_id: WT13-14
         state_preview_alias: ST13_14
         task_domain_title: 真实面试复盘
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1575,7 +1575,7 @@ subtasks:
     meta:
       module_id: M06
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1598,7 +1598,7 @@ subtasks:
         wt13_id: WT13-15
         state_preview_alias: ST13_15
         task_domain_title: 模拟面试复盘
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1617,7 +1617,7 @@ subtasks:
     meta:
       module_id: M04
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1640,7 +1640,7 @@ subtasks:
         wt13_id: WT13-16
         state_preview_alias: ST13_16
         task_domain_title: 薄弱项 `WeaknessItem
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1659,7 +1659,7 @@ subtasks:
     meta:
       module_id: M03
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1682,7 +1682,7 @@ subtasks:
         wt13_id: WT13-17
         state_preview_alias: ST13_17
         task_domain_title: 训练抽屉 / 待打磨清单
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1701,7 +1701,7 @@ subtasks:
     meta:
       module_id: M05
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1723,7 +1723,7 @@ subtasks:
         wt13_id: WT13-18
         state_preview_alias: ST13_18
         task_domain_title: 资产归档
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1742,7 +1742,7 @@ subtasks:
     meta:
       module_id: M03
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1765,7 +1765,7 @@ subtasks:
         wt13_id: WT13-19
         state_preview_alias: ST13_19
         task_domain_title: Markdown 导出 / 复制
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1784,7 +1784,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1805,17 +1805,17 @@ subtasks:
       declared_blocker_refs: []
       design_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md
         template_like: false
       implementation_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-20
         state_preview_alias: ST13_20
         task_domain_title: 服务端保存 / 数据库
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1834,7 +1834,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1855,17 +1855,17 @@ subtasks:
       declared_blocker_refs: []
       design_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md
         template_like: false
       implementation_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-21
         state_preview_alias: ST13_21
         task_domain_title: API / 后端服务边界
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1884,7 +1884,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1905,7 +1905,7 @@ subtasks:
         wt13_id: WT13-22
         state_preview_alias: ST13_22
         task_domain_title: 日志 / 观测 / 运维
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1924,7 +1924,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1953,7 +1953,7 @@ subtasks:
         wt13_id: WT13-23
         state_preview_alias: ST13_23
         task_domain_title: 前端工作台 UI / 页面集合
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -1972,7 +1972,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -1985,17 +1985,17 @@ subtasks:
       declared_blocker_refs: []
       design_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_24/ST13_24_DESIGN.md
         template_like: false
       implementation_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-24
         state_preview_alias: ST13_24
         task_domain_title: 测试 / 验收 / DoD
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -2019,7 +2019,7 @@ subtasks:
     meta:
       module_id: M01
       requirement_id: RQ01
-      path: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+      path: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
     facts:
       requirement_ids:
       - RQ01
@@ -2032,17 +2032,17 @@ subtasks:
       declared_blocker_refs: []
       design_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_DESIGN.md
         template_like: false
       implementation_doc:
         exists: true
-        path: docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-25
         state_preview_alias: ST13_25
         task_domain_title: 文档治理 / 收口 / Basic Memory
-        source_doc: docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md
+        source_doc: docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md
         source_decision: OQ-093=B
         formal_doc_state_write: true
         implementation_ready: false
@@ -2067,7 +2067,7 @@ documents:
     meta:
       doc_type: plan
       title: "AI \u6A21\u62DF\u9762\u8BD5\u7CFB\u7EDF\u5F53\u524D\u4ED3\u5E93\u6267\u884C\u8BA1\u5212"
-      path: docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md
+      path: docs/planning/2026-04-25-current-repo-execution-plan.md
       required_sections:
       - section_id: doc_positioning
         heading: "## 1. \u6587\u6863\u5B9A\u4F4D"

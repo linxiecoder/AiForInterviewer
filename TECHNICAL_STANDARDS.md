@@ -21,7 +21,7 @@
 ### 3.1 仓库与目标代码结构
 
 - 当前仓库实现布局：以设计文档、治理状态、`doc_governor` 工具链和测试验证为主，而不是已经落地的业务 monorepo。
-- 当前目录真值：根目录全局文档、`docs/governance/`、`docs/modules/`、`docs/superpowers/`、`tools/doc_governor/`、`tests/doc_governor/`、`requirements.txt`。
+- 当前目录真值：根目录全局文档、`docs/requirements/`、`docs/design/`、`docs/planning/`、`docs/tasks/`、`docs/governance/`、`docs/modules/`、`tools/doc_governor/`、`tests/doc_governor/`、`requirements.txt`。
 - 当前不把 `node_modules/`、`.serena/`、`.worktrees/`、`__pycache__/`、临时缓存目录计入正式项目结构。
 - 目标产品代码结构采用 `apps/web + packages/shared + apps/api`。
 - 在 `TASK_INDEX.md` 写入明确正式任务 ID 和允许修改范围前，不得创建或扩展业务实现目录。

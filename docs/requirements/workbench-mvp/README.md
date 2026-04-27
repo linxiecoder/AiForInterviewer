@@ -18,8 +18,8 @@
 | --- | --- | --- |
 | requirement | 要什么、不要什么、验收到什么程度 | 本目录 |
 | design | 信息、对象、交互、数据和质量门禁如何设计 | `docs/design/workbench-mvp/**` |
-| planning | 怎么推进、哪些路径仍被状态层锁定 | `PLAN_LATEST.md`、活动 planning 文档 |
-| task | 怎么拆任务、哪些任务仍 blocked | `TASK_INDEX.md`、`docs/superpowers/plans/st13-task-packages/**` |
+| planning | 怎么推进、当前 planning 入口在哪里 | `PLAN_LATEST.md`、`docs/planning/**` |
+| task | 怎么拆任务、哪些任务仍 blocked | `TASK_INDEX.md`、`docs/tasks/workbench-mvp/st13-task-packages/**` |
 | process | 做过什么 | `EXECUTION_LOG.md` |
 | governance | 规则、状态和 gate 约束 | `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`docs/governance/**` |
 

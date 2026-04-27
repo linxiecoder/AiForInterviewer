@@ -24,8 +24,8 @@
 | --- | --- | --- |
 | Workbench MVP requirements | `docs/requirements/workbench-mvp/**` | requirement |
 | Workbench MVP design | `docs/design/workbench-mvp/**` | design |
-| current planning | `PLAN_LATEST.md`、`docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md` | planning |
-| current task index | `TASK_INDEX.md`、`docs/superpowers/plans/st13-task-packages/**` | task |
+| current planning | `PLAN_LATEST.md`、`docs/planning/2026-04-25-current-repo-execution-plan.md` | planning |
+| current task index | `TASK_INDEX.md`、`docs/tasks/workbench-mvp/st13-task-packages/**` | task |
 | process log | `EXECUTION_LOG.md` | process |
 | governance rules | `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`docs/governance/**` | governance |
 | module docs | `docs/modules/**` | module requirement / design / task |
@@ -34,5 +34,5 @@
 
 - `docs/governance/DOC_STATE.yaml` 是正式结构化状态真值，本入口不替代状态层。
 - 当前文档体系重构不打开 formal window，不生成 implementation packet，不授权业务实现。
-- 被状态层引用的 planning/task 文档保持原路径，只允许原地清理措辞。
+- 当前 planning 文档已迁入 `docs/planning/**`，当前 task 文档已迁入 `docs/tasks/**`，状态层路径已同步。
 - 归档材料不作为当前需求、设计、规划或任务依据。

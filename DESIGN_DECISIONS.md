@@ -12,7 +12,7 @@
 | DD-002 | confirmed | Workbench MVP 需求层与设计层职责分离 | requirement / governance | `docs/requirements/workbench-mvp/**` |
 | DD-003 | confirmed | Workbench MVP 设计由五份正式设计文档承载 | design | `docs/design/workbench-mvp/**` |
 | DD-004 | confirmed | 当前任务是否可实施必须由状态层 gate 判定 | governance / task | `docs/governance/DOC_STATE.yaml`、`TASK_INDEX.md` |
-| DD-005 | confirmed | 被状态层引用的 planning/task 文档不在本轮移动 | planning / task | `docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md`、`docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md`、`docs/superpowers/plans/st13-task-packages/**` |
+| DD-005 | confirmed | planning/task 文档从旧 plans 目录迁出，`DOC_STATE.yaml` 已同步新路径，`docs/superpowers/**` 不再作为 active 文档区 | planning / task | `docs/planning/**`、`docs/tasks/workbench-mvp/**`、`docs/governance/DOC_STATE.yaml` |
 | DD-006 | confirmed | 过程记录只进入 execution log 或归档材料，不作为当前需求或设计依据 | process | `EXECUTION_LOG.md` |
 
 ## 3. 决策使用规则

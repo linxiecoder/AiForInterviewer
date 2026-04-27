@@ -2198,6 +2198,22 @@
   - 适合进入 formal window open 确认窗口，用于确认后续是否允许状态治理窗口处理开窗。
   - 仍不能直接打开 formal window，不能生成 implementation packet，不能标记 implementation-ready，不能进入代码实现。
 
+### 2026-04-27 / 文档体系最终迁移 / 状态层路径迁移
+
+- 范围：迁移当前 planning / task 文档路径并同步状态层引用；不修改 `tools/**`、`tests/**`、`apps/**`、`infra/**`，不写 Basic Memory，不打开 formal window，不生成 implementation packet，不标记 implementation-ready。
+- 迁移结果：
+  - planning docs 迁入 `docs/planning/**`。
+  - task docs 迁入 `docs/tasks/**`。
+  - `docs/governance/DOC_STATE.yaml` 已同步新路径。
+  - `DOC_GOVERNOR_REPORT.md` 已基于当前 state 重渲染。
+- 验证结果：
+  - `validate-state`：`ok=true,error=0,warning=0`。
+  - `evaluate-state`：`ok=true,error=0,warning=0`，`documents_blocked_count=0`、`rounds_open_count=0`、`implementation_ready=false`。
+- 边界：
+  - 未执行 `git add`。
+  - 未提交。
+  - 未推送。
+
 ## 4. 使用说明
 
 - 每完成一轮全局性工作后，应新增一条记录，而不是覆盖旧记录。

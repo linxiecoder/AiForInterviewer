@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | requirements | active | Workbench MVP 需求层已独立到 `docs/requirements/workbench-mvp/**` |
 | design | active | Workbench MVP 设计层继续由 `docs/design/workbench-mvp/**` 承载 |
-| planning | active | 当前规划入口为 `PLAN_LATEST.md` 与状态层引用的 planning 文档 |
-| task | blocked by state gate | ST13 任务文档保持原路径，不自动进入 implementation-ready |
+| planning | active | 当前规划入口为 `PLAN_LATEST.md` 与 `docs/planning/**` |
+| task | blocked by implementation gate | ST13 任务文档已迁入 `docs/tasks/**`，不自动进入 implementation-ready |
 | process | active | 过程记录进入 `EXECUTION_LOG.md` |
 | governance | active | 规则入口保持 `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`docs/governance/**` |
 | archive | separated | 归档材料不作为当前事实来源 |
@@ -20,8 +20,6 @@
 
 | blocker | impact | next action |
 | --- | --- | --- |
-| ST13 task docs path locked by state | 不能直接迁出 plans 子目录 | 后续另开状态迁移窗口 |
-| current-repo execution plan path locked by state | 不能直接归档或改路径 | 后续另开状态迁移窗口 |
 | formal window not open | 不能生成 implementation packet 或进入实现 | 先完成文档与状态 gate |
 
 ## 4. 验证入口

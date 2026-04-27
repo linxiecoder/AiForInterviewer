@@ -33,8 +33,8 @@
 - `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`
 - `docs/design/workbench-mvp/scoring-review-export-dod.md`
 - `docs/governance/TEST_POLICY.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
 
 ## 5. 背景
 
@@ -304,8 +304,8 @@
 
 当前 W13-E14-A 只允许修改：
 
-- `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/ST13_24_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md`
 
 当前窗口不允许同步父索引、不允许修改状态层、不允许创建测试或实现目录。若发现父索引、状态层或其他任务包需要同步，只记录给 `W13-E14-Merge`。
 
@@ -339,9 +339,9 @@
 - `OPEN_QUESTIONS.md`
 - `DESIGN_DECISIONS.md`
 - `AGENTS.md`
-- `docs/superpowers/plans/st13-task-packages/ST13_20/**`
-- `docs/superpowers/plans/st13-task-packages/ST13_21/**`
-- `docs/superpowers/plans/st13-task-packages/ST13_25/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/**`
 - `docs/modules/**`
 - 历史材料目录
 - `package.json`

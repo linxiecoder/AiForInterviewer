@@ -87,10 +87,11 @@
 - 根目录 `*.md`: 全局总控、索引、标准、决策、成熟度、进展与开放问题
 - `docs/requirements/`: 当前需求事实源
 - `docs/design/`: 当前设计事实源
+- `docs/planning/`: 当前规划文档
+- `docs/tasks/`: 当前任务文档
 - `docs/governance/`: 文档治理规则、运行手册、状态文件与报告输出
 - `docs/modules/`: `M01-M10` 模块需求、模块设计、模块任务和模块问题
-- `docs/superpowers/plans/`: 仅保留状态层引用的当前 planning/task 文档，以及少量仍需路径稳定的治理输入
-- `docs/superpowers/specs/`: 不承载当前设计事实；历史 specs 应在 `archive/`
+- `EXECUTION_LOG.md`: 当前过程记录入口
 - `archive/`: 历史材料，不作为当前事实源
 - `tools/doc_governor/`: 文档治理 CLI、状态流转、扫描、校验与报告渲染
 - `tests/doc_governor/`: `doc_governor` 对应测试、fixtures 与 smoke / integration 验证
@@ -204,16 +205,16 @@
 
 ### 2.4 计划
 
-- [AI 模拟面试系统当前仓库执行计划](docs/superpowers/plans/2026-04-25-current-repo-execution-plan.md)
-- [AI 模拟面试一期工作台 MVP 任务重映射草案](docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md)
-- [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/superpowers/plans/2026-04-25-workbench-mvp-backlog-roadmap.md)
+- [AI 模拟面试系统当前仓库执行计划](docs/planning/2026-04-25-current-repo-execution-plan.md)
+- [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md)
 
 ### 2.5 任务文档
 
-- [AI 模拟面试一期工作台 MVP ST13_21 API / 后端服务边界双文档](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md)
-- [AI 模拟面试一期工作台 MVP ST13_20 服务端保存 / 数据库双文档](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md)
-- [AI 模拟面试一期工作台 MVP ST13_24 测试 / 验收 / DoD 双文档](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md)
-- [AI 模拟面试一期工作台 MVP ST13_25 文档治理 / 收口 / Basic Memory 双文档](docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_DESIGN.md) / [实施说明](docs/superpowers/plans/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP 任务重映射草案](docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md)
+- [AI 模拟面试一期工作台 MVP ST13_21 API / 后端服务边界双文档](docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md) / [实施说明](docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP ST13_20 服务端保存 / 数据库双文档](docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md) / [实施说明](docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP ST13_24 测试 / 验收 / DoD 双文档](docs/tasks/workbench-mvp/st13-task-packages/ST13_24/ST13_24_DESIGN.md) / [实施说明](docs/tasks/workbench-mvp/st13-task-packages/ST13_24/ST13_24_IMPLEMENTATION.md)
+- [AI 模拟面试一期工作台 MVP ST13_25 文档治理 / 收口 / Basic Memory 双文档](docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_DESIGN.md) / [实施说明](docs/tasks/workbench-mvp/st13-task-packages/ST13_25/ST13_25_IMPLEMENTATION.md)
 
 ### 2.6 全局文档体系
 

@@ -20,16 +20,16 @@
 | --- | --- | --- | --- |
 | OQ-REQ-001 | confirmed | Workbench MVP 需求范围和验收口径从设计层抽出，归入独立需求层 | `docs/requirements/workbench-mvp/**` |
 | OQ-DOC-001 | confirmed | Workbench MVP 当前设计仍由 `docs/design/workbench-mvp/**` 承载 | `docs/design/workbench-mvp/**` |
-| OQ-STATE-001 | confirmed | 被 `DOC_STATE.yaml` 引用的 planning/task 文档本轮不移动 | `docs/governance/DOC_STATE.yaml` |
+| OQ-STATE-001 | confirmed | planning/task 文档迁移已通过 `DOC_STATE.yaml` 路径同步完成 | `docs/governance/DOC_STATE.yaml` |
+| OQ-STATE-002 | resolved | ST13 task docs 已迁入专用 task 目录，required doc slot 已同步 | `docs/tasks/workbench-mvp/st13-task-packages/**` |
+| OQ-STATE-003 | resolved | current-repo execution plan 已迁入 planning 目录，state document path 已同步 | `docs/planning/2026-04-25-current-repo-execution-plan.md` |
+| OQ-GOV-001 | resolved | `DOC_GOVERNOR_REPORT.md` 已基于迁移后的 `DOC_STATE.yaml` 重渲染，未保留旧 active path | `docs/governance/DOC_GOVERNOR_REPORT.md` |
 | OQ-TASK-001 | confirmed | ST13 当前任务文档不因文档重构自动进入 implementation-ready | `TASK_INDEX.md` |
 
 ## 4. 当前未关闭问题
 
 | id | status | question | recommended owner |
 | --- | --- | --- | --- |
-| OQ-STATE-002 | open | ST13 task docs 是否需要从 plans 目录迁到专用 task 目录 | 状态迁移窗口 |
-| OQ-STATE-003 | open | current-repo execution plan 是否需要在后续状态写回后迁出 plans 目录 | 状态迁移窗口 |
-| OQ-GOV-001 | open | generated reports 中的历史表述是否由工具重渲染清理 | doc-governor 工具窗口 |
 
 ## 5. 使用规则
 

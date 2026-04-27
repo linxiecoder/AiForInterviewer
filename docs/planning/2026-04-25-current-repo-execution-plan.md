@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文档是当前仓库执行 planning 文档。该路径被 `docs/governance/DOC_STATE.yaml` 引用，本轮保持原路径。
+本文档是当前仓库执行 planning 文档。本文档已迁入 `docs/planning/**`，`docs/governance/DOC_STATE.yaml` 中的受管路径已同步。
 
 本文档不承载需求正文、设计正文、执行日志、状态写回、formal window 或 implementation packet。
 
@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | requirements | `docs/requirements/workbench-mvp/**` | 产品目标、范围边界、验收口径 |
 | design | `docs/design/workbench-mvp/**` | Workbench MVP 设计事实 |
-| task | `TASK_INDEX.md`、`docs/superpowers/plans/st13-task-packages/**` | 任务入口与 required docs |
+| task | `TASK_INDEX.md`、`docs/tasks/workbench-mvp/st13-task-packages/**` | 任务入口与 required docs |
 | state | `docs/governance/DOC_STATE.yaml` | 正式结构化状态真值 |
 | process | `EXECUTION_LOG.md` | 执行记录 |
 
@@ -26,7 +26,7 @@
 | doc-governor 工具链 | 已具备 validate/evaluate/report/confirm 等治理能力 |
 | Workbench MVP 设计 | 已归位到 `docs/design/workbench-mvp/**` |
 | Workbench MVP 需求 | 已独立到 `docs/requirements/workbench-mvp/**` |
-| ST13 任务文档 | 当前保留在状态层引用路径下 |
+| ST13 任务文档 | 已迁入 `docs/tasks/workbench-mvp/st13-task-packages/**` |
 
 ## 4. 当前主项目设计开发的真实前置条件
 
@@ -41,13 +41,13 @@
 - 当前阶段仍处于文档与状态治理前置阶段。
 - `DOC_STATE.yaml` 尚未放行具体 implementation-ready。
 - 业务目录、工具目录、测试目录不应被文档体系重构顺手改动。
-- ST13 task docs 路径被状态层引用，不能在本轮直接迁移。
+- ST13 task docs 已完成路径迁移，业务目录、工具目录、测试目录仍不应被文档体系重构顺手改动。
 
 ## 6. 下一步建议
 
 1. 完成文档体系重构和引用清理。
 2. 人工 review 本轮 diff，确认没有误删需求或设计事实。
-3. 另开状态迁移窗口，处理被状态层引用但目录职责不理想的任务文档。
+3. 确认 `DOC_STATE.yaml`、索引文档和 generated reports 不再保留旧 active path。
 4. 状态 gate 允许后，再打开 formal window 并生成 implementation packet。
 
 ## 7. 验证命令
