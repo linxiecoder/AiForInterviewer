@@ -21,16 +21,16 @@
 
 | module | path | primary responsibility | current status |
 | --- | --- | --- | --- |
-| M01 | `docs/modules/M01-M10/M01/` | 基础用户、权限与共享适配边界 | not implementation-ready |
-| M02 | `docs/modules/M01-M10/M02/` | 成员 / 账号 / 基础访问边界 | not implementation-ready |
-| M03 | `docs/modules/M01-M10/M03/` | 岗位 / 简历 / 资料管理边界 | not implementation-ready |
-| M04 | `docs/modules/M01-M10/M04/` | 面试记录与会话边界 | not implementation-ready |
-| M05 | `docs/modules/M01-M10/M05/` | 面试工作台交互边界 | not implementation-ready |
-| M06 | `docs/modules/M01-M10/M06/` | LLM / RAG / 多轮上下文边界 | not implementation-ready |
-| M07 | `docs/modules/M01-M10/M07/` | 评分、反馈与复盘边界 | not implementation-ready |
-| M08 | `docs/modules/M01-M10/M08/` | 导出与结果交付边界 | not implementation-ready |
-| M09 | `docs/modules/M01-M10/M09/` | 弱点训练材料边界 | not implementation-ready |
-| M10 | `docs/modules/M01-M10/M10/` | 文档治理、测试与收口边界 | not implementation-ready |
+| M01 | `docs/modules/M01-foundation-and-platform/` | 基础设施、平台边界与共享能力 | not implementation-ready |
+| M02 | `docs/modules/M02-identity-and-team/` | 身份、团队、成员与权限边界 | not implementation-ready |
+| M03 | `docs/modules/M03-jobs-resumes-and-documents/` | 岗位、简历与文档资料边界 | not implementation-ready |
+| M04 | `docs/modules/M04-match-analysis-and-evidence/` | 匹配分析、评分证据与规则版本边界 | not implementation-ready |
+| M05 | `docs/modules/M05-assets-and-retrieval/` | 资产、知识库、检索与归档边界 | not implementation-ready |
+| M06 | `docs/modules/M06-simulated-interview-and-context/` | 模拟面试、上下文包、LLM / RAG 与多轮边界 | not implementation-ready |
+| M07 | `docs/modules/M07-polish-assessment-and-progress/` | 打磨、评估与进度边界 | not implementation-ready |
+| M08 | `docs/modules/M08-review-and-replay/` | 复盘、回放、真实面试输入与导出边界 | not implementation-ready |
+| M09 | `docs/modules/M09-training-and-weakness-lifecycle/` | 训练、薄弱项与生命周期边界 | not implementation-ready |
+| M10 | `docs/modules/M10-admin-governance-and-observability/` | 管理台、治理、可观测性与收口边界 | not implementation-ready |
 
 ## 4. 上游输入
 

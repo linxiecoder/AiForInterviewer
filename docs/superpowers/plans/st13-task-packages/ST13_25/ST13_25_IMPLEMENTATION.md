@@ -3,7 +3,7 @@
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：`implementation plan only`
+- 文档性质：ST13 任务实施说明；只定义后续执行条件，不是 implementation packet
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
@@ -32,7 +32,7 @@
 
 ## 5. implementation packet 前置条件
 
-- formal window open 前置确认已完成。
+- formal window open 前置确认需在后续状态窗口完成。
 - 治理写回 checklist、验证命令、fallback 包和交接格式已明确。
 - allowed modify paths、forbidden paths、required tests、acceptance criteria 均已填实。
 - 当前窗口不生成 implementation packet。
@@ -43,7 +43,7 @@
 未来治理收口窗口才可能允许：
 
 - Basic Memory 写回，且必须先检索、写入、回读验证。
-- Superpowers 计划更新，且必须引用当前事实源。
+- Superpowers 计划更新，且必须引用当前输入。
 - 父索引、OQ/DD、执行日志、进展、成熟度的治理收口更新。
 
 当前 W13-E9 不写 Basic Memory。
@@ -135,7 +135,7 @@ python -m tools.test_runner.run_tests
 ## 13. 安全 / 隐私检查
 
 - Basic Memory 和 Superpowers 写回不得包含真实简历、provider key、私有知识库内容。
-- 收口报告不得把 archive 历史文档误写成当前事实源。
+- 收口报告不得把 archive 历史文档误写成当前输入。
 - 不得将 proposed-default 写成 confirmed，除非用户已确认。
 
 ## 14. 交接输出格式
@@ -159,7 +159,7 @@ python -m tools.test_runner.run_tests
 - 写入 confirmed、风险、下一步、验证结果。
 - 回读验证。
 - 显式使用白名单目录。
-- 只更新当前事实源或对应计划，不更新 archive 历史文档作为当前事实。
+- 只更新当前输入或对应计划，不更新 archive 历史文档作为当前事实。
 - 不把 proposed-default、near-ready 或 facts-only candidate 推荐写成 confirmed。
 
 当前 W13-E14-B 不写 Basic Memory，不调用 Basic Memory，不调用外部记忆写回流程，不更新 Superpowers 外部状态。

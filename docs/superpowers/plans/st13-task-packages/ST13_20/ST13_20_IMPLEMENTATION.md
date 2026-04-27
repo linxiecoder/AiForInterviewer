@@ -3,7 +3,7 @@
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：`implementation plan only`
+- 文档性质：ST13 任务实施说明；只定义后续执行条件，不是 implementation packet
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
@@ -40,7 +40,7 @@
 
 ## 5. implementation packet 前置条件
 
-- formal window open 前置确认已完成。
+- formal window open 前置确认需在后续状态窗口完成。
 - implementation doc 不再只是计划文档。
 - allowed modify paths、forbidden paths、required tests、acceptance criteria 均已填实。
 - `ST13_21` API contract、M02 权限边界、PostgreSQL schema / migration / rollback 策略均已作为 packet 输入。

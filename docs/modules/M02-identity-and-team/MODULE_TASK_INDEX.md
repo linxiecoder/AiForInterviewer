@@ -1,17 +1,18 @@
 # M02 鉴权、团队与成员 - 模块任务索引
 
-## 0. Workbench MVP Design Canon 承接
+## 0. Workbench MVP 当前需求与设计输入
 
-- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 当前需求输入：`docs/requirements/workbench-mvp/`。
+- 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`。
 - 模块承接摘要：登录、session、角色、权限、记录可见范围和管理员入口。
 - 后续补齐项：补齐权限消费边界，尤其是 API / 数据 contract 对 M02 的依赖。
 - 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
 
-## 0. W13 事实源与父级索引边界
+## 0. 当前输入与父级索引边界
 
-- 当前产品范围事实只引用 Workbench MVP 正式设计事实源；本文件中的 `ST02_*` / `MT02_*` 仅用于模块内历史索引、观察蓝本和结构归属说明，不激活旧任务，不新增正式子任务 ID。
-- W10 `apps/web` 原型只能作为参考证据；当前仍暂停代码开发，回到设计文档补齐。
+- 当前产品范围事实只引用 Workbench MVP 当前设计输入；本文件中的 `ST02_*` / `MT02_*` 仅用于模块内历史索引、观察蓝本和结构归属说明，不激活旧任务，不新增正式子任务 ID。
+- 历史 frontend prototype 只作为 historical context；当前任务状态以 `TASK_INDEX.md`、`docs/governance/DOC_STATE.yaml` 和当前任务文档为准。
 - 旧 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 若仍为骨架或模板，不因被本索引链接而获得正式入口、candidate 或开窗资格。
 
 | 历史 / 骨架文档 | 父级索引 | 当前用途 |

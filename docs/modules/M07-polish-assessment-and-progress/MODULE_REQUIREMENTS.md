@@ -1,8 +1,9 @@
 # M07 打磨模式、评估与进度 - 模块需求
 
-## 0. Workbench MVP Design Canon 承接
+## 0. Workbench MVP 当前需求与设计输入
 
-- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 当前需求输入：`docs/requirements/workbench-mvp/`。
+- 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
 - 模块承接摘要：打磨模式、ProgressTree、题级反馈、能力树、训练入口和部分导出。
 - 后续补齐项：明确打磨模式不固定轮次，并与压力面评分和训练闭环分离。
@@ -16,7 +17,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> historical context：历史 P1 设计稿和历史实现计划只用于追溯，不作为当前依据。当前需求事实源为 `docs/requirements/workbench-mvp/**`，当前设计事实源为 `docs/design/workbench-mvp/**`；规划入口为 `PLAN_LATEST.md`，任务入口为 `TASK_INDEX.md`、`docs/governance/DOC_STATE.yaml` 和当前任务文档。
 
 ### 2.1 原始需求引用
 - 历史 P1 设计材料：7.6 评估与进展
@@ -73,10 +74,10 @@
 ## 10. 旧待确认问题处理
 
 - 当前无模块内 open 问题。
-- OQ-008 已由 W13 `FC-17` confirmed 覆盖：匹配分析与评估采用规则版本化、共享核心评估框架与规则推荐优先。
-- OQ-013 已由 W13 `FC-13`、`FC-17` confirmed 覆盖：打磨主题可由用户自定义，也可结合岗位与薄弱项自动推荐，规则推荐优先。
-- OQ-014 已由 W13 `FC-17` confirmed 覆盖：模拟面试、打磨模式和复盘共享核心评估框架，具体模式差异按评分 / 复盘 / 导出 / DoD 事实源承接。
-- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 正式设计事实源文档为准，不再作为当前阻塞。
+- OQ-008 已由当前需求 / 设计输入中的 `FC-17` confirmed 覆盖：匹配分析与评估采用规则版本化、共享核心评估框架与规则推荐优先。
+- OQ-013 已由当前需求 / 设计输入中的 `FC-13`、`FC-17` confirmed 覆盖：打磨主题可由用户自定义，也可结合岗位与薄弱项自动推荐，规则推荐优先。
+- OQ-014 已由当前需求 / 设计输入中的 `FC-17` confirmed 覆盖：模拟面试、打磨模式和复盘共享核心评估框架，具体模式差异按评分 / 复盘 / 导出 / DoD 输入承接。
+- 以上输入以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 当前设计输入文档为准，不再作为当前阻塞。
 
 ## 11. 关联文档
 

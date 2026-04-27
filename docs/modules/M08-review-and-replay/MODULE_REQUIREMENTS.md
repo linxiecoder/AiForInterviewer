@@ -1,8 +1,9 @@
 # M08 复盘与回放 - 模块需求
 
-## 0. Workbench MVP Design Canon 承接
+## 0. Workbench MVP 当前需求与设计输入
 
-- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 当前需求输入：`docs/requirements/workbench-mvp/`。
+- 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`information-architecture.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
 - 模块承接摘要：模拟复盘、真实面试复盘、逐题拆解、导出和归档入口。
 - 后续补齐项：按真实 / 模拟复盘、低置信度校对、Markdown 导出和证据展示补齐模块设计。
@@ -16,7 +17,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> historical context：历史 P1 设计稿和历史实现计划只用于追溯，不作为当前依据。当前需求事实源为 `docs/requirements/workbench-mvp/**`，当前设计事实源为 `docs/design/workbench-mvp/**`；规划入口为 `PLAN_LATEST.md`，任务入口为 `TASK_INDEX.md`、`docs/governance/DOC_STATE.yaml` 和当前任务文档。
 
 ### 2.1 原始需求引用
 - 历史 P1 设计材料：7.7 复盘
@@ -69,10 +70,10 @@
 ## 10. 旧待确认问题处理
 
 - 当前无模块内 open 问题。
-- OQ-010 已由 W13 `FC-14` confirmed 覆盖：支持整份和单题归档到资产库。
-- OQ-014 已由 W13 `FC-17` confirmed 覆盖：模拟面试、打磨模式和复盘共享核心评估框架，具体模式差异按评分 / 复盘 / 导出 / DoD 事实源承接。
-- OQ-015 已由 W13 `FC-11` confirmed 覆盖：真实面试输入支持上传逐字稿原文，不要求用户先按题目拆分；系统由大模型自动识别问答边界，低置信度时提示用户校对。
-- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 正式设计事实源文档为准，不再作为当前阻塞。
+- OQ-010 已由当前需求 / 设计输入中的 `FC-14` confirmed 覆盖：支持整份和单题归档到资产库。
+- OQ-014 已由当前需求 / 设计输入中的 `FC-17` confirmed 覆盖：模拟面试、打磨模式和复盘共享核心评估框架，具体模式差异按评分 / 复盘 / 导出 / DoD 输入承接。
+- OQ-015 已由当前需求 / 设计输入中的 `FC-11` confirmed 覆盖：真实面试输入支持上传逐字稿原文，不要求用户先按题目拆分；系统由大模型自动识别问答边界，低置信度时提示用户校对。
+- 以上输入以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 当前设计输入文档为准，不再作为当前阻塞。
 
 ## 11. 关联文档
 

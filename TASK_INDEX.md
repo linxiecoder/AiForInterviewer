@@ -11,7 +11,7 @@
 | structured task state | `docs/governance/DOC_STATE.yaml` | 正式状态真值 |
 | current task remap | `docs/superpowers/plans/2026-04-25-workbench-mvp-task-remap.md` | 被状态层引用，保持原路径 |
 | ST13 task docs | `docs/superpowers/plans/st13-task-packages/**` | 被状态层引用，保持原路径 |
-| module task indexes | `docs/modules/M01-M10/MODULE_TASK_INDEX.md` | 模块级任务索引 |
+| module task indexes | `docs/modules/<module-dir>/MODULE_TASK_INDEX.md` | 模块级任务索引，真实路径见 `MODULE_INDEX.md` |
 
 ## 3. 当前任务组
 

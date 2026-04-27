@@ -6,33 +6,33 @@
 - 本文档是模块级问题清单，不代替根目录 `OPEN_QUESTIONS.md` 的全局问题总表。
 - 当前模块主责 Codex 在推进模块文档时，若发现新的模块级问题，应优先记录在这里。
 - 若问题已明显影响多个模块、多个子任务或共享契约，应进一步上升到根目录 `OPEN_QUESTIONS.md`。
-- W13 后当前事实以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 `docs/design/workbench-mvp/` 正式设计事实源为准；本文件不再保留模板 MQ 作为当前 open 问题。
+- 当前模块问题状态以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 `docs/design/workbench-mvp/` 当前设计输入为准；本文件不再保留模板 MQ 作为当前 open 问题。
 
 ## 2. 状态定义
 
 - `open`：问题已识别，但尚无明确默认方案
 - `confirmed`：问题已确认，后续文档应按确认结果回写
-- `historical`：仅保留为历史追踪，不再作为当前事实源或阻塞项
+- `historical`：仅保留为历史追踪，不再作为当前输入或阻塞项
 - `superseded`：问题已失效或已被其他新口径替代
 
 ## 3. 问题表
 
-| ID | 问题 | 状态 | 影响范围 | 当前处理 | 是否需上升到全局 | 事实源 / 需回写文档 |
+| ID | 问题 | 状态 | 影响范围 | 当前处理 | 是否需上升到全局 | 输入 / 需回写文档 |
 | --- | --- | --- | --- | --- | --- | --- |
 | MQ-001 | 模板占位：模块边界示例问题 | superseded | 模块问题模板 | 模板占位已失效，不再作为当前问题 | 否 | 本文件已清理 |
 | MQ-002 | 模板占位：异常回滚示例问题 | superseded | 模块问题模板 | 模板占位已失效，不再作为当前问题 | 否 | 本文件已清理 |
-| OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | historical | W10 历史原型 / M10 | 已由 `FC-19` 降级为历史追踪；不再作为当前一期 MVP 事实源 | 否 | `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` |
-| OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | confirmed | M02 / M10 | 已由 `FC-02` 覆盖：一期采用 session cookie | 否 | `OPEN_QUESTIONS.md`、一期 MVP 范围事实源 |
-| OQ-005 | 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面 | confirmed | M02 / M10 | 已由 `FC-02` 覆盖：角色为普通用户 / 管理员两级，管理员可额外按团队筛选 | 否 | `OPEN_QUESTIONS.md`、一期 MVP 范围事实源 |
-| OQ-007 | 上传、转换、导出在 P1 中哪些必须异步 | confirmed | M03 / M08 / M10 | 已由 `FC-12` 覆盖：上传同步入库，转换和导出异步 | 否 | `OPEN_QUESTIONS.md`、评分 / 复盘 / 导出 / DoD 事实源 |
-| OQ-017 | 管理台的模型推荐来源是本地 catalog 还是在线同步 | confirmed | M10 | 已由 `FC-18` 覆盖：模型采用本地 catalog / seed | 否 | `OPEN_QUESTIONS.md`、对象模型 / RAG / 多轮 / 后端边界事实源 |
-| OQ-018 | 管理台是否负责 search snapshot 导入与运维 | confirmed | M06 / M10 | 已由 `FC-18` 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口 | 否 | `OPEN_QUESTIONS.md`、对象模型 / RAG / 多轮 / 后端边界事实源 |
+| OQ-002 | 首轮是否只建立最小运行时、测试和 CI 基线 | historical | W10 历史原型 / M10 | 已由 `FC-19` 降级为历史追踪；不再作为当前一期 MVP 输入 | 否 | `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` |
+| OQ-004 | P1 鉴权机制采用固定 Bearer token、JWT 还是 session cookie | confirmed | M02 / M10 | 已由 `FC-02` 覆盖：一期采用 session cookie | 否 | `OPEN_QUESTIONS.md`、一期 MVP 范围输入 |
+| OQ-005 | 团队管理员与普通成员的权限矩阵是否先只覆盖 P1 页面 | confirmed | M02 / M10 | 已由 `FC-02` 覆盖：角色为普通用户 / 管理员两级，管理员可额外按团队筛选 | 否 | `OPEN_QUESTIONS.md`、一期 MVP 范围输入 |
+| OQ-007 | 上传、转换、导出在 P1 中哪些必须异步 | confirmed | M03 / M08 / M10 | 已由 `FC-12` 覆盖：上传同步入库，转换和导出异步 | 否 | `OPEN_QUESTIONS.md`、评分 / 复盘 / 导出 / DoD 输入 |
+| OQ-017 | 管理台的模型推荐来源是本地 catalog 还是在线同步 | confirmed | M10 | 已由 `FC-18` 覆盖：模型采用本地 catalog / seed | 否 | `OPEN_QUESTIONS.md`、对象模型 / RAG / 多轮 / 后端边界输入 |
+| OQ-018 | 管理台是否负责 search snapshot 导入与运维 | confirmed | M06 / M10 | 已由 `FC-18` 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口 | 否 | `OPEN_QUESTIONS.md`、对象模型 / RAG / 多轮 / 后端边界输入 |
 
 ## 4. 当前高优问题
 
 | 优先级 | ID | 当前阻塞文档 | 原因 | 本轮处理要求 |
 | --- | --- | --- | --- | --- |
-| - | - | - | 当前无模块内 open 问题 | 不新增正式子任务 ID；后续只按 W13 事实源继续细化 |
+| - | - | - | 当前无模块内 open 问题 | 不新增正式子任务 ID；后续只按 当前输入继续细化 |
 
 ## 5. 需要升级到全局的问题
 

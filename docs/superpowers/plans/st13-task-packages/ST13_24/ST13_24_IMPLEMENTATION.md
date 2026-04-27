@@ -3,7 +3,7 @@
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：`implementation plan only`
+- 文档性质：ST13 任务实施说明；只定义后续执行条件，不是 implementation packet
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
@@ -21,7 +21,7 @@
 
 当前未放行实现。未来如要进入 ST13_24 实现窗口，必须先满足以下条件：
 
-1. 总控已另窗打开 `ST13_24 / WT13-24` formal window，且正式状态层允许后续 implementation packet 流程。
+1. 后续总控另窗打开 `ST13_24 / WT13-24` formal window，且正式状态层允许后续 implementation packet 流程。
 2. `ST13_24_DESIGN.md` 中的 acceptance criteria、required tests、implementation scope、allowed paths、forbidden paths、formal window 前置条件、implementation packet 前置条件和回退策略已完成复核。
 3. `ST13_21` API contract 与 `ST13_20` 数据 contract 已稳定到可支撑测试矩阵拆分；若仍有影响测试的 blocker，必须记录并阻断实现。
 4. 是否创建 `tests/**`、是否创建测试代码、是否补充 fixture / helper、是否执行 browser verification，均已有用户确认。

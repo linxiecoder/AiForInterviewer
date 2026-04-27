@@ -1,6 +1,6 @@
 # 模块待确认问题
 
-> W13 事实源对齐：本文只保留 M01 模块内 MQ/OQ 治理记录。凡涉及一期 MVP 范围、IA / 用户旅程、对象模型 / RAG / 多轮 / 后端边界、评分 / 复盘 / 导出 / DoD 的当前事实，统一引用 `docs/design/workbench-mvp/scope.md`、`docs/design/workbench-mvp/information-architecture.md`、`docs/design/workbench-mvp/object-model-rag-multiround-backend.md`、`docs/design/workbench-mvp/scoring-review-export-dod.md`。旧 MQ/OQ 中若出现 W10 `apps/web` 原型、首切片 MVP、RAG / 知识库后续、多轮固定三轮或直接发起模拟面试等产品范围判断，一律按 historical / superseded 理解，不作为当前事实源。
+> 当前输入对齐：本文只保留 M01 模块内 MQ/OQ 治理记录。凡涉及一期 MVP 范围、IA / 用户旅程、对象模型 / RAG / 多轮 / 后端边界、评分 / 复盘 / 导出 / DoD 的当前事实，统一引用 `docs/design/workbench-mvp/scope.md`、`docs/design/workbench-mvp/information-architecture.md`、`docs/design/workbench-mvp/object-model-rag-multiround-backend.md`、`docs/design/workbench-mvp/scoring-review-export-dod.md`。旧 MQ/OQ 中若出现 W10 `apps/web` 原型、首切片 MVP、RAG / 知识库后续、多轮固定三轮或直接发起模拟面试等产品范围判断，一律按 historical / superseded 理解，不作为当前输入。
 
 ## 1. 文档定位
 

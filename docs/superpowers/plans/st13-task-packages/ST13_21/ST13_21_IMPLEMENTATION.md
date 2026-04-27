@@ -3,7 +3,7 @@
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：`implementation plan only`
+- 文档性质：ST13 任务实施说明；只定义后续执行条件，不是 implementation packet
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
@@ -34,7 +34,7 @@
 
 ## 5. implementation packet 前置条件
 
-- formal window open 前置确认已完成。
+- formal window open 前置确认需在后续状态窗口完成。
 - implementation doc 不再只是计划文档，且允许修改范围、禁止范围、required tests、acceptance criteria 均非空。
 - `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml` 对该任务不再给出 implementation-ready blocker。
 - 当前窗口不生成 implementation packet。

@@ -16,7 +16,7 @@
   - `SUBTASK_DESIGN.md`
   - 上游模块文档（必要时列出）
 - 当前成熟度：
-- 当前状态：`draft / reviewable / implementation-ready / blocked`
+- 当前状态：`draft / reviewable / blocked`
 
 ## 3. 子任务实施目标
 

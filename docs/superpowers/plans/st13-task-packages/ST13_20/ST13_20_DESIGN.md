@@ -3,6 +3,7 @@
 ## 1. 文档状态
 
 - 状态：`draft`
+- 文档性质：ST13 任务文档；不是规划正文，也不是需求或设计正本。
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
@@ -23,8 +24,10 @@
 - 横向关联：M01-M10
 - 关键 blocker：M02 权限边界仍需后续模块同步；数据 contract 可以创建文档，但不能进入实现。
 
-## 4. 关联正式设计事实源
+## 4. 关联当前输入
 
+- 需求输入：`docs/requirements/workbench-mvp/**`
+- 设计输入：`docs/design/workbench-mvp/**`
 - `docs/design/workbench-mvp/scope.md`
 - `docs/design/workbench-mvp/information-architecture.md`
 - `docs/design/workbench-mvp/object-model-rag-multiround-backend.md`
@@ -54,7 +57,7 @@
 
 ## 8. 输入
 
-- `docs/design/workbench-mvp/` 正式设计事实源。
+- `docs/design/workbench-mvp/` 当前设计输入。
 - `ST13_21` API / 后端服务边界设计。
 - W13-E5 readiness audit 和 W13-E6 / E7 任务包文档。
 - 当前状态层中 `ST13_20` 的 blocked 事实；W13-E8.5 已登记 `facts.design_doc` / `facts.implementation_doc`，但 `implementation_doc_state` 仍为 `missing`，`readiness` 仍为 `blocked`。

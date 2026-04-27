@@ -1,8 +1,9 @@
 # M10 管理台、治理与可观测性 - 模块需求
 
-## 0. Workbench MVP Design Canon 承接
+## 0. Workbench MVP 当前需求与设计输入
 
-- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 当前需求输入：`docs/requirements/workbench-mvp/`。
+- 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`README.md`、`scope.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
 - 模块承接摘要：管理员入口、公共知识库、LLM provider、日志、审计、配置、测试与治理收口。
 - 后续补齐项：补齐最小运维 / 观测边界，完整管理台和 Basic Memory 写回继续后置。
@@ -16,7 +17,7 @@
 
 ## 2. 来源文档
 
-> W13-StateArchive 说明：本节中的历史 P1 设计稿和旧实现计划引用仅用于历史追溯；当前一期工作台 MVP 事实以 `PLAN_LATEST.md`、`docs/design/workbench-mvp/` 正式设计事实源、`DESIGN_DECISIONS.md` 与 `OPEN_QUESTIONS.md` 为准。
+> historical context：历史 P1 设计稿和历史实现计划只用于追溯，不作为当前依据。当前需求事实源为 `docs/requirements/workbench-mvp/**`，当前设计事实源为 `docs/design/workbench-mvp/**`；规划入口为 `PLAN_LATEST.md`，任务入口为 `TASK_INDEX.md`、`docs/governance/DOC_STATE.yaml` 和当前任务文档。
 
 ### 2.1 原始需求引用
 - 历史 P1 设计材料：5.4 日志与可观测性组件
@@ -72,13 +73,13 @@
 ## 10. 旧待确认问题处理
 
 - 当前无模块内 open 问题。
-- OQ-002 已由 W13 `FC-19` 标记为 historical：仅保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 事实源。
-- OQ-004 已由 W13 `FC-02` confirmed 覆盖：一期采用 session cookie。
-- OQ-005 已由 W13 `FC-02` confirmed 覆盖：一期角色为普通用户 / 管理员两级，管理员可额外按团队筛选。
-- OQ-007 已由 W13 `FC-12` confirmed 覆盖：上传同步入库，转换和导出异步。
-- OQ-017 已由 W13 `FC-18` confirmed 覆盖：模型采用本地 catalog / seed。
-- OQ-018 已由 W13 `FC-18` confirmed 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口。
-- 以上事实源以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 正式设计事实源文档为准，不再作为当前阻塞。
+- OQ-002 已由当前需求 / 设计输入中的 `FC-19` 标记为 historical：仅保留为 W10 旧口径来源追踪，不再作为当前一期 MVP 输入。
+- OQ-004 已由当前需求 / 设计输入中的 `FC-02` confirmed 覆盖：一期采用 session cookie。
+- OQ-005 已由当前需求 / 设计输入中的 `FC-02` confirmed 覆盖：一期角色为普通用户 / 管理员两级，管理员可额外按团队筛选。
+- OQ-007 已由当前需求 / 设计输入中的 `FC-12` confirmed 覆盖：上传同步入库，转换和导出异步。
+- OQ-017 已由当前需求 / 设计输入中的 `FC-18` confirmed 覆盖：模型采用本地 catalog / seed。
+- OQ-018 已由当前需求 / 设计输入中的 `FC-18` confirmed 覆盖：snapshot 只导入不抓取，管理台负责导入与运维入口。
+- 以上输入以 `OPEN_QUESTIONS.md`、`DESIGN_DECISIONS.md` 和 Workbench MVP 当前设计输入文档为准，不再作为当前阻塞。
 
 ## 11. 关联文档
 

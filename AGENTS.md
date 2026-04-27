@@ -85,9 +85,13 @@
 
 #### Repo map
 - 根目录 `*.md`: 全局总控、索引、标准、决策、成熟度、进展与开放问题
+- `docs/requirements/`: 当前需求事实源
+- `docs/design/`: 当前设计事实源
 - `docs/governance/`: 文档治理规则、运行手册、状态文件与报告输出
-- `docs/modules/`: `M01-M10` 模块与子任务文档
-- `docs/superpowers/`: 上游设计稿与实现计划
+- `docs/modules/`: `M01-M10` 模块需求、模块设计、模块任务和模块问题
+- `docs/superpowers/plans/`: 仅保留状态层引用的当前 planning/task 文档，以及少量仍需路径稳定的治理输入
+- `docs/superpowers/specs/`: 不承载当前设计事实；历史 specs 应在 `archive/`
+- `archive/`: 历史材料，不作为当前事实源
 - `tools/doc_governor/`: 文档治理 CLI、状态流转、扫描、校验与报告渲染
 - `tests/doc_governor/`: `doc_governor` 对应测试、fixtures 与 smoke / integration 验证
 - `requirements.txt`: 当前 Python 依赖入口

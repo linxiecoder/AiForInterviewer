@@ -1,8 +1,9 @@
 # M03 岗位、简历与文档处理 - 模块设计
 
-## 0. Workbench MVP Design Canon 承接
+## 0. Workbench MVP 当前需求与设计输入
 
-- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 当前需求输入：`docs/requirements/workbench-mvp/`。
+- 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`、`scoring-review-export-dod.md`。
 - 模块承接摘要：岗位、简历、文档输入、发起必选项、服务端保存和导出关联。
 - 后续补齐项：按发起模拟与导出快照重切岗位、简历和文档链路。

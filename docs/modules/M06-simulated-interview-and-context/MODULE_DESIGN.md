@@ -1,8 +1,9 @@
 # M06 模拟面试、上下文与导出 - 模块设计
 
-## 0. Workbench MVP Design Canon 承接
+## 0. Workbench MVP 当前需求与设计输入
 
-- 当前正式设计事实源：`docs/design/workbench-mvp/`。
+- 当前需求输入：`docs/requirements/workbench-mvp/`。
+- 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`scope.md`、`information-architecture.md`、`object-model-rag-multiround-backend.md`。
 - 模块承接摘要：模拟记录列表、发起模拟、面试台、上下文包、多轮状态机和模拟复盘输入。
 - 后续补齐项：按记录列表默认入口、打磨模式和压力面模式重切会话链路。
