@@ -18,6 +18,9 @@ def _build_state() -> dict:
     module_state = schema.make_default_confirmed_state("module")
     task_state = schema.make_default_confirmed_state("subtask")
     task_state["implementation_doc_state"] = "active_working_doc"
+    task_state["formal_window_status"] = "open"
+    task_state["implementation_approval_status"] = "approved"
+    task_state["maturity"] = "L5"
     return {
         "schema_version": schema.SCHEMA_VERSION,
         "global_policy": {
@@ -187,6 +190,7 @@ class TaskPacketTests(ManagedTempArtifactsTestCase):
     def test_generate_implementation_packet_refuses_forged_ready_payload(self) -> None:
         state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
         state["global_policy"]["formal_window_open"] = False
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["formal_window_status"] = "closed"
         self.state_path.write_text(
             yaml.safe_dump(state, sort_keys=False),
             encoding="utf-8",
@@ -200,11 +204,54 @@ class TaskPacketTests(ManagedTempArtifactsTestCase):
         derived["implementation_blockers"] = []
         output_dir = self.temp_root / "forged-packets"
 
-        with self.assertRaisesRegex(ValueError, "formal_window_open=true"):
+        with self.assertRaisesRegex(ValueError, "formal_window_status"):
             generate_implementation_packet(
                 state_path=str(self.state_path),
                 entity_id="ST01_01",
                 evaluate_payload=forged_payload,
+                output_dir=str(output_dir),
+            )
+
+        self.assertFalse(output_dir.exists())
+
+    def test_generate_implementation_packet_refuses_allowed_forbidden_path_conflict(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        confirmed = state["subtasks"]["ST01_01"]["state"]["confirmed"]
+        confirmed["formal_window_status"] = "open"
+        confirmed["implementation_approval_status"] = "approved"
+        confirmed["maturity"] = "L5"
+        self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        implementation_doc = (
+            "# 子任务实施文档\n\n"
+            "## 3. 本轮实施目标\n\n"
+            "- 本轮准备完成什么：生成 implementation packet。\n\n"
+            "## 5. 允许修改范围\n\n"
+            "### 5.1 允许修改\n"
+            "- 允许修改的文件：`apps/api/app/main.py`\n\n"
+            "### 5.2 禁止修改\n"
+            "- 本轮不应修改的目录 / 文件：`apps/api/**`\n\n"
+            "## 7. 测试与验证\n\n"
+            "### 7.1 自动化验证\n"
+            "- 计划运行的测试：`python -m pytest tests/doc_governor/test_task_packet.py -q`\n\n"
+            "## 8. 完成判定\n\n"
+            "- 满足哪些条件可视为本轮完成：packet 文件成功生成并内容完整。\n"
+        )
+        _write_text(
+            self.temp_root,
+            "docs/modules/M01-test/sub_modules/ST01_01-test/SUBTASK_IMPLEMENTATION.md",
+            implementation_doc,
+        )
+        diagnostics, payload = evaluate_state_file(self.state_path)
+        self.assertEqual([item for item in diagnostics if item.severity == "error"], [])
+        derived = payload["subtasks"]["ST01_01"]["derived"]
+        self.assertIn("gate:path_scope_conflict", derived["blocker_refs"])
+        output_dir = self.temp_root / "conflict-packets"
+
+        with self.assertRaisesRegex(ValueError, "path scope conflict"):
+            generate_implementation_packet(
+                state_path=str(self.state_path),
+                entity_id="ST01_01",
+                evaluate_payload=payload,
                 output_dir=str(output_dir),
             )
 

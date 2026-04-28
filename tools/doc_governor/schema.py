@@ -38,6 +38,8 @@ CANDIDATE_STATUSES = ("none", "observe", "candidate")
 REVIEW_STATUSES = ("unreviewed", "pending_confirmation", "approved", "rejected")
 READINESS_STATUSES = ("blocked", "not_ready", "downstream_ready", "implementation_ready")
 IMPLEMENTATION_DOC_STATES = ("missing", "inactive_template", "active_working_doc")
+FORMAL_WINDOW_STATUSES = ("closed", "open")
+IMPLEMENTATION_APPROVAL_STATUSES = ("none", "approved")
 DOCUMENT_TYPES = ("design", "plan")
 DOCUMENT_STATUSES = ("draft", "active", "blocked", "ready")
 GOVERNANCE_ROUND_STATUSES = ("open", "in_progress", "review", "closed")
@@ -122,6 +124,11 @@ _DEFAULT_CONFIRMED_STATE = {
     },
     "subtask": {
         "implementation_doc_state": "missing",
+        "formal_window_status": "closed",
+        "formal_window_opened_at": None,
+        "formal_window_opened_by": None,
+        "formal_window_reason": None,
+        "implementation_approval_status": "none",
         "maturity": None,
         "candidate_status": "none",
         "review_status": "unreviewed",

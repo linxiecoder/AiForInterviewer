@@ -138,6 +138,11 @@ class SchemaContractTests(ManagedTempArtifactsTestCase):
             subtask_state,
             {
                 "implementation_doc_state": "missing",
+                "formal_window_status": "closed",
+                "formal_window_opened_at": None,
+                "formal_window_opened_by": None,
+                "formal_window_reason": None,
+                "implementation_approval_status": "none",
                 "maturity": None,
                 "window_status": "closed",
                 "window_opened_at": None,

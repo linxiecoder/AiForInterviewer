@@ -20,6 +20,11 @@ CONTENT_BLOCKERS = {
     "gate:implementation_scope_unclear",
     "gate:required_tests_missing",
     "gate:acceptance_criteria_missing",
+    "gate:path_scope_conflict",
+}
+IMPLEMENTATION_READY_ONLY_BLOCKERS = {
+    "gate:maturity_missing",
+    "gate:implementation_approval_missing",
 }
 MANUAL_FIELD_ORDER = {
     "design_key_sections": 10,
@@ -643,7 +648,7 @@ def _categorize_blockers(blockers: list[str]) -> dict[str, list[str]]:
             buckets["requirement"].append(blocker)
         elif blocker.startswith("module:") or blocker in MODULE_LEVEL_BLOCKERS:
             buckets["module"].append(blocker)
-        elif blocker in {IMPLEMENTATION_DOC_NOT_ACTIVE, FORMAL_WINDOW_CLOSED}:
+        elif blocker in {IMPLEMENTATION_DOC_NOT_ACTIVE, FORMAL_WINDOW_CLOSED} or blocker in IMPLEMENTATION_READY_ONLY_BLOCKERS:
             buckets["state"].append(blocker)
         elif blocker in CONTENT_BLOCKERS or blocker.startswith(
             "policy:language_non_compliant"

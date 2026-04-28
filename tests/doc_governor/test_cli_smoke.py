@@ -22,6 +22,8 @@ def _build_state() -> dict:
     task_state = schema.make_default_confirmed_state("subtask")
     task_state["maturity"] = "L4"
     task_state["implementation_doc_state"] = "active_working_doc"
+    task_state["formal_window_status"] = "open"
+    task_state["implementation_approval_status"] = "approved"
     return {
         "schema_version": schema.SCHEMA_VERSION,
         "global_policy": {
@@ -696,6 +698,7 @@ class CliSmokeTests(unittest.TestCase):
         state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
         state["global_policy"]["formal_window_open"] = False
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["formal_window_status"] = "closed"
         self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
 
         output_dir = self.temp_root / "state-writeback-preview"
@@ -792,6 +795,7 @@ class CliSmokeTests(unittest.TestCase):
         state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
         state["global_policy"]["formal_window_open"] = False
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = "missing"
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["formal_window_status"] = "closed"
         self.state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
 
         output_dir = self.temp_root / "task-window-candidates"

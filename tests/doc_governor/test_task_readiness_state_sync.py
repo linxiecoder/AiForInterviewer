@@ -165,7 +165,7 @@ class TaskReadinessStateSyncTests(ManagedTempArtifactsTestCase):
         self.assertIn("requirement relation", str(task["reason"]))
         self.assertEqual(task["status"], "blocked_by_requirement_relation")
 
-    def test_preview_allows_preflight_step_to_implementation_ready(self) -> None:
+    def test_preview_does_not_advance_downstream_ready_to_implementation_ready(self) -> None:
         state_path = self._write_state(
             _build_state(readiness="downstream_ready", formal_window_open=True)
         )
@@ -177,13 +177,13 @@ class TaskReadinessStateSyncTests(ManagedTempArtifactsTestCase):
         )
 
         task = payload["tasks"][0]
-        self.assertEqual(task["dependency_stage"], "ready_for_preflight_open_window")
+        self.assertEqual(task["dependency_stage"], "can_consider_readiness_but_not_formal")
         self.assertEqual(task["gate_result"], "pass")
         self.assertTrue(task["can_open_formal_window"])
-        self.assertTrue(task["can_generate_implementation_packet"])
-        self.assertTrue(task["can_mark_implementation_ready"])
-        self.assertEqual(task["target_readiness"], "implementation_ready")
-        self.assertEqual(task["status"], "can_advance_to_implementation_ready")
+        self.assertFalse(task["can_generate_implementation_packet"])
+        self.assertFalse(task["can_mark_implementation_ready"])
+        self.assertIsNone(task["target_readiness"])
+        self.assertEqual(task["status"], "already_downstream_ready")
 
     def test_preview_exposes_blocked_gate_flags_when_formal_window_closed(self) -> None:
         state_path = self._write_state(
@@ -197,17 +197,15 @@ class TaskReadinessStateSyncTests(ManagedTempArtifactsTestCase):
         )
 
         task = payload["tasks"][0]
-        self.assertEqual(task["gate_result"], "blocked")
-        self.assertFalse(task["can_open_formal_window"])
+        self.assertEqual(task["gate_result"], "pass")
+        self.assertTrue(task["can_open_formal_window"])
         self.assertFalse(task["can_generate_implementation_packet"])
         self.assertFalse(task["can_mark_implementation_ready"])
-        self.assertEqual(task["status"], "blocked_before_preflight_open_window")
+        self.assertEqual(task["status"], "already_downstream_ready")
         self.assertIn("policy:formal_window_closed", task["remaining_blockers_after_writeback"])
 
     def test_apply_writes_only_readiness(self) -> None:
-        state_path = self._write_state(
-            _build_state(readiness="downstream_ready", formal_window_open=True)
-        )
+        state_path = self._write_state(_build_state(readiness="blocked", formal_window_open=True))
         evaluate_payload = _evaluate_payload()
 
         result = execute_task_readiness_state_sync(
@@ -223,7 +221,7 @@ class TaskReadinessStateSyncTests(ManagedTempArtifactsTestCase):
         self.assertEqual(result["summary"]["applied_task_count"], 1)
         updated = yaml.safe_load(state_path.read_text(encoding="utf-8"))
         confirmed = updated["subtasks"]["ST01_01"]["state"]["confirmed"]
-        self.assertEqual(confirmed["readiness"], "implementation_ready")
+        self.assertEqual(confirmed["readiness"], "downstream_ready")
         self.assertEqual(confirmed["implementation_doc_state"], "active_working_doc")
 
     def test_apply_is_blocked_when_content_layer_blocker_exists(self) -> None:

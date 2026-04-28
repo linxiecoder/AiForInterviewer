@@ -22,6 +22,7 @@ def _build_state(
                 "confirmed": {
                     "implementation_doc_state": task["implementation_doc_state"],
                     "readiness": task["readiness"],
+                    "formal_window_status": "open" if formal_window_open else "closed",
                 }
             },
         }
@@ -98,12 +99,12 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
         )
         item = preview["tasks"][0]
         self.assertEqual(item["dependency_stage"], "can_consider_readiness_but_not_formal")
-        self.assertEqual(item["gate_result"], "blocked")
+        self.assertEqual(item["gate_result"], "pass")
         self.assertEqual(item["open_window_gap_blockers"], ["policy:formal_window_closed"])
         self.assertEqual(item["formal_window_blockers"], ["policy:formal_window_closed"])
         self.assertTrue(item["can_continue_readiness"])
         self.assertFalse(item["can_enter_preflight_open_window"])
-        self.assertFalse(item["can_open_formal_window"])
+        self.assertTrue(item["can_open_formal_window"])
         self.assertFalse(item["can_generate_implementation_packet"])
         self.assertFalse(item["can_mark_implementation_ready"])
 
@@ -127,8 +128,8 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
         self.assertFalse(item["formal_window_blockers"])
         self.assertTrue(item["can_enter_preflight_open_window"])
         self.assertTrue(item["can_open_formal_window"])
-        self.assertTrue(item["can_generate_implementation_packet"])
-        self.assertTrue(item["can_mark_implementation_ready"])
+        self.assertFalse(item["can_generate_implementation_packet"])
+        self.assertFalse(item["can_mark_implementation_ready"])
 
     def test_dependency_stage_should_not_enter_open_window(self) -> None:
         preview = self._run_preview(
@@ -173,6 +174,7 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
                                 "confirmed": {
                                     "implementation_doc_state": "active_working_doc",
                                     "readiness": "downstream_ready",
+                                    "formal_window_status": "open",
                                 }
                             },
                         }
@@ -204,5 +206,5 @@ class TaskStateDependencyMapTests(ManagedTempArtifactsTestCase):
         self.assertEqual(code, 0)
         self.assertIn("T05", output)
         self.assertIn("gate_result: pass", output)
-        self.assertIn("can_generate_implementation_packet=true", output)
+        self.assertIn("can_generate_implementation_packet=false", output)
         self.assertIn("可转向 preflight-open-window", output)

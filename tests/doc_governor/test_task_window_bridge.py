@@ -339,6 +339,7 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
         confirmed = state["subtasks"]["ST09_03"]["state"]["confirmed"]
         confirmed["implementation_doc_state"] = "active_working_doc"
         confirmed["readiness"] = "downstream_ready"
+        confirmed["formal_window_status"] = "open"
         self.state_path.write_text(
             yaml.safe_dump(state, sort_keys=False),
             encoding="utf-8",

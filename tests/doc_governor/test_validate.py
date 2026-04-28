@@ -503,7 +503,7 @@ class ValidateSchemaTests(ManagedTempArtifactsTestCase):
         self.assertEqual(exit_code, 1)
         messages = "\n".join(item.message for item in diagnostics)
         self.assertIn(
-            "candidate_status=candidate requires global_policy.formal_window_open=true",
+            "candidate_status=candidate requires scoped formal_window_status=open",
             messages,
         )
         self.assertIn("facts.formal_window_candidate_recommended=true", messages)

@@ -16,6 +16,11 @@ from .task_window_bridge import build_task_window_bridge
 
 ALLOWED_OPEN_READINESS = {"downstream_ready", "implementation_ready"}
 HARD_READINESS_BLOCKERS = {"blocked", "not_ready"}
+PREFLIGHT_OPEN_EXCLUDED_REFS = {
+    "policy:formal_window_closed",
+    "gate:implementation_approval_missing",
+    "gate:maturity_missing",
+}
 
 
 def preflight_open_window(
@@ -90,13 +95,6 @@ def preflight_open_window(
         entity_type=entity_type,
         entity_id=entity_id,
     )
-    global_policy = (
-        official_state.get("global_policy")
-        if isinstance(official_state.get("global_policy"), dict)
-        else {}
-    )
-    formal_window_open = bool(global_policy.get("formal_window_open", True))
-
     history_records, history_parse_errors = _collect_history_records(
         history_path=history_path,
         entity_type=entity_type,
@@ -165,6 +163,7 @@ def preflight_open_window(
 
         derived = _get_derived(o, ent_type, ent_id)
 
+        formal_window_open = _scoped_formal_window_open(official, ent_type)
         official_blockers = _build_official_blockers(
             official,
             entity_type=ent_type,
@@ -178,6 +177,9 @@ def preflight_open_window(
             oq_payload=oq_payload,
             oq_policy_source_map=oq_policy_source_map,
         )
+        if ent_type == "subtask":
+            official_blockers = _filter_preflight_open_blockers(official_blockers)
+            evaluate_blockers = _filter_preflight_open_blockers(evaluate_blockers)
 
         review_required_info = _build_review_required_info(official, derived)
         blockers = official_blockers + evaluate_blockers
@@ -370,12 +372,28 @@ def preflight_open_window(
                 subtask_id=entity_id,
                 official_state=official_state,
                 evaluate_payload=o,
-                formal_window_open=formal_window_open,
+                formal_window_open=_scoped_formal_window_open(
+                    {
+                        "confirmed": _coerce_dict(
+                            _coerce_dict(
+                                _coerce_dict(official_state.get("subtasks")).get(entity_id)
+                            ).get("state")
+                        ).get("confirmed")
+                    },
+                    "subtask",
+                ),
                 eligible_entities=eligible_entities,
                 blocked_entities=blocked_entities,
             )
         )
     return payload
+
+
+def _scoped_formal_window_open(official: dict[str, Any], entity_type: str) -> bool:
+    if entity_type != "subtask":
+        return False
+    confirmed = official.get("confirmed", {}) if isinstance(official.get("confirmed"), dict) else {}
+    return _as_str(confirmed.get("formal_window_status")) == "open"
 
 
 def _has_errors(raw_errors: list[dict[str, Any]]) -> bool:
@@ -670,9 +688,18 @@ def _build_subtask_gate_summary(
         and acceptance_criteria
         and required_tests
     )
-    can_generate_packet = bool(formal_window_open and no_hard_blockers and packet_inputs_complete)
-    can_mark_ready = can_generate_packet
-    can_open_formal_window = bool(no_hard_blockers)
+    can_open_formal_window = bool(derived.get("can_open_formal_window")) or no_hard_blockers
+    can_generate_packet = bool(
+        formal_window_open
+        and no_hard_blockers
+        and packet_inputs_complete
+        and bool(derived.get("can_generate_implementation_packet"))
+    )
+    can_mark_ready = bool(
+        formal_window_open
+        and packet_inputs_complete
+        and bool(derived.get("can_mark_implementation_ready"))
+    )
 
     candidate = {
         "candidate_status": _as_str(confirmed.get("candidate_status")) or "none",
@@ -900,10 +927,10 @@ def _build_official_blockers(
         blockers.append(
             _make_reason(
                 code="formal_window_closed",
-                reference=f"{entity_type}:{entity_id}.global_policy",
+                reference=f"{entity_type}:{entity_id}.state.confirmed.formal_window_status",
                 level="hard",
                 sources=["official_state", "rules"],
-                message="formal window is closed and subtask cannot open",
+                message="scoped formal window is closed and implementation packet cannot be generated",
             )
         )
 
@@ -964,6 +991,19 @@ def _build_evaluate_blockers(
             reasons.append(reason)
 
     return reasons
+
+
+def _filter_preflight_open_blockers(
+    blockers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    for blocker in blockers:
+        if _as_str(blocker.get("code")) == "formal_window_closed":
+            continue
+        if _as_str(blocker.get("reference")) in PREFLIGHT_OPEN_EXCLUDED_REFS:
+            continue
+        filtered.append(blocker)
+    return filtered
 
 
 def _build_review_required_info(
@@ -1057,8 +1097,8 @@ def _reason_from_blocker_ref(
             level="hard",
             sources=["evaluate", "rules"],
             message=(
-                "formal_window_open=false prevents implementation packet generation, "
-                "implementation-ready, and formal-window progression"
+                "scoped formal_window_status is not open; this prevents implementation "
+                "packet generation and implementation-ready"
             ),
         )
 
@@ -1089,6 +1129,13 @@ def _reason_from_blocker_ref(
                 "must be explicit before implementation-ready"
             ),
             "requirement_id_unresolved": "unique requirement_id is required before packet generation",
+            "maturity_missing": "confirmed maturity is required before implementation-ready",
+            "implementation_approval_missing": (
+                "explicit implementation approval is required before implementation-ready"
+            ),
+            "path_scope_conflict": (
+                "allowed_modify_paths and forbidden_paths conflict before packet generation"
+            ),
         }
         return _make_reason(
             code=gate_code or "gate_policy_block",
@@ -1301,15 +1348,13 @@ def _build_task_bridge_reason(
     bridge_item: dict[str, Any],
     dependency_item: dict[str, Any],
 ) -> dict[str, Any] | None:
-    if not formal_window_open:
-        return None
-
     classification = _as_str(bridge_item.get("classification"))
     dependency_stage = _as_str(dependency_item.get("dependency_stage"))
-    if (
-        classification == "ready_for_preflight_open_window"
-        and dependency_stage == "ready_for_preflight_open_window"
-    ):
+    if classification in {
+        "ready_for_preflight_open_window",
+        "already_window_only",
+        "window_only_after_state_activation",
+    }:
         return None
 
     reason = _as_str(bridge_item.get("reason")) or "task bridge still does not place this task in preflight candidate pool"

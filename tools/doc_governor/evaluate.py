@@ -8,7 +8,7 @@ from typing import Any
 from .document_scan import scan_document
 from .diagnostics import Diagnostic, make_diagnostic, make_evidence
 from .language_check import check_markdown_language
-from .schema import REQUIRED_MODULE_SLOTS, SCHEMA_VERSION, TYPED_BLOCKER_REF_RE
+from .schema import MATURITY_LEVELS, REQUIRED_MODULE_SLOTS, SCHEMA_VERSION, TYPED_BLOCKER_REF_RE
 from .validate import validate_state_file
 
 
@@ -30,9 +30,12 @@ BLOCKED_REASON_CODES = {
     "document_file_missing",
     "document_repo_truth_mismatch",
     "requirement_id_unresolved",
+    "maturity_missing",
+    "implementation_approval_missing",
     "implementation_scope_unclear",
     "required_tests_missing",
     "acceptance_criteria_missing",
+    "path_scope_conflict",
 }
 
 REVIEW_REASONS = {
@@ -317,10 +320,6 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
     governance_rounds = state.get("governance_rounds")
     governance_rounds = governance_rounds if isinstance(governance_rounds, list) else []
 
-    global_policy = state.get("global_policy")
-    global_policy = global_policy if isinstance(global_policy, dict) else {}
-    formal_window_open = bool(global_policy.get("formal_window_open", True))
-
     oq_payload = _evaluate_oqs(oqs)
     requirement_derived_map: dict[str, dict[str, Any]] = {}
     known_requirement_ids: set[str] = set()
@@ -392,7 +391,6 @@ def _evaluate_state_payload(state: dict[str, object], *, state_path: Path) -> di
                 oq_payload=oq_payload,
                 module_derived_map=module_derived_map,
                 direct_requirement_blockers=requirement_blockers_by_task.get(str(subtask_id), []),
-                formal_window_open=formal_window_open,
                 repo_root=repo_root,
                 requirement_ids=subtask_requirement_ids.get(str(subtask_id), []),
             )
@@ -768,7 +766,6 @@ def _evaluate_subtask(
     oq_payload: dict[str, Any],
     module_derived_map: dict[str, dict[str, Any]],
     direct_requirement_blockers: list[dict[str, Any]],
-    formal_window_open: bool,
     repo_root: Path,
     requirement_ids: list[str],
 ) -> dict[str, Any]:
@@ -886,6 +883,7 @@ def _evaluate_subtask(
                 ),
             )
         )
+    formal_window_open = str(confirmed.get("formal_window_status", "closed")) == "open"
     if not formal_window_open:
         implementation_blockers.append(
             _make_blocker(
@@ -893,8 +891,38 @@ def _evaluate_subtask(
                 kind="policy",
                 reason_code="formal_window_closed",
                 message=(
-                    f"formal_window_open=false prevents implementation packet generation "
+                    f"scoped formal_window_status is not open; this prevents implementation packet generation "
                     f"and implementation-ready for subtask {subtask_id}"
+                ),
+            )
+        )
+    maturity = confirmed.get("maturity")
+    if maturity not in MATURITY_LEVELS:
+        implementation_blockers.append(
+            _make_blocker(
+                ref="gate:maturity_missing",
+                kind="gate",
+                reason_code="maturity_missing",
+                message=f"subtask {subtask_id} confirmed maturity is required before implementation-ready",
+            )
+        )
+    implementation_approval_status = str(
+        confirmed.get("implementation_approval_status", "none")
+    )
+    confirmed_readiness = str(confirmed.get("readiness", "blocked"))
+    implementation_explicitly_approved = (
+        implementation_approval_status == "approved"
+        or confirmed_readiness == "implementation_ready"
+    )
+    if not implementation_explicitly_approved:
+        implementation_blockers.append(
+            _make_blocker(
+                ref="gate:implementation_approval_missing",
+                kind="gate",
+                reason_code="implementation_approval_missing",
+                message=(
+                    f"subtask {subtask_id} requires implementation_approval_status=approved "
+                    "or confirmed readiness=implementation_ready before implementation-ready"
                 ),
             )
         )
@@ -946,6 +974,20 @@ def _evaluate_subtask(
                 message=(
                     f"subtask {subtask_id} implementation scope is incomplete: "
                     + ", ".join(missing_scope_fields)
+                ),
+            )
+        )
+    for conflict in _as_list(packet_inputs.get("path_conflicts")):
+        if not isinstance(conflict, dict):
+            continue
+        implementation_blockers.append(
+            _make_blocker(
+                ref="gate:path_scope_conflict",
+                kind="gate",
+                reason_code="path_scope_conflict",
+                message=(
+                    f"subtask {subtask_id} allowed path {conflict.get('allowed', '')} "
+                    f"conflicts with forbidden path {conflict.get('forbidden', '')}"
                 ),
             )
         )
@@ -1027,6 +1069,8 @@ def _evaluate_subtask(
         "implementation_doc_activation_reason": implementation_doc_activation_reason,
         "implementation_packet_inputs": packet_inputs,
         "requirement_ids": _dedupe_strings(requirement_ids),
+        "formal_window_status": "open" if formal_window_open else "closed",
+        "implementation_explicitly_approved": implementation_explicitly_approved,
         "formal_window_candidate_recommendation": _build_candidate_recommendation(
             facts=facts,
             confirmed=confirmed,
@@ -1341,7 +1385,34 @@ def _finalize_subtask_derived(
     implementation_blocker_refs = sorted(blocker["ref"] for blocker in implementation_blockers)
     blocker_refs = sorted(blocker["ref"] for blocker in gate_blockers)
     downstream_ready = not bool(downstream_blocker_refs)
-    assessed_implementation_ready = not bool(implementation_blocker_refs)
+    formal_window_open = (
+        str(subtask_result.get("formal_window_status", "closed")) == "open"
+    )
+    implementation_blockers_without_open_or_approval = [
+        ref
+        for ref in implementation_blocker_refs
+        if ref
+        not in {
+            "policy:formal_window_closed",
+            "gate:implementation_approval_missing",
+            "gate:maturity_missing",
+        }
+    ]
+    can_open_formal_window = bool(
+        not formal_window_open
+        and not candidate_blocker_refs
+        and not downstream_blocker_refs
+        and not implementation_blockers_without_open_or_approval
+    )
+    implementation_ready_gate_pass = bool(
+        formal_window_open
+        and not candidate_blocker_refs
+        and not downstream_blocker_refs
+        and not implementation_blocker_refs
+    )
+    assessed_implementation_ready = implementation_ready_gate_pass
+    can_generate_implementation_packet = implementation_ready_gate_pass
+    can_mark_implementation_ready = implementation_ready_gate_pass
     oq_review_only = bool(subtask_result.get("oq_review_only_refs"))
     impl_activation = bool(subtask_result.get("implementation_doc_activation_recommended"))
 
@@ -1367,6 +1438,11 @@ def _finalize_subtask_derived(
         "gate_blockers": gate_blockers,
         "blocker_refs": blocker_refs,
         "requirement_ids": requirement_ids,
+        "formal_window_status": "open" if formal_window_open else "closed",
+        "scoped_formal_window_open": formal_window_open,
+        "can_open_formal_window": can_open_formal_window,
+        "can_generate_implementation_packet": can_generate_implementation_packet,
+        "can_mark_implementation_ready": can_mark_implementation_ready,
         "assessed_downstream_ready": downstream_ready,
         "assessed_implementation_ready": assessed_implementation_ready,
         "implementation_doc_activation_recommended": impl_activation,
@@ -1385,7 +1461,7 @@ def _finalize_subtask_derived(
         "review_required": bool(review_reasons),
         "review_reasons": review_reasons,
         "ready_for_next_step": not bool(blocker_refs),
-        "implementation_ready": not bool(blocker_refs),
+        "implementation_ready": assessed_implementation_ready,
     }
 
 
@@ -1792,6 +1868,10 @@ def _build_subtask_packet_inputs(
     if not allowed_modify_paths:
         allowed_modify_paths = _extract_section_items(implementation_sections.get("允许修改范围", []))
     forbidden_paths = _extract_section_items(implementation_sections.get("禁止修改", []))
+    path_conflicts = _detect_path_conflicts(
+        allowed_paths=allowed_modify_paths,
+        forbidden_paths=forbidden_paths,
+    )
     required_tests = _dedupe_strings(
         _extract_section_items(implementation_sections.get("自动化验证", []))
         + _extract_section_items(implementation_sections.get("手动验证", []))
@@ -1828,6 +1908,7 @@ def _build_subtask_packet_inputs(
         "goal": "\n".join(goal_items).strip(),
         "allowed_modify_paths": allowed_modify_paths,
         "forbidden_paths": forbidden_paths,
+        "path_conflicts": path_conflicts,
         "required_tests": required_tests,
         "acceptance_criteria": acceptance_criteria,
         "official_doc_paths": {
@@ -1836,6 +1917,61 @@ def _build_subtask_packet_inputs(
         },
         "language_violations": language_violations,
     }
+
+
+def _detect_path_conflicts(
+    *,
+    allowed_paths: list[str],
+    forbidden_paths: list[str],
+) -> list[dict[str, str]]:
+    conflicts: list[dict[str, str]] = []
+    for allowed in allowed_paths:
+        for forbidden in forbidden_paths:
+            if _paths_conflict(allowed, forbidden):
+                conflicts.append(
+                    {
+                        "allowed": allowed,
+                        "forbidden": forbidden,
+                    }
+                )
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in conflicts:
+        key = (item["allowed"], item["forbidden"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _paths_conflict(allowed_path: str, forbidden_path: str) -> bool:
+    allowed = _normalize_path_pattern(allowed_path)
+    forbidden = _normalize_path_pattern(forbidden_path)
+    if not allowed or not forbidden:
+        return False
+    if allowed == forbidden:
+        return True
+    if forbidden.endswith("/**"):
+        prefix = forbidden[:-3].rstrip("/")
+        return allowed == prefix or allowed.startswith(prefix + "/")
+    if forbidden.endswith("/*"):
+        prefix = forbidden[:-2].rstrip("/")
+        return allowed.startswith(prefix + "/")
+    if allowed.endswith("/**"):
+        prefix = allowed[:-3].rstrip("/")
+        return forbidden == prefix or forbidden.startswith(prefix + "/")
+    return allowed.startswith(forbidden.rstrip("/") + "/") or forbidden.startswith(
+        allowed.rstrip("/") + "/"
+    )
+
+
+def _normalize_path_pattern(value: str) -> str:
+    text = str(value).strip().strip("`'\"")
+    text = text.replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    return text.rstrip("/")
 
 
 def _join_relative_path(base_path: str, filename: str) -> str:

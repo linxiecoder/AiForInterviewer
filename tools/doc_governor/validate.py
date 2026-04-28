@@ -19,8 +19,10 @@ from .schema import (
     CANDIDATE_STATUSES,
     DOCUMENT_STATUSES,
     DOCUMENT_TYPES,
+    FORMAL_WINDOW_STATUSES,
     GOVERNANCE_ROUND_REQUIRED_FIELDS,
     GOVERNANCE_ROUND_STATUSES,
+    IMPLEMENTATION_APPROVAL_STATUSES,
     IMPLEMENTATION_DOC_STATES,
     MATURITY_LEVELS,
     MODULE_DOC_SLOTS,
@@ -3428,6 +3430,84 @@ def _validate_confirmed_state(
                     ],
                 )
             )
+
+    if entity_type == "subtask":
+        formal_window_status = confirmed.get("formal_window_status", "closed")
+        if formal_window_status not in FORMAL_WINDOW_STATUSES:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=f"{entity_type}s.{entity_id}.state.confirmed.formal_window_status",
+                    message="Unknown formal_window_status value.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=f"{entity_type}s.{entity_id}.state.confirmed.formal_window_status",
+                            value=formal_window_status,
+                        )
+                    ],
+                )
+            )
+
+        implementation_approval_status = confirmed.get(
+            "implementation_approval_status",
+            "none",
+        )
+        if implementation_approval_status not in IMPLEMENTATION_APPROVAL_STATUSES:
+            diagnostics.append(
+                make_diagnostic(
+                    code="SCHEMA_UNKNOWN_ENUM_VALUE",
+                    severity="error",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    field_path=(
+                        f"{entity_type}s.{entity_id}.state.confirmed."
+                        "implementation_approval_status"
+                    ),
+                    message="Unknown implementation_approval_status value.",
+                    evidence=[
+                        make_evidence(
+                            type="state_check",
+                            path=state_path.as_posix(),
+                            ref=(
+                                f"{entity_type}s.{entity_id}.state.confirmed."
+                                "implementation_approval_status"
+                            ),
+                            value=implementation_approval_status,
+                        )
+                    ],
+                )
+            )
+
+        for field_name in (
+            "formal_window_opened_at",
+            "formal_window_opened_by",
+            "formal_window_reason",
+        ):
+            value = confirmed.get(field_name)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="SCHEMA_MISSING_REQUIRED_FIELD",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"{entity_type}s.{entity_id}.state.confirmed.{field_name}",
+                        message=f"{field_name} must be a non-empty string when present.",
+                        evidence=[
+                            make_evidence(
+                                type="state_check",
+                                path=state_path.as_posix(),
+                                ref=f"{entity_type}s.{entity_id}.state.confirmed.{field_name}",
+                                value=value,
+                            )
+                        ],
+                    )
+                )
 
     blocker_refs = confirmed.get("blocker_refs")
     if isinstance(blocker_refs, list):

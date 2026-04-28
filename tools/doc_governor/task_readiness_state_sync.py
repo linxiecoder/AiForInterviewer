@@ -86,8 +86,8 @@ def build_task_readiness_state_sync_preview(
             item for item in state_blockers if item != OFFICIAL_READINESS_BLOCKER
         ]
 
-        # 默认：仅在显式条件通过时推进到 downstream_ready，
-        # 在当前 readiness 已为 downstream_ready 且可进入 preflight 时再推进到 implementation_ready。
+        # 默认：本 preview 只做 readiness bootstrap，最多推进到 downstream_ready。
+        # implementation_ready 由独立 approval / scoped formal window / packet gate 共同决定。
         can_touch_readiness = (
             requirement_relation_unique
             and maturity_state_valid
@@ -118,11 +118,13 @@ def build_task_readiness_state_sync_preview(
                         "blocked/not_ready task can move to downstream_ready after content/state gates clear"
                     )
                     apply_reason = "Decision: advance task readiness after dependency gate checks"
-                elif current_readiness == "downstream_ready" and dependency_stage == "ready_for_preflight_open_window":
-                    target_readiness = "implementation_ready"
-                    status = "can_advance_to_implementation_ready"
-                    summary = "downstream_ready task can move to implementation_ready"
-                    apply_reason = "Decision: advance task readiness to implementation_ready before preflight-open-window"
+                elif current_readiness == "downstream_ready":
+                    target_readiness = ""
+                    status = "already_downstream_ready"
+                    summary = "readiness is already downstream_ready; implementation_ready is not auto-synced"
+                    apply_reason = (
+                        "readiness sync does not advance downstream_ready to implementation_ready"
+                    )
                 else:
                     target_readiness = ""
                     summary = "downstream_ready but open-window criteria not ready"
@@ -183,7 +185,7 @@ def build_task_readiness_state_sync_preview(
             )
         else:
             planned_paths = []
-            if status != "already_implementation_ready":
+            if status not in {"already_implementation_ready", "already_downstream_ready"}:
                 blocked_task_count += 1
             remaining_gap_refs = _dedupe_strings(
                 _as_string_list(readiness_gap_blockers) + _as_string_list(open_window_gap_blockers)

@@ -7,6 +7,10 @@ from typing import Any
 
 IMPLEMENTATION_DOC_NOT_ACTIVE = "gate:implementation_doc_not_active"
 FORMAL_WINDOW_CLOSED = "policy:formal_window_closed"
+IMPLEMENTATION_READY_ONLY_BLOCKERS = {
+    "gate:maturity_missing",
+    "gate:implementation_approval_missing",
+}
 
 
 def build_task_state_writeback_preview(
@@ -38,6 +42,7 @@ def build_task_state_writeback_preview(
             blocker
             for blocker in blockers
             if not (needs_activation and blocker == IMPLEMENTATION_DOC_NOT_ACTIVE)
+            and blocker not in IMPLEMENTATION_READY_ONLY_BLOCKERS
         ]
         remaining_categories = _dedupe_strings(
             [_categorize_blocker(blocker) for blocker in predicted_blockers]
@@ -46,6 +51,7 @@ def build_task_state_writeback_preview(
             blocker
             for blocker in blockers
             if blocker not in {IMPLEMENTATION_DOC_NOT_ACTIVE, FORMAL_WINDOW_CLOSED}
+            and blocker not in IMPLEMENTATION_READY_ONLY_BLOCKERS
         ]
 
         eligible_for_writeback = (
@@ -290,11 +296,12 @@ def _categorize_blocker(blocker: str) -> str:
         "gate:implementation_scope_unclear",
         "gate:required_tests_missing",
         "gate:acceptance_criteria_missing",
+        "gate:path_scope_conflict",
     }:
         return "manual_fill"
     if blocker.startswith("module:") or blocker in {"doc:api", "doc:open_questions"}:
         return "module_inherited"
-    if blocker in {IMPLEMENTATION_DOC_NOT_ACTIVE, FORMAL_WINDOW_CLOSED}:
+    if blocker in {IMPLEMENTATION_DOC_NOT_ACTIVE, FORMAL_WINDOW_CLOSED} or blocker in IMPLEMENTATION_READY_ONLY_BLOCKERS:
         return "state_window"
     return "other"
 

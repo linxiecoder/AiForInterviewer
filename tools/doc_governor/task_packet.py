@@ -34,13 +34,6 @@ def generate_implementation_packet(
             + ", ".join(item.code for item in errors)
         )
 
-    global_policy = state.get("global_policy")
-    global_policy = global_policy if isinstance(global_policy, dict) else {}
-    if not bool(global_policy.get("formal_window_open", False)):
-        raise ValueError(
-            "implementation packet requires global_policy.formal_window_open=true"
-        )
-
     evaluate_payload = live_payload if isinstance(live_payload, dict) else evaluate_payload
     evaluate_subtasks = evaluate_payload.get("subtasks")
     evaluate_subtasks = evaluate_subtasks if isinstance(evaluate_subtasks, dict) else {}
@@ -48,6 +41,22 @@ def generate_implementation_packet(
     evaluate_entry = evaluate_entry if isinstance(evaluate_entry, dict) else {}
     derived = evaluate_entry.get("derived")
     derived = derived if isinstance(derived, dict) else {}
+    packet_inputs = derived.get("implementation_packet_inputs")
+    packet_inputs = packet_inputs if isinstance(packet_inputs, dict) else {}
+    path_conflicts = _as_list_of_dicts(packet_inputs.get("path_conflicts"))
+    if path_conflicts:
+        raise ValueError(
+            "path scope conflict: "
+            + "; ".join(
+                f"{item.get('allowed', '')} conflicts with {item.get('forbidden', '')}"
+                for item in path_conflicts
+            )
+        )
+    confirmed = _as_dict(_as_dict(subtask.get("state")).get("confirmed"))
+    if confirmed.get("formal_window_status", "closed") != "open":
+        raise ValueError(
+            "implementation packet requires subtask formal_window_status=open"
+        )
     if not bool(derived.get("implementation_ready")):
         blocker_refs = derived.get("blocker_refs")
         blocker_refs = blocker_refs if isinstance(blocker_refs, list) else []
@@ -56,8 +65,6 @@ def generate_implementation_packet(
             + ", ".join(str(item) for item in blocker_refs if isinstance(item, str))
         )
 
-    packet_inputs = derived.get("implementation_packet_inputs")
-    packet_inputs = packet_inputs if isinstance(packet_inputs, dict) else {}
     _assert_packet_inputs_ready(
         entity_id=entity_id,
         subtask=subtask,
@@ -185,6 +192,13 @@ def _assert_packet_inputs_ready(
         blockers.append("implementation_doc template-like")
     if confirmed.get("implementation_doc_state") != "active_working_doc":
         blockers.append("implementation_doc_state must be active_working_doc")
+    if confirmed.get("formal_window_status", "closed") != "open":
+        blockers.append("formal_window_status must be open")
+    if (
+        confirmed.get("implementation_approval_status", "none") != "approved"
+        and confirmed.get("readiness") != "implementation_ready"
+    ):
+        blockers.append("implementation approval missing")
     if not _as_string_list(packet_inputs.get("acceptance_criteria")):
         blockers.append("acceptance criteria missing")
     if not _as_string_list(packet_inputs.get("required_tests")):
@@ -195,6 +209,15 @@ def _assert_packet_inputs_ready(
         blockers.append("allowed_modify_paths missing")
     if not _as_string_list(packet_inputs.get("forbidden_paths")):
         blockers.append("forbidden_paths missing")
+    path_conflicts = _as_list_of_dicts(packet_inputs.get("path_conflicts"))
+    if path_conflicts:
+        blockers.append(
+            "path scope conflict: "
+            + "; ".join(
+                f"{item.get('allowed', '')} conflicts with {item.get('forbidden', '')}"
+                for item in path_conflicts
+            )
+        )
     if _as_list_of_dicts(packet_inputs.get("language_violations")):
         blockers.append("language violations present")
     if _as_string_list(derived.get("blocker_refs")):

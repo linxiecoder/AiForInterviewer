@@ -485,10 +485,10 @@ modules:
           template_like: false
     state:
       confirmed:
-        maturity: null
-        candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        maturity: L5
+        candidate_status: observe
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
         last_transition_id: null
         last_confirmed_at: null
@@ -991,6 +991,33 @@ modules:
         last_confirmed_at: null
         last_confirmed_by: null
 subtasks:
+  ST01_01:
+    meta:
+      module_id: M01
+      path: docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/
+    facts:
+      upstream_module_ids:
+      - M01
+      related_oq_ids: []
+      legacy_locked: false
+      declared_blocker_refs: []
+      design_doc:
+        exists: true
+        template_like: false
+      implementation_doc:
+        exists: true
+        template_like: false
+    state:
+      confirmed:
+        implementation_doc_state: active_working_doc
+        maturity: null
+        candidate_status: none
+        review_status: unreviewed
+        readiness: blocked
+        blocker_refs: []
+        last_transition_id: null
+        last_confirmed_at: null
+        last_confirmed_by: null
   ST13_01:
     meta:
       module_id: M01

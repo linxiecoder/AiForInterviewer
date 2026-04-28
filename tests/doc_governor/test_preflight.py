@@ -183,12 +183,9 @@ class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
         self.assertTrue(
             any(entity["entity_id"] == "M01" and entity["entity_type"] == "module" for entity in payload["eligible_entities"])
         )
-        self.assertTrue(
-            any(
-                item["code"] == "formal_window_closed"
-                for item in payload["blocked_entities"][0]["blockers"]
-            )
-        )
+        blocker_codes = {item["code"] for item in payload["blocked_entities"][0]["blockers"]}
+        self.assertNotIn("formal_window_closed", blocker_codes)
+        self.assertIn("task_not_in_open_window_candidate_pool", blocker_codes)
 
     def test_subtask_gate_summary_separates_candidate_packet_and_ready(self) -> None:
         state = _default_state()
@@ -235,7 +232,7 @@ class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
         self.assertTrue(payload["candidate"]["formal_window_candidate_recommended"])
         self.assertEqual(payload["candidate"]["state"], "document_layer_recommended")
         blocker_codes = {item["code"] for item in payload["blockers"]}
-        self.assertIn("formal_window_closed", blocker_codes)
+        self.assertNotIn("formal_window_closed", blocker_codes)
         self.assertIn("implementation_doc_not_active", blocker_codes)
         self.assertIn("acceptance_criteria_missing", blocker_codes)
         self.assertIn("required_tests_missing", blocker_codes)
@@ -255,6 +252,9 @@ class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
             readiness="downstream_ready",
             implementation_state="active_working_doc",
         )
+        confirmed = state["subtasks"]["ST13_24"]["state"]["confirmed"]
+        confirmed["formal_window_status"] = "open"
+        confirmed["implementation_approval_status"] = "approved"
         self._write_state(state)
         _write_text(
             self.temp_root,
@@ -531,6 +531,7 @@ class PreflightOpenWindowTests(ManagedTempArtifactsTestCase):
         state["subtasks"]["ST09_03"] = _subtask_entry("ST09_03", "M09", "downstream_ready", "active_working_doc")
         state["subtasks"]["ST01_01"] = _subtask_entry("ST01_01", "M01", "downstream_ready", "active_working_doc")
         state["subtasks"]["ST02_03"] = _subtask_entry("ST02_03", "M02", "downstream_ready", "active_working_doc")
+        state["subtasks"]["ST09_03"]["state"]["confirmed"]["formal_window_status"] = "open"
         self._write_state(state)
 
         _write_text(

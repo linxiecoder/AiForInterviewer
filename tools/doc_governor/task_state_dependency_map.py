@@ -15,6 +15,10 @@ DEPENDENCY_MAP_CONTRACT_VERSION = 1
 
 ALLOWED_OPEN_READINESS = {"downstream_ready", "implementation_ready"}
 FORMAL_WINDOW_BLOCKER = FORMAL_WINDOW_CLOSED
+IMPLEMENTATION_READY_ONLY_BLOCKERS = {
+    "gate:maturity_missing",
+    "gate:implementation_approval_missing",
+}
 STATE_GATE_BLOCKERS = {IMPLEMENTATION_DOC_NOT_ACTIVE}
 CONTENT_BLOCKERS = {
     "doc:implementation_doc",
@@ -22,6 +26,7 @@ CONTENT_BLOCKERS = {
     "gate:implementation_scope_unclear",
     "gate:required_tests_missing",
     "gate:acceptance_criteria_missing",
+    "gate:path_scope_conflict",
 }
 OFFICIAL_READINESS_BLOCKER = "state:official_readiness_not_ready"
 
@@ -38,8 +43,6 @@ def build_task_state_dependency_map(
         entity_ids=entity_ids,
     )
     state = _load_state(Path(state_path))
-    global_policy = _as_dict(state.get("global_policy"))
-    formal_window_open = bool(global_policy.get("formal_window_open", False))
 
     tasks_payload = _as_list_of_dicts(writeback_preview.get("tasks"))
     map_items: list[dict[str, Any]] = []
@@ -53,6 +56,14 @@ def build_task_state_dependency_map(
             _as_dict(_as_dict(_as_dict(state.get("subtasks", {})).get(task_id)).get("state"))
             .get("confirmed", {})
             .get("readiness"),
+        )
+        confirmed = _as_dict(
+            _as_dict(_as_dict(_as_dict(state.get("subtasks", {})).get(task_id)).get("state"))
+            .get("confirmed", {})
+        )
+        formal_window_open = _as_str(confirmed.get("formal_window_status")) == "open"
+        derived = _as_dict(
+            _as_dict(_as_dict(evaluate_payload.get("subtasks")).get(task_id)).get("derived")
         )
         is_active_working_doc = bool(
             str(item.get("current_implementation_doc_state", "")).strip()
@@ -91,9 +102,16 @@ def build_task_state_dependency_map(
             module_id=module_id,
             dependency_stage=dependency_stage,
         )
-        can_open_formal_window = dependency_stage == "ready_for_preflight_open_window"
-        can_generate_implementation_packet = can_open_formal_window
-        can_mark_implementation_ready = can_open_formal_window
+        can_open_formal_window = dependency_stage in {
+            "can_consider_readiness_but_not_formal",
+            "ready_for_preflight_open_window",
+        }
+        can_generate_implementation_packet = bool(
+            formal_window_open and bool(derived.get("can_generate_implementation_packet"))
+        )
+        can_mark_implementation_ready = bool(
+            formal_window_open and bool(derived.get("can_mark_implementation_ready"))
+        )
 
         map_items.append(
             {
@@ -103,6 +121,7 @@ def build_task_state_dependency_map(
                 "can_open_formal_window": can_open_formal_window,
                 "can_generate_implementation_packet": can_generate_implementation_packet,
                 "can_mark_implementation_ready": can_mark_implementation_ready,
+                "scoped_formal_window_open": formal_window_open,
                 "is_active_working_doc": is_active_working_doc,
                 "current_readiness": current_readiness or "blocked",
                 "current_blocker_refs": current_blockers,
@@ -147,7 +166,7 @@ def build_task_state_dependency_map(
         "summary": summary,
         "tasks": map_items,
         "reasoning_notes": [
-            "本能力仅做依赖映射与只读可视化，不写入 readiness / formal_window_open。",
+            "本能力仅做依赖映射与只读可视化，不写入 readiness / formal_window_status。",
             "依赖评估以 implementation_doc_state 激活后的 predicted blocker 为主线，但不进行任何状态写回。",
             "formal_window_closed 属于独立正式窗口层；即使 readiness 达标，亦不表示可直接打开正式 open-window。",
         ],
@@ -245,9 +264,9 @@ def _classify_stage(
 ) -> str:
     if readiness_content:
         return "stay_in_content_layer"
+    if open_window_gap == [FORMAL_WINDOW_BLOCKER]:
+        return "can_consider_readiness_but_not_formal"
     if not readiness_gap:
-        if open_window_gap == [FORMAL_WINDOW_BLOCKER]:
-            return "can_consider_readiness_but_not_formal"
         if not open_window_gap:
             return "ready_for_preflight_open_window"
     return "should_not_enter_open_window"
@@ -272,8 +291,12 @@ def _derive_open_window_gap(
     predicted_blockers: list[str],
     formal_window_open: bool,
 ) -> list[str]:
-    blockers: list[str] = [blocker for blocker in readiness_gap if blocker]
+    blockers: list[str] = [
+        blocker for blocker in readiness_gap if blocker and blocker != OFFICIAL_READINESS_BLOCKER
+    ]
     for blocker in predicted_blockers:
+        if blocker in IMPLEMENTATION_READY_ONLY_BLOCKERS:
+            continue
         if blocker and blocker not in blockers:
             blockers.append(blocker)
     if not formal_window_open and FORMAL_WINDOW_BLOCKER not in blockers:

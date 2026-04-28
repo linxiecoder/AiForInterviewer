@@ -572,11 +572,17 @@ def _categorize_blocker(blocker: str) -> str:
         "gate:implementation_scope_unclear",
         "gate:required_tests_missing",
         "gate:acceptance_criteria_missing",
+        "gate:path_scope_conflict",
     }:
         return "manual_fill"
     if blocker.startswith("module:") or blocker in {"doc:api", "doc:open_questions"}:
         return "module_inherited"
-    if blocker in {"gate:implementation_doc_not_active", "policy:formal_window_closed"}:
+    if blocker in {
+        "gate:implementation_doc_not_active",
+        "policy:formal_window_closed",
+        "gate:maturity_missing",
+        "gate:implementation_approval_missing",
+    }:
         return "state_window"
     return "other"
 

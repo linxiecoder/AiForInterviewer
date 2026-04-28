@@ -350,6 +350,11 @@ class EvaluateStateTests(unittest.TestCase):
         state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_doc_state"] = (
             "active_working_doc"
         )
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["formal_window_status"] = "open"
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["implementation_approval_status"] = (
+            "approved"
+        )
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["maturity"] = "L5"
         state["subtasks"]["ST01_02"]["state"]["confirmed"]["implementation_doc_state"] = (
             "inactive_template"
         )
@@ -375,6 +380,91 @@ class EvaluateStateTests(unittest.TestCase):
         )
         self.assertEqual(task_blocked["gate_result"], "blocked")
         self.assertFalse(task_blocked["implementation_ready"])
+
+    def test_global_formal_window_open_does_not_make_subtask_implementation_ready(self) -> None:
+        state = _base_state()
+        state["global_policy"]["formal_window_open"] = True
+        state["requirements"] = {
+            "RQ01": _requirement_entry("RQ01", module_ids=["M01"], task_ids=["ST01_01"])
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        confirmed = state["subtasks"]["ST01_01"]["state"]["confirmed"]
+        confirmed["implementation_doc_state"] = "active_working_doc"
+        confirmed["maturity"] = "L5"
+        _write_subtask_docs(self.temp_root, state, "ST01_01")
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+
+        self.assertEqual(exit_code, 0)
+        derived = payload["subtasks"]["ST01_01"]["derived"]
+        self.assertFalse(derived["implementation_ready"])
+        self.assertIn("policy:formal_window_closed", derived["blocker_refs"])
+
+    def test_scoped_formal_window_open_clears_only_formal_blocker(self) -> None:
+        state = _base_state()
+        state["global_policy"]["formal_window_open"] = False
+        state["requirements"] = {
+            "RQ01": _requirement_entry("RQ01", module_ids=["M01"], task_ids=["ST01_01"])
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        confirmed = state["subtasks"]["ST01_01"]["state"]["confirmed"]
+        confirmed["implementation_doc_state"] = "active_working_doc"
+        confirmed["formal_window_status"] = "open"
+        confirmed["maturity"] = "L5"
+        _write_subtask_docs(self.temp_root, state, "ST01_01")
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+
+        self.assertEqual(exit_code, 0)
+        derived = payload["subtasks"]["ST01_01"]["derived"]
+        self.assertNotIn("policy:formal_window_closed", derived["blocker_refs"])
+        self.assertFalse(derived["implementation_ready"])
+        self.assertFalse(derived["can_mark_implementation_ready"])
+
+    def test_scoped_formal_window_isolated_from_other_subtasks(self) -> None:
+        state = _base_state()
+        state["global_policy"]["formal_window_open"] = True
+        state["requirements"] = {
+            "RQ01": _requirement_entry(
+                "RQ01",
+                module_ids=["M01", "M02", "M03"],
+                task_ids=["ST01_01", "ST02_01", "ST03_01"],
+            )
+        }
+        state["modules"] = {
+            "M01": _module_entry("M01"),
+            "M02": _module_entry("M02"),
+            "M03": _module_entry("M03"),
+        }
+        state["subtasks"] = {
+            "ST01_01": _subtask_entry("ST01_01", "M01"),
+            "ST02_01": _subtask_entry("ST02_01", "M02"),
+            "ST03_01": _subtask_entry("ST03_01", "M03"),
+        }
+        for task_id in ("ST01_01", "ST02_01", "ST03_01"):
+            confirmed = state["subtasks"][task_id]["state"]["confirmed"]
+            confirmed["implementation_doc_state"] = "active_working_doc"
+            confirmed["maturity"] = "L5"
+            _write_subtask_docs(self.temp_root, state, task_id)
+        state["subtasks"]["ST01_01"]["state"]["confirmed"]["formal_window_status"] = "open"
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+
+        self.assertEqual(exit_code, 0)
+        st01 = payload["subtasks"]["ST01_01"]["derived"]
+        st02 = payload["subtasks"]["ST02_01"]["derived"]
+        st03 = payload["subtasks"]["ST03_01"]["derived"]
+        self.assertNotIn("policy:formal_window_closed", st01["blocker_refs"])
+        self.assertIn("policy:formal_window_closed", st02["blocker_refs"])
+        self.assertIn("policy:formal_window_closed", st03["blocker_refs"])
+        self.assertFalse(st01["implementation_ready"])
+        self.assertFalse(st02["implementation_ready"])
+        self.assertFalse(st03["implementation_ready"])
 
     def test_review_required_truth_table(self) -> None:
         state = _base_state()

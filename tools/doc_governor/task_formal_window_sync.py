@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,9 +32,8 @@ from .task_state_dependency_map import (
 )
 from .task_window_bridge import build_task_window_bridge
 
-POLICY_ENTITY_TYPE = "policy"
-POLICY_ENTITY_ID = "global_policy"
-FORMAL_WINDOW_TARGET_VALUE = True
+FORMAL_WINDOW_TARGET_VALUE = "open"
+FORMAL_WINDOW_TARGET_FIELD_TEMPLATE = "subtasks.<id>.state.confirmed.formal_window_status"
 
 
 def build_task_formal_window_sync_preview(
@@ -64,7 +64,7 @@ def build_task_formal_window_sync_preview(
     prerequisite_items = _index_by_task_id(_as_list_of_dicts(bridge_payload.get("prerequisites")))
     example_items = _index_by_task_id(_as_list_of_dicts(bridge_payload.get("task_examples")))
 
-    current_formal_window_open = bool(global_policy.get("formal_window_open", False))
+    current_global_formal_window_open = bool(global_policy.get("formal_window_open", False))
     tasks: list[dict[str, Any]] = []
     apply_candidate_count = 0
     blocked_task_count = 0
@@ -86,6 +86,10 @@ def build_task_formal_window_sync_preview(
 
         current_readiness = _normalize_readiness(_as_str(confirmed.get("readiness")))
         readiness_allowed = current_readiness in ALLOWED_OPEN_READINESS
+        current_formal_window_status = _as_str(
+            confirmed.get("formal_window_status")
+        ) or "closed"
+        current_scoped_formal_window_open = current_formal_window_status == "open"
         implementation_doc_state = _as_str(confirmed.get("implementation_doc_state"))
         is_active_working_doc = implementation_doc_state == "active_working_doc"
         design_doc_ready = _slot_ready(_as_dict(facts.get("design_doc")))
@@ -107,7 +111,6 @@ def build_task_formal_window_sync_preview(
         ]
         only_formal_window_gap = (
             dependency_stage == "can_consider_readiness_but_not_formal"
-            and bridge_classification == "already_window_only"
             and not content_blockers
             and not state_blockers
             and not remaining_manual_fill_fields
@@ -119,10 +122,10 @@ def build_task_formal_window_sync_preview(
         reason = "formal window sync conditions not met"
         apply_allowed = False
 
-        if current_formal_window_open:
+        if current_scoped_formal_window_open:
             status = "already_formal_window_open"
-            summary = "formal_window_open already true"
-            reason = "formal_window_open already enabled"
+            summary = "scoped formal_window_status is already open"
+            reason = "scoped formal_window_status already open"
             already_formal_window_open_count += 1
         elif not requirement_ids:
             status = "blocked_by_requirement_relation"
@@ -140,10 +143,6 @@ def build_task_formal_window_sync_preview(
             status = "blocked_by_state_gate"
             summary = "cannot sync formal window before implementation_doc_state activation"
             reason = "implementation_doc_state not active_working_doc"
-        elif not readiness_allowed:
-            status = "blocked_by_readiness_gate"
-            summary = "cannot sync formal window before readiness reaches allowed state"
-            reason = "readiness not in allowed open-window state"
         elif dependency_stage == "stay_in_content_layer":
             status = "stay_in_content_layer"
             summary = "cannot sync formal window while task remains in content layer"
@@ -160,10 +159,6 @@ def build_task_formal_window_sync_preview(
             status = "blocked_by_dependency_map"
             summary = "dependency map still blocks formal window progression"
             reason = "dependency map currently blocks open-window progression"
-        elif bridge_classification != "already_window_only":
-            status = "blocked_by_bridge"
-            summary = "task window bridge does not classify the task as window-only"
-            reason = "bridge classification is not already_window_only"
         elif not only_formal_window_gap or non_formal_blockers:
             status = "blocked_by_formal_window_scope"
             summary = "formal window is not the only remaining blocker"
@@ -182,8 +177,19 @@ def build_task_formal_window_sync_preview(
             {
                 "task_id": task_id,
                 "module_id": _as_str(meta.get("module_id")),
-                "current_formal_window_open": current_formal_window_open,
-                "target_formal_window_open": FORMAL_WINDOW_TARGET_VALUE if apply_allowed else None,
+                "target_entity": f"subtasks.{task_id}",
+                "current_global_formal_window_open": current_global_formal_window_open,
+                "current_formal_window_status": current_formal_window_status,
+                "target_formal_window_status": (
+                    FORMAL_WINDOW_TARGET_VALUE if apply_allowed else None
+                ),
+                "proposed_field": (
+                    f"subtasks.{task_id}.state.confirmed.formal_window_status"
+                ),
+                "proposed_value": FORMAL_WINDOW_TARGET_VALUE if apply_allowed else None,
+                "implementation_ready_after_apply": bool(
+                    dependency_item.get("can_mark_implementation_ready")
+                ) if apply_allowed else False,
                 "requirement_ids": requirement_ids,
                 "requirement_relation_unique": requirement_relation_unique,
                 "current_readiness": current_readiness,
@@ -202,14 +208,18 @@ def build_task_formal_window_sync_preview(
                 "remaining_manual_fill_fields": remaining_manual_fill_fields,
                 "remaining_blockers_after_writeback": [] if apply_allowed else open_window_gap_blockers,
                 "apply_allowed": apply_allowed,
-                "planned_state_paths": ["global_policy.formal_window_open"] if apply_allowed else [],
-                "write_target_field": "global_policy.formal_window_open",
+                "planned_state_paths": [
+                    f"subtasks.{task_id}.state.confirmed.formal_window_status"
+                ] if apply_allowed else [],
+                "write_target_field": (
+                    f"subtasks.{task_id}.state.confirmed.formal_window_status"
+                ),
                 "write_target_path": str(state_path),
                 "status": status,
                 "summary": summary,
                 "reason": reason,
                 "proposed_changes": (
-                    {"formal_window_open": FORMAL_WINDOW_TARGET_VALUE} if apply_allowed else {}
+                    {"formal_window_status": FORMAL_WINDOW_TARGET_VALUE} if apply_allowed else {}
                 ),
             }
         )
@@ -218,8 +228,8 @@ def build_task_formal_window_sync_preview(
         "ok": True,
         "mode": "dry_run",
         "state_write_target_path": str(state_path),
-        "write_target_field": "global_policy.formal_window_open",
-        "current_formal_window_open": current_formal_window_open,
+        "write_target_field": FORMAL_WINDOW_TARGET_FIELD_TEMPLATE,
+        "current_global_formal_window_open": current_global_formal_window_open,
         "summary": {
             "selected_task_count": len(task_ids),
             "formal_window_apply_candidate_count": apply_candidate_count,
@@ -228,8 +238,8 @@ def build_task_formal_window_sync_preview(
         },
         "tasks": tasks,
         "reasoning_notes": [
-            "本 wrapper 只处理 global_policy.formal_window_open，不接 round/open-window 主链。",
-            "默认模式是 dry-run；只有显式 --apply 才会通过 confirm-transition approve 写回 official state。",
+            "本 wrapper 只处理 subtask-scoped formal_window_status，不写 global_policy.formal_window_open。",
+            "默认模式是 dry-run；只有显式 --apply 才会通过 confirm-transition approve 写回 selected subtask。",
             "若任务仍停留在内容层或状态层 blocker，则 formal window 不允许提前推进。",
         ],
     }
@@ -253,25 +263,28 @@ def execute_task_formal_window_sync(
 
     repo_root = _resolve_repo_root_for_confirm(state_path)
     tasks = _as_list_of_dicts(preview.get("tasks"))
-    proposed_changes = {"formal_window_open": FORMAL_WINDOW_TARGET_VALUE}
     eligible_tasks = [item for item in tasks if bool(item.get("apply_allowed"))]
 
-    if eligible_tasks and not bool(preview.get("current_formal_window_open")):
-        policy_dry_run_result = _invoke_policy_confirm_transition(
+    task_dry_run_results: dict[str, dict[str, Any]] = {}
+    for item in eligible_tasks:
+        task_id = _as_str(item.get("task_id"))
+        proposed_changes = _as_dict(item.get("proposed_changes"))
+        if not task_id or not proposed_changes:
+            continue
+        task_dry_run_results[task_id] = _invoke_subtask_confirm_transition(
             repo_root=repo_root,
             state_path=state_path,
+            task_id=task_id,
             proposed_changes=proposed_changes,
             mode="dry-run",
             actor=None,
-            reason="Decision: open formal window after task-level gate checks",
+            reason="Decision: open scoped formal window after task-level gate checks",
         )
-    else:
-        policy_dry_run_result = {"ok": True, "exit_code": 0, "raw_output": "no change"}
 
     if not apply_changes:
         return {
             **preview,
-            "policy_dry_run_result": policy_dry_run_result,
+            "task_dry_run_results": task_dry_run_results,
         }
 
     if not eligible_tasks:
@@ -285,39 +298,73 @@ def execute_task_formal_window_sync(
         raise ValueError("apply requires --actor")
     if not (reason and str(reason).strip()):
         raise ValueError("apply requires --reason")
-    if not _confirm_ok(_as_dict(policy_dry_run_result)):
-        raise ValueError("apply blocked by confirm-transition dry-run: global_policy")
+    failed_dry_runs = [
+        task_id
+        for task_id, result in task_dry_run_results.items()
+        if not _confirm_ok(_as_dict(result))
+    ]
+    if failed_dry_runs:
+        raise ValueError(
+            "apply blocked by confirm-transition dry-run: "
+            + ", ".join(sorted(set(failed_dry_runs)))
+        )
 
-    policy_apply_result = _invoke_policy_confirm_transition(
-        repo_root=repo_root,
-        state_path=state_path,
-        proposed_changes=proposed_changes,
-        mode="approve",
-        actor=actor,
-        reason=reason,
-    )
-    if not _confirm_ok(_as_dict(policy_apply_result)):
-        raise ValueError("apply blocked by confirm-transition approve: global_policy")
+    task_apply_results: dict[str, dict[str, Any]] = {}
+    opened_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    for item in eligible_tasks:
+        task_id = _as_str(item.get("task_id"))
+        proposed_changes = {
+            "formal_window_status": FORMAL_WINDOW_TARGET_VALUE,
+            "formal_window_opened_at": opened_at,
+            "formal_window_opened_by": str(actor).strip(),
+            "formal_window_reason": str(reason).strip(),
+        }
+        task_apply_results[task_id] = _invoke_subtask_confirm_transition(
+            repo_root=repo_root,
+            state_path=state_path,
+            task_id=task_id,
+            proposed_changes=proposed_changes,
+            mode="approve",
+            actor=actor,
+            reason=reason,
+        )
+
+    failed_applies = [
+        task_id
+        for task_id, result in task_apply_results.items()
+        if not _confirm_ok(_as_dict(result))
+    ]
+    if failed_applies:
+        raise ValueError(
+            "apply blocked by confirm-transition approve: "
+            + ", ".join(sorted(set(failed_applies)))
+        )
 
     return {
         "ok": True,
         "mode": "apply",
         "state_write_target_path": str(state_path),
-        "write_target_field": "global_policy.formal_window_open",
-        "current_formal_window_open": bool(preview.get("current_formal_window_open")),
+        "write_target_field": FORMAL_WINDOW_TARGET_FIELD_TEMPLATE,
+        "current_global_formal_window_open": bool(
+            preview.get("current_global_formal_window_open")
+        ),
         "summary": {
             **_as_dict(preview.get("summary")),
-            "applied_policy_count": 1,
+            "applied_task_count": len(eligible_tasks),
             "affected_task_count": len(eligible_tasks),
         },
         "tasks": tasks,
-        "policy_dry_run_result": policy_dry_run_result,
-        "policy_apply_result": policy_apply_result,
+        "task_dry_run_results": task_dry_run_results,
+        "task_apply_results": task_apply_results,
         "result_summary": {
             "applied_task_ids": [
                 str(item.get("task_id", "")).strip() for item in eligible_tasks if item.get("task_id")
             ],
-            "write_target_paths": ["global_policy.formal_window_open"],
+            "write_target_paths": [
+                f"subtasks.{str(item.get('task_id', '')).strip()}.state.confirmed.formal_window_status"
+                for item in eligible_tasks
+                if item.get("task_id")
+            ],
         },
     }
 
@@ -330,9 +377,9 @@ def render_task_formal_window_sync_markdown(payload: dict[str, Any]) -> str:
         "## 概览",
         f"- 已选任务数: {summary.get('selected_task_count', 0)}",
         f"- 可推进任务数: {summary.get('formal_window_apply_candidate_count', 0)}",
-        f"- 当前已打开 formal window: {summary.get('already_formal_window_open_count', 0)}",
+        f"- 当前已打开 scoped formal window: {summary.get('already_formal_window_open_count', 0)}",
         f"- 当前阻塞任务数: {summary.get('blocked_task_count', 0)}",
-        f"- 当前 formal_window_open: {bool(payload.get('current_formal_window_open'))}",
+        f"- 当前 global_policy.formal_window_open: {bool(payload.get('current_global_formal_window_open'))}",
         "",
         "## 任务明细",
     ]
@@ -373,10 +420,11 @@ def write_task_formal_window_sync_output(
     return path
 
 
-def _invoke_policy_confirm_transition(
+def _invoke_subtask_confirm_transition(
     *,
     repo_root: Path,
     state_path: Path,
+    task_id: str,
     proposed_changes: dict[str, Any],
     mode: str,
     actor: str | None,
@@ -384,8 +432,8 @@ def _invoke_policy_confirm_transition(
 ) -> dict[str, Any]:
     args = argparse.Namespace(
         input=state_path.as_posix(),
-        entity_type=POLICY_ENTITY_TYPE,
-        entity_id=POLICY_ENTITY_ID,
+        entity_type="subtask",
+        entity_id=task_id,
         proposed_changes=json.dumps(proposed_changes, ensure_ascii=False),
         evidence_ref=[],
         mode=mode,

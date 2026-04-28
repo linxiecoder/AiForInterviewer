@@ -5,11 +5,6 @@ from .diagnostics import Diagnostic, Evidence, make_diagnostic, make_evidence
 
 def evaluate_rules(state: dict[str, object]) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    global_policy = state.get("global_policy", {})
-    formal_window_open = False
-    if isinstance(global_policy, dict):
-        formal_window_open = bool(global_policy.get("formal_window_open", False))
-
     modules = state.get("modules", {})
     subtasks = state.get("subtasks", {})
 
@@ -73,7 +68,6 @@ def evaluate_rules(state: dict[str, object]) -> list[Diagnostic]:
                     entity_type="subtask",
                     entity_id=subtask_id,
                     confirmed=confirmed,
-                    formal_window_open=formal_window_open,
                 )
             )
 
@@ -155,9 +149,9 @@ def _evaluate_formal_window_closed_gate(
     entity_type: str,
     entity_id: str,
     confirmed: dict[str, object],
-    formal_window_open: bool,
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
+    formal_window_open = str(confirmed.get("formal_window_status", "closed")) == "open"
     if formal_window_open:
         return diagnostics
 
@@ -172,7 +166,7 @@ def _evaluate_formal_window_closed_gate(
                 entity_id=entity_id,
                 field_path=_state_path(entity_type, entity_id, "candidate_status"),
                 message=(
-                    "candidate_status=candidate requires global_policy.formal_window_open=true; "
+                    "candidate_status=candidate requires scoped formal_window_status=open; "
                     "if the intent is only document-layer candidate recommendation, use "
                     "facts.formal_window_candidate_recommended=true or candidate_status=observe "
                     "when observe has been confirmed for that workflow"
@@ -180,7 +174,7 @@ def _evaluate_formal_window_closed_gate(
                 evidence=make_evidence(
                     type="policy_check",
                     path=f"{entity_type}:{entity_id}",
-                    ref="global_policy.formal_window_open",
+                    ref="state.confirmed.formal_window_status",
                     value=False,
                 ),
             )
@@ -200,7 +194,7 @@ def _evaluate_formal_window_closed_gate(
                 evidence=make_evidence(
                     type="policy_check",
                     path=f"{entity_type}:{entity_id}",
-                    ref="global_policy.formal_window_open",
+                    ref="state.confirmed.formal_window_status",
                     value=False,
                 ),
             )

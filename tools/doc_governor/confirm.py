@@ -15,6 +15,8 @@ from .round_template import load_round_decision_anchor
 from .schema import (
     CANDIDATE_STATUSES,
     DOCUMENT_STATUSES,
+    FORMAL_WINDOW_STATUSES,
+    IMPLEMENTATION_APPROVAL_STATUSES,
     IMPLEMENTATION_DOC_STATES,
     MATURITY_LEVELS,
     OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT,
@@ -45,6 +47,11 @@ CONFIRM_ALLOWED_FIELDS_BY_ENTITY = {
             "readiness",
             "blocker_refs",
             "implementation_doc_state",
+            "formal_window_status",
+            "formal_window_opened_at",
+            "formal_window_opened_by",
+            "formal_window_reason",
+            "implementation_approval_status",
         }
     ),
     "document": frozenset(
@@ -833,6 +840,128 @@ def _validate_state_change_inputs(
                     ],
                 )
             )
+        if field == "formal_window_status":
+            if entity_type != "subtask":
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_FIELD_SCOPE_VIOLATION",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message="formal_window_status is valid only for subtask",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=proposed_changes.get(field),
+                            )
+                        ],
+                    )
+                )
+            elif proposed_changes.get(field) not in FORMAL_WINDOW_STATUSES:
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_UNKNOWN_ENUM",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message="Unknown formal_window_status value",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=proposed_changes.get(field),
+                            )
+                        ],
+                    )
+                )
+        if field == "implementation_approval_status":
+            if entity_type != "subtask":
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_FIELD_SCOPE_VIOLATION",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message="implementation_approval_status is valid only for subtask",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=proposed_changes.get(field),
+                            )
+                        ],
+                    )
+                )
+            elif proposed_changes.get(field) not in IMPLEMENTATION_APPROVAL_STATUSES:
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_UNKNOWN_ENUM",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message="Unknown implementation_approval_status value",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=proposed_changes.get(field),
+                            )
+                        ],
+                    )
+                )
+        if field in {
+            "formal_window_opened_at",
+            "formal_window_opened_by",
+            "formal_window_reason",
+        }:
+            value = proposed_changes.get(field)
+            if entity_type != "subtask":
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_FIELD_SCOPE_VIOLATION",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message=f"{field} is valid only for subtask",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=value,
+                            )
+                        ],
+                    )
+                )
+            elif value is not None and (not isinstance(value, str) or not value.strip()):
+                diagnostics.append(
+                    make_diagnostic(
+                        code="CONFIRM_UNKNOWN_ENUM",
+                        severity="error",
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        field_path=f"state.confirmed.{field}",
+                        message=f"{field} must be a non-empty string when present",
+                        evidence=[
+                            make_evidence(
+                                type="cli",
+                                path="--proposed-changes",
+                                ref=field,
+                                value=value,
+                            )
+                        ],
+                    )
+                )
         if field == "blocker_refs":
             blocker_refs = proposed_changes.get(field)
             if not isinstance(blocker_refs, list):

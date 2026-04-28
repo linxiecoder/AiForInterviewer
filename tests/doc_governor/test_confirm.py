@@ -20,6 +20,8 @@ def _base_confirm_state() -> dict:
         slot: {"exists": True, "template_like": False}
         for slot in schema.MODULE_DOC_SLOTS
     }
+    subtask_confirmed = schema.make_default_confirmed_state("subtask")
+    subtask_confirmed["formal_window_status"] = "open"
     return {
         "schema_version": schema.SCHEMA_VERSION,
         "global_policy": {
@@ -59,7 +61,7 @@ def _base_confirm_state() -> dict:
                     "design_doc": {"exists": True, "template_like": False},
                     "implementation_doc": {"exists": True, "template_like": False},
                 },
-                "state": {"confirmed": schema.make_default_confirmed_state("subtask")},
+                "state": {"confirmed": subtask_confirmed},
             }
         },
         "documents": {
