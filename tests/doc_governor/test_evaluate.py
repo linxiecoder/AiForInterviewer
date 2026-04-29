@@ -195,6 +195,27 @@ def _write_subtask_docs(
     )
 
 
+def _write_registered_subtask_docs(
+    root: Path,
+    state: dict,
+    subtask_id: str,
+    *,
+    design_relative_path: str,
+    implementation_relative_path: str,
+    design_content: str | None = None,
+    implementation_content: str | None = None,
+) -> None:
+    subtask = state["subtasks"][subtask_id]
+    subtask["facts"]["design_doc"]["path"] = design_relative_path
+    subtask["facts"]["implementation_doc"]["path"] = implementation_relative_path
+    _write_text(root, design_relative_path, design_content or _build_design_doc())
+    _write_text(
+        root,
+        implementation_relative_path,
+        implementation_content or _build_implementation_doc(),
+    )
+
+
 class EvaluateStateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_artifacts = ManagedTempArtifacts(
@@ -424,6 +445,129 @@ class EvaluateStateTests(unittest.TestCase):
         self.assertNotIn("policy:formal_window_closed", derived["blocker_refs"])
         self.assertFalse(derived["implementation_ready"])
         self.assertFalse(derived["can_mark_implementation_ready"])
+
+    def test_packet_inputs_prefer_registered_subtask_doc_paths(self) -> None:
+        state = _base_state()
+        state["requirements"] = {
+            "RQ01": _requirement_entry("RQ01", module_ids=["M01"], task_ids=["ST13_21"])
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {"ST13_21": _subtask_entry("ST13_21", "M01")}
+        state["subtasks"]["ST13_21"]["meta"]["path"] = (
+            "docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md"
+        )
+        confirmed = state["subtasks"]["ST13_21"]["state"]["confirmed"]
+        confirmed["implementation_doc_state"] = "active_working_doc"
+        confirmed["formal_window_status"] = "open"
+        confirmed["implementation_approval_status"] = "approved"
+        confirmed["maturity"] = "L5"
+        _write_registered_subtask_docs(
+            self.temp_root,
+            state,
+            "ST13_21",
+            design_relative_path=(
+                "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md"
+            ),
+            implementation_relative_path=(
+                "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/"
+                "ST13_21_IMPLEMENTATION.md"
+            ),
+            design_content=(
+                "# ST13_21 DESIGN：R0 最小 API / 后端服务边界\n\n"
+                "## 4. R0 目标\n\n"
+                "- 统一 `/api/v1` prefix。\n"
+            ),
+            implementation_content=(
+                "# ST13_21 IMPLEMENTATION：R0 最小 API / 后端服务边界\n\n"
+                "## 2. 本轮实施目标\n\n"
+                "- 在 ST01_01 最小 FastAPI runtime 上建立 API / 后端服务边界骨架。\n\n"
+                "## 5. 允许修改范围\n\n"
+                "- `apps/api/**`\n"
+                "- `requirements.txt`\n\n"
+                "## 6. 禁止修改\n\n"
+                "- `apps/web/**`\n"
+                "- `docs/governance/DOC_STATE.yaml`\n\n"
+                "## 8. 测试与验证\n\n"
+                "- `python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`\n"
+                "- API import / route smoke，前提是依赖可用。\n\n"
+                "## 9. 完成判定\n\n"
+                "- API routes 可以按 `/api/v1` prefix 组织。\n"
+                "- health endpoint 继续可达，不被破坏。\n"
+            ),
+        )
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+
+        self.assertEqual(exit_code, 0)
+        packet_inputs = payload["subtasks"]["ST13_21"]["derived"][
+            "implementation_packet_inputs"
+        ]
+        self.assertEqual(
+            packet_inputs["official_doc_paths"]["design_doc"],
+            "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md",
+        )
+        self.assertEqual(
+            packet_inputs["official_doc_paths"]["implementation_doc"],
+            (
+                "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/"
+                "ST13_21_IMPLEMENTATION.md"
+            ),
+        )
+        self.assertIn("FastAPI runtime", packet_inputs["goal"])
+        self.assertEqual(
+            packet_inputs["allowed_modify_paths"], ["apps/api/**", "requirements.txt"]
+        )
+        self.assertEqual(
+            packet_inputs["forbidden_paths"],
+            ["apps/web/**", "docs/governance/DOC_STATE.yaml"],
+        )
+        self.assertIn(
+            (
+                "python3 -m tools.doc_governor.cli validate-state --input "
+                "docs/governance/DOC_STATE.yaml"
+            ),
+            packet_inputs["required_tests"],
+        )
+        self.assertIn(
+            "/api/v1",
+            packet_inputs["acceptance_criteria"],
+        )
+        blocker_refs = payload["subtasks"]["ST13_21"]["derived"]["blocker_refs"]
+        self.assertNotIn("gate:implementation_scope_unclear", blocker_refs)
+        self.assertNotIn("gate:required_tests_missing", blocker_refs)
+        self.assertNotIn("gate:acceptance_criteria_missing", blocker_refs)
+
+    def test_packet_inputs_fall_back_to_canonical_subtask_doc_paths(self) -> None:
+        state = _base_state()
+        state["requirements"] = {
+            "RQ01": _requirement_entry("RQ01", module_ids=["M01"], task_ids=["ST01_01"])
+        }
+        state["modules"] = {"M01": _module_entry("M01")}
+        state["subtasks"] = {"ST01_01": _subtask_entry("ST01_01", "M01")}
+        confirmed = state["subtasks"]["ST01_01"]["state"]["confirmed"]
+        confirmed["implementation_doc_state"] = "active_working_doc"
+        confirmed["formal_window_status"] = "open"
+        confirmed["implementation_approval_status"] = "approved"
+        confirmed["maturity"] = "L5"
+        _write_subtask_docs(self.temp_root, state, "ST01_01")
+        state_path = _write_state(state, self.temp_root)
+
+        exit_code, payload = self.run_cli("evaluate-state", "--input", str(state_path))
+
+        self.assertEqual(exit_code, 0)
+        packet_inputs = payload["subtasks"]["ST01_01"]["derived"][
+            "implementation_packet_inputs"
+        ]
+        self.assertEqual(
+            packet_inputs["official_doc_paths"]["design_doc"],
+            "docs/modules/M01/sub_modules/ST01_01-name/SUBTASK_DESIGN.md",
+        )
+        self.assertEqual(
+            packet_inputs["official_doc_paths"]["implementation_doc"],
+            "docs/modules/M01/sub_modules/ST01_01-name/SUBTASK_IMPLEMENTATION.md",
+        )
+        self.assertEqual(packet_inputs["allowed_modify_paths"], ["apps/api/app/main.py"])
 
     def test_scoped_formal_window_isolated_from_other_subtasks(self) -> None:
         state = _base_state()

@@ -955,6 +955,8 @@ def _evaluate_subtask(
         subtask_id=subtask_id,
         module_id=str(meta.get("module_id", "")),
         subtask_path=str(meta.get("path", "")),
+        design_doc=design_doc if isinstance(design_doc, dict) else {},
+        implementation_doc=impl_doc if isinstance(impl_doc, dict) else {},
         repo_root=repo_root,
         requirement_id=resolved_requirement_id,
     )
@@ -1850,11 +1852,31 @@ def _build_subtask_packet_inputs(
     subtask_id: str,
     module_id: str,
     subtask_path: str,
+    design_doc: dict[str, object],
+    implementation_doc: dict[str, object],
     repo_root: Path,
     requirement_id: str | None,
 ) -> dict[str, Any]:
-    design_relative_path = _join_relative_path(subtask_path, "SUBTASK_DESIGN.md")
-    implementation_relative_path = _join_relative_path(subtask_path, "SUBTASK_IMPLEMENTATION.md")
+    canonical_design_path = _join_relative_path(subtask_path, "SUBTASK_DESIGN.md")
+    canonical_implementation_path = _join_relative_path(
+        subtask_path,
+        "SUBTASK_IMPLEMENTATION.md",
+    )
+    design_relative_path, design_warnings = _resolve_subtask_doc_relative_path(
+        repo_root=repo_root,
+        slot_name="design_doc",
+        slot_doc=design_doc,
+        canonical_relative_path=canonical_design_path,
+    )
+    (
+        implementation_relative_path,
+        implementation_warnings,
+    ) = _resolve_subtask_doc_relative_path(
+        repo_root=repo_root,
+        slot_name="implementation_doc",
+        slot_doc=implementation_doc,
+        canonical_relative_path=canonical_implementation_path,
+    )
     design_text = _read_text_if_exists(repo_root / design_relative_path)
     implementation_text = _read_text_if_exists(repo_root / implementation_relative_path)
     design_sections = _parse_markdown_sections(design_text)
@@ -1915,6 +1937,7 @@ def _build_subtask_packet_inputs(
             "design_doc": design_relative_path,
             "implementation_doc": implementation_relative_path,
         },
+        "doc_path_resolution_warnings": design_warnings + implementation_warnings,
         "language_violations": language_violations,
     }
 
@@ -1977,6 +2000,42 @@ def _normalize_path_pattern(value: str) -> str:
 def _join_relative_path(base_path: str, filename: str) -> str:
     base = Path(base_path)
     return (base / filename).as_posix()
+
+
+def _registered_doc_path(slot_doc: dict[str, object]) -> str:
+    path = slot_doc.get("path", "")
+    return str(path).strip() if path is not None else ""
+
+
+def _resolve_subtask_doc_relative_path(
+    *,
+    repo_root: Path,
+    slot_name: str,
+    slot_doc: dict[str, object],
+    canonical_relative_path: str,
+) -> tuple[str, list[str]]:
+    registered_relative_path = _registered_doc_path(slot_doc)
+    warnings: list[str] = []
+    if registered_relative_path:
+        registered_path = Path(registered_relative_path)
+        registered_target = (
+            registered_path
+            if registered_path.is_absolute()
+            else repo_root / registered_path
+        )
+        if registered_target.is_file():
+            return registered_path.as_posix(), warnings
+        warnings.append(
+            (
+                f"{slot_name} registered path not found: {registered_relative_path}; "
+                f"fallback to canonical path: {canonical_relative_path}"
+            )
+        )
+
+    canonical_target = repo_root / canonical_relative_path
+    if canonical_target.is_file() or not registered_relative_path:
+        return canonical_relative_path, warnings
+    return Path(registered_relative_path).as_posix(), warnings
 
 
 def _read_text_if_exists(path: Path) -> str:
