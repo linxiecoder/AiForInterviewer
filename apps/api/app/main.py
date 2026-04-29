@@ -1,12 +1,12 @@
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-app = FastAPI(title="ai-for-interviewer")
-api_v1 = APIRouter(prefix="/api/v1")
+from app.api.v1 import build_api_v1_router
+from app.boundary import get_settings, http_exception_handler
 
+settings = get_settings()
 
-@api_v1.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+app = FastAPI(title=settings.title, version=settings.version)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 
-
-app.include_router(api_v1)
+app.include_router(build_api_v1_router(settings.api_prefix))
