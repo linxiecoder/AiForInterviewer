@@ -1874,14 +1874,15 @@ subtasks:
         review_status: pending_confirmation
         readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: 151951cdc16b4a22b7a5e4a6347cc8ab
-        last_confirmed_at: '2026-04-29T16:30:15.856592+00:00'
+        last_transition_id: 34918e69b1ad4275ba880a55530b4a70
+        last_confirmed_at: '2026-04-29T16:46:52.122776+00:00'
         last_confirmed_by: codex
         formal_window_status: open
         formal_window_opened_at: '2026-04-29T16:30:15+00:00'
         formal_window_opened_by: codex
         formal_window_reason: 'Decision: open ST13_21 scoped formal window for R0 minimal API service boundary only; no implementation
           approval, no packet generation, no implementation.'
+        implementation_approval_status: approved
   ST13_22:
     meta:
       module_id: M01
