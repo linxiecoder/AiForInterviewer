@@ -1868,15 +1868,15 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: 5e98dfbd199142ad91ee76739ab94b02
+        last_confirmed_at: '2026-04-29T15:32:35.244328+00:00'
+        last_confirmed_by: codex
   ST13_22:
     meta:
       module_id: M01
