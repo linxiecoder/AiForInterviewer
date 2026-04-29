@@ -26,7 +26,7 @@
 
 ## 3. 模块内依赖关系
 
-- `ST01_01` 已重建为正式子任务文档入口，并已存在正式 `DOC_STATE.yaml -> subtasks.ST01_01` entry；它提供仓库结构、环境模板、基础设施占位和健康检查入口，是 `ST01_02`、`ST01_03` 的基础；当前 scoped formal window 已打开，`implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`，且 implementation packet 已生成，但当前 packet allowed paths 仅覆盖文档 / 索引基线收口，不授权 runtime code。
+- `ST01_01` 已重建为正式子任务文档入口，并已存在正式 `DOC_STATE.yaml -> subtasks.ST01_01` entry；它提供仓库结构、环境模板、基础设施占位和健康检查入口，是 `ST01_02`、`ST01_03` 的基础；当前 scoped formal window 已打开，`implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`。当前输入文档已修正为 runtime baseline implementation packet input，后续必须重新生成 packet 后才可授权 runtime code。
 - `ST01_02` 依赖 `ST01_01` 已冻结的目录结构、i18n 入口和 Dashboard 路由骨架。
 - `ST01_03` 依赖 `ST01_01` 的最小运行时入口与 `ST01_02` 的前端共享组件边界，才能定义测试与 CI 的最小覆盖面。
 
@@ -87,21 +87,21 @@
 - shared adapter 的共享最小层已补写到模块层；request adapter 签名、resolved copy 承载方式和页面级 service 组合仍留在实现细节层，不再作为 M01 共享前置。
 - 共享下载 / 对象存储主题当前剩余风险已收缩到实现级细节：签名 URL TTL、代理流 / 重定向切换策略、对象生命周期与清理策略仍未冻结。
 - 共享下载网关只冻结了团队与 owner/source pointer 的最小校验边界；完整权限矩阵仍依赖 M02 / M10 后续治理口径。
-- `ST01_01` 双文档已从历史骨架重建为当前 implementation packet 输入；正式状态已登记 `subtasks.ST01_01`，且 `implementation_doc_state=active_working_doc`、`maturity=L4`、`readiness=downstream_ready`、scoped `formal_window_status=open`、`candidate_status=none`、`implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`。当前已生成 packet 的范围仍仅限文档 / 索引基线收口。
+- `ST01_01` 双文档已从历史骨架重建为 implementation packet 输入；正式状态已登记 `subtasks.ST01_01`，且 `implementation_doc_state=active_working_doc`、`maturity=L4`、`readiness=downstream_ready`、scoped `formal_window_status=open`、`candidate_status=none`、`implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`。当前输入文档已转为 runtime baseline packet 输入，待下一窗口重新生成 packet。
 - `ST01_02` / `ST01_03` 子任务文档当前仍按历史骨架处理，不能因 `ST01_01` 重建而同步开放。
 
 ## 7. 当前推进判断
 
-- 就 M01 整体而言，当前正式状态已是 `maturity=L5`、`readiness=downstream_ready`，用于支撑 ST01 子任务入口与后续审查；ST01_01 scoped formal window 已打开，implementation approval 已写入，`implementation_ready=true`，且当前 implementation packet 已生成；但当前 packet 范围仅限文档 / 索引基线收口，不得据此进入 runtime code implementation。
+- 就 M01 整体而言，当前正式状态已是 `maturity=L5`、`readiness=downstream_ready`，用于支撑 ST01 子任务入口与后续审查；ST01_01 scoped formal window 已打开，implementation approval 已写入，`implementation_ready=true`，且当前输入文档已修正为 runtime baseline packet 输入；但在 regenerated packet 通过审查前，不得据此进入 runtime code implementation。
 - 就 SC-05 共享下载 / 对象存储主题而言，可继续作为局部参考输入，但这不外推为 M01 整体成熟度提升。
-- 就 `MQ-001` / `MQ-003` / `MQ-005` 而言，它们已被压缩到 `proposed-default` 的共享最小层，足以支撑 ST01_01 packet scope reconciliation 与后续 runtime baseline 审查；但它们仍不能作为运行时代码、数据库、RAG、LLM 或业务模块实现的授权依据。
+- 就 `MQ-001` / `MQ-003` / `MQ-005` 而言，它们已被压缩到 `proposed-default` 的共享最小层，足以支撑 ST01_01 runtime packet input correction 与后续 runtime baseline 审查；但它们仍不能作为运行时代码、数据库、RAG、LLM 或业务模块实现的授权依据。
 - 当前仅供内部收敛参考的顺序仍为：
   1. ST01_01
   2. ST01_02
   3. ST01_03
-- 但在 `global_policy.formal_window_open=false` 且当前 ST01_01 packet 明确 forbids `apps/**`、`apps/api/**`、`tests/**`、`tools/**` 与 runtime code 时，上述顺序只能作为文档 / 索引基线收口与后续 runtime baseline 审查参考，不能视为已具备 runtime implementation 前置条件。
+- 但在 `global_policy.formal_window_open=false` 且当前旧 ST01_01 packet 尚未被 regenerated packet 替换前，上述顺序只能作为后续 runtime baseline 审查参考，不能视为已具备 runtime implementation 前置条件。
 - `MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` 当前也只能把该边界当预备输入，不能因为本轮补写就视为已具备实施条件。
-- 当前若要推进 runtime baseline，仍差的最小条件包括：在本轮输入文档收口后重新生成 packet，或另开 runtime baseline 任务；后续 packet 必须继续满足范围、测试、验收、路径冲突和 M02/M03 边界要求。不得使用当前文档 / 索引基线 packet 绕过 forbidden paths 启动 runtime code。
+- 当前若要推进 runtime baseline，仍差的最小条件是：在本轮输入文档修正后重新生成 packet，并复核 regenerated packet 的 allowed paths、forbidden paths、required validation、DoD、路径冲突和 M02/M03 边界。不得使用当前旧 packet 绕过 forbidden paths 启动 runtime code。
 - 对 SC-05 主题的下游推进判断：
   - M03 可继续推进与 `storage_objects`、上传受理、导出下载投影相关的模块设计细化。
   - M05 可继续推进对象引用与来源链路相关设计，不必再等待 M01 补 bucket / key / source pointer 基线。
