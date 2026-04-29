@@ -26,7 +26,7 @@
 
 ## 3. 模块内依赖关系
 
-- `ST01_01` 已重建为正式子任务文档入口，并已存在正式 `DOC_STATE.yaml -> subtasks.ST01_01` entry；它提供仓库结构、环境模板、基础设施占位和健康检查入口，是 `ST01_02`、`ST01_03` 的基础，但当前仍因 `formal_window_open=false` 和 `implementation_ready=false` 停留在审查准备层。
+- `ST01_01` 已重建为正式子任务文档入口，并已存在正式 `DOC_STATE.yaml -> subtasks.ST01_01` entry；它提供仓库结构、环境模板、基础设施占位和健康检查入口，是 `ST01_02`、`ST01_03` 的基础；当前 scoped formal window 已打开，但 implementation approval 仍未登记 / 未批准，`implementation_ready=false`，因此仍停留在 approval readiness 审查层。
 - `ST01_02` 依赖 `ST01_01` 已冻结的目录结构、i18n 入口和 Dashboard 路由骨架。
 - `ST01_03` 依赖 `ST01_01` 的最小运行时入口与 `ST01_02` 的前端共享组件边界，才能定义测试与 CI 的最小覆盖面。
 
@@ -87,21 +87,21 @@
 - shared adapter 的共享最小层已补写到模块层；request adapter 签名、resolved copy 承载方式和页面级 service 组合仍留在实现细节层，不再作为 M01 共享前置。
 - 共享下载 / 对象存储主题当前剩余风险已收缩到实现级细节：签名 URL TTL、代理流 / 重定向切换策略、对象生命周期与清理策略仍未冻结。
 - 共享下载网关只冻结了团队与 owner/source pointer 的最小校验边界；完整权限矩阵仍依赖 M02 / M10 后续治理口径。
-- `ST01_01` 双文档已从历史骨架重建为 formal window preparation 输入；正式状态已登记 `subtasks.ST01_01`，且 `implementation_doc_state=active_working_doc`、`candidate_status=none`、`readiness=blocked`。
+- `ST01_01` 双文档已从历史骨架重建为 approval readiness 审查输入；正式状态已登记 `subtasks.ST01_01`，且 `implementation_doc_state=active_working_doc`、`maturity=L4`、`readiness=downstream_ready`、scoped `formal_window_status=open`、`candidate_status=none`、`implementation_approval_status` 未登记 / 未批准、`implementation_ready=false`。
 - `ST01_02` / `ST01_03` 子任务文档当前仍按历史骨架处理，不能因 `ST01_01` 重建而同步开放。
 
 ## 7. 当前推进判断
 
-- 就 M01 整体而言，当前正式状态已是 `maturity=L5`、`readiness=downstream_ready`，用于支撑 ST01 子任务入口与后续审查；仍不得据此进入 implementation-ready 或打开 formal window。
+- 就 M01 整体而言，当前正式状态已是 `maturity=L5`、`readiness=downstream_ready`，用于支撑 ST01 子任务入口与后续审查；ST01_01 scoped formal window 已打开，但仍不得据此进入 implementation approval、implementation packet 或 implementation-ready。
 - 就 SC-05 共享下载 / 对象存储主题而言，可继续作为局部参考输入，但这不外推为 M01 整体成熟度提升。
-- 就 `MQ-001` / `MQ-003` / `MQ-005` 而言，它们已被压缩到 `proposed-default` 的共享最小层，足以支撑 ST01_01 formal window preparation；但它们仍不能作为运行时代码、数据库、RAG、LLM 或业务模块实现的授权依据。
+- 就 `MQ-001` / `MQ-003` / `MQ-005` 而言，它们已被压缩到 `proposed-default` 的共享最小层，足以支撑 ST01_01 approval readiness 审查；但它们仍不能作为运行时代码、数据库、RAG、LLM 或业务模块实现的授权依据。
 - 当前仅供内部收敛参考的顺序仍为：
   1. ST01_01
   2. ST01_02
   3. ST01_03
-- 但在 `global_policy.formal_window_open=false` 且 ST01_01 `implementation_ready=false` 时，上述顺序只能作为 formal window preparation 参考，不能视为已具备实施前置条件。
+- 但在 `global_policy.formal_window_open=false`、ST01_01 `implementation_approval_status` 未登记 / 未批准且 `implementation_ready=false` 时，上述顺序只能作为 approval readiness 审查参考，不能视为已具备实施前置条件。
 - `MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` 当前也只能把该边界当预备输入，不能因为本轮补写就视为已具备实施条件。
-- 当前仍差的最小条件包括：由独立 formal window open 窗口处理开窗边界，并在后续实施窗口继续满足范围、测试、验收和禁止路径要求；在正式开窗前不得生成 implementation packet 或启动实现。
+- 当前仍差的最小条件包括：由独立 state-only approval confirmation 或 approval preview 窗口处理 implementation approval，并在后续实施窗口继续满足范围、测试、验收、路径冲突和 M02/M03 边界要求；在 approval 写入前不得生成 implementation packet 或启动实现。
 - 对 SC-05 主题的下游推进判断：
   - M03 可继续推进与 `storage_objects`、上传受理、导出下载投影相关的模块设计细化。
   - M05 可继续推进对象引用与来源链路相关设计，不必再等待 M01 补 bucket / key / source pointer 基线。

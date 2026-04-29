@@ -12,13 +12,13 @@
 ## 1. 文档定位
 
 - 本文档用于把模块需求转为模块级结构设计。
-- 当前状态：可评审草案。
+- 当前状态：状态层已确认为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`；该状态只支撑下游设计与 formal window preparation，不授权实现。
 
 ## 2. 设计目标
 
 - 在不擅自补关键共享契约的前提下，为仓库结构、运行时、工作台壳层、i18n、列表原语和验证入口建立统一边界。
 - 让 M02、M03 以及后续模块能够明确“应复用什么平台能力、暂时不能依赖什么未冻结契约”。
-- 把 M01 从“需求初稿 + 设计骨架”推进到“设计可评审”，但不把模块误判为可直接支撑子任务设计。
+- 把 M01 从“需求初稿 + 设计骨架”推进到状态层已确认的 `L5 / downstream_ready` 设计事实源，但不把模块误判为可直接进入基础设施实现。
 
 ## 3. 模块职责边界
 
@@ -153,12 +153,12 @@
 - 页面设计：统一要求后续页面显式覆盖 loading / empty / error 其中至少一种处理策略。
 - 文档治理：任何影响共享壳层、i18n 或目录结构的变化，都必须先更新模块文档，再下放到子任务。
 
-## 10. 维持高 L4 时仍缺的最小条件
+## 10. L5 / downstream_ready 后仍后置的实现级条件
 
-- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但这只说明共享边界更稳定；当前 M01 仍只是高 `L4`、接近整体 `L5` 候选但未接受，不构成子任务设计前置条件。
+- `MQ-001`、`MQ-003`、`MQ-005` 已压缩到共享最小层；当前正式状态层已确认 M01 为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`，但 `implementation_ready=false`，不构成创建或修改 `apps/**`、`infra/**`、`.github/**`、`tests/**`、`tools/**` 或运行时代码的授权。
 - `PageHeaderModel`、Dashboard 摘要区与 `ListQueryState` 的 shared adapter 三层边界已补齐；当前未冻结的只剩精确 props、request adapter 签名与 resolved copy 承载方式等实现级细节。
 - 根目录脚本命名、health check 与 API / Web 双 lane 已收敛为共享最小层；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
-- locale fallback、切换策略和消息命名空间已形成最小共享默认口径，但完整 i18n 架构仍未定稿，不足以直接安全拆子任务设计。
+- locale fallback、切换策略和消息命名空间已形成最小共享默认口径，但完整 i18n 架构仍未定稿，不足以直接安全进入实现窗口。
 
 ## 11. 关联文档
 

@@ -3,7 +3,7 @@
 ## 1. 文档定位
 
 - 本文档用于沉淀本模块的核心流程、业务规则、状态变化和异常路径。
-- 当前状态：可评审草案。
+- 当前状态：状态层已确认为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`；该状态只支撑下游设计与 formal window preparation，不授权实现。
 
 ## 2. 核心状态定义
 
@@ -144,13 +144,13 @@
 
 ## 7. 当前缺口
 
-- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但 Logic 文档整体仍只应按高 `L4` 理解，接近整体 `L5` 候选但未接受。
+- `MQ-001`、`MQ-003`、`MQ-005` 已压缩到共享最小层；当前正式状态层已确认 M01 为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`，但 `implementation_ready=false`，不得据此推导为可创建或修改 `apps/**`、`infra/**`、`.github/**`、`tests/**`、`tools/**` 或运行时代码。
 - 根目录脚本命名、health check 与 API / Web 双 lane 已收敛为最小共享验证顺序；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - 对象写入顺序、共享下载网关和最小 owner/source pointer 已形成稳定输入；当前未冻结的只剩签名 URL TTL、对象生命周期与清理策略。
 - Dashboard 摘要区和 `PageHeader` 的详细状态流仍停留在方向级。
 - 列表查询状态已与全局 `OQ-021` 对齐到最小共享行为口径，且当前白名单只覆盖 `page / page_size / q / status / sort / order`；完整实现级 route / callback、时间筛选扩展与 URL / 持久化 / formatter 级 locale 策略仍未冻结。
 
-## 8. 维持高 L4 时仍缺的最小条件
+## 8. L5 / downstream_ready 后仍后置的实现级条件
 
 - 共享下载 / 对象存储主题已足以支撑 M03 的对象引用与下载投影继续推进；后续若继续细化，应留在实现级适配与治理策略，不应回退共享边界。
 - 若继续推进 MQ-001，只应补完整 workflow、lint / format gate、E2E 与多平台矩阵，不再回退根目录最小命名与 API / Web 双 lane。

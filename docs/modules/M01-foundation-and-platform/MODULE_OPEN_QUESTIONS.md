@@ -37,7 +37,7 @@
 | MQ-004 | locale fallback、切换策略与消息命名空间需要冻结到什么程度，才能支撑下游子任务设计 | proposed-default | `MODULE_REQUIREMENTS.md`、`MODULE_API_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、ST01_02 | 已按全局 `OQ-022` 形成最小共享默认口径：冻结集中取词入口、locale seed、统一 fallback 与最小 namespace 边界，但不冻结完整 locale 策略 | 否 | `MODULE_REQUIREMENTS.md`、`MODULE_API_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_TASK_INDEX.md` |
 | MQ-005 | `shared adapter` 应冻结到什么程度，才能让页面容器、共享页面原语、i18n 消费与服务层按同一默认口径协作 | proposed-default | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md`、ST01_02、ST01_03、`MT02_05`、`MT02_06`、`MT03_02`、`MT03_05` | 已吸收 `OQ-020~022`：共享最小层固定页面容器持有 route / locale / page state、request adapter 负责最小 query 映射、shared primitive 只消费稳定输入、服务层只返回领域数据 / 分页骨架 / 错误语义；模块投影层允许业务模块登记摘要字段和扩展 view model；精确 props / callback / resolved copy 载体留在实现细节层，不再作为 M01 共享前置；该压缩结果只说明共享最小层已写清，不代表 M01 整体已具备接受条件 | 否 | `MODULE_DESIGN.md`、`MODULE_API_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_TASK_INDEX.md` |
 | MQ-006 | 共享下载网关与 `storage_objects` 最小边界应冻结到什么程度，才能让 M03 / M05 继续推进而不把平台契约写进业务模块 | confirmed | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、M03、M05 | 已确认：冻结共享 `storage_objects` 最低字段面、bucket / key 规则、`source_type` / `source_id` owner pointer、对象写入顺序，以及 `GET /api/v1/storage-objects/{object_id}/download` 作为唯一实际下载入口；业务入口只做资源定位，不再复制下载逻辑 | 否 | `MODULE_API_DESIGN.md`、`MODULE_SCHEMA_DESIGN.md`、`MODULE_LOGIC_DESIGN.md`、`MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md` |
-| MQ-007 | 当 SC-05 已达到下游模块输入门槛后，是否需要由总控统一回写跨模块 / 全局文档，解除旧的“共享下载 / 对象存储成熟度不足”表述 | proposed-default | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、M03、M05、全局进展 / 问题文档 | 本模块默认判断：M01 整体仍未到 `L5`，但 SC-05 共享下载 / `storage_objects` 主题已可作为 M03 / M05 的局部模块设计参考输入；应由总控统一回写跨模块依赖与进展表述，避免继续把该主题记为主阻塞；该判断不外推为 M01 整体阶段变化 | 是 | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、`OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md`、M03 / M05 相关模块文档 |
+| MQ-007 | 当 SC-05 已达到下游模块输入门槛后，是否需要由总控统一回写跨模块 / 全局文档，解除旧的“共享下载 / 对象存储成熟度不足”表述 | proposed-default | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、M03、M05、全局进展 / 问题文档 | 本模块默认判断：M01 状态层已确认为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`，且 SC-05 共享下载 / `storage_objects` 主题已可作为 M03 / M05 的局部模块设计参考输入；应由总控统一回写跨模块依赖与进展表述，避免继续把该主题记为主阻塞；该判断不外推为实现授权 | 是 | `MODULE_DEPENDENCIES.md`、`MODULE_EXECUTION_LOG.md`、`OPEN_QUESTIONS.md`、`DOCUMENT_PROGRESS.md`、M03 / M05 相关模块文档 |
 
 ## 5. 当前高优问题
 
@@ -55,11 +55,11 @@
 
 ### 5.1 本轮最低位压缩复核（仅 MQ-001 / MQ-003 / MQ-005）
 
-- `MQ-001` 已压缩：M01 内只保留最小脚本命名、`GET /api/v1/health`、API=`pytest` / Web=`vitest` 与 API / Web 双 lane 作为共享最小层；完整 workflow、lint / format gate、E2E 与多平台矩阵继续后置，但这仍不足以让 M01 脱离高 `L4`。
+- `MQ-001` 已压缩：M01 内只保留最小脚本命名、`GET /api/v1/health`、API=`pytest` / Web=`vitest` 与 API / Web 双 lane 作为共享最小层；完整 workflow、lint / format gate、E2E 与多平台矩阵继续后置，但这属于实现级治理后置，不影响 M01 当前 `L5 / downstream_ready` 状态口径。
 - `MQ-003` 已压缩：M01 内只冻结 `ListQueryState` 的共享最小映射与统一分页骨架；扩展筛选键和 callback / request adapter 细节继续留在业务模块或子任务设计，但这仍不足以推导出整体已被接受。
 - `MQ-005` 已压缩：M01 内只冻结页面容器、request adapter、shared primitive、i18n 消费与服务层的共享最小职责边界；精确 props / callback / hook 组织与 resolved copy 载体继续后置，但这仍不足以形成子任务设计前置条件。
-- 复核结论：上述三项已从“方向级缺口”压缩为“共享最小层已明确”，但仍未完成整体接受与全局回写；当前统一判断仍是高 `L4`、接近整体 `L5` 候选但未接受。
-- 当前仍差的最小条件包括：总控统一回写 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`OPEN_QUESTIONS.md`，并继续维持 M01 不开放子任务设计的保守判断；若阶段判断同步变化，再补写 `TASK_INDEX.md`、`MODULE_INDEX.md`。
+- 复核结论：上述三项已从“方向级缺口”压缩为“共享最小层已明确”；当前正式状态层已确认 M01 为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`，但 `implementation_ready=false`。
+- 当前仍差的最小条件包括：继续维持 M01 不授权实现的保守判断；不得据此创建或修改 `apps/**`、`infra/**`、`.github/**`、`tests/**`、`tools/**` 或运行时代码。若后续扩大到全局索引同步，再单独处理 `DOCUMENT_MATURITY.md`、`DOCUMENT_PROGRESS.md`、`TASK_INDEX.md`、`MODULE_INDEX.md`。
 
 ## 6. 需要升级到全局的问题
 
@@ -73,9 +73,9 @@
 
 ## 7. 对子任务设计的影响
 
-- `OQ-001~003` 已足够支撑 M01 在本轮达到可评审，但不足以自动让模块进入子任务设计。
-- 本轮已把 `MQ-001`、`MQ-003` 与 `MQ-005` 压缩到共享最小层口径，但这只说明继续扩张 M01 共享契约的必要性下降；当前 M01 未开放子任务设计，主要因为模块整体仍只是高 `L4`、接近整体 `L5` 候选但未接受，且子任务文档仍为骨架。
-- 对跨模块依赖而言，`MQ-006` 的历史收口可继续被 M03 / M05 引用，但这不改变 M01 整体仍未进入子任务设计阶段的判断。
+- `OQ-001~003` 已足够支撑 M01 当前 `L5 / downstream_ready` 状态口径，但不足以自动让模块进入实现窗口。
+- 本轮已把 `MQ-001`、`MQ-003` 与 `MQ-005` 压缩到共享最小层口径；当前 M01 可支撑下游设计与 ST01_01 formal window preparation，但仍不授权基础设施实现。
+- 对跨模块依赖而言，`MQ-006` 的历史收口可继续被 M03 / M05 引用，但这不改变 M01 `implementation_ready=false` 的判断。
 - `MQ-007` 不构成 M01 子任务设计的新增技术阻塞，但会影响总控对 M03 / M05 与全局文档状态的统一判断。
 
 ## 8. 使用说明

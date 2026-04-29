@@ -1010,10 +1010,15 @@ subtasks:
     state:
       confirmed:
         implementation_doc_state: active_working_doc
-        maturity: null
+        formal_window_status: open
+        formal_window_opened_at: "2026-04-29T07:29:23Z"
+        formal_window_opened_by: state_update
+        formal_window_reason: ST01_01 formal window preparation ready; not implementation approval
+        implementation_approval_status: none
+        maturity: L4
         candidate_status: none
         review_status: unreviewed
-        readiness: blocked
+        readiness: downstream_ready
         blocker_refs: []
         last_transition_id: null
         last_confirmed_at: null

@@ -3,7 +3,7 @@
 ## 1. 文档定位
 
 - 本文档用于沉淀本模块涉及的领域对象、关系、约束和生命周期字段。
-- 当前状态：可评审草案。
+- 当前状态：状态层已确认为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`；该状态只支撑下游设计与 formal window preparation，不授权实现。
 
 ## 2. Schema 范围说明
 
@@ -168,13 +168,13 @@
 
 ## 7. 当前缺口
 
-- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但 Schema 文档整体仍只应按高 `L4` 理解，接近整体 `L5` 候选但未接受。
+- `MQ-001`、`MQ-003`、`MQ-005` 已压缩到共享最小层；当前正式状态层已确认 M01 为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`，但 `implementation_ready=false`，不得据此推导为可创建或修改 `apps/**`、`infra/**`、`.github/**`、`tests/**`、`tools/**` 或运行时代码。
 - 页面头部与摘要区对象模型已形成默认冻结口径，但 `PageHeaderModel.summarySlot`、动作区代码级结构和摘要区精确字段命名仍停留在实现级细化阶段。
 - `ListQueryState` 与 URL、服务端查询参数的最小映射已形成 `proposed-default`，且当前只冻结 `page / page_size / q / status / sort / order`；高级筛选序列化、时间筛选扩展和 route / callback 等实现级交互细节仍未冻结。
 - `StorageObjectRecord` 的最小字段面、bucket / key 规则和 owner/source pointer 已冻结；当前仍未冻结的是对象生命周期、版本化、保留策略与 provider failover。
 - `VerificationEntry` 已冻结到最小命名与 API / Web 双 lane；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 
-## 8. 维持高 L4 时仍缺的最小条件
+## 8. L5 / downstream_ready 后仍后置的实现级条件
 
 - `storage_objects` 的最小字段面已经足以供 M03 / M05 / M08 建立对象引用与下载投影，不应继续在下游模块重定义 bucket / key / source pointer。
 - 将页面头部与摘要区对象模型提升为模块级稳定默认口径，并保持不扩张为完整 props catalog。

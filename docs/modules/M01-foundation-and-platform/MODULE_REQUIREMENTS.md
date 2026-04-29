@@ -12,7 +12,7 @@
 ## 1. 文档定位
 
 - 本文档用于把原始需求和原始实施计划中与“基础平台与工作台壳层”相关的内容提炼成模块级需求。
-- 当前状态：可评审草案。
+- 当前状态：状态层已确认为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`；该状态只支撑下游设计与 formal window preparation，不授权实现。
 - 下游输入目标：MODULE_DESIGN.md、MODULE_API_DESIGN.md、MODULE_SCHEMA_DESIGN.md、MODULE_LOGIC_DESIGN.md。
 
 ## 2. 上游输入
@@ -153,14 +153,14 @@
 - 仓库结构、目录职责和最小运行时基线边界可评审。
 - 健康检查、日志初始化、Web 入口、App Shell、Page Header、列表原语和 i18n 入口的职责分工可评审。
 - `OQ-001~003` 对 M01 的影响已被显式映射到需求、设计、API、schema、logic、依赖和任务索引文档。
-- 模块当前为什么还不能进入子任务设计，原因被写清且可追踪。
+- 模块当前为什么只能支撑下游设计与 formal window preparation、不能进入实现，原因被写清且可追踪。
 
 ## 13. 当前缺口
 
-- `MQ-001`、`MQ-003`、`MQ-005` 虽已压缩到共享最小层，但当前整体口径仍只能视为高 `L4`、接近整体 `L5` 候选但未接受；不得据此推导为已具备整体接受条件或可开启子任务设计。
+- `MQ-001`、`MQ-003`、`MQ-005` 已压缩到共享最小层；当前正式状态层已确认 M01 为 `maturity=L5`、`readiness=downstream_ready`、`review_status=pending_confirmation`，但 `implementation_ready=false`，不得据此推导为可创建或修改 `apps/**`、`infra/**`、`.github/**`、`tests/**`、`tools/**` 或运行时代码。
 - 根目录统一脚本命名、health check 与 API / Web 双 lane 已按 `OQ-019` 吸收；当前未冻结的只剩完整 workflow、lint / format gate、E2E 与多平台矩阵。
 - `PageHeader`、Dashboard 摘要区和列表查询状态的共享最小层已冻结；当前未冻结的只剩精确 props 命名、callback catalog 与 resolved copy 承载形态等实现级细节。
-- locale fallback、切换策略和命名空间约束已冻结到最小共享规则级别，但完整的 URL / 持久化 / formatter 级 i18n 架构仍未定稿，尚不能据此直接开放子任务设计。
+- locale fallback、切换策略和命名空间约束已冻结到最小共享规则级别，但完整的 URL / 持久化 / formatter 级 i18n 架构仍未定稿，尚不能据此直接开放实现窗口。
 
 ## 14. 待确认问题
 
