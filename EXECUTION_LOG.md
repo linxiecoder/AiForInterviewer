@@ -25,6 +25,18 @@
 
 ## 3. 当前记录
 
+### 2026-04-29 / ST01_01-GovernanceCheckpoint / implementation packet 前置收口
+
+- 执行类型：文档口径同步与治理 checkpoint；不生成 implementation packet，不进入代码实现。
+- 范围：
+  - 同步 `TASK_INDEX.md` 中 `ST01_01` 当前状态口径，使其与 official `DOC_STATE.yaml` 一致。
+  - 不修改 `docs/governance/DOC_STATE.yaml`、`docs/governance/transition_history.jsonl`、`apps/**`、`tools/**`、`tests/**`、`.codex` 或 `.serena/`。
+- 当前结论：
+  - `ST01_01` 已通过 confirm-transition 写入 `implementation_approval_status=approved`。
+  - `evaluate-state --entity-type subtask --entity-id ST01_01` 显示 `implementation_ready=true`。
+  - `preflight-open-window --subtask ST01_01` 显示 `can_generate_implementation_packet=true`。
+  - implementation packet 尚未生成，尚未进入代码实现。
+
 ### 2026-04-27 / DocumentSystemRefactor-Step2 / 全量文档体系职责分离
 
 - 执行类型：需求层创建、设计层职责清理、根入口瘦身、状态锁定文档原地清理、过程文档归档、引用扫描；不写 Basic Memory，不提交，不推送。

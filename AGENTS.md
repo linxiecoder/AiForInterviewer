@@ -2,6 +2,233 @@
 
 本文档是当前项目的高优先级协作入口，用于沉淀全局规则并索引核心文档。
 
+## MVP 三迭代交付总控规则
+
+当前项目按「AI 模拟面试工作台级 MVP」推进。MVP 交付必须拆成 R0 / R1 / R2 三个迭代，不允许一次性铺开所有能力。
+
+### R0：可运行主链路
+
+R0 目标是交付最小但真实可运行的模拟面试闭环。
+
+R0 必须优先覆盖：
+
+- 最小登录或用户身份边界
+- 岗位录入 / 读取
+- 简历录入 / 读取
+- 启动一次模拟面试
+- 真实 LLM 生成问题
+- 用户提交回答
+- 服务端保存面试记录
+- 最小历史记录回看
+- 最小评分或反馈
+- 最小复盘结果
+- Markdown 复制或下载
+- 主链路测试或最小集成验证
+
+R0 明确不做：
+
+- 复杂 RAG 质量评估
+- 完整知识库治理
+- 多模式高阶面试
+- 完整训练中心
+- 完整资产归档
+- 企业级权限
+- 多租户
+- 复杂管理后台
+- 大规模 UI 打磨
+- 无关重构
+
+### R1：可信工作台闭环
+
+R1 只能在 R0 accepted / done 或用户明确授权后推进。
+
+R1 目标是在 R0 基础上增强数据、评分、RAG 和复盘可信度。
+
+R1 优先覆盖：
+
+- API contract 收敛
+- 数据模型和数据库 migration 稳定
+- 岗位 / 简历 / 面试 / 问答 / 评分 / 复盘关系可追踪
+- RAG 最小可用：文档切块、索引、检索、引用
+- 0-100 多维评分
+- 复盘中展示评分理由、证据、建议
+- 历史记录可恢复和回看
+- LLM / RAG / 解析失败时有明确降级提示
+- 主链路和关键边界测试
+
+R1 明确不做：
+
+- 高级检索质量平台
+- 复杂团队共享知识库
+- 完整训练闭环
+- 批量导出
+- 高级运维监控
+- 大规模重构
+
+### R2：训练闭环与资产沉淀
+
+R2 只能在 R1 accepted / done 或用户明确授权后推进。
+
+R2 目标是形成从面试到复盘、弱点识别、训练建议和资产归档的闭环。
+
+R2 优先覆盖：
+
+- 薄弱项识别
+- 弱点证据关联
+- 训练建议或训练抽屉
+- 训练任务入列或待打磨清单
+- 模拟面试复盘增强
+- 真实面试复盘入口或最小闭环
+- 资产归档
+- Markdown 导出增强
+- 最终 MVP DoD 收口
+
+R2 明确不做：
+
+- 企业级商业化
+- 多端客户端
+- 实时语音 / 视频
+- ATS 集成
+- 复杂组织管理
+- 完整运营后台
+
+### 每日自检规则
+
+当用户说“每日自检”“今天怎么推进”“继续项目”“检查当前计划”“开启下一步”或“下一步做什么”时，必须执行 Daily Check，而不是直接进入实现。
+
+Daily Check 必须读取和复用现有文档体系：
+
+- `docs/governance/DOC_STATE.yaml`
+- `docs/governance/DOC_AUTOMATION.md`
+- `docs/DOC_GOVERNANCE.md`
+- `TASK_INDEX.md`
+- `PLAN_LATEST.md`
+- `EXECUTION_LOG.md`
+- `OPEN_QUESTIONS.md`
+- `docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md`
+- `docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/**`
+- `docs/requirements/workbench-mvp/**`
+- `docs/design/workbench-mvp/**`
+
+Daily Check 必须输出：
+
+1. Repo 状态：branch、commit、`git status --short`、未解释改动、是否允许继续。
+2. R0 / R1 / R2 交付切片映射表。
+3. 当前主推进迭代。
+4. 计划偏离检查。
+5. 今日唯一主目标。
+6. 下一步窗口卡。
+7. 是否需要用户确认。
+
+### R0/R1/R2 与现有文档体系的关系
+
+R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
+
+不得默认新增：
+
+- `ITERATION_STATE.md`
+- `R0_PLAN.md`
+- `R1_PLAN.md`
+- `R2_PLAN.md`
+- 任何新的长期状态入口
+
+如需固化 R0 / R1 / R2 映射，优先回写到现有文档：
+
+1. `docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md`
+2. `PLAN_LATEST.md`
+3. `TASK_INDEX.md`
+4. 对应 `docs/tasks/workbench-mvp/st13-task-packages/**`
+5. `EXECUTION_LOG.md`
+
+新增文档前必须说明：
+
+- 为什么现有文档不能承接
+- 后续 Daily Check 是否会读取
+- 谁维护
+- 写入路径
+- 用户是否已确认
+
+### Gate 与实现边界
+
+任务是否可实现，以 `DOC_STATE.yaml`、`DOC_AUTOMATION.md` 和 doc-governor gate 为准。
+
+禁止：
+
+- formal window 未打开就直接写业务代码
+- implementation packet 未生成就直接实现
+- 没有 allowed paths / forbidden paths 就修改文件
+- 没有 DoD 或验证命令就开窗
+- 把 Markdown 正文中的 ready / candidate / implementation-ready 描述当作正式状态
+- 把 preview / dry-run / facts-only candidate 当作 official state
+- R0 未 accepted 就主动实现 R1 / R2 能力
+- 新增后续不会维护和读取的文档
+
+### 下一步窗口卡格式
+
+每次建议开启下一步前，必须输出窗口卡：
+
+| 字段 | 内容 |
+| --- | --- |
+| Window ID | 例如 `R0-W01` |
+| Iteration | R0 / R1 / R2 |
+| Task Mode | analysis / implementation / review / documentation / testing / governance |
+| Goal | 本窗口唯一目标 |
+| Existing Source | 对应现有任务、backlog item、OQ 或状态字段 |
+| Allowed Paths | 允许修改路径 |
+| Forbidden Paths | 禁止修改路径 |
+| Input Docs | 必须读取的现有文档 |
+| DoD | 完成标准 |
+| Validation | 验证命令 |
+| Change Budget | 最大修改文件数 / 是否允许新增文件 |
+| Stop Conditions | 停止条件 |
+| Writeback Target | 如需更新文档，写入哪个现有文档；不需要则写 `none` |
+
+没有窗口卡，不得进入实现。
+
+### 目标偏离识别
+
+如果出现以下任一情况，必须明确提醒“目标偏离”：
+
+- R0 未完成，却开始实现 R1 / R2 能力
+- formal window 未打开，却建议直接写业务代码
+- implementation packet 未生成，却建议直接进入实现
+- 没有 allowed paths / forbidden paths，却建议修改文件
+- 没有 DoD 或验证命令，却建议开窗
+- 又开始整理大而全的文档体系
+- 新增了后续不会读取和维护的文档
+- 当前任务不解除任何阻断
+- 当前任务不能推进当前主迭代
+- 修改范围超过窗口目标
+- 多个 Codex session 可能同时修改同一文件
+
+输出格式：
+
+`目标偏离：是。原因：[原因]。建议回到：[具体任务或阻断项]。`
+
+如果没有偏离：
+
+`目标偏离：否。当前动作服务于 [R0/R1/R2] 的 [具体目标]。`
+
+### 推进缓慢识别
+
+如果出现以下任一情况，必须提醒“推进缓慢风险”：
+
+- 连续两次只做文档整理，没有解除 gate 或推进实现前置条件
+- 同一问题反复生成计划，没有进入验证或状态确认
+- 每日目标不是唯一目标
+- 每个窗口都跨多个主题
+- 任务没有完成标准
+- 任务没有验证命令
+- 输出建议没有指向现有任务 ID、backlog ID 或 gate 阻断项
+- 文档更新后没有指定后续谁读取、何时读取、在哪里读取
+- R0 主链路还没跑通，却投入大量精力做 UI polish、复杂 RAG 或训练体系
+
+输出格式：
+
+`推进缓慢风险：是。原因：[原因]。最短推进动作：[一个动作]。`
+
+
 ## 1. 全局规则
 
 ### 1.1 文档语言规则

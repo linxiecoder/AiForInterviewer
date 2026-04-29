@@ -21,14 +21,14 @@
 | ST13_21 | API / 后端服务边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | formal window not open |
 | ST13_24 | 测试 / 验收 / DoD | `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/` | formal window not open |
 | ST13_25 | 文档治理 / 收口 / 长期上下文 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/` | formal window not open |
-| ST01_01 | 运行环境与仓库基线 | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | 已存在正式状态 entry；`maturity=L4`；`readiness=downstream_ready`；scoped `formal_window_status=open`；`global_policy.formal_window_open=false`；`candidate_status=none`；`implementation_approval_status` 未登记 / 未批准；`implementation_ready=false`；当前仅剩 `gate:implementation_approval_missing` |
+| ST01_01 | 运行环境与仓库基线 | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | 已存在正式状态 entry；`maturity=L4`；`readiness=downstream_ready`；scoped `formal_window_status=open`；`global_policy.formal_window_open=false`；`candidate_status=none`；`implementation_approval_status=approved`；`implementation_ready=true`；`can_generate_implementation_packet=true`；implementation packet 尚未生成；尚未进入代码实现 |
 
 ## 4. 任务使用规则
 
 - 任务是否可实施以 `DOC_STATE.yaml` 和 doc-governor gate 为准。
 - ST13 双文档已迁入 `docs/tasks/workbench-mvp/st13-task-packages/**`，并已同步 `DOC_STATE.yaml` required doc slot。
-- 本索引不把历史任务文档重新解释为当前任务入口；`ST01_01` 是从历史骨架重建并已登记正式状态 entry 的例外，当前 scoped formal window 已打开，但 implementation approval 仍未登记 / 未批准，`implementation_ready=false`，不得创建 `apps/api/**`、修改 runtime code 或启动 M02/M03。
-- 本索引不声明任何任务 implementation-ready。
+- 本索引不把历史任务文档重新解释为当前任务入口；`ST01_01` 是从历史骨架重建并已登记正式状态 entry 的例外，当前 scoped formal window 已打开，`implementation_approval_status=approved`，`implementation_ready=true`，`can_generate_implementation_packet=true`；但 implementation packet 尚未生成，尚未进入代码实现，不得直接创建 `apps/api/**`、修改 runtime code 或启动 M02/M03。
+- `ST01_01` 的 `implementation_ready=true` 仅来自 official state 与 doc-governor gate；本索引不通过 Markdown 自行声明其他任务 implementation-ready。
 
 ## 5. 关联输入
 
