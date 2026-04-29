@@ -21,13 +21,13 @@
 | ST13_21 | API / 后端服务边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | formal window not open |
 | ST13_24 | 测试 / 验收 / DoD | `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/` | formal window not open |
 | ST13_25 | 文档治理 / 收口 / 长期上下文 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/` | formal window not open |
-| ST01_01 | 运行环境与仓库基线 | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | 已存在正式状态 entry；`maturity=L4`；`readiness=downstream_ready`；scoped `formal_window_status=open`；`global_policy.formal_window_open=false`；`candidate_status=none`；`implementation_approval_status=approved`；`implementation_ready=true`；`can_generate_implementation_packet=true`；当前输入文档已转为 runtime baseline implementation packet input；后续需重新生成 packet 后才可进入 runtime code 实现 |
+| ST01_01 | 运行环境与仓库基线 | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | 已存在正式状态 entry；`maturity=L4`；`readiness=downstream_ready`；scoped `formal_window_status=open`；`global_policy.formal_window_open=false`；`candidate_status=none`；`implementation_approval_status=approved`；`implementation_ready=true`；`can_generate_implementation_packet=true`；当前窗口已完成 runtime baseline implementation |
 
 ## 4. 任务使用规则
 
 - 任务是否可实施以 `DOC_STATE.yaml` 和 doc-governor gate 为准。
 - ST13 双文档已迁入 `docs/tasks/workbench-mvp/st13-task-packages/**`，并已同步 `DOC_STATE.yaml` required doc slot。
-- 本索引不把历史任务文档重新解释为当前任务入口；`ST01_01` 是从历史骨架重建并已登记正式状态 entry 的例外，当前 scoped formal window 已打开，`implementation_approval_status=approved`，`implementation_ready=true`，`can_generate_implementation_packet=true`；当前旧 implementation packet 仍需由下一窗口重新生成，新的 packet 应授权最小 runtime baseline，但在 regenerated packet 通过审查前不得直接创建 `apps/api/**`、修改 runtime code 或启动 M02/M03。
+- 本索引不把历史任务文档重新解释为当前任务入口；`ST01_01` 是从历史骨架重建并已登记正式状态 entry 的例外，当前 scoped formal window 已打开，`implementation_approval_status=approved`，`implementation_ready=true`，`can_generate_implementation_packet=true`；已落地本窗口 runtime baseline 实施结果，且不进行业务 code 扩展。
 - `ST01_01` 的 `implementation_ready=true` 仅来自 official state 与 doc-governor gate；本索引不通过 Markdown 自行声明其他任务 implementation-ready。
 
 ## 5. 关联输入

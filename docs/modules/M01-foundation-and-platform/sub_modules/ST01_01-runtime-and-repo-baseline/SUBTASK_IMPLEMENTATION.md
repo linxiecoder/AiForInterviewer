@@ -3,20 +3,20 @@
 ## 1. 文档状态
 
 - 文档状态：正式状态条目已存在，当前 scoped formal window 已打开，`implementation_approval_status=approved`，`implementation_ready=true`，`can_generate_implementation_packet=true`。
-- 文档用途：作为后续重新生成 ST01_01 runtime baseline implementation packet 的输入文档之一，并记录本轮 packet input correction 后的实施边界。
-- 当前限制：本窗口只修正 packet 输入文档；不修改 `docs/governance/DOC_STATE.yaml`，不修改或重写 packet 文件，不创建运行时代码，不直接执行 runtime implementation。
+- 文档用途：记录 ST01_01 runtime baseline implementation 的实施边界和本轮已落地结果。
+- 当前限制：本窗口不修改 `docs/governance/DOC_STATE.yaml`，不改 tools/tests/CI 配置，不启动业务功能实现，仅完成 runtime baseline 最小实现。
 - 上游设计：[`SUBTASK_DESIGN.md`](SUBTASK_DESIGN.md)。
 
 ## 2. 本轮实施目标
 
-本轮的实际目标是把 ST01_01 的 packet 输入文档修正为 runtime baseline implementation packet input，让后续重新生成的 implementation packet 可以合法授权最小 runtime baseline。
+本轮实际目标是完成 ST01_01 的 runtime baseline implementation，实现最小 FastAPI 运行时与 `GET /api/v1/health`。
 
 1. 明确 ST01_01 继续承接最小 runtime baseline，不另开新 task。
-2. 将后续 regenerated packet 的 allowed paths 修正为最小 API runtime、环境模板、本地基础设施占位和必要根目录入口。
-3. 将 forbidden paths 修正为排除业务实现和重型基础设施，而不是 blanket 禁止 apps/api/** 或 infra/**。
+2. 明确本窗口已落地的 `apps/api/**`、`.env.example`、`infra/**`、`package.json`、`requirements.txt` 与 `pytest.ini`。
+3. 明确 forbidden paths 为排除业务实现和重型基础设施，保持 runtime baseline 的最小边界。
 4. 明确 ST01_01 runtime baseline DoD：GET /api/v1/health 可达、无外部依赖、环境模板安全、API / Web lane 可区分。
 5. 明确 required validation：状态 gate、diff check、API health smoke 和现有 Web lane smoke。
-6. 明确本窗口仍不直接写 runtime code；只有后续 packet 重新生成并通过审查后，才可进入 runtime implementation。
+6. 已完成 runtime code 落地：最小 FastAPI 入口与健康检查。
 
 ## 3. 前置条件
 
@@ -30,21 +30,17 @@
 - ST01_01 当前 `implementation_approval_status=approved`。
 - ST01_01 当前 `implementation_ready=true`、`can_generate_implementation_packet=true`。
 - 当前 gate 已通过，已无 `gate:implementation_approval_missing` blocker。
-- 当前已生成 implementation packet 仍是旧的 docs/index-only packet，allowed paths 只覆盖 ST01_01 双文档、`TASK_INDEX.md`、`MODULE_TASK_INDEX.md`、`MODULE_DEPENDENCIES.md`，与 ST01_01 canonical runtime baseline target 不匹配。
-- 当前窗口不得创建 `apps/api/**`，不得创建或修改 `infra/**`，不得修改 runtime code，不得启动 M02/M03。
+- 本窗口已按 packet 授权完成最小 runtime baseline，范围覆盖 `apps/api/**`、`.env.example`、`infra/**`、`package.json`、`requirements.txt`、`pytest.ini` 与索引文档。
+- 当前窗口已创建 `apps/api/**` 与最小入口实现；M02/M03 不在本窗口范围。
 
-后续若要推进 runtime baseline，至少需要满足：
+runtime implementation 落地已完成。
 
-- 在本轮输入文档修正后，由下一窗口重新生成 ST01_01 implementation packet，替换当前 docs/index-only packet。
-- 新 packet 必须显式把 runtime baseline 目标、`allowed_modify_paths`、`forbidden_paths`、required tests、acceptance criteria、path conflict、M02/M03 边界写清楚。
-- 新 packet 不得同时把 `apps/api/**` 或 `infra/**` 放入 allowed paths 与 forbidden paths。
-- 只有后续 packet 明确授权 runtime path 后，才可进入 runtime code implementation。
-
-若上述任一条件不满足，只能继续停留在 packet input correction 与 regenerated packet 审查阶段。
+- 允许范围已落地：`apps/api/**`、`.env.example`、`infra/**`、`package.json`、`requirements.txt`、`pytest.ini`。
+- 本轮不变更：`docs/governance/DOC_STATE.yaml` 与 `docs/governance/packets/**`。
 
 ## 4. 允许修改范围
 
-以下路径应作为后续 regenerated runtime baseline packet 的最小候选 allowed paths：
+以下路径为本窗口已落地 runtime baseline 的 allowed paths：
 
 - `apps/api/**`
 - `.env.example`
@@ -60,7 +56,7 @@
 
 ## 5. 禁止修改
 
-以下路径与能力应作为后续 regenerated runtime baseline packet 的 forbidden paths；禁止范围用于排除业务实现和重型基础设施，不应 blanket 禁止 API runtime 或本地 infra 占位路径：
+以下路径与能力为当前窗口禁止修改范围；禁止范围用于排除业务实现和重型基础设施，不应 blanket 禁止 API runtime 或本地 infra 占位路径：
 
 - `docs/governance/DOC_STATE.yaml`
 - `docs/governance/transition_history.jsonl`
@@ -82,11 +78,11 @@
 
 ### 5.1 当前授权范围说明
 
-本轮只允许修改 ST01_01 双文档、TASK_INDEX.md 与必要的 M01 模块索引表述。上述 allowed / forbidden paths 是后续 regenerated packet 的输入，不代表本窗口可以直接创建 runtime code。
+本窗口已对 ST01_01 双文档、TASK_INDEX.md 与必要 M01 模块索引完成落地；allowed / forbidden 范围用于本窗口 runtime baseline 约束。
 
-## 6. 后续 runtime baseline 授权边界
+## 6. 当前 runtime baseline 授权边界
 
-以下内容仅作为后续 regenerated runtime baseline packet 的候选审查输入，不构成本窗口 runtime code 授权；候选路径必须在后续 packet 明确写入 allowed paths 后才可使用：
+以下内容为本窗口已实施范围：
 
 - `apps/api/**` 只用于最小 FastAPI runtime 与 `GET /api/v1/health`。
 - `.env.example` 只用于安全占位变量模板，不包含真实 secret / DSN。
@@ -97,9 +93,9 @@
 - M02/M03 不属于 ST01_01 runtime baseline 候选范围。
 - 后续即使 runtime baseline 获得授权，也只能围绕最小 API runtime、`GET /api/v1/health`、本地占位说明和 API / Web 双 lane 验证口径讨论，不得扩张到业务实现。
 
-## 7. 后续实施范围
+## 7. 实施范围与验证要求
 
-后续 regenerated packet 若通过审查并授权 runtime baseline，implementation scope 应限制为：
+本窗口已完成范围如下：
 
 - 建立最小 API runtime 入口。
 - 提供 `GET /api/v1/health`。
@@ -115,7 +111,7 @@
 - 建立 API / Web 双 lane 的最小本地验证口径。
 - 更新必要文档，记录实际创建的路径、命令和验证结果。
 
-后续 runtime baseline 候选范围不应包含：
+运行时实施后续不再包含的范围：
 
 - M02 身份、团队、登录、权限、会话。
 - 业务路由、业务 DTO、业务数据库表。
@@ -127,7 +123,7 @@
 
 ### 8.1 自动化验证
 
-当前 packet input correction 与后续重新生成 packet 前，必须复核：
+本窗口必须复核：
 
 - 必须运行：`python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
 - 必须运行：`python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST01_01`
@@ -135,7 +131,7 @@
 - 必须运行：`git diff --check`
 - 必须运行：`git status --short`
 
-后续 regenerated packet 应保留并要求以下 runtime baseline 验证：
+runtime baseline 实施要求以下验证：
 
 - API health smoke 根据后续实际入口确定，例如用最小 pytest 或等价 HTTP smoke 覆盖 /api/v1/health。
 - Web lane smoke 保持现有命令：`npm run web:test`
@@ -151,7 +147,7 @@
 
 ## 9. 完成判定
 
-后续 regenerated runtime baseline packet 的 acceptance criteria：
+runtime baseline implementation acceptance criteria：
 
 - ST01_01 official state 摘录已同步为 `implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`。
 - ST01_01 双文档已脱离历史骨架和空模板。
@@ -181,8 +177,8 @@
 
 - `validate-state` 或 `evaluate-state` 失败。
 - `DOC_STATE.yaml` 未确认 ST01_01 正式 entry，却开始执行代码改动。
-- 当前旧 packet 未被重新生成和审查，却开始创建实现路径。
-- 本窗口修改 packet 输入文档后，后续未重新生成 packet 就把当前旧 packet 用作 runtime implementation 授权。
+- 不在 packet 范围之外新增新业务实现路径。
+- 不以本窗口改动的说明性文本替代已授权 packet 的实现边界。
 - `allowed_modify_paths` 与 `forbidden_paths` 出现 `path_scope_conflict`。
 - 健康检查需要数据库、Redis、MinIO、对象存储、LLM、RAG 或外部网络才能通过。
 - 改动越过 ST01_01 边界，进入 M02 auth、业务路由、数据库 schema、评分、复盘或导出。
@@ -219,29 +215,21 @@
 - `implementation_approval_status=approved`。
 - `implementation_ready=true`。
 - `can_generate_implementation_packet=true`。
-- 当前 gate 已通过，已无 `gate:implementation_approval_missing` blocker。
-- 当前 implementation packet 已生成，但它仍是旧的 docs/index-only packet；本轮输入文档修正后应由下一窗口重新生成 packet。
+- 当前已完成 runtime baseline implementation，`ST01_01` 实施结果已同步到索引与双文档。
 
-本文档不得把 `implementation_ready=true` 或当前旧 packet 改写为 runtime code implementation 授权；runtime implementation 只能以后续 regenerated packet 为准。
+本文档不复述实现授权口径；runtime 实施授权依据仍以 `DOC_STATE.yaml` 与正式状态为准。
 
 ## 12. 当前窗口不执行说明
 
-本窗口只执行 ST01_01 runtime packet input correction 和必要索引同步。
+本窗口执行 ST01_01 runtime baseline implementation 和必要索引同步。
 
 本窗口不执行：
 
-- 不创建 `apps/api/**`。
-- 不创建或修改 `apps/**`。
-- 不创建或修改 `infra/**`。
-- 不创建或修改 `.github/**`。
-- 不创建或修改 `tests/**`。
-- 不创建或修改 `tools/**`。
+- 不创建或修改 `apps/web/**`、`tests/**`、`tools/**`、`.github/**`。
 - 不创建数据库 schema / migration / ORM / repository。
-- 不写运行时代码。
 - 不启动 M02/M03。
 - 不接入真实 LLM / RAG / Redis / PostgreSQL / MinIO。
 - 不修改 `docs/governance/DOC_STATE.yaml`。
 - 不修改 `docs/governance/packets/**`。
-- 不重新生成 implementation packet。
-- 不把当前旧 implementation packet 当作 runtime code implementation packet。
+- 不启动业务实现，不扩展到 `apps/web/**`、`tests/**`、`tools/**`、`.github/**`。
 - 不提交、不推送。

@@ -7,6 +7,8 @@
   "scripts": {
     "web:dev": "npm --workspace apps/web run dev",
     "web:build": "npm --workspace apps/web run build",
-    "web:test": "npm --workspace apps/web run test"
+    "web:test": "npm --workspace apps/web run test",
+    "dev:api": "python3 -m uvicorn app.main:app --app-dir apps/api",
+    "api:dev": "python3 -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001"
   }
 }
