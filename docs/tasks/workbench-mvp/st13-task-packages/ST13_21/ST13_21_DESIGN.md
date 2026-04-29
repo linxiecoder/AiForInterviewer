@@ -4,11 +4,11 @@
 
 - 状态：`draft`
 - 文档性质：ST13 任务设计文档；不是 implementation packet，不是 official state。
-- 实施状态：`not implementation-ready`
-- formal window：`formal window closed`
-- implementation packet：`implementation packet forbidden`
-- 当前定位：为后续 `ST13_21` state sync / preview / formal window readiness 准备文档输入。
-- 本窗口不修改 `DOC_STATE.yaml`，不打开 formal window，不生成 packet，不进入 implementation。
+- official gate：formal window 已打开；implementation approval 已批准；当前 `implementation_ready=true`，`can_generate_implementation_packet=true`。
+- packet 状态：当前已生成的 packet 因 stale wording 未通过 acceptance review，需在修正后重新生成并另窗审查 / 提交。
+- implementation 状态：尚未进入 implementation；后续 implementation 必须以通过审查并提交的 packet 为准。
+- 当前定位：为后续 `ST13_21` packet regeneration / acceptance review 提供与 official state 一致的文档输入。
+- 本窗口不修改 `DOC_STATE.yaml`，不手工修改 packet，不生成 packet，不进入 implementation。
 
 ## 2. 关联 ST13 / WT13
 
@@ -16,22 +16,21 @@
 - WT13 alias：`WT13-21`
 - 任务名称：API / 后端服务边界
 - 当前收敛范围：R0 minimal API service boundary
-- 当前来源状态：`double_doc_registered`；M02 upstream blocker 已由 `7ece932` 状态同步解除，但 `ST13_21` 自身 official state 仍 blocked。
+- 当前 official state：`implementation_doc_state=active_working_doc`，`maturity=L5`，`readiness=downstream_ready`，`formal_window_status=open`，`implementation_approval_status=approved`。
+- 当前 evaluate / preflight 派生状态：blockers `[]`，`implementation_ready=true`，`can_generate_implementation_packet=true`。
+- 当前尚未进入 implementation；packet 仍需重新生成并通过 acceptance review 后提交。
 
-## 3. 当前 official blocker 背景
+## 3. 当前 official gate 背景
 
-截至本轮文档修正前，`evaluate-state --entity-type subtask --entity-id ST13_21` 已不再报告 M02 downstream blocker；剩余 blocker 属于 `ST13_21` 自身字段或开窗条件：
+截至本轮 stale wording 修正前，`ST13_21` 已完成 state sync、scoped formal window sync 和 implementation approval。当前 official gate 事实为：
 
-- `acceptance_criteria_missing`
-- `implementation_doc_not_active`
-- `implementation_scope_unclear`
-- `required_tests_missing`
-- `formal_window_closed`
-- `implementation_approval_missing`
-- `maturity_missing`
-- `official_readiness_blocked`
+- `formal_window_status=open`
+- `implementation_approval_status=approved`
+- `implementation_ready=true`
+- `can_generate_implementation_packet=true`
+- `evaluate-state` / `preflight-open-window` 对 `ST13_21` 的 blocker 结果为 `[]`
 
-本文只修正双文档输入，不把上述 blocker 写成已关闭；后续仍需 state sync / preview / formal window 流程。
+本文只修正双文档中的过期状态措辞，不写 official state，不手工修改 packet，不进入 implementation。
 
 ## 4. R0 目标
 
@@ -47,7 +46,7 @@
 
 ## 5. R0 范围内
 
-本任务后续如进入 formal window，只允许围绕以下最小 API service boundary 做骨架级实现：
+本任务后续如进入 implementation window，只允许围绕以下最小 API service boundary 做骨架级实现：
 
 | 范围 | R0 最小含义 | 不代表 |
 | --- | --- | --- |
@@ -158,11 +157,11 @@ M02 当前只作为 `ST13_21` 的 downstream identity boundary input：
 - error envelope contract smoke。
 - 禁止范围检查。
 
-这些验证只有在 formal window / packet 授权后才可扩展为测试代码。
+这些验证只有在 packet 通过 acceptance review 并进入后续 implementation window 后才可扩展为测试代码。
 
 ## 11. 验收方向
 
-后续 state sync / preview 可从本文和实施文档中消费以下输入：
+后续 packet regeneration / acceptance review 可从本文和实施文档中消费以下输入：
 
 - goal 非空，且只覆盖 R0 minimal API service boundary。
 - allowed paths 候选明确。
@@ -174,19 +173,19 @@ M02 当前只作为 `ST13_21` 的 downstream identity boundary input：
 
 ## 12. 当前不进入实现说明
 
-本文修正完成后，`ST13_21` 仍不是 implementation-ready。原因是：
+本文修正完成后，`ST13_21` official gate 已具备 packet generation 条件，但本窗口仍不进入 implementation。当前事实为：
 
-- official `DOC_STATE.yaml` 仍未写入 `ST13_21` 的 maturity / readiness / implementation_doc_state。
-- formal window 仍关闭。
-- implementation approval 尚未完成。
-- 本窗口不生成 implementation packet。
+- official `DOC_STATE.yaml` 已记录 `implementation_doc_state=active_working_doc`、`maturity=L5`、`readiness=downstream_ready`、`formal_window_status=open`、`implementation_approval_status=approved`。
+- `evaluate-state` / `preflight-open-window` 派生 `implementation_ready=true`、`can_generate_implementation_packet=true`。
+- 当前已生成的 packet 未通过 acceptance review，需基于修正文档重新生成。
+- 本窗口不手工修改 packet，不生成 packet，不提交 commit，不进入 implementation。
 - 本窗口不创建或修改 `apps/**`、`tests/**`、`tools/**` 或 `docs/governance/**`。
 
 ## 13. 后续动作
 
-建议下一步不是实现，而是开启 `ST13_21 state sync preview`：
+建议下一步不是实现，而是先完成 stale wording 修正提交，再重新生成 packet：
 
-1. 基于本双文档重新生成或审查 readiness preview。
-2. 确认 preview 只影响 `ST13_21` 指定状态字段和 packet input。
-3. 继续保持 formal window closed，直到用户另窗确认。
-4. 若 preview 显示仍有文档字段缺口，先回到文档修正，而不是打开 implementation。
+1. `R0-W13Z.6b-ST13_21 stale wording commit-prep`：只提交本双文档修正。
+2. `R0-W13Z.6c-ST13_21 regenerate implementation packet`：基于修正文档重新生成 packet。
+3. 重新执行 packet acceptance review，确认 packet 不再携带过期状态措辞。
+4. 只有通过审查并提交的 packet 才可进入后续 implementation 窗口。

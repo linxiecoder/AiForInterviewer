@@ -4,11 +4,11 @@
 
 - 状态：`draft`
 - 文档性质：ST13 任务实施说明；只定义后续 packet 输入，不是 implementation packet。
-- 实施状态：`not implementation-ready`
-- formal window：`formal window closed`
-- implementation packet：`implementation packet forbidden`
-- 当前定位：为后续 `ST13_21` state sync / preview / formal window readiness 准备最小实施输入。
-- 本窗口不修改 `DOC_STATE.yaml`，不打开 formal window，不生成 packet，不进入 implementation。
+- official gate：formal window 已打开；implementation approval 已批准；当前 `implementation_ready=true`，`can_generate_implementation_packet=true`。
+- packet 状态：当前已生成的 packet 因 stale wording 未通过 acceptance review，需在修正后重新生成并另窗审查 / 提交。
+- implementation 状态：尚未进入 implementation；后续 implementation 必须以通过审查并提交的 packet 为准。
+- 当前定位：为后续 `ST13_21` packet regeneration / acceptance review 准备最小实施输入。
+- 本窗口不修改 `DOC_STATE.yaml`，不手工修改 packet，不生成 packet，不进入 implementation。
 
 ## 2. 本轮实施目标
 
@@ -22,11 +22,13 @@
 - M02 只作为 downstream identity boundary input；完整身份系统不由本任务实现。
 - ST01_01 runtime baseline 已存在，且 health endpoint 不被本任务破坏。
 - `DOC_STATE.yaml` 仍由专门状态窗口维护；本文档正文不替代 official state。
-- formal window open、implementation_doc_state activation、implementation approval 和 packet generation 均需后续另窗确认。
+- 当前 official state 已满足 formal window open、`implementation_doc_state=active_working_doc`、implementation approval approved、`implementation_ready=true`。
+- stale wording 修正后必须重新生成 packet，并通过 packet acceptance review / commit-prep；未通过审查并提交的 packet 不得作为 implementation 执行包。
+- implementation 仍需后续单独窗口授权；本窗口不进入 implementation。
 
 ## 4. 范围内
 
-后续 packet 如获授权，只能覆盖：
+后续 implementation 如获通过审查并提交的 packet 授权，只能覆盖：
 
 - 基于现有 FastAPI runtime 的 API service skeleton。
 - `/api/v1` prefix 和 router registration 最小模式。
@@ -79,7 +81,7 @@
 
 ## 7. 后续实施步骤
 
-以下步骤只供 formal window 和 packet 通过后的实现窗口使用；当前均不执行：
+以下步骤只供 packet 通过 acceptance review 并进入后续 implementation window 后使用；当前均不执行：
 
 1. 复核 official `DOC_STATE.yaml`、`evaluate-state` 和 `preflight-open-window`。
 2. 复核 ST01_01 runtime baseline 中 health endpoint 的当前入口。
@@ -124,15 +126,15 @@
 - 与 M02 downstream input 关系明确。
 - 与 ST13_20 / ST13_24 的依赖关系明确：数据保存与测试体系分别由对应任务承接。
 
-完成判定只表示文档输入具备 state sync / preview 的基础，不表示 formal window 已打开，也不表示 implementation-ready。
+完成判定不扩大实现范围；后续 implementation 仍必须受 packet allowed / forbidden paths 限制。
 
 ## 10. 停止条件
 
 出现以下任一情况必须停止：
 
 - 需要修改 `DOC_STATE.yaml` 或 `transition_history.jsonl`。
-- 需要打开 formal window。
-- 需要生成 implementation packet。
+- 需要修改 formal window 或 implementation approval 状态。
+- 需要手工修改、覆盖或重新生成 implementation packet，除非处于专门 packet generation 窗口。
 - 需要修改 `apps/web/**`、`tests/**`、`tools/**`、`.github/**`。
 - 需要实现 Job / Resume / Knowledge / Interview / Score / Review / Export 业务 API。
 - 需要接入 DB、ORM、migration、LLM、RAG、Redis、PostgreSQL、MinIO 或对象存储。
@@ -146,21 +148,20 @@
 - 代码回退：仅适用于未来已授权 implementation window；当前没有代码改动。
 - 验证失败：停止后续 state sync / formal window 讨论，先输出失败命令、失败原因和受影响范围。
 
-## 12. 当前未放行实现说明
+## 12. 当前 gate 与未进入实现说明
 
-`ST13_21_IMPLEMENTATION.md` 的存在不等于 active working doc。本文档不声明：
+`ST13_21_IMPLEMENTATION.md` 已在 official state 中登记为 active working doc；当前 confirmed / derived gate 事实为：
 
 - `implementation_doc_state=active_working_doc`
 - `maturity=L5`
 - `readiness=downstream_ready`
 - `implementation_approval_status=approved`
-- `candidate_status=candidate`
 - `implementation_ready=true`
 - formal window open
-- packet ready
+- `can_generate_implementation_packet=true`
 
-上述状态只能由后续正式状态流程处理。
+上述状态只说明 packet generation gate 已打开；当前仍未进入 implementation。已生成的 packet 因 stale wording 未通过 acceptance review，需基于本次修正文档重新生成并另窗审查 / 提交。
 
 ## 13. 下一步
 
-下一步建议是 `ST13_21 state sync preview`，只验证本文档补齐后的 packet input / readiness 影响，不直接 apply，不打开 formal window，不生成 packet。
+下一步建议是 `R0-W13Z.6b-ST13_21 stale wording commit-prep`，先提交本双文档修正；提交后再开启 `R0-W13Z.6c-ST13_21 regenerate implementation packet`，重新生成 packet 并再次执行 packet acceptance review。
