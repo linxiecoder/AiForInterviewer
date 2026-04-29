@@ -66,22 +66,32 @@ def _subtask_entry(
     *,
     module_id: str,
     implementation_doc_state: str = "missing",
+    meta_path: str | None = None,
+    design_doc_path: str | None = None,
+    implementation_doc_path: str | None = None,
 ) -> dict:
     confirmed = schema.make_default_confirmed_state("subtask")
     confirmed["maturity"] = "L4"
     confirmed["implementation_doc_state"] = implementation_doc_state
+    design_doc = {"exists": True, "template_like": False}
+    implementation_doc = {"exists": True, "template_like": False}
+    if design_doc_path:
+        design_doc["path"] = design_doc_path
+    if implementation_doc_path:
+        implementation_doc["path"] = implementation_doc_path
     return {
         "meta": {
             "module_id": module_id,
-            "path": f"docs/modules/{module_id}-test/sub_modules/{task_id}-test/",
+            "path": meta_path
+            or f"docs/modules/{module_id}-test/sub_modules/{task_id}-test/",
         },
         "facts": {
             "upstream_module_ids": [module_id],
             "related_oq_ids": [],
             "legacy_locked": False,
             "declared_blocker_refs": [],
-            "design_doc": {"exists": True, "template_like": False},
-            "implementation_doc": {"exists": True, "template_like": False},
+            "design_doc": design_doc,
+            "implementation_doc": implementation_doc,
             "compliance": schema.make_default_compliance_state(),
         },
         "state": {
@@ -360,6 +370,89 @@ class TaskWindowBridgeTests(ManagedTempArtifactsTestCase):
         self.assertEqual(candidate["predicted_post_activation_blockers"], [])
         self.assertEqual(payload["recommended_next_step"][0]["code"], "review_preflight_open_window_candidates")
         self.assertEqual(payload["recommended_next_step"][1]["code"], "enter_preflight_open_window")
+
+    def test_registered_doc_paths_with_packet_inputs_are_bridge_candidates(self) -> None:
+        state = yaml.safe_load(self.state_path.read_text(encoding="utf-8"))
+        state["requirements"]["RQ01"]["facts"]["task_ids"].append("ST13_21")
+        design_path = "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md"
+        implementation_path = "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md"
+        state["subtasks"]["ST13_21"] = _subtask_entry(
+            "ST13_21",
+            module_id="M01",
+            implementation_doc_state="active_working_doc",
+            meta_path="docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md",
+            design_doc_path=design_path,
+            implementation_doc_path=implementation_path,
+        )
+        confirmed = state["subtasks"]["ST13_21"]["state"]["confirmed"]
+        confirmed["maturity"] = "L5"
+        confirmed["readiness"] = "downstream_ready"
+        confirmed["review_status"] = "pending_confirmation"
+        self.state_path.write_text(
+            yaml.safe_dump(state, sort_keys=False),
+            encoding="utf-8",
+        )
+        _write_text(
+            self.temp_root,
+            design_path,
+            (
+                "# 子任务设计文档\n\n"
+                "## 3. 子任务目标\n"
+                "- 以 registered path 承载 ST13_21 风格任务。\n\n"
+                "## 5. 技术方案\n"
+                "- 不使用 canonical SUBTASK_DESIGN.md 文件名。\n"
+            ),
+        )
+        _write_text(
+            self.temp_root,
+            implementation_path,
+            (
+                "# 子任务实施文档\n\n"
+                "## 3. 本轮实施目标\n"
+                "- 验证 registered implementation doc 的 packet inputs 可被 bridge 消费。\n\n"
+                "## 5. 允许修改范围\n\n"
+                "### 5.1 允许修改\n"
+                "- `apps/api/**`\n\n"
+                "### 5.2 禁止修改\n"
+                "- `docs/governance/DOC_STATE.yaml`\n\n"
+                "## 7. 测试与验证\n"
+                "- `python -m unittest tests.doc_governor.test_task_window_bridge`\n\n"
+                "## 8. 完成判定\n"
+                "- registered doc path 已提供 allowed paths、required tests 和 acceptance criteria。\n"
+            ),
+        )
+
+        evaluation = self._evaluate()
+        derived = evaluation["subtasks"]["ST13_21"]["derived"]
+        self.assertTrue(derived["can_open_formal_window"])
+        self.assertFalse(derived["implementation_ready"])
+        packet_inputs = derived["implementation_packet_inputs"]
+        self.assertTrue(packet_inputs["allowed_modify_paths"])
+        self.assertTrue(packet_inputs["required_tests"])
+        self.assertTrue(packet_inputs["acceptance_criteria"])
+
+        payload = build_task_window_bridge(
+            state_path=self.state_path,
+            evaluate_payload=evaluation,
+            entity_ids=["ST13_21", "ST09_03"],
+        )
+
+        candidates = {item["task_id"]: item for item in payload["candidate_tasks"]}
+        deferred = {item["task_id"]: item for item in payload["deferred_tasks"]}
+        self.assertIn("ST13_21", candidates)
+        self.assertIn("ST09_03", candidates)
+        self.assertNotIn("ST13_21", deferred)
+        self.assertEqual(candidates["ST13_21"]["classification"], "already_window_only")
+        self.assertEqual(candidates["ST13_21"]["manual_fill_fields"], [])
+        self.assertEqual(
+            candidates["ST13_21"]["current_effective_blockers"],
+            ["policy:formal_window_closed", "gate:implementation_approval_missing"],
+        )
+        self.assertEqual(
+            candidates["ST13_21"]["predicted_post_activation_blockers"],
+            ["policy:formal_window_closed"],
+        )
+        self.assertEqual(candidates["ST09_03"]["classification"], "window_only_after_state_activation")
 
 
 if __name__ == "__main__":

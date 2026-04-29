@@ -26,6 +26,13 @@ OLD_STATUS_RE = re.compile(
     re.IGNORECASE,
 )
 PLACEHOLDER_FIELD_RE = re.compile(r"待人工填写：([A-Za-z_]+)")
+PACKET_INPUT_FIELD_KEYS = {
+    "goal": "goal",
+    "allowed_modify_paths": "allowed_modify_paths",
+    "forbidden_paths": "forbidden_paths",
+    "required_tests": "required_tests",
+    "acceptance_criteria": "acceptance_criteria",
+}
 
 
 def build_task_apply_summary(
@@ -71,15 +78,20 @@ def build_task_apply_summary(
         task_state = _as_dict(_as_dict(state.get("subtasks")).get(task_id))
         task_plan = _as_dict(plan_tasks.get(task_id))
         requirement_action = _as_dict(requirement_actions.get(task_id))
-        after_blockers = _as_string_list(_as_dict(_as_dict(after_subtasks.get(task_id)).get("derived")).get("blocker_refs"))
+        derived = _as_dict(_as_dict(after_subtasks.get(task_id)).get("derived"))
+        after_blockers = _as_string_list(derived.get("blocker_refs"))
+        packet_inputs = _as_dict(derived.get("implementation_packet_inputs"))
         inspection = _inspect_task_docs(
             repo_root=repo_root,
             task_state=task_state,
         )
-        manual_fields = _dedupe_strings(
-            _as_string_list(task_plan.get("manual_fill_fields"))
-            + _as_string_list(_as_dict(inspection.get("implementation")).get("placeholder_fields"))
-            + _as_string_list(_as_dict(inspection.get("design")).get("placeholder_fields"))
+        manual_fields = _filter_manual_fields_with_packet_inputs(
+            _dedupe_strings(
+                _as_string_list(task_plan.get("manual_fill_fields"))
+                + _as_string_list(_as_dict(inspection.get("implementation")).get("placeholder_fields"))
+                + _as_string_list(_as_dict(inspection.get("design")).get("placeholder_fields"))
+            ),
+            packet_inputs=packet_inputs,
         )
 
         resolved_items = _build_resolved_blockers(
@@ -253,9 +265,23 @@ def _inspect_task_docs(
     task_state: dict[str, Any],
 ) -> dict[str, Any]:
     meta = _as_dict(task_state.get("meta"))
+    facts = _as_dict(task_state.get("facts"))
     task_root = str(meta.get("path", "")).strip()
-    design_path = _join_relative_path(task_root, "SUBTASK_DESIGN.md")
-    implementation_path = _join_relative_path(task_root, "SUBTASK_IMPLEMENTATION.md")
+    canonical_design_path = _join_relative_path(task_root, "SUBTASK_DESIGN.md")
+    canonical_implementation_path = _join_relative_path(
+        task_root,
+        "SUBTASK_IMPLEMENTATION.md",
+    )
+    design_path = _resolve_subtask_doc_relative_path(
+        repo_root=repo_root,
+        slot_doc=_as_dict(facts.get("design_doc")),
+        canonical_relative_path=canonical_design_path,
+    )
+    implementation_path = _resolve_subtask_doc_relative_path(
+        repo_root=repo_root,
+        slot_doc=_as_dict(facts.get("implementation_doc")),
+        canonical_relative_path=canonical_implementation_path,
+    )
     design_text = _read_text_if_exists(repo_root / design_path)
     implementation_text = _read_text_if_exists(repo_root / implementation_path)
     return {
@@ -602,6 +628,51 @@ def _extract_placeholder_fields(text: str) -> list[str]:
     if "子任务目标" in text and "design_key_sections" not in fields and "待人工填写：子任务目标" in text:
         fields.append("design_key_sections")
     return _dedupe_strings(fields)
+
+
+def _filter_manual_fields_with_packet_inputs(
+    fields: list[str],
+    *,
+    packet_inputs: dict[str, Any],
+) -> list[str]:
+    filtered: list[str] = []
+    for field in fields:
+        packet_key = PACKET_INPUT_FIELD_KEYS.get(field)
+        if packet_key and _packet_input_field_present(packet_inputs.get(packet_key)):
+            continue
+        filtered.append(field)
+    return _dedupe_strings(filtered)
+
+
+def _packet_input_field_present(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list):
+        return bool(_as_string_list(value))
+    return bool(value)
+
+
+def _resolve_subtask_doc_relative_path(
+    *,
+    repo_root: Path,
+    slot_doc: dict[str, Any],
+    canonical_relative_path: str,
+) -> str:
+    registered_relative_path = str(slot_doc.get("path", "")).strip()
+    if registered_relative_path:
+        registered_path = Path(registered_relative_path)
+        registered_target = (
+            registered_path
+            if registered_path.is_absolute()
+            else repo_root / registered_path
+        )
+        if registered_target.is_file():
+            return registered_path.as_posix()
+
+    canonical_target = repo_root / canonical_relative_path
+    if canonical_target.is_file() or not registered_relative_path:
+        return canonical_relative_path
+    return Path(registered_relative_path).as_posix()
 
 
 def _join_relative_path(base_path: str, filename: str) -> str:
