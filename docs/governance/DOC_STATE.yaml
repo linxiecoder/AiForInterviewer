@@ -486,7 +486,7 @@ modules:
           template_like: false
         api:
           exists: true
-          template_like: true
+          template_like: false
         schema:
           exists: true
           template_like: false
@@ -501,20 +501,20 @@ modules:
           template_like: false
         open_questions:
           exists: true
-          template_like: true
+          template_like: false
         execution_log:
           exists: true
           template_like: false
     state:
       confirmed:
-        maturity: null
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: 6340f332-723c-46c9-a65b-634e8c5f2d40
+        last_confirmed_at: '2026-04-29T12:50:38Z'
+        last_confirmed_by: codex-manual-state-sync
   M03:
     meta:
       path: docs/modules/M03-jobs-resumes-and-documents/
