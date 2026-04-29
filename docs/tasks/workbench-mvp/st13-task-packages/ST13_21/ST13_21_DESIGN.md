@@ -89,7 +89,7 @@
 3. future routers 只能以边界占位方式存在，例如 auth、jobs、resumes、knowledge、interviews、scores、reviews、exports 的注册位置说明。
 4. 未来业务 router 是否创建实际 endpoint，必须由对应 ST13 formal window 决定。
 
-### 7.2 Error response / error envelope
+### 7.2 错误响应与 error envelope
 
 R0 最小错误边界只要求后续服务骨架能表达稳定错误形状：
 
@@ -100,7 +100,7 @@ R0 最小错误边界只要求后续服务骨架能表达稳定错误形状：
 
 R0 只冻结 envelope 位置和最小字段，不完成业务错误全集。完整的权限、RAG、LLM、导出、状态冲突错误 taxonomy 作为后续 contract 或测试任务继续承接。
 
-### 7.3 Config boundary
+### 7.3 配置读取边界
 
 R0 配置读取只覆盖最小运行参数：
 
@@ -110,7 +110,7 @@ R0 配置读取只覆盖最小运行参数：
 
 R0 不读取真实数据库 DSN、Redis URL、MinIO endpoint、LLM provider key、embedding provider 或对象存储 secret。`.env.example` 只能出现安全占位，不得包含真实 secret。
 
-### 7.4 Future routes placeholder
+### 7.4 未来路由占位边界
 
 允许在文档和后续骨架中保留 future contract boundary：
 
@@ -160,7 +160,7 @@ M02 当前只作为 `ST13_21` 的 downstream identity boundary input：
 
 这些验证只有在 formal window / packet 授权后才可扩展为测试代码。
 
-## 11. Acceptance direction
+## 11. 验收方向
 
 后续 state sync / preview 可从本文和实施文档中消费以下输入：
 
