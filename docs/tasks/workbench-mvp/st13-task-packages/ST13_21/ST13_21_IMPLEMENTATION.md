@@ -1,203 +1,166 @@
-# ST13_21 IMPLEMENTATION：API / 后端服务边界
+# ST13_21 IMPLEMENTATION：R0 最小 API / 后端服务边界
 
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：ST13 任务实施说明；只定义后续执行条件，不是 implementation packet
+- 文档性质：ST13 任务实施说明；只定义后续 packet 输入，不是 implementation packet。
 - 实施状态：`not implementation-ready`
 - formal window：`formal window closed`
 - implementation packet：`implementation packet forbidden`
-- contract 状态：`contract_refined`
-- 本文件只描述未来实现窗口如何执行；当前不放行代码。
-- W13-E8.5 已将本文件登记到 `DOC_STATE.yaml` 既有 `facts.implementation_doc` slot，`exists=true`，`template_like=false`；该登记不改变 `implementation_doc_state=missing`、`readiness=blocked` 或 formal window 状态。
+- 当前定位：为后续 `ST13_21` state sync / preview / formal window readiness 准备最小实施输入。
+- 本窗口不修改 `DOC_STATE.yaml`，不打开 formal window，不生成 packet，不进入 implementation。
 
-## 2. 关联 ST13 / WT13
+## 2. 本轮实施目标
 
-- ST13：`ST13_21`
-- WT13 alias：`WT13-21`
-- 设计文档：`docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+- 在 ST01_01 最小 FastAPI runtime 上建立 API / 后端服务边界骨架，统一 /api/v1 路由注册、最小错误响应、配置读取和未来业务路由占位；不实现任何业务 API、不接 DB、不接 LLM/RAG、不接 Redis/PostgreSQL/MinIO。
 
-## 3. 进入实现前置条件
+## 3. 前置条件
 
-- `ST13_21_DESIGN.md` 完成评审并形成稳定 API contract。
-- Auth、Account / Role / Permission、Job、Resume、Knowledge、Interview、Score、Review、Export、Ops domain 已有非空验收标准。
-- API error contract、权限错误 contract、LLM / RAG 失败 contract 已被 `ST13_24` 纳入 required tests。
-- `ST13_20` 至少提供数据 contract 输入，避免 API 与 schema 互相漂移。
-- required tests 已由 `ST13_24` 或后续测试窗口明确。
+后续真正进入 implementation 前，必须同时满足：
 
-## 4. formal window 前置条件
+- `ST13_21_DESIGN.md` 已保持 R0 minimal API service boundary，不再以完整 API 合同作为本任务实施范围。
+- M02 只作为 downstream identity boundary input；完整身份系统不由本任务实现。
+- ST01_01 runtime baseline 已存在，且 health endpoint 不被本任务破坏。
+- `DOC_STATE.yaml` 仍由专门状态窗口维护；本文档正文不替代 official state。
+- formal window open、implementation_doc_state activation、implementation approval 和 packet generation 均需后续另窗确认。
 
-- 用户另窗确认可以打开 `ST13_21` formal window。
-- `DOC_STATE.yaml` required doc slot 已由 W13-E8.5 State Update 窗口写入并通过 validate/evaluate；后续仍需单独状态窗口处理 formal window。
-- `formal_window_open` 相关状态不得由本文档自行声明。
-- M02 权限 blocker 已被评估为可接受或已另窗消除。
+## 4. 范围内
 
-## 5. implementation packet 前置条件
+后续 packet 如获授权，只能覆盖：
 
-- formal window open 前置确认需在后续状态窗口完成。
-- implementation doc 不再只是计划文档，且允许修改范围、禁止范围、required tests、acceptance criteria 均非空。
-- `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml` 对该任务不再给出 implementation-ready blocker。
-- 当前窗口不生成 implementation packet。
+- 基于现有 FastAPI runtime 的 API service skeleton。
+- `/api/v1` prefix 和 router registration 最小模式。
+- health endpoint regression，确保 `GET /api/v1/health` 继续可达。
+- 最小 error response / error envelope。
+- 最小配置读取边界。
+- future routes placeholder / contract boundary。
+- M02 identity context 的消费边界说明。
 
-## 6. 允许修改范围
+本任务不实现任何业务 API。
 
-未来实现窗口才可能允许：
+## 5. 允许修改范围
 
-- `apps/api/**`，但必须由 formal window 明确授权。
-- 共享 contract 或类型目录，若后续仓库结构确认存在。
-- 与 API contract 直接相关的文档和测试。
+候选 allowed paths 仅限以下路径；后续 packet 不得自行扩大：
 
-当前 W13-E9 禁止创建上述目录。
+- `apps/api/**`
+- `package.json`
+- `requirements.txt`
+- `.env.example`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md`
 
-## 7. 禁止修改范围
+如果后续确实需要其它路径，只能作为另窗建议或确认卡，不得在本任务内直接扩大。
 
-- 未经 formal window 授权不得创建 `apps/api/**`。
-- 不得创建 OpenAPI 文件、schema 文件、路由文件、service、repository 或测试代码。
-- 不得顺手实现 `ST13_20` 数据库、`ST13_23` 前端、`ST13_24` 测试代码。
-- 不得修改 `docs/governance/DOC_STATE.yaml`。
-- 不得生成 implementation packet。
-- 不得写 provider key、真实用户简历、私有知识库内容到代码、日志或测试 fixture。
+## 6. 禁止修改
 
-## 8. 预期实现步骤
+后续 packet 的 candidate forbidden paths 必须至少包含：
 
-1. 复核 `ST13_21_DESIGN.md` 与 `ST13_20` 数据 contract。
-2. 固定 API domain、DTO、错误码、权限上下文、异步任务状态和 request / response 最小字段。
-3. 在 formal window 明确授权后，才可生成或维护后端服务边界，优先 contract-first。
-4. 补齐 API contract tests、权限 tests、错误态 tests、LLM / RAG 失败 tests。
-5. 与 `ST13_20` 对齐数据保存字段，与 `ST13_24` 对齐验收矩阵，与 `ST13_25` 对齐收口写回要求。
+- `apps/web/**`
+- `.github/**`
+- `tools/**`
+- `tests/**`
+- `docs/governance/DOC_STATE.yaml`
+- `docs/governance/transition_history.jsonl`
+- `docs/governance/previews/**`
+- `docs/governance/packets/**`
+- `infra/**`
+- DB / ORM / migration / repository
+- LLM provider
+- RAG / embedding
+- Redis / PostgreSQL / MinIO
+- 真实对象存储
+- M02 / M03 业务实现
+- 登录 / 权限完整实现
+- Job / Resume / Knowledge / Interview / Score / Review / Export 业务实现
+- Dashboard / App Shell / PageHeader / DataTable
+- 完整 CI / E2E / 多平台矩阵
 
-以上步骤当前均不执行。
+禁止范围优先级高于 allowed paths。若后续 packet 发现 path conflict，必须停止。
 
-## 9. 验证命令
+## 7. 后续实施步骤
 
-未来实现窗口至少需要：
+以下步骤只供 formal window 和 packet 通过后的实现窗口使用；当前均不执行：
 
-```bash
-python -m tools.test_runner.run_tests
-python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml
-python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml
-```
+1. 复核 official `DOC_STATE.yaml`、`evaluate-state` 和 `preflight-open-window`。
+2. 复核 ST01_01 runtime baseline 中 health endpoint 的当前入口。
+3. 建立或整理 `/api/v1` router registration 的最小骨架。
+4. 保持 health endpoint 可达，避免迁移回归。
+5. 添加最小 error response / error envelope。
+6. 添加最小配置读取边界，且不读取外部服务 secret。
+7. 只保留 future routes placeholder，不实现业务逻辑。
+8. 运行 required validation，并在依赖不可用时记录 environment-blocked。
 
-若后续新增 API 测试，必须补充对应窄范围命令。
+## 8. 测试与验证
 
-## 10. 测试要求
+后续 packet 的 required validation 至少包含：
 
-- contract schema validation。
-- 权限矩阵测试。
-- API error taxonomy 测试。
-- 幂等和状态流转测试。
-- LLM / RAG / scoring / export 异步任务状态测试。
-- request / response 字段最小一致性测试。
-- API 与数据 contract 字段漂移检查。
-- 失败时停止，不得继续扩展实现。
+- `python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+- `python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_21`
+- `python3 -m tools.doc_governor.cli preflight-open-window --subtask ST13_21`
+- `git diff --check`
+- API import / route smoke，前提是依赖可用。
+- health endpoint regression smoke，前提是依赖可用。
+- 如果依赖不可用，记录 environment-blocked，不允许绕过边界新增 vendor code。
+- Web lane smoke 只作为不破坏验证，不作为本任务实现授权。
+
+当前文档修正窗口只运行 governance validation、preflight 和 diff 检查，不执行 API runtime smoke，不启动 dev server。
+
+## 9. 完成判定
+
+`ST13_21` R0 minimal scope 的 acceptance criteria：
+
+- API routes 可以按 /api/v1 prefix 组织。
+- health endpoint 继续可达，不被破坏。
+- 后端服务边界有清晰 router registration 方式。
+- 存在最小 error response / error envelope 约定。
+- 配置读取边界只覆盖最小运行参数，不引入外部服务。
+- Auth / Identity 仅作为 placeholder / boundary，不实现完整身份系统。
+- Job / Resume / Knowledge / Interview / Score / Review / Export 仅作为 future contract boundary，不实现业务逻辑。
+- 不引入 DB / ORM / migration。
+- 不引入 LLM / RAG。
+- 不引入 Redis / PostgreSQL / MinIO。
+- 不修改 apps/web/**。
+- 不修改 tests/**，除非后续 packet 明确授权。
+- 与 M02 downstream input 关系明确。
+- 与 ST13_20 / ST13_24 的依赖关系明确：数据保存与测试体系分别由对应任务承接。
+
+完成判定只表示文档输入具备 state sync / preview 的基础，不表示 formal window 已打开，也不表示 implementation-ready。
+
+## 10. 停止条件
+
+出现以下任一情况必须停止：
+
+- 需要修改 `DOC_STATE.yaml` 或 `transition_history.jsonl`。
+- 需要打开 formal window。
+- 需要生成 implementation packet。
+- 需要修改 `apps/web/**`、`tests/**`、`tools/**`、`.github/**`。
+- 需要实现 Job / Resume / Knowledge / Interview / Score / Review / Export 业务 API。
+- 需要接入 DB、ORM、migration、LLM、RAG、Redis、PostgreSQL、MinIO 或对象存储。
+- 需要扩大 M02 / M03 业务实现范围。
+- 依赖不可用但有人要求通过 vendor code 或临时大改绕过。
 
 ## 11. 回退策略
 
-- 文档回退：回退本双文档和父索引引用。
-- 代码回退：仅限未来实现窗口中被授权的 `apps/api/**` 变更。
+- 文档回退：只回退本双文档中本次 scope correction 内容。
 - 状态回退：必须另开 State Update 或治理窗口；本文档不得直接修改 `DOC_STATE.yaml`。
+- 代码回退：仅适用于未来已授权 implementation window；当前没有代码改动。
+- 验证失败：停止后续 state sync / formal window 讨论，先输出失败命令、失败原因和受影响范围。
 
-## 12. 日志 / 观测要求
+## 12. 当前未放行实现说明
 
-未来实现应保留：
+`ST13_21_IMPLEMENTATION.md` 的存在不等于 active working doc。本文档不声明：
 
-- `request_id`
-- `task_id`
-- `user_id` 或脱敏用户引用
-- `provider`
-- `latency_ms`
-- `error_code`
-- token / cost 候选字段
+- `implementation_doc_state=active_working_doc`
+- `maturity=L5`
+- `readiness=downstream_ready`
+- `implementation_approval_status=approved`
+- `candidate_status=candidate`
+- `implementation_ready=true`
+- formal window open
+- packet ready
 
-## 13. 安全 / 隐私检查
+上述状态只能由后续正式状态流程处理。
 
-- session cookie 与权限过滤必须覆盖全部业务 API。
-- LLM prompt / response 日志必须脱敏。
-- RAG evidence 必须按用户可见范围过滤。
-- Markdown export 不得导出无权限原文。
+## 13. 下一步
 
-## 14. 交接输出格式
-
-未来实现窗口收口时必须输出：
-
-- 修改文件清单。
-- API domain / endpoint 变更摘要。
-- 验证命令和结果。
-- 未完成项和 blocker。
-- 是否仍可进入下一个 ST13。
-
-## 15. Basic Memory / Superpowers 写回要求
-
-未来收口窗口如获授权，必须先检索、后写入、再回读验证。写回内容至少包含 confirmed 结论、风险、下一步和验证结果。
-
-当前 W13-E9 不写 Basic Memory。
-
-## 16. 当前未放行实现说明
-
-`ST13_21_IMPLEMENTATION.md` 的存在和 contract_refined 状态都不等于 implementation-ready。当前不创建 `apps/api/**`，不生成 OpenAPI 文件，不生成 schema 文件，不生成 implementation packet，不打开 formal window，不实现 API。
-
-## 17. W13-E13.5 candidate 表达策略同步
-
-`ST13_21` 在 W13-E13.5 后继续只保留文档层 near-ready：不写正式状态层 `candidate_status`，不写 `readiness=downstream_ready`，不写 formal window candidate，不写 implementation-ready。
-
-## 18. W13-E13.8 facts-only State Update 保持策略
-
-W13-E13.8 只对 `ST13_24 / ST13_25` 执行 facts-only candidate 推荐字段写入；`ST13_21` 保持正式 `DOC_STATE.yaml` 原样，未写 candidate facts，未写 `candidate_status=candidate`，未写 `readiness=downstream_ready`，未写 near-ready 状态。
-
-该保持策略不改变本文件的 implementation plan only 定位。`ST13_21` 仍不得创建 `apps/api/**`、OpenAPI 或 schema，不得生成 implementation packet，不得打开 formal window。
-
-该策略不新增实现任务，不改变本文件的 implementation plan only 定位。当前仍不创建 `apps/api/**`、OpenAPI、schema、implementation packet 或业务代码。
-
-## 19. W13-E14-C 未来实现窗口约束复核
-
-本节只同步 W13-E14-C 的 near-ready blocker 复核结论；不把本文件升级为 active implementation doc，不生成 implementation packet，不创建任何实现文件。
-
-### 19.1 当前硬约束
-
-- 当前不创建 `apps/api/**`。
-- 当前不创建 OpenAPI 文件。
-- 当前不创建 schema、DTO、shared contract 或类型文件。
-- 当前不创建 `tests/**`。
-- 当前不生成 implementation packet。
-- 当前不打开 formal window。
-- 当前不修改 `DOC_STATE.yaml`。
-- 当前不把 `ST13_21` 标记为 implementation-ready。
-
-### 19.2 未来实现前必须等待的确认
-
-未来实现窗口至少需要用户明确确认：
-
-1. 是否打开 `ST13_21` formal window。
-2. 是否允许创建 `apps/api/**` 或其他后端服务目录。
-3. 是否允许创建 OpenAPI 文件，并确认路径、版本策略和维护责任。
-4. 是否允许创建 schema / DTO / shared contract 文件。
-5. 是否允许生成 implementation packet。
-6. 是否允许修改 `DOC_STATE.yaml` 中与 `ST13_21` 相关的 candidate、readiness、formal window 或 implementation doc 字段。
-7. 是否扩大 ST13 范围，或只限 `ST13_21` API / 后端服务边界。
-
-在上述确认前，任何实现步骤都只能作为未来计划，不得执行。
-
-### 19.3 preflight gate 要求
-
-未来实现窗口必须先通过状态层或等价 gate：
-
-- `validate-state` 必须保持 `ok=true,error=0,warning=0`。
-- `evaluate-state` 必须保持 `ok=true,error=0,warning=0`，且不得新增 documents blocker。
-- `preflight-open-window` 或同等开窗检查必须确认 `formal_window_open`、candidate 表达、implementation doc activation、allowed paths、forbidden paths、required tests 和 acceptance criteria 均满足开窗要求。
-- `generate-implementation-packet` 只能在 formal window 已打开、implementation doc 已激活、implementation packet inputs 已闭合后执行。
-
-不得用本文档正文声明替代工具 gate。
-
-### 19.4 与 ST13_20 数据 contract 的对齐要求
-
-未来实现前必须复核 `ST13_20`：
-
-- API request / response 字段必须能映射到 `ST13_20` 的保存、不保存、脱敏、归档或审计策略。
-- `User / Account / Role / Permission / Session` 必须与 M02 权限边界和 `ST13_20` 数据保存策略一致。
-- `SessionRecord`、`ScoreReport`、`ExportSnapshot`、`LLMGenerationRequest / Result` 的 API 状态必须与数据状态机一致。
-- RAG / LLM / provider 失败语义必须能被数据状态、审计事件和 `ST13_24` required tests 覆盖。
-- 若 `ST13_20` 仍保持 near-ready 或 schema / migration / ORM 未授权，`ST13_21` 不得单独进入实现。
-
-### 19.5 当前执行结论
-
-`ST13_21` 当前仍保持 `near_ready_for_formal_window_candidate_confirmed` 的文档层口径；正式状态层不写 candidate，不写 `readiness=downstream_ready`，不打开 formal window，不生成 implementation packet，不进入实现。
+下一步建议是 `ST13_21 state sync preview`，只验证本文档补齐后的 packet input / readiness 影响，不直接 apply，不打开 formal window，不生成 packet。
