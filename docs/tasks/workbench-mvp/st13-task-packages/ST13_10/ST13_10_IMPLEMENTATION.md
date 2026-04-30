@@ -1,55 +1,74 @@
 # ST13_10 实施说明：R1 RAG 最小可用任务包实施说明
 
-## 当前非实现状态
+## 当前实现授权状态
 
-- 状态：`draft`
-- 文档性质：ST13 任务实施说明；只定义后续实现窗口的输入、禁止范围、required tests 和停止条件。
-- 当前 readiness：docs-only readiness；仍不是 implementation-ready。
-- 当前 official state：`DOC_STATE.yaml` 中 `ST13_10` 已为 `implementation_doc_state=active_working_doc`、`maturity=L5`、`readiness=blocked`；仍未打开 formal window，仍不是 implementation-ready。
-- 当前不允许：RAG implementation、schema / migration / ORM implementation、测试实现、packet generation、formal window open。
+- 状态：`implementation_ready`
+- 文档性质：ST13_10 official implementation packet 的范围输入；用于授权 R1 RAG foundation slice 的最小代码与测试路径。
+- 当前 readiness：`DOC_STATE.yaml` 中 `ST13_10` 已为 `implementation_doc_state=active_working_doc`、`maturity=L5`、`readiness=implementation_ready`。
+- 当前 formal window：`formal_window_status=open`。
+- 当前 implementation approval：`implementation_approval_status=approved`。
+- 当前允许：在 official packet 重新生成且 allowed paths 覆盖真实代码 / 测试路径后，进入 R1 RAG foundation slice。
+- 当前仍不允许：schema / migration / ORM implementation、完整 embedding pipeline、真实 vector store tuning、大规模 document ingestion、复杂 reranking、大规模 UI、R2 训练闭环、资产归档、批量导出、新依赖或无关重构。
 - 已有状态层 task：`ST13_10 / WT13-10 / RAG / 知识库`。
 - 不新增 task ID，不创建新长期状态入口。
 
 ## 本轮实施目标
 
-- 建立 ST13_10 R1 RAG 最小可用 readiness 和 future implementation input 的可识别边界。
-- 让后续 formal readiness 评审能从本文档抽取目标、允许修改范围、禁止修改范围和 required tests。
+- 修正 ST13_10 official implementation packet 的 allowed paths，使其基于真实 repo 结构授权 R1 RAG foundation 的最小实现路径和 targeted tests 路径。
+- 在新 official packet 授权后，实现 R1 RAG 最小可用 foundation slice。
 - 继续消费 ST13_21 API contract、ST13_20 data readiness 和 ST13_24 acceptance / tests boundary。
 - 保持 R1 RAG must-have / optional / R2-deferred 边界不变。
-- 明确当前仍不能进入 RAG implementation、schema / migration / ORM implementation 或 tests implementation。
+- 明确本 slice 只建立 domain 类型、service boundary、adapter skeleton、query/result summary、citation/evidence/evidence gap、degraded 状态、visibility filter 占位和 evidence refs 接口，不进入 schema / migration / ORM。
 
 ## 允许修改范围
 
+- `apps/api/app/rag/**`
+- `tests/api/test_rag_foundation.py`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_IMPLEMENTATION.md`
-- `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_DESIGN.md`
 
 ## 禁止修改范围
 
-本节为当前窗口和 formal window 打开前的禁止修改范围。下方 `禁止修改` 子句柄用于让 evaluator 抽取 forbidden paths。
+下方 `禁止修改` 子句柄用于让 evaluator 抽取 forbidden paths。
 
 ### 禁止修改
 
-- `apps/**`
-- `tests/**`
+- `apps/web/**`
+- `apps/api/app/schema/**`
+- `apps/api/app/persistence.py`
+- `infra/**`
+- `tools/**`
 - `docs/governance/**`
 - `DOC_STATE.yaml`
 - `docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/**`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/**`
+- `requirements.txt`
+- `package.json`
+- `apps/web/package.json`
 - schema 文件
 - migration 文件
 - ORM / database implementation
-- packet
-- formal window
+- 完整 embedding pipeline
+- 真实 vector store tuning
+- 大规模 document ingestion
+- 复杂 reranking
+- 大规模 UI
+- R2 训练闭环
+- 资产归档
+- 批量导出
+- 复杂 tenant / RBAC
+- 新依赖
 - 任何新 task ID
 - 任何新长期状态入口
 
 ## 测试与验证
 
-未来 ST13_10 implementation packet 至少需要覆盖以下 required tests 输入；当前窗口不创建测试文件：
+ST13_10 implementation packet 至少需要覆盖以下 required tests 输入：
 
 - governance / state validation：validate-state、evaluate-state、focused ST13_10 evaluate、preflight-open-window、git diff --check、allowed / forbidden path audit。
+- targeted pytest：`.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_rag_foundation.py -q`。
+- py_compile：`.venv/bin/python -m py_compile apps/api/app/rag/__init__.py apps/api/app/rag/models.py apps/api/app/rag/service.py`。
 - knowledge source boundary：用户私有资料、管理员公共资料、岗位、简历和历史回答 scope 的读取边界。
 - document lifecycle：uploaded、parsing、parsed、indexed、failed、archived 等状态语义。
 - indexing status：pending、running、indexed、failed、retryable 和 failure reason 的展示与追踪。
@@ -71,11 +90,13 @@
 2. 需要修改 task remap。
 3. 需要修改 `ST13_20`、`ST13_21` 或 `ST13_24` 文档正文。
 4. 需要新增 task ID 或任何新长期状态入口。
-5. 需要生成 packet 或打开 formal window。
-6. 需要实现业务代码、测试代码、schema、migration、ORM、repository、worker、queue、provider 或前端页面。
+5. Phase B 需要重新生成 packet 或打开 formal window。
+6. 需要实现 packet 未授权的业务代码、测试代码、schema、migration、ORM、repository、worker、queue、provider 或前端页面。
 7. 需要引入新依赖或环境变量。
 8. `validate-state`、全量 `evaluate-state`、focused ST13_10 evaluate 或 ST13_10 preflight 失败且无法解释。
 9. `git status --short` 出现本窗口允许范围外改动。
+10. Phase A 后 official packet 仍不授权 `apps/api/app/rag/**` 与 `tests/api/test_rag_foundation.py`。
+11. Phase B 需要修改 packet 未授权路径。
 
 ## 7. RAG 摄取 / 索引 / 检索最小实现输入
 
@@ -89,7 +110,7 @@
 6. citation / evidence：确认 source ref、chunk ref、snippet summary、evidence gap、confidence label。
 7. integration：确认面试台、评分、复盘、导出、历史回看如何消费。
 
-该顺序是后续实现输入，不代表当前创建 API、schema、worker、queue、provider 或 tests。
+该顺序是本 slice 的边界输入。本 slice 只允许创建 RAG foundation domain / service skeleton 与 targeted tests，不代表当前创建 schema、worker、queue、provider、真实向量库或 UI。
 
 ## 8. RAG 与评分 / 复盘 / 导出 / 历史回看的集成边界
 
@@ -131,21 +152,20 @@ RAG implementation 进入持久化前必须等待：
 
 推荐顺序：
 
-1. `R1-W05b-ST13_10-DOCS-CLOSEOUT-COMMIT`：验证并提交本双文档。
-2. `R1-W06-ST13_10-RAG-CONTRACT-REVIEW`：只读或 docs-only 复核 `ST13_10` 与 `ST13_20` / `ST13_21` 的字段一致性。
-3. `R1-W07-ST13_24-R1-TESTS-ACCEPTANCE-READINESS`：补 R1 RAG / scoring / review / export / history 的 acceptance 和 required tests。
-4. 后续 schema / migration readiness 或 formal window 只能在用户明确授权、packet 和状态 gate 通过后开启。
-
-不建议下一窗口直接进入 RAG implementation。
+1. `R1-DEV-01-ST13_10-PACKET-SCOPE-AND-RAG-FOUNDATION`：修正 packet scope，重新生成 official packet，实现 RAG foundation slice。
+2. 后续 schema / migration readiness 只能在用户明确授权、packet 和状态 gate 通过后开启。
+3. 后续 API / route / persistence / UI 集成必须另开 packet，不能由本 slice 顺手实现。
 
 ## 12. 完成判定
 
-本 docs-only readiness 窗口完成判定：
+本 implementation window 完成判定：
 
-- `ST13_10_DESIGN.md` 已覆盖 R1 RAG minimum scope、source、snapshot、query、result、citation、evidence、gap、fallback、security、frontend、persistence、`ST13_21` / `ST13_20` dependency。
-- `ST13_10_IMPLEMENTATION.md` 已覆盖 readiness state、future allowed paths、forbidden paths、stop conditions、required tests、acceptance boundary、后续窗口顺序。
+- official packet 由 `generate-implementation-packet` 重新生成，且 allowed paths 包含 `apps/api/app/rag/**` 与 `tests/api/test_rag_foundation.py`。
+- packet 不再只授权 ST13_10 文档路径，且 forbidden paths 继续禁止 schema / migration / ORM、新依赖、大规模 UI、R2 训练闭环、资产归档和批量导出。
+- `apps/api/app/rag/**` 提供 RAG domain 类型、service boundary、adapter skeleton、retrieval query summary、retrieval result summary、citation / evidence item / evidence gap、degraded 状态和 visibility filter 占位。
+- RAG foundation 对 score / review / export / history 预留 evidence reference contract，但不修改对应业务服务。
+- `tests/api/test_rag_foundation.py` 至少覆盖一个成功路径和一个 empty / degraded / evidence gap 路径。
 - 明确 `ST13_10` 是 R1 RAG anchor。
 - 明确不新增 task ID。
-- 明确当前不能进入 RAG implementation。
 - 明确当前不能进入 schema / migration / ORM implementation。
-- 未修改代码、测试、governance state、packet 或 formal window。
+- 未新增第三方依赖或环境变量。
