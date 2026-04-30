@@ -177,6 +177,70 @@ packet forbidden paths 已包含且本次未触碰：
 - acceptance refresh 结论：accepted。
 - 本窗口不写 official state，不修改 packet，不继续 implementation。
 
-## 13. 下一步
+## 13. R1 API 契约冻结执行说明
 
-下一步建议是提交本次 post-implementation docs / index / log sync；随后另窗判断是否需要 official state accepted / done / implementation result transition。
+`R1-W02-ST13_21-API-CONTRACT-FREEZE` 只执行 docs-only contract freeze。本文档记录后续执行边界，不代表本窗口进入 implementation，不生成 packet，不打开 formal window，不修改 official state。
+
+### 13.1 本窗口新增的实施输入
+
+后续 `ST13_20` R1 data / schema / migration readiness 可以从 `ST13_21_DESIGN.md` 第 13 节消费以下输入：
+
+- R1 API domain boundary：Identity / Auth context、Job / Resume、Knowledge / RAG、Interview、Score、Review、Export、History。
+- action list：以 create / read / update / archive / restore / generate / retry / list / detail 等 action 语义为边界，不在本窗口创建 endpoint。
+- request contract：actor context、resource identity、snapshot / version、operation intent、RAG query context、LLM / generation context。
+- response contract：resource response、permission-aware response、async response、evidence response、review / score response、export response。
+- error envelope：`error.code`、`error.message`、`error.reason`、`error.request_id`、`error.resource_ref`、`error.retryable`、`error.degraded`、`error.details`。
+- permission context：user / role / workspace / tenant 候选、resource visibility、permission denied 与 resource not visible 的区分。
+- async / degradation semantics：RAG indexing、RAG no result、LLM failed、parsing low confidence、score / review pending、export failed、restore failed。
+- traceability fields：request / operation、actor / workspace scope、resource refs、source snapshot refs、status fields、evidence refs、error refs、export refs。
+- RAG evidence / citation、score / review / export / history 的共享 API 语义。
+
+### 13.2 ST13_20 下游消费边界
+
+`ST13_20` 可以把本窗口冻结内容作为 data / schema / migration readiness 的上游输入，但必须遵守：
+
+- 只有已在 `ST13_21_DESIGN.md` 第 13 节稳定表达的 API 语义，才能进入 `ST13_20` 的字段、状态、错误、traceability 讨论。
+- `ST13_21` 中标注为 contract 占位的字段，不得被 `ST13_20` 直接写成数据库字段或 migration。
+- 完整 prompt 原文、完整 LLM response 原文、embedding 向量、provider secret、对象存储真实路径、完整权限矩阵、企业级 tenant 配置、PDF 模板配置和训练任务调度参数不得在 `ST13_20` 中直接落库。
+- 如果 `ST13_20` 发现 API contract 与 data contract 字段漂移，应回到文档评审窗口，不得通过实现补丁临时修正。
+
+### 13.3 本窗口仍禁止的内容
+
+本窗口明确未执行且仍禁止：
+
+- 不写业务 API。
+- 不创建 endpoint、OpenAPI 文件、schema、migration、ORM、repository、worker、queue、provider adapter 或测试文件。
+- 不修改 `apps/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`。
+- 不生成 implementation packet。
+- 不打开 formal window。
+- 不新增依赖、环境变量或长期状态入口。
+- 不把 R1 contract freeze 写成 accepted / done / implementation-ready 状态。
+
+### 13.4 后续验证口径
+
+本窗口的完成判定只面向文档与治理：
+
+- `ST13_21_DESIGN.md` 已明确 R1 API contract freeze 范围。
+- R1 API contract 已从 R0 minimal service boundary 扩展为可供 `ST13_20` 消费的 domain、request、response、error、permission、async、degradation、traceability 和 evidence contract。
+- R0 / R1 / R2 scope split 已明确。
+- 禁止实现范围已明确。
+- 代码、测试、governance state、packet 和 formal window 未修改。
+
+### 13.5 前端消费边界补丁
+
+`R1-W02a-ST13_21-FRONTEND-UI-CONSUMER-CONTRACT-PATCH` 在 `ST13_21_DESIGN.md` 第 14 节补齐前端消费边界。该补丁只说明前端如何消费 R1 API contract，不实现页面、组件、测试或 endpoint。
+
+后续前端或测试窗口可以消费以下 contract 信息：
+
+- R1 用户可见 surface：工作台概览、模拟记录列表、发起模拟入口、面试台、评分 / 复盘详情、知识库入口、Markdown 导出入口、账号 / 权限提示。
+- 前端直接消费 action：current user / permission context、job / resume list and detail、knowledge / RAG status and search context、interview start / restore / submit / finish / detail / history、score / review read or generate status、export create / status / retry。
+- 前端展示字段：资源摘要、评分与复盘、RAG citation / evidence / evidence gap、异步状态、权限和可见性安全摘要。
+- 后端追踪字段：`request_id`、`operation_id`、audit event id、source snapshot refs、provider alias、model alias 等默认不直接展示。
+- 错误和状态：permission denied、resource not visible、archived resource、validation failed、RAG unavailable、LLM failed、pending / running、retryable、empty history / empty knowledge。
+- R1 / R2 UI 边界：R1 只要求主链路、证据、评分复盘、导出、历史回看、权限 / 降级 / 空状态可感知；训练抽屉完整闭环、资产归档、复杂组织后台和团队共享知识库治理延后。
+
+本补丁仍禁止修改 `apps/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`，禁止新增依赖、schema、migration、packet 或 formal window。
+
+## 14. 下一步
+
+下一步建议开启 `R1-W03-ST13_20-DATA-SCHEMA-MIGRATION-READINESS`。该窗口应只消费本次 `ST13_21` R1 API contract freeze 结果，先做 data / schema / migration readiness，不直接创建 schema、migration、ORM、业务代码或测试。
