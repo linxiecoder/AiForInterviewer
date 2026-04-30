@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Alert, Card, Collapse, Descriptions, Empty, List, Spin, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 
 import { fetchTrustedInterviewDetail } from "../interview/traceApi.js";
 import type { TrustedInterviewDetail } from "../interview/traceTypes.js";
 import { buildTrustedTraceViewModel } from "../interview/traceViewModel.js";
+
+const { Paragraph, Text, Title } = Typography;
 
 type LoadState =
   | { status: "loading" }
@@ -42,138 +45,258 @@ export function TrustedTracePage({
     <main className="app-shell trusted-trace-shell">
       <section className="workspace-header" aria-labelledby="trusted-trace-title">
         <div>
-          <p className="eyebrow">R1 可信工作台 / trace read surface</p>
-          <h1 id="trusted-trace-title">R1 可信 Trace</h1>
-          <p className="header-copy">
+          <Text className="eyebrow">R1 可信工作台 / trace read surface</Text>
+          <Title level={1} id="trusted-trace-title">
+            R1 可信 Trace
+          </Title>
+          <Paragraph className="header-copy">
             展示面试详情中的 trace_summary、RAG citation、evidence gap、评分复盘和 Markdown export
             trace reference。
-          </p>
+          </Paragraph>
         </div>
         <div className="status-group" aria-label="trace 状态">
-          <div className="status-pill">trace_summary: {viewModel.traceStatus}</div>
-          <div className="status-pill">owner: {ownerId}</div>
+          <Tag color={statusColor(viewModel.traceStatus)}>trace_summary: {viewModel.traceStatus}</Tag>
+          <Tag color="blue">owner: {ownerId}</Tag>
         </div>
       </section>
 
       {loadState.status === "loading" ? (
-        <section className="trace-alert" aria-live="polite">
-          正在读取可信 trace...
-        </section>
+        <Alert className="trusted-alert" message="正在读取可信 trace..." type="info" showIcon />
       ) : null}
 
       {loadState.status === "failed" ? (
-        <section className="trace-alert trace-alert-error" aria-live="assertive">
-          <strong>Trace 读取失败</strong>
-          <span>{loadState.message}</span>
-          <span>failed / retryable</span>
-        </section>
+        <Alert
+          className="trusted-alert"
+          message="Trace 读取失败"
+          description={
+            <div className="trusted-alert-detail">
+              <Text>{loadState.message}</Text>
+              <div>
+                <Tag color="error">failed</Tag>
+                <Tag color="warning">retryable</Tag>
+              </div>
+            </div>
+          }
+          type="error"
+          showIcon
+        />
       ) : null}
 
-      <section className="trusted-grid" aria-label="R1 可信数据摘要">
-        <TraceCard title="Trace refs">
-          {viewModel.isEmptyTrace ? <p className="empty-copy">旧记录暂无 trace_summary</p> : null}
-          <ReferenceGroup label="session" refs={viewModel.sessionRefs} />
-          <ReferenceGroup label="turn" refs={viewModel.turnRefs} />
-          <ReferenceGroup label="answer" refs={viewModel.answerRefs} />
-          <div className="trace-counts" aria-label="trace counts">
-            {viewModel.counts.map((item) => (
-              <span key={item.label}>
-                {item.label}: {item.value}
-              </span>
-            ))}
-          </div>
-        </TraceCard>
-
-        <TraceCard title="RAG citation">
-          {viewModel.citationItems.length === 0 ? (
-            <p className="empty-copy">RAG citation 暂无可展示引用</p>
-          ) : (
-            <ul className="citation-list">
-              {viewModel.citationItems.map((item) => (
-                <li key={item.key}>
-                  <strong>{item.sourceSummary}</strong>
-                  <span>{item.chunkSummary}</span>
-                  <span>chunk index: {item.chunkIndex}</span>
-                  <span>{item.position}</span>
-                </li>
+      <Spin spinning={loadState.status === "loading"}>
+        <section className="trusted-grid" aria-label="R1 可信数据摘要">
+          <Card title="Trace refs" className="trace-card trusted-card">
+            {viewModel.isEmptyTrace ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="旧记录暂无 trace_summary" />
+            ) : null}
+            <Descriptions
+              className="trusted-descriptions"
+              size="small"
+              column={1}
+              bordered
+              items={[
+                {
+                  key: "session",
+                  label: "session",
+                  children: <ReferenceList refs={viewModel.sessionRefs} />,
+                },
+                {
+                  key: "turn",
+                  label: "turn",
+                  children: <ReferenceList refs={viewModel.turnRefs} />,
+                },
+                {
+                  key: "answer",
+                  label: "answer",
+                  children: <ReferenceList refs={viewModel.answerRefs} />,
+                },
+              ]}
+            />
+            <div className="trusted-tag-row" aria-label="trace counts">
+              {viewModel.counts.map((item) => (
+                <Tag key={item.label} color="geekblue">
+                  {item.label}: {item.value}
+                </Tag>
               ))}
-            </ul>
-          )}
-        </TraceCard>
+            </div>
+          </Card>
 
-        <TraceCard title="Evidence gap / degraded">
-          <TagList items={viewModel.evidenceGapLabels} emptyLabel="暂无 evidence gap" />
-          <TagList items={viewModel.statusLabels} emptyLabel="暂无 degraded 状态" />
-        </TraceCard>
+          <Card title="RAG citation" className="trace-card trusted-card">
+            <Collapse
+              className="trusted-collapse"
+              defaultActiveKey={["citations"]}
+              items={[
+                {
+                  key: "citations",
+                  label: "RAG citation 详情",
+                  children:
+                    viewModel.citationItems.length === 0 ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="RAG citation 暂无可展示引用"
+                      />
+                    ) : (
+                      <List
+                        className="trusted-list"
+                        size="small"
+                        dataSource={viewModel.citationItems}
+                        renderItem={(item) => (
+                          <List.Item>
+                            <List.Item.Meta
+                              title={<Text strong>{item.sourceSummary}</Text>}
+                              description={
+                                <div className="trusted-list-detail">
+                                  <Text>{item.chunkSummary}</Text>
+                                  <Text>chunk index: {item.chunkIndex}</Text>
+                                  <Text>{item.position}</Text>
+                                </div>
+                              }
+                            />
+                          </List.Item>
+                        )}
+                      />
+                    ),
+                },
+              ]}
+            />
+          </Card>
 
-        <TraceCard title="Review / export refs">
-          <ReferenceGroup label="score" refs={viewModel.scoreRefs} />
-          <ReferenceGroup label="review" refs={viewModel.reviewRefs} />
-          <ReferenceGroup label="export" refs={viewModel.exportRefs} />
-        </TraceCard>
+          <Card title="Evidence gap / degraded" className="trace-card trusted-card">
+            <Alert
+              message="Evidence gap"
+              description={
+                <TagList items={viewModel.evidenceGapLabels} emptyLabel="暂无 evidence gap" />
+              }
+              type={viewModel.evidenceGapLabels.length > 0 ? "warning" : "info"}
+              showIcon
+            />
+            <Alert
+              message="Degraded / failed / retryable"
+              description={<TagList items={viewModel.statusLabels} emptyLabel="暂无 degraded 状态" />}
+              type={viewModel.statusLabels.includes("failed") ? "error" : "warning"}
+              showIcon
+            />
+            <Collapse
+              className="trusted-collapse"
+              items={[
+                {
+                  key: "evidence-gaps",
+                  label: "Evidence gap 详情",
+                  children: (
+                    <Text>{viewModel.evidenceGapLabels.join(" / ") || "暂无 evidence gap"}</Text>
+                  ),
+                },
+              ]}
+            />
+          </Card>
 
-        <TraceCard title="Markdown export">
-          <div className="export-status">Export status: {viewModel.exportStatus}</div>
-          <div>{viewModel.exportRetryable ? "可重试" : "不可重试"}</div>
-          <div>failure reason: {viewModel.exportFailureReason}</div>
-        </TraceCard>
+          <Card title="Review / export refs" className="trace-card trusted-card">
+            <Descriptions
+              className="trusted-descriptions"
+              size="small"
+              column={1}
+              bordered
+              items={[
+                {
+                  key: "score",
+                  label: "score",
+                  children: <ReferenceList refs={viewModel.scoreRefs} />,
+                },
+                {
+                  key: "review",
+                  label: "review",
+                  children: <ReferenceList refs={viewModel.reviewRefs} />,
+                },
+                {
+                  key: "export",
+                  label: "export",
+                  children: <ReferenceList refs={viewModel.exportRefs} />,
+                },
+              ]}
+            />
+          </Card>
 
-        <TraceCard title="Request refs">
-          {viewModel.requestRefs.length === 0 ? (
-            <p className="empty-copy">暂无 request ref</p>
-          ) : (
-            <ul className="reference-list">
-              {viewModel.requestRefs.map((item) => (
-                <li key={item.key}>{item.label}</li>
-              ))}
-            </ul>
-          )}
-        </TraceCard>
-      </section>
+          <Card title="Markdown export" className="trace-card trusted-card">
+            <div className="export-summary">
+              <Text strong>Export status: {viewModel.exportStatus}</Text>
+              <Tag color={viewModel.exportRetryable ? "warning" : "default"}>
+                {viewModel.exportRetryable ? "可重试" : "不可重试"}
+              </Tag>
+              <Text>failure reason: {viewModel.exportFailureReason}</Text>
+            </div>
+          </Card>
+
+          <Card title="Request refs" className="trace-card trusted-card">
+            {viewModel.requestRefs.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 request ref" />
+            ) : (
+              <List
+                className="trusted-list"
+                size="small"
+                dataSource={viewModel.requestRefs}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Text>{item.label}</Text>
+                  </List.Item>
+                )}
+              />
+            )}
+          </Card>
+        </section>
+      </Spin>
     </main>
-  );
-}
-
-function TraceCard({ title, children }: { title: string; children: ReactNode }) {
-  const headingId = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-title`;
-
-  return (
-    <section className="panel trace-card" aria-labelledby={headingId}>
-      <div className="panel-heading">
-        <h2 id={headingId}>{title}</h2>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function ReferenceGroup({ label, refs }: { label: string; refs: string[] }) {
-  return (
-    <div className="reference-group">
-      <span>{label}</span>
-      {refs.length === 0 ? (
-        <p className="empty-copy">暂无 {label} ref</p>
-      ) : (
-        <ul className="reference-list">
-          {refs.map((ref) => (
-            <li key={ref}>{ref}</li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 
 function TagList({ items, emptyLabel }: { items: string[]; emptyLabel: string }) {
   if (items.length === 0) {
-    return <p className="empty-copy">{emptyLabel}</p>;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyLabel} />;
   }
 
   return (
-    <div className="trace-tag-list">
+    <div className="trusted-tag-row">
       {items.map((item) => (
-        <span key={item}>{item}</span>
+        <Tag key={item} color={statusColor(item)}>
+          {item}
+        </Tag>
       ))}
     </div>
   );
+}
+
+function ReferenceList({ refs }: { refs: string[] }) {
+  if (refs.length === 0) {
+    return <Text type="secondary">暂无 ref</Text>;
+  }
+
+  return (
+    <List
+      className="trusted-list trusted-reference-list"
+      size="small"
+      dataSource={refs}
+      renderItem={(ref) => (
+        <List.Item>
+          <Text className="trusted-ref-text">{ref}</Text>
+        </List.Item>
+      )}
+    />
+  );
+}
+
+function statusColor(status: string): string {
+  if (status === "failed" || status === "index_failed") {
+    return "error";
+  }
+  if (status === "degraded" || status === "retryable" || status === "index_pending") {
+    return "warning";
+  }
+  if (status === "available" || status === "completed") {
+    return "success";
+  }
+  if (status === "empty") {
+    return "default";
+  }
+  if (status === "rag_unavailable" || status === "permission_filtered" || status === "no_result") {
+    return "processing";
+  }
+  return "blue";
 }

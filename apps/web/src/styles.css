@@ -374,23 +374,17 @@ h2 {
   max-width: 1320px;
 }
 
-.trace-alert {
-  display: flex;
-  gap: 10px;
-  margin-top: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.22);
-  border-radius: 8px;
-  padding: 12px 14px;
-  color: #1849a9;
-  background: #eff4ff;
-  font-size: 13px;
+.trusted-trace-shell .ant-typography {
+  margin-bottom: 0;
 }
 
-.trace-alert-error {
-  flex-direction: column;
-  border-color: rgba(180, 35, 24, 0.26);
-  color: #b42318;
-  background: #fff3f1;
+.trusted-alert {
+  margin-top: 18px;
+}
+
+.trusted-alert-detail {
+  display: grid;
+  gap: 8px;
 }
 
 .trusted-grid {
@@ -400,73 +394,45 @@ h2 {
   padding-top: 24px;
 }
 
-.trace-card {
+.trusted-card {
   min-width: 0;
 }
 
-.trace-counts,
-.trace-tag-list {
+.trusted-card .ant-card-body {
+  display: grid;
+  gap: 14px;
+}
+
+.trusted-tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.trace-counts span,
-.trace-tag-list span,
-.export-status {
-  border: 1px solid #d5dce5;
-  border-radius: 6px;
-  padding: 6px 8px;
-  color: #0f172a;
-  background: #f8fbff;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.reference-group {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.reference-group > span {
-  color: #475467;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.reference-list,
-.citation-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.reference-list li,
-.citation-list li {
+.trusted-descriptions .ant-descriptions-item-content {
   min-width: 0;
   overflow-wrap: anywhere;
-  border: 1px solid #d5dce5;
-  border-radius: 6px;
-  padding: 10px;
-  background: #f8fbff;
-  font-size: 13px;
 }
 
-.citation-list li {
+.trusted-reference-list .ant-list-item,
+.trusted-list .ant-list-item {
+  min-width: 0;
+}
+
+.trusted-list-detail,
+.export-summary {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
-.citation-list strong {
-  color: #0f172a;
+.trusted-ref-text,
+.trusted-list-detail {
+  overflow-wrap: anywhere;
 }
 
-.empty-copy {
-  color: #667085;
-  font-size: 13px;
+.trusted-collapse .ant-collapse-content-box {
+  display: grid;
+  gap: 12px;
 }
 
 @media (prefers-reduced-motion: no-preference) {

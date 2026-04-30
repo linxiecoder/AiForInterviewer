@@ -6,21 +6,21 @@ permalink: ai-for-interviewer/development/r1-trusted-trace-ui-compliance
 
 # R1 可信 trace UI 规范审计
 
-本文档记录 `apps/web/src/components/TrustedTracePage.tsx` 在 R1-DEV-07 完成后的 UI compliance 审计结果。本文档只记录当前判断，不授权 UI 重构。
+本文档记录 `apps/web/src/components/TrustedTracePage.tsx` 的 UI compliance 审计和 R1-DEV-07c Ant Design 试点结果。本文档只记录当前判断，不授权全站 UI 重构。
 
 ## 审计结论
 
-当前可信 trace 页面符合 R1 最小可见面的功能目标，但不完全符合“大型项目成熟组件优先”的长期方向。
+当前可信 trace 页面已经完成 Ant Design 最小落地试点，功能上保持 R1 最小可信展示面，组件选型上比纯自定义 CSS 更接近“大型项目成熟组件优先”的长期方向。
 
 具体结论：
 
 - 页面已通过真实浏览器 E2E 保护，可展示 `trace_summary`、RAG citation、evidence gap、degraded / failed / retryable、review / export trace reference 和 empty trace 空态。
-- 页面当前只使用 React、HTML 结构和项目自定义 CSS，没有使用 Ant Design、ProComponents 或统一 UI 组件库。
-- 当前项目没有既有 Ant Design 依赖。
+- 页面当前使用 Ant Design 的 `Card`、`Alert`、`Tag`、`Descriptions`、`Collapse`、`Empty`、`Typography`、`List`、`Spin` 承接基础展示。
+- 当前项目已新增 `antd` 依赖。
 - 当前项目没有既有 ProComponents 依赖。
-- 当前项目没有可复用的统一 UI 组件库，只有局部组件和全局 CSS。
-- 本任务不建议引入 Ant Design，因为这会引入较大依赖、样式基线变化、bundle 变化和 E2E 回归风险。
-- 本任务不建议引入 ProComponents，因为当前页面以只读摘要展示为主，不是复杂中后台表单或表格场景。
+- 当前项目还没有全局封装的统一 UI 组件库，Ant Design 仍停留在单页试点层。
+- 本试点不引入 ProComponents，因为当前页面以只读摘要展示为主，不是复杂中后台表单或表格场景。
+- 本试点不迁移 Umi，不引入新状态管理库，不做全站 layout 重构。
 
 ## 检查依据
 
@@ -34,35 +34,43 @@ permalink: ai-for-interviewer/development/r1-trusted-trace-ui-compliance
 
 检查结果：
 
-- 未发现 `antd`、`@ant-design/*`、`@ant-design/pro-*`、`ProComponents`。
-- `TrustedTracePage` 中的卡片、标签、列表、空态和提示由 `TraceCard`、`TagList`、`ReferenceGroup` 与 CSS 实现。
+- 已发现 `antd`，未发现 `@ant-design/pro-*`、`ProComponents`。
+- `TrustedTracePage` 中的卡片、提示、标签、描述列表、折叠面板、空态、文本和列表已由 Ant Design 组件承接。
+- 项目仍保留少量页面级 CSS，用于 grid、间距、长 ref 换行和 Ant Design 组件之间的局部布局适配。
 - 页面没有引入新的状态管理库。
 - 页面没有迁移 Umi。
 - 页面没有全站视觉重构。
 
-## 是否需要立即改代码
+## 试点结论
 
-本任务不建议立即改代码。
+Ant Design 适合继续作为 R1 后续评分、复盘、历史、导出页面的候选统一 UI 基础，但需要先处理 bundle 和局部封装策略。
 
-原因：
+正向结果：
 
-- R1-DEV-07 的目标是让可信数据在真实页面中可见，当前已满足。
-- 当前页面已有 Playwright E2E smoke tests，贸然替换 UI 基础组件会增加测试和视觉回归面。
-- 项目还没有全局 UI 组件选型，单页引入大型组件库会形成局部孤岛。
-- 当前缺口更适合先记录为 UI 选型债，再在统一工作台 UI slice 中收敛。
+- `TrustedTracePage` 可以在不改 route、不改 API 字段、不改 view model 核心逻辑的前提下切到 Ant Design。
+- `Card`、`Descriptions`、`Tag`、`Alert`、`Collapse`、`Empty`、`List` 能覆盖当前可信 trace 详情展示。
+- Playwright E2E 可继续断言用户真实可见能力，并额外覆盖 Ant Design `Card` / `Collapse` / `Empty` 形态。
+
+代价和风险：
+
+- 引入 `antd` 后，当前 Vite build 输出主 JS chunk 约 `689.33 kB`，触发 `Some chunks are larger than 500 kB` warning。
+- Node `18.19.1` 下仍有 Vite 7 engine warning，建议后续升级到 Node `20.19+` 或 `22.12+`。
+- 如果后续多页面直接散用 Ant Design，可能出现样式和交互不一致；建议建立轻量页面级 pattern，而不是继续随页复制。
 
 ## 后续 UI 选型建议
 
 若后续进入 R1 工作台 UI 收敛 slice，建议采用以下顺序：
 
 1. 先确定 `apps/web` 是否继续保持 Vite + React，或是否需要中后台框架。
-2. 如果仍是 React 且需要成熟组件库，优先评估 Ant Design。
+2. 如果仍是 React 且需要成熟组件库，可基于本试点继续使用 Ant Design。
 3. 只在复杂表单、表格、筛选、详情页密集场景中评估 ProComponents。
-4. 先做一个页面的最小替换实验，覆盖 `Card`、`Alert`、`Tag`、`List`、`Descriptions`、`Empty`、`Typography`、`Spin`。
-5. 替换前后必须跑 `npm --workspace apps/web run build`、`npm --workspace apps/web run test`、`npm --workspace apps/web run e2e`。
+4. 为评分、复盘、历史、导出页面沉淀一组轻量 pattern，例如详情页 header、状态区、ref 摘要、引用列表、降级提示。
+5. 评估 Vite code-splitting 或按 route 懒加载，避免 Ant Design 让首屏主 chunk 持续增大。
+6. 替换前后必须跑 `npm --workspace apps/web run build`、`npm --workspace apps/web run test`、`npm --workspace apps/web run e2e`。
 
 ## 当前保留风险
 
-- 自定义 `TraceCard` / `TagList` 后续可能与全局设计系统重复。
-- 页面密度、状态色和列表语义还没有统一组件规范背书。
-- 如果 R1 后续增加筛选、折叠、表格或复杂 review/export 操作，应优先使用成熟组件库，而不是继续扩展自研基础组件。
+- Ant Design 当前只在 `TrustedTracePage` 试点，尚未形成全站统一 UI 规范。
+- 主 bundle size warning 需要在下一轮 UI 系统收敛中评估 code-splitting。
+- 页面密度、状态色和列表语义仍需在评分、复盘、历史、导出页面中继续验证。
+- 如果 R1 后续增加复杂表格和筛选，再评估 ProComponents；当前不应提前引入。
