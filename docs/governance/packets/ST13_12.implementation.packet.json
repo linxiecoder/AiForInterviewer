@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "implementation_packet",
+  "runtime_artifact": true,
+  "generated_at": "2026-04-30T08:08:03Z",
+  "task_id": "ST13_12",
+  "module_id": "M06",
+  "requirement_id": "RQ01",
+  "implementation_ready": true,
+  "goal": "start interview、generate first question、submit answer、next turn / minimal follow-up、save / restore / history。\n使用 ST13_11 provider boundary 生成问题和最小追问，不绕过 provider interface。\n复用 ST13_20 R0 minimal persistence，不新增完整 DB / ORM / migration。\n复用 ST13_21 API boundary 与 error envelope。\n保持 validation、404、provider failure 与 persistence failure 的稳定错误表达。",
+  "allowed_modify_paths": [
+    "apps/api/app/api/v1/**",
+    "apps/api/app/interview_flow/**",
+    "apps/api/app/main.py",
+    "apps/api/app/boundary.py",
+    "tests/api/test_interview_flow.py",
+    "tests/api/**"
+  ],
+  "forbidden_paths": [
+    "docs/governance/DOC_STATE.yaml",
+    "docs/governance/transition_history.jsonl",
+    "docs/governance/packets/**",
+    "tools/**",
+    "infra/**",
+    "apps/web/**",
+    "scoring / review / Markdown export business",
+    "full RAG / knowledge base governance",
+    "full DB migration / ORM / repository",
+    "package.json",
+    "lockfile",
+    "CI 配置",
+    "docs/requirements/workbench-mvp/**",
+    "docs/design/workbench-mvp/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_20/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_24/**",
+    "docs/governance/DOC_STATE.bootstrap.yaml"
+  ],
+  "required_tests": [
+    "git diff --check",
+    "python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_12",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_11",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_20",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_21",
+    ".venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_interview_flow.py -q",
+    ".venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_llm_provider.py -q",
+    ".venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_interview_records.py -q",
+    "git diff --name-only",
+    "复核主链路实现没有直接调用真实 provider SDK / HTTP client。",
+    "复核 deterministic provider 只在 test/dev 显式配置下用于测试。"
+  ],
+  "acceptance_criteria": [
+    "start -> question -> answer -> next-turn / follow-up 最小主链路可运行。",
+    "provider 调用必须通过 ST13_11 boundary，不绕过 provider interface。",
+    "persistence 复用 ST13_20 store，不新建 full DB / ORM / migration。",
+    "owner_id 最小隔离保持，history / restore 不跨 owner 泄露。",
+    "provider failure、validation error、missing session 404 均返回稳定 error envelope。",
+    "scoring / review / Markdown export 未实现。",
+    "full RAG、frontend、完整训练闭环未实现。",
+    "主链路测试、provider tests、persistence tests 通过。",
+    "governance validation 保持 green。"
+  ],
+  "upstream_refs": [
+    "requirement:RQ01",
+    "module:M06",
+    "subtask:ST13_12",
+    "module:M07",
+    "module:M08",
+    "oq:OQ-093"
+  ],
+  "artifact_constraints": {
+    "runtime_artifact": true,
+    "required_requirement_assets": [
+      "module_index",
+      "plan_latest",
+      "task_index"
+    ],
+    "required_task_doc_slots": [
+      "design_doc",
+      "implementation_doc"
+    ],
+    "official_doc_paths": {
+      "design_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_12/ST13_12_DESIGN.md",
+      "implementation_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_12/ST13_12_IMPLEMENTATION.md"
+    }
+  },
+  "language_constraints": {
+    "docs_must_be_chinese_first": true,
+    "allowed_english_categories": [
+      "code",
+      "command",
+      "path",
+      "config_key",
+      "api_name",
+      "class_name",
+      "function_name",
+      "field_name",
+      "standard_term"
+    ],
+    "blocking_violations": []
+  }
+}

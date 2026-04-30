@@ -237,6 +237,8 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 
 - [项目语言规范](docs/project-language-rules.md)
 
+项目中的注释、文档、README、`AGENTS.md`、测试说明和 audit 报告必须使用中文。除第三方 API 名称、协议字段、错误码、命令、路径、包名或代码标识符外，不要新增英文注释或英文文档。如修改到已有英文注释或英文文档，应同步改为中文。
+
 ### 1.2 文档索引规则
 
 后续新增的正式项目文档，应先补充到本文档的索引中，再继续扩展内容，避免规则、设计和计划分散失管。
@@ -339,10 +341,25 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 #### 工程规范入口
 - Python、SQL、配置、安全、docstring、硬编码收敛和变更粒度规则统一见 [`TECHNICAL_STANDARDS.md`](TECHNICAL_STANDARDS.md)；`AGENTS.md` 只保留工程规范入口，不在此处重复展开长期细则。
 
+#### Python 依赖规则
+- 新增 Python 代码时，如果引入新的第三方包，必须在同一次修改中更新 `requirements.txt`。
+- 不要假设本地环境已有依赖就代表项目依赖完整。
+- 标准库足够时优先使用标准库，不要添加未使用依赖。
+- 最终 audit 中必须说明是否新增了第三方依赖；如有新增，列出新增项；如无新增，明确说明未引入新的第三方依赖。
+
+#### 敏感配置与环境变量规则
+- 系统真实运行所需的密钥、令牌、密码、连接串等敏感配置，必须配置在 `.env` 中。
+- `.env.example` 只是示例文件，只能用于说明需要哪些环境变量。
+- 不要把真实密钥、真实 token、真实密码、真实数据库连接串写入 `.env.example`。
+- `.env.example` 中只能使用占位值和中文说明，例如 `YOUR_API_KEY_HERE`、`changeme`、`example-token`。
+- 如果新增代码需要新的环境变量，必须同步更新 `.env.example`，但只能添加变量名、占位值和中文说明，不能添加真实密钥。
+- 如果需要真实值，应提示使用者在本地 `.env` 中配置，不要在代码、测试、文档、日志或 audit 报告中暴露真实密钥。
+- 最终 audit 中如涉及环境变量变更，必须明确说明新增或修改了哪些环境变量名、`.env.example` 是否已同步占位示例，并确认未写入或暴露任何真实密钥。
+
 #### Verification
-- 文档治理 / 工具改动后运行: `python -m pytest tests/doc_governor -q`
-- CLI 入口检查: `python -m tools.doc_governor.cli --help`
-- 涉及状态评估链路时运行: `python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
+- 文档治理 / 工具改动后运行: `.venv/bin/python -m pytest tests/doc_governor -q`
+- CLI 入口检查: `.venv/bin/python -m tools.doc_governor.cli --help`
+- 涉及状态评估链路时运行: `.venv/bin/python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
 
 #### Preferred workflow
 - 先定位入口 symbol
@@ -410,7 +427,10 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 
 ### 1.9 测试规则
 
-- 默认测试入口使用 `python -m tools.test_runner.run_tests`，避免散装 pytest 在仓库目录留下临时目录。
+- Python 测试必须只使用 `.venv/bin/python -m pytest`。
+- 不要使用系统 Python 运行 pytest，也不要使用 `python -m pytest || .venv/bin/python -m pytest` 这类 fallback 组合命令，避免把环境错误和真实 RED/GREEN 测试结果混在一起。
+- 如果系统 Python 报 `No module named pytest` 或 `pytest: command not found`，应视为解释器选择错误，不应作为项目测试失败结果。
+- 所有正式测试、TDD 和 audit 报告只能基于 `.venv/bin/python -m pytest` 的输出。
 - 禁止测试直接在仓库根目录创建 `tmp-*`、`tmp_*`、`temp-*`、`temp_*`、`M01-test`、`fake-repo`、`sample-project` 等目录。
 - 根目录与 `tests/` 下若存在匹配 `^(?:_?tmp|temp)(?:[-_].*)?$` 的目录残留，测试必须失败。
 - 详细约束与验证命令见 [`docs/governance/TEST_POLICY.md`](docs/governance/TEST_POLICY.md)。

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
@@ -32,6 +33,8 @@ DEFAULT_API_PORT = 8001
 ERROR_KEY = "error"
 ERROR_CODE_KEY = "code"
 ERROR_MESSAGE_KEY = "message"
+ERROR_REQUEST_ID_KEY = "request_id"
+ERROR_DETAILS_KEY = "details"
 HTTP_ERROR_CODE_PREFIX = "HTTP"
 REQUEST_VALIDATION_ERROR_MESSAGE = "request validation failed"
 REQUEST_VALIDATION_ERROR_STATUS_CODE = 422
@@ -66,9 +69,20 @@ def get_settings() -> ApiSettings:
     )
 
 
-def build_error_payload(*, code: str, message: str) -> dict[str, dict[str, str]]:
-    """Build the minimal error envelope shared by API routes."""
-    return {ERROR_KEY: {ERROR_CODE_KEY: code, ERROR_MESSAGE_KEY: message}}
+def build_error_payload(
+    *,
+    code: str,
+    message: str,
+    request_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """构造共享 error envelope，并保留可选 provider 元数据。"""
+    error: dict[str, Any] = {ERROR_CODE_KEY: code, ERROR_MESSAGE_KEY: message}
+    if request_id is not None:
+        error[ERROR_REQUEST_ID_KEY] = request_id
+    if details is not None:
+        error[ERROR_DETAILS_KEY] = details
+    return {ERROR_KEY: error}
 
 
 async def http_exception_handler(

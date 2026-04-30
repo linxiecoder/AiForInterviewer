@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "implementation_packet",
+  "runtime_artifact": true,
+  "generated_at": "2026-04-30T08:47:10Z",
+  "task_id": "ST13_15",
+  "module_id": "M06",
+  "requirement_id": "RQ01",
+  "implementation_ready": true,
+  "goal": "为 R0 提供评分 / 复盘 / Markdown 导出最小闭环中的 review summary。\n基于 ST13_12 main flow session 和 ST13_13 score。\n输出主要表现、风险、建议、weakness / improvement minimal output。\n可调用 ST13_11 provider boundary，也可使用 deterministic review rule。\n复用 ST13_20 persistence，把 review payload 写入 session payload。",
+  "allowed_modify_paths": [
+    "apps/api/app/api/v1/**",
+    "apps/api/app/review/**",
+    "apps/api/app/scoring/**",
+    "apps/api/app/export/**",
+    "apps/api/app/interview_flow/**",
+    "apps/api/app/main.py",
+    "apps/api/app/boundary.py",
+    "tests/api/test_review_export.py",
+    "tests/api/test_interview_flow.py"
+  ],
+  "forbidden_paths": [
+    "docs/governance/DOC_STATE.yaml",
+    "docs/governance/transition_history.jsonl",
+    "docs/governance/packets/**",
+    "tools/**",
+    "infra/**",
+    "apps/web/**",
+    "完整 RAG",
+    "完整 DB / ORM / migration",
+    "训练中心",
+    "训练抽屉",
+    "弱点累计 / 消减 / 归档生命周期",
+    "资产归档",
+    "PDF 导出",
+    "前端",
+    "package.json",
+    "lockfile",
+    "CI 配置",
+    "requirements.txt",
+    "docs/requirements/workbench-mvp/**",
+    "docs/design/workbench-mvp/**",
+    "docs/governance/DOC_STATE.bootstrap.yaml"
+  ],
+  "required_tests": [
+    "git diff --check",
+    "python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_15",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_13",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_11",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_12",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_20",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_21",
+    ".venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_review_export.py -q",
+    ".venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_interview_flow.py -q",
+    ".venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_llm_provider.py -q",
+    "git status --short"
+  ],
+  "acceptance_criteria": [
+    "已存在的 interview session 可以生成 review summary。",
+    "review summary 与 weakness / improvement 输出存在。",
+    "如使用 provider，调用必须通过 ST13_11 boundary。",
+    "persistence 复用 ST13_20 store，不引入完整 DB / ORM / migration。",
+    "error envelope 与 ST13_21 保持兼容。",
+    "复盘范围不扩展到 R1/R2 完整复盘中心或训练中心。",
+    "required tests 通过。",
+    "governance validation 保持 green。",
+    "implementation 只触碰 packet allowed paths。"
+  ],
+  "upstream_refs": [
+    "requirement:RQ01",
+    "module:M06",
+    "subtask:ST13_15",
+    "module:M07",
+    "module:M08",
+    "module:M09",
+    "oq:OQ-093"
+  ],
+  "artifact_constraints": {
+    "runtime_artifact": true,
+    "required_requirement_assets": [
+      "module_index",
+      "plan_latest",
+      "task_index"
+    ],
+    "required_task_doc_slots": [
+      "design_doc",
+      "implementation_doc"
+    ],
+    "official_doc_paths": {
+      "design_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_15/ST13_15_DESIGN.md",
+      "implementation_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_15/ST13_15_IMPLEMENTATION.md"
+    }
+  },
+  "language_constraints": {
+    "docs_must_be_chinese_first": true,
+    "allowed_english_categories": [
+      "code",
+      "command",
+      "path",
+      "config_key",
+      "api_name",
+      "class_name",
+      "function_name",
+      "field_name",
+      "standard_term"
+    ],
+    "blocking_violations": []
+  }
+}

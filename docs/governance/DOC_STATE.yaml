@@ -1420,10 +1420,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_11/ST13_11_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_11/ST13_11_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-11
@@ -1435,15 +1437,21 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: d54e4d2cba8c4dddb793fd9a4f041750
+        last_confirmed_at: '2026-04-30T07:39:12.626662+00:00'
+        last_confirmed_by: codex
+        implementation_approval_status: approved
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T07:39:02Z'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_11 scoped formal window for R0 provider boundary only; no provider implementation
+          in this gate window'
   ST13_12:
     meta:
       module_id: M06
@@ -1461,10 +1469,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_12/ST13_12_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_12/ST13_12_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-12
@@ -1476,15 +1486,21 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: a88624b4268a431f91a9455e2d4a4b2e
+        last_confirmed_at: '2026-04-30T08:07:45.311208+00:00'
+        last_confirmed_by: codex
+        implementation_approval_status: approved
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T08:07:26Z'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_12 scoped formal window for R0 main interview flow only; no main-flow implementation
+          in this gate window'
   ST13_13:
     meta:
       module_id: M04
@@ -1503,10 +1519,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_13/ST13_13_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_13/ST13_13_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-13
@@ -1518,15 +1536,21 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: e7bd27e1be894236bb61981ae30032e3
+        last_confirmed_at: '2026-04-30T08:44:57.038377+00:00'
+        last_confirmed_by: codex
+        implementation_approval_status: approved
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T08:42:59Z'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_13 scoped formal window for R0 minimal scoring only; no scoring implementation
+          in this gate window'
   ST13_14:
     meta:
       module_id: M08
@@ -1586,10 +1610,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_15/ST13_15_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_15/ST13_15_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-15
@@ -1601,15 +1627,21 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: cc1e6d96e7114382b839b8bccc965a88
+        last_confirmed_at: '2026-04-30T08:45:13.047548+00:00'
+        last_confirmed_by: codex
+        implementation_approval_status: approved
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T08:42:59Z'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_15 scoped formal window for R0 minimal review summary and weakness output
+          only; no review implementation in this gate window'
   ST13_16:
     meta:
       module_id: M04
@@ -1753,10 +1785,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_19/ST13_19_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_19/ST13_19_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-19
@@ -1768,15 +1802,21 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: b29d4e4c4e664738a3150ff30906d0c0
+        last_confirmed_at: '2026-04-30T08:45:24.478945+00:00'
+        last_confirmed_by: codex
+        implementation_approval_status: approved
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T08:42:59Z'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_19 scoped formal window for R0 minimal Markdown export only; no export
+          implementation in this gate window'
   ST13_20:
     meta:
       module_id: M01
