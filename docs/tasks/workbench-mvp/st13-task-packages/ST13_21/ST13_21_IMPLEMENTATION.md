@@ -3,16 +3,16 @@
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：ST13 任务实施说明；记录 ST13_21 R0 minimal API service boundary 的实际实施结果与后续验证口径，不是 implementation packet。
+- 文档性质：ST13 任务实施说明；当前用于授权 `R1-DEV-04-ST13_21-API-TRACE-READ-SURFACE` 的最小 API/read surface，不是 implementation packet 本体。
 - official gate：formal window 已打开；implementation approval 已批准；当前 `implementation_ready=true`，`can_generate_implementation_packet=true`。
-- packet 状态：implementation packet 已重新生成并提交，提交为 `89d82cf gov: generate ST13_21 implementation packet`。
-- implementation 状态：R0 minimal API service boundary 已完成并通过 acceptance refresh；实现提交为 `b9d7fd3`，TestClient 依赖提交为 `1f65274`。
-- 当前定位：为 post-implementation docs / module sync 记录实际实施边界。
-- 本窗口不修改 `DOC_STATE.yaml`，不修改 packet，不继续 implementation，不扩大业务 API 范围。
+- packet 状态：本轮 Phase A 允许刷新 implementation packet，使后续 Phase B 可以在授权路径内暴露 trace/read surface。
+- implementation 状态：R0 minimal API service boundary 已完成；ST13_20 traceability write integration 已完成；本轮只补 R1 可消费读取面。
+- 当前定位：为 history、review、export、frontend 后续读取 session、turn、RAG evidence、score、review、export trace reference 提供最小稳定 API/read surface。
+- 本窗口 Phase B 不修改 `DOC_STATE.yaml`，不修改 packet，不扩大到 UI、完整 RAG ingestion、schema/migration/ORM 或 R2 训练闭环。
 
 ## 2. 本轮实施目标
 
-- 已在 ST01_01 最小 FastAPI runtime 上建立 API / 后端服务边界骨架，统一 `/api/v1` 路由注册、最小错误响应、配置读取和未来业务路由占位；未实现任何业务 API，未接 DB，未接 LLM/RAG，未接 Redis/PostgreSQL/MinIO。
+- 目标：在已完成 ST13_20 traceability write integration 的基础上，为 /api/v1/interviews history/detail/review/export 读取路径暴露最小 trace summary read surface，使调用方可以稳定读取 session、turn、answer、RAG evidence / evidence gap、score、review、export trace reference 的安全摘要；不实现完整 RAG ingestion、UI、schema/migration/ORM 或 R2 能力。
 
 ## 3. 前置条件
 
@@ -28,27 +28,32 @@
 
 ## 4. 范围内
 
-已完成的 implementation 只覆盖：
+本轮 Phase B implementation 只覆盖：
 
-- 基于现有 FastAPI runtime 的 API service skeleton。
-- `/api/v1` prefix 和 router registration 最小模式。
-- health endpoint regression，确保 `GET /api/v1/health` 继续可达。
-- 最小 error response / error envelope。
-- 最小配置读取边界。
-- future routes placeholder / contract boundary；当前仅为未注册常量。
-- M02 identity context 的消费边界说明。
+- interview detail/history 返回稳定 `trace_summary`。
+- session / turn / answer trace reference 的安全摘要。
+- RAG retrieval / citation / evidence gap trace reference 的安全摘要。
+- score / review / export trace reference 的安全摘要。
+- empty trace / degraded trace / permission-filtered trace 的稳定 response。
+- owner/resource visibility 过滤，调用方只能读取自己可见资源的 trace。
+- request_id / operation_id 仅以有限、安全摘要形式展示。
+- 复用现有 `TraceabilityStore`、interview flow、review/export、RAG foundation 服务边界，不重写主链路。
 
-本任务不实现任何业务 API。
+本任务不实现 UI、完整 RAG ingestion、embedding/vector store、schema/migration/ORM 大改、新依赖或 R2 训练闭环。
 
 ## 5. 允许修改范围
 
 packet allowed paths 限定如下，且不得自行扩大：
 
-- `apps/api/**`
-- `package.json`
-- `requirements.txt`
-- `.env.example`
-- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_DESIGN.md`
+- `apps/api/app/api/v1/interviews.py`
+- `apps/api/app/interview_flow/contract.py`
+- `apps/api/app/interview_flow/service.py`
+- `apps/api/app/traceability.py`
+- `apps/api/app/persistence.py`
+- `apps/api/app/rag/service.py`
+- `apps/api/app/review/service.py`
+- `apps/api/app/export/service.py`
+- `tests/api/test_traceability_integration.py`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md`
 
 如果后续确实需要其它路径，只能作为另窗建议或确认卡，不得在本任务内直接扩大。
@@ -60,21 +65,28 @@ packet forbidden paths 已包含且本次未触碰：
 - `apps/web/**`
 - `.github/**`
 - `tools/**`
-- `tests/**`
+- 其他未授权测试文件
 - `docs/governance/DOC_STATE.yaml`
 - `docs/governance/transition_history.jsonl`
 - `docs/governance/previews/**`
 - `docs/governance/packets/**`
 - `infra/**`
-- DB / ORM / migration / repository
+- `apps/api/app/schema/**`
+- `apps/api/app/llm/**`
+- `package.json`
+- `requirements.txt`
+- `.env.example`
+- DB / ORM / migration / repository 大改
 - LLM provider
-- RAG / embedding
+- 完整 RAG ingestion / indexing / embedding / vector store / reranking
 - Redis / PostgreSQL / MinIO
 - 真实对象存储
 - M02 / M03 业务实现
 - 登录 / 权限完整实现
-- Job / Resume / Knowledge / Interview / Score / Review / Export 业务实现
 - Dashboard / App Shell / PageHeader / DataTable
+- 资产归档
+- 批量导出
+- R2 训练闭环
 - 完整 CI / E2E / 多平台矩阵
 
 禁止范围优先级高于 allowed paths。若后续 packet 发现 path conflict，必须停止。
@@ -95,18 +107,19 @@ packet forbidden paths 已包含且本次未触碰：
 
 ## 8. 测试与验证
 
-本任务 required validation 至少包含，且已在 implementation / acceptance refresh 中执行或记录：
+本任务 required validation 至少包含：
 
-- `python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
-- `python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_21`
-- `python3 -m tools.doc_governor.cli preflight-open-window --subtask ST13_21`
+- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_integration.py -q`
+- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_persistence.py -q`
+- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api -q`
+- `python -m py_compile` 针对本轮修改的 Python 文件
+- `.venv/bin/python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+- `.venv/bin/python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
+- `.venv/bin/python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_21`
 - `git diff --check`
-- API import / route smoke，前提是依赖可用。
-- health endpoint regression smoke，前提是依赖可用。
-- 如果依赖不可用，记录 environment-blocked，不允许绕过边界新增 vendor code。
-- Web lane smoke 只作为不破坏验证，不作为本任务实现授权。
+- `git status --short`
 
-当前已确认：
+### 当前已确认
 
 - `validate-state`、`evaluate-state ST13_21`、`preflight-open-window ST13_21` 通过。
 - `git diff --check` 通过。
@@ -118,22 +131,16 @@ packet forbidden paths 已包含且本次未触碰：
 
 ## 9. 完成判定
 
-`ST13_21` R0 minimal scope 的 acceptance criteria 与当前结果：
+本轮 R1 trace read surface 的 acceptance criteria 与当前结果：
 
-- API routes 可以按 /api/v1 prefix 组织。
-- health endpoint 继续可达，不被破坏。
-- 后端服务边界有清晰 router registration 方式。
-- 存在最小 error response / error envelope 约定。
-- 配置读取边界只覆盖最小运行参数，不引入外部服务。
-- Auth / Identity 仅作为 placeholder / boundary，不实现完整身份系统。
-- Job / Resume / Knowledge / Interview / Score / Review / Export 仅作为 future contract boundary，不实现业务逻辑。
-- 不引入 DB / ORM / migration。
-- 不引入 LLM / RAG。
-- 不引入 Redis / PostgreSQL / MinIO。
-- 不修改 apps/web/**。
-- 不修改 tests/**，除非后续 packet 明确授权。
-- 与 M02 downstream input 关系明确。
-- 与 ST13_20 / ST13_24 的依赖关系明确：数据保存与测试体系分别由对应任务承接。
+- interview detail/history 能返回稳定 trace_summary，empty trace 不报 500。
+- trace_summary 包含 session / turn / answer reference 的前端可展示安全摘要。
+- trace_summary 包含 RAG retrieval / citation / evidence gap / degraded trace 的前端可展示安全摘要。
+- review/export 读取路径能返回 score / review / export trace reference 的前端可展示安全摘要。
+- owner/resource visibility 过滤有效，不泄露不可见 resource id、完整 prompt、完整 LLM response、secret 或对象存储真实路径。
+- request_id / operation_id 只做有限展示，不能作为完整审计日志导出。
+- 继续复用现有 TraceabilityStore 和 service，不新增 schema/migration/ORM，不新增依赖。
+- 不修改 apps/web/**、apps/api/app/schema/**、tools/** 或未授权测试文件。
 
 完成判定不扩大实现范围；后续 implementation 仍必须受 packet allowed / forbidden paths 限制。
 
@@ -144,10 +151,12 @@ packet forbidden paths 已包含且本次未触碰：
 - 需要修改 `DOC_STATE.yaml` 或 `transition_history.jsonl`。
 - 需要修改 formal window 或 implementation approval 状态。
 - 需要手工修改、覆盖或重新生成 implementation packet，除非处于专门 packet generation 窗口。
-- 需要修改 `apps/web/**`、`tests/**`、`tools/**`、`.github/**`。
-- 需要实现 Job / Resume / Knowledge / Interview / Score / Review / Export 业务 API。
+- 需要修改 `apps/web/**`、`tools/**`、`.github/**`、未授权测试文件或 `apps/api/app/schema/**`。
+- 需要实现超出 trace/read surface 的 Job / Resume / Knowledge / Interview / Score / Review / Export 业务 API。
 - 需要接入 DB、ORM、migration、LLM、RAG、Redis、PostgreSQL、MinIO 或对象存储。
+- 需要实现完整 RAG ingestion、embedding、vector store、reranking、资产归档、批量导出或 R2 训练闭环。
 - 需要扩大 M02 / M03 业务实现范围。
+- 需要新增第三方依赖或环境变量。
 - 依赖不可用但有人要求通过 vendor code 或临时大改绕过。
 
 ## 11. 回退策略
@@ -169,13 +178,11 @@ packet forbidden paths 已包含且本次未触碰：
 - formal window open
 - `can_generate_implementation_packet=true`
 
-上述状态仍是 official state / gate 事实，不等于 accepted / done state 已写回。implementation 层事实为：
+上述状态仍是 official state / gate 事实，不等于 accepted / done state 已写回。本轮 R1 trace/read surface 的 packet 输入为：
 
-- packet 已生成并提交：`89d82cf gov: generate ST13_21 implementation packet`。
-- implementation 已提交：`b9d7fd3 feat(ST13_21): add minimal API service boundary`。
-- TestClient 依赖已提交：`1f65274 test(ST13_21): add httpx for FastAPI TestClient smoke`。
-- acceptance refresh 结论：accepted。
-- 本窗口不写 official state，不修改 packet，不继续 implementation。
+- 目标：暴露 history/detail/review/export 可消费的最小 trace summary read surface。
+- 允许路径：API router、interview_flow service/contract、traceability read helper、persistence read helper、RAG/review/export 最小读集成和 `tests/api/test_traceability_integration.py`。
+- 禁止路径：UI、schema/migration/ORM、依赖、LLM provider、完整 RAG ingestion、未授权测试、governance state、R2 能力。
 
 ## 13. R1 API 契约冻结执行说明
 
