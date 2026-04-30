@@ -23,6 +23,9 @@ permalink: ai-for-interviewer/readme
 | 成熟度 | [DOCUMENT_MATURITY.md](DOCUMENT_MATURITY.md) | 文档成熟度等级、可用性和风险摘要 |
 | 过程 | [EXECUTION_LOG.md](EXECUTION_LOG.md) | 执行记录、归档动作和验证结果 |
 | 治理 | [AGENTS.md](AGENTS.md)、[docs/DOC_GOVERNANCE.md](docs/DOC_GOVERNANCE.md) | 协作规则、文档治理规则和状态自动化边界 |
+| 开发启动 | [本地启动指导](docs/development/local-startup.md) | 后端、前端、E2E、Playwright 和 Node 版本说明 |
+| 数据库 | [数据库信息说明](docs/development/database.md) | SQLite schema-loader、SQLAlchemy Core 和 RAG / traceability 数据关系 |
+| UI 规范审计 | [R1 可信 trace UI 规范审计](docs/development/r1-trusted-trace-ui-compliance.md) | 当前可信 trace 页面组件选型判断和后续 UI 收敛建议 |
 
 ## 当前事实源
 
@@ -33,6 +36,7 @@ permalink: ai-for-interviewer/readme
 | current planning | `PLAN_LATEST.md`、`docs/planning/2026-04-25-current-repo-execution-plan.md` | planning |
 | current task index | `TASK_INDEX.md`、`docs/tasks/workbench-mvp/st13-task-packages/**` | task |
 | process log | `EXECUTION_LOG.md` | process |
+| development guides | `docs/development/**` | local startup / database / UI compliance |
 | governance rules | `AGENTS.md`、`docs/DOC_GOVERNANCE.md`、`docs/governance/**` | governance |
 | module docs | `docs/modules/**` | module requirement / design / task |
 
