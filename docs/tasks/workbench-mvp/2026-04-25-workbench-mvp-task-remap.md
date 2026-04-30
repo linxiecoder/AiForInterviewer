@@ -28,7 +28,7 @@
 
 | task | scope | docs | current gate status |
 | --- | --- | --- | --- |
-| ST13_10 | RAG / 知识库 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/` | scoped formal window open / packet pending / still not implementation-ready |
+| ST13_10 | RAG / 知识库 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/` | implementation-ready / packet generated / packet paths limited |
 | ST13_20 | 服务端保存 / 数据库 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/` | scoped formal window open / downstream_ready |
 | ST13_21 | API / 后端服务边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | scoped formal window open / downstream_ready |
 | ST13_24 | 测试 / 验收 / DoD | `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/` | formal window not open |

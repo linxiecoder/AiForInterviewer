@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "implementation_packet",
+  "runtime_artifact": true,
+  "generated_at": "2026-04-30T11:56:30Z",
+  "task_id": "ST13_10",
+  "module_id": "M05",
+  "requirement_id": "RQ01",
+  "implementation_ready": true,
+  "goal": "建立 ST13_10 R1 RAG 最小可用 readiness 和 future implementation input 的可识别边界。\n让后续 formal readiness 评审能从本文档抽取目标、允许修改范围、禁止修改范围和 required tests。\n继续消费 ST13_21 API contract、ST13_20 data readiness 和 ST13_24 acceptance / tests boundary。\n保持 R1 RAG must-have / optional / R2-deferred 边界不变。\n明确当前仍不能进入 RAG implementation、schema / migration / ORM implementation 或 tests implementation。",
+  "allowed_modify_paths": [
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_IMPLEMENTATION.md",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_DESIGN.md"
+  ],
+  "forbidden_paths": [
+    "apps/**",
+    "tests/**",
+    "docs/governance/**",
+    "DOC_STATE.yaml",
+    "docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_20/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_24/**",
+    "schema 文件",
+    "migration 文件",
+    "ORM / database implementation",
+    "packet",
+    "formal window",
+    "任何新 task ID",
+    "任何新长期状态入口",
+    "docs/governance/DOC_STATE.yaml",
+    "docs/governance/DOC_STATE.bootstrap.yaml"
+  ],
+  "required_tests": [
+    "validate-state、evaluate-state、focused ST13_10 evaluate、preflight-open-window、git diff --check、allowed / forbidden path audit。",
+    "用户私有资料、管理员公共资料、岗位、简历和历史回答 scope 的读取边界。",
+    "uploaded、parsing、parsed、indexed、failed、archived 等状态语义。",
+    "pending、running、indexed、failed、retryable 和 failure reason 的展示与追踪。",
+    "query summary、scope、selected materials、topK、actor context 和 visibility filter。",
+    "hit count、hit summary、empty result、permission filtered empty、degraded 和 retryable。",
+    "source ref、chunk ref、snippet summary、source label、visibility snapshot 不泄露不可见资源。",
+    "evidence summary、citation refs、confidence label、no result、index pending、index failed、RAG unavailable、low confidence。",
+    "主链路继续，评分、复盘、导出和历史回看明确降级或证据缺口。",
+    "owner、visibility、resource_not_visible、permission_denied、安全 404 和脱敏输出。",
+    "面试台、评分、复盘、导出和历史回看能消费 citation、evidence item、evidence gap、pending、failed、degraded 和 empty state。",
+    "与 ST13_20 对齐 retrieval query、retrieval result、citation、evidence、source snapshot 和 permission snapshot。",
+    "评分理由、复盘证据、Markdown 导出和历史回看都能追溯 evidence refs、source snapshot、low confidence 和降级说明。"
+  ],
+  "acceptance_criteria": [
+    "ST13_10_DESIGN.md",
+    "ST13_21",
+    "ST13_20",
+    "ST13_10_IMPLEMENTATION.md",
+    "ST13_10",
+    "明确不新增 task ID。",
+    "明确当前不能进入 RAG implementation。",
+    "明确当前不能进入 schema / migration / ORM implementation。",
+    "未修改代码、测试、governance state、packet 或 formal window。"
+  ],
+  "upstream_refs": [
+    "requirement:RQ01",
+    "module:M05",
+    "subtask:ST13_10",
+    "module:M06",
+    "module:M08",
+    "module:M10",
+    "oq:OQ-093"
+  ],
+  "artifact_constraints": {
+    "runtime_artifact": true,
+    "required_requirement_assets": [
+      "module_index",
+      "plan_latest",
+      "task_index"
+    ],
+    "required_task_doc_slots": [
+      "design_doc",
+      "implementation_doc"
+    ],
+    "official_doc_paths": {
+      "design_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_DESIGN.md",
+      "implementation_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_IMPLEMENTATION.md"
+    }
+  },
+  "language_constraints": {
+    "docs_must_be_chinese_first": true,
+    "allowed_english_categories": [
+      "code",
+      "command",
+      "path",
+      "config_key",
+      "api_name",
+      "class_name",
+      "function_name",
+      "field_name",
+      "standard_term"
+    ],
+    "blocking_violations": []
+  }
+}
