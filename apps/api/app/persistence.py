@@ -682,11 +682,60 @@ def _upsert_insert(table: Table, dialect_name: str) -> Any:
 
 
 def _schema_statements(schema_sql: str) -> tuple[str, ...]:
-    return tuple(
-        f"{statement.strip()};"
-        for statement in schema_sql.split(";")
-        if statement.strip() and _has_executable_sql(statement)
-    )
+    def executable_statement(statement: str) -> str:
+        return "\n".join(
+            line
+            for line in statement.splitlines()
+            if line.strip() and not line.strip().startswith("--")
+        ).strip()
+
+    statements: list[str] = []
+    current: list[str] = []
+    in_line_comment = False
+    in_single_quote = False
+    index = 0
+    while index < len(schema_sql):
+        char = schema_sql[index]
+        next_char = schema_sql[index + 1] if index + 1 < len(schema_sql) else ""
+
+        if in_line_comment:
+            current.append(char)
+            if char == "\n":
+                in_line_comment = False
+            index += 1
+            continue
+
+        if not in_single_quote and char == "-" and next_char == "-":
+            current.extend((char, next_char))
+            in_line_comment = True
+            index += 2
+            continue
+
+        if char == "'":
+            current.append(char)
+            if in_single_quote and next_char == "'":
+                current.append(next_char)
+                index += 2
+                continue
+            in_single_quote = not in_single_quote
+            index += 1
+            continue
+
+        if char == ";" and not in_single_quote:
+            statement = "".join(current).strip()
+            if statement and _has_executable_sql(statement):
+                statements.append(f"{executable_statement(statement)};")
+            current = []
+            index += 1
+            continue
+
+        current.append(char)
+        index += 1
+
+    statement = "".join(current).strip()
+    if statement and _has_executable_sql(statement):
+        statements.append(f"{executable_statement(statement)};")
+    return tuple(statements)
 
 
 def _has_executable_sql(statement: str) -> bool:

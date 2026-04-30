@@ -80,6 +80,11 @@ def test_schema_statements_cover_current_runtime_tables() -> None:
     statements = _schema_statements(_load_schema_sql())
 
     assert any("CREATE TABLE IF NOT EXISTS interview_records" in item for item in statements)
+    interview_statement = next(
+        item for item in statements if "CREATE TABLE IF NOT EXISTS interview_records" in item
+    )
+    assert "updated_at TEXT NOT NULL" in interview_statement
+    assert interview_statement.rstrip().endswith(");")
     assert any("CREATE TABLE IF NOT EXISTS traceability_records" in item for item in statements)
     assert any("CREATE TABLE IF NOT EXISTS rag_documents" in item for item in statements)
     assert any("CREATE TABLE IF NOT EXISTS rag_chunks" in item for item in statements)
