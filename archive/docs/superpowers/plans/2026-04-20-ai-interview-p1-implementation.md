@@ -1,3 +1,9 @@
+---
+title: 2026-04-20-ai-interview-p1-implementation
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-20-ai-interview-p1-implementation
+---
+
 ﻿# AI 模拟面试 P1 MVP 实现计划
 
 > **历史快照说明（W13-GOV-HistoryArchive / 2026-04-25）：**

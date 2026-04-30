@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/module-dependencies
+---
+
 # M07 打磨模式、评估与进度 - 模块依赖
 
 ## 1. 上游模块

@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/module-schema-design
+---
+
 # M08 复盘与回放 - Schema 设计
 
 ## 1. 文档定位

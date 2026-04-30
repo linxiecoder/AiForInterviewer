@@ -1,3 +1,9 @@
+---
+title: scope
+type: note
+permalink: ai-for-interviewer/docs/design/workbench-mvp/scope
+---
+
 # Workbench MVP 范围设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: ST13_25_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-25/st13-25-implementation
+---
+
 # ST13_25 IMPLEMENTATION：文档治理 / 收口 / Basic Memory
 
 ## 1. 文档状态

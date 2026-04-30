@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/sub-modules/st06-02-context-pack-and-question-source/subtask-design
+---
+
 # ST06_02 上下文包与问题来源规则 - 子任务设计
 
 ## 1. 文档定位

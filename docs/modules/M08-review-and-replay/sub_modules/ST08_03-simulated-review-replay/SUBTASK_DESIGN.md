@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/sub-modules/st08-03-simulated-review-replay/subtask-design
+---
+
 # ST08_03 模拟面试复盘回放与导出 - 子任务设计
 
 ## 1. 文档定位

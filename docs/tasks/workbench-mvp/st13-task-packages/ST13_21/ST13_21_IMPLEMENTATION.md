@@ -1,3 +1,9 @@
+---
+title: ST13_21_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-21/st13-21-implementation
+---
+
 # ST13_21 IMPLEMENTATION：R0 最小 API / 后端服务边界
 
 ## 1. 文档状态

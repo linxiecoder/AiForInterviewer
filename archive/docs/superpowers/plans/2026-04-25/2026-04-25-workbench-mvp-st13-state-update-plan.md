@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-st13-state-update-plan
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-st13-state-update-plan
+---
+
 # AI 模拟面试一期工作台 MVP ST13 State Update 准备方案
 
 ## 1. 背景

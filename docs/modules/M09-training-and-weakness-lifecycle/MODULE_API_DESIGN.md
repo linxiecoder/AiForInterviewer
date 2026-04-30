@@ -1,3 +1,9 @@
+---
+title: MODULE_API_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/module-api-design
+---
+
 # M09 训练中心与薄弱项生命周期 - API 设计
 
 ## 1. 文档定位

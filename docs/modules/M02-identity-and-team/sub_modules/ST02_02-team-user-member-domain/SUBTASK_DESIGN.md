@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/sub-modules/st02-02-team-user-member-domain/subtask-design
+---
+
 # ST02_02 团队、用户与成员目录 - 子任务设计
 
 ## 1. 文档定位

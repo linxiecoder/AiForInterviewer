@@ -1,3 +1,9 @@
+---
+title: SUBTASK_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/sub-modules/st07-02-capability-tree-and-node-state/subtask-implementation
+---
+
 # 子任务实施文档
 
 ## 1. 文档定位

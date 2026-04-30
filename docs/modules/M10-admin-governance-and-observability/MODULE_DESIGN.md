@@ -1,3 +1,9 @@
+---
+title: MODULE_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/module-design
+---
+
 # M10 管理台、治理与可观测性 - 模块设计
 
 ## 0. Workbench MVP 当前需求与设计输入

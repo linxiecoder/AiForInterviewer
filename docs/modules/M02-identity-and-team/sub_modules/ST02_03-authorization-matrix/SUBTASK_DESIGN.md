@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/sub-modules/st02-03-authorization-matrix/subtask-design
+---
+
 # ST02_03 授权矩阵与管理员/成员边界 - 子任务设计
 
 ## 1. 文档定位

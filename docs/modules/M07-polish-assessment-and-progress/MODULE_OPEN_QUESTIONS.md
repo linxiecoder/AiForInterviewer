@@ -1,3 +1,9 @@
+---
+title: MODULE_OPEN_QUESTIONS
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/module-open-questions
+---
+
 # 模块待确认问题
 
 ## 1. 文档定位

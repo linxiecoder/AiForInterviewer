@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/sub-modules/st10-01-admin-member-and-role-ops/subtask-design
+---
+
 # ST10_01 成员治理与角色操作 - 子任务设计
 
 ## 1. 文档定位

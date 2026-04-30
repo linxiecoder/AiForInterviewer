@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-logic-design
+---
+
 # M01 基础平台与工作台壳层 - Logic 设计
 
 ## 1. 文档定位

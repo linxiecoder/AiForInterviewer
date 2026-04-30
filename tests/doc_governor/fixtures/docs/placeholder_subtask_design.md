@@ -1,3 +1,9 @@
+---
+title: placeholder_subtask_design
+type: note
+permalink: ai-for-interviewer/tests/doc-governor/fixtures/docs/placeholder-subtask-design
+---
+
 # ST04_01 岗位-简历绑定与输入契约 - 子任务设计
 
 ## 1. 文档定位

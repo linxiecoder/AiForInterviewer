@@ -1,3 +1,9 @@
+---
+title: MODULE_REQUIREMENTS
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-requirements
+---
+
 # M01 基础平台与工作台壳层 - 模块需求
 
 ## 0. Workbench MVP 当前需求与设计输入

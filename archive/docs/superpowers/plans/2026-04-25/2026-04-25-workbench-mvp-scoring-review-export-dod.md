@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-scoring-review-export-dod
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-scoring-review-export-dod
+---
+
 # AI 模拟面试一期工作台 MVP 评分、复盘、导出与 DoD 草案
 
 ## 1. 迁移状态

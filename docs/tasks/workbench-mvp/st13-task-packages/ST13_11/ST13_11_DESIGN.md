@@ -1,3 +1,9 @@
+---
+title: ST13_11_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-11/st13-11-design
+---
+
 # 子任务设计文档
 
 ## 1. 文档定位

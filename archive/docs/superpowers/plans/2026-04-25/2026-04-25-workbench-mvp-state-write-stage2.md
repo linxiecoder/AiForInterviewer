@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-state-write-stage2
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-state-write-stage2
+---
+
 # AI 模拟面试一期工作台 MVP State Write 阶段 2 变更与回退说明
 
 > 本文档记录 `W13-E4-C / State Write 阶段 2` 的正式变更、验证结果与回退步骤。本阶段只表达旧 `STxx_*` 的 `historical-reference / superseded` 关系，不移出旧任务，不迁移 archive，不生成 implementation packet，不进入实现。

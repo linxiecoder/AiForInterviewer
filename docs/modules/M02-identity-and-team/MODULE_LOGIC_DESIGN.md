@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-logic-design
+---
+
 # M02 鉴权、团队与成员 - Logic 设计
 
 ## 1. 文档定位

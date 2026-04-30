@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/sub-modules/st03-01-job-domain-and-pages/subtask-design
+---
+
 # ST03_01 岗位域与页面 - 子任务设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: ai-for-interviewer/docs/design/workbench-mvp/readme
+---
+
 # Workbench MVP 设计入口
 
 ## 1. 文档定位

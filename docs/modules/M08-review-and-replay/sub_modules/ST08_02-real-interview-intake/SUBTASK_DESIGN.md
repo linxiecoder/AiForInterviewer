@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/sub-modules/st08-02-real-interview-intake/subtask-design
+---
+
 # ST08_02 真实面试导入与逐题分析 - 子任务设计
 
 ## 1. 文档定位

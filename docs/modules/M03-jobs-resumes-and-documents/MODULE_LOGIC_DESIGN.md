@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module-logic-design
+---
+
 # M03 岗位、简历与文档处理 - Logic 设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: BASIC_MEMORY_GUARD
+type: note
+permalink: ai-for-interviewer/docs/governance/basic-memory-guard
+---
+
 # Basic Memory Guard 运行说明
 
 ## 1. 定位与范围

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/sub-modules/st03-02-resume-domain-versioning-and-editor/subtask-design
+---
+
 # ST03_02 简历域、版本与编辑器 - 子任务设计
 
 ## 1. 文档定位

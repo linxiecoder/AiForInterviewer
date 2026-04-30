@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module-schema-design
+---
+
 # M03 岗位、简历与文档处理 - Schema 设计
 
 ## 1. 文档定位

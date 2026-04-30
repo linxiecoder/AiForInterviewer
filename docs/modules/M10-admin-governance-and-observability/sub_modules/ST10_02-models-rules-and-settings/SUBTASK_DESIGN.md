@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/sub-modules/st10-02-models-rules-and-settings/subtask-design
+---
+
 # ST10_02 模型目录、评分规则与系统设置 - 子任务设计
 
 ## 1. 文档定位

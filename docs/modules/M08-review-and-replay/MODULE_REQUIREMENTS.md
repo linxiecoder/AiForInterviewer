@@ -1,3 +1,9 @@
+---
+title: MODULE_REQUIREMENTS
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/module-requirements
+---
+
 # M08 复盘与回放 - 模块需求
 
 ## 0. Workbench MVP 当前需求与设计输入

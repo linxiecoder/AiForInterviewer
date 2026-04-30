@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/module-dependencies
+---
+
 # M10 管理台、治理与可观测性 - 模块依赖
 
 ## 1. 上游模块

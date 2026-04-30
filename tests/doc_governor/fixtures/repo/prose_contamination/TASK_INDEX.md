@@ -1,3 +1,9 @@
+---
+title: TASK_INDEX
+type: note
+permalink: ai-for-interviewer/tests/doc-governor/fixtures/repo/prose-contamination/task-index
+---
+
 # AI 模拟面试 P1 任务索引
 
 ## 1. 模块任务索引

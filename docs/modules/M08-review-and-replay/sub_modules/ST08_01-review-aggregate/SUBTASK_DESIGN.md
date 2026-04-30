@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/sub-modules/st08-01-review-aggregate/subtask-design
+---
+
 # ST08_01 复盘总对象与列表/详情 - 子任务设计
 
 ## 1. 文档定位

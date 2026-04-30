@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m05-assets-and-retrieval/module-dependencies
+---
+
 # M05 资产库、归档与检索 - 模块依赖
 
 ## 1. 上游模块

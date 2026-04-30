@@ -1,3 +1,9 @@
+---
+title: SUBTASK_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/sub-modules/st04-03-analysis-ui-and-training-entry/subtask-implementation
+---
+
 # 子任务实施文档
 
 ## 1. 文档定位

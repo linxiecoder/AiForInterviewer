@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/sub-modules/st07-03-assessment-and-progress/subtask-design
+---
+
 # ST07_03 逐题评估与进度快照 - 子任务设计
 
 ## 1. 文档定位

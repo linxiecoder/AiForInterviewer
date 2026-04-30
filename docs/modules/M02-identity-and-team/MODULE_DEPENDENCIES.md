@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-dependencies
+---
+
 # M02 鉴权、团队与成员 - 模块依赖
 
 ## 1. 上游依赖

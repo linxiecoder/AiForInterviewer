@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/sub-modules/st03-03-upload-transform-export/subtask-design
+---
+
 # ST03_03 上传、转换与导出链路 - 子任务设计
 
 ## 1. 文档定位

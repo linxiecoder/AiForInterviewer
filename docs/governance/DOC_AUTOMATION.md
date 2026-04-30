@@ -1,3 +1,9 @@
+---
+title: DOC_AUTOMATION
+type: note
+permalink: ai-for-interviewer/docs/governance/doc-automation
+---
+
 # 文档治理自动化规则
 
 ## 1. 目标与当前范围

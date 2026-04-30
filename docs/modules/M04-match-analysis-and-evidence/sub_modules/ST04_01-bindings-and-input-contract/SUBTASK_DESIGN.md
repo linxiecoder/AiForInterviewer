@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/sub-modules/st04-01-bindings-and-input-contract/subtask-design
+---
+
 # ST04_01 岗位-简历绑定与输入契约 - 子任务设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/sub-modules/st06-01-interview-session-bootstrap/subtask-design
+---
+
 # ST06_01 面试会话创建与列表 - 子任务设计
 
 ## 1. 文档定位

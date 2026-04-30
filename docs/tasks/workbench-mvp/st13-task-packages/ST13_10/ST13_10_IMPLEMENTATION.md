@@ -1,3 +1,9 @@
+---
+title: ST13_10_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-10/st13-10-implementation
+---
+
 # ST13_10 实施说明：R1 RAG 最小可用任务包实施说明
 
 ## 当前实现授权状态

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/sub-modules/st04-02-analysis-scoring-and-evidence/subtask-design
+---
+
 # ST04_02 匹配分析、评分与证据 - 子任务设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/sub-modules/st04-03-analysis-ui-and-training-entry/subtask-design
+---
+
 # ST04_03 分析展示与训练入口 - 子任务设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: DISCUSSION_WORKFLOW
+type: note
+permalink: ai-for-interviewer/docs/governance/discussion-workflow
+---
+
 # 讨论轮次工作流
 
 本文档定义当前轮次驱动协作与规划输出负载的最小契约，并约束它们与 `doc-governor`、本地 Codex CLI 的联动方式。

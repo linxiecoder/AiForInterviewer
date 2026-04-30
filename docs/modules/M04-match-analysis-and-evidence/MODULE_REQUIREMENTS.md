@@ -1,3 +1,9 @@
+---
+title: MODULE_REQUIREMENTS
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/module-requirements
+---
+
 # M04 匹配分析与训练证据 - 模块需求
 
 ## 0. Workbench MVP 当前需求与设计输入

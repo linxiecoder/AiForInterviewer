@@ -1,3 +1,9 @@
+---
+title: ST13_13_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-13/st13-13-implementation
+---
+
 # ST13_13 评分体系实施说明
 
 ## 1. 文档定位

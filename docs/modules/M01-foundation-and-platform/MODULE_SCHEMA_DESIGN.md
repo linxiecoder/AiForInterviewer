@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-schema-design
+---
+
 # M01 基础平台与工作台壳层 - Schema 设计
 
 ## 1. 文档定位

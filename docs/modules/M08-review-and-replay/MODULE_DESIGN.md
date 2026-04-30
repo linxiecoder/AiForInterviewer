@@ -1,3 +1,9 @@
+---
+title: MODULE_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/module-design
+---
+
 # M08 复盘与回放 - 模块设计
 
 ## 0. Workbench MVP 当前需求与设计输入

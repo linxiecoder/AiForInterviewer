@@ -1,3 +1,9 @@
+---
+title: object-model-rag-multiround-backend
+type: note
+permalink: ai-for-interviewer/docs/design/workbench-mvp/object-model-rag-multiround-backend
+---
+
 # Workbench MVP Object Model, RAG, Multi-round and Backend Boundary
 
 ## 1. 设计边界

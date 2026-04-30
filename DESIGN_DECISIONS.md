@@ -1,3 +1,9 @@
+---
+title: DESIGN_DECISIONS
+type: note
+permalink: ai-for-interviewer/design-decisions
+---
+
 # AI 模拟面试项目设计决策入口
 
 ## 1. 文档定位

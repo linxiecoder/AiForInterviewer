@@ -1,3 +1,9 @@
+---
+title: SUBTASK_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/sub-modules/st09-03-lifecycle-rules/subtask-implementation
+---
+
 # 子任务实施文档
 
 ## 3. 本轮实施目标

@@ -1,3 +1,9 @@
+---
+title: MODULE_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/module-design
+---
+
 # M06 模拟面试、上下文与导出 - 模块设计
 
 ## 0. Workbench MVP 当前需求与设计输入

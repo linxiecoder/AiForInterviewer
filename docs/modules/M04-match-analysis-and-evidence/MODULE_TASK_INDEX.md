@@ -1,3 +1,9 @@
+---
+title: MODULE_TASK_INDEX
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/module-task-index
+---
+
 # M04 匹配分析与训练证据 - 模块任务索引
 
 ## 0. Workbench MVP 当前需求与设计输入

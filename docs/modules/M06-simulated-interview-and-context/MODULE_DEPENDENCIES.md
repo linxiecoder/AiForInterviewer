@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/module-dependencies
+---
+
 # M06 模拟面试、上下文与导出 - 模块依赖
 
 ## 1. 上游模块

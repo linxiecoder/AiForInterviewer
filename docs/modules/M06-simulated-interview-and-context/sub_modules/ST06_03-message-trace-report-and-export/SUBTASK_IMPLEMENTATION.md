@@ -1,3 +1,9 @@
+---
+title: SUBTASK_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/sub-modules/st06-03-message-trace-report-and-export/subtask-implementation
+---
+
 # 子任务实施文档
 
 ## 1. 文档定位

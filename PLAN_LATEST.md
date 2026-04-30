@@ -1,3 +1,9 @@
+---
+title: PLAN_LATEST
+type: note
+permalink: ai-for-interviewer/plan-latest
+---
+
 # AI 模拟面试系统当前仓库执行计划
 
 ## 1. 文档定位

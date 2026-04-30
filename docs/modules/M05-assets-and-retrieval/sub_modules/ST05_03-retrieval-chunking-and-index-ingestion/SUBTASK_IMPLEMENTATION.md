@@ -1,3 +1,9 @@
+---
+title: SUBTASK_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/modules/m05-assets-and-retrieval/sub-modules/st05-03-retrieval-chunking-and-index-ingestion/subtask-implementation
+---
+
 # 子任务实施文档
 
 ## 1. 文档定位

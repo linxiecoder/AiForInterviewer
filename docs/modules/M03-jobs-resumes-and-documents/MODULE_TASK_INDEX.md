@@ -1,3 +1,9 @@
+---
+title: MODULE_TASK_INDEX
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module-task-index
+---
+
 # M03 岗位、简历与文档处理 - 模块任务索引
 
 ## 0. Workbench MVP 当前需求与设计输入

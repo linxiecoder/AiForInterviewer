@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: ai-for-interviewer/docs/requirements/workbench-mvp/readme
+---
+
 # AI 模拟面试一期工作台 MVP 需求入口
 
 ## 1. 文档定位

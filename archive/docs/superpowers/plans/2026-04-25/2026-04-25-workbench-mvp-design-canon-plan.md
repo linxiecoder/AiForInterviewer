@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-design-canon-plan
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-design-canon-plan
+---
+
 # AI 模拟面试一期工作台 MVP 正式设计文档归位与模块承接计划
 
 ## 1. 背景

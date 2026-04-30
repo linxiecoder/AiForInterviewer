@@ -1,3 +1,9 @@
+---
+title: OPEN_QUESTIONS
+type: note
+permalink: ai-for-interviewer/tests/doc-governor/fixtures/repo/prose-contamination/open-questions
+---
+
 # AI 模拟面试 P1 待确认问题
 
 ## 1. 问题表

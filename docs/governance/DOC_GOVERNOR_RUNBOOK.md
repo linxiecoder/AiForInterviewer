@@ -1,3 +1,9 @@
+---
+title: DOC_GOVERNOR_RUNBOOK
+type: note
+permalink: ai-for-interviewer/docs/governance/doc-governor-runbook
+---
+
 # 文档治理命令与轮次运行手册
 
 ## 1. 定位与范围

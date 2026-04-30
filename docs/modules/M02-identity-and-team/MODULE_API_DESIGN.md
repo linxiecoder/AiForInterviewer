@@ -1,3 +1,9 @@
+---
+title: MODULE_API_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-api-design
+---
+
 # M02 鉴权、团队与成员 - API 设计
 
 ## 1. 当前作用与 R0 责任边界

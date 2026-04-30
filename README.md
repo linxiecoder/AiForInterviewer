@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: ai-for-interviewer/readme
+---
+
 # AI 模拟面试项目文档入口
 
 本文档只作为当前仓库入口导航，不承载需求正文、设计正文、执行日志或任务流水。

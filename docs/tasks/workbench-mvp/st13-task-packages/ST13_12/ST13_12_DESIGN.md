@@ -1,3 +1,9 @@
+---
+title: ST13_12_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-12/st13-12-design
+---
+
 # ST13_12 多轮上下文 / 状态机设计说明
 
 ## 1. 文档定位
@@ -57,4 +63,3 @@ ST13_12 是 R0 最小模拟面试主链路的主 window entity，承接多轮上
 - 主链路实现不得要求真实外部网络或真实 API key 才能测试通过。
 - 主链路实现不得新增 full DB / ORM / migration。
 - 若需要修改 forbidden paths，应停止并回到 governance 窗口。
-

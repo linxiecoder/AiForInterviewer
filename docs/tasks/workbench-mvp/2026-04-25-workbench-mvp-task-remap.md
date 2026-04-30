@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-task-remap
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap
+---
+
 # AI 模拟面试一期工作台 MVP 任务重映射草案
 
 ## 1. 文档定位

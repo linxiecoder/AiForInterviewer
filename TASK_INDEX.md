@@ -1,3 +1,9 @@
+---
+title: TASK_INDEX
+type: note
+permalink: ai-for-interviewer/task-index
+---
+
 # AI 模拟面试项目任务索引
 
 ## 1. 文档定位

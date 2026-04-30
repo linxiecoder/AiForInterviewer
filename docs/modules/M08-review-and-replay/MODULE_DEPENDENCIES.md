@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/module-dependencies
+---
+
 # M08 复盘与回放 - 模块依赖
 
 ## 1. 上游模块

@@ -1,3 +1,9 @@
+---
+title: MODULE_OPEN_QUESTIONS
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/module-open-questions
+---
+
 # 模块待确认问题
 
 ## 1. 文档定位

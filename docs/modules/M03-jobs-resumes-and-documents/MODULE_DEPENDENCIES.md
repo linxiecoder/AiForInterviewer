@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module-dependencies
+---
+
 # M03 岗位、简历与文档处理 - 模块依赖
 
 ## 1. 上游输入

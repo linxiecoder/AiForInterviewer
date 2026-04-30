@@ -1,3 +1,9 @@
+---
+title: DOC_GOVERNOR_REPORT
+type: note
+permalink: ai-for-interviewer/docs/governance/doc-governor-report
+---
+
 # Doc Governor 解释性治理报告
 
 ## 摘要

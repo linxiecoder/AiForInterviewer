@@ -1,3 +1,9 @@
+---
+title: ST13_24_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-24/st13-24-design
+---
+
 # ST13_24 DESIGN：测试 / 验收 / DoD
 
 ## 1. 文档状态

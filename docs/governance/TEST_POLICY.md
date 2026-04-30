@@ -1,3 +1,9 @@
+---
+title: TEST_POLICY
+type: note
+permalink: ai-for-interviewer/docs/governance/test-policy
+---
+
 # 测试执行与临时产物治理规则
 
 ## 1. 默认测试入口

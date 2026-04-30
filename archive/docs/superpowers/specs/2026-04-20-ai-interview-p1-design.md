@@ -1,3 +1,9 @@
+---
+title: 2026-04-20-ai-interview-p1-design
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design
+---
+
 # AI 模拟面试 P1 文本版闭环设计稿
 
 > **历史快照说明（W13-StateArchive / 2026-04-25）：**

@@ -1,3 +1,9 @@
+---
+title: MODULE_INDEX
+type: note
+permalink: ai-for-interviewer/module-index
+---
+
 # AI 模拟面试项目模块索引
 
 ## 1. 文档定位

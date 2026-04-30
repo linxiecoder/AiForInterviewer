@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-backlog-roadmap
+type: note
+permalink: ai-for-interviewer/docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap
+---
+
 # AI 模拟面试一期工作台 MVP 待办与路线图清单
 
 > 本文档是 W13-E2 建立的长期待办与路线图清单，用于持续跟踪一期 MVP 阻断项、状态层后续事项、Task Remap 后续事项、实现前置条件、二期 / 三期候选能力和历史归档事项。本文档不是 `DOC_STATE.yaml`，不替代 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md` 或 implementation packet。

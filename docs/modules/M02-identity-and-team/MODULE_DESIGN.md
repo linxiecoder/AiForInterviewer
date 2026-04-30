@@ -1,3 +1,9 @@
+---
+title: MODULE_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-design
+---
+
 # M02 鉴权、团队与成员 - 模块设计
 
 ## 0. Workbench MVP 当前需求与设计输入

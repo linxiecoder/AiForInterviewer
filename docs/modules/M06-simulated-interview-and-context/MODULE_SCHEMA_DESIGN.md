@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/module-schema-design
+---
+
 # M06 模拟面试、上下文与导出 - Schema 设计
 
 ## 1. 文档定位

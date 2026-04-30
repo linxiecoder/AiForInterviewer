@@ -1,3 +1,9 @@
+---
+title: ST13_24_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-24/st13-24-implementation
+---
+
 # ST13_24 IMPLEMENTATION：测试 / 验收 / DoD
 
 ## 1. 文档状态

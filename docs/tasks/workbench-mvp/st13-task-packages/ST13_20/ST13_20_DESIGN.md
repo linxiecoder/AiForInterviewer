@@ -1,3 +1,9 @@
+---
+title: ST13_20_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-20/st13-20-design
+---
+
 # ST13_20 DESIGN：服务端保存 / 数据库
 
 ## 1. 文档状态

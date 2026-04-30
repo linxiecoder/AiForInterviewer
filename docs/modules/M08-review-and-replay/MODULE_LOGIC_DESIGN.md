@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m08-review-and-replay/module-logic-design
+---
+
 # M08 复盘与回放 - Logic 设计
 
 ## 1. 文档定位

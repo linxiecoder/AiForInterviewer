@@ -1,3 +1,9 @@
+---
+title: ST13_15_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-15/st13-15-implementation
+---
+
 # ST13_15 模拟面试复盘实施说明
 
 ## 1. 文档定位

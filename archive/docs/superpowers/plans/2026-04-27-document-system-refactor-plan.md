@@ -1,3 +1,9 @@
+---
+title: 2026-04-27-document-system-refactor-plan
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-27-document-system-refactor-plan
+---
+
 # AI 模拟面试项目全量文档体系重构计划
 
 > 本文是步骤 1 / 计划冻结产物，只为步骤 2 提供可执行输入。本文不执行移动、归档、删除、引用修改、状态写回、formal window open、implementation packet、业务代码实现、`git add`、`commit` 或 `push`。

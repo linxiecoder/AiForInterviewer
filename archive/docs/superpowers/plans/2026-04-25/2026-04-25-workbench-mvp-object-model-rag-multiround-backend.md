@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-object-model-rag-multiround-backend
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-object-model-rag-multiround-backend
+---
+
 # AI 模拟面试一期工作台 MVP 对象模型、RAG、多轮与后端边界草案
 
 ## 1. 迁移状态

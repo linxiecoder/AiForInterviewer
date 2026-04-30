@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m06-simulated-interview-and-context/module-logic-design
+---
+
 # M06 模拟面试、上下文与导出 - Logic 设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: ST13_19_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-19/st13-19-design
+---
+
 # ST13_19 Markdown 导出 / 复制设计说明
 
 ## 1. 文档定位
@@ -59,4 +65,3 @@
 - Markdown 内容不得泄露未授权用户数据；R0 当前按 owner scoped session 复用既有隔离边界。
 - 不要求真实外部网络或真实 API key 才能测试。
 - 若实现需要修改 forbidden paths，应停止并回到 governance 窗口。
-

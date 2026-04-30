@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/sub-modules/st07-01-practice-topic-recommendation/subtask-design
+---
+
 # ST07_01 打磨主题推荐与启动 - 子任务设计
 
 ## 1. 文档定位

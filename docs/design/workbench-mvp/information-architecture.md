@@ -1,3 +1,9 @@
+---
+title: information-architecture
+type: note
+permalink: ai-for-interviewer/docs/design/workbench-mvp/information-architecture
+---
+
 # Workbench MVP Information Architecture
 
 ## 1. IA 总原则

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/sub-modules/st01-02-workspace-shell-and-i18n/subtask-design
+---
+
 # ST01_02 工作台壳层与 i18n 基线 - 子任务设计
 
 ## 1. 文档定位

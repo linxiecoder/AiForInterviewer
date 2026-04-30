@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-st13-first-contract-readiness-review
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-st13-first-contract-readiness-review
+---
+
 # AI 模拟面试一期工作台 MVP ST13 第一批 contract readiness 复核
 
 ## 1. 背景

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/sub-modules/st09-03-lifecycle-rules/subtask-design
+---
+
 # ST09_03 生命周期、消减与停练规则 - 子任务设计
 
 ## 1. 文档定位

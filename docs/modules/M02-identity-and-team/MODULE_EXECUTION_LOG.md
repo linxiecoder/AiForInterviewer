@@ -1,3 +1,9 @@
+---
+title: MODULE_EXECUTION_LOG
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-execution-log
+---
+
 # M02 鉴权、团队与成员 - 模块执行日志
 
 ## 1. 文档定位

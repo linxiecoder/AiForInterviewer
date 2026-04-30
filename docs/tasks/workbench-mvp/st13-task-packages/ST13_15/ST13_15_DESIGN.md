@@ -1,3 +1,9 @@
+---
+title: ST13_15_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-15/st13-15-design
+---
+
 # ST13_15 模拟面试复盘设计说明
 
 ## 1. 文档定位
@@ -57,4 +63,3 @@
 - weakness / improvement 只作为最小输出字段，不创建 training task、不入列训练抽屉、不实现弱点生命周期。
 - 不要求真实外部网络或真实 API key 才能测试。
 - 若实现需要修改 forbidden paths，应停止并回到 governance 窗口。
-

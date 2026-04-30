@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/module-logic-design
+---
+
 # M09 训练中心与薄弱项生命周期 - Logic 设计
 
 ## 1. 文档定位

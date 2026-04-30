@@ -1,3 +1,9 @@
+---
+title: ST13_20_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-20/st13-20-implementation
+---
+
 # ST13_20 IMPLEMENTATION：服务端保存 / 数据库
 
 ## 1. 文档状态

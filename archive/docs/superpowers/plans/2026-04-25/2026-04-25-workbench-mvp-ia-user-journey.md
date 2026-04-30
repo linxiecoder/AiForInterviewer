@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-ia-user-journey
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-ia-user-journey
+---
+
 # AI 模拟面试一期工作台 MVP 信息架构与用户旅程
 
 ## 1. 迁移状态

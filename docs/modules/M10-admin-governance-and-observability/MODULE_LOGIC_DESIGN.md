@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/module-logic-design
+---
+
 # M10 管理台、治理与可观测性 - Logic 设计
 
 ## 1. 文档定位

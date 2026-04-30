@@ -1,3 +1,9 @@
+---
+title: MODULE_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/module-design
+---
+
 # M09 训练中心与薄弱项生命周期 - 模块设计
 
 ## 0. Workbench MVP 当前需求与设计输入

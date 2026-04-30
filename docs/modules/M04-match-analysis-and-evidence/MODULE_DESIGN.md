@@ -1,3 +1,9 @@
+---
+title: MODULE_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/module-design
+---
+
 # M04 匹配分析与训练证据 - 模块设计
 
 ## 0. Workbench MVP 当前需求与设计输入

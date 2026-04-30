@@ -1,3 +1,9 @@
+---
+title: AGENTS
+type: note
+permalink: ai-for-interviewer/agents
+---
+
 # 项目协作规则
 
 本文档是当前项目的高优先级协作入口，用于沉淀全局规则并索引核心文档。

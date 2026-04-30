@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/sub-modules/st02-01-auth-mechanism-boundary/subtask-design
+---
+
 # ST02_01 鉴权机制与会话边界 - 子任务设计
 
 ## 1. 文档定位

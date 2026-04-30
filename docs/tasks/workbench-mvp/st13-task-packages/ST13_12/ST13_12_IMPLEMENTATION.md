@@ -1,3 +1,9 @@
+---
+title: ST13_12_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-12/st13-12-implementation
+---
+
 # ST13_12 多轮上下文 / 状态机实施说明
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: MODULE_OPEN_QUESTIONS
+type: note
+permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-open-questions
+---
+
 # M02 鉴权、团队与成员 - 开放问题
 
 ## 1. 文档目标与作用

@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-dependencies
+---
+
 # M01 基础平台与工作台壳层 - 模块依赖
 
 ## 1. 上游依赖

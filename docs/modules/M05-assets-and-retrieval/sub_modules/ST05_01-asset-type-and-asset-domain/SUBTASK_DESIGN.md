@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m05-assets-and-retrieval/sub-modules/st05-01-asset-type-and-asset-domain/subtask-design
+---
+
 # ST05_01 资产类型与资产域 - 子任务设计
 
 ## 1. 文档定位

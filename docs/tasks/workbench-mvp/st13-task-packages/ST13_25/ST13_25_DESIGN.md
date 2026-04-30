@@ -1,3 +1,9 @@
+---
+title: ST13_25_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-25/st13-25-design
+---
+
 # ST13_25 DESIGN：文档治理 / 收口 / Basic Memory
 
 ## 1. 文档状态

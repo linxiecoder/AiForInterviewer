@@ -1,3 +1,9 @@
+---
+title: TECHNICAL_STANDARDS
+type: note
+permalink: ai-for-interviewer/technical-standards
+---
+
 # AI 模拟面试 P1 技术标准
 
 ## 1. 文档定位

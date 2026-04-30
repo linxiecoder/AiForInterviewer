@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-state-write-stage3-dry-run
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-state-write-stage3-dry-run
+---
+
 # AI 模拟面试一期工作台 MVP State Write 阶段 3 dry-run 与影响分析
 
 > 本文档是 `W13-E4-D` 的 dry-run / 影响分析产物。本文档不修改正式 `docs/governance/DOC_STATE.yaml`，不移出旧 `STxx_*`，不迁移 archive，不生成 implementation packet，不标记 implementation-ready。

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m05-assets-and-retrieval/sub-modules/st05-03-retrieval-chunking-and-index-ingestion/subtask-design
+---
+
 # ST05_03 检索分块与索引入库 - 子任务设计
 
 ## 1. 文档定位

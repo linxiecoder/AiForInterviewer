@@ -1,3 +1,9 @@
+---
+title: ST13_19_IMPLEMENTATION
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-19/st13-19-implementation
+---
+
 # ST13_19 Markdown 导出 / 复制实施说明
 
 ## 1. 文档定位

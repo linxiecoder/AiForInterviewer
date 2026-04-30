@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/sub-modules/st01-01-runtime-and-repo-baseline/subtask-design
+---
+
 # ST01_01 运行环境与仓库基线子任务设计文档
 
 ## 1. 文档状态

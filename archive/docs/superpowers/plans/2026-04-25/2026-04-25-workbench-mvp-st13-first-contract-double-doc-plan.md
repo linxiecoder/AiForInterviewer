@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-st13-first-contract-double-doc-plan
+---
+
 # AI 模拟面试一期工作台 MVP ST13 第一批 contract 双文档准备方案
 
 ## 1. 背景

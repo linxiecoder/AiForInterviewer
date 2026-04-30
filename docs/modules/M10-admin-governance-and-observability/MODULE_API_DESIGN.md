@@ -1,3 +1,9 @@
+---
+title: MODULE_API_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/module-api-design
+---
+
 # M10 管理台、治理与可观测性 - API 设计
 
 ## 1. 文档定位

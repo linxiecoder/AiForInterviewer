@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m05-assets-and-retrieval/sub-modules/st05-02-archive-records-and-source-linkage/subtask-design
+---
+
 # ST05_02 归档记录与来源追踪 - 子任务设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: DOCUMENT_MATURITY
+type: note
+permalink: ai-for-interviewer/document-maturity
+---
+
 # AI 模拟面试项目文档成熟度
 
 ## 1. 文档定位

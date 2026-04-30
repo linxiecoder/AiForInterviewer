@@ -1,3 +1,9 @@
+---
+title: BOOTSTRAP_REPORT
+type: note
+permalink: ai-for-interviewer/docs/governance/bootstrap-report
+---
+
 # Bootstrap Report
 
 ## Summary

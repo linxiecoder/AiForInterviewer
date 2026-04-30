@@ -1,3 +1,9 @@
+---
+title: ST13_13_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-13/st13-13-design
+---
+
 # ST13_13 评分体系设计说明
 
 ## 1. 文档定位
@@ -56,4 +62,3 @@
 - 不要求真实外部网络或真实 API key 才能测试。
 - RAG evidence 可以作为后续设计输入，但 R0-Final-04 不实现 full RAG，也不让 RAG 直接决定分数。
 - 若实现需要修改 forbidden paths，应停止并回到 governance 窗口。
-

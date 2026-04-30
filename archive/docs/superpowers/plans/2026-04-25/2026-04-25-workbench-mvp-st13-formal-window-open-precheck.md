@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-st13-formal-window-open-precheck
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-st13-formal-window-open-precheck
+---
+
 # AI 模拟面试一期工作台 MVP ST13 formal window open 前置确认
 
 ## 1. 背景

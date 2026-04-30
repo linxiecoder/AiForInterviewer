@@ -1,3 +1,9 @@
+---
+title: scoring-review-export-dod
+type: note
+permalink: ai-for-interviewer/docs/design/workbench-mvp/scoring-review-export-dod
+---
+
 # Workbench MVP Scoring, Review, Export and Definition of Done
 
 ## 1. 评分目标

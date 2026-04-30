@@ -1,3 +1,9 @@
+---
+title: MODULE_API_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/module-api-design
+---
+
 # M07 打磨模式、评估与进度 - API 设计
 
 ## 1. 文档定位

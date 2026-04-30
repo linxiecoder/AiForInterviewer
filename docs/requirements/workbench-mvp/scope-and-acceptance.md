@@ -1,3 +1,9 @@
+---
+title: scope-and-acceptance
+type: note
+permalink: ai-for-interviewer/docs/requirements/workbench-mvp/scope-and-acceptance
+---
+
 # AI 模拟面试一期工作台 MVP 范围与验收需求
 
 ## 1. 文档定位

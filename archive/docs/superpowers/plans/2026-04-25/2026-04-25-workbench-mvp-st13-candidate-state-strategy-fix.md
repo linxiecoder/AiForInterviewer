@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-st13-candidate-state-strategy-fix
+---
+
 # AI 模拟面试一期工作台 MVP ST13 candidate 状态表达策略修正
 
 ## 1. 背景

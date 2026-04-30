@@ -1,3 +1,9 @@
+---
+title: DOC_GOVERNANCE
+type: note
+permalink: ai-for-interviewer/docs/doc-governance
+---
+
 # 文档治理总则
 
 ## 一、适用范围

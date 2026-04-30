@@ -1,3 +1,9 @@
+---
+title: DOCUMENT_PROGRESS
+type: note
+permalink: ai-for-interviewer/document-progress
+---
+
 # AI 模拟面试项目文档进展
 
 ## 1. 文档定位

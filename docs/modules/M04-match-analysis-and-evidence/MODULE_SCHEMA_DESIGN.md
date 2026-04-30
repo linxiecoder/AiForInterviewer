@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/module-schema-design
+---
+
 # M04 匹配分析与训练证据 - Schema 设计
 
 ## 1. 文档定位

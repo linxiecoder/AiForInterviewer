@@ -1,3 +1,9 @@
+---
+title: MODULE_DEPENDENCIES
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/module-dependencies
+---
+
 # M09 训练中心与薄弱项生命周期 - 模块依赖
 
 ## 1. 上游模块

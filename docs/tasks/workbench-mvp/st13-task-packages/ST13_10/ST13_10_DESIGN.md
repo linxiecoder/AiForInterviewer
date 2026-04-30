@@ -1,3 +1,9 @@
+---
+title: ST13_10_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-10/st13-10-design
+---
+
 # ST13_10 设计：R1 RAG 最小可用任务包设计
 
 ## 1. 文档状态

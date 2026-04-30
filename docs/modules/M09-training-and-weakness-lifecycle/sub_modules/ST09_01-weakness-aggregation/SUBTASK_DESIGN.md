@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/sub-modules/st09-01-weakness-aggregation/subtask-design
+---
+
 # ST09_01 薄弱项聚合与训练中心 - 子任务设计
 
 ## 1. 文档定位

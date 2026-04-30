@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-current-repo-execution-plan
+type: note
+permalink: ai-for-interviewer/docs/planning/2026-04-25-current-repo-execution-plan
+---
+
 # AI 模拟面试系统当前仓库执行计划
 
 ## 1. 文档定位

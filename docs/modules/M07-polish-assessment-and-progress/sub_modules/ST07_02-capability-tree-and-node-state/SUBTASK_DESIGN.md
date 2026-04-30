@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/sub-modules/st07-02-capability-tree-and-node-state/subtask-design
+---
+
 # ST07_02 能力树蓝图与节点状态 - 子任务设计
 
 ## 1. 文档定位

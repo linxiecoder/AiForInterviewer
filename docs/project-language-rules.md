@@ -1,3 +1,9 @@
+---
+title: project-language-rules
+type: note
+permalink: ai-for-interviewer/docs/project-language-rules
+---
+
 # 项目语言规范
 
 ## 1. 目的

@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m10-admin-governance-and-observability/sub-modules/st10-03-observability-ci-and-snapshot-ops/subtask-design
+---
+
 # ST10_03 可观测性、CI/E2E 与 snapshot 运维 - 子任务设计
 
 ## 1. 文档定位

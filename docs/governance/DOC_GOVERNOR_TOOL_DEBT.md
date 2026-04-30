@@ -1,3 +1,9 @@
+---
+title: DOC_GOVERNOR_TOOL_DEBT
+type: note
+permalink: ai-for-interviewer/docs/governance/doc-governor-tool-debt
+---
+
 # Doc Governor 工具债追踪
 
 ## 1. 背景

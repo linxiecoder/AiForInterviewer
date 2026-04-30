@@ -1,3 +1,9 @@
+---
+title: real_module_design
+type: note
+permalink: ai-for-interviewer/tests/doc-governor/fixtures/docs/real-module-design
+---
+
 # M01 基础平台与工作台壳层 - 模块设计
 
 ## 1. 文档定位

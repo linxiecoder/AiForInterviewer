@@ -1,3 +1,9 @@
+---
+title: OPEN_QUESTIONS
+type: note
+permalink: ai-for-interviewer/open-questions
+---
+
 # AI 模拟面试项目开放问题入口
 
 ## 1. 文档定位

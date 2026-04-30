@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/module-schema-design
+---
+
 # M09 训练中心与薄弱项生命周期 - Schema 设计
 
 ## 1. 文档定位

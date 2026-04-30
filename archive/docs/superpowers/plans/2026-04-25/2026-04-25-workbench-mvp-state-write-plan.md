@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-state-write-plan
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-state-write-plan
+---
+
 # AI 模拟面试一期工作台 MVP State Write 分阶段计划
 
 > 本文档是 `W13-E4-A / State Write 分阶段计划、测试矩阵与回退方案` 的正式计划产物。`W13-E4-B` 已按本计划执行阶段 1：写入 `ST13_01~ST13_25`，保留旧 `STxx_*`；`W13-E4-C` 已执行阶段 2：用旧任务 facts 表达 `historical-reference / superseded`；`W13-E4-D` 已完成阶段 3 dry-run / 影响分析；`W13-E4-E` 已创建并验证 Stage3 Preview YAML；`W13-E4-F` 已执行正式 Stage 3，将旧 `STxx_*` 从 formal current `subtasks` 容器移出，并将 `RQ01.facts.task_ids` 收敛为 `ST13_01~ST13_25`。本文档仍不生成 implementation packet，不放行实现。

@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-scope
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-scope
+---
+
 # AI 模拟面试一期工作台 MVP 范围冻结草案
 
 ## 1. 迁移状态

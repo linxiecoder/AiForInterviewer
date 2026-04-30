@@ -1,3 +1,9 @@
+---
+title: EXECUTION_LOG
+type: note
+permalink: ai-for-interviewer/execution-log
+---
+
 # AI 模拟面试 P1 执行日志
 
 ## 1. 文档定位

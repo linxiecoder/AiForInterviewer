@@ -1,3 +1,9 @@
+---
+title: ST13_21_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-21/st13-21-design
+---
+
 # ST13_21 DESIGN：R0 最小 API / 后端服务边界
 
 ## 1. 文档状态

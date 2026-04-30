@@ -1,3 +1,9 @@
+---
+title: MODULE_EXECUTION_LOG
+type: note
+permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-execution-log
+---
+
 # 模块执行日志
 
 ## 1. 文档定位

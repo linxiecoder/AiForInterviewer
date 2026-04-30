@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DOC_TEMPLATES
+type: note
+permalink: ai-for-interviewer/docs/subtask-doc-templates
+---
+
 # 子任务双文档模板
 
 ## 1. 文档定位与边界

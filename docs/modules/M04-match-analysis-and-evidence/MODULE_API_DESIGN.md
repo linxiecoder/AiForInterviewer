@@ -1,3 +1,9 @@
+---
+title: MODULE_API_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m04-match-analysis-and-evidence/module-api-design
+---
+
 # M04 匹配分析与训练证据 - API 设计
 
 ## 1. 文档定位

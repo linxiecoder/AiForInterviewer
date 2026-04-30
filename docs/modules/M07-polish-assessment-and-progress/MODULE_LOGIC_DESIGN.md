@@ -1,3 +1,9 @@
+---
+title: MODULE_LOGIC_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/module-logic-design
+---
+
 # M07 打磨模式、评估与进度 - Logic 设计
 
 ## 1. 文档定位

@@ -1,3 +1,9 @@
+---
+title: MODULE_SCHEMA_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m07-polish-assessment-and-progress/module-schema-design
+---
+
 # M07 打磨模式、评估与进度 - Schema 设计
 
 ## 1. 文档定位

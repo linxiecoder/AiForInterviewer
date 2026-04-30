@@ -1,3 +1,9 @@
+---
+title: SUBTASK_DESIGN
+type: note
+permalink: ai-for-interviewer/docs/modules/m09-training-and-weakness-lifecycle/sub-modules/st09-02-training-drawer-and-intake/subtask-design
+---
+
 # ST09_02 训练抽屉与待打磨入列 - 子任务设计
 
 ## 1. 文档定位

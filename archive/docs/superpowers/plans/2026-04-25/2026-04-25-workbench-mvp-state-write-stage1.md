@@ -1,3 +1,9 @@
+---
+title: 2026-04-25-workbench-mvp-state-write-stage1
+type: note
+permalink: ai-for-interviewer/archive/docs/superpowers/plans/2026-04-25/2026-04-25-workbench-mvp-state-write-stage1
+---
+
 # AI 模拟面试一期工作台 MVP State Write 阶段 1 变更与回退说明
 
 ## 1. 背景
