@@ -50,6 +50,25 @@ class RAGRetrievalAdapter(Protocol):
         """根据脱敏 query summary 返回候选知识资源。"""
 
 
+class RAGPersistenceRecorder(Protocol):
+    """RAG 检索结果持久化 adapter 的最小协议。"""
+
+    def create_retrieval_record(
+        self,
+        *,
+        owner_id: str,
+        query_summary: RetrievalQuerySummary,
+        result: RAGFoundationResult,
+        trace_ref: str | None,
+        request_id: str,
+        operation_id: str,
+        session_ref: str | None = None,
+        turn_ref: str | None = None,
+        answer_ref: str | None = None,
+    ) -> dict[str, object]:
+        """保存一次 retrieval 的安全摘要。"""
+
+
 class InMemoryRAGAdapter:
     """面向 RAG foundation 测试的内存 adapter skeleton。"""
 
@@ -98,9 +117,11 @@ class RAGService:
         *,
         adapter: RAGRetrievalAdapter,
         trace_store: TraceabilityStore | None = None,
+        rag_store: RAGPersistenceRecorder | None = None,
     ) -> None:
         self.adapter = adapter
         self.trace_store = trace_store
+        self.rag_store = rag_store
 
     def retrieve(
         self,
@@ -135,7 +156,7 @@ class RAGService:
                 retryable=True,
                 permission_filtered_count=0,
             )
-            self._record_trace(
+            self._record_result(
                 actor_id=actor_id,
                 result=result,
                 trigger=trigger,
@@ -171,7 +192,7 @@ class RAGService:
                 retryable=retryable,
                 permission_filtered_count=permission_filtered_count,
             )
-            self._record_trace(
+            self._record_result(
                 actor_id=actor_id,
                 result=result,
                 trigger=trigger,
@@ -201,7 +222,7 @@ class RAGService:
                 retryable=False,
                 permission_filtered_count=permission_filtered_count,
             )
-            self._record_trace(
+            self._record_result(
                 actor_id=actor_id,
                 result=result,
                 trigger=trigger,
@@ -233,7 +254,7 @@ class RAGService:
             permission_filtered_count=permission_filtered_count,
             degraded=False,
         )
-        self._record_trace(
+        self._record_result(
             actor_id=actor_id,
             result=result,
             trigger=trigger,
@@ -242,6 +263,42 @@ class RAGService:
             answer_ref=answer_ref,
         )
         return result
+
+    def _record_result(
+        self,
+        *,
+        actor_id: str,
+        result: RAGFoundationResult,
+        trigger: str,
+        session_ref: str | None,
+        turn_ref: str | None,
+        answer_ref: str | None,
+    ) -> None:
+        trace = self._record_trace(
+            actor_id=actor_id,
+            result=result,
+            trigger=trigger,
+            session_ref=session_ref,
+            turn_ref=turn_ref,
+            answer_ref=answer_ref,
+        )
+        if self.rag_store is None:
+            return
+
+        request_id = str(trace["request_id"]) if trace is not None else f"rag-{uuid4().hex}"
+        operation_id = str(trace["operation_id"]) if trace is not None else f"rag.retrieve:{trigger}"
+        trace_ref = str(trace["id"]) if trace is not None else None
+        self.rag_store.create_retrieval_record(
+            owner_id=actor_id,
+            query_summary=result.query_summary,
+            result=result,
+            trace_ref=trace_ref,
+            request_id=request_id,
+            operation_id=operation_id,
+            session_ref=session_ref,
+            turn_ref=turn_ref,
+            answer_ref=answer_ref,
+        )
 
     def _record_trace(
         self,
@@ -252,9 +309,9 @@ class RAGService:
         session_ref: str | None,
         turn_ref: str | None,
         answer_ref: str | None,
-    ) -> None:
+    ) -> dict[str, object] | None:
         if self.trace_store is None:
-            return
+            return None
 
         gap_reason = result.evidence_gap.reason if result.evidence_gap is not None else None
         status = TraceabilityStatus.COMPLETED
@@ -263,7 +320,7 @@ class RAGService:
         elif result.degraded:
             status = TraceabilityStatus.DEGRADED
 
-        self.trace_store.create_trace(
+        return self.trace_store.create_trace(
             TraceabilityRecord(
                 owner_id=actor_id,
                 trace_type=TRACE_TYPE_RAG_EVIDENCE,
