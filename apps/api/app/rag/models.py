@@ -23,6 +23,14 @@ class RAGSourceType(StrEnum):
     HISTORY_ANSWER = "history_answer"
 
 
+class KnowledgeIndexStatus(StrEnum):
+    """R1 RAG 最小索引状态。"""
+
+    PENDING = "pending"
+    INDEXED = "indexed"
+    FAILED = "failed"
+
+
 class EvidenceTarget(StrEnum):
     """下游 evidence refs 预留消费面。"""
 
@@ -30,6 +38,21 @@ class EvidenceTarget(StrEnum):
     REVIEW = "review"
     EXPORT = "export"
     HISTORY = "history"
+
+
+@dataclass(frozen=True)
+class KnowledgeDocument:
+    """RAG 最小摄取输入，代表用户可见文档或文本资料。"""
+
+    document_id: str
+    owner_id: str
+    visibility: KnowledgeVisibility
+    source_type: RAGSourceType
+    source_label: str
+    content: str
+    source_version: str
+    index_status: KnowledgeIndexStatus = KnowledgeIndexStatus.INDEXED
+    failure_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -44,7 +67,11 @@ class KnowledgeResource:
     content_summary: str
     chunk_ref: str
     source_version: str
-    index_status: str = "indexed"
+    index_status: KnowledgeIndexStatus = KnowledgeIndexStatus.INDEXED
+    chunk_index: int = 0
+    start_offset: int = 0
+    end_offset: int = 0
+    failure_reason: str | None = None
 
     def is_visible_to(self, actor_id: str) -> bool:
         """判断资源是否对当前 actor 可见。"""
@@ -81,6 +108,9 @@ class Citation:
     snippet_summary: str
     source_version: str
     visibility_snapshot: str
+    chunk_index: int = 0
+    start_offset: int = 0
+    end_offset: int = 0
 
 
 @dataclass(frozen=True)

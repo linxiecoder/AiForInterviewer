@@ -12,6 +12,8 @@ from app.rag.models import (
     EvidenceGap,
     EvidenceItem,
     EvidenceTarget,
+    KnowledgeDocument,
+    KnowledgeIndexStatus,
     KnowledgeResource,
     RAGFoundationResult,
     RetrievalQuerySummary,
@@ -20,16 +22,21 @@ from app.rag.models import (
 from app.traceability import TRACE_TYPE_RAG_EVIDENCE, TraceabilityRecord, TraceabilityStatus
 
 DEFAULT_TOP_K = 3
+DEFAULT_CHUNK_TOKEN_LIMIT = 48
 MAX_QUERY_SUMMARY_LENGTH = 120
 VISIBILITY_FILTER_OWNER_OR_PUBLIC = "owner_or_public"
 
 EMPTY_REASON_NO_RESULT = "no_result"
 EMPTY_REASON_PERMISSION_FILTERED = "permission_filtered_empty"
 EMPTY_REASON_RAG_UNAVAILABLE = "rag_unavailable"
+EMPTY_REASON_INDEX_PENDING = "index_pending"
+EMPTY_REASON_INDEX_FAILED = "index_failed"
 
 SAFE_MESSAGE_NO_RESULT = "当前检索没有命中可引用资料。"
 SAFE_MESSAGE_PERMISSION_FILTERED = "当前可见范围内没有可引用资料。"
 SAFE_MESSAGE_RAG_UNAVAILABLE = "RAG 服务暂不可用，主链路可继续。"
+SAFE_MESSAGE_INDEX_PENDING = "资料索引尚未完成，主链路可继续。"
+SAFE_MESSAGE_INDEX_FAILED = "资料索引失败，暂不能引用。"
 
 
 class RAGUnavailableError(RuntimeError):
@@ -49,6 +56,20 @@ class InMemoryRAGAdapter:
     def __init__(self, *, resources: Iterable[KnowledgeResource], available: bool = True) -> None:
         self._resources = tuple(resources)
         self._available = available
+
+    @classmethod
+    def from_documents(
+        cls,
+        *,
+        documents: Iterable[KnowledgeDocument],
+        chunk_token_limit: int = DEFAULT_CHUNK_TOKEN_LIMIT,
+        available: bool = True,
+    ) -> "InMemoryRAGAdapter":
+        """从最小文档输入构建内存 chunk index。"""
+        resources: list[KnowledgeResource] = []
+        for document in documents:
+            resources.extend(chunk_document(document, max_tokens=chunk_token_limit))
+        return cls(resources=resources, available=available)
 
     def search(self, query_summary: RetrievalQuerySummary) -> Sequence[KnowledgeResource]:
         """返回满足 selected ids 或 query token 的候选资源。"""
@@ -90,6 +111,9 @@ class RAGService:
         evidence_target: EvidenceTarget = EvidenceTarget.REVIEW,
         top_k: int = DEFAULT_TOP_K,
         trigger: str = "interview",
+        session_ref: str | None = None,
+        turn_ref: str | None = None,
+        answer_ref: str | None = None,
     ) -> RAGFoundationResult:
         """执行最小检索并返回 citation、evidence 和 evidence gap。"""
         query_summary = RetrievalQuerySummary(
@@ -111,12 +135,53 @@ class RAGService:
                 retryable=True,
                 permission_filtered_count=0,
             )
-            self._record_trace(actor_id=actor_id, result=result, trigger=trigger)
+            self._record_trace(
+                actor_id=actor_id,
+                result=result,
+                trigger=trigger,
+                session_ref=session_ref,
+                turn_ref=turn_ref,
+                answer_ref=answer_ref,
+            )
             return result
 
         visible_resources = tuple(resource for resource in candidates if resource.is_visible_to(actor_id))
         permission_filtered_count = len(candidates) - len(visible_resources)
-        selected_hits = visible_resources[: query_summary.top_k]
+        indexed_resources = tuple(resource for resource in visible_resources if _is_indexed(resource))
+
+        if not indexed_resources:
+            if visible_resources:
+                reason, safe_message, retryable = _index_gap(visible_resources)
+            else:
+                reason = (
+                    EMPTY_REASON_PERMISSION_FILTERED
+                    if candidates and permission_filtered_count == len(candidates)
+                    else EMPTY_REASON_NO_RESULT
+                )
+                safe_message = (
+                    SAFE_MESSAGE_PERMISSION_FILTERED
+                    if reason == EMPTY_REASON_PERMISSION_FILTERED
+                    else SAFE_MESSAGE_NO_RESULT
+                )
+                retryable = False
+            result = _gap_result(
+                query_summary=query_summary,
+                reason=reason,
+                safe_message=safe_message,
+                retryable=retryable,
+                permission_filtered_count=permission_filtered_count,
+            )
+            self._record_trace(
+                actor_id=actor_id,
+                result=result,
+                trigger=trigger,
+                session_ref=session_ref,
+                turn_ref=turn_ref,
+                answer_ref=answer_ref,
+            )
+            return result
+
+        selected_hits = indexed_resources[: query_summary.top_k]
 
         if not selected_hits:
             reason = (
@@ -136,7 +201,14 @@ class RAGService:
                 retryable=False,
                 permission_filtered_count=permission_filtered_count,
             )
-            self._record_trace(actor_id=actor_id, result=result, trigger=trigger)
+            self._record_trace(
+                actor_id=actor_id,
+                result=result,
+                trigger=trigger,
+                session_ref=session_ref,
+                turn_ref=turn_ref,
+                answer_ref=answer_ref,
+            )
             return result
 
         citations = [_citation_from_resource(resource) for resource in selected_hits]
@@ -161,7 +233,14 @@ class RAGService:
             permission_filtered_count=permission_filtered_count,
             degraded=False,
         )
-        self._record_trace(actor_id=actor_id, result=result, trigger=trigger)
+        self._record_trace(
+            actor_id=actor_id,
+            result=result,
+            trigger=trigger,
+            session_ref=session_ref,
+            turn_ref=turn_ref,
+            answer_ref=answer_ref,
+        )
         return result
 
     def _record_trace(
@@ -170,6 +249,9 @@ class RAGService:
         actor_id: str,
         result: RAGFoundationResult,
         trigger: str,
+        session_ref: str | None,
+        turn_ref: str | None,
+        answer_ref: str | None,
     ) -> None:
         if self.trace_store is None:
             return
@@ -188,6 +270,9 @@ class RAGService:
                 status=status,
                 request_id=f"rag-{uuid4().hex}",
                 operation_id=f"rag.retrieve:{trigger}",
+                session_ref=session_ref,
+                turn_ref=turn_ref,
+                answer_ref=answer_ref,
                 retrieval_query_ref=f"rag-query:{result.query_summary.query_summary}",
                 retrieval_result_ref=(
                     f"rag-result:{result.result_summary.hit_count}:{gap_reason or 'hit'}"
@@ -205,9 +290,47 @@ class RAGService:
                     "hit_count": result.result_summary.hit_count,
                     "permission_filtered_count": result.permission_filtered_count,
                     "degraded": result.degraded,
+                    "gap_reason": gap_reason,
                 },
             )
         )
+
+
+def chunk_document(
+    document: KnowledgeDocument,
+    *,
+    max_tokens: int = DEFAULT_CHUNK_TOKEN_LIMIT,
+) -> list[KnowledgeResource]:
+    """把最小文档输入切成稳定 chunk resources。"""
+    limit = max(max_tokens, 1)
+    if document.index_status != KnowledgeIndexStatus.INDEXED:
+        return [_resource_from_unindexed_document(document)]
+
+    spans = _word_spans(document.content)
+    if not spans:
+        return []
+
+    chunks: list[KnowledgeResource] = []
+    for chunk_index, start in enumerate(range(0, len(spans), limit)):
+        chunk_spans = spans[start : start + limit]
+        content_summary = " ".join(token for token, _, _ in chunk_spans)
+        chunks.append(
+            KnowledgeResource(
+                resource_id=document.document_id,
+                owner_id=document.owner_id,
+                visibility=document.visibility,
+                source_type=document.source_type,
+                source_label=document.source_label,
+                content_summary=content_summary,
+                chunk_ref=f"{document.document_id}:chunk-{chunk_index}",
+                source_version=document.source_version,
+                index_status=KnowledgeIndexStatus.INDEXED,
+                chunk_index=chunk_index,
+                start_offset=chunk_spans[0][1],
+                end_offset=chunk_spans[-1][2],
+            )
+        )
+    return chunks
 
 
 def _gap_result(
@@ -248,6 +371,9 @@ def _citation_from_resource(resource: KnowledgeResource) -> Citation:
         snippet_summary=resource.content_summary,
         source_version=resource.source_version,
         visibility_snapshot=resource.visibility_snapshot(),
+        chunk_index=resource.chunk_index,
+        start_offset=resource.start_offset,
+        end_offset=resource.end_offset,
     )
 
 
@@ -291,3 +417,44 @@ def _query_tokens(query_summary: str) -> tuple[str, ...]:
         for token in query_summary.lower().replace("/", " ").replace("-", " ").split()
         if len(token) >= 3
     )
+
+
+def _resource_from_unindexed_document(document: KnowledgeDocument) -> KnowledgeResource:
+    return KnowledgeResource(
+        resource_id=document.document_id,
+        owner_id=document.owner_id,
+        visibility=document.visibility,
+        source_type=document.source_type,
+        source_label=document.source_label,
+        content_summary="",
+        chunk_ref=f"{document.document_id}:index-{document.index_status.value}",
+        source_version=document.source_version,
+        index_status=document.index_status,
+        chunk_index=-1,
+        start_offset=0,
+        end_offset=0,
+        failure_reason=document.failure_reason,
+    )
+
+
+def _is_indexed(resource: KnowledgeResource) -> bool:
+    return resource.index_status == KnowledgeIndexStatus.INDEXED
+
+
+def _index_gap(resources: Sequence[KnowledgeResource]) -> tuple[str, str, bool]:
+    if any(resource.index_status == KnowledgeIndexStatus.PENDING for resource in resources):
+        return EMPTY_REASON_INDEX_PENDING, SAFE_MESSAGE_INDEX_PENDING, True
+    return EMPTY_REASON_INDEX_FAILED, SAFE_MESSAGE_INDEX_FAILED, False
+
+
+def _word_spans(content: str) -> list[tuple[str, int, int]]:
+    spans: list[tuple[str, int, int]] = []
+    offset = 0
+    for token in str(content).split():
+        start = str(content).find(token, offset)
+        if start < 0:
+            start = offset
+        end = start + len(token)
+        spans.append((token, start, end))
+        offset = end
+    return spans

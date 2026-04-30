@@ -5,6 +5,8 @@ from app.rag.models import (
     EvidenceGap,
     EvidenceItem,
     EvidenceTarget,
+    KnowledgeDocument,
+    KnowledgeIndexStatus,
     KnowledgeResource,
     KnowledgeVisibility,
     RAGFoundationResult,
@@ -12,7 +14,7 @@ from app.rag.models import (
     RetrievalQuerySummary,
     RetrievalResultSummary,
 )
-from app.rag.service import InMemoryRAGAdapter, RAGRetrievalAdapter, RAGService
+from app.rag.service import InMemoryRAGAdapter, RAGRetrievalAdapter, RAGService, chunk_document
 
 __all__ = [
     "Citation",
@@ -20,6 +22,8 @@ __all__ = [
     "EvidenceItem",
     "EvidenceTarget",
     "InMemoryRAGAdapter",
+    "KnowledgeDocument",
+    "KnowledgeIndexStatus",
     "KnowledgeResource",
     "KnowledgeVisibility",
     "RAGFoundationResult",
@@ -28,4 +32,5 @@ __all__ = [
     "RAGSourceType",
     "RetrievalQuerySummary",
     "RetrievalResultSummary",
+    "chunk_document",
 ]

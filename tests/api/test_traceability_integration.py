@@ -46,7 +46,13 @@ from app.interview_record_contract import (  # noqa: E402
 from app.llm.constants import LLM_PROVIDER_DETERMINISTIC, LLM_PROVIDER_ENV  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.persistence import TraceabilityStore  # noqa: E402
-from app.rag.models import KnowledgeResource, KnowledgeVisibility, RAGSourceType  # noqa: E402
+from app.rag.models import (  # noqa: E402
+    EvidenceTarget,
+    KnowledgeDocument,
+    KnowledgeResource,
+    KnowledgeVisibility,
+    RAGSourceType,
+)
 from app.rag.service import InMemoryRAGAdapter, RAGService  # noqa: E402
 from app.traceability import (  # noqa: E402
     TRACE_TYPE_INTERVIEW,
@@ -258,6 +264,68 @@ def test_rag_permission_filtered_empty_writes_degraded_gap_without_invisible_res
     assert trace["citation_refs"] == []
     assert trace["evidence_refs"] == []
     assert "private-resource-other-owner" not in str(trace["metadata"])
+
+
+def test_rag_retrieval_trace_summary_reads_citations_and_evidence_gaps(
+    api_app: Any,
+) -> None:
+    """RAG retrieval 写入 trace 后，session detail trace_summary 应读取 citation 和 gap。"""
+
+    async def run_case() -> tuple[str, list[str], list[str], list[str]]:
+        async with _client(api_app) as client:
+            started = await _start_interview(client, owner_id="owner-rag-summary")
+            session_id = started[FIELD_SESSION_ID]
+            turn_id = started[FIELD_CURRENT_TURN][FIELD_TURN_ID]
+            service = RAGService(
+                adapter=InMemoryRAGAdapter.from_documents(
+                    documents=[
+                        KnowledgeDocument(
+                            document_id="doc-rag-summary",
+                            owner_id="owner-rag-summary",
+                            visibility=KnowledgeVisibility.PRIVATE,
+                            source_type=RAGSourceType.PRIVATE_DOCUMENT,
+                            source_label="RAG summary notes",
+                            content="traceability citations evidence refs are readable",
+                            source_version="v1",
+                        )
+                    ]
+                ),
+                trace_store=api_app.state.traceability_store,
+            )
+            hit = service.retrieve(
+                actor_id="owner-rag-summary",
+                query_text="traceability citation",
+                evidence_target=EvidenceTarget.REVIEW,
+                trigger="review",
+                session_ref=session_id,
+                turn_ref=turn_id,
+            )
+            gap = service.retrieve(
+                actor_id="owner-rag-summary",
+                query_text="postgres migration",
+                evidence_target=EvidenceTarget.REVIEW,
+                trigger="review",
+                session_ref=session_id,
+                turn_ref=turn_id,
+            )
+            detail = await _get_session(
+                client,
+                owner_id="owner-rag-summary",
+                session_id=session_id,
+            )
+        return (
+            detail[FIELD_TRACE_SUMMARY]["status"],
+            detail[FIELD_TRACE_SUMMARY]["rag"]["citation_refs"],
+            detail[FIELD_TRACE_SUMMARY]["rag"]["evidence_refs"],
+            detail[FIELD_TRACE_SUMMARY]["rag"]["evidence_gap_refs"],
+        )
+
+    status, citation_refs, evidence_refs, evidence_gap_refs = asyncio.run(run_case())
+
+    assert status == "available"
+    assert citation_refs == ["citation:doc-rag-summary:doc-rag-summary:chunk-0"]
+    assert evidence_refs == ["evidence:doc-rag-summary:doc-rag-summary:chunk-0"]
+    assert evidence_gap_refs == ["gap:no_result"]
 
 
 def test_traceability_read_helper_filters_by_owner(api_app: Any) -> None:
