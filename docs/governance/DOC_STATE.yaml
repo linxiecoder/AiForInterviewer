@@ -1395,8 +1395,8 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
         review_status: unreviewed
         readiness: blocked

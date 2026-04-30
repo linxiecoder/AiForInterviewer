@@ -1,90 +1,81 @@
 # ST13_10 实施说明：R1 RAG 最小可用任务包实施说明
 
-## 1. 文档状态
+## 当前非实现状态
 
 - 状态：`draft`
 - 文档性质：ST13 任务实施说明；只定义后续实现窗口的输入、禁止范围、required tests 和停止条件。
-- 当前 readiness：docs-only readiness。
-- 当前 official state：`DOC_STATE.yaml` 中 `ST13_10` 仍为 missing / blocked；本窗口不修改 official state。
+- 当前 readiness：docs-only readiness；仍不是 implementation-ready。
+- 当前 official state：`DOC_STATE.yaml` 中 `ST13_10` 已为 `implementation_doc_state=active_working_doc`、`maturity=L5`、`readiness=blocked`；仍未打开 formal window，仍不是 implementation-ready。
 - 当前不允许：RAG implementation、schema / migration / ORM implementation、测试实现、packet generation、formal window open。
-
-## 2. 当前 readiness 状态
-
-`ST13_10` 已被确认为 R1 RAG anchor，但当前仍不是 implementation-ready：
-
 - 已有状态层 task：`ST13_10 / WT13-10 / RAG / 知识库`。
-- 本窗口创建 task package 双文档。
-- 不新增 task ID。
-- 不修改 `DOC_STATE.yaml`。
-- 不生成 implementation packet。
-- 不打开 formal window。
-- 不写代码、测试、schema、migration 或 ORM。
+- 不新增 task ID，不创建新长期状态入口。
 
-## 3. 后续实现允许路径候选
+## 本轮实施目标
 
-以下路径仅是未来 implementation packet 的候选输入，不是当前授权：
+- 建立 ST13_10 R1 RAG 最小可用 readiness 和 future implementation input 的可识别边界。
+- 让后续 formal readiness 评审能从本文档抽取目标、允许修改范围、禁止修改范围和 required tests。
+- 继续消费 ST13_21 API contract、ST13_20 data readiness 和 ST13_24 acceptance / tests boundary。
+- 保持 R1 RAG must-have / optional / R2-deferred 边界不变。
+- 明确当前仍不能进入 RAG implementation、schema / migration / ORM implementation 或 tests implementation。
 
-| 路径 | 未来可能用途 | 当前状态 |
-| --- | --- | --- |
-| `apps/api/**` | RAG ingestion / indexing / retrieval API、service、adapter、persistence integration | 当前禁止 |
-| `tests/**` | RAG contract、integration、failure、visibility 测试 | 当前禁止 |
-| `requirements.txt` | 仅当正式实现引入新依赖时同步 | 当前禁止 |
-| `.env.example` | 仅当正式实现引入新环境变量时同步占位 | 当前禁止 |
-| schema / migration 文件 | 仅当 formal window 和 packet 明确授权后处理 | 当前禁止 |
-| `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/**` | ST13_10 文档同步 | 当前仅本双文档允许 |
+## 允许修改范围
 
-任何未来 allowed paths 都必须由 formal window、implementation packet 和用户明确授权最终决定。
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_IMPLEMENTATION.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_DESIGN.md`
 
-## 4. 当前禁止路径
+## 禁止修改范围
 
-当前窗口和后续未授权状态下禁止：
+本节为当前窗口和 formal window 打开前的禁止修改范围。下方 `禁止修改` 子句柄用于让 evaluator 抽取 forbidden paths。
+
+### 禁止修改
 
 - `apps/**`
 - `tests/**`
 - `docs/governance/**`
 - `DOC_STATE.yaml`
+- `docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/**`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/**`
 - schema 文件
 - migration 文件
 - ORM / database implementation
 - packet
 - formal window
+- 任何新 task ID
 - 任何新长期状态入口
 
-## 5. 实施停止条件
+## 测试与验证
+
+未来 ST13_10 implementation packet 至少需要覆盖以下 required tests 输入；当前窗口不创建测试文件：
+
+- governance / state validation：validate-state、evaluate-state、focused ST13_10 evaluate、preflight-open-window、git diff --check、allowed / forbidden path audit。
+- knowledge source boundary：用户私有资料、管理员公共资料、岗位、简历和历史回答 scope 的读取边界。
+- document lifecycle：uploaded、parsing、parsed、indexed、failed、archived 等状态语义。
+- indexing status：pending、running、indexed、failed、retryable 和 failure reason 的展示与追踪。
+- retrieval query summary：query summary、scope、selected materials、topK、actor context 和 visibility filter。
+- retrieval result summary：hit count、hit summary、empty result、permission filtered empty、degraded 和 retryable。
+- citation contract：source ref、chunk ref、snippet summary、source label、visibility snapshot 不泄露不可见资源。
+- evidence item / evidence gap：evidence summary、citation refs、confidence label、no result、index pending、index failed、RAG unavailable、low confidence。
+- RAG unavailable / empty result / degraded behavior：主链路继续，评分、复盘、导出和历史回看明确降级或证据缺口。
+- permission / resource visibility filtering：owner、visibility、resource_not_visible、permission_denied、安全 404 和脱敏输出。
+- frontend display contract：面试台、评分、复盘、导出和历史回看能消费 citation、evidence item、evidence gap、pending、failed、degraded 和 empty state。
+- persistence boundary：与 ST13_20 对齐 retrieval query、retrieval result、citation、evidence、source snapshot 和 permission snapshot。
+- score / review / export / history evidence integration：评分理由、复盘证据、Markdown 导出和历史回看都能追溯 evidence refs、source snapshot、low confidence 和降级说明。
+
+## 停止条件
 
 出现以下任一情况必须停止：
 
 1. 需要修改 `DOC_STATE.yaml` 或 `docs/governance/**`。
-2. 需要修改 `ST13_20`、`ST13_21` 或 `ST13_24` 文档。
-3. 需要修改 task remap 才能继续。
-4. 需要新增 task ID。
+2. 需要修改 task remap。
+3. 需要修改 `ST13_20`、`ST13_21` 或 `ST13_24` 文档正文。
+4. 需要新增 task ID 或任何新长期状态入口。
 5. 需要生成 packet 或打开 formal window。
 6. 需要实现业务代码、测试代码、schema、migration、ORM、repository、worker、queue、provider 或前端页面。
 7. 需要引入新依赖或环境变量。
-8. `validate-state` 或 `evaluate-state` 失败。
+8. `validate-state`、全量 `evaluate-state`、focused ST13_10 evaluate 或 ST13_10 preflight 失败且无法解释。
 9. `git status --short` 出现本窗口允许范围外改动。
-
-## 6. required tests / 测试要求与验收边界
-
-未来 `ST13_10` implementation packet 至少需要覆盖以下 required tests 输入：
-
-| 测试面 | required tests 输入 |
-| --- | --- |
-| governance | `validate-state`、`evaluate-state`、`git diff --check`、allowed / forbidden path audit |
-| knowledge source | 用户私有资料、管理员公共资料、岗位 / 简历 / 历史回答 scope 的读取边界 |
-| document lifecycle | uploaded、parsing、indexed、failed、archived 等状态语义 |
-| retrieval query | query summary、scope、selected materials、topK、actor / visibility filter |
-| retrieval result | hit count、hit summary、empty result、permission filtered empty、degraded |
-| citation | source ref、chunk ref、snippet summary、visibility snapshot 不泄露不可见资源 |
-| evidence gap | no result、index pending、index failed、RAG unavailable、low confidence |
-| frontend contract | 面试台、评分、复盘、导出和历史回看能消费 citation / evidence gap |
-| persistence | 与 `ST13_20` 对齐 retrieval query/result/citation/evidence/source snapshot 边界 |
-| security | owner、visibility、resource_not_visible、permission_denied、安全 404、脱敏输出 |
-| failure | RAG unavailable 时主链路继续，评分 / 复盘 / 导出明确降级 |
-
-当前窗口不创建 `tests/**`。
 
 ## 7. RAG 摄取 / 索引 / 检索最小实现输入
 
