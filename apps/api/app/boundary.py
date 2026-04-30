@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.interview_record_contract import (
     API_DATABASE_PATH_ENV,
+    DATABASE_URL_ENV,
     DEFAULT_DATABASE_DIR,
     DEFAULT_DATABASE_FILE,
 )
@@ -62,10 +63,7 @@ def get_settings() -> ApiSettings:
         api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
         host=_env(API_HOST_ENV, DEFAULT_API_HOST),
         port=_env_int(API_PORT_ENV, DEFAULT_API_PORT),
-        database_path=_env(
-            API_DATABASE_PATH_ENV,
-            os.path.join(tempfile.gettempdir(), DEFAULT_DATABASE_DIR, DEFAULT_DATABASE_FILE),
-        ),
+        database_path=_database_location(),
     )
 
 
@@ -128,6 +126,16 @@ def _env_int(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def _database_location() -> str:
+    database_url = os.getenv(DATABASE_URL_ENV)
+    if database_url is not None and database_url.strip():
+        return database_url.strip()
+    return _env(
+        API_DATABASE_PATH_ENV,
+        os.path.join(tempfile.gettempdir(), DEFAULT_DATABASE_DIR, DEFAULT_DATABASE_FILE),
+    )
 
 
 def _normalize_prefix(prefix: str) -> str:

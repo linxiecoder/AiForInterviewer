@@ -63,10 +63,36 @@ npm run api:dev
 API_DATABASE_PATH=/tmp/ai-for-interviewer/api.sqlite3 .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
 ```
 
+### PostgreSQL runtime
+
+R1 数据层已支持 `DATABASE_URL`。当 `DATABASE_URL` 非空时，后端优先使用 PostgreSQL 或显式数据库 URL；未设置时继续使用 `API_DATABASE_PATH` 对应的 SQLite fallback。
+
+当前唯一 PostgreSQL driver 是 `psycopg[binary]`，由 `requirements.txt` 安装。`postgresql://...` 会在运行时归一化为 `postgresql+psycopg://...`，也可以直接写 `postgresql+psycopg://...`。
+
+本机如已有 PostgreSQL，可直接启动后端：
+
+```bash
+DATABASE_URL=postgresql+psycopg://ai_interviewer:changeme@127.0.0.1:5432/ai_for_interviewer_dev .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
+```
+
+仓库提供最小本地 PostgreSQL compose 文件：
+
+```bash
+docker compose -f docker-compose.pg.yml up -d
+```
+
+上述 compose 只用于本地开发，密码为占位值 `changeme`。不要把真实数据库密码或真实生产连接串写入 `.env.example`、文档、测试或日志。
+
 后端 targeted API 测试：
 
 ```bash
 .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_integration.py tests/api/test_traceability_persistence.py tests/api/test_rag_foundation.py tests/api/test_rag_persistence.py tests/api/test_review_export.py -q
+```
+
+PostgreSQL integration tests 默认不连接数据库；设置 `TEST_DATABASE_URL` 后手动启用：
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://ai_interviewer:changeme@127.0.0.1:5432/ai_for_interviewer_dev .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_postgresql_runtime.py -q
 ```
 
 ## 前端启动
@@ -161,3 +187,13 @@ npm --workspace apps/web exec -- playwright install chromium
 ### E2E 本地端口或代理问题
 
 `apps/web/playwright.config.ts` 使用 `127.0.0.1:4173`，并在配置中清理常见 proxy 环境变量，避免本地浏览器访问被代理劫持。如端口被占用，先停止已有 `vite preview` 或调整配置中的端口。
+
+### PostgreSQL driver 或连接失败
+
+如果后端启动时报 `No module named psycopg`，先确认已经运行：
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+如果 PG integration tests 被 skip，说明当前 shell 没有设置 `TEST_DATABASE_URL`。如果连接失败，先检查 PostgreSQL 服务是否启动、库名和占位账号是否与本地配置一致。

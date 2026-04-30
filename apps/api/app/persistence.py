@@ -1,4 +1,4 @@
-"""ST13_20 持久化边界的 SQLite adapter。"""
+"""ST13_20 持久化边界的 SQLAlchemy Core adapter。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,9 @@ from sqlalchemy import (
     insert,
     or_,
     select,
+    text,
 )
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine, URL
 from sqlalchemy.pool import StaticPool
@@ -206,12 +208,12 @@ RAG_RETRIEVAL_RECORDS_TABLE = Table(
 
 
 class InterviewRecordStore:
-    """保存、恢复、历史、复盘和导出追踪的最小 SQLite adapter。"""
+    """保存、恢复、历史、复盘和导出追踪的最小持久化 adapter。"""
 
     def __init__(self, database_path: str) -> None:
-        """创建绑定到单个 SQLite 数据库路径的 store。"""
+        """创建绑定到单个数据库位置的 store，可为 SQLite 路径或 database URL。"""
         self.database_path = database_path
-        self._engine = _create_sqlite_engine(database_path)
+        self._engine = _create_database_engine(database_path)
 
     def initialize(self) -> None:
         """在显式 app startup 或测试边界加载 R0 schema。"""
@@ -269,12 +271,12 @@ class InterviewRecordStore:
 
 
 class TraceabilityStore:
-    """R1 最小数据追踪 SQLite adapter。"""
+    """R1 最小数据追踪持久化 adapter。"""
 
     def __init__(self, database_path: str) -> None:
-        """创建绑定到单个 SQLite 数据库路径的 store。"""
+        """创建绑定到单个数据库位置的 store，可为 SQLite 路径或 database URL。"""
         self.database_path = database_path
-        self._engine = _create_sqlite_engine(database_path)
+        self._engine = _create_database_engine(database_path)
 
     def initialize(self) -> None:
         """在显式测试或 runtime 边界加载现有 schema 文件。"""
@@ -359,12 +361,12 @@ class TraceabilityStore:
 
 
 class RAGPersistenceStore:
-    """R1 RAG 文档、chunk、检索结果与 trace 关联的最小 SQLite adapter。"""
+    """R1 RAG 文档、chunk、检索结果与 trace 关联的最小持久化 adapter。"""
 
     def __init__(self, database_path: str) -> None:
-        """创建绑定到单个 SQLite 数据库路径的 store。"""
+        """创建绑定到单个数据库位置的 store，可为 SQLite 路径或 database URL。"""
         self.database_path = database_path
-        self._engine = _create_sqlite_engine(database_path)
+        self._engine = _create_database_engine(database_path)
 
     def initialize(self) -> None:
         """在显式测试或 runtime 边界加载现有 schema 文件。"""
@@ -392,7 +394,9 @@ class RAGPersistenceStore:
             FIELD_CREATED_AT: now,
             FIELD_UPDATED_AT: now,
         }
-        document_insert = sqlite_insert(RAG_DOCUMENTS_TABLE).values(document_values)
+        document_insert = _upsert_insert(RAG_DOCUMENTS_TABLE, self._engine.dialect.name).values(
+            document_values
+        )
         document_upsert = document_insert.on_conflict_do_update(
             index_elements=[
                 RAG_DOCUMENTS_TABLE.c[FIELD_OWNER_ID],
@@ -628,24 +632,68 @@ class RAGPersistenceStore:
             return list(connection.execute(statement).mappings().fetchall())
 
 
-def _create_sqlite_engine(database_path: str) -> Engine:
-    if database_path == ":memory:":
+def _create_database_engine(database_location: str) -> Engine:
+    if database_location == ":memory:":
         return create_engine(
             "sqlite+pysqlite://",
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
-    Path(database_path).parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(URL.create("sqlite+pysqlite", database=database_path))
+    if _is_database_url(database_location):
+        return create_engine(_normalize_database_url(database_location))
+    Path(database_location).parent.mkdir(parents=True, exist_ok=True)
+    return create_engine(URL.create("sqlite+pysqlite", database=database_location))
 
 
 def _initialize_schema(engine: Engine) -> None:
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            for statement in _schema_statements(_load_schema_sql()):
+                connection.execute(text(statement))
+        return
+    if engine.dialect.name != "sqlite":
+        raise ValueError(f"unsupported database dialect: {engine.dialect.name}")
     raw_connection = engine.raw_connection()
     try:
         raw_connection.executescript(_load_schema_sql())
         raw_connection.commit()
     finally:
         raw_connection.close()
+
+
+def _is_database_url(database_location: str) -> bool:
+    return "://" in database_location
+
+
+def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    return database_url
+
+
+def _upsert_insert(table: Table, dialect_name: str) -> Any:
+    if dialect_name == "postgresql":
+        return postgresql_insert(table)
+    if dialect_name == "sqlite":
+        return sqlite_insert(table)
+    raise ValueError(f"unsupported database dialect: {dialect_name}")
+
+
+def _schema_statements(schema_sql: str) -> tuple[str, ...]:
+    return tuple(
+        f"{statement.strip()};"
+        for statement in schema_sql.split(";")
+        if statement.strip() and _has_executable_sql(statement)
+    )
+
+
+def _has_executable_sql(statement: str) -> bool:
+    return any(
+        bool(line.strip()) and not line.strip().startswith("--")
+        for line in statement.splitlines()
+    )
 
 
 def _table_columns(table: Table, column_names: Sequence[str]) -> tuple[Column[Any], ...]:

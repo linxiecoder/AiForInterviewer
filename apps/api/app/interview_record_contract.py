@@ -1,5 +1,6 @@
 """Shared constants for the R0 interview record persistence boundary."""
 
+DATABASE_URL_ENV = "DATABASE_URL"
 API_DATABASE_PATH_ENV = "API_DATABASE_PATH"
 DEFAULT_DATABASE_FILE = "api.sqlite3"
 DEFAULT_DATABASE_DIR = "ai-for-interviewer"

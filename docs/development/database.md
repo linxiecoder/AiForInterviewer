@@ -10,7 +10,14 @@ permalink: ai-for-interviewer/development/database
 
 ## 当前数据库类型
 
-当前后端使用 SQLite，访问层位于 `apps/api/app/persistence.py`。运行时数据库路径由 `API_DATABASE_PATH` 控制；未设置时，默认路径为系统临时目录下的 `ai-for-interviewer/api.sqlite3`。
+当前后端支持 PostgreSQL runtime，并保留 SQLite fallback。访问层位于 `apps/api/app/persistence.py`。
+
+运行时数据库选择规则：
+
+- `DATABASE_URL` 非空时优先使用显式 database URL。
+- `DATABASE_URL` 未设置时，使用 `API_DATABASE_PATH` 对应的 SQLite 文件。
+- `API_DATABASE_PATH` 也未设置时，默认路径为系统临时目录下的 `ai-for-interviewer/api.sqlite3`。
+- `postgresql://...` 会归一化为 `postgresql+psycopg://...`，以使用当前唯一 PostgreSQL driver `psycopg[binary]`。
 
 测试用例会通过 `ManagedTempArtifacts` 创建隔离临时目录，并将 `API_DATABASE_PATH` 指向测试内的 `.sqlite3` 文件。
 
@@ -21,7 +28,9 @@ schema 初始化发生在应用 startup 或测试显式初始化边界：
 - `apps/api/app/main.py` 创建 `InterviewRecordStore`、`TraceabilityStore`、`RAGPersistenceStore`。
 - `create_app(..., initialize_schema=True)` 用于测试中提前初始化 schema。
 - 常规运行时在 FastAPI lifespan 中调用各 store 的 `initialize()`。
-- `persistence.py` 的 `_initialize_schema()` 使用 SQLite raw connection 执行 `_load_schema_sql()`。
+- `persistence.py` 的 `_initialize_schema()` 会识别 SQLAlchemy dialect。
+- SQLite 分支继续使用 raw connection 执行 `_load_schema_sql()`，保持本地 fallback 与既有测试行为。
+- PostgreSQL 分支使用 SQLAlchemy connection 逐条执行 `_schema_statements(_load_schema_sql())` 拆出的 DDL。
 - `_load_schema_sql()` 以 UTF-8 读取并拼接当前三个 schema 文件。
 
 schema-loader 只负责执行 `CREATE TABLE IF NOT EXISTS` 与索引定义，不承担版本迁移、回滚或数据修复。
@@ -38,14 +47,16 @@ schema-loader 只负责执行 `CREATE TABLE IF NOT EXISTS` 与索引定义，不
 
 ## SQLAlchemy Core 使用范围
 
-`apps/api/app/persistence.py` 使用 SQLAlchemy Core 的 `MetaData`、`Table`、`Column`、`select`、`insert`、`delete` 和 SQLite upsert。
+`apps/api/app/persistence.py` 使用 SQLAlchemy Core 的 `MetaData`、`Table`、`Column`、`select`、`insert`、`delete`，并按 dialect 使用 SQLite / PostgreSQL upsert。
 
 当前约束是：
 
 - schema DDL 仍来自 `.sql` 文件。
 - runtime DML / SELECT 使用 SQLAlchemy Core Table 定义。
-- SQLite engine 由 `_create_sqlite_engine()` 创建。
+- engine 由 `_create_database_engine()` 创建，支持 SQLite 路径、SQLite URL 和 PostgreSQL URL。
 - `:memory:` 使用 `StaticPool` 和 `check_same_thread=False`，文件数据库使用 `sqlite+pysqlite` URL。
+- PostgreSQL 使用 `psycopg[binary]`，不引入第二个 PG driver。
+- RAG document upsert 通过 dialect insert helper 分流到 `sqlite_insert` 或 `postgresql_insert`。
 
 ## 为什么不使用手写 SQL 拼接
 
@@ -56,7 +67,7 @@ schema-loader 只负责执行 `CREATE TABLE IF NOT EXISTS` 与索引定义，不
 - 让测试可以检查 DML / SELECT 是否基于 SQLAlchemy Core Table。
 - 保持 SQLite 当前实现与后续迁移评估之间的边界更清晰。
 
-schema-loader 的 `executescript()` 只执行仓库内固定 schema 文件，不接收用户输入。
+schema-loader 只执行仓库内固定 schema 文件，不接收用户输入。PostgreSQL 分支逐条执行固定 DDL，不拼接用户输入。
 
 ## 为什么当前不启用 ORM / Alembic
 
@@ -68,6 +79,30 @@ schema-loader 的 `executescript()` 只执行仓库内固定 schema 文件，不
 - ORM 映射会扩大改动面，不符合 R1 最小闭环目标。
 
 当 schema 出现多版本线上升级、回滚、数据修复或跨环境部署需求时，再重新评估 Alembic。
+
+## PostgreSQL runtime 与 SQLite fallback
+
+PostgreSQL runtime 的目标是让 R1 traceability、RAG persistence 和 interview record store 能在真实数据库上运行。当前不改变 API contract，也不改变 schema 事实源。
+
+本地 PostgreSQL 示例：
+
+```bash
+docker compose -f docker-compose.pg.yml up -d
+```
+
+启动 API 示例：
+
+```bash
+DATABASE_URL=postgresql+psycopg://ai_interviewer:changeme@127.0.0.1:5432/ai_for_interviewer_dev .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
+```
+
+SQLite fallback 示例：
+
+```bash
+API_DATABASE_PATH=/tmp/ai-for-interviewer/api.sqlite3 .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
+```
+
+`.env.example` 只提供空值和占位说明，不包含真实数据库密码或真实生产连接串。
 
 ## Store 职责
 
@@ -153,6 +188,12 @@ RAG / traceability / review-export targeted API 测试：
 .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_integration.py tests/api/test_traceability_persistence.py tests/api/test_rag_foundation.py tests/api/test_rag_persistence.py tests/api/test_review_export.py -q
 ```
 
+完整 API 测试：
+
+```bash
+.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api -q
+```
+
 SQLAlchemy Core access layer 测试：
 
 ```bash
@@ -163,6 +204,20 @@ R0 主链路持久化 smoke：
 
 ```bash
 .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_r0_e2e.py -q
+```
+
+PostgreSQL runtime 定向测试：
+
+```bash
+.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_postgresql_runtime.py -q
+```
+
+该测试文件默认会验证 `DATABASE_URL` 优先级、PostgreSQL engine 创建、SQLite fallback 和 schema statement 解析。需要真实连接 PostgreSQL 的 round trip 测试会在未设置 `TEST_DATABASE_URL` 时 skip。
+
+启用 PG integration tests 示例：
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://ai_interviewer:changeme@127.0.0.1:5432/ai_for_interviewer_dev .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_postgresql_runtime.py -q
 ```
 
 所有正式 Python 测试仍应使用 `.venv/bin/python`。
