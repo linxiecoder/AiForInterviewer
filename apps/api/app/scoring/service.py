@@ -17,6 +17,7 @@ from app.interview_flow.contract import (
     FIELD_QUESTION,
     FIELD_SESSION_ID,
     FIELD_SNAPSHOT_INDEX,
+    FIELD_TURN_ID,
     FIELD_TURNS,
     INTERVIEW_FLOW_RECORD_SOURCE,
     SESSION_STATUS_IN_PROGRESS,
@@ -31,7 +32,8 @@ from app.interview_record_contract import (
 from app.llm.constants import DEFAULT_PROMPT_VERSION, PURPOSE_SCORE
 from app.llm.models import LLMGenerateRequest
 from app.llm.providers import LLMProvider
-from app.persistence import InterviewRecordStore
+from app.persistence import InterviewRecordStore, TraceabilityStore
+from app.traceability import TRACE_TYPE_REVIEW_EXPORT, TraceabilityRecord, TraceabilityStatus
 
 SCORE_PAYLOAD_KEY = "score"
 SCORE_VALUE_KEY = "value"
@@ -56,9 +58,11 @@ class ScoringService:
         *,
         store: InterviewRecordStore,
         provider: LLMProvider | None = None,
+        trace_store: TraceabilityStore | None = None,
     ) -> None:
         self.store = store
         self.provider = provider
+        self.trace_store = trace_store
 
     def generate_score(
         self,
@@ -113,12 +117,36 @@ class ScoringService:
                 payload=payload,
             )
 
+        self._record_trace(
+            TraceabilityRecord(
+                owner_id=owner_id,
+                trace_type=TRACE_TYPE_REVIEW_EXPORT,
+                status=TraceabilityStatus.COMPLETED,
+                request_id=f"score-{_short_id()}",
+                operation_id="score.generate",
+                session_ref=str(interview.get(FIELD_SESSION_ID, session_id)),
+                answer_ref=_latest_answer_ref(turns),
+                score_ref=f"score:{session_id}:{SCORE_CONTENT_VERSION}",
+                source_snapshot_ref=f"{record[FIELD_ID]}:score",
+                content_version=SCORE_CONTENT_VERSION,
+                metadata={
+                    "operation": "score.generate",
+                    "record_id": record[FIELD_ID],
+                    "score": score_payload[SCORE_VALUE_KEY],
+                    "strategy": score_payload[SCORE_STRATEGY_KEY],
+                },
+            )
+        )
         return {
             "record_id": record[FIELD_ID],
             "owner_id": owner_id,
             "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
             "score": score_payload,
         }
+
+    def _record_trace(self, record: TraceabilityRecord) -> None:
+        if self.trace_store is not None:
+            self.trace_store.create_trace(record)
 
 
 def _deterministic_score_payload(*, turns: list[dict[str, Any]]) -> dict[str, Any]:
@@ -233,6 +261,14 @@ def _history_payload(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return history
+
+
+def _latest_answer_ref(turns: list[dict[str, Any]]) -> str | None:
+    for turn in reversed(turns):
+        answer = turn.get(FIELD_ANSWER)
+        if isinstance(answer, Mapping) and answer.get(FIELD_CONTENT):
+            return f"answer:{turn.get(FIELD_TURN_ID, '')}"
+    return None
 
 
 def _get_session_context(

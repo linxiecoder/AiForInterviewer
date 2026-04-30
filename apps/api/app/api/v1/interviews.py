@@ -180,6 +180,7 @@ def _service(request: Request, *, require_provider: bool) -> InterviewFlowServic
     return InterviewFlowService(
         store=request.app.state.interview_record_store,
         provider=provider,
+        trace_store=getattr(request.app.state, "traceability_store", None),
     )
 
 
@@ -188,7 +189,11 @@ def _scoring_service(request: Request, *, require_provider: bool) -> ScoringServ
     if require_provider and provider is None:
         provider = build_llm_provider()
         request.app.state.llm_provider = provider
-    return ScoringService(store=request.app.state.interview_record_store, provider=provider)
+    return ScoringService(
+        store=request.app.state.interview_record_store,
+        provider=provider,
+        trace_store=getattr(request.app.state, "traceability_store", None),
+    )
 
 
 def _review_service(request: Request, *, use_provider: bool) -> ReviewService:
@@ -199,11 +204,15 @@ def _review_service(request: Request, *, use_provider: bool) -> ReviewService:
     return ReviewService(
         store=request.app.state.interview_record_store,
         provider=provider,
+        trace_store=getattr(request.app.state, "traceability_store", None),
     )
 
 
 def _export_service(request: Request) -> ExportService:
-    return ExportService(store=request.app.state.interview_record_store)
+    return ExportService(
+        store=request.app.state.interview_record_store,
+        trace_store=getattr(request.app.state, "traceability_store", None),
+    )
 
 
 def _provider_error_response(exc: LLMProviderError) -> JSONResponse:

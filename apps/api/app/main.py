@@ -14,7 +14,7 @@ from app.boundary import (
     http_exception_handler,
     validation_exception_handler,
 )
-from app.persistence import InterviewRecordStore
+from app.persistence import InterviewRecordStore, TraceabilityStore
 
 
 def create_app(
@@ -25,6 +25,7 @@ def create_app(
     """Build the API app without writing database schema during module import."""
     resolved_settings = settings or get_settings()
     store = InterviewRecordStore(resolved_settings.database_path)
+    traceability_store = TraceabilityStore(resolved_settings.database_path)
 
     @asynccontextmanager
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
@@ -32,6 +33,7 @@ def create_app(
         # into initialize_schema=True for a local temporary database.
         if not initialize_schema:
             store.initialize()
+            traceability_store.initialize()
         yield
 
     application = FastAPI(
@@ -43,8 +45,10 @@ def create_app(
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.state.settings = resolved_settings
     application.state.interview_record_store = store
+    application.state.traceability_store = traceability_store
     if initialize_schema:
         store.initialize()
+        traceability_store.initialize()
     application.include_router(build_api_v1_router(resolved_settings.api_prefix))
     return application
 

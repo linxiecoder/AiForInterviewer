@@ -15,6 +15,7 @@ from app.interview_flow.contract import (
     FIELD_MODE,
     FIELD_QUESTION,
     FIELD_SESSION_ID,
+    FIELD_TURN_ID,
     FIELD_TURNS,
     INTERVIEW_FLOW_RECORD_SOURCE,
     SESSION_STATUS_IN_PROGRESS,
@@ -29,8 +30,9 @@ from app.interview_record_contract import (
 from app.llm.constants import DEFAULT_PROMPT_VERSION, PURPOSE_REVIEW
 from app.llm.models import LLMGenerateRequest
 from app.llm.providers import LLMProvider
-from app.persistence import InterviewRecordStore
+from app.persistence import InterviewRecordStore, TraceabilityStore
 from app.scoring import ScoringService
+from app.traceability import TRACE_TYPE_REVIEW_EXPORT, TraceabilityRecord, TraceabilityStatus
 
 REVIEW_PAYLOAD_KEY = "review"
 REVIEW_SUMMARY_KEY = "summary"
@@ -55,10 +57,16 @@ class ReviewService:
         store: InterviewRecordStore,
         provider: LLMProvider | None = None,
         scoring_service: ScoringService | None = None,
+        trace_store: TraceabilityStore | None = None,
     ) -> None:
         self.store = store
         self.provider = provider
-        self.scoring_service = scoring_service or ScoringService(store=store, provider=provider)
+        self.trace_store = trace_store
+        self.scoring_service = scoring_service or ScoringService(
+            store=store,
+            provider=provider,
+            trace_store=trace_store,
+        )
 
     def generate_review(
         self,
@@ -126,6 +134,26 @@ class ReviewService:
                 payload=payload,
             )
 
+        self._record_trace(
+            TraceabilityRecord(
+                owner_id=owner_id,
+                trace_type=TRACE_TYPE_REVIEW_EXPORT,
+                status=TraceabilityStatus.COMPLETED,
+                request_id=f"review-{_short_id()}",
+                operation_id="review.generate",
+                session_ref=str(interview.get(FIELD_SESSION_ID, session_id)),
+                answer_ref=_latest_answer_ref(turns),
+                score_ref=f"score:{session_id}:{score_payload.get('content_version', '')}",
+                review_ref=f"review:{session_id}:{REVIEW_CONTENT_VERSION}",
+                source_snapshot_ref=f"{record[FIELD_ID]}:review",
+                content_version=REVIEW_CONTENT_VERSION,
+                metadata={
+                    "operation": "review.generate",
+                    "record_id": record[FIELD_ID],
+                    "review_version": REVIEW_CONTENT_VERSION,
+                },
+            )
+        )
         return {
             "record_id": record[FIELD_ID],
             "owner_id": owner_id,
@@ -133,6 +161,10 @@ class ReviewService:
             "score": score_payload,
             REVIEW_PAYLOAD_KEY: review_payload,
         }
+
+    def _record_trace(self, record: TraceabilityRecord) -> None:
+        if self.trace_store is not None:
+            self.trace_store.create_trace(record)
 
 
 def build_review_payload(
@@ -221,6 +253,14 @@ def _history_payload(turns: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return history
+
+
+def _latest_answer_ref(turns: list[Mapping[str, Any]]) -> str | None:
+    for turn in reversed(turns):
+        answer = turn.get(FIELD_ANSWER) if isinstance(turn, Mapping) else {}
+        if isinstance(answer, Mapping) and answer.get(FIELD_CONTENT):
+            return f"answer:{turn.get(FIELD_TURN_ID, '')}"
+    return None
 
 
 def _has_answer(turn: Mapping[str, Any]) -> bool:

@@ -51,7 +51,8 @@ from app.interview_record_contract import (
 from app.llm.constants import PURPOSE_FOLLOW_UP, PURPOSE_QUESTION
 from app.llm.models import LLMGenerateRequest, LLMGenerateResult
 from app.llm.providers import LLMProvider
-from app.persistence import InterviewRecordStore
+from app.persistence import InterviewRecordStore, TraceabilityStore
+from app.traceability import TRACE_TYPE_INTERVIEW, TraceabilityRecord, TraceabilityStatus
 
 
 class InterviewFlowNotFound(Exception):
@@ -71,10 +72,12 @@ class InterviewFlowService:
         *,
         store: InterviewRecordStore,
         provider: LLMProvider | None = None,
+        trace_store: TraceabilityStore | None = None,
     ) -> None:
         """注入依赖，避免 service 自行创建第二套 persistence 或 provider。"""
         self.store = store
         self.provider = provider
+        self.trace_store = trace_store
 
     def start_interview(
         self,
@@ -123,6 +126,27 @@ class InterviewFlowService:
             version=DEFAULT_RECORD_VERSION,
             payload=payload,
         )
+        self._record_trace(
+            TraceabilityRecord(
+                owner_id=owner_id,
+                trace_type=TRACE_TYPE_INTERVIEW,
+                status=TraceabilityStatus.COMPLETED,
+                request_id=request_id,
+                operation_id="interview.start",
+                job_ref=f"job:{record[FIELD_ID]}",
+                resume_ref=f"resume:{record[FIELD_ID]}",
+                session_ref=session_id,
+                turn_ref=turn_id,
+                source_snapshot_ref=f"{record[FIELD_ID]}:snapshot:0",
+                content_version="r1-interview-trace-v1",
+                metadata={
+                    "operation": "interview.start",
+                    "record_id": record[FIELD_ID],
+                    "mode": mode,
+                    "provider_request_id": result.provider_request_id,
+                },
+            )
+        )
         return _session_response(record, current_turn=turn)
 
     def submit_answer(
@@ -151,6 +175,7 @@ class InterviewFlowService:
             FIELD_METADATA: dict(metadata or {}),
         }
         turn_index = len(turns)
+        request_id = _new_id(FIELD_REQUEST_ID)
         result = self._provider().generate(
             LLMGenerateRequest(
                 purpose=PURPOSE_FOLLOW_UP,
@@ -162,7 +187,7 @@ class InterviewFlowService:
                     mode=str(interview.get(FIELD_MODE) or DEFAULT_INTERVIEW_MODE),
                     metadata=dict(metadata or {}),
                 ),
-                request_id=_new_id(FIELD_REQUEST_ID),
+                request_id=request_id,
                 session_id=session_id,
                 turn_index=turn_index,
             )
@@ -181,6 +206,28 @@ class InterviewFlowService:
             source=INTERVIEW_FLOW_RECORD_SOURCE,
             version=DEFAULT_RECORD_VERSION,
             payload=payload,
+        )
+        self._record_trace(
+            TraceabilityRecord(
+                owner_id=owner_id,
+                trace_type=TRACE_TYPE_INTERVIEW,
+                status=TraceabilityStatus.COMPLETED,
+                request_id=request_id,
+                operation_id="interview.answer",
+                session_ref=session_id,
+                turn_ref=turn_id,
+                answer_ref=f"answer:{turn_id}",
+                source_snapshot_ref=(
+                    f"{next_record[FIELD_ID]}:snapshot:{interview[FIELD_SNAPSHOT_INDEX]}"
+                ),
+                content_version="r1-interview-trace-v1",
+                metadata={
+                    "operation": "interview.answer",
+                    "record_id": next_record[FIELD_ID],
+                    "next_turn_ref": next_turn[FIELD_TURN_ID],
+                    "provider_request_id": result.provider_request_id,
+                },
+            )
         )
         return _session_response(next_record, current_turn=next_turn, next_turn=next_turn)
 
@@ -222,6 +269,20 @@ class InterviewFlowService:
                     FIELD_UPDATED_AT: record[FIELD_UPDATED_AT],
                 }
             )
+        self._record_trace(
+            TraceabilityRecord(
+                owner_id=owner_id,
+                trace_type=TRACE_TYPE_INTERVIEW,
+                status=TraceabilityStatus.COMPLETED,
+                request_id=_new_id(FIELD_REQUEST_ID),
+                operation_id="history.list",
+                content_version="r1-history-trace-v1",
+                metadata={
+                    "operation": "history.list",
+                    "item_count": len(items),
+                },
+            )
+        )
         return {RESPONSE_ITEMS: items}
 
     def _latest_session_record(
@@ -246,6 +307,10 @@ class InterviewFlowService:
         if self.provider is None:
             raise RuntimeError("LLM provider is required for interview generation")
         return self.provider
+
+    def _record_trace(self, record: TraceabilityRecord) -> None:
+        if self.trace_store is not None:
+            self.trace_store.create_trace(record)
 
 
 def _payload(

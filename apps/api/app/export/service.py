@@ -9,8 +9,11 @@ from typing import Any
 
 from app.interview_flow import InterviewFlowNotFound
 from app.interview_flow.contract import (
+    FIELD_ANSWER,
+    FIELD_CONTENT,
     FIELD_QUESTION,
     FIELD_SESSION_ID,
+    FIELD_TURN_ID,
     FIELD_TURNS,
     INTERVIEW_FLOW_RECORD_SOURCE,
 )
@@ -21,9 +24,10 @@ from app.interview_record_contract import (
     PAYLOAD_INTERVIEW,
     PAYLOAD_REVIEW,
 )
-from app.persistence import InterviewRecordStore
+from app.persistence import InterviewRecordStore, TraceabilityStore
 from app.review import ReviewService
 from app.scoring import ScoringService
+from app.traceability import TRACE_TYPE_REVIEW_EXPORT, TraceabilityRecord, TraceabilityStatus
 
 PAYLOAD_SCORE = "score"
 EXPORT_PAYLOAD_KEY = "export"
@@ -45,12 +49,18 @@ class ExportService:
         store: InterviewRecordStore,
         scoring_service: ScoringService | None = None,
         review_service: ReviewService | None = None,
+        trace_store: TraceabilityStore | None = None,
     ) -> None:
         self.store = store
-        self.scoring_service = scoring_service or ScoringService(store=store)
+        self.trace_store = trace_store
+        self.scoring_service = scoring_service or ScoringService(
+            store=store,
+            trace_store=trace_store,
+        )
         self.review_service = review_service or ReviewService(
             store=store,
             scoring_service=self.scoring_service,
+            trace_store=trace_store,
         )
 
     def generate_export(
@@ -124,12 +134,37 @@ class ExportService:
                 payload=payload,
             )
 
+        self._record_trace(
+            TraceabilityRecord(
+                owner_id=owner_id,
+                trace_type=TRACE_TYPE_REVIEW_EXPORT,
+                status=TraceabilityStatus.COMPLETED,
+                request_id=f"export:{record[FIELD_ID]}",
+                operation_id="export.markdown",
+                session_ref=str(interview.get(FIELD_SESSION_ID, session_id)),
+                answer_ref=_latest_answer_ref(turns),
+                score_ref=f"score:{session_id}:{score_payload.get('content_version', '')}",
+                review_ref=f"review:{session_id}:{review_payload.get('content_version', '')}",
+                export_ref=f"export:{session_id}:{EXPORT_CONTENT_VERSION}",
+                source_snapshot_ref=f"{record[FIELD_ID]}:export",
+                content_version=EXPORT_CONTENT_VERSION,
+                metadata={
+                    "operation": "export.markdown",
+                    "record_id": record[FIELD_ID],
+                    "format": EXPORT_FORMAT_MARKDOWN,
+                },
+            )
+        )
         return {
             "record_id": record[FIELD_ID],
             "owner_id": owner_id,
             "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
             EXPORT_PAYLOAD_KEY: export_payload,
         }
+
+    def _record_trace(self, record: TraceabilityRecord) -> None:
+        if self.trace_store is not None:
+            self.trace_store.create_trace(record)
 
 
 def _build_markdown_content(
@@ -200,6 +235,14 @@ def _answer_content(turn: Mapping[str, Any]) -> str:
         return ""
     answer_content = answer.get("content")
     return answer_content if isinstance(answer_content, str) else ""
+
+
+def _latest_answer_ref(turns: list[dict[str, Any]]) -> str | None:
+    for turn in reversed(turns):
+        answer = turn.get(FIELD_ANSWER)
+        if isinstance(answer, Mapping) and answer.get(FIELD_CONTENT):
+            return f"answer:{turn.get(FIELD_TURN_ID, '')}"
+    return None
 
 
 def _payload_nested_dict(payload: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:

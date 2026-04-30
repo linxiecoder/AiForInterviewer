@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from typing import Protocol
+from uuid import uuid4
 
+from app.persistence import TraceabilityStore
 from app.rag.models import (
     Citation,
     EvidenceGap,
@@ -15,6 +17,7 @@ from app.rag.models import (
     RetrievalQuerySummary,
     RetrievalResultSummary,
 )
+from app.traceability import TRACE_TYPE_RAG_EVIDENCE, TraceabilityRecord, TraceabilityStatus
 
 DEFAULT_TOP_K = 3
 MAX_QUERY_SUMMARY_LENGTH = 120
@@ -69,8 +72,14 @@ class InMemoryRAGAdapter:
 class RAGService:
     """R1 RAG foundation 的纯服务边界。"""
 
-    def __init__(self, *, adapter: RAGRetrievalAdapter) -> None:
+    def __init__(
+        self,
+        *,
+        adapter: RAGRetrievalAdapter,
+        trace_store: TraceabilityStore | None = None,
+    ) -> None:
         self.adapter = adapter
+        self.trace_store = trace_store
 
     def retrieve(
         self,
@@ -95,13 +104,15 @@ class RAGService:
         try:
             candidates = tuple(self.adapter.search(query_summary))
         except RAGUnavailableError:
-            return _gap_result(
+            result = _gap_result(
                 query_summary=query_summary,
                 reason=EMPTY_REASON_RAG_UNAVAILABLE,
                 safe_message=SAFE_MESSAGE_RAG_UNAVAILABLE,
                 retryable=True,
                 permission_filtered_count=0,
             )
+            self._record_trace(actor_id=actor_id, result=result, trigger=trigger)
+            return result
 
         visible_resources = tuple(resource for resource in candidates if resource.is_visible_to(actor_id))
         permission_filtered_count = len(candidates) - len(visible_resources)
@@ -118,13 +129,15 @@ class RAGService:
                 if reason == EMPTY_REASON_PERMISSION_FILTERED
                 else SAFE_MESSAGE_NO_RESULT
             )
-            return _gap_result(
+            result = _gap_result(
                 query_summary=query_summary,
                 reason=reason,
                 safe_message=safe_message,
                 retryable=False,
                 permission_filtered_count=permission_filtered_count,
             )
+            self._record_trace(actor_id=actor_id, result=result, trigger=trigger)
+            return result
 
         citations = [_citation_from_resource(resource) for resource in selected_hits]
         evidence_items = [
@@ -132,7 +145,7 @@ class RAGService:
             for citation in citations
         ]
         evidence_refs = [item.evidence_ref for item in evidence_items]
-        return RAGFoundationResult(
+        result = RAGFoundationResult(
             query_summary=query_summary,
             result_summary=RetrievalResultSummary(
                 hit_count=len(citations),
@@ -147,6 +160,53 @@ class RAGService:
             downstream_refs=_downstream_refs(evidence_target=evidence_target, evidence_refs=evidence_refs),
             permission_filtered_count=permission_filtered_count,
             degraded=False,
+        )
+        self._record_trace(actor_id=actor_id, result=result, trigger=trigger)
+        return result
+
+    def _record_trace(
+        self,
+        *,
+        actor_id: str,
+        result: RAGFoundationResult,
+        trigger: str,
+    ) -> None:
+        if self.trace_store is None:
+            return
+
+        gap_reason = result.evidence_gap.reason if result.evidence_gap is not None else None
+        status = TraceabilityStatus.COMPLETED
+        if result.result_summary.retryable:
+            status = TraceabilityStatus.RETRYABLE
+        elif result.degraded:
+            status = TraceabilityStatus.DEGRADED
+
+        self.trace_store.create_trace(
+            TraceabilityRecord(
+                owner_id=actor_id,
+                trace_type=TRACE_TYPE_RAG_EVIDENCE,
+                status=status,
+                request_id=f"rag-{uuid4().hex}",
+                operation_id=f"rag.retrieve:{trigger}",
+                retrieval_query_ref=f"rag-query:{result.query_summary.query_summary}",
+                retrieval_result_ref=(
+                    f"rag-result:{result.result_summary.hit_count}:{gap_reason or 'hit'}"
+                ),
+                citation_refs=tuple(citation.citation_ref for citation in result.citations),
+                evidence_refs=tuple(item.evidence_ref for item in result.evidence_items),
+                evidence_gap_ref=f"gap:{gap_reason}" if gap_reason else None,
+                source_snapshot_ref=_source_snapshot_ref(result),
+                retryable=result.result_summary.retryable,
+                failure_reason=gap_reason,
+                content_version="r1-rag-trace-v1",
+                metadata={
+                    "operation": "rag.retrieve",
+                    "trigger": trigger,
+                    "hit_count": result.result_summary.hit_count,
+                    "permission_filtered_count": result.permission_filtered_count,
+                    "degraded": result.degraded,
+                },
+            )
         )
 
 
@@ -211,6 +271,11 @@ def _downstream_refs(
     if evidence_target is not None:
         refs[evidence_target.value] = list(evidence_refs)
     return refs
+
+
+def _source_snapshot_ref(result: RAGFoundationResult) -> str | None:
+    refs = [item.source_snapshot_ref for item in result.evidence_items]
+    return ",".join(refs) if refs else None
 
 
 def _summarize_query(query_text: str) -> str:

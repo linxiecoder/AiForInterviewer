@@ -235,6 +235,33 @@ class TraceabilityStore:
             return None
         return _trace_row_to_record(row)
 
+    def list_traces(
+        self,
+        *,
+        owner_id: str,
+        trace_type: str | None = None,
+        session_ref: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """按 owner_id 收敛读取 traceability records，可选按类型和 session 过滤。"""
+        clauses = [f"{FIELD_OWNER_ID} = ?"]
+        params: list[str] = [owner_id]
+        if trace_type:
+            clauses.append("trace_type = ?")
+            params.append(trace_type)
+        if session_ref:
+            clauses.append("session_ref = ?")
+            params.append(session_ref)
+
+        query = f"""
+            SELECT {TRACEABILITY_SELECT_COLUMNS_SQL}
+            FROM {TABLE_TRACEABILITY_RECORDS}
+            WHERE {" AND ".join(clauses)}
+            ORDER BY {FIELD_CREATED_AT} ASC, {FIELD_ID} ASC
+        """
+        with self._connect() as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+        return [_trace_row_to_record(row) for row in rows]
+
     def _connect(self) -> sqlite3.Connection:
         if self.database_path != ":memory:":
             Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
