@@ -25,6 +25,7 @@ permalink: ai-for-interviewer/readme
 | 治理 | [AGENTS.md](AGENTS.md)、[docs/DOC_GOVERNANCE.md](docs/DOC_GOVERNANCE.md) | 协作规则、文档治理规则和状态自动化边界 |
 | 开发启动 | [本地启动指导](docs/development/local-startup.md) | 后端、前端、E2E、Playwright 和 Node 版本说明 |
 | 数据库 | [数据库信息说明](docs/development/database.md) | SQLite schema-loader、SQLAlchemy Core 和 RAG / traceability 数据关系 |
+| 密钥配置 | [密钥与环境变量策略](docs/development/secrets-and-env.md) | `.env`、`.env.example`、compose、测试和文档的 secrets 边界 |
 | UI 规范审计 | [R1 可信 trace UI 规范审计](docs/development/r1-trusted-trace-ui-compliance.md) | 当前可信 trace 页面组件选型判断和后续 UI 收敛建议 |
 
 ## 当前事实源

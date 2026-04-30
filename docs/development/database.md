@@ -84,6 +84,8 @@ schema-loader 只执行仓库内固定 schema 文件，不接收用户输入。P
 
 PostgreSQL runtime 的目标是让 R1 traceability、RAG persistence 和 interview record store 能在真实数据库上运行。当前不改变 API contract，也不改变 schema 事实源。
 
+真实数据库用户名、密码和连接串只能配置在本地 `.env`。仓库文档和 `.env.example` 只展示变量名或 `<...>` 占位符；完整规则见 [密钥与环境变量策略](secrets-and-env.md)。
+
 本地 PostgreSQL 示例：
 
 ```bash
@@ -93,16 +95,18 @@ docker compose -f docker-compose.pg.yml up -d
 启动 API 示例：
 
 ```bash
-DATABASE_URL=postgresql+psycopg://ai_interviewer:changeme@127.0.0.1:5432/ai_for_interviewer_dev .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
+DATABASE_URL=<postgresql_database_url> .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
 ```
+
+其中 `<postgresql_database_url>` 的格式为 `postgresql+psycopg://<user>:<password>@localhost:5432/<database>`。
 
 SQLite fallback 示例：
 
 ```bash
-API_DATABASE_PATH=/tmp/ai-for-interviewer/api.sqlite3 .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
+API_DATABASE_PATH=<local_sqlite_file_path> .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
 ```
 
-`.env.example` 只提供空值和占位说明，不包含真实数据库密码或真实生产连接串。
+`.env.example` 只提供占位说明，不包含真实数据库密码或真实生产连接串。
 
 ## Store 职责
 
@@ -217,8 +221,10 @@ PostgreSQL runtime 定向测试：
 启用 PG integration tests 示例：
 
 ```bash
-TEST_DATABASE_URL=postgresql+psycopg://ai_interviewer:changeme@127.0.0.1:5432/ai_for_interviewer_dev .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_postgresql_runtime.py -q
+TEST_DATABASE_URL=<postgresql_test_database_url> .venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_postgresql_runtime.py -q
 ```
+
+其中 `<postgresql_test_database_url>` 的格式为 `postgresql+psycopg://<user>:<password>@localhost:5432/<test_database>`。
 
 所有正式 Python 测试仍应使用 `.venv/bin/python`。
 
