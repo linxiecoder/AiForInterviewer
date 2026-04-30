@@ -412,3 +412,96 @@ R0-W13Z.16-ST13_20 第 3/5 次已通过 official state / wrapper 流程解除以
 - `git status --short`
 
 若上述命令通过且 forbidden path audit 无新增问题，`ST13_20` 可进入提交前候选状态；实际 commit / push 仍需用户另行授权。
+
+## 23. R1 data / schema / migration readiness 执行边界
+
+本节记录 `R1-W03-ST13_20-DATA-SCHEMA-MIGRATION-READINESS` 对未来执行窗口的输入约束。它只把已冻结的 `ST13_21` R1 API contract 转换为 `ST13_20` data / schema / migration readiness，不代表 schema implementation，不生成 migration，不创建 ORM model，不修改 persistence 代码，不新增测试，不生成 packet，不打开 formal window。
+
+### 23.1 本窗口新增的执行输入
+
+后续 schema / migration / ORM 窗口可以从 `ST13_20_DESIGN.md` 第 26 节消费以下输入：
+
+- R1 data domain boundary：身份权限、岗位简历、知识库 / RAG、面试记录、评分复盘、导出历史、审计追踪。
+- `ST13_21` 到 `ST13_20` 的字段映射：actor context、resource identity、snapshot / version、operation intent、RAG query context、LLM / generation context、response status、evidence、score / review、export。
+- resource identity / resource reference / source snapshot reference 的区分。
+- actor、owner、visibility、permission snapshot、workspace / tenant 候选字段边界。
+- job、resume、knowledge document、interview session、turn、answer、score、review、export、history 的数据关系。
+- request_id、operation_id、audit event、source snapshot、schema version、content version、created_at、updated_at 等 traceability 字段族。
+- pending、running、failed、completed、generated、archived、deleted candidate、degraded、retryable 等状态语义。
+- RAG citation、evidence、source snapshot、evidence gap 的持久化候选边界。
+- `0-100` 多维评分、可信复盘、Markdown export snapshot、history recovery / replay 的数据边界。
+- 前端展示字段与后端 trace / debug / audit 字段的分工。
+
+### 23.2 R1 必须落入后续 schema / migration 讨论的字段族
+
+以下字段族不是本窗口已落库字段，但后续 schema / migration / ORM 实现窗口必须逐项处理：
+
+- 核心资源 id / ref：job、resume、knowledge document、chunk、session、turn、answer、score、review、export。
+- 权限字段：owner、created_by、updated_by、visibility、workspace / tenant 候选、permission snapshot。
+- 关系字段：session -> job / resume / knowledge scope，turn -> answer / citation，score / review -> session / turn / evidence，export -> review / score / session snapshot。
+- 状态字段：session、RAG indexing、score / review generation、export、archive / delete candidate 的状态语义。
+- 追踪字段：request_id、operation_id、audit event ref、source snapshot ref、schema version、content version、created_at、updated_at。
+- RAG 字段：retrieval query summary、topK、scope、result summary、citation / evidence refs、evidence gap、source snapshot。
+- 评分复盘字段：score_total、dimensions、question feedback、recommendations、low confidence、evidence refs、review summary。
+- 导出历史字段：export snapshot、format、content version、status、failure reason、history summary fields。
+
+### 23.3 R1 候选字段与不落库字段
+
+R1 候选字段只能进入后续评审，不得在本窗口被写成已实现 schema：
+
+- workspace / tenant 命名与隔离粒度。
+- provider alias、model alias、prompt version。
+- retrieval mode、confidence label、token / cost summary。
+- idempotency key、retry policy、retention policy。
+
+R1 明确不落库或不得作为必落库字段：
+
+- provider secret、真实 token、真实 password、数据库连接串。
+- 完整 prompt 原文、完整 LLM response 原文。
+- embedding 向量和向量库内部结构。
+- 对象存储真实路径、真实 bucket / client / provider 初始化信息。
+- 完整权限矩阵、enterprise organization / RBAC 配置。
+- PDF 模板配置、训练任务调度参数、资产归档策略。
+
+如后续确需保存上述任一内容，必须另开安全、隐私、存储和 retention 策略窗口。
+
+### 23.4 前端消费与后端 trace 分工
+
+未来实现不得把所有后端 trace 字段直接暴露给前端：
+
+- 前端可展示：资源摘要、状态、评分、复盘、RAG citation、evidence gap、failure reason 安全摘要、retryable、empty state、permission / visibility 安全文案。
+- 前端可有限展示：脱敏 `request_id`，用于用户反馈或排查。
+- 后端默认保留：`operation_id`、audit event ref、source snapshot ref、provider / model alias、schema version、content version、failure source。
+- 不得展示或保存为普通业务字段：provider secret、完整 prompt、完整 LLM response、embedding 向量、对象存储真实路径、不可见资源真实 id。
+
+### 23.5 后续实现窗口进入条件
+
+未来若要进入 schema / migration / ORM 实现，必须先满足：
+
+1. 用户另窗确认 formal window 或实现窗口目标。
+2. implementation packet 已生成并复核，且 allowed / forbidden paths 明确授权 schema、migration、ORM、tests 或 `apps/api/**` 的具体范围。
+3. `ST13_20_DESIGN.md` 第 26 节中的 R1 must-persist 字段族已经转换为明确 schema 设计。
+4. R1 candidate 字段已逐项确认落库、暂缓或不落库。
+5. M02 权限 / workspace / tenant / resource visibility 语义已闭合或被明确接受为非阻断。
+6. `ST13_24` 已承接 schema relation、权限过滤、RAG evidence、评分复盘、导出快照、历史恢复和失败状态 required tests。
+7. validate-state、evaluate-state、preflight / packet 相关命令继续通过。
+
+### 23.6 当前仍禁止
+
+本 R1 readiness 窗口仍禁止：
+
+- 修改 `apps/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`、`ST13_21/**`、`ST13_10/**`。
+- 创建 schema 文件、migration 文件、ORM model、repository、SQL 或数据库配置。
+- 新增依赖、环境变量、provider、queue、worker、object storage 或 RAG / LLM implementation。
+- 把 R1 readiness 字段表直接当作已冻结数据库 schema、OpenAPI 文件或 implementation-ready 状态。
+- 生成 packet、打开 formal window、commit、push 或修改任何长期状态入口。
+
+### 23.7 验证口径
+
+本窗口完成判定只面向文档与治理：
+
+- `ST13_20_DESIGN.md` 已明确 R1 data / schema / migration readiness 范围。
+- `ST13_20_IMPLEMENTATION.md` 已明确后续 schema / migration / ORM 实现窗口的输入和停止条件。
+- R1 必落库讨论字段、R1 候选字段、R1 不落库字段和 R2 延后范围已区分。
+- RAG evidence、score、review、export、history、permission / visibility、frontend-visible vs backend-trace 字段分工已明确。
+- 未修改代码、测试、governance state、packet、formal window、schema、migration 或 ORM。

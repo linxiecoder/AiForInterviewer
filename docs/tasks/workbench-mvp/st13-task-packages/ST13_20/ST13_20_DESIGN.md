@@ -520,3 +520,176 @@ R0 对 `ST13_20` 的最小持久化目标是支撑一次真实模拟面试主链
 - implementation packet inputs 仍需后续正式流程补齐
 
 因此，本节只能降低后续 review 的设计歧义，不能单独解除 official gate blocker，也不能把 `ST13_20` 推进为 formal-window-open、packet-ready 或 implementation-ready。
+
+## 26. R1 数据 / schema / migration readiness 冻结
+
+本节记录 `R1-W03-ST13_20-DATA-SCHEMA-MIGRATION-READINESS` 的 docs-only readiness 结论。它基于已提交并 push 的 `ST13_21` R1 API contract freeze 和 Frontend / UI consumer contract patch，冻结 R1 data / schema / migration readiness 输入；不创建 schema，不生成 migration，不修改 ORM，不写 SQL，不修改 `apps/**`、`tests/**`、`docs/governance/**` 或 `DOC_STATE.yaml`。
+
+### 26.1 R1 数据领域边界
+
+R1 数据边界只覆盖可信工作台闭环所需的最小可追踪、可恢复、可验收数据域：
+
+| 数据域 | R1 readiness 边界 | 不进入 R1 schema 的内容 |
+| --- | --- | --- |
+| 身份与权限上下文 | actor、owner、visibility、workspace / tenant 候选、permission snapshot 和审计入口 | 企业级 organization、复杂 RBAC、完整成员后台 |
+| 岗位与简历 | `Job`、`Resume` 的 active version、归档状态、启动面试引用和历史快照 | 批量导入、复杂版本 diff、简历资产库 |
+| 知识库与 RAG | `KnowledgeDocument`、chunk、index status、retrieval query/result、citation、evidence gap | 向量库结构、embedding 向量、检索质量平台、团队共享知识库 |
+| 面试记录 | session、turn、question、answer、restore、history、状态机和失败恢复 | 实时音视频、多模式高阶面试实现 |
+| 评分与复盘 | `0-100` 总分、多维评分、题级反馈、复盘摘要、证据引用和低置信度 | 训练闭环自动调度、完整弱点训练中心 |
+| 导出与历史 | Markdown export snapshot、export record、content version、history recovery / replay | PDF、批量导出、外部分享权限 |
+| 审计与追踪 | request / operation、audit event、degraded / retryable、failure reason、source snapshot | provider secret、完整 prompt、完整 LLM response、对象存储真实路径 |
+
+本节不替代正式 schema 设计，不声明 table name、column name、index name、migration tool、ORM framework 或 repository pattern 已冻结。
+
+### 26.2 `ST13_21` API contract 到 `ST13_20` readiness 字段映射
+
+| `ST13_21` contract 字段族 | `ST13_20` readiness 消费方式 | R1 落库判断 |
+| --- | --- | --- |
+| actor context：`user_id`、`role`、workspace / tenant 候选、request source | 映射为 owner、created_by、updated_by、permission snapshot、audit actor 和 resource visibility 候选 | 必须进入 schema / migration 讨论；workspace / tenant 命名保持候选 |
+| resource identity：job、resume、knowledge document、session、turn、score、review、export refs | 映射为核心资源主键、外键或 stable reference，支撑历史回看和导出快照 | 必须进入 schema / migration 讨论 |
+| snapshot / version：source、schema、content、prompt version 候选 | 映射为 snapshot ref、content version、schema version 和 replay / export 兼容字段 | 必须进入 schema / migration 讨论，但 prompt version 可先为候选 |
+| operation intent：create、read、update、archive、restore、generate、retry | 映射为 audit event、operation log、idempotency / retry 和状态流转输入 | operation / audit 必须进入；idempotency 细节保持候选 |
+| RAG query context：query 摘要、topK、scope、selected materials、retrieval mode | 映射为 retrieval query/result、source snapshot、citation 和 evidence gap | 最小 query 摘要、topK、scope、result summary 必须进入；retrieval mode 可候选 |
+| LLM / generation context：purpose、provider alias、model alias、input snapshot ref、low confidence | 映射为脱敏 generation record、failure reason、model trace 和低置信度解释 | 脱敏摘要、状态和 failure 必须进入；provider / model alias 可候选 |
+| response status：resource status、async status、retryable、degraded、last_error | 映射为状态字段、失败原因、降级标记和重试语义 | 必须进入 schema / migration 讨论 |
+| evidence response：citations、evidence_items、evidence_gap、confidence | 映射为 citation / evidence candidate、score / review evidence refs 和 evidence gap | 最小 evidence refs 和 gap 必须进入；confidence 量化策略可候选 |
+| score / review response：score_total、dimensions、question_feedback、recommendations | 映射为 `ScoreReport`、`ScoreDimension`、`QuestionReviewItem`、`MockInterviewReview` | 必须进入 schema / migration 讨论 |
+| export response：snapshot id、format、content version、status、failure reason | 映射为 `ExportSnapshot`、`ExportRecord` 和 Markdown content version | 必须进入 schema / migration 讨论 |
+
+`ST13_21` 中标注为 contract 占位的字段不得被本节直接写成已落库字段；后续 schema / migration 窗口必须再次确认字段名、类型、nullable、索引、约束和迁移策略。
+
+### 26.3 resource identity 与 resource reference 关系
+
+R1 必须区分资源身份、资源引用和快照引用：
+
+| 类型 | 用途 | R1 readiness 规则 |
+| --- | --- | --- |
+| resource identity | 当前资源的稳定标识，例如 job、resume、document、session、turn、score、review、export | 必须能用于权限过滤、详情读取和历史关联 |
+| resource reference | 一个对象对另一个对象的关系引用，例如 session 引用 job / resume，score 引用 session / turn | 必须能支撑 join、history list、review detail 和 export snapshot |
+| source snapshot reference | 生成时使用的来源版本或摘要，例如 job snapshot、resume snapshot、RAG source snapshot、answer snapshot | 必须能支撑回放、导出重现和后续 schema 兼容 |
+| external / provider reference | provider、model、object storage 或 embedding provider 的外部引用 | R1 只保存脱敏 alias 或状态候选；不保存 secret、真实对象存储路径或向量 |
+
+历史回看和导出必须优先使用 snapshot / summary，避免岗位、简历或知识文档后续编辑污染已完成面试结果。
+
+### 26.4 actor / permission / workspace / tenant 候选字段边界
+
+R1 必须进入数据 readiness 的权限字段族：
+
+- `actor_user_ref`：执行操作的用户脱敏引用或内部用户 id 候选。
+- `owner_ref`：资源归属，支撑“我的记录”和默认可见性。
+- `created_by` / `updated_by`：写入和更新审计入口。
+- `visibility`：private、admin_public、workspace_visible 等语义候选；最终枚举名留到 schema 窗口。
+- `permission_snapshot`：导出、复盘和历史回看时的权限摘要，避免导出绕过资源可见性。
+- `workspace_ref` / `tenant_ref`：R1 只作为隔离字段候选，允许进入字段讨论；不引入完整 enterprise tenant / organization / RBAC 模型。
+
+`permission_denied` 与 `resource_not_visible` 必须能映射到数据查询结果、审计事件或安全 404 策略；不得通过错误细节泄露不可见资源是否真实存在。
+
+### 26.5 R1 核心数据关系
+
+| 关系链 | R1 readiness 目标 |
+| --- | --- |
+| `Job` / `Resume` -> `InterviewSession` | 面试启动时保存岗位、简历当前引用与快照摘要，历史回看不被后续编辑污染 |
+| `KnowledgeDocument` / `KnowledgeChunk` -> `RetrievalQuery` / `RetrievalResult` | 保存检索来源、过滤范围、topK、命中摘要、无命中原因和 evidence gap |
+| `RetrievalResult` / `Citation` / `Evidence` -> `InterviewTurn` | 面试台和复盘可展示该题引用、证据缺口和降级说明 |
+| `InterviewSession` -> `InterviewTurn` / `InterviewAnswer` | 支撑保存、恢复、暂停 / 继续、完成、失败和历史列表 |
+| `InterviewTurn` / `InterviewAnswer` -> `ScoreReport` / `QuestionReviewItem` | 评分和题级反馈可回溯到回答、证据和低置信度原因 |
+| `ScoreReport` -> `MockInterviewReview` | 复盘可引用总分、维度、证据、建议和降级信息 |
+| `MockInterviewReview` / `ScoreReport` -> `ExportSnapshot` / `ExportRecord` | Markdown 导出可重现内容版本、来源对象、权限上下文和失败原因 |
+| `InterviewSession` / `ScoreReport` / `Review` / `Export` -> History view | 历史列表和详情能展示当前状态、失败状态、恢复入口和复盘入口 |
+
+R1 readiness 不要求一次性创建完整物理模型；它只冻结后续 schema / migration / ORM 必须支持的关系语义。
+
+### 26.6 状态语义与 traceability 字段边界
+
+R1 状态字段需要覆盖以下通用语义：
+
+| 状态 / 字段族 | R1 数据语义 |
+| --- | --- |
+| `pending` / `running` | RAG indexing、score / review generation、export 等异步过程已开始但未完成 |
+| `failed` | 失败必须保留 safe failure reason、failure source、retryable 和 degraded 候选 |
+| `completed` / `generated` | 结果已可用于历史、复盘、导出或后续评分 |
+| `archived` | 不再作为新输入默认可选，但历史引用仍可展示快照或摘要 |
+| `deleted` / soft delete candidate | R1 只讨论软删除 / 删除标记候选，硬删除策略不冻结 |
+| `degraded` | RAG / LLM / parsing / export 进入降级路径，主链路可继续时必须可追踪 |
+| `retryable` | 失败是否允许用户或系统重试 |
+| `request_id` | 请求级追踪，用于日志和错误排查；可脱敏显示 |
+| `operation_id` | 异步操作追踪，用于 pending / running / failed / completed 状态回看 |
+| `audit_event_ref` | 关键权限拒绝、导出、归档、删除、生成、重试和失败事件引用 |
+| `source_snapshot_ref` | 支撑历史 replay、导出重现和评分 / 复盘解释 |
+
+状态值名称可以在后续 schema 窗口最终命名，但语义不得被实现窗口随意改写。
+
+### 26.7 RAG citation / evidence 持久化候选边界
+
+R1 RAG 数据只冻结最小 evidence 语义：
+
+- `RetrievalQuery` 候选字段：触发场景、query 脱敏摘要、scope、selected materials、topK、status、failure reason。
+- `RetrievalResult` 候选字段：命中数量、命中摘要、无命中原因、权限过滤结果、degraded、retryable。
+- `Citation` 候选字段：source document ref、chunk ref、source position、snippet summary、visibility snapshot。
+- `Evidence` 候选字段：evidence summary、used_by、confidence label、evidence_gap、low_confidence_reason。
+- `source snapshot` 候选字段：文档版本、chunk 版本、解析 / 索引状态、引用时的可见性摘要。
+
+R1 不落库 embedding 向量，不冻结向量库结构，不保存 provider secret，不把完整私有文档原文复制到 citation 表，不把 RAG evidence 作为评分唯一依据。
+
+### 26.8 评分、复盘、导出与历史数据边界
+
+| 业务面 | R1 必须支持的数据边界 |
+| --- | --- |
+| 评分 | `0-100` 总分、多维评分、题级反馈、权重候选、证据引用、低置信度、失败原因和重试语义 |
+| 复盘 | 整场判断、岗位匹配、关键缺口、建议、RAG 证据、LLM / RAG 降级说明和生成版本 |
+| 导出 | Markdown content version、来源 review / score / session snapshot、权限上下文、脱敏状态、失败原因和 retryable |
+| 历史 | session 状态、关联 job / resume snapshot、score / review / export 状态、恢复入口、不可恢复原因和资源可见性 |
+| replay | 历史回看以 snapshot / summary 为主，必要时引用 source version；不要求完整事件溯源平台 |
+
+训练抽屉完整闭环、训练任务自动入列、资产归档、真实面试复盘增强和批量导出属于 R2 或后续增强，不作为 R1 schema 必落库范围。
+
+### 26.9 前端展示字段与后端 trace 字段分工
+
+| 字段类别 | 前端展示策略 | 后端数据策略 |
+| --- | --- | --- |
+| 资源摘要 | 展示 title、status、updated_at、snapshot label、visibility label | 必须可查询，避免历史列表加载大 payload |
+| RAG citation / evidence gap | 展示来源摘要、证据片段摘要、缺口和低置信度提示 | 保存 source ref、chunk ref、evidence summary、gap reason 和 visibility snapshot |
+| Score / review | 展示总分、维度、题级反馈、建议、低置信度 | 保存 score report、dimension、question item、review summary、version 和 evidence refs |
+| async / failure | 展示 pending、running、failed、completed、retryable、failure reason | 保存 operation_id、status、failure source、retryable、degraded 和 last error summary |
+| permission / visibility | 展示无权限、资源不可见、已归档、空状态安全摘要 | 保存 owner、visibility、permission snapshot 和 audit event |
+| trace / debug | 默认不展示，可在错误排查中展示脱敏 request_id | 保存 request_id、operation_id、audit refs、source snapshot refs、provider / model alias 候选 |
+| secret / internal payload | 不展示 | 不保存真实 secret、完整 prompt、完整 LLM response、embedding 向量或对象存储真实路径 |
+
+前端可感知状态不等于前端实现已授权；本节只为后续 UI / API / schema 对齐提供字段分工。
+
+### 26.10 R1 必须进入 schema / migration 讨论的字段族
+
+后续 schema / migration / ORM 窗口必须至少讨论并给出保存方案的字段族：
+
+- 核心资源 identity：job、resume、knowledge document、chunk、session、turn、answer、score、review、export。
+- 关系引用：session -> job / resume / knowledge scope，turn -> answer / citation，score / review -> session / turn / evidence，export -> review / score / session snapshot。
+- 状态字段：draft、ready、in_progress、paused、completed、reviewed、archived、pending、running、failed、generated、retryable、degraded 的等价语义。
+- 权限字段：owner、created_by、updated_by、visibility、workspace / tenant 候选、permission snapshot。
+- traceability：request_id、operation_id、audit event ref、source snapshot ref、schema version、content version、created_at、updated_at。
+- RAG：retrieval query summary、topK、scope、result summary、citation / evidence refs、evidence gap、source snapshot。
+- score / review：total score、dimension score、question feedback、recommendations、low confidence、evidence refs。
+- export / history：export snapshot id、format、content version、status、failure reason、history summary fields。
+
+本清单表示必须进入讨论，不代表字段名、列类型、索引和约束已经冻结。
+
+### 26.11 R1 候选、不落库与 R2 延后字段
+
+| 分类 | 字段 / 能力 | 处理结论 |
+| --- | --- | --- |
+| R1 候选 | `workspace_ref` / `tenant_ref`、provider alias、model alias、prompt version、retrieval mode、confidence label、token / cost summary | 可以进入 readiness 和 schema 讨论，但需后续窗口确认是否落库、如何命名和是否脱敏 |
+| R1 contract / readiness 不落库 | 完整 prompt 原文、完整 LLM response 原文、embedding 向量、provider secret、数据库连接串、对象存储真实路径、完整权限矩阵 | 不进入 R1 必落库字段；如未来确需保存必须另开安全与存储策略窗口 |
+| R1 只保存摘要 / 引用 | 私有知识库内容、简历原文、真实面试材料、导出内容、source snapshot | 优先保存摘要、版本、引用和脱敏快照；原文保存策略需权限和脱敏复核 |
+| R2 延后 | 训练闭环自动调度、训练任务队列、资产归档、真实面试复盘增强、批量导出、复杂组织后台、团队共享知识库治理 | 不纳入 R1 schema 必做范围 |
+
+### 26.12 后续 schema / migration / ORM 实现窗口输入
+
+后续实现窗口若要从本 readiness 进入 schema / migration / ORM，至少需要先确认：
+
+1. formal window、implementation packet、allowed paths、forbidden paths、DoD 和 required tests 已由正式流程生成。
+2. schema 文件路径、migration 文件路径、migration 工具、up/down、dry-run、rollback 和失败恢复策略已确认。
+3. R1 must-persist 字段族被转换为明确表、列、类型、索引、外键、nullable、唯一约束和 retention 策略。
+4. R1 candidate 字段逐项确认落库、暂缓或不落库。
+5. M02 权限、workspace / tenant 命名和 resource visibility 查询策略已与 `ST13_20` 字段边界对齐。
+6. `ST13_24` 已承接 schema relation、权限过滤、RAG evidence、评分复盘、导出快照、历史恢复和失败状态测试。
+
+本窗口不执行上述实现动作；任何 schema、migration、ORM、repository、测试或业务 API 改动都必须另窗授权。
