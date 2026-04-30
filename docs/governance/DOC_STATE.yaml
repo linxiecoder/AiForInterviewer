@@ -1398,12 +1398,17 @@ subtasks:
         implementation_doc_state: active_working_doc
         maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: 42b8fad25cdc4e5aa9b76a780911db64
+        last_confirmed_at: '2026-04-30T11:49:30+00:00'
+        last_confirmed_by: codex
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T11:49:30+00:00'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_10 scoped formal window for R1 RAG formal readiness only; no
+          packet generation, no implementation-ready, no RAG, schema, migration, ORM, or tests implementation.'
   ST13_11:
     meta:
       module_id: M04
