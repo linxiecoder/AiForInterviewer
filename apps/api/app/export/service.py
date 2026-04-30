@@ -13,6 +13,7 @@ from app.interview_flow.contract import (
     FIELD_CONTENT,
     FIELD_QUESTION,
     FIELD_SESSION_ID,
+    FIELD_TRACE_SUMMARY,
     FIELD_TURN_ID,
     FIELD_TURNS,
     INTERVIEW_FLOW_RECORD_SOURCE,
@@ -27,7 +28,12 @@ from app.interview_record_contract import (
 from app.persistence import InterviewRecordStore, TraceabilityStore
 from app.review import ReviewService
 from app.scoring import ScoringService
-from app.traceability import TRACE_TYPE_REVIEW_EXPORT, TraceabilityRecord, TraceabilityStatus
+from app.traceability import (
+    TRACE_TYPE_REVIEW_EXPORT,
+    TraceabilityRecord,
+    TraceabilityStatus,
+    build_trace_summary,
+)
 
 PAYLOAD_SCORE = "score"
 EXPORT_PAYLOAD_KEY = "export"
@@ -160,6 +166,11 @@ class ExportService:
             "owner_id": owner_id,
             "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
             EXPORT_PAYLOAD_KEY: export_payload,
+            FIELD_TRACE_SUMMARY: _trace_summary(
+                trace_store=self.trace_store,
+                owner_id=owner_id,
+                session_id=session_id,
+            ),
         }
 
     def _record_trace(self, record: TraceabilityRecord) -> None:
@@ -294,6 +305,17 @@ def _latest_session_record(
         if latest is None or snapshot_index > latest[0]:
             latest = (snapshot_index, record)
     return latest[1] if latest is not None else None
+
+
+def _trace_summary(
+    *,
+    trace_store: TraceabilityStore | None,
+    owner_id: str,
+    session_id: str,
+) -> dict[str, Any]:
+    if trace_store is None:
+        return build_trace_summary(())
+    return build_trace_summary(trace_store.list_traces(owner_id=owner_id, session_ref=session_id))
 
 
 def _utc_now() -> str:

@@ -30,6 +30,7 @@ from app.interview_flow.contract import (
     FIELD_RESUME,
     FIELD_SESSION_ID,
     FIELD_SNAPSHOT_INDEX,
+    FIELD_TRACE_SUMMARY,
     FIELD_TURN_ID,
     FIELD_TURN_INDEX,
     FIELD_TURNS,
@@ -52,7 +53,12 @@ from app.llm.constants import PURPOSE_FOLLOW_UP, PURPOSE_QUESTION
 from app.llm.models import LLMGenerateRequest, LLMGenerateResult
 from app.llm.providers import LLMProvider
 from app.persistence import InterviewRecordStore, TraceabilityStore
-from app.traceability import TRACE_TYPE_INTERVIEW, TraceabilityRecord, TraceabilityStatus
+from app.traceability import (
+    TRACE_TYPE_INTERVIEW,
+    TraceabilityRecord,
+    TraceabilityStatus,
+    build_trace_summary,
+)
 
 
 class InterviewFlowNotFound(Exception):
@@ -236,7 +242,12 @@ class InterviewFlowService:
         record = self._latest_session_record(owner_id=owner_id, session_id=session_id)
         if record is None:
             raise InterviewFlowNotFound(ERROR_INTERVIEW_SESSION_NOT_FOUND)
-        return _session_response(record)
+        response = _session_response(record)
+        response[FIELD_TRACE_SUMMARY] = self._trace_summary(
+            owner_id=owner_id,
+            session_id=session_id,
+        )
+        return response
 
     def list_history(self, *, owner_id: str) -> dict[str, list[dict[str, Any]]]:
         """返回 owner 范围内每个 session 的最新摘要。"""
@@ -257,6 +268,7 @@ class InterviewFlowService:
         items: list[dict[str, Any]] = []
         for _snapshot_index_value, record, interview in latest_by_session.values():
             turns = _turns_from_interview(interview)
+            session_id = str(interview.get(FIELD_SESSION_ID, ""))
             items.append(
                 {
                     FIELD_RECORD_ID: record[FIELD_ID],
@@ -267,6 +279,10 @@ class InterviewFlowService:
                     FIELD_TURN_INDEX: max(len(turns) - 1, 0),
                     FIELD_CREATED_AT: record[FIELD_CREATED_AT],
                     FIELD_UPDATED_AT: record[FIELD_UPDATED_AT],
+                    FIELD_TRACE_SUMMARY: self._trace_summary(
+                        owner_id=owner_id,
+                        session_id=session_id,
+                    ),
                 }
             )
         self._record_trace(
@@ -311,6 +327,13 @@ class InterviewFlowService:
     def _record_trace(self, record: TraceabilityRecord) -> None:
         if self.trace_store is not None:
             self.trace_store.create_trace(record)
+
+    def _trace_summary(self, *, owner_id: str, session_id: str) -> dict[str, Any]:
+        if self.trace_store is None:
+            return build_trace_summary(())
+        return build_trace_summary(
+            self.trace_store.list_traces(owner_id=owner_id, session_ref=session_id)
+        )
 
 
 def _payload(

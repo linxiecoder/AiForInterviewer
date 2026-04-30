@@ -24,12 +24,25 @@ from app.interview_flow.contract import (  # noqa: E402
     FIELD_JOB,
     FIELD_METADATA,
     FIELD_MODE,
+    FIELD_PROVIDER_TRACE,
     FIELD_RESUME,
     FIELD_SESSION_ID,
+    FIELD_SNAPSHOT_INDEX,
+    FIELD_TRACE_SUMMARY,
     FIELD_TURN_ID,
+    FIELD_TURN_INDEX,
+    FIELD_TURNS,
     INTERVIEWS_ROUTE_PREFIX,
+    INTERVIEW_FLOW_RECORD_SOURCE,
+    SESSION_STATUS_IN_PROGRESS,
 )
-from app.interview_record_contract import API_DATABASE_PATH_ENV, FIELD_OWNER_ID  # noqa: E402
+from app.interview_record_contract import (  # noqa: E402
+    API_DATABASE_PATH_ENV,
+    DEFAULT_RECORD_VERSION,
+    FIELD_OWNER_ID,
+    PAYLOAD_INTERVIEW,
+    RESPONSE_STATUS,
+)
 from app.llm.constants import LLM_PROVIDER_DETERMINISTIC, LLM_PROVIDER_ENV  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.persistence import TraceabilityStore  # noqa: E402
@@ -101,6 +114,107 @@ def test_interview_review_export_history_flow_writes_readable_traceability_recor
         loaded = api_app.state.traceability_store.get_trace(interview_traces[0]["id"])
         assert loaded is not None
         assert loaded["owner_id"] == "owner-trace"
+
+    asyncio.run(run_case())
+
+
+def test_interview_read_surfaces_return_safe_trace_summary(api_app: Any) -> None:
+    """detail/history/review/export 应返回可消费且已过滤的 trace summary。"""
+
+    async def run_case() -> None:
+        async with _client(api_app) as client:
+            started = await _start_interview(client, owner_id="owner-read")
+            answered = await _submit_answer(
+                client,
+                owner_id="owner-read",
+                session_id=started[FIELD_SESSION_ID],
+                turn_id=started[FIELD_CURRENT_TURN][FIELD_TURN_ID],
+            )
+            session_id = answered[FIELD_SESSION_ID]
+            _write_rag_gap_trace(api_app, owner_id="owner-read", session_id=session_id)
+            _write_hidden_trace(api_app)
+
+            review = await _generate_review(client, owner_id="owner-read", session_id=session_id)
+            export = await _generate_export(client, owner_id="owner-read", session_id=session_id)
+            detail = await _get_session(client, owner_id="owner-read", session_id=session_id)
+            history = await _history(client, owner_id="owner-read")
+
+        detail_summary = detail[FIELD_TRACE_SUMMARY]
+        history_summary = history["items"][0][FIELD_TRACE_SUMMARY]
+        review_summary = review[FIELD_TRACE_SUMMARY]
+        export_summary = export[FIELD_TRACE_SUMMARY]
+
+        assert detail_summary["status"] == "available"
+        assert detail_summary["session_refs"] == [session_id]
+        assert started[FIELD_CURRENT_TURN][FIELD_TURN_ID] in detail_summary["turn_refs"]
+        assert f"answer:{started[FIELD_CURRENT_TURN][FIELD_TURN_ID]}" in detail_summary["answer_refs"]
+        assert "gap:permission_filtered_empty" in detail_summary["rag"]["evidence_gap_refs"]
+        assert detail_summary["score_refs"]
+        assert detail_summary["review_refs"]
+        assert detail_summary["export_refs"]
+        assert review_summary["review_refs"] == detail_summary["review_refs"]
+        assert export_summary["export_refs"] == detail_summary["export_refs"]
+        assert history_summary["session_refs"] == [session_id]
+        assert "hidden-resource-id" not in str(detail_summary)
+        assert "hidden-resource-id" not in str(history)
+        assert all("source_snapshot_ref" not in item for item in detail_summary["request_refs"])
+        assert all("metadata" not in item for item in detail_summary["request_refs"])
+
+    asyncio.run(run_case())
+
+
+def test_interview_detail_returns_stable_empty_trace_summary(api_app: Any) -> None:
+    """没有 trace 的历史记录也应返回稳定空 trace_summary，而不是 500。"""
+    session_id = "session-empty-trace"
+    record = api_app.state.interview_record_store.create_record(
+        owner_id="owner-empty",
+        source=INTERVIEW_FLOW_RECORD_SOURCE,
+        version=DEFAULT_RECORD_VERSION,
+        payload={
+            PAYLOAD_INTERVIEW: {
+                FIELD_SESSION_ID: session_id,
+                FIELD_MODE: "empty_trace",
+                RESPONSE_STATUS: SESSION_STATUS_IN_PROGRESS,
+                FIELD_METADATA: {},
+                FIELD_SNAPSHOT_INDEX: 0,
+                FIELD_TURNS: [
+                    {
+                        FIELD_TURN_ID: "turn-empty-trace",
+                        FIELD_TURN_INDEX: 0,
+                        "question": "How do you keep trace reads stable?",
+                    }
+                ],
+                FIELD_PROVIDER_TRACE: [],
+            }
+        },
+    )
+
+    async def run_case() -> None:
+        async with _client(api_app) as client:
+            detail = await _get_session(client, owner_id="owner-empty", session_id=session_id)
+            history = await _history(client, owner_id="owner-empty")
+
+        assert detail["record_id"] == record["id"]
+        assert detail[FIELD_TRACE_SUMMARY] == {
+            "status": "empty",
+            "counts": {"total": 0, "interview": 0, "rag_evidence": 0, "review_export": 0},
+            "session_refs": [],
+            "turn_refs": [],
+            "answer_refs": [],
+            "score_refs": [],
+            "review_refs": [],
+            "export_refs": [],
+            "rag": {
+                "retrieval_query_refs": [],
+                "retrieval_result_refs": [],
+                "citation_refs": [],
+                "evidence_refs": [],
+                "evidence_gap_refs": [],
+                "statuses": [],
+            },
+            "request_refs": [],
+        }
+        assert history["items"][0][FIELD_TRACE_SUMMARY]["status"] == "empty"
 
     asyncio.run(run_case())
 
@@ -250,7 +364,51 @@ async def _generate_export(
     return response.json()
 
 
+async def _get_session(
+    client: httpx.AsyncClient,
+    *,
+    owner_id: str,
+    session_id: str,
+) -> dict[str, Any]:
+    response = await client.get(_interviews_url(f"/{session_id}"), params={FIELD_OWNER_ID: owner_id})
+    assert response.status_code == 200
+    return response.json()
+
+
 async def _history(client: httpx.AsyncClient, *, owner_id: str) -> dict[str, Any]:
     response = await client.get(_interviews_url(), params={FIELD_OWNER_ID: owner_id})
     assert response.status_code == 200
     return response.json()
+
+
+def _write_rag_gap_trace(api_app: Any, *, owner_id: str, session_id: str) -> None:
+    api_app.state.traceability_store.create_trace(
+        TraceabilityRecord(
+            owner_id=owner_id,
+            trace_type=TRACE_TYPE_RAG_EVIDENCE,
+            status=TraceabilityStatus.DEGRADED,
+            request_id="rag-visible-request",
+            operation_id="rag.retrieve:review",
+            session_ref=session_id,
+            retrieval_query_ref="rag-query:backend persistence",
+            retrieval_result_ref="rag-result:0:permission_filtered_empty",
+            evidence_gap_ref="gap:permission_filtered_empty",
+            failure_reason="permission_filtered_empty",
+            metadata={"hidden_resource_id": "hidden-resource-id"},
+        )
+    )
+
+
+def _write_hidden_trace(api_app: Any) -> None:
+    api_app.state.traceability_store.create_trace(
+        TraceabilityRecord(
+            owner_id="owner-hidden",
+            trace_type=TRACE_TYPE_INTERVIEW,
+            status=TraceabilityStatus.COMPLETED,
+            request_id="hidden-request",
+            operation_id="interview.hidden",
+            session_ref="hidden-session",
+            source_snapshot_ref="hidden-resource-id",
+            metadata={"hidden_resource_id": "hidden-resource-id"},
+        )
+    )

@@ -15,6 +15,7 @@ from app.interview_flow.contract import (
     FIELD_MODE,
     FIELD_QUESTION,
     FIELD_SESSION_ID,
+    FIELD_TRACE_SUMMARY,
     FIELD_TURN_ID,
     FIELD_TURNS,
     INTERVIEW_FLOW_RECORD_SOURCE,
@@ -32,7 +33,12 @@ from app.llm.models import LLMGenerateRequest
 from app.llm.providers import LLMProvider
 from app.persistence import InterviewRecordStore, TraceabilityStore
 from app.scoring import ScoringService
-from app.traceability import TRACE_TYPE_REVIEW_EXPORT, TraceabilityRecord, TraceabilityStatus
+from app.traceability import (
+    TRACE_TYPE_REVIEW_EXPORT,
+    TraceabilityRecord,
+    TraceabilityStatus,
+    build_trace_summary,
+)
 
 REVIEW_PAYLOAD_KEY = "review"
 REVIEW_SUMMARY_KEY = "summary"
@@ -160,6 +166,11 @@ class ReviewService:
             "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
             "score": score_payload,
             REVIEW_PAYLOAD_KEY: review_payload,
+            FIELD_TRACE_SUMMARY: _trace_summary(
+                trace_store=self.trace_store,
+                owner_id=owner_id,
+                session_id=session_id,
+            ),
         }
 
     def _record_trace(self, record: TraceabilityRecord) -> None:
@@ -333,6 +344,17 @@ def _review_score_from_payload(*, payload: Mapping[str, Any]) -> Mapping[str, An
     """从 session payload 读取已有 score，缺失则返回 None。"""
     score = payload.get("score")
     return score if isinstance(score, Mapping) else None
+
+
+def _trace_summary(
+    *,
+    trace_store: TraceabilityStore | None,
+    owner_id: str,
+    session_id: str,
+) -> dict[str, Any]:
+    if trace_store is None:
+        return build_trace_summary(())
+    return build_trace_summary(trace_store.list_traces(owner_id=owner_id, session_ref=session_id))
 
 
 def _clamp_int(value: Any, min_value: int, max_value: int) -> int:
