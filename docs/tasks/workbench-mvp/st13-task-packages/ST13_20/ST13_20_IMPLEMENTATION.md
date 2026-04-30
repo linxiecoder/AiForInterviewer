@@ -207,3 +207,208 @@ W13-E13.8 只对 `ST13_24 / ST13_25` 执行 facts-only candidate 推荐字段写
 - 文档层 `near_ready_for_formal_window_candidate_confirmed`
 - 正式状态层不写 `candidate_status=candidate`
 - 正式状态层不写 `readiness=downstream_ready`
+
+## 20. R0-W13Z.16 gate 输入就绪修正
+
+本节在第 1/5、2/5 次文档 readiness 输入基础上，补齐第 3/5 次 official state / formal window 打开后的 implementation packet 输入。第 3/5 次不进入业务代码；第 4/5 次必须先生成并复核 implementation packet，再按 packet 授权进入最小实现。
+
+### 20.1 本轮实施目标
+
+- 为 R0 可运行主链路实现最小服务端保存 / 数据库边界。
+- 覆盖岗位、简历、模拟面试记录、回答、最小评分 / 反馈、最小复盘和 Markdown 导出的最小持久化与追溯边界。
+- 第 3/5 次只完成 official gate 前置状态打开；第 4/5 次先生成 implementation packet，再在 packet 授权路径内实现。
+
+### 20.2 实施范围边界
+
+R0 最小持久化边界只覆盖一次真实模拟面试主链路的保存、回看和最小复盘追溯：
+
+- 身份引用：记录归属、权限过滤和审计入口候选。
+- 岗位与简历：岗位目标、简历正文或脱敏摘要、版本或快照引用。
+- 面试记录：会话、问题、回答、状态、时间戳和完成结果。
+- 评分 / 反馈 / 复盘：最小评分、反馈摘要、复盘摘要、失败状态和证据引用候选。
+- 导出追溯：Markdown 复制 / 下载的来源对象、内容版本、脱敏状态和失败原因候选。
+- 审计与生成记录：必要 request_id、脱敏 LLM 生成状态、失败原因和关键操作审计候选。
+
+保存、恢复、历史、复盘和导出可追溯代表 R0 implementation packet 的候选能力边界。第 3/5 次不实现业务代码；第 4/5 次只允许在 packet 授权后实现最小持久化边界，不覆盖完整后端、完整数据库模型、R1 可信工作台增强、R2 训练闭环或资产沉淀。
+
+### 20.3 允许修改
+
+- `apps/api/**`
+- `tests/**`
+- `requirements.txt`
+- `.env.example`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
+
+### 20.4 禁止修改
+
+- `docs/governance/DOC_STATE.yaml`
+- `docs/governance/transition_history.jsonl`
+- `docs/governance/previews/**`
+- `docs/governance/packets/**`
+- `apps/web/**`
+- `tools/**`
+- `infra/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/**`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/**`
+- `docs/requirements/workbench-mvp/**`
+- `docs/design/workbench-mvp/**`
+- `M02/**`
+- `package.json`
+- `package-lock.json`
+- 完整后端重构
+- 完整 migration 体系
+- 完整 ORM model 体系
+- 完整业务 API 扩展
+- LLM / RAG provider implementation
+
+### 20.4.1 Packet 边界说明
+
+上述 allowed / forbidden paths 只作为 formal window 已打开后的 implementation packet 输入。第 3/5 次执行仍不修改业务代码；第 4/5 次必须先生成并复核 implementation packet，且 packet 禁止范围优先级高于允许范围。
+
+### 20.5 自动化验证
+
+- `git diff --check`
+- `python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+- `python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-id ST13_20`
+- `python3 -m tools.doc_governor.cli preflight-open-window --state docs/governance/DOC_STATE.yaml --subtask ST13_20`
+- `python3 -m tools.doc_governor.cli generate-implementation-packet --input docs/governance/DOC_STATE.yaml --entity-id ST13_20`
+- `python3 -m tools.test_runner.run_tests --pytest-args tests -q`
+- `git status --short`
+
+### 20.6 手动验证
+
+- 检查 IMPLEMENTATION 中 goal、allowed paths、forbidden paths、required tests、acceptance criteria、scope boundary、stop conditions 均非空且不互相冲突。
+- 检查 required tests 输入覆盖保存、恢复、历史查询、复盘读取、Markdown 导出可追溯、权限过滤、脱敏、失败状态和审计候选。
+- 检查实现不扩大到完整 DB 重构、完整 migration 体系、完整 ORM 体系、完整业务 API、LLM / RAG provider、R1 或 R2。
+- 检查 apps/api 目录的最小持久化边界不反向修改 ST13_21，tests 目录的测试只验证 ST13_20 R0 最小保存 / 恢复 / 历史 / 复盘 / 导出追溯口径。
+- 检查 IMPLEMENTATION 与 DESIGN 第 25 节的 R0 最小数据保存边界、禁止范围和最新 official gate 状态保持一致。
+
+### 20.7 测试与验证
+
+- governance tests：validate-state、evaluate-state、git diff --check、git status 范围核对和 UTF-8 乱码扫描。
+- contract tests 输入：R0 最小对象关系、权限过滤、状态字段、归档 / 软删除语义、审计字段、导出快照追溯和 LLM / RAG 脱敏记录边界。
+- integration tests 输入：未来获授权后验证岗位、简历、面试记录、回答、评分、复盘和 Markdown 导出之间的数据一致性。
+- failure tests 输入：无权限、资源不可见、记录归档、LLM 失败、RAG 无命中、评分未生成、复盘失败、导出失败时不得丢失已保存回答和历史记录。
+- 第 3/5 当前动作：只打开 official gate 前置状态，不创建 tests，不启动 dev server，不执行数据库或业务集成测试。
+
+### 20.8 完成判定
+
+- implementation packet 已基于 official state 生成并复核，且 allowed / forbidden paths 与本节一致。
+- 代码实现只触及 packet 授权路径，不修改禁止路径，不扩大到 R1 / R2。
+- R0 最小保存、恢复、历史查询、复盘读取和 Markdown 导出追溯的持久化边界可被验证。
+- git diff --check 通过。
+- validate-state、evaluate-state、preflight-open-window 和 required tests 通过，或明确记录环境阻断原因。
+- acceptance 不以完整数据库模型、完整 migration、完整 ORM、完整业务 API、LLM / RAG provider 或训练闭环作为完成标准。
+
+### 20.9 停止条件
+
+出现以下任一情况必须停止：
+
+1. 需要手工绕过 `confirm-transition` 或 wrapper 修改 official state。
+2. implementation packet 生成失败、packet allowed / forbidden paths 与本节冲突，或 packet 未授权目标文件。
+3. 需要扩大到 `apps/web/**`、`tools/**`、`infra/**`、其他 ST13 目录、M02、R1 或 R2。
+4. 需要实现完整 migration 体系、完整 ORM 体系、完整业务 API、LLM / RAG provider、RAG 检索或训练闭环。
+5. `git status --short` 出现本轮允许范围外的新增 tracked diff 或未解释改动。
+6. `validate-state`、`evaluate-state --entity-id ST13_20`、`preflight-open-window --subtask ST13_20` 或 required tests 无法执行，或出现新的 error / warning / hard blocker。
+
+### 20.10 剩余正式 blocker
+
+R0-W13Z.16-ST13_20 第 3/5 次已通过 official state / wrapper 流程解除以下 blocker：
+
+- `gate:maturity_missing`
+- `gate:implementation_approval_missing`
+- `policy:formal_window_closed`
+- `gate:implementation_doc_not_active`
+
+当前 official state 已对齐为：
+
+- `maturity=L5`
+- `implementation_approval_status=approved`
+- `implementation_doc_state=active_working_doc`
+- `formal_window_status=open`
+- `readiness=downstream_ready`
+- `can_generate_implementation_packet=true`
+- `can_mark_implementation_ready=true`
+- `implementation_ready=true`
+
+第 3/5 次不生成 implementation packet，不进入业务代码。第 4/5 次必须先生成并复核 implementation packet，再按 packet allowed / forbidden paths 进入最小实现。
+
+## 21. R0-W13Z.16 第 4/5 次实现事实同步
+
+第 4/5 次已基于 official state 生成并复核 `ST13_20` implementation packet，随后只在 packet 授权范围内完成 R0 最小后端持久化实现。
+
+### 21.1 Packet 结果
+
+- packet JSON：`docs/governance/packets/ST13_20.implementation.packet.json`
+- packet Markdown：`docs/governance/packets/ST13_20.implementation.packet.md`
+- `implementation_ready=true`
+- allowed paths 覆盖 `apps/api/**`、`tests/**`、`.env.example`、`requirements.txt` 与 `ST13_20` 双文档同步路径。
+- forbidden paths 明确排除 `apps/web/**`、`tools/**`、`infra/**`、其他 ST13 目录、requirements/design 正文、完整 migration、完整 ORM、完整业务 API、LLM / RAG provider 与 R1 / R2。
+
+### 21.2 已实现最小边界
+
+- 在 `apps/api/app/persistence.py` 新增最小 `sqlite3` 持久化 adapter，不引入 ORM，不创建 migration 框架。
+- 将 R0 最小 DDL 拆入 `apps/api/app/schema/interview_records.sql`，Python 只通过显式 schema loader 初始化。
+- 在 `apps/api/app/api/v1/interview_records.py` 新增 `/api/v1/interview-records` 最小路由，覆盖保存、按 id 恢复、历史列表、复盘读取和导出追溯读取。
+- 在 `apps/api/app/main.py` 新增 `create_app()`，在 app state 中挂载最小持久化 store；schema 初始化发生在 runtime startup 或测试显式初始化边界，不在 import 时自动建表。
+- 在 `apps/api/app/boundary.py` 新增 `API_DATABASE_PATH` 配置读取，默认落到系统临时目录，不写仓库根目录。
+- 在 `.env.example` 增加 `API_DATABASE_PATH=` 占位。
+
+### 21.3 已验证最小口径
+
+- `tests/api/test_interview_records.py` 覆盖一次记录保存、恢复、历史查询、复盘读取、导出追溯 metadata 和 404 error envelope。
+- 当前验证使用 `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_interview_records.py -q`。
+- 系统 `python3` 环境缺少 `pytest`，因此应用测试使用仓库 `.venv` 运行；governance CLI 仍使用 `python3` 运行。
+
+### 21.4 第 5/5 次剩余范围
+
+- 复跑 governance 验证、packet 状态核对和 apps/api 最小测试。
+- 视时间补充 owner_id 过滤、空 payload、metadata 字段和错误路径的测试。
+- 做提交前 diff 范围核对，确认没有 forbidden paths 或无关格式化。
+- 不关闭 formal window，不修改 official state，不 commit / push，除非用户另行明确授权。
+
+## 22. R0-W13Z.16 第 5/5 次最终收口事实同步
+
+第 5/5 次执行范围限定为最终测试补齐、规则一致性审计、ST13_20 实现规范复核和提交前收口；本次不修改 official state，不修改 packet，不 commit / push。
+
+### 22.1 规则承载一致性
+
+- `AGENTS.md` 保留规则承载边界和工程规范入口。
+- 企业 Python 工程规范细则统一承载在 `TECHNICAL_STANDARDS.md`。
+- 本轮不再把完整“工程卫生规则”重复写回 `AGENTS.md`。
+
+### 22.2 最终补齐测试范围
+
+`tests/api/test_interview_records.py` 已从单一 smoke test 扩展为 ST13_20 R0 最小持久化边界测试，覆盖：
+
+- `owner_id` 历史列表过滤，不泄漏其他 owner 记录。
+- 空 payload 默认值、`source` / `version` / `created_at` / `updated_at` traceability metadata。
+- 按 id 恢复已存在记录，以及缺失 id 的 404 error envelope。
+- 历史列表最小字段、无大 payload 返回、`created_at DESC` 语义。
+- 复盘读取、导出追溯 metadata 读取，以及缺失记录的 404 error envelope。
+- 非法创建请求的 422 minimal error envelope。
+
+测试临时数据库改用 `ManagedTempArtifacts` 管理，不再使用 `tmp_path`，以对齐 `docs/governance/TEST_POLICY.md`。
+
+### 22.3 最小实现修正
+
+- `apps/api/app/boundary.py` 新增 request validation error handler，使 422 校验失败复用现有 `{error:{code,message}}` 最小 envelope。
+- `apps/api/app/main.py` 将 `RequestValidationError` 绑定到上述 handler。
+- 未引入 ORM、migration 框架、完整业务 API、LLM / RAG provider、前端或 R1 / R2 能力。
+
+### 22.4 最终验证命令
+
+第 5/5 次收口必须复跑：
+
+- `git diff --check`
+- `python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
+- `python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-id ST13_20`
+- `python3 -m tools.doc_governor.cli preflight-open-window --state docs/governance/DOC_STATE.yaml --subtask ST13_20`
+- `rg -n "CREATE TABLE|CREATE INDEX|ALTER TABLE|DROP TABLE" apps/api -g "*.py"`
+- `.venv/bin/python -m py_compile apps/api/app/api/v1/interview_records.py apps/api/app/boundary.py apps/api/app/main.py apps/api/app/persistence.py apps/api/app/interview_record_contract.py`
+- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_interview_records.py -q`
+- `git status --short`
+
+若上述命令通过且 forbidden path audit 无新增问题，`ST13_20` 可进入提交前候选状态；实际 commit / push 仍需用户另行授权。

@@ -69,14 +69,89 @@
 - 导出包含原始回答，但不包含真实面试材料原文。
 - 上传同步入库，转换和导出异步。
 
-## 4. 仍需 implementation packet 复核的内容
+## 4. Python 与工程卫生规则
+
+本节沉淀项目级 Python / SQL / 配置 / 测试工程规范。业务实现窗口仍必须以 `DOC_STATE.yaml`、implementation packet、allowed paths、forbidden paths 和对应 DoD 为准；本文档只定义通用工程底线，不单独授权任何实现。
+
+### 4.1 变更范围与评审粒度
+
+- 默认使用最小安全 diff，一个 patch 只解决一个明确问题。
+- 不做无关重构、不做无关格式化、不升级依赖。
+- 不修改公共 API、架构边界、数据持久化边界或错误 envelope，除非任务与 implementation packet 明确授权。
+- 规则修改、业务代码修改、测试扩展应尽量分阶段处理，避免混入一个不可评审的大 diff。
+- 发现额外清理机会时，作为 follow-up 输出，不混入当前 patch。
+
+### 4.2 Python 模块与导入副作用
+
+- Python 项目规范优先遵循本仓库既有 import、命名、类型注解、测试和错误处理风格。
+- Python 模块 import 时不得执行建表、写文件、发网络请求、启动服务、运行测试等副作用。
+- app 初始化、schema 初始化、资源初始化必须有显式边界。
+- 脚本入口应使用 `main` guard 或项目既有入口模式。
+- 模块应保持可被测试、可被文档工具导入。
+
+### 4.3 DDL 与运行时代码分离
+
+- Python 业务代码、router、service、repository、adapter 中不得内嵌 DDL。
+- Python 文件中不得出现 `CREATE TABLE`、`CREATE INDEX`、`ALTER TABLE`、`DROP TABLE`。
+- DDL 必须放入独立 `.sql` schema / migration 文件。
+- Python 只能通过显式 schema init / migration / loader 边界加载 SQL 文件。
+- 不得在 import 时自动建表，不得在每个请求中重复建表。
+- 测试可以显式调用 schema init 创建临时数据库 schema。
+- Python 中允许保留参数化 `SELECT` / `INSERT` / `UPDATE` / `DELETE`。
+- 禁止通过字符串拼接用户输入生成 SQL。
+- 不引入完整 migration 框架或 ORM，除非任务明确授权且项目已有模式要求。
+
+### 4.4 版权声明与 license header
+
+- 新增 Python / SQL / 关键工程文件必须遵循项目已有版权 / license header 规范。
+- 如果项目已有 SPDX 或 Copyright 头，必须沿用一致格式。
+- 如果项目没有统一版权头规范，不得编造版权主体、公司名、年份或许可证文本。
+- 未发现统一版权头规范时，只补必要 module docstring / 文件说明，并在最终输出中说明。
+
+### 4.5 注释、docstring 与文档说明
+
+- 新增 Python 模块必须有 module docstring。
+- 新增公开 class / function、router handler、adapter method 必须有简洁 docstring。
+- 非显然逻辑应有解释性注释，解释 why，不重复 what。
+- schema init、persistence boundary、connection lifecycle、traceability metadata、error envelope 适配点必须有必要说明。
+- SQL schema 文件必须说明表用途、字段边界、metadata 字段用途和索引用途，尤其说明 `created_at`、`updated_at`、`source`、`version` 等可追溯字段。
+- 禁止大段空泛注释、逐行废话注释、误导性未来承诺，以及无 owner / blocker 的 TODO。
+
+### 4.6 硬编码引用收敛
+
+- 重复出现的表名、列名、payload key、response key、metadata key、env key、error code、默认 `source` / `version` 和能力名等，应收敛到清晰常量或项目已有 config / helper / model 边界。
+- 不允许 router、service、persistence、tests 各自散落维护同一批裸字符串。
+- 优先使用轻量方案，例如模块级常量、`constants.py`、项目已有 config / helper / model 模式。
+- 不为了“零字符串”引入过度抽象。
+- SQL schema 文件中可以保留 DDL 字段名；Python 中重复引用这些字段时必须集中管理。
+- 测试中可以保留少量为了可读性的 expected literal，但不得复制大量裸字段名。
+
+### 4.7 测试与验证
+
+- 生产逻辑变更必须伴随相关测试，或明确说明无法测试的原因。
+- 优先运行 targeted tests，再运行更大范围验证。
+- 测试代码也要保持可维护，不能因为是测试就接受复杂、脆弱、重复的结构。
+- 测试应覆盖关键边界、错误路径和回归风险。
+- 不能编造测试结果；验证结论必须来自本轮实际命令输出。
+- 如果验证失败，必须区分本次变更引入的问题、既有问题和环境问题。
+- 测试入口和临时产物治理规则见 `docs/governance/TEST_POLICY.md`。
+
+### 4.8 配置、安全与可追溯
+
+- env key、配置默认值、路径、错误码不得散落。
+- 不提交真实 secret、token、password、个人路径或本地绝对路径。
+- 默认配置必须适合本地开发和测试，不得隐式破坏生产数据。
+- 数据保存能力必须保留必要 traceability metadata。
+- error envelope、审计字段、`created_at`、`updated_at`、`source`、`version` 等应有清晰边界。
+
+## 5. 仍需 implementation packet 复核的内容
 
 - Web framework、包管理、构建方式、测试矩阵和共享包构建方式仍为 `DD-005` 的 `needs-review` 范围。
 - Markdown 预览、下载、复制与未来 PDF 是否共用同一渲染链仍为 `DD-007` 的 `needs-review` 范围。
 - 具体 API 路由、schema 字段、错误码、CI/E2E、对象存储部署、缓存、任务队列与运维脚本仍需在正式任务 ID 和 implementation packet 中细化。
 - 本节内容不得绕过 `TASK_INDEX.md` 的正式开窗资格进入代码实施。
 
-## 5. 标准变更后需要同步回写
+## 6. 标准变更后需要同步回写
 
 - `DESIGN_DECISIONS.md`
 - `OPEN_QUESTIONS.md`

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "implementation_packet",
+  "runtime_artifact": true,
+  "generated_at": "2026-04-30T03:39:40Z",
+  "task_id": "ST13_20",
+  "module_id": "M01",
+  "requirement_id": "RQ01",
+  "implementation_ready": true,
+  "goal": "为 R0 可运行主链路实现最小服务端保存 / 数据库边界。\n覆盖岗位、简历、模拟面试记录、回答、最小评分 / 反馈、最小复盘和 Markdown 导出的最小持久化与追溯边界。\n第 3/5 次只完成 official gate 前置状态打开；第 4/5 次先生成 implementation packet，再在 packet 授权路径内实现。",
+  "allowed_modify_paths": [
+    "apps/api/**",
+    "tests/**",
+    "requirements.txt",
+    ".env.example",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md"
+  ],
+  "forbidden_paths": [
+    "docs/governance/DOC_STATE.yaml",
+    "docs/governance/transition_history.jsonl",
+    "docs/governance/previews/**",
+    "docs/governance/packets/**",
+    "apps/web/**",
+    "tools/**",
+    "infra/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_21/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_24/**",
+    "docs/tasks/workbench-mvp/st13-task-packages/ST13_25/**",
+    "docs/requirements/workbench-mvp/**",
+    "docs/design/workbench-mvp/**",
+    "M02/**",
+    "package.json",
+    "package-lock.json",
+    "完整后端重构",
+    "完整 migration 体系",
+    "完整 ORM model 体系",
+    "完整业务 API 扩展",
+    "LLM / RAG provider implementation",
+    "docs/governance/DOC_STATE.bootstrap.yaml"
+  ],
+  "required_tests": [
+    "git diff --check",
+    "python3 -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml",
+    "python3 -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-id ST13_20",
+    "python3 -m tools.doc_governor.cli preflight-open-window --state docs/governance/DOC_STATE.yaml --subtask ST13_20",
+    "python3 -m tools.doc_governor.cli generate-implementation-packet --input docs/governance/DOC_STATE.yaml --entity-id ST13_20",
+    "python3 -m tools.test_runner.run_tests --pytest-args tests -q",
+    "git status --short",
+    "检查 IMPLEMENTATION 中 goal、allowed paths、forbidden paths、required tests、acceptance criteria、scope boundary、stop conditions 均非空且不互相冲突。",
+    "检查 required tests 输入覆盖保存、恢复、历史查询、复盘读取、Markdown 导出可追溯、权限过滤、脱敏、失败状态和审计候选。",
+    "检查实现不扩大到完整 DB 重构、完整 migration 体系、完整 ORM 体系、完整业务 API、LLM / RAG provider、R1 或 R2。",
+    "检查 apps/api 目录的最小持久化边界不反向修改 ST13_21，tests 目录的测试只验证 ST13_20 R0 最小保存 / 恢复 / 历史 / 复盘 / 导出追溯口径。",
+    "检查 IMPLEMENTATION 与 DESIGN 第 25 节的 R0 最小数据保存边界、禁止范围和最新 official gate 状态保持一致。"
+  ],
+  "acceptance_criteria": [
+    "implementation packet 已基于 official state 生成并复核，且 allowed / forbidden paths 与本节一致。",
+    "代码实现只触及 packet 授权路径，不修改禁止路径，不扩大到 R1 / R2。",
+    "R0 最小保存、恢复、历史查询、复盘读取和 Markdown 导出追溯的持久化边界可被验证。",
+    "git diff --check 通过。",
+    "validate-state、evaluate-state、preflight-open-window 和 required tests 通过，或明确记录环境阻断原因。",
+    "acceptance 不以完整数据库模型、完整 migration、完整 ORM、完整业务 API、LLM / RAG provider 或训练闭环作为完成标准。"
+  ],
+  "upstream_refs": [
+    "requirement:RQ01",
+    "module:M01",
+    "subtask:ST13_20",
+    "module:M02",
+    "module:M03",
+    "module:M04",
+    "module:M05",
+    "module:M06",
+    "module:M07",
+    "module:M08",
+    "module:M09",
+    "module:M10",
+    "oq:OQ-093"
+  ],
+  "artifact_constraints": {
+    "runtime_artifact": true,
+    "required_requirement_assets": [
+      "module_index",
+      "plan_latest",
+      "task_index"
+    ],
+    "required_task_doc_slots": [
+      "design_doc",
+      "implementation_doc"
+    ],
+    "official_doc_paths": {
+      "design_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md",
+      "implementation_doc": "docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md"
+    }
+  },
+  "language_constraints": {
+    "docs_must_be_chinese_first": true,
+    "allowed_english_categories": [
+      "code",
+      "command",
+      "path",
+      "config_key",
+      "api_name",
+      "class_name",
+      "function_name",
+      "field_name",
+      "standard_term"
+    ],
+    "blocking_violations": []
+  }
+}

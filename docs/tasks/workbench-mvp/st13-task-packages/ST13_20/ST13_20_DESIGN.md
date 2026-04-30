@@ -425,3 +425,98 @@ formal window 前不能创建的文件：
 6. formal window open 已由用户另窗确认，且状态层 preview / preflight gate 通过。
 7. `DOC_STATE.yaml` 的任何写入均由专门状态窗口处理，本窗口不修改。
 8. implementation packet 只能在 formal window open 且 packet inputs 完整后由后续窗口生成。
+
+## 25. R0-W13Z.16 设计 gate 输入最小修正
+
+本节只补齐 `ST13_20` 后续 state / formal window / implementation packet review 可消费的设计输入。它不修改 official state，不生成 formal window，不生成 implementation packet，也不授权数据库、migration、ORM、业务 API 或测试实现。
+
+### 25.1 R0 最小数据保存边界
+
+R0 对 `ST13_20` 的最小持久化目标是支撑一次真实模拟面试主链路的保存与回看，不覆盖完整工作台后端或完整数据平台。
+
+| R0 最小对象 | 最小保存语义 | 当前授权状态 |
+| --- | --- | --- |
+| `User` / 身份引用 | 能标识记录归属、权限过滤和审计入口；具体登录、session、RBAC、tenant 字段等待 M02 与状态 gate。 | 仅设计输入，不创建 schema。 |
+| `Job` | 保存岗位目标、职责 / 技能摘要、状态、版本或快照引用，供启动面试和历史回看使用。 | 仅设计输入，不创建表。 |
+| `Resume` | 保存简历正文或脱敏摘要、版本、来源和历史引用，避免后续编辑污染已完成面试。 | 仅设计输入，不创建表。 |
+| `InterviewSession` / `InterviewTurn` | 保存一次模拟面试的会话、问题、回答、状态、时间戳和完成结果，支持最小历史记录回看。 | 仅设计输入，不创建 repository。 |
+| `ScoreReport` / `FeedbackSummary` / `Review` | 保存最小评分、题级或整场反馈、复盘摘要、失败状态和证据引用候选。 | 仅设计输入，不实现评分或复盘服务。 |
+| `ExportSnapshot` / `ExportRecord` | 保存复制或 Markdown 下载的来源对象、内容版本、脱敏状态和失败原因候选。 | 仅设计输入，不实现导出。 |
+| `AuditEvent` / `LLMGenerationResult` | 保存必要的脱敏生成状态、失败原因、request_id 和审计事件候选。 | 仅设计输入，不接入 provider 或日志系统。 |
+
+上述边界只表达 R0 后续实现应优先保存什么，不代表本轮可以创建 PostgreSQL schema、migration、ORM model、SQL、数据库配置、repository、service、API endpoint 或测试文件。
+
+### 25.2 保存 / 恢复 / 历史 / 复盘 / 导出可追溯候选边界
+
+后续 formal window 如获授权，`ST13_20` 需要让保存链路能回答以下追溯问题：
+
+- save：岗位、简历、会话、问题、回答、评分、复盘和导出动作分别由谁创建、何时创建、处于什么状态。
+- restore：用户重新进入历史记录时，能恢复到对应会话、轮次、回答、评分 / 复盘状态或明确失败 / 未生成状态。
+- history：历史列表至少能追溯到 `InterviewSession`、关联 `Job` / `Resume` 快照、最近状态和复盘入口。
+- review：复盘与评分必须能追溯到回答、证据摘要、LLM / RAG 降级状态和生成版本。
+- export：复制 / Markdown 下载必须能追溯到来源复盘、导出内容版本、权限上下文、脱敏状态和失败原因。
+
+这些 traceability 项是后续实现候选边界，不代表本轮实现 save / restore / history / review / export，不代表完整后端服务、完整业务 API、完整数据库 schema 或导出系统已获授权。
+
+### 25.3 当前窗口允许 / 禁止路径
+
+当前 R0-W13Z.16-ST13_20 第 1/5 次执行只允许修改：
+
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_DESIGN.md`
+- `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/ST13_20_IMPLEMENTATION.md`
+
+本次优先且实际只修改 `ST13_20_DESIGN.md`。当前窗口禁止修改：
+
+- `docs/governance/DOC_STATE.yaml`、`transition_history.jsonl`、`docs/governance/**`
+- `apps/**`、`tests/**`、`tools/**`、`infra/**`
+- schema 文件、migration 文件、ORM / repository / persistence 代码、SQL、数据库配置
+- 业务 API、LLM / RAG provider、导出实现、测试实现
+- `ST13_21/**`、`ST13_24/**`、`ST13_25/**`
+- `docs/requirements/workbench-mvp/**`、`docs/design/workbench-mvp/**`
+- Git commit、push、reset、stash、merge、rebase、checkout
+
+禁止范围优先级高于任何未来候选路径。若后续 packet 需要扩大路径，必须另开窗口并由用户明确确认。
+
+### 25.4 后续测试要求 / 验收标准输入
+
+本轮不创建 `tests/**`，但后续 formal window / packet review 至少应从本 DESIGN 消费以下 required tests 输入：
+
+- governance tests：`validate-state`、`evaluate-state --entity-id ST13_20`、`git diff --check`、禁止范围检查、UTF-8 回读。
+- contract tests：R0 最小对象关系、权限过滤、状态字段、归档 / 软删除语义、审计字段、导出快照追溯、LLM / RAG 脱敏记录边界。
+- integration tests：未来获授权后验证岗位 / 简历 / 面试记录 / 回答 / 评分 / 复盘 / Markdown 导出之间的数据一致性。
+- failure tests：无权限、资源不可见、记录归档、LLM 失败、RAG 无命中、评分未生成、复盘失败、导出失败时不得丢失已保存回答和历史记录。
+
+后续 acceptance criteria 至少应覆盖：
+
+1. R0 最小保存对象与需求闭环、数据闭环、交互闭环、评估闭环可追溯。
+2. `ST13_21` R0 minimal API service boundary 与本数据 contract 的保存 / 不保存策略不冲突。
+3. `ST13_24` 能据此建立数据 DoD、required tests 和失败停止条件。
+4. 当前文档不把 `contract_refined`、near-ready 或候选追溯边界写成 implementation-ready。
+5. 任何 DB / migration / ORM / business API / tests 实现都等待 official formal window、implementation approval、active implementation doc 和 implementation packet。
+
+这些 required tests / acceptance criteria 仍是设计输入。当前 `evaluate-state` 对 `ST13_20` 的正式 gate 仍以 official state 与 IMPLEMENTATION 文档提取结果为准。
+
+### 25.5 停止条件
+
+出现以下任一情况必须停止，不得继续补文档或转入实现：
+
+1. `git status --short` 出现 `.codex/`、`.serena/` 以外的未解释改动，或出现本窗口禁止路径变更。
+2. 需要修改 `DOC_STATE.yaml`、`transition_history.jsonl`、`docs/governance/**` 或生成 formal window / implementation packet。
+3. 需要创建或修改 `apps/**`、`tests/**`、`tools/**`、`infra/**`、schema、migration、ORM、SQL、数据库配置或业务 API。
+4. 发现 R0 最小保存边界必须依赖未闭合的 M02 权限字段或未稳定的 `ST13_21` API 字段。
+5. `validate-state` 或 `evaluate-state --entity-id ST13_20` 失败，或新增 error / warning / hard blocker。
+6. 为了清除 gate blocker 必须修改 `ST13_20_IMPLEMENTATION.md`、official state 或其他任务包文档；这类动作应进入后续执行，不在本次 DESIGN-only 修正中处理。
+
+### 25.6 当前仍阻塞的正式状态
+
+截至本节补充，`ST13_20` 仍保持：
+
+- `candidate_status=none`
+- `readiness=blocked`
+- `maturity` 未确认
+- scoped formal window closed
+- implementation approval 未批准
+- `implementation_doc_state` 未激活为 `active_working_doc`
+- implementation packet inputs 仍需后续正式流程补齐
+
+因此，本节只能降低后续 review 的设计歧义，不能单独解除 official gate blocker，也不能把 `ST13_20` 推进为 formal-window-open、packet-ready 或 implementation-ready。

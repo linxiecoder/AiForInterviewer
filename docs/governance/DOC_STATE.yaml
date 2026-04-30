@@ -1818,15 +1818,21 @@ subtasks:
         implementation_ready: false
     state:
       confirmed:
-        implementation_doc_state: missing
-        maturity: null
+        implementation_doc_state: active_working_doc
+        maturity: L5
         candidate_status: none
-        review_status: unreviewed
-        readiness: blocked
+        review_status: pending_confirmation
+        readiness: downstream_ready
         blocker_refs: []
-        last_transition_id: null
-        last_confirmed_at: null
-        last_confirmed_by: null
+        last_transition_id: 13a78e64a7684beb809b4d3e33d8029b
+        last_confirmed_at: '2026-04-30T03:30:26.770841+00:00'
+        last_confirmed_by: codex
+        implementation_approval_status: approved
+        formal_window_status: open
+        formal_window_opened_at: '2026-04-30T03:29:48+00:00'
+        formal_window_opened_by: codex
+        formal_window_reason: 'Decision: open ST13_20 scoped formal window for R0 minimal service-side persistence only; no
+          business implementation in this window'
   ST13_21:
     meta:
       module_id: M01

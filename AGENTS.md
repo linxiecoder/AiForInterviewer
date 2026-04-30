@@ -249,6 +249,13 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 - 开发约定
 - 操作手册
 
+### 1.2.1 规则承载边界
+- `AGENTS.md` 只承载最高优先级协作入口、当前迭代边界、状态 gate、仓库导航、必读规则索引和 Codex 执行硬约束。
+- `TECHNICAL_STANDARDS.md` 承载全局技术口径、Python 工程规范、数据库 / SQL 边界、工程卫生和配置安全规则。
+- `docs/DOC_GOVERNANCE.md` 承载人工文档治理、角色职责、成熟度模型和多 Codex 协作规则。
+- `docs/governance/DOC_AUTOMATION.md` 承载 `doc-governor` 自动化、结构化状态、命令契约和 state writeback 边界。
+- `docs/governance/TEST_POLICY.md` 承载测试入口、临时产物治理和测试残留守卫。
+
 ### 1.3 文档治理规则
 
 本仓库的项目治理总则定义在 [`DOC_GOVERNANCE.md`](docs/DOC_GOVERNANCE.md)。
@@ -328,6 +335,9 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 - 不要直接改 `node_modules/`、`.serena/`、`.worktrees/`、`__pycache__/`、`pytest-cache-files-*` 等本地缓存或工作目录
 - `docs/governance/DOC_STATE.yaml` 是正式真值；`DOC_STATE.bootstrap.yaml` 只是 bootstrap 输出
 - 修改 `tools/doc_governor/` 时，必须同步检查 `tests/doc_governor/` 的影响
+
+#### 工程规范入口
+- Python、SQL、配置、安全、docstring、硬编码收敛和变更粒度规则统一见 [`TECHNICAL_STANDARDS.md`](TECHNICAL_STANDARDS.md)；`AGENTS.md` 只保留工程规范入口，不在此处重复展开长期细则。
 
 #### Verification
 - 文档治理 / 工具改动后运行: `python -m pytest tests/doc_governor -q`
