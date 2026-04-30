@@ -9,16 +9,16 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：ST13 任务实施说明；当前用于授权 `R1-DEV-04-ST13_21-API-TRACE-READ-SURFACE` 的最小 API/read surface，不是 implementation packet 本体。
+- 文档性质：ST13 任务实施说明；当前用于授权 `R1-DEV-07-WORKBENCH-TRUSTED-FRONTEND-SURFACE-WITH-E2E` 的最小前端可信展示面与浏览器 E2E，不是 implementation packet 本体。
 - official gate：formal window 已打开；implementation approval 已批准；当前 `implementation_ready=true`，`can_generate_implementation_packet=true`。
-- packet 状态：本轮 Phase A 允许刷新 implementation packet，使后续 Phase B 可以在授权路径内暴露 trace/read surface。
-- implementation 状态：R0 minimal API service boundary 已完成；ST13_20 traceability write integration 已完成；本轮只补 R1 可消费读取面。
-- 当前定位：为 history、review、export、frontend 后续读取 session、turn、RAG evidence、score、review、export trace reference 提供最小稳定 API/read surface。
-- 本窗口 Phase B 不修改 `DOC_STATE.yaml`，不修改 packet，不扩大到 UI、完整 RAG ingestion、schema/migration/ORM 或 R2 训练闭环。
+- packet 状态：本轮 Phase A 允许刷新 implementation packet，使后续 Phase B 可以在授权路径内实现 `apps/web` 前端消费面与最小 E2E。
+- implementation 状态：R0 minimal API service boundary 已完成；ST13_20 traceability write integration 已完成；ST13_21 trace read surface 已完成；本轮只补 R1 可信数据的前端可见面。
+- 当前定位：让 history/detail/review/export 中的 session、turn、answer、RAG citation、evidence gap、score、review、export trace reference 能在真实前端页面被安全展示和 E2E 保护。
+- 本窗口 Phase B 不修改 `DOC_STATE.yaml`，不修改后端 schema/migration/ORM，不扩大到完整知识库后台、复杂 RAG provider、批量导出或 R2 训练闭环。
 
 ## 2. 本轮实施目标
 
-- 目标：在已完成 ST13_20 traceability write integration 的基础上，为 /api/v1/interviews history/detail/review/export 读取路径暴露最小 trace summary read surface，使调用方可以稳定读取 session、turn、answer、RAG evidence / evidence gap、score、review、export trace reference 的安全摘要；不实现完整 RAG ingestion、UI、schema/migration/ORM 或 R2 能力。
+- 目标：在已完成 ST13_20 traceability write integration 与 ST13_21 trace read API surface 的基础上，为 apps/web 增加最小 R1 可信工作台展示面和真实浏览器 E2E；页面必须能展示 trace_summary、session / turn / answer trace reference、RAG citation、evidence gap、degraded / failed / retryable / empty 状态、score / review / export trace reference 和 Markdown export status，同时不得泄露完整 prompt、完整 LLM response、secret、对象存储真实路径或不可见 resource id。
 
 ## 3. 前置条件
 
@@ -36,50 +36,50 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 
 本轮 Phase B implementation 只覆盖：
 
-- interview detail/history 返回稳定 `trace_summary`。
-- session / turn / answer trace reference 的安全摘要。
-- RAG retrieval / citation / evidence gap trace reference 的安全摘要。
-- score / review / export trace reference 的安全摘要。
-- empty trace / degraded trace / permission-filtered trace 的稳定 response。
-- owner/resource visibility 过滤，调用方只能读取自己可见资源的 trace。
-- request_id / operation_id 仅以有限、安全摘要形式展示。
-- 复用现有 `TraceabilityStore`、interview flow、review/export、RAG foundation 服务边界，不重写主链路。
+- 在现有 `apps/web` React / Vite 页面中增加最小可信数据展示区域，不做全站 UI 重构。
+- 前端 API client / types 消费 `trace_summary`、RAG citation / evidence gap、score / review / export trace reference、export status / failure reason / retryable。
+- 旧记录或 mock response 中没有 trace 时显示稳定 empty state，不白屏、不报错。
+- degraded、failed、retryable、empty 等状态以用户可见文案呈现。
+- 真实浏览器 E2E 访问实际 route，可 mock API response，但必须验证用户实际能看到的 R1 能力。
+- 敏感字段过滤在页面与 E2E 中显式保护，不展示完整 prompt、完整 LLM response、secret、对象存储真实路径或不可见 resource id。
+- 复用现有 API/read surface，不修改后端 schema/migration/ORM，不重写主链路。
 
-本任务不实现 UI、完整 RAG ingestion、embedding/vector store、schema/migration/ORM 大改、新依赖或 R2 训练闭环。
+本任务不实现完整知识库后台、复杂 RAG ingestion、embedding/vector store、schema/migration/ORM 大改、新状态管理库、批量导出或 R2 训练闭环。
 
 ## 5. 允许修改范围
 
 packet allowed paths 限定如下，且不得自行扩大：
 
-- `apps/api/app/api/v1/interviews.py`
-- `apps/api/app/interview_flow/contract.py`
-- `apps/api/app/interview_flow/service.py`
-- `apps/api/app/traceability.py`
-- `apps/api/app/persistence.py`
-- `apps/api/app/rag/service.py`
-- `apps/api/app/review/service.py`
-- `apps/api/app/export/service.py`
-- `tests/api/test_traceability_integration.py`
+- `apps/web/src/**`
+- `apps/web/e2e/**`
+- `apps/web/playwright.config.ts`
+- `apps/web/package.json`
+- `package.json`
+- `package-lock.json`
 - `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/ST13_21_IMPLEMENTATION.md`
+- `docs/governance/packets/ST13_21.implementation.packet.json`
+- `docs/governance/packets/ST13_21.implementation.packet.md`
 
 如果后续确实需要其它路径，只能作为另窗建议或确认卡，不得在本任务内直接扩大。
 
 ## 6. 禁止修改
 
-packet forbidden paths 已包含且本次未触碰：
+packet forbidden paths 已包含且本次不得触碰：
 
-- `apps/web/**`
+- `apps/api/app/schema/**`
+- `apps/api/app/llm/**`
+- `apps/api/app/persistence.py`
+- `apps/api/app/api/v1/interviews.py`
+- `apps/api/app/interview_flow/**`
+- `apps/api/app/rag/**`
+- `apps/api/app/review/**`
+- `apps/api/app/export/**`
 - `.github/**`
 - `tools/**`
-- 其他未授权测试文件
 - `docs/governance/DOC_STATE.yaml`
 - `docs/governance/transition_history.jsonl`
 - `docs/governance/previews/**`
-- `docs/governance/packets/**`
 - `infra/**`
-- `apps/api/app/schema/**`
-- `apps/api/app/llm/**`
-- `package.json`
 - `requirements.txt`
 - `.env.example`
 - DB / ORM / migration / repository 大改
@@ -89,11 +89,13 @@ packet forbidden paths 已包含且本次未触碰：
 - 真实对象存储
 - M02 / M03 业务实现
 - 登录 / 权限完整实现
-- Dashboard / App Shell / PageHeader / DataTable
 - 资产归档
 - 批量导出
 - R2 训练闭环
-- 完整 CI / E2E / 多平台矩阵
+- 完整 CI / 多平台矩阵
+- Cypress 或多套 E2E 工具并存
+- 新状态管理库
+- 全站 UI 重构
 
 禁止范围优先级高于 allowed paths。若后续 packet 发现 path conflict，必须停止。
 
@@ -115,10 +117,10 @@ packet forbidden paths 已包含且本次未触碰：
 
 本任务 required validation 至少包含：
 
-- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_integration.py -q`
-- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_persistence.py -q`
-- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api -q`
-- `python -m py_compile` 针对本轮修改的 Python 文件
+- `npm --workspace apps/web run build`
+- `npm --workspace apps/web run test`
+- `npm --workspace apps/web run e2e`
+- `.venv/bin/python -m tools.test_runner.run_tests --pytest-args tests/api/test_traceability_integration.py tests/api/test_rag_foundation.py tests/api/test_rag_persistence.py tests/api/test_review_export.py -q`
 - `.venv/bin/python -m tools.doc_governor.cli validate-state --input docs/governance/DOC_STATE.yaml`
 - `.venv/bin/python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml`
 - `.venv/bin/python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STATE.yaml --entity-type subtask --entity-id ST13_21`
@@ -139,14 +141,18 @@ packet forbidden paths 已包含且本次未触碰：
 
 本轮 R1 trace read surface 的 acceptance criteria 与当前结果：
 
-- interview detail/history 能返回稳定 trace_summary，empty trace 不报 500。
-- trace_summary 包含 session / turn / answer reference 的前端可展示安全摘要。
-- trace_summary 包含 RAG retrieval / citation / evidence gap / degraded trace 的前端可展示安全摘要。
-- review/export 读取路径能返回 score / review / export trace reference 的前端可展示安全摘要。
-- owner/resource visibility 过滤有效，不泄露不可见 resource id、完整 prompt、完整 LLM response、secret 或对象存储真实路径。
-- request_id / operation_id 只做有限展示，不能作为完整审计日志导出。
-- 继续复用现有 TraceabilityStore 和 service，不新增 schema/migration/ORM，不新增依赖。
-- 不修改 apps/web/**、apps/api/app/schema/**、tools/** 或未授权测试文件。
+- 页面能真实打开，且通过浏览器访问实际 route。
+- 页面展示 trace_summary、session / turn / answer trace reference 的安全摘要。
+- 页面展示 RAG citation 列表，包括 source summary、chunk summary、chunk index 或位置。
+- 页面展示 evidence gap：no_result、permission_filtered、index_pending、index_failed、rag_unavailable 至少覆盖当前 slice 可消费状态。
+- 页面展示 degraded / failed / retryable / empty 状态。
+- 页面展示 score / review / export trace reference 的安全摘要。
+- Markdown export 区域展示 export status、failure reason、retryable。
+- 旧记录无 trace 时显示稳定空态，不白屏、不报错。
+- 页面不得展示完整 prompt、完整 LLM response、secret、对象存储真实路径、不可见 resource id 或 provider secret。
+- 至少一条真实浏览器 E2E 测试通过。
+- 继续复用现有 trace read API surface，不新增后端 schema/migration/ORM，不新增无关依赖。
+- 不修改后端 schema / migration / ORM、复杂 RAG provider、R2 训练闭环或资产归档。
 
 完成判定不扩大实现范围；后续 implementation 仍必须受 packet allowed / forbidden paths 限制。
 
@@ -156,13 +162,13 @@ packet forbidden paths 已包含且本次未触碰：
 
 - 需要修改 `DOC_STATE.yaml` 或 `transition_history.jsonl`。
 - 需要修改 formal window 或 implementation approval 状态。
-- 需要手工修改、覆盖或重新生成 implementation packet，除非处于专门 packet generation 窗口。
-- 需要修改 `apps/web/**`、`tools/**`、`.github/**`、未授权测试文件或 `apps/api/app/schema/**`。
-- 需要实现超出 trace/read surface 的 Job / Resume / Knowledge / Interview / Score / Review / Export 业务 API。
+- 需要手工修改、覆盖或重新生成 implementation packet，除非处于本任务 Phase A 的官方 packet generation 步骤。
+- 需要修改 `tools/**`、`.github/**`、未授权后端测试文件或 `apps/api/app/schema/**`。
+- 需要实现超出 trace/read surface 前端消费面的 Job / Resume / Knowledge / Interview / Score / Review / Export 业务 API。
 - 需要接入 DB、ORM、migration、LLM、RAG、Redis、PostgreSQL、MinIO 或对象存储。
 - 需要实现完整 RAG ingestion、embedding、vector store、reranking、资产归档、批量导出或 R2 训练闭环。
 - 需要扩大 M02 / M03 业务实现范围。
-- 需要新增第三方依赖或环境变量。
+- 需要新增非 E2E / UI 必要第三方依赖或环境变量。
 - 依赖不可用但有人要求通过 vendor code 或临时大改绕过。
 
 ## 11. 回退策略
