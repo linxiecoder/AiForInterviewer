@@ -1,4 +1,4 @@
-# ST13_10 IMPLEMENTATION：R1 RAG 最小可用任务包实施说明
+# ST13_10 实施说明：R1 RAG 最小可用任务包实施说明
 
 ## 1. 文档状态
 
@@ -8,7 +8,7 @@
 - 当前 official state：`DOC_STATE.yaml` 中 `ST13_10` 仍为 missing / blocked；本窗口不修改 official state。
 - 当前不允许：RAG implementation、schema / migration / ORM implementation、测试实现、packet generation、formal window open。
 
-## 2. 当前 readiness state
+## 2. 当前 readiness 状态
 
 `ST13_10` 已被确认为 R1 RAG anchor，但当前仍不是 implementation-ready：
 
@@ -52,7 +52,7 @@
 - formal window
 - 任何新长期状态入口
 
-## 5. Implementation stop conditions
+## 5. 实施停止条件
 
 出现以下任一情况必须停止：
 
@@ -66,7 +66,7 @@
 8. `validate-state` 或 `evaluate-state` 失败。
 9. `git status --short` 出现本窗口允许范围外改动。
 
-## 6. Required tests / acceptance boundary
+## 6. required tests / 测试要求与验收边界
 
 未来 `ST13_10` implementation packet 至少需要覆盖以下 required tests 输入：
 
@@ -86,7 +86,7 @@
 
 当前窗口不创建 `tests/**`。
 
-## 7. RAG ingestion / indexing / retrieval 最小实现输入
+## 7. RAG 摄取 / 索引 / 检索最小实现输入
 
 未来最小实现输入应按以下顺序收敛：
 
@@ -100,7 +100,7 @@
 
 该顺序是后续实现输入，不代表当前创建 API、schema、worker、queue、provider 或 tests。
 
-## 8. RAG 与 score / review / export / history 的集成边界
+## 8. RAG 与评分 / 复盘 / 导出 / 历史回看的集成边界
 
 | 下游 | RAG integration boundary |
 | --- | --- |
@@ -111,7 +111,7 @@
 
 训练闭环自动消费 RAG evidence 属于 R2，不进入 R1 must-have。
 
-## 9. RAG 与 frontend UI consumption 的集成边界
+## 9. RAG 与前端 UI 消费的集成边界
 
 未来前端消费需要遵守：
 

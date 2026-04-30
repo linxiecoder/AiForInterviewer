@@ -1,4 +1,4 @@
-# ST13_10 DESIGN：R1 RAG 最小可用任务包设计
+# ST13_10 设计：R1 RAG 最小可用任务包设计
 
 ## 1. 文档状态
 
@@ -22,7 +22,7 @@
   - `docs/requirements/workbench-mvp/**`
   - `docs/design/workbench-mvp/**`
 
-## 3. R1 RAG minimum scope
+## 3. R1 RAG 最小范围
 
 R1 RAG 最小可用目标是让岗位、简历、用户资料、公共知识材料和历史回答能够作为可引用上下文进入模拟面试、评分、复盘、导出和历史回看。
 
@@ -39,7 +39,7 @@ R1 minimum 不追求高级检索质量平台，而是冻结以下最小闭环：
 | evidence gap | RAG 无结果、索引未完成、索引失败或权限过滤为空时显式说明 | 不静默隐藏缺口 |
 | degraded / fallback | RAG 不可用时主链路继续，评分 / 复盘 / 导出显示降级原因 | 不实现完整重试平台 |
 
-## 4. Knowledge source boundary
+## 4. 知识来源边界
 
 R1 knowledge source 至少包含：
 
@@ -56,7 +56,7 @@ R1 不包含：
 - 外部搜索爬取系统。
 - 大规模文档治理平台。
 
-## 5. Document / source snapshot boundary
+## 5. 文档与来源快照边界
 
 R1 document / source snapshot 需要表达：
 
@@ -70,7 +70,7 @@ R1 document / source snapshot 需要表达：
 
 source snapshot 用于复盘、评分、导出和历史回看重现，不代表当前已经创建 schema、migration 或对象存储实现。
 
-## 6. Retrieval query boundary
+## 6. 检索查询边界
 
 R1 retrieval query contract 至少需要：
 
@@ -85,7 +85,7 @@ R1 retrieval query contract 至少需要：
 
 retrieval query 可以被 `ST13_20` 持久化为 summary / metadata / source refs，不得在 R1 默认落完整 prompt、embedding 向量或 provider secret。
 
-## 7. Retrieval result boundary
+## 7. 检索结果边界
 
 R1 retrieval result contract 至少需要：
 
@@ -100,7 +100,7 @@ R1 retrieval result contract 至少需要：
 
 retrieval result 必须能被面试台、评分、复盘、导出和历史回看消费，但不冻结排序算法、embedding provider、向量数据库或 reranking 策略。
 
-## 8. Citation contract
+## 8. 引用契约
 
 R1 citation contract 需要表达：
 
@@ -115,7 +115,7 @@ R1 citation contract 需要表达：
 
 citation 是可解释引用，不是评分唯一依据，也不是完整知识库治理实现。
 
-## 9. Evidence item contract
+## 9. 证据项契约
 
 R1 evidence item contract 需要表达：
 
@@ -129,7 +129,7 @@ R1 evidence item contract 需要表达：
 
 Evidence item 可以进入评分理由、复盘证据、导出内容和历史回看，但必须遵守资源可见性与脱敏边界。
 
-## 10. Evidence gap contract
+## 10. 证据缺口契约
 
 R1 必须显式表达 evidence gap：
 
@@ -144,7 +144,7 @@ R1 必须显式表达 evidence gap：
 
 evidence gap 不得被前端静默隐藏，也不得让用户误以为有证据支持。
 
-## 11. RAG unavailable / empty result / degraded / fallback semantics
+## 11. RAG 不可用 / 空结果 / 降级 / 回退语义
 
 R1 fallback 规则：
 
@@ -155,7 +155,7 @@ R1 fallback 规则：
 - Permission denied / resource not visible：按 `ST13_21` error contract 与 `ST13_20` visibility boundary 处理。
 - LLM 仍可基于岗位、简历、当前回答和历史上下文继续，但复盘 / 评分必须标注证据缺口。
 
-## 12. Security / visibility boundary
+## 12. 安全与可见性边界
 
 R1 RAG 必须遵守：
 
@@ -167,7 +167,7 @@ R1 RAG 必须遵守：
 - 不保存 provider secret、真实 token、真实数据库连接、对象存储真实路径。
 - 不把完整私有文档原文复制到 citation / evidence 表。
 
-## 13. Frontend display contract
+## 13. 前端展示契约
 
 R1 前端可消费的 RAG display contract：
 
@@ -183,7 +183,7 @@ R1 前端可消费的 RAG display contract：
 
 本任务不设计具体 UI 组件，不修改 `apps/**`，不创建前端页面。
 
-## 14. Persistence boundary
+## 14. 持久化边界
 
 R1 persistence boundary 必须与 `ST13_20` 对齐：
 
@@ -195,7 +195,7 @@ R1 persistence boundary 必须与 `ST13_20` 对齐：
 
 R1 不把完整 prompt、完整 LLM response、embedding 向量、provider secret、对象存储真实路径作为必落库字段。
 
-## 15. Dependency on ST13_21 API contract
+## 15. 对 ST13_21 API 契约的依赖
 
 `ST13_10` 必须消费 `ST13_21` 已冻结的 R1 API contract：
 
@@ -208,7 +208,7 @@ R1 不把完整 prompt、完整 LLM response、embedding 向量、provider secre
 
 `ST13_10` 不反向创建 endpoint、OpenAPI、router、mock server 或 API implementation。
 
-## 16. Dependency on ST13_20 data readiness
+## 16. 对 ST13_20 数据 readiness 的依赖
 
 `ST13_10` 必须消费 `ST13_20` 已冻结的 R1 data readiness：
 
@@ -220,7 +220,7 @@ R1 不把完整 prompt、完整 LLM response、embedding 向量、provider secre
 
 `ST13_10` 不创建 schema、migration、ORM、repository 或 database implementation。
 
-## 17. R1 must-have / optional / R2-deferred RAG scope
+## 17. R1 必做 / 可选 / R2 延后的 RAG 范围
 
 | 层级 | RAG scope |
 | --- | --- |

@@ -1378,10 +1378,12 @@ subtasks:
       legacy_locked: false
       declared_blocker_refs: []
       design_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_DESIGN.md
         template_like: false
       implementation_doc:
-        exists: false
+        exists: true
+        path: docs/tasks/workbench-mvp/st13-task-packages/ST13_10/ST13_10_IMPLEMENTATION.md
         template_like: false
       w13_preview:
         wt13_id: WT13-10
