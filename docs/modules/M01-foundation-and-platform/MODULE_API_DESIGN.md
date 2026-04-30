@@ -16,6 +16,17 @@
 | `AppShell` / `PageHeader` | 前端组合接口 | `/(dashboard)` 页面与后续业务页 | 统一工作台壳层与页面头部 | 可作为下游设计输入 |
 | `DataTable` / `FilterBar` / `Pagination` | 前端组合接口 | 列表型页面 | 统一表格、筛选、分页与状态骨架 | 可作为下游设计输入 |
 
+### 2.1 ST13_21 已落地的 API runtime 共享边界
+
+ST13_21 已在 R0 minimal API service boundary 范围内落地以下 M01 共享边界：
+
+- `apps/api/app/main.py` 创建 FastAPI app，并注册 `build_api_v1_router(settings.api_prefix)`。
+- `settings.api_prefix` 默认来自 `API_PREFIX=/api/v1`，统一承载 `/api/v1` 下的 API router。
+- 当前 `/api/v1` 只注册 health router；future route placeholders 仅为未注册常量，不暴露 `/auth`、`/jobs`、`/resumes`、`/interviews`、`/scores`、`/reviews`、`/exports` 等业务 endpoint。
+- HTTPException 最小错误响应已收敛为 `{"error": {"code": "HTTP_<status>", "message": "<detail>"}}`，不定义业务错误 taxonomy。
+- 最小配置边界只读取 `API_TITLE`、`API_VERSION`、`ENVIRONMENT`、`API_PREFIX`、`API_HOST`、`API_PORT`，不读取 DB、Redis、MinIO、LLM、RAG 或对象存储配置。
+- `httpx>=0.27,<1.0` 已显式加入 `requirements.txt`，仅用于 FastAPI `TestClient` smoke / validation；非 sandbox 环境 smoke 已通过，sandbox 内 TestClient 可能超时，记录为 runtime limitation。
+
 ## 3. HTTP API：`GET /api/v1/health`
 
 - 路径：`/api/v1/health`
@@ -38,7 +49,7 @@
 ### 3.3 错误语义
 
 - 本接口不定义业务错误码。
-- 若应用未启动、路由未注册或框架异常，按默认 HTTP 错误语义返回，并通过结构化日志记录。
+- 若应用未启动，仍按运行环境错误处理；若路由未注册或抛出 HTTPException，API runtime 返回最小错误 envelope：`{"error": {"code": "HTTP_<status>", "message": "<detail>"}}`。
 - 健康检查失败意味着运行时基线未建立，应先修复 M01，不应继续推进下游模块实现。
 
 ## 4. HTTP API：`GET /api/v1/storage-objects/{object_id}/download`

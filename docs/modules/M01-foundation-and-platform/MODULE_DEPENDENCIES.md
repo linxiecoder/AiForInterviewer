@@ -24,6 +24,13 @@
 - ST01_02 工作台壳层与 i18n 基线
 - ST01_03 测试、日志与文档治理基线
 
+### 2.1 ST13_21 API lane 依赖事实
+
+- ST13_21 已落地 R0 minimal API service boundary，可作为 M01 对外提供 `/api/v1` router organization、health endpoint、minimal error envelope 与 minimal config boundary 的当前实现事实。
+- API lane 当前依赖 `fastapi`、`uvicorn` 与 `httpx`；其中 `httpx>=0.27,<1.0` 只用于 FastAPI `TestClient` smoke / validation。
+- ST13_21 未新增 DB / ORM / migration、Redis、PostgreSQL、MinIO、LLM、RAG、对象存储或 external services 依赖。
+- ST13_21 未修改 `tests/**` 与 `apps/web/**`，因此不改变 Web lane 或正式测试目录边界。
+
 ## 3. 模块内依赖关系
 
 - `ST01_01` 已重建为正式子任务文档入口，并已存在正式 `DOC_STATE.yaml -> subtasks.ST01_01` entry；它提供仓库结构、环境模板、基础设施占位和健康检查入口，是 `ST01_02`、`ST01_03` 的基础；当前 scoped formal window 已打开，`implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`。本窗口已完成 runtime baseline implementation。

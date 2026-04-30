@@ -25,6 +25,25 @@
 
 ## 3. 当前记录
 
+### 2026-04-30 / R0-W13Z.13 / ST13_21 minimal API service boundary implementation accepted
+
+- 执行类型：post-implementation docs / index / log sync；不写 official state，不改代码，不改 tests，不改 Web。
+- 已确认提交：
+  - `b9d7fd3 feat(ST13_21): add minimal API service boundary`
+  - `1f65274 test(ST13_21): add httpx for FastAPI TestClient smoke`
+- 验收结果：
+  - ST13_21 acceptance refresh: accepted。
+  - `/api/v1/health` 在非 sandbox 环境返回 `200 {"status":"ok"}`。
+  - missing route 返回 minimal error envelope。
+  - FastAPI `TestClient` smoke 在非 sandbox 环境通过；sandbox 内 TestClient 可能超时，记录为 runtime limitation。
+- 范围边界：
+  - 仅完成 R0 minimal API service boundary。
+  - 未实现业务 API，未接 DB / ORM / migration，未接 LLM / RAG，未接 Redis / PostgreSQL / MinIO。
+  - 未修改 `tests/**`、`apps/web/**`。
+- 后续：
+  - official state accepted / done / implementation result transition 仍需另窗 review。
+  - 旧 preview cleanup 仍需单独 cleanup-only 窗口。
+
 ### 2026-04-29 / ST01_01-GovernanceCheckpoint / implementation packet 前置收口
 
 - 执行类型：文档口径同步与治理 checkpoint；不生成 implementation packet，不进入代码实现。

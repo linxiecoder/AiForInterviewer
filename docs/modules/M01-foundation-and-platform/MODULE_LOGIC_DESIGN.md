@@ -42,6 +42,16 @@
 3. 路由返回 `{ "status": "ok" }`。
 4. 结果用于确认 API 入口存活，不用于判断外部依赖是否健康。
 
+### 3.2.1 ST13_21 API runtime 边界逻辑
+
+1. `apps/api/app/main.py` 创建 FastAPI app。
+2. `get_settings()` 读取 `API_TITLE`、`API_VERSION`、`ENVIRONMENT`、`API_PREFIX`、`API_HOST`、`API_PORT` 等最小运行配置。
+3. `main.py` 通过 `build_api_v1_router(settings.api_prefix)` 注册 `/api/v1` router。
+4. `/api/v1` router 当前只注册 health router，保证 `GET /api/v1/health` 返回 `{ "status": "ok" }`。
+5. HTTPException 进入 minimal error envelope，返回 `{"error": {"code": "HTTP_<status>", "message": "<detail>"}}`。
+6. future route placeholders 仅作为未注册常量保留，不创建业务 endpoint。
+7. 该流程不访问 DB、Redis、MinIO、LLM、RAG、对象存储或外部网络。
+
 ### 3.3 工作台壳层渲染逻辑
 
 1. 解析当前 Dashboard 路由。

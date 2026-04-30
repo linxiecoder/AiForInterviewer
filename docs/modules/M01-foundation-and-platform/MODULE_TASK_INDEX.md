@@ -14,6 +14,7 @@
 - 当前产品范围事实只引用 Workbench MVP 当前设计输入；本文件中的 `ST01_*` 用于 M01 模块内结构归属、正式入口重建或历史索引说明，是否具备正式状态仍以 `docs/governance/DOC_STATE.yaml` 为准。
 - 历史 frontend prototype 只作为 historical context；当前任务状态以 `TASK_INDEX.md`、`docs/governance/DOC_STATE.yaml` 和当前任务文档为准。
 - `ST01_01` 双文档已由历史骨架重建为正式 runtime baseline implementation 入口；正式 `DOC_STATE.yaml` 已存在 `subtasks.ST01_01` entry，且 `implementation_doc_state=active_working_doc`、`maturity=L4`、`readiness=downstream_ready`、scoped `formal_window_status=open`、`global_policy.formal_window_open=false`、`candidate_status=none`、`implementation_approval_status=approved`、`implementation_ready=true`、`can_generate_implementation_packet=true`。当前窗口已完成本轮 runtime baseline implementation。
+- `ST13_21` 已作为 Workbench MVP 的 R0 minimal API service boundary 在 M01 API runtime 边界内落地；该事实只说明 `/api/v1` router organization、health endpoint、minimal error envelope、minimal config boundary 和未注册 future route placeholders 已完成，不代表完整后端、业务 API、DB、LLM/RAG、tests 或 Web lane 已完成。
 - `ST01_02` / `ST01_03` 的旧 `SUBTASK_DESIGN.md` / `SUBTASK_IMPLEMENTATION.md` 若仍为骨架或模板，不因被本索引链接而获得正式入口、candidate 或开窗资格。
 
 | 子任务文档 | 父级索引 | 当前用途 |

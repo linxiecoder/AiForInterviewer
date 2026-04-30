@@ -18,7 +18,7 @@
 | group | scope | active entry | status |
 | --- | --- | --- | --- |
 | ST13_20 | 服务端保存 / 数据库边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/` | formal window not open |
-| ST13_21 | API / 后端服务边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | formal window not open |
+| ST13_21 | API / 后端服务边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | formal window 已打开；implementation approval 已批准；implementation packet 已生成并提交；minimal API service boundary implementation 已完成，acceptance refresh 已通过；不授权业务 API / DB / LLM / RAG / tests / Web；可作为 R0 后续 API boundary 基线输入 |
 | ST13_24 | 测试 / 验收 / DoD | `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/` | formal window not open |
 | ST13_25 | 文档治理 / 收口 / 长期上下文 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/` | formal window not open |
 | ST01_01 | 运行环境与仓库基线 | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | 已存在正式状态 entry；`maturity=L4`；`readiness=downstream_ready`；scoped `formal_window_status=open`；`global_policy.formal_window_open=false`；`candidate_status=none`；`implementation_approval_status=approved`；`implementation_ready=true`；`can_generate_implementation_packet=true`；当前窗口已完成 runtime baseline implementation |
@@ -27,6 +27,7 @@
 
 - 任务是否可实施以 `DOC_STATE.yaml` 和 doc-governor gate 为准。
 - ST13 双文档已迁入 `docs/tasks/workbench-mvp/st13-task-packages/**`，并已同步 `DOC_STATE.yaml` required doc slot。
+- `ST13_21` 当前只代表 R0 minimal API service boundary 已落地并验收通过，不代表 R0 主链路、完整后端或完整 API contract 已完成。
 - 本索引不把历史任务文档重新解释为当前任务入口；`ST01_01` 是从历史骨架重建并已登记正式状态 entry 的例外，当前 scoped formal window 已打开，`implementation_approval_status=approved`，`implementation_ready=true`，`can_generate_implementation_packet=true`；已落地本窗口 runtime baseline 实施结果，且不进行业务 code 扩展。
 - `ST01_01` 的 `implementation_ready=true` 仅来自 official state 与 doc-governor gate；本索引不通过 Markdown 自行声明其他任务 implementation-ready。
 
