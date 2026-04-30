@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { appText, sampleInputs, type WorkflowStageId } from "./appContent.js";
 import { StageStrip, type WorkflowStageStatus } from "./components/StageStrip.js";
+import { TrustedTracePage } from "./components/TrustedTracePage.js";
 import { createMockInterviewGenerator } from "./interview/mockInterviewGenerator.js";
 import {
   getFeedbackGenerationHint,
@@ -33,6 +34,17 @@ const createMarkdownPreview = (feedback: FeedbackSummary | undefined) => {
 };
 
 export function App() {
+  const currentPath = typeof window === "undefined" ? "/" : window.location.pathname;
+  if (currentPath.startsWith("/interviews/")) {
+    const sessionId = decodeURIComponent(currentPath.replace(/^\/interviews\//, ""));
+    const ownerId =
+      typeof window === "undefined"
+        ? "owner-local"
+        : new URLSearchParams(window.location.search).get("owner_id") ?? "owner-local";
+
+    return <TrustedTracePage sessionId={sessionId} ownerId={ownerId} />;
+  }
+
   const generator = useMemo(() => createMockInterviewGenerator(), []);
   const [jobDescriptionText, setJobDescriptionText] = useState<string>(
     sampleInputs.jobDescription,
