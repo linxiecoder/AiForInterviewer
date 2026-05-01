@@ -90,6 +90,8 @@ const trustedTracePayload = {
   export: {
     format: "markdown",
     status: "failed",
+    content_version: "r0-export-v1",
+    snapshot_ref: "record-r1-trace:export",
     failure_reason: "Markdown export provider retry budget exhausted",
     retryable: true,
   },
@@ -134,11 +136,31 @@ const emptyTracePayload = {
 };
 
 test("工作台首页作为根路径展示 R1 布局并可进入可信详情", async ({ page }) => {
+  await page.route("**/api/v1/interviews?owner_id=owner-e2e", async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            record_id: "record-r1-trace",
+            owner_id: "owner-e2e",
+            session_id: "session-r1-trace",
+            status: "feedback_ready",
+            mode: "r1_trusted",
+            turn_index: 1,
+            created_at: "2026-05-01T01:00:00Z",
+            updated_at: "2026-05-01T03:20:00Z",
+            trace_summary: trustedTracePayload.trace_summary,
+            unsafe_debug: trustedTracePayload.unsafe_debug,
+          },
+        ],
+      },
+    });
+  });
   await page.route("**/api/v1/interviews/session-r1-trace?owner_id=owner-e2e", async (route) => {
     await route.fulfill({ json: trustedTracePayload });
   });
 
-  await page.goto("/");
+  await page.goto("/?owner_id=owner-e2e");
 
   await expect(page.getByRole("heading", { name: "AI 模拟面试工作台" })).toBeVisible();
   await expect(page.getByText("R1 可信工作台闭环")).toBeVisible();
@@ -147,6 +169,9 @@ test("工作台首页作为根路径展示 R1 布局并可进入可信详情", a
   await expect(statusTags.getByText("RAG citation", { exact: true })).toBeVisible();
   await expect(page.getByLabel("可信能力摘要").getByText("evidence gap", { exact: true })).toBeVisible();
   await expect(statusTags.getByText("0-100 scoring", { exact: true })).toBeVisible();
+  await expect(page.getByText("trace 7 / RAG 2 / export 2")).toBeVisible();
+  await expect(page.getByText("feedback_ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("FULL_PROMPT_SHOULD_NOT_RENDER")).toHaveCount(0);
   await expect(page.getByText("W10 首切片 / apps/web mock 原型")).toHaveCount(0);
   await expect(page.getByText("AI 模拟面试首切片原型")).toHaveCount(0);
   await expect(page.getByText("Mock LLM")).toHaveCount(0);
@@ -210,6 +235,8 @@ test("面试详情页展示 R1 可信 trace、RAG citation、evidence gap 和 ex
   await expect(page.getByText("review:session-r1-trace:r1-review-v1")).toBeVisible();
   await expect(page.getByText("export:session-r1-trace:r0-export-v1")).toBeVisible();
   await expect(page.getByText("Export status: failed")).toBeVisible();
+  await expect(page.getByText("content_version: r0-export-v1")).toBeVisible();
+  await expect(page.getByText("snapshot_ref: record-r1-trace:export")).toBeVisible();
   await expect(page.getByText("可重试")).toBeVisible();
   await expect(page.getByText("Markdown export provider retry budget exhausted")).toBeVisible();
 

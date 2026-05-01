@@ -1,4 +1,5 @@
 import type {
+  MarkdownExportSummary,
   RagCitationSummary,
   ScoreDimension,
   TraceSummary,
@@ -38,6 +39,7 @@ export interface TrustedTraceViewModel {
   exportStatus: string;
   exportFailureReason: string;
   exportRetryable: boolean;
+  exportMetadata: string[];
 }
 
 export interface DimensionViewItem {
@@ -131,6 +133,7 @@ export function buildTrustedTraceViewModel(detail: TrustedInterviewDetail): Trus
     exportStatus: exportSummary.status ?? "empty",
     exportFailureReason: exportSummary.failure_reason ?? "none",
     exportRetryable: Boolean(exportSummary.retryable),
+    exportMetadata: buildExportMetadata(exportSummary),
   };
 }
 
@@ -205,6 +208,31 @@ function safeStringList(values: string[] | undefined): string[] {
 
 function normalizeScoreTotal(value: number | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function buildExportMetadata(exportSummary: MarkdownExportSummary): string[] {
+  const metadata = exportSummary.metadata ?? {};
+  const values = [
+    ["content_version", exportSummary.content_version ?? metadata.content_version],
+    ["snapshot_ref", exportSummary.snapshot_ref ?? metadata.snapshot_ref],
+    ["snapshot_record", metadata.record_id],
+    ["review_version", metadata.review_version],
+    ["turn_count", metadata.turn_count],
+  ] as const;
+
+  return values
+    .map(([label, value]) => formatMetadataValue(label, value))
+    .filter((value): value is string => Boolean(value));
+}
+
+function formatMetadataValue(label: string, value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return `${label}: ${value.trim()}`;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `${label}: ${value}`;
+  }
+  return undefined;
 }
 
 function uniqueStrings(values: Array<string | undefined>): string[] {

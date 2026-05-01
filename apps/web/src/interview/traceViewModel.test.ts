@@ -55,7 +55,13 @@ test("buildTrustedTraceViewModel normalizes trusted trace refs and evidence gaps
       },
       request_refs: [{ trace_type: "interview", status: "completed", operation_id: "detail" }],
     },
-    export: { status: "failed", retryable: true, failure_reason: "export failed" },
+    export: {
+      status: "failed",
+      retryable: true,
+      failure_reason: "export failed",
+      content_version: "r0-export-v1",
+      snapshot_ref: "record-r1:export",
+    },
   };
 
   const viewModel = buildTrustedTraceViewModel(detail);
@@ -66,6 +72,7 @@ test("buildTrustedTraceViewModel normalizes trusted trace refs and evidence gaps
   assert.ok(viewModel.statusLabels.includes("degraded"));
   assert.ok(viewModel.statusLabels.includes("retryable"));
   assert.equal(viewModel.exportStatus, "failed");
+  assert.deepEqual(viewModel.exportMetadata, ["content_version: r0-export-v1", "snapshot_ref: record-r1:export"]);
   assert.equal(viewModel.scoreTotal, 82);
   assert.equal(viewModel.scoreStatus, "degraded");
   assert.equal(viewModel.lowConfidence, true);

@@ -18,10 +18,38 @@ permalink: ai-for-interviewer/development/local-startup
 
 ### Node / npm
 
-- 本地已验证 Node：`v18.19.1`。
-- 本地已验证 npm：`9.2.0`。
-- 当前前端依赖包含 `vite@7.3.2` 和 `@vitejs/plugin-react@5.2.0`，它们在 lockfile 中声明推荐 Node `^20.19.0 || >=22.12.0`。
-- 在 Node `18.19.1` 下，`npm --workspace apps/web run build` 会输出 Node 版本 warning，但当前构建可通过。新开发环境建议使用 Node `20.19+` 或 `22.12+`，避免未来 Vite 行为变化。
+- 前端运行基线：Node `20.19+` 或 `22.12+`。
+- 仓库根目录已提供 `.nvmrc` 和 `.node-version`，当前固定为 `22.12.0`。
+- 本轮已验证 Node：`v22.22.2`；已验证 npm：`10.9.7`。
+- 当前前端依赖包含 Vite 7；Vite 7 要求 Node `20.19+` 或 `22.12+`。Node 18 下的 warning 不再视为可长期忽略，前端 build / test / E2E 前必须先切到满足基线的 Node。
+
+WSL / Linux 使用 `nvm` 切换到推荐基线：
+
+```bash
+nvm install 22.12.0
+nvm use 22.12.0
+node -v
+npm -v
+```
+
+如果本机统一使用 Node 20 LTS，也必须不低于 `20.19.0`：
+
+```bash
+nvm install 20.19.0
+nvm use 20.19.0
+node -v
+```
+
+Windows PowerShell 使用 nvm-windows 时执行：
+
+```powershell
+nvm install 22.12.0
+nvm use 22.12.0
+node -v
+npm -v
+```
+
+如果 Windows / WSL 中 `node -v` 仍显示 `v18.x`，先停止前端 build / test / E2E，完成 Node 切换后再继续。
 
 ### WSL2 / Windows / PyCharm
 
@@ -141,9 +169,9 @@ npm --workspace apps/web run dev
 npm run web:dev
 ```
 
-启动后默认打开根路径 `/`，当前根路径是 R1 工作台首页，展示最近模拟、主操作入口、可信能力摘要和风险空态。旧 W10 mock 原型不再作为默认首页，可通过 `/legacy-mock` 或 `/mock` 手动访问。
+启动后默认打开根路径 `/`，当前根路径是 R1 工作台首页，展示主操作入口、可信能力摘要、风险空态，并通过 `/api/v1/interviews?owner_id=<owner>` 读取最近模拟记录。旧 W10 mock 原型不再作为默认首页，可通过 `/legacy-mock` 或 `/mock` 手动访问。
 
-当前 `apps/web/vite.config.ts` 没有配置 API proxy。可信 trace 页面使用相对路径 `/api/v1/interviews/:sessionId` 读取后端；本地真实联调需要同源反向代理、后续 Vite proxy，或通过 E2E mock 验证页面能力。
+当前 `apps/web/vite.config.ts` 没有配置 API proxy。R1 首页和可信 trace 页面使用相对路径 `/api/v1/interviews`、`/api/v1/interviews/:sessionId` 读取后端；本地真实联调需要同源反向代理、后续 Vite proxy，或通过 E2E mock 验证页面能力。
 
 ### 测试步骤
 
@@ -183,7 +211,7 @@ npm --workspace apps/web exec -- playwright install chromium
 npm --workspace apps/web run e2e
 ```
 
-当前 E2E 配置位于 `apps/web/playwright.config.ts`，测试位于 `apps/web/e2e/trusted-trace.spec.ts`。Playwright 会执行 `npm run build && npm run preview -- --port 4173` 并访问 `http://127.0.0.1:4173`。E2E 覆盖根路径 `/` 的 R1 工作台首页、从最近记录进入 `/interviews/:sessionId` 的可信详情页，以及 `/legacy-mock` 旧原型入口。
+当前 E2E 配置位于 `apps/web/playwright.config.ts`，测试位于 `apps/web/e2e/trusted-trace.spec.ts`。Playwright 会执行 `npm run build && npm run preview -- --port 4173` 并访问 `http://127.0.0.1:4173`。E2E 覆盖根路径 `/` 的 R1 工作台首页、首页读取真实 history contract、从最近记录进入 `/interviews/:sessionId` 的可信详情页，以及 `/legacy-mock` 旧原型入口。
 
 ## 常见问题
 
@@ -200,7 +228,7 @@ npm --workspace apps/web run e2e
 
 ### Node 版本 warning
 
-在 Node `18.19.1` 下，Vite 7 会提示需要 Node `20.19+` 或 `22.12+`。当前 build 已验证可通过，但建议升级 Node，以免后续 Vite minor 版本或插件行为收紧。
+Vite 7 要求 Node `20.19+` 或 `22.12+`。如果当前 shell 仍是 Node `18.x`，不要继续运行前端 build / test / E2E；先按本文 Node / npm 章节切换到 Node `20.19+` 或 `22.12+`。本轮在 Node `v22.22.2` 下验证，build 输出不再出现 Node 18 / Vite 运行时 warning。
 
 ### Playwright browser 缺失
 

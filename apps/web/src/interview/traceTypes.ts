@@ -44,10 +44,14 @@ export interface TraceSummary {
 }
 
 export interface MarkdownExportSummary {
+  [key: string]: unknown;
   format?: string;
   status?: string;
+  content_version?: string;
+  snapshot_ref?: string;
   failure_reason?: string;
   retryable?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ScoreDimension {
@@ -89,6 +93,7 @@ export interface ReviewSummary {
 }
 
 export interface TrustedInterviewDetail {
+  [key: string]: unknown;
   record_id?: string;
   owner_id?: string;
   session_id: string;
@@ -97,4 +102,22 @@ export interface TrustedInterviewDetail {
   score?: ScoreSummary;
   review?: ReviewSummary;
   export?: MarkdownExportSummary;
+}
+
+export interface InterviewHistoryItem {
+  [key: string]: unknown;
+  record_id?: string;
+  owner_id?: string;
+  session_id?: string;
+  status?: string;
+  mode?: string;
+  turn_index?: number;
+  created_at?: string;
+  updated_at?: string;
+  trace_summary?: TraceSummary;
+}
+
+export interface InterviewHistoryResponse {
+  [key: string]: unknown;
+  items?: InterviewHistoryItem[];
 }

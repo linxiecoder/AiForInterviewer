@@ -44,6 +44,7 @@ permalink: ai-for-interviewer/readme
 ## 当前执行约束
 
 - `docs/governance/DOC_STATE.yaml` 是正式结构化状态真值，本入口不替代状态层。
+- 前端运行基线为 Node `20.19+` 或 `22.12+`；仓库 `.nvmrc` / `.node-version` 当前固定到 `22.12.0`，本地启动细节见 [本地启动指导](docs/development/local-startup.md)。
 - 当前文档体系重构不打开 formal window，不生成 implementation packet，不授权业务实现。
 - 当前 planning 文档已迁入 `docs/planning/**`，当前 task 文档已迁入 `docs/tasks/**`，状态层路径已同步。
 - 归档材料不作为当前需求、设计、规划或任务依据。

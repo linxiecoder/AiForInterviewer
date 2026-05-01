@@ -303,6 +303,7 @@ export function TrustedTracePage({
                 {viewModel.exportRetryable ? "可重试" : "不可重试"}
               </Tag>
               <Text>failure reason: {viewModel.exportFailureReason}</Text>
+              <TagList items={viewModel.exportMetadata} emptyLabel="暂无 export snapshot / version" />
             </div>
             </Card>
 

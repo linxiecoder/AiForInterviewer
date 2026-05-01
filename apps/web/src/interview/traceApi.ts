@@ -1,4 +1,24 @@
-import type { TrustedInterviewDetail } from "./traceTypes.js";
+import type { InterviewHistoryResponse, TrustedInterviewDetail } from "./traceTypes.js";
+
+export async function fetchInterviewHistory({
+  ownerId,
+  signal,
+}: {
+  ownerId: string;
+  signal?: AbortSignal;
+}): Promise<InterviewHistoryResponse> {
+  const params = new URLSearchParams({ owner_id: ownerId });
+  const response = await fetch(`/api/v1/interviews?${params}`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`history request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as InterviewHistoryResponse;
+}
 
 export async function fetchTrustedInterviewDetail({
   sessionId,

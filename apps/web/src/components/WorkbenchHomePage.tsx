@@ -1,10 +1,47 @@
 import { Alert, Button, Card, Col, Descriptions, Empty, List, Row, Space, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 
 import { workbenchHomeText } from "../appContent.js";
+import { fetchInterviewHistory } from "../interview/traceApi.js";
+import type { InterviewHistoryResponse } from "../interview/traceTypes.js";
+import { buildHistoryViewModel } from "../interview/historyViewModel.js";
 
 const { Paragraph, Text, Title } = Typography;
 
-export function WorkbenchHomePage() {
+type HistoryLoadState =
+  | { status: "loading" }
+  | { status: "ready"; response: InterviewHistoryResponse }
+  | { status: "failed"; message: string };
+
+export function WorkbenchHomePage({ ownerId }: { ownerId: string }) {
+  const [historyLoadState, setHistoryLoadState] = useState<HistoryLoadState>({ status: "loading" });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setHistoryLoadState({ status: "loading" });
+
+    fetchInterviewHistory({ ownerId, signal: controller.signal })
+      .then((response) => setHistoryLoadState({ status: "ready", response }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "history request failed";
+        setHistoryLoadState({ status: "failed", message });
+      });
+
+    return () => controller.abort();
+  }, [ownerId]);
+
+  const historyViewModel = useMemo(
+    () =>
+      buildHistoryViewModel(
+        historyLoadState.status === "ready" ? historyLoadState.response : { items: [] },
+        ownerId,
+      ),
+    [historyLoadState, ownerId],
+  );
+
   return (
     <main className="app-shell workbench-home-shell">
       <section className="workspace-header" aria-labelledby="workbench-home-title">
@@ -56,11 +93,23 @@ export function WorkbenchHomePage() {
           <Title level={2} id="recent-title">
             最近记录
           </Title>
-          <Text type="secondary">示例记录用于保护从首页进入可信详情页的真实路径。</Text>
+          <Text type="secondary">读取 `/api/v1/interviews` 的真实 history contract。</Text>
         </div>
+        {historyLoadState.status === "loading" ? (
+          <Alert className="trusted-alert" message="正在读取最近记录..." type="info" showIcon />
+        ) : null}
+        {historyLoadState.status === "failed" ? (
+          <Alert
+            className="trusted-alert"
+            message="最近记录读取失败"
+            description={historyLoadState.message}
+            type="warning"
+            showIcon
+          />
+        ) : null}
         <List
           className="home-record-list"
-          dataSource={[...workbenchHomeText.recentInterviews]}
+          dataSource={historyViewModel.items}
           locale={{ emptyText: <Empty description="没有历史模拟记录，先从发起入口开始。" /> }}
           renderItem={(record) => (
             <List.Item
@@ -74,16 +123,28 @@ export function WorkbenchHomePage() {
                 title={
                   <div className="home-card-title-row">
                     <Text strong>{record.title}</Text>
-                    <Tag color="success">score {record.score}</Tag>
                     <Tag color="processing">{record.status}</Tag>
+                    <Tag color={statusTagColor(record.traceStatus)}>trace_summary: {record.traceStatus}</Tag>
                   </div>
                 }
                 description={
                   <div className="home-record-detail">
-                    <Text>{record.description}</Text>
+                    <Text>{record.traceCountLabel}</Text>
+                    <div className="trusted-tag-row">
+                      {record.statusLabels.map((label) => (
+                        <Tag color={statusTagColor(label)} key={label}>
+                          {label}
+                        </Tag>
+                      ))}
+                      {record.evidenceGapLabels.map((label) => (
+                        <Tag color="warning" key={label}>
+                          {label}
+                        </Tag>
+                      ))}
+                    </div>
                     <Text type="secondary">
-                      session: {record.sessionId} / owner: {record.ownerId} / updated:{" "}
-                      {record.updatedAt}
+                      session: {record.sessionId} / owner: {record.ownerId} / mode: {record.mode} /
+                      turn: {record.turnIndex} / updated: {record.updatedAt}
                     </Text>
                   </div>
                 }
