@@ -45,17 +45,17 @@ export function TrustedTracePage({
     <main className="app-shell trusted-trace-shell">
       <section className="workspace-header" aria-labelledby="trusted-trace-title">
         <div>
-          <Text className="eyebrow">R1 可信工作台 / trace read surface</Text>
+          <Text className="eyebrow">R1 可信工作台 / 评分复盘详情</Text>
           <Title level={1} id="trusted-trace-title">
-            R1 可信 Trace
+            评分 / 复盘详情
           </Title>
           <Paragraph className="header-copy">
-            展示面试详情中的 trace_summary、RAG citation、evidence gap、评分复盘和 Markdown export
-            trace reference。
+            本场面试的总分、维度理由、证据链、降级态与导出状态。
           </Paragraph>
         </div>
         <div className="status-group" aria-label="trace 状态">
           <Tag color={statusColor(viewModel.traceStatus)}>trace_summary: {viewModel.traceStatus}</Tag>
+          <Tag color="geekblue">session: {sessionId}</Tag>
           <Tag color="blue">owner: {ownerId}</Tag>
         </div>
       </section>
@@ -83,8 +83,16 @@ export function TrustedTracePage({
       ) : null}
 
       <Spin spinning={loadState.status === "loading"}>
-        <section className="trusted-grid" aria-label="R1 可信数据摘要">
-          <Card title="评分 / 复盘" className="trace-card trusted-card">
+        <section className="trusted-section" aria-labelledby="trusted-section-title">
+          <div className="trusted-section-heading">
+            <Title level={2} id="trusted-section-title">
+              可信复盘工作区
+            </Title>
+            <Text type="secondary">复盘结果、证据链、降级态和导出引用来自本场面试记录。</Text>
+          </div>
+          <div className="trusted-grid" aria-label="R1 可信数据摘要">
+            <div className="trusted-grid-divider">复盘结果</div>
+            <Card title="评分 / 复盘" className="trace-card trusted-card">
             {viewModel.scoreTotal === undefined ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="旧记录暂无评分复盘" />
             ) : (
@@ -153,9 +161,10 @@ export function TrustedTracePage({
                 },
               ]}
             />
-          </Card>
+            </Card>
 
-          <Card title="Trace refs" className="trace-card trusted-card">
+            <div className="trusted-grid-divider">Trace / RAG 证据链</div>
+            <Card title="Trace refs" className="trace-card trusted-card">
             {viewModel.isEmptyTrace ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="旧记录暂无 trace_summary" />
             ) : null}
@@ -189,9 +198,9 @@ export function TrustedTracePage({
                 </Tag>
               ))}
             </div>
-          </Card>
+            </Card>
 
-          <Card title="RAG citation" className="trace-card trusted-card">
+            <Card title="RAG citation" className="trace-card trusted-card">
             <Collapse
               className="trusted-collapse"
               defaultActiveKey={["citations"]}
@@ -229,9 +238,9 @@ export function TrustedTracePage({
                 },
               ]}
             />
-          </Card>
+            </Card>
 
-          <Card title="Evidence gap / degraded" className="trace-card trusted-card">
+            <Card title="Evidence gap / degraded" className="trace-card trusted-card">
             <Alert
               message="Evidence gap"
               description={
@@ -258,9 +267,10 @@ export function TrustedTracePage({
                 },
               ]}
             />
-          </Card>
+            </Card>
 
-          <Card title="Review / export refs" className="trace-card trusted-card">
+            <div className="trusted-grid-divider">复盘引用与导出</div>
+            <Card title="Review / export refs" className="trace-card trusted-card">
             <Descriptions
               className="trusted-descriptions"
               size="small"
@@ -284,9 +294,9 @@ export function TrustedTracePage({
                 },
               ]}
             />
-          </Card>
+            </Card>
 
-          <Card title="Markdown export" className="trace-card trusted-card">
+            <Card title="Markdown export" className="trace-card trusted-card">
             <div className="export-summary">
               <Text strong>Export status: {viewModel.exportStatus}</Text>
               <Tag color={viewModel.exportRetryable ? "warning" : "default"}>
@@ -294,9 +304,9 @@ export function TrustedTracePage({
               </Tag>
               <Text>failure reason: {viewModel.exportFailureReason}</Text>
             </div>
-          </Card>
+            </Card>
 
-          <Card title="Request refs" className="trace-card trusted-card">
+            <Card title="Request refs" className="trace-card trusted-card">
             {viewModel.requestRefs.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 request ref" />
             ) : (
@@ -311,7 +321,8 @@ export function TrustedTracePage({
                 )}
               />
             )}
-          </Card>
+            </Card>
+          </div>
         </section>
       </Spin>
     </main>

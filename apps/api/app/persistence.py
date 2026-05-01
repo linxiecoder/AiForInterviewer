@@ -24,7 +24,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.engine import Engine, URL
+from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.pool import StaticPool
 
 from app.interview_record_contract import (
@@ -643,6 +643,31 @@ def _create_database_engine(database_location: str) -> Engine:
         return create_engine(_normalize_database_url(database_location))
     Path(database_location).parent.mkdir(parents=True, exist_ok=True)
     return create_engine(URL.create("sqlite+pysqlite", database=database_location))
+
+
+def describe_database_location(database_location: str) -> str:
+    """返回不含凭据的启动日志数据库描述。"""
+    if database_location == ":memory:":
+        return "database=sqlite path=:memory:"
+    if not _is_database_url(database_location):
+        return f"database=sqlite path={Path(database_location).name}"
+
+    try:
+        url = make_url(_normalize_database_url(database_location))
+    except Exception:
+        return "database=url dialect=unknown"
+
+    if url.get_backend_name() == "postgresql":
+        host = url.host or "<local>"
+        port = url.port or 5432
+        database = url.database or "<unknown>"
+        return f"database=postgresql host={host} port={port} db={database}"
+
+    if url.get_backend_name() == "sqlite":
+        database = url.database or "<memory>"
+        return f"database=sqlite path={Path(database).name}"
+
+    return f"database={url.get_backend_name()} host={url.host or '<local>'}"
 
 
 def _initialize_schema(engine: Engine) -> None:

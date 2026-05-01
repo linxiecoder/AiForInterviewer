@@ -387,11 +387,32 @@ h2 {
   gap: 8px;
 }
 
+.trusted-section {
+  display: grid;
+  gap: 14px;
+  padding-top: 24px;
+}
+
+.trusted-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #d5dce5;
+  padding-bottom: 12px;
+}
+
 .trusted-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  padding-top: 24px;
+}
+
+.trusted-grid-divider {
+  grid-column: 1 / -1;
+  color: #1849a9;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .trusted-card {
@@ -453,13 +474,15 @@ h2 {
   }
 
   .workspace-header,
+  .trusted-section-heading,
   .stage-strip,
   .workbench,
   .trusted-grid {
     grid-template-columns: 1fr;
   }
 
-  .workspace-header {
+  .workspace-header,
+  .trusted-section-heading {
     display: grid;
     align-items: start;
   }

@@ -142,7 +142,8 @@ test("面试详情页展示 R1 可信 trace、RAG citation、evidence gap 和 ex
 
   await page.goto("/interviews/session-r1-trace?owner_id=owner-e2e");
 
-  await expect(page.getByRole("heading", { name: "R1 可信 Trace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "评分 / 复盘详情" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "可信复盘工作区" })).toBeVisible();
   await expect(page.locator(".ant-card").filter({ hasText: "Trace refs" })).toBeVisible();
   await expect(page.locator(".ant-collapse").filter({ hasText: "RAG citation 详情" })).toBeVisible();
   await expect(page.getByText("trace_summary: available")).toBeVisible();
@@ -191,7 +192,7 @@ test("旧记录没有 trace 时展示稳定空态", async ({ page }) => {
 
   await page.goto("/interviews/session-empty-trace?owner_id=owner-empty");
 
-  await expect(page.getByRole("heading", { name: "R1 可信 Trace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "评分 / 复盘详情" })).toBeVisible();
   await expect(page.getByText("trace_summary: empty")).toBeVisible();
   await expect(page.getByText("旧记录暂无评分复盘")).toBeVisible();
   await expect(page.getByText("暂无评分维度")).toBeVisible();

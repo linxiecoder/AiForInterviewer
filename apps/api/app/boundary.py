@@ -1,10 +1,11 @@
-"""Application boundary settings and shared error-envelope helpers."""
+"""应用边界配置与共享 error envelope 辅助函数。"""
 
 from __future__ import annotations
 
 import os
 import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastapi import Request
@@ -25,12 +26,15 @@ ENVIRONMENT_ENV = "ENVIRONMENT"
 API_PREFIX_ENV = "API_PREFIX"
 API_HOST_ENV = "API_HOST"
 API_PORT_ENV = "API_PORT"
+AUTO_MIGRATE_ON_STARTUP_ENV = "AUTO_MIGRATE_ON_STARTUP"
 DEFAULT_API_TITLE = "ai-for-interviewer"
 DEFAULT_API_VERSION = "0.1.0"
 DEFAULT_ENVIRONMENT = "development"
 DEFAULT_API_PREFIX = "/api/v1"
 DEFAULT_API_HOST = "127.0.0.1"
 DEFAULT_API_PORT = 8001
+DEFAULT_AUTO_MIGRATE_ON_STARTUP = True
+DEFAULT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 ERROR_KEY = "error"
 ERROR_CODE_KEY = "code"
 ERROR_MESSAGE_KEY = "message"
@@ -43,7 +47,7 @@ REQUEST_VALIDATION_ERROR_STATUS_CODE = 422
 
 @dataclass(frozen=True)
 class ApiSettings:
-    """Runtime settings consumed by the FastAPI application boundary."""
+    """FastAPI 应用边界运行配置。"""
 
     title: str
     version: str
@@ -52,18 +56,25 @@ class ApiSettings:
     host: str
     port: int
     database_path: str
+    auto_migrate_on_startup: bool
 
 
-def get_settings() -> ApiSettings:
-    """Read API settings from environment variables with local defaults."""
+def get_settings(env_file: Path | None = None) -> ApiSettings:
+    """读取环境变量和本地 .env，返回 API 运行配置。"""
+    dotenv_values = _load_local_env_file(env_file)
     return ApiSettings(
-        title=_env(API_TITLE_ENV, DEFAULT_API_TITLE),
-        version=_env(API_VERSION_ENV, DEFAULT_API_VERSION),
-        environment=_env(ENVIRONMENT_ENV, DEFAULT_ENVIRONMENT),
-        api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
-        host=_env(API_HOST_ENV, DEFAULT_API_HOST),
-        port=_env_int(API_PORT_ENV, DEFAULT_API_PORT),
-        database_path=_database_location(),
+        title=_env(API_TITLE_ENV, DEFAULT_API_TITLE, dotenv_values),
+        version=_env(API_VERSION_ENV, DEFAULT_API_VERSION, dotenv_values),
+        environment=_env(ENVIRONMENT_ENV, DEFAULT_ENVIRONMENT, dotenv_values),
+        api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX, dotenv_values)),
+        host=_env(API_HOST_ENV, DEFAULT_API_HOST, dotenv_values),
+        port=_env_int(API_PORT_ENV, DEFAULT_API_PORT, dotenv_values),
+        database_path=_database_location(dotenv_values),
+        auto_migrate_on_startup=_env_bool(
+            AUTO_MIGRATE_ON_STARTUP_ENV,
+            DEFAULT_AUTO_MIGRATE_ON_STARTUP,
+            dotenv_values,
+        ),
     )
 
 
@@ -113,14 +124,14 @@ async def validation_exception_handler(
     )
 
 
-def _env(name: str, default: str) -> str:
-    value = os.getenv(name, default).strip()
-    return value or default
+def _env(name: str, default: str, dotenv_values: dict[str, str] | None = None) -> str:
+    value = _env_optional(name, dotenv_values)
+    return value if value is not None else default
 
 
-def _env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if value is None or not value.strip():
+def _env_int(name: str, default: int, dotenv_values: dict[str, str] | None = None) -> int:
+    value = _env_optional(name, dotenv_values)
+    if value is None:
         return default
     try:
         return int(value)
@@ -128,13 +139,33 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _database_location() -> str:
-    database_url = os.getenv(DATABASE_URL_ENV)
-    if database_url is not None and database_url.strip():
-        return database_url.strip()
+def _env_bool(name: str, default: bool, dotenv_values: dict[str, str] | None = None) -> bool:
+    value = _env_optional(name, dotenv_values)
+    if value is None:
+        return default
+    normalized = value.lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _database_location(dotenv_values: dict[str, str] | None = None) -> str:
+    database_url = _clean_env_value(os.getenv(DATABASE_URL_ENV))
+    if database_url is not None:
+        return database_url
+    process_sqlite_path = _clean_env_value(os.getenv(API_DATABASE_PATH_ENV))
+    if process_sqlite_path is not None:
+        return process_sqlite_path
+    if DATABASE_URL_ENV not in os.environ and dotenv_values is not None:
+        dotenv_database_url = _clean_env_value(dotenv_values.get(DATABASE_URL_ENV))
+        if dotenv_database_url is not None:
+            return dotenv_database_url
     return _env(
         API_DATABASE_PATH_ENV,
         os.path.join(tempfile.gettempdir(), DEFAULT_DATABASE_DIR, DEFAULT_DATABASE_FILE),
+        dotenv_values,
     )
 
 
@@ -143,3 +174,50 @@ def _normalize_prefix(prefix: str) -> str:
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
     return normalized.rstrip("/") or "/"
+
+
+def _env_optional(name: str, dotenv_values: dict[str, str] | None = None) -> str | None:
+    if name in os.environ:
+        return _clean_env_value(os.getenv(name))
+    if dotenv_values is None:
+        return None
+    return _clean_env_value(dotenv_values.get(name))
+
+
+def _clean_env_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if cleaned.startswith("<") and cleaned.endswith(">"):
+        return None
+    return cleaned
+
+
+def _load_local_env_file(env_file: Path | None = None) -> dict[str, str]:
+    if os.getenv(ENVIRONMENT_ENV, "").strip().lower() == "test":
+        return {}
+    path = env_file or DEFAULT_ENV_FILE
+    if not path.is_file():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        name, raw_value = line.split("=", 1)
+        key = name.strip()
+        if not key:
+            continue
+        values[key] = _strip_env_quotes(raw_value.strip())
+    return values
+
+
+def _strip_env_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value

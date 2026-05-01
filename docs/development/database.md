@@ -27,13 +27,16 @@ schema 初始化发生在应用 startup 或测试显式初始化边界：
 
 - `apps/api/app/main.py` 创建 `InterviewRecordStore`、`TraceabilityStore`、`RAGPersistenceStore`。
 - `create_app(..., initialize_schema=True)` 用于测试中提前初始化 schema。
-- 常规运行时在 FastAPI lifespan 中调用各 store 的 `initialize()`。
+- 常规运行时在 FastAPI lifespan 中调用各 store 的 `initialize()`，默认由 `AUTO_MIGRATE_ON_STARTUP=true` 控制开启。
+- `AUTO_MIGRATE_ON_STARTUP=false` 会跳过启动时 schema bootstrap；本地开发默认开启，生产环境建议显式控制。
 - `persistence.py` 的 `_initialize_schema()` 会识别 SQLAlchemy dialect。
 - SQLite 分支继续使用 raw connection 执行 `_load_schema_sql()`，保持本地 fallback 与既有测试行为。
 - PostgreSQL 分支使用 SQLAlchemy connection 逐条执行 `_schema_statements(_load_schema_sql())` 拆出的 DDL。
 - `_load_schema_sql()` 以 UTF-8 读取并拼接当前三个 schema 文件。
 
-schema-loader 只负责执行 `CREATE TABLE IF NOT EXISTS` 与索引定义，不承担版本迁移、回滚或数据修复。
+schema-loader 只负责执行 `CREATE TABLE IF NOT EXISTS` 与索引定义，不承担版本迁移、回滚或数据修复。当前不引入 Alembic；如果后续需要版本化 migration、回滚、数据修复或多环境发布策略，应开启单独 migration strategy 设计窗口。
+
+启动成功后，FastAPI startup 日志会输出 API base URL、Swagger UI URL、OpenAPI JSON URL、数据库类型和 schema bootstrap 开关。PostgreSQL 日志只允许包含 host、port 和 db 名称，不输出用户名、密码或完整 DSN。
 
 ## schema 文件列表
 
@@ -106,7 +109,7 @@ SQLite fallback 示例：
 API_DATABASE_PATH=<local_sqlite_file_path> .venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
 ```
 
-`.env.example` 只提供占位说明，不包含真实数据库密码或真实生产连接串。
+`.env.example` 只提供占位说明，不包含真实数据库密码或真实生产连接串。后端会读取仓库根目录 `.env` 中的 `DATABASE_URL` 和 `AUTO_MIGRATE_ON_STARTUP`；占位形式的 `<...>` 值会被视为空值，避免复制模板后误连无效数据库。
 
 ## Store 职责
 
