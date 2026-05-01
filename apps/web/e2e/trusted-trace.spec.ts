@@ -196,6 +196,32 @@ test("工作台首页作为根路径展示 R1 布局并可进入可信详情", a
   await expect(page.getByText("AI 模拟面试首切片原型")).toBeVisible();
 });
 
+test("工作台首页主入口进入真实页面且不再使用锚点假入口", async ({ page }) => {
+  await page.route("**/api/v1/interviews?owner_id=owner-e2e", async (route) => {
+    await route.fulfill({ json: { items: [] } });
+  });
+
+  await page.goto("/?owner_id=owner-e2e");
+
+  await expect(page.getByRole("heading", { name: "AI 模拟面试工作台" })).toBeVisible();
+  const expectedEntries = [
+    { name: "发起模拟面试", url: /\/interviews\/new$/ },
+    { name: "历史记录", url: /\/interviews$/ },
+    { name: "岗位管理", url: /\/jobs$/ },
+    { name: "简历管理", url: /\/resumes$/ },
+    { name: "复盘", url: /\/reviews$/ },
+  ];
+
+  for (const entry of expectedEntries) {
+    const action = page.getByTestId(`primary-action-${entry.name}`);
+    await expect(action).toHaveAttribute("href", /^(?!#)/);
+    await action.click();
+    await expect(page).toHaveURL(entry.url);
+    await expect(page.getByRole("heading", { name: entry.name })).toBeVisible();
+    await page.goto("/?owner_id=owner-e2e");
+  }
+});
+
 test("面试详情页展示 R1 可信 trace、RAG citation、evidence gap 和 export 状态", async ({
   page,
 }) => {

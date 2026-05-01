@@ -85,32 +85,32 @@ export const workbenchHomeText = {
     {
       title: "发起模拟面试",
       description: "选择岗位、简历和知识来源后进入文本面试台。",
-      href: "#launch-entry",
-      status: "准备入口",
+      href: "/interviews/new",
+      status: "真实入口",
     },
     {
       title: "历史记录",
       description: "查看最近模拟、待处理复盘和导出快照。",
-      href: "#recent-interviews",
+      href: "/interviews",
       status: "R1 重点",
     },
     {
       title: "岗位管理",
       description: "维护岗位目标、职责、能力要求和匹配线索。",
-      href: "#workbench-entities",
+      href: "/jobs",
       status: "材料入口",
     },
     {
       title: "简历管理",
       description: "维护简历要点、项目经历和可引用证据。",
-      href: "#workbench-entities",
+      href: "/resumes",
       status: "材料入口",
     },
     {
-      title: "知识库 / RAG",
-      description: "管理上下文资料、索引状态、引用和证据缺口。",
-      href: "#trusted-capabilities",
-      status: "证据入口",
+      title: "复盘",
+      description: "查看评分复盘、弱项建议、导出状态和证据缺口。",
+      href: "/reviews",
+      status: "验收入口",
     },
   ],
   recentInterviews: [
@@ -175,4 +175,86 @@ export const workbenchHomeText = {
       value: "可信详情页已接入",
     },
   ],
+} as const;
+
+export const workbenchNavigation = [
+  {
+    label: "工作台",
+    href: "/",
+  },
+  {
+    label: "岗位",
+    href: "/jobs",
+  },
+  {
+    label: "简历",
+    href: "/resumes",
+  },
+  {
+    label: "历史记录",
+    href: "/interviews",
+  },
+  {
+    label: "发起面试",
+    href: "/interviews/new",
+  },
+  {
+    label: "复盘",
+    href: "/reviews",
+  },
+] as const;
+
+export const workbenchRoutePages = {
+  jobs: {
+    eyebrow: "R1B-01 工作台入口 / 岗位",
+    title: "岗位管理",
+    copy: "当前阶段提供真实可访问的岗位管理入口，后续再接入岗位创建、编辑和服务端保存。",
+    stage: "R1B-01 只修复入口验收，不新增岗位后端 API 或数据库 schema。",
+    emptyTitle: "暂无岗位列表",
+    emptyDescription: "可以先从发起模拟面试入口进入最小主链路，岗位持久化将在后续 R1 切片接入。",
+    facts: [
+      "入口 route: /jobs",
+      "当前数据来源: 静态空态",
+      "禁止范围: 不新增岗位 API、不新增 DB migration",
+    ],
+  },
+  resumes: {
+    eyebrow: "R1B-01 工作台入口 / 简历",
+    title: "简历管理",
+    copy: "当前阶段提供真实可访问的简历管理入口，后续再接入简历录入、解析和服务端保存。",
+    stage: "R1B-01 只修复入口验收，不新增简历后端 API 或对象存储能力。",
+    emptyTitle: "暂无简历材料",
+    emptyDescription: "简历材料持久化将在后续 R1 切片接入；本页先保证入口可访问且不伪装完成能力。",
+    facts: [
+      "入口 route: /resumes",
+      "当前数据来源: 静态空态",
+      "禁止范围: 不接入对象存储、不新增解析服务",
+    ],
+  },
+  interviewsNew: {
+    eyebrow: "R1B-01 工作台入口 / 发起",
+    title: "发起模拟面试",
+    copy: "当前阶段提供真实可访问的发起入口，后续再接入岗位、简历和问题生成主链路。",
+    stage: "R1B-01 不接入真实 LLM，也不新增面试创建 API。",
+    emptyTitle: "面试发起表单尚未接入",
+    emptyDescription: "本页是 R1B-01 验收入口，避免首页继续停留在锚点跳转。",
+    facts: [
+      "入口 route: /interviews/new",
+      "当前能力: 可访问页面与阶段说明",
+      "禁止范围: 不接入 LLM、不新增后端创建接口",
+    ],
+  },
+  reviews: {
+    eyebrow: "R1B-01 工作台入口 / 复盘",
+    title: "复盘",
+    copy: "当前阶段提供真实可访问的复盘列表入口；可信详情仍由 /interviews/:sessionId 承接。",
+    stage: "R1B-01 保留现有可信详情页，不扩展复盘后端 contract。",
+    emptyTitle: "暂无独立复盘列表",
+    emptyDescription: "已有复盘详情可从历史记录进入；独立复盘列表将在后续 R1 切片接入。",
+    facts: [
+      "入口 route: /reviews",
+      "当前详情能力: /interviews/:sessionId",
+      "禁止范围: 不新增复盘 API、不扩展导出链路",
+    ],
+  },
 } as const;

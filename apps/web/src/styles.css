@@ -467,8 +467,41 @@ h2 {
   max-width: 1360px;
 }
 
+.workbench-route-shell {
+  max-width: 1200px;
+}
+
 .workbench-home-shell .ant-typography {
   margin-bottom: 0;
+}
+
+.workbench-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  border: 1px solid #d5dce5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.workbench-nav-brand {
+  flex: none;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.workbench-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workbench-nav-link {
+  border-radius: 6px;
 }
 
 .workbench-status-tag {
@@ -507,6 +540,14 @@ h2 {
 .home-action-card .ant-card-body,
 .home-capability-card .ant-card-body {
   height: 100%;
+}
+
+.route-page-card {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.route-page-card .ant-card-body {
+  min-height: 280px;
 }
 
 .home-card-title-row {
@@ -563,6 +604,7 @@ h2 {
   }
 
   .workspace-header,
+  .workbench-nav,
   .trusted-section-heading,
   .home-section-heading,
   .stage-strip,
@@ -573,6 +615,7 @@ h2 {
   }
 
   .workspace-header,
+  .workbench-nav,
   .trusted-section-heading,
   .home-section-heading {
     display: grid;
@@ -585,6 +628,10 @@ h2 {
   }
 
   .status-group {
+    justify-content: flex-start;
+  }
+
+  .workbench-nav-links {
     justify-content: flex-start;
   }
 

@@ -169,7 +169,7 @@ npm --workspace apps/web run dev
 npm run web:dev
 ```
 
-启动后默认打开根路径 `/`，当前根路径是 R1 工作台首页，展示主操作入口、可信能力摘要、风险空态，并通过 `/api/v1/interviews?owner_id=<owner>` 读取最近模拟记录。旧 W10 mock 原型不再作为默认首页，可通过 `/legacy-mock` 或 `/mock` 手动访问。
+启动后默认打开根路径 `/`，当前根路径是 R1 工作台首页，展示主操作入口、一级导航、可信能力摘要、风险空态，并通过 `/api/v1/interviews?owner_id=<owner>` 读取最近模拟记录。R1B-01 已补齐最小工作台真实入口：`/jobs`、`/resumes`、`/interviews`、`/interviews/new`、`/reviews`；旧 W10 mock 原型不再作为默认首页，可通过 `/legacy-mock` 或 `/mock` 手动访问。
 
 当前 `apps/web/vite.config.ts` 没有配置 API proxy。R1 首页和可信 trace 页面使用相对路径 `/api/v1/interviews`、`/api/v1/interviews/:sessionId` 读取后端；本地真实联调需要同源反向代理、后续 Vite proxy，或通过 E2E mock 验证页面能力。
 
@@ -211,7 +211,7 @@ npm --workspace apps/web exec -- playwright install chromium
 npm --workspace apps/web run e2e
 ```
 
-当前 E2E 配置位于 `apps/web/playwright.config.ts`，测试位于 `apps/web/e2e/trusted-trace.spec.ts`。Playwright 会执行 `npm run build && npm run preview -- --port 4173` 并访问 `http://127.0.0.1:4173`。E2E 覆盖根路径 `/` 的 R1 工作台首页、首页读取真实 history contract、从最近记录进入 `/interviews/:sessionId` 的可信详情页，以及 `/legacy-mock` 旧原型入口。
+当前 E2E 配置位于 `apps/web/playwright.config.ts`，测试位于 `apps/web/e2e/trusted-trace.spec.ts`。Playwright 会执行 `npm run build && npm run preview -- --port 4173` 并访问 `http://127.0.0.1:4173`。E2E 覆盖根路径 `/` 的 R1 工作台首页、首页主入口不再使用 `#anchor`、点击岗位 / 简历 / 发起模拟面试 / 历史记录 / 复盘进入真实页面、首页读取真实 history contract、从最近记录进入 `/interviews/:sessionId` 的可信详情页，以及 `/legacy-mock` 旧原型入口。
 
 ## 常见问题
 

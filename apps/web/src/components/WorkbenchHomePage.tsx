@@ -5,6 +5,7 @@ import { workbenchHomeText } from "../appContent.js";
 import { fetchInterviewHistory } from "../interview/traceApi.js";
 import type { InterviewHistoryResponse } from "../interview/traceTypes.js";
 import { buildHistoryViewModel } from "../interview/historyViewModel.js";
+import { WorkbenchNav } from "./WorkbenchNav.js";
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -44,6 +45,7 @@ export function WorkbenchHomePage({ ownerId }: { ownerId: string }) {
 
   return (
     <main className="app-shell workbench-home-shell">
+      <WorkbenchNav />
       <section className="workspace-header" aria-labelledby="workbench-home-title">
         <div>
           <Text className="eyebrow">{workbenchHomeText.header.eyebrow}</Text>
@@ -78,8 +80,13 @@ export function WorkbenchHomePage({ ownerId }: { ownerId: string }) {
                     <Tag color="blue">{action.status}</Tag>
                   </div>
                   <Paragraph>{action.description}</Paragraph>
-                  <Button href={action.href} type={action.title === "发起模拟面试" ? "primary" : "default"}>
-                    进入
+                  <Button
+                    aria-label={action.title}
+                    data-testid={`primary-action-${action.title}`}
+                    href={action.href}
+                    type={action.title === "发起模拟面试" ? "primary" : "default"}
+                  >
+                    进入 {action.title}
                   </Button>
                 </Space>
               </Card>

@@ -9,6 +9,9 @@ const TrustedTracePage = lazy(() =>
 const WorkbenchHomePage = lazy(() =>
   import("./components/WorkbenchHomePage.js").then((module) => ({ default: module.WorkbenchHomePage })),
 );
+const WorkbenchRoutePage = lazy(() =>
+  import("./components/WorkbenchRoutePage.js").then((module) => ({ default: module.WorkbenchRoutePage })),
+);
 
 function getCurrentLocation() {
   if (typeof window === "undefined") {
@@ -29,7 +32,19 @@ export function App() {
   const params = new URLSearchParams(search);
   let page;
 
-  if (pathname.startsWith("/interviews/")) {
+  if (pathname === "/") {
+    page = <WorkbenchHomePage ownerId={params.get("owner_id") ?? "owner-local"} />;
+  } else if (pathname === "/jobs") {
+    page = <WorkbenchRoutePage kind="jobs" ownerId={params.get("owner_id") ?? "owner-local"} />;
+  } else if (pathname === "/resumes") {
+    page = <WorkbenchRoutePage kind="resumes" ownerId={params.get("owner_id") ?? "owner-local"} />;
+  } else if (pathname === "/interviews") {
+    page = <WorkbenchRoutePage kind="interviews" ownerId={params.get("owner_id") ?? "owner-local"} />;
+  } else if (pathname === "/interviews/new") {
+    page = <WorkbenchRoutePage kind="interviewsNew" ownerId={params.get("owner_id") ?? "owner-local"} />;
+  } else if (pathname === "/reviews") {
+    page = <WorkbenchRoutePage kind="reviews" ownerId={params.get("owner_id") ?? "owner-local"} />;
+  } else if (pathname.startsWith("/interviews/")) {
     const sessionId = decodeURIComponent(pathname.replace(/^\/interviews\//, ""));
     const ownerId = params.get("owner_id") ?? "owner-local";
 

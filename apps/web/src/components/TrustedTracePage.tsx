@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchTrustedInterviewDetail } from "../interview/traceApi.js";
 import type { TrustedInterviewDetail } from "../interview/traceTypes.js";
 import { buildTrustedTraceViewModel } from "../interview/traceViewModel.js";
+import { WorkbenchNav } from "./WorkbenchNav.js";
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -43,6 +44,7 @@ export function TrustedTracePage({
 
   return (
     <main className="app-shell trusted-trace-shell">
+      <WorkbenchNav />
       <section className="workspace-header" aria-labelledby="trusted-trace-title">
         <div>
           <Text className="eyebrow">R1 可信工作台 / 评分复盘详情</Text>
