@@ -56,3 +56,7 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 git diff --check
 git status --short
 ```
+
+## 6. 每日执行面板入口（根目录）
+
+为降低跨会话切换成本，根目录新增 `DAILY_EXECUTION_PANEL.md` 作为默认启动入口；其结构复用本计划文档的结构化区块思路，并强制记录：唯一目标、窗口卡、阻断项、完成证据、次日接力入口。每次开发结束必须更新该面板。
