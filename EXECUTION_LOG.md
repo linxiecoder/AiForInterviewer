@@ -31,6 +31,19 @@ permalink: ai-for-interviewer/execution-log
 
 ## 3. 当前记录
 
+### 2026-05-01 / 状态语义收敛 / TASK_INDEX 与 DOC_STATE 字段对齐
+
+- 执行类型：文档口径收敛；仅改索引叙述，不改状态真值。
+- 范围：
+  - 对齐 `TASK_INDEX.md` “当前任务组”与 `docs/governance/DOC_STATE.yaml` 的字段：`formal_window_status`、`implementation_approval_status`、`implementation_ready`、`candidate_status`、`readiness`。
+  - 删除或降级“已完成实现/已验收通过”等容易被误解为 gate 放行的措辞，统一改为“历史动作记录，不代表当前 gate 放行”。
+  - 新增固定规则：若文本与 `DOC_STATE.yaml` 冲突，以 `DOC_STATE.yaml` 为准。
+- 非目标：
+  - 不修改 `docs/governance/DOC_STATE.yaml`。
+  - 不执行状态写回、不变更 gate、不变更代码与测试。
+- 结论：
+  - 本次仅完成状态语义收敛与索引叙述修正；official state 仍以 `DOC_STATE.yaml` 为唯一真值。
+
 ### 2026-04-30 / R0-W13Z.13 / ST13_21 minimal API service boundary implementation accepted
 
 - 执行类型：post-implementation docs / index / log sync；不写 official state，不改代码，不改 tests，不改 Web。
