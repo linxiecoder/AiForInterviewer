@@ -4,6 +4,9 @@ type: note
 permalink: ai-for-interviewer/task-index
 ---
 
+> 强引用：有效文档白名单见 `docs/governance/ACTIVE_DOC_CANON.md`。
+
+
 # AI 模拟面试项目任务索引
 
 ## 1. 文档定位

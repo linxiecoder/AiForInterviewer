@@ -4,6 +4,9 @@ type: note
 permalink: ai-for-interviewer/agents
 ---
 
+> 强引用：有效文档白名单见 `docs/governance/ACTIVE_DOC_CANON.md`。
+
+
 # 项目协作规则
 
 本文档是当前项目的高优先级协作入口，用于沉淀全局规则并索引核心文档。
