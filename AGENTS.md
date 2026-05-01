@@ -210,6 +210,7 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 - 当前任务不能推进当前主迭代
 - 修改范围超过窗口目标
 - 多个 Codex session 可能同时修改同一文件
+- 在已统一 `R0/R1/R2` 后仍新增 `P*`、`W*` 或其他并行阶段命名体系
 
 输出格式：
 
@@ -473,6 +474,7 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 
 - [AI 模拟面试系统当前仓库执行计划](docs/planning/2026-04-25-current-repo-execution-plan.md)
 - [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md)
+- [AI 模拟面试工作台 MVP 阶段映射（统一 R0/R1/R2）](docs/planning/workbench-mvp/2026-05-01-r-stage-mapping.md)
 
 ### 2.5 任务文档
 
