@@ -1,4 +1,9 @@
-import type { RagCitationSummary, TraceSummary, TrustedInterviewDetail } from "./traceTypes.js";
+import type {
+  RagCitationSummary,
+  ScoreDimension,
+  TraceSummary,
+  TrustedInterviewDetail,
+} from "./traceTypes.js";
 
 export interface CitationViewItem {
   key: string;
@@ -11,6 +16,14 @@ export interface CitationViewItem {
 export interface TrustedTraceViewModel {
   traceStatus: string;
   isEmptyTrace: boolean;
+  scoreTotal?: number;
+  scoreStatus: string;
+  lowConfidence: boolean;
+  lowConfidenceReason: string;
+  dimensionItems: DimensionViewItem[];
+  reviewSummary: string;
+  suggestions: string[];
+  weakAreas: string[];
   counts: Array<{ label: string; value: number }>;
   sessionRefs: string[];
   turnRefs: string[];
@@ -25,6 +38,17 @@ export interface TrustedTraceViewModel {
   exportStatus: string;
   exportFailureReason: string;
   exportRetryable: boolean;
+}
+
+export interface DimensionViewItem {
+  key: string;
+  label: string;
+  score?: number;
+  reason: string;
+  citationRefs: string[];
+  evidenceGapRefs: string[];
+  lowConfidence: boolean;
+  lowConfidenceReason: string;
 }
 
 const emptyTraceSummary = (sessionId: string): TraceSummary => ({
@@ -56,17 +80,33 @@ export function buildTrustedTraceViewModel(detail: TrustedInterviewDetail): Trus
   const traceSummary = detail.trace_summary ?? emptyTraceSummary(detail.session_id);
   const rag = traceSummary.rag ?? emptyTraceSummary(detail.session_id).rag;
   const exportSummary = detail.export ?? {};
+  const score = detail.score ?? {};
+  const review = detail.review ?? {};
+  const scoreTotal = normalizeScoreTotal(score.score_total ?? score.value ?? review.score_total);
+  const lowConfidence = Boolean(score.low_confidence) || Boolean(review.degraded);
   const statusLabels = uniqueStrings([
     traceSummary.status,
+    score.status,
+    review.status,
+    lowConfidence ? "low_confidence" : undefined,
     ...rag.statuses,
     ...traceSummary.request_refs.map((item) => item.status),
     exportSummary.status,
+    review.retryable ? "retryable" : undefined,
     exportSummary.retryable ? "retryable" : undefined,
   ]);
 
   return {
     traceStatus: traceSummary.status,
     isEmptyTrace: traceSummary.status === "empty" || traceSummary.counts.total === 0,
+    scoreTotal,
+    scoreStatus: score.status ?? review.status ?? "empty",
+    lowConfidence,
+    lowConfidenceReason: score.low_confidence_reason ?? "",
+    dimensionItems: buildDimensionItems(score.dimensions ?? review.dimensions),
+    reviewSummary: review.review_summary ?? review.summary ?? score.review_summary ?? "",
+    suggestions: safeStringList(review.suggestions ?? score.suggestions),
+    weakAreas: safeStringList(review.weak_areas ?? score.weak_areas),
     counts: [
       { label: "total", value: traceSummary.counts.total },
       { label: "interview", value: traceSummary.counts.interview },
@@ -92,6 +132,22 @@ export function buildTrustedTraceViewModel(detail: TrustedInterviewDetail): Trus
     exportFailureReason: exportSummary.failure_reason ?? "none",
     exportRetryable: Boolean(exportSummary.retryable),
   };
+}
+
+function buildDimensionItems(dimensions: ScoreDimension[] | undefined): DimensionViewItem[] {
+  if (!dimensions) {
+    return [];
+  }
+  return dimensions.map((dimension, index) => ({
+    key: dimension.id ?? `dimension-${index}`,
+    label: dimension.label ?? dimension.id ?? `dimension-${index + 1}`,
+    score: normalizeScoreTotal(dimension.score),
+    reason: dimension.reason ?? "暂无 reason",
+    citationRefs: safeStringList(dimension.citation_refs),
+    evidenceGapRefs: safeStringList(dimension.evidence_gap_refs),
+    lowConfidence: Boolean(dimension.low_confidence),
+    lowConfidenceReason: dimension.low_confidence_reason ?? "",
+  }));
 }
 
 function buildCitationItems(
@@ -141,6 +197,14 @@ function normalizeEvidenceGapRef(value: string | undefined): string | undefined 
 
 function safeList(values: string[] | undefined, fallback: string[] = []): string[] {
   return values && values.length > 0 ? values : fallback;
+}
+
+function safeStringList(values: string[] | undefined): string[] {
+  return values && values.length > 0 ? values : [];
+}
+
+function normalizeScoreTotal(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function uniqueStrings(values: Array<string | undefined>): string[] {

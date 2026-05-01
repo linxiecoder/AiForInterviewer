@@ -50,11 +50,51 @@ export interface MarkdownExportSummary {
   retryable?: boolean;
 }
 
+export interface ScoreDimension {
+  id?: string;
+  label?: string;
+  score?: number;
+  reason?: string;
+  evidence_refs?: string[];
+  citation_refs?: string[];
+  evidence_gap_refs?: string[];
+  low_confidence?: boolean;
+  low_confidence_reason?: string;
+}
+
+export interface ScoreSummary {
+  value?: number;
+  score_total?: number;
+  dimensions?: ScoreDimension[];
+  status?: string;
+  low_confidence?: boolean;
+  low_confidence_reason?: string;
+  suggestions?: string[];
+  weak_areas?: string[];
+  review_summary?: string;
+}
+
+export interface ReviewSummary {
+  summary?: string;
+  review_summary?: string;
+  score_total?: number;
+  dimensions?: ScoreDimension[];
+  suggestions?: string[];
+  weak_areas?: string[];
+  citation_refs?: string[];
+  evidence_gap_refs?: string[];
+  status?: string;
+  degraded?: boolean;
+  retryable?: boolean;
+}
+
 export interface TrustedInterviewDetail {
   record_id?: string;
   owner_id?: string;
   session_id: string;
   status?: string;
   trace_summary?: TraceSummary;
+  score?: ScoreSummary;
+  review?: ReviewSummary;
   export?: MarkdownExportSummary;
 }

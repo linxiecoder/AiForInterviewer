@@ -5,6 +5,36 @@ const trustedTracePayload = {
   owner_id: "owner-e2e",
   session_id: "session-r1-trace",
   status: "feedback_ready",
+  score: {
+    score_total: 82,
+    value: 82,
+    status: "degraded",
+    low_confidence: true,
+    low_confidence_reason: "RAG evidence gap 存在，评分可信度降低。",
+    dimensions: [
+      {
+        id: "technical_depth",
+        label: "技术深度",
+        score: 78,
+        reason: "回答说明了 React 项目里的 API 边界和持久化取舍。",
+        citation_refs: ["citation:resume-evidence:resume-evidence:chunk-0"],
+        evidence_gap_refs: ["gap:no_result"],
+        low_confidence: true,
+        low_confidence_reason: "引用证据不足",
+      },
+    ],
+    suggestions: ["补充量化结果。"],
+    weak_areas: ["风险与不确定性"],
+    review_summary: "整体表现稳定，但证据链仍需补齐。",
+  },
+  review: {
+    review_summary: "整体表现稳定，但证据链仍需补齐。",
+    suggestions: ["补充量化结果。"],
+    weak_areas: ["风险与不确定性"],
+    status: "degraded",
+    degraded: true,
+    retryable: false,
+  },
   trace_summary: {
     status: "available",
     counts: {
@@ -116,17 +146,24 @@ test("面试详情页展示 R1 可信 trace、RAG citation、evidence gap 和 ex
   await expect(page.locator(".ant-card").filter({ hasText: "Trace refs" })).toBeVisible();
   await expect(page.locator(".ant-collapse").filter({ hasText: "RAG citation 详情" })).toBeVisible();
   await expect(page.getByText("trace_summary: available")).toBeVisible();
+  await expect(page.getByText("总分 82")).toBeVisible();
+  await expect(page.getByText("技术深度")).toBeVisible();
+  await expect(page.getByText("回答说明了 React 项目里的 API 边界和持久化取舍。")).toBeVisible();
+  await expect(page.getByText("RAG evidence gap 存在，评分可信度降低。")).toBeVisible();
+  await expect(page.getByText("补充量化结果。")).toBeVisible();
+  await expect(page.getByText("风险与不确定性")).toBeVisible();
+  await expect(page.getByText("整体表现稳定，但证据链仍需补齐。")).toBeVisible();
   await expect(page.getByText("session-r1-trace", { exact: true })).toBeVisible();
   await expect(page.getByText("turn-r1-01", { exact: true })).toBeVisible();
   await expect(page.getByText("answer:turn-r1-01", { exact: true })).toBeVisible();
   await expect(page.getByText("候选人简历片段")).toBeVisible();
   await expect(page.getByText("React 项目经历摘要")).toBeVisible();
-  await expect(page.getByText("chunk-0")).toBeVisible();
-  await expect(page.getByText("no_result")).toBeVisible();
-  await expect(page.getByText("permission_filtered")).toBeVisible();
-  await expect(page.getByText("index_pending")).toBeVisible();
-  await expect(page.getByText("index_failed")).toBeVisible();
-  await expect(page.getByText("rag_unavailable")).toBeVisible();
+  await expect(page.getByText("chunk-0", { exact: true })).toBeVisible();
+  await expect(page.getByText("no_result", { exact: true })).toBeVisible();
+  await expect(page.getByText("permission_filtered", { exact: true })).toBeVisible();
+  await expect(page.getByText("index_pending", { exact: true })).toBeVisible();
+  await expect(page.getByText("index_failed", { exact: true })).toBeVisible();
+  await expect(page.getByText("rag_unavailable", { exact: true })).toBeVisible();
   await expect(page.getByText("degraded", { exact: true })).toBeVisible();
   await expect(page.getByText("failed", { exact: true })).toBeVisible();
   await expect(page.getByText("retryable", { exact: true })).toBeVisible();

@@ -1,4 +1,4 @@
-"""R0 评分服务，实现最小 0-100 score 并持久化到 session payload。"""
+"""R1 评分服务，实现 0-100 多维 score 并持久化到 session payload。"""
 
 from __future__ import annotations
 
@@ -33,21 +33,47 @@ from app.llm.constants import DEFAULT_PROMPT_VERSION, PURPOSE_SCORE
 from app.llm.models import LLMGenerateRequest
 from app.llm.providers import LLMProvider
 from app.persistence import InterviewRecordStore, TraceabilityStore
-from app.traceability import TRACE_TYPE_REVIEW_EXPORT, TraceabilityRecord, TraceabilityStatus
+from app.traceability import (
+    TRACE_TYPE_REVIEW_EXPORT,
+    TraceabilityRecord,
+    TraceabilityStatus,
+    build_trace_summary,
+)
 
 SCORE_PAYLOAD_KEY = "score"
 SCORE_VALUE_KEY = "value"
+SCORE_TOTAL_KEY = "score_total"
+SCORE_DIMENSIONS_KEY = "dimensions"
+SCORE_STATUS_KEY = "status"
 SCORE_STRATEGY_KEY = "scoring_strategy"
 SCORE_CONTENT_VERSION_KEY = "content_version"
 SCORE_GENERATED_AT_KEY = "generated_at"
 SCORE_EXPLANATION_KEY = "explanation"
 SCORE_METADATA_KEY = "metadata"
+SCORE_CITATION_REFS_KEY = "citation_refs"
+SCORE_EVIDENCE_REFS_KEY = "evidence_refs"
+SCORE_EVIDENCE_GAP_REFS_KEY = "evidence_gap_refs"
+SCORE_LOW_CONFIDENCE_KEY = "low_confidence"
+SCORE_LOW_CONFIDENCE_REASON_KEY = "low_confidence_reason"
+SCORE_SUGGESTIONS_KEY = "suggestions"
+SCORE_WEAK_AREAS_KEY = "weak_areas"
+SCORE_REVIEW_SUMMARY_KEY = "review_summary"
 
 SCORE_MIN = 0
 SCORE_MAX = 100
-SCORE_CONTENT_VERSION = "r0-score-v1"
+SCORE_CONTENT_VERSION = "r1-score-v1"
 SCORE_DETERMINISTIC_STRATEGY = "deterministic"
 SCORE_PROVIDER_STRATEGY = "provider_assisted"
+SCORE_STATUS_GENERATED = "generated"
+SCORE_STATUS_DEGRADED = "degraded"
+
+SCORE_DIMENSION_DEFINITIONS = (
+    ("professional_fit", "专业匹配度"),
+    ("clarity", "表达清晰度"),
+    ("technical_depth", "技术深度"),
+    ("role_relevance", "岗位相关性"),
+    ("risk_uncertainty", "风险与不确定性"),
+)
 
 
 class ScoringService:
@@ -80,7 +106,7 @@ class ScoringService:
         )
 
         if use_provider and self.provider is not None:
-            score_payload = _provider_score(
+            base_score_payload = _provider_score(
                 provider=self.provider,
                 interview=interview,
                 turns=turns,
@@ -88,26 +114,24 @@ class ScoringService:
                 owner_id=owner_id,
             )
         else:
-            score_payload = _deterministic_score_payload(turns=turns)
+            base_score_payload = _deterministic_score_payload(turns=turns)
 
-        score_payload = {
-            SCORE_VALUE_KEY: _clamp_score(int(score_payload[SCORE_VALUE_KEY])),
-            SCORE_STRATEGY_KEY: score_payload[SCORE_STRATEGY_KEY],
-            SCORE_CONTENT_VERSION_KEY: SCORE_CONTENT_VERSION,
-            SCORE_EXPLANATION_KEY: _score_explanation(
-                int(score_payload[SCORE_VALUE_KEY]),
+        score_payload = _build_score_payload(
+            base_score_payload=base_score_payload,
+            interview=interview,
+            turns=turns,
+            owner_id=owner_id,
+            session_id=session_id,
+            trace_summary=_trace_summary(
+                trace_store=self.trace_store,
+                owner_id=owner_id,
+                session_id=session_id,
             ),
-            SCORE_GENERATED_AT_KEY: _utc_now(),
-            SCORE_METADATA_KEY: {
-                **score_payload.get(SCORE_METADATA_KEY, {}),
-                "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
-                "owner_id": owner_id,
-                "status": str(interview.get(RESPONSE_STATUS, SESSION_STATUS_IN_PROGRESS)),
-            },
-        }
+        )
 
         payload = deepcopy(record[FIELD_PAYLOAD])
         payload[SCORE_PAYLOAD_KEY] = score_payload
+        _bump_snapshot_index(payload)
 
         if persist:
             record = self.store.create_record(
@@ -121,19 +145,28 @@ class ScoringService:
             TraceabilityRecord(
                 owner_id=owner_id,
                 trace_type=TRACE_TYPE_REVIEW_EXPORT,
-                status=TraceabilityStatus.COMPLETED,
+                status=(
+                    TraceabilityStatus.DEGRADED
+                    if score_payload[SCORE_STATUS_KEY] == SCORE_STATUS_DEGRADED
+                    else TraceabilityStatus.COMPLETED
+                ),
                 request_id=f"score-{_short_id()}",
                 operation_id="score.generate",
                 session_ref=str(interview.get(FIELD_SESSION_ID, session_id)),
                 answer_ref=_latest_answer_ref(turns),
                 score_ref=f"score:{session_id}:{SCORE_CONTENT_VERSION}",
+                citation_refs=tuple(score_payload[SCORE_CITATION_REFS_KEY]),
+                evidence_refs=tuple(score_payload[SCORE_EVIDENCE_REFS_KEY]),
+                evidence_gap_ref=_first_or_none(score_payload[SCORE_EVIDENCE_GAP_REFS_KEY]),
                 source_snapshot_ref=f"{record[FIELD_ID]}:score",
                 content_version=SCORE_CONTENT_VERSION,
+                retryable=bool(score_payload[SCORE_LOW_CONFIDENCE_KEY]),
                 metadata={
                     "operation": "score.generate",
                     "record_id": record[FIELD_ID],
-                    "score": score_payload[SCORE_VALUE_KEY],
+                    "score_total": score_payload[SCORE_TOTAL_KEY],
                     "strategy": score_payload[SCORE_STRATEGY_KEY],
+                    "status": score_payload[SCORE_STATUS_KEY],
                 },
             )
         )
@@ -168,6 +201,187 @@ def _deterministic_score_payload(*, turns: list[dict[str, Any]]) -> dict[str, An
             "answered_count": answered_count,
         },
     }
+
+
+def _build_score_payload(
+    *,
+    base_score_payload: Mapping[str, Any],
+    interview: Mapping[str, Any],
+    turns: list[dict[str, Any]],
+    owner_id: str,
+    session_id: str,
+    trace_summary: Mapping[str, Any],
+) -> dict[str, Any]:
+    score_total = _clamp_score(int(base_score_payload[SCORE_VALUE_KEY]))
+    evidence = _evidence_context(trace_summary=trace_summary)
+    low_confidence_reasons = _low_confidence_reasons(
+        turns=turns,
+        evidence_gap_refs=evidence["evidence_gap_refs"],
+        rag_statuses=evidence["rag_statuses"],
+    )
+    low_confidence = bool(low_confidence_reasons)
+    status = SCORE_STATUS_DEGRADED if low_confidence else SCORE_STATUS_GENERATED
+    dimensions = _score_dimensions(
+        score_total=score_total,
+        turns=turns,
+        citation_refs=evidence["citation_refs"],
+        evidence_refs=evidence["evidence_refs"],
+        evidence_gap_refs=evidence["evidence_gap_refs"],
+        low_confidence=low_confidence,
+        low_confidence_reason="；".join(low_confidence_reasons),
+    )
+    suggestions = _score_suggestions(
+        score_total=score_total,
+        evidence_gap_refs=evidence["evidence_gap_refs"],
+    )
+    weak_areas = _score_weak_areas(dimensions=dimensions)
+
+    return {
+        SCORE_VALUE_KEY: score_total,
+        SCORE_TOTAL_KEY: score_total,
+        SCORE_DIMENSIONS_KEY: dimensions,
+        SCORE_STATUS_KEY: status,
+        SCORE_STRATEGY_KEY: base_score_payload[SCORE_STRATEGY_KEY],
+        SCORE_CONTENT_VERSION_KEY: SCORE_CONTENT_VERSION,
+        SCORE_EXPLANATION_KEY: _score_explanation(score_total),
+        SCORE_GENERATED_AT_KEY: _utc_now(),
+        SCORE_CITATION_REFS_KEY: evidence["citation_refs"],
+        SCORE_EVIDENCE_REFS_KEY: evidence["evidence_refs"],
+        SCORE_EVIDENCE_GAP_REFS_KEY: evidence["evidence_gap_refs"],
+        SCORE_LOW_CONFIDENCE_KEY: low_confidence,
+        SCORE_LOW_CONFIDENCE_REASON_KEY: "；".join(low_confidence_reasons),
+        SCORE_SUGGESTIONS_KEY: suggestions,
+        SCORE_WEAK_AREAS_KEY: weak_areas,
+        SCORE_REVIEW_SUMMARY_KEY: _score_review_summary(
+            score_total=score_total,
+            low_confidence=low_confidence,
+        ),
+        SCORE_METADATA_KEY: {
+            **dict(base_score_payload.get(SCORE_METADATA_KEY, {})),
+            "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
+            "owner_id": owner_id,
+            "status": str(interview.get(RESPONSE_STATUS, SESSION_STATUS_IN_PROGRESS)),
+            "trace_status": str(trace_summary.get("status", "empty")),
+        },
+    }
+
+
+def _evidence_context(*, trace_summary: Mapping[str, Any]) -> dict[str, list[str]]:
+    rag = trace_summary.get("rag")
+    rag = rag if isinstance(rag, Mapping) else {}
+    return {
+        "citation_refs": _string_list(rag.get("citation_refs")),
+        "evidence_refs": _string_list(rag.get("evidence_refs")),
+        "evidence_gap_refs": _string_list(rag.get("evidence_gap_refs")),
+        "rag_statuses": _string_list(rag.get("statuses")),
+    }
+
+
+def _low_confidence_reasons(
+    *,
+    turns: list[dict[str, Any]],
+    evidence_gap_refs: list[str],
+    rag_statuses: list[str],
+) -> list[str]:
+    reasons: list[str] = []
+    answered_count, _total_chars = _answer_metrics(turns=turns)
+    if not turns or answered_count == 0:
+        reasons.append("缺少可评分回答")
+    if evidence_gap_refs:
+        reasons.append("存在 RAG evidence gap")
+    if any(status in {"degraded", "failed", "retryable"} for status in rag_statuses):
+        reasons.append("RAG trace 状态降级")
+    return reasons
+
+
+def _score_dimensions(
+    *,
+    score_total: int,
+    turns: list[dict[str, Any]],
+    citation_refs: list[str],
+    evidence_refs: list[str],
+    evidence_gap_refs: list[str],
+    low_confidence: bool,
+    low_confidence_reason: str,
+) -> list[dict[str, Any]]:
+    answered_count, total_chars = _answer_metrics(turns=turns)
+    average_length = total_chars / answered_count if answered_count else 0
+    adjustments = (2, 0, -4 if average_length < 48 else 3, 1, -6 if low_confidence else 2)
+    reasons = (
+        "结合岗位与简历信息，回答覆盖了主要匹配点。",
+        "回答结构基本清晰，可继续补充上下文和结果。",
+        "技术细节随回答长度和具体案例深度提升。",
+        "回答围绕当前岗位问题展开，具备岗位相关性。",
+        "证据链和不确定性会影响该维度的置信度。",
+    )
+    dimensions: list[dict[str, Any]] = []
+    for (dimension_id, label), adjustment, reason in zip(
+        SCORE_DIMENSION_DEFINITIONS,
+        adjustments,
+        reasons,
+        strict=True,
+    ):
+        dimension_score = _clamp_score(score_total + adjustment)
+        dimensions.append(
+            {
+                "id": dimension_id,
+                "label": label,
+                "score": dimension_score,
+                "reason": _dimension_reason(
+                    base_reason=reason,
+                    citation_refs=citation_refs,
+                    evidence_gap_refs=evidence_gap_refs,
+                ),
+                "evidence_refs": evidence_refs,
+                "citation_refs": citation_refs,
+                "evidence_gap_refs": evidence_gap_refs,
+                "low_confidence": low_confidence,
+                "low_confidence_reason": low_confidence_reason,
+            }
+        )
+    return dimensions
+
+
+def _dimension_reason(
+    *,
+    base_reason: str,
+    citation_refs: list[str],
+    evidence_gap_refs: list[str],
+) -> str:
+    suffixes: list[str] = []
+    if citation_refs:
+        suffixes.append("已关联可追踪 citation。")
+    if evidence_gap_refs:
+        suffixes.append("存在 evidence gap，需降低证据置信度。")
+    return " ".join([base_reason, *suffixes])
+
+
+def _score_suggestions(*, score_total: int, evidence_gap_refs: list[str]) -> list[str]:
+    suggestions = [
+        "每题补齐动作、过程、结果三个维度。",
+        "对关键问题给出可量化结果。",
+    ]
+    if score_total < 70:
+        suggestions.append("优先补强技术细节和岗位关联案例。")
+    if evidence_gap_refs:
+        suggestions.append("补充可引用证据，降低 evidence gap 对复盘可信度的影响。")
+    return suggestions
+
+
+def _score_weak_areas(*, dimensions: list[dict[str, Any]]) -> list[str]:
+    weak = [
+        str(dimension["label"])
+        for dimension in dimensions
+        if isinstance(dimension.get("score"), int) and dimension["score"] < 70
+    ]
+    return weak[:3] or ["暂无明显薄弱项"]
+
+
+def _score_review_summary(*, score_total: int, low_confidence: bool) -> str:
+    summary = _score_explanation(score_total)
+    if low_confidence:
+        return f"{summary} 当前证据链存在缺口，复盘结论需标记低置信度。"
+    return summary
 
 
 def _provider_score(
@@ -269,6 +483,41 @@ def _latest_answer_ref(turns: list[dict[str, Any]]) -> str | None:
         if isinstance(answer, Mapping) and answer.get(FIELD_CONTENT):
             return f"answer:{turn.get(FIELD_TURN_ID, '')}"
     return None
+
+
+def _bump_snapshot_index(payload: dict[str, Any]) -> None:
+    interview = payload.get(PAYLOAD_INTERVIEW_KEY)
+    if not isinstance(interview, dict):
+        return
+    current = interview.get(FIELD_SNAPSHOT_INDEX)
+    interview[FIELD_SNAPSHOT_INDEX] = current + 1 if isinstance(current, int) else 1
+
+
+def _trace_summary(
+    *,
+    trace_store: TraceabilityStore | None,
+    owner_id: str,
+    session_id: str,
+) -> dict[str, Any]:
+    if trace_store is None:
+        return build_trace_summary(())
+    return build_trace_summary(trace_store.list_traces(owner_id=owner_id, session_ref=session_id))
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item).strip() if item is not None else ""
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _first_or_none(values: Any) -> str | None:
+    items = _string_list(values)
+    return items[0] if items else None
 
 
 def _get_session_context(

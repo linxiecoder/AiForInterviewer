@@ -44,6 +44,8 @@ EXPORT_METADATA_KEY = "metadata"
 EXPORT_GENERATED_AT_KEY = "generated_at"
 EXPORT_FORMAT_MARKDOWN = "markdown"
 EXPORT_CONTENT_VERSION = "r0-export-v1"
+EXPORT_SCORE_CONTENT_VERSION = "r0-score-v1"
+EXPORT_REVIEW_CONTENT_VERSION = "r0-review-v1"
 
 
 class ExportService:
@@ -112,6 +114,14 @@ class ExportService:
             owner_id=owner_id,
             session_id=session_id,
         )
+        export_score_payload = _export_compatible_payload(
+            payload=score_payload,
+            content_version=EXPORT_SCORE_CONTENT_VERSION,
+        )
+        export_review_payload = _export_compatible_payload(
+            payload=review_payload,
+            content_version=EXPORT_REVIEW_CONTENT_VERSION,
+        )
         export_payload = {
             EXPORT_FORMAT_KEY: EXPORT_FORMAT_MARKDOWN,
             EXPORT_CONTENT_KEY: export_content,
@@ -122,15 +132,15 @@ class ExportService:
                 EXPORT_GENERATED_AT_KEY: _utc_now(),
                 "record_id": str(record[FIELD_ID]),
                 "turn_count": len(turns),
-                "score": score_payload,
-                "review_version": str(review_payload.get("content_version", "")),
+                "score": export_score_payload,
+                "review_version": str(export_review_payload.get("content_version", "")),
             },
         }
 
         payload = deepcopy(record[FIELD_PAYLOAD])
         payload[EXPORT_PAYLOAD_KEY] = export_payload
-        payload[PAYLOAD_SCORE] = score_payload
-        payload[PAYLOAD_REVIEW] = review_payload
+        payload[PAYLOAD_SCORE] = export_score_payload
+        payload[PAYLOAD_REVIEW] = export_review_payload
 
         if persist:
             record = self.store.create_record(
@@ -260,6 +270,16 @@ def _payload_nested_dict(payload: Mapping[str, Any], key: str) -> Mapping[str, A
     """读取 payload key 指向的 dict。"""
     value = payload.get(key)
     return value if isinstance(value, Mapping) else None
+
+
+def _export_compatible_payload(
+    *,
+    payload: Mapping[str, Any],
+    content_version: str,
+) -> dict[str, Any]:
+    compatible = dict(payload)
+    compatible["content_version"] = content_version
+    return compatible
 
 
 def _get_session_context(

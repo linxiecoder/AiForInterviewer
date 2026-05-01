@@ -1,4 +1,4 @@
-import { Alert, Card, Collapse, Descriptions, Empty, List, Spin, Tag, Typography } from "antd";
+import { Alert, Card, Collapse, Descriptions, Empty, List, Progress, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { fetchTrustedInterviewDetail } from "../interview/traceApi.js";
@@ -84,6 +84,77 @@ export function TrustedTracePage({
 
       <Spin spinning={loadState.status === "loading"}>
         <section className="trusted-grid" aria-label="R1 可信数据摘要">
+          <Card title="评分 / 复盘" className="trace-card trusted-card">
+            {viewModel.scoreTotal === undefined ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="旧记录暂无评分复盘" />
+            ) : (
+              <div className="export-summary">
+                <Text strong>总分 {viewModel.scoreTotal}</Text>
+                <Progress percent={viewModel.scoreTotal} size="small" status="active" />
+                <Tag color={statusColor(viewModel.scoreStatus)}>score: {viewModel.scoreStatus}</Tag>
+              </div>
+            )}
+            {viewModel.lowConfidence ? (
+              <Alert
+                message="低置信度复盘"
+                description={viewModel.lowConfidenceReason || "证据链不足，复盘结论需谨慎使用。"}
+                type="warning"
+                showIcon
+              />
+            ) : null}
+            {viewModel.reviewSummary ? (
+              <Paragraph className="header-copy">{viewModel.reviewSummary}</Paragraph>
+            ) : null}
+            <Title level={4}>评分维度</Title>
+            {viewModel.dimensionItems.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无评分维度" />
+            ) : (
+              <List
+                className="trusted-list"
+                size="small"
+                dataSource={viewModel.dimensionItems}
+                renderItem={(item) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={
+                        <div className="trusted-tag-row">
+                          <Text strong>{item.label}</Text>
+                          {item.score !== undefined ? <Tag color="blue">{item.score}</Tag> : null}
+                          {item.lowConfidence ? <Tag color="warning">low confidence</Tag> : null}
+                        </div>
+                      }
+                      description={
+                        <div className="trusted-list-detail">
+                          <Text>{item.reason}</Text>
+                          <TagList items={item.citationRefs} emptyLabel="暂无 citation ref" />
+                          <TagList items={item.evidenceGapRefs} emptyLabel="暂无 evidence gap" />
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            )}
+            <Descriptions
+              className="trusted-descriptions"
+              size="small"
+              column={1}
+              bordered
+              items={[
+                {
+                  key: "suggestions",
+                  label: "suggestions",
+                  children: <TagList items={viewModel.suggestions} emptyLabel="暂无 suggestion" />,
+                },
+                {
+                  key: "weak-areas",
+                  label: "weak areas",
+                  children: <TagList items={viewModel.weakAreas} emptyLabel="暂无 weak area" />,
+                },
+              ]}
+            />
+          </Card>
+
           <Card title="Trace refs" className="trace-card trusted-card">
             {viewModel.isEmptyTrace ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="旧记录暂无 trace_summary" />

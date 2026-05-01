@@ -1,4 +1,4 @@
-"""R0 复盘摘要服务，基于 score + turns 生成 minimal review。"""
+"""R1 可信复盘服务，基于多维 score + trace evidence 生成 review。"""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from app.interview_flow.contract import (
     FIELD_MODE,
     FIELD_QUESTION,
     FIELD_SESSION_ID,
+    FIELD_SNAPSHOT_INDEX,
     FIELD_TRACE_SUMMARY,
     FIELD_TURN_ID,
     FIELD_TURNS,
@@ -42,16 +43,30 @@ from app.traceability import (
 
 REVIEW_PAYLOAD_KEY = "review"
 REVIEW_SUMMARY_KEY = "summary"
+REVIEW_SCORE_TOTAL_KEY = "score_total"
+REVIEW_DIMENSIONS_KEY = "dimensions"
 REVIEW_STRENGTHS_KEY = "strengths"
 REVIEW_RISKS_KEY = "risks"
 REVIEW_SUGGESTIONS_KEY = "suggestions"
 REVIEW_WEAKNESS_KEY = "weakness"
+REVIEW_WEAK_AREAS_KEY = "weak_areas"
 REVIEW_IMPROVEMENTS_KEY = "improvements"
+REVIEW_CITATION_REFS_KEY = "citation_refs"
+REVIEW_EVIDENCE_REFS_KEY = "evidence_refs"
+REVIEW_EVIDENCE_GAP_REFS_KEY = "evidence_gap_refs"
+REVIEW_LOW_CONFIDENCE_KEY = "low_confidence"
+REVIEW_LOW_CONFIDENCE_REASON_KEY = "low_confidence_reason"
+REVIEW_STATUS_KEY = "status"
+REVIEW_DEGRADED_KEY = "degraded"
+REVIEW_RETRYABLE_KEY = "retryable"
+REVIEW_REVIEW_SUMMARY_KEY = "review_summary"
 REVIEW_CONTENT_VERSION_KEY = "content_version"
 REVIEW_GENERATED_AT_KEY = "generated_at"
 REVIEW_METADATA_KEY = "metadata"
 
-REVIEW_CONTENT_VERSION = "r0-review-v1"
+REVIEW_CONTENT_VERSION = "r1-review-v1"
+REVIEW_STATUS_GENERATED = "generated"
+REVIEW_STATUS_DEGRADED = "degraded"
 
 
 class ReviewService:
@@ -131,6 +146,7 @@ class ReviewService:
         payload = deepcopy(record[FIELD_PAYLOAD])
         payload[REVIEW_PAYLOAD_KEY] = review_payload
         payload["score"] = score_payload
+        _bump_snapshot_index(payload)
 
         if persist:
             record = self.store.create_record(
@@ -144,19 +160,28 @@ class ReviewService:
             TraceabilityRecord(
                 owner_id=owner_id,
                 trace_type=TRACE_TYPE_REVIEW_EXPORT,
-                status=TraceabilityStatus.COMPLETED,
+                status=(
+                    TraceabilityStatus.DEGRADED
+                    if review_payload[REVIEW_STATUS_KEY] == REVIEW_STATUS_DEGRADED
+                    else TraceabilityStatus.COMPLETED
+                ),
                 request_id=f"review-{_short_id()}",
                 operation_id="review.generate",
                 session_ref=str(interview.get(FIELD_SESSION_ID, session_id)),
                 answer_ref=_latest_answer_ref(turns),
                 score_ref=f"score:{session_id}:{score_payload.get('content_version', '')}",
                 review_ref=f"review:{session_id}:{REVIEW_CONTENT_VERSION}",
+                citation_refs=tuple(review_payload[REVIEW_CITATION_REFS_KEY]),
+                evidence_refs=tuple(review_payload[REVIEW_EVIDENCE_REFS_KEY]),
+                evidence_gap_ref=_first_or_none(review_payload[REVIEW_EVIDENCE_GAP_REFS_KEY]),
                 source_snapshot_ref=f"{record[FIELD_ID]}:review",
                 content_version=REVIEW_CONTENT_VERSION,
+                retryable=bool(review_payload[REVIEW_RETRYABLE_KEY]),
                 metadata={
                     "operation": "review.generate",
                     "record_id": record[FIELD_ID],
                     "review_version": REVIEW_CONTENT_VERSION,
+                    "status": review_payload[REVIEW_STATUS_KEY],
                 },
             )
         )
@@ -186,9 +211,16 @@ def build_review_payload(
     provider_comment: str | None = None,
 ) -> dict[str, Any]:
     """基于分数与回答情况构建最小 review payload。"""
-    score_value = _clamp_int(score_payload.get("value", 0), 0, 100)
+    score_value = _score_total(score_payload)
     answered_count = len([turn for turn in turns if _has_answer(turn)])
     total_count = max(len(turns), 1)
+    dimensions = _list_of_mappings(score_payload.get("dimensions"))
+    citation_refs = _string_list(score_payload.get("citation_refs"))
+    evidence_refs = _string_list(score_payload.get("evidence_refs"))
+    evidence_gap_refs = _string_list(score_payload.get("evidence_gap_refs"))
+    low_confidence = bool(score_payload.get("low_confidence")) or bool(evidence_gap_refs)
+    low_confidence_reason = str(score_payload.get("low_confidence_reason", "")).strip()
+    status = REVIEW_STATUS_DEGRADED if low_confidence else REVIEW_STATUS_GENERATED
 
     if score_value >= 80:
         summary = "表现良好，已覆盖主要题目并给出较完整答案。"
@@ -224,19 +256,39 @@ def build_review_payload(
     if not improvements:
         improvements.append("继续保持当前深度，并保持结构化表达。")
 
-    suggestions = [
+    suggestions = _string_list(score_payload.get("suggestions")) or [
         "每题补齐动作、过程、结果三个维度。",
         "对关键问题给出可量化结果。",
         "将 weak point 落到可执行的下一步计划。",
     ]
+    weak_areas = _string_list(score_payload.get("weak_areas")) or weaknesses[:3]
+    if evidence_gap_refs and "补充证据链以降低复盘不确定性。" not in suggestions:
+        suggestions.append("补充证据链以降低复盘不确定性。")
+    review_summary = _review_summary(
+        summary=summary,
+        low_confidence=low_confidence,
+        low_confidence_reason=low_confidence_reason,
+    )
 
     return {
         REVIEW_SUMMARY_KEY: summary,
+        REVIEW_REVIEW_SUMMARY_KEY: review_summary,
+        REVIEW_SCORE_TOTAL_KEY: score_value,
+        REVIEW_DIMENSIONS_KEY: dimensions,
         REVIEW_STRENGTHS_KEY: strengths,
         REVIEW_RISKS_KEY: risks[:3],
         REVIEW_SUGGESTIONS_KEY: suggestions,
         REVIEW_WEAKNESS_KEY: weaknesses[:3],
+        REVIEW_WEAK_AREAS_KEY: weak_areas[:3],
         REVIEW_IMPROVEMENTS_KEY: improvements[:3],
+        REVIEW_CITATION_REFS_KEY: citation_refs,
+        REVIEW_EVIDENCE_REFS_KEY: evidence_refs,
+        REVIEW_EVIDENCE_GAP_REFS_KEY: evidence_gap_refs,
+        REVIEW_LOW_CONFIDENCE_KEY: low_confidence,
+        REVIEW_LOW_CONFIDENCE_REASON_KEY: low_confidence_reason,
+        REVIEW_STATUS_KEY: status,
+        REVIEW_DEGRADED_KEY: status == REVIEW_STATUS_DEGRADED,
+        REVIEW_RETRYABLE_KEY: False,
         REVIEW_CONTENT_VERSION_KEY: REVIEW_CONTENT_VERSION,
         REVIEW_GENERATED_AT_KEY: _utc_now(),
         REVIEW_METADATA_KEY: {
@@ -245,7 +297,7 @@ def build_review_payload(
             "score": score_value,
             "answered_count": answered_count,
             "total_count": total_count,
-            "provider_comment": provider_comment,
+            "provider_comment_present": bool(provider_comment),
             "status": str(interview.get(RESPONSE_STATUS, SESSION_STATUS_IN_PROGRESS)),
         },
     }
@@ -294,6 +346,14 @@ def _answer_content(turn: Mapping[str, Any]) -> str:
 
 def _payload_field(interview: Mapping[str, Any], field: str) -> Mapping[str, Any] | Any:
     return interview.get(field, {})
+
+
+def _bump_snapshot_index(payload: dict[str, Any]) -> None:
+    interview = payload.get(PAYLOAD_INTERVIEW)
+    if not isinstance(interview, dict):
+        return
+    current = interview.get(FIELD_SNAPSHOT_INDEX)
+    interview[FIELD_SNAPSHOT_INDEX] = current + 1 if isinstance(current, int) else 1
 
 
 def _get_session_context(
@@ -346,6 +406,23 @@ def _review_score_from_payload(*, payload: Mapping[str, Any]) -> Mapping[str, An
     return score if isinstance(score, Mapping) else None
 
 
+def _score_total(score_payload: Mapping[str, Any]) -> int:
+    value = score_payload.get("score_total", score_payload.get("value", 0))
+    return _clamp_int(value, 0, 100)
+
+
+def _review_summary(
+    *,
+    summary: str,
+    low_confidence: bool,
+    low_confidence_reason: str,
+) -> str:
+    if not low_confidence:
+        return summary
+    reason = low_confidence_reason or "证据链不足"
+    return f"{summary} 由于{reason}，本次复盘标记为低置信度。"
+
+
 def _trace_summary(
     *,
     trace_store: TraceabilityStore | None,
@@ -355,6 +432,28 @@ def _trace_summary(
     if trace_store is None:
         return build_trace_summary(())
     return build_trace_summary(trace_store.list_traces(owner_id=owner_id, session_ref=session_id))
+
+
+def _list_of_mappings(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, Mapping)]
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item).strip() if item is not None else ""
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _first_or_none(values: Any) -> str | None:
+    items = _string_list(values)
+    return items[0] if items else None
 
 
 def _clamp_int(value: Any, min_value: int, max_value: int) -> int:

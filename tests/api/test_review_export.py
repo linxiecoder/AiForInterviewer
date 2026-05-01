@@ -77,7 +77,7 @@ def api_app(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
 
 def test_generate_review_summary_score_and_persistence(api_app: Any) -> None:
-    """Review endpoint 应生成有界 score、summary、weakness/improvement 并持久化。"""
+    """Review endpoint 应生成 R1 多维 score、可信 review payload 并持久化。"""
 
     async def run_case() -> None:
         async with _client(api_app) as client:
@@ -93,13 +93,34 @@ def test_generate_review_summary_score_and_persistence(api_app: Any) -> None:
             score = payload[PAYLOAD_SCORE]
             review = payload[RESPONSE_REVIEW]
             assert 0 <= score["value"] <= 100
+            assert score["score_total"] == score["value"]
+            assert score["status"] == "generated"
             assert score["explanation"]
+            assert len(score["dimensions"]) >= 5
+            for dimension in score["dimensions"]:
+                assert {"id", "label", "score", "reason"}.issubset(dimension)
+                assert 0 <= dimension["score"] <= 100
+                assert dimension["reason"]
+                assert "citation_refs" in dimension
+                assert "evidence_gap_refs" in dimension
+                assert "low_confidence" in dimension
+            assert score["suggestions"]
+            assert score["weak_areas"]
+            assert score["review_summary"]
+
             assert review["summary"]
-            assert review["weakness"]
+            assert review["review_summary"] == review["summary"]
+            assert review["score_total"] == score["score_total"]
+            assert review["dimensions"] == score["dimensions"]
+            assert review["suggestions"]
+            assert review["weak_areas"]
             assert review["improvements"]
+            assert review["status"] == "generated"
+            assert review["degraded"] is False
+            assert review["retryable"] is False
 
             persisted = await _get_record(client, record_id=payload[FIELD_RECORD_ID])
-            assert persisted[FIELD_PAYLOAD][PAYLOAD_SCORE]["value"] == score["value"]
+            assert persisted[FIELD_PAYLOAD][PAYLOAD_SCORE]["score_total"] == score["score_total"]
             assert persisted[FIELD_PAYLOAD][PAYLOAD_REVIEW]["summary"] == review["summary"]
 
     asyncio.run(run_case())

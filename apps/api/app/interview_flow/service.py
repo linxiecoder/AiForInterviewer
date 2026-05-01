@@ -45,7 +45,9 @@ from app.interview_record_contract import (
     FIELD_OWNER_ID,
     FIELD_PAYLOAD,
     FIELD_UPDATED_AT,
+    PAYLOAD_EXPORT,
     PAYLOAD_INTERVIEW,
+    PAYLOAD_REVIEW,
     RESPONSE_ITEMS,
     RESPONSE_STATUS,
 )
@@ -355,6 +357,8 @@ def _session_response(
     current_turn: dict[str, Any] | None = None,
     next_turn: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    payload = record.get(FIELD_PAYLOAD, {})
+    payload = payload if isinstance(payload, Mapping) else {}
     interview = _interview_from_record(record)
     turns = _turns_from_interview(interview)
     response: dict[str, Any] = {
@@ -367,6 +371,15 @@ def _session_response(
         FIELD_TURNS: turns,
         FIELD_CURRENT_TURN: current_turn or (turns[-1] if turns else None),
     }
+    score_payload = payload.get("score")
+    if isinstance(score_payload, Mapping):
+        response["score"] = dict(score_payload)
+    review_payload = payload.get(PAYLOAD_REVIEW)
+    if isinstance(review_payload, Mapping):
+        response[PAYLOAD_REVIEW] = dict(review_payload)
+    export_payload = payload.get(PAYLOAD_EXPORT)
+    if isinstance(export_payload, Mapping):
+        response[PAYLOAD_EXPORT] = dict(export_payload)
     if next_turn is not None:
         response[FIELD_NEXT_TURN] = next_turn
     return response

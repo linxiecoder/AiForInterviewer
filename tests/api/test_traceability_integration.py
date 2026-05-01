@@ -328,6 +328,58 @@ def test_rag_retrieval_trace_summary_reads_citations_and_evidence_gaps(
     assert evidence_gap_refs == ["gap:no_result"]
 
 
+def test_review_score_payload_consumes_rag_refs_and_marks_low_confidence(
+    api_app: Any,
+) -> None:
+    """评分与复盘应消费 RAG citation/gap refs，并在证据不足时降级为低置信度。"""
+
+    async def run_case() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        async with _client(api_app) as client:
+            started = await _start_interview(client, owner_id="owner-score-rag")
+            answered = await _submit_answer(
+                client,
+                owner_id="owner-score-rag",
+                session_id=started[FIELD_SESSION_ID],
+                turn_id=started[FIELD_CURRENT_TURN][FIELD_TURN_ID],
+            )
+            _write_rag_citation_gap_trace(
+                api_app,
+                owner_id="owner-score-rag",
+                session_id=answered[FIELD_SESSION_ID],
+            )
+            review = await _generate_review(
+                client,
+                owner_id="owner-score-rag",
+                session_id=answered[FIELD_SESSION_ID],
+            )
+            detail = await _get_session(
+                client,
+                owner_id="owner-score-rag",
+                session_id=answered[FIELD_SESSION_ID],
+            )
+        return review["score"], review["review"], detail
+
+    score, review, detail = asyncio.run(run_case())
+
+    assert score["status"] == "degraded"
+    assert score["low_confidence"] is True
+    assert score["citation_refs"] == ["citation:score-rag:doc-score-rag:chunk-0"]
+    assert score["evidence_gap_refs"] == ["gap:no_result"]
+    assert all(dimension["citation_refs"] == score["citation_refs"] for dimension in score["dimensions"])
+    assert all(
+        dimension["evidence_gap_refs"] == score["evidence_gap_refs"]
+        for dimension in score["dimensions"]
+    )
+    assert review["status"] == "degraded"
+    assert review["degraded"] is True
+    assert review["citation_refs"] == score["citation_refs"]
+    assert review["evidence_gap_refs"] == score["evidence_gap_refs"]
+    assert detail["score"]["score_total"] == score["score_total"]
+    assert detail["review"]["review_summary"] == review["review_summary"]
+    assert detail[FIELD_TRACE_SUMMARY]["score_refs"]
+    assert detail[FIELD_TRACE_SUMMARY]["review_refs"]
+
+
 def test_traceability_read_helper_filters_by_owner(api_app: Any) -> None:
     """读取 helper 必须按 owner_id 收敛，不能泄露其他 owner 的 resource id。"""
     trace_store: TraceabilityStore = api_app.state.traceability_store
@@ -463,6 +515,25 @@ def _write_rag_gap_trace(api_app: Any, *, owner_id: str, session_id: str) -> Non
             evidence_gap_ref="gap:permission_filtered_empty",
             failure_reason="permission_filtered_empty",
             metadata={"hidden_resource_id": "hidden-resource-id"},
+        )
+    )
+
+
+def _write_rag_citation_gap_trace(api_app: Any, *, owner_id: str, session_id: str) -> None:
+    api_app.state.traceability_store.create_trace(
+        TraceabilityRecord(
+            owner_id=owner_id,
+            trace_type=TRACE_TYPE_RAG_EVIDENCE,
+            status=TraceabilityStatus.DEGRADED,
+            request_id="rag-score-request",
+            operation_id="rag.retrieve:review",
+            session_ref=session_id,
+            retrieval_query_ref="rag-query:score-rag",
+            retrieval_result_ref="rag-result:score-rag",
+            citation_refs=("citation:score-rag:doc-score-rag:chunk-0",),
+            evidence_refs=("evidence:score-rag:doc-score-rag:chunk-0",),
+            evidence_gap_ref="gap:no_result",
+            failure_reason="no_result",
         )
     )
 
