@@ -470,6 +470,7 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 
 - [AI 模拟面试系统当前仓库执行计划](docs/planning/2026-04-25-current-repo-execution-plan.md)
 - [AI 模拟面试一期工作台 MVP 待办与路线图清单](docs/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.md)
+- [AI 模拟面试工作台 MVP 主实施计划](docs/planning/workbench-mvp/MASTER_IMPLEMENTATION_PLAN.md)
 
 ### 2.5 任务文档
 
