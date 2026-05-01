@@ -6,10 +6,14 @@ permalink: ai-for-interviewer/docs/planning/workbench-mvp/2026-04-25-workbench-m
 
 # AI 模拟面试一期工作台 MVP 待办与路线图清单
 
-> 本文档是 W13-E2 建立的长期待办与路线图清单，用于持续跟踪一期 MVP 阻断项、状态层后续事项、Task Remap 后续事项、实现前置条件、二期 / 三期候选能力和历史归档事项。本文档不是 `DOC_STATE.yaml`，不替代 `TASK_INDEX.md`、`MODULE_INDEX.md`、`OPEN_QUESTIONS.md` 或 implementation packet。
+> 本文档保留“当前可执行 backlog 入口”和“字段规范”。W13 历史过程、确认卡逐条记录与阶段性明细已归档，避免正文继续膨胀。
 
 ## 1. 文档定位
 
+- 维护范围：当前待办、状态层后续事项、实现前置条件与后续候选能力。
+- 正式状态真值：`docs/governance/DOC_STATE.yaml`。
+- 历史过程明细入口：`archive/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.history-2026-05-01.md`。
+- 归档总台账入口：`archive/governance/archive-ledger.md`。
 - 维护范围：项目待办、状态层后续事项、任务重映射后续事项、实现前置条件、二期 / 三期候选能力、历史归档后续事项和用户确认待办。
 - 当前状态：W13-E15 / formal window open 前置确认已完成；正式 `DOC_STATE.yaml.subtasks` 仍只保留 `ST13_01~ST13_25`，旧 `STxx_*` 已从 formal current 容器移出，`RQ01.facts.task_ids` 已只保留 `ST13_01~ST13_25`；第一批 `ST13_24 / ST13_25` 已以 facts-only 方式把 candidate 推荐字段写入正式状态层，并已完成前置确认卡输出，但当前仍不能生成 implementation packet、打开 formal window 或进入实现。
 - 不做事项：不创建 `apps/**`、`infra/**`，不修改 `tools/**`、`tests/**`，不生成 implementation packet；不迁移 archive，不删除旧 `STxx_*` 文档。
@@ -162,6 +166,6 @@ permalink: ai-for-interviewer/docs/planning/workbench-mvp/2026-04-25-workbench-m
 
 1. 新增待办时必须补齐第 2 节字段。
 2. 状态变化后同步更新最近更新时间和备注。
-3. 任何 `confirmed` 状态必须能追溯到用户确认、`DESIGN_DECISIONS.md` 或已验证的正式文档事实源。
+3. 任何 `confirmed` 状态必须可追溯到用户确认、`DESIGN_DECISIONS.md` 或正式文档事实源。
 4. 任何会影响 `DOC_STATE.yaml` 的事项必须先进入 preview / dry-run 或用户确认卡。
 5. 本文件不得被用来绕过 `validate-state`、`evaluate-state`、`confirm-transition` 或 formal window gate。

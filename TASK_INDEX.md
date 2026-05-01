@@ -52,3 +52,7 @@ permalink: ai-for-interviewer/task-index
 | `docs/design/workbench-mvp/**` | 任务设计依据 |
 | `PLAN_LATEST.md` | 当前推进顺序 |
 | `MODULE_INDEX.md` | 模块文档入口 |
+## 6. 历史过程归档入口
+
+- 历史过程细节与旧体系迁移说明已归档至：`archive/governance/archive-ledger.md`。
+- 需追溯 W13 过程细节时，优先查看：`archive/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.history-2026-05-01.md`。
