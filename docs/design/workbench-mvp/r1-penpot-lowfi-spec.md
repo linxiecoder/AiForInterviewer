@@ -45,18 +45,67 @@ permalink: ai-for-interviewer/docs/design/workbench-mvp/r1-penpot-lowfi-spec
 
 现有代码只能作为能力事实和字段事实，不能作为最终布局依据。
 
-### 3.2 R1 页面共同结构
+### 3.2 全局 App Shell / 信息架构
+
+R1 所有主页面必须采用统一 App Shell。App Shell 是后续 Penpot frame 和前端实现的最高优先级布局约束，优先级高于当前前端代码中已有的顶部导航形态。
+
+统一 App Shell 必须包含：
+
+| 区域 | 低保真要求 |
+| --- | --- |
+| 左侧全局导航 | 固定承载 R1 主要业务栏目，导航选中态随右侧详情区路由变化。 |
+| 右侧页面详情区 | 承载当前页面标题、主内容、状态区、主要操作和空态 / 失败态 / 降级态。 |
+| 右上角用户登录信息区 | 在右侧详情区顶部或全局顶栏右侧展示用户头像、用户名称或账号标识、下拉菜单和个人配置入口。 |
+
+左侧导航只承载主要业务栏目，不放用户个人配置。用户个人配置必须放在右上角头像下拉中。旧 mock 入口不得出现在主导航，只允许作为开发辅助入口或隐藏入口。
+
+左侧全局导航推荐 IA：
+
+| 一级栏目 | 二级入口 |
+| --- | --- |
+| 工作台总览 | 工作台首页 |
+| 简历和岗位管理 | 岗位管理、简历管理 |
+| 模拟面试 | 发起模拟面试、模拟面试历史 |
+| 复盘 | 复盘列表、评分 / 复盘详情 |
+| 知识库 | 我的资料、公共知识库、RAG 状态 |
+
+右上角用户登录信息区至少包含：
+
+- 用户头像。
+- 用户名称或账号标识。
+- 下拉菜单。
+- 个人配置入口。
+
+用户下拉菜单建议包含：
+
+- 个人资料。
+- 偏好设置。
+- 模型 / LLM 配置。
+- 安全与隐私。
+- 退出登录。
+
+右侧详情区按页面类型切换：
+
+| 页面类型 | 右侧详情区内容 |
+| --- | --- |
+| 工作台首页 | 总览、快捷入口、最近记录、R1 可信能力摘要。 |
+| 简历和岗位管理 | 列表、创建入口、状态、空态。 |
+| 模拟面试 | 发起流程、历史记录、面试详情。 |
+| 复盘 | 复盘列表、评分详情、证据链、建议、薄弱项。 |
+| 知识库 | 资料列表、索引状态、RAG degraded / evidence gap 状态。 |
+
+### 3.3 R1 页面共同结构
 
 所有 R1 页面低保真稿应包含：
 
-- 顶部全局导航，保持工作台、岗位、简历、历史记录、发起面试、复盘的主入口。
+- 统一 App Shell，保持左侧全局导航、右侧页面详情区和右上角用户登录信息区稳定。
 - 当前页面标题、阶段状态和关键能力标签。
 - 主要内容区，优先展示当前页面最需要完成的任务，而不是大面积说明文案。
 - 状态区，统一表达 loading、empty、degraded、failed、retryable、permission-hidden。
 - 安全信息边界，明确不展示敏感字段。
 - 可进入下一步的主操作，避免只有静态空态。
 
-### 3.3 状态表达
+### 3.4 状态表达
 
 低保真稿必须显式预留以下状态：
 
@@ -69,7 +118,7 @@ permalink: ai-for-interviewer/docs/design/workbench-mvp/r1-penpot-lowfi-spec
 | retryable | 和 failed / degraded 并列展示是否可重试。 |
 | permission-hidden | 明确说明当前身份不可见，不泄露对象是否真实存在。 |
 
-### 3.4 安全展示边界
+### 3.5 安全展示边界
 
 所有页面禁止展示：
 
@@ -89,12 +138,12 @@ permalink: ai-for-interviewer/docs/design/workbench-mvp/r1-penpot-lowfi-spec
 | 页面 | Route | Penpot frame | R1 目标 |
 | --- | --- | --- | --- |
 | 工作台首页 | `/` | `R1 Workbench Home` | 成为 R1 默认首页，汇总主链路入口、最近记录和可信能力。 |
+| 简历和岗位管理 | `/jobs`、`/resumes` | `R1 Jobs and Resumes` | 在统一父栏目下展示岗位和简历列表、创建入口、状态和空态。 |
+| 发起模拟面试页 | `/interviews/new` | `R1 Start Interview` | 选择岗位、简历、知识库 / RAG 后发起文本模拟。 |
 | 历史列表页 | `/interviews` | `R1 Interview History` | 展示模拟记录、评分摘要、复盘状态、export 状态，并进入详情。 |
 | 评分 / 复盘详情页 | `/interviews/:sessionId` | `R1 Trusted Review Detail` | 展示可信评分、复盘、RAG citation、evidence gap、trace refs 和 export 状态。 |
-| 发起模拟面试页 | `/interviews/new` | `R1 Start Interview` | 选择岗位、简历、知识库 / RAG 后发起文本模拟。 |
-| 岗位管理页 | `/jobs` | `R1 Jobs` | 展示岗位列表、最近使用和新建入口。 |
-| 简历管理页 | `/resumes` | `R1 Resumes` | 展示简历列表、上传 / 新建入口、解析状态和失败态。 |
 | 复盘列表页 | `/reviews` | `R1 Reviews` | 汇总最近复盘、分数、状态、evidence gap 和详情入口。 |
+| 知识库 | 后续 route 待实现，建议 `/knowledge` | `R1 Knowledge Base` | 为资料列表、公共知识库、RAG 状态和 evidence gap 预留入口。 |
 | 空态集合 | 多页面适用 | `R1 Empty States` | 统一历史、岗位、简历、复盘、旧 trace、旧 score 的空态。 |
 | 降级集合 | 多页面适用 | `R1 Degraded States` | 统一 RAG degraded、LLM unavailable、export failed、permission hidden 等状态。 |
 
@@ -110,8 +159,9 @@ permalink: ai-for-interviewer/docs/design/workbench-mvp/r1-penpot-lowfi-spec
 
 | 区块 | 低保真要求 |
 | --- | --- |
-| 顶部区域 | 显示产品名、R1 当前定位、owner / identity 摘要、R1 状态标签。 |
-| 主导航 | 展示工作台、岗位、简历、历史记录、发起面试、复盘；当前页高亮。 |
+| App Shell | 左侧全局导航选中“工作台总览”，右侧详情区显示首页内容，右上角显示用户头像和下拉入口。 |
+| 顶部区域 | 在右侧详情区顶部显示产品名、R1 当前定位、owner / identity 摘要、R1 状态标签。 |
+| 主导航 | 左侧导航展示工作台总览、简历和岗位管理、模拟面试、复盘、知识库；旧 mock 不进入主导航。 |
 | R1 状态区 | 展示 `PostgreSQL`、`RAG citation`、`traceability`、`0-100 scoring`、`E2E protected`，并预留 degraded / failed 标签位。 |
 | 主操作入口 | 首要操作是“发起模拟面试”；次要操作是历史记录、岗位管理、简历管理、复盘。所有入口必须是真实 route，不允许 `#anchor` 假入口。 |
 | 最近模拟记录 | 展示 session、更新时间、状态、trace count、score、review、export、evidence gap 摘要和“查看可信详情”。 |
@@ -126,6 +176,7 @@ Codex 实现注意事项：
 - 后续实现不得仅照抄当前 Ant Design card 堆叠；布局以 Penpot 首页 frame 为准。
 - 首页可以保留 Ant Design 作为组件基础，但信息架构和视觉密度以 Penpot frame 为准。
 - 首页只能展示安全摘要，不展示 prompt、raw response、secret 或私有存储路径。
+- 根路径 `/` 必须呈现统一 App Shell，而不是只呈现单页顶部导航。
 
 ### 5.2 历史列表页
 
@@ -135,6 +186,7 @@ Codex 实现注意事项：
 
 | 区块 | 低保真要求 |
 | --- | --- |
+| App Shell | 左侧导航选中“模拟面试 / 模拟面试历史”，右侧详情区显示历史列表，右上角用户区保持可见。 |
 | 列表字段 | session / title、状态、mode、turn、updated_at、score、review、export、trace count、evidence gap。 |
 | 状态标签 | `feedback_ready`、`archived`、`available`、`empty`、`degraded`、`failed`、`retryable` 等状态有固定标签位。 |
 | 评分摘要 | 展示 `score: 82` 或 `score: empty`；不得把无评分误显示为 0 分。 |
@@ -158,6 +210,7 @@ Codex 实现注意事项：
 
 | 区块 | 低保真要求 |
 | --- | --- |
+| App Shell | 左侧导航选中“复盘 / 评分 / 复盘详情”或从“模拟面试历史”进入详情时保留合理高亮，右上角用户区保持可见。 |
 | 总分 | 显示 `0-100` 总分、score status、低置信度提示；无分数时显示旧记录空态。 |
 | 多维评分 | 每个维度显示 label、score、reason、citation ref、evidence gap、low confidence。 |
 | 每个维度 reason | reason 必须和分数并列展示，不允许隐藏到 tooltip 中作为唯一入口。 |
@@ -186,6 +239,7 @@ Codex 实现注意事项：
 
 | 区块 | 低保真要求 |
 | --- | --- |
+| App Shell | 左侧导航选中“模拟面试 / 发起模拟面试”，右侧详情区显示发起流程，右上角用户区保持可见。 |
 | 岗位选择 | 显示最近岗位、岗位状态、必填标记和去新建岗位入口。 |
 | 简历选择 | 显示最近简历、解析状态、必填标记和去上传 / 新建简历入口。 |
 | 知识库 / RAG 选择 | 显示可用知识库、索引状态、是否启用 RAG、无资料提示。 |
@@ -207,6 +261,7 @@ Codex 实现注意事项：
 
 | 区块 | 低保真要求 |
 | --- | --- |
+| App Shell | 左侧导航选中“简历和岗位管理 / 岗位管理”，右侧详情区显示岗位列表，右上角用户区保持可见。 |
 | 岗位列表 | 显示岗位名称、目标方向、最近更新、使用次数、可见状态。 |
 | 新建岗位入口 | 明确主按钮“新建岗位”，并预留后续创建表单入口。 |
 | 最近使用 | 首页和发起页应能引用最近岗位；岗位页展示最近使用排序。 |
@@ -226,6 +281,7 @@ Codex 实现注意事项：
 
 | 区块 | 低保真要求 |
 | --- | --- |
+| App Shell | 左侧导航选中“简历和岗位管理 / 简历管理”，右侧详情区显示简历列表，右上角用户区保持可见。 |
 | 简历列表 | 显示简历名称、更新时间、解析状态、最近使用、关联岗位数量。 |
 | 上传 / 新建入口 | 提供上传文件和新建文本简历两个入口；低保真稿可用占位控件表达。 |
 | 解析状态 | 展示 pending、parsed、failed、degraded；解析成功后显示可引用摘要。 |
@@ -245,6 +301,7 @@ Codex 实现注意事项：
 
 | 区块 | 低保真要求 |
 | --- | --- |
+| App Shell | 左侧导航选中“复盘 / 复盘列表”，右侧详情区显示最近复盘，右上角用户区保持可见。 |
 | 最近复盘列表 | 复用或映射历史记录，展示最近复盘条目。 |
 | 分数 | 显示 `score: 82` 或 `score: empty`。 |
 | 状态 | 显示 review、trace、export、retryable 状态。 |
@@ -257,102 +314,148 @@ Codex 实现注意事项：
 - `/reviews` 可以复用 history contract，但 UI 语义必须是“复盘列表”，不是历史列表复制品。
 - 后续如果新增独立 review API，需要同步更新 E2E，不得破坏 `/interviews/:sessionId` 详情入口。
 
+### 5.8 知识库
+
+页面目标：为 R1 RAG / 文档资料 / 索引状态预留明确入口，避免知识库能力散落到首页或发起页。
+
+必须包含：
+
+| 区块 | 低保真要求 |
+| --- | --- |
+| App Shell | 左侧导航选中“知识库”，右侧详情区显示资料和 RAG 状态，右上角用户区保持可见。 |
+| 我的资料 | 展示用户私有资料列表、可见性、上传 / 解析状态和最近使用。 |
+| 公共知识库 | 展示公共资料入口和权限说明，不展示不可见资源名称。 |
+| RAG 状态 | 展示 indexed、pending、failed、degraded、unavailable 等状态。 |
+| evidence gap | 展示 no_result、permission_filtered、index_pending、index_failed、rag_unavailable 等缺口。 |
+| 空态 | 没有资料时提示可先继续发起模拟，但复盘会标注 evidence gap。 |
+
+Codex 实现注意事项：
+
+- 本文档只预留知识库入口，不授权新增知识库 route、上传 API、索引后台或数据库 schema。
+- 知识库栏目必须出现在左侧主导航，但旧 mock 不得作为同级栏目出现。
+
 ## 6. Penpot frame 规划
+
+所有 Penpot frame 必须带统一 App Shell：左侧全局导航、右侧页面详情区、右上角用户登录信息区。每个 frame 都必须标注左侧导航选中态、右上角用户区、页面标题、主内容区域、状态区、主要操作、空态 / 失败态 / 降级态。
 
 ### 6.1 `R1 Workbench Home`
 
 | 项 | 内容 |
 | --- | --- |
 | frame 目标 | 定义 R1 默认首页布局，替代 Codex 仅凭当前代码推断首页。 |
-| 页面区块 | 顶部导航、R1 状态带、主操作区、最近模拟记录、可信能力摘要、岗位 / 简历 / 知识库概览、风险状态区。 |
+| 左侧导航选中态 | 工作台总览。 |
+| 右上角用户区 | 用户头像、用户名称或账号标识、下拉菜单入口、个人配置入口。 |
+| 页面标题 | `AI 模拟面试工作台`。 |
+| 主内容区域 | R1 状态带、主操作区、最近模拟记录、可信能力摘要、岗位 / 简历 / 知识库概览。 |
+| 状态区 | 旧记录无 trace、RAG degraded / evidence missing、export failed / retryable。 |
+| 主要操作 | 发起模拟、进入历史、进入岗位、进入简历、进入复盘、从最近记录进详情。 |
+| 空态 / 失败态 / 降级态 | 最近记录 empty、history failed、RAG degraded、export failed / retryable。 |
 | 关键文案 | `AI 模拟面试工作台`、`R1 可信工作台闭环`、`发起模拟面试`、`查看可信详情`、`旧记录无 trace`、`RAG degraded / evidence missing`。 |
-| 主要组件 | 顶部导航、状态标签、主操作按钮组、记录列表、能力摘要卡、对象概览、Alert 状态块。 |
-| 用户动作 | 发起模拟、进入历史、进入岗位、进入简历、进入复盘、从最近记录进详情。 |
-| 状态变化 | loading 最近记录、empty 最近记录、history failed、degraded / failed / retryable 标签显示。 |
 | Codex 实现注意事项 | `/` 必须匹配此 frame；旧 mock 不得出现在首页；不得显示敏感字段。 |
 
-### 6.2 `R1 Interview History`
+### 6.2 `R1 Jobs and Resumes`
 
 | 项 | 内容 |
 | --- | --- |
-| frame 目标 | 定义历史列表的扫描结构和记录字段。 |
-| 页面区块 | 顶部导航、列表标题、筛选占位、记录列表、失败 / 空态区域。 |
-| 关键文案 | `历史记录`、`模拟面试历史列表`、`查看可信详情`、`score`、`review`、`export`、`trace_summary`。 |
-| 主要组件 | 列表行、状态标签、评分摘要、export 摘要、详情链接、空态、错误提示。 |
-| 用户动作 | 点击详情、返回工作台、发起新模拟、重试读取。 |
-| 状态变化 | empty、failed、permission-hidden、export retryable。 |
-| Codex 实现注意事项 | 每行需要保留足够字段密度；不要把 export failure 藏到二级页面。 |
+| frame 目标 | 定义“简历和岗位管理”父栏目下的岗位与简历管理入口。 |
+| 左侧导航选中态 | 简历和岗位管理；二级入口根据页面状态选中岗位管理或简历管理。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `简历和岗位管理`，并在内容内区分 `岗位管理` 与 `简历管理`。 |
+| 主内容区域 | 岗位列表、简历列表、新建岗位、上传 / 新建简历、最近使用、解析状态。 |
+| 状态区 | 岗位 empty、简历 empty、解析 pending / failed / degraded、permission-hidden。 |
+| 主要操作 | 新建岗位、上传简历、新建文本简历、选择用于发起模拟。 |
+| 空态 / 失败态 / 降级态 | 暂无岗位、暂无简历材料、解析失败、当前身份暂无可见资源。 |
+| 关键文案 | `简历和岗位管理`、`岗位管理`、`简历管理`、`新建岗位`、`上传简历`、`解析失败`、`最近使用`。 |
+| Codex 实现注意事项 | `/jobs` 与 `/resumes` 可以是分路由，但 Penpot frame 必须表达同一个左侧父栏目；不得做复杂后台。 |
 
-### 6.3 `R1 Trusted Review Detail`
-
-| 项 | 内容 |
-| --- | --- |
-| frame 目标 | 定义可信评分 / 复盘详情的信息优先级。 |
-| 页面区块 | 总分摘要、多维评分、review summary、suggestions、weak areas、trace refs、RAG citation、evidence gap、export status、request refs。 |
-| 关键文案 | `评分 / 复盘详情`、`可信复盘工作区`、`总分`、`评分维度`、`RAG citation 详情`、`Evidence gap`、`Export status`。 |
-| 主要组件 | 分数条、维度列表、reason 文本、citation 列表、trace ref 列表、状态 Alert、export 元数据。 |
-| 用户动作 | 查看 citation、查看 evidence gap、复制 / 下载导出入口占位、返回历史。 |
-| 状态变化 | score empty、trace empty、citation empty、degraded、failed、retryable、low confidence。 |
-| Codex 实现注意事项 | 敏感字段硬隔离；reason 必须可见；旧记录空态必须稳定。 |
-
-### 6.4 `R1 Start Interview`
+### 6.3 `R1 Start Interview`
 
 | 项 | 内容 |
 | --- | --- |
 | frame 目标 | 定义发起模拟前的选择和风险提示。 |
-| 页面区块 | 岗位选择、简历选择、知识库 / RAG 选择、模式占位、缺失输入提示、开始按钮、风险提示。 |
-| 关键文案 | `发起模拟面试`、`选择岗位`、`选择简历`、`知识库 / RAG`、`开始模拟`、`缺失输入`、`LLM unavailable`。 |
-| 主要组件 | 选择卡、下拉占位、状态标签、禁用按钮、局部错误提示、预警 Alert。 |
-| 用户动作 | 选择岗位、选择简历、启用 / 关闭 RAG、进入新建岗位 / 简历、开始模拟。 |
-| 状态变化 | job missing、resume missing、RAG degraded、LLM unavailable、ready。 |
+| 左侧导航选中态 | 模拟面试 / 发起模拟面试。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `发起模拟面试`。 |
+| 主内容区域 | 岗位选择、简历选择、知识库 / RAG 选择、模式占位、缺失输入提示、开始按钮。 |
+| 状态区 | RAG degraded、LLM unavailable、缺失岗位、缺失简历、知识库为空。 |
+| 主要操作 | 选择岗位、选择简历、启用 / 关闭 RAG、进入新建岗位 / 简历、开始模拟。 |
+| 空态 / 失败态 / 降级态 | job missing、resume missing、RAG degraded、LLM unavailable。 |
+| 关键文案 | `选择岗位`、`选择简历`、`知识库 / RAG`、`开始模拟`、`缺失输入`、`LLM unavailable`。 |
 | Codex 实现注意事项 | 当前文档不授权 API；实现前必须另开 formal implementation 窗口。 |
 
-### 6.5 `R1 Jobs`
+### 6.4 `R1 Interview History`
 
 | 项 | 内容 |
 | --- | --- |
-| frame 目标 | 定义岗位管理入口的列表形态和空态。 |
-| 页面区块 | 顶部导航、岗位列表、最近使用、新建入口、权限提示。 |
-| 关键文案 | `岗位管理`、`新建岗位`、`最近使用`、`暂无岗位列表`、`当前身份暂无可见岗位`。 |
-| 主要组件 | 列表、状态标签、主按钮、空态、权限不可见提示。 |
-| 用户动作 | 新建岗位、选择最近岗位、从岗位发起模拟。 |
-| 状态变化 | empty、permission-hidden、loading、failed。 |
-| Codex 实现注意事项 | R1 不做复杂后台；岗位服务于发起模拟主链路。 |
+| frame 目标 | 定义历史列表的扫描结构和记录字段。 |
+| 左侧导航选中态 | 模拟面试 / 模拟面试历史。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `历史记录`。 |
+| 主内容区域 | 列表标题、筛选占位、记录列表、score / review / export / trace_summary 摘要。 |
+| 状态区 | loading、empty、failed、permission-hidden、export retryable。 |
+| 主要操作 | 点击详情、返回工作台、发起新模拟、重试读取。 |
+| 空态 / 失败态 / 降级态 | 暂无历史记录、历史记录读取失败、当前身份暂无可见记录、export failed / retryable。 |
+| 关键文案 | `历史记录`、`模拟面试历史列表`、`查看可信详情`、`score`、`review`、`export`、`trace_summary`。 |
+| Codex 实现注意事项 | 每行需要保留足够字段密度；不要把 export failure 藏到二级页面。 |
 
-### 6.6 `R1 Resumes`
+### 6.5 `R1 Trusted Review Detail`
 
 | 项 | 内容 |
 | --- | --- |
-| frame 目标 | 定义简历材料入口和解析状态表达。 |
-| 页面区块 | 简历列表、上传 / 新建入口、解析状态、最近使用、失败恢复。 |
-| 关键文案 | `简历管理`、`上传简历`、`新建文本简历`、`解析中`、`解析失败`、`最近使用`。 |
-| 主要组件 | 列表、上传入口占位、状态标签、解析失败 Alert、空态。 |
-| 用户动作 | 上传、手动新建、重试解析、选择用于模拟。 |
-| 状态变化 | empty、parsing、parsed、failed、degraded、permission-hidden。 |
-| Codex 实现注意事项 | 不展示对象存储真实路径；未授权上传时只能保留入口和空态。 |
+| frame 目标 | 定义可信评分 / 复盘详情的信息优先级。 |
+| 左侧导航选中态 | 复盘 / 评分 / 复盘详情；如果从历史进入，也保留复盘详情语义。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `评分 / 复盘详情`。 |
+| 主内容区域 | 总分摘要、多维评分、review summary、suggestions、weak areas、trace refs、RAG citation、evidence gap、export status、request refs。 |
+| 状态区 | score empty、trace empty、citation empty、degraded、failed、retryable、low confidence。 |
+| 主要操作 | 查看 citation、查看 evidence gap、复制 / 下载导出入口占位、返回历史。 |
+| 空态 / 失败态 / 降级态 | 旧记录暂无 trace_summary、旧记录暂无评分复盘、RAG citation 暂无可展示引用、export failed / retryable。 |
+| 关键文案 | `评分 / 复盘详情`、`可信复盘工作区`、`总分`、`评分维度`、`RAG citation 详情`、`Evidence gap`、`Export status`。 |
+| Codex 实现注意事项 | 敏感字段硬隔离；reason 必须可见；旧记录空态必须稳定。 |
 
-### 6.7 `R1 Reviews`
+### 6.6 `R1 Reviews`
 
 | 项 | 内容 |
 | --- | --- |
 | frame 目标 | 定义最近复盘列表和详情入口。 |
-| 页面区块 | 最近复盘列表、评分摘要、review 状态、evidence gap、export 状态、详情入口、空态。 |
+| 左侧导航选中态 | 复盘 / 复盘列表。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `复盘`。 |
+| 主内容区域 | 最近复盘列表、评分摘要、review 状态、evidence gap、export 状态、详情入口。 |
+| 状态区 | empty、degraded、failed、retryable、permission-hidden。 |
+| 主要操作 | 进入详情、返回历史、发起新模拟。 |
+| 空态 / 失败态 / 降级态 | 暂无复盘记录、复盘摘要读取失败、evidence gap、export failed / retryable。 |
 | 关键文案 | `复盘`、`最近复盘入口`、`查看复盘详情`、`score`、`review`、`evidence gap`。 |
-| 主要组件 | 列表行、分数标签、状态标签、详情链接、空态。 |
-| 用户动作 | 进入详情、返回历史、发起新模拟。 |
-| 状态变化 | empty、degraded、failed、retryable、permission-hidden。 |
 | Codex 实现注意事项 | `/reviews` 的页面语义必须是复盘列表，不能只是历史列表换标题。 |
+
+### 6.7 `R1 Knowledge Base`
+
+| 项 | 内容 |
+| --- | --- |
+| frame 目标 | 定义知识库栏目作为 RAG / 文档资料 / 索引状态的主入口。 |
+| 左侧导航选中态 | 知识库；二级入口可展示我的资料、公共知识库、RAG 状态。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `知识库`。 |
+| 主内容区域 | 我的资料列表、公共知识库入口、索引状态、RAG degraded、evidence gap。 |
+| 状态区 | indexed、pending、failed、degraded、unavailable、permission-hidden。 |
+| 主要操作 | 查看资料、上传 / 添加资料占位、查看 RAG 状态、补充资料。 |
+| 空态 / 失败态 / 降级态 | 没有资料、索引失败、RAG unavailable、permission filtered。 |
+| 关键文案 | `知识库`、`我的资料`、`公共知识库`、`RAG 状态`、`Evidence gap`、`RAG degraded`。 |
+| Codex 实现注意事项 | 只预留入口，不授权实现知识库 route、上传 API 或索引后台。 |
 
 ### 6.8 `R1 Empty States`
 
 | 项 | 内容 |
 | --- | --- |
 | frame 目标 | 统一 R1 页面空态，不让空页面变成无反馈白屏。 |
-| 页面区块 | 无历史、无复盘、无岗位、无简历、旧记录无 trace、旧记录无 score、无 citation。 |
+| 左侧导航选中态 | 按所展示空态来源高亮对应栏目。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `R1 Empty States`。 |
+| 主内容区域 | 无历史、无复盘、无岗位、无简历、无知识库资料、旧记录无 trace、旧记录无 score、无 citation。 |
+| 状态区 | empty、permission-hidden、旧记录缺字段。 |
+| 主要操作 | 发起模拟、新建岗位、上传 / 新建简历、返回工作台、补充资料。 |
+| 空态 / 失败态 / 降级态 | 汇总展示各页面空态样式。 |
 | 关键文案 | `没有历史模拟记录`、`暂无复盘记录`、`暂无岗位列表`、`暂无简历材料`、`旧记录暂无 trace_summary`、`旧记录暂无评分复盘`。 |
-| 主要组件 | Empty、主动作按钮、次动作链接、原因说明。 |
-| 用户动作 | 发起模拟、新建岗位、上传 / 新建简历、返回工作台。 |
-| 状态变化 | 数据为空、旧记录缺字段、权限不可见。 |
 | Codex 实现注意事项 | 空态要给下一步动作；权限不可见不能泄露隐藏资源。 |
 
 ### 6.9 `R1 Degraded States`
@@ -360,11 +463,14 @@ Codex 实现注意事项：
 | 项 | 内容 |
 | --- | --- |
 | frame 目标 | 统一降级、失败、可重试和不可用状态的视觉表达。 |
-| 页面区块 | RAG degraded、evidence gap、export failed、LLM unavailable、history failed、permission hidden。 |
+| 左侧导航选中态 | 按所展示降级来源高亮对应栏目。 |
+| 右上角用户区 | 用户头像和下拉入口保持可见。 |
+| 页面标题 | `R1 Degraded States`。 |
+| 主内容区域 | RAG degraded、evidence gap、export failed、LLM unavailable、history failed、permission hidden。 |
+| 状态区 | degraded、failed、retryable、unavailable、permission-hidden。 |
+| 主要操作 | 重试、继续但标记 degraded、返回工作台、补充资料。 |
+| 空态 / 失败态 / 降级态 | 汇总展示失败、可重试、不可用和权限不可见。 |
 | 关键文案 | `RAG degraded`、`Evidence gap`、`Degraded / failed / retryable`、`LLM unavailable`、`读取失败`、`当前身份暂无可见记录`。 |
-| 主要组件 | Alert、状态标签、重试按钮、详情链接、恢复建议。 |
-| 用户动作 | 重试、继续但标记 degraded、返回工作台、补充资料。 |
-| 状态变化 | failed -> retryable、degraded -> continued、permission-hidden、LLM unavailable。 |
 | Codex 实现注意事项 | 降级态不能被隐藏；RAG 失败时面试可继续但复盘必须标注 evidence gap；LLM unavailable 时不能进入真实生成问题链路。 |
 
 ## 7. Penpot MCP 后续工作流
@@ -373,7 +479,7 @@ Codex 实现注意事项：
 
 1. 用户先在 Penpot 中打开目标设计文件，并通过 Penpot MCP Plugin 连接当前项目。
 2. Codex 使用 Penpot MCP 读取当前 focused page / current page，确认 page 名称、已有 frame 和 selection。
-3. Codex 根据本文档整理将创建的 frame、尺寸、区块、组件层级、命名规则和状态覆盖计划。
+3. Codex 根据本文档整理将创建的 frame、统一 App Shell、左侧导航选中态、右上角用户区、尺寸、区块、组件层级、命名规则和状态覆盖计划。
 4. 创建任何 Penpot frame 前，Codex 必须先输出计划并等待用户确认。
 5. 用户确认后，Codex 通过 Penpot MCP 创建低保真 frame；创建时优先使用 board、text、rectangle、group、flex / grid layout 等基础形状，不做高保真视觉。
 6. Codex 创建后应读取 frame structure，并在必要时导出 frame 预览用于检查。
@@ -389,7 +495,7 @@ Penpot MCP 执行注意事项：
 - 读取结构时优先使用 `penpotUtils.getPages()`、`penpot.root`、`penpot.selection` 和 `penpotUtils.shapeStructure()`。
 - 创建 frame 时按视觉顺序 append child；如果 board 使用 flex / grid layout，优先修改 layout gap / padding，不手动硬改子元素坐标。
 - 创建文字元素时避免重复写 shape 名称；Penpot 图层名和画布文字职责应分开。
-- 输出给用户的计划必须列出 frame 名称、页面区块、主要状态和不会修改代码的保证。
+- 输出给用户的计划必须列出 frame 名称、左侧导航选中态、右上角用户区、页面区块、主要状态和不会修改代码的保证。
 - 后续从 Penpot 到代码时，缺失的样式值不能由 Codex 自行发挥，应先标注缺失并向用户确认。
 
 ## 8. 后续页面实现验收原则
@@ -399,12 +505,20 @@ Penpot MCP 执行注意事项：
 - Penpot frame 是最高优先级布局依据。
 - 现有文字描述只作为辅助。
 - 不能只凭现有代码推断布局。
-- 根路径 `/` 必须符合 Penpot 首页。
+- 根路径 `/` 必须显示统一 App Shell，并符合 Penpot 首页。
+- 左侧全局导航在主要页面保持一致。
+- 右上角用户头像和下拉入口在主要页面保持一致。
+- `/jobs`、`/resumes` 或合并后的“简历和岗位管理”入口必须来自左侧导航。
+- `/interviews`、`/interviews/new` 必须来自“模拟面试”栏目。
 - `/interviews` 必须符合 Penpot 历史列表。
 - `/interviews/:sessionId` 必须符合 Penpot 评分复盘详情。
+- `/reviews` 必须来自“复盘”栏目。
+- 知识库栏目必须为 RAG / 文档资料 / 索引状态保留入口。
 - 旧 mock 只能在 `/legacy-mock` 或 `/mock`。
+- 旧 mock 不得作为左侧主导航项。
 - 不展示 full prompt、raw LLM response、secret、object storage path、hidden resource id。
 - 页面能力必须有 Playwright E2E。
+- Playwright E2E 后续必须覆盖左侧导航可见、用户头像可见、用户下拉可打开、左侧导航进入各主要栏目、详情区内容随路由变化。
 - 关键页面必须有 screenshot baseline。
 - R1 未被用户确认 closeout 前，不得把本设计规格解释为 R1 acceptance closeout 已完成。
 
@@ -425,12 +539,12 @@ Penpot MCP 执行注意事项：
 | Window ID | `R1-UX-02-PENPOT-LOWFI-GENERATION` |
 | Iteration | R1 |
 | Task Mode | UX specification / Penpot generation / no code |
-| Goal | 使用 Penpot MCP 在当前 focused page 创建 R1 低保真 frame。 |
+| Goal | 使用 Penpot MCP 在当前 focused page 创建带统一 App Shell 的 R1 低保真 frame。 |
 | Existing Source | `docs/design/workbench-mvp/r1-penpot-lowfi-spec.md` |
 | Allowed Paths | Penpot 当前连接文件；本地仓库无写入。 |
 | Forbidden Paths | `apps/**`、`tests/**`、`docs/governance/**`、`DOC_STATE.yaml`、packet、数据库、`.env`、package 依赖。 |
 | Input Docs | `docs/design/workbench-mvp/r1-penpot-lowfi-spec.md`、`docs/development/r1-trusted-trace-ui-compliance.md`、当前 Penpot focused page。 |
-| DoD | 9 个指定 frame 已创建或已明确说明无法创建的阻断；frame 名称、区块、关键文案、状态集合与本文档一致。 |
+| DoD | 9 个指定 frame 已创建或已明确说明无法创建的阻断；frame 名称、左侧导航选中态、右上角用户区、区块、关键文案、状态集合与本文档一致。 |
 | Validation | Penpot MCP 读取当前 page structure；必要时导出 frame 预览；本地执行 `git status --short` 确认仓库未变。 |
 | Change Budget | 本地文件 0；Penpot frame 9 个。 |
 | Stop Conditions | Penpot MCP 未连接；focused page 不明确；用户未确认创建计划；现有 Penpot 信息架构与本文档冲突且用户未决策。 |
