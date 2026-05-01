@@ -197,6 +197,22 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 - `DOC_GOVERNOR_REPORT.md` 属于生成型治理报告，不是 confirmed state；其标题、章节标题与说明性正文默认应遵循中文规则，命令名、路径、JSON key、diagnostic code 可保留英文。
 - 若当前渲染输出仍存在英文标题或英文自然语言段落，应视为 `render.py` 的实现漂移并在生成器层修复，而不是手工维护报告文件。
 
+
+## 文档质量门禁（docs/governance）
+
+当前新增 `doc-quality-gate` 门禁，默认扫描 `docs/governance/*.md`（排除 `DOC_QUALITY_GATE_REPORT.md`），并将结果写入固定路径 `docs/governance/DOC_QUALITY_GATE_REPORT.md`。
+
+门禁检查项：
+- 必填字段：`Owner`、`Last Updated`、`Scope`、`Depends On`、`Supersedes`。
+- 链接健康：失效链接、`..` 跨层误引用。
+- 重复主题：同一主题出现多个“当前入口”。
+- 阶段标签一致性：仅允许 `R0` / `R1` / `R2`。
+
+接线规则：
+- `preflight-open-window` 在主流程前强制执行门禁。
+- 门禁失败时，`preflight-open-window` 返回 `ok=false`，并给出 `DOC_QUALITY_GATE_FAILED` 阻断原因。
+- 门禁未通过不得进入下一窗口。
+
 ## 8. Round Lifecycle Contract
 
 当前 round 生命周期固定为：
