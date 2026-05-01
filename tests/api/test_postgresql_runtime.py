@@ -2,24 +2,40 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
 from uuid import uuid4
 
+import httpx
 import pytest
 
 API_ROOT = Path(__file__).resolve().parents[2] / "apps" / "api"
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-from app.boundary import get_settings  # noqa: E402
+from app.boundary import ENVIRONMENT_ENV, get_settings  # noqa: E402
+from app.interview_flow.contract import (  # noqa: E402
+    FIELD_CONTENT,
+    FIELD_CURRENT_TURN,
+    FIELD_JOB,
+    FIELD_METADATA,
+    FIELD_MODE,
+    FIELD_RESUME,
+    FIELD_SESSION_ID,
+    FIELD_TURN_ID,
+    INTERVIEWS_ROUTE_PREFIX,
+)
 from app.interview_record_contract import (  # noqa: E402
     API_DATABASE_PATH_ENV,
     DATABASE_URL_ENV,
     DEFAULT_RECORD_SOURCE,
     DEFAULT_RECORD_VERSION,
+    FIELD_OWNER_ID,
 )
+from app.llm.constants import LLM_PROVIDER_DETERMINISTIC, LLM_PROVIDER_ENV  # noqa: E402
+from app.main import create_app  # noqa: E402
 from app.persistence import (  # noqa: E402
     InterviewRecordStore,
     RAGPersistenceStore,
@@ -40,6 +56,9 @@ from app.traceability import (  # noqa: E402
     TraceabilityRecord,
     TraceabilityStatus,
 )
+
+
+API_PREFIX = "/api/v1"
 
 
 def test_database_url_takes_precedence_over_sqlite_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,3 +217,77 @@ def test_postgresql_traceability_and_rag_round_trip_when_enabled() -> None:
     assert gap_records[0]["degraded"] is True
     assert gap_records[0]["retryable"] is False
     assert gap_records[0]["evidence_gap_ref"] == "gap:no_result"
+
+
+def test_postgresql_scoring_review_round_trip_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """设置 TEST_DATABASE_URL 时，PG 下应完成 score/review payload round trip。"""
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("TEST_DATABASE_URL 未设置，跳过 PostgreSQL 集成测试。")
+
+    monkeypatch.setenv(DATABASE_URL_ENV, database_url)
+    monkeypatch.setenv(ENVIRONMENT_ENV, "test")
+    monkeypatch.setenv(LLM_PROVIDER_ENV, LLM_PROVIDER_DETERMINISTIC)
+    app = create_app(get_settings(), initialize_schema=True)
+
+    async def run_case() -> None:
+        suffix = uuid4().hex
+        owner_id = f"owner-pg-score-{suffix}"
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            started_response = await client.post(
+                _interviews_url(),
+                json={
+                    FIELD_OWNER_ID: owner_id,
+                    FIELD_JOB: {"title": "Backend Engineer"},
+                    FIELD_RESUME: {"summary": "PostgreSQL and API persistence"},
+                    FIELD_MODE: "pg_score_review",
+                    FIELD_METADATA: {"source": "postgresql-score-review-test"},
+                },
+            )
+            assert started_response.status_code == 201
+            started = started_response.json()
+            answer_response = await client.post(
+                _interviews_url(f"/{started[FIELD_SESSION_ID]}/answers"),
+                json={
+                    FIELD_OWNER_ID: owner_id,
+                    FIELD_TURN_ID: started[FIELD_CURRENT_TURN][FIELD_TURN_ID],
+                    FIELD_CONTENT: "I keep trace refs and score payloads durable in PostgreSQL.",
+                },
+            )
+            assert answer_response.status_code == 200
+
+            review_response = await client.post(
+                _interviews_url(f"/{started[FIELD_SESSION_ID]}/review"),
+                json={FIELD_OWNER_ID: owner_id},
+            )
+            assert review_response.status_code == 200
+            review_payload = review_response.json()
+
+            detail_response = await client.get(
+                _interviews_url(f"/{started[FIELD_SESSION_ID]}"),
+                params={FIELD_OWNER_ID: owner_id},
+            )
+            assert detail_response.status_code == 200
+            detail = detail_response.json()
+
+            assert 0 <= review_payload["score"]["score_total"] <= 100
+            assert review_payload["score"]["dimensions"]
+            assert all(item["reason"] for item in review_payload["score"]["dimensions"])
+            assert review_payload["review"]["review_summary"]
+            assert review_payload["review"]["suggestions"]
+            assert review_payload["review"]["weak_areas"]
+            assert detail["score"]["score_total"] == review_payload["score"]["score_total"]
+            assert detail["review"]["review_summary"] == review_payload["review"]["review_summary"]
+            assert detail["trace_summary"]["score_refs"]
+            assert detail["trace_summary"]["review_refs"]
+
+    asyncio.run(run_case())
+
+
+def _interviews_url(suffix: str = "") -> str:
+    return f"{API_PREFIX}{INTERVIEWS_ROUTE_PREFIX}{suffix}"

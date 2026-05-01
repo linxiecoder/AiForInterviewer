@@ -26,25 +26,34 @@ from app.boundary import (  # noqa: E402
     get_settings,
 )
 from app.interview_flow.contract import (  # noqa: E402
+    FIELD_ANSWER,
     FIELD_CONTENT,
     FIELD_CURRENT_TURN,
     FIELD_JOB,
     FIELD_METADATA,
     FIELD_MODE,
+    FIELD_QUESTION,
     FIELD_RECORD_ID,
     FIELD_RESUME,
     FIELD_SESSION_ID,
+    FIELD_SNAPSHOT_INDEX,
     FIELD_TURN_ID,
+    FIELD_TURNS,
     INTERVIEWS_ROUTE_PREFIX,
+    INTERVIEW_FLOW_RECORD_SOURCE,
+    SESSION_STATUS_IN_PROGRESS,
 )
 from app.interview_record_contract import (  # noqa: E402
     API_DATABASE_PATH_ENV,
+    DEFAULT_RECORD_VERSION,
     FIELD_OWNER_ID,
     FIELD_PAYLOAD,
     INTERVIEW_RECORDS_ROUTE_PREFIX,
+    PAYLOAD_INTERVIEW,
     PAYLOAD_EXPORT,
     PAYLOAD_REVIEW,
     RECORD_ID_ROUTE,
+    RESPONSE_STATUS,
 )
 from app.llm.constants import (  # noqa: E402
     ERROR_LLM_PROVIDER_FAILED,
@@ -52,7 +61,7 @@ from app.llm.constants import (  # noqa: E402
     LLM_PROVIDER_ENV,
 )
 from app.llm.errors import LLMProviderError  # noqa: E402
-from app.llm.models import LLMGenerateRequest  # noqa: E402
+from app.llm.models import LLMGenerateRequest, LLMGenerateResult  # noqa: E402
 from app.main import create_app  # noqa: E402
 
 
@@ -122,6 +131,95 @@ def test_generate_review_summary_score_and_persistence(api_app: Any) -> None:
             persisted = await _get_record(client, record_id=payload[FIELD_RECORD_ID])
             assert persisted[FIELD_PAYLOAD][PAYLOAD_SCORE]["score_total"] == score["score_total"]
             assert persisted[FIELD_PAYLOAD][PAYLOAD_REVIEW]["summary"] == review["summary"]
+
+    asyncio.run(run_case())
+
+
+def test_review_consumes_legacy_r0_score_value_without_crashing(api_app: Any) -> None:
+    """旧 R0 score.value 可被 review 消费，并以 review.score_total 兼容表达。"""
+    session_id = "session-legacy-score"
+    api_app.state.interview_record_store.create_record(
+        owner_id="owner-legacy-score",
+        source=INTERVIEW_FLOW_RECORD_SOURCE,
+        version=DEFAULT_RECORD_VERSION,
+        payload={
+            PAYLOAD_INTERVIEW: {
+                FIELD_SESSION_ID: session_id,
+                FIELD_MODE: "legacy_r0",
+                RESPONSE_STATUS: SESSION_STATUS_IN_PROGRESS,
+                FIELD_METADATA: {},
+                FIELD_SNAPSHOT_INDEX: 0,
+                FIELD_TURNS: [
+                    {
+                        FIELD_TURN_ID: "turn-legacy-score",
+                        FIELD_QUESTION: "How do you keep old score records stable?",
+                        FIELD_ANSWER: {FIELD_CONTENT: "I keep a value fallback."},
+                    }
+                ],
+            },
+            PAYLOAD_SCORE: {
+                "value": 64,
+                "content_version": "r0-score-v1",
+            },
+        },
+    )
+
+    async def run_case() -> None:
+        async with _client(api_app) as client:
+            response = await client.post(
+                _interviews_url(f"/{session_id}/review"),
+                json={FIELD_OWNER_ID: "owner-legacy-score"},
+            )
+            detail = await client.get(
+                _interviews_url(f"/{session_id}"),
+                params={FIELD_OWNER_ID: "owner-legacy-score"},
+            )
+
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload[PAYLOAD_SCORE]["value"] == 64
+            assert payload[PAYLOAD_SCORE]["content_version"] == "r0-score-v1"
+            assert payload[RESPONSE_REVIEW]["score_total"] == 64
+            assert payload[RESPONSE_REVIEW]["dimensions"] == []
+            assert payload[RESPONSE_REVIEW]["status"] == "generated"
+            assert detail.status_code == 200
+            assert detail.json()[PAYLOAD_SCORE]["value"] == 64
+
+    asyncio.run(run_case())
+
+
+def test_provider_success_does_not_persist_prompt_raw_response_or_secret(api_app: Any) -> None:
+    """provider 成功路径只保存安全摘要，不持久化 prompt/raw response/secret/object path。"""
+    forbidden_markers = [
+        "FULL_PROMPT_SHOULD_NOT_PERSIST",
+        "RAW_LLM_RESPONSE_SHOULD_NOT_PERSIST",
+        "FAKE_SECRET_SHOULD_NOT_PERSIST",
+        "s3://private-bucket/raw-export.md",
+    ]
+
+    async def run_case() -> None:
+        async with _client(api_app) as client:
+            session = await _answered_session(client, owner_id="owner-sensitive-provider")
+            api_app.state.llm_provider = SensitiveProvider()
+
+            response = await client.post(
+                _interviews_url(f"/{session[FIELD_SESSION_ID]}/review"),
+                json={FIELD_OWNER_ID: "owner-sensitive-provider", "use_provider": True},
+            )
+
+            assert response.status_code == 200
+            payload = response.json()
+            persisted = await _get_record(client, record_id=payload[FIELD_RECORD_ID])
+            traces = api_app.state.traceability_store.list_traces(
+                owner_id="owner-sensitive-provider",
+                session_ref=session[FIELD_SESSION_ID],
+            )
+            serialized = "\n".join([str(payload), str(persisted), str(traces)])
+
+            assert payload[PAYLOAD_SCORE]["scoring_strategy"] == "provider_assisted"
+            assert persisted[FIELD_PAYLOAD][PAYLOAD_REVIEW]["metadata"]["provider_comment_present"] is True
+            for marker in forbidden_markers:
+                assert marker not in serialized
 
     asyncio.run(run_case())
 
@@ -275,5 +373,24 @@ class FailingProvider:
         raise LLMProviderError(
             code=ERROR_LLM_PROVIDER_FAILED,
             message="provider failed",
+            request_id=request.request_id,
+        )
+
+
+class SensitiveProvider:
+    """provider success double，用于证明 raw provider content 不会被持久化。"""
+
+    def generate(self, request: LLMGenerateRequest) -> LLMGenerateResult:
+        """返回含敏感哨兵的 fake 内容，测试不得将其写入 payload 或 trace。"""
+        return LLMGenerateResult(
+            provider="fake-provider",
+            model="fake-sensitive-model",
+            content=(
+                "88 FULL_PROMPT_SHOULD_NOT_PERSIST "
+                "RAW_LLM_RESPONSE_SHOULD_NOT_PERSIST "
+                "FAKE_SECRET_SHOULD_NOT_PERSIST "
+                "s3://private-bucket/raw-export.md"
+            ),
+            finish_reason="stop",
             request_id=request.request_id,
         )

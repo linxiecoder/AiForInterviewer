@@ -193,6 +193,8 @@ test("旧记录没有 trace 时展示稳定空态", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "R1 可信 Trace" })).toBeVisible();
   await expect(page.getByText("trace_summary: empty")).toBeVisible();
+  await expect(page.getByText("旧记录暂无评分复盘")).toBeVisible();
+  await expect(page.getByText("暂无评分维度")).toBeVisible();
   await expect(page.locator(".ant-empty").filter({ hasText: "旧记录暂无 trace_summary" })).toBeVisible();
   await expect(page.getByText("旧记录暂无 trace_summary")).toBeVisible();
   await expect(page.getByText("RAG citation 暂无可展示引用")).toBeVisible();

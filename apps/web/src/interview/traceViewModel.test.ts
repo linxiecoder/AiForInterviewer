@@ -86,3 +86,28 @@ test("buildTrustedTraceViewModel keeps legacy empty trace stable", () => {
   assert.equal(viewModel.scoreTotal, undefined);
   assert.deepEqual(viewModel.dimensionItems, []);
 });
+
+test("buildTrustedTraceViewModel keeps legacy score value and pending failed statuses stable", () => {
+  const viewModel = buildTrustedTraceViewModel({
+    session_id: "session-legacy-score",
+    score: {
+      value: 64,
+      status: "pending",
+    },
+    review: {
+      summary: "旧记录复盘可读。",
+      status: "failed",
+      degraded: true,
+      retryable: true,
+    },
+  });
+
+  assert.equal(viewModel.scoreTotal, 64);
+  assert.equal(viewModel.scoreStatus, "pending");
+  assert.equal(viewModel.lowConfidence, true);
+  assert.equal(viewModel.reviewSummary, "旧记录复盘可读。");
+  assert.ok(viewModel.statusLabels.includes("pending"));
+  assert.ok(viewModel.statusLabels.includes("failed"));
+  assert.ok(viewModel.statusLabels.includes("retryable"));
+  assert.deepEqual(viewModel.dimensionItems, []);
+});
