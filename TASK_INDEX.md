@@ -4,6 +4,9 @@ type: note
 permalink: ai-for-interviewer/task-index
 ---
 
+> 强引用：有效文档白名单见 `docs/governance/ACTIVE_DOC_CANON.md`。
+
+
 # AI 模拟面试项目任务索引
 
 ## 1. 文档定位
@@ -21,13 +24,13 @@ permalink: ai-for-interviewer/task-index
 
 ## 3. 当前任务组
 
-| group | scope | active entry | status |
-| --- | --- | --- | --- |
-| ST13_20 | 服务端保存 / 数据库边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/` | `formal_window_status=open`；`implementation_approval_status=approved`；`implementation_ready=false`；`candidate_status=none`；`readiness=downstream_ready`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
-| ST13_21 | API / 后端服务边界 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | `formal_window_status=open`；`implementation_approval_status=approved`；`implementation_ready=false`；`candidate_status=none`；`readiness=downstream_ready`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
-| ST13_24 | 测试 / 验收 / DoD | `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/` | `formal_window_status=closed`（未写入 open）；`implementation_approval_status=none`（未写入 approved）；`implementation_ready=false`；`candidate_status=none`；`readiness=blocked`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
-| ST13_25 | 文档治理 / 收口 / 长期上下文 | `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/` | `formal_window_status=closed`（未写入 open）；`implementation_approval_status=none`（未写入 approved）；`implementation_ready=false`；`candidate_status=none`；`readiness=blocked`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
-| ST01_01 | 运行环境与仓库基线 | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | `formal_window_status=open`；`implementation_approval_status=approved`；`implementation_ready` 以 `evaluate-state` 当前输出为准；`candidate_status=none`；`readiness=downstream_ready`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
+| group | scope | 阶段主标签 | active entry | status |
+| --- | --- | --- | --- | --- |
+| ST13_20 | 服务端保存 / 数据库边界 | `R1` | `docs/tasks/workbench-mvp/st13-task-packages/ST13_20/` | `formal_window_status=open`；`implementation_approval_status=approved`；`implementation_ready=false`；`candidate_status=none`；`readiness=downstream_ready`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
+| ST13_21 | API / 后端服务边界 | `R1` | `docs/tasks/workbench-mvp/st13-task-packages/ST13_21/` | `formal_window_status=open`；`implementation_approval_status=approved`；`implementation_ready=false`；`candidate_status=none`；`readiness=downstream_ready`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
+| ST13_24 | 测试 / 验收 / DoD | `R0` | `docs/tasks/workbench-mvp/st13-task-packages/ST13_24/` | `formal_window_status=closed`（未写入 open）；`implementation_approval_status=none`（未写入 approved）；`implementation_ready=false`；`candidate_status=none`；`readiness=blocked`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
+| ST13_25 | 文档治理 / 收口 / 长期上下文 | `R0` | `docs/tasks/workbench-mvp/st13-task-packages/ST13_25/` | `formal_window_status=closed`（未写入 open）；`implementation_approval_status=none`（未写入 approved）；`implementation_ready=false`；`candidate_status=none`；`readiness=blocked`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
+| ST01_01 | 运行环境与仓库基线 | 历史流程噪声（归档） | `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/` | `formal_window_status=open`；`implementation_approval_status=approved`；`implementation_ready` 以 `evaluate-state` 当前输出为准；`candidate_status=none`；`readiness=downstream_ready`；历史动作记录（如实现/验收叙述）不代表当前 gate 放行 |
 
 ## 4. 任务使用规则
 
@@ -37,6 +40,9 @@ permalink: ai-for-interviewer/task-index
 - `ST13_21` 的历史实现/验收记录仅作过程证据，不代表当前 gate 已放行后续实现；是否可实施仍以 `DOC_STATE.yaml` 与 doc-governor 判定为准。
 - 本索引不把历史任务文档重新解释为当前任务入口；`ST01_01` 是从历史骨架重建并已登记正式状态 entry 的例外。其可实施结论必须以 `DOC_STATE.yaml` 与 `evaluate-state` 当前输出为准；历史实施记录仅作过程证据，不代表自动放行新窗口。
 - `ST01_01` 与其他任务的 implementation-ready 结论均以 official state 与 doc-governor gate 为准；本索引不通过 Markdown 自行声明 implementation-ready。
+
+- 阶段主标签统一使用 `R0/R1/R2`；`P0/P1/P2`、`W13-*`、旧 `STxx_*` 仅可作为历史追溯信息，不得作为新任务主标签。
+- 新任务命名固定为 `R{n}-W{nn}`，禁止引入新体系。
 
 ## 5. 关联输入
 
