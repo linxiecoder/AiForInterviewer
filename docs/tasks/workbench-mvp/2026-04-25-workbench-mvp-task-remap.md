@@ -4,6 +4,12 @@ type: note
 permalink: ai-for-interviewer/docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap
 ---
 
+> superseded: true
+> 已废弃：是
+> 替代路径：`TASK_INDEX.md`
+> 生效日期：2026-05-01
+> 说明：该文件不再作为当前主入口，仅保留历史参考。
+
 # AI 模拟面试一期工作台 MVP 任务重映射草案
 
 ## 1. 文档定位

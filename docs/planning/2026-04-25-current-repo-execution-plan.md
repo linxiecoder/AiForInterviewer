@@ -4,6 +4,12 @@ type: note
 permalink: ai-for-interviewer/docs/planning/2026-04-25-current-repo-execution-plan
 ---
 
+> superseded: true
+> 已废弃：是
+> 替代路径：`PLAN_LATEST.md`
+> 生效日期：2026-05-01
+> 说明：该文件不再作为当前主入口，仅保留历史参考。
+
 # AI 模拟面试系统当前仓库执行计划
 
 ## 1. 文档定位
