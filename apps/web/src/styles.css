@@ -456,11 +456,93 @@ h2 {
   gap: 12px;
 }
 
+.workbench-home-shell {
+  max-width: 1360px;
+}
+
+.workbench-home-shell .ant-typography {
+  margin-bottom: 0;
+}
+
+.workbench-status-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 700;
+}
+
+.home-section {
+  display: grid;
+  gap: 16px;
+  padding-top: 24px;
+}
+
+.home-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #d5dce5;
+  padding-bottom: 12px;
+}
+
+.compact-heading {
+  margin-bottom: 16px;
+}
+
+.home-action-card,
+.home-capability-card {
+  height: 100%;
+}
+
+.home-action-card .ant-card-body,
+.home-capability-card .ant-card-body {
+  height: 100%;
+}
+
+.home-card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-card-title-row strong {
+  overflow-wrap: anywhere;
+}
+
+.home-record-list {
+  border: 1px solid #d5dce5;
+  border-radius: 8px;
+  padding: 4px 16px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.home-record-detail,
+.home-risk-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.home-record-detail {
+  overflow-wrap: anywhere;
+}
+
+.home-overview-section {
+  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+  gap: 20px;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   button,
   textarea,
   .panel,
-  .stage-item {
+  .stage-item,
+  .home-action-card,
+  .home-capability-card {
     transition:
       border-color 180ms ease,
       box-shadow 180ms ease,
@@ -475,14 +557,17 @@ h2 {
 
   .workspace-header,
   .trusted-section-heading,
+  .home-section-heading,
   .stage-strip,
   .workbench,
-  .trusted-grid {
+  .trusted-grid,
+  .home-overview-section {
     grid-template-columns: 1fr;
   }
 
   .workspace-header,
-  .trusted-section-heading {
+  .trusted-section-heading,
+  .home-section-heading {
     display: grid;
     align-items: start;
   }

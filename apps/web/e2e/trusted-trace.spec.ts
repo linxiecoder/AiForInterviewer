@@ -133,6 +133,44 @@ const emptyTracePayload = {
   },
 };
 
+test("工作台首页作为根路径展示 R1 布局并可进入可信详情", async ({ page }) => {
+  await page.route("**/api/v1/interviews/session-r1-trace?owner_id=owner-e2e", async (route) => {
+    await route.fulfill({ json: trustedTracePayload });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "AI 模拟面试工作台" })).toBeVisible();
+  await expect(page.getByText("R1 可信工作台闭环")).toBeVisible();
+  const statusTags = page.getByLabel("R1 工作台状态");
+  await expect(statusTags.getByText("traceability", { exact: true })).toBeVisible();
+  await expect(statusTags.getByText("RAG citation", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("可信能力摘要").getByText("evidence gap", { exact: true })).toBeVisible();
+  await expect(statusTags.getByText("0-100 scoring", { exact: true })).toBeVisible();
+  await expect(page.getByText("W10 首切片 / apps/web mock 原型")).toHaveCount(0);
+  await expect(page.getByText("AI 模拟面试首切片原型")).toHaveCount(0);
+  await expect(page.getByText("Mock LLM")).toHaveCount(0);
+  await expect(page.getByText("单次会话临时数据")).toHaveCount(0);
+  await expect(page.getByText("不连接真实 LLM，不做登录或长期保存")).toHaveCount(0);
+
+  await page.getByRole("link", { name: "查看可信详情" }).click();
+  await expect(page).toHaveURL(/\/interviews\/session-r1-trace\?owner_id=owner-e2e$/);
+  await expect(page.getByRole("heading", { name: "评分 / 复盘详情" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "可信复盘工作区" })).toBeVisible();
+  await expect(page.locator(".ant-card").filter({ hasText: "Trace refs" })).toBeVisible();
+  await expect(page.locator(".ant-collapse").filter({ hasText: "RAG citation 详情" })).toBeVisible();
+  await expect(page.getByText("Evidence gap", { exact: true })).toBeVisible();
+  await expect(page.getByText("总分 82")).toBeVisible();
+  await expect(page.getByText("Markdown export provider retry budget exhausted")).toBeVisible();
+  await expect(page.getByText("FULL_PROMPT_SHOULD_NOT_RENDER")).toHaveCount(0);
+  await expect(page.getByText("RAW_LLM_RESPONSE_SHOULD_NOT_RENDER")).toHaveCount(0);
+  await expect(page.getByText("super-secret-token")).toHaveCount(0);
+
+  await page.goto("/legacy-mock");
+  await expect(page.getByRole("heading", { name: "旧 Mock 原型 / Legacy" })).toBeVisible();
+  await expect(page.getByText("AI 模拟面试首切片原型")).toBeVisible();
+});
+
 test("面试详情页展示 R1 可信 trace、RAG citation、evidence gap 和 export 状态", async ({
   page,
 }) => {
