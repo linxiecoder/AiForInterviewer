@@ -12,6 +12,7 @@ from .validate import validate_state_file
 from .schema import OFFICIAL_STATE_PATH, OQ_POLICY_SOURCE_BOOTSTRAP_DEFAULT
 from .task_state_dependency_map import build_task_state_dependency_map
 from .task_window_bridge import build_task_window_bridge
+from .doc_quality_gate import run_doc_quality_gate
 
 
 ALLOWED_OPEN_READINESS = {"downstream_ready", "implementation_ready"}
@@ -37,6 +38,28 @@ def preflight_open_window(
     ).resolve()
 
     parse_errors: list[dict[str, Any]] = []
+
+    quality_gate = run_doc_quality_gate(state_path.parents[2])
+    quality_gate_errors = diagnostics_to_dicts(quality_gate.get("diagnostics", []))
+    parse_errors.extend(quality_gate_errors)
+    if not quality_gate.get("ok", False):
+        return {
+            "ok": False,
+            "state_path": state_path.as_posix(),
+            "history_path": history_path.as_posix(),
+            "evaluation_source": "quality-gate-blocked",
+            "scope": {"entity_type": entity_type, "entity_id": entity_id, "history": history_path.as_posix()},
+            "eligible_entities": [],
+            "blocked_entities": [],
+            "blocker_reasons": [{"code": "DOC_QUALITY_GATE_FAILED", "message": "文档质量门禁未通过，禁止进入下一窗口。", "report_path": quality_gate.get("report_path")}],
+            "missing_requirements": [],
+            "review_required_before_open": [],
+            "summary": {"entities_scanned": 0, "eligible_count": 0, "blocked_count": 0, "hard_blocked_count": 0, "review_required_unconfirmed_count": 0, "history_records": 0, "history_parse_error_count": 0, "evaluation_source": "quality-gate-blocked"},
+            "parse_errors": parse_errors,
+            "history_recent": [],
+            "history_signals": {"history_recent_parse_error_count": 0},
+            "doc_quality_gate": {"ok": False, "report_path": quality_gate.get("report_path")},
+        }
 
     official_state, state_errors = _load_official_state(state_path)
     parse_errors.extend(state_errors)

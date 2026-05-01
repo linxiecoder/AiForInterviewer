@@ -135,6 +135,7 @@ if __package__ in {None, ""}:
     from tools.doc_governor.open_window import open_window
     from tools.doc_governor.round_template import generate_round_template
     from tools.doc_governor.window_plan import plan_open_window, sort_round_entities
+    from tools.doc_governor.doc_quality_gate import run_doc_quality_gate
     from tools.doc_governor.repo_scan import scan_repo
     from tools.doc_governor.render import (
         build_render_diagnostics,
@@ -267,6 +268,7 @@ else:
     from .open_window import open_window
     from .round_template import generate_round_template
     from .window_plan import plan_open_window, sort_round_entities
+    from .doc_quality_gate import run_doc_quality_gate
     from .repo_scan import scan_repo
     from .render import (
         build_render_diagnostics,
@@ -305,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser.add_argument("--baseline-evaluate-json")
     evaluate_parser.add_argument("--entity-type")
     evaluate_parser.add_argument("--entity-id")
+
+    quality_gate_parser = subparsers.add_parser("doc-quality-gate")
+    quality_gate_parser.add_argument("--repo-root", default=".")
 
     render_parser = subparsers.add_parser("render-report")
     render_parser.add_argument("--evaluate-json")
@@ -630,6 +635,11 @@ def main(argv: list[str] | None = None) -> int:
         return validate_state(args)
     if args.command == "evaluate-state":
         return evaluate_state_command(args)
+    if args.command == "doc-quality-gate":
+        result = run_doc_quality_gate(Path(args.repo_root).resolve())
+        print(result_to_json(ok=result.get("ok", False), diagnostics=result.get("diagnostics", []), report_path=result.get("report_path")))
+        return 0 if result.get("ok", False) else 1
+
     if args.command == "render-report":
         return render_report_command(args)
     if args.command == "confirm-transition":
