@@ -4,6 +4,9 @@ type: note
 permalink: ai-for-interviewer/plan-latest
 ---
 
+> 强引用：有效文档白名单见 `docs/governance/ACTIVE_DOC_CANON.md`。
+
+
 # AI 模拟面试系统当前仓库执行计划
 
 ## 1. 文档定位
@@ -56,7 +59,8 @@ python -m tools.doc_governor.cli evaluate-state --input docs/governance/DOC_STAT
 git diff --check
 git status --short
 ```
+## 6. 历史过程归档入口
 
-## 6. 每日执行面板入口（根目录）
-
-为降低跨会话切换成本，根目录新增 `DAILY_EXECUTION_PANEL.md` 作为默认启动入口；其结构复用本计划文档的结构化区块思路，并强制记录：唯一目标、窗口卡、阻断项、完成证据、次日接力入口。每次开发结束必须更新该面板。
+- 规划历史过程、阶段性确认卡与旧体系细节已归档，不在本文件展开。
+- 归档台账：`archive/governance/archive-ledger.md`。
+- 规划历史快照：`archive/planning/workbench-mvp/2026-04-25-workbench-mvp-backlog-roadmap.history-2026-05-01.md`。
