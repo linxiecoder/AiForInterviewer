@@ -1,4 +1,4 @@
-import type { InterviewHistoryResponse, TraceSummary } from "./traceTypes.js";
+import type { InterviewHistoryResponse, MarkdownExportSummary, ReviewSummary, ScoreSummary, TraceSummary } from "./traceTypes.js";
 
 export interface HistoryRecordViewItem {
   key: string;
@@ -12,6 +12,12 @@ export interface HistoryRecordViewItem {
   updatedAt: string;
   traceStatus: string;
   traceCountLabel: string;
+  scoreLabel: string;
+  reviewStatus: string;
+  exportStatus: string;
+  exportFailureReason: string;
+  exportRetryable: boolean;
+  exportMetadata: string[];
   statusLabels: string[];
   evidenceGapLabels: string[];
 }
@@ -36,6 +42,9 @@ export function buildHistoryViewModel(
       const traceSummary = item.trace_summary ?? emptyTraceSummary(sessionId);
       const rag = traceSummary.rag ?? emptyTraceSummary(sessionId).rag;
       const counts = traceSummary.counts ?? emptyTraceSummary(sessionId).counts;
+      const scoreSummary = normalizeScore(item.score);
+      const reviewSummary = normalizeReview(item.review);
+      const exportSummary = normalizeExport(item.export);
 
       return {
         key: normalizeString(item.record_id) || sessionId || `history-${index}`,
@@ -51,7 +60,14 @@ export function buildHistoryViewModel(
         traceCountLabel: `trace ${counts.total ?? 0} / RAG ${counts.rag_evidence ?? 0} / export ${
           counts.review_export ?? 0
         }`,
-        statusLabels: buildStatusLabels(traceSummary),
+        scoreLabel:
+          typeof scoreSummary.scoreTotal === "number" ? `score: ${scoreSummary.scoreTotal}` : "score: empty",
+        reviewStatus: reviewSummary.status,
+        exportStatus: exportSummary.status,
+        exportFailureReason: exportSummary.failureReason,
+        exportRetryable: exportSummary.retryable,
+        exportMetadata: exportSummary.metadata,
+        statusLabels: buildStatusLabels(traceSummary, scoreSummary.status, reviewSummary.status, exportSummary.status),
         evidenceGapLabels: uniqueStrings(rag.evidence_gap_refs.map(normalizeEvidenceGapRef)),
       };
     })
@@ -91,7 +107,12 @@ function emptyTraceSummary(sessionId: string): TraceSummary {
   };
 }
 
-function buildStatusLabels(traceSummary: TraceSummary): string[] {
+function buildStatusLabels(
+  traceSummary: TraceSummary,
+  scoreStatus: string,
+  reviewStatus: string,
+  exportStatus: string,
+): string[] {
   const degradedStatuses = new Set([
     "degraded",
     "failed",
@@ -102,11 +123,54 @@ function buildStatusLabels(traceSummary: TraceSummary): string[] {
   ]);
   const rag = traceSummary.rag ?? emptyTraceSummary("").rag;
   return uniqueStrings([
+    scoreStatus,
+    reviewStatus,
+    exportStatus,
     ...rag.statuses.filter((status) => degradedStatuses.has(status)),
     ...traceSummary.request_refs
       .map((item) => item.status)
       .filter((status): status is string => Boolean(status && degradedStatuses.has(status))),
-  ]);
+  ]).filter((status) => status !== "empty" && status !== "generated" && status !== "completed");
+}
+
+function normalizeScore(score: ScoreSummary | undefined): { scoreTotal?: number; status: string } {
+  const scoreTotal = score?.score_total ?? score?.value;
+  return {
+    scoreTotal: typeof scoreTotal === "number" && Number.isFinite(scoreTotal) ? scoreTotal : undefined,
+    status: normalizeString(score?.status) || "empty",
+  };
+}
+
+function normalizeReview(review: ReviewSummary | undefined): { status: string } {
+  return {
+    status: normalizeString(review?.status) || "empty",
+  };
+}
+
+function normalizeExport(
+  exportSummary: MarkdownExportSummary | undefined,
+): { status: string; failureReason: string; retryable: boolean; metadata: string[] } {
+  return {
+    status: normalizeString(exportSummary?.status) || "empty",
+    failureReason: normalizeString(exportSummary?.failure_reason),
+    retryable: Boolean(exportSummary?.retryable),
+    metadata: buildExportMetadata(exportSummary ?? {}),
+  };
+}
+
+function buildExportMetadata(exportSummary: MarkdownExportSummary): string[] {
+  const metadata = exportSummary.metadata ?? {};
+  return [
+    formatMetadataValue("content_version", exportSummary.content_version ?? metadata.content_version),
+    formatMetadataValue("snapshot_ref", exportSummary.snapshot_ref ?? metadata.snapshot_ref),
+  ].filter((value): value is string => Boolean(value));
+}
+
+function formatMetadataValue(label: string, value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return `${label}: ${value.trim()}`;
+  }
+  return undefined;
 }
 
 function normalizeEvidenceGapRef(value: string | undefined): string | undefined {

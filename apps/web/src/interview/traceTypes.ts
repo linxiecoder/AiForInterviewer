@@ -114,6 +114,9 @@ export interface InterviewHistoryItem {
   turn_index?: number;
   created_at?: string;
   updated_at?: string;
+  score?: ScoreSummary;
+  review?: ReviewSummary;
+  export?: MarkdownExportSummary;
   trace_summary?: TraceSummary;
 }
 

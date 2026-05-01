@@ -5,7 +5,7 @@ import { workbenchHomeText } from "../appContent.js";
 import { fetchInterviewHistory } from "../interview/traceApi.js";
 import type { InterviewHistoryResponse } from "../interview/traceTypes.js";
 import { buildHistoryViewModel } from "../interview/historyViewModel.js";
-import { WorkbenchNav } from "./WorkbenchNav.js";
+import { hrefWithCurrentOwner, WorkbenchNav } from "./WorkbenchNav.js";
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -83,7 +83,7 @@ export function WorkbenchHomePage({ ownerId }: { ownerId: string }) {
                   <Button
                     aria-label={action.title}
                     data-testid={`primary-action-${action.title}`}
-                    href={action.href}
+                    href={hrefWithCurrentOwner(action.href)}
                     type={action.title === "发起模拟面试" ? "primary" : "default"}
                   >
                     进入 {action.title}

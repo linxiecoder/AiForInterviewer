@@ -8,6 +8,18 @@ function currentPathname() {
   return typeof window === "undefined" ? "/" : window.location.pathname;
 }
 
+export function hrefWithCurrentOwner(href: string): string {
+  if (typeof window === "undefined") {
+    return href;
+  }
+  const ownerId = new URLSearchParams(window.location.search).get("owner_id");
+  if (!ownerId) {
+    return href;
+  }
+  const params = new URLSearchParams({ owner_id: ownerId });
+  return `${href}?${params}`;
+}
+
 export function WorkbenchNav() {
   const pathname = currentPathname();
 
@@ -25,7 +37,7 @@ export function WorkbenchNav() {
           return (
             <Button
               className="workbench-nav-link"
-              href={item.href}
+              href={hrefWithCurrentOwner(item.href)}
               key={item.href}
               type={isActive ? "primary" : "text"}
             >

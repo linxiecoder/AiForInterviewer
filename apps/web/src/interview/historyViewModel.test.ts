@@ -16,6 +16,21 @@ test("buildHistoryViewModel maps real history contract into safe recent records"
         turn_index: 2,
         created_at: "2026-05-01T01:00:00Z",
         updated_at: "2026-05-01T03:20:00Z",
+        score: {
+          score_total: 82,
+          status: "degraded",
+        },
+        review: {
+          status: "degraded",
+          retryable: false,
+        },
+        export: {
+          status: "failed",
+          failure_reason: "Markdown export provider retry budget exhausted",
+          retryable: true,
+          content_version: "r0-export-v1",
+          snapshot_ref: "record-r1-history:export",
+        },
         trace_summary: {
           status: "available",
           counts: { total: 4, interview: 2, rag_evidence: 1, review_export: 1 },
@@ -55,7 +70,16 @@ test("buildHistoryViewModel maps real history contract into safe recent records"
   assert.equal(viewModel.items[0]?.status, "feedback_ready");
   assert.equal(viewModel.items[0]?.traceStatus, "available");
   assert.equal(viewModel.items[0]?.traceCountLabel, "trace 4 / RAG 1 / export 1");
-  assert.deepEqual(viewModel.items[0]?.statusLabels, ["degraded", "retryable"]);
+  assert.equal(viewModel.items[0]?.scoreLabel, "score: 82");
+  assert.equal(viewModel.items[0]?.reviewStatus, "degraded");
+  assert.equal(viewModel.items[0]?.exportStatus, "failed");
+  assert.equal(viewModel.items[0]?.exportFailureReason, "Markdown export provider retry budget exhausted");
+  assert.equal(viewModel.items[0]?.exportRetryable, true);
+  assert.deepEqual(viewModel.items[0]?.exportMetadata, [
+    "content_version: r0-export-v1",
+    "snapshot_ref: record-r1-history:export",
+  ]);
+  assert.deepEqual(viewModel.items[0]?.statusLabels, ["degraded", "failed", "retryable"]);
   assert.deepEqual(viewModel.items[0]?.evidenceGapLabels, ["no_result"]);
   assert.equal(viewModel.items[0]?.updatedAt, "2026-05-01T03:20:00Z");
   const serialized = JSON.stringify(viewModel);
@@ -84,6 +108,10 @@ test("buildHistoryViewModel keeps empty and old history records stable", () => {
   assert.equal(viewModel.isEmpty, false);
   assert.equal(viewModel.items[0]?.traceStatus, "empty");
   assert.equal(viewModel.items[0]?.traceCountLabel, "trace 0 / RAG 0 / export 0");
+  assert.equal(viewModel.items[0]?.scoreLabel, "score: empty");
+  assert.equal(viewModel.items[0]?.reviewStatus, "empty");
+  assert.equal(viewModel.items[0]?.exportStatus, "empty");
+  assert.equal(viewModel.items[0]?.exportRetryable, false);
   assert.deepEqual(viewModel.items[0]?.statusLabels, []);
   assert.deepEqual(viewModel.items[0]?.evidenceGapLabels, []);
 });

@@ -205,11 +205,11 @@ test("工作台首页主入口进入真实页面且不再使用锚点假入口",
 
   await expect(page.getByRole("heading", { name: "AI 模拟面试工作台" })).toBeVisible();
   const expectedEntries = [
-    { name: "发起模拟面试", url: /\/interviews\/new$/ },
-    { name: "历史记录", url: /\/interviews$/ },
-    { name: "岗位管理", url: /\/jobs$/ },
-    { name: "简历管理", url: /\/resumes$/ },
-    { name: "复盘", url: /\/reviews$/ },
+    { name: "发起模拟面试", url: /\/interviews\/new\?owner_id=owner-e2e$/ },
+    { name: "历史记录", url: /\/interviews\?owner_id=owner-e2e$/ },
+    { name: "岗位管理", url: /\/jobs\?owner_id=owner-e2e$/ },
+    { name: "简历管理", url: /\/resumes\?owner_id=owner-e2e$/ },
+    { name: "复盘", url: /\/reviews\?owner_id=owner-e2e$/ },
   ];
 
   for (const entry of expectedEntries) {
@@ -217,9 +217,75 @@ test("工作台首页主入口进入真实页面且不再使用锚点假入口",
     await expect(action).toHaveAttribute("href", /^(?!#)/);
     await action.click();
     await expect(page).toHaveURL(entry.url);
-    await expect(page.getByRole("heading", { name: entry.name })).toBeVisible();
+    await expect(page.getByRole("heading", { name: entry.name, exact: true })).toBeVisible();
     await page.goto("/?owner_id=owner-e2e");
   }
+});
+
+test("历史记录和复盘入口形成 R1 history export degraded 闭环", async ({ page }) => {
+  await page.route("**/api/v1/interviews?owner_id=owner-e2e", async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            record_id: "record-r1-trace",
+            owner_id: "owner-e2e",
+            session_id: "session-r1-trace",
+            status: "feedback_ready",
+            mode: "r1_trusted",
+            turn_index: 1,
+            created_at: "2026-05-01T01:00:00Z",
+            updated_at: "2026-05-01T03:20:00Z",
+            score: { score_total: 82, status: "degraded" },
+            review: { status: "degraded", retryable: false },
+            export: {
+              status: "failed",
+              failure_reason: "Markdown export provider retry budget exhausted",
+              retryable: true,
+              content_version: "r0-export-v1",
+              snapshot_ref: "record-r1-trace:export",
+            },
+            trace_summary: trustedTracePayload.trace_summary,
+            unsafe_debug: trustedTracePayload.unsafe_debug,
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/v1/interviews/session-r1-trace?owner_id=owner-e2e", async (route) => {
+    await route.fulfill({ json: trustedTracePayload });
+  });
+
+  await page.goto("/?owner_id=owner-e2e");
+  await page.getByTestId("primary-action-历史记录").click();
+  await expect(page).toHaveURL(/\/interviews\?owner_id=owner-e2e$/);
+  await expect(page.getByRole("heading", { name: "历史记录" })).toBeVisible();
+  await expect(page.getByText("score: 82")).toBeVisible();
+  await expect(page.getByText("review: degraded")).toBeVisible();
+  await expect(page.getByText("export: failed")).toBeVisible();
+  await expect(page.getByText("Markdown export provider retry budget exhausted")).toBeVisible();
+  await expect(page.getByText("可重试")).toBeVisible();
+
+  await page.getByRole("link", { name: "查看可信详情" }).click();
+  await expect(page).toHaveURL(/\/interviews\/session-r1-trace\?owner_id=owner-e2e$/);
+  await expect(page.getByText("Export status: failed")).toBeVisible();
+  await expect(page.getByText("Markdown export provider retry budget exhausted")).toBeVisible();
+
+  await page.goto("/reviews?owner_id=owner-e2e");
+  await expect(page.getByRole("heading", { name: "复盘", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "最近复盘入口" })).toBeVisible();
+  await expect(page.getByText("score: 82")).toBeVisible();
+  await expect(page.getByText("review: degraded")).toBeVisible();
+  await expect(page.getByRole("link", { name: "查看复盘详情" })).toHaveAttribute(
+    "href",
+    "/interviews/session-r1-trace?owner_id=owner-e2e",
+  );
+
+  await expect(page.getByText("FULL_PROMPT_SHOULD_NOT_RENDER")).toHaveCount(0);
+  await expect(page.getByText("RAW_LLM_RESPONSE_SHOULD_NOT_RENDER")).toHaveCount(0);
+  await expect(page.getByText("super-secret-token")).toHaveCount(0);
+  await expect(page.getByText("s3://private-bucket/raw-export.md")).toHaveCount(0);
+  await expect(page.getByText("hidden-resource-id")).toHaveCount(0);
 });
 
 test("面试详情页展示 R1 可信 trace、RAG citation、evidence gap 和 export 状态", async ({

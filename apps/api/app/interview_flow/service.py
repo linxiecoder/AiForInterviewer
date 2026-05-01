@@ -271,6 +271,8 @@ class InterviewFlowService:
         for _snapshot_index_value, record, interview in latest_by_session.values():
             turns = _turns_from_interview(interview)
             session_id = str(interview.get(FIELD_SESSION_ID, ""))
+            payload = record.get(FIELD_PAYLOAD, {})
+            payload = payload if isinstance(payload, Mapping) else {}
             items.append(
                 {
                     FIELD_RECORD_ID: record[FIELD_ID],
@@ -281,6 +283,9 @@ class InterviewFlowService:
                     FIELD_TURN_INDEX: max(len(turns) - 1, 0),
                     FIELD_CREATED_AT: record[FIELD_CREATED_AT],
                     FIELD_UPDATED_AT: record[FIELD_UPDATED_AT],
+                    "score": _history_score_summary(payload.get("score")),
+                    PAYLOAD_REVIEW: _history_review_summary(payload.get(PAYLOAD_REVIEW)),
+                    PAYLOAD_EXPORT: _history_export_summary(payload.get(PAYLOAD_EXPORT)),
                     FIELD_TRACE_SUMMARY: self._trace_summary(
                         owner_id=owner_id,
                         session_id=session_id,
@@ -383,6 +388,58 @@ def _session_response(
     if next_turn is not None:
         response[FIELD_NEXT_TURN] = next_turn
     return response
+
+
+def _history_score_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {"status": "empty", "score_total": None}
+    score_total = value.get("score_total", value.get("value"))
+    return {
+        "status": _safe_text(value.get(RESPONSE_STATUS), "generated"),
+        "score_total": score_total if isinstance(score_total, (int, float)) else None,
+        "content_version": _safe_text(value.get("content_version"), ""),
+    }
+
+
+def _history_review_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {"status": "empty", "retryable": False, "degraded": False}
+    return {
+        "status": _safe_text(value.get(RESPONSE_STATUS), "generated"),
+        "retryable": bool(value.get("retryable")),
+        "degraded": bool(value.get("degraded")),
+        "content_version": _safe_text(value.get("content_version"), ""),
+    }
+
+
+def _history_export_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {
+            "status": "empty",
+            "failure_reason": "",
+            "retryable": False,
+            "content_version": "",
+            "snapshot_ref": "",
+        }
+    metadata = value.get("metadata")
+    metadata = metadata if isinstance(metadata, Mapping) else {}
+    snapshot_ref = value.get("snapshot_ref") or (
+        f"{metadata.get('record_id')}:export" if metadata.get("record_id") else ""
+    )
+    return {
+        "status": _safe_text(value.get(RESPONSE_STATUS), "completed"),
+        "failure_reason": _safe_text(value.get("failure_reason"), ""),
+        "retryable": bool(value.get("retryable")),
+        "content_version": _safe_text(value.get("content_version"), ""),
+        "snapshot_ref": _safe_text(snapshot_ref, ""),
+    }
+
+
+def _safe_text(value: Any, fallback: str) -> str:
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    return text or fallback
 
 
 def _interview_from_record(record: dict[str, Any]) -> dict[str, Any]:

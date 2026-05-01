@@ -261,6 +261,45 @@ def test_markdown_export_content_metadata_and_persistence(api_app: Any) -> None:
     asyncio.run(run_case())
 
 
+def test_history_list_returns_score_review_export_summary_without_sensitive_fields(api_app: Any) -> None:
+    """History list 应返回 R1 可验收摘要，且不泄露敏感字段。"""
+
+    async def run_case() -> None:
+        async with _client(api_app) as client:
+            session = await _answered_session(client, owner_id="owner-history-summary")
+            await client.post(
+                _interviews_url(f"/{session[FIELD_SESSION_ID]}/review"),
+                json={FIELD_OWNER_ID: "owner-history-summary"},
+            )
+            await client.post(
+                _interviews_url(f"/{session[FIELD_SESSION_ID]}/export"),
+                json={FIELD_OWNER_ID: "owner-history-summary"},
+            )
+            history_response = await client.get(
+                _interviews_url(),
+                params={FIELD_OWNER_ID: "owner-history-summary"},
+            )
+
+            assert history_response.status_code == 200
+            item = history_response.json()["items"][0]
+            assert item["score"]["score_total"] >= 0
+            assert item["score"]["status"] in {"generated", "degraded"}
+            assert item["review"]["status"] in {"generated", "degraded"}
+            assert item["review"]["retryable"] is False
+            assert item["export"]["status"] == "completed"
+            assert item["export"]["retryable"] is False
+            assert item["export"]["content_version"] == "r0-export-v1"
+            assert item["export"]["snapshot_ref"]
+
+            serialized = str(item)
+            assert "FULL_PROMPT_SHOULD_NOT_PERSIST" not in serialized
+            assert "RAW_LLM_RESPONSE_SHOULD_NOT_PERSIST" not in serialized
+            assert "FAKE_SECRET_SHOULD_NOT_PERSIST" not in serialized
+            assert "s3://private-bucket/raw-export.md" not in serialized
+
+    asyncio.run(run_case())
+
+
 def test_review_export_missing_session_and_validation_error(api_app: Any) -> None:
     """缺失 session 与缺失 owner_id 都应返回稳定 error envelope。"""
 

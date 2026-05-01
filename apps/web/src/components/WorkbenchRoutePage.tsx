@@ -1,4 +1,4 @@
-import { Alert, Card, Empty, List, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Empty, List, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { workbenchRoutePages } from "../appContent.js";
@@ -25,6 +25,9 @@ export function WorkbenchRoutePage({
 }) {
   if (kind === "interviews") {
     return <InterviewHistoryPage ownerId={ownerId} />;
+  }
+  if (kind === "reviews") {
+    return <ReviewListPage ownerId={ownerId} />;
   }
 
   const page = workbenchRoutePages[kind];
@@ -164,6 +167,16 @@ function InterviewHistoryPage({ ownerId }: { ownerId: string }) {
                 description={
                   <div className="home-record-detail">
                     <Text>{record.traceCountLabel}</Text>
+                    <div className="trusted-tag-row">
+                      <Tag color={statusColor(record.reviewStatus)}>{record.scoreLabel}</Tag>
+                      <Tag color={statusColor(record.reviewStatus)}>review: {record.reviewStatus}</Tag>
+                      <Tag color={statusColor(record.exportStatus)}>export: {record.exportStatus}</Tag>
+                      {record.exportRetryable ? <Tag color="warning">可重试</Tag> : null}
+                    </div>
+                    {record.exportFailureReason ? (
+                      <Text type="danger">{record.exportFailureReason}</Text>
+                    ) : null}
+                    <TagList items={record.exportMetadata} emptyLabel="暂无 export snapshot / version" />
                     <Text type="secondary">
                       session: {record.sessionId} / owner: {record.ownerId} / mode: {record.mode} /
                       updated: {record.updatedAt}
@@ -177,4 +190,143 @@ function InterviewHistoryPage({ ownerId }: { ownerId: string }) {
       </section>
     </main>
   );
+}
+
+function ReviewListPage({ ownerId }: { ownerId: string }) {
+  const [historyLoadState, setHistoryLoadState] = useState<HistoryLoadState>({ status: "loading" });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setHistoryLoadState({ status: "loading" });
+
+    fetchInterviewHistory({ ownerId, signal: controller.signal })
+      .then((response) => setHistoryLoadState({ status: "ready", response }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "history request failed";
+        setHistoryLoadState({ status: "failed", message });
+      });
+
+    return () => controller.abort();
+  }, [ownerId]);
+
+  const historyViewModel = useMemo(
+    () =>
+      buildHistoryViewModel(
+        historyLoadState.status === "ready" ? historyLoadState.response : { items: [] },
+        ownerId,
+      ),
+    [historyLoadState, ownerId],
+  );
+
+  return (
+    <main className="app-shell workbench-route-shell">
+      <WorkbenchNav />
+      <section className="workspace-header" aria-labelledby="reviews-title">
+        <div>
+          <Text className="eyebrow">R1B-01 工作台入口 / 复盘</Text>
+          <Title level={1} id="reviews-title">
+            复盘
+          </Title>
+          <Paragraph className="header-copy">
+            复用历史记录 contract 展示最近复盘入口、评分摘要、导出状态和降级提示。
+          </Paragraph>
+        </div>
+        <div className="status-group" aria-label="复盘当前阶段">
+          <Tag color="blue">R1 history</Tag>
+          <Tag color="success">review/export summary</Tag>
+        </div>
+      </section>
+
+      <section className="home-section" aria-labelledby="review-entry-title">
+        <div className="home-section-heading">
+          <Title level={2} id="review-entry-title">
+            最近复盘入口
+          </Title>
+          <Text type="secondary">不新增复盘 API；从可信详情页继续查看完整证据链。</Text>
+        </div>
+        {historyLoadState.status === "loading" ? (
+          <Alert className="trusted-alert" message="正在读取复盘摘要..." type="info" showIcon />
+        ) : null}
+        {historyLoadState.status === "failed" ? (
+          <Alert
+            className="trusted-alert"
+            message="复盘摘要读取失败"
+            description={historyLoadState.message}
+            type="warning"
+            showIcon
+          />
+        ) : null}
+        <List
+          className="home-record-list"
+          dataSource={historyViewModel.items}
+          locale={{ emptyText: <Empty description="暂无复盘记录，入口已就绪。" /> }}
+          renderItem={(record) => (
+            <List.Item
+              actions={[
+                <Button href={record.href} key="review-detail" type="link">
+                  查看复盘详情
+                </Button>,
+              ]}
+            >
+              <List.Item.Meta
+                title={
+                  <div className="home-card-title-row">
+                    <Text strong>{record.title}</Text>
+                    <Tag color={statusColor(record.reviewStatus)}>review: {record.reviewStatus}</Tag>
+                    <Tag color={statusColor(record.exportStatus)}>export: {record.exportStatus}</Tag>
+                  </div>
+                }
+                description={
+                  <div className="home-record-detail">
+                    <div className="trusted-tag-row">
+                      <Tag color="blue">{record.scoreLabel}</Tag>
+                      <Tag color={statusColor(record.traceStatus)}>trace_summary: {record.traceStatus}</Tag>
+                      {record.exportRetryable ? <Tag color="warning">可重试</Tag> : null}
+                    </div>
+                    {record.exportFailureReason ? (
+                      <Text type="danger">{record.exportFailureReason}</Text>
+                    ) : null}
+                    <Text type="secondary">
+                      session: {record.sessionId} / updated: {record.updatedAt}
+                    </Text>
+                  </div>
+                }
+              />
+            </List.Item>
+          )}
+        />
+      </section>
+    </main>
+  );
+}
+
+function TagList({ items, emptyLabel }: { items: string[]; emptyLabel: string }) {
+  if (items.length === 0) {
+    return <Text type="secondary">{emptyLabel}</Text>;
+  }
+  return (
+    <div className="trusted-tag-row">
+      {items.map((item) => (
+        <Tag color="geekblue" key={item}>
+          {item}
+        </Tag>
+      ))}
+    </div>
+  );
+}
+
+function statusColor(status: string): string {
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "degraded" || status === "retryable" || status === "pending") {
+    return "warning";
+  }
+  if (status === "generated" || status === "completed" || status === "available") {
+    return "success";
+  }
+  return "default";
 }

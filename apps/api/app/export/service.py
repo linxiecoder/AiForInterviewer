@@ -42,7 +42,12 @@ EXPORT_CONTENT_KEY = "content"
 EXPORT_CONTENT_VERSION_KEY = "content_version"
 EXPORT_METADATA_KEY = "metadata"
 EXPORT_GENERATED_AT_KEY = "generated_at"
+EXPORT_STATUS_KEY = "status"
+EXPORT_FAILURE_REASON_KEY = "failure_reason"
+EXPORT_RETRYABLE_KEY = "retryable"
+EXPORT_SNAPSHOT_REF_KEY = "snapshot_ref"
 EXPORT_FORMAT_MARKDOWN = "markdown"
+EXPORT_STATUS_COMPLETED = "completed"
 EXPORT_CONTENT_VERSION = "r0-export-v1"
 EXPORT_SCORE_CONTENT_VERSION = "r0-score-v1"
 EXPORT_REVIEW_CONTENT_VERSION = "r0-review-v1"
@@ -124,8 +129,12 @@ class ExportService:
         )
         export_payload = {
             EXPORT_FORMAT_KEY: EXPORT_FORMAT_MARKDOWN,
+            EXPORT_STATUS_KEY: EXPORT_STATUS_COMPLETED,
             EXPORT_CONTENT_KEY: export_content,
             EXPORT_CONTENT_VERSION_KEY: EXPORT_CONTENT_VERSION,
+            EXPORT_FAILURE_REASON_KEY: "",
+            EXPORT_RETRYABLE_KEY: False,
+            EXPORT_SNAPSHOT_REF_KEY: f"{record[FIELD_ID]}:export",
             EXPORT_METADATA_KEY: {
                 "session_id": str(interview.get(FIELD_SESSION_ID, session_id)),
                 "owner_id": owner_id,
@@ -141,6 +150,7 @@ class ExportService:
         payload[EXPORT_PAYLOAD_KEY] = export_payload
         payload[PAYLOAD_SCORE] = export_score_payload
         payload[PAYLOAD_REVIEW] = export_review_payload
+        _bump_snapshot_index(payload)
 
         if persist:
             record = self.store.create_record(
@@ -280,6 +290,16 @@ def _export_compatible_payload(
     compatible = dict(payload)
     compatible["content_version"] = content_version
     return compatible
+
+
+def _bump_snapshot_index(payload: dict[str, Any]) -> None:
+    interview = payload.get(PAYLOAD_INTERVIEW)
+    if not isinstance(interview, dict):
+        return
+    snapshot_index = interview.get("snapshot_index", 0)
+    if not isinstance(snapshot_index, int):
+        snapshot_index = 0
+    interview["snapshot_index"] = snapshot_index + 1
 
 
 def _get_session_context(
