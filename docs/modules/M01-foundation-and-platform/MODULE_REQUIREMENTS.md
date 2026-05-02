@@ -12,7 +12,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-re
 - 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`README.md`、`scope.md`、`information-architecture.md`、`scoring-review-export-dod.md`。
 - 模块承接摘要：工作台壳层、运行时边界、i18n、测试与文档治理基线。
-- 后续补齐项：复核当前仓库与未来 monorepo 边界，保持不创建业务代码目录。
+- 后续补齐项：复核当前已存在的 `apps/api` / `apps/web` 与未来共享包边界，保持不新增未授权业务实现。
 - 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
 
 ## 1. 文档定位
@@ -46,7 +46,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-re
 - `docs/DOC_GOVERNANCE.md`：模块文档达到 `L5` 前，不应进入子任务设计。
 - `PLAN_LATEST.md`：M01 是整个项目的依赖根部模块，负责仓库结构、运行时、i18n、测试与文档治理基线。
 - `TASK_INDEX.md`：M02、M03 直接依赖 M01，后续模块间接依赖 M01 的仓库、页面壳层和验证约束。
-- `TECHNICAL_STANDARDS.md`：默认技术口径为 monorepo、Next.js、FastAPI、PostgreSQL、Redis；工作台壳层和列表原语需先沉淀为全局复用能力。
+- `TECHNICAL_STANDARDS.md`：当前仓库事实为 `apps/api` / `apps/web` 已存在，后端 FastAPI，前端 Vite + React，数据库为 PostgreSQL runtime + SQLite fallback；Redis 只作为后续能力候选，不是 R0 必需 runtime。
 - `DESIGN_DECISIONS.md`：`DD-004`、`DD-005` 目前仍是 `proposed`，本轮按默认口径推进，不擅自升级为 confirmed。
 - `OPEN_QUESTIONS.md`：本轮默认冻结 `OQ-001` monorepo、`OQ-002` 首轮只做最小运行时/测试/CI 基线、`OQ-003` 首轮只沉淀壳层/头部/列表原语/基础页面样式。
 
@@ -66,7 +66,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-re
 
 - 仓库目录、环境模板、基础设施占位
 - FastAPI 健康检查与日志初始化
-- Next.js 最小入口、Dashboard App Shell、页面头部、列表原语与基础页面样式
+- Vite + React 最小入口、工作台壳层、页面头部、列表原语与基础页面样式
 - `apps/web/src/i18n/**` 统一文案入口与 locale seed
 - 根目录脚本命名、最小测试入口与 API / Web 双 lane CI 基线
 - 模块级文档治理约束与对下游模块的共享约束说明
@@ -105,7 +105,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-re
 
 1. 开发者从 `.env.example` 派生本地 `.env`，只填本地安全占位值。
 2. 启动 `infra` 中的最小基础设施，并安装 `apps/web`、`apps/api` 依赖。
-3. 启动 FastAPI 最小入口与 Next.js 最小入口，确保健康检查与首页可用。
+3. 启动 FastAPI 最小入口与 Vite + React 最小入口，确保健康检查与首页可用。
 4. 通过 `test:api` / `test:web` 或等价 API / Web 双 lane 入口验证“仓库结构可运行、服务可存活、页面壳层可渲染”。
 
 ### 8.2 工作台壳层加载

@@ -13,7 +13,7 @@ permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-dependen
 | `AGENTS.md` | 文档语言、索引与 Markdown 安全读写规则 | 约束本轮文档编辑与回写边界 | 已满足 |
 | `docs/DOC_GOVERNANCE.md` | 模块 Codex 责任边界、成熟度与收口规则 | 约束本轮只修改 `M02` 模块级文档 | 已满足 |
 | `PLAN_LATEST.md` | `M02` 模块目标与模块顺序 | 确认本模块是第一轮优先模块 | 已满足 |
-| `TECHNICAL_STANDARDS.md` | `Next.js + FastAPI + PostgreSQL`、开发态认证适配层口径、治理与可观测性要求 | 提供技术边界与默认口径 | 已满足 |
+| `TECHNICAL_STANDARDS.md` | 当前仓库事实为 FastAPI、Vite + React、PostgreSQL runtime + SQLite fallback；开发态认证适配层口径、治理与可观测性要求 | 提供技术边界与默认口径 | 已满足 |
 | `DESIGN_DECISIONS.md` | 全局分层、单次实施单位、技术路线 | 约束本模块输出给下游的形式 | 已满足 |
 | `OPEN_QUESTIONS.md` | `OQ-004`、`OQ-005`、`OQ-023` 的默认冻结口径，以及 `OQ-021`、`OQ-022` 的共享边界 | 同时提供本轮可采用默认方案与当前不能私自补齐的上游问题 | 部分满足 |
 | `M01` 模块文档 | 配置读取、App Shell、i18n、列表原语、日志与测试基线 | 为登录页、成员列表与鉴权测试提供前置约束 | 配置与壳层方向足以支撑评审；列表 / i18n 共享契约仍不足以支撑子任务设计 |
@@ -25,7 +25,7 @@ permalink: ai-for-interviewer/docs/modules/m02-identity-and-team/module-dependen
 - monorepo 结构、`apps/web` / `apps/api` / `infra`
 - `.env` 读取基线
 - FastAPI 路由挂载方式
-- Next.js App Shell 与 i18n 入口约束
+- Vite + React 工作台壳层与 i18n 入口约束；Next.js / App Router 仅作为历史口径或未来替换候选
 
 ### 2.2 页面与测试输入
 

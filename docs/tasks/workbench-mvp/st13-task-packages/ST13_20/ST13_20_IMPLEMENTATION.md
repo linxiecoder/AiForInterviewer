@@ -9,13 +9,20 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 ## 1. 文档状态
 
 - 状态：`active_working_doc`
-- 文档性质：ST13 任务实施说明；为 official implementation packet 提供范围输入
-- 实施状态：`implementation-ready`
-- formal window：`formal window open`
-- implementation packet：已可通过 official command 生成
+- 文档性质：ST13 任务实施说明；属于 state-bound task package / historical task evidence，当前只为 official state 和任务索引提供追溯输入。
+- 实施状态：以 `DOC_STATE.yaml`、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 当前输出为准；本文档不自行声明 implementation-ready。
+- formal window：以 official state 当前输出为准。
+- implementation packet：以 official state / gate 当前输出为准，本文档不自行授权生成。
 - contract 状态：`contract_refined`
-- 当前授权已从 `R1-DEV-03-ST13_20-TRACEABILITY-INTEGRATION-SLICE` 推进到 `R1-DEV-06-ST13_20-RAG-PERSISTENCE-SLICE`，仅放行 R1 RAG 最小可用链路的 schema / sqlite persistence / traceability 关联 / targeted tests，不放行完整数据层、完整 ORM、复杂 RBAC、R2 训练闭环、资产归档或批量导出。
+- 历史授权曾从 `R1-DEV-03-ST13_20-TRACEABILITY-INTEGRATION-SLICE` 推进到 `R1-DEV-06-ST13_20-RAG-PERSISTENCE-SLICE`；这些记录只作为历史任务证据，不代表当前窗口放行业务代码、schema、测试或 packet。
 - W13-E8.5 曾将本文件登记到 `DOC_STATE.yaml` 既有 `facts.implementation_doc` slot；截至本轮 baseline，official state 已将 `implementation_doc_state` 更新为 `active_working_doc`，且 `ST13_20` scoped formal window 已打开。
+
+## 1.1 W04 技术事实边界
+
+- 当前仓库已经存在 `apps/api`、`apps/web`；后端为 FastAPI，前端为 Vite + React。
+- 当前数据库事实为 PostgreSQL runtime + SQLite fallback；本文中关于 sqlite persistence、schema SQL 或 PostgreSQL 的历史执行记录不能替代当前 `docs/development/database.md`。
+- 当前 API 已包含 interviews、records、review、export 等读写面，不能继续按“尚未创建 API / schema”或旧任务状态理解当前仓库。
+- 当前 readiness、packet 和 formal window 结论以 official state、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 为准。
 
 ## 2. 关联 ST13 / WT13
 
@@ -369,7 +376,7 @@ R0-W13Z.16-ST13_20 第 3/5 次已通过 official state / wrapper 流程解除以
 - `policy:formal_window_closed`
 - `gate:implementation_doc_not_active`
 
-当前 official state 已对齐为：
+历史 official state 曾在该阶段对齐为：
 
 - `maturity=L5`
 - `implementation_approval_status=approved`
@@ -377,8 +384,8 @@ R0-W13Z.16-ST13_20 第 3/5 次已通过 official state / wrapper 流程解除以
 - `formal_window_status=open`
 - `readiness=downstream_ready`
 - `can_generate_implementation_packet=true`
-- `can_mark_implementation_ready=true`
-- `implementation_ready=true`
+- 历史记录曾出现 `can_mark_implementation_ready=true`
+- 历史记录曾出现 `implementation_ready=true`
 
 第 3/5 次不生成 implementation packet，不进入业务代码。第 4/5 次必须先生成并复核 implementation packet，再按 packet allowed / forbidden paths 进入最小实现。
 
@@ -390,7 +397,7 @@ R0-W13Z.16-ST13_20 第 3/5 次已通过 official state / wrapper 流程解除以
 
 - packet JSON：`docs/governance/packets/ST13_20.implementation.packet.json`
 - packet Markdown：`docs/governance/packets/ST13_20.implementation.packet.md`
-- `implementation_ready=true`
+- 历史 packet 记录曾出现 `implementation_ready=true`
 - allowed paths 覆盖 `apps/api/**`、`tests/**`、`.env.example`、`requirements.txt` 与 `ST13_20` 双文档同步路径。
 - forbidden paths 明确排除 `apps/web/**`、`tools/**`、`infra/**`、其他 ST13 目录、requirements/design 正文、完整 migration、完整 ORM、完整业务 API、LLM / RAG provider 与 R1 / R2。
 

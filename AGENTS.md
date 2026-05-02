@@ -120,6 +120,13 @@ Daily Check 必须读取和复用现有文档体系：
 - `docs/requirements/workbench-mvp/**`
 - `docs/design/workbench-mvp/**`
 
+Daily Check 读取清单必须区分以下层级，读取不等于恢复主入口地位，也不等于允许移动或删除：
+
+- primary current source：`docs/requirements/workbench-mvp/**`、`docs/design/workbench-mvp/**`、`PLAN_LATEST.md`、`TASK_INDEX.md`、`docs/governance/ACTIVE_DOC_CANON.md`、`docs/governance/DOC_STATE.yaml`。
+- delegated state-bound source：`docs/planning/2026-04-25-current-repo-execution-plan.md`、`docs/tasks/workbench-mvp/2026-04-25-workbench-mvp-task-remap.md`、已登记 required doc slot 的 `docs/tasks/workbench-mvp/st13-task-packages/**`；这类文档可作为迁移前状态引用，但不是并行主入口。
+- generated report：`docs/governance/DOC_GOVERNOR_REPORT.md`、`docs/governance/DOC_QUALITY_GATE_REPORT.md`、`docs/governance/BOOTSTRAP_REPORT.md`、`docs/governance/previews/**`、`docs/governance/packets/**`；只作生成结果或历史证据，不作为当前事实源。
+- archive evidence：`archive/**` 只作历史证据或归档台账，不作为当前需求、设计、规划、任务或状态真值。
+
 Daily Check 必须输出：
 
 1. Repo 状态：branch、commit、`git status --short`、未解释改动、是否允许继续。
@@ -133,6 +140,8 @@ Daily Check 必须输出：
 ### R0/R1/R2 与现有文档体系的关系
 
 R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
+
+`ST13_*` 只作为任务 ID、source_doc 引用或 state key 保留，不是阶段体系；当前阶段体系只使用 R0 / R1 / R2。
 
 不得默认新增：
 
@@ -157,6 +166,8 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 - 谁维护
 - 写入路径
 - 用户是否已确认
+
+新增正式文档必须纳入 `docs/governance/ACTIVE_DOC_CANON.md` 或对应目录 README / 索引后，Daily Check 才能把它视为 active；未纳入的材料只能作为 archive、generated 或 temporary evidence。
 
 ### Gate 与实现边界
 
@@ -246,6 +257,10 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 默认情况下，当前项目中的文档主体必须使用中文，代码与技术标识按常规技术规范保持英文。详细规则见：
 
 - [项目语言规范](docs/project-language-rules.md)
+
+项目正式文档默认使用中文。标题、章节名、说明文字和表格字段说明应使用中文；代码标识符、命令、路径、文件名、API 名称、库名、框架名、协议名、配置键、错误码、测试名、Git 分支 / commit 和必要技术术语可以保留英文。
+
+新增或修改正式文档必须遵守中文优先规则。审计包和归档文档原则上也遵守该规则；历史已生成审计包的语言统一可另开窗口处理，不在普通修复窗口中批量翻译。
 
 项目中的注释、文档、README、`AGENTS.md`、测试说明和 audit 报告必须使用中文。除第三方 API 名称、协议字段、错误码、命令、路径、包名或代码标识符外，不要新增英文注释或英文文档。如修改到已有英文注释或英文文档，应同步改为中文。
 
@@ -419,6 +434,8 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 当任务属于需求开发、文档治理、模块推进、设计讨论、任务拆分或任务总结时：
 
 - 开始前先读取 `AGENTS.md` 与必要的正式规则文档，再检索 `AiForInterviewer` 的 Basic Memory 上下文，不要直接凭当前聊天继续。
+- 除非窗口卡明确授权写回，否则 Codex 不得主动写 Basic Memory；只读检索可用于上下文回收。
+- Basic Memory MCP 是正常工具，进程存在本身不是 stop condition；只有它造成非授权文件变更时才停止并报告。
 - 若 `search_notes` 的 default / hybrid / vector 检索失败，必须降级到 `text -> title -> permalink -> recent_activity -> list_directory -> read_note/build_context`，不得把向量失败误判成“没有历史记忆”。
 - 写入时只允许使用白名单目录：`00-project`、`10-requirements`、`20-decisions`、`30-open-questions`、`40-module-design`、`50-plans`、`60-risks-constraints`、`90-session-summaries`。
 - 禁止写入根目录、空目录或 `notes/`。
@@ -487,21 +504,21 @@ R0 / R1 / R2 只是交付切片视角，不是新的状态真值系统。
 
 ### 2.6 全局文档体系
 
-- [AI 模拟面试 P1 最新文档总控](PLAN_LATEST.md)
-- [AI 模拟面试 P1 任务索引](TASK_INDEX.md)
-- [AI 模拟面试 P1 执行日志](EXECUTION_LOG.md)
-- [AI 模拟面试 P1 技术标准](TECHNICAL_STANDARDS.md)
-- [AI 模拟面试 P1 设计决策](DESIGN_DECISIONS.md)
-- [AI 模拟面试 P1 模块索引](MODULE_INDEX.md)
-- [AI 模拟面试 P1 待确认问题](OPEN_QUESTIONS.md)
-- [AI 模拟面试 P1 文档成熟度](DOCUMENT_MATURITY.md)
-- [AI 模拟面试 P1 文档进展](DOCUMENT_PROGRESS.md)
-- [AI 模拟面试 P1 文档治理规则](docs/DOC_GOVERNANCE.md)
-- [AI 模拟面试 P1 子任务双文档模板](docs/SUBTASK_DOC_TEMPLATES.md)
+- [AI 模拟面试项目最新文档总控](PLAN_LATEST.md)
+- [AI 模拟面试项目任务索引](TASK_INDEX.md)
+- [AI 模拟面试项目执行日志](EXECUTION_LOG.md)
+- [AI 模拟面试项目技术标准](TECHNICAL_STANDARDS.md)
+- [AI 模拟面试项目设计决策](DESIGN_DECISIONS.md)
+- [AI 模拟面试项目模块索引](MODULE_INDEX.md)
+- [AI 模拟面试项目待确认问题](OPEN_QUESTIONS.md)
+- [AI 模拟面试项目文档成熟度](DOCUMENT_MATURITY.md)
+- [AI 模拟面试项目文档进展](DOCUMENT_PROGRESS.md)
+- [AI 模拟面试项目文档治理规则](docs/DOC_GOVERNANCE.md)
+- [AI 模拟面试项目子任务双文档模板](docs/SUBTASK_DOC_TEMPLATES.md)
 
 ### 2.7 模块目录
 
-- [AI 模拟面试 P1 模块文档目录](docs/modules)
+- [AI 模拟面试项目模块文档目录](docs/modules)
 
 ## 3. 执行说明
 

@@ -11,11 +11,18 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 - 状态：`draft`
 - 文档性质：ST13 任务文档；不是规划正文，也不是需求或设计正本。
 - 实施状态：`not implementation-ready`
-- formal window：`formal window closed`
-- implementation packet：`implementation packet forbidden`
+- formal window：以 `DOC_STATE.yaml`、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 当前输出为准。
+- implementation packet：以 official state / gate 当前输出为准，本文档不自行授权生成。
 - contract 状态：`contract_refined`
 - 本文件是 W13-E8 创建的正式双文档实体之一；W13-E8.5 已将本文件登记到 `DOC_STATE.yaml` 既有 `facts.design_doc` slot，`exists=true`，`template_like=false`。
-- 当前仍未形成 implementation-ready；formal window 仍关闭；implementation packet 仍禁止生成。
+- 当前仍未形成 implementation-ready；历史 formal window / packet 叙述只作 state-bound historical task evidence，不能覆盖当前 official state。
+
+## 1.1 W04 技术事实边界
+
+- 本文件属于 state-bound task package / historical task evidence；当前 readiness 以 official state、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 为准。
+- 当前仓库已经存在 `apps/api`、`apps/web`；后端为 FastAPI，前端为 Vite + React。
+- 当前数据库事实为 PostgreSQL runtime + SQLite fallback；本文中的 PostgreSQL schema contract 只表示长期数据方向，不否认当前 SQLite fallback。
+- 当前 API 已包含 interviews、records、review、export 等读写面，不应把历史任务包中的旧实现状态当作当前事实源。
 
 ## 2. 关联 ST13 / WT13
 
@@ -44,7 +51,7 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 
 ## 5. 背景
 
-一期 MVP 已 confirmed 必须服务端保存简历、面试过程、历史记录、复盘、评分证据、RAG query/topK、脱敏 LLM 记录、导出记录和训练相关结果。PostgreSQL 是当前已确认主路线，但 schema、migration、ORM、repository 都仍未放行实现。
+一期 MVP 已 confirmed 必须服务端保存简历、面试过程、历史记录、复盘、评分证据、RAG query/topK、脱敏 LLM 记录、导出记录和训练相关结果。PostgreSQL 是长期主路线，当前运行事实为 PostgreSQL runtime + SQLite fallback；schema、migration、ORM、repository 的扩展仍需按 official gate 放行。
 
 ## 6. 目标
 
@@ -96,9 +103,9 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 | 资产与导出 | `Asset`、`AssetArchive`、`ExportSnapshot`、`ExportRecord` | 归档资产、复制 / Markdown 下载快照和导出动作 | `ST13_18`、`ST13_19` |
 | LLM 与审计 | `LLMGenerationRequest`、`LLMGenerationResult`、`AuditEvent`、`OperationLog` | 脱敏生成记录、provider 状态、失败原因、关键操作审计 | `ST13_11`、`ST13_22`、`ST13_25` |
 
-### 11.2 PostgreSQL 主路线边界
+### 11.2 PostgreSQL 主路线与 SQLite fallback 边界
 
-- PostgreSQL 是 confirmed 主路线；当前只定义 schema contract，不创建数据库、migration、ORM model 或 SQL。
+- PostgreSQL 是 confirmed 主路线；当前仓库同时存在 SQLite fallback。本文只定义 schema contract，不创建数据库、migration、ORM model 或 SQL。
 - 数据 contract 必须给后续 migration 留出版本字段、状态字段、创建 / 更新时间、归档标记、审计字段和外键关系候选。
 - 具体表名、索引名、迁移工具、ORM 框架和部署连接方式必须留到 formal window。
 

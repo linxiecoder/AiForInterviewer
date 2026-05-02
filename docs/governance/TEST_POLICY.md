@@ -2,6 +2,11 @@
 title: TEST_POLICY
 type: note
 permalink: ai-for-interviewer/docs/governance/test-policy
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: 测试入口、临时产物治理和测试残留守卫
+Depends On: AGENTS.md, docs/governance/DOC_AUTOMATION.md
+Supersedes: none
 ---
 
 # 测试执行与临时产物治理规则

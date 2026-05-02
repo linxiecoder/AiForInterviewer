@@ -20,7 +20,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-de
 | `docs/DOC_GOVERNANCE.md` | 文档成熟度与收口规则 | 模块未到 `L5` 前不得进入子任务设计 |
 | `PLAN_LATEST.md` | 模块地图与执行顺序 | M01 是优先推进的依赖根模块 |
 | `TASK_INDEX.md` | 依赖链索引 | M02、M03 直接依赖 M01 |
-| `TECHNICAL_STANDARDS.md` | 默认技术口径 | monorepo、Next.js、FastAPI，以及 i18n / 页面原语 / list adapter 的默认边界先沉淀；对象存储默认走 S3-compatible，本地以 MinIO 模拟 |
+| `TECHNICAL_STANDARDS.md` | 默认技术口径 | 当前仓库事实为 `apps/api` / `apps/web` 已存在，后端 FastAPI，前端 Vite + React，数据库为 PostgreSQL runtime + SQLite fallback；对象存储 / MinIO / S3-compatible 仅作为后续能力候选 |
 | `DESIGN_DECISIONS.md` | 全局设计决策 | `DD-011~DD-014` 仍是 proposed，shared adapter 只能按默认职责边界推进 |
 | `OPEN_QUESTIONS.md` | 冻结 / open 问题总表 | `OQ-001~003` 提供平台首轮边界，`OQ-007` 提供“上传同步入库、转换 / 导出异步”的上游约束，`OQ-020~022` 提供 shared page primitive / list adapter / i18n consumer 的默认冻结口径 |
 
@@ -34,7 +34,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-de
 
 - ST13_21 已落地 R0 minimal API service boundary，可作为 M01 对外提供 `/api/v1` router organization、health endpoint、minimal error envelope 与 minimal config boundary 的当前实现事实。
 - API lane 当前依赖 `fastapi`、`uvicorn` 与 `httpx`；其中 `httpx>=0.27,<1.0` 只用于 FastAPI `TestClient` smoke / validation。
-- ST13_21 未新增 DB / ORM / migration、Redis、PostgreSQL、MinIO、LLM、RAG、对象存储或 external services 依赖。
+- ST13_21 历史最小骨架未新增 DB / ORM / migration、Redis、PostgreSQL、MinIO、LLM、RAG、对象存储或 external services 依赖；当前数据库事实以 PostgreSQL runtime + SQLite fallback 为准。
 - ST13_21 未修改 `tests/**` 与 `apps/web/**`，因此不改变 Web lane 或正式测试目录边界。
 
 ## 3. 模块内依赖关系

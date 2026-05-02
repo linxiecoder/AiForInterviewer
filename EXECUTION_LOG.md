@@ -2264,6 +2264,89 @@ permalink: ai-for-interviewer/execution-log
   - 未提交。
   - 未推送。
 
+### 2026-05-02 / R0-W05-FINAL-GOVERNANCE-CLOSURE / 治理收口
+
+- 范围：只执行 state-bound 迁移计划、入口索引最小更新、gate / test 验证、语义审计和本日志写回；未修改 `DOC_STATE.yaml`，未移动、归档或删除文件，未修改业务代码、工具或测试，未写 Basic Memory，未执行 Git 提交或推送。
+- 迁移计划产物：
+  - 新增 `docs/governance/STATE_BOUND_MIGRATION_PLAN.md`。
+  - 该文档明确 `DOC_STATE.yaml` 是状态真值，state-bound 文档必须先解除 `source_doc` / `meta.path` / packet / preview 绑定，再在后续独立窗口中执行 `git mv` 或清理。
+  - 该文档明确本窗口不移动、不删除、不归档文件；generated/temp 产物只有确认无 gate、Daily Check 或 state 依赖后才能删除。
+- 入口索引更新：
+  - `PLAN_LATEST.md` 记录 state-bound 归档迁移计划已形成，未完成 state migration 前不得移动或删除 state-bound 文档，是否进入 R0 主链路以后续验证结果为准。
+  - `TASK_INDEX.md` 记录 task remap 与 ST13 task packages 属于 delegated / state-bound / historical task evidence，当前任务入口仍是 `TASK_INDEX.md`，迁移前不得直接移动或删除相关任务包。
+  - `docs/governance/ACTIVE_DOC_CANON.md` 登记 `STATE_BOUND_MIGRATION_PLAN.md` 为 governance migration plan，明确其不是当前事实源，不替代 `DOC_STATE.yaml`，不授权直接移动或删除 state-bound 文档。
+  - `docs/planning/workbench-mvp/README.md` 增加迁移计划链接，并明确其不作为当前计划源。
+- 验证结果：
+  - `git diff --check`：通过。
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：通过，`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：通过，`ok=true,error=0,warning=0`；但当前 state 仍显示多项实施前置阻断，包括 formal window、implementation approval、acceptance criteria、required tests 等未满足项。
+  - `doc-quality-gate --repo-root .`：未通过，`ok=false,error=50,warning=0`，原因是多个 `docs/governance/*.md` 缺少 `Owner`、`Last Updated`、`Scope`、`Depends On`、`Supersedes` 等必填 metadata；报告已由 gate 写入 `docs/governance/DOC_QUALITY_GATE_REPORT.md`。
+  - `.venv/bin/python -m pytest tests/doc_governor tests/api tests/basic_memory_guard tests/test_temp_artifact_policy.py -q`：未通过，`29 failed,389 passed,2 skipped`；失败集中在 doc-governor state / packet / document evaluate 预期与当前收敛后 state-bound 路径不一致，以及 temp artifact policy 检出测试中的 forbidden temp fixture 命名。
+  - `npm run test --workspace apps/web`：通过。
+  - `npm run build --workspace apps/web`：通过。
+  - ignored artifacts 仅记录未删除：`apps/web/dist-test`、`apps/web/dist`、`apps/web/node_modules/.vite` 等。
+- 语义审计结论：
+  - 旧阶段体系审计：未发现必须阻断当前计划的 `invalid-current-plan-language`；`ST13_*` 主要作为任务 ID / state key / historical mapping 存在。
+  - archive 引用审计：未发现 `invalid-current-fact-source`；archive 引用主要作为历史证据、ledger 或迁移计划矩阵项存在。
+  - 技术事实残留审计：发现 `docs/project-language-rules.md` 中仍存在 `Next.js` 当前技术示例残留，本窗口禁止修改该文件，需后续窗口处理或确认其仅为历史示例。
+- R0 判定：
+  - 当前不允许进入 R0 主链路实现。
+  - 结论：`R0_BLOCKED`。
+  - 阻断项：`doc-quality-gate` 未通过；指定 pytest 未通过；技术事实残留审计仍有需后续处理或确认的 `Next.js` 示例残留；当前 state 仍未打开 implementation 所需 formal window / implementation approval / packet 前置条件。
+
+### 2026-05-02 / R0-W06A-DOC-QUALITY-METADATA-AND-FACT-RESIDUAL-FIX / 文档质量 metadata 与技术事实残留修复
+
+- 范围：只修复 `docs/governance/*.md` 的 doc-quality metadata 缺口、`docs/project-language-rules.md` 的 `Next.js` 当前事实残留，并追加本执行日志；未修改 `DOC_STATE.yaml`、previews、packets、业务代码、tools 或 tests；未运行 pytest 或 npm；未写 Basic Memory；未执行 Git 提交或推送。
+- governance metadata 修复：
+  - 为 `docs/governance/ACTIVE_DOC_CANON.md`、`BASIC_MEMORY_GUARD.md`、`BOOTSTRAP_REPORT.md`、`DISCUSSION_WORKFLOW.md`、`DOC_AUTOMATION.md`、`DOC_GOVERNOR_REPORT.md`、`DOC_GOVERNOR_RUNBOOK.md`、`DOC_GOVERNOR_TOOL_DEBT.md`、`STATE_BOUND_MIGRATION_PLAN.md`、`TEST_POLICY.md` 的既有 YAML frontmatter 补齐 `Owner`、`Last Updated`、`Scope`、`Depends On`、`Supersedes`。
+  - `docs/governance/BOOTSTRAP_REPORT.md` 仅额外将生成报告中的英文标题改为中文标题，未改报告事实内容。
+  - governance Markdown `title/type/permalink` 检查结果为 `ALL_GOVERNANCE_MD_METADATA_OK`。
+- 技术事实残留修复：
+  - `docs/project-language-rules.md` 的推荐写法已从 `Next.js` 改为 `Vite + React`。
+  - 同文件新增当前技术事实说明：前端为 `Vite + React`，后端为 `FastAPI`，数据库运行基线为 `PostgreSQL runtime + SQLite fallback`；`Next.js`、`Nextjs`、`App Router` 仅可作为技术名词示例或历史 / 未来候选语境，不代表当前前端事实。
+- 验证结果：
+  - `git diff --check`：通过。
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：通过，`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：通过，`ok=true,error=0,warning=0`；当前 state 仍显示 implementation gate 前置项未满足，且本窗口不处理 pytest blocker。
+  - 独立命令 `doc-quality-gate --repo-root .`：当前环境未发现该可执行命令，返回 `command not found`，已按窗口规则记录。
+  - 仓库内 `tools.doc_governor.cli doc-quality-gate --repo-root .` 子命令：通过，`ok=true,error=0,warning=0`，并更新 `docs/governance/DOC_QUALITY_GATE_REPORT.md`。
+  - `Next.js` / `App Router` 残留审计：当前命中均明确为技术名词示例、历史口径或未来替换候选；未发现仍把 `Next.js` / `App Router` 写成当前前端事实的命中。
+  - 中文标题检查：未发现需要修复的纯英文标题。
+- R0 判定：
+  - 本窗口已清除 W05 中的 doc-quality metadata blocker 和 `docs/project-language-rules.md` 技术事实残留 blocker。
+  - 当前仍不允许进入 R0 主链路实现。
+  - 结论：`R0_BLOCKED`。
+  - 剩余阻断项：W05 指定 pytest 失败尚未处理；implementation gate / formal window / packet 前置条件尚未在正式 state 中闭合。
+- 下一步建议窗口：`R0-W06B-PYTEST-FAILURE-TRIAGE`，只做 pytest 失败分流和最小修复方案设计，不进入 R0 主链路实现。
+
+### 2026-05-02 / R0-W06B-PYTEST-FAILURE-TRIAGE-AND-MINIMAL-FIX / pytest blocker 归因与最小修复
+
+- 范围：只处理 W05 遗留的指定 pytest blocker；未修改 `DOC_STATE.yaml`、previews、packets、业务代码、package 配置或 npm 产物；未运行 npm；未写 Basic Memory；未启动或停止 Basic Memory MCP；未执行 Git 提交或推送。
+- pytest 初始复现：
+  - 命令：`.venv/bin/python -m pytest tests/doc_governor tests/api tests/basic_memory_guard tests/test_temp_artifact_policy.py -q`。
+  - 结果：`29 failed,389 passed,2 skipped`。
+  - 归因：28 个 doc-governor 失败来自测试临时仓库的 repo root 识别漂移，`/tmp` 沙箱 `.git` 被误判为仓库根，导致 state / packet / document evaluate 读取错根目录；1 个失败来自 `tests/api` 中直接使用 `tmp_path`，触发临时产物策略检查。
+- 最小修复：
+  - `tools/doc_governor/evaluate.py`：收紧 `_looks_like_repo_root`，不再把单独存在 `.git` 的目录视为项目根，需同时满足项目标记组合。
+  - `tests/api/test_startup_runtime.py`：将直接 `tmp_path` 测试工作区替换为 `ManagedTempArtifacts` 管理的临时目录。
+  - `tests/api/test_postgresql_runtime.py`：将 SQLite fallback 测试中的直接 `tmp_path` 替换为 `ManagedTempArtifacts` 管理的临时目录。
+- pytest 修复后结果：
+  - 命令：`.venv/bin/python -m pytest tests/doc_governor tests/api tests/basic_memory_guard tests/test_temp_artifact_policy.py -q --tb=short`。
+  - 结果：`418 passed,2 skipped`；两个 skip 均为未设置 `TEST_DATABASE_URL` 的 PostgreSQL 集成测试，不构成本窗口 pytest blocker。
+- 验证结果：
+  - `git diff --check`：通过。
+  - `validate-state --input docs/governance/DOC_STATE.yaml`：通过，`ok=true,error=0,warning=0`。
+  - `evaluate-state --input docs/governance/DOC_STATE.yaml`：通过，`ok=true,error=0,warning=0`；但当前 state 仍显示 implementation gate 阻断项，包括 formal window、implementation approval、required doc slot、acceptance criteria、required tests 等未满足。
+  - `.venv/bin/python -m tools.doc_governor.cli doc-quality-gate --repo-root .`：通过，`ok=true,error=0,warning=0`。
+  - standalone `doc-quality-gate --repo-root .`：当前环境仍不可用，输出 `STANDALONE_DOC_QUALITY_GATE_NOT_AVAILABLE`。
+  - 路径范围检查：W06B 新增修改仅限 `tests/api/test_postgresql_runtime.py`、`tests/api/test_startup_runtime.py`、`tools/doc_governor/evaluate.py` 与本日志；窗口脚本仍会把 W06A 已存在的部分 `docs/governance/*.md` dirty baseline 标记为 `UNEXPECTED_DIFF_PATH`，本窗口未新增这些 governance 修改。
+- R0 判定：
+  - 本窗口已清除指定 pytest blocker。
+  - 当前仍不允许进入 R0 主链路实现。
+  - 结论：`R0_BLOCKED`。
+  - 剩余阻断项：implementation gate / formal window / packet / implementation approval 等正式前置条件尚未闭合。
+- 下一步建议窗口：`R0-W06C-IMPLEMENTATION-GATE-UNBLOCK`，只处理 implementation gate 前置条件，不进入未授权业务实现。
+
 ## 4. 使用说明
 
 - 每完成一轮全局性工作后，应新增一条记录，而不是覆盖旧记录。

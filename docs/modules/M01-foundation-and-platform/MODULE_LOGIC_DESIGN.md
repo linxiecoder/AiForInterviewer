@@ -38,7 +38,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-lo
 1. 从 `.env.example` 派生本地 `.env`，只使用安全占位值。
 2. 启动 `infra` 中的最小依赖服务。
 3. 安装并同步 `apps/web`、`apps/api` 依赖。
-4. 通过根目录 `dev:api` / `dev:web` 启动 FastAPI 最小入口和 Next.js 最小入口。
+4. 通过根目录 `dev:api` / `dev:web` 启动 FastAPI 最小入口和 Vite + React 最小入口。
 5. 运行 `test:api` / `test:web` 或等价 API / Web 双 lane 验证，进入 `verified`。
 
 ### 3.2 健康检查逻辑
@@ -53,10 +53,10 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-lo
 1. `apps/api/app/main.py` 创建 FastAPI app。
 2. `get_settings()` 读取 `API_TITLE`、`API_VERSION`、`ENVIRONMENT`、`API_PREFIX`、`API_HOST`、`API_PORT` 等最小运行配置。
 3. `main.py` 通过 `build_api_v1_router(settings.api_prefix)` 注册 `/api/v1` router。
-4. `/api/v1` router 当前只注册 health router，保证 `GET /api/v1/health` 返回 `{ "status": "ok" }`。
+4. 历史最小骨架保证 `GET /api/v1/health` 返回 `{ "status": "ok" }`；当前 `apps/api` 已存在 interviews、records、review、export 等读写面，当前事实以 `apps/api/**` 和 `docs/development/**` 为准。
 5. HTTPException 进入 minimal error envelope，返回 `{"error": {"code": "HTTP_<status>", "message": "<detail>"}}`。
 6. future route placeholders 仅作为未注册常量保留，不创建业务 endpoint。
-7. 该流程不访问 DB、Redis、MinIO、LLM、RAG、对象存储或外部网络。
+7. 该历史骨架流程不访问 DB、Redis、MinIO、LLM、RAG、对象存储或外部网络；当前数据库事实为 PostgreSQL runtime + SQLite fallback，Redis、MinIO 和对象存储不作为 R0 必需 runtime。
 
 ### 3.3 工作台壳层渲染逻辑
 

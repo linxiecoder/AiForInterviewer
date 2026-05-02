@@ -29,14 +29,14 @@ permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module
 ### 2.1 M03 负责
 - 岗位基础对象与岗位页面基础数据面。
 - 简历聚合根、当前文档指针、版本快照与编辑页主流程。
-- 原始 PDF 上传、对象存储引用、转换日志和导出记录。
+- 原始 PDF 上传、后续对象存储候选引用、转换日志和导出记录；这些不作为 R0 必需 runtime。
 - 对下游暴露“当前岗位输入”和“当前简历正文输入”的稳定数据面。
 
 ### 2.2 M03 不负责
 - `job_resume_bindings`、`job_resume_match_analyses`、`weakness_evidences`，由 M04 承接。
 - 资产归档、检索分块与向量化，由 M05 承接。
 - 模拟面试上下文包组装、会话导出和 search snapshot，由 M06 承接。
-- 对象存储 SDK、任务调度器、统一下载网关本身的技术实现，由 M01 / 基础设施承接。
+- 对象存储 SDK、任务调度器、统一下载网关本身的技术实现，由 M01 / 基础设施在后续能力窗口承接，不作为 R0 必需 runtime。
 
 ### 2.3 设计前提
 - 鉴权默认使用 M02 冻结的 Bearer token 方案。

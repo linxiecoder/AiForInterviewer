@@ -12,7 +12,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-de
 - 当前设计输入：`docs/design/workbench-mvp/`。
 - 重点引用：`README.md`、`scope.md`、`information-architecture.md`、`scoring-review-export-dod.md`。
 - 模块承接摘要：工作台壳层、运行时边界、i18n、测试与文档治理基线。
-- 后续补齐项：复核当前仓库与未来 monorepo 边界，保持不创建业务代码目录。
+- 后续补齐项：复核当前已存在的 `apps/api` / `apps/web` 与未来共享包边界，保持不新增未授权业务实现。
 - 边界：本节只记录模块摘要、入口关系和后续补齐项；不复制正式设计正文，不提升模块成熟度，不放行 formal window、implementation packet 或代码实现。
 
 ## 1. 文档定位
@@ -36,7 +36,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-de
 
 - `Workspace Baseline`：monorepo 根目录、应用目录、基础设施目录和环境模板的边界。
 - `API Runtime Baseline`：FastAPI 最小入口、`/api/v1/health`、结构化日志初始化。
-- `Web Shell Baseline`：Next.js 入口、`/(dashboard)` 壳层、一级导航、页面头部、Dashboard 基础摘要区。
+- `Web Shell Baseline`：Vite + React 入口、工作台壳层、一级导航、页面头部、Dashboard 基础摘要区；Next.js / App Router 仅保留为历史口径或未来替换候选。
 - `Shared Primitive / Adapter Baseline`：页面头部、Dashboard 摘要区、表格、筛选条、分页容器与 shared adapter 的职责边界。
 - `Governance Baseline`：i18n 集中取词入口、最小测试入口、CI 方向与文档回写约束。
 
@@ -54,7 +54,7 @@ permalink: ai-for-interviewer/docs/modules/m01-foundation-and-platform/module-de
 
 - 根目录维护统一脚本入口、`.env.example` 和 `infra/**` 占位。
 - `apps/api` 承载 Python 运行时、健康检查和后续领域服务入口。
-- `apps/web` 承载 Next.js App Router、共享 layout、i18n 与前端测试入口。
+- `apps/web` 当前承载 Vite + React、共享 layout、i18n 与前端测试入口；Next.js / App Router 不作为当前实现事实。
 - 本层解决的是“项目怎样被启动和验证”，不解决业务功能本身。
 
 ### 4.2 API 最小入口层

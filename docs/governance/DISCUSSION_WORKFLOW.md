@@ -2,6 +2,11 @@
 title: DISCUSSION_WORKFLOW
 type: note
 permalink: ai-for-interviewer/docs/governance/discussion-workflow
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: 文档讨论轮次、round lifecycle 和人工确认边界
+Depends On: docs/governance/DOC_AUTOMATION.md, docs/governance/DOC_STATE.yaml
+Supersedes: none
 ---
 
 # 讨论轮次工作流

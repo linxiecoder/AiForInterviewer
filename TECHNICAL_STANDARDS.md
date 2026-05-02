@@ -4,7 +4,7 @@ type: note
 permalink: ai-for-interviewer/technical-standards
 ---
 
-# AI 模拟面试 P1 技术标准
+# AI 模拟面试项目技术标准
 
 ## 1. 文档定位
 
@@ -26,17 +26,19 @@ permalink: ai-for-interviewer/technical-standards
 
 ### 3.1 仓库与目标代码结构
 
-- 当前仓库实现布局：以设计文档、治理状态、`doc_governor` 工具链和测试验证为主，而不是已经落地的业务 monorepo。
-- 当前目录真值：根目录全局文档、`docs/requirements/`、`docs/design/`、`docs/planning/`、`docs/tasks/`、`docs/governance/`、`docs/modules/`、`tools/doc_governor/`、`tests/doc_governor/`、`requirements.txt`。
+- 当前仓库已经存在业务实现切片：`apps/api` 和 `apps/web` 均已落地。
+- 当前目录真值：根目录全局文档、`docs/requirements/`、`docs/design/`、`docs/planning/`、`docs/tasks/`、`docs/governance/`、`docs/modules/`、`apps/api/`、`apps/web/`、`tools/doc_governor/`、`tests/doc_governor/`、`requirements.txt`。
 - 当前不把 `node_modules/`、`.serena/`、`.worktrees/`、`__pycache__/`、临时缓存目录计入正式项目结构。
-- 目标产品代码结构采用 `apps/web + packages/shared + apps/api`。
-- 在 `TASK_INDEX.md` 写入明确正式任务 ID 和允许修改范围前，不得创建或扩展业务实现目录。
+- `packages/shared` 仍是后续共享包候选结构，不是当前仓库事实。
+- 已存在业务目录不等于允许继续扩展业务实现；任何新增或修改 `apps/**` 仍必须等待正式窗口、allowed paths、implementation packet 和 gate 放行。
 
 ### 3.2 后端、数据与部署
 
 - 后端采用 FastAPI。
-- 数据库采用 PostgreSQL。
+- 前端当前实现采用 Vite + React。
+- 数据库当前事实为 PostgreSQL runtime + SQLite fallback；具体运行边界见 `docs/development/database.md`。
 - API contract 先行。
+- 当前 API 已不止 health endpoint，`apps/api` 已包含 interviews、records、review、export 等读写面；本文档只记录事实，不授权继续实现。
 - 部署目标为单机服务器。
 - 日志覆盖应用、LLM 与 RAG。
 - 简历、面试记录、复盘、脱敏 LLM 记录、RAG query/topK、完整问答、摘要与评分证据都由服务端保存。
@@ -57,6 +59,7 @@ permalink: ai-for-interviewer/technical-standards
 - RAG 采用混合检索。
 - RAG 失败时降级继续，并标注证据缺口。
 - RAG 进入评分证据，但不直接决定分数。
+- Redis、pgvector、对象存储、MinIO 或 S3-compatible 存储只作为 R1/R2 或后续能力候选，不是 R0 必需 runtime。
 
 ### 3.5 Web 最小共享层
 
@@ -152,7 +155,7 @@ permalink: ai-for-interviewer/technical-standards
 
 ## 5. 仍需 implementation packet 复核的内容
 
-- Web framework、包管理、构建方式、测试矩阵和共享包构建方式仍为 `DD-005` 的 `needs-review` 范围。
+- 当前前端实现事实为 Vite + React；是否引入共享包、调整包管理、扩展构建方式或形成长期测试矩阵，仍为 `DD-005` 的 `needs-review` 范围。
 - Markdown 预览、下载、复制与未来 PDF 是否共用同一渲染链仍为 `DD-007` 的 `needs-review` 范围。
 - 具体 API 路由、schema 字段、错误码、CI/E2E、对象存储部署、缓存、任务队列与运维脚本仍需在正式任务 ID 和 implementation packet 中细化。
 - 本节内容不得绕过 `TASK_INDEX.md` 的正式开窗资格进入代码实施。

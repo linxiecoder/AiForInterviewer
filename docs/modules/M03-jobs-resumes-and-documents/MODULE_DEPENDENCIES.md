@@ -10,11 +10,11 @@ permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module
 
 | 来源 | 当前可引用输入 | 当前状态判断 | 对 M03 的影响 |
 | --- | --- | --- | --- |
-| `PLAN_LATEST.md` / `TECHNICAL_STANDARDS.md` / `DESIGN_DECISIONS.md` | monorepo、Next.js + FastAPI、PostgreSQL、Redis、S3-compatible 存储、文档分层规则 | 可引用 | 作为架构与文档治理总口径 |
+| `PLAN_LATEST.md` / `TECHNICAL_STANDARDS.md` / `DESIGN_DECISIONS.md` | 当前 `apps/api` / `apps/web`、FastAPI、Vite + React、PostgreSQL runtime + SQLite fallback、文档分层规则；Redis / pgvector / 对象存储 / MinIO / S3-compatible 仅作后续能力候选 | 可引用 | 作为架构与文档治理总口径 |
 | `OPEN_QUESTIONS.md` | `OQ-006`、`OQ-007` 的默认冻结方案 | 可引用 | 允许把“共享渲染链”“上传同步受理、转换/导出异步”写入模块层设计 |
 | `OPEN_QUESTIONS.md` | `OQ-020`：共享页面头部与摘要区的最小接口边界 | 已形成全局 `proposed-default`，但仍不应扩写成实现级 props catalog | 影响 `jobs` / `resumes` 页面微任务，当前不适合下放到旧 `ST03_01` / `ST03_02` |
 | `OPEN_QUESTIONS.md` | `OQ-021`：列表查询状态、分页交互与 URL / callback 的统一映射规则 | 已形成全局 `proposed-default`，但仍只覆盖最小 shared contract | 影响 `jobs` / `resumes` 列表 API 与页面微任务，当前不适合下放到旧 `ST03_01` / `ST03_02` |
-| M01 | 对象存储默认形态、统一下载能力、工作台壳层、日志与测试基线 | 方向可引用，但共享下载 / 对象存储实现口径成熟度仍不足 | 直接限制上传、导出与下载投影相关微任务是否能并行推进 |
+| M01 | 后续对象存储候选边界、统一下载能力、工作台壳层、日志与测试基线 | 方向可引用，但共享下载 / 对象存储实现口径成熟度仍不足；不构成 R0 必需 runtime | 直接限制上传、导出与下载投影相关微任务是否能并行推进 |
 | M02 | Bearer token、`team_id` 隔离、权限矩阵与软删除访问规则 | 方向可引用，但接口级和页面级细节仍未全部成熟 | 影响岗位 / 简历页面的数据可见性与错误语义，但不应在 M03 重写权限契约 |
 
 ## 2. 旧切分入口的依赖问题

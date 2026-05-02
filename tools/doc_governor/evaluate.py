@@ -1315,16 +1315,15 @@ def _resolve_repo_root(state_path: Path) -> Path:
 
 
 def _looks_like_repo_root(path: Path) -> bool:
-    if (path / ".git").exists():
-        return True
-
+    has_git = (path / ".git").exists()
     has_agents = (path / "AGENTS.md").is_file()
     has_state = (path / "docs" / "governance" / "DOC_STATE.yaml").is_file()
     has_doc_governor = (path / "tools" / "doc_governor").is_dir()
     has_python_project = (path / "pytest.ini").is_file() or (path / "pyproject.toml").is_file()
 
     return (
-        (has_agents and has_doc_governor)
+        (has_git and (has_agents or has_state or has_doc_governor or has_python_project))
+        or (has_agents and has_doc_governor)
         or (has_agents and has_state)
         or (has_state and has_doc_governor)
         or (has_python_project and has_doc_governor)

@@ -2,25 +2,30 @@
 title: BOOTSTRAP_REPORT
 type: note
 permalink: ai-for-interviewer/docs/governance/bootstrap-report
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: bootstrap 生成结果与历史诊断记录
+Depends On: docs/governance/DOC_STATE.bootstrap.yaml, docs/governance/DOC_AUTOMATION.md
+Supersedes: none
 ---
 
-# Bootstrap Report
+# Bootstrap 生成报告
 
-## Summary
+## 摘要
 
 - repo_root: `D:/AI/AiForInterviewer`
 - output_path: `D:/AI/AiForInterviewer/docs/governance/DOC_STATE.bootstrap.yaml`
 - report_path: `D:/AI/AiForInterviewer/docs/governance/BOOTSTRAP_REPORT.md`
 - diagnostics: error=0, warning=91
 
-## Scan counts
+## 扫描计数
 
 - modules: 10
 - subtasks: 30
 - oqs: 25
 - template_like_docs: 60
 
-## Detected template-like docs
+## 检出的模板化文档
 
 - `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/#design_doc`
 - `docs/modules/M01-foundation-and-platform/sub_modules/ST01_01-runtime-and-repo-baseline/#implementation_doc`
@@ -83,11 +88,11 @@ permalink: ai-for-interviewer/docs/governance/bootstrap-report
 - `docs/modules/M10-admin-governance-and-observability/sub_modules/ST10_03-observability-ci-and-snapshot-ops/#design_doc`
 - `docs/modules/M10-admin-governance-and-observability/sub_modules/ST10_03-observability-ci-and-snapshot-ops/#implementation_doc`
 
-## Ambiguous implementation docs
+## 存疑实施文档
 
 - none
 
-## Diagnostics snapshot
+## 诊断快照
 
 - OQ policy defaults applied: count=25, defaults={'gate_level': 'observe_only', 'resolution_policy': 'proposed_default_ok'}, missing_gate_level=25, missing_resolution_policy=25, sample_oq_ids=['OQ-001', 'OQ-002', 'OQ-003', 'OQ-004', 'OQ-005', 'OQ-006', 'OQ-007', 'OQ-008', 'OQ-009', 'OQ-010']
 - `BOOTSTRAP_OQ_POLICY_DEFAULT_APPLIED` [warning] system:GLOBAL -> Applied default OQ policy fields to 25 OQ(s): gate_level=observe_only, resolution_policy=proposed_default_ok

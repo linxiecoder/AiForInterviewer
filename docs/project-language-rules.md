@@ -69,8 +69,10 @@ permalink: ai-for-interviewer/docs/project-language-rules
 推荐写法：
 
 - 使用 `FastAPI` 搭建后端服务
-- 使用 `Next.js` 承载前端工作台
+- 使用 `Vite + React` 承载当前前端工作台
 - 使用 `GPT-5.4` 作为面试编排模型
+
+当前项目技术事实：前端为 `Vite + React`，后端为 `FastAPI`，数据库运行基线为 `PostgreSQL runtime + SQLite fallback`。`Next.js`、`Nextjs` 或 `App Router` 只可作为技术名词示例或历史/未来候选语境出现，不代表本项目当前前端事实。
 
 ### 4.3 `doc_governance` 受管正式文档的强制中文规则
 
