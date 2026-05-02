@@ -71,21 +71,26 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 | `archive/2026-05-doc-consolidation/legacy/docs/design/workbench-mvp/scoring-review-export-dod.md` §1-§7 | 0-100 评分、低置信度、复盘、Markdown 导出、薄弱项和质量门禁 | MERGED_TO_PRD | `PRD.md` §6.12-§6.14、§7-§8；评分公式 UNKNOWN | AIFI-PROD-005、AIFI-QA-001 |
 | `archive/2026-05-doc-consolidation/legacy/docs/design/workbench-mvp/r1-penpot-lowfi-spec.md` §3、§5-§8、§11 | 迁移前低保真规格包含简历匹配评估、双模式启动、面试进展树、复盘详情、空态与异常状态 | MERGED_TO_PRD | `PRD.md` §6-§8；低保真需在 F2 重新基于 active PRD 设计 | AIFI-UX-001、AIFI-QA-001 |
 
-## 4. 待人工确认项
+## 4. F1.3 UNKNOWN 收敛同步
 
-| 编号 | 问题 | 当前状态 | 建议处理 |
-|---|---|---|---|
-| OQ-F1-001 | 匹配度评分公式、权重和阈值 | UNKNOWN | 进入 F4 技术设计，不阻塞 F2 低保真设计 |
-| OQ-F1-002 | 多简历多岗位绑定规则 | UNKNOWN | 人工确认或进入 F4；F2 可先设计 UNKNOWN 提示和默认绑定路径 |
-| OQ-F1-003 | 薄弱项算法、合并规则、状态和生命周期 | UNKNOWN | 进入 F4；F2 只需展示来源、状态和操作入口 |
-| OQ-F1-004 | 进展树数据结构、节点类型和更新规则 | UNKNOWN | 进入 F4；F2 只需设计用户可见状态与路径 |
-| OQ-F1-005 | 资产版本策略、合并规则和质量判断 | UNKNOWN | 进入 F4；F2 只需设计资产沉淀确认和失败态 |
-| OQ-F1-006 | Prompt 具体模板、模型选择和模型调用参数 | UNKNOWN | 进入 F4；F1 不冻结 |
-| OQ-F1-007 | 打磨模式题目推荐算法和同题结束建议阈值 | UNKNOWN | 进入 F4；F2 可设计多轮同题流程 |
-| OQ-F1-008 | 压力面题量、节奏和连续追问深度规则 | UNKNOWN | 进入 F4；F2 可设计连续问答和结束报告流程 |
-| OQ-F1-009 | 真实面试材料切分阈值和人工校对规则 | UNKNOWN | 进入 F4；F2 可设计低置信度校对状态 |
-| OQ-F1-010 | 复盘、报告、薄弱项、资产库之间的自动回流是否需要用户确认 | UNKNOWN | 人工确认或 F4 冻结；F2 需设计确认态和失败态 |
+`PRD.md` §10 是完整 UNKNOWN 收敛台账；本节只同步历史需求未完全确认部分的处理状态和任务承接，避免历史来源中的缺口在 F2/F4/F7 被遗忘。
 
-## 5. F1.2 结论
+| 历史未完全确认主题 | 对应 PRD UNKNOWN | 分类 | 当前状态 | 承接 AIFI-* 任务 | 关闭后写入目标文档 | 关闭标准 |
+|---|---|---|---|---|---|---|
+| 扫描件 OCR 与简历 PDF 导出 | OQ-F1-001、OQ-F1-003 | DEFERRED_WITH_REASON | UNKNOWN 已绑定处理策略 | AIFI-PROD-006、AIFI-PROD-010 | `PRD.md`、`REQUIREMENT_TRACEABILITY.md` | 明确不作为 MVP 发布阻塞，F7 不按该能力设置阻塞验收 |
+| 简历、岗位、项目和资产版本策略 | OQ-F1-002、OQ-F1-004、OQ-F1-013、OQ-F1-018 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | F4 文档明确版本、引用、历史回看和更新规则 |
+| 岗位状态、导入路径和多简历多岗位绑定 | OQ-F1-005、OQ-F1-006、OQ-F1-007、OQ-F1-008 | F2_UX_BLOCKING | UNKNOWN 已绑定 F2 承接 | AIFI-UX-002 | `UX_SPEC.md` | F2 低保真关闭岗位状态、导入失败兜底、绑定关系和解除绑定后默认行为 |
+| 岗位匹配评分公式、权重、阈值和低置信度 | OQ-F1-009、OQ-F1-010、OQ-F1-011 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002、AIFI-QA-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md`、`TEST_PLAN.md` | F4 关闭评分生成口径，F7 转为可测断言 |
+| 项目打磨、真实项目复盘和资产确认态 | OQ-F1-012、OQ-F1-014、OQ-F1-016、OQ-F1-017、OQ-F1-020 | F2_UX_BLOCKING | UNKNOWN 已绑定 F2 承接 | AIFI-UX-002、AIFI-QA-002 | `UX_SPEC.md`、`TEST_PLAN.md` | F2 低保真覆盖完成态、确认态、低置信度校对、合并展示和失败态 |
+| 真实面试材料切分、资产合并和质量判断 | OQ-F1-015、OQ-F1-019 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-PROMPT-001、AIFI-DATA-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`DATA_MODEL.md`、`TECH_DESIGN.md` | F4 明确切分、合并、质量判断和降级规则 |
+| 模拟面试输入优先级和增强输入缺失提示 | OQ-F1-021、OQ-F1-022 | F4_TECH_DESIGN / F2_UX_BLOCKING | UNKNOWN 已拆分到 F2 和 F4 | AIFI-UX-002、AIFI-PROMPT-001、AIFI-ARCH-002 | `UX_SPEC.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F2 关闭用户提示，F4 关闭输入优先级和编排规则 |
+| 打磨模式题目推荐、结束阈值和暂停恢复 | OQ-F1-023、OQ-F1-024、OQ-F1-025 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确推荐依据、结束建议和恢复上下文保存策略 |
+| 压力面题量、节奏、暂停和追问深度 | OQ-F1-026、OQ-F1-027、OQ-F1-028 | F2_UX_BLOCKING / F4_TECH_DESIGN | UNKNOWN 已拆分到 F2 和 F4 | AIFI-UX-002、AIFI-PROMPT-001、AIFI-ARCH-002 | `UX_SPEC.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F2 关闭用户流程和暂停规则，F4 关闭追问深度和停止条件 |
+| 进展树展示层级、数据结构和推荐算法 | OQ-F1-029、OQ-F1-030、OQ-F1-031 | F2_UX_BLOCKING / F4_TECH_DESIGN | UNKNOWN 已按展示层和结构层拆分 | AIFI-UX-002、AIFI-DATA-001、AIFI-ARCH-002、AIFI-PROMPT-001 | `UX_SPEC.md`、`DATA_MODEL.md`、`TECH_DESIGN.md`、`PROMPT_SPEC.md` | F2 关闭展示层级，F4 关闭数据结构、状态更新和推荐算法 |
+| 面试报告评分、重试、复盘切分和展示 | OQ-F1-032、OQ-F1-033、OQ-F1-034、OQ-F1-036 | F4_TECH_DESIGN / F2_UX_BLOCKING | UNKNOWN 已拆分到 F2 和 F4 | AIFI-UX-002、AIFI-PROMPT-001、AIFI-ARCH-002、AIFI-QA-002 | `UX_SPEC.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md`、`TEST_PLAN.md` | F2 关闭展示关系，F4 关闭评分、重试和切分规则，F7 转为测试断言 |
+| 自动回流是否需要用户确认 | OQ-F1-035 | HUMAN_CONFIRMATION | UNKNOWN 已绑定人工确认和 F2 承接 | AIFI-PROD-010、AIFI-UX-002 | `REQUIREMENT_TRACEABILITY.md`、`UX_SPEC.md` | 人工确认默认策略，F2 低保真体现确认入口、取消态和失败态 |
+| 薄弱项算法、合并、生命周期和自动消减 | OQ-F1-037、OQ-F1-038、OQ-F1-039 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确薄弱项提炼、合并、状态流转、来源证据和自动消减规则 |
 
-F1.2 已将 PRD 从“大能力清单”补全为产品需求规格说明书：补齐文档状态、产品目标、用户角色、核心业务对象、核心业务数据流、功能规格、状态与异常、验收标准、非目标范围和集中 UNKNOWN。历史有效需求已同步标记为 `MERGED_TO_PRD`、`PARTIAL`、`DEFERRED`、`REJECTED` 或 `UNKNOWN`；其中产品规格层需求已进入 PRD，算法、结构、模板、模型、权重和技术实现细节保留为 F4 `UNKNOWN`。
+## 5. F1.3 结论
+
+F1.2 已将 PRD 从“大能力清单”补全为产品需求规格说明书。F1.3 已将 PRD 中所有 UNKNOWN 绑定到分类、影响范围、当前处理策略、必须关闭阶段、承接 AIFI-* 任务、关闭后写入的目标文档和关闭标准。当前无 `F1_PRODUCT_BLOCKING`；`F2_UX_BLOCKING` 由 AIFI-UX-002 在 `UX_SPEC.md` 关闭；`F4_TECH_DESIGN` 由 AIFI-ARCH-002 及 F4 设计任务关闭；影响验收的剩余项由 AIFI-QA-002 在 F7 验证。

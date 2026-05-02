@@ -489,25 +489,56 @@ MVP 成功标准为：
 
 ## 10. UNKNOWN
 
-以下问题待 F4 或人工确认，未确认前不得在 F1 PRD 中假设为已冻结技术方案：
+本表是 PRD 中所有 UNKNOWN 的唯一收敛台账。模块段落中的 UNKNOWN 只作为问题出现位置提示；是否阻塞、由哪个阶段关闭、由哪个 AIFI-* 任务承接，以本表为准。本表不是新任务体系，不改变 F0-F8 阶段和 AIFI-* 任务编号规则。
 
-| 编号 | 问题 | 当前处理 |
-|---|---|---|
-| OQ-F1-001 | 匹配度评分公式 | F4 冻结 |
-| OQ-F1-002 | 匹配度权重 | F4 冻结 |
-| OQ-F1-003 | 匹配度阈值和低置信度规则 | F4 冻结 |
-| OQ-F1-004 | 多简历多岗位绑定规则 | 人工确认或 F4 冻结 |
-| OQ-F1-005 | 薄弱项算法 | F4 冻结 |
-| OQ-F1-006 | 薄弱项合并规则、状态和生命周期 | F4 冻结 |
-| OQ-F1-007 | 进展树数据结构 | F4 冻结 |
-| OQ-F1-008 | 进展树节点类型和状态更新规则 | F4 冻结 |
-| OQ-F1-009 | 资产版本策略 | F4 冻结 |
-| OQ-F1-010 | 资产合并、更新和质量判断规则 | F4 冻结 |
-| OQ-F1-011 | Prompt 具体模板 | F4 冻结 |
-| OQ-F1-012 | 模型选择 | F4 冻结 |
-| OQ-F1-013 | 模型调用参数 | F4 冻结 |
-| OQ-F1-014 | 面试报告评分公式和分项权重 | F4 冻结 |
-| OQ-F1-015 | 打磨模式题目推荐算法和同题结束建议阈值 | F4 冻结 |
-| OQ-F1-016 | 压力面题量、节奏和连续追问深度规则 | F4 冻结 |
-| OQ-F1-017 | 真实面试材料切分阈值和人工校对规则 | F4 冻结 |
-| OQ-F1-018 | 复盘、报告、薄弱项、资产库之间的自动回流是否需要用户确认 | 人工确认或 F4 冻结 |
+分类定义：
+
+- `F1_PRODUCT_BLOCKING`：影响产品范围、用户故事或核心业务流程，必须在 F1 关闭。
+- `F2_UX_BLOCKING`：影响低保真页面、入口、状态、路径或用户可见确认方式，必须在 F2 关闭。
+- `F4_TECH_DESIGN`：评分、算法、数据结构、Prompt、模型、接口、安全、版本或持久化策略，必须在 F4 关闭。
+- `HUMAN_CONFIRMATION`：必须由人工明确产品取舍或交互默认值，不能由实现阶段静默决定。
+- `DEFERRED_WITH_REASON`：不属于 MVP 阻塞范围，且已有明确产品原因。
+
+当前无 `F1_PRODUCT_BLOCKING` 项。所有 UNKNOWN 均已绑定关闭阶段、承接任务、目标文档和关闭标准。
+
+| 编号 | 问题 | 分类 | 影响范围 | 当前处理策略 | 必须关闭阶段 | 承接 AIFI-* 任务 | 关闭后写入目标文档 | 关闭标准 |
+|---|---|---|---|---|---|---|---|---|
+| OQ-F1-001 | 扫描件 OCR 是否必须覆盖 | DEFERRED_WITH_REASON | 简历导入输入范围、解析失败提示 | MVP 以文本、Markdown 和可解析 PDF 为核心输入；扫描件 OCR 不影响岗位匹配和模拟面试主流程 | F1 | AIFI-PROD-010 | `PRD.md`、`REQUIREMENT_TRACEABILITY.md` | PRD 明确扫描件 OCR 不作为 MVP 验收阻塞，F7 不按扫描件 OCR 设计用例 |
+| OQ-F1-002 | 简历版本策略 | F4_TECH_DESIGN | 简历编辑、历史回看、匹配分析引用 | F2 只设计当前版本和历史可见提示；版本保存规则由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | 数据模型明确简历版本、引用关系和历史报告回看规则 |
+| OQ-F1-003 | 简历 PDF 导出是否进入 MVP 阻塞口径 | DEFERRED_WITH_REASON | 简历导出、发布验收 | MVP 核心是面试准备闭环，不以简历 PDF 导出作为发布阻塞；报告 Markdown 复制或下载优先 | F1 | AIFI-PROD-006、AIFI-PROD-010 | `PRD.md`、`REQUIREMENT_TRACEABILITY.md` | PRD 非目标或验收口径明确简历 PDF 导出不阻塞 MVP |
+| OQ-F1-004 | 岗位版本策略 | F4_TECH_DESIGN | 岗位编辑、匹配分析追溯、历史报告引用 | F2 只设计岗位详情和编辑提示；版本引用由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | 数据模型明确岗位版本、匹配分析引用和历史记录回看规则 |
+| OQ-F1-005 | 岗位状态枚举 | F2_UX_BLOCKING | 岗位列表、岗位详情、绑定入口、空态 | F2 必须冻结用户可见状态和状态切换入口 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真覆盖岗位创建、编辑、待绑定、已绑定、资料不足等状态 |
+| OQ-F1-006 | 岗位 / JD 导入格式范围 | F2_UX_BLOCKING | 岗位创建入口、导入错误态、手动录入兜底 | F2 冻结导入入口和失败兜底；具体解析实现由 F4 处理 | F2 | AIFI-UX-002、AIFI-ARCH-002 | `UX_SPEC.md`、`TECH_DESIGN.md` | 低保真明确支持录入、粘贴或导入的用户路径，以及导入失败后的手动录入路径 |
+| OQ-F1-007 | 多简历多岗位绑定规则 | F2_UX_BLOCKING | 岗位绑定简历、默认带入、匹配分析、模拟面试发起路径 | F2 必须确认一对多 / 多对一的用户可见规则；不得静默假设 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确一个岗位可绑定几份简历、一份简历可绑定几个岗位，以及冲突提示 |
+| OQ-F1-008 | 解除绑定后是否保留默认推荐关系 | F2_UX_BLOCKING | 解除绑定、历史报告回看、发起模拟面试默认值 | F2 冻结解除绑定后的页面提示和默认推荐行为 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确解除绑定后历史记录、默认带入和重新绑定入口 |
+| OQ-F1-009 | 匹配度评分公式 | F4_TECH_DESIGN | 岗位匹配分析、评分解释、报告引用 | F2 只展示分数占位和解释区域；公式由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 文档明确公式来源、解释规则和低置信度处理 |
+| OQ-F1-010 | 匹配度权重 | F4_TECH_DESIGN | 匹配度分数、匹配点排序、加强点排序 | F2 不展示权重配置；F4 冻结权重口径 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 文档明确各评分维度权重或明确无固定权重的替代规则 |
+| OQ-F1-011 | 匹配度阈值和低置信度规则 | F4_TECH_DESIGN | 匹配分析状态、低置信度提示、F7 测试断言 | F2 展示低置信度状态；阈值和判断规则由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-QA-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TEST_PLAN.md` | F4 定义阈值或判断条件，F7 有低置信度测试用例 |
+| OQ-F1-012 | 项目打磨结束标准 | F2_UX_BLOCKING | 项目打磨路径、完成态、下一步建议 | F2 冻结用户可见完成态、继续打磨和沉淀资产入口 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确项目打磨完成、暂停、继续和沉淀资产的状态 |
+| OQ-F1-013 | 项目表达版本策略 | F4_TECH_DESIGN | 项目打磨记录、资产沉淀、历史复盘引用 | F2 只展示版本提示；版本保存和引用由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | 数据模型明确项目表达版本、来源和引用关系 |
+| OQ-F1-014 | 资产沉淀确认方式 | F2_UX_BLOCKING | 项目打磨、真实项目复盘、报告回流、资产库更新 | F2 必须设计用户确认、取消、失败和重试路径 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真覆盖沉淀资产确认态、取消态、失败态和成功态 |
+| OQ-F1-015 | 真实面试材料切分阈值 | F4_TECH_DESIGN | 真实项目复盘、低置信度校对、复盘准确性 | F2 只设计校对状态；切分阈值由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确问答切分、材料过短和低置信度规则 |
+| OQ-F1-016 | 低置信度校对规则 | F2_UX_BLOCKING | 真实项目复盘、报告、匹配分析、用户校对入口 | F2 冻结低置信度提示和人工校对入口；判定阈值由 F4 承接 | F2 | AIFI-UX-002、AIFI-QA-002 | `UX_SPEC.md`、`TEST_PLAN.md` | 低保真覆盖低置信度提示、校对入口和继续流程 |
+| OQ-F1-017 | 复盘结果合并规则 | F2_UX_BLOCKING | 真实项目复盘、模拟面试复盘、报告关系 | F2 冻结用户可见的合并展示或分开展示路径 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确复盘结果与已有记录如何展示、替换或并列 |
+| OQ-F1-018 | 资产版本策略 | F4_TECH_DESIGN | 资产库、资产回流、历史资产引用 | F2 设计资产列表和更新提示；版本规则由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | 数据模型明确资产版本、来源、更新时间和历史引用 |
+| OQ-F1-019 | 资产合并、更新和质量判断规则 | F4_TECH_DESIGN | 资产库更新、模拟面试增强输入、质量提示 | F2 只设计确认和失败态；合并与质量判断由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确资产合并、去重、质量判断和不可用状态 |
+| OQ-F1-020 | 资产更新确认方式 | F2_UX_BLOCKING | 资产库、反馈回流、用户控制权 | F2 冻结更新前确认、取消和回退提示 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确用户确认资产更新的入口、状态和失败处理 |
+| OQ-F1-021 | 两种模式共用输入的优先级规则 | F4_TECH_DESIGN | 打磨模式、压力面模式、增强输入选择 | F2 展示输入来源和可用性；优先级编排由 F4 冻结 | F4 | AIFI-ARCH-002、AIFI-PROMPT-001 | `TECH_DESIGN.md`、`PROMPT_SPEC.md` | F4 明确简历、岗位、资产、薄弱项和历史结果的输入优先级 |
+| OQ-F1-022 | 缺失增强输入时的质量提示口径 | F2_UX_BLOCKING | 发起模拟面试、报告低置信度、用户预期 | F2 必须设计资料不足提示和继续 / 补充路径 | F2 | AIFI-UX-002、AIFI-QA-002 | `UX_SPEC.md`、`TEST_PLAN.md` | 低保真覆盖增强输入缺失时的提示、继续和补充入口 |
+| OQ-F1-023 | 打磨模式题目推荐算法 | F4_TECH_DESIGN | 打磨模式出题、薄弱项训练、项目打磨联动 | F2 只设计推荐题入口和手动继续路径；算法由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确题目推荐依据、输入和降级规则 |
+| OQ-F1-024 | 同题打磨结束建议阈值 | F4_TECH_DESIGN | 打磨模式多轮反馈、下一轮建议 | F2 允许继续打磨和结束选择；结束建议阈值由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确同题结束建议的判定条件或人工优先规则 |
+| OQ-F1-025 | 恢复上下文的具体保存策略 | F4_TECH_DESIGN | 打磨模式暂停恢复、进展树位置、历史回答 | F2 设计恢复路径和失败态；保存策略由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | F4 明确暂停恢复需要保存的字段、引用和失败处理 |
+| OQ-F1-026 | 压力面题量和节奏规则 | F2_UX_BLOCKING | 压力面流程、进展树、结束报告入口 | F2 必须冻结用户可见题量表达、节奏提示和结束条件 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确压力面开始、连续问答、结束和报告入口 |
+| OQ-F1-027 | 压力面中途暂停限制 | F2_UX_BLOCKING | 压力面会话控制、用户中断、恢复路径 | F2 冻结是否允许暂停、暂停后状态和恢复提示 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确压力面暂停、中断、继续或结束的可见规则 |
+| OQ-F1-028 | 压力面连续追问深度规则 | F4_TECH_DESIGN | 压力面出题、追问、报告评价 | F2 只设计连续追问的用户路径；深度规则由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确追问深度、停止条件和低置信度降级 |
+| OQ-F1-029 | 进展树展示层级和节点类型 | F2_UX_BLOCKING | 打磨模式、压力面模式、报告和复盘可见进度 | F2 冻结专题、主题、技术点、项目、题目和薄弱项的展示层级 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确进展树用户可见层级、节点状态和当前位置 |
+| OQ-F1-030 | 进展树数据结构与状态更新规则 | F4_TECH_DESIGN | 进展树持久化、暂停恢复、报告引用 | F2 只冻结展示层级；数据结构和更新规则由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | F4 明确进展树节点、状态机、引用关系和更新触发 |
+| OQ-F1-031 | 进展树推荐算法 | F4_TECH_DESIGN | 下一题推荐、薄弱项路径、训练建议 | F2 只设计下一步建议位置；推荐算法由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确推荐输入、输出和降级规则 |
+| OQ-F1-032 | 面试报告评分公式和分项权重 | F4_TECH_DESIGN | 面试报告、复盘、F7 验收断言 | F2 展示评分区域；公式和权重由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002、AIFI-QA-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md`、`TEST_PLAN.md` | F4 明确评分公式或评分生成口径，F7 有报告评分验收用例 |
+| OQ-F1-033 | 报告生成失败后的重试策略 | F4_TECH_DESIGN | 报告生成失败、恢复、数据保留 | F2 设计失败提示和重试入口；重试策略由 F4 冻结 | F4 | AIFI-ARCH-002、AIFI-QA-002 | `TECH_DESIGN.md`、`TEST_PLAN.md` | F4 明确重试条件、保存边界和失败后可见状态 |
+| OQ-F1-034 | 模拟面试复盘切分规则 | F4_TECH_DESIGN | 模拟面试复盘、题级点评、薄弱项提炼 | F2 设计复盘详情页；切分规则由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确题目、回答、点评、评分和失分原因的切分规则 |
+| OQ-F1-035 | 复盘、报告、薄弱项、资产库之间的自动回流是否需要用户确认 | HUMAN_CONFIRMATION | 反馈回流、资产更新、用户控制权、低保真确认态 | 必须由人工确认默认策略；F2 同步设计确认态和失败态 | F2 | AIFI-UX-002、AIFI-PROD-010 | `UX_SPEC.md`、`REQUIREMENT_TRACEABILITY.md` | 人工确认自动回流或手动确认的默认规则，低保真体现确认入口 |
+| OQ-F1-036 | 复盘与报告的合并展示规则 | F2_UX_BLOCKING | 报告详情、复盘详情、列表入口 | F2 冻结合并展示、分开展示或跳转关系 | F2 | AIFI-UX-002 | `UX_SPEC.md` | 低保真明确报告与复盘在列表、详情和回流入口的关系 |
+| OQ-F1-037 | 薄弱项算法 | F4_TECH_DESIGN | 薄弱项提炼、题目推荐、压力面出题 | F2 展示薄弱项列表和来源；算法由 F4 冻结 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确薄弱项识别输入、输出、置信度和失败处理 |
+| OQ-F1-038 | 薄弱项合并规则、状态和生命周期 | F4_TECH_DESIGN | 薄弱项列表、训练建议、历史复盘引用 | F2 展示来源和状态；合并、状态流转和生命周期由 F4 冻结 | F4 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | F4 明确薄弱项合并、状态流转、来源证据和历史引用 |
+| OQ-F1-039 | 薄弱项自动消减规则 | F4_TECH_DESIGN | 训练建议、能力进展、薄弱项状态 | MVP 不静默自动消减；是否自动消减由 F4 明确 | F4 | AIFI-PROMPT-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确自动消减是否启用、触发条件和人工覆盖规则 |
