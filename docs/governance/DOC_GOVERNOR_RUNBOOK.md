@@ -2,6 +2,11 @@
 title: DOC_GOVERNOR_RUNBOOK
 type: note
 permalink: ai-for-interviewer/docs/governance/doc-governor-runbook
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: doc-governor 命令、状态流转和轮次操作手册
+Depends On: docs/governance/DOC_AUTOMATION.md, tools/doc_governor
+Supersedes: none
 ---
 
 # 文档治理命令与轮次运行手册

@@ -2,6 +2,11 @@
 title: DOC_GOVERNOR_REPORT
 type: note
 permalink: ai-for-interviewer/docs/governance/doc-governor-report
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: doc-governor evaluate/render 的解释性治理报告输出
+Depends On: docs/governance/DOC_STATE.yaml, docs/governance/DOC_AUTOMATION.md
+Supersedes: none
 ---
 
 # Doc Governor 解释性治理报告

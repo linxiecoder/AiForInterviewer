@@ -49,10 +49,10 @@ permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module
 
 ### 2.3 全局与上游约束引用
 - `PLAN_LATEST.md`：M03 在 `M01 -> M02 -> M03` 顺序中承接岗位、简历与文档链路。
-- `TECHNICAL_STANDARDS.md`：默认技术口径为 Next.js + FastAPI + PostgreSQL + Redis + S3-compatible 对象存储。
+- `TECHNICAL_STANDARDS.md`：当前仓库事实为 FastAPI、Vite + React、PostgreSQL runtime + SQLite fallback；Redis、pgvector、对象存储、MinIO 或 S3-compatible 存储只作为 R1/R2 或后续能力候选。
 - `DESIGN_DECISIONS.md`：文档体系分层、单次实施单位、Markdown 渲染链共享等全局口径。
 - `OPEN_QUESTIONS.md`：`OQ-006`、`OQ-007` 已按默认方案冻结，可作为本轮 M03 设计输入。
-- `docs/modules/M01-foundation-and-platform/**`：提供 monorepo、对象存储、工作台壳层、日志与测试基线。
+- `docs/modules/M01-foundation-and-platform/**`：提供当前 `apps/api` / `apps/web` 边界、后续对象存储候选边界、工作台壳层、日志与测试基线。
 - `docs/modules/M02-identity-and-team/**`：提供 Bearer token、`team_id` 隔离与权限矩阵基线。
 
 ## 3. 模块目标
@@ -65,7 +65,7 @@ permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module
 
 - 岗位对象与岗位列表/详情页的基础数据面。
 - 简历对象、当前文档指针、版本快照与 Markdown 编辑/预览。
-- 原始 PDF 上传、对象存储入库、转换日志、导出记录。
+- 原始 PDF 上传、对象存储候选引用、转换日志、导出记录；这些不作为 R0 必需 runtime。
 - 原始 PDF 与导出 PDF 的业务级访问入口，以及它们与共享 `storage_objects` 的映射关系。
 - 面向下游模块的最小可引用输入面：
   - `jobs.jd_markdown`
@@ -117,7 +117,7 @@ permalink: ai-for-interviewer/docs/modules/m03-jobs-resumes-and-documents/module
 
 ### 7.3 PDF 上传、转换与预览
 1. 用户上传 PDF。
-2. 服务端同步完成文件校验、对象存储写入和 `storage_objects` / `resumes` / `resume_conversion_logs` 的初始落库。
+2. 服务端同步完成文件校验、后续对象存储候选引用和 `storage_objects` / `resumes` / `resume_conversion_logs` 的初始落库；R0 只要求岗位 / 简历录入读取和主链路最小可用。
 3. 上传接口返回已受理状态，转换任务异步执行 `PDF -> Markdown`。
 4. 转换成功后生成新的 `resume_documents` 快照，并更新 `resumes.current_document_id`；失败时保留原始 PDF 和失败日志。
 

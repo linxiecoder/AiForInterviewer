@@ -2,6 +2,11 @@
 title: DOC_AUTOMATION
 type: note
 permalink: ai-for-interviewer/docs/governance/doc-automation
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: doc-governor 自动化、状态文件规则、命令契约和 gate 边界
+Depends On: AGENTS.md, docs/DOC_GOVERNANCE.md, tools/doc_governor
+Supersedes: none
 ---
 
 # 文档治理自动化规则

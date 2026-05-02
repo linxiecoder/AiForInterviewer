@@ -10,10 +10,10 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 
 - 状态：`draft`
 - 文档性质：ST13 任务设计文档；记录 ST13_21 R0 minimal API service boundary 的设计边界与实施后同步事实；不是 implementation packet，不是 official state。
-- official gate：formal window 已打开；implementation approval 已批准；当前 `implementation_ready=true`，`can_generate_implementation_packet=true`。
+- official gate：历史记录曾写入 formal window、implementation approval、`implementation_ready=true` 和 `can_generate_implementation_packet=true`；当前结论以 `DOC_STATE.yaml`、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 为准。
 - packet 状态：implementation packet 已重新生成并提交，提交为 `89d82cf gov: generate ST13_21 implementation packet`。
 - implementation 状态：R0 minimal API service boundary 已完成并通过 acceptance refresh；实现提交为 `b9d7fd3`，TestClient 依赖提交为 `1f65274`。
-- 当前定位：为 `ST13_21` post-implementation docs / module sync 提供与 official state 和实际实现一致的文档事实。
+- 当前定位：作为 state-bound task package / historical task evidence，供后续迁移和事实复核使用。
 - 本窗口不修改 `DOC_STATE.yaml`，不修改 packet，不继续 implementation，不扩大业务 API 范围。
 
 ## 2. 关联 ST13 / WT13
@@ -22,17 +22,23 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 - WT13 alias：`WT13-21`
 - 任务名称：API / 后端服务边界
 - 当前收敛范围：R0 minimal API service boundary
-- 当前 official state：`implementation_doc_state=active_working_doc`，`maturity=L5`，`readiness=downstream_ready`，`formal_window_status=open`，`implementation_approval_status=approved`。
-- 当前 evaluate / preflight 派生状态：blockers `[]`，`implementation_ready=true`，`can_generate_implementation_packet=true`。
-- 当前实现结果：已按 packet 完成最小 `/api/v1` router registration、`GET /api/v1/health` regression、minimal error envelope、minimal config boundary 和未注册 future route placeholders；acceptance refresh 已通过。
+- 当前 official state、evaluate / preflight 派生状态和 readiness 以 `DOC_STATE.yaml`、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 当前输出为准。
+- 当前实现结果：历史最小 `/api/v1` router registration 与 health regression 已完成；当前仓库事实已扩展到 interviews、records、review、export 等读写面。
+
+## 2.1 W04 技术事实边界
+
+- 当前仓库已经存在 `apps/api`、`apps/web`；后端为 FastAPI，前端为 Vite + React。
+- 当前数据库事实为 PostgreSQL runtime + SQLite fallback。
+- 本文中关于 health-only skeleton、未注册业务 endpoint 或 `implementation_ready=true` 的旧叙述，只能作为历史任务证据，不作为当前事实源。
+- Redis、pgvector、对象存储、MinIO 或 S3-compatible 存储不作为 R0 必需 runtime。
 
 ## 3. 当前 official gate 背景
 
-截至本轮 post-implementation 文档同步，`ST13_21` 已完成 state sync、scoped formal window sync、implementation approval、packet generation / commit、minimal API service boundary implementation 和 acceptance refresh。当前 official gate 事实为：
+截至历史 post-implementation 文档同步，`ST13_21` 曾完成 state sync、scoped formal window sync、implementation approval、packet generation / commit、minimal API service boundary implementation 和 acceptance refresh。以下为历史 official gate 记录，当前结论仍以 `DOC_STATE.yaml`、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 为准：
 
 - `formal_window_status=open`
 - `implementation_approval_status=approved`
-- `implementation_ready=true`
+- 历史记录曾出现 `implementation_ready=true`
 - `can_generate_implementation_packet=true`
 - `evaluate-state` / `preflight-open-window` 对 `ST13_21` 的 blocker 结果为 `[]`
 - implementation packet 已提交：`89d82cf`
@@ -95,8 +101,8 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 1. `apps/api/app/main.py` 创建 FastAPI app，并注册 `build_api_v1_router(settings.api_prefix)`。
 2. `settings.api_prefix` 默认来自 `API_PREFIX=/api/v1`。
 3. `apps/api/app/api/v1/__init__.py` 统一管理 `/api/v1` 下路由注册。
-4. 当前只注册 health router，`GET /api/v1/health` 继续返回 `{ "status": "ok" }`。
-5. future route names 仅作为未注册常量存在，未创建 `/auth`、`/jobs`、`/resumes`、`/interviews`、`/scores`、`/reviews`、`/exports` 等业务 endpoint。
+4. 历史最小骨架保证 `GET /api/v1/health` 返回 `{ "status": "ok" }`。
+5. 当前仓库事实已包含 interviews、records、review、export 等读写面；future route placeholder 叙述只保留为历史 implementation evidence。
 
 ### 7.2 错误响应与 error envelope
 
@@ -190,7 +196,7 @@ M02 当前只作为 `ST13_21` 的 downstream identity boundary input：
 `ST13_21` implementation 已完成并通过 acceptance refresh，但 official `DOC_STATE.yaml` 尚未在本窗口写入 accepted / done / implementation result。当前事实为：
 
 - official `DOC_STATE.yaml` 已记录 `implementation_doc_state=active_working_doc`、`maturity=L5`、`readiness=downstream_ready`、`formal_window_status=open`、`implementation_approval_status=approved`。
-- `evaluate-state` / `preflight-open-window` 派生 `implementation_ready=true`、`can_generate_implementation_packet=true`。
+- 历史 `evaluate-state` / `preflight-open-window` 曾派生 `implementation_ready=true`、`can_generate_implementation_packet=true`。
 - packet 已生成并提交：`89d82cf gov: generate ST13_21 implementation packet`。
 - implementation 已提交：`b9d7fd3 feat(ST13_21): add minimal API service boundary`。
 - TestClient 依赖已提交：`1f65274 test(ST13_21): add httpx for FastAPI TestClient smoke`。

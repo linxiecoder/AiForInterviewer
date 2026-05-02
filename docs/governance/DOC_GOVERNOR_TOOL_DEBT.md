@@ -2,6 +2,11 @@
 title: DOC_GOVERNOR_TOOL_DEBT
 type: note
 permalink: ai-for-interviewer/docs/governance/doc-governor-tool-debt
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: doc-governor 工具债、后续修复项和验证要求
+Depends On: docs/governance/DOC_AUTOMATION.md, tools/doc_governor
+Supersedes: none
 ---
 
 # Doc Governor 工具债追踪

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from contextlib import contextmanager
 import os
 import sys
 from pathlib import Path
@@ -10,6 +12,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from tools.testing.temp_artifacts import ManagedTempArtifacts
 
 API_ROOT = Path(__file__).resolve().parents[2] / "apps" / "api"
 if str(API_ROOT) not in sys.path:
@@ -61,6 +64,15 @@ from app.traceability import (  # noqa: E402
 API_PREFIX = "/api/v1"
 
 
+@contextmanager
+def managed_workspace(label: str) -> Iterator[Path]:
+    artifacts = ManagedTempArtifacts(test_id=f"tests.api.test_postgresql_runtime.{label}")
+    try:
+        yield artifacts.make_temp_dir(label)
+    finally:
+        artifacts.cleanup()
+
+
 def test_database_url_takes_precedence_over_sqlite_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """DATABASE_URL 存在时，runtime 应优先使用显式数据库 URL。"""
     database_url = "postgresql+psycopg://user:pass@127.0.0.1:5432/interviewer"
@@ -82,16 +94,17 @@ def test_postgresql_url_uses_psycopg_driver_without_connecting() -> None:
         engine.dispose()
 
 
-def test_sqlite_path_still_uses_sqlite_engine(tmp_path: Path) -> None:
+def test_sqlite_path_still_uses_sqlite_engine() -> None:
     """普通文件路径仍然走 SQLite fallback，并自动创建父目录。"""
-    database_path = tmp_path / "nested" / "api.sqlite3"
+    with managed_workspace("sqlite-engine") as workspace:
+        database_path = workspace / "nested" / "api.sqlite3"
 
-    engine = _create_database_engine(str(database_path))
-    try:
-        assert engine.dialect.name == "sqlite"
-        assert database_path.parent.exists()
-    finally:
-        engine.dispose()
+        engine = _create_database_engine(str(database_path))
+        try:
+            assert engine.dialect.name == "sqlite"
+            assert database_path.parent.exists()
+        finally:
+            engine.dispose()
 
 
 def test_schema_statements_cover_current_runtime_tables() -> None:

@@ -2,6 +2,11 @@
 title: BASIC_MEMORY_GUARD
 type: note
 permalink: ai-for-interviewer/docs/governance/basic-memory-guard
+Owner: 文档治理
+Last Updated: 2026-05-02
+Scope: Basic Memory 写入路由、包装器和只读/写回边界
+Depends On: AGENTS.md, docs/governance/DOC_AUTOMATION.md
+Supersedes: none
 ---
 
 # Basic Memory Guard 运行说明

@@ -36,4 +36,7 @@ permalink: ai-for-interviewer/docs/design/workbench-mvp/readme
 - 一期工作台以文本模拟面试闭环为主。
 - 设计覆盖岗位与简历材料、面试记录、面试工作台、LLM/RAG/多轮、评分复盘、导出和弱点训练材料。
 - 后端边界以支撑保存、恢复、评分、复盘和上下文引用为目标。
+- 当前实现事实：后端为 FastAPI，前端为 Vite + React，数据库事实为 PostgreSQL runtime + SQLite fallback。
+- Next.js / App Router 只能作为历史口径或未来替换候选，不作为当前实现事实。
+- Redis、pgvector、对象存储、MinIO 或 S3-compatible 存储不作为 R0 必需 runtime；如后续需要，必须由 R1/R2 或独立窗口补齐设计与 gate。
 - 是否进入实现由状态层 gate 决定，本目录不声明 implementation-ready。

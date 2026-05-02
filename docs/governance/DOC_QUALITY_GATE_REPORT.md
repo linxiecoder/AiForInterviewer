@@ -1,49 +1,14 @@
+---
+title: DOC_QUALITY_GATE_REPORT
+type: note
+permalink: ai-for-interviewer/docs/governance/doc-quality-gate-report
+---
+
 # 文档质量门禁报告
 
-- 扫描文档数: 8
-- 诊断数: 40
+- 扫描文档数: 10
+- 诊断数: 0
 
-门禁未通过：存在以下问题。
-
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_RUNBOOK.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_RUNBOOK.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_RUNBOOK.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_RUNBOOK.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_RUNBOOK.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_AUTOMATION.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_AUTOMATION.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_AUTOMATION.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_AUTOMATION.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_AUTOMATION.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_TOOL_DEBT.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_TOOL_DEBT.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_TOOL_DEBT.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_TOOL_DEBT.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_TOOL_DEBT.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_REPORT.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_REPORT.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_REPORT.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_REPORT.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DOC_GOVERNOR_REPORT.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BASIC_MEMORY_GUARD.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BASIC_MEMORY_GUARD.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BASIC_MEMORY_GUARD.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BASIC_MEMORY_GUARD.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BASIC_MEMORY_GUARD.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BOOTSTRAP_REPORT.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BOOTSTRAP_REPORT.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BOOTSTRAP_REPORT.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BOOTSTRAP_REPORT.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | BOOTSTRAP_REPORT.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DISCUSSION_WORKFLOW.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DISCUSSION_WORKFLOW.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DISCUSSION_WORKFLOW.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DISCUSSION_WORKFLOW.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | DISCUSSION_WORKFLOW.md | 缺少必填字段: Supersedes
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | TEST_POLICY.md | 缺少必填字段: Owner
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | TEST_POLICY.md | 缺少必填字段: Last Updated
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | TEST_POLICY.md | 缺少必填字段: Scope
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | TEST_POLICY.md | 缺少必填字段: Depends On
-- [error] DOC_GATE_REQUIRED_FIELD_MISSING | TEST_POLICY.md | 缺少必填字段: Supersedes
+门禁通过：未发现错误。
 
 规则：门禁未通过时，不得进入下一窗口。

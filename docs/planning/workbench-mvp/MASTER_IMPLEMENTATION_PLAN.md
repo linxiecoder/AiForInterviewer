@@ -1,12 +1,20 @@
-# AI 模拟面试工作台 MVP 主实施计划（R0 / R1 / R2）
+---
+title: MASTER_IMPLEMENTATION_PLAN
+type: note
+permalink: ai-for-interviewer/docs/planning/workbench-mvp/master-implementation-plan
+---
 
-> 目标：在单一主计划中统一管理 R0/R1/R2 的实施范围、里程碑、依赖、风险、降级与变更，禁止产生平行主计划。
+# AI 模拟面试工作台 MVP 长期实施计划（R0 / R1 / R2）
+
+> 目标：作为完整长期阶段计划，统一管理 R0/R1/R2 的实施范围、里程碑、依赖、风险、降级与变更；当前 execution / current window 入口仍以 `PLAN_LATEST.md` 为准。
 
 ## 1. 计划总则
 
-- 本文档是 `docs/planning/workbench-mvp/` 下唯一主计划入口。
+- 本文档是 R0/R1/R2 完整长期阶段实施计划，不替代 `PLAN_LATEST.md` 的当前执行入口职责。
+- `PLAN_LATEST.md` 承载当前阶段、当前窗口、下一窗口、阻断项和下一步窗口卡；本文档承载长期阶段计划、里程碑、依赖、风险和变更机制。
 - R0 → R1 → R2 必须顺序推进；未达到前一阶段 DoD，不得默认进入下一阶段实现。
-- 所有新增需求、范围变更、里程碑调整，必须通过“变更单”写回本文档，禁止在其他位置创建平行主计划。
+- 固定推进顺序为：需求确认 -> 低保真 -> 高保真 -> 后端接口/数据 -> 前端页面/交互 -> 联调 -> 自动化测试 -> 文档和状态写回。
+- 所有新增需求、范围变更、里程碑调整，必须通过“变更单”写回本文档；若影响当前窗口，还必须同步 `PLAN_LATEST.md` 的 current execution 视角，禁止创建平行长期计划。
 
 ---
 

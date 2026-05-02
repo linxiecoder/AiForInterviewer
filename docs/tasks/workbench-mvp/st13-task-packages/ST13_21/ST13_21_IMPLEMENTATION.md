@@ -9,12 +9,20 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 ## 1. 文档状态
 
 - 状态：`draft`
-- 文档性质：ST13 任务实施说明；当前用于授权 `R1-DEV-07-WORKBENCH-TRUSTED-FRONTEND-SURFACE-WITH-E2E` 的最小前端可信展示面与浏览器 E2E，不是 implementation packet 本体。
-- official gate：formal window 已打开；implementation approval 已批准；当前 `implementation_ready=true`，`can_generate_implementation_packet=true`。
-- packet 状态：本轮 Phase A 允许刷新 implementation packet，使后续 Phase B 可以在授权路径内实现 `apps/web` 前端消费面与最小 E2E。
-- implementation 状态：R0 minimal API service boundary 已完成；ST13_20 traceability write integration 已完成；ST13_21 trace read surface 已完成；本轮只补 R1 可信数据的前端可见面。
-- 当前定位：让 history/detail/review/export 中的 session、turn、answer、RAG citation、evidence gap、score、review、export trace reference 能在真实前端页面被安全展示和 E2E 保护。
+- 文档性质：ST13 任务实施说明；属于 state-bound task package / historical task evidence，不是当前窗口的 implementation packet。
+- official gate：历史记录曾写入 formal window、implementation approval、`implementation_ready=true` 和 `can_generate_implementation_packet=true`；当前结论以 `DOC_STATE.yaml`、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 为准。
+- packet 状态：历史 packet 记录只作为过程证据，不授权当前窗口刷新 packet 或实现 `apps/**`。
+- implementation 状态：历史 R0 minimal API service boundary、ST13_20 traceability write integration、ST13_21 trace read surface 和 R1 前端展示面只作为历史实现证据。
+- 当前定位：供 history/detail/review/export 的 trace 事实和后续 state-bound migration 追溯使用。
 - 本窗口 Phase B 不修改 `DOC_STATE.yaml`，不修改后端 schema/migration/ORM，不扩大到完整知识库后台、复杂 RAG provider、批量导出或 R2 训练闭环。
+
+## 1.1 W04 技术事实边界
+
+- 当前仓库已经存在 `apps/api`、`apps/web`；后端为 FastAPI，前端为 Vite + React。
+- 当前数据库事实为 PostgreSQL runtime + SQLite fallback。
+- 当前 API 已包含 interviews、records、review、export 等读写面，不能继续按 health-only skeleton 理解。
+- Redis、pgvector、对象存储、MinIO 或 S3-compatible 存储不作为 R0 必需 runtime。
+- 当前 readiness、packet 和 formal window 结论以 official state、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 为准；本文档不自行声明 implementation-ready。
 
 ## 2. 本轮实施目标
 
@@ -28,7 +36,7 @@ permalink: ai-for-interviewer/docs/tasks/workbench-mvp/st13-task-packages/st13-2
 - M02 只作为 downstream identity boundary input；完整身份系统不由本任务实现。
 - ST01_01 runtime baseline 已存在，且 health endpoint 不被本任务破坏。
 - `DOC_STATE.yaml` 仍由专门状态窗口维护；本文档正文不替代 official state。
-- 当前 official state 已满足 formal window open、`implementation_doc_state=active_working_doc`、implementation approval approved、`implementation_ready=true`。
+- 历史 official state 记录曾满足 formal window open、`implementation_doc_state=active_working_doc`、implementation approval approved、`implementation_ready=true`；当前判断以 official state 与任务索引为准。
 - 已基于修正后的文档提交 packet，并已通过 packet acceptance review / commit-prep。
 - implementation 已按提交后的 packet 执行并通过 acceptance refresh。
 
@@ -180,13 +188,13 @@ packet forbidden paths 已包含且本次不得触碰：
 
 ## 12. 当前 gate 与实施验收说明
 
-`ST13_21_IMPLEMENTATION.md` 已在 official state 中登记为 active working doc；当前 confirmed / derived gate 事实为：
+`ST13_21_IMPLEMENTATION.md` 已在 official state 中登记为 active working doc；以下 confirmed / derived gate 字段为历史任务证据，当前判断仍以 official state、`PLAN_LATEST.md` 和 `TASK_INDEX.md` 的最新输出为准：
 
 - `implementation_doc_state=active_working_doc`
 - `maturity=L5`
 - `readiness=downstream_ready`
 - `implementation_approval_status=approved`
-- `implementation_ready=true`
+- 历史记录曾出现 `implementation_ready=true`
 - formal window open
 - `can_generate_implementation_packet=true`
 
