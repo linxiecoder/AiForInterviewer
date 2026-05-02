@@ -52,6 +52,13 @@ coverage/
 tmp/
 temp/
 
+# F0/F0.1 local document audit snapshots
+.aifi-docs-snapshot/
+aifi-docs-snapshot.zip
+docs-files.txt
+docs-risk-keywords.txt
+scripts/export_doc_snapshot.py
+
 # Local databases / storage
 *.sqlite3
 *.db
