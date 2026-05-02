@@ -9,7 +9,7 @@ permalink: ai-for-interviewer/docs/03-delivery/backlog
 
 # BACKLOG
 
-本文件是唯一任务入口。所有任务必须使用 `AIFI-*` 编号；优先级只使用 `MUST`、`SHOULD`、`COULD`、`LATER`；阶段只引用 `F0` 至 `F8`。
+本文件是唯一任务入口。所有任务必须使用 `AIFI-*` 编号；优先级只使用 `MUST`、`SHOULD`、`COULD`、`LATER`；阶段只引用 `F0` 至 `F8`。本文件不设置批次、波次或发布批次字段，任务承接只通过阶段、里程碑、优先级、依赖、验收和状态表达。
 
 ## 1. Backlog
 
@@ -19,32 +19,35 @@ permalink: ai-for-interviewer/docs/03-delivery/backlog
 | AIFI-DOC-002 | F0 | M0 | MUST | 合并归档台账 | 新建 `archive/MANIFEST.md`，合并旧归档索引与台账 | `archive/MANIFEST.md` | `DOCS_INDEX.md` | DONE |
 | AIFI-DOC-003 | F0 | M0 | MUST | 废弃旧 active 入口 | 将旧 planning/task/module/state 文档迁入 archive 并登记替代路径 | README、AGENTS、`archive/MANIFEST.md` | F0.1 归档 | DONE |
 | AIFI-DOC-004 | F0 | M0 | MUST | 清理重复模板文档 | 旧模板和旧治理文档转为历史来源 | `archive/2026-05-doc-consolidation/legacy/` | F0.1 归档 | DONE |
-| AIFI-PROD-001 | F1 | M1 | MUST | 编写并冻结 MVP PRD | 建立唯一产品需求事实源，覆盖产品定位、目标、角色、流程和非目标 | `docs/01-product/PRD.md` | AIFI-DOC-001 | DONE |
-| AIFI-PROD-002 | F1 | M1 | MUST | 完成历史需求继承处理 | 将历史有效需求标记为 MERGED_TO_PRD / DEFERRED / REJECTED / UNKNOWN | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | AIFI-PROD-001 | DONE |
-| AIFI-PROD-003 | F1 | M1 | MUST | 定义 MVP 用户角色与权限边界 | 冻结练习者、管理员/内容维护者、项目维护者和单工作区边界 | `docs/01-product/PRD.md` §3、§12 | AIFI-PROD-001 | DONE |
-| AIFI-PROD-004 | F1 | M1 | MUST | 定义核心面试主流程 | 冻结岗位、简历、参考材料、考点规划、问题生成、面试执行和历史回看 | `docs/01-product/PRD.md` §4、§6-§8 | AIFI-PROD-001 | DONE |
-| AIFI-PROD-005 | F1 | M1 | MUST | 定义评分、通过概率、弱项训练需求 | 冻结可解释评分、通过概率、复盘报告和弱项训练闭环 | `docs/01-product/PRD.md` §9-§11 | AIFI-PROD-001 | DONE |
-| AIFI-PROD-006 | F1 | M1 | MUST | 定义 MVP 非目标范围 | 冻结多团队、多租户、语音、视频、ATS、商业化、高级治理等后置范围 | `docs/01-product/PRD.md` §13-§14 | AIFI-PROD-001 | DONE |
-| AIFI-UX-001 | F2 | M2 | MUST | 准备 F2 低保真设计输入 | 基于 PRD 编写低保真 UX 规范，覆盖主流程、页面 IA、状态和错误态 | `docs/02-design/UX_SPEC.md` | F1 完成 | NOT_STARTED |
-| AIFI-UI-001 | F3 | M3 | MUST | 编写 UI 设计系统 | 迁移有效视觉原则，补组件、页面规范和设计 token | `docs/02-design/UI_DESIGN_SYSTEM.md` | F2 评审 | NOT_STARTED |
-| AIFI-ARCH-001 | F4 | M4 | MUST | 准备 F4 技术设计输入 | 基于 PRD 和当前仓库事实冻结技术架构、服务边界和工程约束 | `docs/02-design/TECH_DESIGN.md`、ADR | F1/F2 | NOT_STARTED |
-| AIFI-API-001 | F4 | M4 | MUST | 编写 API 契约 | 汇总岗位、简历、面试、复盘、导出、训练、权限 API | `docs/02-design/API_SPEC.md` | AIFI-ARCH-001 | NOT_STARTED |
-| AIFI-DATA-001 | F4 | M4 | MUST | 编写数据模型 | 汇总核心实体、状态机、审计字段、迁移策略 | `docs/02-design/DATA_MODEL.md` | AIFI-PROD-003 | NOT_STARTED |
-| AIFI-PROMPT-001 | F4 | M4 | MUST | 编写 Prompt 规范 | 写入参考材料包、考点规划、问题生成、追问、评分解释和低置信度规则 | `docs/02-design/PROMPT_SPEC.md` | AIFI-PROD-004 | NOT_STARTED |
-| AIFI-SEC-001 | F4 | M4 | MUST | 编写安全隐私规范 | 权限、数据可见性、审计、脱敏、保留周期、导出边界 | `docs/02-design/SECURITY_PRIVACY.md` | AIFI-PROD-003 | NOT_STARTED |
-| AIFI-BE-001 | F5 | M5 | MUST | 完成后端主链路 | 服务端保存、面试编排、RAG/LLM、评分复盘、导出基础能力 | 后端实现、API 测试 | F4 评审通过 | NOT_STARTED |
-| AIFI-FE-001 | F6 | M6 | MUST | 完成前端主链路 | 工作台、发起、面试台、复盘、训练入口、基础管理 | 前端实现、页面测试 | F5 主接口可用 | NOT_STARTED |
-| AIFI-QA-001 | F7 | M7 | MUST | 完成全链路测试 | API、E2E、权限、降级、数据持久化、导出测试 | `docs/03-delivery/TEST_PLAN.md`、测试报告 | F5/F6 | NOT_STARTED |
-| AIFI-REL-001 | F8 | M8 | MUST | 完成发布检查 | 发布清单、变更记录、已知问题、回滚策略 | `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md` | F7 全链路通过 | NOT_STARTED |
+| AIFI-PROD-001 | F1 | M1 | MUST | 编写并冻结 MVP PRD | 建立唯一产品需求事实源，覆盖产品定位、目标、角色、业务对象、核心需求、核心业务数据流、状态异常、验收标准和非目标 | `docs/01-product/PRD.md` | AIFI-DOC-001 | DONE |
+| AIFI-PROD-002 | F1 | M1 | MUST | 完成历史需求继承处理 | 将历史有效需求标记为 MERGED_TO_PRD / PARTIAL / DEFERRED / REJECTED / UNKNOWN，并登记 F1 覆盖矩阵 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | AIFI-PROD-001 | DONE |
+| AIFI-PROD-003 | F1 | M1 | MUST | 定义 MVP 用户角色与权限边界 | 冻结求职者 / 面试准备用户、管理员/内容维护者、项目维护者和最小管理边界 | `docs/01-product/PRD.md` §3 | AIFI-PROD-001 | DONE |
+| AIFI-PROD-004 | F1 | M1 | MUST | 定义核心面试双模式 | 冻结模拟面试必须拆分为打磨模式和压力面模式；定义进展树状态、同一道题多轮打磨、详细点评、打分、失分原因、参考回答、参考回答与失分点对应、考点解析、技术原理扩展、打磨模式暂停与恢复，以及压力面连续追问和真实节奏边界 | `docs/01-product/PRD.md` §6.8-§6.11、§7-§8 | AIFI-PROD-001 | DONE |
+| AIFI-PROD-005 | F1 | M1 | MUST | 定义评分、面试报告、复盘和薄弱项需求 | 冻结可解释评分、面试报告、模拟面试复盘、薄弱项提炼、薄弱项回流、未生成状态提示，以及报告和复盘进入项目打磨、资产库和模拟面试输入的边界 | `docs/01-product/PRD.md` §6.12-§6.14、§7-§8 | AIFI-PROD-001 | DONE |
+| AIFI-PROD-006 | F1 | M1 | MUST | 定义 MVP 非目标范围 | 冻结多团队、多租户、语音、视频、ATS、商业化、高级治理等非目标范围，并明确 PRD 核心需求不得降级为非目标 | `docs/01-product/PRD.md` §9 | AIFI-PROD-001 | DONE |
+| AIFI-PROD-007 | F1 | M1 | MUST | 冻结项目经验关键业务数据流 | 定义项目打磨、真实项目复盘、资产库沉淀、资产驱动模拟面试输入、反馈反哺项目打磨，以及该数据流不构成交付批次、阶段体系或唯一产品闭环 | `docs/01-product/PRD.md` §5.2-§5.4、§6.5-§6.8、§8；`docs/01-product/REQUIREMENT_TRACEABILITY.md` §2-§5 | AIFI-PROD-001 | DONE |
+| AIFI-PROD-008 | F1 | M1 | MUST | 定义简历边界与岗位匹配度分析 | 定义简历边界、岗位 / JD 与简历绑定、岗位匹配度分析、匹配度打分、匹配点、不匹配点、加强点，以及岗位匹配分析如何提炼薄弱项并进入项目打磨、真实项目复盘、资产库、打磨模式和压力面模式 | `docs/01-product/PRD.md` §6.1-§6.4；`docs/01-product/REQUIREMENT_TRACEABILITY.md` §2-§5 | AIFI-PROD-001 | DONE |
+| AIFI-PROD-009 | F1 | M1 | MUST | 完成 PRD 规格化补全 | 将 PRD 从能力清单补全为产品需求规格说明书，覆盖用户故事、用户任务、业务对象、业务数据流、功能逻辑、输入 / 输出、场景级规格、状态流转、异常状态、规则约束、验收标准、UNKNOWN 和非目标范围 | `docs/01-product/PRD.md`、`docs/01-product/REQUIREMENT_TRACEABILITY.md` | AIFI-PROD-001、AIFI-PROD-002 | DONE |
+| AIFI-UX-001 | F2 | M2 | MUST | 准备 F2 低保真设计输入 | 基于 PRD 的用户故事、核心业务数据流、功能逻辑、输入 / 输出、状态异常和验收标准编写低保真 UX 规范，覆盖简历、岗位 / JD、岗位绑定简历、岗位匹配分析、项目打磨、真实项目复盘、资产库、打磨模式、压力面模式、进展树、面试报告、模拟面试复盘、薄弱项、训练建议和反馈回流 | `docs/02-design/UX_SPEC.md` | F1 完成 | NOT_STARTED |
+| AIFI-UI-001 | F3 | M3 | MUST | 编写 UI 设计系统 | 迁移有效视觉原则，补组件、页面规范和设计 token，服务 F2 已冻结的 PRD 核心需求 | `docs/02-design/UI_DESIGN_SYSTEM.md` | F2 评审 | NOT_STARTED |
+| AIFI-ARCH-001 | F4 | M4 | MUST | 准备 F4 技术设计输入 | 基于 PRD 的业务对象、核心业务数据流、规则约束、状态异常、验收标准和 UNKNOWN，结合当前仓库事实冻结技术架构、服务边界、进展树、薄弱项、岗位匹配、评分、复盘、题目推荐和资产边界 | `docs/02-design/TECH_DESIGN.md`、ADR | F1/F2 | NOT_STARTED |
+| AIFI-API-001 | F4 | M4 | MUST | 编写 API 契约 | 汇总岗位、简历、岗位绑定、岗位匹配分析、项目打磨、资产、双模式模拟面试、面试报告、复盘、导出、训练、权限 API | `docs/02-design/API_SPEC.md` | AIFI-ARCH-001 | NOT_STARTED |
+| AIFI-DATA-001 | F4 | M4 | MUST | 编写数据模型 | 汇总简历、岗位 / JD、岗位与简历绑定关系、岗位匹配分析结果、匹配度评分、匹配点、不匹配点、加强点、项目、项目打磨记录、真实项目复盘记录、资产库、模拟面试会话、题目、回答、点评、评分、失分点、参考回答、考点解析、进展树、暂停恢复状态、薄弱项、训练建议和资产库回流关系 | `docs/02-design/DATA_MODEL.md` | AIFI-PROD-003、AIFI-PROD-004、AIFI-PROD-007、AIFI-PROD-008、AIFI-PROD-009 | NOT_STARTED |
+| AIFI-PROMPT-001 | F4 | M4 | MUST | 编写 Prompt 规范 | 写入参考材料包、资产库消费、打磨模式出题、压力面模式出题和追问、考点规划、问题生成、点评、打分、失分原因、参考回答、考点解析、技术原理扩展、面试报告、模拟面试复盘、薄弱项提炼、岗位匹配分析、匹配度打分、匹配点、不匹配点、加强点分析、岗位匹配分析提炼薄弱项和低置信度规则 | `docs/02-design/PROMPT_SPEC.md` | AIFI-PROD-004、AIFI-PROD-005、AIFI-PROD-007、AIFI-PROD-008 | NOT_STARTED |
+| AIFI-SEC-001 | F4 | M4 | MUST | 编写安全隐私规范 | 权限、数据可见性、审计、脱敏、保留周期、导出边界和资产访问边界 | `docs/02-design/SECURITY_PRIVACY.md` | AIFI-PROD-003 | NOT_STARTED |
+| AIFI-BE-001 | F5 | M5 | MUST | 完成后端核心链路 | 实现服务端保存、项目打磨记录、真实项目复盘、资产沉淀和读取、资产驱动模拟面试输入、打磨模式会话、压力面模式会话、面试报告生成、模拟面试复盘、薄弱项提炼、打磨模式暂停与恢复状态、岗位绑定简历、岗位匹配度分析、匹配度打分、匹配点、不匹配点、加强点生成、从岗位匹配分析中提炼薄弱项、RAG/LLM、评分复盘、导出基础能力 | 后端实现、API 测试 | F4 评审通过 | NOT_STARTED |
+| AIFI-FE-001 | F6 | M6 | MUST | 完成前端核心链路 | 实现工作台、简历、岗位 / JD、岗位绑定简历、岗位匹配分析、项目打磨、真实项目复盘、资产库、打磨模式、压力面模式、进展树、面试报告、模拟面试复盘、薄弱项、训练建议、暂停恢复、反馈回流和异常状态页面 | 前端实现、页面测试 | F5 主接口可用 | NOT_STARTED |
+| AIFI-QA-001 | F7 | M7 | MUST | 完成全链路测试 | 验证 PRD 中的用户故事、核心业务数据流、功能逻辑、输入 / 输出、状态异常和验收标准，包括简历、岗位 / JD、岗位绑定简历、岗位匹配分析、项目打磨、真实项目复盘、资产库、打磨模式、压力面模式、进展树、面试报告、模拟面试复盘、薄弱项、训练建议和反馈回流 | `docs/03-delivery/TEST_PLAN.md`、测试报告 | F5/F6 | NOT_STARTED |
+| AIFI-REL-001 | F8 | M8 | MUST | 完成发布检查 | 发布清单、变更记录、已知问题、回滚策略，并确认 PRD 核心需求无遗漏 | `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md` | F7 全链路通过 | NOT_STARTED |
 
 ## 2. 优先级定义
 
 | 优先级 | 定义 |
 |---|---|
 | MUST | 没有它不能发布 |
-| SHOULD | 首版强相关，但不阻塞 MVP |
-| COULD | 体验增强 |
-| LATER | 后续迭代 |
+| SHOULD | MVP 强相关，但不阻塞发布 |
+| COULD | 可选优化 |
+| LATER | 下一轮迭代 |
 
 ## 3. 旧任务迁移规则
 

@@ -19,6 +19,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 文档索引 | `docs/00-governance/DOCS_INDEX.md` | 当前有效文档清单和 active / archive 边界 |
 | 文档治理 | `docs/00-governance/DOCS_GOVERNANCE.md` | 文档生命周期、命名、归档、迁移和防腐规则 |
 | AI 工作流 | `docs/00-governance/AI_WORKFLOW.md` | Codex / AI 读取、修改、落库和确认流程 |
+| 产品需求 | `docs/01-product/PRD.md` | MVP 产品需求唯一事实源 |
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 历史需求吸收、替代、后置、缺口和待决策项 |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
@@ -32,7 +33,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 目录 | 状态 | 规则 |
 | --- | --- | --- |
 | `docs/00-governance/` | active | 只承载当前治理入口 |
-| `docs/01-product/` | active | 当前仅 `REQUIREMENT_TRACEABILITY.md` 生效；其他产品事实文档创建前不得作为依据 |
+| `docs/01-product/` | active | 当前 `PRD.md` 为产品需求唯一事实源，`REQUIREMENT_TRACEABILITY.md` 只登记历史需求处理 |
 | `docs/03-delivery/` | active | 当前仅 `DELIVERY_PLAN.md`、`BACKLOG.md` 生效 |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
@@ -53,9 +54,9 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 - `archive/` 下任何文档不得被列为当前需求、设计、阶段或任务执行依据。
 - 若历史内容仍有效，必须迁入 active docs 后才能参与后续交付。
 
-## 5. 后续目标文档生效条件
+## 5. 目标文档生效条件
 
-后续新增 PRD、设计、测试、发布或 ADR 文档时，必须同时满足：
+新增或更新设计、测试、发布或 ADR 文档时，必须同时满足：
 
 1. 有明确所属阶段、任务或决策来源。
 2. 已登记到本索引或对应目录索引。
