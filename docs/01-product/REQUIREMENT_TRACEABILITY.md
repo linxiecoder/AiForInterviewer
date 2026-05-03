@@ -34,7 +34,8 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 | 模拟面试数据流 | 2026-04-20 历史设计稿 §3.4、§9.3-§9.5、§15.4；legacy IA §3-§5；legacy object model §5 | `PRD.md` §5.3、§6.8-§6.13 | MERGED_TO_PRD；题量、节奏和状态细节 UNKNOWN | AIFI-PROD-004；AIFI-UX-001；AIFI-BE-001；AIFI-FE-001；AIFI-QA-001 | 打磨模式和压力面模式均为 MVP 核心需求 |
 | 反馈回流数据流 | 2026-04-20 历史设计稿 §10-§11、§17-§18；legacy scoring §5 | `PRD.md` §5.4-§5.6、§6.12-§6.14 | MERGED_TO_PRD；自动回流确认规则 UNKNOWN | AIFI-PROD-005；AIFI-PROD-007；AIFI-QA-001 | 模拟反馈和面试复盘可回流到薄弱项、打磨模式、压力面模式、资产库和下一次模拟面试输入 |
 | 简历规格 | 2026-04-20 历史设计稿 §3.3、§7.2、§9.1；legacy lowfi §5.6 | `PRD.md` §6.1 | MERGED_TO_PRD；扫描件 OCR UNKNOWN | AIFI-PROD-008；AIFI-UX-001；AIFI-DATA-001 | 明确简历按通用简历模块处理，且不等同于资产库 |
-| 岗位 / JD 规格 | 2026-04-20 历史设计稿 §7.2、§9.2；legacy requirements §4 | `PRD.md` §6.2 | MERGED_TO_PRD；岗位版本和导入格式 UNKNOWN | AIFI-PROD-008；AIFI-UX-001；AIFI-DATA-001 | 岗位 / JD 是匹配分析和模拟面试的重要输入 |
+| 岗位 / JD 手动录入规格 | 2026-04-20 历史设计稿 §7.2、§9.2；legacy requirements §4 | `PRD.md` §6.2 | MERGED_TO_PRD；岗位版本和状态枚举 UNKNOWN | AIFI-PROD-008；AIFI-UX-001；AIFI-DATA-001 | 岗位 / JD 是匹配分析和模拟面试的重要输入；MVP 创建岗位等同于用户手动填写岗位表单 |
+| 历史岗位外部材料解析诉求 | 2026-04-20 历史设计稿 §7.2、§9.2；legacy requirements §4 | `PRD.md` §6.2、§10 OQ-F1-006 | DEFERRED | AIFI-PROD-010；AIFI-UX-002 | MVP 岗位只支持手动录入；历史外部文件解析或剪贴板批量生成岗位信息的诉求不标记为 `MERGED_TO_PRD` |
 | 岗位绑定简历 | 2026-04-20 历史设计稿 §9.2；legacy lowfi §5.5-§5.6 | `PRD.md` §6.3 | MERGED_TO_PRD；多简历多岗位规则 UNKNOWN | AIFI-PROD-008；AIFI-UX-001；AIFI-BE-001；AIFI-FE-001；AIFI-QA-001 | 已补齐绑定规则、解除绑定规则和验收标准 |
 | 岗位匹配度分析 | 2026-04-20 历史设计稿 §7.3、§8、§9.2；legacy lowfi §5.6 | `PRD.md` §6.4 | MERGED_TO_PRD；算法、权重、阈值 UNKNOWN | AIFI-PROD-008；AIFI-DATA-001；AIFI-PROMPT-001；AIFI-QA-001 | 匹配度分数、匹配点、不匹配点、加强点和薄弱项均进入 PRD |
 | 项目经历 | 2026-04-20 历史设计稿 §7.2、§9.4、§15.4、§17-§18 | `PRD.md` §4、§6.1、§6.5 | MERGED_TO_PRD；版本策略 UNKNOWN | AIFI-PROD-007；AIFI-UX-001；AIFI-BE-001；AIFI-FE-001；AIFI-QA-001 | 项目经历归入简历模块，可作为打磨模式、压力面模式、面试复盘和资产库沉淀的输入 |
@@ -82,7 +83,8 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 |---|---|---|---|---|---|---|
 | 扫描件 OCR 与文件导出 | OQ-F1-001、OQ-F1-003 | DEFERRED_WITH_REASON | UNKNOWN 已绑定处理策略；MVP 不做 PDF、Markdown 文件、Word / docx 或批量导出，仅支持复制报告内容 | AIFI-PROD-006、AIFI-PROD-010、AIFI-FE-001、AIFI-QA-001 | `PRD.md`、`REQUIREMENT_TRACEABILITY.md`、`BACKLOG.md` | 明确不作为 MVP 发布阻塞，F2 只设计复制入口和反馈，F7 不按文件导出设置阻塞验收 |
 | 简历、岗位、项目经历和资产版本策略 | OQ-F1-002、OQ-F1-004、OQ-F1-013、OQ-F1-018 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-DATA-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`TECH_DESIGN.md` | F4 文档明确版本、引用、历史回看和更新规则 |
-| 岗位状态、导入路径和多简历多岗位绑定 | OQ-F1-005、OQ-F1-006、OQ-F1-007、OQ-F1-008 | F2_UX_BLOCKING | UNKNOWN 已绑定 F2 承接 | AIFI-UX-002 | `UX_SPEC.md` | F2 低保真关闭岗位状态、导入失败兜底、绑定关系和解除绑定后默认行为 |
+| 岗位状态、多简历多岗位绑定和解除绑定 | OQ-F1-005、OQ-F1-007、OQ-F1-008 | F2_UX_BLOCKING | UNKNOWN 已绑定 F2 承接 | AIFI-UX-002 | `UX_SPEC.md` | F2 低保真关闭岗位状态、绑定关系和解除绑定后默认行为 |
+| 岗位输入方式与外部材料解析范围 | OQ-F1-006 | DEFERRED_WITH_REASON | F1 已关闭，结论为岗位 / JD 仅支持手动录入 | AIFI-PROD-010、AIFI-UX-002 | `PRD.md`、`UX_SPEC.md` | PRD 已冻结岗位手动录入字段；F2 只承接岗位手动录入表单低保真设计，不承接外部材料解析路径 |
 | 岗位匹配评分公式、权重、阈值、校准方法和低置信度 | OQ-F1-009、OQ-F1-010、OQ-F1-011 | F4_TECH_DESIGN | PRD 已合并 0-100 产品展示刻度；公式、权重、阈值和校准方法仍由 F4 承接 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002、AIFI-QA-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md`、`TEST_PLAN.md` | F4 关闭评分生成口径，F7 转为可测断言 |
 | 打磨模式、面试复盘和资产确认态 | OQ-F1-012、OQ-F1-014、OQ-F1-016、OQ-F1-017、OQ-F1-020 | F2_UX_BLOCKING | UNKNOWN 已绑定 F2 承接 | AIFI-UX-002、AIFI-QA-002 | `UX_SPEC.md`、`TEST_PLAN.md` | F2 低保真覆盖完成态、确认态、低置信度校对、合并展示和失败态 |
 | 真实面试材料切分、资产合并和质量判断 | OQ-F1-015、OQ-F1-019 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-PROMPT-001、AIFI-DATA-001、AIFI-ARCH-002 | `PROMPT_SPEC.md`、`DATA_MODEL.md`、`TECH_DESIGN.md` | F4 明确切分、合并、质量判断和降级规则 |
@@ -97,4 +99,4 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 
 ## 5. F1.3 结论
 
-F1.2 已将 PRD 从“大能力清单”补全为产品需求规格说明书。F1.3 已将 PRD 中所有 UNKNOWN 绑定到分类、影响范围、当前处理策略、必须关闭阶段、承接 AIFI-* 任务、关闭后写入的目标文档和关闭标准。F1.4 已将 0-100 产品展示刻度、MVP 不做文件导出仅支持复制、通过概率不承诺精确实现同步到 PRD 和追踪关系。F1.5 已修正业务对象模型：项目经历归入简历模块，历史“项目打磨”归入打磨模式中的项目经历表达主题，历史“真实项目复盘”归入面试复盘并区分模拟面试复盘和真实面试复盘。当前无 `F1_PRODUCT_BLOCKING`；`F2_UX_BLOCKING` 由 AIFI-UX-002 在 `UX_SPEC.md` 关闭；`F4_TECH_DESIGN` 由 AIFI-ARCH-002 及 F4 设计任务关闭；影响验收的剩余项由 AIFI-QA-002 在 F7 验证。
+F1.2 已将 PRD 从“大能力清单”补全为产品需求规格说明书。F1.3 已将 PRD 中所有 UNKNOWN 绑定到分类、影响范围、当前处理策略、必须关闭阶段、承接 AIFI-* 任务、关闭后写入的目标文档和关闭标准。F1.4 已将 0-100 产品展示刻度、MVP 不做文件导出仅支持复制、通过概率不承诺精确实现同步到 PRD 和追踪关系。F1.5 已修正业务对象模型：项目经历归入简历模块，历史“项目打磨”归入打磨模式中的项目经历表达主题，历史“真实项目复盘”归入面试复盘并区分模拟面试复盘和真实面试复盘。F1.6 已关闭 OQ-F1-006，冻结岗位 / JD 仅支持手动录入，历史外部文件解析或剪贴板批量生成岗位信息的诉求按产品原因后置，不作为 MVP active 能力。当前无 `F1_PRODUCT_BLOCKING`；`F2_UX_BLOCKING` 由 AIFI-UX-002 在 `UX_SPEC.md` 关闭；`F4_TECH_DESIGN` 由 AIFI-ARCH-002 及 F4 设计任务关闭；影响验收的剩余项由 AIFI-QA-002 在 F7 验证。
