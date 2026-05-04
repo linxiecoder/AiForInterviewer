@@ -5,7 +5,18 @@ Thumbs.db
 # Editors / local tooling
 .idea/
 .vscode/
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/agents/
+!.claude/agents/*.md
+!.claude/skills/
+!.claude/skills/**
+
+.claude/settings.local.json
+.claude/.credentials*
+.claude/cache/
+.claude/logs/
+.claude/tmp/
 
 # Environment files and local secrets
 .env

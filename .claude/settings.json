@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(secrets/**)",
+      "Read(config/credentials.json)",
+      "Read(**/credentials.json)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(curl * | sh)",
+      "Bash(wget * | sh)",
+      "Bash(chmod -R 777 *)",
+      "Bash(sudo *)",
+      "Bash(npm publish)",
+      "Bash(pnpm publish)",
+      "Bash(yarn publish)"
+    ],
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git grep *)",
+      "Bash(git log *)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(grep *)",
+      "Bash(tree *)",
+      "Bash(npm run web:build)",
+      "Bash(npm run web:test)"
+    ]
+  }
+}
