@@ -127,4 +127,4 @@ Proposed
 - 是否纳入 CI 或脚本审计。
 - 是否登记到 docs/00-governance/DOCS_INDEX.md。
 
-本轮因授权范围限制，不更新 DOCS_INDEX.md。ADR 创建后尚未登记到 DOCS_INDEX.md 是一个已知治理风险，需后续单独处理。
+ADR-0003 已在后续授权中登记到 docs/00-governance/DOCS_INDEX.md。OpenDesign 仍仅作为 F3 高保真探索工具，不改变 Figma Prototype、UI_DESIGN_SYSTEM.md 和 M3 评审主证据地位。
