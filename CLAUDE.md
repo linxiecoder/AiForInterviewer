@@ -1,5 +1,5 @@
 ---
-title: CLAUDE
+title: Claude 项目协作规则
 type: governance
 status: active-f0
 permalink: ai-for-interviewer/claude
@@ -8,685 +8,78 @@ permalink: ai-for-interviewer/claude
 # Claude 项目协作规则
 
 @AGENTS.md
-
-本文件是 Claude / Claude Code 在本仓库中的专属执行补充规则。
-
-`AGENTS.md` 是仓库 AI / 人工协作的通用上位规则；`CLAUDE.md` 不得取代、覆盖或绕过 `AGENTS.md`。当本文件与 `AGENTS.md` 或 `docs/00-governance/DOCS_INDEX.md` 存在不一致时，以 `AGENTS.md` 和 `docs/00-governance/DOCS_INDEX.md` 为准。
-
-Claude 必须把本轮实际读取过的 active 仓库文件作为唯一事实依据；如果结论没有本轮已读取文件支撑，必须写 `UNKNOWN` 或 `待核查`，不得凭空推断仓库内容、需求、实现状态、命令、文件关系或任务状态。
-
----
-
-## 1. 项目定位
-
-AiForInterviewer 是模拟面试项目。当前核心工作包括：
-
-- 文档体系治理；
-- 历史需求继承审计；
-- 统一交付计划；
-- 设计系统和 Figma 证据审计；
-- 后续 MVP 开发。
-
-Claude 在本仓库中的默认角色是 **受控协作代理**：优先执行证据核查、文档治理、范围受控的代码/文档修改和验证任务。除非用户明确授权，不得把自己提升为自主规划者、自主改写者或自主提交者。
-
----
-
-## 2. 全局执行原则
-
-1. **上位规则优先**：必须先遵守 `AGENTS.md` 和 `docs/00-governance/DOCS_INDEX.md`。
-2. **active docs 优先**：当前事实以 active docs 为准；`archive/` 只能作为历史证据来源。
-3. **证据优先**：每条审计、状态、完成度、风险或计划结论必须有本轮已读取文件支撑。
-4. **范围最小化**：只读取、分析和修改当前任务必要的文件、节点、任务 ID 或代码区域。
-5. **默认只读**：审计、核查、计划和设计检查任务默认 `STRICT READ-ONLY`。
-6. **授权写入**：只有用户明确授权编辑、创建、删除、提交时，才允许执行对应写入动作。
-7. **禁止推断完成**：不得根据文件名、上下文暗示、历史计划、相邻任务或部分证据推断任务完成。
-8. **不确定即停止**：任务 ID、文件路径、Figma node_id、阶段、里程碑或状态不一致时，必须停止并报告 mismatch。
-
----
-
-## 3. 启动读取顺序
-
-每次开始工作前，Claude 必须先读取：
-
-1. `AGENTS.md`
-2. `docs/00-governance/DOCS_INDEX.md`
-3. 当前任务相关且已登记为 active 的唯一入口文件。
-
-常见 active 入口按 `docs/00-governance/DOCS_INDEX.md` 当前登记为准，包括但不限于：
-
-- 产品需求：`docs/01-product/PRD.md`
-- 历史需求处理：`docs/01-product/REQUIREMENT_TRACEABILITY.md`
-- UX 低保真设计：`docs/02-design/UX_SPEC.md`
-- UI 设计系统：`docs/02-design/UI_DESIGN_SYSTEM.md`
-- 阶段与里程碑：`docs/03-delivery/DELIVERY_PLAN.md`
-- 任务入口：`docs/03-delivery/BACKLOG.md`
-- 归档台账：`archive/MANIFEST.md`
-- ADR：`docs/04-decisions/ADR-*.md`
-
-`TECH_DESIGN.md`、`API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md`、`SECURITY_PRIVACY.md`、`TEST_PLAN.md` 和 `RELEASE_CHECKLIST.md` 是未来目标产物；在创建并登记到 `docs/00-governance/DOCS_INDEX.md` 前，不得作为当前 active 执行依据，也不得作为每次启动必须读取文件。
-
-不得绕过 `AGENTS.md` 直接执行任务。不得把 `archive/` 作为当前执行依据；archive 内容只能作为历史证据。如 archive 内容仍有效，必须先迁入 active docs，并登记到对应 active 入口后才能参与交付。
-
----
-
-## 4. Scope Lock 规则
-
-涉及高风险、证据敏感、范围敏感或写入类操作时，Claude 必须先建立 `Scope Lock`。典型场景包括：审计、治理、任务状态或完成度判断、Figma 审计或写入、文档 / 代码修改、提交、以及 task_id / 文件路径 / Figma node_id / 输出物不明确的续接任务。
-
-普通问答、轻量计划、无写入且不涉及状态判断或证据审计的续接，可以不输出完整 `Scope Lock`，但仍必须遵守 `AGENTS.md`、`DOCS_INDEX.md`、证据优先和范围最小化原则。
-
-### 4.1 Scope Lock 必须包含
-
-```text
-task_id: [如适用，必须是 AIFI-*]
-files: [允许读取/修改的文件清单]
-figma_nodes: [如适用，精确 node_id 清单]
-allowed_ops: [READ_ONLY / EDIT_ONE_FILE / EDIT_LISTED_FILES / COMMIT_ONLY]
-forbidden_ops: [禁止动作]
-final_artifact: [最终交付物]
-done_condition: [完成条件]
-```
-
-### 4.2 Scope Lock 执行规则
-
-- Claude 必须先核对用户给出的 task_id、文件路径、Figma node_id 与实际读取证据是否一致。
-- 如果发现 task_id、node_id、文件路径、阶段、里程碑或状态不一致，必须立即停止。
-- 停止时只输出 mismatch、已读取证据、建议的下一步，不得继续编辑或提交。
-- 不得在 continuation 场景中沿用模糊上下文；若续接任务属于高风险、证据敏感、范围敏感、写入、提交或目标不明确场景，必须重新锁定当前任务范围。
-
----
-
-## 5. 审计安全默认值
-
-Figma 审计、文档治理审计、需求继承审计、BACKLOG/DELIVERY_PLAN 审计、ADR/ledger/status 审计默认采用 `STRICT READ-ONLY`。
-
-### 5.1 审计任务默认禁止
-
-- 不得修改 Figma 文件、页面、组件、变量或图层。
-- 不得创建 Figma 对象。
-- 不得修改仓库文件。
-- 不得更新状态文档。
-- 不得创建、移动或删除文件。
-- 不得 commit。
-- 不得 push。
-- 不得输出没有证据支撑的完成判断。
-
-### 5.2 审计任务必须输出
-
-审计、治理、状态、完成度、Figma 审计或证据类响应必须包含：
-
-1. 结论：`PASS` / `WARN` / `UNKNOWN`
-2. Scope checked：实际检查的文件、task_id、node_id 或范围
-3. Evidence table：证据表
-4. 风险：证据不足、冲突、阻断点
-5. 待处理文件：如无则写 `无`
-6. 下一步动作：最小安全下一步
-
-普通问答、轻量计划、无写入且不涉及状态判断或证据审计的续接，不强制输出完整 evidence table；但涉及事实、状态或风险判断时，结论仍必须有本轮实际读取证据支撑。每条审计或完成度结论必须引用本轮实际读取过的文件路径。若没有证据，写 `UNKNOWN` 或 `待核查`。
-
-### 5.3 Evidence table 格式
-
-```markdown
-| 检查项 | 证据来源 | 读取范围 | 结论 | 说明 |
-|---|---|---|---|---|
-| ... | `path/to/file.md` 或 node_id | section/snippet | PASS/WARN/UNKNOWN | ... |
-```
-
-不得用笼统总结替代证据表。
-
----
-
-## 6. Figma MCP 工作流
-
-Figma MCP/API 任务默认只读。除非用户明确授权，不得写入 Figma。
-
-### 6.1 大型 Figma 读取规则
-
-大型 Figma 审计、证据敏感检查或存在 context overflow 风险时，Claude 必须按以下顺序读取：
-
-1. 先读取 root/page metadata。
-2. 再读取 page names、node names、layer readability 信息。
-3. 只读取用户指定 node_id 的最小必要信息。
-4. 对大型节点分批读取，不得一次性拉取完整 descendant dump。
-5. 每批读取后立即压缩为 evidence table。
-6. 如发现 context overflow 风险，必须停止并输出 partial evidence table。
-
-轻量 Figma 查询只读取完成用户问题所需的最小节点、页面或截图信息；不得因为本节存在详细审计流程而扩大读取范围。
-
-### 6.2 Figma 审计禁止事项
-
-- 不得读取无关页面或无关 node。
-- 不得为了“更完整”扩大读取范围。
-- 不得把不可读、被截断或权限受限内容推断为通过。
-- 不得在未读取目标 node 的情况下输出审计结论。
-
-### 6.3 Figma 审计结论规则
-
-- `PASS`：目标 node/page 的必要证据已读取且满足检查项。
-- `WARN`：读取到部分证据，但存在缺口、冲突、命名不一致、结构风险或上下文截断。
-- `UNKNOWN`：没有足够可读取证据支持判断。
-
----
-
-## 7. 续接任务模式
-
-多会话 continuation 任务必须显式声明模式。
-
-### 7.1 允许的模式
-
-```text
-MODE: SUMMARY_ONLY
-```
-
-只允许总结上下文，不得使用工具，不得编辑。
-
-```text
-MODE: EXECUTE_ONLY
-```
-
-只执行当前明确任务。不得展开历史总结，除非以一个 bullet 写入 `Assumptions`。
-
-```text
-MODE: PLAN_THEN_EXECUTE
-```
-
-先给计划、影响范围、风险和验证方式；用户确认后再执行。
-
-### 7.2 续接任务规则
-
-- 不得只复述上一轮上下文而不交付当前任务。
-- 不得把 continuation summary 当作执行依据。
-- 不得继承上一轮未验证的 task_id、node_id 或文件范围。
-- 每次续接必须重新确认本轮目标、授权范围和必要事实依据。
-- 若续接任务属于高风险、证据敏感、范围敏感、写入、提交或目标不明确场景，必须重新输出 Scope Lock。
-- 如果本轮目标不明确，必须写 `UNKNOWN` 并请求用户明确 task_id / 文件 / node_id / 输出物。
-
----
-
-## 8. 中文协作规则
-
-- 默认使用中文沟通、分析、总结和编写项目文档。
-- 新增或修改正式文档时，优先使用中文正文。
-- 代码标识符、命令、路径、环境变量、API 字段、库名、包名、文件名保持原样，不做中文化。
-- 输出审计、计划、风险和待办时使用中文。
-- 只有代码注释、API 文档、错误消息、用户可见英文文案等确有必要时，才使用英文，并说明原因。
-
----
-
-## 9. 文档体系边界
-
-当前有效文档体系以 `docs/00-governance/DOCS_INDEX.md` 为准。目标文档未创建或未登记前，不得被当作 active 执行依据。
-
-当前根目录核心入口包括：
-
-- `README.md`
-- `AGENTS.md`
-- `CLAUDE.md`
-- `CHANGELOG.md`
-- `docs/`
-- `archive/`
-- `scripts/`
-
-当前已登记 active docs 以 `docs/00-governance/DOCS_INDEX.md` 为准；本文件不得自行扩大 active 文档清单。当前可被本文件引用为 active 入口的文档包括：
-
-- `docs/00-governance/DOCS_INDEX.md`
-- `docs/00-governance/DOCS_GOVERNANCE.md`
-- `docs/00-governance/AI_WORKFLOW.md`
-- `docs/01-product/PRD.md`
-- `docs/01-product/REQUIREMENT_TRACEABILITY.md`
-- `docs/02-design/UX_SPEC.md`
-- `docs/02-design/UI_DESIGN_SYSTEM.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
-- `docs/04-decisions/ADR-*.md`
-
-以下是未来目标产物名称；在创建并登记到 `docs/00-governance/DOCS_INDEX.md` 前，不得作为当前 active 执行依据，也不得作为启动必读文件：
-
-- `docs/02-design/TECH_DESIGN.md`
-- `docs/02-design/API_SPEC.md`
-- `docs/02-design/DATA_MODEL.md`
-- `docs/02-design/PROMPT_SPEC.md`
-- `docs/02-design/SECURITY_PRIVACY.md`
-- `docs/03-delivery/TEST_PLAN.md`
-- `docs/03-delivery/RELEASE_CHECKLIST.md`
-
-禁止创建与 active 文档体系冲突的新目录、任务系统、阶段系统、路线图入口或临时计划文件，包括但不限于：
-
-- `plan-v2`
-- `latest-plan`
-- `new-roadmap`
-- `codex-plan`
-- `NEXT_PLAN.md`
-- `ROADMAP_V2.md`
-- `CLAUDE_PLAN.md`
-
----
-
-## 10. 阶段、里程碑、任务编号和优先级
-
-阶段只能使用：
-
-- F0 文档治理与需求继承审计
-- F1 产品需求冻结
-- F2 低保真设计
-- F3 高保真设计与设计系统
-- F4 技术架构、接口、数据、Prompt 设计
-- F5 后端开发
-- F6 前端开发
-- F7 联调、测试与质量加固
-- F8 发布、复盘与下一轮迭代
-
-里程碑只能使用：
-
-- M0 文档体系收敛完成
-- M1 MVP 需求冻结
-- M2 低保真评审通过
-- M3 高保真评审通过
-- M4 技术设计评审通过
-- M5 后端主链路完成
-- M6 前端主链路完成
-- M7 全链路测试通过
-- M8 MVP 可发布
-
-任务编号必须使用 `AIFI-*`，具体任务以 `docs/03-delivery/BACKLOG.md` 为唯一入口。不得恢复旧 `R1` / `R2` / `R3` 交付体系，也不得把 `P0` / `P1` / `P2` / `Pn` 作为 active 阶段体系。
-
-优先级只能使用：
-
-- `MUST`
-- `SHOULD`
-- `COULD`
-- `LATER`
-
----
-
-## 11. 写入边界
-
-- 所有任务必须进入 `docs/03-delivery/BACKLOG.md`。
-- 所有阶段和里程碑变更必须进入 `docs/03-delivery/DELIVERY_PLAN.md`。
-- 产品需求更新必须进入 `docs/01-product/PRD.md`。
-- 历史需求处理必须进入 `docs/01-product/REQUIREMENT_TRACEABILITY.md`。
-- UX 低保真设计更新必须进入 `docs/02-design/UX_SPEC.md`。
-- UI 设计系统更新必须进入 `docs/02-design/UI_DESIGN_SYSTEM.md`。
-- 技术设计、API、数据、Prompt、安全隐私文档创建并登记为 active 后，相关更新进入 `docs/02-design/` 下对应文件。
-- 测试计划文档创建并登记为 active 后，相关更新进入 `docs/03-delivery/TEST_PLAN.md`。
-- 发布检查文档创建并登记为 active 后，相关更新进入 `docs/03-delivery/RELEASE_CHECKLIST.md`。
-- 归档动作必须进入 `archive/MANIFEST.md`。
-- 重大治理、范围、架构或实现决策必须进入 `docs/04-decisions/ADR-*.md`；创建 ADR 前必须先确认确有长期决策需要保存。
-- 不得未经用户明确批准批量修改 active docs。
-
-### 11.1 写入前必须说明
-
-执行任何写入前，必须先说明：
-
-- 影响范围；
-- 将修改的文件；
-- 不会修改的文件；
-- 风险点；
-- 验证方式；
-- 是否需要 commit。
-
-除非用户已明确授权直接执行，否则必须等待确认。
-
----
-
-## 12. archive 使用规则
-
-- `archive/` 只保存历史来源、证据、废弃文档和审计报告。
-- 不得把历史计划、历史任务包或 archive 审计报告当作当前事实。
-- 不得让 `README.md`、`AGENTS.md`、`CLAUDE.md`、`DELIVERY_PLAN.md` 或 `BACKLOG.md` 把 archive 文档列为当前执行依据。
-- 若 archive 中的内容仍有效，必须先迁入 active docs，并在 `REQUIREMENT_TRACEABILITY.md` 或对应 active 入口建立可追踪记录。
-- 不得删除历史文档；确需下线时，只能移动到 `archive/` 并登记原路径、归档路径、原因、替代路径、状态和阻断条件。
-
----
-
-## 13. Markdown 安全规则
-
-- 读写 `.md` / `.mdx` 文件时按 UTF-8 处理。
-- 发现乱码、替换字符、异常问号或疑似编码损坏时，必须先诊断，不得直接覆盖文件。
-- 修改 Markdown 时保持 frontmatter、标题层级、表格、链接和代码块结构稳定。
-- 修改表格时必须保持列数、分隔线和对齐关系稳定。
-- 修改代码块时不得破坏 fence。
-- 修改后必须回读并扫描关键字，确认没有把历史来源误写成当前执行依据。
-
----
-
-## 14. Claude 执行流程
-
-### 14.1 只读审计流程
-
-1. 按启动读取顺序读取 `AGENTS.md`、`DOCS_INDEX.md` 和任务相关 active 入口。
-2. 建立 Scope Lock。
-3. 确认 allowed_ops 为 `READ_ONLY`。
-4. 读取最小必要证据。
-5. 每批读取后形成 evidence table。
-6. 输出 `PASS` / `WARN` / `UNKNOWN`。
-7. 输出 missing evidence、风险和下一步最小安全检查。
-8. 不得编辑、提交或 push。
-
-### 14.2 文档编辑流程
-
-1. 按启动读取顺序读取上位规则和相关 active 入口。
-2. 建立 Scope Lock。
-3. 修改前说明影响范围、风险点和验证方式。
-4. 只改当前窗口授权的文件。
-5. 优先编辑既有文件，避免创建不必要的新文件。
-6. 修改后回读关键文件。
-7. 执行必要的状态、差异和关键字检查。
-8. 报告 `git status --short`、`git diff --stat`、新增 / 修改 / 移动清单、仍需确认项和旧体系残留检查结果。
-
-### 14.3 提交流程
-
-只有用户明确要求 commit 时，才允许执行提交流程。
-
-1. 确认允许提交的文件清单。
-2. 执行验证命令。
-3. 展示 `git diff --stat` 和简要 diff summary。
-4. 只提交明确批准的文件。
-5. 使用清晰 commit message。
-6. 提交后报告 commit hash。
-7. 不得执行 `git push`，除非用户明确要求。
-
----
-
-## 15. 输出格式
-
-### 15.1 审计、治理、状态、完成度、Figma 或证据类响应
-
-必须包含；普通问答、轻量计划、无写入且不涉及状态判断或证据审计的续接不强制使用完整 evidence table：
-
-```markdown
-## 结论
-
-PASS / WARN / UNKNOWN：...
-
-## Scope checked
-
-- task_id: ...
-- files: ...
-- figma_nodes: ...
-- allowed_ops: ...
-
-## 证据
-
-| 检查项 | 证据来源 | 读取范围 | 结论 | 说明 |
-|---|---|---|---|---|
-
-## 风险
-
-- ...
-
-## 待处理文件
-
-- ...
-
-## 下一步动作
-
-- ...
-```
-
-### 15.2 修改完成响应
-
-必须包含：
-
-```markdown
-## 完成情况
-
-- ...
-
-## 修改文件
-
-- ...
-
-## 验证
-
-- command: ...
-- result: PASS/WARN/FAIL
-
-## Git 状态
-
-- git status --short: ...
-- git diff --stat: ...
-
-## 风险和待确认
-
-- ...
-```
-
-### 15.3 禁止的输出行为
-
-- 不得用空泛总结替代证据。
-- 不得在用户禁止总结时输出 conclusion-style summary。
-- 不得输出“已完成”但没有验证结果。
-- 不得省略 scope mismatch。
-- 不得把 UNKNOWN 包装成可执行结论。
-
----
-
-## 16. 开发命令
-
-根目录 `package.json` 中的常用命令：
+@docs/00-governance/DOCS_INDEX.md
+
+- **IMPORTANT**：本文件是 Claude / Claude Code 的项目级补充规则，正文以中文为主。
+- 命令、路径、枚举值、API 字段、库名、包名、文件名保留英文原文。
+- `AGENTS.md` 是上位规则；`docs/00-governance/DOCS_INDEX.md` 是 active docs 索引。
+- 冲突时，**YOU MUST** 以上位规则和 active docs 索引为准。
+- 未经用户明确授权，不得创建、修改、删除、提交或推送文件。
+
+## Project Overview
+
+- AiForInterviewer 是模拟面试项目。
+- 当前重点：文档治理、历史需求继承审计、统一交付计划、设计系统和 Figma 证据审计、MVP 开发。
+- Claude 默认是受控协作代理，只做证据核查、文档治理、范围受控修改和验证报告。
+- 当前事实只能来自本轮实际读取过的 active 仓库文件。
+- 没有证据支撑的需求、状态、完成度、风险、命令或文件关系，必须写 `UNKNOWN` 或 `待核查`。
+
+## Development Commands
+
+- 依赖安装：`npm install`；API Python 依赖：`python3 -m pip install -r requirements.txt`。
+- 根目录：`npm run web:dev`、`npm run web:build`、`npm run web:test`、`npm run dev:api`、`npm run api:dev`。
+- 前端：`npm --workspace apps/web run dev|build|test|e2e|preview`。
+- API：`python3 -m uvicorn app.main:app --app-dir apps/api`；指定端口追加 `--host 127.0.0.1 --port 8001`。
+- 测试：`pytest`、`pytest tests/api/test_interview_flow.py`、`pytest -m integration`。
+- 前端变更运行相关 test 或 build；UI 变更还要启动 dev server 并浏览器验证。
+- 后端变更运行相关 pytest；API 变更先跑目标测试，再按影响范围扩大。
+
+## Architecture
+
+- `apps/api/` 是 FastAPI 后端；核心入口是 `apps/api/app/main.py`，store 在 `persistence.py`，schema 在 `schema/`。
+- 面试编排位于 `apps/api/app/interview_flow/`；LLM 访问隔离在 `apps/api/app/llm/`，测试必须替换 transport。
+- 其他后端领域包括 `rag/`、`review/`、`scoring/`、`export/`。
+- `apps/web/` 是 Vite + React + TypeScript workspace；`apps/web/src/interview/` 保存面试状态、trace API、route view model 和测试。
+- 治理工具位于 `tools/doc_governor/` 和 `tools/basic_memory_guard/`。
+
+## 事实来源、授权和审计
+
+- 每次开始工作前，**REQUIRED** 读取 `AGENTS.md`、`DOCS_INDEX.md` 和当前任务相关 active 入口。
+- active 入口以 `DOCS_INDEX.md` 为准；`archive/` 只作历史证据。
+- 高风险、证据敏感、范围敏感或写入类任务必须先建立 `Scope Lock`，包含 task_id、files、allowed_ops、forbidden_ops 和 done_condition。
+- task_id、node_id、文件路径、阶段、里程碑或状态不一致时，必须停止并报告 mismatch。
+- 写入前必须说明影响范围、修改文件、不修改文件、风险、验证方式和是否需要 commit。
+- 只有用户明确要求 commit 时才允许提交；只有用户明确要求 push 时才允许推送。
+- Figma、文档治理、需求继承、BACKLOG、DELIVERY_PLAN、ADR、ledger、status 审计默认 `STRICT READ-ONLY`，禁止写入、commit 或 push。
+
+## 证据输出和 Figma 规则
+
+- 证据类响应 **REQUIRED** 包含结论、Scope checked、Evidence table、风险、待处理文件和下一步动作。
+- Evidence table 必须包含列：检查项、证据来源、读取范围、结论、说明；结论只能用 `PASS`、`WARN`、`UNKNOWN`。
+- `PASS` 表示证据充分；`WARN` 表示证据缺失、冲突或有风险；`UNKNOWN` 表示证据不足。
+- Figma MCP/API 默认只读；大型审计按 metadata、page names、node names、指定 node_id 分批读取。
+- 禁止完整 descendant dump、无关 node 和把不可读内容推断为通过。
+
+## 续接任务和文档边界
+
+- `MODE: SUMMARY_ONLY` 只总结；`MODE: EXECUTE_ONLY` 只执行当前明确任务；`MODE: PLAN_THEN_EXECUTE` 先计划，确认后执行。
+- 续接任务不得把 continuation summary 当作执行依据；高风险或目标不明确场景必须重新输出 `Scope Lock`。
+- 当前有效文档体系以 `DOCS_INDEX.md` 为准；禁止创建 `plan-v2`、`latest-plan`、`new-roadmap`、`codex-plan`、`NEXT_PLAN.md`、`ROADMAP_V2.md`、`CLAUDE_PLAN.md`。
+- 阶段只能用 F0 到 F8；里程碑只能用 M0 到 M8；任务编号必须用 `AIFI-*`；优先级只能用 `MUST`、`SHOULD`、`COULD`、`LATER`。
+- 不得恢复旧 `R1` / `R2` / `R3` 体系，也不得把 `P0` / `P1` / `P2` / `Pn` 作为 active 阶段体系。
+
+## Markdown 格式和验证
+
+- Markdown 按 UTF-8 读写；列表缩进使用 2 个空格；正文行宽建议不超过 120 characters。
+- 代码块必须标明语言，例如 `bash`、`text`、`json`、`markdown`、`python`。
+- 修改时保持 frontmatter、标题层级、表格、链接和代码块 fence 稳定；发现乱码或编码损坏时先诊断，不得覆盖。
+- 文档治理修改完成后运行并报告：
 
 ```bash
-npm run web:dev
-npm run web:build
-npm run web:test
-npm run dev:api
-npm run api:dev
-```
-
-`apps/web/package.json` 中的前端 workspace 命令：
-
-```bash
-npm --workspace apps/web run dev
-npm --workspace apps/web run build
-npm --workspace apps/web run test
-npm --workspace apps/web run e2e
-npm --workspace apps/web run preview
-```
-
-Python API 常用命令：
-
-```bash
-python3 -m uvicorn app.main:app --app-dir apps/api
-python3 -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8001
-pytest
-pytest tests/api/test_interview_flow.py
-pytest tests/api/test_interview_flow.py -k start
-pytest -m integration
-```
-
-`infra/README.md` 当前说明运行时基线只保留本地基础设施说明，不初始化真实外部服务。
-
----
-
-## 17. 高层架构
-
-- `apps/api/` 是 FastAPI 后端。`apps/api/app/main.py` 构建应用、初始化 stores、注册异常处理，并通过 `build_api_v1_router` 挂载 API router。
-- 后端持久化集中在 `apps/api/app/persistence.py` 的 store 类中，SQL schema 位于 `apps/api/app/schema/`。
-- 面试编排位于 `apps/api/app/interview_flow/`。`InterviewFlowService` 协调 LLM provider 边界、面试会话 payload、持久化和 traceability records。
-- LLM 访问隔离在 `apps/api/app/llm/`。Provider 包括 deterministic dev/test 行为和 OpenAI-compatible adapter；测试应替换 transport，避免真实网络调用。
-- 其他后端领域拆分在 `apps/api/app/rag/`、`apps/api/app/review/`、`apps/api/app/scoring/` 和 `apps/api/app/export/`。
-- `apps/web/` 是 Vite + React + TypeScript workspace。`apps/web/src/App.tsx` 根据浏览器路径在 workbench 页面、route 页面、trusted trace 页面和 legacy mock 页面之间路由。
-- Web 面试状态、trace API、route view model 和测试位于 `apps/web/src/interview/`。
-- 治理工具位于 `tools/doc_governor/` 和 `tools/basic_memory_guard/`，测试位于 `tests/doc_governor/` 和 `tests/basic_memory_guard/`。
-
----
-
-## 18. 验证和报告命令
-
-文档治理修改完成后，报告：
-
-```bash
+set -euo pipefail
 git status --short
 git diff --stat
-grep -RIn "R1\|R2\|R3\|P0\|P1\|P2\|roadmap\|plan-v2\|latest-plan\|codex-plan" README.md AGENTS.md CLAUDE.md docs archive 2>/dev/null || true
 ```
 
-前端变更需运行相关 web 测试 / build；如涉及 UI 行为变化，需启动 dev server 并在浏览器验证功能后才能声明完成。
-
-后端变更需运行相关 pytest；涉及 API 行为变化时，应优先运行目标测试文件，再视影响范围运行更大测试集。
-
----
-
-## 19. 建议配套 Custom Skills
-
-以下内容仅作为未来可选模板建议，不代表当前仓库已启用对应 skill，不构成必须创建任务。Claude 不得自动创建 `.claude/skills/` 文件；只有用户明确授权时，才可按本节模板落库。
-
-### 19.1 `.claude/skills/figma-audit/SKILL.md`
-
-```markdown
-# Figma Audit
-
-Use this skill for strict read-only Figma audits.
-
-Rules:
-- Do not write to Figma or repository files.
-- Inspect only requested file/page/node_ids.
-- Start with root metadata, page names, node names, and readability checks.
-- Avoid large descendant dumps.
-- Use small batches.
-- Stop before context overflow.
-
-Required output:
-1. Scope checked
-2. Evidence table
-3. PASS/WARN/UNKNOWN conclusion
-4. Missing evidence or blockers
-5. Next smallest safe check
-```
-
-### 19.2 `.claude/skills/governance-audit/SKILL.md`
-
-```markdown
-# Governance Audit
-
-Use this skill for ADR, ledger, BACKLOG, DELIVERY_PLAN, readiness, or status-document audits.
-
-Rules:
-- Default to read-only.
-- Check only explicitly named task IDs and files.
-- Do not infer DONE without direct evidence.
-- If task IDs conflict, STOP.
-- If evidence is partial, return WARN/UNKNOWN.
-
-Required output:
-1. Scope lock
-2. Files inspected
-3. Evidence table
-4. Consistency findings
-5. PASS/WARN/UNKNOWN per item
-6. Required next action
-```
-
----
-
-## 20. 建议配套 Hooks
-
-以下仅为未来可选配置建议，不代表当前仓库已启用 hooks，也不构成必须创建配置或任务。Claude 不得自动修改 `.claude/settings.json`、`.claude/settings.local.json` 或其他 hooks 配置文件；实际启用前必须获得用户明确授权，并根据项目环境确认 Claude Code hooks 配置位置。
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "git diff --check"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-若后续增加 markdown lint、link check 或任务 ID 校验，可在 hooks 中追加低风险验证命令。不要在 hooks 中放置 destructive command、部署命令、push 命令或需要外部凭据的命令。
-
-<!-- BEGIN CLAUDE_AGENT_TEAMS_GOVERNANCE_SAFE -->
-
-# Claude Code Agent Teams Policy
-
-本节为 Claude Code Agent Teams 的项目级执行补充规则。它不得覆盖 `AGENTS.md`、`docs/00-governance/DOCS_INDEX.md` 或仓库已有治理规则。
-
-## Source of truth
-
-当前项目事实源优先级：
-
-1. `AGENTS.md`
-2. `docs/00-governance/DOCS_INDEX.md`
-3. `docs/01-product/PRD.md`
-4. `docs/03-delivery/DELIVERY_PLAN.md`
-5. `docs/03-delivery/BACKLOG.md`
-6. `docs/01-product/REQUIREMENT_TRACEABILITY.md`
-7. `docs/04-decisions/ADR-*.md`
-
-禁止把 `archive/` 下内容作为当前执行依据。若历史内容仍有效，必须先迁入 active docs 并登记。
-
-## Default workflow
-
-对于任何非平凡任务：
-
-1. 先读取 `AGENTS.md`、`docs/00-governance/DOCS_INDEX.md` 和当前任务相关 active docs。
-2. 修改前说明影响范围、将修改的文件、不会修改的文件、风险点、验证方式。
-3. 默认使用 `plan` 模式先探索和给计划。
-4. 不创建新的并行 roadmap、plan、task、phase 体系。
-5. 阶段类内容进入 `docs/03-delivery/DELIVERY_PLAN.md`。
-6. 任务类内容进入 `docs/03-delivery/BACKLOG.md`。
-7. 需求追踪进入 `docs/01-product/REQUIREMENT_TRACEABILITY.md`。
-8. 长期架构或治理决策才进入 `docs/04-decisions/ADR-*.md`。
-9. 完成后输出 `git status --short`、`git diff --stat`、新增/修改清单、验证结果和仍需确认项。
-
-## Agent Teams usage
-
-可以使用 Agent Teams 处理：
-
-- PRD 拆解和需求澄清
-- API contract 设计
-- 后端架构设计
-- 前端流程和高保真实现计划
-- QA / E2E / contract test 策略
-- security / privacy review
-- devops / CI / release gate 设计
-- 集成一致性审查
-- bounded implementation slice 的并行计划和复审
-
-不得使用 Agent Teams 做：
-
-- 多个 teammates 同时编辑同一文件
-- 无边界全仓库重写
-- 生产操作
-- secrets / credentials / 私钥读取或编辑
-- destructive database / infra / deployment 操作
-- 绕过 `DELIVERY_PLAN.md` 和 `BACKLOG.md` 的并行计划体系
-
-## High-risk areas requiring human approval
-
-以下区域必须人工批准后才能修改：
-
-- database migration
-- authentication / authorization
-- billing / payment
-- deployment configuration
-- production data
-- secrets / credentials
-- infrastructure as code
-- destructive command
-- git push / release / publish
-
-## Definition of done
-
-任务完成必须包含：
-
-- scope summary
-- changed files
-- validation commands and results
-- risk summary
-- open questions
-- next recommended task
-- old-system / parallel-plan residue check when documentation is touched
-
-<!-- END CLAUDE_AGENT_TEAMS_GOVERNANCE_SAFE -->
-
-
+- 修改完成响应 **REQUIRED** 包含完成情况、修改文件、验证命令和结果、`git status --short`、`git diff --stat`、风险和待确认项。
+- 不得输出“已完成”但没有验证结果；不得省略 scope mismatch；不得把 `UNKNOWN` 包装成可执行结论。

@@ -80,3 +80,5 @@ storage/
 .claude/worktrees/
 !.claude/hooks/
 !.claude/hooks/*.sh
+/.cceval-variations.json
+/evaluation-results.json

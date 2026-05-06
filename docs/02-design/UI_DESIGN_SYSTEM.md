@@ -596,6 +596,7 @@ WARN / UNKNOWN / CONFLICT 台账必须可关闭、可追踪。关闭不代表 F3
 | 114:3754 | UNKNOWN | 新增真实面试复盘、真实面试字段、沉淀链路 | 是 | 高保真补齐真实面试复盘保存到详情链路；字段边界待 F4 | UNKNOWN | F3 / F4 |
 | 114:5944 | WARN / CONFLICT 规范层已关闭 | 表头筛选缺少取消操作、未应用变更语义 | 否 | 以本文档 §10 和 §19 作为 F3 规范层关闭；Figma 源稿是否修订由人工决定 | 本文档已补齐应用 / 取消 / 清空 / 重置 / 未应用变更语义 | F3 |
 | node.type / Page 归属 | UNKNOWN | Figma Page 归属、node.type 证据完整性 | 是 | M3 前补充 metadata 或人工确认 Page / Frame 归属 | UNKNOWN | F3 |
+| `DOCS_INDEX.md` §2 `docs/02-design/` 目录边界 | WARN | `DOCS_INDEX.md` §1 已登记本文档为 F3 active design draft，但 §2 仍保留“当前仅 `UX_SPEC.md` 作为 F2 低保真设计输出生效；后续高保真和技术相关文档未创建前不得作为执行依据”疑似旧表述 | 否 | 待单独授权修正 `DOCS_INDEX.md` 目录边界；本文档只登记风险，不改治理入口 | `DOCS_INDEX.md` §1 / §2 已读；本文档 §1 / §22 / §23 已读 | F3 / 文档治理 |
 
 ## 24. 验收标准
 
