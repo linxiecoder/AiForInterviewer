@@ -17,16 +17,14 @@ permalink: ai-for-interviewer/docs/02-design/ux-spec
 - 输入来源：`docs/01-product/PRD.md`，UNKNOWN 输入来源为 PRD §10。
 - 承接任务：AIFI-UX-001、AIFI-UX-002。
 - 输出目标：支撑 Figma 低保真线框、关键抽屉、关键状态和 Prototype 路径绘制。
-- 文档组织方式：以功能场景设计包为主体；每个核心功能场景同时包含页面布局、用户流程、表格列、抽屉、模块折叠、气泡、空状态、加载状态、错误状态、Figma 低保真应绘制内容、Prototype 路径和验收标准。
+- 文档组织方式：以功能场景设计包为主体，覆盖页面布局、用户流程、表格列、抽屉、模块折叠、气泡、空状态、加载状态、错误状态、Figma 低保真应绘制内容、Prototype 路径和验收标准。
 - 不包含：高保真视觉、设计系统、接口方案、数据模型、提示词规则、工程架构、评分算法、模型选择或运行环境方案。
-- Figma 关系：UX_SPEC 是 Figma 低保真设计输入；Figma 低保真稿是 F2 评审交付物；当前仓库不存储 Figma 文件本体。
+- Figma 关系：UX_SPEC 是 Figma 低保真设计输入；Figma 低保真稿是 F2 评审交付物；仓库不存储 Figma 文件本体。
 - Figma 文件：<https://www.figma.com/design/CcpZAT98jL5PnUYH2XRRDV/Untitled?t=8Brm2sh2OaKA2WBR-0>。
 - Figma Page：`AiForInterviewer - F2 Low Fidelity`。
-- Figma 当前状态：已按本轮结构性返修要求修正 `AiForInterviewer - F2 Low Fidelity` Page；修正范围包括列表主态 / 抽屉态拆分、状态 Frame 拆分、分页重画、表头筛选下拉扩展区、打磨 / 压力面工作台四区布局、详情抽屉、用户设置和内容沉淀确认；已建立 `F2 Low Fidelity Components` 低保真组件区；本轮质量返修继续修正组件区文字 / 图标重叠、文本溢出、组件互相覆盖、弹窗按钮越界、进展树交互、分页图标、操作列圆角、表格列宽和抽屉比例；本轮补齐弹窗表单行父容器边界、进展树节点与说明分离、表格操作列图标单元格内约束、应用壳用户区布局和打磨模式回答后决策闭环；本轮清理重建已创建 `Archive - F2 Low Fidelity before cleanup` 备份 Page，并在 active Page 中删除旧问题节点和旧修正层后重建干净组件基线，组件区与页面引用保持一致；本轮组件基线精修已统一低保真间距、比例、灰阶和层级，补齐反馈卡片、下一步建议固定区、聊天窗口滚动历史态和长内容默认折叠表达；本轮质量闸门修复及继续返修复核已针对当前审计 BLOCKER / MAJOR 修正用户设置抽屉、抽屉态底层列表可读性、组件区与页面引用关键尺寸、列表承载密度、工作台反馈卡片重叠和备份 Page 有效性；人工调整已完成组件基线、表格、分页、抽屉、进展树、模拟面试聊天工作台、反馈卡片、下一步建议固定区、用户区和状态 Frame 的低保真质量修正，并确认组件越线、重叠、嵌套、组件引用不一致、进展树和聊天工作台问题已关闭；F2 低保真稿已被人工接受，可作为 F3 输入，但本轮不进入 F3。
-- Figma 本轮同步审计：已读取 active Page `AiForInterviewer - F2 Low Fidelity`，可见 36 个顶层 Frame；备份 Page 包括 `Archive - F2 Low Fidelity before manual adjustment` 和 `Archive - F2 Low Fidelity before cleanup`。Figma 当前可读内容覆盖 `F2 Low Fidelity Components`、打磨模式工作台、压力面模式工作台、多维进展树、右键菜单、节点生成题目态、反馈卡片和下一步建议固定区。读取结果中仍可见输入区 `文本`、`视频置灰`、`音频置灰` 文本节点，因此本轮 UX_SPEC 明确后续低保真验收以图标化入口为准；该可见文本是否仅作为标注 / tooltip 表达需人工确认，不得将其误判为 F3 高保真样式。
-- Prototype 表达状态：已在 Figma 中创建 `Prototype Path 区域` Frame，用路径注释表达最小原型路径；未写入原生 Prototype reactions。
-- Figma 未完成项：输入区文本 / 视频 / 音频入口是否已完全按图标化规则重画需人工确认；是否补充原生 Prototype reactions 不作为本轮 F2 阻塞。
+- Figma 交付状态：active Page 已覆盖 36 个顶层 Frame、`F2 Low Fidelity Components` 低保真组件区和 `Prototype Path 区域`；Prototype 当前以路径注释表达，未要求原生 Prototype reactions；F2 低保真稿已被人工接受，可作为 F3 输入，但本文档不进入 F3 高保真范围。
 - PRD 边界：Figma 低保真稿不得直接定义新需求；如落图发现 PRD 缺口，必须回到 PRD 变更流程。
+- 待确认项：输入区文本 / 视频 / 音频入口是否已完全按图标化规则重画需人工确认；是否补充原生 Prototype reactions 不作为本轮 F2 阻塞。
 - OQ-F1-006：已在 F1.6 关闭，岗位 / JD 仅支持手动录入；F2 只设计岗位手动录入表单。
 - OQ-F1-035：由内容沉淀确认功能场景关闭；该能力用于让用户确认是否将报告、复盘和薄弱项中的可复用内容沉淀到资产库、薄弱项、训练建议或后续模拟面试输入。
 - OQ-F1-040：保留到 F4 / F7；F2 不定义精确通过概率、评分公式、阈值或可信度计算。
@@ -425,6 +423,51 @@ Figma Frame 清单至少覆盖：
 - 分页组件 / 每页条数下拉
 - 表头筛选下拉扩展区
 - Prototype Path 区域
+
+### Figma Frame 节点映射
+
+以下 JSON 仅用于定位 active Page 中的 F2 低保真 Frame；`node_id` / `name` 不定义新需求、不替代 `PRD.md`，也不作为 F3 高保真依据。如名称与 Frame 清单需对齐，以 `UX_SPEC.md` 与 active Page 对齐为准。
+
+```json
+[
+  { "node_id": "114:2", "name": "工作台 / 首页" },
+  { "node_id": "114:41", "name": "简历列表 / 列表主态" },
+  { "node_id": "114:314", "name": "简历列表 / 简历详情抽屉态" },
+  { "node_id": "114:628", "name": "简历 Markdown 编辑抽屉" },
+  { "node_id": "114:942", "name": "岗位列表 / 列表主态" },
+  { "node_id": "114:1215", "name": "岗位列表 / 岗位详情抽屉态" },
+  { "node_id": "114:1529", "name": "岗位手动录入抽屉" },
+  { "node_id": "114:1843", "name": "模拟面试列表 / 列表主态" },
+  { "node_id": "114:2116", "name": "模拟面试列表 / 模拟面试详情抽屉态" },
+  { "node_id": "114:2430", "name": "模拟面试列表 / 面试报告详情抽屉态" },
+  { "node_id": "114:2744", "name": "发起模拟面试弹窗态" },
+  { "node_id": "114:2803", "name": "打磨模式工作台" },
+  { "node_id": "114:2930", "name": "压力面模式工作台" },
+  { "node_id": "114:3057", "name": "面试复盘列表 / 列表主态" },
+  { "node_id": "114:3330", "name": "面试复盘列表 / 复盘报告详情抽屉态" },
+  { "node_id": "114:3644", "name": "新增面试复盘弹窗态" },
+  { "node_id": "114:3703", "name": "新增模拟面试复盘表单态" },
+  { "node_id": "114:3754", "name": "新增真实面试复盘表单态" },
+  { "node_id": "114:3809", "name": "资产库列表 / 列表主态" },
+  { "node_id": "114:4082", "name": "资产库列表 / 资产详情抽屉态" },
+  { "node_id": "114:4396", "name": "薄弱项列表 / 列表主态" },
+  { "node_id": "114:4669", "name": "薄弱项列表 / 薄弱项详情抽屉态" },
+  { "node_id": "114:4983", "name": "薄弱项列表 / 多选发起打磨弹窗态" },
+  { "node_id": "114:5042", "name": "候选简历选择表格 / 最大承载状态" },
+  { "node_id": "114:5276", "name": "内容沉淀确认抽屉态" },
+  { "node_id": "114:5590", "name": "低置信度校对抽屉" },
+  { "node_id": "114:5904", "name": "列表状态 Frame：空列表" },
+  { "node_id": "114:5910", "name": "列表状态 Frame：加载骨架" },
+  { "node_id": "114:5916", "name": "列表状态 Frame：错误重试" },
+  { "node_id": "114:5922", "name": "分页组件 / 每页条数下拉" },
+  { "node_id": "114:5944", "name": "表头筛选下拉扩展区" },
+  { "node_id": "114:5960", "name": "用户设置抽屉" },
+  { "node_id": "114:6274", "name": "成功气泡状态" },
+  { "node_id": "114:6279", "name": "错误气泡状态" },
+  { "node_id": "114:6284", "name": "Prototype Path 区域" },
+  { "node_id": "114:6287", "name": "F2 Low Fidelity Components" }
+]
+```
 
 表头筛选下拉扩展区至少展示以下字段，且不同字段下拉值不同：
 
