@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+INPUT="$(cat)"
+
+INPUT_JSON="$INPUT" python3 - <<'PY'
+import json
+import os
+import re
+import sys
+
+try:
+    payload = json.loads(os.environ.get("INPUT_JSON", "") or "{}")
+except Exception:
+    sys.exit(0)
+
+tool_input = payload.get("tool_input", {})
+paths = []
+
+for key in ("file_path", "path"):
+    value = tool_input.get(key)
+    if isinstance(value, str):
+        paths.append(value)
+
+for key in ("file_paths", "paths"):
+    value = tool_input.get(key)
+    if isinstance(value, list):
+        paths.extend(x for x in value if isinstance(x, str))
+
+protected = re.compile(
+    r"(^|/)(\.env|\.env\..*|secrets|secret|credentials|id_rsa|id_ed25519|.*\.pem|.*\.key|.*\.p12|.*\.pfx)$"
+    r"|(^|/)\.git(/|$)",
+    flags=re.IGNORECASE,
+)
+
+for p in paths:
+    normalized = p.replace("\\", "/")
+    if protected.search(normalized):
+        print(f"Blocked protected file operation: {p}", file=sys.stderr)
+        sys.exit(2)
+
+sys.exit(0)
+PY

@@ -20,6 +20,9 @@ permalink: ai-for-interviewer/docs/00-governance/docs-governance
 | 历史需求继承和缺口 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` |
 | 归档动作 | `archive/MANIFEST.md` |
 | AI / 人工协作约束 | `AGENTS.md`、`docs/00-governance/AI_WORKFLOW.md` |
+| 重大 AI 协作治理决策 | `docs/04-decisions/ADR-*.md` |
+
+AI 协作长期规则以 `docs/00-governance/AI_WORKFLOW.md` 为入口；重大 AI 协作治理决策进入 ADR。不得用长 Prompt、`.claude/plans/*` 或临时计划替代 active docs。
 
 ## 2. 生命周期
 

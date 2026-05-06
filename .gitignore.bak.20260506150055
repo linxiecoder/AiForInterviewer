@@ -75,8 +75,3 @@ scripts/export_doc_snapshot.py
 *.db
 uploads/
 storage/
-
-# Claude Code Agent Teams
-.claude/worktrees/
-!.claude/hooks/
-!.claude/hooks/*.sh

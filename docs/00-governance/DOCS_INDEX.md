@@ -30,6 +30,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 文档治理决策 | `docs/04-decisions/ADR-0001-document-governance.md` | 唯一文档体系、docs/archive 边界和归档机制 |
 | 交付体系决策 | `docs/04-decisions/ADR-0002-unified-delivery-system.md` | 统一阶段、里程碑、任务编号和优先级体系 |
 | 高保真设计工具治理决策 | `docs/04-decisions/ADR-0003-high-fidelity-design-tooling.md` | 状态 Proposed；Use OpenDesign as a high-fidelity exploration tool；记录 OpenDesign 作为 F3 高保真探索工具的治理边界；OpenDesign 输出不作为 active docs，不替代 Figma Prototype，不作为 M3 单独通过证据 |
+| AI 协作治理决策 | `docs/04-decisions/ADR-0004-ai-collaboration-governance.md` | 状态 Accepted；以 ADR-0001 和 ADR-0002 为上位依据；登记 Claude Code / Codex / ChatGPT 协作治理、Prompt Markdown、安全读取、最小审计、三轮推进和 Scope 外本地改动报告规则；ADR-0003 不作为依据；不定义产品 Prompt，不替代 F4 `PROMPT_SPEC.md` |
 
 ## 2. 当前目录边界
 

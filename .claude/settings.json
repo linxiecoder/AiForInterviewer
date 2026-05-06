@@ -18,7 +18,19 @@
       "Bash(sudo *)",
       "Bash(npm publish)",
       "Bash(pnpm publish)",
-      "Bash(yarn publish)"
+      "Bash(yarn publish)",
+      "Read(**/secrets/**)",
+      "Read(credentials)",
+      "Read(**/credentials)",
+      "Bash(git push *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -fd *)",
+      "Bash(kubectl delete *)",
+      "Bash(terraform apply *)",
+      "Bash(pulumi up *)",
+      "Bash(aws * delete *)",
+      "Bash(gcloud * delete *)",
+      "Bash(az * delete *)"
     ],
     "allow": [
       "Bash(git status)",
@@ -33,7 +45,69 @@
       "Bash(grep *)",
       "Bash(tree *)",
       "Bash(npm run web:build)",
-      "Bash(npm run web:test)"
+      "Bash(npm run web:test)",
+      "Bash(pwd)",
+      "Bash(git status *)",
+      "Bash(git branch *)",
+      "Bash(npm run lint *)",
+      "Bash(npm run test *)",
+      "Bash(npm run typecheck *)",
+      "Bash(npm run build *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm build *)",
+      "Bash(yarn lint *)",
+      "Bash(yarn test *)",
+      "Bash(yarn typecheck *)",
+      "Bash(yarn build *)"
+    ],
+    "defaultMode": "plan",
+    "ask": [
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git commit *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)",
+      "Bash(git restore *)"
     ]
-  }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/post_edit_diff_check.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-dangerous-bash.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-files.sh\""
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "teammateMode": "in-process"
 }

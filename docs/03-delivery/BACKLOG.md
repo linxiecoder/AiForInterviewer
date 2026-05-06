@@ -19,6 +19,7 @@ permalink: ai-for-interviewer/docs/03-delivery/backlog
 | AIFI-DOC-002 | F0 | M0 | MUST | 合并归档台账 | 新建 `archive/MANIFEST.md`，合并旧归档索引与台账 | `archive/MANIFEST.md` | `DOCS_INDEX.md` | DONE |
 | AIFI-DOC-003 | F0 | M0 | MUST | 废弃旧 active 入口 | 将旧 planning/task/module/state 文档迁入 archive 并登记替代路径 | README、AGENTS、`archive/MANIFEST.md` | F0.1 归档 | DONE |
 | AIFI-DOC-004 | F0 | M0 | MUST | 清理重复模板文档 | 旧模板和旧治理文档转为历史来源 | `archive/2026-05-doc-consolidation/legacy/` | F0.1 归档 | DONE |
+| AIFI-DOC-005 | F0 | M0 | SHOULD | 固化 AI 协作治理规则 | 在 Claude Code / Codex / ChatGPT 协作入口中固化 Prompt Markdown 可复制、中文、转义、安全读取、最小审计、三轮推进、第三轮后不重复全面审计、ChatGPT 优先自行最小审查、Scope 外本地改动只报告不阻塞等规则 | `docs/00-governance/AI_WORKFLOW.md`、`docs/00-governance/DOCS_GOVERNANCE.md`、`docs/04-decisions/ADR-0004-ai-collaboration-governance.md`、`docs/00-governance/DOCS_INDEX.md` | AIFI-DOC-001、ADR-0001、ADR-0002 | DONE |
 | AIFI-PROD-001 | F1 | M1 | MUST | 编写并冻结 MVP PRD | 建立唯一产品需求事实源，覆盖产品定位、目标、角色、业务对象、核心需求、核心业务数据流、状态异常、验收标准和非目标 | `docs/01-product/PRD.md` | AIFI-DOC-001 | DONE |
 | AIFI-PROD-002 | F1 | M1 | MUST | 完成历史需求继承处理 | 将历史有效需求标记为 MERGED_TO_PRD / PARTIAL / DEFERRED / REJECTED / UNKNOWN，并登记 F1 覆盖矩阵 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | AIFI-PROD-001 | DONE |
 | AIFI-PROD-003 | F1 | M1 | MUST | 定义 MVP 用户角色与权限边界 | 冻结求职者 / 面试准备用户、管理员/内容维护者、项目维护者和最小管理边界 | `docs/01-product/PRD.md` §3 | AIFI-PROD-001 | DONE |
