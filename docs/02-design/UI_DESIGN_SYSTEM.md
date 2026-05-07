@@ -145,10 +145,84 @@ permalink: ai-for-interviewer/docs/02-design/ui-design-system
 
 ## 7. 基础组件规范
 
+### S0 / Icon Source
+
+- selected_source: local-f3-icon-components
+- source_status: confirmed-for-f3-generation
+- figma_file: MI2jyhCEKr6j2rxrdvDJeZ
+- figma_page: AiForInterviewer - F3 High Fidelity
+- figma_component_location: S1 Foundations / Icon Library
+- frame_id: 59:3
+- naming_rule: S1/Icon/<name>
+- fallback_rule: S1/IconPlaceholder/<name>
+- page_usage_rule: 页面只引用 S1 图标组件，不创建私有 icon
+- external-library-required: false
+- blocker: none
+- Flaude Components Library 不再作为 F3 图标来源。
+- `flaude-components.json` 不再作为 F3 图标来源 blocker。
+- F2 Components 不能作为 F3 icon 视觉规范。
+- 页面任务包不得创建私有 icon、不得手绘 icon、不得使用 emoji 作为正式 icon、不得引入外部 icon dependency。
+- 图标来源已配置；图标库不再是 blocker。
+- 后续如需替换图标源，只能在 S1 Foundations / Icon Library 统一替换，不允许各页面分散替换。
+
+### S1.0 Icon Components
+
+当前 canonical components 共 32 个：
+
+- S1/Icon/alert-circle
+- S1/Icon/alert-triangle
+- S1/Icon/archive
+- S1/Icon/arrow-left
+- S1/Icon/book-open
+- S1/Icon/briefcase
+- S1/Icon/calendar
+- S1/Icon/check-circle
+- S1/Icon/chevron-down
+- S1/Icon/chevron-right
+- S1/Icon/chevron-up
+- S1/Icon/close
+- S1/Icon/copy
+- S1/Icon/edit
+- S1/Icon/file-text
+- S1/Icon/filter
+- S1/Icon/home
+- S1/Icon/list
+- S1/Icon/loader
+- S1/Icon/message-square
+- S1/Icon/more-horizontal
+- S1/Icon/panel-right
+- S1/Icon/plus
+- S1/Icon/refresh
+- S1/Icon/report
+- S1/Icon/search
+- S1/Icon/settings
+- S1/Icon/sort
+- S1/Icon/table
+- S1/Icon/target
+- S1/Icon/trash
+- S1/Icon/user
+
+Icon component 只承载统一视觉符号；交互语义仍由 Icon Button 或具体业务组件承担。缺失图标使用
+S1/IconPlaceholder/<name>，并作为后续补齐项，不阻塞页面任务包。页面任务包只能引用 S1/Icon，
+不得创建页面私有 icon。
+
+Alias mapping：
+
+- delete -> S1/Icon/trash
+- check -> S1/Icon/check-circle
+- error -> S1/Icon/alert-circle
+- warning -> S1/Icon/alert-triangle
+- loading -> S1/Icon/loader
+- retry -> S1/Icon/refresh
+- document -> S1/Icon/file-text
+- more -> S1/Icon/more-horizontal
+
+### 7.1 基础组件清单
+
 | 组件 | 用途 | 适用页面 | 低保真来源 | 状态 | F3 待补充项 |
 | --- | --- | --- | --- | --- | --- |
 | Button | 触发主操作、次操作、危险确认和表单提交 | 全部页面、抽屉、弹窗 | F2 弹窗、抽屉、表单、确认态 | 默认、hover、pressed、disabled、loading、danger | 高保真颜色、尺寸、层级和危险态视觉 |
-| Icon Button | 表格操作、设置、关闭、筛选、排序、展开收起 | 表格、抽屉、弹窗、导航、进展树 | F2 操作列、表头图标、用户区 | 默认、hover、active、disabled、tooltip | 图标库、触达面积、焦点态 |
+| Icon Button | 表格操作、设置、关闭、筛选、排序、展开收起 | 表格、抽屉、弹窗、导航、进展树 | F2 操作列、表头图标、用户区 | 默认、hover、active、disabled、tooltip | 引用 S1/Icon/<name>、缺失时使用 S1/IconPlaceholder/<name>、触达面积、焦点态、tooltip、accessible name、禁用说明 |
 | Input | 单行文本输入 | 岗位录入、筛选搜索、设置、弹窗表单 | F2 表单与筛选下拉 | 默认、focus、filled、error、disabled、saving | 字段高度、错误样式、前后缀图标 |
 | Textarea | 多行文本输入 | 岗位职责、岗位要求、其他、复盘内容、校对内容 | F2 岗位录入、复盘表单 | 默认、focus、filled、error、disabled、saving | 字数提示、自动高度、长文本滚动 |
 | Select | 单选选择 | 模式选择、岗位、简历、状态、类型 | F2 发起模拟面试、表单 | 默认、open、selected、disabled、error | 搜索、多选差异、键盘交互 |
@@ -223,7 +297,7 @@ permalink: ai-for-interviewer/docs/02-design/ui-design-system
 | 组件 | 默认 | hover | focus | disabled | loading | error | warning | success |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Button | 展示主 / 次 / 危险层级和明确文案 | 背景或边框强化，不能只依赖 tooltip | 使用 `border.focus` 或焦点环语义 | 使用 `state.disabled`，必须说明原因 | 保留按钮宽度，显示 loading，禁止重复提交 | 用于提交失败后的错误反馈入口，不替代表单错误 | 用于风险确认或资料不足提醒 | 用于保存 / 复制 / 沉淀成功后的可见结果 |
-| Icon Button | 图标可识别，操作列内对齐 | 显示 tooltip，图标背景轻微强化 | 可键盘聚焦并有可见焦点态 | 置灰并说明不可用原因 | 可显示小型 loading 或禁用重复点击 | 删除、解绑、复制失败等保留重试或确认 | 危险前置提醒或不可逆操作提示 | 操作成功后通过 Toast + 页面状态反馈 |
+| Icon Button | 引用 S1/Icon/<name> 且图标可识别，缺失图标使用 S1/IconPlaceholder/<name> | 显示 tooltip，图标背景轻微强化 | 可键盘聚焦并有可见焦点态，具备 accessible name | 置灰并说明不可用原因 | 可显示小型 loading 或禁用重复点击 | 删除、解绑、复制失败等保留重试或确认 | 危险前置提醒或不可逆操作提示 | 操作成功后通过 Toast + 页面状态反馈 |
 | Input | 展示 label、占位、当前值和帮助文本 | 边框轻微强化 | 焦点边框 / 焦点环可见 | 值可读但不可编辑 | 保存中避免重复输入或显示保存状态 | 错误信息靠近字段，字段自动定位 | 用于非阻塞风险或待补充提醒 | 保存成功后字段状态与页面状态同步 |
 | Textarea | 支持多行、长文本滚动或换行 | 边框轻微强化 | 焦点态可见 | 不可编辑但内容可读 | 保存中避免重复提交 | 错误靠近字段并保留输入 | 长度、证据不足或待确认提示 | 保存成功后保留内容并显示反馈 |
 | Select | 展示当前选择或占位 | 触发区强化 | 焦点回到触发入口 | 禁用时说明缺少前置资料 | 选项加载中显示 loading | 必选未选或加载失败显示错误 | 选择可能影响后续输入时提示 | 选择成功后更新关联页面状态 |
@@ -261,12 +335,12 @@ permalink: ai-for-interviewer/docs/02-design/ui-design-system
 
 ## 10. 表格与列表规范
 
-- 表头：承载列名、筛选图标、排序图标；不常驻黑底说明块，不使用 F / S 字母。
+- 表头：承载列名、筛选图标和排序图标；筛选图标引用 S1/Icon/filter，排序图标引用 S1/Icon/sort；不常驻黑底说明块，不使用 F / S 字母。
 - 数据行：行高、列宽、文本省略和 hover 状态统一；名称列可进入详情。
-- 操作列：固定在右侧，默认只显示 Icon Button，hover 显示 tooltip。
-- 筛选：由表头筛选入口打开下拉，字段值因页面而异。
-- 排序：支持默认、升序、降序三态。
-- 分页：展示总条数、当前页、页码、上一页 / 下一页图标和每页条数下拉。
+- 操作列：固定在右侧，默认只显示 Icon Button，Icon Button 引用 S1/Icon/<name>，hover 显示 tooltip。
+- 筛选：由表头筛选入口打开下拉，字段值因页面而异；缺失筛选图标使用 S1/IconPlaceholder/filter。
+- 排序：支持默认、升序、降序三态；缺失排序图标使用 S1/IconPlaceholder/sort。
+- 分页：展示总条数、当前页、页码、上一页 / 下一页图标和每页条数下拉；上一页 / 下一页引用 S1/Icon/<name>，缺失时使用 S1/IconPlaceholder/<name>。
 - 每页条数下拉：基础态只显示当前值，例如“每页 20 条 ▾”；展开态展示可选项。
 - 最大承载状态：行数和分页语义保持一致，不以稀疏数据伪装完整列表。
 - 空列表：状态 Frame 替代表格区，提供新增或返回入口。
@@ -424,10 +498,12 @@ permalink: ai-for-interviewer/docs/02-design/ui-design-system
 
 - 键盘可达：导航、表格操作、筛选、排序、抽屉、弹窗、表单和复制按钮必须可通过键盘访问。
 - 焦点态：Button、Icon Button、Input、Select、Checkbox、Accordion、Modal、Drawer 关闭入口必须有可见焦点态。
+- Icon Button：图标仅提供视觉符号，必须由控件提供 tooltip 或 accessible name；引用 S1/Icon/<name> 不等于交互语义已完成。
+- 图标缺失：使用 S1/IconPlaceholder/<name> 时仍需保留 tooltip、accessible name、键盘焦点和禁用原因说明。
 - 表单错误提示：错误信息应靠近字段，不能只依赖 Toast。
 - 对比度：高保真色彩必须满足文本、边框、禁用态和状态提示的可读性；具体数值待 F3 高保真确认。
 - Toast 非唯一反馈：保存、复制、沉淀等关键结果必须在页面状态中同步体现。
-- 表格表头语义：表头、筛选、排序和列含义必须清晰；图标需要 tooltip 或可访问名称。
+- 表格表头语义：表头、筛选、排序和列含义必须清晰；筛选使用 S1/Icon/filter，排序使用 S1/Icon/sort，图标需要 tooltip 或可访问名称。
 - 抽屉关闭入口：顶部关闭、取消和未保存二次确认必须可达。
 - 弹窗关闭入口：顶部关闭、取消、Esc 行为和未保存确认待高保真 / 前端复核。
 - 禁用态说明：禁用按钮、置灰视频 / 音频入口和不可用动作需要说明原因。
