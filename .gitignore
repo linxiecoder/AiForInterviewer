@@ -12,6 +12,23 @@ Thumbs.db
 !.claude/skills/
 !.claude/skills/**
 
+# Claude Flow generated runtime artifacts and generic external packs
+.claude-flow/
+.swarm/
+.claude/agents/*/
+.claude/skills/agentdb-*/
+.claude/skills/browser/
+.claude/skills/github-*/
+.claude/skills/hooks-automation/
+.claude/skills/pair-programming/
+.claude/skills/reasoningbank-*/
+.claude/skills/skill-builder/
+.claude/skills/sparc-methodology/
+.claude/skills/stream-chain/
+.claude/skills/swarm-*/
+.claude/skills/v3-*/
+.claude/skills/verification-quality/
+
 .claude/settings.local.json
 .claude/.credentials*
 .claude/cache/
