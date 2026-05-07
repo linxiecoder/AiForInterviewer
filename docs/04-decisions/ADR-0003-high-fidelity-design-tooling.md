@@ -1,3 +1,12 @@
+---
+title: ADR-0003-high-fidelity-design-tooling
+type: decision
+status: proposed
+owner: 文档治理
+date: 2026-05-05
+permalink: ai-for-interviewer/docs/04-decisions/adr-0003-high-fidelity-design-tooling
+---
+
 # ADR-0003: Use OpenDesign as a high-fidelity exploration tool
 
 ## Status

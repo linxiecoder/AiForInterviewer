@@ -1,3 +1,12 @@
+---
+title: UI_DESIGN_SYSTEM
+type: design
+status: draft-f3
+owner: 产品/设计
+source: docs/02-design/UX_SPEC.md
+permalink: ai-for-interviewer/docs/02-design/ui-design-system
+---
+
 # AiForInterviewer UI Design System
 
 ## 1. 文档状态
