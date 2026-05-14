@@ -666,7 +666,104 @@ Prototype 用于 M3 高保真评审中的信息架构、页面跳转、关键状
 | 组件状态高保真 | Component Set | Button、Table、Filter Dropdown、Drawer、Modal 等 | UNKNOWN | NOT_STARTED | 需覆盖 §19 状态 |
 | Prototype 主链路 | Prototype | §17 必须可点击链路 | UNKNOWN | NOT_STARTED | 不等于真实产品实现 |
 
-## 23. WARN / UNKNOWN / CONFLICT 台账关闭格式
+## 23. F3 高保真页面交付清单
+
+### 1. 本轮记录来源
+
+- 任务编号：`AIFI-UI-001`
+- 阶段 / 里程碑：`F3` / `M3`
+- 本轮记录基于 7 个单模块 Figma direct children 只读审计结果汇总回写：
+  - 1B-01：首页：单模块审计结果已带回 ChatGPT Project 审查
+  - 1B-02：我的简历：单模块审计结果已带回 ChatGPT Project 审查
+  - 1B-03：岗位管理：单模块审计结果已带回 ChatGPT Project 审查；`47:1184 / 岗位管理 - 状态规则说明态` 已由用户确认可忽略
+  - 1B-04：模拟面试：单模块审计结果已带回 ChatGPT Project 审查
+  - 1B-05：复盘：单模块审计结果已带回 ChatGPT Project 审查
+  - 1B-06：知识库：单模块审计结果已带回 ChatGPT Project 审查
+  - 1B-07：薄弱项：单模块审计结果已带回 ChatGPT Project 审查
+- 证据来源统一记为：`单模块 Figma direct children 只读审计 + 用户声明`
+- 本记录不得作为 PRD / UX_SPEC 产品事实。
+
+### 2. Figma fileKey
+
+- `grWpr4Hd8UFReGZ6lWskI3`
+
+### 3. Figma 入口节点清单
+
+| 模块 | 入口容器 nodeId | 入口容器名称 | 节点角色 |
+| --- | --- | --- | --- |
+| 首页 | `6:1164` | `01_首页` | Page 容器节点 |
+| 我的简历 | `14:3313` | `02_我的简历` | Page 容器节点 |
+| 岗位管理 | `14:9086` | `03_岗位管理` | Page 容器节点 |
+| 模拟面试 | `77:2` | `04_模拟面试` | Page 容器节点 |
+| 复盘 | `181:2` | `05_复盘` | Page 容器节点 |
+| 知识库 | `181:3` | `06_知识库` | Page 容器节点 |
+| 薄弱项 | `181:4` | `07_训练中心与薄弱项页` | Page 容器节点 |
+
+### 4. 页面级交付清单
+
+| 模块 | 页面名称 | Figma nodeId | 所属容器 nodeId | 节点角色 | 节点类型 | 尺寸 | visible | childCount | 设计状态 | 验收状态 | 证据来源 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 首页 | `Section01_AboveTheFold` | `7:2301` | `6:1164` | 目标 Frame 节点 | FRAME | 1440x900 | true | 4 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 首页 | `Section02_TodoSection` | `7:2625` | `6:1164` | 目标 Frame 节点 | FRAME | 1440x900 | true | 3 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 首页 | `Section03_ActivitySection` | `7:2761` | `6:1164` | 目标 Frame 节点 | FRAME | 1440x1100 | true | 3 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 首页 | `Section04_EmptyStates` | `7:2938` | `6:1164` | 目标 Frame 节点 | FRAME | 1440x1100 | true | 4 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 我的简历 | `我的简历-查看简历详情抽屉` | `14:7090` | `14:3313` | 目标 Frame 节点 | FRAME | 1440x900 | true | 5 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 我的简历 | `我的简历-Markdown编辑器` | `43:1925` | `14:3313` | 目标 Frame 节点 | FRAME | 1440x900 | true | 7 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 我的简历 | `我的简历-简历列表` | `43:2505` | `14:3313` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 岗位管理 | `岗位管理-新建岗位详情抽屉` | `38:382` | `14:9086` | 目标 Frame 节点 | FRAME | 1440x900 | true | 3 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 岗位管理 | `岗位管理-查看岗位详情抽屉` | `47:575` | `14:9086` | 目标 Frame 节点 | FRAME | 1440x900 | true | 3 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 岗位管理 | `岗位管理-岗位列表` | `47:2` | `14:9086` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 模拟面试 | `模拟面试-列表主态` | `79:2` | `77:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 本轮只记录其作为 `77:2` direct child 的页面级交付信息，未读取 descendants；不得作为 PRD / UX_SPEC 产品事实 |
+| 模拟面试 | `模拟面试-列表空态` | `128:2` | `77:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 3 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 模拟面试 | `模拟面试-发起弹窗态` | `177:2` | `77:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 5 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 模拟面试 | `打磨模式工作台` | `257:2` | `77:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 模拟面试 | `压力面模式工作台` | `379:2` | `77:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 模拟面试 | `查看模拟面试详情抽屉` | `419:2` | `77:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 复盘 | `复盘列表` | `578:2` | `181:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 复盘 | `新增模拟面试复盘-模拟面试类型` | `814:2` | `181:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 1 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 复盘 | `新增模拟面试复盘-真实面试类型` | `977:2` | `181:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 1 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 复盘 | `新增模拟面试复盘-真实面试类型-简历选择弹窗` | `910:2` | `181:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 复盘 | `新增模拟面试复盘-真实面试类型-岗位选择弹窗` | `977:146` | `181:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 复盘 | `新增模拟面试复盘-模拟面试类型-模拟面试选择弹窗` | `977:314` | `181:2` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 知识库 | `知识库列表` | `644:2` | `181:3` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 知识库 | `资产详情抽屉` | `934:2` | `181:3` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 薄弱项 | `薄弱项列表` | `1070:2` | `181:4` | 目标 Frame 节点 | FRAME | 1440x900 | true | 1 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 薄弱项 | `薄弱项列表-查看薄弱项详情抽屉` | `1183:2` | `181:4` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+| 薄弱项 | `多选薄弱项发起打磨弹窗态` | `1323:2` | `181:4` | 目标 Frame 节点 | FRAME | 1440x900 | true | 2 | Figma 已完成设计候选 | 待 active docs 闭环验收 | 单模块 Figma direct children 只读审计 + 用户声明 | 不得作为 PRD / UX_SPEC 产品事实 |
+
+### 5. 排除 / 忽略节点摘要
+
+| 节点 | 类型 | 处理 |
+| --- | --- | --- |
+| `7:2153 / Section05_DesignNote` | 设计说明 | 排除，不作为目标交付页面 |
+| `7:3166 / Section06_Components` | 组件素材区 | 排除，不作为目标交付页面 |
+| `47:1184 / 岗位管理 - 状态规则说明态` | 状态规则说明态 | 用户确认可忽略，不作为目标交付页面 |
+
+### 6. UNKNOWN 节点摘要
+
+- 无
+
+### 7. 状态限制说明
+
+- 本记录仅表示 F3 高保真设计交付清单回写。
+- 本记录不新增 PRD 范围。
+- 本记录不新增 UX_SPEC 范围。
+- 本记录不代表所有 Figma 页面自动验收 PASS。
+- 单模块审计只覆盖 direct children 层级，不代表 full descendants 验收。
+- `47:1184 / 岗位管理 - 状态规则说明态` 已由用户确认可忽略，不作为目标交付页面。
+- AIFI-UI-001 完成态改写需另行执行。
+- M3 完成态改写需确认 `DELIVERY_PLAN.md` 中所有 M3 条目闭合。
+
+### 8. 后续状态改写条件
+
+- `AIFI-UI-001` 完成态改写必须另开一轮执行。
+- 状态改写轮才允许读取 `BACKLOG.md` 中 AIFI-UI-001 附近上下文。
+- 状态改写轮才允许读取 `DELIVERY_PLAN.md` 中 F3 / M3 附近上下文。
+- 本轮不得修改 `BACKLOG.md`。
+- 本轮不得修改 `DELIVERY_PLAN.md`。
+- M3 是否完成必须以后续 DELIVERY_PLAN.md 闭环结果为准。
+
+## 24. WARN / UNKNOWN / CONFLICT 台账关闭格式
 
 WARN / UNKNOWN / CONFLICT 台账必须可关闭、可追踪。关闭不代表 F3 或 AIFI-UI-001 完成；仅表示对应风险项已有关闭证据，且未把 F4 / F7 内容提前写成 F3 完成事实。
 
@@ -683,7 +780,7 @@ WARN / UNKNOWN / CONFLICT 台账必须可关闭、可追踪。关闭不代表 F3
 | node.type / Page 归属 | UNKNOWN | Figma Page 归属、node.type 证据完整性 | 是 | M3 前补充 metadata 或人工确认 Page / Frame 归属 | UNKNOWN | F3 |
 | `DOCS_INDEX.md` §2 `docs/02-design/` 目录边界 | WARN | `DOCS_INDEX.md` §1 已登记本文档为 F3 active design draft，但 §2 仍保留“当前仅 `UX_SPEC.md` 作为 F2 低保真设计输出生效；后续高保真和技术相关文档未创建前不得作为执行依据”疑似旧表述 | 否 | 待单独授权修正 `DOCS_INDEX.md` 目录边界；本文档只登记风险，不改治理入口 | `DOCS_INDEX.md` §1 / §2 已读；本文档 §1 / §22 / §23 已读 | F3 / 文档治理 |
 
-## 24. 验收标准
+## 25. 验收标准
 
 - 文件存在。
 - 覆盖页面类型。
