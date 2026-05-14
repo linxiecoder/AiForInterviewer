@@ -35,9 +35,9 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 ## 4. 非目标
 
 - 不在本文件中展开数据表、字段、API endpoint、Prompt 模板、安全策略或测试用例。
-- 不创建 `DATA_MODEL.md`、`API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
+- `DATA_MODEL.md` 已由 `AIFI-DATA-001` 初始化；本文件不创建 `API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
 - 不创建或关闭 ADR。
-- 不更新 BACKLOG、DELIVERY_PLAN、DOCS_INDEX 或任何任务状态。
+- 不更新 DELIVERY_PLAN 或任何无关任务状态；BACKLOG 与 DOCS_INDEX 仅允许围绕已初始化的 F4 子文档做最小状态同步。
 - 不关闭 PRD §10 中归类为 `F4_TECH_DESIGN` 的 UNKNOWN。
 - MVP 不支持 PDF、Markdown、Word 或批量文件导出；报告复制是页面交互，不是文件导出。
 - MVP 不支持解析外部材料并自动生成岗位 / JD。
@@ -170,7 +170,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 ## 16. 架构风险、UNKNOWN 与补齐路径
 
 - 评分公式、权重、阈值、校准、通过倾向表达和风险提示仍为 `F4_TECH_DESIGN` 待关闭内容。
-- 数据对象、状态枚举、版本策略、资产合并、弱项生命周期和持久化 schema 待 `DATA_MODEL.md` 明确。
+- 数据对象、状态枚举、版本策略、资产合并、弱项生命周期和持久化 schema 已由 `DATA_MODEL.md` 初始化，仍需后续 F4 子文档协同补齐。
 - API path、request / response schema、错误码、鉴权语义、异步任务语义和重试语义待 `API_SPEC.md` 明确。
 - Prompt 模板、模型选择、输入裁剪、输出校验、低信心处理、重试和降级策略待 `PROMPT_SPEC.md` 明确。
 - 隐私字段、日志脱敏、密钥管理、数据保留、删除策略和发布风险待 `SECURITY_PRIVACY.md` 明确。
@@ -179,7 +179,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 
 ## 17. 后续分段执行顺序
 
-1. 基于本文档创建 `DATA_MODEL.md`，先收敛业务对象、数据对象、状态与版本边界。
+1. 继续迭代 `DATA_MODEL.md`，收敛业务对象、数据对象、状态与版本边界。
 2. 创建 `API_SPEC.md`，对齐页面流、任务流、错误语义和前后端契约。
 3. 创建 `PROMPT_SPEC.md`，明确 LLM 输入输出、可追踪性和安全约束。
 4. 创建 `SECURITY_PRIVACY.md`，补齐隐私、安全、密钥、日志和发布风险。
@@ -188,6 +188,6 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 ## 18. 本轮状态
 
 - 已补齐 F4 技术设计主架构锚点。
-- 未创建 `DATA_MODEL.md`、`API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
-- 未修改 BACKLOG、DELIVERY_PLAN、DOCS_INDEX、PRD、UX_SPEC、UI_DESIGN_SYSTEM、ADR、apps、packages 或 archive。
+- 已初始化 `DATA_MODEL.md`；未创建 `API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
+- 本轮仅围绕 `AIFI-DATA-001` 最小同步 BACKLOG 与 DOCS_INDEX；未修改 DELIVERY_PLAN、PRD、UX_SPEC、UI_DESIGN_SYSTEM、ADR、apps、packages 或 archive。
 - 未关闭任何 `F4_TECH_DESIGN` UNKNOWN。
