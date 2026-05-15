@@ -30,7 +30,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 - `docs/02-design/UI_DESIGN_SYSTEM.md`：F3 设计系统草案、交互状态约束和前端实现交接边界。
 - `docs/03-delivery/DELIVERY_PLAN.md`：F4 / M4 目标、产物和阶段边界。
 - `docs/03-delivery/BACKLOG.md`：AIFI-ARCH、AIFI-DATA、AIFI-API、AIFI-PROMPT、AIFI-SEC 后续任务入口。
-- 仓库技术配置：根目录 `package.json`、`requirements.txt`、`apps/web/package.json`、`apps/web/vite.config.ts`、`apps/web/tsconfig*.json`、`apps/web/playwright.config.ts`。
+- 仓库技术配置：根目录 `package.json`、`requirements.txt`、`apps/web/package.json`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json` 和 API 启动入口；这些配置只证明前后端技术入口仍保留，具体页面、接口、持久化和测试实现以 F5/F6 后续落地为准。
 
 ## 4. 非目标
 
@@ -45,7 +45,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 
 ## 5. 架构目标与设计原则
 
-- 以 MVP 可交付为优先，采用当前仓库已存在的 Web + API 分层，不引入无证据的新框架、服务拆分或部署形态。
+- 以 MVP 可交付为优先，采用当前仓库已保留的 Web + API 技术入口和分层目标，不引入无证据的新框架、服务拆分或部署形态。
 - 前端负责交互、状态呈现和用户动作收集；后端负责业务编排、持久化边界、LLM 调用和安全控制。
 - 所有 LLM Prompt、模型调用参数、密钥和原始模型响应必须留在后端边界内，前端只接收可展示结果、状态和可追踪错误。
 - 业务状态必须可追踪、可恢复、可解释；分数、通过倾向和低信心输出不得伪装成确定预测。
@@ -56,8 +56,8 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 
 ## 6. MVP 系统上下文与架构总览
 
-- 用户通过浏览器访问 `apps/web` 前端，完成简历、岗位 / JD、模拟面试、报告、复盘和训练建议相关交互。
-- 前端通过 HTTP API 与 `apps/api` 后端交互；API 负责接收请求、校验边界输入、执行业务编排并返回状态或结果。
+- 用户通过浏览器访问 Web 前端，完成简历、岗位 / JD、模拟面试、报告、复盘和训练建议相关交互。
+- 前端通过 HTTP API 与 API 后端交互；API 负责接收请求、校验边界输入、执行业务编排并返回状态或结果。
 - 后端内部按应用编排、领域能力、LLM 边界、持久化边界和安全审计边界分层。
 - LLM Provider 是外部依赖；后端通过隔离层调用，不允许 UI 直接访问模型或密钥。
 - 持久化方案、数据库 schema、数据保留和部署拓扑待 `DATA_MODEL.md` 与 `SECURITY_PRIVACY.md` 明确。
@@ -70,17 +70,17 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 - `apps/web/package.json` 声明前端使用 React、React DOM、Ant Design、Vite、TypeScript 和 `@vitejs/plugin-react`。
 - `apps/web/vite.config.ts` 使用 Vite React plugin。
 - `apps/web/tsconfig.json` 启用 TypeScript strict、`react-jsx` 和 Bundler module resolution。
-- `apps/web/package.json` 的测试脚本先编译到 `dist-test`，再使用 Node 内置 test runner 执行 `dist-test/interview/*.test.js`。
-- `apps/web/playwright.config.ts` 使用 Playwright Chromium，并通过 `npm run build && npm run preview -- --port 4173` 启动 E2E 目标。
+- `apps/web/package.json` 保留 `test` 脚本作为当前前端入口类型检查；旧单元测试和 E2E 用例不作为本文件的当前实现基线。
+- legacy E2E 用例删除后，`apps/web/playwright.config.ts` 不作为当前 active 测试入口；后续 F7 如需 E2E，应按当前 MVP 实现重新建立测试配置。
 - 根目录 `requirements.txt` 声明 FastAPI、httpx、SQLAlchemy、psycopg、uvicorn、pytest 和 PyYAML。
 - 根目录 API 脚本使用 `python3 -m uvicorn app.main:app --app-dir apps/api` 启动 FastAPI 应用。
-- 当前未读取到根目录 `pyproject.toml`、根目录 `vite.config.ts` 或根目录 `tsconfig.json` 作为架构依据。
+- 当前未读取到根目录 `pyproject.toml`、根目录 `vite.config.ts` 或根目录 `tsconfig.json` 作为架构依据；未保留在当前工作区中的页面、API route、schema 和测试文件不得作为当前实现依据。
 
 ## 8. 技术栈选型与方案对比
 
 - 方案 A：沿用当前仓库技术栈，采用 Vite + React + TypeScript + Ant Design 前端，以及 FastAPI + SQLAlchemy + psycopg 后端。
   - 推荐作为 MVP 默认方案。
-  - 优点是已有配置、脚本、测试入口和依赖证据，能减少 F4 到 F5 的迁移成本。
+  - 优点是已有配置、脚本和依赖证据，能减少 F4 到 F5 的迁移成本。
   - 风险是部分持久化、部署、鉴权和异步任务策略仍需后续子文档补齐。
 - 方案 B：切换到 Next.js、SSR 或其他前端框架。
   - 不推荐作为当前 MVP 默认方案。

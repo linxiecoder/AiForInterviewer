@@ -1,28 +1,47 @@
 """FastAPI 应用工厂。"""
 
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 import logging
+import os
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import build_api_v1_router
-from app.boundary import (
-    ApiSettings,
-    get_settings,
-    http_exception_handler,
-    validation_exception_handler,
-)
-from app.persistence import (
-    InterviewRecordStore,
-    RAGPersistenceStore,
-    TraceabilityStore,
-    describe_database_location,
-)
 
 STARTUP_LOGGER = logging.getLogger("uvicorn.error")
+DEFAULT_API_TITLE = "ai-for-interviewer"
+DEFAULT_API_VERSION = "0.1.0"
+DEFAULT_API_PREFIX = "/api/v1"
+DEFAULT_API_HOST = "127.0.0.1"
+DEFAULT_API_PORT = 8001
+API_TITLE_ENV = "API_TITLE"
+API_VERSION_ENV = "API_VERSION"
+API_PREFIX_ENV = "API_PREFIX"
+API_HOST_ENV = "API_HOST"
+API_PORT_ENV = "API_PORT"
+
+
+@dataclass(frozen=True)
+class ApiSettings:
+    """FastAPI 入口运行配置。"""
+
+    title: str = DEFAULT_API_TITLE
+    version: str = DEFAULT_API_VERSION
+    api_prefix: str = DEFAULT_API_PREFIX
+    host: str = DEFAULT_API_HOST
+    port: int = DEFAULT_API_PORT
+
+
+def get_settings() -> ApiSettings:
+    """读取当前保留 API 入口需要的最小运行配置。"""
+    return ApiSettings(
+        title=_env(API_TITLE_ENV, DEFAULT_API_TITLE),
+        version=_env(API_VERSION_ENV, DEFAULT_API_VERSION),
+        api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
+        host=_env(API_HOST_ENV, DEFAULT_API_HOST),
+        port=_env_int(API_PORT_ENV, DEFAULT_API_PORT),
+    )
 
 
 def create_app(
@@ -30,25 +49,13 @@ def create_app(
     *,
     initialize_schema: bool = False,
 ) -> FastAPI:
-    """构建 API app，避免在模块导入阶段写数据库 schema。"""
+    """构建当前保留的 API app；legacy schema 初始化已随旧持久化层删除。"""
     resolved_settings = settings or get_settings()
-    store = InterviewRecordStore(resolved_settings.database_path)
-    traceability_store = TraceabilityStore(resolved_settings.database_path)
-    rag_persistence_store = RAGPersistenceStore(resolved_settings.database_path)
 
     @asynccontextmanager
-    async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
-        if not initialize_schema:
-            if resolved_settings.auto_migrate_on_startup:
-                _initialize_runtime_schema(
-                    store=store,
-                    traceability_store=traceability_store,
-                    rag_persistence_store=rag_persistence_store,
-                )
-            else:
-                STARTUP_LOGGER.info(
-                    "Database schema bootstrap disabled: auto_migrate_on_startup=false"
-                )
+    async def lifespan(_application: FastAPI):
+        if initialize_schema:
+            STARTUP_LOGGER.info("Schema initialization skipped: no active persistence schema")
         _log_runtime_ready(resolved_settings)
         yield
 
@@ -57,33 +64,9 @@ def create_app(
         version=resolved_settings.version,
         lifespan=lifespan,
     )
-    application.add_exception_handler(StarletteHTTPException, http_exception_handler)
-    application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.state.settings = resolved_settings
-    application.state.interview_record_store = store
-    application.state.traceability_store = traceability_store
-    application.state.rag_persistence_store = rag_persistence_store
-    if initialize_schema:
-        store.initialize()
-        traceability_store.initialize()
-        rag_persistence_store.initialize()
     application.include_router(build_api_v1_router(resolved_settings.api_prefix))
     return application
-
-
-def _initialize_runtime_schema(
-    *,
-    store: InterviewRecordStore,
-    traceability_store: TraceabilityStore,
-    rag_persistence_store: RAGPersistenceStore,
-) -> None:
-    try:
-        store.initialize()
-        traceability_store.initialize()
-        rag_persistence_store.initialize()
-    except Exception:
-        STARTUP_LOGGER.exception("Database schema bootstrap failed")
-        raise
 
 
 def _log_runtime_ready(settings: ApiSettings) -> None:
@@ -98,17 +81,37 @@ def _startup_log_lines(settings: ApiSettings) -> tuple[str, ...]:
         f"API base URL: {server_url}{settings.api_prefix}",
         f"Swagger UI: {server_url}/docs",
         f"OpenAPI JSON: {server_url}/openapi.json",
-        (
-            "Database: "
-            f"{describe_database_location(settings.database_path)}, "
-            f"auto_migrate_on_startup={str(settings.auto_migrate_on_startup).lower()}"
-        ),
     )
 
 
 def _server_url(settings: ApiSettings) -> str:
     host = "127.0.0.1" if settings.host in {"0.0.0.0", "::"} else settings.host
     return f"http://{host}:{settings.port}"
+
+
+def _env(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    stripped = value.strip()
+    return stripped or default
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _normalize_prefix(prefix: str) -> str:
+    normalized = prefix.strip() or DEFAULT_API_PREFIX
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    return normalized.rstrip("/") or "/"
 
 
 settings = get_settings()
