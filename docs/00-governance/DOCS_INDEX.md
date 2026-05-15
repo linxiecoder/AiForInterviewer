@@ -29,6 +29,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | F4 技术设计草案 | `docs/02-design/TECH_DESIGN.md` | AIFI-ARCH-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；基于 `docs/01-product/PRD.md`、`docs/02-design/UX_SPEC.md` 和 `docs/02-design/UI_DESIGN_SYSTEM.md` 冻结技术架构边界；不替代 `DATA_MODEL.md`、`SECURITY_PRIVACY.md`、后续 `API_SPEC.md` 或 `PROMPT_SPEC.md` |
 | F4 数据模型草案 | `docs/02-design/DATA_MODEL.md` | AIFI-DATA-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的数据模型子文档；初始化业务对象、数据对象、状态枚举、版本策略和持久化边界；不替代 `SECURITY_PRIVACY.md`、后续 `API_SPEC.md` 或 `PROMPT_SPEC.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | F4 安全隐私规范草案 | `docs/02-design/SECURITY_PRIVACY.md` | AIFI-SEC-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的安全隐私子文档；初始化 MVP ownership、角色权限、LLM 隔离、RAG 来源治理、trace、审计、脱敏、保留、复制 non-goal 和密钥边界；不替代后续 `API_SPEC.md` 或 `PROMPT_SPEC.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
+| F4 Prompt / AI 子任务 contract 草案 | `docs/02-design/PROMPT_SPEC.md` | AIFI-PROMPT-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的 AI 编排与 Prompt contract 子文档；定义 AI 子任务 contract、上下文装配、检索依赖、输出 schema、校验、trace / evidence 和失败处理；不替代 `API_SPEC.md`、`DATA_MODEL.md` 或 `SECURITY_PRIVACY.md`；不作为完整提示词文案库；不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
@@ -44,7 +45,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | --- | --- | --- |
 | `docs/00-governance/` | active | 只承载当前治理入口 |
 | `docs/01-product/` | active | 当前 `PRD.md` 为产品需求唯一事实源，`REQUIREMENT_TRACEABILITY.md` 只登记历史需求处理 |
-| `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md` 和 `SECURITY_PRIVACY.md` 已登记为 active 设计文档；未创建或未登记的后续设计文档不得作为执行依据 |
+| `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md` 和 `PROMPT_SPEC.md` 已登记为 active 设计文档；未创建或未登记的后续设计文档不得作为执行依据 |
 | `docs/03-delivery/` | active | 当前仅 `DELIVERY_PLAN.md`、`BACKLOG.md` 生效 |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
