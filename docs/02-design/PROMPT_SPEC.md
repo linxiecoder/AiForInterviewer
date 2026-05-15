@@ -264,10 +264,10 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-POLISH-002` | Question Generation | 生成或选择打磨题目 | Draft |
 | `P-POLISH-003` | Answer Diagnosis | 诊断用户回答 | Draft |
 | `P-POLISH-004` | Round Score | 生成每轮 0-100 得分 | Draft |
-| `P-POLISH-005` | Loss Point Analysis | 生成失分点与原因 | Stub |
-| `P-POLISH-006` | Reference Answer | 生成参考回答 | Stub |
-| `P-POLISH-007` | Knowledge Point Explanation | 生成考点解析 | Stub |
-| `P-POLISH-008` | Technical Principle Expansion | 生成技术原理扩展 | Stub |
+| `P-POLISH-005` | Loss Point Analysis | 生成失分点与原因 | Draft |
+| `P-POLISH-006` | Reference Answer | 生成参考回答 | Draft |
+| `P-POLISH-007` | Knowledge Point Explanation | 生成考点解析 | Draft |
+| `P-POLISH-008` | Technical Principle Expansion | 生成技术原理扩展 | Draft |
 | `P-POLISH-009` | Next Round Suggestion | 生成下一轮改进建议 | Stub |
 | `P-POLISH-010` | Asset Candidate | 生成资产候选 | Stub |
 | `P-POLISH-011` | Weakness Candidate | 生成薄弱项候选 | Stub |
@@ -1732,19 +1732,527 @@ Polish 第一组不得直接写入正式 `Weakness`、正式 `Asset`、正式 `T
   - 同题打磨结束建议阈值。
   - 通过倾向展示边界。
 
-### 12.5 Polish 第一组 Contract 关系
+### 12.5 `P-POLISH-005` Loss Point Analysis
+
+#### Polish 6A 公共边界
+
+Polish 6A 只负责反馈解释链路：失分点分析、参考回答、考点解析和技术原理扩展。6A 不负责下一轮建议、正式资产候选生成、正式薄弱项候选生成、训练计划生成、压力面追问、最终面试报告或真实面试复盘，也不关闭评分公式、权重、阈值、题目推荐算法或同题结束阈值 UNKNOWN。
+
+Polish 6A 可以消费 `P-POLISH-001` 至 `P-POLISH-004` 的输出、当前题目、当前用户回答、当前诊断、当前本轮得分、Job Match 输出、`ScoreResult` canonical score、`MatchPoint` / `MismatchPoint` / `ImprovementPoint`、既有 `Weakness`、已确认 `AssetVersion`、RAG evidence、公共参考材料、session summary 和最近若干轮 Polish turns。上述输入必须按任务最小必要裁剪，不得默认塞入全部简历、全部岗位、全部历史会话、全部资产、全部知识库材料或全部复盘。
+
+`JobVersion` 和 `ResumeVersion` 是核心输入，不是 RAG；当前题目、当前回答、诊断和评分是 Polish 6A 的核心输入。资产库、薄弱项、历史 Polish turns、Job Match 结果、公共参考材料和知识库是条件检索来源；条件检索必须经过 `P-SHARED-002`。RAG / 知识库可以用于考点、技术原理、参考回答和技术准确性增强，但不是 6A 的硬依赖；互联网检索不是 MVP 默认强依赖，不得默认启用。无 RAG、无资产、无历史报告或无历史复盘时不得阻断基础 6A 流程；技术原理、考点解析或参考答案缺少知识证据时必须进入 Low Confidence 表达，不得伪造确定结论。
+
+Polish 6A 输出可以保存为失分点候选、参考回答、考点解析、技术原理扩展、validation result、low confidence flag、EvidenceRef、TraceRef 和 session summary update 输入。Polish 6A 不得直接写入正式 `Weakness`、正式 `Asset`、正式 `TrainingRecommendation`、最终面试报告或压力面整场评分；需要产生弱项、资产或训练方向时，只能输出候选引用、后续 contract 入口建议或非写入动作。
+
+#### Polish 6A 公共 Output Schema
+
+`P-POLISH-005` 至 `P-POLISH-008` 的 Output Schema 都必须包含以下公共字段；各 contract 可以增加专属字段，但不得删除公共字段或改变字段语义。
+
+| 字段 | 必填 | 类型 / 枚举 | 说明 |
+|---|---|---|---|
+| `status` | 是 | `success` / `partial` / `low_confidence` / `validation_failed` / `generation_failed` | 子任务结果状态 |
+| `contract_id` | 是 | string | 当前 contract id |
+| `polish_session_ref` | 是 | ref | 打磨会话引用 |
+| `polish_turn_ref` | 是 | ref | 当前打磨轮次引用 |
+| `question_ref` | 是 | ref | 当前题目引用 |
+| `answer_ref` | 是 | ref | 当前回答引用 |
+| `diagnosis_refs` | 否 | ref[] | 回答诊断引用 |
+| `round_score_refs` | 否 | ref[] | 本轮得分引用 |
+| `job_version_ref` | 是 | ref | 生成时岗位版本或快照引用 |
+| `resume_version_ref` | 是 | ref | 生成时简历版本或快照引用 |
+| `source_refs` | 是 | ref[] | 被消费的来源引用 |
+| `source_availability` | 是 | `available` / `partial` / `unavailable` / `mixed` | 来源可用性聚合状态；底层来源状态仍沿用 §6.1 的 `source_*` 枚举 |
+| `evidence_refs` | 是 | ref[] | 支撑关键结论的 `EvidenceRef` |
+| `displayable_evidence_summary` | 否 | object[] | 可展示证据摘要，不等于原始敏感正文 |
+| `low_confidence_flags` | 是 | object[] | 低置信度标记，必须可追溯到 `P-SHARED-004` |
+| `validation_result_ref` | 是 | ref | `P-SHARED-003` 校验结果引用 |
+| `trace_refs` | 是 | ref[] | 检索、上下文装配、模型调用、校验和持久化交接过程 `TraceRef` |
+| `session_summary_update_ref` | 否 | ref | `P-SHARED-006` 产出的摘要更新引用 |
+| `next_recommended_actions` | 否 | enum[] | 非写入动作建议 |
+| `user_confirmation_required` | 是 | boolean | 是否需要用户确认后才能回流正式对象 |
+
+`next_recommended_actions` 只表达建议动作，不直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。允许值至少包括 `answer_again`、`generate_reference_answer`、`explain_knowledge_point`、`expand_technical_principle`、`continue_same_question`、`switch_topic`、`generate_next_question`、`mark_weakness_candidate`、`mark_asset_candidate`、`generate_next_round_suggestion`、`provide_more_answer_detail`、`provide_more_resume_evidence` 和 `skip_current_question`。其中需要用户确认的 action 必须进入用户确认流，并形成 `UserConfirmationRef` 或等价记录。
+
+- Contract ID: `P-POLISH-005`
+- Name: Loss Point Analysis
+- Mode: `polish`
+- Trigger:
+  - `P-POLISH-003` Answer Diagnosis 完成后。
+  - `P-POLISH-004` Round Score 完成后。
+  - 用户请求查看本轮失分原因。
+  - 用户修改回答后请求重新分析失分点。
+  - 系统需要为参考回答、下一轮建议、弱项候选或资产候选提供输入。
+- Goal: 基于当前题目、用户回答、回答诊断和本轮得分生成结构化失分点；失分点只作为本轮反馈和后续候选输入，不直接写入正式 `Weakness` 或 `TrainingRecommendation`。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `polish_turn_ref`
+  - 当前题目引用
+  - 当前用户回答引用
+  - `P-POLISH-003` Answer Diagnosis 结果
+  - `P-POLISH-004` Round Score 结果或等价评分输入
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `P-SHARED-002` Retrieval Planning 结果
+  - selected topic
+  - Job Match points
+  - `ScoreResult` canonical score
+  - 既有 `Weakness`
+  - 已确认 `AssetVersion`
+  - 历史同题打磨轮次
+  - 知识库 / RAG evidence
+  - 公共评分口径
+- Retrieval Sources:
+  - 默认使用当前题目、当前回答、诊断和本轮得分。
+  - 条件读取 Job Match points、历史同题打磨轮次、既有 `Weakness`、已确认资产、公共评分口径和知识库 evidence。
+  - 条件读取必须经过 `P-SHARED-002`。
+  - 互联网检索不默认启用。
+  - 无 RAG 或公共评分口径时仍可生成基础失分点；技术准确性或知识性失分应标记低置信度。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
+  - 上下文至少包含当前题目、当前回答、诊断结果、本轮得分、评分解释、岗位相关要求、简历相关模块和输出 schema。
+  - 上下文过长时优先保留当前回答、诊断中的 missing points / weaknesses、本轮得分解释、负向证据和 validation 要求。
+  - 不得默认塞入全部历史回答、全部资产、全部知识库或全部复盘。
+- Excluded Inputs:
+  - 岗位匹配缺口作为本轮回答失分点的直接替代。
+  - 用户未表达的经历、未确认候选对象作为正式事实、具体未冻结评分公式、权重、阈值或精确通过概率。
+  - owner 不一致、source deleted / disabled / unavailable 的正文。
+  - 无关历史回答全文、全量资产、全量知识库、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
+- Output Schema:
+  - 公共字段：必须完整包含本小节 Polish 6A 公共 Output Schema。
+  - `loss_point_analysis_id_candidate`
+  - `loss_points`
+  - 每个 loss point 的 `loss_point_id_candidate`
+  - 每个 loss point 的 `title`
+  - 每个 loss point 的 `description`
+  - 每个 loss point 的 `loss_type`
+  - 每个 loss point 的 `severity_hint`
+  - 每个 loss point 的 `score_impact_hint`
+  - 每个 loss point 的 `source_diagnosis_refs`
+  - 每个 loss point 的 `source_score_refs`
+  - 每个 loss point 的 `evidence_refs`
+  - 每个 loss point 的 `related_question_requirements`
+  - 每个 loss point 的 `related_job_requirements`
+  - 每个 loss point 的 `related_resume_modules`
+  - 每个 loss point 的 `suggested_repair_direction`
+  - `loss_point_ordering`
+  - `max_loss_points_hint`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 每个失分点必须基于当前题目、当前回答、诊断或评分解释。
+  - 不得把岗位匹配缺口直接当成本轮回答失分点。
+  - 不得把用户未表达的经历虚构为失分原因。
+  - 技术准确性类失分若缺少知识证据，应触发低置信度。
+  - `severity_hint` 和 `score_impact_hint` 只是提示，不冻结评分算法。
+  - `max_loss_points_hint` 是展示和成本控制提示，不冻结最终算法。
+  - 失分点不得直接写入正式 `Weakness` 或 `TrainingRecommendation`。
+- Low Confidence Rules:
+  - 诊断结果缺失。
+  - 本轮得分缺失或低置信度。
+  - 用户回答过短。
+  - 题目要求不清。
+  - 失分点无法绑定当前回答。
+  - 技术判断缺少知识证据。
+  - 分数解释和诊断不一致。
+  - 上下文裁剪影响失分归因。
+- Evidence Requirements: 每个失分点的标题、描述、严重程度提示、影响提示和修复方向必须绑定当前题目、当前回答、诊断、评分解释或知识库 `EvidenceRef`；无法绑定时不得生成高置信失分点。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、失分点生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishLossPointAnalysis` 或等价会话内分析对象。
+  - `LossPoint` candidate 或等价逻辑对象。
+  - `PolishTurn` loss point result。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 失分点可作为本轮反馈展示。
+  - 派生正式 `Weakness`、`Asset` 或 `TrainingRecommendation` 必须进入后续候选 / 确认链路。
+  - 用户可接受、忽略、补充回答或重新生成失分点。
+- Retry / Fallback:
+  - 当前题目、当前回答、诊断或评分输入缺失时停止正常生成，返回失败或补充材料路径。
+  - 诊断低置信度、评分低置信度、证据不足或技术判断缺证据时可保存低置信度失分点或要求用户补充回答。
+  - 重试不得默认启用互联网检索、扩大到全量历史会话或虚构评分公式。
+- API State Mapping: 只定义状态语义，包括 `loss_points_available`、`loss_points_partial`、`loss_points_low_confidence`、`loss_points_validation_failed`、`diagnosis_missing`、`score_missing` 和 `technical_evidence_missing`；不定义 endpoint 或 schema。
+- Security Notes: 失分点分析只使用当前 owner 的题目、回答、诊断、评分、岗位、简历和授权增强证据；可展示结果不得暴露无权限来源正文、原始 Prompt、completion 或 provider payload。
+- Test Strategy: 使用 fixture 覆盖正常失分归因、诊断缺失、评分缺失、回答过短、岗位匹配缺口不转本轮失分、虚构经历防护、技术判断缺证据、分数解释和诊断不一致、上下文裁剪和不写入正式弱项 / 训练建议。
+- Open Questions: 失分点排序算法、严重程度映射、score impact 计算、展示数量上限、弱项候选生成和训练方向生成仍交给后续 Polish / Weakness / Training contracts，不在本 contract 关闭。
+
+### 12.6 `P-POLISH-006` Reference Answer
+
+- Contract ID: `P-POLISH-006`
+- Name: Reference Answer
+- Mode: `polish`
+- Trigger:
+  - 用户完成当前回答并请求参考回答。
+  - `P-POLISH-003` Answer Diagnosis 完成后。
+  - `P-POLISH-005` Loss Point Analysis 完成后。
+  - 用户要求基于自己的回答生成改进版。
+  - 用户要求查看更结构化、更贴近岗位的表达示例。
+- Goal: 基于当前题目、岗位、简历、用户回答、诊断和失分点生成参考回答，供用户学习和自我修正；不得伪装成用户真实经历，不得在用户答题前泄露完整答案。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `polish_turn_ref`
+  - 当前题目引用
+  - 当前用户回答引用
+  - `P-POLISH-003` Answer Diagnosis 结果
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `P-SHARED-002` Retrieval Planning 结果
+  - `P-POLISH-005` Loss Point Analysis 结果
+  - selected topic
+  - expected focus points
+  - Job Match points
+  - 已确认 `AssetVersion`
+  - 既有 `Weakness`
+  - 知识库 / RAG evidence
+  - 公共参考材料
+  - 历史同题打磨轮次
+- Retrieval Sources:
+  - 默认使用当前题目、当前回答、诊断、岗位、简历和 session summary。
+  - 条件读取失分点、Job Match points、已确认资产、历史同题轮次、公共参考材料和知识库 evidence。
+  - 条件读取必须经过 `P-SHARED-002`。
+  - RAG / 公共材料可用于技术准确性和表达结构增强，但不是必需输入。
+  - 互联网检索不默认启用。
+  - 无 RAG 时仍可生成基础参考回答；涉及技术事实时必须标记知识证据弱或低置信度。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
+  - 上下文至少包含当前题目、当前回答、诊断、岗位相关要求、简历相关模块、允许使用的用户事实和输出 schema。
+  - 对项目经历类题目，必须区分“用户已提供事实”和“建议表达结构”。
+  - 不得默认塞入全部简历、全部资产或全部历史回答。
+  - 上下文过长时优先保留当前回答、题目要求、用户事实、岗位要求、失分点和 evidence refs。
+- Excluded Inputs:
+  - 用户未提供的经历、数据、项目、成果或职责作为事实。
+  - 答题前自动展示完整参考答案。
+  - 未确认候选资产作为正式事实、owner 不一致或 source unavailable 的正文。
+  - 原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文、原始 embedding 向量和默认互联网检索结果。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.5 的 Polish 6A 公共 Output Schema。
+  - `reference_answer_id_candidate`
+  - `answer_style`
+  - `reference_answer`
+  - `answer_outline`
+  - `key_points_covered`
+  - `improvements_over_user_answer`
+  - `facts_used_from_user`
+  - `facts_not_assumed`
+  - `evidence_refs`
+  - `risk_flags`
+  - `adaptation_notes`
+  - `user_edit_required`
+  - `visibility_policy`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 参考回答必须回答当前题目。
+  - 不得虚构用户未提供的经历、数据、项目、成果或职责。
+  - 对用户未提供的信息必须使用占位、建议补充或低置信度表达。
+  - 不得在用户答题前自动展示完整参考答案。
+  - 技术内容缺少知识证据时必须触发低置信度。
+  - 参考回答不得承诺面试通过结果或精确通过概率。
+  - 参考回答不得直接写入正式 `Asset`，除非后续 Asset Candidate contract 和用户确认完成。
+  - `answer_style` 必须使用稳定枚举或等价描述，例如 `concise` / `structured` / `star` / `technical_deep_dive` / `project_story`。
+- Low Confidence Rules:
+  - 用户回答过短。
+  - 用户事实不足。
+  - 当前题目不清。
+  - 简历证据不足。
+  - 技术知识证据不足。
+  - 参考回答需要假设用户经历。
+  - RAG evidence 缺失但题目要求技术准确性。
+  - 输出和用户事实存在冲突。
+- Evidence Requirements: `reference_answer`、关键覆盖点、改进点和使用的用户事实必须绑定当前题目、当前回答、诊断、失分点、简历 / 岗位 evidence 或知识库 `EvidenceRef`；`facts_not_assumed` 必须列出未被当作事实使用的信息边界。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、参考回答生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishReferenceAnswer` 或等价会话内参考回答对象。
+  - `PolishTurn` reference answer result。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 参考回答可以展示给用户。
+  - 参考回答不得自动变成正式 `Asset`。
+  - 用户可复制、编辑、重新生成或选择后续进入 Asset Candidate contract。
+  - 如果用户选择归档为资产，必须进入 `P-POLISH-010` 或等价资产候选 / 确认链路。
+- Retry / Fallback:
+  - 当前题目、当前回答、诊断或必需版本缺失时停止正常生成，返回失败或补充材料路径。
+  - 用户事实不足、技术证据不足或输出和用户事实冲突时可保存低置信度参考回答、要求用户补充事实或降级为结构化答题提纲。
+  - 重试不得默认启用互联网检索、虚构用户经历或把参考回答直接写入资产。
+- API State Mapping: 只定义状态语义，包括 `reference_answer_available`、`reference_answer_partial`、`reference_answer_low_confidence`、`reference_answer_validation_failed`、`user_facts_insufficient` 和 `visibility_restricted`；不定义 endpoint 或 schema。
+- Security Notes: 参考回答只使用当前 owner 的题目、回答、诊断、岗位、简历、已确认资产和授权证据；前端展示必须遵守 `visibility_policy`，日志不得记录原始 Prompt、completion 或 provider payload。
+- Test Strategy: 使用 fixture 覆盖正常参考回答、用户事实不足、项目经历占位、答题前不展示完整答案、技术证据缺失、事实冲突、不得承诺面试通过、不得直接写入正式资产和用户选择进入资产候选链路。
+- Open Questions: 参考回答风格默认值、展示时机细则、资产候选质量判断和资产合并规则仍交给后续 Polish / Asset contracts，不在本 contract 关闭。
+
+### 12.7 `P-POLISH-007` Knowledge Point Explanation
+
+- Contract ID: `P-POLISH-007`
+- Name: Knowledge Point Explanation
+- Mode: `polish`
+- Trigger:
+  - 用户请求解释题目考点。
+  - `P-POLISH-002` 生成题目后需要展示考察方向。
+  - `P-POLISH-003` 诊断后需要解释回答问题。
+  - `P-POLISH-005` 失分点分析后需要解释失分对应考点。
+  - 用户请求了解“这题到底考什么”。
+- Goal: 基于当前题目、用户回答、诊断、失分点和必要知识证据生成考点解析；考点解析用于解释题目考察点、回答评价依据和知识盲区，不等同于完整技术原理扩展。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `polish_turn_ref`
+  - 当前题目引用
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `P-SHARED-002` Retrieval Planning 结果
+  - 当前用户回答
+  - `P-POLISH-003` Answer Diagnosis 结果
+  - `P-POLISH-005` Loss Point Analysis 结果
+  - `P-POLISH-006` Reference Answer 结果
+  - expected focus points
+  - Job Match points
+  - 知识库 / RAG evidence
+  - 公共参考材料
+  - 已确认 `AssetVersion`
+  - 既有 `Weakness`
+- Retrieval Sources:
+  - 默认使用当前题目、岗位、简历和 expected focus points。
+  - 条件读取当前回答、诊断、失分点、参考回答、Job Match points、知识库 / RAG evidence 和公共参考材料。
+  - 技术性考点或准确性判断优先使用知识库 / 公共材料 evidence；但 RAG 不是 MVP 硬依赖。
+  - 无 RAG 时可以输出基础考点解析，但必须标记知识证据弱或低置信度。
+  - 互联网检索不默认启用。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
+  - 上下文至少包含当前题目、题目类型、岗位相关要求、expected focus points 和输出 schema。
+  - 如果要解释用户回答问题，应包含当前回答、诊断和失分点。
+  - 如果要解释技术考点，应包含知识 evidence 或低置信度标记。
+  - 不得默认塞入全部知识库、全部历史回答或全部资产。
+- Excluded Inputs:
+  - 与当前题目或岗位要求无关的百科材料。
+  - 用户未回答内容作为用户错误事实。
+  - 未确认候选对象作为正式事实、owner 不一致或 source unavailable 的正文。
+  - 原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文、原始 embedding 向量和默认互联网检索结果。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.5 的 Polish 6A 公共 Output Schema。
+  - `knowledge_explanation_id_candidate`
+  - `examined_knowledge_points`
+  - 每个 knowledge point 的 `knowledge_point_id_candidate`
+  - 每个 knowledge point 的 `title`
+  - 每个 knowledge point 的 `description`
+  - 每个 knowledge point 的 `why_it_matters`
+  - 每个 knowledge point 的 `expected_answer_signals`
+  - 每个 knowledge point 的 `common_mistakes`
+  - 每个 knowledge point 的 `related_loss_point_refs`
+  - 每个 knowledge point 的 `related_job_requirements`
+  - 每个 knowledge point 的 `evidence_refs`
+  - `knowledge_depth_hint`
+  - `prerequisite_notes`
+  - `not_covered_scope`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 考点必须与当前题目或岗位要求相关。
+  - 不得把考点解析扩展成无边界百科讲解。
+  - 技术性考点必须绑定知识 evidence 或触发低置信度。
+  - 不得把用户未回答内容当成用户错误事实。
+  - `knowledge_depth_hint` 是解释深度提示，不冻结课程体系。
+  - 考点解析不得直接写入正式 `Weakness` 或 `TrainingRecommendation`。
+  - 如果知识证据不足，应明确说明影响范围。
+- Low Confidence Rules:
+  - 当前题目过泛。
+  - expected focus points 缺失。
+  - 技术知识证据不足。
+  - RAG unavailable。
+  - 诊断或失分点低置信度。
+  - 岗位要求和题目关联弱。
+  - 输出考点无法绑定 evidence。
+  - 上下文裁剪影响考点解释。
+- Evidence Requirements: 每个考点的标题、描述、考察意义、预期回答信号和常见误区必须绑定当前题目、岗位要求、诊断、失分点或知识库 `EvidenceRef`；知识证据不足时必须输出受影响范围和低置信度标记。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、考点解析生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishKnowledgePointExplanation` 或等价会话内考点解析对象。
+  - `KnowledgePoint` candidate 或等价逻辑对象。
+  - `PolishTurn` knowledge explanation result。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 考点解析可以展示给用户。
+  - 考点解析不得自动创建正式 `Weakness` 或 `TrainingRecommendation`。
+  - 用户可继续请求技术原理扩展、参考回答或重新回答。
+- Retry / Fallback:
+  - 当前题目、岗位版本或简历版本缺失时停止正常生成，返回失败或补充材料路径。
+  - expected focus points 缺失、RAG 不可用或题目过泛时可保存低置信度考点解析、降级为基础解释或要求用户补充问题范围。
+  - 重试不得默认启用互联网检索、扩大为全量知识库讲解或把考点解析写入正式弱项 / 训练建议。
+- API State Mapping: 只定义状态语义，包括 `knowledge_explanation_available`、`knowledge_explanation_partial`、`knowledge_explanation_low_confidence`、`knowledge_explanation_validation_failed`、`expected_focus_missing` 和 `knowledge_evidence_missing`；不定义 endpoint 或 schema。
+- Security Notes: 考点解析只使用当前 owner 的题目、回答、诊断、岗位、简历和授权证据；可展示 evidence summary 不等于原始敏感正文，日志不得记录原始 Prompt、completion 或 provider payload。
+- Test Strategy: 使用 fixture 覆盖正常考点解析、题目过泛、expected focus 缺失、无 RAG、诊断低置信度、岗位关联弱、无边界百科化防护、用户未答内容不当作错误和不写入正式弱项 / 训练建议。
+- Open Questions: 考点粒度、深度默认值、知识体系映射和训练建议生成仍交给后续 contract / API / UX 收敛，不在本 contract 关闭。
+
+### 12.8 `P-POLISH-008` Technical Principle Expansion
+
+- Contract ID: `P-POLISH-008`
+- Name: Technical Principle Expansion
+- Mode: `polish`
+- Trigger:
+  - 用户请求展开技术原理。
+  - `P-POLISH-007` Knowledge Point Explanation 完成后。
+  - `P-POLISH-003` 诊断发现技术准确性问题。
+  - `P-POLISH-005` 失分点涉及技术原理缺失。
+  - 用户请求“讲深一点”“底层原理是什么”“为什么这么答”。
+- Goal: 基于题目、考点、诊断、失分点和知识证据扩展技术原理，帮助用户理解底层机制、原理、对比、边界条件和面试表达方式；不等同于参考答案，也不等同于完整课程内容。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `polish_turn_ref`
+  - 当前题目引用
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `P-SHARED-002` Retrieval Planning 结果
+  - `P-POLISH-007` Knowledge Point Explanation 结果
+  - `P-POLISH-003` Answer Diagnosis 结果
+  - `P-POLISH-005` Loss Point Analysis 结果
+  - 当前用户回答
+  - 知识库 / RAG evidence
+  - 公共参考材料
+  - Job Match points
+  - 已确认 `AssetVersion`
+  - 既有 `Weakness`
+- Retrieval Sources:
+  - 默认使用当前题目、考点解析、岗位和简历上下文。
+  - 条件读取诊断、失分点、当前回答、知识库 / RAG evidence、公共参考材料和已确认资产。
+  - 技术原理扩展优先使用知识库 / 公共材料 evidence；但 RAG 不是 MVP 硬依赖。
+  - 无知识 evidence 时，可以输出低置信度、有限深度解释或建议补充知识材料，不得伪造确定技术事实。
+  - 互联网检索不默认启用。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
+  - 上下文至少包含当前题目、相关考点、用户技术准确性问题、岗位技术要求和输出 schema。
+  - 如果引用知识库，必须包含 evidence refs、版本或 chunk refs。
+  - 不得默认塞入全部知识库材料、全部历史问答或全部资产。
+  - 上下文过长时优先保留当前技术问题、考点、失分点、知识 evidence 和输出 schema。
+- Excluded Inputs:
+  - 超出当前题目、考点或失分点范围的完整课程材料。
+  - 无 evidence 的技术事实、伪造引用、伪造版本、论文、官方文档或项目经历。
+  - 用户未掌握内容作为用户已经掌握的事实。
+  - owner 不一致、source unavailable 的正文、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文、原始 embedding 向量和默认互联网检索结果。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.5 的 Polish 6A 公共 Output Schema。
+  - `technical_expansion_id_candidate`
+  - `principle_topics`
+  - 每个 principle topic 的 `principle_topic_id_candidate`
+  - 每个 principle topic 的 `title`
+  - 每个 principle topic 的 `core_explanation`
+  - 每个 principle topic 的 `mechanism`
+  - 每个 principle topic 的 `tradeoffs`
+  - 每个 principle topic 的 `boundary_conditions`
+  - 每个 principle topic 的 `common_misconceptions`
+  - 每个 principle topic 的 `interview_expression_tips`
+  - 每个 principle topic 的 `related_knowledge_point_refs`
+  - 每个 principle topic 的 `related_loss_point_refs`
+  - 每个 principle topic 的 `evidence_refs`
+  - `depth_level`
+  - `not_covered_scope`
+  - `requires_rag_or_manual_check`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 技术原理必须与当前题目、考点或失分点相关。
+  - 不得无边界扩展成完整课程。
+  - 技术事实必须绑定知识 evidence 或明确低置信度。
+  - 不得伪造引用、版本、论文、官方文档或项目经历。
+  - 不得把技术解释包装成用户已经掌握的事实。
+  - `depth_level` 是展示深度提示，不冻结课程体系。
+  - `requires_rag_or_manual_check` 为真时，前端应展示风险提示或要求补充材料。
+  - 技术原理扩展不得直接写入正式 `Asset`、`Weakness` 或 `TrainingRecommendation`。
+- Low Confidence Rules:
+  - 知识 evidence 缺失。
+  - RAG unavailable。
+  - 当前题目与技术点关联弱。
+  - 考点解析缺失或低置信度。
+  - 诊断或失分点低置信度。
+  - 技术事实无法验证。
+  - 输出超出证据范围。
+  - 用户请求深度超过当前证据支持。
+- Evidence Requirements: 每个技术原理主题的核心解释、机制、权衡、边界条件和常见误区必须绑定知识库 / 公共材料 `EvidenceRef` 或明确低置信度；`requires_rag_or_manual_check` 为真时必须输出受影响主题和人工检查原因。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、技术原理扩展生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishTechnicalPrincipleExpansion` 或等价会话内技术原理扩展对象。
+  - `TechnicalPrinciple` candidate 或等价逻辑对象。
+  - `PolishTurn` technical expansion result。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 技术原理扩展可以展示给用户。
+  - 不自动归档为正式 `Asset`。
+  - 不自动创建正式 `Weakness`。
+  - 用户可以继续要求更深解释、生成参考回答、重新回答或进入 Asset Candidate contract。
+  - 如果用户要归档为资产，必须进入 `P-POLISH-010` 或等价资产候选 / 确认链路。
+- Retry / Fallback:
+  - 当前题目、考点上下文或必需版本缺失时停止正常生成，返回失败或补充材料路径。
+  - 知识 evidence 缺失、RAG 不可用或用户请求深度超过证据支持时可保存低置信度有限解释、要求补充材料或建议人工检查。
+  - 重试不得默认启用互联网检索、伪造技术事实、扩大为完整课程或自动归档为资产。
+- API State Mapping: 只定义状态语义，包括 `technical_expansion_available`、`technical_expansion_partial`、`technical_expansion_low_confidence`、`technical_expansion_validation_failed`、`rag_or_manual_check_required` 和 `technical_evidence_missing`；不定义 endpoint 或 schema。
+- Security Notes: 技术原理扩展只使用当前 owner 的题目、回答、诊断、考点、岗位、简历和授权知识 evidence；可展示 evidence summary 不等于原始敏感正文，日志不得记录原始 Prompt、completion 或 provider payload。
+- Test Strategy: 使用 fixture 覆盖正常技术原理扩展、无知识 evidence、RAG unavailable、题目关联弱、考点低置信度、输出超出证据范围、伪造引用防护、完整课程扩展防护、requires_rag_or_manual_check 展示要求和不自动归档资产 / 弱项 / 训练建议。
+- Open Questions: 技术原理扩展深度、课程体系映射、技术资料治理和资产候选质量判断仍交给后续 contract / API / UX / 内容治理收敛，不在本 contract 关闭。
+
+### 12.9 Polish Contract 关系
 
 - `P-POLISH-001` 负责规划打磨主题。
 - `P-POLISH-002` 基于选定主题生成或选择题目。
 - `P-POLISH-003` 基于当前题目和用户回答生成诊断。
 - `P-POLISH-004` 基于当前题目、用户回答和诊断生成本轮 0-100 得分。
-- 四个 contract 都必须引用 Shared Contracts，并至少交接 validation、low confidence、EvidenceRef、TraceRef 和 session summary update 输入。
+- `P-POLISH-005` 基于 `P-POLISH-003` 诊断和 `P-POLISH-004` 得分生成失分点。
+- `P-POLISH-006` 基于当前题目、用户回答、诊断和失分点生成参考回答。
+- `P-POLISH-007` 基于当前题目、诊断、失分点和知识 evidence 生成考点解析。
+- `P-POLISH-008` 基于考点解析、技术诊断、失分点和知识 evidence 扩展技术原理。
+- `P-POLISH-006` 不得在用户答题前泄露完整参考答案。
+- `P-POLISH-007` 不得无边界扩展成百科讲解。
+- `P-POLISH-008` 不得无证据伪造技术事实。
+- `P-POLISH-001` 至 `P-POLISH-008` 都必须引用 Shared Contracts，并至少交接 validation、Low Confidence、EvidenceRef、TraceRef 和 session summary update 输入。
 - `P-POLISH-001` 和 `P-POLISH-002` 可以消费 Job Match 输出作为上游参考。
-- `P-POLISH-003` 和 `P-POLISH-004` 必须绑定当前题目和当前回答。
+- `P-POLISH-003` 至 `P-POLISH-008` 必须绑定当前题目；涉及用户回答时必须绑定当前回答。
 - `P-POLISH-004` 不得把 Job Match 分数直接当成本轮回答分。
-- Polish 第一组不得直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
-- Polish 第一组产生的弱项、资产、失分点、参考答案、知识点解析和下一轮建议，应交给后续 Polish contracts 或对应业务 contract。
-- Polish 第一组每轮结束后应为 `P-SHARED-006` Session Summary Update 提供输入。
+- `P-POLISH-005` 至 `P-POLISH-008` 都不得直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
+- `P-POLISH-005` 至 `P-POLISH-008` 产生的候选输入，可交给后续 `P-POLISH-009`、`P-POLISH-010`、`P-POLISH-011`。
+- 每个 contract 都必须为 `P-SHARED-006` Session Summary Update 提供输入。
+- 6A 完成后，`P-POLISH-009` 至 `P-POLISH-011` 仍应保持 Stub，等待 6B 填充。
 
 ## 13. 单个 Contract Stub 模板
 
