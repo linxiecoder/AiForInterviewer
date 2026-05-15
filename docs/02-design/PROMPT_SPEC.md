@@ -260,10 +260,10 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | Contract ID | 名称 | 目标 | 状态 |
 |---|---|---|---|
-| `P-POLISH-001` | Topic Planning | 规划打磨主题 | Stub |
-| `P-POLISH-002` | Question Generation | 生成或选择打磨题目 | Stub |
-| `P-POLISH-003` | Answer Diagnosis | 诊断用户回答 | Stub |
-| `P-POLISH-004` | Round Score | 生成每轮 0-100 得分 | Stub |
+| `P-POLISH-001` | Topic Planning | 规划打磨主题 | Draft |
+| `P-POLISH-002` | Question Generation | 生成或选择打磨题目 | Draft |
+| `P-POLISH-003` | Answer Diagnosis | 诊断用户回答 | Draft |
+| `P-POLISH-004` | Round Score | 生成每轮 0-100 得分 | Draft |
 | `P-POLISH-005` | Loss Point Analysis | 生成失分点与原因 | Stub |
 | `P-POLISH-006` | Reference Answer | 生成参考回答 | Stub |
 | `P-POLISH-007` | Knowledge Point Explanation | 生成考点解析 | Stub |
@@ -1200,7 +1200,553 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - 4 个 contract 的结果都不得承诺精确通过概率或确定预测真实面试结果。
 - `P-JOBMATCH-004` 的输出不得绕过用户确认写入正式薄弱项。
 
-## 12. 单个 Contract Stub 模板
+## 12. Polish Contract 细则
+
+本节填充打磨模式主链路前半段的 AI 子任务 contract。Polish 第一组只定义主题规划、题目生成或选择、回答诊断和每轮 0-100 得分的输入输出、检索依赖、上下文装配、校验、低置信度、证据、trace、持久化交接和安全边界；不写完整生产 Prompt 文案，不冻结题目推荐算法、评分公式、权重、阈值、校准方法、模型供应商、模型参数、RAG 实现、API endpoint 或物理数据库 schema。
+
+### 12.0 Polish 第一组公共字段与边界
+
+#### 模式边界
+
+- Polish 是打磨模式，不是压力面模式；允许用户围绕同一题多轮改进。
+- Polish 第一组可以给出诊断、评分、改进方向和后续建议，但不生成最终面试报告。
+- Polish 第一组不生成正式薄弱项、正式资产或正式训练计划。
+- Polish 第一组不负责连续压力追问、整场压力评分或压力面节奏控制。
+- 同题打磨结束建议阈值仍为 UNKNOWN，本阶段不得关闭。
+- 四个 contract 都必须引用 Shared Contracts，默认按 `P-SHARED-002`、`P-SHARED-005` Input Evidence Selection、`P-SHARED-001`、业务生成、`P-SHARED-005` Output Evidence Binding、`P-SHARED-003`、`P-SHARED-004`、`P-SHARED-006` 和持久化 / 用户确认链路交接。
+
+#### 上游输入边界
+
+Polish 第一组可以条件消费 `JobMatchAnalysis`、`ScoreResult` canonical score、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`Weakness` candidate refs、`JobVersion`、`ResumeVersion`、`ResumeModule`、`AssetVersion`、`Weakness`、`SessionSummary`、最近若干轮 Polish turns、当前题目、当前用户回答、RAG evidence 和公共参考材料。
+
+这些输入不得默认全部进入上下文：不得默认塞入全部简历、全部岗位、全部历史会话、全部资产或全部知识库材料。`JobVersion` 和 `ResumeVersion` 是核心输入，不是 RAG；Job Match 结果是结构化上游，不是 RAG。
+
+#### 检索边界
+
+- 默认基础流程只要求岗位、简历、当前打磨会话和必要 session summary。
+- 资产库、薄弱项、历史 Polish turns、Job Match 结果、历史报告 / 复盘摘要和知识库都是条件检索来源。
+- RAG / 知识库可用于考点、技术原理或参考依据增强，但不是 Polish 第一组 MVP 的硬依赖。
+- 互联网检索不是 MVP 默认强依赖，不得默认启用。
+- 条件检索必须经过 `P-SHARED-002`，并沿用 owner / source availability / evidence / trace 过滤规则。
+- 无 RAG、无资产、无历史报告、无历史复盘时不得阻断基础 Polish 流程；需要时应输出低置信度或资料不足状态。
+
+#### Polish 第一组 Output Schema 公共字段
+
+四个 Polish 第一组 contract 的 Output Schema 都必须包含以下公共字段；各 contract 可增加专属字段，但不得删除公共字段或改变字段语义。
+
+| 字段 | 必填 | 类型 / 枚举 | 说明 |
+|---|---|---|---|
+| `status` | 是 | `success` / `partial` / `low_confidence` / `validation_failed` / `generation_failed` | 子任务结果状态 |
+| `contract_id` | 是 | string | 当前 contract id |
+| `polish_session_ref` | 是 | ref | 打磨会话引用 |
+| `job_version_ref` | 是 | ref | 生成时岗位版本或快照引用 |
+| `resume_version_ref` | 是 | ref | 生成时简历版本或快照引用 |
+| `job_match_refs` | 否 | ref[] | 被消费的岗位匹配结果引用 |
+| `turn_refs` | 否 | ref[] | 被消费的打磨轮次引用 |
+| `source_refs` | 是 | ref[] | 被消费的来源引用 |
+| `source_availability` | 是 | `available` / `partial` / `unavailable` / `mixed` | 来源可用性聚合状态；底层来源状态仍沿用 §6.1 的 `source_*` 枚举 |
+| `evidence_refs` | 是 | ref[] | 支撑关键结论的 `EvidenceRef` |
+| `displayable_evidence_summary` | 否 | object[] | 可展示证据摘要，不等于原始敏感正文 |
+| `low_confidence_flags` | 是 | object[] | 低置信度标记，必须可追溯到 `P-SHARED-004` |
+| `validation_result_ref` | 是 | ref | `P-SHARED-003` 校验结果引用 |
+| `trace_refs` | 是 | ref[] | 检索、上下文装配、模型调用、校验和持久化交接过程 `TraceRef` |
+| `session_summary_update_ref` | 否 | ref | `P-SHARED-006` 产出的摘要更新引用 |
+| `next_recommended_actions` | 否 | enum[] | 非写入动作建议，允许值见本节下方 |
+| `user_confirmation_required` | 是 | boolean | 是否需要用户确认后才能回流正式对象 |
+
+`next_recommended_actions` 只表达建议动作，不直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。允许值至少包括 `answer_again`、`generate_reference_answer`、`explain_knowledge_point`、`expand_technical_principle`、`continue_same_question`、`switch_topic`、`generate_next_question`、`mark_weakness_candidate`、`mark_asset_candidate`、`enter_pressure_mode`、`generate_review_later`、`provide_more_answer_detail`、`provide_more_resume_evidence` 和 `skip_current_question`。其中需要用户确认的动作必须进入用户确认流，并形成 `UserConfirmationRef` 或等价记录。
+
+#### 输出和持久化边界
+
+Polish 第一组输出可以保存为题目规划候选、打磨题目、回答诊断、每轮得分、validation result、low confidence flag、evidence refs、trace refs 和 session summary update 输入。
+
+Polish 第一组不得直接写入正式 `Weakness`、正式 `Asset`、正式 `TrainingRecommendation`、最终面试报告或压力面整场评分。如需要产生弱项、资产、失分点、参考答案、知识点解析、技术原理扩展或训练方向，只能输出候选引用、后续 contract 入口建议或用户确认入口。
+
+### 12.1 `P-POLISH-001` Topic Planning
+
+- Contract ID: `P-POLISH-001`
+- Name: Topic Planning
+- Mode: `polish`
+- Trigger:
+  - 用户进入打磨模式。
+  - 用户选择岗位、简历或 Job Match 结果后开始打磨。
+  - 用户完成一轮打磨后请求下一主题。
+  - `SessionSummary` 显示当前主题已完成、需要切换或存在未完成主题。
+  - 用户手动选择关注方向。
+- Goal: 规划当前或下一组打磨主题，决定本轮应围绕哪些岗位要求、简历模块、匹配缺口、薄弱项候选或用户目标展开；不生成正式训练计划，不关闭同题打磨结束建议阈值 UNKNOWN。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-002` Retrieval Planning 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `JobMatchAnalysis`
+  - `ScoreResult` canonical score
+  - `MatchPoint`
+  - `MismatchPoint`
+  - `ImprovementPoint`
+  - 已确认 `AssetVersion`
+  - 既有 `Weakness`
+  - `Weakness` candidate refs
+  - 最近若干轮 Polish turns
+  - 历史报告 / 复盘摘要
+  - 公共参考材料
+  - 知识库 / RAG evidence
+- Retrieval Sources:
+  - 默认使用 `JobVersion`、`ResumeVersion` 和当前 `SessionSummary`。
+  - 条件检索 Job Match 结果、资产、薄弱项、历史打磨轮次、报告、复盘和知识库。
+  - Job Match 结果是结构化上游，不是 RAG；`JobVersion` 和 `ResumeVersion` 是核心输入，不是 RAG。
+  - 知识库 / RAG 只作为考点或背景依据增强，不作为基础主题规划的硬依赖。
+  - 互联网检索不默认启用。
+  - 无 Job Match 结果时可以基于岗位与简历直接规划主题，但必须标记输入较弱、`job_match_refs` 为空或触发低置信度。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的 owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
+  - 上下文至少包含岗位摘要、简历摘要、当前打磨目标、session summary、已问主题、禁止重复主题、Job Match 相关 refs 和输出 schema。
+  - 不得默认塞入全部历史会话、全部资产、全部复盘或全部知识库材料。
+  - 上下文过长时优先保留当前目标、未完成主题、mismatch / improvement points、用户显式选择方向、禁止重复列表和输出 schema。
+- Excluded Inputs:
+  - owner 不一致、source deleted / disabled / unavailable 的正文。
+  - 未经用户确认的资产候选、薄弱项候选或训练建议作为已确认事实。
+  - 全量无关历史会话、全量资产库、无关知识库材料、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
+  - 默认互联网检索结果和无法形成 `EvidenceRef` 的材料。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.0 的 Polish 第一组公共字段。
+  - `topic_plan_id_candidate`
+  - `topic_candidates`
+  - 每个 topic 的 `topic_id_candidate`
+  - 每个 topic 的 `title`
+  - 每个 topic 的 `focus_area`
+  - 每个 topic 的 `source_type`
+  - 每个 topic 的 `source_refs`
+  - 每个 topic 的 `evidence_refs`
+  - 每个 topic 的 `priority`
+  - 每个 topic 的 `difficulty_hint`
+  - 每个 topic 的 `reason`
+  - 每个 topic 的 `related_job_requirements`
+  - 每个 topic 的 `related_resume_modules`
+  - 每个 topic 的 `related_match_or_mismatch_refs`
+  - `selected_topic_ref`
+  - `forbidden_repeat_topics`
+  - `topic_ordering`
+  - `max_topics_hint`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 每个 topic 必须绑定岗位要求、简历模块或 Job Match evidence。
+  - 主题不得完全脱离岗位与简历。
+  - 主题不得重复最近已完成主题，除非明确是同题继续打磨或用户手动选择重复。
+  - `difficulty_hint` 只能是建议，不冻结题目难度算法。
+  - `max_topics_hint` 是展示和成本控制提示，不冻结最终算法。
+  - 不得把 topic candidate 直接写成正式训练计划、正式薄弱项或正式资产。
+- Low Confidence Rules:
+  - 无 Job Match 结果。
+  - 岗位要求过短或模糊。
+  - 简历模块不足。
+  - session summary 缺失。
+  - evidence 不足。
+  - 已问主题无法确认。
+  - 用户目标过泛。
+  - 上下文高风险裁剪。
+  - 低置信度分类必须交给 `P-SHARED-004` 消费 validation、retrieval、context 和 evidence failure signals，不在本 contract 重复定义公共分类枚举。
+- Evidence Requirements: 每个 topic 的来源、优先级原因、岗位要求、简历模块和 Job Match 引用必须绑定 `EvidenceRef`、`SourceRef`、`VersionRef` / `SnapshotRef`；证据不足时必须输出 `evidence_missing` 或等价低置信度标记。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖 Retrieval Planning、Input Evidence Selection、Context Assembly、主题生成或选择、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishSession` topic plan candidate 或等价会话内结果。
+  - `PolishTopic` candidate 或等价逻辑对象。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 用户可以接受、切换、跳过或手动选择 topic。
+  - topic plan 不直接创建正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
+  - 如果后续根据 topic 派生弱项或资产，必须进入对应候选 / 确认链路。
+- Retry / Fallback:
+  - 必需版本缺失、owner mismatch 或 session 不可访问时停止正常生成，返回失败或补充材料路径。
+  - Job Match 不存在、历史主题不可确认或 RAG 为空时可保存低置信度主题候选，不阻断基础打磨。
+  - 重试不得扩大输入范围、默认启用互联网检索或记录原始 Prompt / completion。
+- API State Mapping: 只定义状态语义，包括 `topic_plan_available`、`topic_plan_partial`、`topic_plan_low_confidence`、`topic_plan_validation_failed`、`insufficient_input`、`anti_repeat_unknown` 和 `source_unavailable`；不定义 endpoint 或 request / response schema。
+- Security Notes: 所有输入必须通过 owner / scope 校验和最小必要裁剪；前端只可见结构化主题候选、状态、可展示证据摘要和必要 trace id，不暴露原始 Prompt、completion、provider payload 或无权限来源正文。
+- Test Strategy: 使用确定性 fixture 覆盖有 Job Match、无 Job Match、岗位模糊、简历模块不足、session summary 缺失、重复主题、用户手动选择方向、RAG 为空、上下文高风险裁剪和不得写入正式训练计划。
+- Open Questions: 主题排序算法、主题数量上限、同题打磨结束建议阈值、进展树推荐算法和 topic 与后续训练计划的映射仍待后续 contract / API / UX 收敛，不在本 contract 关闭。
+
+### 12.2 `P-POLISH-002` Question Generation
+
+- Contract ID: `P-POLISH-002`
+- Name: Question Generation
+- Mode: `polish`
+- Trigger:
+  - `P-POLISH-001` 选定 topic 后。
+  - 用户请求生成题目。
+  - 用户跳过当前题目并请求新题。
+  - 用户要求继续同一主题但换题。
+  - `SessionSummary` 显示需要补充某类题目。
+- Goal: 基于选定主题、岗位、简历、Job Match 结果、session summary 和必要证据生成或选择打磨题目；不生成完整参考答案，不冻结题目推荐算法。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `selected_topic_ref` 或等价 topic context
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-002` Retrieval Planning 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `JobMatchAnalysis`
+  - `MismatchPoint`
+  - `ImprovementPoint`
+  - `MatchPoint`
+  - 既有 `Weakness`
+  - 已确认 `AssetVersion`
+  - 最近若干轮 Polish turns
+  - 已问问题列表
+  - 禁止重复问题列表
+  - 公共参考材料
+  - 知识库 / RAG evidence
+- Retrieval Sources:
+  - 默认使用 selected topic、`JobVersion`、`ResumeVersion` 和 `SessionSummary`。
+  - 条件检索 Job Match points、资产、薄弱项、历史题目和知识库。
+  - 知识库 / RAG 可用于考点覆盖或题目素材增强，不是必需输入。
+  - 互联网检索不默认启用。
+  - 无 RAG 时仍必须可以生成基础题目；如技术原理题缺少知识证据，应传递低置信度或资料不足状态。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、裁剪、omitted refs 和 trace 规则。
+  - 上下文至少包含 selected topic、岗位要求、简历相关模块、已问问题、禁止重复列表、当前打磨目标和输出 schema。
+  - 不得默认塞入全部知识库材料、全部历史会话、全部资产或全部弱项。
+  - 上下文过长时优先保留 selected topic、禁止重复问题、相关岗位要求、简历模块、evidence refs 和输出 schema。
+- Excluded Inputs:
+  - owner 不一致、source deleted / disabled / unavailable 的正文。
+  - 完整参考答案、未校验知识库原文、无 evidence ref 的题目素材。
+  - 无关历史问答全文、全量资产库、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
+  - 默认互联网检索结果、违法或隐私侵入材料。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.0 的 Polish 第一组公共字段。
+  - `question_id_candidate`
+  - `topic_ref`
+  - `question_text`
+  - `question_type`
+  - `difficulty_hint`
+  - `expected_focus_points`
+  - `related_job_requirements`
+  - `related_resume_modules`
+  - `source_refs`
+  - `evidence_refs`
+  - `anti_repeat_refs`
+  - `answer_guidance_visibility`
+  - `time_box_hint`
+  - `follow_up_allowed`
+  - `same_question_polish_allowed`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 题目必须与 selected topic、岗位要求或简历模块有关。
+  - 题目不得重复最近已问问题；无法判断重复时必须触发低置信度。
+  - 题目不得直接泄露完整参考答案。
+  - `difficulty_hint` 只是建议，不冻结题目推荐算法。
+  - `question_type` 必须使用稳定枚举，例如 `experience` / `project_deep_dive` / `technical_principle` / `scenario` / `behavioral` / `system_design` / `coding_discussion` 或后续等价枚举。
+  - `answer_guidance_visibility` 必须区分用户答题前是否展示提示。
+  - 不得生成违法、隐私侵入或与岗位无关题目。
+- Low Confidence Rules:
+  - selected topic 缺失。
+  - 岗位或简历证据不足。
+  - 禁止重复列表缺失。
+  - 题目与岗位 / 简历关联弱。
+  - RAG evidence 不可用但题目需要知识补充。
+  - 输出题目过泛。
+  - 无法判断是否重复。
+  - 上下文高风险裁剪。
+- Evidence Requirements: 题目、预期考察点、岗位要求、简历模块和去重依据必须绑定 `EvidenceRef` 或 `anti_repeat_refs`；缺少证据时不得伪装成高置信题目。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖 Retrieval Planning、Input Evidence Selection、Context Assembly、题目生成或选择、去重检查、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishQuestion` candidate 或等价会话内题目对象。
+  - `PolishTurn` 初始化输入。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 生成题目可以直接进入答题流程。
+  - 用户可跳过、换题、继续同主题或切换主题。
+  - 题目生成不得直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
+- Retry / Fallback:
+  - selected topic 缺失、owner mismatch 或必需版本缺失时停止正常生成，返回失败或补充材料路径。
+  - RAG 为空、历史题目不可确认或题目过泛时可重试、降级为基础题目或要求用户补充方向。
+  - 重试不得默认启用互联网检索、扩大到全量历史会话或泄露完整参考答案。
+- API State Mapping: 只定义状态语义，包括 `question_available`、`question_partial`、`question_low_confidence`、`question_validation_failed`、`duplicate_risk`、`topic_missing` 和 `source_unavailable`；不定义 endpoint 或 schema。
+- Security Notes: 题目生成只使用当前 owner 的必要岗位、简历、topic、session summary 和已授权增强材料；日志不记录原始 Prompt、completion、provider payload 或隐私正文。
+- Test Strategy: 使用 fixture 覆盖有 topic、无 topic、禁止重复列表缺失、重复题、无 RAG、技术题缺证据、过泛题、答题前提示可见性、违法 / 隐私题拒绝和题目不转正式弱项 / 资产 / 训练建议。
+- Open Questions: 题目推荐算法、难度排序、题目数量控制、time box 默认值、进展树推荐策略和后续题目 API 字段仍待后续 contract / API / UX 收敛，不在本 contract 关闭。
+
+### 12.3 `P-POLISH-003` Answer Diagnosis
+
+- Contract ID: `P-POLISH-003`
+- Name: Answer Diagnosis
+- Mode: `polish`
+- Trigger:
+  - 用户提交当前题目的回答。
+  - 用户修改回答后重新诊断。
+  - 用户请求解释回答问题。
+  - `P-POLISH-004` 评分前需要诊断输入。
+- Goal: 诊断用户对当前题目的回答，输出结构化反馈、优点、不足、缺失信息、追问线索和后续评分输入；不静默创建正式薄弱项、资产或训练建议。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - `PolishQuestion` 或当前题目引用
+  - 用户当前回答
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `P-SHARED-002` Retrieval Planning 结果
+  - selected topic
+  - Job Match points
+  - 既有 `Weakness`
+  - 已确认 `AssetVersion`
+  - 最近若干轮回答
+  - 题目相关知识库 / RAG evidence
+  - 公共参考材料
+- Retrieval Sources:
+  - 默认使用当前题目、当前回答、`JobVersion`、`ResumeVersion` 和 `SessionSummary`。
+  - 条件检索 Job Match points、资产、薄弱项、知识库和历史回答。
+  - 如果需要判断技术准确性或补充考点，可经过 `P-SHARED-002` 使用知识库 / RAG。
+  - 不得默认启用互联网检索。
+  - 无知识库时仍可基于题目、岗位、简历和回答进行基础诊断；技术原理类判断应标记证据弱或低置信度。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、裁剪、omitted refs 和 trace 规则；条件检索时必须继承 `P-SHARED-002`。
+  - 上下文至少包含当前题目、用户回答、岗位相关要求、简历相关模块、selected topic、最近相关 turn 和输出 schema。
+  - 对长回答必须优先保留用户原始回答、问题要求、岗位证据和诊断目标。
+  - 不得默认塞入全部历史回答、全部知识库材料、全部资产或全部薄弱项。
+- Excluded Inputs:
+  - 用户未表达的经历、无证据的能力判断、未确认候选对象作为正式事实。
+  - owner 不一致、source deleted / disabled / unavailable 的正文。
+  - 无关历史回答全文、全量知识库、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
+  - 默认互联网检索结果和无法形成 `EvidenceRef` 的技术断言。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.0 的 Polish 第一组公共字段。
+  - `diagnosis_id_candidate`
+  - `question_ref`
+  - `answer_ref`
+  - `answer_summary`
+  - `strengths`
+  - `weaknesses`
+  - `missing_points`
+  - `unclear_points`
+  - `off_topic_segments`
+  - `technical_accuracy_notes`
+  - `structure_notes`
+  - `communication_notes`
+  - `evidence_refs`
+  - `score_input_refs`
+  - `suggested_follow_up_questions`
+  - `candidate_loss_points`
+  - `candidate_improvement_actions`
+  - `requires_user_clarification`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - 诊断必须基于当前题目和当前回答。
+  - 不得把用户未表达的经历虚构为事实。
+  - 不得把岗位不匹配直接包装为用户能力缺陷。
+  - 不得静默创建正式 `Weakness`。
+  - 技术准确性判断如缺少知识证据，应触发低置信度。
+  - 诊断输出必须能作为 `P-POLISH-004` 的评分输入。
+  - `suggested_follow_up_questions` 只是候选，不等同于压力面连续追问。
+- Low Confidence Rules:
+  - 用户回答过短。
+  - 用户回答明显跑题。
+  - 当前题目缺失。
+  - 岗位 / 简历证据不足。
+  - 技术判断缺少知识证据。
+  - 回答中存在自相矛盾内容。
+  - 上下文裁剪影响诊断。
+  - 模型无法区分事实、推测和建议。
+  - 诊断输出无法绑定证据或无法作为评分输入。
+- Evidence Requirements: strengths、weaknesses、missing points、technical accuracy notes、candidate loss points 和 improvement actions 必须绑定当前题目、当前回答、岗位 / 简历 evidence 或知识库 `EvidenceRef`；证据不足时必须显式标记。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖 Context Assembly、条件 Retrieval Planning、Input Evidence Selection、回答诊断、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- Persistence Targets:
+  - `PolishAnswerDiagnosis` 或等价会话内诊断对象。
+  - `PolishTurn` 诊断结果。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 诊断结果可作为本轮反馈展示。
+  - 派生的弱项、资产或训练方向只能作为候选或后续 contract 输入。
+  - 用户可补充回答、重新诊断或继续评分。
+- Retry / Fallback:
+  - 当前题目或当前回答缺失、owner mismatch 或必需版本缺失时停止正常诊断，返回失败或补充材料路径。
+  - 回答过短、证据不足或技术判断缺证据时可保存低置信度诊断、要求用户补充回答或跳过技术准确性判断。
+  - 重试不得默认启用互联网检索、虚构用户经历或把建议写成事实。
+- API State Mapping: 只定义状态语义，包括 `diagnosis_available`、`diagnosis_partial`、`diagnosis_low_confidence`、`diagnosis_validation_failed`、`answer_too_short`、`clarification_required` 和 `technical_evidence_missing`；不定义 endpoint 或 schema。
+- Security Notes: 诊断只使用当前 owner 的题目、回答、岗位、简历和授权增强证据；可展示结果不得暴露无权限来源正文、原始 Prompt、completion 或 provider payload。
+- Test Strategy: 使用 fixture 覆盖正常回答、过短回答、跑题回答、题目缺失、岗位 / 简历证据不足、技术判断缺 RAG、回答自相矛盾、虚构经历防护、岗位不匹配不包装成能力缺陷和不静默创建正式 `Weakness`。
+- Open Questions: 失分点归因细则、参考答案生成、考点解析、技术原理扩展、压力面追问策略和正式弱项候选生成仍交给后续 Polish / Pressure / Weakness contracts，不在本 contract 关闭。
+
+### 12.4 `P-POLISH-004` Round Score
+
+- Contract ID: `P-POLISH-004`
+- Name: Round Score
+- Mode: `polish`
+- Trigger:
+  - `P-POLISH-003` 完成回答诊断后。
+  - 用户提交回答并请求评分。
+  - 用户修改回答后重新评分。
+  - 系统需要决定是否建议继续同题打磨。
+- Goal: 基于当前题目、用户回答和诊断结果生成每轮 0-100 展示分与解释；不冻结评分公式、权重、阈值或校准方法，只冻结评分输出必须具备的结构、解释、证据、低置信度和 trace。
+- Required Inputs:
+  - `OwnerRef`
+  - `polish_session_ref`
+  - 当前题目引用
+  - 用户当前回答引用
+  - `P-POLISH-003` Answer Diagnosis 结果或等价诊断输入
+  - `JobVersion`
+  - `ResumeVersion`
+  - 当前 `contract_id`
+  - `ScoreRuleVersion` 或评分规则占位引用
+  - 目标输出 schema
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
+  - `P-SHARED-005` Evidence Binding 要求
+  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
+- Optional Inputs:
+  - `P-SHARED-002` Retrieval Planning 结果
+  - `JobMatchAnalysis`
+  - `ScoreResult` canonical score from Job Match
+  - selected topic
+  - 既有 `Weakness`
+  - 已确认 `AssetVersion`
+  - 历史同题打磨轮次
+  - 知识库 / RAG evidence
+  - 公共评分口径
+- Retrieval Sources:
+  - 默认使用当前题目、当前回答、回答诊断、`JobVersion`、`ResumeVersion` 和 `SessionSummary`。
+  - 条件读取 Job Match canonical score、历史同题轮次、公共评分口径和知识库 evidence。
+  - 条件读取必须经过 `P-SHARED-002`。
+  - 互联网检索不默认启用。
+  - 无 RAG 或公共评分口径时仍可生成基础得分，但必须保留评分规则 UNKNOWN、资料不足或低置信度边界。
+- Context Assembly:
+  - 必须继承 `P-SHARED-001` 的最小必要上下文、裁剪、omitted refs 和 trace 规则；条件读取时必须继承 `P-SHARED-002`。
+  - 上下文至少包含当前题目、用户回答、诊断结果、岗位要求、简历相关模块、评分目标、评分规则版本或 UNKNOWN 占位、输出 schema。
+  - 上下文过长时优先保留当前题目、当前回答、诊断结果、评分证据、输出 schema 和 validation 要求。
+  - 不得默认塞入全部历史回答、全部资产、全部知识库或全部复盘。
+- Excluded Inputs:
+  - 具体未冻结评分公式、权重、阈值、校准方法或精确通过概率。
+  - Job Match 分数作为本轮回答分的直接替代。
+  - owner 不一致、source deleted / disabled / unavailable 的正文。
+  - 无关历史回答全文、全量资产、全量知识库、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
+- Output Schema:
+  - 公共字段：必须完整包含 §12.0 的 Polish 第一组公共字段。
+  - `round_score_ref`
+  - `score_result_ref`
+  - `score_value`
+  - `score_scale`
+  - `score_type`
+  - `score_explanation`
+  - `dimension_scores`
+  - `positive_evidence_refs`
+  - `negative_evidence_refs`
+  - `diagnosis_refs`
+  - `loss_point_candidate_refs`
+  - `improvement_action_refs`
+  - `score_rule_version_ref`
+  - `uncertainty_reasons`
+  - `same_question_continue_hint`
+- Validation Rules:
+  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
+  - `score_value` 必须在 0-100 范围内。
+  - `score_scale` 必须表明是产品展示刻度。
+  - 不得输出精确通过概率。
+  - 不得输出“必过”“必挂”等确定性预测。
+  - 不得把岗位匹配分直接当成本轮回答分。
+  - 分数解释必须绑定当前题目、当前回答和诊断证据。
+  - 低分和高分都必须有解释。
+  - 评分规则未冻结时必须保留 UNKNOWN，不得虚构公式。
+  - `same_question_continue_hint` 只是建议，不关闭同题打磨结束阈值 UNKNOWN。
+- Low Confidence Rules:
+  - 用户回答过短。
+  - 诊断结果缺失或低置信度。
+  - 当前题目缺失。
+  - 评分规则版本缺失或未冻结。
+  - 证据不足。
+  - 分数与解释不一致。
+  - 只有分数没有解释。
+  - 上下文裁剪影响评分依据。
+  - 技术准确性需要知识证据但 RAG 不可用。
+- Evidence Requirements: `score_explanation`、正向证据、负向证据、dimension scores、诊断引用、失分点候选和改进动作必须绑定当前题目、当前回答、诊断结果和 `EvidenceRef`；评分规则版本或 UNKNOWN 占位必须可追踪到 `ScoreRuleVersion` / `TraceRef`。
+- Trace Requirements: 必须记录 `TraceRef`，覆盖 Context Assembly、条件 Retrieval Planning、Input Evidence Selection、评分生成、评分规则引用、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
+- `canonical` score 关系:
+  - `ScoreResult` 是统一评分承载对象，保存 score value、score type、explanation、rule version、evidence refs、validation result 和 trace refs。
+  - `PolishRoundScore` 是打磨轮次场景下的视图、引用或领域包装，用于从 `PolishTurn` 指向对应 `ScoreResult`。
+  - 不允许 `ScoreResult` 与 `PolishRoundScore` 分别保存两份不一致的分数、解释或证据。
+  - Job Match canonical score 可作为上游参考，但不得直接替代本轮回答分。
+  - 历史回看、校准和报告复用应引用 canonical score。
+- Persistence Targets:
+  - `PolishRoundScore` 或等价会话内得分对象。
+  - `ScoreResult` canonical score。
+  - `ScoreExplanation`
+  - `ScoreEvidenceLink`
+  - `PolishTurn` scoring result。
+  - `LlmValidationResult`
+  - `LowConfidenceFlag`
+  - `TraceRef`
+  - `SessionSummary` update 输入
+  - `AuditEvent`
+- User Confirmation Requirement:
+  - 本轮得分可直接作为打磨反馈展示。
+  - 由得分派生的正式 `Weakness`、`Asset` 或 `TrainingRecommendation` 必须进入后续候选 / 确认链路。
+  - 用户可以重新回答、继续同题打磨、换题或进入后续解释 / 参考答案 contract。
+- Retry / Fallback:
+  - 分数越界、缺少解释、缺 evidence refs 或诊断引用缺失时进入 repair / retry / validation failed。
+  - 评分规则 UNKNOWN、证据不足或 RAG 不可用时可保存低置信度分数、部分可用解释或要求用户补充回答。
+  - 重试不得默认启用互联网检索、虚构评分公式或把 Job Match 分数当成本轮回答分。
+- API State Mapping: 只定义状态语义，包括 `round_score_available`、`round_score_partial`、`round_score_low_confidence`、`round_score_validation_failed`、`score_rule_unknown`、`score_out_of_range`、`evidence_missing` 和 `same_question_continue_suggested`；不定义 endpoint 或 schema。
+- Security Notes: 评分上下文只能包含当前 owner 的题目、回答、诊断、岗位、简历、证据和授权增强材料；日志不得记录原始 Prompt、completion、provider payload 或隐私正文；前端只可见结构化分数、解释、状态、可展示证据摘要和必要 trace id。
+- Test Strategy: 使用 fixture 覆盖 0、100、中间分、分数越界、只有分数无解释、解释无证据、诊断缺失、评分规则 UNKNOWN、Job Match 分数不可直接复用、本轮高分 / 低分均有解释、不得输出精确通过概率和 same question continue hint 不关闭 UNKNOWN。
+- Open Questions:
+  - 评分公式。
+  - 分项权重。
+  - 阈值。
+  - 校准方法。
+  - 评分等级映射。
+  - 同题打磨结束建议阈值。
+  - 通过倾向展示边界。
+
+### 12.5 Polish 第一组 Contract 关系
+
+- `P-POLISH-001` 负责规划打磨主题。
+- `P-POLISH-002` 基于选定主题生成或选择题目。
+- `P-POLISH-003` 基于当前题目和用户回答生成诊断。
+- `P-POLISH-004` 基于当前题目、用户回答和诊断生成本轮 0-100 得分。
+- 四个 contract 都必须引用 Shared Contracts，并至少交接 validation、low confidence、EvidenceRef、TraceRef 和 session summary update 输入。
+- `P-POLISH-001` 和 `P-POLISH-002` 可以消费 Job Match 输出作为上游参考。
+- `P-POLISH-003` 和 `P-POLISH-004` 必须绑定当前题目和当前回答。
+- `P-POLISH-004` 不得把 Job Match 分数直接当成本轮回答分。
+- Polish 第一组不得直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
+- Polish 第一组产生的弱项、资产、失分点、参考答案、知识点解析和下一轮建议，应交给后续 Polish contracts 或对应业务 contract。
+- Polish 第一组每轮结束后应为 `P-SHARED-006` Session Summary Update 提供输入。
+
+## 13. 单个 Contract Stub 模板
 
 后续填充 contract 时复制以下结构。模板只写字段结构，不写具体 Prompt 文案。
 
@@ -1231,18 +1777,18 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - Open Questions:
 ```
 
-## 13. 后续填充顺序
+## 14. 后续填充顺序
 
-当前已将 Shared contracts 和 Job match contracts 填充为 Draft。后续业务 contract 建议按以下顺序继续填充：
+当前已将 Shared contracts、Job match contracts 和 Polish 第一组 contracts 填充为 Draft。后续业务 contract 建议按以下顺序继续填充：
 
-1. Polish mode contracts。
+1. Polish mode 剩余 contracts（`P-POLISH-005` 至 `P-POLISH-011`）。
 2. Pressure mode contracts。
 3. Report contracts。
 4. Review contracts。
 5. Weakness / asset / training contracts。
 6. Cross-contract consistency review。
 
-## 14. UNKNOWN 与后续交接
+## 15. UNKNOWN 与后续交接
 
 以下 UNKNOWN 本阶段只承接，不关闭：
 
@@ -1262,10 +1808,11 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 本阶段不关闭上述 UNKNOWN，不改变 PRD §10 的关闭台账，不把 `AIFI-PROMPT-001` 标记为 DONE。后续只有在具体 contract 完成、与 `TECH_DESIGN.md` / `DATA_MODEL.md` / `SECURITY_PRIVACY.md` / `API_SPEC.md` 一致性复核通过，并具备可验证证据后，才能进入 `AIFI-ARCH-002` 的 UNKNOWN 关闭检查。
 
-## 15. 变更记录
+## 16. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-15 | 填充 Polish 第一组 Contract 细则 | 将 `P-POLISH-001` 至 `P-POLISH-004` 从 Stub 更新为 Draft，补充主题规划、题目生成、回答诊断和每轮 0-100 得分 contract；不填充 `P-POLISH-005` 至 `P-POLISH-011`，不生成最终报告、正式薄弱项、正式资产或训练计划，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 2026-05-15 | 填充 Job Match Contract 细则 | 将 `P-JOBMATCH-001` 至 `P-JOBMATCH-004` 从 Stub 更新为 Draft，补充岗位匹配分析总控、0-100 匹配分、匹配 / 不匹配 / 加强点和薄弱项候选 contract；不填充其他业务 contract，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 2026-05-15 | 修复 Shared Contracts 审计阻塞问题 | 拆分 Input Evidence Selection / Output Evidence Binding，补充推荐调用顺序、failure signal enum、source availability 矩阵、Context Assembly 条件输入和安全分区、Retrieval Planning 子阶段，以及 Session Summary MVP 执行策略；不填充业务 contract，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 2026-05-15 | 填充 Shared Contract 细则 | 将 `P-SHARED-001` 至 `P-SHARED-006` 从 Stub 更新为 Draft，补充上下文装配、检索规划、输出校验、低置信度、证据绑定和会话摘要更新的公共 contract；不填充业务 contract，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
