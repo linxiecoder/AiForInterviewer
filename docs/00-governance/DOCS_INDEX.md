@@ -21,6 +21,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 文档索引 | `docs/00-governance/DOCS_INDEX.md` | 当前有效文档清单和 active / archive 边界 |
 | 文档治理 | `docs/00-governance/DOCS_GOVERNANCE.md` | 文档生命周期、命名、归档、迁移和防腐规则 |
 | AI 工作流 | `docs/00-governance/AI_WORKFLOW.md` | Codex / AI 读取、修改、落库和确认流程 |
+| 测试策略 | `docs/00-governance/TEST_POLICY.md` | 测试临时产物治理、受管临时目录工具和测试残留检查规则 |
 | 产品需求 | `docs/01-product/PRD.md` | MVP 产品需求唯一事实源 |
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 历史需求吸收、替代、后置、缺口和待决策项 |
 | F2 低保真设计 | `docs/02-design/UX_SPEC.md` | F2 低保真设计唯一 active 文档；输入来源是 `PRD.md`，UNKNOWN 输入来源是 PRD §10；正文以功能场景设计包为主体，Figma 低保真稿链接、Page 名称、Prototype 表达状态和人工接受状态登记以 `UX_SPEC.md` 为准，仓库不存储 Figma 文件本体；不替代 `PRD.md`，不包含高保真 UI、技术设计、API、数据模型或 Prompt 设计 |

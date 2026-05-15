@@ -5,7 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = REPO_ROOT / "tests"
-DOC_POLICY_PATH = REPO_ROOT / "docs" / "governance" / "TEST_POLICY.md"
+DOC_POLICY_PATH = REPO_ROOT / "docs" / "00-governance" / "TEST_POLICY.md"
 ALLOWED_FILES = {
     TEST_ROOT / "doc_governor" / "test_temp_artifacts.py",
     TEST_ROOT / "test_temp_artifact_policy.py",
