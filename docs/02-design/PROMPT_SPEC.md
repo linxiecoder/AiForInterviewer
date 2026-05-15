@@ -428,10 +428,10 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
-| `P-WEAKNESS-001` | Weakness Extraction | 提炼薄弱项候选 | Stub | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
-| `P-WEAKNESS-002` | Weakness Merge Suggestion | 生成薄弱项合并建议 | Stub | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
-| `P-WEAKNESS-003` | Weakness Severity Assessment | 判断薄弱项严重度 | Stub | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
-| `P-WEAKNESS-004` | Weakness Status Update Suggestion | 生成状态更新建议 | Stub | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
+| `P-WEAKNESS-001` | Weakness Extraction | 提炼薄弱项候选 | Draft | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
+| `P-WEAKNESS-002` | Weakness Merge Suggestion | 生成薄弱项合并建议 | Draft | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
+| `P-WEAKNESS-003` | Weakness Severity Assessment | 判断薄弱项严重度 | Draft | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
+| `P-WEAKNESS-004` | Weakness Status Update Suggestion | 生成状态更新建议 | Draft | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
 
 ### 9.8 Asset Contracts
 
@@ -461,7 +461,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `prompt-contracts/PRESSURE_CONTRACTS.md` | `P-PRESSURE-*` | Draft | Pressure 001-009 细则 |
 | `prompt-contracts/REPORT_CONTRACTS.md` | `P-REPORT-*` | Draft | Report 001-004 细则 |
 | `prompt-contracts/REVIEW_CONTRACTS.md` | `P-REVIEW-*` | Draft | Review 001-004 细则 |
-| `prompt-contracts/WEAKNESS_CONTRACTS.md` | `P-WEAKNESS-*` | Stub | 待后续授权填充 |
+| `prompt-contracts/WEAKNESS_CONTRACTS.md` | `P-WEAKNESS-*` | Draft | Weakness 001-004 细则 |
 | `prompt-contracts/ASSET_CONTRACTS.md` | `P-ASSET-*` | Stub | 待后续授权填充 |
 | `prompt-contracts/TRAINING_CONTRACTS.md` | `P-TRAINING-*` | Stub | 待后续授权填充 |
 
@@ -528,6 +528,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-16 | 填充 Weakness Contract 细则 | 将 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 从 Stub 更新为 Draft，补充薄弱项候选提炼、合并建议、严重度提示和状态更新建议 contract；不填充 Asset / Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动合并、删除或更新正式 Weakness，不关闭薄弱项合并算法、严重度规则、状态流转规则或训练优先级 UNKNOWN |
 | 2026-05-16 | 填充 Review Contract 细则 | 将 `P-REVIEW-001` 至 `P-REVIEW-004` 从 Stub 更新为 Draft，补充模拟面试复盘、真实面试输入结构化、真实面试复盘和题级复盘项提取 contract；不填充 Weakness / Asset / Training contracts，不生成真实复盘实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭复盘切分、真实面试输入结构化、题级复盘项合并、薄弱项合并、资产归档或训练优先级 UNKNOWN |
 | 2026-05-16 | 填充 Report Contract 细则 | 将 `P-REPORT-001` 至 `P-REPORT-004` 从 Stub 更新为 Draft，补充报告生成、分项评分解释、风险提示与通过倾向、可复制内容组装 contract；不填充 Review / Weakness / Asset / Training contracts，不生成报告实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭评分公式、分项权重、通过倾向、风险提示阈值或 RAG 实现 UNKNOWN |
 | 2026-05-15 | 拆分 contract 子文档 | 主文件保留 canonical registry 和治理规则，详细正文迁移到 `prompt-contracts/*.md`；不改变 contract ID、名称、状态或语义，不填充 Stub contract，不关闭 UNKNOWN |
