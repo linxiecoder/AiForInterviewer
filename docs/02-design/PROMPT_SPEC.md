@@ -65,6 +65,126 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | TraceRef | 支撑模型调用、检索、上下文装配、输出校验和失败记录的过程引用 |
 | Failure Signal | 跨 Shared Contract 传递的标准化失败信号，统一使用 snake_case 命名 |
 
+### 3.1 Contract ID Namespace Governance
+
+本节冻结 `P-*` 系列 AI Task Contract ID 的含义、格式、命名边界和维护规则。后续即使拆分 `PROMPT_SPEC.md`，仍沿用本 namespace，不重新命名现有 ID。
+
+#### 3.1.1 ID 定位
+
+- `P-*` 是 AI Task Contract 的稳定引用 ID。
+- `P-*` 用于在 Prompt / AI orchestration 规范、trace、validation、测试 fixture、后续 API 状态语义和子文档之间引用具体 AI 子任务。
+- `P-*` 不等于完整 Prompt 文案。
+- `P-*` 不等于一次 LLM 调用。
+- `P-*` 不等于 API endpoint。
+- `P-*` 不等于数据库表名。
+- `P-*` 不等于 BACKLOG task id。
+- `P-*` 不等于物理任务队列 id。
+- `P-*` 不等于 UI route 或前端组件名。
+
+#### 3.1.2 `P` 的含义
+
+- `P` = `Prompt / AI Task Contract`。
+- `P-*` = `Prompt Contract namespace for AI task contracts`。
+- `P` 是本文件历史兼容前缀，后续继续沿用。
+- 不再引入新的同级前缀；如确需迁移，必须通过单独文档治理任务显式完成。
+- 后续即使拆分 `PROMPT_SPEC.md`，仍沿用该 ID 体系。
+
+#### 3.1.3 ID 格式
+
+ID 格式固定为：
+
+```text
+P-<DOMAIN>-<NNN>
+```
+
+| 组成 | 说明 |
+|---|---|
+| `P` | Prompt / AI Task Contract 前缀 |
+| `<DOMAIN>` | contract 所属能力域 |
+| `<NNN>` | 三位递增编号，从 `001` 开始 |
+
+格式规则：
+
+- `DOMAIN` 使用大写英文。
+- `NNN` 必须是三位数字。
+- 不允许使用 `P-POLISH-1`、`P-Polish-001`、`POLISH-001`、`P_POLISH_001` 等变体。
+- 新增 ID 必须先登记到主 catalog。
+- 详细 contract 正文必须使用 catalog 中已登记的 ID。
+
+#### 3.1.4 允许的 DOMAIN
+
+| Domain | 范围 |
+|---|---|
+| `SHARED` | 跨模式公共 contract，例如上下文装配、检索规划、校验、低置信度、证据绑定、session summary |
+| `JOBMATCH` | 岗位匹配分析链路 |
+| `POLISH` | 打磨模式链路 |
+| `PRESSURE` | 压力面模式链路 |
+| `REPORT` | 面试报告链路 |
+| `REVIEW` | 模拟 / 真实面试复盘链路 |
+| `WEAKNESS` | 正式薄弱项体系链路 |
+| `ASSET` | 正式资产体系链路 |
+| `TRAINING` | 训练建议和训练闭环链路 |
+
+DOMAIN 治理规则：
+
+- 不得随意新增 domain。
+- 新增 domain 必须通过 `PROMPT_SPEC.md` 治理补丁登记。
+- domain 不是数据库 schema，也不是 bounded context 的最终实现边界。
+
+#### 3.1.5 ID 稳定性
+
+- ID 一旦进入 catalog，不应因标题、描述或正文细节微调而改变。
+- Contract 名称可以优化，但 ID 应保持稳定。
+- ID 不得复用。
+- 删除 contract 时，应标记为 `Deprecated` 或等价状态，不得把编号分配给新 contract。
+- 合并 contract 时，应保留原 ID 的迁移说明。
+- 拆分 contract 时，新 contract 使用新 ID，旧 ID 保留迁移说明。
+- 状态从 `Stub` 到 `Draft` 到后续状态变化，不改变 ID。
+
+#### 3.1.6 ID 与执行顺序
+
+- 编号通常反映默认 catalog 顺序或默认链路顺序。
+- 编号不等于强制物理执行顺序。
+- 编号不等于必须一对一对应一次 LLM 调用。
+- 编号不等于必须同步执行。
+- 应用编排层可以根据模式、状态、用户动作和失败处理选择跳过、重试、合并或拆分调用。
+- 任何编排变体都必须保留输出所属 contract ID 和 trace。
+
+#### 3.1.7 Canonical Registry
+
+- `docs/02-design/PROMPT_SPEC.md` 中的 Contract Catalog 是 canonical registry。
+- 后续即使拆分到子文档，主 catalog 仍是 ID 的唯一登记源。
+- 子文档可以承载详细正文，但不得自行创建未登记 ID。
+- 子文档中的 contract ID 必须与主 catalog 完全一致。
+- 拆分后主 catalog 应增加 `子文档` 或等价列；本任务不执行拆分。
+- 后续文档引用 contract 时应使用 `Contract ID + 名称`，例如 `P-POLISH-004 Round Score`。
+
+#### 3.1.8 ID 与状态
+
+- `Stub` 表示已登记但尚未填充正文。
+- `Draft` 表示 contract 细则已经填充，但仍属于 F4 draft。
+- `Deprecated` 可用于后续废弃 contract。
+- `DONE` 不是 contract catalog 状态，`DONE` 只能用于 BACKLOG / delivery task，不应用于 contract 状态。
+- 把某个 contract 标为 `Draft` 不代表实现完成。
+- 把全部 contract 标为 `Draft` 也不代表 `AIFI-PROMPT-001` 自动 DONE。
+
+#### 3.1.9 跨文档引用
+
+- 引用时使用 `Contract ID + 名称`。
+- 首次引用建议写完整，例如 `P-PRESSURE-003 Answer Quality Assessment`。
+- 后续可简称 ID。
+- 不得只写中文名称而省略 ID。
+- 不得只写 ID 而不在附近提供名称或上下文。
+- trace、validation、fixture、API state mapping 后续应优先使用 ID 作为稳定引用键。
+
+#### 3.1.10 拆分前置说明
+
+- 在拆分 `PROMPT_SPEC.md` 前，必须先冻结本 namespace。
+- 拆分只迁移详细 contract 正文，不改变 ID。
+- 拆分后主文件继续保留 canonical registry 和 governance。
+- 子文档不得改变 ID 含义、domain 或状态。
+- 如果拆分中发现 ID 冲突，应停止拆分并先修 registry。
+
 ## 4. AI Task Contract 标准模板
 
 后续每个 AI 子任务 contract 必须使用统一字段。字段是 contract 结构，不是 Prompt 文案。
