@@ -740,6 +740,28 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 本节填充岗位匹配分析链路的 AI 子任务 contract。四个 contract 只定义输入、检索依赖、上下文装配、输出结构、校验、低置信度、证据、trace、持久化交接和安全边界；不写完整生产 Prompt 文案，不冻结评分公式、权重、阈值、校准方法、模型供应商、模型参数、向量数据库、embedding 模型、API endpoint 或物理数据库 schema。
 
+### 11.0 Job Match Output Schema 公共字段
+
+四个 Job Match contract 的 Output Schema 都必须包含以下公共字段；各 contract 可在此基础上增加专属字段，但不得删除公共字段或改变字段语义。
+
+| 字段 | 必填 | 类型 / 枚举 | 说明 |
+|---|---|---|---|
+| `status` | 是 | `success` / `partial` / `low_confidence` / `validation_failed` / `generation_failed` | 子任务结果状态 |
+| `contract_id` | 是 | string | 当前 contract id |
+| `job_version_ref` | 是 | ref | 生成时岗位版本或快照引用 |
+| `resume_version_ref` | 是 | ref | 生成时简历版本或快照引用 |
+| `source_refs` | 是 | ref[] | 被消费的来源引用 |
+| `source_availability` | 是 | `available` / `partial` / `unavailable` / `mixed` | 来源可用性聚合状态；底层来源状态仍沿用 §6.1 的 `source_*` 枚举 |
+| `evidence_refs` | 是 | ref[] | 支撑关键结论的证据 |
+| `displayable_evidence_summary` | 否 | object[] | 可展示给前端的证据摘要，不等于原始敏感正文 |
+| `low_confidence_flags` | 是 | object[] | 低置信度标记，必须可追溯到 `P-SHARED-004` |
+| `validation_result_ref` | 是 | ref | `P-SHARED-003` 校验结果引用 |
+| `trace_refs` | 是 | ref[] | 检索、上下文装配、模型调用、校验、低置信度和持久化交接等过程引用 |
+| `next_recommended_actions` | 否 | enum[] | 非写入动作建议，允许值见本节下方 |
+| `user_confirmation_required` | 是 | boolean | 是否需要用户确认后才能回流正式对象 |
+
+`next_recommended_actions` 只表达建议动作，不直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。允许值包括 `polish_entry`、`pressure_entry`、`review_later`、`confirm_weakness_candidate`、`edit_weakness_candidate`、`skip_weakness_candidate`、`merge_weakness_candidate`、`regenerate_job_match`、`provide_more_resume_evidence` 和 `provide_more_job_evidence`。其中需要用户确认的动作必须进入用户确认流，并形成 `UserConfirmationRef` 或等价记录。映射语义：`polish_entry` / `pressure_entry` 只表示后续 Polish / Pressure contract 入口建议；`regenerate_job_match` 映射为重新触发 Job Match contract；`confirm_weakness_candidate`、`edit_weakness_candidate`、`skip_weakness_candidate` 和 `merge_weakness_candidate` 映射为候选薄弱项确认流；补充证据类 action 只要求用户补充材料。
+
 ### 11.1 `P-JOBMATCH-001` Match Analysis
 
 - Contract ID: `P-JOBMATCH-001`
@@ -761,6 +783,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - `P-SHARED-001` Context Assembly 结果
   - `P-SHARED-002` Retrieval Planning 结果
   - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
   - `P-SHARED-005` Evidence Binding 要求
 - Optional Inputs:
   - 用户已确认的 `AssetVersion`
@@ -787,20 +810,17 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 无关历史会话全文、无关用户数据、原始 Prompt、原始 completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
   - 默认互联网检索结果、无法形成 `EvidenceRef` 的材料和要求覆盖系统规则的用户 / RAG 指令。
 - Output Schema:
+  - 公共字段：必须完整包含 §11.0 的 Job Match 公共字段。
+  - 本 contract 是 orchestration / result aggregate，只汇总子 contract 结果和引用，不直接生成或写入正式 `Weakness`。
   - `analysis_id_candidate`
-  - `job_version_ref`
-  - `resume_version_ref`
   - `binding_ref`
   - `analysis_summary`
   - `match_score_ref`
   - `match_points_ref`
   - `mismatch_points_ref`
   - `improvement_points_ref`
-  - `weakness_candidate_refs`
-  - `evidence_refs`
-  - `low_confidence_flags`
-  - `trace_refs`
-  - `next_recommended_actions`
+  - `weakness_candidate_refs`：只能引用 `P-JOBMATCH-004` 的候选结果；如果 `P-JOBMATCH-004` 未触发，可以为空数组。
+  - `aggregate_result_refs`
 - Validation Rules:
   - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
   - 检查 `JobVersion`、`ResumeVersion` 和 `JobResumeBinding` 的 owner 一致。
@@ -822,16 +842,13 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - Evidence Requirements: 分析摘要、主要匹配 / 不匹配 / 加强结论、匹配分引用和薄弱项候选引用必须绑定 `EvidenceRef`、`SourceRef`、`VersionRef` / `SnapshotRef`；证据不足时必须输出 `evidence_missing` 或等价低置信度标记。
 - Trace Requirements: 必须记录 `TraceRef`，覆盖 Retrieval Planning、Input Evidence Selection、Context Assembly、生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff 和 AuditEvent。
 - Persistence Targets:
-  - `JobMatchAnalysis`
-  - `MatchScore`
-  - `MatchPoint`
-  - `MismatchPoint`
-  - `ImprovementPoint`
-  - `Weakness` candidate 或待确认记录
+  - `JobMatchAnalysis` aggregate / result envelope。
+  - `match_score_ref`、`match_points_ref`、`mismatch_points_ref`、`improvement_points_ref` 和 `weakness_candidate_refs` 等子结果引用。
   - `LlmValidationResult`
   - `LowConfidenceFlag`
   - `TraceRef`
   - `AuditEvent`
+  - 不直接持久化薄弱项候选详情，不创建正式 `Weakness`；候选详情由 `P-JOBMATCH-004` 负责。
 - User Confirmation Requirement:
   - 匹配分析结果可以作为分析结果保存。
   - 薄弱项候选、资产候选或训练建议不得绕过用户确认直接写入正式对象。
@@ -861,6 +878,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - `JobResumeBinding`
   - `EvidenceRef`
   - `ScoreRuleVersion` 或评分规则占位引用
+  - `P-SHARED-002` Retrieval Planning 结果
   - `P-SHARED-001` Context Assembly 结果
   - `P-SHARED-003` Output Validation 要求
   - `P-SHARED-004` Low Confidence Classification 要求
@@ -876,6 +894,8 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - Retrieval Sources:
   - 默认使用 `JobVersion`、`ResumeVersion`、`JobResumeBinding` 和已选择 evidence refs。
   - 条件读取 match / mismatch / improvement points、历史匹配分析、公共评分口径、用户已确认资产和薄弱项证据。
+  - 条件读取必须经过 `P-SHARED-002`；如果没有条件检索结果，不阻断基础评分。
+  - 基础评分仍可仅基于 `JobVersion`、`ResumeVersion`、`JobResumeBinding` 和已选 evidence 运行，并把检索为空或未使用增强证据传递给低置信度分类。
   - 知识库 / RAG 只作为证据增强或公共评分口径来源，不替代核心岗位与简历输入。
   - 互联网检索不作为默认评分输入。
 - Context Assembly:
@@ -887,6 +907,9 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 与评分无关的完整历史会话、全部资产、全部复盘、原始 Prompt、completion、provider payload、密钥、token 和日志正文。
   - source unavailable 正文、无 evidence ref 的材料和无 owner 校验数据。
 - Output Schema:
+  - 公共字段：必须完整包含 §11.0 的 Job Match 公共字段。
+  - `score_result_ref`
+  - `match_score_view_ref`
   - `score_value`
   - `score_scale`
   - `score_type`
@@ -894,9 +917,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - `positive_evidence_refs`
   - `negative_evidence_refs`
   - `uncertainty_reasons`
-  - `low_confidence_flags`
   - `score_rule_version_ref`
-  - `trace_refs`
 - Validation Rules:
   - `score_value` 必须在 0-100 范围内。
   - `score_scale` 必须表明是产品展示刻度。
@@ -917,9 +938,15 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 解释无法绑定证据。
 - Evidence Requirements: `score_explanation`、正向证据、负向证据和不确定性原因必须绑定 `EvidenceRef` 或明确标记证据不足；评分规则版本或 UNKNOWN 占位必须可追踪到 `ScoreRuleVersion` / `TraceRef`。
 - Trace Requirements: 必须记录评分生成、评分规则引用、证据绑定、validation、low confidence 和重试 / 降级路径的 `TraceRef`。
+- `canonical` score 关系:
+  - `ScoreResult` 是统一评分承载对象，保存 score value、score type、explanation、rule version、evidence refs、validation result 和 trace refs。
+  - `MatchScore` 是岗位匹配场景下的视图、引用或领域包装，用于从 `JobMatchAnalysis` 指向对应 `ScoreResult`。
+  - 不允许 `ScoreResult` 与 `MatchScore` 分别保存两份不一致的分数、解释或证据。
+  - 历史回看、校准和报告复用应引用 canonical score。
+  - 如果后续 `DATA_MODEL.md` 需要同步命名，应另开数据模型修正任务；本任务不修改 `DATA_MODEL.md`。
 - Persistence Targets:
-  - `MatchScore`
-  - `ScoreResult`
+  - `ScoreResult` canonical score。
+  - `MatchScore` view / reference wrapper。
   - `ScoreExplanation`
   - `ScoreEvidenceLink`
   - `LowConfidenceFlag`
@@ -960,6 +987,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - `P-SHARED-001` Context Assembly 结果
   - `P-SHARED-002` Retrieval Planning 结果
   - `P-SHARED-003` Output Validation 要求
+  - `P-SHARED-004` Low Confidence Classification 要求
   - `P-SHARED-005` Evidence Binding 要求
 - Optional Inputs:
   - 历史匹配分析。
@@ -981,19 +1009,27 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 无 evidence ref 的泛化判断、owner 不一致来源、source unavailable 正文、未确认候选对象作为事实。
   - 完整无关历史、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
 - Output Schema:
+  - 公共字段：必须完整包含 §11.0 的 Job Match 公共字段。
   - `match_points`
   - `mismatch_points`
   - `improvement_points`
+  - `point_ordering`
+  - `max_points_hint`
+  - 每个 point 的 `point_id_candidate`
+  - 每个 point 的 `point_type`
   - 每个 point 的 `title`
   - 每个 point 的 `description`
   - 每个 point 的 `impact`
-  - 每个 point 的 `evidence_refs`
+  - 每个 point 的 `priority`
   - 每个 point 的 `confidence`
   - 每个 point 的 `related_resume_modules`
   - 每个 point 的 `related_job_requirements`
+  - 每个 point 的 `evidence_refs`
+  - 每个 point 的 `source_refs`
   - 每个 point 的 `suggested_next_action`
-  - `low_confidence_flags`
-  - `trace_refs`
+  - `point_type` 只能是 `match` / `mismatch` / `improvement`。
+  - `impact` 和 `priority` 建议使用 `high` / `medium` / `low` 或等价枚举。
+  - `max_points_hint` 是 MVP 展示和成本控制提示，不冻结最终算法；默认建议每类 point 不超过 3-5 条，除非后续产品设计另行明确。
 - Point 分类规则:
   - `MatchPoint` 表示简历证据与岗位要求有正向对应。
   - `MismatchPoint` 表示岗位要求中缺少简历证据、证据弱或表达不充分。
@@ -1005,7 +1041,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 每个 point 必须关联岗位要求或简历模块。
   - `MismatchPoint` 不得直接等同于失败结论。
   - `ImprovementPoint` 不得直接写入正式训练建议，后续仍需训练建议 contract 或用户确认。
-  - 点位数量不在本阶段冻结，但必须避免无边界扩张。
+  - 点位数量不得无边界扩张；`max_points_hint` 默认用于 MVP 展示和成本控制，不能被解释为最终评分算法或硬性产品上限。
   - 输出不得绕过 `P-SHARED-005` Evidence Binding。
 - Low Confidence Rules:
   - point 缺少证据。
@@ -1032,7 +1068,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - API State Mapping: 只定义状态语义，包括 `points_available`、`points_partial`、`points_low_confidence`、`points_validation_failed`、`evidence_missing` 和 `classification_ambiguous`；不定义 endpoint 或 schema。
 - Security Notes: 输出只展示可展示证据摘要和必要引用；不得暴露无权限来源、source unavailable 正文、原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖三类 point、同一证据冲突分类、无证据匹配点、岗位要求模糊、简历模块缺失、数量无边界扩张、improvement 不转正式训练建议和 mismatch 不等同失败结论。
-- Open Questions: point 数量上限、排序策略、影响程度枚举、训练建议映射和点位合并规则仍待后续业务 contract / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 最终点位排序策略、产品化硬上限、训练建议映射和点位合并规则仍待后续业务 contract / API / UX 收敛，不在本 contract 关闭。
 
 ### 11.4 `P-JOBMATCH-004` Weakness Candidate from Job Match
 
@@ -1043,15 +1079,17 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - `P-JOBMATCH-001` 完成后触发。
   - `P-JOBMATCH-003` 生成 mismatch / improvement points 后触发。
   - 用户选择从岗位匹配分析生成薄弱项候选时触发。
-- Goal: 从岗位匹配分析、mismatch / improvement points、低分解释或证据不足中提炼薄弱项候选；本 contract 只生成候选，不直接写入正式 `Weakness`，除非后续产品和 API 明确允许且保留用户确认或候选状态。
+- Goal: 从岗位匹配分析、mismatch / improvement points、低分解释或证据不足中提炼薄弱项候选；本 contract 只生成候选，不直接写入正式 `Weakness`，后续进入正式薄弱项生命周期必须经过用户确认流。
 - Required Inputs:
   - `JobMatchAnalysis`
   - `MismatchPoint`
   - `ImprovementPoint`
-  - `MatchScore`
+  - `MatchScore` / `score_result_ref` 条件输入；不可用时允许 `score_dependency_status = score_unavailable`
   - `EvidenceRef`
   - `JobVersion`
   - `ResumeVersion`
+  - `P-SHARED-001` Context Assembly 结果
+  - `P-SHARED-002` Retrieval Planning 结果，或 `retrieval_plan.status = retrieval_not_required`
   - `P-SHARED-003` Output Validation 要求
   - `P-SHARED-004` Low Confidence Classification 要求
   - `P-SHARED-005` Evidence Binding 要求
@@ -1063,14 +1101,17 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 用户已确认资产
   - session summary
 - Retrieval Sources:
-  - 默认使用当前 `JobMatchAnalysis`、`MismatchPoint`、`ImprovementPoint`、`MatchScore` 和 evidence refs。
+  - 默认使用当前 `JobMatchAnalysis`、`MismatchPoint`、`ImprovementPoint`、可用的 `MatchScore` / `score_result_ref` 和 evidence refs。
+  - 如果只消费 `P-JOBMATCH-001` / `P-JOBMATCH-003` 上游结果且不读取既有 `Weakness`、历史训练建议、历史报告、复盘或 session summary，可使用 `retrieval_not_required`。
+  - 如果读取既有 `Weakness`、历史训练建议、历史报告、复盘或 session summary，必须经过 `P-SHARED-002`，并保留 owner / source / evidence 过滤边界与 trace。
   - 条件检索既有 `Weakness`、历史薄弱项状态、历史训练建议、历史报告 / 复盘、用户已确认资产和 session summary。
   - 条件检索必须沿用 `P-SHARED-002` 的来源过滤、排序、裁剪和 source availability 规则。
   - 知识库 / RAG 只作为证据解释补充，不替代岗位匹配分析来源。
   - 互联网检索不默认启用。
 - Context Assembly:
   - 必须继承 `P-SHARED-001` 的最小必要上下文、分区、裁剪、omitted refs 和 trace 规则。
-  - 使用当前匹配分析结果、mismatch / improvement points、低分解释、证据不足原因和既有薄弱项摘要。
+  - 使用当前匹配分析结果、mismatch / improvement points、低分解释、证据不足原因，以及经 `P-SHARED-002` 选入的既有薄弱项摘要。
+  - 使用 `retrieval_not_required` 时不得读取既有 `Weakness`、历史训练建议、历史报告、复盘或 session summary 的正文或摘要。
   - 不读取无关历史会话全文，不把全部训练建议或全部资产塞入上下文。
   - 上下文过长时，优先保留来源 points、分数解释、证据 refs、既有薄弱项候选合并线索和输出 schema。
 - Excluded Inputs:
@@ -1078,7 +1119,12 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 未通过 owner 校验的历史弱项、训练建议、报告、复盘或资产。
   - source unavailable 正文、未确认候选对象作为正式事实、原始 Prompt、completion、provider payload、密钥、token、cookie 和日志正文。
 - Output Schema:
+  - 公共字段：必须完整包含 §11.0 的 Job Match 公共字段。
   - `weakness_candidates`
+  - `merge_suggestions`
+  - `score_dependency_status`
+  - 每个候选的 `candidate_id`
+  - 每个候选的 `candidate_status`
   - 每个候选的 `title`
   - 每个候选的 `description`
   - 每个候选的 `source_type`
@@ -1089,14 +1135,17 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - 每个候选的 `related_job_requirements`
   - 每个候选的 `related_resume_modules`
   - 每个候选的 `merge_candidate_refs`
-  - `user_confirmation_required`
-  - `low_confidence_flags`
-  - `trace_refs`
+  - 每个候选的 `user_confirmation_required`
+  - `candidate_status` 建议使用 `weakness_detected` 或等价候选态，不得静默写入正式 `Weakness`。
+  - `score_dependency_status` 至少区分 `score_available` / `score_unavailable`；当 score unavailable 时必须触发 low confidence flag。
 - Candidate 规则:
   - 薄弱项候选必须来源于 mismatch point、improvement point、低分解释或证据不足。
   - 薄弱项候选必须绑定来源证据。
+  - 输出是候选态，不是正式 `Weakness`；用户确认后才可进入正式薄弱项生命周期。
   - 薄弱项候选不得静默覆盖既有薄弱项。
-  - 如可能与既有薄弱项重复，应输出 merge suggestion，而不是直接合并。
+  - 如可能与既有薄弱项重复，应输出 merge suggestion，而不是直接合并或覆盖。
+  - 用户可确认、编辑、跳过或合并；确认动作必须形成 `UserConfirmationRef` 或等价记录。
+  - `MatchScore` / `score_result_ref` 不可用时，允许以 `score_unavailable` 和低置信度方式基于 mismatch / improvement points 生成候选。
   - `severity_hint` 只是提示，不冻结薄弱项严重度算法。
   - `suggested_training_direction` 只是训练方向，不等同于正式训练任务。
 - Validation Rules:
@@ -1110,19 +1159,23 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
   - mismatch / improvement points 本身低置信度。
   - 来源证据不足。
   - 既有薄弱项冲突。
+  - `score_unavailable` 但仍基于 mismatch / improvement points 生成候选。
   - 薄弱项粒度过粗或过细。
   - 训练方向无法从证据推出。
   - 用户简历信息不足以判断真实能力。
-- Evidence Requirements: 每个候选必须绑定来源 point、低分解释或证据不足记录的 `EvidenceRef`；无法绑定时不得生成正式候选，只能输出证据不足和 `manual_check_required`。
+- Evidence Requirements: 每个候选必须绑定来源 point、低分解释或证据不足记录的 `EvidenceRef`；无法绑定时不得生成高置信候选，更不得写入正式 `Weakness`，只能输出证据不足和 `manual_check_required`。
 - Trace Requirements: 必须记录来源匹配分析、来源 point、分数解释、证据绑定、重复候选判断、validation、low confidence、用户确认状态和回流失败的 `TraceRef`。
 - Persistence Targets:
-  - `Weakness` candidate
-  - `WeaknessEvidence`
-  - `UserConfirmationRef`
-  - `FeedbackLoop`
+  - `Weakness` candidate result，状态为 `weakness_detected` 或等价候选态。
+  - `WeaknessEvidence` candidate evidence。
+  - `merge_suggestions`，只表达合并建议，不自动覆盖既有 `Weakness`。
+  - `UserConfirmationRef` 或等价确认记录。
+  - `FeedbackLoop` candidate / confirmation flow。
   - `LowConfidenceFlag`
+  - `LlmValidationResult`
   - `TraceRef`
   - `AuditEvent`
+  - 正式 `Weakness` 只能在用户确认后由后续确认流写入；候选结果、正式对象、用户确认记录、trace、validation result 和 audit event 不得混写。
 - User Confirmation Requirement:
   - 默认需要用户确认后才能成为正式薄弱项。
   - 用户可以确认、编辑、跳过或合并。
