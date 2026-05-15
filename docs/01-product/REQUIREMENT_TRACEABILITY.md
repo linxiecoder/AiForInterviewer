@@ -54,6 +54,8 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 
 ## 3. 历史来源处理明细
 
+本节出现的 `archive/2026-05-doc-consolidation/legacy/docs/requirements/workbench-mvp/**` 与 `archive/2026-05-doc-consolidation/legacy/docs/design/workbench-mvp/**` 只表示历史来源证据；不得恢复为 `docs/requirements/workbench-mvp/**` 或 `docs/design/workbench-mvp/**` active 路径，也不得作为当前开发、验收或测试依据。
+
 | 历史来源文件路径 | 历史需求摘要 | 当前处理状态 | 迁入目标位置 / 未迁入原因 | 对应 BACKLOG |
 |---|---|---|---|---|
 | `archive/docs/superpowers/specs/2026-04-20-ai-interview-p1-design.md` §2-§3、§18 | 文本面试工作台覆盖岗位、简历、匹配、模拟、打磨、复盘、训练、资产库和管理边界 | MERGED_TO_PRD | `PRD.md` §2-§6、§9 | AIFI-PROD-001、AIFI-PROD-009 |

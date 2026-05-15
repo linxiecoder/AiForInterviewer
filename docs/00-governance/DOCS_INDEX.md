@@ -11,6 +11,8 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 
 本文件是 F0 文档治理落库后的当前有效文档索引。它只登记当前已经落库并可作为 active 入口的文档；尚未创建或尚未确认的目标文档不得被当作当前执行依据。
 
+当前 AI 模拟面试工作台级 MVP 以 active PRD / UX / TECH / DATA_MODEL / SECURITY_PRIVACY 文档体系为准；archive 下的 workbench-mvp 仅保留历史记录，不作为开发、验收或测试依据。
+
 ## 1. 当前有效入口
 
 | 类型 | 路径 | 职责 |
