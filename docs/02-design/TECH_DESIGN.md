@@ -35,7 +35,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 ## 4. 非目标
 
 - 不在本文件中展开数据表、字段、API endpoint、Prompt 模板、安全策略或测试用例。
-- `DATA_MODEL.md` 已由 `AIFI-DATA-001` 初始化；本文件不创建 `API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
+- `DATA_MODEL.md` 已由 `AIFI-DATA-001` 初始化，`SECURITY_PRIVACY.md` 已由 `AIFI-SEC-001` 初始化为 active design draft；本文件不创建 `API_SPEC.md` 或 `PROMPT_SPEC.md`，也不替代安全隐私草案或实现状态。
 - 不创建或关闭 ADR。
 - 不更新 DELIVERY_PLAN 或任何无关任务状态；BACKLOG 与 DOCS_INDEX 仅允许围绕已初始化的 F4 子文档做最小状态同步。
 - 不关闭 PRD §10 中归类为 `F4_TECH_DESIGN` 的 UNKNOWN。
@@ -173,7 +173,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 - 数据对象、状态枚举、版本策略、资产合并、弱项生命周期和持久化 schema 已由 `DATA_MODEL.md` 初始化，仍需后续 F4 子文档协同补齐。
 - API path、request / response schema、错误码、鉴权语义、异步任务语义和重试语义待 `API_SPEC.md` 明确。
 - Prompt 模板、模型选择、输入裁剪、输出校验、低信心处理、重试和降级策略待 `PROMPT_SPEC.md` 明确。
-- 隐私字段、日志脱敏、密钥管理、数据保留、删除策略和发布风险待 `SECURITY_PRIVACY.md` 明确。
+- 隐私字段、日志脱敏、密钥管理、数据保留、删除策略和发布风险已由 `SECURITY_PRIVACY.md` 初始化设计边界；retention / deletion、审计可见范围、密钥轮换、trace 保存与脱敏策略仍按其 UNKNOWN 和后续 F4/F5 收敛。
 - 部署拓扑、队列、对象存储、后台 worker、监控告警和生产数据库形态当前证据不足，默认不进入 MVP 主架构。
 - `AIFI-ARCH-002` 应在子文档证据充分后统一检查 UNKNOWN 关闭状态；本文件不单独关闭 UNKNOWN。
 
@@ -182,12 +182,12 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 1. 继续迭代 `DATA_MODEL.md`，收敛业务对象、数据对象、状态与版本边界。
 2. 创建 `API_SPEC.md`，对齐页面流、任务流、错误语义和前后端契约。
 3. 创建 `PROMPT_SPEC.md`，明确 LLM 输入输出、可追踪性和安全约束。
-4. 创建 `SECURITY_PRIVACY.md`，补齐隐私、安全、密钥、日志和发布风险。
+4. 继续迭代 `SECURITY_PRIVACY.md`，收敛隐私、安全、密钥、日志和发布风险的 UNKNOWN。
 5. 回到 `TECH_DESIGN.md` 汇总跨文档决策，并在证据充分时关闭对应 `F4_TECH_DESIGN` UNKNOWN。
 
 ## 18. 本轮状态
 
 - 已补齐 F4 技术设计主架构锚点。
-- 已初始化 `DATA_MODEL.md`；未创建 `API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
-- 本轮仅围绕 `AIFI-DATA-001` 最小同步 BACKLOG 与 DOCS_INDEX；未修改 DELIVERY_PLAN、PRD、UX_SPEC、UI_DESIGN_SYSTEM、ADR、apps、packages 或 archive。
+- 已初始化 `DATA_MODEL.md` 与 `SECURITY_PRIVACY.md`；`SECURITY_PRIVACY.md` 当前仍是 active design draft，不代表安全隐私能力已实现完成；未创建 `API_SPEC.md` 或 `PROMPT_SPEC.md`。
+- 本轮仅围绕 `AIFI-DATA-001` 与 `AIFI-SEC-001` 的 F4 子文档状态做最小同步；未修改 DELIVERY_PLAN、PRD、UX_SPEC、UI_DESIGN_SYSTEM、ADR、apps、packages 或 archive。
 - 未关闭任何 `F4_TECH_DESIGN` UNKNOWN。
