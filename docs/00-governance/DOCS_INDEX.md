@@ -23,8 +23,9 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 历史需求吸收、替代、后置、缺口和待决策项 |
 | F2 低保真设计 | `docs/02-design/UX_SPEC.md` | F2 低保真设计唯一 active 文档；输入来源是 `PRD.md`，UNKNOWN 输入来源是 PRD §10；正文以功能场景设计包为主体，Figma 低保真稿链接、Page 名称、Prototype 表达状态和人工接受状态登记以 `UX_SPEC.md` 为准，仓库不存储 Figma 文件本体；不替代 `PRD.md`，不包含高保真 UI、技术设计、API、数据模型或 Prompt 设计 |
 | F3 设计系统草案 | `docs/02-design/UI_DESIGN_SYSTEM.md` | AIFI-UI-001 当前产物；阶段 F3；状态 DRAFT；类型 active design draft；不替代 `docs/01-product/PRD.md` 或 `docs/02-design/UX_SPEC.md`；包含 WARN / UNKNOWN / CONFLICT 台账，相关项仍需后续关闭；Figma 仅作为 F2 低保真证据来源 |
-| F4 技术设计草案 | `docs/02-design/TECH_DESIGN.md` | AIFI-ARCH-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；基于 `docs/01-product/PRD.md`、`docs/02-design/UX_SPEC.md` 和 `docs/02-design/UI_DESIGN_SYSTEM.md` 冻结技术架构边界；不替代 `DATA_MODEL.md`、后续 `API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md` |
-| F4 数据模型草案 | `docs/02-design/DATA_MODEL.md` | AIFI-DATA-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的数据模型子文档；初始化业务对象、数据对象、状态枚举、版本策略和持久化边界；不替代后续 `API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
+| F4 技术设计草案 | `docs/02-design/TECH_DESIGN.md` | AIFI-ARCH-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；基于 `docs/01-product/PRD.md`、`docs/02-design/UX_SPEC.md` 和 `docs/02-design/UI_DESIGN_SYSTEM.md` 冻结技术架构边界；不替代 `DATA_MODEL.md`、`SECURITY_PRIVACY.md`、后续 `API_SPEC.md` 或 `PROMPT_SPEC.md` |
+| F4 数据模型草案 | `docs/02-design/DATA_MODEL.md` | AIFI-DATA-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的数据模型子文档；初始化业务对象、数据对象、状态枚举、版本策略和持久化边界；不替代 `SECURITY_PRIVACY.md`、后续 `API_SPEC.md` 或 `PROMPT_SPEC.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
+| F4 安全隐私规范草案 | `docs/02-design/SECURITY_PRIVACY.md` | AIFI-SEC-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的安全隐私子文档；初始化 MVP ownership、角色权限、LLM 隔离、RAG 来源治理、trace、审计、脱敏、保留、复制 non-goal 和密钥边界；不替代后续 `API_SPEC.md` 或 `PROMPT_SPEC.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
@@ -40,7 +41,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | --- | --- | --- |
 | `docs/00-governance/` | active | 只承载当前治理入口 |
 | `docs/01-product/` | active | 当前 `PRD.md` 为产品需求唯一事实源，`REQUIREMENT_TRACEABILITY.md` 只登记历史需求处理 |
-| `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md` 和 `DATA_MODEL.md` 已登记为 active 设计文档；未创建或未登记的后续设计文档不得作为执行依据 |
+| `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md` 和 `SECURITY_PRIVACY.md` 已登记为 active 设计文档；未创建或未登记的后续设计文档不得作为执行依据 |
 | `docs/03-delivery/` | active | 当前仅 `DELIVERY_PLAN.md`、`BACKLOG.md` 生效 |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
