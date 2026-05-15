@@ -400,11 +400,11 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-PRESSURE-002` | First Question Generation | 生成首题 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 | `P-PRESSURE-003` | Answer Quality Assessment | 判断回答质量 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 | `P-PRESSURE-004` | Follow-up Strategy | 选择追问策略 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
-| `P-PRESSURE-005` | Follow-up Question Generation | 生成连续追问 | Stub | `prompt-contracts/PRESSURE_CONTRACTS.md` |
-| `P-PRESSURE-006` | Pace Control | 控制节奏与压力强度 | Stub | `prompt-contracts/PRESSURE_CONTRACTS.md` |
-| `P-PRESSURE-007` | End Condition Check | 判断是否结束整场 | Stub | `prompt-contracts/PRESSURE_CONTRACTS.md` |
-| `P-PRESSURE-008` | Session Score | 生成整场评分 | Stub | `prompt-contracts/PRESSURE_CONTRACTS.md` |
-| `P-PRESSURE-009` | Report Input Assembly | 组装报告输入 | Stub | `prompt-contracts/PRESSURE_CONTRACTS.md` |
+| `P-PRESSURE-005` | Follow-up Question Generation | 生成连续追问 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
+| `P-PRESSURE-006` | Pace Control | 控制节奏与压力强度 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
+| `P-PRESSURE-007` | End Condition Check | 判断是否结束整场 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
+| `P-PRESSURE-008` | Session Score | 生成整场评分 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
+| `P-PRESSURE-009` | Report Input Assembly | 组装报告输入 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 
 ### 9.5 Report Contracts
 
@@ -458,7 +458,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `prompt-contracts/SHARED_CONTRACTS.md` | `P-SHARED-*` | Draft | Shared contract 细则 |
 | `prompt-contracts/JOB_MATCH_CONTRACTS.md` | `P-JOBMATCH-*` | Draft | Job Match contract 细则 |
 | `prompt-contracts/POLISH_CONTRACTS.md` | `P-POLISH-*` | Draft | Polish 001-011 细则 |
-| `prompt-contracts/PRESSURE_CONTRACTS.md` | `P-PRESSURE-*` | Partial Draft | 001-004 Draft，005-009 Stub |
+| `prompt-contracts/PRESSURE_CONTRACTS.md` | `P-PRESSURE-*` | Draft | Pressure 001-009 细则 |
 | `prompt-contracts/REPORT_CONTRACTS.md` | `P-REPORT-*` | Stub | 待后续授权填充 |
 | `prompt-contracts/REVIEW_CONTRACTS.md` | `P-REVIEW-*` | Stub | 待后续授权填充 |
 | `prompt-contracts/WEAKNESS_CONTRACTS.md` | `P-WEAKNESS-*` | Stub | 待后续授权填充 |
@@ -498,14 +498,13 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 ## 12. 后续填充顺序
 
-当前已将 Shared contracts、Job match contracts、Polish `P-POLISH-001` 至 `P-POLISH-011` 和 Pressure `P-PRESSURE-001` 至 `P-PRESSURE-004` 填充为 Draft。Pressure 第一组完成后，下一批不应继续重复填充 Opening / First Question / Answer Quality / Follow-up Strategy；应先进入 Pressure 第一组只读验收，或在另行授权后进入 Pressure 后续 contracts / Report / Review 等后续阶段。
+当前已将 Shared contracts、Job match contracts、Polish `P-POLISH-001` 至 `P-POLISH-011` 和 Pressure `P-PRESSURE-001` 至 `P-PRESSURE-009` 填充为 Draft。Pressure 细则完成后，下一批不应继续重复填充 Pressure contracts；应先进入 Pressure 001-009 只读验收，或在另行授权后进入 Report / Review 等后续阶段。
 
-1. Pressure 第一组 `P-PRESSURE-001` 至 `P-PRESSURE-004` 只读验收。
-2. Pressure mode `P-PRESSURE-005` 至 `P-PRESSURE-009`。
-3. Report contracts。
-4. Review contracts。
-5. Weakness / asset / training contracts。
-6. Cross-contract consistency review。
+1. Pressure `P-PRESSURE-001` 至 `P-PRESSURE-009` 只读验收。
+2. Report contracts。
+3. Review contracts。
+4. Weakness / asset / training contracts。
+5. Cross-contract consistency review。
 
 ## 13. UNKNOWN 与后续交接
 
@@ -532,6 +531,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | 日期 | 变更 | 影响 |
 |---|---|---|
 | 2026-05-15 | 拆分 contract 子文档 | 主文件保留 canonical registry 和治理规则，详细正文迁移到 `prompt-contracts/*.md`；不改变 contract ID、名称、状态或语义，不填充 Stub contract，不关闭 UNKNOWN |
+| 2026-05-15 | 填充 Pressure 7B Contract 细则 | 将 `P-PRESSURE-005` 至 `P-PRESSURE-009` 从 Stub 更新为 Draft，补充连续追问生成、节奏控制、结束条件判断、整场评分和报告输入组装 contract；不填充 Report / Review / Weakness / Asset / Training contracts，不生成报告正文，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭压力强度、追问深度、结束条件、整场评分公式、通过倾向或 RAG 实现 UNKNOWN |
 | 2026-05-15 | 填充 Pressure 第一组 Contract 细则 | 将 `P-PRESSURE-001` 至 `P-PRESSURE-004` 从 Stub 更新为 Draft，补充开场策略、首题生成、回答质量判断和追问策略 contract；不填充 `P-PRESSURE-005` 至 `P-PRESSURE-009`，不生成连续追问题目、整场评分、最终报告、正式薄弱项、正式资产或训练建议，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 2026-05-15 | 填充 Polish 6B 回流候选链路 Contract 细则 | 将 `P-POLISH-009` 至 `P-POLISH-011` 从 Stub 更新为 Draft，补充下一轮建议、资产候选和薄弱项候选 contract；不填充 Pressure / Report / Review / Weakness / Asset / Training contracts，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 2026-05-15 | 填充 Polish 第一组 Contract 细则 | 将 `P-POLISH-001` 至 `P-POLISH-004` 从 Stub 更新为 Draft，补充主题规划、题目生成、回答诊断和每轮 0-100 得分 contract；不填充 `P-POLISH-005` 至 `P-POLISH-011`，不生成最终报告、正式薄弱项、正式资产或训练计划，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
