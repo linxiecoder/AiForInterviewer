@@ -419,10 +419,10 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
-| `P-REVIEW-001` | Mock Interview Review | 生成模拟面试复盘 | Stub | `prompt-contracts/REVIEW_CONTRACTS.md` |
-| `P-REVIEW-002` | Real Interview Input Structuring | 结构化真实面试输入 | Stub | `prompt-contracts/REVIEW_CONTRACTS.md` |
-| `P-REVIEW-003` | Real Interview Review | 生成真实面试复盘 | Stub | `prompt-contracts/REVIEW_CONTRACTS.md` |
-| `P-REVIEW-004` | Review Item Extraction | 提炼题级复盘项 | Stub | `prompt-contracts/REVIEW_CONTRACTS.md` |
+| `P-REVIEW-001` | Mock Interview Review | 生成模拟面试复盘 | Draft | `prompt-contracts/REVIEW_CONTRACTS.md` |
+| `P-REVIEW-002` | Real Interview Input Structuring | 结构化真实面试输入 | Draft | `prompt-contracts/REVIEW_CONTRACTS.md` |
+| `P-REVIEW-003` | Real Interview Review | 生成真实面试复盘 | Draft | `prompt-contracts/REVIEW_CONTRACTS.md` |
+| `P-REVIEW-004` | Review Item Extraction | 提炼题级复盘项 | Draft | `prompt-contracts/REVIEW_CONTRACTS.md` |
 
 ### 9.7 Weakness Contracts
 
@@ -460,7 +460,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `prompt-contracts/POLISH_CONTRACTS.md` | `P-POLISH-*` | Draft | Polish 001-011 细则 |
 | `prompt-contracts/PRESSURE_CONTRACTS.md` | `P-PRESSURE-*` | Draft | Pressure 001-009 细则 |
 | `prompt-contracts/REPORT_CONTRACTS.md` | `P-REPORT-*` | Draft | Report 001-004 细则 |
-| `prompt-contracts/REVIEW_CONTRACTS.md` | `P-REVIEW-*` | Stub | 待后续授权填充 |
+| `prompt-contracts/REVIEW_CONTRACTS.md` | `P-REVIEW-*` | Draft | Review 001-004 细则 |
 | `prompt-contracts/WEAKNESS_CONTRACTS.md` | `P-WEAKNESS-*` | Stub | 待后续授权填充 |
 | `prompt-contracts/ASSET_CONTRACTS.md` | `P-ASSET-*` | Stub | 待后续授权填充 |
 | `prompt-contracts/TRAINING_CONTRACTS.md` | `P-TRAINING-*` | Stub | 待后续授权填充 |
@@ -498,12 +498,11 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 ## 12. 后续填充顺序
 
-当前已将 Shared contracts、Job match contracts、Polish `P-POLISH-001` 至 `P-POLISH-011`、Pressure `P-PRESSURE-001` 至 `P-PRESSURE-009` 和 Report `P-REPORT-001` 至 `P-REPORT-004` 填充为 Draft。Report 细则完成后，下一批不应继续重复填充 Report contracts；应先进入 Report 001-004 只读验收，或在另行授权后进入 Review / Weakness / Asset / Training 等后续阶段。
+当前已将 Shared contracts、Job match contracts、Polish `P-POLISH-001` 至 `P-POLISH-011`、Pressure `P-PRESSURE-001` 至 `P-PRESSURE-009`、Report `P-REPORT-001` 至 `P-REPORT-004` 和 Review `P-REVIEW-001` 至 `P-REVIEW-004` 填充为 Draft。Review 细则完成后，下一批不应继续重复填充 Review contracts；应先进入 Review 001-004 只读验收，或在另行授权后进入 Weakness / Asset / Training 等后续阶段。
 
-1. Report `P-REPORT-001` 至 `P-REPORT-004` 只读验收。
-2. Review contracts。
-3. Weakness / asset / training contracts。
-4. Cross-contract consistency review。
+1. Review `P-REVIEW-001` 至 `P-REVIEW-004` 只读验收。
+2. Weakness / asset / training contracts。
+3. Cross-contract consistency review。
 
 ## 13. UNKNOWN 与后续交接
 
@@ -529,6 +528,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-16 | 填充 Review Contract 细则 | 将 `P-REVIEW-001` 至 `P-REVIEW-004` 从 Stub 更新为 Draft，补充模拟面试复盘、真实面试输入结构化、真实面试复盘和题级复盘项提取 contract；不填充 Weakness / Asset / Training contracts，不生成真实复盘实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭复盘切分、真实面试输入结构化、题级复盘项合并、薄弱项合并、资产归档或训练优先级 UNKNOWN |
 | 2026-05-16 | 填充 Report Contract 细则 | 将 `P-REPORT-001` 至 `P-REPORT-004` 从 Stub 更新为 Draft，补充报告生成、分项评分解释、风险提示与通过倾向、可复制内容组装 contract；不填充 Review / Weakness / Asset / Training contracts，不生成报告实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭评分公式、分项权重、通过倾向、风险提示阈值或 RAG 实现 UNKNOWN |
 | 2026-05-15 | 拆分 contract 子文档 | 主文件保留 canonical registry 和治理规则，详细正文迁移到 `prompt-contracts/*.md`；不改变 contract ID、名称、状态或语义，不填充 Stub contract，不关闭 UNKNOWN |
 | 2026-05-15 | 填充 Pressure 7B Contract 细则 | 将 `P-PRESSURE-005` 至 `P-PRESSURE-009` 从 Stub 更新为 Draft，补充连续追问生成、节奏控制、结束条件判断、整场评分和报告输入组装 contract；不填充 Report / Review / Weakness / Asset / Training contracts，不生成报告正文，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭压力强度、追问深度、结束条件、整场评分公式、通过倾向或 RAG 实现 UNKNOWN |
