@@ -30,6 +30,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | F4 数据模型草案 | `docs/02-design/DATA_MODEL.md` | AIFI-DATA-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的数据模型子文档；初始化业务对象、数据对象、状态枚举、版本策略和持久化边界；不替代 `SECURITY_PRIVACY.md`、后续 `API_SPEC.md` 或 `PROMPT_SPEC.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | F4 安全隐私规范草案 | `docs/02-design/SECURITY_PRIVACY.md` | AIFI-SEC-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的安全隐私子文档；初始化 MVP ownership、角色权限、LLM 隔离、RAG 来源治理、trace、审计、脱敏、保留、复制 non-goal 和密钥边界；不替代后续 `API_SPEC.md` 或 `PROMPT_SPEC.md`；不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | F4 Prompt / AI 子任务 contract 草案 | `docs/02-design/PROMPT_SPEC.md` | AIFI-PROMPT-001 当前产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 `TECH_DESIGN.md` 下的 AI 编排与 Prompt contract 子文档；定义 AI 子任务 contract、上下文装配、检索依赖、输出 schema、校验、trace / evidence 和失败处理；不替代 `API_SPEC.md`、`DATA_MODEL.md` 或 `SECURITY_PRIVACY.md`；不作为完整提示词文案库；不关闭 `F4_TECH_DESIGN` UNKNOWN |
+| F4 Prompt contract 子文档集合 | `docs/02-design/prompt-contracts/*.md` | AIFI-PROMPT-001 active 子文档集合；承载 `PROMPT_SPEC.md` 已登记 contract 的详细正文或 Stub 摘要；主 `PROMPT_SPEC.md` 是 canonical registry；子文档不得自行新增未登记 ID，不替代 `API_SPEC.md`、`DATA_MODEL.md` 或 `SECURITY_PRIVACY.md`，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
