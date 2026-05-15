@@ -63,7 +63,7 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | 业务对象 | 逻辑数据对象 | 说明 |
 |---|---|---|
 | 用户 / 账号 / 角色 / 审计 | `UserAccount`、`OwnerRef`、`RoleAssignment`、`RoleScope`、`PermissionBoundary`、`AuditEvent` | 保存账号归属、最小角色范围、关键动作审计和可见性边界；完整鉴权策略交给 `SECURITY_PRIVACY.md` |
-| 简历 | `Resume`、`ResumeVersion`、`ResumeModule` | 简历正文以 Markdown 为主；系统识别模块用于定位、分析和引用 |
+| 简历 | `Resume`、`ResumeVersion`、`ResumeModule` | MVP 简历正文来自 Markdown 粘贴 / 手动编辑；系统识别模块用于定位、分析和引用；不要求保存文件原文、MIME、文件名或文件大小 |
 | 项目经历模块 | `ResumeModule(type=project_experience)` | 作为简历模块存在，可被匹配分析、会话、复盘和资产引用 |
 | 岗位 / JD | `Job`、`JobVersion`、`JobStatus` | 岗位来源为用户手动录入；不承接外部材料解析生成岗位 |
 | 岗位-简历绑定 | `JobResumeBinding` | 保存岗位、简历、版本和绑定状态，支撑匹配分析和历史回看 |
@@ -168,10 +168,10 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | 对象 | 必要字段组 | 关系与说明 |
 |---|---|---|
 | `Resume` | 所有者、简历名称、目标方向、当前版本、资料状态、创建 / 更新时间 | 简历是岗位匹配、模拟面试和复盘的基础输入，不承载资产库材料、复盘结论、打磨记录或薄弱项 |
-| `ResumeVersion` | 简历标识、版本号或版本序列、Markdown 正文、摘要、来源、创建时间、创建原因 | 匹配分析、会话、报告和复盘应引用版本，而不是只引用可变的 `Resume` |
+| `ResumeVersion` | 简历标识、版本号或版本序列、Markdown 正文、摘要、来源（`markdown_paste` / `manual_input`）、创建时间、创建原因 | 匹配分析、会话、报告和复盘应引用版本，而不是只引用可变的 `Resume` |
 | `ResumeModule` | 简历版本、模块类型、标题、正文片段、位置范围、识别状态、证据摘要 | `project_experience` 是模块类型之一，不升级为顶层数据对象 |
 
-简历版本创建触发、版本保留策略和历史引用细节仍为 UNKNOWN，见 §12。
+MVP 不要求保存 `original_file`、`parsed_file`、MIME、文件名或文件大小；`file_upload` / PDF 类来源如未来需要，只能作为 Deferred enum 扩展，不能成为 MVP required path。简历版本创建触发、版本保留策略和历史引用细节仍为 UNKNOWN，见 §12。
 
 ### 5.3 岗位 / JD、版本与状态
 
