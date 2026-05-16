@@ -445,9 +445,9 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
-| `P-TRAINING-001` | Training Recommendation | 生成训练建议 | Stub | `prompt-contracts/TRAINING_CONTRACTS.md` |
-| `P-TRAINING-002` | Training Priority Ranking | 训练建议排序 | Stub | `prompt-contracts/TRAINING_CONTRACTS.md` |
-| `P-TRAINING-003` | Training Result Review | 训练结果复盘 | Stub | `prompt-contracts/TRAINING_CONTRACTS.md` |
+| `P-TRAINING-001` | Training Recommendation | 生成训练建议 | Draft | `prompt-contracts/TRAINING_CONTRACTS.md` |
+| `P-TRAINING-002` | Training Priority Ranking | 训练建议排序 | Draft | `prompt-contracts/TRAINING_CONTRACTS.md` |
+| `P-TRAINING-003` | Training Result Review | 训练结果复盘 | Draft | `prompt-contracts/TRAINING_CONTRACTS.md` |
 
 ## 10. Contract 子文档索引
 
@@ -463,7 +463,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `prompt-contracts/REVIEW_CONTRACTS.md` | `P-REVIEW-*` | Draft | Review 001-004 细则 |
 | `prompt-contracts/WEAKNESS_CONTRACTS.md` | `P-WEAKNESS-*` | Draft | Weakness 001-004 细则 |
 | `prompt-contracts/ASSET_CONTRACTS.md` | `P-ASSET-*` | Draft | Asset 001-003 细则 |
-| `prompt-contracts/TRAINING_CONTRACTS.md` | `P-TRAINING-*` | Stub | 待后续授权填充 |
+| `prompt-contracts/TRAINING_CONTRACTS.md` | `P-TRAINING-*` | Draft | Training 001-003 细则 |
 
 ## 11. 单个 Contract Stub 模板
 
@@ -528,6 +528,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-16 | 填充 Training Contract 细则 | 将 `P-TRAINING-001` 至 `P-TRAINING-003` 从 Stub 更新为 Draft，补充训练建议、训练建议排序和训练结果复盘 contract；不实现训练执行，不自动创建 TrainingTask，不自动更新正式 Weakness，不自动归档 Asset，不自动发布 AssetVersion，不关闭训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则 UNKNOWN |
 | 2026-05-16 | 填充 Asset Contract 细则 | 将 `P-ASSET-001` 至 `P-ASSET-003` 从 Stub 更新为 Draft，补充资产候选提炼、资产质量提示和资产版本更新建议 contract；不填充 Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动替换、覆盖或发布 AssetVersion，不关闭资产质量规则、资产归档策略、资产版本合并策略或训练优先级 UNKNOWN |
 | 2026-05-16 | 填充 Weakness Contract 细则 | 将 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 从 Stub 更新为 Draft，补充薄弱项候选提炼、合并建议、严重度提示和状态更新建议 contract；不填充 Asset / Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动合并、删除或更新正式 Weakness，不关闭薄弱项合并算法、严重度规则、状态流转规则或训练优先级 UNKNOWN |
 | 2026-05-16 | 填充 Review Contract 细则 | 将 `P-REVIEW-001` 至 `P-REVIEW-004` 从 Stub 更新为 Draft，补充模拟面试复盘、真实面试输入结构化、真实面试复盘和题级复盘项提取 contract；不填充 Weakness / Asset / Training contracts，不生成真实复盘实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭复盘切分、真实面试输入结构化、题级复盘项合并、薄弱项合并、资产归档或训练优先级 UNKNOWN |
