@@ -308,7 +308,7 @@ Rubric / rule version 的最小维度如下：
 - `RiskSignal` / 报告风险项至少包含 `risk_level`、`risk_reason`、`confidence_level`、`evidence_refs`、`score_version`、`rubric_version`、`rule_version_ref`、`validation_status` 和 `low_confidence_flags`；如不新增独立一级对象，可由 `ReportSection`、`ReviewItem` 或等价风险字段承载。
 - 低置信度、证据不足、source unavailable 或 validation failed 时，不得给出确定性通过倾向，只能进入 `insufficient_evidence` 或 `manual_review_required`。
 
-打磨模式暂停恢复的最小快照边界已冻结：`InterviewSession` / `PolishSessionDetail` 保存 owner、mode、current question、current answer draft 或 submitted answer ref、`ProgressPosition`、`SessionSummary`、last stable `TraceRef`、low confidence / failure flags、updated_at 和 resume attempt status；完整恢复失败状态机继续由 `AR-F4-FULL-005` 的 Medium finding 验证，不作为 `AR-F4-FULL-001` 的 M4 阻断。
+打磨模式和压力面模式暂停恢复的最小快照边界已冻结：`InterviewSession` / mode detail 保存 owner、mode、current question、current answer draft 或 submitted answer ref、`ProgressPosition`、`SessionSummary`、last stable `TraceRef`、low confidence / failure flags、updated_at 和 resume attempt status；恢复必须校验 `source_session_snapshot_ref`、`covered_turn_refs`、`ProgressPosition` 和 source availability，失败时进入 `pause_snapshot_unavailable`、`resume_failed`、`source_unavailable` 或 `partial`，不得重复生成题目、丢弃进展或隐藏低置信度继承。
 
 ### 5.6 进展树
 
@@ -318,7 +318,7 @@ Rubric / rule version 的最小维度如下：
 | `ProgressNode` | 进展树、父节点、节点类型、标题、状态、排序、完成度、来源证据 | 节点可表达技术点、项目经历、能力项、自我介绍、软技能、行为面、薄弱项、题目或训练主题 |
 | `ProgressPosition` | 会话、当前节点、当前题目、当前位置更新时间、恢复状态 | 支撑当前位置展示和暂停恢复 |
 
-进展树数据结构和最小状态域已冻结：`ProgressTree` / `ProgressNode` / `ProgressPosition` 支撑能力项、题目、薄弱项、训练主题和会话位置；节点状态至少使用 §7 的 `not_started`、`in_progress`、`completed`、`suggested`、`paused`、`blocked`。更细的推荐排序和 UI 展示策略由后续 `AR-F4-FULL-005` / UX / F7 fixture 承接，不阻断 M4。
+进展树数据结构和最小状态域已冻结：`ProgressTree` / `ProgressNode` / `ProgressPosition` 支撑能力项、题目、薄弱项、训练主题和会话位置；节点状态至少使用 §7 的 `not_started`、`in_progress`、`completed`、`suggested`、`paused`、`blocked`。更细的推荐排序和 UI 展示策略由 UX / F7 fixture 承接，不阻断 M4。
 
 ### 5.7 知识库、RAG 与证据引用
 
@@ -624,8 +624,8 @@ Rubric / rule version 的最小维度如下：
 | DM-UNK-002 | 岗位版本策略 | must_close_in_F4 | 岗位正文保存创建新 `JobVersion`；投递状态留在 `JobStatus`；编辑不静默重算历史分析。 | F5 migration / API 字段 |
 | DM-UNK-003 | 项目经历表达版本策略 | must_close_in_F4 | 项目经历仍是简历模块；打磨结果先进入候选 / 建议，确认后更新简历模块或资产版本。 | F5 confirmation flow |
 | DM-UNK-004 | 资产版本、合并、质量判断与自动沉淀 | deferred_non_blocking | `AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`AssetSource`、`UserConfirmationRef` 已冻结；自动合并、质量评分和去重算法不作为 MVP 阻断。 | Asset / F7 fixture |
-| DM-UNK-005 | 打磨模式暂停恢复字段与引用 | must_close_in_F4 | 最小恢复快照字段已冻结：session、mode、question / answer ref、progress position、session summary、trace、risk / low confidence、resume attempt status。 | `AR-F4-FULL-005` 验证完整状态机 |
-| DM-UNK-006 | 进展树数据结构、节点状态和更新触发 | must_close_in_F4 | `ProgressTree` / `ProgressNode` / `ProgressPosition` 和最小状态域已冻结；排序和推荐算法后置。 | `AR-F4-FULL-005` / F7 |
+| DM-UNK-005 | 打磨模式 / 压力面模式暂停恢复字段与引用 | must_close_in_F4 | 最小恢复快照字段已冻结：session、mode、question / answer ref、progress position、session summary、trace、risk / low confidence、resume attempt status；恢复失败、快照不可用、来源不可用和 partial 状态必须用户可见。 | F7 pause/resume fixture |
+| DM-UNK-006 | 进展树数据结构、节点状态和更新触发 | must_close_in_F4 | `ProgressTree` / `ProgressNode` / `ProgressPosition` 和最小状态域已冻结；暂停 / 恢复必须绑定 `ProgressPosition`；排序和推荐算法后置。 | F7 progress-tree fixture |
 | DM-UNK-007 | 薄弱项合并、状态流转、生命周期和自动消减 | deferred_non_blocking | 候选、合并建议、严重度提示、状态更新建议和正式 Weakness 边界已冻结；自动消减和复杂合并算法后置。 | Weakness / Training 后续优化 |
 | DM-UNK-008 | 匹配分析和报告评分结果如何存储 | already_closed_by_recent_remediation | `ScoreResult` 承载 0-100 产品展示分、版本、规则、置信度、validation、task、证据和解释。 | F7 scoring fixture |
 | DM-UNK-009 | 解释、证据和低置信度如何关联 | already_closed_by_recent_remediation | `EvidenceSummary`、`ScoreEvidenceLink`、`LowConfidenceFlag`、免责声明、风险提示和通过倾向降级边界已冻结。 | F7 low confidence / evidence fixture |
@@ -650,6 +650,7 @@ Rubric / rule version 的最小维度如下：
 | 日期 | 变更 | 影响 |
 |---|---|---|
 | 2026-05-16 | 修复 `AR-F4-FULL-001` 数据模型侧阻断项 | 将 `DM-UNK-*` 改为 F4 待决策项处置表；冻结简历 / 岗位版本、项目经历表达版本、暂停恢复最小快照、进展树最小状态、复盘切分、候选 / 正式对象、trace / evidence 和训练 / 资产 / 弱项 deferred_non_blocking 边界；等待 verification |
+| 2026-05-16 | 修复 `AR-F4-FULL-005` 暂停恢复与进展树状态机缺口 | 将暂停恢复最小快照扩展到打磨和压力面两种模式，明确 `source_session_snapshot_ref`、`covered_turn_refs`、`ProgressPosition`、恢复失败、来源不可用、partial 和低置信度继承；不进入 implementation |
 | 2026-05-16 | 修复 `AR-F4-FULL-003` 评分数据承载缺口 | 冻结 `ScoreResult` 正式字段、0-100 产品刻度、`score_version` / `rubric_version` / `ScoreRuleVersion`、rubric 维度与权重策略、通过倾向分档、风险提示字段、低置信度降级和 MVP 校准承载；不新增独立一级业务对象，不进入物理 schema |
 | 2026-05-16 | 同步 Asset / Training handoff 逻辑对象 | 补充 `AssetQualityHint`、`AssetVersionSuggestion`、`TrainingPriorityRanking`、`TrainingResultReview` 及其候选 / 建议 / 用户确认边界；不定义物理 schema |
 | 2026-05-15 | 初始化 F4 数据模型工作草案 | 建立 `AIFI-DATA-001` 的对象、关系、状态、版本、回流、评分和 trace 承载边界 |

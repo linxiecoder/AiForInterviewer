@@ -511,4 +511,4 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
 - Weakness contracts 不得直接创建 TrainingRecommendation。
 - Weakness contracts 不得自动归档 Asset。
 - Weakness contracts 不实现合并算法、严重度规则、状态流转或训练优先级复杂算法；这些为 deferred_non_blocking，且不得绕过用户确认更新正式 Weakness。
-- Asset / Training contracts 仍保持 Stub，等待后续阶段授权填充。
+- Asset / Training contracts 当前均已按 `PROMPT_SPEC.md` canonical registry 进入 Draft；Weakness contracts 只向这些 domain 输出候选、建议或确认入口，不自动创建正式 Asset、TrainingRecommendation 或 TrainingTask，也不关闭这些 domain 的 deferred_non_blocking 细化项。

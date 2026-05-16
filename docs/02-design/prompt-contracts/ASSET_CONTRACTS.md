@@ -432,4 +432,4 @@ Asset 输出可以保存为 asset candidate、asset quality hint、asset version
 - Asset contracts 不得直接创建 `TrainingRecommendation`。
 - Asset contracts 不得自动归档 `Asset` 或替换 `AssetVersion`。
 - Asset contracts 不实现资产质量规则、资产归档策略、资产版本合并策略或训练优先级复杂算法；这些为 deferred_non_blocking，且不得绕过用户确认发布正式 AssetVersion。
-- Training contracts 仍保持 Stub，等待后续阶段授权填充。
+- Training contracts 当前已按 `PROMPT_SPEC.md` canonical registry 进入 Draft；Asset contracts 只向 Training domain 输出候选、建议或确认入口，不自动创建正式 TrainingRecommendation 或 TrainingTask，也不关闭 Training domain 的 deferred_non_blocking 细化项。
