@@ -85,6 +85,7 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | 训练建议 / 训练过程 | `TrainingRecommendation`、`TrainingPriorityRanking`、`TrainingTask`、`TrainingSession`、`TrainingResult`、`TrainingResultReview` | 保存训练建议、排序提示、执行状态、结果复盘和回流候选 |
 | 反馈回流 / 用户确认 | `FeedbackLoop`、`UserConfirmation` | 保存用户确认、编辑、取消、跳过、写入成功或失败 |
 | AI Task Contract 输出交接 | `AiTaskResultRef`、`CandidateRef`、`SuggestionRef`、`LlmValidationResult`、`LowConfidenceFlag`、`TraceRef`、`EvidenceRef`、`AuditEvent` | 保存 contract 输出结果引用、候选态、建议态、校验、低置信度、证据、追踪和审计边界；不等同于 provider response |
+| API 幂等、任务与请求追踪 | `IdempotencyRecord`、`AiTask`、`AiTaskResult`、`ApiRequestTrace`、`ApiEndpointRef` | 承接 `API_SPEC.md` 的幂等重试、异步任务状态、接口请求 trace、owner boundary、字段级 schema 和 F7 contract tests；不定义物理队列、表结构或运行时平台 |
 | LLM request / response / usage / validation | `LlmRequestTrace`、`LlmResponseTrace`、`LlmUsageRecord`、`LlmValidationResult`、`LlmRetentionPolicyRef`、`LlmRedactionRef`、`LlmFailureRecord` | 保存最小可追踪信息、结构化输出状态、用量统计边界、校验和保留 / 脱敏引用 |
 
 ### 4.1 统一引用模型
@@ -99,11 +100,11 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | `EvidenceRef` | 记录证据来源，例如题目、回答、点评、评分解释、RAG 检索证据、用户确认或面试官反馈 | `ReviewItem`、`ScoreResult`、`WeaknessEvidence`、`TrainingRecommendation`、`TrainingPriorityRanking`、`TrainingResultReview`、`AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`RetrievalEvidence` | 证据引用应能回溯到证据对象、证据版本或快照、摘要和置信度 / 完整度标记 | `API_SPEC.md` 定义查询和展示字段，`SECURITY_PRIVACY.md` 定义证据片段可展示范围 |
 | `VersionRef` | 记录源对象版本，例如 `ResumeVersion`、`JobVersion`、`KnowledgeDocument` version、`AssetVersion`、`ScoreRuleVersion` | 历史报告、复盘、评分、资产候选、RAG evidence、LLM trace | 指向生成时使用的版本；源对象后续编辑不得改写已生成结果 | `API_SPEC.md` 定义版本引用表达，F5 实现冻结具体持久化方式 |
 | `SnapshotRef` | 记录生成时快照引用，用于历史报告、复盘、评分和资产候选的稳定回看 | `InterviewReport`、`MockInterviewReview`、`RealInterviewReview`、`ScoreResult`、`AssetCandidate`、`AuditEvent` | 当版本对象不足以稳定回看时，引用生成时的内容快照或快照摘要；不得退化为当前最新对象引用 | `API_SPEC.md` 定义快照读取语义，`SECURITY_PRIVACY.md` 定义快照保留和删除边界 |
-| `TraceRef` | 记录 LLM、RAG、校验、审计等过程引用 | `ScoreResult`、`InterviewReport`、`ReviewItem`、`WeaknessEvidence`、`TrainingRecommendation`、`TrainingPriorityRanking`、`TrainingResultReview`、`AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`AuditEvent` | 只表达过程追踪链路，不暴露 provider-specific payload、Prompt 模板或模型调用参数 | `PROMPT_SPEC.md` 定义模型过程边界，`SECURITY_PRIVACY.md` 定义日志和保留边界 |
+| `TraceRef` | 记录 API request、LLM、RAG、校验、审计和持久化交接等过程引用 | `ApiRequestTrace`、`AiTask`、`ScoreResult`、`InterviewReport`、`ReviewItem`、`WeaknessEvidence`、`TrainingRecommendation`、`TrainingPriorityRanking`、`TrainingResultReview`、`AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`AuditEvent` | 只表达过程追踪链路，不保存或暴露 provider payload、system prompt、completion 原文、隐藏评分规则、request / response body 或未脱敏正文 | `API_SPEC.md` 定义 request / response trace 字段，`PROMPT_SPEC.md` 定义模型过程边界，`SECURITY_PRIVACY.md` 定义日志和保留边界 |
 | `UserConfirmationRef` | 记录用户确认、拒绝、修正、回流确认或资产入库确认 | `AssetCandidate`、`AssetVersionSuggestion`、`AssetVersion`、`WeaknessEvidence`、`TrainingRecommendation` candidate、`TrainingResultReview`、`FeedbackLoop`、`AuditEvent` | 系统建议进入正式资产、薄弱项或训练输入前，应保留确认动作、确认状态和编辑结果引用 | `API_SPEC.md` 定义确认流程字段，`SECURITY_PRIVACY.md` 定义确认记录可见性 |
 | `CandidateRef` | 记录 AI 生成的待确认候选对象引用 | `WeaknessCandidate`、`AssetCandidate`、`TrainingRecommendation` candidate、`SessionSummary`、`AiTaskResultRef` | 候选引用必须保留 owner、来源、证据、trace、候选状态和用户确认要求；用户确认前不得升级为正式对象 | `API_SPEC.md` 定义候选查询、确认和状态展示语义 |
 | `SuggestionRef` | 记录合并建议、严重度提示、状态更新建议、质量提示、版本建议、排序提示或结果复盘建议引用 | `WeaknessMergeSuggestion`、`WeaknessSeverityAssessment`、`WeaknessStatusUpdateSuggestion`、`AssetQualityHint`、`AssetVersionSuggestion`、`TrainingPriorityRanking`、`TrainingResultReview` | 建议对象不等于正式业务动作，必须可被确认、编辑、跳过、拒绝或人工校对 | `API_SPEC.md` 定义建议列表、确认动作和过期状态语义 |
-| `AiTaskResultRef` | 记录一个 AI Task Contract 的输出结果引用 | Report / Review / Weakness / Asset / Training 相关结果、候选、建议、validation 和 audit event | 必须关联 `contract_id`、owner、status、validation result、low confidence、trace 和 evidence；不保存 provider response 原文 | `PROMPT_SPEC.md` 定义 contract 输出，`API_SPEC.md` 定义响应 envelope 和状态语义 |
+| `AiTaskResultRef` | 记录一个 AI Task Contract 或 API AI task 的输出结果引用 | `AiTaskResult`、Report / Review / Weakness / Asset / Training 相关结果、候选、建议、validation 和 audit event | 必须关联 `ai_task_id`、`contract_id`、owner、status、validation result、low confidence、source availability、trace 和 evidence；不保存 provider response 原文 | `PROMPT_SPEC.md` 定义 contract 输出，`API_SPEC.md` 定义响应 envelope、task status 和 result 语义 |
 | `OwnerRef` | 记录对象归属、创建者和 MVP 最小 role scope | 用户业务对象、知识文档、资产、报告、复盘、trace、审计事件 | MVP 默认以个人工作台 owner 为主要边界；只表达最小可见性和维护角色范围，不设计复杂权限继承 | `API_SPEC.md` 定义资源 owner 表达，`SECURITY_PRIVACY.md` 定义鉴权和审计边界 |
 
 历史报告、复盘、评分结果和资产候选不能只引用“当前最新简历 / 岗位 / 知识文档 / 评分规则”，必须引用生成时的 `VersionRef` 或 `SnapshotRef`。如果源对象被后续编辑、归档、禁用或删除，历史结果仍保留生成时引用，只额外展示来源当前可用性状态。
@@ -119,6 +120,7 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | 一级领域对象 / Domain Entity | `User` / `Account`、`Resume`、`ResumeVersion`、`Job` / `JD`、`JobVersion`、`ResumeJobBinding`、`MatchAnalysis`、`InterviewSession`、`SessionSummary`、`PolishingSession`、`PressureInterviewSession`、`ProgressTree`、`InterviewReport`、`MockInterviewReview`、`RealInterviewReview`、`Weakness`、`TrainingRecommendation`、`TrainingTask` / `TrainingSession`、`Asset`、`AssetVersion`、`AssetCandidate`、`KnowledgeBase`、`KnowledgeDocument`、`LlmRequestTrace` / `LlmResponseTrace`、`AuditEvent` | 具有独立生命周期、状态或跨模块引用价值；其中 `KnowledgeBase` 只是后端逻辑检索边界，不代表产品一级模块 |
 | 明细或值对象 / Value Object or Detail Object | `ResumeModule`、`ProjectExperienceModule`、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`InterviewQuestion`、`InterviewAnswer`、`Feedback`、`ScoreDimension`、`ScoreExplanation`、`ScoreEvidenceLink`、`ReviewItem`、`WeaknessEvidence`、`RetrievalEvidence`、`Citation` / `CitationRef`、`TrainingResult`、`AssetPromotionRecord` | 依附于主对象，通常不独立管理生命周期 |
 | 候选 / 建议 / AI 结果交接对象 | `CandidateRef`、`WeaknessCandidate`、`AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`TrainingRecommendation` candidate、`TrainingPriorityRanking`、`TrainingResultReview`、`SuggestionRef`、`WeaknessMergeSuggestion`、`WeaknessSeverityAssessment`、`WeaknessStatusUpdateSuggestion`、`AiTaskResultRef`、`LowConfidenceFlag`、`LlmValidationResult` | 承接 AI Task Contract 输出和用户确认流；不等同于正式业务对象或实际业务动作 |
+| API 协议承接对象 / API Handoff Object | `IdempotencyRecord`、`AiTask`、`AiTaskResult`、`ApiRequestTrace`、`ApiEndpointRef` | 承接 API 字段级 contract、异步任务协议、幂等持久化、trace / audit 和 F7 contract test 的逻辑落点；不等同于物理表或队列实现 |
 | 引用对象 / Reference Object | `SourceRef`、`EvidenceRef`、`VersionRef`、`TraceRef`、`SnapshotRef`、`UserConfirmationRef`、`OwnerRef`、`RoleScope`、`PermissionBoundary` | 用于跨模块引用、证据追踪、版本追踪、归属、确认和最小权限边界 |
 | 延后对象 / Deferred Object | API request / response schema、API endpoint、Prompt 输入输出 schema、Prompt 模板、LLM 调用参数、安全隐私字段细则、retention / deletion 具体策略、物理数据库表、ORM model、DDL、索引、外键、migration | 不在 `DATA_MODEL.md` 展开，交给后续 `API_SPEC.md`、`PROMPT_SPEC.md`、`SECURITY_PRIVACY.md` 或 F5 实现 |
 
@@ -156,6 +158,10 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | `KnowledgeChunk` | `value object` / `reference` | 依附于知识文档版本，用作检索和证据引用 |
 | `RetrievalEvidence` | `reference` | 连接检索结果、知识文档、chunk、版本和命中摘要 |
 | `RAGContextAssembly` | `trace` / `derived context` | 记录一次上下文组装过程和来源集合 |
+| `IdempotencyRecord` | `api protocol state` / `handoff record` | 承接 mutation 幂等、request body hash、first response snapshot、AI task 绑定、TTL、owner 和 audit |
+| `AiTask` | `api task entity` | API 可查询、可重试、可取消的异步任务逻辑对象；不等同于 provider task 或物理队列任务 |
+| `AiTaskResult` | `task result` / `handoff result` | 承接 result、candidate、suggestion、validation、low confidence、source availability、evidence 和 trace |
+| `ApiRequestTrace` | `trace` | 记录 API request id、trace id、actor、endpoint、resource refs、validation、audit 和日志脱敏边界 |
 | `LlmRequestTrace` | `trace` | 记录 LLM 请求过程边界 |
 | `LlmResponseTrace` | `trace` | 记录 LLM 响应和结构化输出边界 |
 | `LlmValidationResult` | `trace` / `validation result` | 记录结构化校验和业务语义校验结果 |
@@ -173,7 +179,7 @@ AI Task Contract 的输出必须先落入以下一种或多种逻辑对象，不
 |---|---|---|
 | `CandidateRef` | `candidate_id`、`candidate_type`、`owner_ref`、`source_refs`、`evidence_refs`、`trace_refs`、`low_confidence_flags`、`candidate_status`、`user_confirmation_required`、`created_at`、`updated_at` | 表示 AI 生成的待确认候选对象引用，可用于 `WeaknessCandidate`、`AssetCandidate` 和后续 Training candidate；用户确认前不得升级为正式对象 |
 | `UserConfirmationRef` | `confirmation_id`、`owner_ref`、`actor_ref`、`target_ref`、`target_type`、`action_type`、`action_result`、`before_summary`、`after_summary`、`confirmed_at`、`trace_ref`、`audit_event_ref` | 表示用户对候选、合并建议、状态更新建议、资产归档、训练建议等回流动作的确认记录，不是单纯 boolean |
-| `AiTaskResultRef` | `ai_task_result_id`、`contract_id`、`owner_ref`、`status`、`source_refs`、`evidence_refs`、`validation_result_ref`、`low_confidence_flags`、`trace_refs`、`created_at`、`updated_at` | 表示一个 AI Task Contract 的输出结果引用，用于追踪具体 contract 生成结果；不等于 LLM provider response |
+| `AiTaskResultRef` | `ai_task_result_id`、`ai_task_id`、`contract_id`、`owner_ref`、`status`、`source_refs`、`source_availability`、`evidence_refs`、`validation_result_ref`、`low_confidence_flags`、`trace_refs`、`created_at`、`updated_at` | 表示一个 AI Task Contract 或 API AI task 的输出结果引用，用于追踪具体 contract 生成结果；不等于 LLM provider response |
 | `SuggestionRef` | `suggestion_id`、`suggestion_type`、`target_ref`、`source_refs`、`evidence_refs`、`confidence`、`low_confidence_flags`、`user_confirmation_required`、`status`、`trace_refs` | 表示建议对象，例如 merge suggestion、severity assessment、status update suggestion 或 next recommended action；不等于正式业务动作 |
 
 公共规则：
@@ -186,6 +192,103 @@ AI Task Contract 的输出必须先落入以下一种或多种逻辑对象，不
 - `TrainingRecommendation` 可先以候选态存在；用户确认前不得自动成为正式训练建议。
 - `TrainingTask`、`TrainingSession`、`Asset`、`AssetVersion` 或正式 `Weakness` 不得从 AI 输出直接写入。
 - 所有候选 / 建议对象都要能绑定 `UserConfirmationRef` 或明确 `user_confirmation_required`。
+
+### 4.4 API 幂等、AI Task、Trace 与持久化承接
+
+本节补齐 `AR-F4-F8-001` 中 `API_SPEC.md` 字段级 contract 所依赖的逻辑承接。这里仍是逻辑数据模型，不是物理表、队列、DDL、索引或 migration；F5 可以按实现需要拆分存储，但不得删除以下语义字段或绕过 owner / trace / audit 边界。
+
+#### 4.4.1 IdempotencyRecord
+
+`IdempotencyRecord` 承接所有创建、确认、复制审计、AI task create / retry / cancel 和其它可能重复提交的 mutation。固定幂等范围为 `scope = actor_id + method + path + idempotency_key + request_body_hash`。
+
+| 字段 | 必要性 | 规则 |
+|---|---|---|
+| `idempotency_record_id` | 必须 | 逻辑记录 ID；不得暴露为业务对象 ID |
+| `scope` | 必须 | 固定为 `actor_id + method + path + idempotency_key + request_body_hash` |
+| `actor_ref` / `owner_ref` | 必须 | 当前登录 actor 和 owner 边界；不得由请求体 owner_id 决定 |
+| `method` | 必须 | HTTP method |
+| `path_template` | 必须 | 例如 `/api/v1/reports/{report_id}/copy-events`，不保存 query 中的敏感正文 |
+| `idempotency_key` | 必须 | `Idempotency-Key` header 值；日志只可记录 hash 或摘要 |
+| `request_body_hash` | 必须 | 标准化 request body 的 hash；不得保存原始敏感正文 |
+| `first_response_ref` / `response_snapshot` | 必须二选一 | 重复请求返回第一次 response 等价结果或当前 task status；snapshot 不得包含 provider payload、Prompt、completion 或敏感正文 |
+| `linked_ai_task_id` | 条件必需 | 异步任务创建、retry 或 cancel 时绑定对应 `AiTask.ai_task_id` |
+| `target_ref` | 建议 | 被创建、确认、复制审计或重试的目标引用 |
+| `created_at` | 必须 | 首次接收时间 |
+| `expires_at` | 必须 | TTL 过期时间；MVP 默认不少于 24 小时，具体实现由 F5 冻结 |
+| `conflict_behavior` | 必须 | same key + same body 返回第一次 response；same key + different body 返回 `idempotency_conflict` |
+| `audit_event_ref` | 必须 | 记录创建、复用、冲突或异常过期审计事件 |
+
+幂等规则：
+
+- idempotent retry 不得重复创建 `Resume`、`Job`、`InterviewReport`、`Review`、`Asset`、`Weakness`、`TrainingRecommendation`、`TrainingTask`、candidate、suggestion 或 `AiTask`。
+- 异步 task 的重复创建返回同一个 `ai_task_id` 或等价当前状态；不得重新排队导致重复 candidate / suggestion / formal object。
+- 同一 `idempotency_key` 携带不同 `request_body_hash` 时必须拒绝，不能把后一次请求覆盖为“修正”。
+- 幂等记录自身不保存 request / response body 明文、简历正文、岗位正文、报告正文、复盘正文、Prompt、completion、provider payload、token、cookie、secret 或隐藏评分规则。
+
+#### 4.4.2 AiTask 与 AiTaskResult
+
+`AiTask` 是 API 层可查询、可重试、可取消的异步任务逻辑对象；`AiTaskResult` 是任务结果和候选 / 建议 / validation / trace 的逻辑承接。两者都不等同于 provider task、物理队列任务或 Prompt contract ID。
+
+| 对象 | 必要字段组 | 关系与说明 |
+|---|---|---|
+| `AiTask` | `ai_task_id`、`owner_ref`、`actor_ref`、`task_type`、`status`、`contract_ids`、`target_ref`、`input_refs`、`idempotency_record_ref`、`created_at`、`updated_at`、`timeout_at`、`cancelled_at`、`retry_count`、`retryable`、`user_visible_status` | 对外暴露为 API task status；`contract_ids` 必须来自 `PROMPT_SPEC.md` canonical registry；`target_ref` 和 `input_refs` 必须通过 owner / source availability 校验 |
+| `AiTaskResult` | `ai_task_result_id`、`ai_task_id`、`owner_ref`、`task_type`、`status`、`result_ref`、`candidate_refs`、`suggestion_refs`、`validation_result_ref`、`low_confidence_flags`、`source_availability`、`evidence_refs`、`trace_refs`、`created_at`、`updated_at` | 保存结构化结果引用、候选、建议、校验、低置信度、来源可用性、证据和 trace；不保存 provider response 原文 |
+| `AiTaskResultRef` | `ai_task_result_id`、`ai_task_id`、`contract_id`、`owner_ref`、`status`、`result_ref`、`validation_result_ref`、`low_confidence_flags`、`evidence_refs`、`trace_refs` | 跨 API / Prompt / Data 的轻量引用；可进入 response envelope、candidate、suggestion、report、review、weakness、asset、training 等结果 |
+
+状态和写入规则：
+
+- `status` 至少包含 `queued`、`running`、`succeeded`、`partial`、`low_confidence`、`validation_failed`、`source_unavailable`、`generation_failed`、`timed_out`、`cancelled`。
+- `retry_count`、`retryable`、`timeout_at`、`cancelled_at` 必须能支撑 `API-AITASK-004` retry 与 `API-AITASK-005` cancel。
+- `cancelled`、`timed_out`、`generation_failed`、`validation_failed` 和 `source_unavailable` 不得产生 late formal write。
+- `candidate_refs` / `suggestion_refs` 只表示候选或建议；成为正式 `Weakness`、`Asset`、`AssetVersion`、`TrainingRecommendation` 或 `TrainingTask` 必须走 `UserConfirmationRef` 或显式业务动作。
+- `result_ref` 指向结构化业务结果或可展示结果引用，不是 raw completion、provider response、system prompt、Prompt 模板或隐藏评分规则。
+
+#### 4.4.3 ApiRequestTrace 与 TraceRef
+
+`ApiRequestTrace` 记录一次 API 请求的最小追踪事实，服务于 F7 contract tests、权限审计、幂等复核、source unavailable 和失败排障。
+
+| 字段 | 必要性 | 规则 |
+|---|---|---|
+| `api_request_trace_id` | 必须 | API request trace 逻辑 ID |
+| `request_id` | 必须 | 来自 `X-Request-Id` 或服务端生成 |
+| `trace_id` | 必须 | 服务端链路追踪 ID |
+| `actor_ref` | 必须 | 当前登录 actor；匿名业务 API 不应进入业务处理 |
+| `endpoint_ref` | 必须 | `ApiEndpointRef`，包含 API ID、method、path_template 和 domain |
+| `method` | 必须 | HTTP method |
+| `path_template` | 必须 | route template；不得保存敏感 path 变体正文 |
+| `resource_refs` | 条件必需 | 目标资源、复合输入资源、candidate、suggestion、report、review 或 task refs |
+| `ai_task_id` | 条件必需 | 创建、查询、重试、取消 AI task 时记录 |
+| `validation_result_ref` | 条件必需 | request validation、output validation 或 business validation 结果 |
+| `audit_event_ref` | 条件必需 | owner mismatch、permission denied、copy event、confirmation、source unavailable、validation failed 等关键事件 |
+| `created_at` | 必须 | 请求追踪创建时间 |
+| `log_redaction_boundary` | 必须 | 明确不保存 request / response body、provider payload、system prompt、completion 原文、隐藏评分规则、token、cookie、secret、简历正文、岗位正文、回答正文、报告正文或复盘正文 |
+
+`TraceRef` 可以引用 `ApiRequestTrace`、`RAGContextAssembly`、`LlmRequestTrace`、`LlmValidationResult`、`AuditEvent` 或 persistence handoff；但 trace 可追踪不等于原文可见。前端只接收必要 `trace_id` / `trace_refs` 和安全摘要。
+
+#### 4.4.4 AuditEvent 覆盖范围
+
+`AuditEvent` 至少覆盖以下 API / persistence 事件：
+
+| 事件 | 必须记录 | 不得记录 |
+|---|---|---|
+| copy event / report copy boundary | actor、report_ref、copy_content_ref、copy_surface、result、request_id、trace_id | 复制正文、报告全文、Prompt、provider payload、隐藏评分规则 |
+| owner mismatch | actor、target_ref、endpoint_ref、result、risk flag | 目标资源正文或可泄露存在性的详细信息 |
+| permission denied | actor、role_scope、endpoint_ref、target summary、result | token、cookie、secret、敏感正文 |
+| candidate confirmation | actor、candidate_ref / suggestion_ref、action、before_summary_ref、after_summary_ref、result | 大段原文、Prompt、completion |
+| AI task create / retry / cancel | actor、ai_task_id、task_type、contract_ids、result、idempotency_record_ref | provider task payload、模型参数、Prompt 文案 |
+| source unavailable | actor、source_ref、source_status、target_ref、result | 已删除或禁用来源正文 |
+| validation failed | actor、endpoint_ref、validation_result_ref、failure_signals、result | request body、response body、原始模型输出 |
+| export_not_supported | actor、endpoint_ref、attempted_semantic、result | 任何导出物、filename、download URL 或文件快照 |
+
+#### 4.4.5 Persistence handoff
+
+- candidate / draft / suggestion 不能静默写正式对象；正式对象必须经过用户确认、用户编辑、合并确认、显式业务动作或明确状态转换。
+- `WeaknessCandidate`、`AssetCandidate`、`AssetVersionSuggestion`、`TrainingRecommendation` candidate、`WeaknessMergeSuggestion`、`WeaknessStatusUpdateSuggestion` 和 `TrainingPriorityRanking` 默认不是正式事实。
+- formal object 写入必须记录 `UserConfirmationRef`、`AuditEvent`、`TraceRef`、owner、source / evidence 和版本引用。
+- idempotent retry 不得重复创建 formal object；如果第一次请求已创建 task 或结果，重复请求返回同一 task / result / response snapshot。
+- async task result 与 formal object 的边界必须显式：`AiTaskResult` 可产生 candidate / suggestion / validation result；只有确认流或显式业务动作才能创建或更新 `Weakness`、`Asset`、`AssetVersion`、正式 `TrainingRecommendation` 或 `TrainingTask`。
+- validation failed、low confidence、source unavailable、generation failed、provider unavailable、task timeout 和 cancel 后的结果不得被报告读取、copy content 或前端视为高置信正式事实。
+- 持久化实现不得为了排障保存 provider payload、system prompt、completion 原文、隐藏评分规则或未脱敏正文；排障只使用 `ApiRequestTrace`、`TraceRef`、`LlmValidationResult`、`LlmFailureRecord`、`AuditEvent` 和安全摘要。
 
 ## 5. 核心数据对象清单
 
@@ -599,6 +702,7 @@ Rubric / rule version 的最小维度如下：
 | 身份、归属与审计 | `UserAccount`、`OwnerRef`、`RoleAssignment`、`RoleScope`、`PermissionBoundary`、`AuditActor`、`AuditTarget`、`AuditEvent` |
 | 统一引用模型 | `SourceRef`、`EvidenceRef`、`VersionRef`、`TraceRef`、`SnapshotRef`、`UserConfirmationRef`、`OwnerRef` |
 | AI 输出交接 | `AiTaskResultRef`、`CandidateRef`、`SuggestionRef`、`LlmValidationResult`、`LowConfidenceFlag`、`AuditEvent` |
+| API 幂等、任务与请求追踪 | `IdempotencyRecord`、`AiTask`、`AiTaskResult`、`ApiRequestTrace`、`ApiEndpointRef` |
 | 简历 | `Resume`、`ResumeVersion`、`ResumeModule` |
 | 岗位 | `Job`、`JobVersion`、`JobStatus`、`JobResumeBinding` |
 | 匹配分析 | `JobMatchAnalysis`、`MatchScore`、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`EvidenceSummary` |
@@ -649,6 +753,7 @@ Rubric / rule version 的最小维度如下：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 修复 `AR-F4-F8-001` 数据承接缺口 | 新增 `IdempotencyRecord`、`AiTask` / `AiTaskResult`、`ApiRequestTrace` / `TraceRef`、`AuditEvent` 覆盖范围和 persistence handoff 规则；承接 API 字段级 contract、幂等重试、AI task result、source availability、candidate / suggestion / formal object 边界；不进入物理 schema 或 implementation |
 | 2026-05-16 | 修复 `AR-F4-FULL-001` 数据模型侧阻断项 | 将 `DM-UNK-*` 改为 F4 待决策项处置表；冻结简历 / 岗位版本、项目经历表达版本、暂停恢复最小快照、进展树最小状态、复盘切分、候选 / 正式对象、trace / evidence 和训练 / 资产 / 弱项 deferred_non_blocking 边界；等待 verification |
 | 2026-05-16 | 修复 `AR-F4-FULL-005` 暂停恢复与进展树状态机缺口 | 将暂停恢复最小快照扩展到打磨和压力面两种模式，明确 `source_session_snapshot_ref`、`covered_turn_refs`、`ProgressPosition`、恢复失败、来源不可用、partial 和低置信度继承；不进入 implementation |
 | 2026-05-16 | 修复 `AR-F4-FULL-003` 评分数据承载缺口 | 冻结 `ScoreResult` 正式字段、0-100 产品刻度、`score_version` / `rubric_version` / `ScoreRuleVersion`、rubric 维度与权重策略、通过倾向分档、风险提示字段、低置信度降级和 MVP 校准承载；不新增独立一级业务对象，不进入物理 schema |

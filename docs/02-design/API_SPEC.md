@@ -306,103 +306,4412 @@ Async 规则：
 - timeout 后必须返回 `task_timeout` 或 `generation_failed`，保留可用输入和部分结果引用。
 - `low_confidence` 和 `partial` 结果可以读取，但不得被前端展示为高置信完成态。
 
-## 6. 资源域与核心 endpoint contract
+## 6. API 清单总表
 
-### 6.1 Endpoint contract 共同字段
+本节作为 F5 后端实现、F6 前端接入和 F7 API contract tests 的稳定 route inventory。旧版 endpoint matrix 不再作为唯一交接面；逐接口字段级 contract 见 §7，Schema Index 见 §8。
 
-每个 endpoint 至少遵守以下共同规则：
+| API ID | Method | Path | Name | Domain | Sync/Async | Auth | Idempotency | Owner Check | Request Schema | Response Schema | Error Schema | Related Data Objects | Related Prompt Contract | F7 Contract Test |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| API-RESUME-001 | GET | /api/v1/resumes | List resumes | Resume | sync | required | not required | 按 actor owner scope 过滤列表 | N/A (Query Params) | ResumeSummary[] | ApiErrorEnvelope | Resume, ResumeVersion, OwnerRef | N/A | api.resume.list.owner_scoped |
+| API-RESUME-002 | POST | /api/v1/resumes | Create resume | Resume | sync | required | required | 服务端从 session 推导 owner, 请求体不得包含 owner_id | CreateResumeRequest | ResumeDetail | ApiErrorEnvelope | Resume, ResumeVersion, ResumeModule, AuditEvent, IdempotencyRecord | N/A | api.resume.create.success |
+| API-RESUME-003 | GET | /api/v1/resumes/{resume_id} | Get resume detail | Resume | sync | required | not required | resume.owner_ref 必须匹配当前 actor | N/A | ResumeDetail | ApiErrorEnvelope | Resume, ResumeVersion, ResumeModule, OwnerRef | N/A | api.resume.get.cross_user_denied |
+| API-RESUME-004 | PATCH | /api/v1/resumes/{resume_id} | Update resume | Resume | sync | required | required | resume.owner_ref 与 base_version_ref owner 一致 | UpdateResumeRequest | ResumeDetail | ApiErrorEnvelope | Resume, ResumeVersion, ResumeModule, AuditEvent, IdempotencyRecord | N/A | api.resume.update.stale_version_conflict |
+| API-RESUME-005 | GET | /api/v1/resumes/{resume_id}/modules/project-experiences | List resume project experience modules | Resume project experiences | sync | required | not required | resume.owner_ref 必须匹配当前 actor, project experience 不是一级资源 | N/A (Query Params) | ResumeProjectExperienceModule[] | ApiErrorEnvelope | ResumeModule(type=project_experience), ResumeVersion, SourceAvailability | N/A | api.resume_project_experience.list.not_top_level |
+| API-RESUME-006 | PATCH | /api/v1/resumes/{resume_id}/modules/project-experiences/{module_id} | Update resume project experience module | Resume project experiences | sync | required | required | module 必须属于当前 resume 且 owner 匹配 | UpdateResumeRequest | ResumeProjectExperienceModule | ApiErrorEnvelope | ResumeModule, ResumeVersion, AuditEvent, IdempotencyRecord | N/A | api.resume_project_experience.update.versioned |
+| API-JOB-001 | GET | /api/v1/jobs | List jobs | Job / JD | sync | required | not required | 按 actor owner scope 过滤列表 | N/A (Query Params) | JobSummary[] | ApiErrorEnvelope | Job, JobVersion, JobStatus, OwnerRef | N/A | api.job.list.owner_scoped |
+| API-JOB-002 | POST | /api/v1/jobs | Create job manually | Job / JD | sync | required | required | 服务端从 session 推导 owner, 不接受外部材料解析 | CreateJobRequest | JobDetail | ApiErrorEnvelope | Job, JobVersion, JobStatus, AuditEvent, IdempotencyRecord | N/A | api.job.create.manual_only |
+| API-JOB-003 | GET | /api/v1/jobs/{job_id} | Get job detail | Job / JD | sync | required | not required | job.owner_ref 必须匹配当前 actor | N/A | JobDetail | ApiErrorEnvelope | Job, JobVersion, JobStatus, OwnerRef | N/A | api.job.get.cross_user_denied |
+| API-JOB-004 | PATCH | /api/v1/jobs/{job_id} | Update job | Job / JD | sync | required | required | job.owner_ref 与 base_version_ref owner 一致 | UpdateJobRequest | JobDetail | ApiErrorEnvelope | Job, JobVersion, JobStatus, AuditEvent, IdempotencyRecord | N/A | api.job.update.stale_version_conflict |
+| API-BINDING-001 | POST | /api/v1/resume-job-bindings | Create resume-job binding | Resume-job binding | sync | required | required | resume、job、version 必须同 owner | CreateBindingRequest | JobResumeBindingResponse | ApiErrorEnvelope | JobResumeBinding, ResumeVersion, JobVersion, AuditEvent, IdempotencyRecord | N/A | api.binding.create.cross_owner_denied |
+| API-JOBMATCH-001 | POST | /api/v1/job-match-analyses | Create job match analysis task | Job match analysis | async | required | required | binding/job/resume/version 必须同 owner 且 source_available | CreateJobMatchAnalysisRequest | AiTaskStatusResponse | ApiErrorEnvelope | JobMatchAnalysis, MatchScore, WeaknessCandidate, AiTask, IdempotencyRecord | P-JOBMATCH-001, P-JOBMATCH-002, P-JOBMATCH-003, P-JOBMATCH-004 | api.job_match.create.async_success |
+| API-JOBMATCH-002 | GET | /api/v1/job-match-analyses/{analysis_id} | Get job match analysis | Job match analysis | sync | required | not required | analysis.owner_ref 必须匹配当前 actor | N/A | JobMatchAnalysisResponse | ApiErrorEnvelope | JobMatchAnalysis, ScoreResult, EvidenceRef, TraceRef, SourceAvailability | P-JOBMATCH-* | api.job_match.get.low_confidence_visible |
+| API-POLISH-001 | POST | /api/v1/polish-sessions | Create polish session | Polish session | sync | required | required | resume/job/binding/source_refs 必须同 owner | CreatePolishSessionRequest | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PolishSessionDetail, ProgressTree, IdempotencyRecord | P-POLISH-001 | api.polish_session.create.success |
+| API-POLISH-002 | GET | /api/v1/polish-sessions/{session_id} | Get polish session | Polish session | sync | required | not required | session.owner_ref 必须匹配当前 actor | N/A | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PolishSessionDetail, ProgressTree, SessionSummary | N/A | api.polish_session.get.owner_scoped |
+| API-POLISH-003 | POST | /api/v1/polish-sessions/{session_id}/questions | Create polish question task | Question | async | required | required | session、progress_node、source_refs 必须同 owner | CreateQuestionTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Question, AiTask, RAGContextAssembly, IdempotencyRecord | P-POLISH-002, P-SHARED-* | api.polish_question.create.async_success |
+| API-POLISH-004 | POST | /api/v1/polish-sessions/{session_id}/answers | Create polish answer | Answer | sync | required | required | session/question.owner_ref 必须匹配当前 actor | CreateAnswerRequest | AnswerResponse | ApiErrorEnvelope | Answer, Question, InterviewSession, AuditEvent, IdempotencyRecord | N/A | api.polish_answer.create.validation_failed |
+| API-POLISH-005 | POST | /api/v1/polish-sessions/{session_id}/feedback | Create polish feedback task | Feedback | async | required | required | session/answer/evidence owner 必须匹配当前 actor | CreateFeedbackTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Feedback, ScoreResult, AssetCandidate, WeaknessCandidate, AiTask, IdempotencyRecord | P-POLISH-003, P-POLISH-004, P-POLISH-005, P-POLISH-006, P-POLISH-007, P-POLISH-008, P-POLISH-009, P-POLISH-010, P-POLISH-011 | api.polish_feedback.create.low_confidence_visible |
+| API-PRESSURE-001 | POST | /api/v1/pressure-sessions | Create pressure session | Pressure session | sync | required | required | resume/job/binding/source_refs 必须同 owner | CreatePressureSessionRequest | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PressureSessionDetail, ProgressTree, IdempotencyRecord | P-PRESSURE-001 | api.pressure_session.create.success |
+| API-PRESSURE-002 | GET | /api/v1/pressure-sessions/{session_id} | Get pressure session | Pressure session | sync | required | not required | session.owner_ref 必须匹配当前 actor | N/A | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PressureSessionDetail, ProgressTree, SessionSummary | N/A | api.pressure_session.get.owner_scoped |
+| API-PRESSURE-003 | POST | /api/v1/pressure-sessions/{session_id}/questions | Create pressure question task | Question | async | required | required | session/answer/source_refs 必须同 owner | CreateQuestionTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Question, AiTask, PressureSessionDetail, IdempotencyRecord | P-PRESSURE-002, P-PRESSURE-004, P-PRESSURE-005 | api.pressure_question.create.async_success |
+| API-PRESSURE-004 | POST | /api/v1/pressure-sessions/{session_id}/answers | Create pressure answer | Answer | sync | required | required | session/question.owner_ref 必须匹配当前 actor | CreateAnswerRequest | AnswerResponse | ApiErrorEnvelope | Answer, Question, InterviewSession, AuditEvent, IdempotencyRecord | N/A | api.pressure_answer.create.success |
+| API-PRESSURE-005 | POST | /api/v1/pressure-sessions/{session_id}/feedback | Create pressure feedback task | Feedback | async | required | required | session/answer/evidence owner 必须匹配当前 actor | CreateFeedbackTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Feedback, ScoreResult, SessionSummary, AiTask, IdempotencyRecord | P-PRESSURE-003, P-PRESSURE-006, P-PRESSURE-007, P-PRESSURE-008, P-PRESSURE-009 | api.pressure_feedback.create.generation_failed_visible |
+| API-PROGRESS-001 | GET | /api/v1/interview-sessions/{session_id}/progress-tree | Get progress tree | Progress tree | sync | required | not required | session.owner_ref 必须匹配当前 actor | N/A | ProgressTreeResponse | ApiErrorEnvelope | ProgressTree, ProgressNode, ProgressPosition, SourceAvailability | N/A | api.progress_tree.get.owner_scoped |
+| API-SCORING-001 | POST | /api/v1/scoring-results | Create scoring task | Scoring result | async | required | required | target/input_refs owner 必须匹配当前 actor, hidden scoring rules 不暴露 | CreateScoringTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | ScoreResult, ScoreRuleVersion, ScoreExplanation, AiTask, IdempotencyRecord | P-JOBMATCH-002, P-POLISH-004, P-PRESSURE-008, P-REPORT-002 | api.scoring.create.no_hidden_rules |
+| API-SCORING-002 | GET | /api/v1/scoring-results/{score_result_id} | Get scoring result | Scoring result | sync | required | not required | score_result.owner_ref 必须匹配当前 actor | N/A | ScoreResultResponse | ApiErrorEnvelope | ScoreResult, ScoreRuleVersion, EvidenceRef, TraceRef, LowConfidenceFlag | P-JOBMATCH-002, P-POLISH-004, P-PRESSURE-008, P-REPORT-002 | api.scoring.get.no_exact_probability |
+| API-REPORT-001 | POST | /api/v1/reports | Create report task | Report | async | required | required | session/input_refs owner 必须匹配当前 actor | CreateReportTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | InterviewReport, ReportSection, ScoreResult, AiTask, IdempotencyRecord | P-REPORT-001, P-REPORT-002, P-REPORT-003, P-REPORT-004 | api.report.create.async_success |
+| API-REPORT-002 | GET | /api/v1/reports/{report_id} | Get report | Report | sync | required | not required | report.owner_ref 必须匹配当前 actor | N/A | ReportResponse | ApiErrorEnvelope | InterviewReport, ReportSection, ScoreResult, SourceAvailability | P-REPORT-* | api.report.get.copy_boundary_visible |
+| API-REPORT-003 | GET | /api/v1/reports/{report_id}/copy-content | Get report copy content | Report copy content | sync | required | not required | report.owner_ref 必须匹配当前 actor, copy boundary 必须过滤敏感内容 | N/A | ReportCopyContentResponse | ApiErrorEnvelope | CopyableContent, InterviewReport, AuditEvent, EvidenceRef | P-REPORT-004 | api.report.copy_content.no_export_artifact |
+| API-REPORT-004 | POST | /api/v1/reports/{report_id}/copy-events | Record report copy event | Report copy content | sync | required | required | report.owner_ref 必须匹配当前 actor, 审计不记录正文 | RecordCopyEventRequest | ReportCopyContentResponse | ApiErrorEnvelope | CopyableContent, AuditEvent, IdempotencyRecord | N/A | api.report.copy_event.audit_without_body |
+| API-REVIEW-001 | POST | /api/v1/reviews/mock | Create mock interview review task | Mock interview review | async | required | required | session/report/input_refs owner 必须匹配当前 actor | CreateReviewTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | MockInterviewReview, ReviewItem, AiTask, IdempotencyRecord | P-REVIEW-001, P-REVIEW-004 | api.review.mock.create.async_success |
+| API-REVIEW-002 | POST | /api/v1/reviews/real-inputs | Create real interview input | Real interview input / review | sync | required | required | job/resume/input_refs owner 必须匹配当前 actor | CreateRealInterviewInputRequest | ReviewResponse | ApiErrorEnvelope | RealInterviewInput, RealInterviewEvidence, UserConfirmationRef, IdempotencyRecord | P-REVIEW-002 | api.review.real_input.create.requires_confirmation |
+| API-REVIEW-003 | POST | /api/v1/reviews/real | Create real interview review task | Real interview input / review | async | required | required | real_interview_input owner 必须匹配当前 actor 且已确认 | CreateReviewTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | RealInterviewReview, ReviewItem, AiTask, IdempotencyRecord | P-REVIEW-003, P-REVIEW-004 | api.review.real.create.confirmed_input_only |
+| API-REVIEW-004 | GET | /api/v1/reviews/{review_id} | Get review | Mock interview review / Real interview review | sync | required | not required | review.owner_ref 必须匹配当前 actor | N/A | ReviewResponse | ApiErrorEnvelope | MockInterviewReview, RealInterviewReview, ReviewItem, SourceAvailability | P-REVIEW-* | api.review.get.low_confidence_visible |
+| API-ASSET-001 | GET | /api/v1/assets | List assets | Asset | sync | required | not required | 按 actor owner scope 过滤正式资产 | N/A (Query Params) | AssetResponse[] | ApiErrorEnvelope | Asset, AssetVersion, AssetSource, OwnerRef | N/A | api.asset.list.owner_scoped |
+| API-ASSET-002 | POST | /api/v1/asset-candidates | Create asset candidate task | Asset candidate / asset version suggestion | async | required | required | source_refs/target_asset owner 必须匹配当前 actor | CreateAssetCandidateTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | AssetCandidate, AssetQualityHint, AssetVersionSuggestion, AiTask, IdempotencyRecord | P-ASSET-001, P-ASSET-002, P-ASSET-003, P-POLISH-010 | api.asset_candidate.create.candidate_not_formal |
+| API-ASSET-003 | GET | /api/v1/asset-candidates/{candidate_id} | Get asset candidate | Asset candidate / asset version suggestion | sync | required | not required | candidate.owner_ref 必须匹配当前 actor | N/A | AssetCandidateResponse | ApiErrorEnvelope | AssetCandidate, AssetQualityHint, AssetVersionSuggestion, EvidenceRef, TraceRef | P-ASSET-* | api.asset_candidate.get.low_confidence_visible |
+| API-ASSET-004 | POST | /api/v1/asset-candidates/{candidate_id}/confirmations | Confirm asset candidate | Asset candidate / asset version suggestion | sync | required | required | candidate 和 target_asset owner 必须匹配当前 actor, 确认前不得写正式 Asset | ConfirmCandidateRequest | AssetResponse | ApiErrorEnvelope | AssetCandidate, Asset, AssetVersion, UserConfirmationRef, AuditEvent, IdempotencyRecord | P-ASSET-001, P-ASSET-003 | api.asset_candidate.confirm.formal_requires_user_action |
+| API-WEAKNESS-001 | GET | /api/v1/weaknesses | List weaknesses | Weakness | sync | required | not required | 按 actor owner scope 过滤正式薄弱项 | N/A (Query Params) | WeaknessResponse[] | ApiErrorEnvelope | Weakness, WeaknessEvidence, WeaknessStatusHistory | N/A | api.weakness.list.owner_scoped |
+| API-WEAKNESS-002 | POST | /api/v1/weakness-candidates | Create weakness candidate task | Weakness candidate / merge suggestion | async | required | required | source_refs/input_refs owner 必须匹配当前 actor | CreateWeaknessCandidateTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | WeaknessCandidate, WeaknessMergeSuggestion, WeaknessSeverityAssessment, AiTask, IdempotencyRecord | P-WEAKNESS-001, P-WEAKNESS-002, P-WEAKNESS-003, P-WEAKNESS-004, P-JOBMATCH-004, P-POLISH-011 | api.weakness_candidate.create.candidate_not_formal |
+| API-WEAKNESS-003 | POST | /api/v1/weakness-candidates/{candidate_id}/confirmations | Confirm weakness candidate | Weakness candidate / merge suggestion | sync | required | required | candidate 和 target_weakness owner 必须匹配当前 actor, 确认前不得写正式 Weakness | ConfirmCandidateRequest | WeaknessResponse | ApiErrorEnvelope | WeaknessCandidate, Weakness, WeaknessStatusHistory, UserConfirmationRef, AuditEvent, IdempotencyRecord | P-WEAKNESS-001, P-WEAKNESS-002, P-WEAKNESS-004 | api.weakness_candidate.confirm.formal_requires_user_action |
+| API-TRAINING-001 | GET | /api/v1/training-suggestions | List training suggestions | Training suggestion | sync | required | not required | 按 actor owner scope 过滤训练建议 | N/A (Query Params) | TrainingSuggestionResponse[] | ApiErrorEnvelope | TrainingRecommendation, TrainingPriorityRanking, OwnerRef | P-TRAINING-001, P-TRAINING-002 | api.training_suggestion.list.owner_scoped |
+| API-TRAINING-002 | POST | /api/v1/training-suggestions | Create training suggestion task | Training suggestion | async | required | required | source_refs/weakness_ids/asset_ids owner 必须匹配当前 actor | CreateTrainingSuggestionTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | TrainingRecommendation, TrainingPriorityRanking, AiTask, IdempotencyRecord | P-TRAINING-001, P-TRAINING-002 | api.training_suggestion.create.no_auto_task |
+| API-TRAINING-003 | POST | /api/v1/training-suggestions/{suggestion_id}/confirmations | Confirm training suggestion | Training suggestion | sync | required | required | suggestion.owner_ref 必须匹配当前 actor, 确认不等于自动启动 TrainingTask | ConfirmCandidateRequest | TrainingSuggestionResponse | ApiErrorEnvelope | TrainingRecommendation, UserConfirmationRef, AuditEvent, IdempotencyRecord | P-TRAINING-001 | api.training_suggestion.confirm.no_auto_training_task |
+| API-AITASK-001 | POST | /api/v1/ai-tasks | Create generic AI task | AI task | async | required | required | target_ref/input_refs owner 必须匹配当前 actor, contract_ids 必须已登记 | CreateAiTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | AiTask, AiTaskResult, LlmValidationResult, IdempotencyRecord | 已登记 P-* | api.ai_task.create.contract_id_registered |
+| API-AITASK-002 | GET | /api/v1/ai-tasks/{ai_task_id} | Get AI task status | AI task | sync | required | not required | ai_task.owner_ref 必须匹配当前 actor | N/A | AiTaskStatusResponse | ApiErrorEnvelope | AiTask, AiTaskResult, LlmValidationResult, TraceRef | 已登记 P-* | api.ai_task.status.owner_scoped |
+| API-AITASK-003 | GET | /api/v1/ai-tasks/{ai_task_id}/result | Get AI task result | AI task | sync | required | not required | ai_task.owner_ref 必须匹配当前 actor, 不返回 provider payload | N/A | AiTaskResultResponse | ApiErrorEnvelope | AiTaskResult, CandidateRef, SuggestionRef, EvidenceRef, TraceRef | 已登记 P-* | api.ai_task.result.no_provider_payload |
+| API-AITASK-004 | POST | /api/v1/ai-tasks/{ai_task_id}/retry | Retry AI task | AI task | async | required | required | ai_task.owner_ref 必须匹配当前 actor, retry 不得扩大上下文 | RetryAiTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | AiTask, AiTaskResult, LlmFailureRecord, IdempotencyRecord | 已登记 P-* | api.ai_task.retry.idempotent_and_scope_safe |
+| API-AITASK-005 | POST | /api/v1/ai-tasks/{ai_task_id}/cancel | Cancel AI task | AI task | sync | required | required | ai_task.owner_ref 必须匹配当前 actor, cancel 后不得 late write formal object | CancelAiTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | AiTask, AuditEvent, IdempotencyRecord | 已登记 P-* | api.ai_task.cancel.no_late_write |
 
-- `Method` 和 `Path` 必须稳定，除非走 versioning。
-- `Request` 只列 API contract 必要字段，不等同最终 TypeScript / Pydantic 类型全集。
-- `Response` 必须使用 §3.4 envelope。
-- `Error cases` 必须从 §4 选择稳定错误码。
-- `Permission / owner check` 必须说明 owner 校验位置。
-- `Idempotency requirement` 必须说明是否必需。
-- `Related data objects` 必须来自 `DATA_MODEL.md` 已登记对象或 API protocol 对象。
-- `Related prompt contract` 只引用已登记 `P-*`；不适用时写 `N/A`。
-- `Related F7 test assertion` 必须能转成 contract test。
 
-### 6.2 Core endpoint matrix
+## 7. 逐接口字段级详情
 
-| Method | Path | Purpose | Request / Query | Response | Error cases | Permission / owner check | Idempotency requirement | Related data objects | Related prompt contract | Related F7 test assertion |
-|---|---|---|---|---|---|---|---|---|---|---|
-| GET | `/api/v1/resumes` | 查询当前用户简历列表 | `cursor`、`limit`、`status`、`sort` | `resume[]` + pagination meta | `unauthenticated`、`validation_failed` | 列表按 actor owner scope 过滤 | 不需要 | `Resume`、`ResumeVersion`、`OwnerRef` | N/A | `resumes.list.owner_scoped` |
-| POST | `/api/v1/resumes` | 创建 Markdown 简历 | `title`、`markdown_text`、`target_direction`、`client_draft_id` | 201 `resume`、当前 `ResumeVersion` | `validation_failed`、`rate_limited`、`idempotency_required` | 服务端写入当前 actor owner；不得接受请求体 owner | 必需 | `Resume`、`ResumeVersion`、`ResumeModule`、`AuditEvent` | N/A | `resumes.create.success`、`resumes.create.validation_failed` |
-| GET | `/api/v1/resumes/{resume_id}` | 读取简历详情和当前版本摘要 | path `resume_id` | `resume` + `current_version_ref` + modules summary | `not_found_or_inaccessible`、`owner_mismatch` | 校验 resume owner | 不需要 | `Resume`、`ResumeVersion`、`ResumeModule` | N/A | `resumes.get.cross_user_denied` |
-| PATCH | `/api/v1/resumes/{resume_id}` | 编辑简历并产生新版本 | `markdown_text`、`base_version_ref`、`title`、`If-Match` | `resume` + new `ResumeVersion` | `validation_failed`、`stale_version_conflict`、`owner_mismatch` | 校验 resume owner；版本必须属于同 owner | 必需 | `Resume`、`ResumeVersion`、`AuditEvent` | N/A | `resumes.update.stale_version_conflict` |
-| DELETE | `/api/v1/resumes/{resume_id}` | soft delete 简历并阻断 active 读取 | `delete_reason` | `status=success` + `source_deleted` impact summary | `owner_mismatch`、`stale_version_conflict` | 校验 resume owner；关联 active 生成阻断 | 必需 | `Resume`、`ResumeVersion`、`SourceRef`、`AuditEvent` | N/A | `resumes.delete.source_unavailable_for_new_generation` |
-| GET | `/api/v1/resumes/{resume_id}/versions/{version_id}` | 读取历史简历版本摘要 | path ids | `resume_version` + source availability | `not_found_or_inaccessible`、`source_unavailable` | 校验 resume/version owner | 不需要 | `ResumeVersion`、`VersionRef`、`SnapshotRef` | N/A | `resumes.version.history_read_owner_scoped` |
-| GET | `/api/v1/resumes/{resume_id}/modules/project-experiences` | 查询简历中的项目经历模块 | `version_id` 可选 | `ResumeModule(type=project_experience)[]` | `owner_mismatch`、`source_unavailable` | 校验 resume owner；项目经历不是一级资源 | 不需要 | `ResumeModule(type=project_experience)` | N/A | `resume_project_experiences.not_top_level_resource` |
-| PATCH | `/api/v1/resumes/{resume_id}/modules/project-experiences/{module_id}` | 编辑项目经历模块并产生简历新版本或模块修正 | `content`、`base_version_ref` | updated module + `ResumeVersion` ref | `validation_failed`、`stale_version_conflict`、`owner_mismatch` | 校验 resume owner 和 module 属于 resume | 必需 | `ResumeModule`、`ResumeVersion`、`AuditEvent` | N/A | `resume_project_experiences.update.versioned` |
-| GET | `/api/v1/jobs` | 查询当前用户岗位 / JD 列表 | `cursor`、`limit`、`status`、`application_status`、`sort` | `job[]` + pagination meta | `unauthenticated`、`validation_failed` | 列表按 actor owner scope 过滤 | 不需要 | `Job`、`JobVersion`、`JobStatus` | N/A | `jobs.list.owner_scoped` |
-| POST | `/api/v1/jobs` | 手动创建岗位 / JD | `title`、`company`、`department`、`responsibilities`、`requirements`、`other`、`application_status` | 201 `job` + current `JobVersion` | `validation_failed`、`idempotency_required` | 写入当前 actor owner；不支持外部材料解析 | 必需 | `Job`、`JobVersion`、`JobStatus`、`AuditEvent` | N/A | `jobs.create.manual_only` |
-| GET | `/api/v1/jobs/{job_id}` | 读取岗位详情 | path `job_id` | `job` + current version summary | `not_found_or_inaccessible`、`owner_mismatch` | 校验 job owner | 不需要 | `Job`、`JobVersion` | N/A | `jobs.get.cross_user_denied` |
-| PATCH | `/api/v1/jobs/{job_id}` | 编辑岗位并产生新版本 | job fields + `base_version_ref` | updated `job` + new `JobVersion` | `validation_failed`、`stale_version_conflict`、`owner_mismatch` | 校验 job owner；版本必须同 owner | 必需 | `Job`、`JobVersion`、`AuditEvent` | N/A | `jobs.update.stale_version_conflict` |
-| DELETE | `/api/v1/jobs/{job_id}` | soft delete 岗位 | `delete_reason` | `status=success` + `source_deleted` impact summary | `owner_mismatch`、`stale_version_conflict` | 校验 job owner；新生成不得读取 deleted job | 必需 | `Job`、`JobVersion`、`SourceRef` | N/A | `jobs.delete.source_unavailable_for_new_generation` |
-| GET | `/api/v1/jobs/{job_id}/versions/{version_id}` | 读取岗位历史版本 | path ids | `job_version` + source availability | `not_found_or_inaccessible` | 校验 job/version owner | 不需要 | `JobVersion`、`VersionRef`、`SnapshotRef` | N/A | `jobs.version.history_read_owner_scoped` |
-| GET | `/api/v1/resume-job-bindings` | 查询岗位-简历绑定 | `job_id`、`resume_id`、`status` | `JobResumeBinding[]` | `validation_failed`、`owner_mismatch` | filter 中 job/resume 必须属于 actor | 不需要 | `JobResumeBinding`、`ResumeVersion`、`JobVersion` | N/A | `bindings.list.owner_scoped` |
-| POST | `/api/v1/resume-job-bindings` | 建立岗位与简历绑定 | `job_id`、`resume_id`、`job_version_id` 可选、`resume_version_id` 可选 | 201 `JobResumeBinding` | `validation_failed`、`owner_mismatch`、`stale_version_conflict`、`idempotency_required` | 校验 job 和 resume owner 均为 actor 且版本可用 | 必需 | `JobResumeBinding`、`JobVersion`、`ResumeVersion`、`AuditEvent` | N/A | `bindings.create.cross_owner_rejected` |
-| DELETE | `/api/v1/resume-job-bindings/{binding_id}` | 解除绑定 | `reason`、`base_version_ref` | `status=success` + historical reference preserved | `owner_mismatch`、`stale_version_conflict` | 校验 binding owner；历史报告不被破坏 | 必需 | `JobResumeBinding`、`AuditEvent` | N/A | `bindings.delete.history_preserved` |
-| POST | `/api/v1/job-match-analyses` | 创建岗位匹配分析 AI task | `binding_id` 或 `job_id` + `resume_id`、`job_version_id`、`resume_version_id`、`requested_outputs` | 202 `ai_task_id`; result is `JobMatchAnalysis` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`rate_limited`、`idempotency_required` | 校验 job、resume、binding、version 同 owner 且可用 | 必需 | `JobMatchAnalysis`、`MatchScore`、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`WeaknessCandidate`、`AiTaskResultRef` | `P-JOBMATCH-001`、`P-JOBMATCH-002`、`P-JOBMATCH-003`、`P-JOBMATCH-004` | `job_match.create.async_success`、`job_match.create.idempotent_retry` |
-| GET | `/api/v1/job-match-analyses/{analysis_id}` | 读取岗位匹配分析结果 | path `analysis_id` | `JobMatchAnalysis` + score + points + low confidence flags | `not_found_or_inaccessible`、`owner_mismatch`、`source_unavailable` | 校验 analysis owner；历史来源不可用只展示状态 | 不需要 | `JobMatchAnalysis`、`ScoreResult`、`EvidenceRef`、`TraceRef` | `P-JOBMATCH-*` | `job_match.get.low_confidence_visible` |
-| GET | `/api/v1/job-match-analyses/{analysis_id}/points` | 读取匹配点、不匹配点、加强点 | `type`、`cursor`、`limit` | points list | `owner_mismatch`、`validation_failed` | 校验 analysis owner | 不需要 | `MatchPoint`、`MismatchPoint`、`ImprovementPoint` | `P-JOBMATCH-003` | `job_match.points.pagination_and_filtering` |
-| POST | `/api/v1/polish-sessions` | 创建打磨模式会话 | `resume_id`、`job_id` 可选、`binding_id` 可选、`topic_hint`、`source_refs` | 201 `InterviewSession(mode=polish)` + `PolishSessionDetail` | `validation_failed`、`owner_mismatch`、`source_unavailable` | 校验所有输入 owner；缺失增强输入返回低置信或可继续状态 | 必需 | `InterviewSession`、`PolishSessionDetail`、`ProgressTree` | `P-POLISH-001` 可后续触发 | `polish_sessions.create.success` |
-| GET | `/api/v1/polish-sessions/{session_id}` | 读取打磨会话状态 | path `session_id` | session + current question + progress summary | `not_found_or_inaccessible` | 校验 session owner | 不需要 | `InterviewSession`、`PolishSessionDetail`、`SessionSummary` | N/A | `polish_sessions.get.owner_scoped` |
-| PATCH | `/api/v1/polish-sessions/{session_id}` | 暂停、恢复或更新用户可见会话状态 | `action=pause,resume,end`、`base_session_version_ref` | updated session state | `validation_failed`、`stale_version_conflict`、`source_unavailable` | 校验 session owner；resume 前校验恢复来源可用性 | 必需 | `InterviewSession`、`ProgressPosition`、`SessionSummary` | `P-SHARED-006` 状态交接 | `polish_sessions.resume.source_unavailable` |
-| POST | `/api/v1/polish-sessions/{session_id}/questions` | 生成或选择打磨题目 | `topic_ref`、`progress_node_ref`、`difficulty_hint` | 202 `ai_task_id`; result is `Question` | `owner_mismatch`、`source_unavailable`、`generation_failed`、`rate_limited` | 校验 session owner 和上下文来源 owner | 必需 | `Question`、`RAGContextAssembly`、`AiTaskResultRef` | `P-POLISH-002`、`P-SHARED-*` | `questions.polish_generation.async_failure_visible` |
-| POST | `/api/v1/polish-sessions/{session_id}/answers` | 保存用户回答 | `question_id`、`answer_text`、`answer_round`、`base_question_version_ref` | 201 `Answer` | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 session/question owner | 必需 | `Answer`、`Question`、`AuditEvent` | N/A | `answers.create.validation_failed` |
-| POST | `/api/v1/polish-sessions/{session_id}/feedback` | 生成打磨点评、失分点、参考回答、考点解析或下一轮建议 | `answer_id`、`requested_outputs` | 202 `ai_task_id`; result includes `Feedback` and related refs | `owner_mismatch`、`source_unavailable`、`generation_failed`、`low_confidence` | 校验 session/answer owner 和 evidence owner | 必需 | `Feedback`、`LossPoint`、`ReferenceAnswer`、`KnowledgePointExplanation`、`ScoreResult`、`AssetCandidate`、`WeaknessCandidate` | `P-POLISH-003` 至 `P-POLISH-011` | `feedback.polish.low_confidence_visible` |
-| POST | `/api/v1/pressure-sessions` | 创建压力面会话 | `resume_id`、`job_id` 可选、`binding_id` 可选、`start_mode` | 201 `InterviewSession(mode=pressure)` + `PressureSessionDetail` | `validation_failed`、`owner_mismatch`、`source_unavailable` | 校验输入 owner；缺失增强输入可生成低置信提示 | 必需 | `InterviewSession`、`PressureSessionDetail`、`ProgressTree` | `P-PRESSURE-001` 可后续触发 | `pressure_sessions.create.success` |
-| GET | `/api/v1/pressure-sessions/{session_id}` | 读取压力面会话状态 | path `session_id` | session + pace + current question summary | `not_found_or_inaccessible` | 校验 session owner | 不需要 | `InterviewSession`、`PressureSessionDetail`、`SessionSummary` | N/A | `pressure_sessions.get.owner_scoped` |
-| PATCH | `/api/v1/pressure-sessions/{session_id}` | 暂停、恢复、结束或记录恢复失败的压力面会话状态 | `action=pause,resume,end,mark_resume_failed`、`base_session_version_ref`、`resume_snapshot_ref` 可选 | updated session state + pace / progress / summary state | `validation_failed`、`stale_version_conflict`、`owner_mismatch`、`source_unavailable`、`resume_failed` | 校验 session owner；resume 前校验 `source_session_snapshot_ref`、`covered_turn_refs`、`ProgressPosition` 和来源可用性；恢复失败必须用户可见且不得丢弃原始题答 | 必需 | `InterviewSession`、`PressureSessionDetail`、`ProgressPosition`、`SessionSummary`、`AuditEvent` | `P-SHARED-006`、`P-PRESSURE-006`、`P-PRESSURE-007` | `pressure_sessions.resume.source_unavailable`、`pressure_sessions.resume_failed_visible` |
-| POST | `/api/v1/pressure-sessions/{session_id}/questions` | 生成首题或追问 | `question_type=first,follow_up`、`answer_id` 可选、`pace_state` | 202 `ai_task_id`; result is `Question` | `owner_mismatch`、`source_unavailable`、`generation_failed`、`rate_limited` | 校验 session、answer、source owner | 必需 | `Question`、`PressureSessionDetail`、`AiTaskResultRef` | `P-PRESSURE-002`、`P-PRESSURE-004`、`P-PRESSURE-005` | `questions.pressure_generation.async_success` |
-| POST | `/api/v1/pressure-sessions/{session_id}/answers` | 保存压力面回答 | `question_id`、`answer_text`、`answer_order` | 201 `Answer` | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 session/question owner | 必需 | `Answer`、`Question`、`AuditEvent` | N/A | `answers.pressure.create_success` |
-| POST | `/api/v1/pressure-sessions/{session_id}/feedback` | 生成回答质量、节奏控制、结束判断、整场评分或报告输入 | `answer_id`、`requested_outputs` | 202 `ai_task_id`; result includes feedback / score / report input refs | `owner_mismatch`、`source_unavailable`、`generation_failed`、`low_confidence` | 校验 session/answer owner 和 evidence owner | 必需 | `Feedback`、`ScoreResult`、`SessionSummary`、`AiTaskResultRef` | `P-PRESSURE-003`、`P-PRESSURE-006`、`P-PRESSURE-007`、`P-PRESSURE-008`、`P-PRESSURE-009` | `feedback.pressure.generation_failed_visible` |
-| GET | `/api/v1/interview-sessions/{session_id}/progress-tree` | 读取会话进展树 | path `session_id` | `ProgressTree` + nodes + position | `owner_mismatch`、`source_unavailable` | 校验 session owner；历史来源不可用只展示状态 | 不需要 | `ProgressTree`、`ProgressNode`、`ProgressPosition` | N/A | `progress_tree.get.owner_scoped` |
-| PATCH | `/api/v1/interview-sessions/{session_id}/progress-tree/position` | 更新当前进展位置或用户选择节点 | `progress_node_id`、`base_position_ref` | updated `ProgressPosition` | `validation_failed`、`stale_version_conflict`、`owner_mismatch` | 校验 session/tree/node owner | 必需 | `ProgressPosition`、`ProgressNode` | N/A | `progress_tree.position.stale_version_conflict` |
-| GET | `/api/v1/interview-sessions/{session_id}/questions` | 查询会话题目列表 | `cursor`、`limit`、`status` | `Question[]` | `owner_mismatch`、`validation_failed` | 校验 session owner | 不需要 | `Question`、`InterviewSession` | `P-POLISH-002` 或 `P-PRESSURE-002/005` | `questions.list.owner_scoped` |
-| GET | `/api/v1/questions/{question_id}` | 读取单题详情 | path `question_id` | `Question` + source refs | `not_found_or_inaccessible` | 校验 question 所属 session owner | 不需要 | `Question`、`SourceRef`、`EvidenceRef` | N/A | `questions.get.cross_user_denied` |
-| GET | `/api/v1/answers/{answer_id}` | 读取回答详情 | path `answer_id` | `Answer` | `not_found_or_inaccessible` | 校验 answer 所属 session owner | 不需要 | `Answer` | N/A | `answers.get.cross_user_denied` |
-| GET | `/api/v1/feedback/{feedback_id}` | 读取点评 / 反馈详情 | path `feedback_id` | `Feedback` + score / loss / reference refs | `not_found_or_inaccessible`、`low_confidence` | 校验 feedback owner；低置信度必须显式返回 | 不需要 | `Feedback`、`ScoreResult`、`LossPoint`、`ReferenceAnswer` | `P-POLISH-003` 至 `P-POLISH-009` 或 `P-PRESSURE-003/006/007` | `feedback.get.low_confidence_visible` |
-| POST | `/api/v1/scoring-results` | 创建 AI scoring task | `target_type`、`target_id`、`score_type`、`input_refs`、`score_rule_version_id` 可选 | 202 `ai_task_id`; result is `ScoreResult` with `score_value`、`score_scale`、`score_version`、`rubric_version`、`confidence_level`、`evidence_refs` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 target/input owner；不得暴露隐藏评分规则；validation failed 不落正式评分 | 必需 | `ScoreResult`、`ScoreRuleVersion`、`ScoreExplanation`、`LowConfidenceFlag` | `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002` | `scoring.create.async_low_confidence`、`scoring.create.validation_failed_no_formal_score` |
-| GET | `/api/v1/scoring-results/{score_result_id}` | 读取评分结果 | path `score_result_id` | `ScoreResult` + explanation + evidence refs + version/confidence/disclaimer | `not_found_or_inaccessible`、`low_confidence` | 校验 score owner；不返回隐藏规则细节或精确通过概率 | 不需要 | `ScoreResult`、`ScoreExplanation`、`ScoreEvidenceLink` | score-producing contracts | `scoring.get.no_hidden_rules`、`scoring.get.no_exact_probability` |
-| POST | `/api/v1/reports` | 创建面试报告生成任务 | `session_id`、`report_type`、`requested_sections` | 202 `ai_task_id`; result is `InterviewReport` with score/risk/pass tendency refs | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed`、`rate_limited` | 校验 session、resume、job、score refs owner；source unavailable 时报告降级或失败可见 | 必需 | `InterviewReport`、`ReportSection`、`CopyableContent`、`ScoreResult` | `P-REPORT-001`、`P-REPORT-002`、`P-REPORT-003`、`P-REPORT-004` | `reports.create.async_success`、`reports.create.idempotent_retry`、`reports.create.source_unavailable_degraded` |
-| GET | `/api/v1/reports/{report_id}` | 读取报告详情 | path `report_id` | `InterviewReport` + sections summary + score/rubric/confidence + low confidence flags | `not_found_or_inaccessible`、`source_unavailable` | 校验 report owner；历史来源不可用只展示状态；不返回精确通过概率 | 不需要 | `InterviewReport`、`ReportSection` | `P-REPORT-*` | `reports.get.source_unavailable_visible`、`reports.get.no_exact_probability` |
-| GET | `/api/v1/reports/{report_id}/sections` | 读取报告分项 | `cursor`、`limit`、`section_type` | `ReportSection[]` with `risk_level`、`risk_reason`、`evidence_refs`、`confidence_level` | `owner_mismatch`、`validation_failed` | 校验 report owner；risk item 无 evidence 时必须低置信或 manual review | 不需要 | `ReportSection`、`ScoreResult` | `P-REPORT-002`、`P-REPORT-003` | `reports.sections.risk_has_evidence` |
-| GET | `/api/v1/reports/{report_id}/copy-content` | 读取可复制报告内容，不生成文件 | `section_ids` 可选、`format=clipboard_text,structured` | `CopyableContent` with `copy_boundary=clipboard_only` | `owner_mismatch`、`source_unavailable`、`copy_boundary_violation`、`export_not_supported` | 校验 report owner、source availability 和 copy scope | 不需要 | `CopyableContent`、`ReportSection`、`AuditEvent` | `P-REPORT-004` | `report_copy.get.no_export`、`report_copy.get.no_prompt_payload` |
-| POST | `/api/v1/reports/{report_id}/copy-events` | 记录复制动作和结果 | `copy_content_id`、`copy_scope_summary`、`client_result=success,failed` | 201 `AuditEvent` ref | `owner_mismatch`、`copy_boundary_violation`、`idempotency_required` | 校验 report/copy content owner；不记录复制正文 | 必需 | `AuditEvent`、`CopyableContent` | N/A | `report_copy.audit.no_body_logged` |
-| POST | `/api/v1/reviews/mock` | 创建模拟面试复盘分析任务 | `session_id` 或 `report_id`、`requested_items` | 202 `ai_task_id`; result is `MockInterviewReview` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 session/report owner 和来源可用性 | 必需 | `InterviewRetrospective`、`MockInterviewReview`、`ReviewItem` | `P-REVIEW-001`、`P-REVIEW-004` | `reviews.mock.create.async_success` |
-| POST | `/api/v1/reviews/real-inputs` | 保存真实面试复盘输入 | `job_id` 可选、`resume_id` 可选、`interview_time`、`questions_recalled`、`answers_recalled`、`feedback_text`、`result_status` | 201 `RealInterviewInput` | `validation_failed`、`owner_mismatch` | 写入当前 actor owner；第三方信息不得进日志 | 必需 | `RealInterviewInput`、`RealInterviewEvidence`、`AuditEvent` | N/A | `reviews.real_input.create.validation_failed` |
-| POST | `/api/v1/reviews/real` | 创建真实面试复盘分析任务 | `real_interview_input_id`、`requested_items` | 202 `ai_task_id`; result is `RealInterviewReview` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed`、`low_confidence` | 校验 input、job、resume owner；标记可信度和完整度 | 必需 | `InterviewRetrospective`、`RealInterviewReview`、`ReviewItem` | `P-REVIEW-002`、`P-REVIEW-003`、`P-REVIEW-004` | `reviews.real.create.low_confidence_visible` |
-| GET | `/api/v1/reviews/{review_id}` | 读取模拟或真实复盘 | path `review_id` | review + review items + source confidence | `not_found_or_inaccessible`、`source_unavailable` | 校验 review owner | 不需要 | `MockInterviewReview`、`RealInterviewReview`、`ReviewItem` | `P-REVIEW-*` | `reviews.get.cross_user_denied` |
-| GET | `/api/v1/assets` | 查询正式资产 | `cursor`、`limit`、`status`、`asset_type`、`source_type` | `Asset[]` + pagination | `validation_failed`、`unauthenticated` | owner scope 过滤；不返回其他用户资产 | 不需要 | `Asset`、`AssetVersion` | N/A | `assets.list.owner_scoped` |
-| GET | `/api/v1/assets/{asset_id}` | 读取正式资产详情 | path `asset_id` | `Asset` + current version + source summary | `not_found_or_inaccessible`、`source_unavailable` | 校验 asset owner | 不需要 | `Asset`、`AssetVersion`、`AssetSource` | N/A | `assets.get.cross_user_denied` |
-| GET | `/api/v1/assets/{asset_id}/versions/{version_id}` | 读取资产版本 | path ids | `AssetVersion` + source availability | `not_found_or_inaccessible` | 校验 asset/version owner | 不需要 | `AssetVersion`、`VersionRef` | N/A | `assets.version.history_read_owner_scoped` |
-| POST | `/api/v1/asset-candidates` | 创建资产候选提炼任务 | `source_type`、`source_ref`、`target_asset_id` 可选、`candidate_goal` | 202 `ai_task_id`; result is `AssetCandidate` / suggestions | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 source owner；不得自动写正式 Asset | 必需 | `AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`AiTaskResultRef` | `P-ASSET-001`、`P-ASSET-002`、`P-ASSET-003`、`P-POLISH-010` | `asset_candidates.create.candidate_not_formal` |
-| GET | `/api/v1/asset-candidates/{candidate_id}` | 读取资产候选 | path `candidate_id` | `AssetCandidate` + evidence + confirmation state | `not_found_or_inaccessible`、`low_confidence` | 校验 candidate owner | 不需要 | `AssetCandidate`、`CandidateRef`、`EvidenceRef` | `P-ASSET-001` | `asset_candidates.get.low_confidence_visible` |
-| POST | `/api/v1/asset-candidates/{candidate_id}/confirmations` | 确认、编辑、跳过或拒绝资产候选 | `action=confirm,edit,skip,reject,manual_review`、`edited_content` 可选、`base_candidate_version_ref` | `UserConfirmationRef`; confirm 后可返回 `Asset` / `AssetVersion` ref | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 candidate owner；确认前不得写正式资产 | 必需 | `UserConfirmationRef`、`Asset`、`AssetVersion`、`AuditEvent` | N/A | `asset_candidates.confirm.formal_requires_user_action` |
-| POST | `/api/v1/asset-version-suggestions/{suggestion_id}/confirmations` | 确认或拒绝资产版本建议 | `action=confirm,edit,skip,reject`、`edited_delta` 可选 | `UserConfirmationRef`; confirm 后返回 new `AssetVersion` ref | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 suggestion 和 target asset owner | 必需 | `AssetVersionSuggestion`、`AssetVersion`、`UserConfirmationRef` | `P-ASSET-003` | `asset_version_suggestions.confirm.no_silent_publish` |
-| GET | `/api/v1/weaknesses` | 查询正式薄弱项 | `cursor`、`limit`、`status`、`severity_hint`、`source_type` | `Weakness[]` + pagination | `validation_failed`、`unauthenticated` | owner scope 过滤 | 不需要 | `Weakness`、`WeaknessEvidence` | N/A | `weaknesses.list.owner_scoped` |
-| GET | `/api/v1/weaknesses/{weakness_id}` | 读取正式薄弱项详情 | path `weakness_id` | `Weakness` + evidence + status history | `not_found_or_inaccessible` | 校验 weakness owner | 不需要 | `Weakness`、`WeaknessEvidence`、`WeaknessStatusHistory` | N/A | `weaknesses.get.cross_user_denied` |
-| PATCH | `/api/v1/weaknesses/{weakness_id}` | 用户显式编辑薄弱项状态或摘要 | `status`、`user_note`、`base_status_ref` | updated `Weakness` + audit ref | `validation_failed`、`stale_version_conflict`、`owner_mismatch` | 校验 weakness owner；AI suggestion 不能直接调用该路径 | 必需 | `Weakness`、`WeaknessStatusHistory`、`AuditEvent` | N/A | `weaknesses.update.user_action_only` |
-| POST | `/api/v1/weakness-candidates` | 创建薄弱项提炼任务 | `source_type`、`source_ref`、`candidate_goal` | 202 `ai_task_id`; result is `WeaknessCandidate` / suggestions | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 source owner；不得自动写正式 Weakness | 必需 | `WeaknessCandidate`、`WeaknessMergeSuggestion`、`WeaknessSeverityAssessment`、`WeaknessStatusUpdateSuggestion` | `P-WEAKNESS-001`、`P-WEAKNESS-002`、`P-WEAKNESS-003`、`P-WEAKNESS-004`、`P-JOBMATCH-004`、`P-POLISH-011` | `weakness_candidates.create.candidate_not_formal` |
-| GET | `/api/v1/weakness-candidates/{candidate_id}` | 读取薄弱项候选 | path `candidate_id` | `WeaknessCandidate` + evidence + merge suggestions | `not_found_or_inaccessible`、`low_confidence` | 校验 candidate owner | 不需要 | `WeaknessCandidate`、`CandidateRef`、`EvidenceRef` | `P-WEAKNESS-001` | `weakness_candidates.get.low_confidence_visible` |
-| POST | `/api/v1/weakness-candidates/{candidate_id}/confirmations` | 确认、编辑、合并、跳过或拒绝薄弱项候选 | `action=confirm,edit,merge,skip,reject,manual_review`、`target_weakness_id` 可选、`edited_summary` 可选 | `UserConfirmationRef`; confirm / merge 后返回 `Weakness` ref | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 candidate 和 target weakness owner；确认前不得写正式 Weakness | 必需 | `UserConfirmationRef`、`Weakness`、`WeaknessStatusHistory` | N/A | `weakness_candidates.confirm.formal_requires_user_action` |
-| POST | `/api/v1/weakness-merge-suggestions/{suggestion_id}/confirmations` | 确认或拒绝薄弱项合并建议 | `action=merge,edit,skip,reject`、`target_weakness_id` | `UserConfirmationRef` + optional merged `Weakness` ref | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 suggestion、candidate、target weakness owner | 必需 | `WeaknessMergeSuggestion`、`UserConfirmationRef` | `P-WEAKNESS-002` | `weakness_merge.confirm.no_silent_merge` |
-| POST | `/api/v1/weakness-status-suggestions/{suggestion_id}/confirmations` | 确认或拒绝薄弱项状态更新建议 | `action=confirm,edit,skip,reject`、`edited_status` 可选 | `UserConfirmationRef` + optional updated `Weakness` ref | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 suggestion 和 weakness owner | 必需 | `WeaknessStatusUpdateSuggestion`、`WeaknessStatusHistory` | `P-WEAKNESS-004` | `weakness_status.confirm.no_silent_update` |
-| POST | `/api/v1/training-suggestions` | 创建训练建议生成任务 | `source_type`、`source_ref`、`weakness_ids` 可选、`asset_ids` 可选 | 202 `ai_task_id`; result is recommendation candidates / ranking | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验所有 input owner；不得自动创建 TrainingTask | 必需 | `TrainingRecommendation`、`TrainingPriorityRanking`、`AiTaskResultRef` | `P-TRAINING-001`、`P-TRAINING-002` | `training_suggestions.create.no_auto_task` |
-| GET | `/api/v1/training-suggestions/{recommendation_id}` | 读取训练建议或候选 | path `recommendation_id` | `TrainingRecommendation` + status + evidence | `not_found_or_inaccessible`、`low_confidence` | 校验 recommendation owner | 不需要 | `TrainingRecommendation`、`EvidenceRef` | `P-TRAINING-001` | `training_suggestions.get.low_confidence_visible` |
-| POST | `/api/v1/training-suggestions/{recommendation_id}/confirmations` | 确认、编辑、跳过或拒绝训练建议 | `action=confirm,edit,skip,reject,manual_review`、`edited_recommendation` 可选 | `UserConfirmationRef`; confirm 后 recommendation 可进入正式状态 | `validation_failed`、`owner_mismatch`、`stale_version_conflict` | 校验 recommendation owner；确认不等于自动启动 TrainingTask | 必需 | `TrainingRecommendation`、`UserConfirmationRef` | N/A | `training_suggestions.confirm.no_auto_training_task` |
-| POST | `/api/v1/training-tasks` | 用户显式启动训练任务 | `training_recommendation_id`、`entry_mode=polish,pressure,manual`、`scheduled_at` 可选 | 201 `TrainingTask` / `TrainingSession` | `validation_failed`、`owner_mismatch`、`source_unavailable` | 校验 recommendation owner；必须是用户动作或明确确认后动作 | 必需 | `TrainingTask`、`TrainingSession`、`AuditEvent` | N/A | `training_tasks.create.user_action_required` |
-| GET | `/api/v1/training-tasks/{training_task_id}` | 读取训练任务状态 | path `training_task_id` | `TrainingTask` + optional `TrainingResult` | `not_found_or_inaccessible` | 校验 task owner | 不需要 | `TrainingTask`、`TrainingResult` | N/A | `training_tasks.get.owner_scoped` |
-| POST | `/api/v1/training-results/{training_result_id}/review` | 创建训练结果复盘任务 | `training_result_id`、`requested_outputs` | 202 `ai_task_id`; result is `TrainingResultReview` suggestions | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 result/task owner；回流只产候选 / 建议 | 必需 | `TrainingResultReview`、`WeaknessStatusUpdateSuggestion`、`AssetCandidate`、`TrainingRecommendation` candidate | `P-TRAINING-003` | `training_result_review.create.candidate_only` |
-| POST | `/api/v1/ai-tasks` | 创建通用 AI task；用于 domain endpoint 未覆盖的 F5 内部显式任务 | `task_type`、`contract_ids`、`target_ref`、`input_refs`、`requested_outputs` | 202 `ai_task_id` + task status | `validation_failed`、`owner_mismatch`、`source_unavailable`、`rate_limited`、`idempotency_required` | 校验所有 input refs owner；contract id 必须已登记 | 必需 | `AiTaskResultRef`、`LlmValidationResult`、`TraceRef` | 已登记 `P-*` | `ai_tasks.create.contract_id_registered` |
-| GET | `/api/v1/ai-tasks/{ai_task_id}` | 查询 AI task 状态 | path `ai_task_id` | task status envelope | `not_found_or_inaccessible`、`owner_mismatch` | 校验 task owner | 不需要 | `AiTaskResultRef`、`LlmValidationResult` | related `P-*` | `ai_tasks.status.owner_scoped` |
-| GET | `/api/v1/ai-tasks/{ai_task_id}/result` | 读取 AI task 结果引用或候选 / 建议 | path `ai_task_id` | result refs + candidate / suggestion / low confidence flags | `not_found_or_inaccessible`、`generation_failed`、`task_timeout`、`source_unavailable` | 校验 task owner；不得返回 raw provider payload | 不需要 | `AiTaskResultRef`、`CandidateRef`、`SuggestionRef` | related `P-*` | `ai_tasks.result.no_provider_payload` |
-| POST | `/api/v1/ai-tasks/{ai_task_id}/retry` | 重试失败、timeout、source 修复后或可重试低置信度任务 | `reason`、`fixed_input_refs` 可选 | 202 new or same `ai_task_id` per retry policy | `task_retry_not_allowed`、`owner_mismatch`、`idempotency_required`、`source_unavailable` | 校验 task owner；重试不得扩大未授权上下文 | 必需 | `AiTaskResultRef`、`LlmFailureRecord` | related `P-*` | `ai_tasks.retry.idempotent_and_scope_safe` |
-| POST | `/api/v1/ai-tasks/{ai_task_id}/cancel` | 取消 queued 或可中断 running 任务 | `reason` | task `status=cancelled` | `task_cancelled`、`task_retry_not_allowed`、`owner_mismatch` | 校验 task owner；取消后不得写 formal object | 必需 | `AiTaskResultRef`、`AuditEvent` | related `P-*` | `ai_tasks.cancel.no_late_write` |
+通用约束：所有接口默认 `Auth: required`，成功响应使用 `ApiSuccessEnvelope`，错误响应使用 `ApiErrorEnvelope`。`Sensitive / Loggable` 中 `sensitive_not_loggable` 表示字段可持久化但不得进入日志、trace 明文或 copy event；`sensitive_summary_only` 表示只允许脱敏摘要进入可观测性或前端摘要。
 
-## 7. Candidate / suggestion / confirmation 写入边界
+### API-RESUME-001 List resumes
+
+Method: GET
+Path: `/api/v1/resumes`
+Domain: Resume
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: 按 actor owner scope 过滤列表
+Related Data Objects: Resume, ResumeVersion, OwnerRef
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.resume.list.owner_scoped, api.resume.list.validation_failed, api.resume.list.cross_user_denied
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| cursor | 否 | string | opaque cursor | 分页游标 | loggable |
+| limit | 否 | integer | 1..100 default 20 | 分页大小 | loggable |
+| status | 否 | string | endpoint whitelist | 状态过滤 | loggable |
+| sort | 否 | string | endpoint whitelist | 排序字段 | loggable |
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume | 资源域 | loggable |
+| data.resume_id | 是 | string | res_* | 简历 ID | loggable |
+| data.title | 是 | string | 1..120 | 简历标题 | loggable |
+| data.target_direction | 否 | string | <=120 | 目标方向 | loggable |
+| data.current_version_ref | 是 | VersionRef | ResumeVersion | 当前版本引用 | loggable |
+| data.module_summary.project_experience_count | 是 | integer | >=0 | 项目经历模块数量 | loggable |
+| data.updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+| meta.pagination | 否 | PaginationMeta | cursor pagination | 列表分页信息 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.resume.list.owner_scoped`
+- `api.resume.list.validation_failed`
+- `api.resume.list.cross_user_denied`
+
+### API-RESUME-002 Create resume
+
+Method: POST
+Path: `/api/v1/resumes`
+Domain: Resume
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: 服务端从 session 推导 owner, 请求体不得包含 owner_id
+Related Data Objects: Resume, ResumeVersion, ResumeModule, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.resume.create.success, api.resume.create.validation_failed, api.resume.create.cross_user_denied, api.resume.create.idempotency_required, api.resume.create.idempotency_conflict
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 是 | string | 1..120 | 简历标题 | loggable |
+| markdown_text | 是 | string | 1..60000 | Markdown 简历正文 | sensitive_not_loggable |
+| target_direction | 否 | string | <=120 | 目标方向 | loggable |
+| client_draft_id | 否 | string | client generated | 客户端草稿 ID | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume | 资源域 | loggable |
+| data.resume_id | 是 | string | res_* | 简历 ID | loggable |
+| data.title | 是 | string | 1..120 | 简历标题 | loggable |
+| data.markdown_text | 是 | string | 1..60000 | Markdown 简历正文 | sensitive_not_loggable |
+| data.current_version_ref | 是 | VersionRef | ResumeVersion | 当前版本 | loggable |
+| data.modules[] | 是 | ResumeProjectExperienceModule[] | includes project_experience | 简历模块 | sensitive_summary_only |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.resume.create.success`
+- `api.resume.create.validation_failed`
+- `api.resume.create.cross_user_denied`
+- `api.resume.create.idempotency_required`
+- `api.resume.create.idempotency_conflict`
+
+### API-RESUME-003 Get resume detail
+
+Method: GET
+Path: `/api/v1/resumes/{resume_id}`
+Domain: Resume
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: resume.owner_ref 必须匹配当前 actor
+Related Data Objects: Resume, ResumeVersion, ResumeModule, OwnerRef
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.resume.get.cross_user_denied, api.resume.get.validation_failed, api.resume.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | resume_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume | 资源域 | loggable |
+| data.resume_id | 是 | string | res_* | 简历 ID | loggable |
+| data.title | 是 | string | 1..120 | 简历标题 | loggable |
+| data.markdown_text | 是 | string | 1..60000 | Markdown 简历正文 | sensitive_not_loggable |
+| data.current_version_ref | 是 | VersionRef | ResumeVersion | 当前版本 | loggable |
+| data.modules[] | 是 | ResumeProjectExperienceModule[] | includes project_experience | 简历模块 | sensitive_summary_only |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.resume.get.cross_user_denied`
+- `api.resume.get.validation_failed`
+- `api.resume.get.cross_user_denied`
+
+### API-RESUME-004 Update resume
+
+Method: PATCH
+Path: `/api/v1/resumes/{resume_id}`
+Domain: Resume
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: resume.owner_ref 与 base_version_ref owner 一致
+Related Data Objects: Resume, ResumeVersion, ResumeModule, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.resume.update.stale_version_conflict, api.resume.update.validation_failed, api.resume.update.cross_user_denied, api.resume.update.idempotency_required, api.resume.update.idempotency_conflict, api.resume.update.stale_version_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | resume_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 否 | string | 1..120 | 新标题 | loggable |
+| markdown_text | 否 | string | 1..60000 | 新简历正文 | sensitive_not_loggable |
+| content_markdown | 否 | string | 1..20000 | 项目经历模块正文 | sensitive_not_loggable |
+| base_version_ref | 是 | VersionRef | ResumeVersion | 基础版本 | loggable |
+| change_reason | 否 | string | <=240 | 变更原因 | loggable |
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume | 资源域 | loggable |
+| data.resume_id | 是 | string | res_* | 简历 ID | loggable |
+| data.title | 是 | string | 1..120 | 简历标题 | loggable |
+| data.markdown_text | 是 | string | 1..60000 | Markdown 简历正文 | sensitive_not_loggable |
+| data.current_version_ref | 是 | VersionRef | ResumeVersion | 当前版本 | loggable |
+| data.modules[] | 是 | ResumeProjectExperienceModule[] | includes project_experience | 简历模块 | sensitive_summary_only |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.resume.update.stale_version_conflict`
+- `api.resume.update.validation_failed`
+- `api.resume.update.cross_user_denied`
+- `api.resume.update.idempotency_required`
+- `api.resume.update.idempotency_conflict`
+- `api.resume.update.stale_version_conflict`
+
+### API-RESUME-005 List resume project experience modules
+
+Method: GET
+Path: `/api/v1/resumes/{resume_id}/modules/project-experiences`
+Domain: Resume project experiences
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: resume.owner_ref 必须匹配当前 actor, project experience 不是一级资源
+Related Data Objects: ResumeModule(type=project_experience), ResumeVersion, SourceAvailability
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.resume_project_experience.list.not_top_level, api.resume_project_experience.list.validation_failed, api.resume_project_experience.list.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | resume_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| version_id | 否 | string | ResumeVersion id | 读取指定版本模块；缺省读取当前版本 | loggable |
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume project experiences | 资源域 | loggable |
+| data.module_id | 是 | string | mod_* | 模块 ID | loggable |
+| data.resume_id | 是 | string | res_* | 所属简历 | loggable |
+| data.module_type | 是 | enum | project_experience | 项目经历模块 | loggable |
+| data.content_markdown | 是 | string | 1..20000 | 模块正文 | sensitive_not_loggable |
+| data.base_version_ref | 是 | VersionRef | ResumeVersion | 来源版本 | loggable |
+| data.updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+| meta.pagination | 否 | PaginationMeta | cursor pagination | 列表分页信息 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.resume_project_experience.list.not_top_level`
+- `api.resume_project_experience.list.validation_failed`
+- `api.resume_project_experience.list.cross_user_denied`
+
+### API-RESUME-006 Update resume project experience module
+
+Method: PATCH
+Path: `/api/v1/resumes/{resume_id}/modules/project-experiences/{module_id}`
+Domain: Resume project experiences
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: module 必须属于当前 resume 且 owner 匹配
+Related Data Objects: ResumeModule, ResumeVersion, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.resume_project_experience.update.versioned, api.resume_project_experience.update.validation_failed, api.resume_project_experience.update.cross_user_denied, api.resume_project_experience.update.idempotency_required, api.resume_project_experience.update.idempotency_conflict, api.resume_project_experience.update.stale_version_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | resume_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+| module_id | 是 | string | module_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 否 | string | 1..120 | 新标题 | loggable |
+| markdown_text | 否 | string | 1..60000 | 新简历正文 | sensitive_not_loggable |
+| content_markdown | 否 | string | 1..20000 | 项目经历模块正文 | sensitive_not_loggable |
+| base_version_ref | 是 | VersionRef | ResumeVersion | 基础版本 | loggable |
+| change_reason | 否 | string | <=240 | 变更原因 | loggable |
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume project experiences | 资源域 | loggable |
+| data.module_id | 是 | string | mod_* | 模块 ID | loggable |
+| data.resume_id | 是 | string | res_* | 所属简历 | loggable |
+| data.module_type | 是 | enum | project_experience | 项目经历模块 | loggable |
+| data.content_markdown | 是 | string | 1..20000 | 模块正文 | sensitive_not_loggable |
+| data.base_version_ref | 是 | VersionRef | ResumeVersion | 来源版本 | loggable |
+| data.updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.resume_project_experience.update.versioned`
+- `api.resume_project_experience.update.validation_failed`
+- `api.resume_project_experience.update.cross_user_denied`
+- `api.resume_project_experience.update.idempotency_required`
+- `api.resume_project_experience.update.idempotency_conflict`
+- `api.resume_project_experience.update.stale_version_conflict`
+
+### API-JOB-001 List jobs
+
+Method: GET
+Path: `/api/v1/jobs`
+Domain: Job / JD
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: 按 actor owner scope 过滤列表
+Related Data Objects: Job, JobVersion, JobStatus, OwnerRef
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.job.list.owner_scoped, api.job.list.validation_failed, api.job.list.cross_user_denied
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| cursor | 否 | string | opaque cursor | 分页游标 | loggable |
+| limit | 否 | integer | 1..100 default 20 | 分页大小 | loggable |
+| status | 否 | string | endpoint whitelist | 状态过滤 | loggable |
+| sort | 否 | string | endpoint whitelist | 排序字段 | loggable |
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Job / JD | 资源域 | loggable |
+| data.job_id | 是 | string | job_* | 岗位 ID | loggable |
+| data.title | 是 | string | 1..160 | 岗位名称 | loggable |
+| data.company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| data.application_status | 否 | enum | draft / applied / interviewing / closed | 投递状态 | loggable |
+| data.current_version_ref | 是 | VersionRef | JobVersion | 当前版本 | loggable |
+| data.updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+| meta.pagination | 否 | PaginationMeta | cursor pagination | 列表分页信息 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.job.list.owner_scoped`
+- `api.job.list.validation_failed`
+- `api.job.list.cross_user_denied`
+
+### API-JOB-002 Create job manually
+
+Method: POST
+Path: `/api/v1/jobs`
+Domain: Job / JD
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: 服务端从 session 推导 owner, 不接受外部材料解析
+Related Data Objects: Job, JobVersion, JobStatus, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.job.create.manual_only, api.job.create.validation_failed, api.job.create.cross_user_denied, api.job.create.idempotency_required, api.job.create.idempotency_conflict
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 是 | string | 1..160 | 岗位名称 | loggable |
+| company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| department | 否 | string | <=160 | 部门 | sensitive_summary_only |
+| responsibilities | 是 | string[] | 1..100 items | 职责 | sensitive_not_loggable |
+| requirements | 是 | string[] | 1..100 items | 要求 | sensitive_not_loggable |
+| application_status | 否 | enum | draft / applied / interviewing / closed | 投递状态 | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Job / JD | 资源域 | loggable |
+| data.job_id | 是 | string | job_* | 岗位 ID | loggable |
+| data.title | 是 | string | 1..160 | 岗位名称 | loggable |
+| data.company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| data.responsibilities | 是 | string[] | item<=1000 | 职责列表 | sensitive_not_loggable |
+| data.requirements | 是 | string[] | item<=1000 | 要求列表 | sensitive_not_loggable |
+| data.current_version_ref | 是 | VersionRef | JobVersion | 当前版本 | loggable |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.job.create.manual_only`
+- `api.job.create.validation_failed`
+- `api.job.create.cross_user_denied`
+- `api.job.create.idempotency_required`
+- `api.job.create.idempotency_conflict`
+
+### API-JOB-003 Get job detail
+
+Method: GET
+Path: `/api/v1/jobs/{job_id}`
+Domain: Job / JD
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: job.owner_ref 必须匹配当前 actor
+Related Data Objects: Job, JobVersion, JobStatus, OwnerRef
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.job.get.cross_user_denied, api.job.get.validation_failed, api.job.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| job_id | 是 | string | job_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Job / JD | 资源域 | loggable |
+| data.job_id | 是 | string | job_* | 岗位 ID | loggable |
+| data.title | 是 | string | 1..160 | 岗位名称 | loggable |
+| data.company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| data.responsibilities | 是 | string[] | item<=1000 | 职责列表 | sensitive_not_loggable |
+| data.requirements | 是 | string[] | item<=1000 | 要求列表 | sensitive_not_loggable |
+| data.current_version_ref | 是 | VersionRef | JobVersion | 当前版本 | loggable |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.job.get.cross_user_denied`
+- `api.job.get.validation_failed`
+- `api.job.get.cross_user_denied`
+
+### API-JOB-004 Update job
+
+Method: PATCH
+Path: `/api/v1/jobs/{job_id}`
+Domain: Job / JD
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: job.owner_ref 与 base_version_ref owner 一致
+Related Data Objects: Job, JobVersion, JobStatus, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.job.update.stale_version_conflict, api.job.update.validation_failed, api.job.update.cross_user_denied, api.job.update.idempotency_required, api.job.update.idempotency_conflict, api.job.update.stale_version_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| job_id | 是 | string | job_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 否 | string | 1..160 | 岗位名称 | loggable |
+| company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| responsibilities | 否 | string[] | <=100 items | 职责 | sensitive_not_loggable |
+| requirements | 否 | string[] | <=100 items | 要求 | sensitive_not_loggable |
+| application_status | 否 | enum | draft / applied / interviewing / closed | 投递状态 | loggable |
+| base_version_ref | 是 | VersionRef | JobVersion | 基础版本 | loggable |
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Job / JD | 资源域 | loggable |
+| data.job_id | 是 | string | job_* | 岗位 ID | loggable |
+| data.title | 是 | string | 1..160 | 岗位名称 | loggable |
+| data.company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| data.responsibilities | 是 | string[] | item<=1000 | 职责列表 | sensitive_not_loggable |
+| data.requirements | 是 | string[] | item<=1000 | 要求列表 | sensitive_not_loggable |
+| data.current_version_ref | 是 | VersionRef | JobVersion | 当前版本 | loggable |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.job.update.stale_version_conflict`
+- `api.job.update.validation_failed`
+- `api.job.update.cross_user_denied`
+- `api.job.update.idempotency_required`
+- `api.job.update.idempotency_conflict`
+- `api.job.update.stale_version_conflict`
+
+### API-BINDING-001 Create resume-job binding
+
+Method: POST
+Path: `/api/v1/resume-job-bindings`
+Domain: Resume-job binding
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: resume、job、version 必须同 owner
+Related Data Objects: JobResumeBinding, ResumeVersion, JobVersion, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.binding.create.cross_owner_denied, api.binding.create.validation_failed, api.binding.create.cross_user_denied, api.binding.create.idempotency_required, api.binding.create.idempotency_conflict
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| job_id | 是 | string | job_* | 岗位 ID | loggable |
+| resume_version_id | 否 | string | version id | 指定简历版本 | loggable |
+| job_version_id | 否 | string | version id | 指定岗位版本 | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Resume-job binding | 资源域 | loggable |
+| data.binding_id | 是 | string | bind_* | 绑定 ID | loggable |
+| data.resume_ref | 是 | VersionRef | ResumeVersion | 绑定简历版本 | loggable |
+| data.job_ref | 是 | VersionRef | JobVersion | 绑定岗位版本 | loggable |
+| data.binding_status | 是 | enum | active / inactive | 绑定状态 | loggable |
+| data.created_at | 是 | datetime | ISO-8601 | 创建时间 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.binding.create.cross_owner_denied`
+- `api.binding.create.validation_failed`
+- `api.binding.create.cross_user_denied`
+- `api.binding.create.idempotency_required`
+- `api.binding.create.idempotency_conflict`
+
+### API-JOBMATCH-001 Create job match analysis task
+
+Method: POST
+Path: `/api/v1/job-match-analyses`
+Domain: Job match analysis
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: binding/job/resume/version 必须同 owner 且 source_available
+Related Data Objects: JobMatchAnalysis, MatchScore, WeaknessCandidate, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-JOBMATCH-001, P-JOBMATCH-002, P-JOBMATCH-003, P-JOBMATCH-004
+F7 Contract Tests: api.job_match.create.async_success, api.job_match.create.validation_failed, api.job_match.create.cross_user_denied, api.job_match.create.idempotency_required, api.job_match.create.idempotency_conflict, api.job_match.create.source_unavailable, api.job_match.create.provider_unavailable, api.job_match.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| binding_id | 否 | string | bind_* | 绑定 ID | loggable |
+| resume_id | 条件 | string | res_* | 无 binding 时必填 | loggable |
+| job_id | 条件 | string | job_* | 无 binding 时必填 | loggable |
+| requested_outputs | 否 | string[] | score / points / weakness_candidates | 请求输出 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Job match analysis | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.job_match.create.async_success`
+- `api.job_match.create.validation_failed`
+- `api.job_match.create.cross_user_denied`
+- `api.job_match.create.idempotency_required`
+- `api.job_match.create.idempotency_conflict`
+- `api.job_match.create.source_unavailable`
+- `api.job_match.create.provider_unavailable`
+- `api.job_match.create.task_timeout`
+
+### API-JOBMATCH-002 Get job match analysis
+
+Method: GET
+Path: `/api/v1/job-match-analyses/{analysis_id}`
+Domain: Job match analysis
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: analysis.owner_ref 必须匹配当前 actor
+Related Data Objects: JobMatchAnalysis, ScoreResult, EvidenceRef, TraceRef, SourceAvailability
+Related Prompt Contracts: P-JOBMATCH-*
+F7 Contract Tests: api.job_match.get.low_confidence_visible, api.job_match.get.validation_failed, api.job_match.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| analysis_id | 是 | string | analysis_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Job match analysis | 资源域 | loggable |
+| data.analysis_id | 是 | string | jma_* | 分析 ID | loggable |
+| data.binding_ref | 是 | string | bind_* | 绑定引用 | loggable |
+| data.score.score_value | 是 | integer | 0..100 | 匹配分 | loggable |
+| data.match_points[] | 是 | object[] | >=0 | 匹配点 | sensitive_summary_only |
+| data.mismatch_points[] | 是 | object[] | >=0 | 不匹配点 | sensitive_summary_only |
+| data.improvement_points[] | 是 | object[] | >=0 | 加强点 | sensitive_summary_only |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.job_match.get.low_confidence_visible`
+- `api.job_match.get.validation_failed`
+- `api.job_match.get.cross_user_denied`
+
+### API-POLISH-001 Create polish session
+
+Method: POST
+Path: `/api/v1/polish-sessions`
+Domain: Polish session
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: resume/job/binding/source_refs 必须同 owner
+Related Data Objects: InterviewSession, PolishSessionDetail, ProgressTree, IdempotencyRecord
+Related Prompt Contracts: P-POLISH-001
+F7 Contract Tests: api.polish_session.create.success, api.polish_session.create.validation_failed, api.polish_session.create.cross_user_denied, api.polish_session.create.idempotency_required, api.polish_session.create.idempotency_conflict
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| job_id | 否 | string | job_* | 岗位 ID | loggable |
+| binding_id | 否 | string | bind_* | 绑定 ID | loggable |
+| topic_hint | 否 | string | <=240 | 打磨主题提示 | sensitive_summary_only |
+| source_refs | 否 | SourceRef[] | owner scoped | 增强来源 | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Polish session | 资源域 | loggable |
+| data.session_id | 是 | string | ses_* | 会话 ID | loggable |
+| data.mode | 是 | enum | polish / pressure | 模式 | loggable |
+| data.session_status | 是 | enum | created / running / paused / completed / failed | 会话状态 | loggable |
+| data.current_question_ref | 否 | string | question_* | 当前题目 | loggable |
+| data.progress_position_ref | 否 | string | progress_pos_* | 进展位置 | loggable |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.polish_session.create.success`
+- `api.polish_session.create.validation_failed`
+- `api.polish_session.create.cross_user_denied`
+- `api.polish_session.create.idempotency_required`
+- `api.polish_session.create.idempotency_conflict`
+
+### API-POLISH-002 Get polish session
+
+Method: GET
+Path: `/api/v1/polish-sessions/{session_id}`
+Domain: Polish session
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: session.owner_ref 必须匹配当前 actor
+Related Data Objects: InterviewSession, PolishSessionDetail, ProgressTree, SessionSummary
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.polish_session.get.owner_scoped, api.polish_session.get.validation_failed, api.polish_session.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Polish session | 资源域 | loggable |
+| data.session_id | 是 | string | ses_* | 会话 ID | loggable |
+| data.mode | 是 | enum | polish / pressure | 模式 | loggable |
+| data.session_status | 是 | enum | created / running / paused / completed / failed | 会话状态 | loggable |
+| data.current_question_ref | 否 | string | question_* | 当前题目 | loggable |
+| data.progress_position_ref | 否 | string | progress_pos_* | 进展位置 | loggable |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.polish_session.get.owner_scoped`
+- `api.polish_session.get.validation_failed`
+- `api.polish_session.get.cross_user_denied`
+
+### API-POLISH-003 Create polish question task
+
+Method: POST
+Path: `/api/v1/polish-sessions/{session_id}/questions`
+Domain: Question
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: session、progress_node、source_refs 必须同 owner
+Related Data Objects: Question, AiTask, RAGContextAssembly, IdempotencyRecord
+Related Prompt Contracts: P-POLISH-002, P-SHARED-*
+F7 Contract Tests: api.polish_question.create.async_success, api.polish_question.create.validation_failed, api.polish_question.create.cross_user_denied, api.polish_question.create.idempotency_required, api.polish_question.create.idempotency_conflict, api.polish_question.create.source_unavailable, api.polish_question.create.provider_unavailable, api.polish_question.create.task_timeout
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| progress_node_ref | 否 | TraceRef | node ref | 进展节点 | loggable |
+| topic_ref | 否 | TraceRef | topic ref | 主题引用 | loggable |
+| question_type | 否 | enum | first / follow_up / polish | 题目类型 | loggable |
+| answer_id | 否 | string | ans_* | 追问时的上一回答 | loggable |
+| difficulty_hint | 否 | enum | easy / medium / hard / adaptive | 难度提示 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Question | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.polish_question.create.async_success`
+- `api.polish_question.create.validation_failed`
+- `api.polish_question.create.cross_user_denied`
+- `api.polish_question.create.idempotency_required`
+- `api.polish_question.create.idempotency_conflict`
+- `api.polish_question.create.source_unavailable`
+- `api.polish_question.create.provider_unavailable`
+- `api.polish_question.create.task_timeout`
+
+### API-POLISH-004 Create polish answer
+
+Method: POST
+Path: `/api/v1/polish-sessions/{session_id}/answers`
+Domain: Answer
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: session/question.owner_ref 必须匹配当前 actor
+Related Data Objects: Answer, Question, InterviewSession, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.polish_answer.create.validation_failed, api.polish_answer.create.validation_failed, api.polish_answer.create.cross_user_denied, api.polish_answer.create.idempotency_required, api.polish_answer.create.idempotency_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| question_id | 是 | string | q_* | 题目 ID | loggable |
+| answer_text | 是 | string | 1..20000 | 回答正文 | sensitive_not_loggable |
+| answer_round | 否 | integer | >=1 | 轮次 | loggable |
+| base_question_version_ref | 否 | VersionRef | Question | 题目版本 | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Answer | 资源域 | loggable |
+| data.answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| data.question_id | 是 | string | q_* | 题目 ID | loggable |
+| data.answer_text | 是 | string | 1..20000 | 回答正文 | sensitive_not_loggable |
+| data.answer_round | 否 | integer | >=1 | 回答轮次 | loggable |
+| data.created_at | 是 | datetime | ISO-8601 | 提交时间 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.polish_answer.create.validation_failed`
+- `api.polish_answer.create.validation_failed`
+- `api.polish_answer.create.cross_user_denied`
+- `api.polish_answer.create.idempotency_required`
+- `api.polish_answer.create.idempotency_conflict`
+
+### API-POLISH-005 Create polish feedback task
+
+Method: POST
+Path: `/api/v1/polish-sessions/{session_id}/feedback`
+Domain: Feedback
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: session/answer/evidence owner 必须匹配当前 actor
+Related Data Objects: Feedback, ScoreResult, AssetCandidate, WeaknessCandidate, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-POLISH-003, P-POLISH-004, P-POLISH-005, P-POLISH-006, P-POLISH-007, P-POLISH-008, P-POLISH-009, P-POLISH-010, P-POLISH-011
+F7 Contract Tests: api.polish_feedback.create.low_confidence_visible, api.polish_feedback.create.validation_failed, api.polish_feedback.create.cross_user_denied, api.polish_feedback.create.idempotency_required, api.polish_feedback.create.idempotency_conflict, api.polish_feedback.create.source_unavailable, api.polish_feedback.create.provider_unavailable, api.polish_feedback.create.task_timeout
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| requested_outputs | 否 | string[] | diagnosis / score / loss_points / reference_answer / knowledge / next_action / asset_candidate / weakness_candidate | 请求输出 | loggable |
+| session_summary_ref | 否 | TraceRef | summary ref | 会话摘要 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Feedback | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.polish_feedback.create.low_confidence_visible`
+- `api.polish_feedback.create.validation_failed`
+- `api.polish_feedback.create.cross_user_denied`
+- `api.polish_feedback.create.idempotency_required`
+- `api.polish_feedback.create.idempotency_conflict`
+- `api.polish_feedback.create.source_unavailable`
+- `api.polish_feedback.create.provider_unavailable`
+- `api.polish_feedback.create.task_timeout`
+
+### API-PRESSURE-001 Create pressure session
+
+Method: POST
+Path: `/api/v1/pressure-sessions`
+Domain: Pressure session
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: resume/job/binding/source_refs 必须同 owner
+Related Data Objects: InterviewSession, PressureSessionDetail, ProgressTree, IdempotencyRecord
+Related Prompt Contracts: P-PRESSURE-001
+F7 Contract Tests: api.pressure_session.create.success, api.pressure_session.create.validation_failed, api.pressure_session.create.cross_user_denied, api.pressure_session.create.idempotency_required, api.pressure_session.create.idempotency_conflict
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| job_id | 否 | string | job_* | 岗位 ID | loggable |
+| binding_id | 否 | string | bind_* | 绑定 ID | loggable |
+| start_mode | 否 | enum | first_question / continue_from_weakness / manual_topic | 启动模式 | loggable |
+| source_refs | 否 | SourceRef[] | owner scoped | 增强来源 | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Pressure session | 资源域 | loggable |
+| data.session_id | 是 | string | ses_* | 会话 ID | loggable |
+| data.mode | 是 | enum | polish / pressure | 模式 | loggable |
+| data.session_status | 是 | enum | created / running / paused / completed / failed | 会话状态 | loggable |
+| data.current_question_ref | 否 | string | question_* | 当前题目 | loggable |
+| data.progress_position_ref | 否 | string | progress_pos_* | 进展位置 | loggable |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.pressure_session.create.success`
+- `api.pressure_session.create.validation_failed`
+- `api.pressure_session.create.cross_user_denied`
+- `api.pressure_session.create.idempotency_required`
+- `api.pressure_session.create.idempotency_conflict`
+
+### API-PRESSURE-002 Get pressure session
+
+Method: GET
+Path: `/api/v1/pressure-sessions/{session_id}`
+Domain: Pressure session
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: session.owner_ref 必须匹配当前 actor
+Related Data Objects: InterviewSession, PressureSessionDetail, ProgressTree, SessionSummary
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.pressure_session.get.owner_scoped, api.pressure_session.get.validation_failed, api.pressure_session.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Pressure session | 资源域 | loggable |
+| data.session_id | 是 | string | ses_* | 会话 ID | loggable |
+| data.mode | 是 | enum | polish / pressure | 模式 | loggable |
+| data.session_status | 是 | enum | created / running / paused / completed / failed | 会话状态 | loggable |
+| data.current_question_ref | 否 | string | question_* | 当前题目 | loggable |
+| data.progress_position_ref | 否 | string | progress_pos_* | 进展位置 | loggable |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.pressure_session.get.owner_scoped`
+- `api.pressure_session.get.validation_failed`
+- `api.pressure_session.get.cross_user_denied`
+
+### API-PRESSURE-003 Create pressure question task
+
+Method: POST
+Path: `/api/v1/pressure-sessions/{session_id}/questions`
+Domain: Question
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: session/answer/source_refs 必须同 owner
+Related Data Objects: Question, AiTask, PressureSessionDetail, IdempotencyRecord
+Related Prompt Contracts: P-PRESSURE-002, P-PRESSURE-004, P-PRESSURE-005
+F7 Contract Tests: api.pressure_question.create.async_success, api.pressure_question.create.validation_failed, api.pressure_question.create.cross_user_denied, api.pressure_question.create.idempotency_required, api.pressure_question.create.idempotency_conflict, api.pressure_question.create.source_unavailable, api.pressure_question.create.provider_unavailable, api.pressure_question.create.task_timeout
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| progress_node_ref | 否 | TraceRef | node ref | 进展节点 | loggable |
+| topic_ref | 否 | TraceRef | topic ref | 主题引用 | loggable |
+| question_type | 否 | enum | first / follow_up / polish | 题目类型 | loggable |
+| answer_id | 否 | string | ans_* | 追问时的上一回答 | loggable |
+| difficulty_hint | 否 | enum | easy / medium / hard / adaptive | 难度提示 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Question | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.pressure_question.create.async_success`
+- `api.pressure_question.create.validation_failed`
+- `api.pressure_question.create.cross_user_denied`
+- `api.pressure_question.create.idempotency_required`
+- `api.pressure_question.create.idempotency_conflict`
+- `api.pressure_question.create.source_unavailable`
+- `api.pressure_question.create.provider_unavailable`
+- `api.pressure_question.create.task_timeout`
+
+### API-PRESSURE-004 Create pressure answer
+
+Method: POST
+Path: `/api/v1/pressure-sessions/{session_id}/answers`
+Domain: Answer
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: session/question.owner_ref 必须匹配当前 actor
+Related Data Objects: Answer, Question, InterviewSession, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.pressure_answer.create.success, api.pressure_answer.create.validation_failed, api.pressure_answer.create.cross_user_denied, api.pressure_answer.create.idempotency_required, api.pressure_answer.create.idempotency_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| question_id | 是 | string | q_* | 题目 ID | loggable |
+| answer_text | 是 | string | 1..20000 | 回答正文 | sensitive_not_loggable |
+| answer_round | 否 | integer | >=1 | 轮次 | loggable |
+| base_question_version_ref | 否 | VersionRef | Question | 题目版本 | loggable |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Answer | 资源域 | loggable |
+| data.answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| data.question_id | 是 | string | q_* | 题目 ID | loggable |
+| data.answer_text | 是 | string | 1..20000 | 回答正文 | sensitive_not_loggable |
+| data.answer_round | 否 | integer | >=1 | 回答轮次 | loggable |
+| data.created_at | 是 | datetime | ISO-8601 | 提交时间 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+
+#### F7 Contract Tests
+
+- `api.pressure_answer.create.success`
+- `api.pressure_answer.create.validation_failed`
+- `api.pressure_answer.create.cross_user_denied`
+- `api.pressure_answer.create.idempotency_required`
+- `api.pressure_answer.create.idempotency_conflict`
+
+### API-PRESSURE-005 Create pressure feedback task
+
+Method: POST
+Path: `/api/v1/pressure-sessions/{session_id}/feedback`
+Domain: Feedback
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: session/answer/evidence owner 必须匹配当前 actor
+Related Data Objects: Feedback, ScoreResult, SessionSummary, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-PRESSURE-003, P-PRESSURE-006, P-PRESSURE-007, P-PRESSURE-008, P-PRESSURE-009
+F7 Contract Tests: api.pressure_feedback.create.generation_failed_visible, api.pressure_feedback.create.validation_failed, api.pressure_feedback.create.cross_user_denied, api.pressure_feedback.create.idempotency_required, api.pressure_feedback.create.idempotency_conflict, api.pressure_feedback.create.source_unavailable, api.pressure_feedback.create.provider_unavailable, api.pressure_feedback.create.task_timeout
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| requested_outputs | 否 | string[] | diagnosis / score / loss_points / reference_answer / knowledge / next_action / asset_candidate / weakness_candidate | 请求输出 | loggable |
+| session_summary_ref | 否 | TraceRef | summary ref | 会话摘要 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Feedback | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.pressure_feedback.create.generation_failed_visible`
+- `api.pressure_feedback.create.validation_failed`
+- `api.pressure_feedback.create.cross_user_denied`
+- `api.pressure_feedback.create.idempotency_required`
+- `api.pressure_feedback.create.idempotency_conflict`
+- `api.pressure_feedback.create.source_unavailable`
+- `api.pressure_feedback.create.provider_unavailable`
+- `api.pressure_feedback.create.task_timeout`
+
+### API-PROGRESS-001 Get progress tree
+
+Method: GET
+Path: `/api/v1/interview-sessions/{session_id}/progress-tree`
+Domain: Progress tree
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: session.owner_ref 必须匹配当前 actor
+Related Data Objects: ProgressTree, ProgressNode, ProgressPosition, SourceAvailability
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.progress_tree.get.owner_scoped, api.progress_tree.get.validation_failed, api.progress_tree.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Progress tree | 资源域 | loggable |
+| data.progress_tree_id | 是 | string | pt_* | 进展树 ID | loggable |
+| data.session_id | 是 | string | ses_* | 会话 ID | loggable |
+| data.nodes[] | 是 | object[] | >=0 | 节点列表 | loggable |
+| data.current_position.node_id | 否 | string | node_* | 当前位置 | loggable |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.progress_tree.get.owner_scoped`
+- `api.progress_tree.get.validation_failed`
+- `api.progress_tree.get.cross_user_denied`
+
+### API-SCORING-001 Create scoring task
+
+Method: POST
+Path: `/api/v1/scoring-results`
+Domain: Scoring result
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: target/input_refs owner 必须匹配当前 actor, hidden scoring rules 不暴露
+Related Data Objects: ScoreResult, ScoreRuleVersion, ScoreExplanation, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-JOBMATCH-002, P-POLISH-004, P-PRESSURE-008, P-REPORT-002
+F7 Contract Tests: api.scoring.create.no_hidden_rules, api.scoring.create.validation_failed, api.scoring.create.cross_user_denied, api.scoring.create.idempotency_required, api.scoring.create.idempotency_conflict, api.scoring.create.source_unavailable, api.scoring.create.provider_unavailable, api.scoring.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| target_type | 是 | enum | job_match / answer / session / report / review / training_result | 评分目标类型 | loggable |
+| target_id | 是 | string | typed id | 评分目标 ID | loggable |
+| score_type | 是 | enum | job_match / polish_round / pressure_session / report_section | 评分类型 | loggable |
+| input_refs | 是 | SourceRef[] | owner scoped | 输入引用 | loggable |
+| score_rule_version_id | 否 | string | rule version | 指定评分规则版本 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Scoring result | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.scoring.create.no_hidden_rules`
+- `api.scoring.create.validation_failed`
+- `api.scoring.create.cross_user_denied`
+- `api.scoring.create.idempotency_required`
+- `api.scoring.create.idempotency_conflict`
+- `api.scoring.create.source_unavailable`
+- `api.scoring.create.provider_unavailable`
+- `api.scoring.create.task_timeout`
+
+### API-SCORING-002 Get scoring result
+
+Method: GET
+Path: `/api/v1/scoring-results/{score_result_id}`
+Domain: Scoring result
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: score_result.owner_ref 必须匹配当前 actor
+Related Data Objects: ScoreResult, ScoreRuleVersion, EvidenceRef, TraceRef, LowConfidenceFlag
+Related Prompt Contracts: P-JOBMATCH-002, P-POLISH-004, P-PRESSURE-008, P-REPORT-002
+F7 Contract Tests: api.scoring.get.no_exact_probability, api.scoring.get.validation_failed, api.scoring.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| score_result_id | 是 | string | score_result_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Scoring result | 资源域 | loggable |
+| data.score_result_id | 是 | string | score_* | 评分 ID | loggable |
+| data.target_ref | 是 | TraceRef | typed ref | 评分目标 | loggable |
+| data.score_value | 是 | integer | 0..100 | 0-100 产品刻度 | loggable |
+| data.score_scale | 是 | enum | 0_100_product_scale | 分数刻度 | loggable |
+| data.score_version | 是 | string | semver/date | 评分版本 | loggable |
+| data.rubric_version | 是 | string | semver/date | Rubric 版本 | loggable |
+| data.confidence_level | 是 | enum | high / medium / low / insufficient | 置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.scoring.get.no_exact_probability`
+- `api.scoring.get.validation_failed`
+- `api.scoring.get.cross_user_denied`
+
+### API-REPORT-001 Create report task
+
+Method: POST
+Path: `/api/v1/reports`
+Domain: Report
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: session/input_refs owner 必须匹配当前 actor
+Related Data Objects: InterviewReport, ReportSection, ScoreResult, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-REPORT-001, P-REPORT-002, P-REPORT-003, P-REPORT-004
+F7 Contract Tests: api.report.create.async_success, api.report.create.validation_failed, api.report.create.cross_user_denied, api.report.create.idempotency_required, api.report.create.idempotency_conflict, api.report.create.source_unavailable, api.report.create.provider_unavailable, api.report.create.task_timeout, api.report.no_export_endpoint
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | ses_* | 会话 ID | loggable |
+| report_type | 是 | enum | polish_summary / pressure_full | 报告类型 | loggable |
+| input_refs | 否 | SourceRef[] | owner scoped | 输入引用 | loggable |
+| requested_sections | 否 | string[] | summary / score / risk / weakness / training / copy_content | 请求分项 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Report | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+| 404 / 405 | export_not_supported | 请求 PDF、Markdown file、Word、docx、download 或 export 语义 | use_copy_content | false | export.no_endpoint |
+
+#### F7 Contract Tests
+
+- `api.report.create.async_success`
+- `api.report.create.validation_failed`
+- `api.report.create.cross_user_denied`
+- `api.report.create.idempotency_required`
+- `api.report.create.idempotency_conflict`
+- `api.report.create.source_unavailable`
+- `api.report.create.provider_unavailable`
+- `api.report.create.task_timeout`
+- `api.report.no_export_endpoint`
+
+### API-REPORT-002 Get report
+
+Method: GET
+Path: `/api/v1/reports/{report_id}`
+Domain: Report
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: report.owner_ref 必须匹配当前 actor
+Related Data Objects: InterviewReport, ReportSection, ScoreResult, SourceAvailability
+Related Prompt Contracts: P-REPORT-*
+F7 Contract Tests: api.report.get.copy_boundary_visible, api.report.get.validation_failed, api.report.get.cross_user_denied, api.report.no_export_endpoint
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| report_id | 是 | string | report_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Report | 资源域 | loggable |
+| data.report_id | 是 | string | rep_* | 报告 ID | loggable |
+| data.session_ref | 是 | string | ses_* | 会话引用 | loggable |
+| data.report_status | 是 | enum | generating / available / partial / failed | 报告状态 | loggable |
+| data.sections[] | 是 | object[] | >=0 | 报告分项 | sensitive_summary_only |
+| data.score_ref | 否 | string | score_* | 总评分引用 | loggable |
+| data.copy_content_available | 是 | boolean | true / false | 是否可复制 | loggable |
+| data.source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+| 404 / 405 | export_not_supported | 请求 PDF、Markdown file、Word、docx、download 或 export 语义 | use_copy_content | false | export.no_endpoint |
+
+#### F7 Contract Tests
+
+- `api.report.get.copy_boundary_visible`
+- `api.report.get.validation_failed`
+- `api.report.get.cross_user_denied`
+- `api.report.no_export_endpoint`
+
+### API-REPORT-003 Get report copy content
+
+Method: GET
+Path: `/api/v1/reports/{report_id}/copy-content`
+Domain: Report copy content
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: report.owner_ref 必须匹配当前 actor, copy boundary 必须过滤敏感内容
+Related Data Objects: CopyableContent, InterviewReport, AuditEvent, EvidenceRef
+Related Prompt Contracts: P-REPORT-004
+F7 Contract Tests: api.report.copy_content.no_export_artifact, api.report.copy_content.validation_failed, api.report.copy_content.cross_user_denied, api.report.no_export_endpoint
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| report_id | 是 | string | report_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Report copy content | 资源域 | loggable |
+| data.report_id | 是 | string | rep_* | 报告 ID | loggable |
+| data.copy_content_id | 是 | string | copy_* | 复制内容 ID | loggable |
+| data.clipboard_blocks[] | 是 | object[] | plain text blocks | 剪贴板块 | sensitive_not_loggable |
+| data.redaction_applied | 是 | boolean | true / false | 是否脱敏 | loggable |
+| data.copy_boundary | 是 | enum | clipboard_only | 复制边界 | loggable |
+| data.export_artifact | 是 | null | must be null | 不得返回导出物 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+| 404 / 405 | export_not_supported | 请求 PDF、Markdown file、Word、docx、download 或 export 语义 | use_copy_content | false | export.no_endpoint |
+
+#### F7 Contract Tests
+
+- `api.report.copy_content.no_export_artifact`
+- `api.report.copy_content.validation_failed`
+- `api.report.copy_content.cross_user_denied`
+- `api.report.no_export_endpoint`
+
+### API-REPORT-004 Record report copy event
+
+Method: POST
+Path: `/api/v1/reports/{report_id}/copy-events`
+Domain: Report copy content
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: report.owner_ref 必须匹配当前 actor, 审计不记录正文
+Related Data Objects: CopyableContent, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.report.copy_event.audit_without_body, api.report.copy_event.validation_failed, api.report.copy_event.cross_user_denied, api.report.copy_event.idempotency_required, api.report.copy_event.idempotency_conflict, api.report.no_export_endpoint
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| report_id | 是 | string | report_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| copy_content_id | 是 | string | copy_* | 复制内容 ID | loggable |
+| copy_surface | 是 | enum | report_detail / review_detail | 复制位置 | loggable |
+| client_event_id | 否 | string | client generated | 客户端事件 ID | loggable |
+| selected_block_ids | 否 | string[] | copy block ids | 复制块 ID | loggable |
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Report copy content | 资源域 | loggable |
+| data.report_id | 是 | string | rep_* | 报告 ID | loggable |
+| data.copy_content_id | 是 | string | copy_* | 复制内容 ID | loggable |
+| data.clipboard_blocks[] | 是 | object[] | plain text blocks | 剪贴板块 | sensitive_not_loggable |
+| data.redaction_applied | 是 | boolean | true / false | 是否脱敏 | loggable |
+| data.copy_boundary | 是 | enum | clipboard_only | 复制边界 | loggable |
+| data.export_artifact | 是 | null | must be null | 不得返回导出物 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+| 404 / 405 | export_not_supported | 请求 PDF、Markdown file、Word、docx、download 或 export 语义 | use_copy_content | false | export.no_endpoint |
+
+#### F7 Contract Tests
+
+- `api.report.copy_event.audit_without_body`
+- `api.report.copy_event.validation_failed`
+- `api.report.copy_event.cross_user_denied`
+- `api.report.copy_event.idempotency_required`
+- `api.report.copy_event.idempotency_conflict`
+- `api.report.no_export_endpoint`
+
+### API-REVIEW-001 Create mock interview review task
+
+Method: POST
+Path: `/api/v1/reviews/mock`
+Domain: Mock interview review
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: session/report/input_refs owner 必须匹配当前 actor
+Related Data Objects: MockInterviewReview, ReviewItem, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-REVIEW-001, P-REVIEW-004
+F7 Contract Tests: api.review.mock.create.async_success, api.review.mock.create.validation_failed, api.review.mock.create.cross_user_denied, api.review.mock.create.idempotency_required, api.review.mock.create.idempotency_conflict, api.review.mock.create.source_unavailable, api.review.mock.create.provider_unavailable, api.review.mock.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | mock_session / report / real_interview_input | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| requested_outputs | 否 | string[] | review_summary / review_items / weakness_candidates / asset_candidates / training_suggestions | 请求输出 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Mock interview review | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.review.mock.create.async_success`
+- `api.review.mock.create.validation_failed`
+- `api.review.mock.create.cross_user_denied`
+- `api.review.mock.create.idempotency_required`
+- `api.review.mock.create.idempotency_conflict`
+- `api.review.mock.create.source_unavailable`
+- `api.review.mock.create.provider_unavailable`
+- `api.review.mock.create.task_timeout`
+
+### API-REVIEW-002 Create real interview input
+
+Method: POST
+Path: `/api/v1/reviews/real-inputs`
+Domain: Real interview input / review
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: job/resume/input_refs owner 必须匹配当前 actor
+Related Data Objects: RealInterviewInput, RealInterviewEvidence, UserConfirmationRef, IdempotencyRecord
+Related Prompt Contracts: P-REVIEW-002
+F7 Contract Tests: api.review.real_input.create.requires_confirmation, api.review.real_input.create.validation_failed, api.review.real_input.create.cross_user_denied, api.review.real_input.create.idempotency_required, api.review.real_input.create.idempotency_conflict
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| job_id | 否 | string | job_* | 岗位 ID | loggable |
+| resume_id | 否 | string | res_* | 简历 ID | loggable |
+| interview_time | 否 | datetime | ISO-8601 | 面试时间 | sensitive_summary_only |
+| question_recall | 否 | string | <=20000 | 问题回忆 | sensitive_not_loggable |
+| answer_recall | 否 | string | <=20000 | 回答回忆 | sensitive_not_loggable |
+| interviewer_feedback | 否 | string | <=12000 | 面试官反馈 | sensitive_not_loggable |
+| result_status | 否 | enum | unknown / passed / failed / pending / no_response | 结果状态 | sensitive_summary_only |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Real interview input / review | 资源域 | loggable |
+| data.review_id | 是 | string | rev_* | 复盘 ID | loggable |
+| data.review_type | 是 | enum | mock / real_input / real | 复盘类型 | loggable |
+| data.review_status | 是 | enum | available / partial / low_confidence / failed | 状态 | loggable |
+| data.items[] | 否 | object[] | >=0 | 题级复盘项 | sensitive_summary_only |
+| data.source_refs[] | 是 | SourceRef[] | >=1 | 来源 | loggable |
+| data.candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选回流 | loggable |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.review.real_input.create.requires_confirmation`
+- `api.review.real_input.create.validation_failed`
+- `api.review.real_input.create.cross_user_denied`
+- `api.review.real_input.create.idempotency_required`
+- `api.review.real_input.create.idempotency_conflict`
+
+### API-REVIEW-003 Create real interview review task
+
+Method: POST
+Path: `/api/v1/reviews/real`
+Domain: Real interview input / review
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: real_interview_input owner 必须匹配当前 actor 且已确认
+Related Data Objects: RealInterviewReview, ReviewItem, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-REVIEW-003, P-REVIEW-004
+F7 Contract Tests: api.review.real.create.confirmed_input_only, api.review.real.create.validation_failed, api.review.real.create.cross_user_denied, api.review.real.create.idempotency_required, api.review.real.create.idempotency_conflict, api.review.real.create.source_unavailable, api.review.real.create.provider_unavailable, api.review.real.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | mock_session / report / real_interview_input | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| requested_outputs | 否 | string[] | review_summary / review_items / weakness_candidates / asset_candidates / training_suggestions | 请求输出 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Real interview input / review | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.review.real.create.confirmed_input_only`
+- `api.review.real.create.validation_failed`
+- `api.review.real.create.cross_user_denied`
+- `api.review.real.create.idempotency_required`
+- `api.review.real.create.idempotency_conflict`
+- `api.review.real.create.source_unavailable`
+- `api.review.real.create.provider_unavailable`
+- `api.review.real.create.task_timeout`
+
+### API-REVIEW-004 Get review
+
+Method: GET
+Path: `/api/v1/reviews/{review_id}`
+Domain: Mock interview review / Real interview review
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: review.owner_ref 必须匹配当前 actor
+Related Data Objects: MockInterviewReview, RealInterviewReview, ReviewItem, SourceAvailability
+Related Prompt Contracts: P-REVIEW-*
+F7 Contract Tests: api.review.get.low_confidence_visible, api.review.get.validation_failed, api.review.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| review_id | 是 | string | review_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Mock interview review / Real interview review | 资源域 | loggable |
+| data.review_id | 是 | string | rev_* | 复盘 ID | loggable |
+| data.review_type | 是 | enum | mock / real_input / real | 复盘类型 | loggable |
+| data.review_status | 是 | enum | available / partial / low_confidence / failed | 状态 | loggable |
+| data.items[] | 否 | object[] | >=0 | 题级复盘项 | sensitive_summary_only |
+| data.source_refs[] | 是 | SourceRef[] | >=1 | 来源 | loggable |
+| data.candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选回流 | loggable |
+| data.low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.review.get.low_confidence_visible`
+- `api.review.get.validation_failed`
+- `api.review.get.cross_user_denied`
+
+### API-ASSET-001 List assets
+
+Method: GET
+Path: `/api/v1/assets`
+Domain: Asset
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: 按 actor owner scope 过滤正式资产
+Related Data Objects: Asset, AssetVersion, AssetSource, OwnerRef
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.asset.list.owner_scoped, api.asset.list.validation_failed, api.asset.list.cross_user_denied
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| cursor | 否 | string | opaque cursor | 分页游标 | loggable |
+| limit | 否 | integer | 1..100 default 20 | 分页大小 | loggable |
+| status | 否 | string | endpoint whitelist | 状态过滤 | loggable |
+| sort | 否 | string | endpoint whitelist | 排序字段 | loggable |
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Asset | 资源域 | loggable |
+| data.asset_id | 是 | string | asset_* | 资产 ID | loggable |
+| data.current_version_ref | 是 | VersionRef | AssetVersion | 当前版本 | loggable |
+| data.title | 是 | string | 1..160 | 资产标题 | loggable |
+| data.asset_type | 是 | enum | answer_material / project_expression / job_material / feedback_summary | 资产类型 | loggable |
+| data.status | 是 | enum | active / archived / disabled | 状态 | loggable |
+| data.source_refs[] | 是 | SourceRef[] | >=1 | 来源 | loggable |
+| meta.pagination | 否 | PaginationMeta | cursor pagination | 列表分页信息 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.asset.list.owner_scoped`
+- `api.asset.list.validation_failed`
+- `api.asset.list.cross_user_denied`
+
+### API-ASSET-002 Create asset candidate task
+
+Method: POST
+Path: `/api/v1/asset-candidates`
+Domain: Asset candidate / asset version suggestion
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: source_refs/target_asset owner 必须匹配当前 actor
+Related Data Objects: AssetCandidate, AssetQualityHint, AssetVersionSuggestion, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-ASSET-001, P-ASSET-002, P-ASSET-003, P-POLISH-010
+F7 Contract Tests: api.asset_candidate.create.candidate_not_formal, api.asset_candidate.create.validation_failed, api.asset_candidate.create.cross_user_denied, api.asset_candidate.create.idempotency_required, api.asset_candidate.create.idempotency_conflict, api.asset_candidate.create.source_unavailable, api.asset_candidate.create.provider_unavailable, api.asset_candidate.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | answer / feedback / report / review / training_result / manual | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| target_asset_id | 否 | string | asset_* | 目标资产 | loggable |
+| candidate_goal | 否 | enum | new_asset / version_update / quality_hint | 候选目标 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Asset candidate / asset version suggestion | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.asset_candidate.create.candidate_not_formal`
+- `api.asset_candidate.create.validation_failed`
+- `api.asset_candidate.create.cross_user_denied`
+- `api.asset_candidate.create.idempotency_required`
+- `api.asset_candidate.create.idempotency_conflict`
+- `api.asset_candidate.create.source_unavailable`
+- `api.asset_candidate.create.provider_unavailable`
+- `api.asset_candidate.create.task_timeout`
+
+### API-ASSET-003 Get asset candidate
+
+Method: GET
+Path: `/api/v1/asset-candidates/{candidate_id}`
+Domain: Asset candidate / asset version suggestion
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: candidate.owner_ref 必须匹配当前 actor
+Related Data Objects: AssetCandidate, AssetQualityHint, AssetVersionSuggestion, EvidenceRef, TraceRef
+Related Prompt Contracts: P-ASSET-*
+F7 Contract Tests: api.asset_candidate.get.low_confidence_visible, api.asset_candidate.get.validation_failed, api.asset_candidate.get.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| candidate_id | 是 | string | candidate_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Asset candidate / asset version suggestion | 资源域 | loggable |
+| data.candidate_id | 是 | string | cand_* | 候选 ID | loggable |
+| data.candidate_status | 是 | enum | draft / needs_confirmation / confirmed / rejected / low_confidence | 候选状态 | loggable |
+| data.content_draft | 是 | string | <=12000 | 候选内容 | sensitive_not_loggable |
+| data.target_asset_ref | 否 | string | asset_* | 目标资产 | loggable |
+| data.quality_hint_ref | 否 | string | hint_* | 质量提示 | loggable |
+| data.version_suggestion_ref | 否 | string | avs_* | 资产版本建议 | loggable |
+| data.user_confirmation_required | 是 | boolean | true / false | 是否需要确认 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.asset_candidate.get.low_confidence_visible`
+- `api.asset_candidate.get.validation_failed`
+- `api.asset_candidate.get.cross_user_denied`
+
+### API-ASSET-004 Confirm asset candidate
+
+Method: POST
+Path: `/api/v1/asset-candidates/{candidate_id}/confirmations`
+Domain: Asset candidate / asset version suggestion
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: candidate 和 target_asset owner 必须匹配当前 actor, 确认前不得写正式 Asset
+Related Data Objects: AssetCandidate, Asset, AssetVersion, UserConfirmationRef, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: P-ASSET-001, P-ASSET-003
+F7 Contract Tests: api.asset_candidate.confirm.formal_requires_user_action, api.asset_candidate.confirm.validation_failed, api.asset_candidate.confirm.cross_user_denied, api.asset_candidate.confirm.idempotency_required, api.asset_candidate.confirm.idempotency_conflict, api.asset_candidate.confirm.stale_version_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| candidate_id | 是 | string | candidate_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| action | 是 | enum | confirm / edit / skip / reject / merge / manual_review | 确认动作 | loggable |
+| target_version_ref | 否 | VersionRef | target version | 目标版本 | loggable |
+| target_formal_ref | 否 | TraceRef | typed ref | 合并或更新目标 | loggable |
+| edited_content | 否 | object | schema depends on target | 用户编辑内容 | sensitive_not_loggable |
+| confirmation_note | 否 | string | <=1000 | 用户备注 | sensitive_summary_only |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Asset candidate / asset version suggestion | 资源域 | loggable |
+| data.asset_id | 是 | string | asset_* | 资产 ID | loggable |
+| data.current_version_ref | 是 | VersionRef | AssetVersion | 当前版本 | loggable |
+| data.title | 是 | string | 1..160 | 资产标题 | loggable |
+| data.asset_type | 是 | enum | answer_material / project_expression / job_material / feedback_summary | 资产类型 | loggable |
+| data.status | 是 | enum | active / archived / disabled | 状态 | loggable |
+| data.source_refs[] | 是 | SourceRef[] | >=1 | 来源 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.asset_candidate.confirm.formal_requires_user_action`
+- `api.asset_candidate.confirm.validation_failed`
+- `api.asset_candidate.confirm.cross_user_denied`
+- `api.asset_candidate.confirm.idempotency_required`
+- `api.asset_candidate.confirm.idempotency_conflict`
+- `api.asset_candidate.confirm.stale_version_conflict`
+
+### API-WEAKNESS-001 List weaknesses
+
+Method: GET
+Path: `/api/v1/weaknesses`
+Domain: Weakness
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: 按 actor owner scope 过滤正式薄弱项
+Related Data Objects: Weakness, WeaknessEvidence, WeaknessStatusHistory
+Related Prompt Contracts: N/A
+F7 Contract Tests: api.weakness.list.owner_scoped, api.weakness.list.validation_failed, api.weakness.list.cross_user_denied
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| cursor | 否 | string | opaque cursor | 分页游标 | loggable |
+| limit | 否 | integer | 1..100 default 20 | 分页大小 | loggable |
+| status | 否 | string | endpoint whitelist | 状态过滤 | loggable |
+| sort | 否 | string | endpoint whitelist | 排序字段 | loggable |
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Weakness | 资源域 | loggable |
+| data.weakness_id | 是 | string | weak_* | 薄弱项 ID | loggable |
+| data.title | 是 | string | 1..160 | 主题 | sensitive_summary_only |
+| data.status | 是 | enum | confirmed / low_priority / ignored / resolved_candidate / resolved / reopened | 状态 | loggable |
+| data.severity_hint | 否 | enum | low / medium / high / unknown | 严重度提示 | loggable |
+| data.evidence_refs[] | 是 | EvidenceRef[] | >=1 | 证据 | loggable |
+| data.updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+| meta.pagination | 否 | PaginationMeta | cursor pagination | 列表分页信息 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+
+#### F7 Contract Tests
+
+- `api.weakness.list.owner_scoped`
+- `api.weakness.list.validation_failed`
+- `api.weakness.list.cross_user_denied`
+
+### API-WEAKNESS-002 Create weakness candidate task
+
+Method: POST
+Path: `/api/v1/weakness-candidates`
+Domain: Weakness candidate / merge suggestion
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: source_refs/input_refs owner 必须匹配当前 actor
+Related Data Objects: WeaknessCandidate, WeaknessMergeSuggestion, WeaknessSeverityAssessment, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-WEAKNESS-001, P-WEAKNESS-002, P-WEAKNESS-003, P-WEAKNESS-004, P-JOBMATCH-004, P-POLISH-011
+F7 Contract Tests: api.weakness_candidate.create.candidate_not_formal, api.weakness_candidate.create.validation_failed, api.weakness_candidate.create.cross_user_denied, api.weakness_candidate.create.idempotency_required, api.weakness_candidate.create.idempotency_conflict, api.weakness_candidate.create.source_unavailable, api.weakness_candidate.create.provider_unavailable, api.weakness_candidate.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | job_match / polish / pressure / report / review / manual | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| candidate_goal | 否 | enum | new_weakness / merge_suggestion / status_update / severity_assessment | 候选目标 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Weakness candidate / merge suggestion | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.weakness_candidate.create.candidate_not_formal`
+- `api.weakness_candidate.create.validation_failed`
+- `api.weakness_candidate.create.cross_user_denied`
+- `api.weakness_candidate.create.idempotency_required`
+- `api.weakness_candidate.create.idempotency_conflict`
+- `api.weakness_candidate.create.source_unavailable`
+- `api.weakness_candidate.create.provider_unavailable`
+- `api.weakness_candidate.create.task_timeout`
+
+### API-WEAKNESS-003 Confirm weakness candidate
+
+Method: POST
+Path: `/api/v1/weakness-candidates/{candidate_id}/confirmations`
+Domain: Weakness candidate / merge suggestion
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: candidate 和 target_weakness owner 必须匹配当前 actor, 确认前不得写正式 Weakness
+Related Data Objects: WeaknessCandidate, Weakness, WeaknessStatusHistory, UserConfirmationRef, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: P-WEAKNESS-001, P-WEAKNESS-002, P-WEAKNESS-004
+F7 Contract Tests: api.weakness_candidate.confirm.formal_requires_user_action, api.weakness_candidate.confirm.validation_failed, api.weakness_candidate.confirm.cross_user_denied, api.weakness_candidate.confirm.idempotency_required, api.weakness_candidate.confirm.idempotency_conflict, api.weakness_candidate.confirm.stale_version_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| candidate_id | 是 | string | candidate_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| action | 是 | enum | confirm / edit / skip / reject / merge / manual_review | 确认动作 | loggable |
+| target_version_ref | 否 | VersionRef | target version | 目标版本 | loggable |
+| target_formal_ref | 否 | TraceRef | typed ref | 合并或更新目标 | loggable |
+| edited_content | 否 | object | schema depends on target | 用户编辑内容 | sensitive_not_loggable |
+| confirmation_note | 否 | string | <=1000 | 用户备注 | sensitive_summary_only |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Weakness candidate / merge suggestion | 资源域 | loggable |
+| data.weakness_id | 是 | string | weak_* | 薄弱项 ID | loggable |
+| data.title | 是 | string | 1..160 | 主题 | sensitive_summary_only |
+| data.status | 是 | enum | confirmed / low_priority / ignored / resolved_candidate / resolved / reopened | 状态 | loggable |
+| data.severity_hint | 否 | enum | low / medium / high / unknown | 严重度提示 | loggable |
+| data.evidence_refs[] | 是 | EvidenceRef[] | >=1 | 证据 | loggable |
+| data.updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.weakness_candidate.confirm.formal_requires_user_action`
+- `api.weakness_candidate.confirm.validation_failed`
+- `api.weakness_candidate.confirm.cross_user_denied`
+- `api.weakness_candidate.confirm.idempotency_required`
+- `api.weakness_candidate.confirm.idempotency_conflict`
+- `api.weakness_candidate.confirm.stale_version_conflict`
+
+### API-TRAINING-001 List training suggestions
+
+Method: GET
+Path: `/api/v1/training-suggestions`
+Domain: Training suggestion
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: 按 actor owner scope 过滤训练建议
+Related Data Objects: TrainingRecommendation, TrainingPriorityRanking, OwnerRef
+Related Prompt Contracts: P-TRAINING-001, P-TRAINING-002
+F7 Contract Tests: api.training_suggestion.list.owner_scoped, api.training_suggestion.list.validation_failed, api.training_suggestion.list.cross_user_denied
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| cursor | 否 | string | opaque cursor | 分页游标 | loggable |
+| limit | 否 | integer | 1..100 default 20 | 分页大小 | loggable |
+| status | 否 | string | endpoint whitelist | 状态过滤 | loggable |
+| sort | 否 | string | endpoint whitelist | 排序字段 | loggable |
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Training suggestion | 资源域 | loggable |
+| data.suggestion_id | 是 | string | tr_* | 训练建议 ID | loggable |
+| data.suggestion_status | 是 | enum | candidate / confirmed / skipped / rejected / low_confidence | 建议状态 | loggable |
+| data.topic | 是 | string | 1..160 | 训练主题 | sensitive_summary_only |
+| data.priority_hint | 否 | enum | low / medium / high / unknown | 优先级提示 | loggable |
+| data.weakness_refs[] | 否 | string[] | >=0 | 关联薄弱项 | loggable |
+| data.asset_refs[] | 否 | string[] | >=0 | 关联资产 | loggable |
+| data.user_confirmation_required | 是 | boolean | true / false | 是否需要确认 | loggable |
+| meta.pagination | 否 | PaginationMeta | cursor pagination | 列表分页信息 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.training_suggestion.list.owner_scoped`
+- `api.training_suggestion.list.validation_failed`
+- `api.training_suggestion.list.cross_user_denied`
+
+### API-TRAINING-002 Create training suggestion task
+
+Method: POST
+Path: `/api/v1/training-suggestions`
+Domain: Training suggestion
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: source_refs/weakness_ids/asset_ids owner 必须匹配当前 actor
+Related Data Objects: TrainingRecommendation, TrainingPriorityRanking, AiTask, IdempotencyRecord
+Related Prompt Contracts: P-TRAINING-001, P-TRAINING-002
+F7 Contract Tests: api.training_suggestion.create.no_auto_task, api.training_suggestion.create.validation_failed, api.training_suggestion.create.cross_user_denied, api.training_suggestion.create.idempotency_required, api.training_suggestion.create.idempotency_conflict, api.training_suggestion.create.source_unavailable, api.training_suggestion.create.provider_unavailable, api.training_suggestion.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | weakness / report / review / asset / training_result / manual | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| weakness_ids | 否 | string[] | weak_* | 薄弱项 | loggable |
+| asset_ids | 否 | string[] | asset_* | 资产 | loggable |
+| requested_outputs | 否 | string[] | recommendation / priority_ranking | 请求输出 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Training suggestion | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.training_suggestion.create.no_auto_task`
+- `api.training_suggestion.create.validation_failed`
+- `api.training_suggestion.create.cross_user_denied`
+- `api.training_suggestion.create.idempotency_required`
+- `api.training_suggestion.create.idempotency_conflict`
+- `api.training_suggestion.create.source_unavailable`
+- `api.training_suggestion.create.provider_unavailable`
+- `api.training_suggestion.create.task_timeout`
+
+### API-TRAINING-003 Confirm training suggestion
+
+Method: POST
+Path: `/api/v1/training-suggestions/{suggestion_id}/confirmations`
+Domain: Training suggestion
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: suggestion.owner_ref 必须匹配当前 actor, 确认不等于自动启动 TrainingTask
+Related Data Objects: TrainingRecommendation, UserConfirmationRef, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: P-TRAINING-001
+F7 Contract Tests: api.training_suggestion.confirm.no_auto_training_task, api.training_suggestion.confirm.validation_failed, api.training_suggestion.confirm.cross_user_denied, api.training_suggestion.confirm.idempotency_required, api.training_suggestion.confirm.idempotency_conflict, api.training_suggestion.confirm.stale_version_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| suggestion_id | 是 | string | suggestion_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+| If-Match | 条件 | string | VersionRef or ETag | 更新正式对象、确认或复制审计需要防 stale write 时必填 | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| action | 是 | enum | confirm / edit / skip / reject / merge / manual_review | 确认动作 | loggable |
+| target_version_ref | 否 | VersionRef | target version | 目标版本 | loggable |
+| target_formal_ref | 否 | TraceRef | typed ref | 合并或更新目标 | loggable |
+| edited_content | 否 | object | schema depends on target | 用户编辑内容 | sensitive_not_loggable |
+| confirmation_note | 否 | string | <=1000 | 用户备注 | sensitive_summary_only |
+
+#### Success Response
+
+HTTP: 201 Created
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | Training suggestion | 资源域 | loggable |
+| data.suggestion_id | 是 | string | tr_* | 训练建议 ID | loggable |
+| data.suggestion_status | 是 | enum | candidate / confirmed / skipped / rejected / low_confidence | 建议状态 | loggable |
+| data.topic | 是 | string | 1..160 | 训练主题 | sensitive_summary_only |
+| data.priority_hint | 否 | enum | low / medium / high / unknown | 优先级提示 | loggable |
+| data.weakness_refs[] | 否 | string[] | >=0 | 关联薄弱项 | loggable |
+| data.asset_refs[] | 否 | string[] | >=0 | 关联资产 | loggable |
+| data.user_confirmation_required | 是 | boolean | true / false | 是否需要确认 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.training_suggestion.confirm.no_auto_training_task`
+- `api.training_suggestion.confirm.validation_failed`
+- `api.training_suggestion.confirm.cross_user_denied`
+- `api.training_suggestion.confirm.idempotency_required`
+- `api.training_suggestion.confirm.idempotency_conflict`
+- `api.training_suggestion.confirm.stale_version_conflict`
+
+### API-AITASK-001 Create generic AI task
+
+Method: POST
+Path: `/api/v1/ai-tasks`
+Domain: AI task
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: target_ref/input_refs owner 必须匹配当前 actor, contract_ids 必须已登记
+Related Data Objects: AiTask, AiTaskResult, LlmValidationResult, IdempotencyRecord
+Related Prompt Contracts: 已登记 P-*
+F7 Contract Tests: api.ai_task.create.contract_id_registered, api.ai_task.create.validation_failed, api.ai_task.create.cross_user_denied, api.ai_task.create.idempotency_required, api.ai_task.create.idempotency_conflict, api.ai_task.create.source_unavailable, api.ai_task.create.provider_unavailable, api.ai_task.create.task_timeout
+
+#### Path Params
+
+N/A
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| task_type | 是 | enum | registered AI task type | 任务类型 | loggable |
+| contract_ids | 是 | string[] | P-* registered | 相关 contract | loggable |
+| target_ref | 是 | TraceRef | typed ref | 目标引用 | loggable |
+| input_refs | 是 | SourceRef[] | owner scoped | 输入引用 | loggable |
+| requested_outputs | 否 | string[] | contract scoped | 请求输出 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | AI task | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.ai_task.create.contract_id_registered`
+- `api.ai_task.create.validation_failed`
+- `api.ai_task.create.cross_user_denied`
+- `api.ai_task.create.idempotency_required`
+- `api.ai_task.create.idempotency_conflict`
+- `api.ai_task.create.source_unavailable`
+- `api.ai_task.create.provider_unavailable`
+- `api.ai_task.create.task_timeout`
+
+### API-AITASK-002 Get AI task status
+
+Method: GET
+Path: `/api/v1/ai-tasks/{ai_task_id}`
+Domain: AI task
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: ai_task.owner_ref 必须匹配当前 actor
+Related Data Objects: AiTask, AiTaskResult, LlmValidationResult, TraceRef
+Related Prompt Contracts: 已登记 P-*
+F7 Contract Tests: api.ai_task.status.owner_scoped, api.ai_task.status.validation_failed, api.ai_task.status.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ai_task_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | AI task | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.ai_task.status.owner_scoped`
+- `api.ai_task.status.validation_failed`
+- `api.ai_task.status.cross_user_denied`
+
+### API-AITASK-003 Get AI task result
+
+Method: GET
+Path: `/api/v1/ai-tasks/{ai_task_id}/result`
+Domain: AI task
+Sync/Async: sync
+Auth: required
+Idempotency-Key: not required
+Owner Check: ai_task.owner_ref 必须匹配当前 actor, 不返回 provider payload
+Related Data Objects: AiTaskResult, CandidateRef, SuggestionRef, EvidenceRef, TraceRef
+Related Prompt Contracts: 已登记 P-*
+F7 Contract Tests: api.ai_task.result.no_provider_payload, api.ai_task.result.validation_failed, api.ai_task.result.cross_user_denied
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ai_task_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+
+#### Request Body
+
+N/A
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | AI task | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | 任务 ID | loggable |
+| data.status | 是 | enum | succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 结果状态 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选引用 | loggable |
+| data.suggestion_refs[] | 否 | SuggestionRef[] | >=0 | 建议引用 | loggable |
+| data.validation_result_ref | 否 | ValidationResultRef | val_* | 校验结果 | loggable |
+| data.provider_payload | 是 | null | must be null | 不得返回 provider payload | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.ai_task.result.no_provider_payload`
+- `api.ai_task.result.validation_failed`
+- `api.ai_task.result.cross_user_denied`
+
+### API-AITASK-004 Retry AI task
+
+Method: POST
+Path: `/api/v1/ai-tasks/{ai_task_id}/retry`
+Domain: AI task
+Sync/Async: async
+Auth: required
+Idempotency-Key: required
+Owner Check: ai_task.owner_ref 必须匹配当前 actor, retry 不得扩大上下文
+Related Data Objects: AiTask, AiTaskResult, LlmFailureRecord, IdempotencyRecord
+Related Prompt Contracts: 已登记 P-*
+F7 Contract Tests: api.ai_task.retry.idempotent_and_scope_safe, api.ai_task.retry.validation_failed, api.ai_task.retry.cross_user_denied, api.ai_task.retry.idempotency_required, api.ai_task.retry.idempotency_conflict, api.ai_task.retry.source_unavailable, api.ai_task.retry.provider_unavailable, api.ai_task.retry.task_timeout
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ai_task_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| reason | 是 | enum | provider_unavailable / task_timeout / generation_failed / validation_failed / source_fixed / manual_retry | 重试原因 | loggable |
+| fixed_input_refs | 否 | SourceRef[] | owner scoped | 修复后的输入 | loggable |
+
+#### Success Response
+
+HTTP: 202 Accepted
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | AI task | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.ai_task.retry.idempotent_and_scope_safe`
+- `api.ai_task.retry.validation_failed`
+- `api.ai_task.retry.cross_user_denied`
+- `api.ai_task.retry.idempotency_required`
+- `api.ai_task.retry.idempotency_conflict`
+- `api.ai_task.retry.source_unavailable`
+- `api.ai_task.retry.provider_unavailable`
+- `api.ai_task.retry.task_timeout`
+
+### API-AITASK-005 Cancel AI task
+
+Method: POST
+Path: `/api/v1/ai-tasks/{ai_task_id}/cancel`
+Domain: AI task
+Sync/Async: sync
+Auth: required
+Idempotency-Key: required
+Owner Check: ai_task.owner_ref 必须匹配当前 actor, cancel 后不得 late write formal object
+Related Data Objects: AiTask, AuditEvent, IdempotencyRecord
+Related Prompt Contracts: 已登记 P-*
+F7 Contract Tests: api.ai_task.cancel.no_late_write, api.ai_task.cancel.validation_failed, api.ai_task.cancel.cross_user_denied, api.ai_task.cancel.idempotency_required, api.ai_task.cancel.idempotency_conflict
+
+#### Path Params
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ai_task_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+
+#### Query Params
+
+N/A
+
+#### Headers
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
+| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
+
+#### Request Body
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| reason | 是 | enum | user_cancelled / source_changed / no_longer_needed / manual_review | 取消原因 | loggable |
+
+#### Success Response
+
+HTTP: 200 OK
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | AI task | 资源域 | loggable |
+| data.ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| data.task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| data.status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| data.contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| data.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| data.result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| data.user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### Error Responses
+
+| HTTP | error.code | Condition | User Action | Retryable | F7 Assertion |
+| --- | --- | --- | --- | --- | --- |
+| 401 | unauthenticated | 未登录或 session 过期 | login | false | auth.unauthenticated_denied |
+| 403 | permission_denied / owner_mismatch | actor 无权访问目标或复合资源 owner 不一致 | manual_review | false | auth.cross_user_denied |
+| 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
+| 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
+| 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
+| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
+| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
+| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
+| 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
+| 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
+| 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
+| 429 | rate_limited | 达到 actor/IP/endpoint/task_type 限流 | retry_later | true | rate_limit.enforced |
+
+#### F7 Contract Tests
+
+- `api.ai_task.cancel.no_late_write`
+- `api.ai_task.cancel.validation_failed`
+- `api.ai_task.cancel.cross_user_denied`
+- `api.ai_task.cancel.idempotency_required`
+- `api.ai_task.cancel.idempotency_conflict`
+
+
+## 8. Schema Index
+
+Schema Index 冻结字段级 contract 的最小交接面。F5 可以在实现中拆分 TypeScript / Pydantic 类型，但不得删除必填字段、放宽 owner/source/idempotency 边界或把敏感字段写入日志。
+
+### 8.1 Common schemas
+
+#### ApiSuccessEnvelope
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| status | 是 | enum | success / partial / low_confidence / accepted / queued / running | 业务状态 | loggable |
+| resource_type | 是 | string | registered resource type | 资源类型 | loggable |
+| data | 否 | object | schema specific | 业务数据 | schema_defined |
+| meta | 否 | object | PaginationMeta / RateLimitMeta / version meta | 元数据 | loggable |
+| ai_task_id | 否 | string | ait_* | 异步任务 ID | loggable |
+
+#### ApiErrorEnvelope
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| request_id | 是 | string | X-Request-Id or generated | 请求追踪 ID | loggable |
+| trace_id | 是 | string | server trace | 链路追踪 ID | loggable |
+| error.code | 是 | enum | stable error code | 稳定错误码 | loggable |
+| error.message | 是 | string | safe summary | 用户可理解摘要 | loggable |
+| error.details | 否 | object | redacted | 字段或冲突细节 | no_sensitive_body |
+| error.retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| error.user_action | 否 | enum | login / fix_input / retry_later / manual_review / choose_available_source | 用户动作 | loggable |
+
+#### PaginationMeta
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| next_cursor | 否 | string | opaque | 下一页游标 | loggable |
+| has_more | 是 | boolean | true / false | 是否有更多 | loggable |
+| limit | 是 | integer | 1..100 | 本页大小 | loggable |
+| total_count_available | 是 | boolean | true / false | 是否提供总数 | loggable |
+
+#### RateLimitMeta
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| limit | 是 | integer | >0 | 限制值 | loggable |
+| remaining | 是 | integer | >=0 | 剩余额度 | loggable |
+| reset_at | 是 | datetime | ISO-8601 | 重置时间 | loggable |
+| retry_after_seconds | 否 | integer | >=0 | 建议重试秒数 | loggable |
+
+#### SourceAvailability
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_ref | 是 | SourceRef | typed ref | 来源引用 | loggable |
+| status | 是 | enum | source_available / source_archived / source_deleted / source_disabled / source_unavailable | 来源状态 | loggable |
+| can_read_for_generation | 是 | boolean | true / false | 能否用于新生成 | loggable |
+| display_summary | 否 | string | redacted | 可展示摘要 | sensitive_summary_only |
+
+#### LowConfidenceFlag
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| flag_id | 是 | string | lcf_* | 标记 ID | loggable |
+| reason | 是 | enum | evidence_missing / evidence_conflict / source_unavailable / output_incomplete / manual_check_required | 原因 | loggable |
+| impact_scope | 是 | string | <=240 | 影响范围 | loggable |
+| recommended_action | 否 | enum | manual_review / provide_more_input / retry / ignore | 建议动作 | loggable |
+
+#### EvidenceRef
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| evidence_ref_id | 是 | string | ev_* | 证据引用 ID | loggable |
+| source_ref | 是 | SourceRef | typed ref | 来源 | loggable |
+| version_ref | 否 | VersionRef | typed ref | 版本 | loggable |
+| summary | 否 | string | redacted | 可展示摘要 | sensitive_summary_only |
+| confidence_level | 否 | enum | high / medium / low / insufficient | 证据置信度 | loggable |
+
+#### TraceRef
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| trace_ref_id | 是 | string | tr_* | 追踪引用 ID | loggable |
+| trace_type | 是 | enum | api_request / rag / llm / validation / audit / persistence | 追踪类型 | loggable |
+| created_at | 是 | datetime | ISO-8601 | 创建时间 | loggable |
+| redaction_boundary | 是 | string | no raw payload | 脱敏边界 | loggable |
+
+#### ValidationResultRef
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| validation_result_id | 是 | string | val_* | 校验结果 ID | loggable |
+| status | 是 | enum | passed / partial / failed | 校验状态 | loggable |
+| failure_signals[] | 否 | string[] | shared failure signals | 失败信号 | loggable |
+| repair_hint | 否 | string | <=240 | 修复提示 | loggable |
+
+#### UserConfirmationRef
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| confirmation_id | 是 | string | uc_* | 确认 ID | loggable |
+| actor_ref | 是 | OwnerRef | current actor | 确认人 | loggable |
+| target_ref | 是 | TraceRef | typed ref | 确认目标 | loggable |
+| action_type | 是 | enum | confirm / edit / skip / reject / merge / manual_review | 动作 | loggable |
+| action_result | 是 | enum | succeeded / failed / pending | 结果 | loggable |
+| audit_event_ref | 是 | TraceRef | audit | 审计引用 | loggable |
+
+#### AiTaskRef
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ait_* | AI task ID | loggable |
+| task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 状态 | loggable |
+| contract_ids[] | 是 | string[] | P-* | 相关 contract | loggable |
+| owner_ref | 是 | OwnerRef | current actor | 归属 | loggable |
+
+### 8.2 Request schemas
+
+#### CreateResumeRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 是 | string | 1..120 | 简历标题 | loggable |
+| markdown_text | 是 | string | 1..60000 | Markdown 简历正文 | sensitive_not_loggable |
+| target_direction | 否 | string | <=120 | 目标方向 | loggable |
+| client_draft_id | 否 | string | client generated | 客户端草稿 ID | loggable |
+
+#### UpdateResumeRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 否 | string | 1..120 | 新标题 | loggable |
+| markdown_text | 否 | string | 1..60000 | 新简历正文 | sensitive_not_loggable |
+| content_markdown | 否 | string | 1..20000 | 项目经历模块正文 | sensitive_not_loggable |
+| base_version_ref | 是 | VersionRef | ResumeVersion | 基础版本 | loggable |
+| change_reason | 否 | string | <=240 | 变更原因 | loggable |
+
+#### CreateJobRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 是 | string | 1..160 | 岗位名称 | loggable |
+| company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| department | 否 | string | <=160 | 部门 | sensitive_summary_only |
+| responsibilities | 是 | string[] | 1..100 items | 职责 | sensitive_not_loggable |
+| requirements | 是 | string[] | 1..100 items | 要求 | sensitive_not_loggable |
+| application_status | 否 | enum | draft / applied / interviewing / closed | 投递状态 | loggable |
+
+#### UpdateJobRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| title | 否 | string | 1..160 | 岗位名称 | loggable |
+| company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| responsibilities | 否 | string[] | <=100 items | 职责 | sensitive_not_loggable |
+| requirements | 否 | string[] | <=100 items | 要求 | sensitive_not_loggable |
+| application_status | 否 | enum | draft / applied / interviewing / closed | 投递状态 | loggable |
+| base_version_ref | 是 | VersionRef | JobVersion | 基础版本 | loggable |
+
+#### CreateBindingRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| job_id | 是 | string | job_* | 岗位 ID | loggable |
+| resume_version_id | 否 | string | version id | 指定简历版本 | loggable |
+| job_version_id | 否 | string | version id | 指定岗位版本 | loggable |
+
+#### CreateJobMatchAnalysisRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| binding_id | 否 | string | bind_* | 绑定 ID | loggable |
+| resume_id | 条件 | string | res_* | 无 binding 时必填 | loggable |
+| job_id | 条件 | string | job_* | 无 binding 时必填 | loggable |
+| requested_outputs | 否 | string[] | score / points / weakness_candidates | 请求输出 | loggable |
+
+#### CreatePolishSessionRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| job_id | 否 | string | job_* | 岗位 ID | loggable |
+| binding_id | 否 | string | bind_* | 绑定 ID | loggable |
+| topic_hint | 否 | string | <=240 | 打磨主题提示 | sensitive_summary_only |
+| source_refs | 否 | SourceRef[] | owner scoped | 增强来源 | loggable |
+
+#### CreatePressureSessionRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| job_id | 否 | string | job_* | 岗位 ID | loggable |
+| binding_id | 否 | string | bind_* | 绑定 ID | loggable |
+| start_mode | 否 | enum | first_question / continue_from_weakness / manual_topic | 启动模式 | loggable |
+| source_refs | 否 | SourceRef[] | owner scoped | 增强来源 | loggable |
+
+#### CreateQuestionTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| progress_node_ref | 否 | TraceRef | node ref | 进展节点 | loggable |
+| topic_ref | 否 | TraceRef | topic ref | 主题引用 | loggable |
+| question_type | 否 | enum | first / follow_up / polish | 题目类型 | loggable |
+| answer_id | 否 | string | ans_* | 追问时的上一回答 | loggable |
+| difficulty_hint | 否 | enum | easy / medium / hard / adaptive | 难度提示 | loggable |
+
+#### CreateAnswerRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| question_id | 是 | string | q_* | 题目 ID | loggable |
+| answer_text | 是 | string | 1..20000 | 回答正文 | sensitive_not_loggable |
+| answer_round | 否 | integer | >=1 | 轮次 | loggable |
+| base_question_version_ref | 否 | VersionRef | Question | 题目版本 | loggable |
+
+#### CreateFeedbackTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| requested_outputs | 否 | string[] | diagnosis / score / loss_points / reference_answer / knowledge / next_action / asset_candidate / weakness_candidate | 请求输出 | loggable |
+| session_summary_ref | 否 | TraceRef | summary ref | 会话摘要 | loggable |
+
+#### CreateScoringTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| target_type | 是 | enum | job_match / answer / session / report / review / training_result | 评分目标类型 | loggable |
+| target_id | 是 | string | typed id | 评分目标 ID | loggable |
+| score_type | 是 | enum | job_match / polish_round / pressure_session / report_section | 评分类型 | loggable |
+| input_refs | 是 | SourceRef[] | owner scoped | 输入引用 | loggable |
+| score_rule_version_id | 否 | string | rule version | 指定评分规则版本 | loggable |
+
+#### CreateReportTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | ses_* | 会话 ID | loggable |
+| report_type | 是 | enum | polish_summary / pressure_full | 报告类型 | loggable |
+| input_refs | 否 | SourceRef[] | owner scoped | 输入引用 | loggable |
+| requested_sections | 否 | string[] | summary / score / risk / weakness / training / copy_content | 请求分项 | loggable |
+
+#### CreateRealInterviewInputRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| job_id | 否 | string | job_* | 岗位 ID | loggable |
+| resume_id | 否 | string | res_* | 简历 ID | loggable |
+| interview_time | 否 | datetime | ISO-8601 | 面试时间 | sensitive_summary_only |
+| question_recall | 否 | string | <=20000 | 问题回忆 | sensitive_not_loggable |
+| answer_recall | 否 | string | <=20000 | 回答回忆 | sensitive_not_loggable |
+| interviewer_feedback | 否 | string | <=12000 | 面试官反馈 | sensitive_not_loggable |
+| result_status | 否 | enum | unknown / passed / failed / pending / no_response | 结果状态 | sensitive_summary_only |
+
+#### CreateReviewTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | mock_session / report / real_interview_input | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| requested_outputs | 否 | string[] | review_summary / review_items / weakness_candidates / asset_candidates / training_suggestions | 请求输出 | loggable |
+
+#### CreateAssetCandidateTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | answer / feedback / report / review / training_result / manual | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| target_asset_id | 否 | string | asset_* | 目标资产 | loggable |
+| candidate_goal | 否 | enum | new_asset / version_update / quality_hint | 候选目标 | loggable |
+
+#### ConfirmCandidateRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| action | 是 | enum | confirm / edit / skip / reject / merge / manual_review | 确认动作 | loggable |
+| target_version_ref | 否 | VersionRef | target version | 目标版本 | loggable |
+| target_formal_ref | 否 | TraceRef | typed ref | 合并或更新目标 | loggable |
+| edited_content | 否 | object | schema depends on target | 用户编辑内容 | sensitive_not_loggable |
+| confirmation_note | 否 | string | <=1000 | 用户备注 | sensitive_summary_only |
+
+#### CreateWeaknessCandidateTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | job_match / polish / pressure / report / review / manual | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| candidate_goal | 否 | enum | new_weakness / merge_suggestion / status_update / severity_assessment | 候选目标 | loggable |
+
+#### CreateTrainingSuggestionTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| source_type | 是 | enum | weakness / report / review / asset / training_result / manual | 来源类型 | loggable |
+| source_ref | 是 | SourceRef | owner scoped | 来源引用 | loggable |
+| weakness_ids | 否 | string[] | weak_* | 薄弱项 | loggable |
+| asset_ids | 否 | string[] | asset_* | 资产 | loggable |
+| requested_outputs | 否 | string[] | recommendation / priority_ranking | 请求输出 | loggable |
+
+#### CreateAiTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| task_type | 是 | enum | registered AI task type | 任务类型 | loggable |
+| contract_ids | 是 | string[] | P-* registered | 相关 contract | loggable |
+| target_ref | 是 | TraceRef | typed ref | 目标引用 | loggable |
+| input_refs | 是 | SourceRef[] | owner scoped | 输入引用 | loggable |
+| requested_outputs | 否 | string[] | contract scoped | 请求输出 | loggable |
+
+#### RetryAiTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| reason | 是 | enum | provider_unavailable / task_timeout / generation_failed / validation_failed / source_fixed / manual_retry | 重试原因 | loggable |
+| fixed_input_refs | 否 | SourceRef[] | owner scoped | 修复后的输入 | loggable |
+
+#### CancelAiTaskRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| reason | 是 | enum | user_cancelled / source_changed / no_longer_needed / manual_review | 取消原因 | loggable |
+
+#### RecordCopyEventRequest
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| copy_content_id | 是 | string | copy_* | 复制内容 ID | loggable |
+| copy_surface | 是 | enum | report_detail / review_detail | 复制位置 | loggable |
+| client_event_id | 否 | string | client generated | 客户端事件 ID | loggable |
+| selected_block_ids | 否 | string[] | copy block ids | 复制块 ID | loggable |
+
+### 8.3 Response data schemas
+
+#### ResumeSummary
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| title | 是 | string | 1..120 | 简历标题 | loggable |
+| target_direction | 否 | string | <=120 | 目标方向 | loggable |
+| current_version_ref | 是 | VersionRef | ResumeVersion | 当前版本引用 | loggable |
+| module_summary.project_experience_count | 是 | integer | >=0 | 项目经历模块数量 | loggable |
+| updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+
+#### ResumeDetail
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| resume_id | 是 | string | res_* | 简历 ID | loggable |
+| title | 是 | string | 1..120 | 简历标题 | loggable |
+| markdown_text | 是 | string | 1..60000 | Markdown 简历正文 | sensitive_not_loggable |
+| current_version_ref | 是 | VersionRef | ResumeVersion | 当前版本 | loggable |
+| modules[] | 是 | ResumeProjectExperienceModule[] | includes project_experience | 简历模块 | sensitive_summary_only |
+| source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### ResumeProjectExperienceModule
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| module_id | 是 | string | mod_* | 模块 ID | loggable |
+| resume_id | 是 | string | res_* | 所属简历 | loggable |
+| module_type | 是 | enum | project_experience | 项目经历模块 | loggable |
+| content_markdown | 是 | string | 1..20000 | 模块正文 | sensitive_not_loggable |
+| base_version_ref | 是 | VersionRef | ResumeVersion | 来源版本 | loggable |
+| updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+
+#### JobSummary
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| job_id | 是 | string | job_* | 岗位 ID | loggable |
+| title | 是 | string | 1..160 | 岗位名称 | loggable |
+| company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| application_status | 否 | enum | draft / applied / interviewing / closed | 投递状态 | loggable |
+| current_version_ref | 是 | VersionRef | JobVersion | 当前版本 | loggable |
+| updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+
+#### JobDetail
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| job_id | 是 | string | job_* | 岗位 ID | loggable |
+| title | 是 | string | 1..160 | 岗位名称 | loggable |
+| company | 否 | string | <=160 | 公司名 | sensitive_summary_only |
+| responsibilities | 是 | string[] | item<=1000 | 职责列表 | sensitive_not_loggable |
+| requirements | 是 | string[] | item<=1000 | 要求列表 | sensitive_not_loggable |
+| current_version_ref | 是 | VersionRef | JobVersion | 当前版本 | loggable |
+| source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### JobResumeBindingResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| binding_id | 是 | string | bind_* | 绑定 ID | loggable |
+| resume_ref | 是 | VersionRef | ResumeVersion | 绑定简历版本 | loggable |
+| job_ref | 是 | VersionRef | JobVersion | 绑定岗位版本 | loggable |
+| binding_status | 是 | enum | active / inactive | 绑定状态 | loggable |
+| created_at | 是 | datetime | ISO-8601 | 创建时间 | loggable |
+
+#### JobMatchAnalysisResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| analysis_id | 是 | string | jma_* | 分析 ID | loggable |
+| binding_ref | 是 | string | bind_* | 绑定引用 | loggable |
+| score.score_value | 是 | integer | 0..100 | 匹配分 | loggable |
+| match_points[] | 是 | object[] | >=0 | 匹配点 | sensitive_summary_only |
+| mismatch_points[] | 是 | object[] | >=0 | 不匹配点 | sensitive_summary_only |
+| improvement_points[] | 是 | object[] | >=0 | 加强点 | sensitive_summary_only |
+| low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### InterviewSessionResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| session_id | 是 | string | ses_* | 会话 ID | loggable |
+| mode | 是 | enum | polish / pressure | 模式 | loggable |
+| session_status | 是 | enum | created / running / paused / completed / failed | 会话状态 | loggable |
+| current_question_ref | 否 | string | question_* | 当前题目 | loggable |
+| progress_position_ref | 否 | string | progress_pos_* | 进展位置 | loggable |
+| low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### ProgressTreeResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| progress_tree_id | 是 | string | pt_* | 进展树 ID | loggable |
+| session_id | 是 | string | ses_* | 会话 ID | loggable |
+| nodes[] | 是 | object[] | >=0 | 节点列表 | loggable |
+| current_position.node_id | 否 | string | node_* | 当前位置 | loggable |
+| source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### QuestionResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| question_id | 是 | string | q_* | 题目 ID | loggable |
+| session_id | 是 | string | ses_* | 会话 ID | loggable |
+| question_text | 是 | string | 1..4000 | 题目正文 | sensitive_summary_only |
+| question_type | 是 | enum | polish / pressure_first / pressure_follow_up | 题目类型 | loggable |
+| evidence_refs[] | 否 | EvidenceRef[] | >=0 | 证据引用 | loggable |
+| generated_by_task_id | 否 | string | ait_* | 生成任务 | loggable |
+
+#### AnswerResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| question_id | 是 | string | q_* | 题目 ID | loggable |
+| answer_text | 是 | string | 1..20000 | 回答正文 | sensitive_not_loggable |
+| answer_round | 否 | integer | >=1 | 回答轮次 | loggable |
+| created_at | 是 | datetime | ISO-8601 | 提交时间 | loggable |
+
+#### FeedbackResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| feedback_id | 是 | string | fb_* | 反馈 ID | loggable |
+| answer_id | 是 | string | ans_* | 回答 ID | loggable |
+| summary | 是 | string | <=2000 | 点评摘要 | sensitive_summary_only |
+| score_ref | 否 | string | score_* | 评分引用 | loggable |
+| loss_point_refs[] | 否 | string[] | >=0 | 失分点引用 | loggable |
+| candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选回流 | loggable |
+
+#### ScoreResultResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| score_result_id | 是 | string | score_* | 评分 ID | loggable |
+| target_ref | 是 | TraceRef | typed ref | 评分目标 | loggable |
+| score_value | 是 | integer | 0..100 | 0-100 产品刻度 | loggable |
+| score_scale | 是 | enum | 0_100_product_scale | 分数刻度 | loggable |
+| score_version | 是 | string | semver/date | 评分版本 | loggable |
+| rubric_version | 是 | string | semver/date | Rubric 版本 | loggable |
+| confidence_level | 是 | enum | high / medium / low / insufficient | 置信度 | loggable |
+| evidence_refs[] | 是 | EvidenceRef[] | >=1 unless insufficient | 证据 | loggable |
+
+#### ReportResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| report_id | 是 | string | rep_* | 报告 ID | loggable |
+| session_ref | 是 | string | ses_* | 会话引用 | loggable |
+| report_status | 是 | enum | generating / available / partial / failed | 报告状态 | loggable |
+| sections[] | 是 | object[] | >=0 | 报告分项 | sensitive_summary_only |
+| score_ref | 否 | string | score_* | 总评分引用 | loggable |
+| copy_content_available | 是 | boolean | true / false | 是否可复制 | loggable |
+| source_availability | 是 | SourceAvailability | source_* | 来源可用性 | loggable |
+
+#### ReportCopyContentResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| report_id | 是 | string | rep_* | 报告 ID | loggable |
+| copy_content_id | 是 | string | copy_* | 复制内容 ID | loggable |
+| clipboard_blocks[] | 是 | object[] | plain text blocks | 剪贴板块 | sensitive_not_loggable |
+| redaction_applied | 是 | boolean | true / false | 是否脱敏 | loggable |
+| copy_boundary | 是 | enum | clipboard_only | 复制边界 | loggable |
+| export_artifact | 是 | null | must be null | 不得返回导出物 | loggable |
+
+#### ReviewResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| review_id | 是 | string | rev_* | 复盘 ID | loggable |
+| review_type | 是 | enum | mock / real_input / real | 复盘类型 | loggable |
+| review_status | 是 | enum | available / partial / low_confidence / failed | 状态 | loggable |
+| items[] | 否 | object[] | >=0 | 题级复盘项 | sensitive_summary_only |
+| source_refs[] | 是 | SourceRef[] | >=1 | 来源 | loggable |
+| candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选回流 | loggable |
+| low_confidence_flags[] | 否 | LowConfidenceFlag[] | >=0 | 低置信度 | loggable |
+
+#### AssetResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| asset_id | 是 | string | asset_* | 资产 ID | loggable |
+| current_version_ref | 是 | VersionRef | AssetVersion | 当前版本 | loggable |
+| title | 是 | string | 1..160 | 资产标题 | loggable |
+| asset_type | 是 | enum | answer_material / project_expression / job_material / feedback_summary | 资产类型 | loggable |
+| status | 是 | enum | active / archived / disabled | 状态 | loggable |
+| source_refs[] | 是 | SourceRef[] | >=1 | 来源 | loggable |
+
+#### AssetCandidateResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| candidate_id | 是 | string | cand_* | 候选 ID | loggable |
+| candidate_status | 是 | enum | draft / needs_confirmation / confirmed / rejected / low_confidence | 候选状态 | loggable |
+| content_draft | 是 | string | <=12000 | 候选内容 | sensitive_not_loggable |
+| target_asset_ref | 否 | string | asset_* | 目标资产 | loggable |
+| quality_hint_ref | 否 | string | hint_* | 质量提示 | loggable |
+| version_suggestion_ref | 否 | string | avs_* | 资产版本建议 | loggable |
+| user_confirmation_required | 是 | boolean | true / false | 是否需要确认 | loggable |
+
+#### WeaknessResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| weakness_id | 是 | string | weak_* | 薄弱项 ID | loggable |
+| title | 是 | string | 1..160 | 主题 | sensitive_summary_only |
+| status | 是 | enum | confirmed / low_priority / ignored / resolved_candidate / resolved / reopened | 状态 | loggable |
+| severity_hint | 否 | enum | low / medium / high / unknown | 严重度提示 | loggable |
+| evidence_refs[] | 是 | EvidenceRef[] | >=1 | 证据 | loggable |
+| updated_at | 是 | datetime | ISO-8601 | 更新时间 | loggable |
+
+#### WeaknessCandidateResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| candidate_id | 是 | string | wc_* | 候选 ID | loggable |
+| candidate_status | 是 | enum | draft / needs_confirmation / merge_suggested / low_confidence / rejected | 候选状态 | loggable |
+| title | 是 | string | 1..160 | 候选主题 | sensitive_summary_only |
+| evidence_refs[] | 是 | EvidenceRef[] | >=1 | 证据 | loggable |
+| merge_suggestion_refs[] | 否 | SuggestionRef[] | >=0 | 合并建议 | loggable |
+| user_confirmation_required | 是 | boolean | true / false | 是否需要确认 | loggable |
+
+#### TrainingSuggestionResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| suggestion_id | 是 | string | tr_* | 训练建议 ID | loggable |
+| suggestion_status | 是 | enum | candidate / confirmed / skipped / rejected / low_confidence | 建议状态 | loggable |
+| topic | 是 | string | 1..160 | 训练主题 | sensitive_summary_only |
+| priority_hint | 否 | enum | low / medium / high / unknown | 优先级提示 | loggable |
+| weakness_refs[] | 否 | string[] | >=0 | 关联薄弱项 | loggable |
+| asset_refs[] | 否 | string[] | >=0 | 关联资产 | loggable |
+| user_confirmation_required | 是 | boolean | true / false | 是否需要确认 | loggable |
+
+#### AiTaskStatusResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ait_* | API AI task ID | loggable |
+| task_type | 是 | enum | registered task_type | 任务类型 | loggable |
+| status | 是 | enum | queued / running / succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 任务状态 | loggable |
+| contract_ids[] | 是 | string[] | P-* | 相关 Prompt contract | loggable |
+| retryable | 是 | boolean | true / false | 是否可重试 | loggable |
+| result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| user_visible_status | 是 | string | <=240 | 用户可见状态摘要 | loggable |
+
+#### AiTaskResultResponse
+
+| Field | Required | Type | Enum / Constraint | Description | Sensitive / Loggable |
+| --- | --- | --- | --- | --- | --- |
+| ai_task_id | 是 | string | ait_* | 任务 ID | loggable |
+| status | 是 | enum | succeeded / partial / low_confidence / validation_failed / source_unavailable / generation_failed / timed_out / cancelled | 结果状态 | loggable |
+| result_ref | 否 | TraceRef | typed ref | 结果引用 | loggable |
+| candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选引用 | loggable |
+| suggestion_refs[] | 否 | SuggestionRef[] | >=0 | 建议引用 | loggable |
+| validation_result_ref | 否 | ValidationResultRef | val_* | 校验结果 | loggable |
+| provider_payload | 是 | null | must be null | 不得返回 provider payload | loggable |
+
+## 9. Candidate / suggestion / confirmation 写入边界
 
 ### 7.1 通用 confirmation request
 
@@ -428,7 +4737,7 @@ Async 规则：
 - `TrainingResultReview`、`WeaknessStatusUpdateSuggestion`、`AssetQualityHint` 和 `TrainingPriorityRanking` 只能作为 suggestion / hint；不得自动更新正式 Weakness、归档 Asset 或创建下一轮 TrainingRecommendation。
 - `InterviewReport`、`MockInterviewReview` 和 `RealInterviewReview` 作为生成结果可被读取，但其提炼出的薄弱项、资产、训练建议仍必须走 candidate / suggestion / confirmation。
 
-## 8. 报告读取、copy content 与禁止 export
+## 10. 报告读取、copy content 与禁止 export
 
 报告 API 只允许：
 
@@ -445,7 +4754,7 @@ Async 规则：
 - copy content 不得包含 `system prompt`、Prompt 模板、completion、provider payload、隐藏评分规则、无权限来源正文或未经脱敏的第三方 / 公司 / 个人敏感信息。
 - F7 必须使用 route inventory 或 OpenAPI route list 断言不存在 export/download endpoint，并用 copy content fixture 断言 copy boundary。
 
-## 9. F7 可测试性矩阵
+## 11. F7 可测试性矩阵
 
 | 能力 | 必测断言 |
 |---|---|
@@ -467,7 +4776,7 @@ Async 规则：
 | Async cancellation / timeout | queued/running task 可取消；timeout 可见；取消或 timeout 不产生 late formal write |
 | Pause / resume state machine | 打磨模式和压力面模式暂停均保存最小恢复快照；恢复必须校验 `source_session_snapshot_ref`、`covered_turn_refs`、`ProgressPosition`、owner 和 source availability；缺失时返回 `pause_snapshot_unavailable`、`resume_failed`、`source_unavailable` 或 `partial`，不得重复生成题目、丢弃进展或隐藏低置信度继承 |
 
-## 10. 与 TECH / DATA / SECURITY / PROMPT 的一致性边界
+## 12. 与 TECH / DATA / SECURITY / PROMPT 的一致性边界
 
 | 子文档 | 一致性点 |
 |---|---|
@@ -478,7 +4787,7 @@ Async 规则：
 
 本文件不新增未登记业务对象，不把项目经历提升为一级业务对象，不引入 MVP non-goal，不定义文件导出，不绕过 candidate / confirmation / formal object 边界。
 
-## 11. Deferred / 非阻断项
+## 13. Deferred / 非阻断项
 
 以下事项已分类为 deferred_non_blocking 或后续 verification 项，不再作为 `AR-F4-FULL-001` 的 M4 阻断 API UNKNOWN：
 
@@ -490,10 +4799,11 @@ Async 规则：
 - 鉴权 API 的完整登录注册产品流程、复杂 ACL、企业多租户和组织权限模型：MVP 使用登录态 actor、owner enforcement、role scope 和标准错误语义；企业治理后置。
 - 物理数据库、队列、缓存、日志平台、监控告警和部署拓扑：不属于 API contract 事实源；F5 可以按本 API contract 选择实现方式。
 
-## 12. 变更记录
+## 14. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 修复 `AR-F4-F8-001` API 字段级 contract 缺口 | 新增 API 清单总表、49 个核心接口逐接口字段级详情和 Schema Index；逐接口展开 Path Params、Query Params、Headers、Request Body、Success Response、Error Responses 和 F7 Contract Tests；不新增导出、文件上传解析或实现代码；等待 focused verification |
 | 2026-05-16 | 修复 `AR-F4-FULL-001` API 阻断项 | 明确 API endpoint、response / error envelope、async task、retry、idempotency、rate limit、permission、copy boundary 和 F7 assertion 已作为 F5/F6/F7 handoff 固化；将剩余算法、状态机和治理细节改为 deferred_non_blocking 或后续 verification 项；等待 verification |
 | 2026-05-16 | 修复 `AR-F4-FULL-003` 评分 / 风险 API 语义 | 明确评分不是精确通过概率；补 `score_version`、`rubric_version`、`confidence_level`、`pass_tendency_level`、`risk_level`、`evidence_refs` 响应语义；规定 low confidence / source unavailable / validation failed 降级；增加 F7 断言；不暴露隐藏评分规则 |
 | 2026-05-16 | 修复 `AR-F4-FULL-002` API handoff 缺口 | 将 `API_SPEC.md` 从早期占位草案补齐为 F5/F6/F7 可交接 API contract；新增全局约定、错误 envelope、分页 / sorting / filtering、idempotency、rate limit、async task protocol、核心 endpoint matrix、copy boundary 和 F7 test assertions；不写实现代码，不改变其它 finding 状态，不标记 acceptance |
