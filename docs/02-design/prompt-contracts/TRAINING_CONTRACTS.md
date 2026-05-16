@@ -17,7 +17,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/training-contracts
 - 本文件不得自行新增未登记 ID。
 - 本文件不得自行改变 contract ID、名称、目标或状态；状态以主 catalog 为准。
 - 本文件不定义 API endpoint、数据库 schema、provider、模型参数、向量库或 embedding。
-- 本文件不关闭 `F4_TECH_DESIGN` UNKNOWN。
+- 本文件遵守 `PROMPT_SPEC.md` §13 的 `AR-F4-FULL-001` 处置口径；复杂算法和实现细节按 deferred_non_blocking 承接。
 - 本文件不把 `AIFI-PROMPT-001` 标记为 DONE。
 
 ## 2. 当前状态
@@ -38,7 +38,7 @@ Training contracts 已按主 catalog 更新为 Draft。本文只承载 `P-TRAINI
 
 #### Training 公共职责
 
-Training contracts 只负责生成训练建议、对训练建议进行优先级排序，以及对训练结果进行复盘。Training contracts 不负责自动执行训练任务、自动更新正式 Weakness 状态、自动归档正式 Asset、自动创建正式 AssetVersion、自动关闭薄弱项、自动关闭训练优先级算法 UNKNOWN、自动关闭训练结果评估规则 UNKNOWN、自动关闭弱项自动消减规则 UNKNOWN、自动关闭资产自动沉淀规则 UNKNOWN，也不替代用户确认。
+Training contracts 只负责生成训练建议、对训练建议进行优先级排序，以及对训练结果进行复盘。Training contracts 不负责自动执行训练任务、自动更新正式 Weakness 状态、自动归档正式 Asset、自动创建正式 AssetVersion、自动关闭薄弱项，也不实现训练优先级、训练结果评估、弱项自动消减或资产自动沉淀复杂算法，不替代用户确认。
 
 #### Training 公共上游输入
 
@@ -97,7 +97,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
 - 不得生成完整生产 Prompt 文案、原始 Prompt、completion 或 provider payload。
 - 不得定义 API endpoint、物理数据库 schema、LLM provider、模型参数、向量数据库、embedding 模型或搜索服务。
 - 不得自动创建正式 `TrainingRecommendation`、自动创建 `TrainingTask`、自动更新正式 Weakness 状态、自动归档 Asset 或自动发布 AssetVersion。
-- 不得关闭训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则 UNKNOWN。
+- 不得把训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则实现为自动正式写入；这些复杂算法为 deferred_non_blocking。
 
 ### 3.1 P-TRAINING-001 Training Recommendation
 
@@ -216,7 +216,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
 - API State Mapping: 只定义状态语义，包括 `training_recommendation_candidate_available`、`training_recommendation_partial`、`training_recommendation_low_confidence`、`training_recommendation_validation_failed`、`manual_review_required` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
 - Security Notes: 训练建议只使用当前 owner 的授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
 - Test Strategy: 使用 fixture 覆盖 Weakness severity 后建议、Review item 建议、Report risk 建议、Polish / Pressure 重复缺口、Asset quality hint 建议、用户请求下一步训练、无训练历史、RAG 不可用、source unavailable、与既有建议冲突、用户确认 / 编辑 / 跳过和不得自动创建 TrainingTask / 更新 Weakness / 归档 Asset。
-- Open Questions: 训练分类算法、训练建议去重规则、建议质量评估、训练入口推荐阈值和正式 TrainingRecommendation API 字段仍待后续 Training / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 训练分类算法、训练建议去重规则、建议质量评估、训练入口推荐阈值和正式 TrainingRecommendation API 字段仍待后续 Training / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.2 P-TRAINING-002 Training Priority Ranking
 
@@ -299,7 +299,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - impact / effort 信号不足。
   - 排序依据冲突。
   - 上下文裁剪影响排序判断。
-- Evidence Requirements: 每个 ranked item 的 priority rank、priority hint、priority reason、impact signals、effort signals 和 confidence 必须绑定 recommendation refs、source refs、evidence refs、validation result refs 和 trace refs；证据冲突或优先级规则未冻结时必须输出 `ranking_unknown_flags` 或 `manual_review_required`。
+- Evidence Requirements: 每个 ranked item 的 priority rank、priority hint、priority reason、impact signals、effort signals 和 confidence 必须绑定 recommendation refs、source refs、evidence refs、validation result refs 和 trace refs；证据冲突或优先级规则处于 deferred_non_blocking 细化范围时必须输出 `ranking_unknown_flags` 或 `manual_review_required`。
 - Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练建议排序、冲突证据检查、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff 和 AuditEvent。
 - Persistence Targets:
   - `TrainingPriorityRanking` 或等价排序建议对象。
@@ -319,7 +319,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
 - API State Mapping: 只定义状态语义，包括 `training_priority_ranking_available`、`training_priority_ranking_partial`、`training_priority_ranking_low_confidence`、`training_priority_ranking_validation_failed`、`priority_rule_unknown` 和 `manual_review_required`；不定义 endpoint 或 schema。
 - Security Notes: 排序只使用当前 owner 的训练建议、授权来源、可展示证据摘要、用户偏好和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
 - Test Strategy: 使用 fixture 覆盖多个训练建议排序、用户请求排序、新 Weakness / Review / Asset / Report 证据、无用户目标、无时间预算、impact / effort 信号不足、证据冲突、单次低分不得高置信排首、severity 不等于 priority 和不得自动创建 TrainingTask。
-- Open Questions: 训练优先级算法、impact / effort 计算、时间预算映射、排序刷新策略和正式 TrainingPriorityRanking API 字段仍待后续 Training / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 训练优先级算法、impact / effort 计算、时间预算映射、排序刷新策略和正式 TrainingPriorityRanking API 字段仍待后续 Training / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.3 P-TRAINING-003 Training Result Review
 
@@ -432,7 +432,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
 - API State Mapping: 只定义状态语义，包括 `training_result_review_available`、`training_result_review_partial`、`training_result_review_low_confidence`、`training_result_review_validation_failed`、`manual_review_required` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
 - Security Notes: 训练结果复盘只使用当前 owner 的训练任务、训练建议、用户训练输出、授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
 - Test Strategy: 使用 fixture 覆盖训练完成复盘、用户提交训练结果、用户查看训练效果、目标 Weakness 改善信号、关联 Asset 候选、下一步训练建议候选、训练输出缺失、TrainingTask 缺失、Recommendation 缺失、用户自评冲突、训练目标不匹配和不得自动更新 Weakness / 归档 Asset / 创建下一轮 TrainingRecommendation。
-- Open Questions: 训练结果评估规则、弱项状态影响映射、资产自动沉淀规则、下一轮训练建议生成规则和正式 TrainingResultReview API 字段仍待后续 Training / Weakness / Asset / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 训练结果评估规则、弱项状态影响映射、资产自动沉淀规则、下一轮训练建议生成规则和正式 TrainingResultReview API 字段仍待后续 Training / Weakness / Asset / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.4 Training Contract 关系
 
@@ -442,5 +442,5 @@ Training 输出可以保存为 training recommendation、training priority ranki
 - Training contracts 可以消费 Weakness / Asset / Review / Report / Polish / Pressure 输出，但不得重新生成这些上游结果。
 - Training contracts 不得自动更新正式 Weakness 状态。
 - Training contracts 不得自动归档 Asset 或发布 AssetVersion。
-- Training contracts 不得关闭训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则 UNKNOWN。
+- Training contracts 不实现训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀复杂算法；这些为 deferred_non_blocking，且不得绕过用户确认创建训练任务或更新正式对象。
 - `P-TRAINING-003` 的回流输出必须进入对应 Weakness / Asset / Training 候选或建议链路，不得直接写正式对象。

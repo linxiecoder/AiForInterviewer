@@ -17,7 +17,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - 本文件不得自行新增未登记 ID。
 - 本文件不得改变 contract ID、名称、目标或状态。
 - 本文件不定义 API endpoint、数据库 schema、provider、模型参数、向量库或 embedding。
-- 本文件不关闭 `F4_TECH_DESIGN` UNKNOWN。
+- 本文件遵守 `PROMPT_SPEC.md` §13 的 `AR-F4-FULL-001` 处置口径；复杂参数和实现细节按 deferred_non_blocking 承接。
 - 本文件不把 `AIFI-PROMPT-001` 标记为 DONE。
 
 ## 2. 适用范围
@@ -121,7 +121,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - API State Mapping: 只定义状态语义，包括 `context_ready`、`context_partial`、`context_too_large`、`source_unavailable`、`owner_mismatch`、`required_input_missing` 和 `validation_requirement_missing`；不定义 endpoint 或 schema。
 - Security Notes: 所有输入进入上下文前必须完成 owner / scope 校验和最小必要裁剪；不得保存或返回原始 Prompt、provider payload、密钥、token、cookie 和无关正文。
 - Test Strategy: 使用确定性 fixture 验证上下文层级、裁剪顺序、禁止输入过滤、`owner_mismatch`、`source_unavailable`、omitted refs、trace_ref 和预算状态。
-- Open Questions: 具体 token / size 预算数值、最近轮次数量和暂停恢复快照最小字段仍继承 `F4_TECH_DESIGN` UNKNOWN，不在本 contract 关闭。
+- Open Questions: 具体 token / size 预算数值、最近轮次数量和暂停恢复快照扩展字段为 deferred_non_blocking；最小上下文分层、裁剪、trace 和低置信度规则已由本 contract 固化。
 
 ### 10.2 `P-SHARED-002` Retrieval Planning
 
@@ -200,7 +200,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - API State Mapping: 只定义状态语义，包括 `retrieval_not_required`、`retrieval_ready`、`retrieval_empty`、`retrieval_partial`、`evidence_conflict`、`source_unavailable`、`public_material_unpublished` 和 `internet_retrieval_unavailable`；不定义 endpoint 或 schema。
 - Security Notes: 检索必须在服务端按 owner / public scope 过滤；公共材料未发布不得进入业务生成；互联网检索默认关闭，启用前需补来源治理和隐私边界。
 - Test Strategy: 使用确定性检索 fixture 覆盖 owner 隔离、公共材料发布状态、`source_deleted` / `source_disabled` / `source_archived`、空结果、冲突证据、过长证据裁剪和互联网检索不可用。
-- Open Questions: 具体检索数量、排序权重、公共材料发布流程、互联网检索启用条件和具体索引实现仍为后续设计问题，不在本 contract 关闭。
+- Open Questions: 具体检索数量、排序权重、公共材料发布流程、互联网检索启用条件和具体索引实现仍为后续设计问题，为 deferred_non_blocking。
 
 ### 10.3 `P-SHARED-003` Output Validation
 
@@ -231,12 +231,19 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
   - `rejected_fields`
   - `repairable_fields`
   - `normalized_failure_signals`
+  - `score_validation_status`
+  - `probability_forbidden_check`
+  - `hidden_rule_exposure_check`
   - `risk_flags`
   - `trace_ref`
 - Validation Rules:
   - 结构化校验必须检查必填字段、字段类型、枚举值、0-100 分值范围、evidence refs、trace refs、confidence / low confidence 字段、next action 和 user confirmation requirement。
   - 业务语义校验必须检查不承诺精确通过概率、不把低置信度伪装成正常结论、不把候选资产写成正式资产、不把候选薄弱项写成正式薄弱项、不绕过用户确认。
   - 业务语义校验还必须检查不引用无权限来源、不引用 `source_unavailable` 正文、不把打磨模式当压力面、不把压力面当同题无限打磨、不生成与岗位 / 简历证据明显冲突的结论。
+  - scoring candidate 校验必须检查 `score_value`、`score_scale`、`score_version`、`rubric_version`、`score_rule_version_ref`、`generated_by_task_id`、`confidence_level`、`evidence_refs`、`trace_refs` 和 `validation_status`。
+  - scoring candidate 不得包含精确通过概率、录取概率、offer 概率、通过率百分比或等价文案；不得暴露隐藏评分规则、完整内部权重表、校准样例正文、系统 Prompt、completion 或 provider payload。
+  - `validation_failed`、`score_out_of_range`、`evidence_missing`、`source_unavailable` 或隐藏规则外泄时，不得写入正式 `ScoreResult`、正式报告评分或确定性通过倾向。
+  - 风险提示候选必须校验 `risk_level`、`risk_reason`、`confidence_level`、`evidence_refs`、`score_version`、`rubric_version` 和 disclaimer；缺证据时只能进入低置信度或 manual review。
   - 校验失败字段必须进入 `rejected_fields` 或 `repairable_fields`，不得静默进入 `validated_output`。
   - Validation 失败必须归一化为 §7.1 的 failure signal，例如 `schema_invalid`、`semantic_invalid`、`score_out_of_range`、`evidence_missing`、`evidence_conflict`、`validation_partial`、`output_incomplete` 或 `manual_check_required`。
 - Low Confidence Rules:
@@ -253,7 +260,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - API State Mapping: 只定义状态语义，包括 `validation_passed`、`validation_failed`、`validation_partial`、`repair_required`、`manual_review_required`、`retry_allowed`、`fallback_allowed` 和 `generation_failed`；不定义 endpoint 或 schema。
 - Security Notes: 校验层必须阻断无权限来源、`source_unavailable` 正文、未确认候选写正式对象和敏感字段外泄；日志只记录错误分类、trace id 和状态。
 - Test Strategy: 使用确定性输出 fixture 覆盖缺字段、类型错误、非法枚举、分数越界、缺 evidence / trace、低置信度伪装、模式边界错误、用户确认绕过和 `source_unavailable`。
-- Open Questions: 各业务 contract 的详细 output schema、评分校准阈值和 repair 策略细节仍待后续填充；本 contract 只冻结共享校验边界。
+- Open Questions: 各业务 contract 的详细 output schema 已由对应子文档承接；共享 repair 策略细节、非业务通用阈值和最终调参属于 deferred_non_blocking，不重新打开评分、校验或 failure handling 的 M4 阻断边界。
 
 ### 10.4 `P-SHARED-004` Low Confidence Classification
 
@@ -288,6 +295,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - Validation Rules:
   - 触发条件至少覆盖 `required_input_missing`、insufficient answer、insufficient resume evidence、insufficient job evidence、`retrieval_empty`、`evidence_conflict`、`source_unavailable`、`validation_partial`、`output_incomplete`、score explanation weak、real interview input incomplete 和 `context_truncated_with_risk`。
   - 低置信度类型只能使用 `insufficient_input`、`insufficient_evidence`、`evidence_conflict`、`source_unavailable`、`validation_partial`、`model_output_incomplete`、`context_truncated`、`manual_check_required` 或后续明确扩展值。
+  - `confidence_level` 只能使用 `high`、`medium`、`low`、`insufficient`；`insufficient` 必须阻断确定性通过倾向。
   - 用户可见表达必须说明影响范围，不得使用确定性结论包装低置信度结果。
   - `failure_signals` 是分类输入，不是二次 validation 结果；分类不得把 `schema_invalid`、`semantic_invalid` 或 `evidence_missing` 改写成高置信状态。
 - Low Confidence Rules:
@@ -304,7 +312,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - API State Mapping: 只定义状态语义，包括 `low_confidence`、`partial_usable`、`manual_check_required`、`insufficient_input`、`source_unavailable` 和 `evidence_conflict`；不定义 endpoint 或 schema。
 - Security Notes: 用户可见提示只展示必要摘要和风险范围，不暴露原始敏感正文、无权限证据或 provider payload。
 - Test Strategy: 使用 fixture 覆盖每类触发条件、低置信度类型映射、用户可见提示、保存原始输入不被阻断、候选对象不静默转正式对象。
-- Open Questions: `confidence_level` 的具体分级阈值和各业务页面的用户提示文案由后续业务 contract / UX 收敛，本 contract 不关闭。
+- Open Questions: `confidence_level` 的具体分级阈值和各业务页面的用户提示文案由后续业务 contract / UX 收敛，为 deferred_non_blocking；低置信度状态、触发条件、recommended actions 和不得转正式对象的边界已冻结。
 
 ### 10.5 `P-SHARED-005` Evidence Binding
 
@@ -343,6 +351,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
   - Input Evidence Selection 必须排除 `owner_mismatch`、`source_unavailable`、`source_deleted`、`source_disabled`、`source_archived` 默认不可用正文、`public_material_unpublished` 和不可形成 evidence ref 的材料。
   - Output Evidence Binding 中每个关键结论至少应绑定一个 evidence ref，除非明确标记证据不足或不适用。
   - 评分必须绑定评分依据或评分解释；薄弱项必须绑定来源证据；资产候选必须绑定来源内容。
+  - 通过倾向和风险提示必须绑定评分版本、规则版本、低置信度状态和 evidence refs；没有 evidence refs 时不得输出确定倾向或高置信风险提示。
   - 参考回答和技术解释如使用知识库，应绑定 RAG evidence。
   - 证据冲突、缺失或不可展示必须显式进入输出，不得静默删除。
   - Evidence Binding 失败时必须输出可被 Validation 和 Low Confidence 消费的 failure signals，例如 `evidence_missing`、`evidence_conflict`、`source_unavailable`、`owner_mismatch`、`snapshot_missing` 或 `manual_check_required`。
@@ -365,7 +374,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - API State Mapping: 只定义状态语义，包括 `evidence_bound`、`missing_evidence`、`evidence_conflict`、`source_unavailable`、`evidence_not_displayable` 和 `snapshot_missing`；不定义 endpoint 或 schema。
 - Security Notes: 前端只接收可展示证据摘要和必要引用；日志、trace 和错误不记录原始敏感正文、Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖评分证据、薄弱项证据、资产候选来源、RAG evidence、历史版本引用、`source_unavailable`、`owner_mismatch`、不可展示证据和冲突证据。
-- Open Questions: 证据摘要展示粒度、snapshot 缺失时的恢复策略和各业务 contract 的关键结论清单仍由后续设计收敛。
+- Open Questions: 证据摘要展示粒度、snapshot 缺失时的恢复策略和各业务 contract 的关键结论清单仍由后续设计收敛，为 deferred_non_blocking；证据绑定、source availability 和 trace 边界已冻结。
 
 ### 10.6 `P-SHARED-006` Session Summary Update
 
@@ -429,4 +438,4 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - API State Mapping: 只定义状态语义，包括 `summary_updated`、`summary_partial`、`summary_failed`、`covered_turn_refs_missing`、`pause_snapshot_unavailable`、`resume_failed` 和 `low_confidence_inherited`；不定义 endpoint 或 schema。
 - Security Notes: 摘要仍属于 owner 私有会话数据；前端展示只返回可展示摘要和风险状态，不暴露 Prompt、provider payload、原始敏感正文或无关会话内容。
 - Test Strategy: 使用多轮会话 fixture 覆盖回答后、点评后、追问后、主题切换、暂停、恢复、报告前、复盘前和结束时更新；验证 `covered_turn_refs`、禁止重复追问、低置信度继承和候选不转正式对象。
-- Open Questions: summary 最小字段、压缩策略、暂停恢复快照字段和同题多轮结束阈值仍继承 `F4_TECH_DESIGN` UNKNOWN，不在本 contract 关闭。
+- Open Questions: summary 扩展字段、压缩策略、暂停恢复快照扩展字段和同题多轮结束阈值为 deferred_non_blocking；MVP summary 最小字段、失败状态、trace 和候选不转正式对象边界已冻结。

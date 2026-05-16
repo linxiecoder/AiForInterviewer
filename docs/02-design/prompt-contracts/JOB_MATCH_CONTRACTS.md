@@ -17,7 +17,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
 - 本文件不得自行新增未登记 ID。
 - 本文件不得改变 contract ID、名称、目标或状态。
 - 本文件不定义 API endpoint、数据库 schema、provider、模型参数、向量库或 embedding。
-- 本文件不关闭 `F4_TECH_DESIGN` UNKNOWN。
+- 本文件遵守 `PROMPT_SPEC.md` §13 的 `AR-F4-FULL-001` 处置口径；复杂算法和实现细节按 deferred_non_blocking 承接。
 - 本文件不把 `AIFI-PROMPT-001` 标记为 DONE。
 
 ## 2. 适用范围
@@ -26,7 +26,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
 
 ## 11. Job Match Contract 细则
 
-本节填充岗位匹配分析链路的 AI 子任务 contract。四个 contract 只定义输入、检索依赖、上下文装配、输出结构、校验、低置信度、证据、trace、持久化交接和安全边界；不写完整生产 Prompt 文案，不冻结评分公式、权重、阈值、校准方法、模型供应商、模型参数、向量数据库、embedding 模型、API endpoint 或物理数据库 schema。
+本节填充岗位匹配分析链路的 AI 子任务 contract。四个 contract 只定义输入、检索依赖、上下文装配、输出结构、校验、低置信度、证据、trace、持久化交接和安全边界；不写完整生产 Prompt 文案，不暴露隐藏评分公式、完整内部权重表、复杂阈值、模型供应商、模型参数、向量数据库、embedding 模型、API endpoint 或物理数据库 schema。`AR-F4-FULL-003` 范围内的 0-100 产品刻度、rubric / rule version、最小权重策略、禁止精确概率、低置信度降级和 MVP fixture 校准策略以本文件、`PROMPT_SPEC.md`、`DATA_MODEL.md` 与 `API_SPEC.md` 的当前规则为准。
 
 ### 11.0 Job Match Output Schema 公共字段
 
@@ -148,7 +148,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
 - API State Mapping: 只定义状态语义，包括 `not_generated`、`generating`、`generated`、`failed`、`low_confidence`、`partial`、`insufficient_input`、`owner_mismatch` 和 `source_unavailable`；不定义 endpoint 或 request / response schema。
 - Security Notes: 所有输入必须通过 owner / scope 校验和最小必要裁剪；前端只可见结构化分析、风险状态、可展示证据摘要和必要 trace id，不暴露原始 Prompt、completion、provider payload 或无权限来源正文。
 - Test Strategy: 使用确定性 fixture 覆盖正常匹配分析、owner mismatch、岗位缺失、简历过短、绑定关系不可用、证据冲突、检索为空、上下文高风险裁剪、候选薄弱项不转正式对象和不可承诺精确通过概率。
-- Open Questions: 评分公式、分项权重、阈值、校准方法、通过倾向展示边界、薄弱项合并规则、上下文预算数值和 API 具体状态字段仍为后续设计问题，不在本 contract 关闭。
+- Open Questions: 隐藏评分公式实现细节、复杂阈值、真实结果校准、薄弱项合并规则、上下文预算数值和 API 具体状态字段仍为后续设计问题，为 deferred_non_blocking；通过倾向展示边界已收敛为分档表达和低置信度降级，不再作为本 contract 的开放问题。
 
 ### 11.2 `P-JOBMATCH-002` Match Score
 
@@ -159,13 +159,14 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
   - `P-JOBMATCH-001` 需要生成或刷新匹配分。
   - 用户重新生成匹配分析。
   - 后续报告或训练建议需要读取已有匹配分时，不重新生成，只引用已保存结果。
-- Goal: 定义岗位匹配 0-100 分与解释的输出 contract；不冻结评分公式、权重、阈值或校准方法，只冻结评分输出必须具备的结构、解释、证据和风险表达。
+- Goal: 定义岗位匹配 0-100 产品评分刻度与解释的输出 contract；冻结 `AR-F4-FULL-003` 所需的 rubric / rule version、版本追踪、证据、低置信度、禁止精确概率和降级边界。该分数不是精确通过概率，也不是真实面试结果预测。
 - Required Inputs:
   - `JobVersion`
   - `ResumeVersion`
   - `JobResumeBinding`
   - `EvidenceRef`
-  - `ScoreRuleVersion` 或评分规则占位引用
+  - `ScoreRuleVersion`
+  - `rubric_version`
   - `P-SHARED-002` Retrieval Planning 结果
   - `P-SHARED-001` Context Assembly 结果
   - `P-SHARED-003` Output Validation 要求
@@ -188,10 +189,12 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
   - 互联网检索不作为默认评分输入。
 - Context Assembly:
   - 必须继承 `P-SHARED-001` 的上下文分区、裁剪和 trace 规则。
-  - 上下文至少包含岗位要求摘要、简历证据摘要、绑定关系、评分目标、评分规则版本或 UNKNOWN 占位、正负证据和输出 schema。
+  - 上下文至少包含岗位要求摘要、简历证据摘要、绑定关系、评分目标、评分规则版本、rubric version、正负证据和输出 schema。
   - 上下文过长时，优先保留评分所需证据、岗位关键要求、简历对应片段、评分规则引用和 validation 要求。
 - Excluded Inputs:
-  - 具体未冻结评分公式、权重、阈值或校准方法的虚构内容。
+  - LLM 单次输出临时发明的评分公式、权重、阈值或校准方法。
+  - 精确通过概率、录取概率、offer 概率、通过率百分比或等价措辞。
+  - 隐藏评分规则、完整内部权重表、校准样例正文、系统 Prompt 或内部校准细节。
   - 与评分无关的完整历史会话、全部资产、全部复盘、原始 Prompt、completion、provider payload、密钥、token 和日志正文。
   - source unavailable 正文、无 evidence ref 的材料和无 owner 校验数据。
 - Output Schema:
@@ -200,31 +203,43 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
   - `match_score_view_ref`
   - `score_value`
   - `score_scale`
+  - `score_version`
+  - `rubric_version`
   - `score_type`
   - `score_explanation`
+  - `dimension_scores`
+  - `confidence_level`
+  - `validation_status`
+  - `generated_by_task_id`
+  - `generated_at`
   - `positive_evidence_refs`
   - `negative_evidence_refs`
   - `uncertainty_reasons`
   - `score_rule_version_ref`
+  - `non_decision_disclaimer`
 - Validation Rules:
   - `score_value` 必须在 0-100 范围内。
-  - `score_scale` 必须表明是产品展示刻度。
+  - `score_scale` 必须表明是 `0_100_product_scale` 产品展示刻度，不是精确通过概率。
+  - `score_version`、`rubric_version`、`score_rule_version_ref`、`confidence_level`、`validation_status`、`generated_by_task_id`、`evidence_refs` 和 `trace_refs` 必须存在。
+  - `dimension_scores` 必须使用 `ScoreRuleVersion` 中已登记的维度，Job Match 默认维度为 `requirement_alignment`、`experience_evidence`、`skill_coverage`、`gap_risk`、`readiness_actions`。
   - 不得输出精确通过概率。
+  - 不得输出录取概率、offer 概率、通过率百分比或“你有 73% 概率通过”等等价措辞。
   - 不得输出“必过”“必挂”等确定预测。
   - 分数解释必须引用 evidence refs。
   - 低分和高分都必须有解释。
   - 缺少足够证据时必须触发 low confidence。
-  - 如果评分规则版本尚未冻结，应显式保留 UNKNOWN，不得虚构公式。
+  - 评分规则版本缺失、证据缺失、source unavailable 或 validation failed 时，不得落正式 `ScoreResult`，也不得给出确定性通过倾向。
+  - 不得暴露隐藏评分规则、完整内部权重表或校准样例正文。
 - Low Confidence Rules:
   - 评分证据不足。
   - 分数与解释不一致。
   - 岗位要求缺失。
   - 简历证据缺失。
-  - 评分规则版本缺失或未冻结。
+  - 评分规则版本或 rubric version 缺失。
   - 上下文裁剪影响评分依据。
   - 模型输出只有分数没有解释。
   - 解释无法绑定证据。
-- Evidence Requirements: `score_explanation`、正向证据、负向证据和不确定性原因必须绑定 `EvidenceRef` 或明确标记证据不足；评分规则版本或 UNKNOWN 占位必须可追踪到 `ScoreRuleVersion` / `TraceRef`。
+- Evidence Requirements: `score_explanation`、正向证据、负向证据、维度分、不确定性原因、规则版本和免责声明必须绑定 `EvidenceRef`、`ScoreRuleVersion` 或 `TraceRef`；证据不足时必须降级为 low confidence 或 manual review。
 - Trace Requirements: 必须记录评分生成、评分规则引用、证据绑定、validation、low confidence 和重试 / 降级路径的 `TraceRef`。
 - `canonical` score 关系:
   - `ScoreResult` 是统一评分承载对象，保存 score value、score type、explanation、rule version、evidence refs、validation result 和 trace refs。
@@ -243,18 +258,13 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
 - User Confirmation Requirement: 匹配分作为分析结果保存不要求用户逐项确认；若后续根据分数生成正式薄弱项、资产或训练建议，仍必须经过对应 contract 或用户确认。
 - Retry / Fallback:
   - 分数越界、缺少解释或缺 evidence refs 时进入 repair / retry / validation failed。
-  - 证据不足或评分规则版本 UNKNOWN 时可保存低置信度分数或仅保存分析摘要，不得伪造公式。
+  - 证据不足、source unavailable、评分规则版本缺失或 validation failed 时可保存低置信度候选或仅保存分析摘要，不得伪造公式、不得落正式报告评分、不得输出确定倾向。
   - 后续消费已有匹配分时只引用保存结果，不因报告或训练建议读取而自动重算。
 - API State Mapping: 只定义状态语义，包括 `score_available`、`score_low_confidence`、`score_partial`、`score_validation_failed`、`score_rule_unknown`、`score_out_of_range` 和 `evidence_missing`；不定义 endpoint 或 schema。
-- Security Notes: 评分上下文只能包含当前 owner 的必要岗位、简历、证据和已授权公共材料；日志不得记录原始 Prompt、completion、provider payload 或隐私正文。
-- Test Strategy: 使用确定性输出 fixture 覆盖 0、100、中间分、分数越界、只有分数无解释、解释无证据、评分规则 UNKNOWN、证据不足、高分 / 低分均有解释和不得输出精确通过概率。
+- Security Notes: 评分上下文只能包含当前 owner 的必要岗位、简历、证据和已授权公共材料；日志不得记录原始 Prompt、completion、provider payload、隐藏评分规则、内部校准细节或隐私正文。
+- Test Strategy: 使用确定性输出 fixture 覆盖 0、100、中间分、分数越界、只有分数无解释、解释无证据、评分规则版本缺失、证据不足、source unavailable、validation failed 不落正式评分、高分 / 低分均有解释、不得输出精确通过概率和不得暴露隐藏评分规则。
 - Open Questions:
-  - 评分公式。
-  - 分项权重。
-  - 阈值。
-  - 校准方法。
-  - 评分等级映射。
-  - 通过倾向展示边界。
+  - 隐藏评分规则的实现细节、真实招聘结果校准、版本发布审批和复杂调参流程仍由后续 API / F5 / F7 收敛；本 contract 已冻结 MVP 可展示分、rubric / rule version、低置信度和禁止概率边界。
 
 ### 11.3 `P-JOBMATCH-003` Match / Mismatch / Improvement Points
 
@@ -356,7 +366,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
 - API State Mapping: 只定义状态语义，包括 `points_available`、`points_partial`、`points_low_confidence`、`points_validation_failed`、`evidence_missing` 和 `classification_ambiguous`；不定义 endpoint 或 schema。
 - Security Notes: 输出只展示可展示证据摘要和必要引用；不得暴露无权限来源、source unavailable 正文、原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖三类 point、同一证据冲突分类、无证据匹配点、岗位要求模糊、简历模块缺失、数量无边界扩张、improvement 不转正式训练建议和 mismatch 不等同失败结论。
-- Open Questions: 最终点位排序策略、产品化硬上限、训练建议映射和点位合并规则仍待后续业务 contract / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 最终点位排序策略、产品化硬上限、训练建议映射和点位合并规则仍待后续业务 contract / API / UX 收敛，为 deferred_non_blocking。
 
 ### 11.4 `P-JOBMATCH-004` Weakness Candidate from Job Match
 
@@ -476,7 +486,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
 - API State Mapping: 只定义状态语义，包括 `candidate_generated`、`candidate_low_confidence`、`candidate_partial`、`candidate_validation_failed`、`confirmation_required`、`merge_suggested`、`feedback_loop_failed` 和 `formal_weakness_not_written`；不定义 endpoint 或 schema。
 - Security Notes: 候选生成只使用当前 owner 的匹配分析、points、分数解释和授权历史摘要；不得把无权限历史弱项或 source unavailable 正文纳入 Prompt；日志不记录原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖从 mismatch、improvement、低分解释和证据不足生成候选、候选缺证据、既有薄弱项冲突、merge suggestion、不把岗位不匹配包装成能力缺陷、粒度过粗 / 过细、用户确认 required 和回流失败不影响原始分析。
-- Open Questions: 薄弱项严重度算法、合并规则、自动消减规则、训练任务生成规则、正式 `Weakness` 状态流和用户确认 API 字段仍待后续 Weakness / Training / API contract 收敛，不在本 contract 关闭。
+- Open Questions: 薄弱项严重度算法、合并规则、自动消减规则、训练任务生成规则、正式 `Weakness` 状态流和用户确认 API 字段仍待后续 Weakness / Training / API contract 收敛，为 deferred_non_blocking。
 
 ### 11.5 Job Match Contract 关系
 

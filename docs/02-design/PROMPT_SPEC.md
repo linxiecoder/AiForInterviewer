@@ -12,10 +12,10 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 ## 1. 文档状态与治理边界
 
 - 本文件是 F4 技术设计下的 Prompt / AI 子任务 contract 子文档，承接 `AIFI-PROMPT-001`。
-- 本文件当前只初始化 AI 子任务 contract 骨架、目录和统一模板，不是完整提示词文案库。
+- 本文件维护 AI 子任务 contract canonical registry、统一模板、公共规则和子文档索引，不是完整提示词文案库。
 - 本文件不是代码实现、API spec、数据模型、模型供应商配置或向量数据库设计。
 - 本文件不定义 API endpoint、request / response schema、物理数据库 schema、embedding 模型、向量数据库或联网搜索服务。
-- 本文件不关闭 `F4_TECH_DESIGN` UNKNOWN，不标记 `AIFI-ARCH-002` 完成，也不把 `AIFI-PROMPT-001` 标记为 DONE。
+- 本轮按 `AR-F4-FULL-001` 处置 Prompt 侧 F4 阻断项：contract 输入、输出 schema、failure state、confidence、evidence、trace、validation、candidate / suggestion / confirmation 边界已冻结；不标记 `AIFI-ARCH-002` 或 `AIFI-PROMPT-001` 完成。
 - 本文件不得把 `archive/**` 作为当前执行依据；历史内容只有迁入 active docs 后才能影响本规范。
 - 打磨模式、压力面模式、岗位匹配分析、报告、复盘、薄弱项、资产和训练建议必须由后端应用编排层串联，不能退化为单次 LLM 调用或一个大 Prompt。
 
@@ -213,7 +213,7 @@ DOMAIN 治理规则：
 | `api_state_mapping` | 是 | 对 API 状态语义的要求；本文只定义语义，不定义 endpoint 或 schema |
 | `security_notes` | 是 | owner 校验、隐私裁剪、日志限制 |
 | `test_strategy` | 是 | 确定性替身和最小验证要求 |
-| `open_questions` | 否 | 仍待后续业务 contract、API 或实现阶段关闭的问题；不得在 shared contract 中提前关闭 `F4_TECH_DESIGN` UNKNOWN |
+| `open_questions` | 否 | 仅记录不阻断 M4 的 deferred_non_blocking 事项、UX 文案润色或实现细节；不得记录新的 F4 阻断项 |
 
 ## 5. Context Assembly 总策略
 
@@ -338,6 +338,24 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `snapshot_missing` | 生成时版本或快照缺失 |
 
 `P-SHARED-003` Output Validation 产出 normalized failure signals；`P-SHARED-004` Low Confidence Classification 消费 failure signals，负责分类、用户可见表达和 recommended action。业务 contract 可以添加业务特有 failure signal，但不得重命名或重复定义上述共享枚举。
+
+### 7.2 Scoring Candidate、通过倾向与风险提示全局规则
+
+本节冻结 `AR-F4-FULL-003` 的 Prompt / AI contract 全局边界，适用于 `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002`、`P-REPORT-003` 以及后续消费评分的 contract。
+
+- LLM 可以输出 scoring candidate / draft，但不得直接输出最终不可校验评分。正式 `ScoreResult` 必须经过 output schema、`P-SHARED-005` Evidence Binding、`P-SHARED-003` Output Validation、`P-SHARED-004` Low Confidence Classification、版本记录和 persistence handoff。
+- 所有评分输出必须包含 `score_value`、`score_scale=0_100_product_scale`、`score_type`、`score_version`、`rubric_version`、`score_rule_version_ref`、`generated_by_task_id`、`generated_at`、`validation_status`、`confidence_level`、`evidence_refs`、`trace_refs` 和 `low_confidence_flags`。
+- `score_value` 是 0-100 产品展示刻度，不是精确通过概率。Prompt 输出不得包含 `pass_probability`、`offer_probability`、`admission_probability`、通过率百分比或“你有 73% 概率通过”等等价文案。
+- MVP 正式评分不并行输出 `raw_score`、`normalized_score` 和 `display_score` 三套分数；如候选生成包含内部原始值，必须在 validation / trace 中消化，不进入用户可见 schema。
+- Rubric / rule version 是评分来源。Job Match 默认维度为 `requirement_alignment`、`experience_evidence`、`skill_coverage`、`gap_risk`、`readiness_actions`；面试会话 / 报告默认维度为 `answer_relevance`、`technical_depth`、`communication_structure`、`evidence_specificity`、`risk_control`。权重来自 `ScoreRuleVersion` 元数据，总和为 100，不由 LLM 临时发明。
+- 版本变更后，历史报告和评分继续引用生成时 `score_version`、`rubric_version` 与 `ScoreRuleVersion`；不同版本分数不可直接强比较，除非后续存在校准映射。
+- MVP 校准使用固定 rule version、人工验收样例集和回归 fixture；真实招聘结果校准为 `LATER` / `SHOULD`，且不得使用未脱敏第三方隐私数据。
+- 通过倾向只允许分档：`low` / `medium` / `high` / `caution` / `insufficient_evidence`，用户可见对应“偏低 / 中等 / 偏高 / 需谨慎 / 证据不足，无法判断倾向”。通过倾向不得作为自动决策依据。
+- 低置信度、证据不足、source unavailable、validation failed、评分规则版本缺失、evidence binding failed 或输出与证据冲突时，不得生成确定性通过倾向；必须降级为 `insufficient_evidence`、`manual_check_required` 或 `risk_wording_low_confidence`。
+- 风险提示必须包含 `risk_level`、`risk_reason`、`confidence_level`、`evidence_refs`、`score_version`、`rubric_version`、`score_rule_version_ref`、`validation_status` 和 `low_confidence_flags`。风险提示解释风险来源，改进建议只提供下一步行动入口，两者不得混同。
+- 风险提示不得使用恐吓式、确定性、歧视性或不可解释表达，不得把岗位匹配缺口直接包装成稳定能力缺陷，不得引用无权限来源、source unavailable 正文或未脱敏第三方隐私。
+- 用户可见评分、通过倾向和风险提示必须带可信度说明与非决策性免责声明，说明结果基于当前材料、规则版本和证据，仅用于面试准备辅助，不代表真实招聘决定。
+- generation failed / low confidence / source unavailable / validation failed 时，fallback 只能返回失败、部分可用、低置信度、补充材料、manual review 或 retry；不得用未校验 completion 填充正式评分或确定倾向。
 
 ## 8. Trace / Evidence / Persistence 交接
 
@@ -507,44 +525,46 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 3. 全量 Prompt contract / 跨文档回归门禁。
 4. `AIFI-PROMPT-001` 关闭前置检查。
 
-`AIFI-PROMPT-001` 当前仍不自动 DONE；`F4_TECH_DESIGN` UNKNOWN 仍需等跨文档证据充分后，再进入 `AIFI-ARCH-002` 检查。
+`AIFI-PROMPT-001` 当前仍不自动 DONE；跨文档证据已在本轮转入 `AR-F4-FULL-001` 处置表，后续进入 verification，而不是继续保留阻断式 Prompt UNKNOWN。
 
-## 13. UNKNOWN 与后续交接
+## 13. F4 Prompt 待决策项处置表
 
-以下 UNKNOWN 本阶段只承接，不关闭：
+以下条目保留原待决策主题作为审计追踪，但不再表示 M4 阻断。评分、通过倾向、风险提示、API handoff、低置信度、source unavailable、validation failed、candidate / formal object 和 copy boundary 已由当前 active docs 冻结；剩余复杂算法或 provider 选择统一为 deferred_non_blocking。
 
-- 评分公式、权重、阈值、校准方法。
-- 通过倾向 / 风险提示展示边界。
-- 题目推荐算法。
-- 压力面题量和节奏规则。
-- 连续追问深度规则。
-- 同题打磨结束建议阈值。
-- 复盘切分规则。
-- 薄弱项算法和合并规则。
-- 资产合并和版本策略。
-- 上下文预算具体数值。
-- 模型选择和模型参数。
-- retry / fallback 具体策略。
-- RAG 索引、embedding 和向量库实现。
+| 主题 | 分类 | F4 处置结论 | 后续承接 |
+|---|---|---|---|
+| 评分、权重、阈值、通过倾向、风险提示、可信度和免责声明 | already_closed_by_recent_remediation | `PROMPT_SPEC.md` §7.2 和 scoring / report contracts 已冻结 0-100 产品刻度、rubric / rule version、最小权重策略、分档倾向、风险字段、低置信度降级、版本追踪、免责声明和 MVP fixture 校准策略；不得输出精确通过概率。 | F7 scoring / risk fixture |
+| Prompt contract 输出状态、低置信度、source unavailable、validation failed | must_close_in_F4 | Shared failure signals、source availability、Output Validation、Low Confidence、Evidence Binding、Trace / Persistence 已冻结；业务 contract 必须复用 `status`、`validation_result_ref`、`low_confidence_flags`、`evidence_refs` 和 `trace_refs`。 | `P-SHARED-003` / `P-SHARED-004` / `P-SHARED-005`；API response envelope |
+| candidate / suggestion / confirmation / formal object 边界 | must_close_in_F4 | AI 输出只能进入 candidate、draft、suggestion、validation result、trace 或 low confidence；正式 `Weakness`、`Asset`、`AssetVersion`、`TrainingRecommendation`、`TrainingTask` 需用户确认或显式业务动作。 | `DATA_MODEL.md` §4.3；`API_SPEC.md` §7；Weakness / Asset / Training contracts |
+| Prompt 输入最小化、system prompt、provider payload、隐藏评分规则 | must_close_in_F4 | Context Assembly 和 Security 边界禁止前端、日志、trace、copy content 或 API response 暴露 system prompt、Prompt 模板、completion、provider payload、密钥、隐藏评分规则或内部校准细节。 | `SECURITY_PRIVACY.md` §9 / §17.1 / §21；`API_SPEC.md` §8 |
+| 题目推荐、压力面题量 / 节奏、连续追问深度、同题结束阈值 | deferred_non_blocking | MVP contract 已冻结输入、输出、状态、证据、trace、低置信度和用户动作边界；排序、强度、题量、追问深度和结束阈值为策略优化，不阻断 M4。 | `POLISH_CONTRACTS.md` / `PRESSURE_CONTRACTS.md`; `AR-F4-FULL-005` |
+| 复盘切分、题级复盘合并、跨复盘聚合 | deferred_non_blocking | Review contracts 已冻结模拟 / 真实复盘输入、可信度、完整度、ReviewItem、证据和候选回流边界；复杂合并与最终 UX 展示后置。 | `REVIEW_CONTRACTS.md`; F7 review fixture |
+| 薄弱项合并、严重度、状态流转、自动消减 | deferred_non_blocking | Weakness contracts 已冻结候选、合并建议、严重度提示、状态更新建议、用户确认和不得自动改正式 Weakness 的边界；复杂算法后置。 | `WEAKNESS_CONTRACTS.md`; Training 后续优化 |
+| 资产质量、资产合并、版本替代、可复用评分 | deferred_non_blocking | Asset contracts 已冻结资产候选、质量提示、版本建议、用户确认和不得自动发布 `AssetVersion` 的边界；复杂质量算法、归档策略和去重后置。 | `ASSET_CONTRACTS.md`; Asset / F7 fixture |
+| 训练优先级、训练结果评估、弱项自动消减、自动训练任务 | deferred_non_blocking | Training contracts 已冻结训练建议、排序 hint、结果复盘、候选 / 建议回流和显式训练任务启动边界；算法和自动化后置。 | `TRAINING_CONTRACTS.md`; Training 后续优化 |
+| 上下文预算具体数值、模型 provider、模型参数、RAG 索引、embedding、向量库 | deferred_non_blocking | Contract 已冻结 provider-independent 的上下文层级、裁剪、source availability、trace / evidence、validation 和 fallback 语义；具体数值和技术选型属于 F5 配置 / 实现，不改变业务 contract。 | F5 实现设计；Security provider review |
+| retry / fallback 具体次数和退避参数 | deferred_non_blocking | Contract 与 API 已冻结 retryable / non-retryable 条件、不得扩大上下文、不得记录 raw payload 和低置信度 / manual review 降级语义；次数和退避参数后置。 | `API_SPEC.md` §5；F7 retry fixture |
 
-本阶段不关闭上述 UNKNOWN，不改变 PRD §10 的关闭台账，不把 `AIFI-PROMPT-001` 标记为 DONE。已登记 contract 完成 Draft 覆盖后，仍只有在与 `TECH_DESIGN.md` / `DATA_MODEL.md` / `SECURITY_PRIVACY.md` / `API_SPEC.md` 一致性复核通过，并具备可验证证据后，才能进入 `AIFI-ARCH-002` 的 UNKNOWN 关闭检查。
+本节不把 `AIFI-PROMPT-001` 标记为 DONE；只表示 Prompt 侧 `AR-F4-FULL-001` 阻断项已回写为可验证的设计结论或 deferred_non_blocking 后置项。整体 acceptance 仍保持 Pending，等待 verification。
 
 ## 14. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
-| 2026-05-16 | 更新阶段性说明 / Draft 覆盖状态 | 说明所有已登记 Prompt contracts 已完成 Draft 覆盖，后续转入 API / DATA / SECURITY / TECH 对齐和回归门禁；不改 contract 状态，不关闭 UNKNOWN，不标记 `AIFI-PROMPT-001` DONE |
-| 2026-05-16 | 填充 Training Contract 细则 | 将 `P-TRAINING-001` 至 `P-TRAINING-003` 从 Stub 更新为 Draft，补充训练建议、训练建议排序和训练结果复盘 contract；不实现训练执行，不自动创建 TrainingTask，不自动更新正式 Weakness，不自动归档 Asset，不自动发布 AssetVersion，不关闭训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则 UNKNOWN |
-| 2026-05-16 | 填充 Asset Contract 细则 | 将 `P-ASSET-001` 至 `P-ASSET-003` 从 Stub 更新为 Draft，补充资产候选提炼、资产质量提示和资产版本更新建议 contract；不填充 Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动替换、覆盖或发布 AssetVersion，不关闭资产质量规则、资产归档策略、资产版本合并策略或训练优先级 UNKNOWN |
-| 2026-05-16 | 填充 Weakness Contract 细则 | 将 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 从 Stub 更新为 Draft，补充薄弱项候选提炼、合并建议、严重度提示和状态更新建议 contract；不填充 Asset / Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动合并、删除或更新正式 Weakness，不关闭薄弱项合并算法、严重度规则、状态流转规则或训练优先级 UNKNOWN |
-| 2026-05-16 | 填充 Review Contract 细则 | 将 `P-REVIEW-001` 至 `P-REVIEW-004` 从 Stub 更新为 Draft，补充模拟面试复盘、真实面试输入结构化、真实面试复盘和题级复盘项提取 contract；不填充 Weakness / Asset / Training contracts，不生成真实复盘实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭复盘切分、真实面试输入结构化、题级复盘项合并、薄弱项合并、资产归档或训练优先级 UNKNOWN |
-| 2026-05-16 | 填充 Report Contract 细则 | 将 `P-REPORT-001` 至 `P-REPORT-004` 从 Stub 更新为 Draft，补充报告生成、分项评分解释、风险提示与通过倾向、可复制内容组装 contract；不填充 Review / Weakness / Asset / Training contracts，不生成报告实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭评分公式、分项权重、通过倾向、风险提示阈值或 RAG 实现 UNKNOWN |
-| 2026-05-15 | 拆分 contract 子文档 | 主文件保留 canonical registry 和治理规则，详细正文迁移到 `prompt-contracts/*.md`；不改变 contract ID、名称、状态或语义，不填充 Stub contract，不关闭 UNKNOWN |
-| 2026-05-15 | 填充 Pressure 7B Contract 细则 | 将 `P-PRESSURE-005` 至 `P-PRESSURE-009` 从 Stub 更新为 Draft，补充连续追问生成、节奏控制、结束条件判断、整场评分和报告输入组装 contract；不填充 Report / Review / Weakness / Asset / Training contracts，不生成报告正文，不写正式 Weakness、正式 Asset 或 TrainingRecommendation，不关闭压力强度、追问深度、结束条件、整场评分公式、通过倾向或 RAG 实现 UNKNOWN |
-| 2026-05-15 | 填充 Pressure 第一组 Contract 细则 | 将 `P-PRESSURE-001` 至 `P-PRESSURE-004` 从 Stub 更新为 Draft，补充开场策略、首题生成、回答质量判断和追问策略 contract；不填充 `P-PRESSURE-005` 至 `P-PRESSURE-009`，不生成连续追问题目、整场评分、最终报告、正式薄弱项、正式资产或训练建议，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
-| 2026-05-15 | 填充 Polish 6B 回流候选链路 Contract 细则 | 将 `P-POLISH-009` 至 `P-POLISH-011` 从 Stub 更新为 Draft，补充下一轮建议、资产候选和薄弱项候选 contract；不填充 Pressure / Report / Review / Weakness / Asset / Training contracts，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
-| 2026-05-15 | 填充 Polish 第一组 Contract 细则 | 将 `P-POLISH-001` 至 `P-POLISH-004` 从 Stub 更新为 Draft，补充主题规划、题目生成、回答诊断和每轮 0-100 得分 contract；不填充 `P-POLISH-005` 至 `P-POLISH-011`，不生成最终报告、正式薄弱项、正式资产或训练计划，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
-| 2026-05-15 | 填充 Job Match Contract 细则 | 将 `P-JOBMATCH-001` 至 `P-JOBMATCH-004` 从 Stub 更新为 Draft，补充岗位匹配分析总控、0-100 匹配分、匹配 / 不匹配 / 加强点和薄弱项候选 contract；不填充其他业务 contract，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
-| 2026-05-15 | 修复 Shared Contracts 审计阻塞问题 | 拆分 Input Evidence Selection / Output Evidence Binding，补充推荐调用顺序、failure signal enum、source availability 矩阵、Context Assembly 条件输入和安全分区、Retrieval Planning 子阶段，以及 Session Summary MVP 执行策略；不填充业务 contract，不关闭 `F4_TECH_DESIGN` UNKNOWN |
-| 2026-05-15 | 填充 Shared Contract 细则 | 将 `P-SHARED-001` 至 `P-SHARED-006` 从 Stub 更新为 Draft，补充上下文装配、检索规划、输出校验、低置信度、证据绑定和会话摘要更新的公共 contract；不填充业务 contract，不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
-| 2026-05-15 | 初始化 F4 Prompt / AI 子任务 contract 草案 | 创建 AI Task Contract 标准模板、Context Assembly、Retrieval、Output Schema、Validation、Low Confidence、EvidenceRef、TraceRef、Persistence、Failure Handling 和 contract catalog；不写完整 Prompt 文案，不关闭 `F4_TECH_DESIGN` UNKNOWN |
+| 2026-05-16 | 修复 `AR-F4-FULL-001` Prompt 阻断项 | 将 Prompt 待决策项改为处置表；冻结 contract 状态、failure signals、low confidence、source unavailable、validation、evidence、trace、candidate / formal object 和安全边界；复杂算法、provider、模型参数、RAG 实现和 retry 参数改为 deferred_non_blocking；等待 verification |
+| 2026-05-16 | 修复 `AR-F4-FULL-003` Prompt 评分全局边界 | 新增 scoring candidate、rubric / rule version、通过倾向分档、风险提示、低置信度降级、版本字段、免责声明和 MVP 校准策略；适用于评分与报告相关 contract；不写完整 Prompt 文案，不进入实现 |
+| 2026-05-16 | 更新阶段性说明 / Draft 覆盖状态 | 说明所有已登记 Prompt contracts 已完成 Draft 覆盖，后续转入 API / DATA / SECURITY / TECH 对齐和回归门禁；不改 contract 状态，不标记 `AIFI-PROMPT-001` DONE |
+| 2026-05-16 | 填充 Training Contract 细则 | 将 `P-TRAINING-001` 至 `P-TRAINING-003` 从 Stub 更新为 Draft，补充训练建议、训练建议排序和训练结果复盘 contract；不实现训练执行，不自动创建 TrainingTask，不自动更新正式 Weakness，不自动归档 Asset，不自动发布 AssetVersion |
+| 2026-05-16 | 填充 Asset Contract 细则 | 将 `P-ASSET-001` 至 `P-ASSET-003` 从 Stub 更新为 Draft，补充资产候选提炼、资产质量提示和资产版本更新建议 contract；不填充 Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动替换、覆盖或发布 AssetVersion |
+| 2026-05-16 | 填充 Weakness Contract 细则 | 将 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 从 Stub 更新为 Draft，补充薄弱项候选提炼、合并建议、严重度提示和状态更新建议 contract；不填充 Asset / Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动合并、删除或更新正式 Weakness |
+| 2026-05-16 | 填充 Review Contract 细则 | 将 `P-REVIEW-001` 至 `P-REVIEW-004` 从 Stub 更新为 Draft，补充模拟面试复盘、真实面试输入结构化、真实面试复盘和题级复盘项提取 contract；不填充 Weakness / Asset / Training contracts，不生成真实复盘实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation |
+| 2026-05-16 | 填充 Report Contract 细则 | 将 `P-REPORT-001` 至 `P-REPORT-004` 从 Stub 更新为 Draft，补充报告生成、分项评分解释、风险提示与通过倾向、可复制内容组装 contract；不填充 Review / Weakness / Asset / Training contracts，不生成报告实例，不写正式 Weakness、正式 Asset 或 TrainingRecommendation；隐藏评分公式实现细节、复杂分项权重调参和 RAG 实现仍不在该填充轮关闭，后续 `AR-F4-FULL-003` 已另行冻结通过倾向分档、风险提示证据绑定、低置信度降级和禁止精确概率边界 |
+| 2026-05-15 | 拆分 contract 子文档 | 主文件保留 canonical registry 和治理规则，详细正文迁移到 `prompt-contracts/*.md`；不改变 contract ID、名称、状态或语义，不填充 Stub contract |
+| 2026-05-15 | 填充 Pressure 7B Contract 细则 | 将 `P-PRESSURE-005` 至 `P-PRESSURE-009` 从 Stub 更新为 Draft，补充连续追问生成、节奏控制、结束条件判断、整场评分和报告输入组装 contract；不填充 Report / Review / Weakness / Asset / Training contracts，不生成报告正文，不写正式 Weakness、正式 Asset 或 TrainingRecommendation |
+| 2026-05-15 | 填充 Pressure 第一组 Contract 细则 | 将 `P-PRESSURE-001` 至 `P-PRESSURE-004` 从 Stub 更新为 Draft，补充开场策略、首题生成、回答质量判断和追问策略 contract；不填充 `P-PRESSURE-005` 至 `P-PRESSURE-009`，不生成连续追问题目、整场评分、最终报告、正式薄弱项、正式资产或训练建议，不写完整 Prompt 文案 |
+| 2026-05-15 | 填充 Polish 6B 回流候选链路 Contract 细则 | 将 `P-POLISH-009` 至 `P-POLISH-011` 从 Stub 更新为 Draft，补充下一轮建议、资产候选和薄弱项候选 contract；不填充 Pressure / Report / Review / Weakness / Asset / Training contracts，不写完整 Prompt 文案 |
+| 2026-05-15 | 填充 Polish 第一组 Contract 细则 | 将 `P-POLISH-001` 至 `P-POLISH-004` 从 Stub 更新为 Draft，补充主题规划、题目生成、回答诊断和每轮 0-100 得分 contract；不填充 `P-POLISH-005` 至 `P-POLISH-011`，不生成最终报告、正式薄弱项、正式资产或训练计划，不写完整 Prompt 文案 |
+| 2026-05-15 | 填充 Job Match Contract 细则 | 将 `P-JOBMATCH-001` 至 `P-JOBMATCH-004` 从 Stub 更新为 Draft，补充岗位匹配分析总控、0-100 匹配分、匹配 / 不匹配 / 加强点和薄弱项候选 contract；不填充其他业务 contract，不写完整 Prompt 文案 |
+| 2026-05-15 | 修复 Shared Contracts 审计阻塞问题 | 拆分 Input Evidence Selection / Output Evidence Binding，补充推荐调用顺序、failure signal enum、source availability 矩阵、Context Assembly 条件输入和安全分区、Retrieval Planning 子阶段，以及 Session Summary MVP 执行策略；不填充业务 contract |
+| 2026-05-15 | 填充 Shared Contract 细则 | 将 `P-SHARED-001` 至 `P-SHARED-006` 从 Stub 更新为 Draft，补充上下文装配、检索规划、输出校验、低置信度、证据绑定和会话摘要更新的公共 contract；不填充业务 contract，不写完整 Prompt 文案 |
+| 2026-05-15 | 初始化 F4 Prompt / AI 子任务 contract草案 | 创建 AI Task Contract 标准模板、Context Assembly、Retrieval、Output Schema、Validation、Low Confidence、EvidenceRef、TraceRef、Persistence、Failure Handling 和 contract catalog；不写完整 Prompt 文案 |

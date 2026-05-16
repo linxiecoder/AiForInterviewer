@@ -20,7 +20,7 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 - API 不提供 PDF、Markdown 文件、Word、docx、批量文件下载或文件导出 endpoint；报告只提供读取和 copy content。
 - AI 输出默认只能进入 candidate、draft、suggestion、validation result、trace 或 low confidence 状态；不得静默成为正式事实。
 - 正式资产、薄弱项、训练建议、报告复盘结论和训练回流状态必须有用户确认、用户编辑、显式业务动作或明确状态转换记录。
-- 本文件不关闭 `AR-F4-FULL-001`、`AR-F4-FULL-003`、Medium 或 Low findings；不标记 `F4_FULL_DESIGN_ACCEPTANCE.md` 为 Accepted；不创建 final acceptance approval。
+- 本轮按 `AR-F4-FULL-001` 处置 API 侧 F4 阻断项：endpoint、error semantics、retry、idempotency、rate limit、async task、permission、copy boundary 和 F7 assertion 已作为 F5/F6/F7 handoff 固化；Medium / Low findings 不在本轮变更状态；不标记 `F4_FULL_DESIGN_ACCEPTANCE.md` 为 Accepted；不创建 final acceptance approval。
 - 本文件不得把 `archive/**` 作为当前执行依据；历史内容只有迁入 active docs 后才能影响本 API 契约。
 
 ## 2. 输入来源与非目标
@@ -100,6 +100,11 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 | `source_availability` | 否 | `source_available`、`source_archived`、`source_deleted`、`source_disabled`、`source_unavailable` |
 | `evidence_refs` | 否 | 支撑关键结论的证据引用或可展示摘要引用 |
 | `trace_refs` | 否 | 检索、上下文装配、模型调用、校验、持久化交接和审计过程引用 |
+| `score_version` | 否 | 评分结果版本；评分 / 报告 / 复盘 / job match 相关响应返回 |
+| `rubric_version` | 否 | rubric / rule version；评分 / 报告 / 复盘 / job match 相关响应返回 |
+| `confidence_level` | 否 | `high`、`medium`、`low`、`insufficient`；低置信度不能被正常成功态吞掉 |
+| `pass_tendency_level` | 否 | `low`、`medium`、`high`、`caution`、`insufficient_evidence`；不得表达精确通过概率 |
+| `risk_level` | 否 | `low`、`medium`、`high`、`unknown`；风险提示必须同时带 `evidence_refs` 或低置信度原因 |
 | `next_actions` | 否 | 可执行动作，例如 `confirm`、`edit`、`skip`、`retry`、`manual_review`；不等于自动写入动作 |
 
 Envelope 规则：
@@ -217,6 +222,20 @@ F7 必须覆盖分页边界、非法 sort 字段、非法 filter、跨 owner fil
 - `source_unavailable`：不可访问、缺少快照、无权限或无法读取；新生成通常失败或进入低置信度 / manual review。
 
 低置信度不是普通成功态。API 必须在 `status`、`low_confidence_flags`、`source_availability`、`next_actions` 中表达影响范围和用户可操作路径。
+
+### 4.4 评分、通过倾向和风险提示响应语义
+
+评分 / 报告 / job match / review 相关 endpoint 必须遵守以下响应语义：
+
+- API 可以返回 0-100 `score_value` / `display_score`，但必须通过 `score_scale=0_100_product_scale` 说明这是产品评分刻度，不是精确通过概率。
+- API 不得返回 `pass_probability`、`offer_probability`、`admission_probability`、`pass_rate_percent` 或任何等价精确概率字段；也不得返回“你有 73% 概率通过”一类文案。
+- API 必须返回 `score_version`、`rubric_version`、`score_rule_version_ref`、`confidence_level`、`evidence_refs`、`trace_refs`、`validation_result_ref` 和 `generated_by_task_id`，用于 F5 / F6 / F7 追踪评分来源。
+- `pass_tendency_level` 只允许 `low` / `medium` / `high` / `caution` / `insufficient_evidence`，用户可见映射为“偏低 / 中等 / 偏高 / 需谨慎 / 证据不足，无法判断倾向”。
+- `low_confidence`、`source_unavailable`、`validation_failed`、`evidence_missing`、`score_rule_version_missing` 或 `manual_check_required` 时，API 不得返回确定性通过倾向；必须返回 `pass_tendency_level=insufficient_evidence` 或不返回该字段，并给出 `low_confidence_flags` / `next_actions`。
+- 风险提示必须返回 `risk_level`、`risk_reason`、`confidence_level`、`evidence_refs`、`score_version`、`rubric_version`、`validation_status` 和必要 disclaimer；不得只返回不可解释的风险文案。
+- `validation_failed` 的 scoring candidate 不得落为正式 `ScoreResult`，报告读取不得把该候选分展示为正式评分；只能返回 validation failure、repair / retry 或 manual review 状态。
+- API 不暴露隐藏评分规则、完整内部权重表、校准样例正文、系统 prompt、provider payload 或可反向复制的内部校准细节；copy content 同样不得包含这些内容。
+- 所有用户可见评分、通过倾向和风险提示必须附带可信度说明和非决策性免责声明，说明结果基于当前材料、规则版本和证据，仅用于面试准备辅助。
 
 ## 5. 同步 / 异步任务边界
 
@@ -344,11 +363,11 @@ Async 规则：
 | GET | `/api/v1/questions/{question_id}` | 读取单题详情 | path `question_id` | `Question` + source refs | `not_found_or_inaccessible` | 校验 question 所属 session owner | 不需要 | `Question`、`SourceRef`、`EvidenceRef` | N/A | `questions.get.cross_user_denied` |
 | GET | `/api/v1/answers/{answer_id}` | 读取回答详情 | path `answer_id` | `Answer` | `not_found_or_inaccessible` | 校验 answer 所属 session owner | 不需要 | `Answer` | N/A | `answers.get.cross_user_denied` |
 | GET | `/api/v1/feedback/{feedback_id}` | 读取点评 / 反馈详情 | path `feedback_id` | `Feedback` + score / loss / reference refs | `not_found_or_inaccessible`、`low_confidence` | 校验 feedback owner；低置信度必须显式返回 | 不需要 | `Feedback`、`ScoreResult`、`LossPoint`、`ReferenceAnswer` | `P-POLISH-003` 至 `P-POLISH-009` 或 `P-PRESSURE-003/006/007` | `feedback.get.low_confidence_visible` |
-| POST | `/api/v1/scoring-results` | 创建 AI scoring task | `target_type`、`target_id`、`score_type`、`input_refs`、`score_rule_version_id` 可选 | 202 `ai_task_id`; result is `ScoreResult` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 target/input owner；不得暴露隐藏评分规则 | 必需 | `ScoreResult`、`ScoreRuleVersion`、`ScoreExplanation`、`LowConfidenceFlag` | `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002` | `scoring.create.async_low_confidence` |
-| GET | `/api/v1/scoring-results/{score_result_id}` | 读取评分结果 | path `score_result_id` | `ScoreResult` + explanation + evidence refs | `not_found_or_inaccessible`、`low_confidence` | 校验 score owner；不返回隐藏规则细节 | 不需要 | `ScoreResult`、`ScoreExplanation`、`ScoreEvidenceLink` | score-producing contracts | `scoring.get.no_hidden_rules` |
-| POST | `/api/v1/reports` | 创建面试报告生成任务 | `session_id`、`report_type`、`requested_sections` | 202 `ai_task_id`; result is `InterviewReport` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed`、`rate_limited` | 校验 session、resume、job、score refs owner | 必需 | `InterviewReport`、`ReportSection`、`CopyableContent`、`ScoreResult` | `P-REPORT-001`、`P-REPORT-002`、`P-REPORT-003`、`P-REPORT-004` | `reports.create.async_success`、`reports.create.idempotent_retry` |
-| GET | `/api/v1/reports/{report_id}` | 读取报告详情 | path `report_id` | `InterviewReport` + sections summary + low confidence flags | `not_found_or_inaccessible`、`source_unavailable` | 校验 report owner；历史来源不可用只展示状态 | 不需要 | `InterviewReport`、`ReportSection` | `P-REPORT-*` | `reports.get.source_unavailable_visible` |
-| GET | `/api/v1/reports/{report_id}/sections` | 读取报告分项 | `cursor`、`limit`、`section_type` | `ReportSection[]` | `owner_mismatch`、`validation_failed` | 校验 report owner | 不需要 | `ReportSection`、`ScoreResult` | `P-REPORT-002`、`P-REPORT-003` | `reports.sections.pagination` |
+| POST | `/api/v1/scoring-results` | 创建 AI scoring task | `target_type`、`target_id`、`score_type`、`input_refs`、`score_rule_version_id` 可选 | 202 `ai_task_id`; result is `ScoreResult` with `score_value`、`score_scale`、`score_version`、`rubric_version`、`confidence_level`、`evidence_refs` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 target/input owner；不得暴露隐藏评分规则；validation failed 不落正式评分 | 必需 | `ScoreResult`、`ScoreRuleVersion`、`ScoreExplanation`、`LowConfidenceFlag` | `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002` | `scoring.create.async_low_confidence`、`scoring.create.validation_failed_no_formal_score` |
+| GET | `/api/v1/scoring-results/{score_result_id}` | 读取评分结果 | path `score_result_id` | `ScoreResult` + explanation + evidence refs + version/confidence/disclaimer | `not_found_or_inaccessible`、`low_confidence` | 校验 score owner；不返回隐藏规则细节或精确通过概率 | 不需要 | `ScoreResult`、`ScoreExplanation`、`ScoreEvidenceLink` | score-producing contracts | `scoring.get.no_hidden_rules`、`scoring.get.no_exact_probability` |
+| POST | `/api/v1/reports` | 创建面试报告生成任务 | `session_id`、`report_type`、`requested_sections` | 202 `ai_task_id`; result is `InterviewReport` with score/risk/pass tendency refs | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed`、`rate_limited` | 校验 session、resume、job、score refs owner；source unavailable 时报告降级或失败可见 | 必需 | `InterviewReport`、`ReportSection`、`CopyableContent`、`ScoreResult` | `P-REPORT-001`、`P-REPORT-002`、`P-REPORT-003`、`P-REPORT-004` | `reports.create.async_success`、`reports.create.idempotent_retry`、`reports.create.source_unavailable_degraded` |
+| GET | `/api/v1/reports/{report_id}` | 读取报告详情 | path `report_id` | `InterviewReport` + sections summary + score/rubric/confidence + low confidence flags | `not_found_or_inaccessible`、`source_unavailable` | 校验 report owner；历史来源不可用只展示状态；不返回精确通过概率 | 不需要 | `InterviewReport`、`ReportSection` | `P-REPORT-*` | `reports.get.source_unavailable_visible`、`reports.get.no_exact_probability` |
+| GET | `/api/v1/reports/{report_id}/sections` | 读取报告分项 | `cursor`、`limit`、`section_type` | `ReportSection[]` with `risk_level`、`risk_reason`、`evidence_refs`、`confidence_level` | `owner_mismatch`、`validation_failed` | 校验 report owner；risk item 无 evidence 时必须低置信或 manual review | 不需要 | `ReportSection`、`ScoreResult` | `P-REPORT-002`、`P-REPORT-003` | `reports.sections.risk_has_evidence` |
 | GET | `/api/v1/reports/{report_id}/copy-content` | 读取可复制报告内容，不生成文件 | `section_ids` 可选、`format=clipboard_text,structured` | `CopyableContent` with `copy_boundary=clipboard_only` | `owner_mismatch`、`source_unavailable`、`copy_boundary_violation`、`export_not_supported` | 校验 report owner、source availability 和 copy scope | 不需要 | `CopyableContent`、`ReportSection`、`AuditEvent` | `P-REPORT-004` | `report_copy.get.no_export`、`report_copy.get.no_prompt_payload` |
 | POST | `/api/v1/reports/{report_id}/copy-events` | 记录复制动作和结果 | `copy_content_id`、`copy_scope_summary`、`client_result=success,failed` | 201 `AuditEvent` ref | `owner_mismatch`、`copy_boundary_violation`、`idempotency_required` | 校验 report/copy content owner；不记录复制正文 | 必需 | `AuditEvent`、`CopyableContent` | N/A | `report_copy.audit.no_body_logged` |
 | POST | `/api/v1/reviews/mock` | 创建模拟面试复盘分析任务 | `session_id` 或 `report_id`、`requested_items` | 202 `ai_task_id`; result is `MockInterviewReview` | `validation_failed`、`owner_mismatch`、`source_unavailable`、`generation_failed` | 校验 session/report owner 和来源可用性 | 必需 | `InterviewRetrospective`、`MockInterviewReview`、`ReviewItem` | `P-REVIEW-001`、`P-REVIEW-004` | `reviews.mock.create.async_success` |
@@ -435,10 +454,13 @@ Async 规则：
 | Source unavailable | deleted / archived / disabled / inaccessible source 不能进入新生成；历史结果只展示 source availability |
 | Low confidence | low confidence 以 `status`、`low_confidence_flags` 和 `next_actions` 返回，不被前端当作高置信成功 |
 | Generation failed | provider timeout、schema invalid、semantic invalid、RAG failure 返回 `generation_failed` 或 `validation_failed`，不写 formal object |
+| Scoring | 0-100 `score_value` 正常生成；`score_version`、`rubric_version`、`confidence_level`、`evidence_refs` 必须存在；`validation_failed` 不落正式报告评分 |
+| Pass tendency | 不返回精确通过概率、录取概率、offer 概率或通过率百分比；低置信度 / source unavailable / validation failed 时不返回确定倾向 |
+| Risk wording | `risk_level` 与 `evidence_refs` 同步存在；风险提示带 `risk_reason`、`confidence_level`、版本字段和免责声明 |
 | Idempotent retry | mutation 和 AI task create 使用同一 `Idempotency-Key` 不重复创建；同 key 不同 body 返回 `idempotency_conflict` |
 | Stale version / conflict | `If-Match`、`base_version_ref`、`target_version_ref` 过期返回 `stale_version_conflict` |
 | No export endpoint | route inventory 不存在 PDF / Markdown file / Word / docx / export / download endpoint；命中时返回 `export_not_supported` |
-| Copy boundary | copy content 仅为 clipboard 结构，不含 prompt/provider payload/hidden scoring rules/sensitive raw text；复制事件审计不记录正文 |
+| Copy boundary | copy content 仅为 clipboard 结构，不含 prompt/provider payload/hidden scoring rules/internal calibration details/sensitive raw text；复制事件审计不记录正文 |
 | Formal object confirmation | candidate / suggestion 不经用户确认不得成为正式 Asset、Weakness、TrainingRecommendation、AssetVersion 或 TrainingTask |
 | Rate limit | 登录、简历保存、LLM 生成、RAG 检索、报告生成、复盘生成、训练建议生成触发 429 和 retry metadata |
 | Async cancellation / timeout | queued/running task 可取消；timeout 可见；取消或 timeout 不产生 late formal write |
@@ -454,23 +476,24 @@ Async 规则：
 
 本文件不新增未登记业务对象，不把项目经历提升为一级业务对象，不引入 MVP non-goal，不定义文件导出，不绕过 candidate / confirmation / formal object 边界。
 
-## 11. Deferred / 非本轮关闭项
+## 11. Deferred / 非阻断项
 
-以下事项不属于 `AR-F4-FULL-002` 的 API handoff 缺口，仍按对应 finding、UNKNOWN 或后续任务处理：
+以下事项已分类为 deferred_non_blocking 或后续 verification 项，不再作为 `AR-F4-FULL-001` 的 M4 阻断 API UNKNOWN：
 
-- `AR-F4-FULL-001`：所有 `F4_TECH_DESIGN` UNKNOWN 的关闭 / Deferred / Accepted Risk。
-- `AR-F4-FULL-003`：评分公式、权重、阈值、校准、风险提示和免责声明。
-- `AR-F4-FULL-005`：进展树、暂停恢复和异步失败状态机的完整状态机冻结；本文只定义 API status / retry / cancel / timeout 协议。
-- 正式 Weakness 生命周期、合并规则、关闭阈值和自动消减规则。
-- Asset 质量判断、版本合并、归档、替代和去重算法。
-- Training 优先级、训练结果评估、弱项自动消减和自动训练策略。
-- 鉴权 API 的完整登录注册产品流程、复杂 ACL、企业多租户和组织权限模型。
-- 物理数据库、队列、缓存、日志平台、监控告警和部署拓扑。
+- `AR-F4-FULL-003`：评分产品刻度、rubric / rule version、通过倾向分档、风险提示、低置信度降级、版本字段和免责声明已回写并通过 verification；真实招聘结果校准、隐藏规则实现细节和复杂算法调参按 `SHOULD` / `LATER` 处理。
+- `AR-F4-FULL-005`：本文已定义 API status / retry / cancel / timeout、`ai_task_id`、`Idempotency-Key` 和 F7 assertion；进展树 / 暂停恢复的完整状态机 fixture 仍由该 Medium finding 后续验证，不改变本轮 AR-F4-FULL-001 的 Fixed 状态。
+- 正式 Weakness 生命周期、合并规则、关闭阈值和自动消减规则：API 只允许 candidate / suggestion / confirmation / formal object 边界，自动算法后置。
+- Asset 质量判断、版本合并、归档、替代和去重算法：API 只允许候选、质量提示、版本建议和用户确认 endpoint；复杂算法后置。
+- Training 优先级、训练结果评估、弱项自动消减和自动训练策略：API 只允许训练建议、训练排序提示、训练任务显式启动和训练结果复盘；自动训练后置。
+- 鉴权 API 的完整登录注册产品流程、复杂 ACL、企业多租户和组织权限模型：MVP 使用登录态 actor、owner enforcement、role scope 和标准错误语义；企业治理后置。
+- 物理数据库、队列、缓存、日志平台、监控告警和部署拓扑：不属于 API contract 事实源；F5 可以按本 API contract 选择实现方式。
 
 ## 12. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
-| 2026-05-16 | 修复 `AR-F4-FULL-002` API handoff 缺口 | 将 `API_SPEC.md` 从早期占位草案补齐为 F5/F6/F7 可交接 API contract；新增全局约定、错误 envelope、分页 / sorting / filtering、idempotency、rate limit、async task protocol、核心 endpoint matrix、copy boundary 和 F7 test assertions；不写实现代码，不关闭其它 finding，不标记 acceptance |
-| 2026-05-16 | 同步 Asset / Training handoff 与候选确认集中语义 | 补 Candidate / Confirmation 集中语义、Asset API handoff、Training API handoff 和 async / status / retry / idempotency 占位；不定义 endpoint，不关闭 UNKNOWN |
-| 2026-05-16 | 初始化 F4 API 契约早期草案 | 对齐 DATA_MODEL 与 Prompt contracts 中的候选态、建议态、用户确认流、AI task result、response envelope 和 Weakness API handoff；后续已由 `AR-F4-FULL-002` remediation 补齐 endpoint contract，不关闭 `F4_TECH_DESIGN` UNKNOWN |
+| 2026-05-16 | 修复 `AR-F4-FULL-001` API 阻断项 | 明确 API endpoint、response / error envelope、async task、retry、idempotency、rate limit、permission、copy boundary 和 F7 assertion 已作为 F5/F6/F7 handoff 固化；将剩余算法、状态机和治理细节改为 deferred_non_blocking 或后续 verification 项；等待 verification |
+| 2026-05-16 | 修复 `AR-F4-FULL-003` 评分 / 风险 API 语义 | 明确评分不是精确通过概率；补 `score_version`、`rubric_version`、`confidence_level`、`pass_tendency_level`、`risk_level`、`evidence_refs` 响应语义；规定 low confidence / source unavailable / validation failed 降级；增加 F7 断言；不暴露隐藏评分规则 |
+| 2026-05-16 | 修复 `AR-F4-FULL-002` API handoff 缺口 | 将 `API_SPEC.md` 从早期占位草案补齐为 F5/F6/F7 可交接 API contract；新增全局约定、错误 envelope、分页 / sorting / filtering、idempotency、rate limit、async task protocol、核心 endpoint matrix、copy boundary 和 F7 test assertions；不写实现代码，不改变其它 finding 状态，不标记 acceptance |
+| 2026-05-16 | 同步 Asset / Training handoff 与候选确认集中语义 | 补 Candidate / Confirmation 集中语义、Asset API handoff、Training API handoff 和 async / status / retry / idempotency 占位；后续已由 AR-F4-FULL-001 统一分类为已冻结或 deferred_non_blocking |
+| 2026-05-16 | 初始化 F4 API 契约早期草案 | 对齐 DATA_MODEL 与 Prompt contracts 中的候选态、建议态、用户确认流、AI task result、response envelope 和 Weakness API handoff；后续已由 `AR-F4-FULL-002` remediation 补齐 endpoint contract，并由 AR-F4-FULL-001 处置表分类 |

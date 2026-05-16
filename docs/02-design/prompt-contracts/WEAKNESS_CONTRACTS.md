@@ -17,12 +17,12 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/weakness-contracts
 - 本文件不得自行新增未登记 ID。
 - 本文件不得改变 contract ID、名称、目标或状态。
 - 本文件不定义 API endpoint、数据库 schema、provider、模型参数、向量库或 embedding。
-- 本文件不关闭 `F4_TECH_DESIGN` UNKNOWN。
+- 本文件遵守 `PROMPT_SPEC.md` §13 的 `AR-F4-FULL-001` 处置口径；复杂算法和实现细节按 deferred_non_blocking 承接。
 - 本文件不把 `AIFI-PROMPT-001` 标记为 DONE。
 
 ## 2. 当前状态
 
-本文件承载主 catalog 中 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 的详细 contract 正文。Weakness contracts 当前为 Draft，仍属于 F4 Prompt / AI 子任务 contract 草案，不代表实现完成，不代表 `AIFI-PROMPT-001` DONE，也不关闭任何 `F4_TECH_DESIGN` UNKNOWN。
+本文件承载主 catalog 中 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 的详细 contract 正文。Weakness contracts 当前为 Draft，仍属于 F4 Prompt / AI 子任务 contract 草案，不代表实现完成，不代表 `AIFI-PROMPT-001` DONE。
 
 ## 3. Weakness Contract 细则
 
@@ -30,7 +30,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/weakness-contracts
 
 #### Weakness 公共职责
 
-Weakness contracts 只负责从 Job Match、Polish、Pressure、Report、Review 等上游输出中提炼薄弱项候选，生成薄弱项合并建议，判断薄弱项严重度提示，并生成薄弱项状态更新建议。Weakness contracts 不负责自动创建正式 `TrainingRecommendation`、自动归档 `Asset`、生成完整训练计划、替代用户确认、关闭薄弱项合并算法 UNKNOWN、关闭严重度规则 UNKNOWN、关闭状态流转规则 UNKNOWN 或关闭训练优先级 UNKNOWN。
+Weakness contracts 只负责从 Job Match、Polish、Pressure、Report、Review 等上游输出中提炼薄弱项候选，生成薄弱项合并建议，判断薄弱项严重度提示，并生成薄弱项状态更新建议。Weakness contracts 不负责自动创建正式 `TrainingRecommendation`、自动归档 `Asset`、生成完整训练计划、替代用户确认，也不实现薄弱项合并、严重度、状态流转或训练优先级复杂算法。
 
 #### Weakness 公共上游输入
 
@@ -84,7 +84,7 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
 - 不得生成完整生产 Prompt 文案、原始 Prompt、completion 或 provider payload。
 - 不得定义 API endpoint、物理数据库 schema、LLM provider、模型参数、向量数据库、embedding 模型或搜索服务。
 - 不得自动创建正式 Weakness、正式 Asset、正式 TrainingRecommendation 或训练任务。
-- 不得关闭薄弱项合并算法、严重度规则、状态流转规则或训练优先级 UNKNOWN。
+- 不得把薄弱项合并算法、严重度规则、状态流转规则或训练优先级算法实现为自动正式写入；这些复杂算法为 deferred_non_blocking。
 
 ### 3.1 P-WEAKNESS-001 Weakness Extraction
 
@@ -195,7 +195,7 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
 - API State Mapping: 只定义状态语义，包括 `weakness_extraction_available`、`weakness_extraction_partial`、`weakness_extraction_low_confidence`、`weakness_extraction_validation_failed`、`user_confirmation_required` 和 `merge_candidate_detected`；不定义 endpoint 或 schema。
 - Security Notes: 薄弱项提炼只使用当前 owner 的授权来源、摘要、证据和可展示 evidence summary；不得暴露无权限来源正文、原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖 Job Match 候选、Polish 候选、Pressure 风险信号、Report risk item、Review item、无既有 Weakness、重复候选、source unavailable、单次轻微失误低置信度、岗位缺口不转能力缺陷、用户确认 / 编辑 / 跳过 / 合并和不得自动创建正式 Weakness。
-- Open Questions: 薄弱项合并算法、严重度规则、状态生命周期、训练优先级和正式 Weakness API 字段仍待后续 Weakness / Training / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 薄弱项合并算法、严重度规则、状态生命周期、训练优先级和正式 Weakness API 字段仍待后续 Weakness / Training / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.2 P-WEAKNESS-002 Weakness Merge Suggestion
 
@@ -296,7 +296,7 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
 - API State Mapping: 只定义状态语义，包括 `weakness_merge_suggestion_available`、`weakness_merge_suggestion_partial`、`weakness_merge_suggestion_low_confidence`、`weakness_merge_suggestion_validation_failed`、`manual_review_required` 和 `insufficient_evidence`；不定义 endpoint 或 schema。
 - Security Notes: 合并建议只使用当前 owner 的候选、既有 Weakness 摘要、授权 evidence 和用户确认记录；不得暴露无权限来源正文、原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖可合并候选、应保持独立候选、名称相似但证据不同、低置信候选、evidence 冲突、缺少 existing Weakness、用户确认 / 编辑 / 跳过 / 人工校对和不得自动合并 / 覆盖 / 删除 Weakness。
-- Open Questions: 薄弱项合并算法、相似度阈值、合并后字段保留策略和正式 Weakness merge API 字段仍待后续 Weakness / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 薄弱项合并算法、相似度阈值、合并后字段保留策略和正式 Weakness merge API 字段仍待后续 Weakness / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.3 P-WEAKNESS-003 Weakness Severity Assessment
 
@@ -397,7 +397,7 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
 - API State Mapping: 只定义状态语义，包括 `weakness_severity_available`、`weakness_severity_partial`、`weakness_severity_low_confidence`、`weakness_severity_validation_failed`、`severity_unknown` 和 `manual_review_required`；不定义 endpoint 或 schema。
 - Security Notes: 严重度提示只使用当前 owner 的 Weakness / candidate、授权 evidence 和可展示证据摘要；不得暴露无权限来源正文、原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖候选严重度、既有 Weakness 严重度、新增证据后重评、重复信号、最近性强、频次缺失、单次低质量回答低置信度、岗位不匹配不转高严重度、训练优先级只是 hint 和不得创建 TrainingRecommendation。
-- Open Questions: 严重度算法、severity 枚举、训练优先级映射、状态生命周期和正式展示规则仍待后续 Weakness / Training / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 严重度算法、severity 枚举、训练优先级映射、状态生命周期和正式展示规则仍待后续 Weakness / Training / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.4 P-WEAKNESS-004 Weakness Status Update Suggestion
 
@@ -476,9 +476,9 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
   - training history 缺失。
   - 证据冲突。
   - 用户确认缺失。
-  - 状态流转规则未冻结。
+  - 状态流转规则处于 deferred_non_blocking 细化范围。
   - 上下文裁剪影响状态判断。
-- Evidence Requirements: 每条状态更新建议的 current status、suggested status、更新原因、supporting evidence、conflicting evidence 和 confidence 必须绑定 source refs、evidence refs、validation result refs 和 trace refs；证据冲突或状态规则未冻结时必须输出 manual review 或 status unknown flag。
+- Evidence Requirements: 每条状态更新建议的 current status、suggested status、更新原因、supporting evidence、conflicting evidence 和 confidence 必须绑定 source refs、evidence refs、validation result refs 和 trace refs；证据冲突或状态规则处于 deferred_non_blocking 细化范围时必须输出 manual review 或 status unknown flag。
 - Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、状态更新建议生成、冲突证据检查、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff 和 AuditEvent。
 - Persistence Targets:
   - `WeaknessStatusUpdateSuggestion` 或等价状态更新建议对象。
@@ -494,12 +494,12 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
   - 回流失败不得影响原始 Weakness 或 evidence。
 - Retry / Fallback:
   - existing Weakness、current status、WeaknessEvidence、owner 校验或 recent source artifact 缺失时停止正常建议，返回失败或补充材料路径。
-  - 最近表现不足、训练历史缺失、证据冲突或状态流转规则未冻结时输出 low confidence、status unknown flag 或 manual review。
+  - 最近表现不足、训练历史缺失、证据冲突或状态流转规则处于 deferred_non_blocking 细化范围时输出 low confidence、status unknown flag 或 manual review。
   - 重试不得默认启用互联网检索、自动关闭 / 升级 Weakness 状态或创建正式 TrainingRecommendation。
 - API State Mapping: 只定义状态语义，包括 `weakness_status_suggestion_available`、`weakness_status_suggestion_partial`、`weakness_status_suggestion_low_confidence`、`weakness_status_suggestion_validation_failed`、`status_rule_unknown` 和 `manual_review_required`；不定义 endpoint 或 schema。
 - Security Notes: 状态更新建议只使用当前 owner 的 existing Weakness、WeaknessEvidence、最近来源、训练 / 复盘摘要和用户确认记录；不得暴露无权限来源正文、原始 Prompt、completion 或 provider payload。
 - Test Strategy: 使用 fixture 覆盖新增证据、训练后改善、复盘后恶化、用户请求更新、current status 缺失、单次好表现不得关闭、单次差表现不得升级、证据冲突 manual review、用户确认 / 编辑 / 跳过和不得自动更新正式 Weakness 状态。
-- Open Questions: 状态流转规则、自动消减规则、关闭阈值、训练结果映射和正式 Weakness 状态 API 字段仍待后续 Weakness / Training / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 状态流转规则、自动消减规则、关闭阈值、训练结果映射和正式 Weakness 状态 API 字段仍待后续 Weakness / Training / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.5 Weakness Contract 关系
 
@@ -510,5 +510,5 @@ Weakness 输出可以保存为 Weakness candidate、merge suggestion、severity 
 - Weakness contracts 可以消费 Review / Report / Polish / Pressure / Job Match 输出，但不得重新生成这些上游结果。
 - Weakness contracts 不得直接创建 TrainingRecommendation。
 - Weakness contracts 不得自动归档 Asset。
-- Weakness contracts 不得关闭合并算法、严重度规则、状态流转规则或训练优先级 UNKNOWN。
+- Weakness contracts 不实现合并算法、严重度规则、状态流转或训练优先级复杂算法；这些为 deferred_non_blocking，且不得绕过用户确认更新正式 Weakness。
 - Asset / Training contracts 仍保持 Stub，等待后续阶段授权填充。

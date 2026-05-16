@@ -17,12 +17,12 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/asset-contracts
 - 本文件不得自行新增未登记 ID。
 - 本文件不得改变 contract ID、名称、目标或状态。
 - 本文件不定义 API endpoint、数据库 schema、provider、模型参数、向量库或 embedding。
-- 本文件不关闭 `F4_TECH_DESIGN` UNKNOWN。
+- 本文件遵守 `PROMPT_SPEC.md` §13 的 `AR-F4-FULL-001` 处置口径；复杂算法和实现细节按 deferred_non_blocking 承接。
 - 本文件不把 `AIFI-PROMPT-001` 标记为 DONE。
 
 ## 2. 当前状态
 
-本文件承载主 catalog 中 `P-ASSET-001` 至 `P-ASSET-003` 的详细 contract 正文。Asset contracts 当前为 Draft，仍属于 F4 Prompt / AI 子任务 contract 草案，不代表实现完成，不代表 `AIFI-PROMPT-001` DONE，也不关闭任何 `F4_TECH_DESIGN` UNKNOWN。
+本文件承载主 catalog 中 `P-ASSET-001` 至 `P-ASSET-003` 的详细 contract 正文。Asset contracts 当前为 Draft，仍属于 F4 Prompt / AI 子任务 contract 草案，不代表实现完成，不代表 `AIFI-PROMPT-001` DONE。
 
 ## 3. Asset Contract 细则
 
@@ -30,7 +30,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/asset-contracts
 
 #### Asset 公共职责
 
-Asset contracts 只负责从 Polish、Report、Review、Weakness 等上游输出中提炼资产候选，生成资产质量提示，并生成资产版本更新建议。Asset contracts 不负责自动创建正式 `TrainingRecommendation`、生成完整训练计划、自动覆盖既有 `Asset`、自动替换 `AssetVersion`、关闭资产质量规则 UNKNOWN、关闭资产归档策略 UNKNOWN、关闭资产版本合并策略 UNKNOWN 或关闭训练优先级 UNKNOWN。
+Asset contracts 只负责从 Polish、Report、Review、Weakness 等上游输出中提炼资产候选，生成资产质量提示，并生成资产版本更新建议。Asset contracts 不负责自动创建正式 `TrainingRecommendation`、生成完整训练计划、自动覆盖既有 `Asset`、自动替换 `AssetVersion`，也不实现资产质量、资产归档、资产版本合并或训练优先级复杂算法。
 
 #### Asset 公共上游输入
 
@@ -88,7 +88,7 @@ Asset 输出可以保存为 asset candidate、asset quality hint、asset version
 - 不得生成完整生产 Prompt 文案、原始 Prompt、completion 或 provider payload。
 - 不得定义 API endpoint、物理数据库 schema、LLM provider、模型参数、向量数据库、embedding 模型或搜索服务。
 - 不得自动创建正式 Asset、自动发布 AssetVersion、自动创建 TrainingRecommendation 或训练任务。
-- 不得关闭资产质量规则、资产归档策略、资产版本合并策略、资产可复用评分或训练优先级 UNKNOWN。
+- 不得把资产质量规则、资产归档策略、资产版本合并策略、资产可复用评分或训练优先级算法实现为自动正式写入；这些复杂算法为 deferred_non_blocking。
 
 | Contract ID | 名称 | 目标 | 状态 |
 |---|---|---|---|
@@ -210,7 +210,7 @@ Asset 输出可以保存为 asset candidate、asset quality hint、asset version
 - API State Mapping: 只定义状态语义，包括 `asset_candidate_available`、`asset_candidate_partial`、`asset_candidate_low_confidence`、`asset_candidate_validation_failed`、`user_confirmation_required`、`merge_candidate_detected` 和 `user_facts_insufficient`；不定义 endpoint 或 schema。
 - Security Notes: 资产候选只使用当前 owner 的授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
 - Test Strategy: 使用 fixture 覆盖 Polish 候选、Report strengths / copyable content、Review item、高价值表达片段、Weakness 改进表达、用户主动保存、无既有资产、重复资产合并线索、用户事实不足、技术证据缺失、source unavailable、用户确认 / 编辑 / 跳过 / 合并和不得自动创建正式 Asset / AssetVersion / TrainingRecommendation。
-- Open Questions: 资产分类算法、资产质量规则、资产归档策略、资产合并算法、版本替代规则和正式 Asset API 字段仍待后续 Asset / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 资产分类算法、资产质量规则、资产归档策略、资产合并算法、版本替代规则和正式 Asset API 字段仍待后续 Asset / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.2 P-ASSET-002 Asset Quality Hint
 
@@ -313,7 +313,7 @@ Asset 输出可以保存为 asset candidate、asset quality hint、asset version
 - API State Mapping: 只定义状态语义，包括 `asset_quality_hint_available`、`asset_quality_hint_partial`、`asset_quality_hint_low_confidence`、`asset_quality_hint_validation_failed`、`manual_review_required` 和 `asset_edit_recommended`；不定义 endpoint 或 schema。
 - Security Notes: 质量提示只使用当前 owner 的候选、资产、授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
 - Test Strategy: 使用 fixture 覆盖候选质量提示、既有 AssetVersion 质量提示、用户请求查看质量、报告 / 复盘 / Polish 新证据、用户事实边界不清、技术 evidence 缺失、适用场景不明确、与既有资产冲突、用户确认缺失、低质量建议编辑和不得自动归档 / 创建版本 / 创建 TrainingRecommendation。
-- Open Questions: 资产质量算法、质量等级枚举、复用准备度评分、质量不足归档策略和正式展示规则仍待后续 Asset / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 资产质量算法、质量等级枚举、复用准备度评分、质量不足归档策略和正式展示规则仍待后续 Asset / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.3 P-ASSET-003 Asset Version Suggestion
 
@@ -421,7 +421,7 @@ Asset 输出可以保存为 asset candidate、asset quality hint、asset version
 - API State Mapping: 只定义状态语义，包括 `asset_version_suggestion_available`、`asset_version_suggestion_partial`、`asset_version_suggestion_low_confidence`、`asset_version_suggestion_validation_failed`、`manual_review_required`、`insufficient_evidence` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
 - Security Notes: 版本建议只使用当前 owner 的候选、既有资产摘要、授权 evidence、用户确认记录和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
 - Test Strategy: 使用 fixture 覆盖候选关联既有资产、用户编辑后保存为版本、质量提示建议更新、Report / Review / Polish 更好表达、创建新资产建议、创建新版本建议、合并建议、保持独立建议、证据冲突 manual review、低置信候选不得覆盖版本和不得自动替换 / 覆盖 / 发布 AssetVersion。
-- Open Questions: 资产版本合并算法、版本替代规则、合并后字段保留策略、资产归档策略、资产可复用评分和正式 AssetVersion API 字段仍待后续 Asset / API / UX 收敛，不在本 contract 关闭。
+- Open Questions: 资产版本合并算法、版本替代规则、合并后字段保留策略、资产归档策略、资产可复用评分和正式 AssetVersion API 字段仍待后续 Asset / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.4 Asset Contract 关系
 
@@ -431,5 +431,5 @@ Asset 输出可以保存为 asset candidate、asset quality hint、asset version
 - Asset contracts 可以消费 Weakness / Review / Report / Polish 输出，但不得重新生成这些上游结果。
 - Asset contracts 不得直接创建 `TrainingRecommendation`。
 - Asset contracts 不得自动归档 `Asset` 或替换 `AssetVersion`。
-- Asset contracts 不得关闭资产质量规则、资产归档策略、资产版本合并策略或训练优先级 UNKNOWN。
+- Asset contracts 不实现资产质量规则、资产归档策略、资产版本合并策略或训练优先级复杂算法；这些为 deferred_non_blocking，且不得绕过用户确认发布正式 AssetVersion。
 - Training contracts 仍保持 Stub，等待后续阶段授权填充。
