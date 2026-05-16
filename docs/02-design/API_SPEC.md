@@ -229,6 +229,7 @@ Training API 规则：
 - 岗位匹配分析、评分结果、匹配点、不匹配点和加强点。
 - 打磨模式会话、压力面会话、题目、回答、点评和会话摘要。
 - 面试报告、报告分项、可复制内容和低置信度提示。
+- 报告相关 API 只提供读取报告、读取报告分项和返回复制所需内容的语义边界；MVP 不提供 PDF / Markdown / Word / docx / 批量文件下载或导出 endpoint，不返回文件名、文件快照或文件生成结果。
 - 模拟面试复盘、真实面试输入、真实面试复盘和题级复盘项。
 - Weakness candidate、正式 Weakness、合并建议、严重度提示和状态更新建议。
 - Asset candidate、正式 Asset、AssetVersion 和资产来源。
