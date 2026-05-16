@@ -488,14 +488,38 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 
 ## 21. 与 API_SPEC.md、DATA_MODEL.md、PROMPT_SPEC.md 的交接边界
 
+`API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md` 当前均已存在并作为 F4 active draft 承接对应边界。本文继续冻结安全隐私语义和 enforcement 要求；endpoint、schema、Prompt 模板、模型参数、物理 DB schema 和实现方案仍由对应文档及后续阶段承接。本文不关闭 SECURITY_PRIVACY 自身 Deferred / UNKNOWN。
+
 | 交接对象 | 本文交接内容 | 本文不展开内容 |
 |---|---|---|
-| `DATA_MODEL.md` | 承接 ownership、`RoleScope`、`PermissionBoundary`、`AuditEvent`、`TraceRef`、`RetentionPolicyRef`、`RedactionRef`，定义安全隐私可见性和保留边界 | 不改写数据对象定义，不写物理 schema |
-| `API_SPEC.md` | 交接鉴权语义、错误语义、权限错误、审计触发点、复制事件、删除 / 归档 / 不可用状态 | 不定义 endpoint 或 request / response schema |
-| `PROMPT_SPEC.md` | 交接 Prompt 输入最小化、上下文裁剪、敏感字段排除、低置信度和 validation 要求 | 不写 Prompt 模板、模型调用参数或 provider payload |
+| `API_SPEC.md` | 承接 API resource boundary、candidate / confirmation、status、error、async / retry / idempotency、response envelope、复制和回流失败语义 | 不定义 endpoint、path、method 或完整 request / response schema |
+| `DATA_MODEL.md` | 承接 `CandidateRef`、`SuggestionRef`、`UserConfirmationRef`、`AiTaskResultRef`、`EvidenceRef`、`TraceRef`、`LowConfidenceFlag`、`AuditEvent`、`RoleScope`、`PermissionBoundary` 等逻辑对象 | 不改写数据对象定义，不写物理 DB schema、ORM、DDL、migration 或索引 |
+| `PROMPT_SPEC.md` 与 `prompt-contracts/*.md` | 承接 AI Task Contract、上下文装配、检索依赖、validation、low confidence、evidence、trace、failure handling、source unavailable 和 LLM payload 交接要求 | 不写 Prompt 模板全集，不选择 provider、模型参数、向量数据库、embedding 模型或搜索服务 |
 | F5 实现 | 交接密钥管理、日志保留、脱敏实现、审计事件落库、删除策略、trace 存储和访问控制 | 不写 ORM、DDL、migration 或平台选型 |
 
-`API_SPEC.md` 与 `PROMPT_SPEC.md` 尚未创建前，本文冻结安全隐私语义和 enforcement 要求；endpoint、schema、Prompt 模板和模型参数仍由后续文档承接。
+### 21.1 Candidate / Confirmation 安全边界
+
+- `CandidateRef`、`SuggestionRef`、`UserConfirmationRef` 不是敏感正文容器，只能保存最小必要引用、状态、摘要和审计关联。
+- candidate / suggestion 展示必须先通过 owner / scope 校验；前端可见内容只能是授权范围内的结构化结果、证据摘要和必要 trace id。
+- confirmation 记录必须审计 actor、target、action、result、timestamp、trace 和 audit event，但不得记录过量正文。
+- `before_summary` / `after_summary` 应为摘要或引用，不应无条件保存简历、回答、复盘、Prompt、completion 或来源原文。
+- `edit`、`merge`、`confirm`、`reject`、`manual_review`、`skip` 都应形成 `AuditEvent` 或等价审计记录。
+- 回流失败不得导致未授权写入、重复写入或覆盖正式对象；失败状态应保留 trace、audit 和 rollback-safe 语义。
+
+### 21.2 Source unavailable 与 Evidence 展示边界
+
+- `source_unavailable`、`source_deleted`、`source_disabled` 状态下，不得重新读取来源原始正文，也不得把原始正文注入新的 LLM 上下文。
+- 可展示 evidence summary 不等于原始敏感正文；需要展示时必须经过 owner / scope 校验、最小化裁剪和敏感字段排除。
+- trace / evidence 可追踪不等于原文可见；`TraceRef` / `EvidenceRef` 只证明来源、版本、快照、摘要和生成链路可回溯。
+- Report / Review / Asset / Training 的 `CopyableContent` 不得包含无权限来源正文、原始 Prompt、completion 或 provider payload。
+
+### 21.3 LLM payload / trace / audit 交接边界
+
+- API response 不得暴露原始 Prompt、completion 或 provider payload。
+- 日志不得保存 provider payload、token、cookie、secrets、数据库 DSN、环境变量、request / response body 或未经脱敏的敏感正文。
+- `TraceRef` / `AuditEvent` 只能保存最小必要引用、状态、错误分类、摘要和审计结果。
+- Debug、failure、`validation_failed`、`low_confidence` 路径也不得落敏感正文，不得为了排障保存原始 provider payload。
+- 这些边界与 `API_SPEC.md` 的 response envelope 和 `DATA_MODEL.md` 的 AI output handoff 保持一致。
 
 ## 22. Deferred / 待后续补齐项
 
@@ -516,5 +540,6 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-16 | 同步 API / DATA / Prompt 交接边界当前性 | 同步 `API_SPEC.md` / `DATA_MODEL.md` / `PROMPT_SPEC.md` 已创建后的安全交接口径；补 candidate / confirmation、source unavailable、trace / evidence / audit、LLM payload 边界；不关闭 UNKNOWN，不定义 endpoint、schema、Prompt 模板或实现方案 |
 | 2026-05-15 | 补齐 MVP 安全隐私闭环 | 增加字段级数据分类矩阵、session / owner enforcement、简历 Markdown 输入安全、删除 / 归档 / 复制语义、LLM / RAG 安全闭环、日志脱敏、威胁模型、验证 checklist 和 Deferred 台账；仍不引入 API schema、Prompt 模板、DDL 或企业级合规扩展 |
 | 2026-05-15 | 初始化 F4 安全隐私规范草案 | 建立 `AIFI-SEC-001` 的 ownership、角色权限、LLM 隔离、RAG 来源、trace、审计、脱敏、保留、复制 non-goal、真实面试敏感信息、用户确认、密钥和 UNKNOWN 边界；不关闭 `F4_TECH_DESIGN` UNKNOWN |
