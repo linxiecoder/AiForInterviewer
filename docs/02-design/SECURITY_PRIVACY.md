@@ -488,11 +488,11 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 
 ## 21. 与 API_SPEC.md、DATA_MODEL.md、PROMPT_SPEC.md 的交接边界
 
-`API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md` 当前均已存在并作为 F4 active draft 承接对应边界。本文继续冻结安全隐私语义和 enforcement 要求；endpoint、schema、Prompt 模板、模型参数、物理 DB schema 和实现方案仍由对应文档及后续阶段承接。本文不关闭 SECURITY_PRIVACY 自身 Deferred / UNKNOWN。
+`API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md` 当前均已存在并作为 F4 active draft 承接对应边界。本文继续冻结安全隐私语义和 enforcement 要求；endpoint、API schema、Prompt 模板、模型参数、物理 DB schema 和实现方案仍由对应文档及后续阶段承接。本文不关闭 SECURITY_PRIVACY 自身 Deferred / UNKNOWN。
 
 | 交接对象 | 本文交接内容 | 本文不展开内容 |
 |---|---|---|
-| `API_SPEC.md` | 承接 API resource boundary、candidate / confirmation、status、error、async / retry / idempotency、response envelope、复制和回流失败语义 | 不定义 endpoint、path、method 或完整 request / response schema |
+| `API_SPEC.md` | 承接 API resource boundary、endpoint、path、method、request / response handoff、candidate / confirmation、status、error、async / retry / idempotency、rate limit、response envelope、复制和回流失败语义 | 不在本文重复定义 endpoint、path、method 或完整 request / response schema |
 | `DATA_MODEL.md` | 承接 `CandidateRef`、`SuggestionRef`、`UserConfirmationRef`、`AiTaskResultRef`、`EvidenceRef`、`TraceRef`、`LowConfidenceFlag`、`AuditEvent`、`RoleScope`、`PermissionBoundary` 等逻辑对象 | 不改写数据对象定义，不写物理 DB schema、ORM、DDL、migration 或索引 |
 | `PROMPT_SPEC.md` 与 `prompt-contracts/*.md` | 承接 AI Task Contract、上下文装配、检索依赖、validation、low confidence、evidence、trace、failure handling、source unavailable 和 LLM payload 交接要求 | 不写 Prompt 模板全集，不选择 provider、模型参数、向量数据库、embedding 模型或搜索服务 |
 | F5 实现 | 交接密钥管理、日志保留、脱敏实现、审计事件落库、删除策略、trace 存储和访问控制 | 不写 ORM、DDL、migration 或平台选型 |
@@ -540,6 +540,7 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-16 | 同步 AR-F4-FULL-002 后 API handoff 当前性 | 明确 endpoint、API schema、async / retry / idempotency、rate limit 由 `API_SPEC.md` 承接；本文只同步安全隐私 enforcement 交接口径，不关闭 UNKNOWN，不定义 Prompt 模板、物理 schema 或实现方案 |
 | 2026-05-16 | 同步 API / DATA / Prompt 交接边界当前性 | 同步 `API_SPEC.md` / `DATA_MODEL.md` / `PROMPT_SPEC.md` 已创建后的安全交接口径；补 candidate / confirmation、source unavailable、trace / evidence / audit、LLM payload 边界；不关闭 UNKNOWN，不定义 endpoint、schema、Prompt 模板或实现方案 |
 | 2026-05-15 | 补齐 MVP 安全隐私闭环 | 增加字段级数据分类矩阵、session / owner enforcement、简历 Markdown 输入安全、删除 / 归档 / 复制语义、LLM / RAG 安全闭环、日志脱敏、威胁模型、验证 checklist 和 Deferred 台账；仍不引入 API schema、Prompt 模板、DDL 或企业级合规扩展 |
 | 2026-05-15 | 初始化 F4 安全隐私规范草案 | 建立 `AIFI-SEC-001` 的 ownership、角色权限、LLM 隔离、RAG 来源、trace、审计、脱敏、保留、复制 non-goal、真实面试敏感信息、用户确认、密钥和 UNKNOWN 边界；不关闭 `F4_TECH_DESIGN` UNKNOWN |

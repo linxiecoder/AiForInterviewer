@@ -19,7 +19,7 @@ Status 只使用 `Open`、`Fixed`、`Deferred`、`Rejected_False_Positive`、`Ve
 | ID | Severity | Category | Source | Affected Downstream | Risk | Required Fix | Required Decision | Status | Owner | Close Condition |
 |---|---|---|---|---|---|---|---|---|---|---|
 | AR-F4-FULL-001 | High | Scope / Governance / Testability | `DELIVERY_PLAN.md` F4 exit; `BACKLOG.md` `AIFI-ARCH-002`; `TECH_DESIGN.md` §16 / §18; `DATA_MODEL.md` §12; `PROMPT_SPEC.md` §13; `API_SPEC.md` §12 | F5 Backend; F6 Frontend; F7 QA | `F4_TECH_DESIGN` UNKNOWN 仍显式保留，M4 退出标准未满足 | 回写 TECH / DATA / API / PROMPT / SECURITY，逐项关闭、Deferred 或 Accepted Risk | 哪些 UNKNOWN 必须 F4 关闭，哪些允许后置 | Open | Architecture owner | 所有 F4 UNKNOWN 有处置状态，F7 可验证关闭状态 |
-| AR-F4-FULL-002 | High | API / Reliability / Testability | `API_SPEC.md` §1 / §2 / §10 / §11 / §12 | F5 Backend; F6 Frontend; F7 QA | API 契约仍为骨架，endpoint/schema/error/auth/retry/idempotency/rate limit 未冻结 | 补齐完整 API contract 和失败状态协议 | 同步 / 异步分界、idempotency key、rate limit 维度 | Open | API / Backend owner | F7 可直接从 API_SPEC 生成 contract tests |
+| AR-F4-FULL-002 | High | API / Reliability / Testability | `API_SPEC.md` §1-§10；`TECH_DESIGN.md` §14.1 / §16 / §18；`SECURITY_PRIVACY.md` §21 / §23 | F5 Backend; F6 Frontend; F7 QA | API 契约已从骨架回写并复核为 F5/F6/F7 handoff | 已复核完整 API contract、失败状态协议、endpoint matrix、async task、幂等、rate limit 和 F7 assertions | 同步 / 异步分界、idempotency key、rate limit 维度已在 `API_SPEC.md` 落地，并已通过本轮 verification | Verified | API / Backend owner | F7 可直接从 API_SPEC 生成 contract tests，且 verification 确认无骨架残留 |
 | AR-F4-FULL-003 | High | Scoring / Prompt / Testability | `PRD.md` §5.7 / §10; `DATA_MODEL.md` §10 / §12; Prompt scoring contracts | F5 Backend; F6 Frontend; F7 QA | 评分公式、权重、阈值、校准、通过倾向和免责声明仍未冻结 | 冻结最小评分规则版本、risk wording、免责声明和测试 fixture | 采用固定公式还是 rubric / rule version 替代口径 | Open | Product / Architecture / Prompt owner | F7 可验证评分、低置信、风险提示和禁止精确概率 |
 | AR-F4-FULL-004 | High | Scope / Prompt / Security / Privacy | `PRD.md` §5.7 / §9; `TECH_DESIGN.md` §4 / §12; `SECURITY_PRIVACY.md` §14 / §22; `REPORT_CONTRACTS.md` §3.0 / §3.4 | F5 Backend; F6 Frontend; F7 QA | Report contract 重新引入 Markdown 下载 / 导出语义，违背 MVP non-goal | 从 Report contract 删除 download/export/filename/snapshot 语义，收敛为页面复制 | `P-REPORT-004` 是否只允许复制，不允许任何下载 / export | Verified | Prompt / Security / Product owner | active docs 只保留复制能力；导出命中仅存在于 non-goal / deferred / finding；verification 已通过 |
 | AR-F4-FULL-005 | Medium | State / Reliability / Testability | `DATA_MODEL.md` §12; `API_SPEC.md` §10 / §12; `SHARED_CONTRACTS.md` §10.6 | F5 Backend; F6 Frontend; F7 QA | 进展树、暂停恢复、异步失败和重试缺少可执行状态机 | 冻结暂停恢复快照、进展树状态机、status query/retry/cancel/timeout | 打磨 / 压力面暂停恢复范围和失败路径 | Open | Data / API / SRE owner | F7 覆盖 pause/resume/resume failed/partial/timeout |
@@ -30,12 +30,14 @@ Status 只使用 `Open`、`Fixed`、`Deferred`、`Rejected_False_Positive`、`Ve
 
 | ID | Actual Fix Summary | Verification State |
 |---|---|---|
+| AR-F4-FULL-002 | 已将 `API_SPEC.md` 从“不定义完整 endpoint”的骨架改为 F5/F6/F7 可交接 API contract：补齐 base path / versioning、auth / session assumption、owner boundary、response / error envelope、pagination、sorting、filtering、idempotency、rate limit、request id / trace id、async task id、标准错误码、同步 / 异步策略、AI task create / status / result / retry / cancel 协议、核心 endpoint matrix、candidate / suggestion / confirmation 写入边界、报告 copy content 与 no export 边界、F7 可测试性矩阵；并最小同步 `TECH_DESIGN.md` 与 `SECURITY_PRIVACY.md` 中 API handoff 当前性。未修改业务代码，未修改 prompt-contracts 正文，未处理其它 finding。 | Verified |
 | AR-F4-FULL-004 | 已将 `REPORT_CONTRACTS.md` 的 Report 公共 action 和 `P-REPORT-004` 从 Markdown 下载 / 文件产物语义改为报告内容复制 / copy content；明确 MVP 不生成 PDF、Markdown 文件、Word / docx 或批量文件；复制内容不得包含 `system prompt`、provider payload、隐藏评分规则或未经脱敏的第三方 / 公司 / 个人敏感信息；`API_SPEC.md` 已补充报告 API 只提供读取和复制所需内容，不提供下载 / 导出 endpoint。 | Verified |
 
 ## 2.2 Verification Summary
 
 | ID | Verification Summary | Verification State |
 |---|---|---|
+| AR-F4-FULL-002 | 已复核 `API_SPEC.md` 明确为 F5 后端实现、F6 前端接入和 F7 API contract tests 的前置硬门槛；全局约定覆盖 `/api/v1`、auth / session、owner boundary、response / error envelope、pagination / sorting / filtering、idempotency、rate limit、request / trace id、async task id 与标准错误码；endpoint matrix 覆盖核心资源域，且每行具备 method、path、purpose、request、response、error cases、owner check、idempotency、related data objects、related prompt contract 和 F7 assertion；async task protocol 覆盖 create / status / result / retry / cancel、idempotency、timeout、failure 和 user-visible status；F7 matrix 覆盖 success、validation failed、cross-user、source unavailable、low confidence、generation failed、idempotent retry、stale conflict、no export endpoint 和 copy boundary；`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md` 与该 handoff 边界一致。 | Verified |
 | AR-F4-FULL-004 | 已复核 `REPORT_CONTRACTS.md` 无 `download` / `export` / `下载` / `导出` / `filename` / `MarkdownExport` 命中；`CopyableReportContent` 仅作为可复制内容对象并明确不是外部文件产物；`API_SPEC.md` 明确不提供文件下载 / 导出 endpoint；`SECURITY_PRIVACY.md` 保持页面复制、复制审计、Deferred 下载和 non-goal 边界一致；未发现 archive、snapshot file、report file、markdown artifact 或 downloadable content 等替代命名承接文件导出能力。 | Verified |
 
 ## 3. Critical / High Blocking Scope
@@ -43,7 +45,7 @@ Status 只使用 `Open`、`Fixed`、`Deferred`、`Rejected_False_Positive`、`Ve
 | ID | Blocks F4 Exit | Blocks F5 | Blocks F7 | Reason |
 |---|---|---|---|---|
 | AR-F4-FULL-001 | Yes | Yes | Yes | F4 UNKNOWN 未关闭，M4 退出标准不满足 |
-| AR-F4-FULL-002 | Yes | Yes | Yes | API handoff 不可实现、不可测试 |
+| AR-F4-FULL-002 | No | No | No | 已 Verified；API handoff 不再因本 finding 阻断 F4 / F5 / F7 |
 | AR-F4-FULL-003 | Yes | Yes | Yes | 评分和风险提示无法形成稳定实现 / 验收 |
 | AR-F4-FULL-004 | No | No | No | 已验证为页面复制边界，不再因本 finding 阻断退出 |
 
@@ -55,4 +57,5 @@ Status 只使用 `Open`、`Fixed`、`Deferred`、`Rejected_False_Positive`、`Ve
 - LLM / RAG failure 是否不保存 raw prompt、completion 或 provider payload。
 - `source_unavailable`、`validation_failed`、`low_confidence` 是否不被 UI 静默吞掉。
 - Report copy 在本轮验证中已确认严格停留在页面复制；后续实现仍需在 F5 / F7 按无文件生成、无文件下载和复制审计继续回归。
+- `API_SPEC.md` 已补齐并通过本轮 verification；后续 F5 / F7 仍需用 contract tests 防止实现偏离 API contract。
 - F3 / F6 交接状态是否有人工确认或 active docs 关闭证据。
