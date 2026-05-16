@@ -496,13 +496,18 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - Open Questions:
 ```
 
-## 12. 后续填充顺序
+## 12. 当前 Draft 覆盖状态与后续收口路径
 
-当前已将 Shared contracts、Job match contracts、Polish `P-POLISH-001` 至 `P-POLISH-011`、Pressure `P-PRESSURE-001` 至 `P-PRESSURE-009`、Report `P-REPORT-001` 至 `P-REPORT-004` 和 Review `P-REVIEW-001` 至 `P-REVIEW-004` 填充为 Draft。Review 细则完成后，下一批不应继续重复填充 Review contracts；应先进入 Review 001-004 只读验收，或在另行授权后进入 Weakness / Asset / Training 等后续阶段。
+当前已将 Shared、Job Match、Polish、Pressure、Report、Review、Weakness、Asset、Training 全部 contract domain 填充为 Draft。主 catalog 中已登记的 48 个 `P-*` contract 均为 Draft，详细正文由 `prompt-contracts/*.md` 承载；后续不应继续重复填充这些 contract，也不应新增未登记的 Prompt contract ID。
 
-1. Review `P-REVIEW-001` 至 `P-REVIEW-004` 只读验收。
-2. Weakness / asset / training contracts。
-3. Cross-contract consistency review。
+下一步应从 contract 填充转入以下收口路径：
+
+1. `API_SPEC.md` / `DATA_MODEL.md` 同步与细化。
+2. `SECURITY_PRIVACY.md` / `TECH_DESIGN.md` 当前性对齐。
+3. 全量 Prompt contract / 跨文档回归门禁。
+4. `AIFI-PROMPT-001` 关闭前置检查。
+
+`AIFI-PROMPT-001` 当前仍不自动 DONE；`F4_TECH_DESIGN` UNKNOWN 仍需等跨文档证据充分后，再进入 `AIFI-ARCH-002` 检查。
 
 ## 13. UNKNOWN 与后续交接
 
@@ -522,12 +527,13 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - retry / fallback 具体策略。
 - RAG 索引、embedding 和向量库实现。
 
-本阶段不关闭上述 UNKNOWN，不改变 PRD §10 的关闭台账，不把 `AIFI-PROMPT-001` 标记为 DONE。后续只有在具体 contract 完成、与 `TECH_DESIGN.md` / `DATA_MODEL.md` / `SECURITY_PRIVACY.md` / `API_SPEC.md` 一致性复核通过，并具备可验证证据后，才能进入 `AIFI-ARCH-002` 的 UNKNOWN 关闭检查。
+本阶段不关闭上述 UNKNOWN，不改变 PRD §10 的关闭台账，不把 `AIFI-PROMPT-001` 标记为 DONE。已登记 contract 完成 Draft 覆盖后，仍只有在与 `TECH_DESIGN.md` / `DATA_MODEL.md` / `SECURITY_PRIVACY.md` / `API_SPEC.md` 一致性复核通过，并具备可验证证据后，才能进入 `AIFI-ARCH-002` 的 UNKNOWN 关闭检查。
 
 ## 14. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-16 | 更新阶段性说明 / Draft 覆盖状态 | 说明所有已登记 Prompt contracts 已完成 Draft 覆盖，后续转入 API / DATA / SECURITY / TECH 对齐和回归门禁；不改 contract 状态，不关闭 UNKNOWN，不标记 `AIFI-PROMPT-001` DONE |
 | 2026-05-16 | 填充 Training Contract 细则 | 将 `P-TRAINING-001` 至 `P-TRAINING-003` 从 Stub 更新为 Draft，补充训练建议、训练建议排序和训练结果复盘 contract；不实现训练执行，不自动创建 TrainingTask，不自动更新正式 Weakness，不自动归档 Asset，不自动发布 AssetVersion，不关闭训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则 UNKNOWN |
 | 2026-05-16 | 填充 Asset Contract 细则 | 将 `P-ASSET-001` 至 `P-ASSET-003` 从 Stub 更新为 Draft，补充资产候选提炼、资产质量提示和资产版本更新建议 contract；不填充 Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动替换、覆盖或发布 AssetVersion，不关闭资产质量规则、资产归档策略、资产版本合并策略或训练优先级 UNKNOWN |
 | 2026-05-16 | 填充 Weakness Contract 细则 | 将 `P-WEAKNESS-001` 至 `P-WEAKNESS-004` 从 Stub 更新为 Draft，补充薄弱项候选提炼、合并建议、严重度提示和状态更新建议 contract；不填充 Asset / Training contracts，不自动创建 TrainingRecommendation，不自动归档 Asset，不自动合并、删除或更新正式 Weakness，不关闭薄弱项合并算法、严重度规则、状态流转规则或训练优先级 UNKNOWN |
