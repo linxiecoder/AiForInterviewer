@@ -1,0 +1,2 @@
+"""Low-coupling shared helpers."""
+

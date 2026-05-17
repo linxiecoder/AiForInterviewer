@@ -1,1 +1,1 @@
-"""API route organization boundaries."""
+"""HTTP adapter package."""

@@ -1,0 +1,2 @@
+"""Weakness domain module."""
+

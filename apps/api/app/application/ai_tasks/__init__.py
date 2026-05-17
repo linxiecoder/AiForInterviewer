@@ -1,0 +1,2 @@
+"""AI task application boundary."""
+

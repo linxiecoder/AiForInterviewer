@@ -1,0 +1,2 @@
+"""Binding application boundary."""
+

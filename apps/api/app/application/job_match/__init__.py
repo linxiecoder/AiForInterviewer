@@ -1,0 +1,2 @@
+"""Job match application boundary."""
+

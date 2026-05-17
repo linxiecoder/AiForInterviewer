@@ -1,0 +1,2 @@
+"""Weakness application boundary."""
+

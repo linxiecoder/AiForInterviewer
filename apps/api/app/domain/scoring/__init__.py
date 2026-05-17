@@ -1,0 +1,2 @@
+"""Scoring domain module."""
+

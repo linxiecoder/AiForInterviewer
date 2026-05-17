@@ -1,0 +1,2 @@
+"""Training application boundary."""
+
