@@ -65,7 +65,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | TraceRef | 支撑模型调用、检索、上下文装配、输出校验和失败记录的过程引用 |
 | Failure Signal | 跨 Shared Contract 传递的标准化失败信号，统一使用 snake_case 命名 |
 
-### 3.1 Contract ID Namespace Governance
+### 3.1 Contract ID 命名空间治理（Contract ID Namespace Governance）
 
 本节冻结 `P-*` 系列 AI Task Contract ID 的含义、格式、命名边界和维护规则。拆分后仍沿用本 namespace，不重新命名现有 ID；主 catalog 继续作为 canonical registry，子文档只承载详细正文。
 
@@ -150,7 +150,7 @@ DOMAIN 治理规则：
 - 应用编排层可以根据模式、状态、用户动作和失败处理选择跳过、重试、合并或拆分调用。
 - 任何编排变体都必须保留输出所属 contract ID 和 trace。
 
-#### 3.1.7 Canonical Registry
+#### 3.1.7 规范登记表（Canonical Registry）
 
 - `docs/02-design/PROMPT_SPEC.md` 中的 Contract Catalog 是 canonical registry。
 - 拆分到子文档后，主 catalog 仍是 ID 的唯一登记源。
@@ -215,7 +215,7 @@ DOMAIN 治理规则：
 | `test_strategy` | 是 | 确定性替身和最小验证要求 |
 | `open_questions` | 否 | 仅记录不阻断 M4 的 deferred_non_blocking 事项、UX 文案润色或实现细节；不得记录新的 F4 阻断项 |
 
-## 5. Context Assembly 总策略
+## 5. 上下文装配（Context Assembly）总策略
 
 一场模拟面试内容不能整体塞进一个 Prompt。后端应用编排层必须按 contract、模式、轮次和输出目标组装最小必要上下文。
 
@@ -245,6 +245,8 @@ Context Assembly 规则：
 - 裁剪不得破坏 owner 校验、证据引用和历史结果可追踪性。
 - 被删除、禁用、归档、不可访问或缺少版本快照的来源不得进入新生成上下文；历史结果只能通过来源可用性状态表达 `source_unavailable` 等标准枚举。
 - 组装过程应能通过 `RAGContextAssembly`、`LlmRequestTrace` 或同等 `TraceRef` 回溯输入来源、裁剪原因、检索状态和低置信度状态。
+- 打磨模式的主题选择来自 API 受控选项：`PolishTopicRef`、`PolishSubtopicRef` 和可选 `custom_topic_text`。主题 / 次主题只用于上下文装配、题目生成和后续 trace，不是正式业务对象，也不得替代 `ResumeVersion`、`JobVersion` 或 `JobResumeBinding`。
+- `custom_topic_text` 必须按用户输入处理：进入 prompt 前需要长度限制、敏感信息裁剪、prompt injection 防护和指令中和；模型不得把其中的“忽略规则”“泄露系统提示”等文本当作系统指令。
 
 ## 6. Retrieval / RAG / 资产检索策略
 
@@ -271,7 +273,7 @@ Retrieval Policy 边界：
 - RAG evidence 进入业务结果时必须绑定 `EvidenceRef`、`SourceRef`、`VersionRef` / `SnapshotRef` 和 `TraceRef`。
 - 检索为空、证据不足、证据冲突或 `source_unavailable` 时，结果必须进入 Low Confidence、部分可用、证据不足、证据冲突或生成失败状态，不能伪装成高置信结果。
 
-### 6.1 Source Availability 状态矩阵
+### 6.1 来源可用性（Source Availability）状态矩阵
 
 来源可用性状态统一使用 snake_case 枚举，供 Retrieval Planning、Context Assembly、Evidence Binding、Output Validation 和 Low Confidence Classification 复用。
 
@@ -284,7 +286,7 @@ Retrieval Policy 边界：
 | `source_archived` | 默认不可以 | 历史引用可保留 ref / snapshot / summary status | archived 来源默认不进入新生成；除非后续业务设计明确恢复或选择历史引用场景 |
 | `public_material_unpublished` | 不可以 | 不作为新生成证据 | 未发布公共材料不得进入业务生成或 RAG evidence |
 
-## 7. Output Schema、Validation 与 Failure Handling
+## 7. 输出 Schema（Output Schema）、校验（Validation）与失败处理（Failure Handling）
 
 所有 LLM 输出进入报告、复盘、薄弱项、资产候选或训练建议前，必须先经过 Output Schema 结构化校验。结构化校验通过后，还必须进行业务语义校验。
 
@@ -308,7 +310,7 @@ Validation 与失败处理规则：
 - 业务语义校验应检查模式边界、来源可用性、证据一致性、0-100 展示范围、不可承诺精确通过概率、用户确认要求和安全隐私边界。
 - retry / fallback 不能扩大数据范围，不能把原始 Prompt、completion 或 provider payload 写入日志。
 
-### 7.1 Shared Failure Signal Enum
+### 7.1 共享失败信号枚举（Shared Failure Signal Enum）
 
 Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不应重复定义同一批 failure signals；除非存在业务特有扩展，否则应直接消费本枚举。枚举命名统一使用 snake_case，不混用空格写法。
 
@@ -339,7 +341,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 `P-SHARED-003` Output Validation 产出 normalized failure signals；`P-SHARED-004` Low Confidence Classification 消费 failure signals，负责分类、用户可见表达和 recommended action。业务 contract 可以添加业务特有 failure signal，但不得重命名或重复定义上述共享枚举。
 
-### 7.2 Scoring Candidate、通过倾向与风险提示全局规则
+### 7.2 评分候选（Scoring Candidate）、通过倾向与风险提示全局规则
 
 本节冻结 `AR-F4-FULL-003` 的 Prompt / AI contract 全局边界，适用于 `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002`、`P-REPORT-003` 以及后续消费评分的 contract。
 
@@ -366,6 +368,8 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - 不得把原始 Prompt、provider payload、completion 原文默认暴露给前端。
 - 持久化目标应区分正式业务结果、候选结果、trace、validation result、low confidence flag 和 audit event。
 - 用户确认前，只能写入候选、待确认或 validation / trace 状态，不得写入正式资产、薄弱项或训练建议。
+- 用户对低置信 candidate / suggestion 的校对内容必须先形成 `CandidateCorrection` / `UserCorrectionRef`，经过 owner 校验、结构化校验、敏感信息处理和 validation 后，才能作为后续 confirmation 或 task input；不得直接反向污染 Prompt source、覆盖原始候选或创建正式对象。
+- Prompt contract 可以输出 `suggested_deposit_targets[]` 或下一步动作建议，但不得静默决定正式沉淀目标。允许建议的目标类型只限 `asset`、`weakness`、`training_suggestion`、`polish_input`、`pressure_input`、`next_interview_input`、`review_note`、`none` / `skip`；正式 `DepositTarget`、`target_ref` 和 `created_formal_ref` 由 API / DATA 的用户确认链路承接。
 - `EvidenceRef` 应能回溯到题目、回答、点评、评分解释、RAG 检索证据、用户确认、面试官反馈或生成时版本 / 快照。
 - `TraceRef` 应能回溯到检索、Context Assembly、LLM request、LLM response、Output Schema 校验、Validation、Low Confidence classification、Failure Handling 和 audit event。
 - Persistence 语义只定义业务交接和状态；物理表、ORM、DDL、索引和 migration 由后续实现承接。
@@ -374,7 +378,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 本阶段只建立 contract catalog，不填充完整 Prompt 文案。
 
-### 9.1 Shared Contracts
+### 9.1 共享 Contract（Shared Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -385,7 +389,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-SHARED-005` | Evidence Binding | 证据引用绑定 | Draft | `prompt-contracts/SHARED_CONTRACTS.md` |
 | `P-SHARED-006` | Session Summary Update | 会话摘要更新 | Draft | `prompt-contracts/SHARED_CONTRACTS.md` |
 
-### 9.2 Job Match Contracts
+### 9.2 岗位匹配 Contract（Job Match Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -394,7 +398,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-JOBMATCH-003` | Match / Mismatch / Improvement Points | 生成匹配点、不匹配点、加强点 | Draft | `prompt-contracts/JOB_MATCH_CONTRACTS.md` |
 | `P-JOBMATCH-004` | Weakness Candidate from Job Match | 从岗位匹配分析提炼薄弱项候选 | Draft | `prompt-contracts/JOB_MATCH_CONTRACTS.md` |
 
-### 9.3 Polish Mode Contracts
+### 9.3 打磨模式 Contract（Polish Mode Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -410,7 +414,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-POLISH-010` | Asset Candidate | 生成资产候选 | Draft | `prompt-contracts/POLISH_CONTRACTS.md` |
 | `P-POLISH-011` | Weakness Candidate | 生成薄弱项候选 | Draft | `prompt-contracts/POLISH_CONTRACTS.md` |
 
-### 9.4 Pressure Mode Contracts
+### 9.4 压力面模式 Contract（Pressure Mode Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -424,7 +428,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-PRESSURE-008` | Session Score | 生成整场评分 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 | `P-PRESSURE-009` | Report Input Assembly | 组装报告输入 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 
-### 9.5 Report Contracts
+### 9.5 报告 Contract（Report Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -433,7 +437,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-REPORT-003` | Risk and Pass Tendency Wording | 生成风险提示和通过倾向表达 | Draft | `prompt-contracts/REPORT_CONTRACTS.md` |
 | `P-REPORT-004` | Copyable Content Assembly | 生成可复制内容结构 | Draft | `prompt-contracts/REPORT_CONTRACTS.md` |
 
-### 9.6 Review Contracts
+### 9.6 复盘 Contract（Review Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -442,7 +446,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-REVIEW-003` | Real Interview Review | 生成真实面试复盘 | Draft | `prompt-contracts/REVIEW_CONTRACTS.md` |
 | `P-REVIEW-004` | Review Item Extraction | 提炼题级复盘项 | Draft | `prompt-contracts/REVIEW_CONTRACTS.md` |
 
-### 9.7 Weakness Contracts
+### 9.7 薄弱项 Contract（Weakness Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -451,7 +455,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-WEAKNESS-003` | Weakness Severity Assessment | 判断薄弱项严重度 | Draft | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
 | `P-WEAKNESS-004` | Weakness Status Update Suggestion | 生成状态更新建议 | Draft | `prompt-contracts/WEAKNESS_CONTRACTS.md` |
 
-### 9.8 Asset Contracts
+### 9.8 资产 Contract（Asset Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -459,7 +463,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-ASSET-002` | Asset Quality Hint | 生成资产质量提示 | Draft | `prompt-contracts/ASSET_CONTRACTS.md` |
 | `P-ASSET-003` | Asset Version Suggestion | 生成资产版本更新建议 | Draft | `prompt-contracts/ASSET_CONTRACTS.md` |
 
-### 9.9 Training Contracts
+### 9.9 训练 Contract（Training Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
 |---|---|---|---|---|
@@ -488,30 +492,30 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 后续填充 contract 时复制以下结构。模板只写字段结构，不写具体 Prompt 文案。
 
 ```markdown
-### <Contract ID> <Name>
+### <Contract ID> <名称（Name）>
 
-- Contract ID:
-- Name:
-- Mode:
-- Trigger:
-- Goal:
-- Required Inputs:
-- Optional Inputs:
-- Retrieval Sources:
-- Context Assembly:
-- Excluded Inputs:
-- Output Schema:
-- Validation Rules:
-- Low Confidence Rules:
-- Evidence Requirements:
-- Trace Requirements:
-- Persistence Targets:
-- User Confirmation Requirement:
-- Retry / Fallback:
-- API State Mapping:
-- Security Notes:
-- Test Strategy:
-- Open Questions:
+- Contract ID：
+- 名称（Name）：
+- 模式（Mode）：
+- 触发条件（Trigger）：
+- 目标（Goal）：
+- 必需输入（Required Inputs）：
+- 可选输入（Optional Inputs）：
+- 检索来源（Retrieval Sources）：
+- 上下文装配（Context Assembly）：
+- 排除输入（Excluded Inputs）：
+- 输出 Schema（Output Schema）：
+- 校验规则（Validation Rules）：
+- 低置信度规则（Low Confidence Rules）：
+- 证据要求（Evidence Requirements）：
+- Trace 要求（Trace Requirements）：
+- 持久化目标（Persistence Targets）：
+- 用户确认要求（User Confirmation Requirement）：
+- 重试 / 兜底（Retry / Fallback）：
+- API 状态映射（API State Mapping）：
+- 安全说明（Security Notes）：
+- 测试策略（Test Strategy）：
+- 开放问题（Open Questions）：
 ```
 
 ## 12. 当前 Draft 覆盖状态与后续收口路径
@@ -551,6 +555,8 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 修复 `AR-DOCS02-SEM-001` Prompt 校对 / 沉淀目标断链 | 明确低置信校对只能形成 `CandidateCorrection` / `UserCorrectionRef` 并在确认后作为后续输入；Prompt 只能建议沉淀目标，不能静默决定正式 `DepositTarget` 或写入正式对象；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
+| 2026-05-17 | 修复 `AR-F4-F8-006` Polish topic / subtopic Prompt 语义 | 明确 `PolishTopicRef` / `PolishSubtopicRef` / `custom_topic_text` 只作为打磨上下文装配与题目生成输入；主题 / 次主题不是正式业务对象；自定义主题文本必须经过 prompt injection 防护；不新增 contract ID，不进入实现 |
 | 2026-05-16 | 修复 `AR-F4-FULL-001` Prompt 阻断项 | 将 Prompt 待决策项改为处置表；冻结 contract 状态、failure signals、low confidence、source unavailable、validation、evidence、trace、candidate / formal object 和安全边界；复杂算法、provider、模型参数、RAG 实现和 retry 参数改为 deferred_non_blocking；等待 verification |
 | 2026-05-16 | 修复 `AR-F4-FULL-003` Prompt 评分全局边界 | 新增 scoring candidate、rubric / rule version、通过倾向分档、风险提示、低置信度降级、版本字段、免责声明和 MVP 校准策略；适用于评分与报告相关 contract；不写完整 Prompt 文案，不进入实现 |
 | 2026-05-16 | 更新阶段性说明 / Draft 覆盖状态 | 说明所有已登记 Prompt contracts 已完成 Draft 覆盖，后续转入 API / DATA / SECURITY / TECH 对齐和回归门禁；不改 contract 状态，不标记 `AIFI-PROMPT-001` DONE |

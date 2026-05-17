@@ -60,7 +60,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
 
 训练建议、训练任务创建、结果复盘、弱项状态影响和资产候选沉淀必须保留用户确认、编辑、跳过或人工校对路径。`P-TRAINING-001` 生成的是训练建议候选或建议入口，不自动创建正式 `TrainingRecommendation` 或 `TrainingTask`；`P-TRAINING-003` 的回流输出必须进入候选态或建议态。
 
-#### Training 公共 Output Schema
+#### Training 公共输出 Schema（Output Schema）
 
 `P-TRAINING-001` 至 `P-TRAINING-003` 的 Output Schema 都必须包含以下公共字段；各 contract 可以增加专属字段，但不得删除公共字段或改变字段语义。
 
@@ -99,12 +99,12 @@ Training 输出可以保存为 training recommendation、training priority ranki
 - 不得自动创建正式 `TrainingRecommendation`、自动创建 `TrainingTask`、自动更新正式 Weakness 状态、自动归档 Asset 或自动发布 AssetVersion。
 - 不得把训练优先级算法、训练结果评估规则、弱项自动消减规则或资产自动沉淀规则实现为自动正式写入；这些复杂算法为 deferred_non_blocking。
 
-### 3.1 P-TRAINING-001 Training Recommendation
+### 3.1 P-TRAINING-001 训练建议（Training Recommendation）
 
-- Contract ID: `P-TRAINING-001`
-- Name: Training Recommendation
-- Mode: `training`
-- Trigger:
+- Contract ID： `P-TRAINING-001`
+- 名称（Name）： Training Recommendation
+- 模式（Mode）： `training`
+- 触发条件（Trigger）：
   - Weakness severity assessment 生成后。
   - Review item 提示需要训练。
   - Report / Risk wording 暴露明显风险。
@@ -112,8 +112,8 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - Asset quality hint 建议补充表达或案例。
   - 用户请求“下一步怎么练”。
   - 系统需要生成训练建议候选。
-- Goal: 基于 Weakness、Asset、Review、Report、Polish、Pressure 等上游结果生成训练建议；本 contract 只生成训练建议候选或建议入口，不自动创建训练任务，不自动更新 Weakness，不自动归档 Asset。
-- Required Inputs:
+- 目标（Goal）： 基于 Weakness、Asset、Review、Report、Polish、Pressure 等上游结果生成训练建议；本 contract 只生成训练建议候选或建议入口，不自动创建训练任务，不自动更新 Weakness，不自动归档 Asset。
+- 必需输入（Required Inputs）：
   - `OwnerRef`
   - 至少一个 source artifact：Weakness / Review / Report / Polish / Pressure / Asset 输出之一。
   - evidence refs
@@ -123,7 +123,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `P-SHARED-003` Output Validation 要求
   - `P-SHARED-004` Low Confidence Classification 要求
   - `P-SHARED-005` Evidence Binding 要求
-- Optional Inputs:
+- 可选输入（Optional Inputs）：
   - `P-SHARED-002` Retrieval Planning 结果
   - confirmed Weakness
   - WeaknessSeverityAssessment
@@ -137,23 +137,23 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - user preferences
   - low confidence flags
   - RAG evidence
-- Retrieval Sources:
+- 检索来源（Retrieval Sources）：
   - 默认使用显式 source artifact、evidence refs、weakness / review / asset 结构化摘要。
   - 条件读取既有 Weakness、Training history、AssetVersion、Job / Resume、Polish / Pressure / Report / Review 摘要和知识库 evidence。
   - 条件读取必须经过 `P-SHARED-002`。
   - 不默认启用互联网检索。
   - 无训练历史或 RAG 时仍可生成基础训练建议，但必须保留低置信度和 evidence 边界。
-- Context Assembly:
+- 上下文装配（Context Assembly）：
   - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
   - 上下文至少包含 source artifact summary、weakness / asset / review signals、evidence refs、低置信度、source availability、用户目标和输出 schema。
   - 不得默认塞入全部历史会话、全部报告、全部复盘、全部资产、全部训练历史或全部知识库。
   - 上下文过长时优先保留高优先级 Weakness、强证据来源、重复出现信号、用户确认记录、当前训练目标和当前候选依据。
-- Excluded Inputs:
+- 排除输入（Excluded Inputs）：
   - 全量简历、全量岗位、全量历史会话、全量报告、全量复盘、全量资产、全量薄弱项、全量训练历史、全量知识库和默认互联网检索结果。
   - 未经 source refs 或 evidence refs 支撑的训练建议、训练收益、训练优先级或能力改善判断。
   - 自动创建 `TrainingTask`、自动更新正式 Weakness、自动归档 Asset、自动发布 AssetVersion 或自动创建新的 Report / Review 的写入动作。
   - 原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
-- Output Schema:
+- 输出 Schema（Output Schema）：
   - 公共字段：必须完整包含 §3.0 的 Training 公共 Output Schema。
   - `training_recommendations`
   - 每个 recommendation 的 `recommendation_id`
@@ -173,7 +173,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - 每个 recommendation 的 `user_confirmation_required`
   - `recommendation_summary`
   - `candidate_ordering`
-- Validation Rules:
+- 校验规则（Validation Rules）：
   - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
   - 每个训练建议必须绑定 source refs 和 evidence refs。
   - 不得把 severity hint 直接等同训练优先级。
@@ -184,7 +184,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `training_type_hint` 只是训练类型提示，不冻结训练分类算法。
   - `suggested_task_shape` 只是任务形态建议，不等同正式训练任务。
   - 证据不足时必须低置信度或 manual review。
-- Low Confidence Rules:
+- 低置信度规则（Low Confidence Rules）：
   - evidence 不足。
   - Weakness severity 低置信度。
   - source artifact 低置信度。
@@ -194,9 +194,9 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - source unavailable。
   - 技术训练需要知识 evidence 但 RAG 不可用。
   - 上下文裁剪影响建议归因。
-- Evidence Requirements: 每个训练建议的标题、描述、目标弱项 / 资产、expected outcome、suggested entry mode、suggested task shape、low confidence impact 和 candidate ordering 必须绑定 source refs、evidence refs、validation result refs 和 trace refs；无法绑定时必须输出低置信度、要求补充 evidence 或进入 manual review。
-- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练建议生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff、UserConfirmationRef 交接和 AuditEvent。
-- Persistence Targets:
+- 证据要求（Evidence Requirements）： 每个训练建议的标题、描述、目标弱项 / 资产、expected outcome、suggested entry mode、suggested task shape、low confidence impact 和 candidate ordering 必须绑定 source refs、evidence refs、validation result refs 和 trace refs；无法绑定时必须输出低置信度、要求补充 evidence 或进入 manual review。
+- Trace 要求（Trace Requirements）： 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练建议生成、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff、UserConfirmationRef 交接和 AuditEvent。
+- 持久化目标（Persistence Targets）：
   - `TrainingRecommendation` candidate 或等价待确认对象。
   - `CandidateRef`
   - `SuggestionRef`
@@ -205,31 +205,31 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `LowConfidenceFlag`
   - `TraceRef`
   - `AuditEvent`
-- User Confirmation Requirement:
+- 用户确认要求（User Confirmation Requirement）：
   - 默认需要用户确认后才能成为正式 `TrainingRecommendation` 或 `TrainingTask`。
   - 用户可以确认、编辑、跳过、排序、进入训练或要求重新生成。
   - 用户确认动作必须形成 `UserConfirmationRef` 或等价记录。
-- Retry / Fallback:
+- 重试 / 兜底（Retry / Fallback）：
   - `OwnerRef`、source artifact、evidence refs、Context Assembly 或 owner 校验缺失时停止正常建议，返回失败或补充材料路径。
   - 无训练历史、RAG 不可用或 source unavailable 时可生成基础建议，但必须标记缺失来源、低置信度和 manual check 入口。
   - 重试不得默认启用互联网检索、扩大到全量历史上下文、创建正式 TrainingRecommendation、创建 TrainingTask、更新 Weakness 或归档 Asset。
-- API State Mapping: 只定义状态语义，包括 `training_recommendation_candidate_available`、`training_recommendation_partial`、`training_recommendation_low_confidence`、`training_recommendation_validation_failed`、`manual_review_required` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
-- Security Notes: 训练建议只使用当前 owner 的授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
-- Test Strategy: 使用 fixture 覆盖 Weakness severity 后建议、Review item 建议、Report risk 建议、Polish / Pressure 重复缺口、Asset quality hint 建议、用户请求下一步训练、无训练历史、RAG 不可用、source unavailable、与既有建议冲突、用户确认 / 编辑 / 跳过和不得自动创建 TrainingTask / 更新 Weakness / 归档 Asset。
-- Open Questions: 训练分类算法、训练建议去重规则、建议质量评估、训练入口推荐阈值和正式 TrainingRecommendation API 字段仍待后续 Training / API / UX 收敛，为 deferred_non_blocking。
+- API 状态映射（API State Mapping）： 只定义状态语义，包括 `training_recommendation_candidate_available`、`training_recommendation_partial`、`training_recommendation_low_confidence`、`training_recommendation_validation_failed`、`manual_review_required` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
+- 安全说明（Security Notes）： 训练建议只使用当前 owner 的授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
+- 测试策略（Test Strategy）： 使用 fixture 覆盖 Weakness severity 后建议、Review item 建议、Report risk 建议、Polish / Pressure 重复缺口、Asset quality hint 建议、用户请求下一步训练、无训练历史、RAG 不可用、source unavailable、与既有建议冲突、用户确认 / 编辑 / 跳过和不得自动创建 TrainingTask / 更新 Weakness / 归档 Asset。
+- 开放问题（Open Questions）： 训练分类算法、训练建议去重规则、建议质量评估、训练入口推荐阈值和正式 TrainingRecommendation API 字段仍待后续 Training / API / UX 收敛，为 deferred_non_blocking。
 
-### 3.2 P-TRAINING-002 Training Priority Ranking
+### 3.2 P-TRAINING-002 训练优先级排序（Training Priority Ranking）
 
-- Contract ID: `P-TRAINING-002`
-- Name: Training Priority Ranking
-- Mode: `training`
-- Trigger:
+- Contract ID： `P-TRAINING-002`
+- 名称（Name）： Training Priority Ranking
+- 模式（Mode）： `training`
+- 触发条件（Trigger）：
   - `P-TRAINING-001` 生成多个训练建议后。
   - 用户请求排序训练建议。
   - 新的 Weakness / Review / Asset / Report 证据出现后。
   - 系统需要决定推荐用户先练什么。
-- Goal: 对训练建议进行优先级排序；本 contract 不冻结训练优先级算法，只生成基于证据、弱项严重度、复现频率、用户目标和可执行性的 priority hint。
-- Required Inputs:
+- 目标（Goal）： 对训练建议进行优先级排序；本 contract 不冻结训练优先级算法，只生成基于证据、弱项严重度、复现频率、用户目标和可执行性的 priority hint。
+- 必需输入（Required Inputs）：
   - `OwnerRef`
   - Training recommendation refs
   - source refs
@@ -240,7 +240,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `P-SHARED-003` Output Validation 要求
   - `P-SHARED-004` Low Confidence Classification 要求
   - `P-SHARED-005` Evidence Binding 要求
-- Optional Inputs:
+- 可选输入（Optional Inputs）：
   - `P-SHARED-002` Retrieval Planning 结果
   - WeaknessSeverityAssessment
   - Review items
@@ -252,23 +252,23 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - JobVersion
   - ResumeVersion
   - low confidence flags
-- Retrieval Sources:
+- 检索来源（Retrieval Sources）：
   - 默认使用训练建议、source refs 和 evidence refs。
   - 条件读取 Weakness severity、Review items、Report risk、Asset quality、训练历史、用户偏好和时间预算。
   - 条件读取必须经过 `P-SHARED-002`。
   - 不默认启用互联网检索。
-- Context Assembly:
+- 上下文装配（Context Assembly）：
   - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
   - 上下文至少包含 recommendation summaries、weakness / asset / review signals、evidence、用户目标、时间预算和输出 schema。
   - 不得默认塞入全部训练历史、全部报告、全部资产或全部知识库。
   - 上下文过长时优先保留高证据强度训练建议、重复出现弱项、用户目标、训练成本和低置信度标记。
-- Excluded Inputs:
+- 排除输入（Excluded Inputs）：
   - 全量训练历史、全量报告、全量资产、全量知识库和默认互联网检索结果。
   - 未经 evidence 支撑的时间预算、训练收益、影响面、改善幅度或优先级理由。
   - 把 Weakness severity、单次低分或 Asset quality hint 直接等同于最高优先级的判断。
   - 自动创建 TrainingTask、自动更新正式 Weakness、自动归档 Asset 或发布 AssetVersion 的写入动作。
   - 原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
-- Output Schema:
+- 输出 Schema（Output Schema）：
   - 公共字段：必须完整包含 §3.0 的 Training 公共 Output Schema。
   - `training_priority_ranking_id_candidate`
   - `ranked_recommendations`
@@ -282,7 +282,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - 每个 ranked item 的 `confidence`
   - `ranking_unknown_flags`
   - `manual_review_required`
-- Validation Rules:
+- 校验规则（Validation Rules）：
   - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
   - 排序必须基于训练建议、evidence、用户目标或弱项 / 资产 / 复盘信号。
   - `priority_hint` 只是提示，不冻结训练优先级算法。
@@ -291,7 +291,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - 不得虚构时间预算、训练收益或影响面。
   - 证据冲突时必须进入 manual review。
   - 排序结果不得自动创建训练任务。
-- Low Confidence Rules:
+- 低置信度规则（Low Confidence Rules）：
   - 训练建议缺失。
   - evidence 不足。
   - Weakness severity 低置信度。
@@ -299,41 +299,41 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - impact / effort 信号不足。
   - 排序依据冲突。
   - 上下文裁剪影响排序判断。
-- Evidence Requirements: 每个 ranked item 的 priority rank、priority hint、priority reason、impact signals、effort signals 和 confidence 必须绑定 recommendation refs、source refs、evidence refs、validation result refs 和 trace refs；证据冲突或优先级规则处于 deferred_non_blocking 细化范围时必须输出 `ranking_unknown_flags` 或 `manual_review_required`。
-- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练建议排序、冲突证据检查、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff 和 AuditEvent。
-- Persistence Targets:
+- 证据要求（Evidence Requirements）： 每个 ranked item 的 priority rank、priority hint、priority reason、impact signals、effort signals 和 confidence 必须绑定 recommendation refs、source refs、evidence refs、validation result refs 和 trace refs；证据冲突或优先级规则处于 deferred_non_blocking 细化范围时必须输出 `ranking_unknown_flags` 或 `manual_review_required`。
+- Trace 要求（Trace Requirements）： 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练建议排序、冲突证据检查、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff 和 AuditEvent。
+- 持久化目标（Persistence Targets）：
   - `TrainingPriorityRanking` 或等价排序建议对象。
   - `SuggestionRef`
   - `LlmValidationResult`
   - `LowConfidenceFlag`
   - `TraceRef`
   - `AuditEvent`
-- User Confirmation Requirement:
+- 用户确认要求（User Confirmation Requirement）：
   - 排序建议可展示给用户。
   - 用户可以调整排序、确认开始某项训练、跳过或进入 manual review。
   - 本 contract 不自动创建 TrainingTask。
-- Retry / Fallback:
+- 重试 / 兜底（Retry / Fallback）：
   - Training recommendation refs、source refs、evidence refs、Context Assembly 或 owner 校验缺失时停止正常排序，返回失败或补充材料路径。
   - 用户目标、时间预算、impact / effort 信号缺失时仍可输出低置信度排序草案，但必须保留 manual review 入口。
   - 重试不得默认启用互联网检索、虚构排序依据、创建 TrainingTask、更新 Weakness 或归档 Asset。
-- API State Mapping: 只定义状态语义，包括 `training_priority_ranking_available`、`training_priority_ranking_partial`、`training_priority_ranking_low_confidence`、`training_priority_ranking_validation_failed`、`priority_rule_unknown` 和 `manual_review_required`；不定义 endpoint 或 schema。
-- Security Notes: 排序只使用当前 owner 的训练建议、授权来源、可展示证据摘要、用户偏好和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
-- Test Strategy: 使用 fixture 覆盖多个训练建议排序、用户请求排序、新 Weakness / Review / Asset / Report 证据、无用户目标、无时间预算、impact / effort 信号不足、证据冲突、单次低分不得高置信排首、severity 不等于 priority 和不得自动创建 TrainingTask。
-- Open Questions: 训练优先级算法、impact / effort 计算、时间预算映射、排序刷新策略和正式 TrainingPriorityRanking API 字段仍待后续 Training / API / UX 收敛，为 deferred_non_blocking。
+- API 状态映射（API State Mapping）： 只定义状态语义，包括 `training_priority_ranking_available`、`training_priority_ranking_partial`、`training_priority_ranking_low_confidence`、`training_priority_ranking_validation_failed`、`priority_rule_unknown` 和 `manual_review_required`；不定义 endpoint 或 schema。
+- 安全说明（Security Notes）： 排序只使用当前 owner 的训练建议、授权来源、可展示证据摘要、用户偏好和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
+- 测试策略（Test Strategy）： 使用 fixture 覆盖多个训练建议排序、用户请求排序、新 Weakness / Review / Asset / Report 证据、无用户目标、无时间预算、impact / effort 信号不足、证据冲突、单次低分不得高置信排首、severity 不等于 priority 和不得自动创建 TrainingTask。
+- 开放问题（Open Questions）： 训练优先级算法、impact / effort 计算、时间预算映射、排序刷新策略和正式 TrainingPriorityRanking API 字段仍待后续 Training / API / UX 收敛，为 deferred_non_blocking。
 
-### 3.3 P-TRAINING-003 Training Result Review
+### 3.3 P-TRAINING-003 训练结果复盘（Training Result Review）
 
-- Contract ID: `P-TRAINING-003`
-- Name: Training Result Review
-- Mode: `training`
-- Trigger:
+- Contract ID： `P-TRAINING-003`
+- 名称（Name）： Training Result Review
+- 模式（Mode）： `training`
+- 触发条件（Trigger）：
   - 用户完成 TrainingTask 或 TrainingSession。
   - 用户提交训练结果。
   - 系统检测到训练输出可复盘。
   - 用户请求查看训练效果。
   - 系统需要判断训练是否对弱项、资产或下一步建议产生影响。
-- Goal: 对训练结果进行复盘，并为 Weakness 状态更新、Asset 候选和后续训练建议提供输入；本 contract 不自动更新正式 Weakness，不自动归档 Asset，不自动创建下一轮 `TrainingRecommendation`。
-- Required Inputs:
+- 目标（Goal）： 对训练结果进行复盘，并为 Weakness 状态更新、Asset 候选和后续训练建议提供输入；本 contract 不自动更新正式 Weakness，不自动归档 Asset，不自动创建下一轮 `TrainingRecommendation`。
+- 必需输入（Required Inputs）：
   - `OwnerRef`
   - TrainingTask 或 TrainingSession refs
   - TrainingRecommendation refs
@@ -346,7 +346,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `P-SHARED-003` Output Validation 要求
   - `P-SHARED-004` Low Confidence Classification 要求
   - `P-SHARED-005` Evidence Binding 要求
-- Optional Inputs:
+- 可选输入（Optional Inputs）：
   - `P-SHARED-002` Retrieval Planning 结果
   - target Weakness refs
   - related Asset refs
@@ -356,23 +356,23 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - user self assessment
   - RAG evidence
   - low confidence flags
-- Retrieval Sources:
+- 检索来源（Retrieval Sources）：
   - 默认使用训练任务、训练建议、用户训练输出、source refs 和 evidence refs。
   - 条件读取目标 Weakness、相关 Asset、历史 TrainingResult、Review items、Report / Polish / Pressure 摘要和知识库 evidence。
   - 条件读取必须经过 `P-SHARED-002`。
   - 不默认启用互联网检索。
   - 无历史训练时仍可生成基础训练结果复盘。
-- Context Assembly:
+- 上下文装配（Context Assembly）：
   - 必须继承 `P-SHARED-001` 的最小必要上下文、owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
   - 上下文至少包含 training task / session、training recommendation、用户训练输出、目标弱项 / 资产、evidence、低置信度和输出 schema。
   - 不得默认塞入全部训练历史、全部报告、全部资产或全部知识库。
   - 上下文过长时优先保留本次训练输入输出、目标、证据、用户自评和潜在回流项。
-- Excluded Inputs:
+- 排除输入（Excluded Inputs）：
   - 全量训练历史、全量报告、全量资产、全量知识库和默认互联网检索结果。
   - 未经训练输出、训练任务或 evidence 支撑的改善信号、能力提升、弱项消减或资产沉淀判断。
   - 自动更新正式 Weakness、自动归档 Asset、自动发布 AssetVersion、自动创建下一轮 TrainingRecommendation 或自动创建新的 Report / Review 的写入动作。
   - 原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
-- Output Schema:
+- 输出 Schema（Output Schema）：
   - 公共字段：必须完整包含 §3.0 的 Training 公共 Output Schema。
   - `training_result_review_id_candidate`
   - `training_result_summary`
@@ -387,7 +387,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `low_confidence_summary`
   - `manual_review_required`
   - `next_recommended_actions`
-- Validation Rules:
+- 校验规则（Validation Rules）：
   - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
   - 训练结果复盘必须基于用户训练输出、训练任务或训练建议。
   - 不得自动更新正式 Weakness 状态。
@@ -397,7 +397,7 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - improvement signals 必须绑定 evidence 或标记低置信度。
   - 若训练输出不足，必须要求补充或进入 low confidence。
   - 回流到 Weakness / Asset / Training 必须保留候选态或建议态。
-- Low Confidence Rules:
+- 低置信度规则（Low Confidence Rules）：
   - 用户训练输出缺失。
   - TrainingTask / TrainingSession 缺失。
   - TrainingRecommendation 缺失。
@@ -406,9 +406,9 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - 无法判断改善信号。
   - 训练目标与输出不匹配。
   - 上下文裁剪影响结果归因。
-- Evidence Requirements: 训练结果摘要、improvement signals、remaining gap signals、弱项状态更新候选、资产候选、下一步训练建议候选和 low confidence summary 必须绑定 source refs、evidence refs、validation result refs 和 trace refs；训练输出不足、证据冲突或归因受裁剪影响时必须输出 low confidence 或 manual review。
-- Trace Requirements: 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练结果复盘、改善 / 缺口信号归因、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff、UserConfirmationRef 交接和 AuditEvent。
-- Persistence Targets:
+- 证据要求（Evidence Requirements）： 训练结果摘要、improvement signals、待补缺口（remaining gap） signals、弱项状态更新候选、资产候选、下一步训练建议候选和 low confidence summary 必须绑定 source refs、evidence refs、validation result refs 和 trace refs；训练输出不足、证据冲突或归因受裁剪影响时必须输出 low confidence 或 manual review。
+- Trace 要求（Trace Requirements）： 必须记录 `TraceRef`，覆盖条件 Retrieval Planning、Input Evidence Selection、Context Assembly、训练结果复盘、改善 / 缺口信号归因、Output Evidence Binding、Output Validation、Low Confidence Classification、Persistence handoff、UserConfirmationRef 交接和 AuditEvent。
+- 持久化目标（Persistence Targets）：
   - `TrainingResult` 或等价训练结果对象。
   - `TrainingResultReview` 或等价训练复盘对象。
   - `WeaknessStatusUpdateSuggestion`
@@ -421,18 +421,18 @@ Training 输出可以保存为 training recommendation、training priority ranki
   - `LowConfidenceFlag`
   - `TraceRef`
   - `AuditEvent`
-- User Confirmation Requirement:
+- 用户确认要求（User Confirmation Requirement）：
   - 训练结果复盘可展示给用户。
   - 用户可以确认弱项状态更新候选、确认资产候选、继续训练、进入 Polish 或重新训练。
   - 本 contract 不自动更新正式 Weakness，不自动归档 Asset，不自动创建下一轮 `TrainingRecommendation`。
-- Retry / Fallback:
+- 重试 / 兜底（Retry / Fallback）：
   - TrainingTask / TrainingSession refs、TrainingRecommendation refs、用户训练输出、evidence refs、Context Assembly 或 owner 校验缺失时停止正常复盘，返回失败或补充材料路径。
   - 训练输出不足、用户自评冲突、改善信号无法判断或上下文裁剪影响归因时输出 low confidence、补充材料请求或 manual review。
   - 重试不得默认启用互联网检索、虚构训练效果、自动更新 Weakness、归档 Asset 或创建下一轮 TrainingRecommendation。
-- API State Mapping: 只定义状态语义，包括 `training_result_review_available`、`training_result_review_partial`、`training_result_review_low_confidence`、`training_result_review_validation_failed`、`manual_review_required` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
-- Security Notes: 训练结果复盘只使用当前 owner 的训练任务、训练建议、用户训练输出、授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
-- Test Strategy: 使用 fixture 覆盖训练完成复盘、用户提交训练结果、用户查看训练效果、目标 Weakness 改善信号、关联 Asset 候选、下一步训练建议候选、训练输出缺失、TrainingTask 缺失、Recommendation 缺失、用户自评冲突、训练目标不匹配和不得自动更新 Weakness / 归档 Asset / 创建下一轮 TrainingRecommendation。
-- Open Questions: 训练结果评估规则、弱项状态影响映射、资产自动沉淀规则、下一轮训练建议生成规则和正式 TrainingResultReview API 字段仍待后续 Training / Weakness / Asset / API / UX 收敛，为 deferred_non_blocking。
+- API 状态映射（API State Mapping）： 只定义状态语义，包括 `training_result_review_available`、`training_result_review_partial`、`training_result_review_low_confidence`、`training_result_review_validation_failed`、`manual_review_required` 和 `user_confirmation_required`；不定义 endpoint 或 schema。
+- 安全说明（Security Notes）： 训练结果复盘只使用当前 owner 的训练任务、训练建议、用户训练输出、授权来源、可展示证据摘要和必要 trace id；不得暴露无权限来源正文、原始 Prompt、completion、provider payload 或隐私字段。
+- 测试策略（Test Strategy）： 使用 fixture 覆盖训练完成复盘、用户提交训练结果、用户查看训练效果、目标 Weakness 改善信号、关联 Asset 候选、下一步训练建议候选、训练输出缺失、TrainingTask 缺失、Recommendation 缺失、用户自评冲突、训练目标不匹配和不得自动更新 Weakness / 归档 Asset / 创建下一轮 TrainingRecommendation。
+- 开放问题（Open Questions）： 训练结果评估规则、弱项状态影响映射、资产自动沉淀规则、下一轮训练建议生成规则和正式 TrainingResultReview API 字段仍待后续 Training / Weakness / Asset / API / UX 收敛，为 deferred_non_blocking。
 
 ### 3.4 Training Contract 关系
 

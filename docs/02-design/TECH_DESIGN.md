@@ -51,7 +51,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 - 所有 LLM Prompt、模型调用参数、密钥和原始模型响应必须留在后端边界内，前端只接收可展示结果、状态和可追踪错误。
 - 业务状态必须可追踪、可恢复、可解释；分数、通过倾向和低信心输出不得伪装成确定预测。
 - 数据对象、API 契约、Prompt 规范和安全隐私约束必须从同一组模块边界出发。
-- 项目经历属于简历模块，不升级为独立顶层业务对象或顶层数据对象。
+- 项目经历属于 Markdown 简历正文片段或派生 outline 节点，不升级为独立顶层业务对象、顶层数据对象或 API module CRUD 资源。
 - 资产库不是简历的别名，承担跨会话沉淀、复用和反馈回流职责。
 - 报告复制是页面交互能力，不是文件导出能力。
 
@@ -104,7 +104,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 
 ## 10. 功能模块划分
 
-- 简历模块：保存简历主体、项目经历、能力标签和用户可复用素材。
+- 简历模块：保存 Markdown 简历主体；项目经历、能力标签等只作为正文片段或派生 outline 被定位和引用，不提供独立模块 CRUD。
 - 岗位 / JD 模块：保存岗位目标、JD 文本、岗位约束和岗位绑定关系。
 - 岗位匹配分析模块：基于简历与岗位生成匹配结果、差距解释和后续训练输入。
 - 打磨模式会话模块：围绕用户回答进行追问、优化建议和可复用表达沉淀。
@@ -121,7 +121,7 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 
 - 前端只依赖 API 契约，不直接读取数据库、不直接调用 LLM、不保存业务真相。
 - API 边界层调用应用编排层；应用编排层协调领域能力、LLM 边界和持久化边界。
-- 简历模块和岗位 / JD 模块是匹配分析、会话生成、报告生成和训练建议的主要输入。
+- 简历 Markdown 版本和岗位 / JD 版本是匹配分析、会话生成、报告生成和训练建议的主要输入；F6 不得绕过 API 从展示概念反推模块级 CRUD。
 - 打磨模式和压力面模式会话产生回答、追问、评分、弱项和资产候选。
 - 面试报告和面试复盘消费会话过程、评分结果、弱项和用户反馈。
 - 资产库消费简历、会话、报告和复盘输出，并向后续匹配分析、会话和训练建议提供上下文。
@@ -223,6 +223,24 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 - `SECURITY_PRIVACY.md` 以本文件的数据流、LLM 输入、资产沉淀和日志边界为输入，定义隐私字段、保留策略、密钥、权限和发布风险。
 - 子文档可以细化本文件锚点，但不得绕过本文档重新定义顶层模块、前后端职责或 LLM 所属边界。
 
+### 15.1 F4 到 F6 交接（handoff）规则
+
+本节补充 `AR-F4-F8-002` 的 F4→F6 handoff 规则；页面级接入矩阵的 canonical 位置为 `API_SPEC.md` §6.1-§6.6。
+
+- F6 前端只依赖 `API_SPEC.md` 中的 endpoint、response schema、状态映射、error envelope、candidate / confirmation flow、copy boundary 和 F7 assertions，不得从 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md` 或实现代码反向发明 API 字段、状态或错误码。
+- `UX_SPEC.md` / `UI_DESIGN_SYSTEM.md` 只约束页面、组件、布局、用户任务和交互状态；当 F2/F3 页面需要的数据不在 `API_SPEC.md` 中时，必须登记为 待补缺口（remaining gap），不得在 F6 mock adapter 中伪造业务事实。
+- `API_SPEC.md` §6.1 覆盖 F6 page / surface 的 API、schema、loading / empty / error / permission / candidate / copy / F7 assertion 接入规则；§6.2 覆盖必须显式处理的状态；§6.3-§6.4 覆盖前端字段族和确认流。
+- 本轮按人工审计决策执行：Resume API Markdown-only。F6 简历页面只使用 `ResumeDetail.markdown_text` / `current_version_ref` / `status`，不得调用或假设 project-experience module CRUD；项目经历定位只能来自 Markdown 内容或 derived outline。
+- F6 岗位 list/detail 必须直接消费 `JobBindingSummary` 与 `JobMatchSummary`，不得通过额外详情二次查询拼接基础摘要；`latest_match_summary` 不返回精确通过概率。
+- F6 打磨模式必须先读取 `GET /api/v1/polish-topics`，并在创建会话时传递 `resume_job_binding_id`、`topic_id`、`subtopic_id` 或经过安全输入处理的 `custom_topic_text`。
+- F6 岗位详情和岗位绑定页面的解绑动作必须接入 `DELETE /api/v1/resume-job-bindings/{binding_id}`；请求带 `base_version_ref`、可选 `reason` 和 `Idempotency-Key`，响应展示 `binding_status`、历史结果保留引用和默认入口影响摘要；解绑不得删除历史报告、复盘或匹配分析。
+- F6 复盘列表必须接入 `GET /api/v1/reviews`，直接消费 `ReviewSummary[]` 的类型、来源摘要、状态、置信度、`source_availability`、关联报告 / 会话引用和下一步动作；不得靠多次详情查询拼接列表核心摘要。
+- F6 复盘复制必须通过 review copy content / copy event 边界，用户可见内容不得包含 system prompt、provider payload、隐藏评分规则或未脱敏第三方 / 公司 / 面试官 / 他人隐私；复制审计只记录 actor、target、范围摘要和结果，不记录正文。
+- F6 低置信校对保存必须通过 candidate correction 边界，用户修正先形成 `CandidateCorrection` / `UserCorrectionRef` 并经过 validation；不得直接覆盖原候选、正式对象或 Prompt source。
+- F6 内容沉淀目标必须通过 `DepositTarget` / confirmation 边界，目标可为 `asset`、`weakness`、`training_suggestion`、`polish_input`、`pressure_input`、`next_interview_input`、`review_note`、`none` 或 `skip`；Prompt 只能建议目标，正式写入必须来自用户确认或显式业务动作。
+- F6 不得提供文件导出、PDF / Markdown / Word / docx 下载、文件上传解析、外部材料解析岗位、精确通过概率、system prompt、provider payload 或隐藏评分规则展示。
+- 如果 F6 发现需要新增 dashboard aggregate、report history list、candidate inbox 或 persisted account preferences API，必须回到 `API_SPEC.md` / `BACKLOG.md` 的后续 refinement；不得把这些能力作为本轮 AR-F4-F8-002 的隐含实现。
+
 ## 16. F4 UNKNOWN 收敛与后置边界
 
 本节用于关闭 `AR-F4-FULL-001` 指向的 F4 阻断口径：active design docs 不再把评分、接口、数据结构、Prompt、模型结果状态、安全边界、候选 / 正式对象、资产回流、真实面试复盘、进展树、暂停恢复、题目推荐、复盘切分或薄弱项生命周期表达为未处置的 M4 阻断项。下表是 F4 退出前的处置状态，verification 仍由 `F4_FULL_DESIGN_ACCEPTANCE.md` 记录。
@@ -255,6 +273,7 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 - `PROMPT_SPEC.md` 已拆分 `prompt-contracts/*.md` 子文档，并完成全量 Prompt Contract Draft 覆盖。
 - `API_SPEC.md` 已作为 F4 API contract handoff 存在，当前覆盖 base path、response / error envelope、endpoint matrix、async task、retry、idempotency、rate limit、copy boundary 和 F7 test assertions。
 - `DATA_MODEL.md` 已同步候选态、建议态、用户确认流、AI output handoff、Asset / Training 逻辑对象。
+- 本轮按 `AR-DOCS02-SEM-001` 补齐 UX 可见任务到 API / DATA / TECH / PROMPT / SECURITY 的五条链路：岗位解绑、复盘列表、复盘复制、低置信校对保存和内容沉淀目标；等待独立 verification，不处理 `AR-DOCS02-SEM-002/003`。
 - `AR-F4-FULL-003` 的评分、通过倾向、风险提示和校准口径已回写并完成 verification；不代表 F4 全量验收 Accepted。
 - 本轮 `AR-F4-FULL-001` 将 F4 active design docs 中的阻断式 UNKNOWN 口径改为已冻结、已处置或 deferred_non_blocking；等待独立 verification。
 - 本轮不进入 implementation，不修改业务代码，不把 `F4_FULL_DESIGN_ACCEPTANCE.md` 标记为 Accepted。
