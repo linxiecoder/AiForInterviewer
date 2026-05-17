@@ -506,7 +506,7 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 
 ## 21. 与 API_SPEC.md、DATA_MODEL.md、PROMPT_SPEC.md 的交接边界
 
-`API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md` 当前均已存在并作为 F4 active draft 承接对应边界。本文继续冻结安全隐私语义和 enforcement 要求；endpoint、API schema、Prompt 模板、模型参数、物理 DB schema 和实现方案由对应文档及后续阶段承接。SECURITY_PRIVACY 自身后置项均在 §22 明确为 deferred_non_blocking，不阻断 M4。
+`API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md` 当前均已存在并作为 F4 active draft 承接对应边界。本文继续冻结安全隐私语义和 enforcement 要求；endpoint、API schema、Prompt 模板、模型参数、物理 DB schema 和实现方案由对应文档及后续阶段承接。SECURITY_PRIVACY 自身后置项均在 §23 明确为 deferred_non_blocking，不阻断 M4。
 
 | 交接对象 | 本文交接内容 | 本文不展开内容 |
 |---|---|---|
@@ -539,7 +539,36 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 - Debug、failure、`validation_failed`、`low_confidence` 路径也不得落敏感正文，不得为了排障保存原始 provider payload。
 - 这些边界与 `API_SPEC.md` 的 response envelope 和 `DATA_MODEL.md` 的 AI output handoff 保持一致。
 
-## 22. Deferred / 待后续补齐项
+## 22. 发布前 security / privacy checklist
+
+本节补充 `AR-F4-F8-003` 的 security / privacy release handoff。它为 F8 release checklist、runbook、known limitations 和 retrospective 提供输入，不代表 F4 已实现监控平台、SIEM、KMS、DPA、部署脚本或运维自动化。F8 canonical handoff 为 `RELEASE_HANDOFF_SPEC.md`。
+
+| 检查项 | 发布前必须确认 | F8 产物 |
+|---|---|---|
+| owner boundary | 所有业务 API、RAG、LLM、copy、confirmation、delete、restore、trace 和 audit 均以 server-side owner / scope 校验为准；请求体 `owner_id` 不作为授权依据 | release checklist / runbook |
+| session / cookie / token | cookie 使用 `HttpOnly`、`SameSite=Lax` 或更严格策略；非本地开发 `Secure`；token / cookie 不进入前端可读存储、日志、Prompt 或 trace | release checklist |
+| secret handling | provider key、cookie secret、数据库凭据、真实 DSN、环境变量不进入仓库、前端、日志、Prompt、trace、copy content 或 API response；泄露后有废弃 / 手动轮换输入 | release checklist / runbook |
+| log redaction | 应用日志、错误日志、审计日志、LLM failure、模块识别失败日志不含正文、request / response body、Prompt、completion、provider payload、token、cookie、secret | release checklist |
+| provider payload | 默认不保存 provider request / response payload；如 F5 为排障保留安全摘要，必须脱敏、限期、禁止前端可见，并进入 F8 known limitation / runbook | release checklist / known limitations |
+| system prompt | system prompt 原文、Prompt 模板、developer 指令和安全规则不进入前端、copy content、trace 可见正文、日志或错误响应 | release checklist |
+| completion 原文 | completion 原文默认不保存、不展示、不复制；业务只保存结构化结果、validation、usage、failure category、source refs、trace refs 和 audit summary | release checklist |
+| copy boundary | 报告 / 复盘复制前校验 owner、source status 和 copy scope；copy event 只记录范围摘要和结果，不记录复制正文 | release checklist / runbook |
+| third-party privacy | 真实复盘、公司、面试官、外部反馈和第三方个人信息进入展示 / copy content 前必须脱敏、摘要化并保留可信度 / 完整度状态 | release checklist / known limitations |
+| retention / deletion | 删除、归档、禁用后 active 读取和新生成失效；历史结果只展示 `source_deleted` / `source_disabled` / `source_unavailable` 等状态；备份即时删除作为 accepted risk 说明 | release checklist / known limitations |
+| backup restore | restore 需要审批、owner / trace / audit / source availability / historical refs 校验；restore 不得恢复无权限正文读取 | runbook / rollback strategy |
+| rate limit | 登录、简历保存、LLM 生成、RAG 检索、报告生成、复盘生成、训练建议生成具备 MVP 级 rate limit 或发布前豁免说明 | release checklist / runbook |
+| provider failure | provider unavailable、timeout、rate limit、generation failed、validation failed 均有用户可见状态、retryable 标记和不扩大上下文规则 | runbook |
+| audit event | 登录、权限失败、owner mismatch、copy、confirmation、source unavailable、validation failed、export_not_supported、delete / restore 等关键事件有最小审计或 fail closed 规则 | release checklist / runbook |
+| trace | response 返回 `request_id` / `trace_id`；trace 只保存最小引用、状态、failure category 和摘要，不暴露 Prompt、completion、provider payload 或正文 | release checklist / runbook |
+| source availability | `source_deleted`、`source_disabled`、`source_archived`、`source_unavailable` 不读取正文、不进入新 Prompt；历史结果只展示状态和安全摘要 | release checklist / runbook |
+
+F8 发布复盘至少记录以下安全隐私输入：
+
+- 发生过的 owner mismatch、permission denied、rate limit、provider failure、source unavailable、validation failed、copy boundary violation 和 export_not_supported 次数或类别摘要。
+- 是否有日志 / trace / audit 写入失败，以及这些失败是否影响 formal write。
+- 已知 privacy limitation、accepted risk 和后续 Backlog ID。
+
+## 23. Deferred / 待后续补齐项
 
 本节只登记 SECURITY_PRIVACY 自身 deferred_non_blocking 项。它们不属于 `AR-F4-FULL-001` 的 M4 阻断 UNKNOWN：MVP 已有替代控制和 F7 可测边界，后续只在发布、运维或企业化能力中补齐。
 
@@ -554,10 +583,11 @@ F5 / F7 至少需要覆盖以下验收项，未通过时不得宣称安全隐私
 | SP-DEF-007 | 用户自助完整审计历史和管理员审计检索台 | MVP 仅展示本人关键动作摘要和维护范围摘要 | 用户无法自助检索全部历史安全事件 | 后续 UX / API 冻结审计查询、分页、保留和导出边界 |
 | SP-DEF-008 | URL 导入、远程知识抓取、外部站点解析 | MVP 不抓取 URL，不跟随上传内容中的远程链接 | 不能自动导入外部网页材料 | 若实现，补 SSRF 防护、域名 allowlist、内容净化和版权 / 来源治理 |
 
-## 23. 变更记录
+## 24. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 修复 `AR-F4-F8-003` security / privacy release handoff 缺口 | 新增发布前 security / privacy checklist，覆盖 owner boundary、session / cookie / token、secret handling、log redaction、provider payload、system prompt、completion 原文、copy boundary、third-party privacy、retention / deletion、backup restore、rate limit、provider failure、audit event、trace 和 source availability；不实现监控平台、SIEM、KMS、DPA 或运维自动化 |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` 安全隐私断链 | 补齐岗位解绑 owner / 历史保留继承口径、复盘复制第三方隐私脱敏和 copy audit no body、低置信校对 owner / validation / 敏感信息处理、内容沉淀 `target_ref` owner scope；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
 | 2026-05-16 | 修复 `AR-F4-FULL-001` 安全隐私阻断项 | 明确 owner、visibility、LLM 输入最小化、provider payload、system prompt、隐藏评分规则、日志、trace、copy boundary、第三方隐私和用户确认审计边界已冻结；将 PDF / docx / 导出、hard delete、企业 KMS、SSO、多租户、WAF、URL 抓取等登记为 deferred_non_blocking；等待 verification |
 | 2026-05-16 | 修复 `AR-F4-FULL-003` 评分 / 风险提示安全边界 | 明确评分、风险提示、通过倾向和校准细节的隐私边界；禁止泄露隐藏评分规则、provider payload、第三方隐私和内部校准细节；补 F7 安全断言 |

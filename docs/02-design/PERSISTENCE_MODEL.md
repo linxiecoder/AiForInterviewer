@@ -165,8 +165,37 @@ F7 至少验证：
 - copy event audit 不保存复制正文。
 - `provider_payload`、system prompt、completion 原文和 secret 不进入 API response 或 trace 可读正文。
 
-## 11. 变更记录
+## 11. Migration / rollback / backup restore handoff
+
+本节补充 `AR-F4-F8-003` 的 persistence release handoff。它不是 DDL、ORM、migration 文件、备份工具或自动恢复脚本；只为 F5 migration 设计、F7 persistence fixture 和 F8 rollback / restore runbook 提供逻辑风险和检查输入。
+
+| 主题 | 逻辑风险 | F8 / F5 handoff |
+|---|---|---|
+| migration 前检查 | schema version、route inventory、owner filter、join / reference table、idempotency record、AiTask 状态和 ScoreRuleVersion 可能不一致 | 发布前对账当前 schema version、migration plan、backup checkpoint、owner scoped query、API route inventory、in-flight AiTask 和 scoring rule version |
+| migration 后检查 | 新字段、状态枚举、reference table 或 derived read model 可能无法被 API / F7 fixture 读取 | 迁移后抽样验证 Resume / Job / Binding / Report / Review / Score / Candidate / Confirmation / Copy / Trace / Audit 的 owner、version、status、refs |
+| rollback trigger | migration 失败、owner 泄露、copy boundary 破坏、trace / audit critical write failure、ScoreRuleVersion mismatch、source availability 异常 | F8 runbook 记录触发条件、decision owner、停止发布和 rollback / restore 路径 |
+| rollback decision owner | 数据回滚同时影响后端、API、审计、用户可见状态和发布沟通 | F8 Release owner 协调 Backend owner、Data owner、Security owner；用户沟通由 Product / Release owner 决策 |
+| schema rollback 风险 | 新写入数据在旧 schema 下可能丢失语义，未知 enum 可能被误判为 success | 未知 enum 必须进入 unsupported / manual review / failure，不得被旧版本解释为高置信成功 |
+| data compatibility | `candidate` / `suggestion`、`source_availability`、`validation_status` 和 `AiTask.status` 的新值可能与旧代码不兼容 | 迁移设计必须列出兼容矩阵；不兼容时阻断发布或提供转换 / 冻结写入策略 |
+| versioned object rollback | `ResumeVersion`、`JobVersion`、`AssetVersion`、`ScoreRuleVersion` 和 `SnapshotRef` 被错误回滚会破坏历史引用 | rollback 只能回滚 schema / 新写入策略，不得静默改写历史版本对象和引用 |
+| historical reference integrity | 历史报告、复盘、评分、资产候选依赖生成时 `VersionRef` / `SnapshotRef` / `TraceRef` | rollback 后必须验证历史报告、复盘、评分仍引用生成时版本或快照，不重算、不覆盖 |
+| `ScoreRuleVersion` rollback | 评分规则版本回退可能让旧分数使用错误规则解释 | `ScoreResult` 永远引用生成时 `score_rule_version_id`、`score_version`、`rubric_version`；回滚不得改写历史分数 |
+| in-flight `AiTask` rollback | migration / deploy rollback 时 `queued` / `running` 任务可能在旧版本恢复后继续写结果 | rollback 时 `queued` / `running` task 必须 cancel、timeout、mark generation_failed 或阻断 result write；不得 late formal write |
+| candidate / suggestion / formal object restore boundary | restore 可能把已拒绝或未确认 candidate 误当 formal object | restore 后重新校验 `user_confirmations`、candidate status、suggestion status 和 formal object refs；未确认对象不得进入正式列表 |
+| source availability after restore | restore 可能恢复 deleted / disabled 源正文或让 source status 与索引状态不一致 | restore 后校验 active 读取、RAG index、evidence refs 和 `source_*` 状态；`source_deleted` / `source_disabled` / `source_unavailable` 默认不恢复正文读取 |
+| audit / trace consistency after rollback | 回滚可能丢失关键安全事件、copy event 或 confirmation trace | rollback / restore 后对账 `api_request_traces`、`trace_refs`、`audit_events`、`user_confirmations` 和 copy events；关键缺失需进入 release blocker |
+| backup restore validation | 备份恢复可能跨 owner、跨版本或跨 source status 造成错误可见性 | restore drill 必须按 owner scope、trace / audit、history refs、copy boundary、source availability、ScoreRuleVersion 和 in-flight AiTask 清单验证 |
+
+强制规则：
+
+- 历史报告、复盘、评分不能因 rollback 静默改写。
+- `source_deleted` / `source_disabled` / `source_unavailable` 不能恢复读取正文，除非有合法 snapshot / backup restore 机制、owner 权限和审计记录。
+- candidate / suggestion rollback 不能自动创建 formal object。
+- migration / rollback / restore 的失败路径必须保留 `request_id`、`trace_id`、audit summary 和用户可见状态，不得暴露正文、Prompt、completion、provider payload、token、cookie 或 secret。
+
+## 12. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 修复 `AR-F4-F8-003` persistence release handoff 缺口 | 新增 migration / rollback / backup restore handoff，覆盖 migration 前后检查、rollback trigger、decision owner、schema rollback、data compatibility、versioned object、historical references、ScoreRuleVersion、in-flight AiTask、candidate / suggestion / formal object、source availability、audit / trace consistency 和 backup restore validation；不写 DDL、ORM、migration 文件或自动恢复脚本 |
 | 2026-05-17 | 初始化 persistence handoff | 将 `DATA_MODEL.md` 逻辑对象映射为建议物理模型、关系、join table、API schema 和 F7 persistence fixture |

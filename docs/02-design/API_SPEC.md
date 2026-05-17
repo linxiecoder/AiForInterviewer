@@ -5521,10 +5521,39 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 - 鉴权 API 的完整登录注册产品流程、复杂 ACL、企业多租户和组织权限模型：MVP 使用登录态 actor、owner enforcement、role scope 和标准错误语义；企业治理后置。
 - 物理数据库、队列、缓存、日志平台、监控告警和部署拓扑：不属于 API contract 事实源；F5 可以按本 API contract 选择实现方式。
 
-## 14. 变更记录
+## 14. F8 API 发布检查映射
+
+本节补充 `AR-F4-F8-003` 的 API release check handoff。它只定义 F8 release checklist / runbook / changelog input 的来源映射，不表示健康检查、监控平台、部署拓扑或运维自动化已在 F4 实现。F8 的 canonical release handoff 文档为 `RELEASE_HANDOFF_SPEC.md`。
+
+| 发布检查项 | API 来源 | F8 检查方式 | 不得发生 |
+|---|---|---|---|
+| route inventory | §6 API 清单总表、§7 逐接口详情 | 对账实现路由的 method + path + API ID；新增 / 删除 / 变更进入 changelog input | F5 自行新增未登记 endpoint |
+| no export endpoint | §4.2 `export_not_supported`、§6.5、§10、§11 | route inventory 不存在 `/exports`、`/download`、`/files`、`/pdf`、`/docx`、`/markdown-file`、`/report-file`、download URL 或 filename hint | 用 copy content 伪装下载或返回 export artifact |
+| copy content endpoint | `API-REPORT-003`、`API-REVIEW-006`、§10 | 仅返回 clipboard blocks、copy boundary、redaction 状态和 copy content ref | 返回 system prompt、provider payload、completion 原文、hidden scoring rules、无权限正文或下载物 |
+| copy event endpoint | `API-REPORT-004`、`API-REVIEW-007`、§10 | 只记录 actor、target、copy surface、scope summary、result、audit ref | 保存复制正文、报告全文、复盘正文或文件产物 |
+| rate limit | §3.8、§4.2、§6.2、§11 | 429 返回 `rate_limited`、`Retry-After` / rate limit meta，并按 actor / IP / endpoint / LLM task type 可追踪 | 通过扩大上下文、降级为未审计生成或绕过 owner 校验处理限流 |
+| provider failure | §4.1-§4.2、§5.3、§6.2 | `provider_unavailable`、`generation_failed`、`task_timeout`、`validation_failed` 可见且映射 runbook | 把失败结果展示为高置信 success 或写 formal object |
+| async task status | §5.2-§5.3、`API-AITASK-*`、`AiTaskStatusResponse` | `queued`、`running`、`partial`、`low_confidence`、`validation_failed`、`source_unavailable`、`generation_failed`、`timed_out`、`cancelled` 均可查询 | cancel / timeout 后 late formal write |
+| retry / cancel | `API-AITASK-004`、`API-AITASK-005`、§5.3 | retryable / non-retryable 条件清楚；cancel 只作用于可取消阶段 | retry 扩大上下文、默认启用互联网检索、绕过 owner check |
+| health check / trace / audit visibility boundary | §3.2、§3.9、§8.1、§12 | 不含个人数据的健康检查可公开；业务 trace / audit 仅返回必要 id / ref / 摘要 | 前端展开 Prompt、completion、provider payload、request / response body 或 secret |
+| response envelope / error envelope | §3.4、§3.5 | 所有响应有 `request_id` / `trace_id`；错误不含敏感正文；业务失败不被 HTTP 200 success 吞掉 | error details 返回正文、token、cookie、provider payload、隐藏评分规则 |
+| source unavailable / low confidence / validation failed | §4.3、§6.2、§11 | 新生成阻断或降级；历史结果只展示 source status；validation failed 不 formal write | 读取 `source_deleted` / `source_disabled` 正文或展示为高置信完成 |
+| no exact probability | §4.4、§6.5、§11 | 不返回 `pass_probability`、`offer_probability`、`admission_probability`、`pass_rate_percent` 或等价文案 | 将 0-100 product score 解释为真实通过概率 |
+| no provider payload / system prompt / hidden scoring rules | §1、§3.5、§10、§11、§12 | API response、copy content、trace 可见内容、error envelope 和日志摘要均不包含这些内容 | 暴露 provider payload、system prompt、completion 原文、hidden scoring rules、完整内部权重表或校准样例正文 |
+
+F8 changelog input 至少从以下 API 变化提取：
+
+- route inventory 的 method / path / API ID 增删改。
+- response envelope / error envelope 字段变更。
+- async task status、retry / cancel、rate limit、source availability、low confidence 或 validation status 语义变更。
+- copy content / copy event / no export boundary 变更。
+- scoring response 中 `score_version`、`rubric_version`、`score_rule_version_ref`、`evidence_refs` 或 `trace_refs` 的变更。
+
+## 15. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 修复 `AR-F4-F8-003` API release handoff 缺口 | 新增 F8 API 发布检查映射，覆盖 route inventory、no export endpoint、copy content / copy event、rate limit、provider failure、async task status、retry / cancel、health / trace / audit 可见性、response / error envelope、source unavailable、low confidence、validation failed、no exact probability 和 provider payload / system prompt / hidden scoring rules 禁止项；不新增 endpoint，不进入 implementation |
 | 2026-05-17 | 增加 scoring / semantics / persistence / application flow 交接 | 将评分 canonical 规则交给 `SCORING_SPEC.md`，语义枚举交给 `SEMANTICS_GLOSSARY.md`，物理关系交给 `PERSISTENCE_MODEL.md`，应用编排交给 `APPLICATION_FLOW_SPEC.md`；更新 `score_type` canonical enum 和 `ScoreResultResponse` 必填字段 |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` UX 可见任务 API 断链 | 新增岗位-简历解绑、复盘列表、复盘复制内容 / 复制事件、低置信候选校对保存和内容沉淀目标确认 endpoint；补齐 request / response、状态、错误、owner、幂等、历史保留和 F7 assertion；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-008` API path / 技术标识符原样性风险 | 回读 API 清单总表、逐接口详情、报告 copy boundary、Schema 索引和 F7 assertion 引用；删除未登记的 report sections endpoint 说明并改为 `data.sections[]`，修正受中文化括注污染的接口名称；当前 API 清单总表与逐接口详情均为 48 个 Method + Path，且不恢复 project-experience module CRUD；不处理 `AR-F4-F8-003`，不进入 implementation |

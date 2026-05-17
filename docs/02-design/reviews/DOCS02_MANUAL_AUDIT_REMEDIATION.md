@@ -59,7 +59,7 @@ permalink: ai-for-interviewer/docs/02-design/reviews/docs02-manual-audit-remedia
 - provider、模型参数、embedding、向量库、RAG 索引和 token budget 具体数值。
 - 资产质量算法、资产合并 / 替代 / 归档算法、复杂语义去重。
 - 薄弱项合并、严重度、状态自动消减和训练优先级复杂算法。
-- F8 release / ops / runbook / rollback / observability 输入仍按既有 `AR-F4-F8-003` 跟踪，不在本轮修复范围内。
+- F8 release / ops / runbook / rollback / observability 输入已由后续 `AR-F4-F8-003` remediation 交给 `RELEASE_HANDOFF_SPEC.md` 承接；本文件不改变人工审计四项原始修复结论。
 
 ## 6. F5 / F6 / F7 readiness 影响
 
@@ -82,4 +82,4 @@ permalink: ai-for-interviewer/docs/02-design/reviews/docs02-manual-audit-remedia
 
 Status: `Fixed / Pending verification`。
 
-本记录不标记整体 F4 accepted，不创建 final acceptance approval，不关闭 `AR-F4-F8-003`，不进入 implementation。
+本记录不标记整体 F4 accepted，不创建 final acceptance approval，不进入 implementation；`AR-F4-F8-003` 的后续状态以 AIFI-ARCH-005 readiness records 为准。

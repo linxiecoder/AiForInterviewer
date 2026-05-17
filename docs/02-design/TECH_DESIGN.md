@@ -228,6 +228,7 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 - `SEMANTICS_GLOSSARY.md` 以本文件的状态流和低信心要求为输入，统一 low confidence、validation、source availability 和失败状态语义。
 - `PERSISTENCE_MODEL.md` 以 `DATA_MODEL.md` 的逻辑对象为输入，给出 F5 建议物理模型、关系、join / reference table 和 API schema 映射。
 - `APPLICATION_FLOW_SPEC.md` 以 `API_SPEC.md` endpoint、`PROMPT_SPEC.md` P-* contract 和 `DATA_MODEL.md` / `PERSISTENCE_MODEL.md` 对象为输入，定义 use-case orchestration、LLM 调用时机、调用次数和持久化交接。
+- `RELEASE_HANDOFF_SPEC.md` 以 TECH / API / DATA / PERSISTENCE / SECURITY / PROMPT / SCORING / SEMANTICS / FLOW 和 delivery docs 为输入，定义 F8 release / ops / retrospective handoff；它不是正式发布清单、运行手册、监控平台实现或部署脚本。
 - 子文档可以细化本文件锚点，但不得绕过本文档重新定义顶层模块、前后端职责或 LLM 所属边界。
 
 ### 15.1 F4 到 F6 交接（handoff）规则
@@ -248,6 +249,20 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 - F6 不得提供文件导出、PDF / Markdown / Word / docx 下载、文件上传解析、外部材料解析岗位、精确通过概率、system prompt、provider payload 或隐藏评分规则展示。
 - 如果 F6 发现需要新增 dashboard aggregate、report history list、candidate inbox 或 persisted account preferences API，必须回到 `API_SPEC.md` / `BACKLOG.md` 的后续 refinement；不得把这些能力作为本轮 AR-F4-F8-002 的隐含实现。
 
+### 15.2 F4 到 F8 发布交接（release handoff）规则
+
+本节补充 `AR-F4-F8-003` 的 F4->F8 handoff 规则；F8 release / ops / retrospective handoff 的 canonical 位置为 `RELEASE_HANDOFF_SPEC.md`。
+
+- F4 只提供 F8 发布产物输入，不生成最终 `RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、rollback strategy、known limitations 或 release retrospective。
+- F8 release checklist 输入必须覆盖 route inventory、no export、no PDF / docx / Word / Markdown file download、no file upload parsing、no external material parsing for jobs、no exact probability、copy boundary、owner boundary、candidate / suggestion 不自动转 formal object、low confidence、source unavailable、validation failed、score version / rubric version / evidence refs。
+- F8 known limitations 必须从 `RELEASE_HANDOFF_SPEC.md` §4 生成，并区分 product non-goal、implementation limitation、operational limitation、accepted risk 和 next-iteration item；不得把限制写成已实现能力。
+- F8 runbook 输入必须覆盖 provider unavailable、provider timeout、provider rate limit、AI task timeout、generation failed、validation failed、low confidence spike、source unavailable、RAG retrieval empty、owner mismatch spike、idempotency conflict、stale version conflict、copy boundary violation、export not supported attempt、audit / trace write failure、database migration failure 和 backup restore required。
+- F8 rollback / migration 输入必须以 `PERSISTENCE_MODEL.md` 的 owner、version、trace、audit、ScoreRuleVersion、AiTask 和 historical reference 语义为准；rollback 不得静默改写历史报告、复盘、评分或资产版本引用。
+- Observability handoff 只冻结 signals 和检查项，不选择监控平台、日志平台、SIEM、云服务或部署拓扑；完整平台化能力由 `BACKLOG.md` 的 F8 / LATER 任务承接。
+- Deferred->Backlog 映射必须以 `RELEASE_HANDOFF_SPEC.md` §10 和 `BACKLOG.md` 为准；复杂算法、provider tuning、vector database、enterprise SSO / ACL、internet search、advanced backup restore automation 和 release automation 不阻断 MVP，但不得悬空。
+- F5 / F6 / F7 可以根据该 handoff 预留日志、trace、audit、rate limit、retry、source availability、copy boundary 和 migration / rollback 测试输入；这不代表 F8 运维能力在 F4 已实现。
+- `F4_TO_F8_READINESS_ACCEPTANCE.md` 即使记录 `AR-F4-F8-003` Verified，也不得自动写 Accepted；整体 readiness 仍需人工 approval。
+
 ## 16. F4 UNKNOWN 收敛与后置边界
 
 本节用于关闭 `AR-F4-FULL-001` 指向的 F4 阻断口径：active design docs 不再把评分、接口、数据结构、Prompt、模型结果状态、安全边界、候选 / 正式对象、资产回流、真实面试复盘、进展树、暂停恢复、题目推荐、复盘切分或薄弱项生命周期表达为未处置的 M4 阻断项。下表是 F4 退出前的处置状态，verification 仍由 `F4_FULL_DESIGN_ACCEPTANCE.md` 记录。
@@ -263,8 +278,8 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 | 资产合并、候选态到正式态、用户确认边界 | must_close_in_F4 | AI 输出只能先进入 candidate / suggestion；正式 `Asset`、`AssetVersion`、`Weakness`、`TrainingRecommendation` 和 `TrainingTask` 必须经过用户确认、编辑、合并或显式业务动作。资产质量、合并排序和复杂去重算法为 deferred_non_blocking。 | `DATA_MODEL.md` §4.3 / §5.9 / §9；`API_SPEC.md` §7；`ASSET_CONTRACTS.md` |
 | 真实面试复盘、第三方隐私、公司信息脱敏 | must_close_in_F4 | 真实面试复盘只来源于用户手动录入；必须记录可信度、完整度和来源；第三方 / 公司 / 个人敏感信息只可使用脱敏摘要，不得进入日志、copy content 或高置信风险依据。 | `DATA_MODEL.md` §5.8；`SECURITY_PRIVACY.md` §15 / §17.1；`REVIEW_CONTRACTS.md` |
 | 进展树、暂停恢复、题目推荐、复盘切分、薄弱项生命周期 | deferred_non_blocking | M4 冻结最小对象、状态、API task / retry / cancel / timeout、candidate / suggestion / confirmation 和 F7 断言边界；完整状态机 fixture、排序算法、结束阈值、跨复盘聚合和自动消减规则继续由 `AR-F4-FULL-005` 或后续 `SHOULD` / `LATER` 承接，不作为 `AR-F4-FULL-001` 的 M4 阻断。 | `DATA_MODEL.md` §7 / §8 / §9 / §12；`API_SPEC.md` §5 / §9 / §11；`PROMPT_SPEC.md` §13 |
-| 文件导出、PDF / Markdown / Word / docx 下载、文件上传解析、外部材料解析岗位 | deferred_non_blocking | 明确为 MVP non-goal 或 Deferred；MVP 只支持 Markdown 文本输入和页面复制，不支持文件导出、文件解析或外部材料自动生成岗位。 | 本文件 §4；`API_SPEC.md` §8；`SECURITY_PRIVACY.md` §8 / §14 / §22 |
-| 多租户、企业治理、商业化、复杂部署拓扑、对象存储、独立 worker | deferred_non_blocking | 当前证据不足且非 MVP 必需；默认不进入 MVP 主架构。若后续引入，需另行 ADR / 安全文档 / 实现设计。 | 本文件 §4 / §8；`SECURITY_PRIVACY.md` §22 |
+| 文件导出、PDF / Markdown / Word / docx 下载、文件上传解析、外部材料解析岗位 | deferred_non_blocking | 明确为 MVP non-goal 或 Deferred；MVP 只支持 Markdown 文本输入和页面复制，不支持文件导出、文件解析或外部材料自动生成岗位。 | 本文件 §4；`API_SPEC.md` §8；`SECURITY_PRIVACY.md` §8 / §14 / §23；`RELEASE_HANDOFF_SPEC.md` §4 |
+| 多租户、企业治理、商业化、复杂部署拓扑、对象存储、独立 worker | deferred_non_blocking | 当前证据不足且非 MVP 必需；默认不进入 MVP 主架构。若后续引入，需另行 ADR / 安全文档 / 实现设计。 | 本文件 §4 / §8；`SECURITY_PRIVACY.md` §23；`RELEASE_HANDOFF_SPEC.md` §10 |
 
 ## 17. 后续分段执行顺序
 
@@ -280,6 +295,7 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 
 - `DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`API_SPEC.md` 均已作为 F4 active draft 文档存在。
 - `SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 已作为 F4 active handoff draft 登记，分别承接评分、语义、持久化和应用编排整改。
+- `RELEASE_HANDOFF_SPEC.md` 已作为 F4->F8 release / ops / retrospective handoff draft 登记，承接 release checklist、known limitations、runbook、rollback / migration、observability、Deferred->Backlog 和 F8 输出映射；不创建 F8 最终发布产物。
 - `PROMPT_SPEC.md` 已拆分 `prompt-contracts/*.md` 子文档，并完成全量 Prompt Contract Draft 覆盖。
 - `API_SPEC.md` 已作为 F4 API contract handoff 存在，当前覆盖 base path、response / error envelope、endpoint matrix、async task、retry、idempotency、rate limit、copy boundary 和 F7 test assertions。
 - `DATA_MODEL.md` 已同步候选态、建议态、用户确认流、AI output handoff、Asset / Training 逻辑对象。

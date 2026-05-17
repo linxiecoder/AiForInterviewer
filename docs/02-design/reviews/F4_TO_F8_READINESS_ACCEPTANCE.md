@@ -12,7 +12,7 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 
 本验收记录不得写 Accepted。本轮只记录严格审计结果和已授权单 finding 整改状态；active 设计文档的修复完成不等于最终验收。
 
-整改更新：`AR-F4-F8-001` 已通过定向复核并标记为 Verified；`AR-F4-F8-002` 已通过定向复核并标记为 Verified；`AR-F4-F8-004`、`AR-F4-F8-005`、`AR-F4-F8-006` 已通过本轮定向复核并标记为 Verified；`AR-F4-F8-007` 已通过中文优先文档治理定向复核并标记为 Verified；`AR-F4-F8-008` 已通过 API path / 技术标识符原样性定向复核并标记为 Verified；`AR-F4-F8-003` 保持 Open。本文件整体 `状态` 仍为 `Pending`，不得作为 Accepted 结论。
+整改更新：`AR-F4-F8-001` 已通过定向复核并标记为 Verified；`AR-F4-F8-002` 已通过定向复核并标记为 Verified；`AR-F4-F8-003` 已通过 F8 release handoff 定向复核并标记为 Verified；`AR-F4-F8-004`、`AR-F4-F8-005`、`AR-F4-F8-006` 已通过定向复核并标记为 Verified；`AR-F4-F8-007` 已通过中文优先文档治理定向复核并标记为 Verified；`AR-F4-F8-008` 已通过 API path / 技术标识符原样性定向复核并标记为 Verified。所有 known high findings verified, pending human approval。本文件整体 `状态` 仍为 `Pending`，不得作为 Accepted 结论，也不自动批准 F5 / F6 / F7 / F8 正式启动。
 
 ## 1. 审计范围
 
@@ -26,17 +26,17 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 
 | 阶段 | 结论 | 是否允许启动 |
 |---|---|---|
-| F5 就绪性结论 | AR-F4-F8-001_VERIFIED；AR-F4-F8-004_VERIFIED；AR-F4-F8-005_VERIFIED；AR-F4-F8-006_VERIFIED；AR-F4-F8-007_VERIFIED；AR-F4-F8-008_VERIFIED。上述 finding 不再阻断 F5 API / DATA / Prompt handoff；但整体 `状态` 仍为 `Pending`，不得作为 F4 Accepted 或 F5 正式启动审批。 | 否 |
-| F6 就绪性结论 | AR-F4-F8-002_VERIFIED；AR-F4-F8-004_VERIFIED；AR-F4-F8-005_VERIFIED；AR-F4-F8-006_VERIFIED；AR-F4-F8-007_VERIFIED；AR-F4-F8-008_VERIFIED。Job summary、Resume Markdown-only、Polish topic/subtopic 和中文优先文档治理已可作为 F6 接入输入；但整体 `状态` 仍为 `Pending`，不得作为 F4 Accepted 或 F6 正式启动审批。 | 否 |
-| F7 就绪性结论 | API 契约测试和页面 assertions 有 Verified 基线；AR-F4-F8-004 / 005 / 006 的新增 F7 assertions 已定向复核，AR-F4-F8-007 中文优先治理已复核；但本文件整体 `状态` 仍为 `Pending`，不得作为 F7 正式启动审批。 | 否 |
-| F8 就绪性结论 | BLOCKED。缺 release checklist 来源矩阵、runbook、known limitations、rollback / migration、observability 和 Deferred→Backlog 映射。 | 否 |
+| F5 就绪性结论 | Verified baseline / pending human approval。AR-F4-F8-001/004/005/006/007/008 不再阻断 F5 API / DATA / Prompt handoff；AR-F4-F8-003 的 F8 release handoff 已补齐，但整体 `状态` 仍为 `Pending`，不得作为 F4 Accepted 或 F5 正式启动审批。 | 否 |
+| F6 就绪性结论 | Verified baseline / pending human approval。AR-F4-F8-002/004/005/006/007/008 已可作为 F6 接入输入；Job summary、Resume Markdown-only、Polish topic/subtopic 和中文优先文档治理已完成定向复核；整体 `状态` 仍为 `Pending`，不得作为 F4 Accepted 或 F6 正式启动审批。 | 否 |
+| F7 就绪性结论 | Verified baseline / pending human approval。API 契约测试和页面 assertions 有 Verified 基线；AR-F4-F8-004 / 005 / 006 的新增 F7 assertions、AR-F4-F8-007 中文优先治理、AR-F4-F8-008 技术标识符原样性已定向复核；整体 `状态` 仍为 `Pending`，不得作为 F7 正式启动审批。 | 否 |
+| F8 就绪性结论 | Verified baseline / pending human approval。`RELEASE_HANDOFF_SPEC.md`、TECH / API / SECURITY / PERSISTENCE / BACKLOG 已补齐 release checklist 来源矩阵、known limitations、runbook source、rollback / migration / restore handoff、observability / audit / trace inventory、provider failure / rate limit / retry policy、retention / deletion / privacy handoff 和 Deferred→Backlog 映射；整体 `状态` 仍为 `Pending`，不得作为 F8 发布审批。 | 否 |
 
 ## 3. Finding 统计
 
 | 严重度 | 未关闭数量 |
 |---|---:|
 | Critical | 0 |
-| High | 1 |
+| High | 0 |
 | Medium | 0 |
 | Low | 0 |
 
@@ -44,6 +44,7 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 
 - `AR-F4-F8-001` High: API_SPEC / DATA_MODEL 字段级 contract 和幂等 / task / trace / persistence 承接已通过定向复核，标记为 Verified；整体验收仍为 Pending。
 - `AR-F4-F8-002` High: F6 页面到 API / 状态 / 错误态接入矩阵已通过定向复核，标记为 Verified；整体验收仍为 Pending。
+- `AR-F4-F8-003` High: F8 release / ops / retrospective handoff 已通过定向复核，`RELEASE_HANDOFF_SPEC.md` 与 TECH / API / SECURITY / PERSISTENCE / BACKLOG 已可生成 release checklist、known limitations、runbook、rollback strategy、changelog 输入、发布复盘输入和 next iteration backlog，标记为 Verified；整体验收仍为 Pending。
 - `AR-F4-F8-004` High: Resume API Markdown-only、无 project-experience module CRUD、无 `modules[]`、普通 Resume CRUD 不使用 `source_availability` 已通过定向复核，标记为 Verified；整体验收仍为 Pending。
 - `AR-F4-F8-005` High: Job list/detail 的 `binding_summary` / `latest_match_summary`、summary 状态域、评分版本字段和 no exact probability 边界已通过定向复核，标记为 Verified；整体验收仍为 Pending。
 - `AR-F4-F8-006` High: Polish topic/subtopic、`resume_job_binding_id`、`GET /api/v1/polish-topics`、F6 surface、F7 tests 和 `custom_topic_text` prompt injection 防护已通过定向复核，标记为 Verified；整体验收仍为 Pending。
@@ -54,23 +55,23 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 
 未关闭 finding（Open findings）：
 
-- `AR-F4-F8-003` High: 缺少 F8 发布 / 运维 / 复盘交接依据。
+- 无。所有 known high findings verified, pending human approval。
 
 ## 4. 启动判定
 
 | 判定项 | 结论 |
 |---|---|
-| 是否允许 F5 启动 | 否。AR-F4-F8-001/004/005/006/007/008 不再阻断 API / DATA / Prompt 实现交接；但整体验收仍为 Pending，本记录不作为 F4 Accepted 或 F5 正式启动审批。 |
+| 是否允许 F5 启动 | 否。AR-F4-F8-001/004/005/006/007/008 不再阻断 API / DATA / Prompt 实现交接，AR-F4-F8-003 已补齐 F8 handoff；但整体验收仍为 Pending，本记录不作为 F4 Accepted 或 F5 正式启动审批。 |
 | 是否允许 F6 启动 | 否。本记录整体仍为 Pending，且未创建 F4 accepted / F6 阶段启动审批；AR-F4-F8-002/004/005/006/007/008 已可作为 F6 页面接入准备输入。 |
-| 是否允许 F7 规划测试 | 否。本记录整体仍为 Pending，不能作为正式 F7 启动审批；AR-F4-F8-004/005/006 的新增 F7 assertions 与 AR-F4-F8-007 中文优先治理已定向复核通过。 |
-| 是否允许 F8 发布准备 | 否 |
+| 是否允许 F7 规划测试 | 否。本记录整体仍为 Pending，不能作为正式 F7 启动审批；API / DATA / Prompt / F6 assertions / 中文治理 / 技术标识符原样性均已有 Verified baseline。 |
+| 是否允许 F8 发布准备 | 否。AR-F4-F8-003 已不再因缺交接依据阻断 F8 baseline，但 F8 正式发布准备仍需 F7 通过、人工 acceptance / approval 和 F8 阶段任务授权。 |
 
 ## 5. 需要人工决策项
 
-1. 是否在整体 `状态：Pending` 且 `AR-F4-F8-003` 仍 Open 的情况下，允许 F5 仅基于已 Verified 的 API / DATA / Prompt contract 做后续准备；本记录不作为 F5 正式启动审批。
-2. 是否授权后续 remediation 修改 `API_SPEC.md`、`DATA_MODEL.md`、`TECH_DESIGN.md`、`SECURITY_PRIVACY.md` 和必要的 `BACKLOG.md`。
-3. 是否在整体 `状态：Pending` 且 `AR-F4-F8-003` 仍 Open 的情况下，允许 F6 仅基于已 Verified 的页面接入矩阵、Job summary、Resume Markdown-only 和 Polish topic/subtopic contract 做 mock adapter、状态处理和 E2E fixture 准备；本记录不作为 F6 正式启动审批。
-4. 是否将 `AR-F4-F8-003` 的 Deferred / release ops 项拆入后续 AIFI-* Backlog，或逐项标记 Accepted_Risk。
+1. 是否在所有 known high findings verified 但整体 `状态：Pending` 的情况下，创建或批准后续 F4→F8 readiness acceptance approval；本记录自身不得写 Accepted。
+2. 是否允许 F5 仅基于已 Verified 的 API / DATA / Prompt contract 做后续准备；本记录不作为 F5 正式启动审批。
+3. 是否允许 F6 仅基于已 Verified 的页面接入矩阵、Job summary、Resume Markdown-only 和 Polish topic/subtopic contract 做 mock adapter、状态处理和 E2E fixture 准备；本记录不作为 F6 正式启动审批。
+4. 是否授权 F8 阶段基于 `RELEASE_HANDOFF_SPEC.md` 创建正式 `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、rollback strategy、known limitations 和 release retrospective；本轮不创建这些 F8 产物。
 5. 是否保留前序 `AIFI-ARCH-004` 的 Verified finding 状态，同时明确其不等于本轮 F4→F8 readiness Accepted。
 6. PRD / UX 中“展示主要简历模块”“维护项目经历”等上游产品口径是否需要改写为 Markdown-only + derived outline 表述；本轮不修改 PRD / UX，仅按人工审计决策执行 F4 API / DATA / Prompt 修复。
 
@@ -100,7 +101,7 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 | F2/F3 一致性 | Verified | `API_SPEC.md` §6.6 明确不新增未登记页面体系；dashboard aggregate、report history list、candidate inbox、account preferences 均列为待补缺口或后续 refinement，不作为 AR-F4-F8-002 阻断项，也不得由 F6 自行发明 |
 | F4→F6 handoff 规则 | Verified | `TECH_DESIGN.md` §15.1 指向 `API_SPEC.md` §6.1-§6.6，并禁止 F6 从 UX/UI 反向发明 API 字段、状态或错误码 |
 
-本节只记录 `AR-F4-F8-002` 定向复核结果；整体 `状态` 仍为 `Pending`，`AR-F4-F8-003` 仍为 Open，不创建最终验收审批。
+本节只记录 `AR-F4-F8-002` 定向复核结果；整体 `状态` 仍为 `Pending`，不得创建最终验收审批。
 
 ## 8. 定向复核：AR-F4-F8-008
 
@@ -114,7 +115,7 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 | 技术标识符 | Verified | JSON 字段名、Header、enum / error code、Schema 名、API ID、`AR-F4-F8-*`、`AIFI-*`、`P-*` 和 F7 assertion id 均保持技术标识符原样；未发现 `简历_id`、`岗位_id`、`请求_id`、`追踪_id`、`来源_availability`、`低_confidence`、`验证_status`、`确认_required` |
 | DATA_MODEL 交叉检查 | Verified | `DATA_MODEL.md` 保留 `IdempotencyRecord`、`AiTask`、`ApiRequestTrace`、`TraceRef`、`AuditEvent` 等 schema / 逻辑对象名；字段名和 enum 值未被误翻译；provider payload、system prompt、hidden scoring rules 均处于不得保存 / 不得暴露边界 |
 
-本节只记录 `AR-F4-F8-008` 定向复核结果；整体 `状态` 仍为 `Pending`，`AR-F4-F8-003` 仍为 Open，不创建最终验收审批。
+本节只记录 `AR-F4-F8-008` 定向复核结果；整体 `状态` 仍为 `Pending`，不得创建最终验收审批。
 
 ## 9. 定向复核：AR-F4-F8-004 / 005 / 006 / 007
 
@@ -127,7 +128,26 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 | AR-F4-F8-006 | Polish session request 使用 `resume_job_binding_id` 并增加 `topic_id`、`subtopic_id`、`custom_topic_text`；新增 `GET /api/v1/polish-topics`、`PolishTopic` / `PolishSubtopic`；DATA / PROMPT / POLISH / SECURITY 增加 topic refs、上下文装配和 custom topic prompt injection 防护。 | Verified；定向复核通过，整体验收仍为 Pending |
 | AR-F4-F8-007 | `docs/02-design` 正式设计文档改为中文优先：正文、章节标题、表头、说明、风险、验收和测试描述已中文化；API path、JSON 字段、enum、schema、ID、命令和文件路径等技术标识符保留原样。 | Verified；定向复核通过，整体验收仍为 Pending |
 
-## 10. 需要 MCP Approval 的审计产物清单
+## 10. 定向复核：AR-F4-F8-003
+
+状态：Verified
+
+| 检查项 | 结果 | 证据 |
+|---|---|---|
+| F8 handoff canonical 文档 | Verified | `DOCS_INDEX.md` 已登记 `RELEASE_HANDOFF_SPEC.md` 为 F4→F8 release / ops / retrospective handoff canonical 文档；该文档不替代 F8 最终 release checklist / changelog / runbook |
+| release checklist source matrix | Verified | `RELEASE_HANDOFF_SPEC.md` §3 覆盖 no export、no file download、no file upload parsing、no external material parsing、no exact probability、score / rubric / evidence refs、low confidence、source unavailable、validation failed、candidate not formal、owner boundary、copy boundary、route inventory、async status、provider failure、rate limit、audit、trace、logs redaction、secret、retention / deletion、backup restore、migration / rollback 和 Deferred mapping |
+| known limitations | Verified | `RELEASE_HANDOFF_SPEC.md` §4 区分 product non-goal、implementation limitation、operational limitation、accepted risk 和 next-iteration item，覆盖文件导出、PDF / Word / docx 下载、文件上传解析、外部材料自动生成岗位、精确通过概率、招聘结果校准、多租户、OAuth / SSO、复杂权限、互联网检索、provider payload / completion 原文和低置信降级 |
+| runbook source | Verified | `RELEASE_HANDOFF_SPEC.md` §5 覆盖 LLM provider unavailable / timeout / rate limit、AI task timeout、generation failed、validation failed、low confidence spike、source unavailable、RAG retrieval empty、owner mismatch spike、idempotency conflict、stale version conflict、copy boundary violation、export not supported attempt、audit / trace write failure、migration failure 和 backup restore required |
+| rollback / migration / restore | Verified | `RELEASE_HANDOFF_SPEC.md` §6 与 `PERSISTENCE_MODEL.md` §11 覆盖 migration 前后检查、rollback trigger、decision owner、schema rollback 风险、data compatibility、versioned object rollback、historical references、`ScoreRuleVersion` rollback、in-flight `AiTask` rollback、backup restore validation 和 source availability after restore |
+| observability / audit / trace | Verified | `RELEASE_HANDOFF_SPEC.md` §7 与 `SECURITY_PRIVACY.md` §22 覆盖 request_id、trace_id、ai_task_id、audit_event_id、owner_id / actor_id、endpoint_ref、task_type、contract_ids、validation_status、confidence_level、source_availability、rate limit、provider failure、copy event、confirmation、retention / deletion；明确不得记录正文、Prompt、provider payload、completion 原文、hidden scoring rules、token、cookie、secret |
+| provider failure / rate limit / retry | Verified | `RELEASE_HANDOFF_SPEC.md` §8 与 `API_SPEC.md` §14 明确可重试 / 不可重试 failure、retry 不扩大上下文、不启用互联网检索、不绕过 owner check、low confidence / partial 不伪装高置信，并要求 rate limit 响应进入 F8 release check |
+| retention / deletion / privacy | Verified | `RELEASE_HANDOFF_SPEC.md` §9 与 `SECURITY_PRIVACY.md` §22 覆盖删除后历史引用展示、source deleted / disabled / archived / unavailable 行为、audit / trace 保留边界、provider payload 不保存或只保存安全摘要、copy event 不存正文、删除 / 禁用 / 归档对后续 AI 生成的影响和 restore 后校验 |
+| Deferred→Backlog | Verified | `RELEASE_HANDOFF_SPEC.md` §10 将全部 Deferred 项映射到 owner、`AIFI-REL-001` 至 `AIFI-REL-007`、`AIFI-BE-001` 或 LATER / accepted risk / not blocking 理由；`BACKLOG.md` 已新增相应 AIFI-* 任务，不创建新阶段体系 |
+| F8 output mapping | Verified | `RELEASE_HANDOFF_SPEC.md` §11 说明如何生成 `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、known limitations、rollback strategy、release retrospective 和 next iteration backlog；本轮不创建这些 F8 产物 |
+
+本节只记录 `AR-F4-F8-003` 定向复核结果。所有 known high findings verified, pending human approval；整体 `状态` 仍为 `Pending`，不得写 Accepted，不自动批准 F5 / F6 / F7 / F8 正式启动。
+
+## 11. 需要 MCP Approval 的审计产物清单
 
 本轮可以为以下三个文档创建 approval request：
 

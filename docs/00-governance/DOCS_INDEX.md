@@ -11,7 +11,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 
 本文件是 F0 文档治理落库后的当前有效文档索引。它只登记当前已经落库并可作为 active 入口的文档；尚未创建或尚未确认的目标文档不得被当作当前执行依据。
 
-当前 AI 模拟面试工作台级 MVP 以 active PRD / UX / TECH / DATA_MODEL / SECURITY_PRIVACY / PROMPT_SPEC / API_SPEC / SCORING_SPEC / SEMANTICS_GLOSSARY / PERSISTENCE_MODEL / APPLICATION_FLOW_SPEC 文档体系为准；archive 下的 workbench-mvp 仅保留历史记录，不作为开发、验收或测试依据。
+当前 AI 模拟面试工作台级 MVP 以 active PRD / UX / TECH / DATA_MODEL / SECURITY_PRIVACY / PROMPT_SPEC / API_SPEC / SCORING_SPEC / SEMANTICS_GLOSSARY / PERSISTENCE_MODEL / APPLICATION_FLOW_SPEC / RELEASE_HANDOFF_SPEC 文档体系为准；archive 下的 workbench-mvp 仅保留历史记录，不作为开发、验收或测试依据。
 
 ## 1. 当前有效入口
 
@@ -35,6 +35,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | F4 语义词汇表草案 | `docs/02-design/SEMANTICS_GLOSSARY.md` | AIFI-ARCH-006 当前整改产物；阶段 F4；状态 DRAFT；类型 active technical design draft；统一 Low Confidence、`confidence_level`、`validation_status`、`source_availability`、candidate / suggestion / formal object 和失败状态语义；不替代 `API_SPEC.md`、`DATA_MODEL.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md` |
 | F4 持久化交接模型草案 | `docs/02-design/PERSISTENCE_MODEL.md` | AIFI-ARCH-006 当前整改产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 F5 persistence handoff；将 `DATA_MODEL.md` 逻辑对象映射到建议物理模型、字段组、关系、join / reference table、API schema 和 F7 persistence fixture；不是最终 DDL / ORM / migration |
 | F4 应用编排流程规范草案 | `docs/02-design/APPLICATION_FLOW_SPEC.md` | AIFI-ARCH-006 当前整改产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 application service / use-case orchestration spec；补齐 API 到模型读取、写入、AiTask、P-* contract、LLM call plan、Prompt 输入结构、validation、low confidence、persistence handoff 和 F7 fixture 的映射；不是代码实现或生产 Prompt 文案 |
+| F4->F8 发布交接规范草案 | `docs/02-design/RELEASE_HANDOFF_SPEC.md` | AIFI-ARCH-005 当前整改产物；阶段 F4；状态 DRAFT；类型 active technical design draft；定位为 F8 release / ops / retrospective handoff canonical 文档；为 F8 `RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、known limitations、rollback strategy、release retrospective 和 next-iteration backlog 提供输入；不替代 F8 最终发布清单、变更记录或运行手册 |
 | F4 Prompt contract 子文档集合 | `docs/02-design/prompt-contracts/*.md` | AIFI-PROMPT-001 active 子文档集合；承载 `PROMPT_SPEC.md` 已登记 contract 的详细正文或 Stub 摘要；主 `PROMPT_SPEC.md` 是 canonical registry；子文档不得自行新增未登记 ID，不替代 `API_SPEC.md`、`DATA_MODEL.md` 或 `SECURITY_PRIVACY.md`，不关闭 `F4_TECH_DESIGN` UNKNOWN |
 | F4 Prompt / 安全隐私 / 技术设计对抗性审查主报告 | `docs/02-design/reviews/F4_PROMPT_SECURITY_TECH_ADVERSARIAL_REVIEW.md` | AIFI-ARCH-003 审查证据；阶段 F4；状态 DRAFT；记录 `PROMPT_SPEC.md`、`SECURITY_PRIVACY.md`、`TECH_DESIGN.md` 和 `prompt-contracts/*.md` 的对抗性审查问题、证据和结论；不替代 `TECH_DESIGN.md`、`PROMPT_SPEC.md`、`SECURITY_PRIVACY.md` 或 `DATA_MODEL.md` |
 | F4 Prompt / 安全隐私 / 技术设计风险登记表 | `docs/02-design/reviews/F4_PROMPT_SECURITY_TECH_RISK_REGISTER.md` | AIFI-ARCH-003 审查证据；阶段 F4；状态 DRAFT；登记对抗性审查发现的设计风险、严重度、影响面和处置状态；只作为风险台账，不替代 `TECH_DESIGN.md`、`PROMPT_SPEC.md`、`SECURITY_PRIVACY.md` 或 `DATA_MODEL.md` |
@@ -67,7 +68,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | --- | --- | --- |
 | `docs/00-governance/` | active | 只承载当前治理入口 |
 | `docs/01-product/` | active | 当前 `PRD.md` 为产品需求唯一事实源，`REQUIREMENT_TRACEABILITY.md` 只登记历史需求处理 |
-| `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`PERSISTENCE_MODEL.md` 和 `APPLICATION_FLOW_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
+| `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 和 `RELEASE_HANDOFF_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
 | `docs/03-delivery/` | active | 当前仅 `DELIVERY_PLAN.md`、`BACKLOG.md` 生效 |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
