@@ -44,6 +44,10 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | F4→F8 交接就绪性风险登记表 | `docs/02-design/reviews/F4_TO_F8_READINESS_RISK_REGISTER.md` | AIFI-ARCH-005 风险台账；登记 F4→F8 严格审计发现的风险、严重度、影响阶段、required fix、owner 和关闭条件；状态仅使用 Open / Deferred / Accepted_Risk / Rejected_False_Positive；不替代 active design docs |
 | F4→F8 交接就绪性整改矩阵 | `docs/02-design/reviews/F4_TO_F8_READINESS_REMEDIATION_MATRIX.md` | AIFI-ARCH-005 整改追踪证据；将 AR-F4-F8 finding 映射到目标 active doc、required change、F5/F6/F7/F8 阻断关系和验证方法；本轮只登记，不直接修复 active design docs |
 | F4→F8 交接就绪性验收记录 | `docs/02-design/reviews/F4_TO_F8_READINESS_ACCEPTANCE.md` | AIFI-ARCH-005 Pending 验收记录；记录审计范围、F5/F6/F7/F8 readiness 结论、open finding 数量、人工决策项和 MCP approval 清单；不得作为 Accepted 结论，不替代 active design docs |
+| docs/02 深度语义关联审计主报告 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_AUDIT_REPORT.md` | AIFI-ARCH-006 审计证据；审计 PRD、UX、UI、TECH、DATA、API、PROMPT、SECURITY 与 F5/F6/F7/F8 交接语义链路是否闭合；前序审计只作为历史证据；不替代 active design docs，不修复 active design docs |
+| docs/02 深度语义关联审计风险登记表 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_RISK_REGISTER.md` | AIFI-ARCH-006 风险台账；登记 AR-DOCS02-SEM finding 的严重度、影响链路、required fix、owner 和关闭条件；状态仅使用 Open / Deferred / Accepted_Risk / Rejected_False_Positive；不替代 active design docs |
+| docs/02 深度语义关联审计整改矩阵 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_REMEDIATION_MATRIX.md` | AIFI-ARCH-006 整改追踪证据；将 AR-DOCS02-SEM finding 映射到目标 active doc、required change、F5/F6/F7/F8 阻断关系和验证方法；本轮只登记，不直接修复 active design docs |
+| docs/02 深度语义关联审计验收记录 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_ACCEPTANCE.md` | AIFI-ARCH-006 Pending 验收记录；记录审计范围、语义链路矩阵完成情况、finding 数量、F5/F6/F7/F8 readiness 结论、人工决策项和 MCP approval 状态占位；不得作为 Accepted 结论，不替代 active design docs |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
