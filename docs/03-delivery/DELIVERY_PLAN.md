@@ -44,8 +44,8 @@ permalink: ai-for-interviewer/docs/03-delivery/delivery-plan
 | F1 | DONE | `PRD.md` 已创建并完成 F1.2 规格化补全、F1.3 UNKNOWN 收敛机制补强、F1.4 评分 / 复制 / 通过概率口径修复、F1.5 业务对象模型修正和 F1.6 岗位输入方式修正；已补齐用户故事、业务对象、核心业务数据流、功能逻辑、输入 / 输出、状态异常、验收标准、UNKNOWN 和非目标；项目经历归入简历模块，项目不作为当前一级业务对象；岗位 / JD 仅支持手动录入；PRD §10 已将 UNKNOWN 绑定分类、影响范围、关闭阶段、承接任务、目标文档和关闭标准；历史有效需求已在 `REQUIREMENT_TRACEABILITY.md` 中分类处理；F2-F8 任务入口已进入 `BACKLOG.md` |
 | F2 | DONE | `docs/02-design/UX_SPEC.md` 已完成信息架构与功能场景修正，按工作台、简历管理、岗位 / JD 管理、岗位详情与匹配分析、模拟面试列表、发起模拟面试、打磨模式工作台、压力面模式工作台、模拟面试详情、面试报告详情与复制、面试复盘列表、新增模拟面试复盘、新增真实面试复盘、复盘报告详情、资产库、薄弱项列表与多选发起打磨、内容沉淀确认组织正文；每个核心功能场景均具备布局、流程、交互、状态和 Figma 交付要求；本轮结构性返修已要求并同步 Figma 列表 / 抽屉、状态 Frame、分页、每页条数选择、筛选下拉、操作列图标、工作台布局、详情抽屉、用户设置入口、复盘新增抽屉、薄弱项发起打磨和内容沉淀确认；本轮细节返修已要求并同步 Figma 操作列图标、分页组件、表头筛选 / 排序图标和用户区布局；本轮组件基线返修已要求并同步 `F2 Low Fidelity Components` 区、页面组件统一和“组件基线不是 F3 设计系统”的退出标准；本轮质量返修已要求并同步组件基线基础可用性检查、无重叠 / 无溢出 / 无越界、弹窗按钮不越界、多维进展树右键菜单、分页图标、操作列统一圆角、表格列宽和抽屉比例；本轮人工复审返修已同步弹窗文本不越界、进展树节点与说明不重叠、操作列图标不越界、应用壳用户区稳定和打磨模式回答后决策闭环；本轮清理重建已同步无旧问题节点残留、无 overlay 修正层、组件区与页面引用一致、无越线 / 嵌套 / 重叠和打磨模式决策闭环完整；本轮组件基线精修已同步可评审低保真质量、页面引用组件一致、打磨模式反馈卡片和下一步建议固定区、聊天窗口滚动与长内容折叠规则；本轮质量闸门修复及继续返修复核已同步当前审计 BLOCKER / MAJOR 的关闭条件；人工调整后的 Figma active Page 已确认组件基线、表格、分页、抽屉、进展树、模拟面试聊天工作台、反馈卡片、下一步建议固定区、用户区和状态 Frame 问题关闭；本轮同步已补充模拟面试输入区图标化入口、多维进展树状态交互和组件区 / 页面引用一致要求；F2 低保真已被人工接受，可作为 F3 输入；本轮不进入 F3；AIFI-UX-001 与 AIFI-UX-002 维持 DONE，F2 低保真已人工接受；本轮不进入 F3，下一轮可开启 F3 |
 | F3 | DONE | AIFI-UI-001 已标记 DONE；F3 高保真页面交付清单已回写；经人工确认无其他 M3 阻塞项，M3 已闭合 |
-| F4 | IN_PROGRESS | 待 F1/F2 输入稳定后编写技术、API、数据、Prompt、安全隐私设计 |
-| F5 | NOT_STARTED | 等待 F4 评审 |
+| F4 | ACCEPTED | F4/M4 已人工批准 Accepted；`docs/02-design/reviews/F4_TO_F8_READINESS_ACCEPTANCE.md` 已记录所有 known findings Verified，并批准 F4 design readiness 与 F4→F8 handoff baseline 可作为进入 F5 的治理依据 |
+| F5 | READY_TO_START | 已允许进入 F5 后端开发；F5 输入基线引用 `F4_TO_F8_READINESS_ACCEPTANCE.md`、`API_SPEC.md`、`DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`PROMPT_SPEC.md`、`APPLICATION_FLOW_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`RELEASE_HANDOFF_SPEC.md` |
 | F6 | NOT_STARTED | 等待 F5 主接口 |
 | F7 | NOT_STARTED | 等待 F5/F6 联调 |
 | F8 | NOT_STARTED | 等待 F7 全链路通过 |
