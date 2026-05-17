@@ -160,6 +160,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/job-match-contract
   - 用户重新生成匹配分析。
   - 后续报告或训练建议需要读取已有匹配分时，不重新生成，只引用已保存结果。
 - 目标（Goal）： 定义岗位匹配 0-100 产品评分刻度与解释的输出 contract；冻结 `AR-F4-FULL-003` 所需的 rubric / rule version、版本追踪、证据、低置信度、禁止精确概率和降级边界。该分数不是精确通过概率，也不是真实面试结果预测。
+  - 评分 score type、默认维度、权重、公式、缺失维度处理和 F7 scoring fixture 以 `../SCORING_SPEC.md` 的 `job_match` 规则为 canonical；本 contract 只定义 Prompt 输出与校验边界。
 - 必需输入（Required Inputs）：
   - `JobVersion`
   - `ResumeVersion`

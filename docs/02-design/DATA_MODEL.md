@@ -13,7 +13,8 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 
 - 本文件是 F4 技术设计下的数据模型子文档，承接 `AIFI-DATA-001`。
 - 当前版本是初始化版 / 工作草案，用于统一业务对象、数据对象、状态、引用、版本和持久化边界。
-- 本文件不是终版数据库 schema，不提供物理表 DDL，不替代 `TECH_DESIGN.md`、`API_SPEC.md`、`PROMPT_SPEC.md` 或 `SECURITY_PRIVACY.md`。
+- 本文件不是终版数据库 schema，不提供物理表 DDL，不替代 `TECH_DESIGN.md`、`API_SPEC.md`、`PROMPT_SPEC.md`、`SECURITY_PRIVACY.md` 或 `PERSISTENCE_MODEL.md`。
+- F5 persistence handoff 的 canonical 位置为 `PERSISTENCE_MODEL.md`；F5 不得只从本文逻辑对象自行推导物理表、join table、引用表、唯一约束或 API schema 映射。
 - 本轮按 `AR-F4-FULL-001` 处置数据模型侧 F4 待决策项：M4 阻断项已冻结为逻辑对象、状态、版本、trace / evidence、candidate / formal 和 deferred_non_blocking 边界；不标记 `AIFI-ARCH-002` 或 `AIFI-DATA-001` 完成。
 - 本文件不新增 roadmap、plan-v2、codex-plan、临时任务文档或并行设计入口。
 - 本文件不得把 `archive/` 内容作为当前执行依据；历史内容只有进入 active docs 后才能影响本数据模型。
@@ -28,6 +29,9 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | `docs/02-design/UX_SPEC.md` | 已冻结的用户可见页面、绑定关系入口、内容沉淀确认、低置信度校对、状态与异常 |
 | `docs/02-design/TECH_DESIGN.md` | 模块划分、系统分层、LLM 边界、状态域和子文档交接边界 |
 | `docs/02-design/PROMPT_SPEC.md` | AI Task Contract 的输出对象、validation、low confidence、trace / evidence 和用户确认交接边界 |
+| `docs/02-design/SCORING_SPEC.md` | 评分 score type、rubric dimensions、权重、公式、低置信度降级和 `ScoreResult` 正式落库边界 |
+| `docs/02-design/SEMANTICS_GLOSSARY.md` | `confidence_level`、`validation_status`、`source_availability`、candidate / suggestion / formal object 统一语义 |
+| `docs/02-design/PERSISTENCE_MODEL.md` | F5 建议物理模型、字段组、关系、join / reference table、API schema 映射和 persistence fixture |
 | `docs/03-delivery/DELIVERY_PLAN.md` | F4 / M4 阶段边界和不得遗留的技术设计 UNKNOWN 类型 |
 | `docs/03-delivery/BACKLOG.md` | `AIFI-DATA-001` 范围和与 `AIFI-ARCH-002`、`AIFI-PROMPT-001`、`AIFI-SEC-001` 的依赖 |
 
@@ -48,7 +52,7 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 
 ## 3. 数据模型设计原则
 
-1. 采用逻辑数据模型表达，先冻结对象、引用、状态和生命周期，不提前绑定物理数据库实现。
+1. 采用逻辑数据模型表达，先冻结对象、引用、状态和生命周期；F5 物理关系、建议表和 join / reference table 交接由 `PERSISTENCE_MODEL.md` 承接。
 2. 用户、简历、岗位、会话、报告、复盘、资产、薄弱项和训练建议都必须有明确归属，避免跨用户数据串联。
 3. 历史结果引用应指向生成时使用的版本或快照，不依赖会被后续编辑覆盖的当前对象。
 4. 项目经历只作为 Markdown 简历正文片段、派生 outline 节点、打磨主题、复盘分析对象或资产来源，不成为一级或二级 CRUD 业务对象。
@@ -700,6 +704,7 @@ Rubric / rule version 的最小维度如下：
 
 - 前端不保存业务真相，不直接读取数据库，不直接调用 LLM。
 - 后端持久化层负责保存用户数据、版本、知识库逻辑对象、RAG 证据引用、会话、报告、复盘、资产、薄弱项、训练建议、回流确认、最小 LLM trace 和关键审计事件。
+- `PERSISTENCE_MODEL.md` 负责把本文逻辑对象映射为 F5 建议物理模型、primary key、owner / actor、version、status、created_at / updated_at、关键外键、唯一约束、1:N / M:N 关系和 API schema 映射。
 - `SECURITY_PRIVACY.md` 负责定义隐私字段、日志脱敏、密钥、权限、保留和删除策略。
 - `API_SPEC.md` 负责定义具体资源路径、请求响应结构、错误语义和异步任务查询。
 - `PROMPT_SPEC.md` 负责定义 Prompt 输入输出、模型调用、结构化校验和低置信度判定。
@@ -756,6 +761,9 @@ Rubric / rule version 的最小维度如下：
 | 子文档 | 本文交接内容 | 本文不展开内容 |
 |---|---|---|
 | `API_SPEC.md` | 逻辑对象、状态域、引用关系、生成任务状态、历史引用原则、MVP role scope、候选 / 建议 / 确认对象和审计对象边界 | endpoint、request / response schema、错误码、分页过滤参数、异步任务协议、具体鉴权 API |
+| `SCORING_SPEC.md` | `ScoreResult`、`ScoreRuleVersion`、score type、维度、权重、公式、低置信度和正式落库规则 | 复杂算法、真实招聘结果校准、隐藏规则实现细节 |
+| `SEMANTICS_GLOSSARY.md` | Low Confidence、validation、source availability、candidate / suggestion / formal object 的 canonical 语义 | API endpoint、物理表和 UI 文案最终稿 |
+| `PERSISTENCE_MODEL.md` | 将本文逻辑对象映射为 F5 建议物理模型、关系、join / reference table、唯一约束、derived / read model 和 API schema 映射 | SQL DDL、ORM model、migration、数据库供应商特性 |
 | `PROMPT_SPEC.md` | LLM 输出应落到哪些结构化对象、RAG 上下文组装结果如何被引用、低置信度、候选态 / 建议态和部分可用状态应被持久化；scoring candidate 进入正式 `ScoreResult` 前必须完成 schema validation、rule version、evidence、confidence 和 trace 校验 | Prompt 模板、模型选择、模型调用参数、上下文裁剪、重试降级策略、隐藏评分规则实现细节 |
 | `SECURITY_PRIVACY.md` | 哪些对象包含用户资料、简历、岗位、回答、报告、复盘、资产、知识库文档、RAG 证据和 LLM trace | 密钥管理、权限矩阵、复杂 ACL、企业多租户、数据可见性、日志脱敏、保留 / 删除细则、隐私字段分级 |
 | `TECH_DESIGN.md` | 本文回填数据模型子文档状态、F4 待决策项处置表和 deferred_non_blocking 边界 | 顶层架构重写、M4 整体验收、`AIFI-ARCH-002` 完成判定 |
@@ -764,6 +772,7 @@ Rubric / rule version 的最小维度如下：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 增加 F5 persistence handoff 交接 | 明确本文仍是逻辑模型，物理模型、join / reference table、关系和 API schema 映射以 `PERSISTENCE_MODEL.md` 为 canonical；避免 F5 从逻辑对象自行推导物理关系 |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` 数据模型断链 | 补齐岗位解绑历史保留字段、复盘列表投影、复盘复制内容 / 审计、低置信候选校对记录和内容沉淀目标类型；不定义物理 schema，不处理 `AR-DOCS02-SEM-002/003` |
 | 2026-05-17 | 修复 `AR-F4-F8-004` / `AR-F4-F8-005` / `AR-F4-F8-006` 人工审计数据语义偏差 | 将 Resume 收敛为 Markdown-only，项目经历降级为 Markdown 片段 / derived non-persistent outline；补 `JobBindingSummary` / `JobMatchSummary` 作为 F6 read model；补 `PolishTopicRef` / `PolishSubtopicRef` 与 `custom_topic_text` 安全输入边界；不进入物理 schema 或 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-001` 数据承接缺口 | 新增 `IdempotencyRecord`、`AiTask` / `AiTaskResult`、`ApiRequestTrace` / `TraceRef`、`AuditEvent` 覆盖范围和 persistence handoff 规则；承接 API 字段级 contract、幂等重试、AI task result、source availability、candidate / suggestion / formal object 边界；不进入物理 schema 或 implementation |

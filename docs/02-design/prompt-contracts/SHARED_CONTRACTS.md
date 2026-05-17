@@ -269,6 +269,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-contracts/shared-contracts
 - 模式（Mode）： `shared`
 - 触发条件（Trigger）： 输入不足、检索失败、证据冲突、上下文裁剪、模型输出不完整或 validation 弱通过时触发。
 - 目标（Goal）： 生成一致的低置信度分类、影响范围、用户可见提示和推荐动作，避免把风险结果伪装成正常高置信结论。
+  - Low Confidence、`confidence_level`、`validation_status`、`source_availability` 和失败状态的 canonical 语义以 `../SEMANTICS_GLOSSARY.md` 为准；本 contract 只定义 Prompt / AI 输出侧分类。
 - 必需输入（Required Inputs）：
   - 当前 contract、业务模式、任务目标、`validation_result`、`missing_evidence`、`conflicting_evidence`、`context_risk_flags`、`retrieval_status` 和 `failure_signals`。
   - required inputs 完整性、answer 完整性、resume / job evidence 完整性、source availability 和 `evidence_conflict` 状态。

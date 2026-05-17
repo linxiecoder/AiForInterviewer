@@ -16,6 +16,8 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 - 本文件只定义 API contract、状态语义和前后端 / 测试交接边界，不实现代码，不定义 ORM、DDL、migration、索引、物理数据库表或运行时队列。
 - `PROMPT_SPEC.md` 不能替代 API contract；`P-*` 是 AI Task Contract ID，不是 endpoint、schema、队列任务名或数据库表名。
 - `DATA_MODEL.md` 不能替代 API contract；逻辑对象、引用对象和状态域必须通过本文件映射为可调用、可测试的 HTTP API 语义。
+- `APPLICATION_FLOW_SPEC.md` 是 endpoint 到 application service / 模型读取 / AiTask / P-* contract / LLM call plan / persistence handoff 的 canonical 编排交接；F5 不得只按本文件字段表自行发明流程。
+- `SCORING_SPEC.md` 是评分 score type、维度、权重、公式、低置信度和正式 `ScoreResult` 规则的 canonical 文档；本文只定义 API 字段和状态。
 - API 不得暴露 `system prompt`、Prompt 模板、provider request / response payload、completion 原文、模型调用参数、密钥、隐藏评分规则或内部评分校准细节。
 - API 不提供 PDF、Markdown 文件、Word、docx、批量文件下载或文件导出 endpoint；报告只提供读取和 copy content。
 - AI 输出默认只能进入 candidate、draft、suggestion、validation result、trace 或 low confidence 状态；不得静默成为正式事实。
@@ -34,6 +36,10 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 | `docs/02-design/SECURITY_PRIVACY.md` | 登录态、owner enforcement、隐私裁剪、复制边界、source unavailable、日志脱敏和错误安全表达 |
 | `docs/02-design/PROMPT_SPEC.md` | `P-*` AI Task Contract ID、validation、low confidence、failure signal、trace / evidence 和 persistence handoff |
 | `docs/02-design/prompt-contracts/*.md` | 业务 AI task 的相关 prompt contract、候选 / 建议 / 用户确认边界和测试策略 |
+| `docs/02-design/SCORING_SPEC.md` | scoring response 字段、score type、低置信度和 F7 scoring fixture 的 canonical 规则 |
+| `docs/02-design/SEMANTICS_GLOSSARY.md` | `confidence_level`、`validation_status`、`source_availability` 和 low confidence 状态语义 |
+| `docs/02-design/PERSISTENCE_MODEL.md` | API schema 到建议物理模型、join / reference table 和 persistence fixture 的交接 |
+| `docs/02-design/APPLICATION_FLOW_SPEC.md` | endpoint 到 use-case orchestration、LLM call plan、Prompt 输入结构和持久化流程的交接 |
 | `docs/03-delivery/DELIVERY_PLAN.md` | F4 / F5 / F7 阶段交接、无文件导出和 F7 可测试性要求 |
 | `docs/03-delivery/BACKLOG.md` | `AIFI-API-001`、`AIFI-BE-001`、`AIFI-FE-001`、`AIFI-QA-001` 的范围和依赖 |
 
@@ -44,7 +50,7 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 - 不定义登录注册完整产品方案、OAuth / SSO、企业级多租户、复杂 ACL 或组织权限树。
 - 不定义物理数据库 schema、ORM model、DDL、索引、外键、migration 或缓存方案。
 - 不定义 Prompt 文案、模型供应商、模型参数、embedding 模型、向量数据库或联网搜索服务。
-- 不定义评分公式、权重、阈值、校准算法、通过概率或真实面试结果预测。
+- 不在本文重复定义评分公式、权重、阈值和校准算法；评分 canonical 规则见 `SCORING_SPEC.md`。API 不得返回通过概率或真实面试结果预测。
 - 不提供文件上传解析、PDF parser、OCR、docx 解析、远程 URL 抓取或对象存储解析链路。
 - 不提供文件导出、下载、批量导出、report file、snapshot file、filename hint 或 export artifact。
 - 不把项目经历提升为独立一级或二级 API CRUD 资源；项目经历只作为 Markdown 简历正文中的内容片段或派生 outline 节点被引用。
@@ -2348,7 +2354,7 @@ N/A
 | --- | --- | --- | --- | --- | --- |
 | target_type | 是 | enum | job_match / answer / session / report / review / training_result | 评分目标类型 | loggable |
 | target_id | 是 | string | typed id | 评分目标 ID | loggable |
-| score_type | 是 | enum | job_match / polish_round / pressure_session / report_section | 评分类型 | loggable |
+| score_type | 是 | enum | job_match / polish_answer / polish_report / pressure_session / report_section | 评分类型；旧 `polish_round` 只可作为兼容别名映射到 `polish_answer`，不得作为新 canonical 值 | loggable |
 | input_refs | 是 | SourceRef[] | owner scoped | 输入引用 | loggable |
 | score_rule_version_id | 否 | string | rule version | 指定评分规则版本 | loggable |
 
@@ -4899,7 +4905,7 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 | --- | --- | --- | --- | --- | --- |
 | target_type | 是 | enum | job_match / answer / session / report / review / training_result | 评分目标类型 | loggable |
 | target_id | 是 | string | typed id | 评分目标 ID | loggable |
-| score_type | 是 | enum | job_match / polish_round / pressure_session / report_section | 评分类型 | loggable |
+| score_type | 是 | enum | job_match / polish_answer / polish_report / pressure_session / report_section | 评分类型；旧 `polish_round` 只可作为兼容别名映射到 `polish_answer` | loggable |
 | input_refs | 是 | SourceRef[] | owner scoped | 输入引用 | loggable |
 | score_rule_version_id | 否 | string | rule version | 指定评分规则版本 | loggable |
 
@@ -5222,12 +5228,19 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 | --- | --- | --- | --- | --- | --- |
 | score_result_id | 是 | string | score_* | 评分 ID | loggable |
 | target_ref | 是 | TraceRef | typed ref | 评分目标 | loggable |
+| score_type | 是 | enum | job_match / polish_answer / polish_report / pressure_session / report_section | canonical 评分类型 | loggable |
 | score_value | 是 | integer | 0..100 | 0-100 产品刻度 | loggable |
 | score_scale | 是 | enum | 0_100_product_scale | 分数刻度 | loggable |
 | score_version | 是 | string | semver/date | 评分版本 | loggable |
 | rubric_version | 是 | string | semver/date | Rubric 版本 | loggable |
+| score_rule_version_ref | 是 | TraceRef | ScoreRuleVersion | 评分规则版本引用 | loggable |
+| validation_status | 是 | enum | valid / valid_with_warnings / invalid / manual_review_required | 评分校验状态 | loggable |
 | confidence_level | 是 | enum | high / medium / low / insufficient | 置信度 | loggable |
+| dimension_scores[] | 是 | object[] | dimensions from `ScoreRuleVersion` | 维度分、权重、解释和证据引用摘要；不得包含隐藏校准样例正文 | loggable |
 | evidence_refs[] | 是 | EvidenceRef[] | >=1 unless insufficient | 证据 | loggable |
+| trace_refs[] | 是 | TraceRef[] | >=1 | context / LLM / validation / persistence / audit trace | loggable |
+| low_confidence_flags[] | 是 | LowConfidenceFlag[] | >=0 | 低置信度标记 | loggable |
+| allowed_as_formal_score | 是 | boolean | true / false | 是否允许作为正式 `ScoreResult` 展示或写入报告评分 | loggable |
 
 #### ReportResponse
 
@@ -5489,6 +5502,10 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 | `DATA_MODEL.md` | endpoint 只使用已登记逻辑对象、引用对象和状态域；项目经历只是 Resume Markdown 内容片段或派生 non-persistent outline 节点，不是 API CRUD 子资源；`JobBindingSummary` / `JobMatchSummary` 由 `JobResumeBinding` 和 `JobMatchAnalysis` 派生；`PolishTopicRef` / `PolishSubtopicRef` 只作为打磨上下文选项引用；`AiTaskResultRef`、`CandidateRef`、`SuggestionRef`、`UserConfirmationRef`、`VersionRef`、`TraceRef`、`EvidenceRef` 进入 API envelope |
 | `SECURITY_PRIVACY.md` | 未登录拒绝、owner enforcement、source unavailable、复制审计、日志脱敏、Prompt / provider payload 不暴露、copy 非 export 与本文一致 |
 | `PROMPT_SPEC.md` | `P-*` 只作为 related prompt contract 和 trace / validation 引用；Prompt contract 的 `api_state_mapping` 不替代 endpoint；failure signals 映射为 API status / error / low confidence |
+| `SCORING_SPEC.md` | 本文评分字段必须使用 `SCORING_SPEC.md` 的 score type、`ScoreRuleVersion`、维度、validation、confidence、low confidence 和 forbidden probability 规则；API 不返回隐藏评分规则或完整内部权重表 |
+| `SEMANTICS_GLOSSARY.md` | `confidence_level`、`validation_status`、`source_availability` 和 candidate / suggestion / formal object 语义必须与词汇表一致；`available / partial / unavailable / mixed` 只可作为聚合状态 |
+| `PERSISTENCE_MODEL.md` | API schema 必须能映射到建议物理模型、join / reference table、owner、version、status、trace、evidence 和 confirmation 记录 |
+| `APPLICATION_FLOW_SPEC.md` | endpoint 的同步 / 异步、模型读取 / 写入、AiTask、P-* contract、LLM call plan、Prompt 结构、validation、low confidence 和 persistence handoff 以该文档为编排交接 |
 
 本文件不新增未登记业务对象，不把项目经历提升为一级或二级 CRUD 资源，不引入 MVP non-goal，不定义文件导出，不绕过 candidate / confirmation / formal object 边界。
 
@@ -5496,7 +5513,7 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 
 以下事项已分类为 deferred_non_blocking 或后续 verification 项，不再作为 `AR-F4-FULL-001` 的 M4 阻断 API UNKNOWN：
 
-- `AR-F4-FULL-003`：评分产品刻度、rubric / rule version、通过倾向分档、风险提示、低置信度降级、版本字段和免责声明已回写并通过 verification；真实招聘结果校准、隐藏规则实现细节和复杂算法调参按 `SHOULD` / `LATER` 处理。
+- `AR-F4-FULL-003`：评分产品刻度、rubric / rule version、通过倾向分档、风险提示、低置信度降级、版本字段和免责声明已回写并通过 verification；评分公式、score type、维度、权重、低置信度和 F7 fixture 的 canonical 位置为 `SCORING_SPEC.md`；真实招聘结果校准、隐藏规则实现细节和复杂算法调参按 `SHOULD` / `LATER` 处理。
 - `AR-F4-FULL-005`：本文已定义 API status / retry / cancel / timeout、`ai_task_id`、`Idempotency-Key` 和 F7 assertion；进展树 / 暂停恢复的完整状态机 fixture 仍由该 Medium finding 后续验证，不改变本轮 AR-F4-FULL-001 的 Fixed 状态。
 - 正式 Weakness 生命周期、合并规则、关闭阈值和自动消减规则：API 只允许 candidate / suggestion / confirmation / formal object 边界，自动算法后置。
 - Asset 质量判断、版本合并、归档、替代和去重算法：API 只允许候选、质量提示、版本建议和用户确认 endpoint；复杂算法后置。
@@ -5508,6 +5525,7 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 增加 scoring / semantics / persistence / application flow 交接 | 将评分 canonical 规则交给 `SCORING_SPEC.md`，语义枚举交给 `SEMANTICS_GLOSSARY.md`，物理关系交给 `PERSISTENCE_MODEL.md`，应用编排交给 `APPLICATION_FLOW_SPEC.md`；更新 `score_type` canonical enum 和 `ScoreResultResponse` 必填字段 |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` UX 可见任务 API 断链 | 新增岗位-简历解绑、复盘列表、复盘复制内容 / 复制事件、低置信候选校对保存和内容沉淀目标确认 endpoint；补齐 request / response、状态、错误、owner、幂等、历史保留和 F7 assertion；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-008` API path / 技术标识符原样性风险 | 回读 API 清单总表、逐接口详情、报告 copy boundary、Schema 索引和 F7 assertion 引用；删除未登记的 report sections endpoint 说明并改为 `data.sections[]`，修正受中文化括注污染的接口名称；当前 API 清单总表与逐接口详情均为 48 个 Method + Path，且不恢复 project-experience module CRUD；不处理 `AR-F4-F8-003`，不进入 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-004` / `AR-F4-F8-005` / `AR-F4-F8-006` 人工审计 API 语义偏差 | Resume API 收敛为 Markdown-only，删除 project-experience module CRUD 和 `modules[]`；`source_availability` 只用于 AI 结果 / 历史引用；Job list/detail 增加 `binding_summary` 与 `latest_match_summary`；Polish session 使用 `resume_job_binding_id`、`topic_id`、`subtopic_id`、`custom_topic_text` 并新增 `GET /api/v1/polish-topics`；不处理 `AR-F4-F8-003`，不进入 implementation |

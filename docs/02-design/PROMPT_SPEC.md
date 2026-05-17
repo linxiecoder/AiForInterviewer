@@ -29,6 +29,9 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | `docs/02-design/TECH_DESIGN.md` | AI 编排总览、LLM 边界、Context Assembly、Retrieval / RAG、trace / evidence 和子文档交接边界 |
 | `docs/02-design/DATA_MODEL.md` | `EvidenceRef`、`TraceRef`、`VersionRef`、`SnapshotRef`、`RAGContextAssembly`、`LlmValidationResult` 等逻辑对象和状态承载 |
 | `docs/02-design/SECURITY_PRIVACY.md` | Prompt 输入最小化、owner 校验、隐私裁剪、RAG 来源治理、日志限制和 LLM / RAG failure 安全表达 |
+| `docs/02-design/SCORING_SPEC.md` | score type、rubric dimensions、默认权重、公式、低置信度和正式 `ScoreResult` 规则 |
+| `docs/02-design/SEMANTICS_GLOSSARY.md` | Low Confidence、`confidence_level`、`validation_status`、`source_availability` 和 candidate / suggestion / formal object 统一语义 |
+| `docs/02-design/APPLICATION_FLOW_SPEC.md` | P-* contract 到 application service、AiTask、LLM call plan、Prompt 输入结构和 persistence handoff 的运行编排 |
 | `docs/03-delivery/BACKLOG.md` | `AIFI-PROMPT-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-SEC-001` 的依赖 |
 
 ### 2.2 非目标
@@ -343,7 +346,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 ### 7.2 评分候选（Scoring Candidate）、通过倾向与风险提示全局规则
 
-本节冻结 `AR-F4-FULL-003` 的 Prompt / AI contract 全局边界，适用于 `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002`、`P-REPORT-003` 以及后续消费评分的 contract。
+本节冻结 `AR-F4-FULL-003` 的 Prompt / AI contract 全局边界，适用于 `P-JOBMATCH-002`、`P-POLISH-004`、`P-PRESSURE-008`、`P-REPORT-002`、`P-REPORT-003` 以及后续消费评分的 contract。评分公式、score type、rubric dimensions、默认权重、缺失维度处理和 F7 scoring fixture 的 canonical 位置为 `SCORING_SPEC.md`；本节只定义 Prompt 输出和校验边界。
 
 - LLM 可以输出 scoring candidate / draft，但不得直接输出最终不可校验评分。正式 `ScoreResult` 必须经过 output schema、`P-SHARED-005` Evidence Binding、`P-SHARED-003` Output Validation、`P-SHARED-004` Low Confidence Classification、版本记录和 persistence handoff。
 - 所有评分输出必须包含 `score_value`、`score_scale=0_100_product_scale`、`score_type`、`score_version`、`rubric_version`、`score_rule_version_ref`、`generated_by_task_id`、`generated_at`、`validation_status`、`confidence_level`、`evidence_refs`、`trace_refs` 和 `low_confidence_flags`。
@@ -365,6 +368,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 交接规则：
 
+- P-* contract 不是一次 LLM call，也不是 endpoint。运行编排、哪些 contract 合并为一次 LLM call、哪些按用户点击 on-demand 生成、以及每个流程读取 / 写入哪些模型，以 `APPLICATION_FLOW_SPEC.md` 为 canonical。
 - 不得把原始 Prompt、provider payload、completion 原文默认暴露给前端。
 - 持久化目标应区分正式业务结果、候选结果、trace、validation result、low confidence flag 和 audit event。
 - 用户确认前，只能写入候选、待确认或 validation / trace 状态，不得写入正式资产、薄弱项或训练建议。
@@ -524,9 +528,9 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 下一步应从 contract 填充转入以下收口路径：
 
-1. `API_SPEC.md` / `DATA_MODEL.md` 同步与细化。
-2. `SECURITY_PRIVACY.md` / `TECH_DESIGN.md` 当前性对齐。
-3. 全量 Prompt contract / 跨文档回归门禁。
+1. 以 `APPLICATION_FLOW_SPEC.md` 对齐 P-* contract 的运行编排、LLM call plan 和 persistence handoff。
+2. 以 `SCORING_SPEC.md` / `SEMANTICS_GLOSSARY.md` 对齐评分、低置信度和状态枚举。
+3. 以 `API_SPEC.md` / `DATA_MODEL.md` / `PERSISTENCE_MODEL.md` 做跨文档回归门禁。
 4. `AIFI-PROMPT-001` 关闭前置检查。
 
 `AIFI-PROMPT-001` 当前仍不自动 DONE；跨文档证据已在本轮转入 `AR-F4-FULL-001` 处置表，后续进入 verification，而不是继续保留阻断式 Prompt UNKNOWN。
@@ -537,7 +541,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 主题 | 分类 | F4 处置结论 | 后续承接 |
 |---|---|---|---|
-| 评分、权重、阈值、通过倾向、风险提示、可信度和免责声明 | already_closed_by_recent_remediation | `PROMPT_SPEC.md` §7.2 和 scoring / report contracts 已冻结 0-100 产品刻度、rubric / rule version、最小权重策略、分档倾向、风险字段、低置信度降级、版本追踪、免责声明和 MVP fixture 校准策略；不得输出精确通过概率。 | F7 scoring / risk fixture |
+| 评分、权重、阈值、通过倾向、风险提示、可信度和免责声明 | already_closed_by_recent_remediation | `PROMPT_SPEC.md` §7.2 和 scoring / report contracts 已冻结 0-100 产品刻度、rubric / rule version、分档倾向、风险字段、低置信度降级、版本追踪、免责声明和禁止精确概率边界；score type、默认维度、权重、公式、缺失维度处理和 F7 scoring fixture 以 `SCORING_SPEC.md` 为 canonical。 | `SCORING_SPEC.md`; F7 scoring / risk fixture |
 | Prompt contract 输出状态、低置信度、source unavailable、validation failed | must_close_in_F4 | Shared failure signals、source availability、Output Validation、Low Confidence、Evidence Binding、Trace / Persistence 已冻结；业务 contract 必须复用 `status`、`validation_result_ref`、`low_confidence_flags`、`evidence_refs` 和 `trace_refs`。 | `P-SHARED-003` / `P-SHARED-004` / `P-SHARED-005`；API response envelope |
 | candidate / suggestion / confirmation / formal object 边界 | must_close_in_F4 | AI 输出只能进入 candidate、draft、suggestion、validation result、trace 或 low confidence；正式 `Weakness`、`Asset`、`AssetVersion`、`TrainingRecommendation`、`TrainingTask` 需用户确认或显式业务动作。 | `DATA_MODEL.md` §4.3；`API_SPEC.md` §7；Weakness / Asset / Training contracts |
 | Prompt 输入最小化、system prompt、provider payload、隐藏评分规则 | must_close_in_F4 | Context Assembly 和 Security 边界禁止前端、日志、trace、copy content 或 API response 暴露 system prompt、Prompt 模板、completion、provider payload、密钥、隐藏评分规则或内部校准细节。 | `SECURITY_PRIVACY.md` §9 / §17.1 / §21；`API_SPEC.md` §8 |
@@ -555,6 +559,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-17 | 增加 scoring / semantics / application flow 交接 | 明确评分细则以 `SCORING_SPEC.md` 为 canonical，Low Confidence / validation / source availability 以 `SEMANTICS_GLOSSARY.md` 为 canonical，P-* contract 运行编排以 `APPLICATION_FLOW_SPEC.md` 为 canonical；不新增 contract ID |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` Prompt 校对 / 沉淀目标断链 | 明确低置信校对只能形成 `CandidateCorrection` / `UserCorrectionRef` 并在确认后作为后续输入；Prompt 只能建议沉淀目标，不能静默决定正式 `DepositTarget` 或写入正式对象；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-006` Polish topic / subtopic Prompt 语义 | 明确 `PolishTopicRef` / `PolishSubtopicRef` / `custom_topic_text` 只作为打磨上下文装配与题目生成输入；主题 / 次主题不是正式业务对象；自定义主题文本必须经过 prompt injection 防护；不新增 contract ID，不进入实现 |
 | 2026-05-16 | 修复 `AR-F4-FULL-001` Prompt 阻断项 | 将 Prompt 待决策项改为处置表；冻结 contract 状态、failure signals、low confidence、source unavailable、validation、evidence、trace、candidate / formal object 和安全边界；复杂算法、provider、模型参数、RAG 实现和 retry 参数改为 deferred_non_blocking；等待 verification |

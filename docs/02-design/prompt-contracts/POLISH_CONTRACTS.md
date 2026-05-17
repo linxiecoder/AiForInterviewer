@@ -480,6 +480,7 @@ Polish 第一组不得直接写入正式 `Weakness`、正式 `Asset`、正式 `T
   - 用户修改回答后重新评分。
   - 系统需要决定是否建议继续同题打磨。
 - 目标（Goal）： 基于当前题目、用户回答和诊断结果生成每轮 0-100 产品评分 candidate / draft 与解释；本 contract 只输出单轮 polish scoring candidate，不直接生成通过倾向或整场风险提示，不直接形成最终报告评分。其输出必须提供后续 report / review / scoring 汇总所需的 `score_version`、`rubric_version` / `rule_version`、证据、置信度、校验结果和 trace。
+  - 评分 score type、默认维度、权重、公式、缺失维度处理和 F7 scoring fixture 以 `../SCORING_SPEC.md` 的 `polish_answer` 规则为 canonical；打磨报告总评分必须使用 `polish_report`，不得直接复用本轮回答分。
 - 必需输入（Required Inputs）：
   - `OwnerRef`
   - `polish_session_ref`
