@@ -190,14 +190,85 @@ F6 约束：
 | `APPLICATION_FLOW_SPEC.md` | use case / command / query / port 边界、Fake LLM 可用于 deterministic orchestration fixture |
 | `SCORING_SPEC.md` | `ScoreType`、0-100 product scale、confidence、validation、pass tendency、risk level、no exact probability |
 | `SEMANTICS_GLOSSARY.md` | `confidence_level`、`validation_status`、`source_availability`、candidate / suggestion / formal object 边界 |
-| `SECURITY_PRIVACY.md` | owner placeholder、trace / audit 最小暴露、Prompt / provider / completion / hidden scoring rules 禁止暴露 |
+| `SECURITY_PRIVACY.md` | auth / session foundation、owner placeholder、trace / audit 最小暴露、Prompt / provider / completion / hidden scoring rules 禁止暴露 |
 | `RELEASE_HANDOFF_SPEC.md` | route inventory、no export、provider failure、trace / audit、migration / rollback 后续输入 |
 
-## 9. 风险和后续待办
+## 9. F5 auth / session foundation baseline
+
+本轮在 F5-M0 skeleton 之上补齐第一批登录闭环后端 foundation：
+
+- 新增 `domain/auth`、`application/auth`、`infrastructure/security`、`schemas/auth.py` 和 `api/v1/auth.py`，保持 domain 不依赖 FastAPI / SQLAlchemy / Pydantic / infrastructure，application 不依赖 FastAPI，router 只做 HTTP adapter。
+- 新增 `POST /api/v1/auth/login`、`GET /api/v1/auth/me`、`POST /api/v1/auth/logout`；不新增 `GET /api/v1/auth/session`，因为 `/auth/me` 已覆盖 session validity 和 current user summary。
+- 当前使用 in-memory user store 与 server-side session store，只作为 F5 foundation baseline；session cookie 名为 `aifi_session`，`HttpOnly`、`SameSite=Lax`、`Path=/api/v1`，local dev 默认不强制 `Secure`，非本地环境可通过配置开启。
+- dev seed 凭据不再硬编码；`/api/v1` 登录种子改为 `API_AUTH_*` 环境变量驱动，`API_AUTH_DEV_USER_PASSWORD` 必填（当 `API_AUTH_DEV_USER_ENABLED=true` 且本地-like 时），未提供时默认不 seed（fail-closed）。
+- 密码 baseline 使用标准库 `hashlib.pbkdf2_hmac`、`secrets.token_bytes` 和 `hmac.compare_digest`；响应、日志和 error envelope 不返回 password、password hash、salt、cookie、raw token 或 session digest。
+- 当前 dev/test seed user 仅用于 local/test baseline，不代表生产账号体系，不记录或响应 seed password / hash / salt。
+- 已新增 auth API、dependency、password/session store、route inventory 和 architecture boundary 测试，验证登录成功设置 HttpOnly cookie、错误密码 401、无 cookie 访问 `/auth/me` 401、cookie 登录态返回用户摘要、logout 清 cookie、无敏感字段暴露、无 `utils.py` 和无 export / download / upload 路由。
+
+本轮不处理生产级账号注册、密码策略、邮件验证、OAuth / SSO、组织权限、多设备管理、持久化 session、CSRF token、登录限流或账号锁定。后续进入更完整 F5 hardening 时，需要补 DB migration、persistent session store、CSRF / rate-limit、审计持久化、账号禁用联动和部署 secret 策略。
+
+## 9.1. 本轮 CORS baseline（本地开发）
+
+- 已在 `apps/api/app/main.py` 增加本地开发 CORS baseline，使用 FastAPI/Starlette 内置 `CORSMiddleware`，默认 `allow_credentials=True`。
+- 默认允许本地 origin：
+  - `http://127.0.0.1:5173`
+  - `http://localhost:5173`
+  - `http://127.0.0.1:5174`
+  - `http://localhost:5174`
+- `OPTIONS` 与主流程允许的方法默认包含 `GET`、`POST`、`OPTIONS`。
+- 允许的请求头默认包含 `Content-Type`、`Accept`、`Authorization`。
+- `API_CORS_ALLOW_ORIGINS` 支持逗号分隔配置；缺省时按 `local`/`dev`/`test`/`development` 环境默认上述本地 origin；在生产语义下缺省空白列表。
+- credentials 模式下禁止 `*`，若环境变量中包含 `*` 会在运行期去除。
+- 不新增路由，也不改变现有 auth envelope / cookie 行为（`HttpOnly`、`SameSite=Lax` 等保持不变）。
+
+## 10. 风险和后续待办
 
 - 当前 SQLAlchemy model 是 skeleton，未冻结 DDL、索引、migration 和真实 repository 查询。
-- 当前 auth / owner dependency 只是 F5-M0 placeholder，F5-M1 起必须按 `SECURITY_PRIVACY.md` 冻结真实 session / owner enforcement。
+- 当前 auth / session 已具备 F5 foundation baseline，但仍是 in-memory store，尚未落库，也未实现 CSRF / rate-limit / 多设备管理 / persistent revocation。
+- 当前 owner dependency 已从 `X-User-Id` placeholder 收敛为 cookie session actor baseline；F5-M1 起仍必须按业务资源逐步补齐 owner-scoped repository 查询和二次 owner enforcement。
 - 当前业务 router 只登记边界，不返回伪造业务数据。
 - 当前 Fake LLM 只用于 contract tests，不代表 Prompt 文案、provider 参数或真实生成质量。
 - 下一步建议进入 F5-M1 Resume module：实现 Markdown 简历保存、版本引用、owner scope、最小 repository 和对应 API contract tests。
 
+## 12. 本轮 dev seed 凭据配置方式（本地）
+
+- 本地可使用 `.env` 注入如下变量（或临时导出）：
+  - `API_AUTH_DEV_USER_ENABLED`
+  - `API_AUTH_DEV_USER_IDENTIFIER`
+  - `API_AUTH_DEV_USER_EMAIL`
+  - `API_AUTH_DEV_USER_USERNAME`
+  - `API_AUTH_DEV_USER_DISPLAY_NAME`
+  - `API_AUTH_DEV_USER_PASSWORD`
+- 建议加载示例：
+  ```bash
+  set -a
+  . ./.env
+  set +a
+  python3 -m uvicorn apps.api.app.main:app --reload --host 127.0.0.1 --port 8000
+  ```
+- `.env.example` 只包含占位值，不含真实密码；`API_AUTH_DEV_USER_PASSWORD` 建议保持为 `change-me-local-only`。
+- `.env` 默认不提交，仓库以 `.gitignore` 统一过滤；即使本地启用 seed，也不代表生产账号体系。生产/非 local-like 环境默认不启用 seed。
+
+## 11. F5 第 2 批前端基础落地（本轮）
+
+- 已建立 `apps/web/src` 的前端最小骨架，采用 Feature-Sliced Design + Domain UI Model 划分：
+  - `app/`：应用入口、provider、路由管理。
+  - `features/`：`auth-login`、`auth-logout` 的 API 与模型。
+  - `entities/`：`user` 的模型与 API adapter。
+  - `pages/`：`login` 与 `dashboard` 基础页。
+  - `widgets/app-shell`：`AppShell`、`Topbar`、`Sidebar`、`UserMenu`。
+  - `shared/`：API client、envelope、error、config、hooks、基础 UI 组件。
+- 新增共享 API client：默认 `base url = /api/v1`，支持 `VITE_API_BASE_URL` 覆盖，统一 `credentials: "include"`，解析 success/error envelope，401 统一归类为 `unauthenticated`。
+- 新增 auth state：包含 `currentUser/loading/error/login/logout/refreshCurrentUser`。
+- 登录页要求达成：
+  - `identifier`（邮箱/用户名）与 `password` 输入。
+  - 登录提交 loading、错误提示。
+  - 登录成功后由路由守卫进入 `/dashboard`。
+- Dashboard Shell 达成：
+  - Topbar、侧边栏、用户状态区、内容区。
+  - 模块导航仅占位（`工作台 / 简历 / 岗位 / 打磨模式 / 压力面 / 报告 / 复盘 / 资产库 / 薄弱项 / 训练建议`），仅占位卡片与 disabled placeholder，不调用业务接口。
+- 安全边界约束（本轮）：
+  - 不使用 localStorage / sessionStorage 存储 token、cookie 或凭据。
+  - 不新增依赖，不直接在页面拼接 `fetch`。
+  - 不展示 cookie、session、token、provider payload、system prompt、隐藏评分规则等敏感内容。
+  - 不展示精确概率与文件导出入口（PDF/docx/Markdown 下载不包含）。

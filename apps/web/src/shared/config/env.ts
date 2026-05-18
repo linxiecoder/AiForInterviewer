@@ -13,7 +13,7 @@ type ApiImportMeta = Omit<ImportMeta, "env"> & {
 const apiMeta = import.meta as ApiImportMeta;
 
 const DEFAULT_API_BASE_URL = "/api/v1";
-const DEV_FALLBACK_API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+const DEV_FALLBACK_API_BASE_URL = "http://127.0.0.1:8001/api/v1";
 
 function normalizeApiBaseUrl(raw: string | undefined): string {
   const trimmed = raw?.trim();

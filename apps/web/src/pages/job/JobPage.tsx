@@ -214,6 +214,7 @@ export function JobPage() {
   const { navigate } = useRouteController();
 
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [jobSearchKeyword, setJobSearchKeyword] = useState<string>("");
   const [isJobsLoading, setIsJobsLoading] = useState<boolean>(false);
   const [jobsError, setJobsError] = useState<UiError | null>(null);
 
@@ -556,6 +557,24 @@ export function JobPage() {
     void loadResumeState();
   }, []);
 
+  const filteredJobs = useMemo(() => {
+    const keyword = jobSearchKeyword.trim().toLowerCase();
+
+    if (!keyword) {
+      return jobs;
+    }
+
+    return jobs.filter((job) =>
+      [
+        job.title,
+        job.company,
+        job.department,
+        job.application_status,
+        job.status,
+      ].some((value) => (value ?? "").toLowerCase().includes(keyword)),
+    );
+  }, [jobs, jobSearchKeyword]);
+
   const tableColumns: ColumnsType<JobSummary> = useMemo(
     () => [
       {
@@ -799,33 +818,35 @@ export function JobPage() {
   return (
     <AppShell>
       <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
-        <Space direction="vertical" size={4} style={{ width: "100%" }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            岗位 / JD 管理
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            支持岗位列表、创建 / 编辑、详情查看、归档与简历绑定联调。
-          </Typography.Text>
-        </Space>
-
         <Card>
-          <Space wrap>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreateForm}
-              disabled={formLoading}
-            >
-              新增岗位
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                void loadJobs();
+          <Space wrap style={{ width: "100%", justifyContent: "space-between" }}>
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreateForm}
+                disabled={formLoading}
+              >
+                新增岗位
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  void loadJobs();
+                }}
+              >
+                刷新
+              </Button>
+            </Space>
+            <Input.Search
+              allowClear
+              placeholder="搜索岗位、公司、部门"
+              value={jobSearchKeyword}
+              onChange={(event) => {
+                setJobSearchKeyword(event.target.value);
               }}
-            >
-              刷新
-            </Button>
+              style={{ width: 320 }}
+            />
           </Space>
         </Card>
 
@@ -862,8 +883,11 @@ export function JobPage() {
             <Table<JobSummary>
               rowKey="job_id"
               columns={tableColumns}
-              dataSource={jobs}
-              pagination={{ pageSize: 10, showSizeChanger: true }}
+              dataSource={filteredJobs}
+              pagination={{
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条`,
+              }}
               size="small"
               scroll={{ x: 1100 }}
             />

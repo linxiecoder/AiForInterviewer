@@ -80,6 +80,9 @@ coverage/
 tmp/
 temp/
 
+# Local design evidence exports
+design-evidence/
+
 # F0/F0.1 local document audit snapshots
 .aifi-docs-snapshot/
 aifi-docs-snapshot.zip

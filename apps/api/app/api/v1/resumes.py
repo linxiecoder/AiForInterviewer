@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session, sessionmaker
 from typing import Any
 
-from app.api.deps import require_authenticated_actor
+from app.api.deps import get_db_session_factory, require_authenticated_actor
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.application.resumes.use_cases import ResumeUseCases
@@ -17,8 +18,11 @@ router = APIRouter(prefix="/resumes", tags=["resumes"])
 
 
 @router.get("")
-async def list_resumes(actor: CurrentActor = Depends(require_authenticated_actor)) -> Any:
-    use_cases = ResumeUseCases(repository=SqlAlchemyResumeRepository())
+async def list_resumes(
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    use_cases = ResumeUseCases(repository=SqlAlchemyResumeRepository(session_factory))
     result = use_cases.list_for_owner(owner_id=actor.owner_id)
     if not result.is_success:
         error = result.error

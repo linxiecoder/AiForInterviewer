@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import Request
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.errors import raise_api_error
 from app.domain.auth.entities import CurrentActor
@@ -18,6 +19,17 @@ def get_auth_runtime(request: Request) -> Any:
             message="Auth runtime is not available.",
         )
     return runtime
+
+
+async def get_db_session_factory(request: Request) -> sessionmaker[Session]:
+    session_factory = getattr(request.app.state, "db_session_factory", None)
+    if session_factory is None:
+        raise_api_error(
+            status_code=500,
+            code="internal_error",
+            message="Database session factory is not available.",
+        )
+    return session_factory
 
 
 def get_current_actor(request: Request) -> CurrentActor | None:

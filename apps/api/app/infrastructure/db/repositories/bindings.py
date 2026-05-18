@@ -1,61 +1,146 @@
-"""In-memory repository implementations for resume-job bindings."""
+"""SQLAlchemy repository implementations for resume-job bindings."""
 
 from __future__ import annotations
 
-from collections import defaultdict
-from copy import deepcopy
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.bindings.ports import BindingRepository
+from app.domain.shared.clock import utc_now
 from app.infrastructure.db.models.binding import ResumeJobBinding as BindingModel
+from app.infrastructure.db.models.resume import Resume as ResumeModel
+from app.infrastructure.db.session import get_session_factory
 
 
 class SqlAlchemyBindingRepository(BindingRepository):
-    _bindings: dict[str, ResumeJobBinding] = {}
-    _by_owner_job: dict[tuple[str, str], set[str]] = defaultdict(set)
-    _resume_current_version: dict[tuple[str, str], str] = {}
+    def __init__(self, session_factory: sessionmaker[Session] | None = None) -> None:
+        self._session_factory = session_factory or get_session_factory()
 
     def get(self, binding_id: str) -> ResumeJobBinding | None:
-        binding = self._bindings.get(binding_id)
-        return deepcopy(binding) if binding is not None else None
+        with self._session_factory() as session:
+            binding = session.get(BindingModel, binding_id)
+            return _to_domain_binding(binding) if binding is not None else None
 
     def add(self, binding: ResumeJobBinding) -> None:
-        self._bindings[binding.binding_id] = deepcopy(binding)
-        self._by_owner_job[(binding.owner_id, binding.job_id)].add(binding.binding_id)
+        with self._session_factory() as session:
+            session.merge(_to_binding_model(binding))
+            session.commit()
 
     def update(self, binding: ResumeJobBinding) -> None:
-        self._bindings[binding.binding_id] = deepcopy(binding)
-        self._by_owner_job[(binding.owner_id, binding.job_id)].add(binding.binding_id)
+        with self._session_factory() as session:
+            session.merge(_to_binding_model(binding))
+            session.commit()
 
     def list_by_owner(self, owner_id: str) -> list[ResumeJobBinding]:
-        return [deepcopy(binding) for binding in self._bindings.values() if binding.owner_id == owner_id]
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(BindingModel)
+                .where(BindingModel.owner_id == owner_id)
+                .order_by(BindingModel.created_at, BindingModel.id)
+            ).all()
+            return [_to_domain_binding(row) for row in rows]
 
     def list_by_job(self, owner_id: str, job_id: str) -> list[ResumeJobBinding]:
-        ids = self._by_owner_job.get((owner_id, job_id), set())
-        return [deepcopy(self._bindings[binding_id]) for binding_id in ids if binding_id in self._bindings]
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(BindingModel)
+                .where(BindingModel.owner_id == owner_id, BindingModel.job_id == job_id)
+                .order_by(BindingModel.created_at, BindingModel.id)
+            ).all()
+            return [_to_domain_binding(row) for row in rows]
 
     def find_active_binding(self, owner_id: str, resume_id: str, job_id: str) -> ResumeJobBinding | None:
-        ids = self._by_owner_job.get((owner_id, job_id), set())
-        for binding_id in ids:
-            binding = self._bindings.get(binding_id)
-            if (
-                binding is not None
-                and binding.resume_id == resume_id
-                and binding.owner_id == owner_id
-                and binding.job_id == job_id
-                and binding.status == "active"
-            ):
-                return deepcopy(binding)
+        with self._session_factory() as session:
+            binding = session.scalar(
+                select(BindingModel)
+                .where(
+                    BindingModel.owner_id == owner_id,
+                    BindingModel.resume_id == resume_id,
+                    BindingModel.job_id == job_id,
+                    BindingModel.status == "active",
+                )
+                .order_by(BindingModel.created_at.desc(), BindingModel.id.desc())
+            )
+            if binding is not None:
+                return _to_domain_binding(binding)
         return None
 
     def register_resume(self, owner_id: str, resume_id: str, resume_version_id: str) -> None:
-        self._resume_current_version[(owner_id, resume_id)] = resume_version_id
+        with self._session_factory() as session:
+            resume = session.get(ResumeModel, resume_id)
+            now = utc_now()
+            if resume is None:
+                resume = ResumeModel(
+                    id=resume_id,
+                    owner_id=owner_id,
+                    actor_id=None,
+                    record_version=1,
+                    status="active",
+                    trace_ref_ids=None,
+                    evidence_ref_ids=None,
+                    created_at=now,
+                    updated_at=now,
+                    title=None,
+                    file_name=None,
+                    current_version_id=resume_version_id,
+                )
+            else:
+                resume.current_version_id = resume_version_id
+                resume.updated_at = now
+            session.merge(resume)
+            session.commit()
 
     def get_resume_current_version(self, owner_id: str, resume_id: str) -> str | None:
-        return self._resume_current_version.get((owner_id, resume_id))
+        with self._session_factory() as session:
+            resume = session.scalar(
+                select(ResumeModel).where(
+                    ResumeModel.id == resume_id,
+                    ResumeModel.owner_id == owner_id,
+                )
+            )
+            return resume.current_version_id if resume is not None else None
 
     @classmethod
     def clear_state(cls) -> None:
-        cls._bindings.clear()
-        cls._by_owner_job.clear()
-        cls._resume_current_version.clear()
+        session_factory = get_session_factory()
+        with session_factory() as session:
+            session.execute(delete(BindingModel))
+            session.commit()
+
+
+def _to_binding_model(binding: ResumeJobBinding) -> BindingModel:
+    return BindingModel(
+        id=binding.binding_id,
+        owner_id=binding.owner_id,
+        actor_id=None,
+        record_version=binding.record_version,
+        status=binding.status,
+        trace_ref_ids=None,
+        evidence_ref_ids=None,
+        created_at=binding.created_at,
+        updated_at=binding.updated_at,
+        resume_id=binding.resume_id,
+        job_id=binding.job_id,
+        resume_version_id=binding.resume_version_id,
+        job_version_id=binding.job_version_id,
+        unbound_at=binding.unbound_at,
+        unbound_by=binding.unbound_by,
+    )
+
+
+def _to_domain_binding(model: BindingModel) -> ResumeJobBinding:
+    return ResumeJobBinding(
+        binding_id=model.id,
+        owner_id=model.owner_id,
+        resume_id=model.resume_id,
+        job_id=model.job_id,
+        resume_version_id=model.resume_version_id,
+        job_version_id=model.job_version_id,
+        status=model.status,
+        record_version=model.record_version,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        unbound_at=model.unbound_at,
+        unbound_by=model.unbound_by,
+    )

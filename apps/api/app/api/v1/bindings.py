@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session, sessionmaker
 from typing import Any
 
-from app.api.deps import require_authenticated_actor
+from app.api.deps import get_db_session_factory, require_authenticated_actor
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.application.bindings.commands import CreateBindingCommand, DeleteBindingCommand
@@ -24,10 +25,11 @@ router = APIRouter(prefix="/resume-job-bindings", tags=["bindings"])
 async def create_binding(
     payload: CreateBindingRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
     binding_use_case = BindingUseCases(
-        binding_repository=SqlAlchemyBindingRepository(),
-        job_repository=SqlAlchemyJobRepository(),
+        binding_repository=SqlAlchemyBindingRepository(session_factory),
+        job_repository=SqlAlchemyJobRepository(session_factory),
     )
     command = CreateBindingCommand(
         owner_id=actor.owner_id,
@@ -54,10 +56,11 @@ async def delete_binding(
     binding_id: str,
     payload: DeleteBindingRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
     binding_use_case = BindingUseCases(
-        binding_repository=SqlAlchemyBindingRepository(),
-        job_repository=SqlAlchemyJobRepository(),
+        binding_repository=SqlAlchemyBindingRepository(session_factory),
+        job_repository=SqlAlchemyJobRepository(session_factory),
     )
     query = GetBindingQuery(owner_id=actor.owner_id, binding_id=binding_id)
     command = DeleteBindingCommand(
