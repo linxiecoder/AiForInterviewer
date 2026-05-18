@@ -1,13 +1,16 @@
-"""Job commands."""
+"""Job command objects."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
+
 from app.domain.shared.refs import VersionRef
 
 
 @dataclass(frozen=True)
 class CreateJobCommand:
-    title: str
     owner_id: str
+    title: str
     company: str | None
     department: str | None
     responsibilities: list[str]

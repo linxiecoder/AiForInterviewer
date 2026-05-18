@@ -1,4 +1,6 @@
-"""Resume-job binding model skeleton."""
+"""Resume-job binding models for F5-M2."""
+
+from __future__ import annotations
 
 from datetime import datetime
 
@@ -17,4 +19,4 @@ class ResumeJobBinding(OwnedRecordMixin, Base):
     resume_version_id: Mapped[str] = mapped_column(String(80), nullable=False)
     job_version_id: Mapped[str] = mapped_column(String(80), nullable=False)
     unbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
+    unbound_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
