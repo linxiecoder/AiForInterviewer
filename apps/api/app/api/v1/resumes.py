@@ -9,10 +9,11 @@ from typing import Any
 from app.api.deps import get_db_session_factory, require_authenticated_actor
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
+from app.application.resumes.commands import CreateResumeCommand
 from app.application.resumes.use_cases import ResumeUseCases
 from app.domain.auth.entities import CurrentActor
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
-from app.schemas.resumes import ResumeSummary
+from app.schemas.resumes import CreateResumeRequest, ResumeSummary
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
 
@@ -34,6 +35,32 @@ async def list_resumes(
 
     data = [_to_resume_summary(resume) for resume in result.value or []]
     return success_envelope(resource_type="resume_list", data=data)
+
+
+@router.post("", status_code=201)
+async def create_resume(
+    payload: CreateResumeRequest,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    use_cases = ResumeUseCases(repository=SqlAlchemyResumeRepository(session_factory))
+    result = use_cases.create(
+        CreateResumeCommand(
+            owner_id=actor.owner_id,
+            title=payload.title,
+            markdown_text=payload.markdown_text,
+        )
+    )
+    if not result.is_success:
+        error = result.error
+        raise_api_error(
+            status_code=_error_status(error.code),
+            code=error.code,
+            message=error.message,
+        )
+
+    resume, _version = result.value
+    return success_envelope(resource_type="resume_detail", data=_to_resume_summary(resume))
 
 
 def _to_resume_summary(resume) -> dict:

@@ -6,11 +6,9 @@ type ViteEnvModeHints = {
   readonly DEV?: boolean;
 };
 
-type ApiImportMeta = Omit<ImportMeta, "env"> & {
-  readonly env?: ViteEnvWithApiBase & ViteEnvModeHints;
+type ViteImportMeta = ImportMeta & {
+  readonly env: ViteEnvWithApiBase & ViteEnvModeHints;
 };
-
-const apiMeta = import.meta as ApiImportMeta;
 
 const DEFAULT_API_BASE_URL = "/api/v1";
 const DEV_FALLBACK_API_BASE_URL = "http://127.0.0.1:8001/api/v1";
@@ -43,8 +41,10 @@ function isLocalViteDevServer(): boolean {
   );
 }
 
-export const API_BASE_URL = normalizeApiBaseUrl(apiMeta.env?.VITE_API_BASE_URL);
+const viteEnv = (import.meta as ViteImportMeta).env;
 
-if (apiMeta.env?.DEV) {
+export const API_BASE_URL = normalizeApiBaseUrl(viteEnv.VITE_API_BASE_URL);
+
+if (viteEnv.DEV) {
   console.info("[AIFI] API_BASE_URL", API_BASE_URL);
 }

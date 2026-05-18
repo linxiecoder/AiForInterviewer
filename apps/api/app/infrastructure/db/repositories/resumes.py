@@ -4,10 +4,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.resumes.ports import ResumeRepository
-from app.domain.resumes.entities import Resume
+from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
 from app.infrastructure.db.models.resume import Resume as ResumeModel
+from app.infrastructure.db.models.resume import ResumeVersion as ResumeVersionModel
 from app.infrastructure.db.session import get_session_factory
 
 
@@ -41,10 +42,22 @@ class SqlAlchemyResumeRepository(ResumeRepository):
             session.merge(_to_resume_model(resume))
             session.commit()
 
+    def add_version(self, version: ResumeVersion) -> None:
+        with self._session_factory() as session:
+            session.merge(_to_resume_version_model(version))
+            session.commit()
+
+    def create_with_version(self, resume: Resume, version: ResumeVersion) -> None:
+        with self._session_factory() as session:
+            session.merge(_to_resume_model(resume))
+            session.merge(_to_resume_version_model(version))
+            session.commit()
+
     @classmethod
     def clear_state(cls) -> None:
         session_factory = get_session_factory()
         with session_factory() as session:
+            session.execute(delete(ResumeVersionModel))
             session.execute(delete(ResumeModel))
             session.commit()
 
@@ -82,4 +95,22 @@ def _to_domain_resume(model: ResumeModel) -> Resume:
         file_name=model.file_name,
         created_at=model.created_at,
         updated_at=model.updated_at,
+    )
+
+
+def _to_resume_version_model(version: ResumeVersion) -> ResumeVersionModel:
+    created_at = version.created_at or utc_now()
+    return ResumeVersionModel(
+        id=version.resume_version_id,
+        owner_id=version.owner_id,
+        actor_id=None,
+        record_version=1,
+        status=version.status,
+        trace_ref_ids=None,
+        evidence_ref_ids=None,
+        created_at=created_at,
+        updated_at=created_at,
+        resume_id=version.resume_id,
+        version_number=version.version_number,
+        markdown_text=version.markdown_text,
     )

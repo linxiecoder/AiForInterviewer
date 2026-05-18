@@ -69,6 +69,69 @@ def test_list_resumes_returns_empty_when_no_resume() -> None:
     assert body["data"] == []
 
 
+def test_create_resume_returns_created_summary_and_owner_scoped_list() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_a_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+    owner_b_cookie = _login_cookie(app, "user_b", USER_B_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resumes",
+        "POST",
+        json_body={
+            "title": "前端工程师简历",
+            "markdown_text": "# 前端工程师\n\n- React\n- TypeScript",
+        },
+        headers={"cookie": owner_a_cookie},
+    )
+
+    assert status_code == 201
+    assert body["resource_type"] == "resume_detail"
+    created = body["data"]
+    assert created["resume_id"].startswith("res_")
+    assert created["title"] == "前端工程师简历"
+    assert created["status"] == "active"
+    assert created["current_version_ref"]["resource_type"] == "resume"
+    assert created["current_version_ref"]["resource_id"] == created["resume_id"]
+    assert created["current_version_ref"]["version_id"].startswith("res_")
+
+    owner_a_status_code, owner_a_body = call_json(
+        app,
+        "/api/v1/resumes",
+        "GET",
+        headers={"cookie": owner_a_cookie},
+    )
+    assert owner_a_status_code == 200
+    assert [item["resume_id"] for item in owner_a_body["data"]] == [created["resume_id"]]
+
+    owner_b_status_code, owner_b_body = call_json(
+        app,
+        "/api/v1/resumes",
+        "GET",
+        headers={"cookie": owner_b_cookie},
+    )
+    assert owner_b_status_code == 200
+    assert owner_b_body["data"] == []
+
+
+def test_create_resume_rejects_blank_content() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resumes",
+        "POST",
+        json_body={"title": "空白简历", "markdown_text": "   "},
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+
+
 def test_user_b_cannot_list_user_a_resumes() -> None:
     app = _app_with_two_users()
     _reset_repositories()

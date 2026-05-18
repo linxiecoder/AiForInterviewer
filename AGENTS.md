@@ -71,7 +71,49 @@ permalink: ai-for-interviewer/agents
 4. 只改当前窗口授权的文件。
 5. 完成后输出 `git status --short`、`git diff --stat`、新增/修改/移动清单、仍需确认项和旧体系残留检查结果。
 
-## 8. 禁止事项
+## 8. 本地页面验证启动命令
+
+以下命令用于本地页面验证和前后端联调。默认在 WSL / Linux shell 中从仓库根目录执行：
+
+```bash
+cd /home/administrator/code/AiForInterviewer
+```
+
+后端运行时读取 `API_DATABASE_URL`，未设置时读取 `DATABASE_URL`，二者都未设置时回退到内存 SQLite。需要连接本地 PostgreSQL 时，先确认 `.env` 中包含 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_PORT` 和 `DATABASE_URL`，再启动数据库：
+
+```bash
+docker compose -f docker-compose.pg.yml up -d postgres
+```
+
+当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时也会执行同一初始化路径。需要在启动服务前手动初始化 schema 时，使用：
+
+```bash
+set -a; . ./.env; set +a
+PYTHONPATH=apps/api .venv/bin/python -c "from app.infrastructure.db.session import initialize_schema; initialize_schema(); print('schema initialized')"
+```
+
+启动后端 API：
+
+```bash
+set -a; . ./.env; set +a
+.venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port "${API_PORT:-8001}"
+```
+
+后端启动后用以下地址检查：
+
+```bash
+curl "http://127.0.0.1:${API_PORT:-8001}/api/v1/health"
+```
+
+启动前端前，确认 `apps/web/.env.local` 的 `VITE_API_BASE_URL` 与后端端口一致。例如后端使用 `8001` 时：
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1 npm run web:dev
+```
+
+前端启动后访问 `http://127.0.0.1:5173/`。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
+
+## 9. 禁止事项
 
 - 禁止把历史计划、历史任务包或 archive 报告恢复为 active 事实源。
 - 禁止绕过 `BACKLOG.md` 直接开启任务。

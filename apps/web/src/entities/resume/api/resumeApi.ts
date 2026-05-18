@@ -2,6 +2,11 @@ import { isApiHttpError, type ApiHttpError } from "../../../shared/api/errors";
 import { request, buildSuccessData } from "../../../shared/api/client";
 import type { ResumeSummary } from "../model/types";
 
+export type CreateResumeRequest = {
+  title: string;
+  markdown_text: string;
+};
+
 export type ResumeApiState =
   | {
       kind: "ready";
@@ -13,6 +18,18 @@ export type ResumeApiState =
       resumes: [];
       status: number;
     };
+
+export async function createResume(payload: CreateResumeRequest): Promise<ResumeSummary> {
+  const response = await request<ResumeSummary>("/resumes", {
+    method: "POST",
+    body: payload,
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("简历创建返回为空");
+  }
+  return data;
+}
 
 export async function fetchResumeSummaries(): Promise<ResumeApiState> {
   try {
