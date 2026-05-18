@@ -1,10 +1,23 @@
-"""Job domain ports."""
+"""Job repository ports."""
+
+from __future__ import annotations
 
 from typing import Protocol
 
-from app.domain.jobs.entities import Job
+from app.domain.jobs.entities import Job, JobVersion
 
 
-class JobReader(Protocol):
+class JobRepository(Protocol):
     def get(self, job_id: str) -> Job | None: ...
 
+    def list_by_owner(self, owner_id: str) -> list[Job]: ...
+
+    def create_job(self, job: Job) -> None: ...
+
+    def update_job(self, job: Job) -> None: ...
+
+    def create_job_version(self, version: JobVersion) -> None: ...
+
+    def update_job_version(self, version: JobVersion) -> None: ...
+
+    def get_job_version(self, job_version_id: str) -> JobVersion | None: ...

@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.ai_tasks import router as ai_tasks_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.assets import router as assets_router
 from app.api.v1.bindings import router as bindings_router
 from app.api.v1.contract_baseline import router as contract_baseline_router
@@ -22,6 +23,7 @@ def build_api_v1_router(prefix: str) -> APIRouter:
     """Build the API v1 router from stable and active route boundaries."""
     router = APIRouter(prefix=prefix)
     router.include_router(health_router)
+    router.include_router(auth_router)
     router.include_router(contract_baseline_router)
     router.include_router(resumes_router)
     router.include_router(jobs_router)

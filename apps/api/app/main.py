@@ -4,10 +4,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import logging
 import os
+from typing import Iterable
 
 from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
+from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1 import build_api_v1_router
+from app.infrastructure.security.auth import AuthRuntime, build_auth_runtime_from_env
 
 STARTUP_LOGGER = logging.getLogger("uvicorn.error")
 DEFAULT_API_TITLE = "ai-for-interviewer"
@@ -20,6 +24,16 @@ API_VERSION_ENV = "API_VERSION"
 API_PREFIX_ENV = "API_PREFIX"
 API_HOST_ENV = "API_HOST"
 API_PORT_ENV = "API_PORT"
+API_CORS_ALLOW_ORIGINS_ENV = "API_CORS_ALLOW_ORIGINS"
+API_CORS_LOCAL_LIKE_ENV_VALUES = {"local", "test", "development", "dev"}
+DEFAULT_CORS_ALLOW_ORIGINS = (
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:5174",
+)
+DEFAULT_CORS_METHODS = ("GET", "POST", "PATCH", "DELETE", "OPTIONS")
+DEFAULT_CORS_HEADERS = ("Content-Type", "Accept", "Authorization")
 
 
 @dataclass(frozen=True)
@@ -31,6 +45,7 @@ class ApiSettings:
     api_prefix: str = DEFAULT_API_PREFIX
     host: str = DEFAULT_API_HOST
     port: int = DEFAULT_API_PORT
+    cors_allow_origins: tuple[str, ...] = ()
 
 
 def get_settings() -> ApiSettings:
@@ -41,6 +56,7 @@ def get_settings() -> ApiSettings:
         api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
         host=_env(API_HOST_ENV, DEFAULT_API_HOST),
         port=_env_int(API_PORT_ENV, DEFAULT_API_PORT),
+        cors_allow_origins=_read_cors_allow_origins(),
     )
 
 
@@ -48,6 +64,7 @@ def create_app(
     settings: ApiSettings | None = None,
     *,
     initialize_schema: bool = False,
+    auth_runtime: AuthRuntime | None = None,
 ) -> FastAPI:
     """构建当前保留的 API app；legacy schema 初始化已随旧持久化层删除。"""
     resolved_settings = settings or get_settings()
@@ -65,6 +82,11 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.auth_runtime = auth_runtime or build_auth_runtime_from_env(
+        cookie_path=resolved_settings.api_prefix
+    )
+    _add_cors_middleware(application, resolved_settings.cors_allow_origins)
+    application.add_exception_handler(ApiHttpError, api_http_error_handler)
     application.include_router(build_api_v1_router(resolved_settings.api_prefix))
     return application
 
@@ -105,6 +127,54 @@ def _env_int(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def _env_optional(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    return value.strip() or None
+
+
+def _read_cors_allow_origins() -> tuple[str, ...]:
+    configured = _env_optional(API_CORS_ALLOW_ORIGINS_ENV)
+    if configured is None:
+        env_mode = _read_env_mode()
+        if env_mode in API_CORS_LOCAL_LIKE_ENV_VALUES:
+            return DEFAULT_CORS_ALLOW_ORIGINS
+        return tuple()
+    origins = _parse_cors_origins(configured)
+    return tuple(_filter_cors_wildcards(origins))
+
+
+def _read_env_mode() -> str:
+    return (
+        _env("API_AUTH_ENV", _env("API_ENV", "local")).strip().lower()
+        or "local"
+    )
+
+
+def _parse_cors_origins(raw: str) -> tuple[str, ...]:
+    values = (value.strip() for value in raw.split(","))
+    return tuple(value for value in values if value)
+
+
+def _filter_cors_wildcards(origins: tuple[str, ...]) -> tuple[str, ...]:
+    if "*" in origins:
+        STARTUP_LOGGER.warning(
+            "API_CORS_ALLOW_ORIGINS contains wildcard '*'; dropping it because credentials mode is enabled."
+        )
+    return tuple(dict.fromkeys(origin for origin in origins if origin != "*"))
+
+
+def _add_cors_middleware(application: FastAPI, cors_allow_origins: Iterable[str]) -> None:
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(cors_allow_origins),
+        allow_credentials=True,
+        allow_methods=DEFAULT_CORS_METHODS,
+        allow_headers=DEFAULT_CORS_HEADERS,
+    )
 
 
 def _normalize_prefix(prefix: str) -> str:

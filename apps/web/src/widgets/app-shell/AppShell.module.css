@@ -1,0 +1,27 @@
+.shell {
+  min-height: 100vh;
+  height: 100dvh;
+  display: flex;
+  background: #eef4fb;
+  overflow: hidden;
+}
+
+.shell > :global(.ant-layout) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mainContent {
+  min-height: 0;
+  flex: 1;
+  padding: 16px 20px;
+  overflow: auto;
+  background: linear-gradient(180deg, #f4f7fc 0%, #edf3fb 100%);
+}
+
+.contentSurface {
+  background: transparent;
+  min-height: 100%;
+}

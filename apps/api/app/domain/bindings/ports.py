@@ -1,10 +1,25 @@
-"""Binding domain ports."""
+"""Binding repository ports."""
+
+from __future__ import annotations
 
 from typing import Protocol
 
 from app.domain.bindings.entities import ResumeJobBinding
 
 
-class BindingReader(Protocol):
+class BindingRepository(Protocol):
     def get(self, binding_id: str) -> ResumeJobBinding | None: ...
 
+    def add(self, binding: ResumeJobBinding) -> None: ...
+
+    def update(self, binding: ResumeJobBinding) -> None: ...
+
+    def list_by_owner(self, owner_id: str) -> list[ResumeJobBinding]: ...
+
+    def list_by_job(self, owner_id: str, job_id: str) -> list[ResumeJobBinding]: ...
+
+    def find_active_binding(self, owner_id: str, resume_id: str, job_id: str) -> ResumeJobBinding | None: ...
+
+    def register_resume(self, owner_id: str, resume_id: str, resume_version_id: str) -> None: ...
+
+    def get_resume_current_version(self, owner_id: str, resume_id: str) -> str | None: ...

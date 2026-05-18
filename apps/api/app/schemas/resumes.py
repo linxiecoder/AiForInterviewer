@@ -1,5 +1,7 @@
 """Resume API DTO skeletons."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from app.schemas.refs import VersionRef
@@ -18,12 +20,17 @@ class UpdateResumeRequest(BaseModel):
 
 class ResumeSummary(BaseModel):
     resume_id: str
-    title: str
+    title: str | None
     status: str
     current_version_ref: VersionRef
+    current_version_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    file_name: str | None = None
+    binding_eligible: bool | None = None
+    latest_version_summary: str | None = None
 
 
 class ResumeDetail(ResumeSummary):
     markdown_text: str
     derived_outline: dict[str, object] | None = None
-

@@ -16,7 +16,11 @@ def test_route_inventory_keeps_health_and_contract_baseline() -> None:
     paths = {route.path for route in app.routes if hasattr(route, "path")}
 
     assert "/api/v1/health" in paths
+    assert "/api/v1/auth/login" in paths
+    assert "/api/v1/auth/me" in paths
+    assert "/api/v1/auth/logout" in paths
     assert "/api/v1/contract-baseline" in paths
+    assert "/api/v1/auth/session" not in paths
 
 
 def test_baseline_route_inventory_has_no_export_download_or_upload_routes() -> None:
@@ -34,4 +38,3 @@ def test_baseline_route_inventory_has_no_export_download_or_upload_routes() -> N
         for forbidden in FORBIDDEN_ROUTE_PARTS
         if forbidden in path
     ]
-

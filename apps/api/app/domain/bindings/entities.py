@@ -1,15 +1,22 @@
-"""Binding domain entities."""
+"""Resume-job binding domain entities for F5-M2."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
-
-from app.domain.shared.refs import OwnerRef, VersionRef
+from datetime import datetime
 
 
 @dataclass(frozen=True)
 class ResumeJobBinding:
     binding_id: str
-    owner_ref: OwnerRef
-    resume_version_ref: VersionRef
-    job_version_ref: VersionRef
+    owner_id: str
+    resume_id: str
+    job_id: str
+    resume_version_id: str
+    job_version_id: str
     status: str
-
+    record_version: int
+    created_at: datetime
+    updated_at: datetime
+    unbound_at: datetime | None = None
+    unbound_by: str | None = None

@@ -33,6 +33,25 @@ def test_application_layer_does_not_import_fastapi_or_infrastructure() -> None:
     assert violations == []
 
 
+def test_auth_layers_keep_required_boundaries() -> None:
+    domain_violations = _find_forbidden_imports(
+        APP_ROOT / "domain" / "auth",
+        forbidden_prefixes=("fastapi", "sqlalchemy", "pydantic", "app.infrastructure"),
+    )
+    application_violations = _find_forbidden_imports(
+        APP_ROOT / "application" / "auth",
+        forbidden_prefixes=("fastapi",),
+    )
+    api_violations = _find_forbidden_imports(
+        APP_ROOT / "api" / "v1" / "auth.py",
+        forbidden_prefixes=("app.infrastructure.db.models",),
+    )
+
+    assert domain_violations == []
+    assert application_violations == []
+    assert api_violations == []
+
+
 def test_no_unbounded_utils_file_exists() -> None:
     assert list((APP_ROOT).rglob("utils.py")) == []
 
@@ -57,7 +76,8 @@ def test_shared_kernel_objects_are_reusable() -> None:
 
 def _find_forbidden_imports(root: Path, forbidden_prefixes: tuple[str, ...]) -> list[str]:
     violations: list[str] = []
-    for path in sorted(root.rglob("*.py")):
+    paths = [root] if root.is_file() else sorted(root.rglob("*.py"))
+    for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             module_names: list[str] = []
@@ -70,4 +90,3 @@ def _find_forbidden_imports(root: Path, forbidden_prefixes: tuple[str, ...]) -> 
                     rel = path.relative_to(REPO_ROOT)
                     violations.append(f"{rel}: {module_name}")
     return violations
-
