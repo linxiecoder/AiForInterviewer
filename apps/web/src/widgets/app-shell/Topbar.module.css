@@ -1,0 +1,15 @@
+.topbar {
+  height: 72px;
+  background: transparent;
+  border-bottom: 1px solid #e6edf4;
+  display: flex;
+  align-items: center;
+  padding: 0 24px !important;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.searchInput {
+  width: 480px;
+}

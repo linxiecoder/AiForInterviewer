@@ -1,0 +1,73 @@
+export const DASHBOARD_PAGE_COPY = {
+  pageTitle: "工作台",
+  frameHint: "高保真结构占位态（本地数据，不接入真实业务接口）",
+  searchPlaceholder: "搜索简历、岗位、面试记录...",
+  sections: {
+    above: {
+      title: "Section01_AboveTheFold",
+      cardsTitle: "首页指标",
+      titlePrefix: "首页指标",
+      disabledActionHint: "待联调状态，仅作入口占位。",
+      defaultTitle: "首页指标",
+    },
+    todo: {
+      title: "Section02_TodoSection",
+      cardTitle: "待办事项",
+      totalHint: "共 23 项",
+      headerIconLabel: "待办事项",
+      disabledActionHint: "待联调状态，仅作待办提示。",
+    },
+    activity: {
+      title: "Section03_ActivitySection",
+      cardTitle: "最近活动",
+      headerActionLabel: "查看全部",
+      headerActionDisabledHint: "查看全部（占位）",
+      footer: "近期活动仅为示例占位，不代表真实历史。",
+    },
+    empty: {
+      title: "资料不足态",
+      sectionHeader: "资料与历史不足状态",
+      description: "当前不接入真实数据。",
+      footer: "仅保留提示文案与占位模块。",
+      defaultDisabledHint: "当前为示例状态。",
+      disabledReason: "该状态下不展示真实历史记录。",
+    },
+  },
+  labels: {
+    pageTitle: "工作台",
+    emergency: "紧急",
+    important: "重要",
+    normal: "普通",
+    newTag: "新建",
+    reviewTag: "待复盘",
+    sentTag: "已投递",
+    updatedTag: "已更新",
+    todoBadgeStatusTodo: "TODO",
+    todoBadgeStatusDefault: "— 0",
+  },
+  states: {
+    loading: "加载中",
+    loadingReason: "当前页面采用高保真占位结构，数据未接入真实接口。",
+    loadingDetails: "请稍后使用真实业务联调。",
+    errorRecoverHint: "占位页目前不支持恢复查询",
+    emptyReason: "暂无可展示数据（占位示例模式）。",
+    insufficientPrefix: "资料不足",
+    placeholderButton: "待联调",
+    disabledPrefix: "当前状态仅为示意说明",
+  },
+  sectionOrder: [
+    "Section01_AboveTheFold",
+    "Section02_TodoSection",
+    "Section03_ActivitySection",
+  ],
+  navigationHint: "导航与 shell 布局沿用高保真结构候选，不接真实业务流程。",
+  emptyStates: {
+    guidanceTitle: "默认未接入真实状态",
+    guidanceDescription: "当前展示内容为 Design Evidence 占位数据。",
+    todoHint: "后续补充真实联调能力。",
+    createAction: "立即配置（占位）",
+    guidanceFooter: "该区块不作为默认首页主内容。",
+  },
+} as const;
+
+export type DashboardPageCopy = typeof DASHBOARD_PAGE_COPY;

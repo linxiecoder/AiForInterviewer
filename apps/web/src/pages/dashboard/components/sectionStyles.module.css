@@ -1,0 +1,75 @@
+.sectionCard {
+  background: #ffffff;
+}
+
+.metricCard {
+  border: 1px solid #dce5f2;
+  background: #ffffff;
+}
+
+.metricInner {
+  width: 100%;
+}
+
+.metricHeader {
+  width: 100%;
+}
+
+.metricIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1677ff;
+  font-size: 16px;
+  background: #edf4ff;
+}
+
+.metricValue {
+  margin: 0 !important;
+  line-height: 1.2;
+}
+
+.sectionHeaderRow {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.leftAccentIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1677ff;
+  background: #edf4ff;
+}
+
+.todoCard {
+  border: 1px solid #dce5f2;
+  background: #ffffff;
+  min-height: 178px;
+}
+
+.todoTitleRow {
+  width: 100%;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.activityHeader {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
