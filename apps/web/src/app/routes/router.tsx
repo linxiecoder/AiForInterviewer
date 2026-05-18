@@ -10,10 +10,11 @@ import {
 import { useAuth } from "../providers/AuthProvider";
 import { LoginPage } from "../../pages/login/LoginPage";
 import { DashboardPage } from "../../pages/dashboard/DashboardPage";
+import { JobPage } from "../../pages/job/JobPage";
 import { ErrorState } from "../../shared/ui/ErrorState";
 import { LoadingState } from "../../shared/ui/LoadingState";
 
-export type RoutePath = "/login" | "/dashboard" | "/";
+export type RoutePath = "/login" | "/dashboard" | "/job" | "/";
 type RouteAction = (path: string, options?: { replace?: boolean }) => void;
 
 interface RouteContextValue {
@@ -24,7 +25,12 @@ interface RouteContextValue {
 const RouteContext = createContext<RouteContextValue | null>(null);
 
 function normalizePath(pathname: string): RoutePath {
-  if (pathname === "/dashboard" || pathname === "/login" || pathname === "/") {
+  if (
+    pathname === "/dashboard" ||
+    pathname === "/job" ||
+    pathname === "/login" ||
+    pathname === "/"
+  ) {
     return pathname;
   }
   return "/";
@@ -32,7 +38,7 @@ function normalizePath(pathname: string): RoutePath {
 
 function parsePath(rawPath: string | null): RoutePath {
   const pathname = rawPath || window.location.pathname;
-  if (pathname === "/dashboard" || pathname === "/login" || pathname === "/") {
+  if (pathname === "/dashboard" || pathname === "/job" || pathname === "/login" || pathname === "/") {
     return pathname;
   }
   return "/";
@@ -123,6 +129,10 @@ export function AppRouter() {
 
   if (path === "/dashboard") {
     return <DashboardPage />;
+  }
+
+  if (path === "/job") {
+    return <JobPage />;
   }
 
   return (

@@ -38,8 +38,8 @@ export const APP_SHELL_NAV_ITEMS: AppShellNavItem[] = [
     label: "目标岗位",
     icon: "target",
     path: "/job",
-    disabled: true,
-    disabledReason: "占位：岗位模块待联调",
+    disabled: false,
+    disabledReason: "岗位模块已联调",
   },
   {
     key: "interview",
