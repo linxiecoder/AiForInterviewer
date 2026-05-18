@@ -1,6 +1,64 @@
-"""Resume route boundary placeholder."""
+"""Resume API boundary for list/detail operations."""
 
-from fastapi import APIRouter
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends
+from typing import Any
+
+from app.api.deps import require_authenticated_actor
+from app.api.envelope import success_envelope
+from app.api.errors import raise_api_error
+from app.application.resumes.use_cases import ResumeUseCases
+from app.domain.auth.entities import CurrentActor
+from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
+from app.schemas.resumes import ResumeSummary
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
 
+
+@router.get("")
+async def list_resumes(actor: CurrentActor = Depends(require_authenticated_actor)) -> Any:
+    use_cases = ResumeUseCases(repository=SqlAlchemyResumeRepository())
+    result = use_cases.list_for_owner(owner_id=actor.owner_id)
+    if not result.is_success:
+        error = result.error
+        raise_api_error(
+            status_code=_error_status(error.code),
+            code=error.code,
+            message=error.message,
+        )
+
+    data = [_to_resume_summary(resume) for resume in result.value or []]
+    return success_envelope(resource_type="resume_list", data=data)
+
+
+def _to_resume_summary(resume) -> dict:
+    current_version_ref = resume.current_version_ref
+    current_version_ref_payload = None
+    if current_version_ref is not None:
+        current_version_ref_payload = {
+            "resource_type": current_version_ref.resource_type,
+            "resource_id": current_version_ref.resource_id,
+            "version_id": current_version_ref.version_id,
+        }
+
+    return ResumeSummary(
+        resume_id=resume.resume_id,
+        title=resume.title,
+        status=resume.status,
+        current_version_ref=current_version_ref_payload,
+        current_version_id=resume.current_version_ref.version_id,
+        created_at=resume.created_at,
+        updated_at=resume.updated_at,
+        file_name=resume.file_name,
+    ).model_dump(mode="json")
+
+
+def _error_status(code: str) -> int:
+    if code in {"stale_version_conflict", "idempotency_conflict"}:
+        return 409
+    if code == "validation_failed":
+        return 422
+    if code == "not_found_or_inaccessible":
+        return 404
+    return 400
