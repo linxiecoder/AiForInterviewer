@@ -13,6 +13,9 @@ from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
     PolishQuestion,
+    PolishSessionAnswerDetail,
+    PolishSessionDetail,
+    PolishSessionTurn,
     PolishSession,
     PolishSubtopic,
     PolishTaskStatus,
@@ -42,6 +45,12 @@ FEEDBACK_CONTRACT_IDS = (
     "P-POLISH-005",
     "P-POLISH-009",
 )
+UNNAMED_JOB_TITLE = "未命名岗位"
+UNNAMED_RESUME_TITLE = "未命名简历"
+UNNAMED_COMPANY_TITLE = "未命名公司"
+UNNAMED_QUESTION_TEXT = "题干缺失"
+UNNAMED_ANSWER_TEXT = "暂无回答"
+UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
 
 POLISH_TOPICS: tuple[PolishTopic, ...] = (
     PolishTopic(
@@ -127,8 +136,14 @@ class PolishUseCases:
                 )
         return ApplicationResult(value=POLISH_TOPICS)
 
-    def list_sessions(self, query: ListPolishSessionsQuery) -> ApplicationResult[tuple[PolishSession, ...]]:
-        return ApplicationResult(value=self._polish_repository.list_sessions(query.owner_id))
+    def list_sessions(self, query: ListPolishSessionsQuery) -> ApplicationResult[tuple[PolishSessionDetail, ...]]:
+        sessions = self._polish_repository.list_sessions(query.owner_id)
+        return ApplicationResult(
+            value=tuple(
+                self._build_session_detail(owner_id=query.owner_id, session=session, include_turns=False)
+                for session in sessions
+            )
+        )
 
     def create_session(self, command: CreatePolishSessionCommand) -> ApplicationResult[PolishSession]:
         binding = self._binding_repository.get(command.resume_job_binding_id)
@@ -185,13 +200,14 @@ class PolishUseCases:
         self._polish_repository.add_session(session)
         return ApplicationResult(value=session)
 
-    def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSession]:
+    def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSessionDetail]:
         session = self._polish_repository.get_session(query.owner_id, query.session_id)
         if session is None:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
             )
-        return ApplicationResult(value=session)
+        detail = self._build_session_detail(owner_id=query.owner_id, session=session)
+        return ApplicationResult(value=detail)
 
     def create_question_task(self, command: CreatePolishQuestionTaskCommand) -> ApplicationResult[PolishTaskStatus]:
         session = self._polish_repository.get_session(command.owner_id, command.session_id)
@@ -320,6 +336,68 @@ class PolishUseCases:
         )
         return ApplicationResult(value=task)
 
+    def _build_session_detail(
+        self, *, owner_id: str, session: PolishSession, include_turns: bool = True
+    ) -> PolishSessionDetail:
+        job_title, job_company = self._resolve_job_labels(owner_id=owner_id, job_id=session.job_id)
+        resume_title = self._resolve_resume_title(owner_id=owner_id, resume_id=session.resume_id)
+        binding_label = self._build_binding_label(job_title=job_title, resume_title=resume_title)
+        turns = self._build_session_turns(owner_id=owner_id, session_id=session.session_id) if include_turns else ()
+        return PolishSessionDetail(
+            session=session,
+            job_title=job_title,
+            job_company=job_company,
+            resume_title=resume_title,
+            binding_label=binding_label,
+            turns=tuple(turns),
+        )
+
+    def _build_session_turns(self, owner_id: str, session_id: str) -> tuple[PolishSessionTurn, ...]:
+        questions = self._polish_repository.list_questions_for_session(owner_id=owner_id, session_id=session_id)
+        answers = self._polish_repository.list_answers_for_session(owner_id=owner_id, session_id=session_id)
+        feedbacks = self._polish_repository.list_feedbacks_for_session(owner_id=owner_id, session_id=session_id)
+
+        feedback_map = _latest_feedback_by_answer_id(feedbacks)
+        answers_by_question: dict[str, list[PolishSessionAnswerDetail]] = {}
+        for answer in answers:
+            answers_by_question.setdefault(answer.question_id, []).append(
+                _to_session_answer_detail(answer=answer, feedback=feedback_map.get(answer.answer_id))
+            )
+
+        return tuple(
+            PolishSessionTurn(
+                question_id=question.question_id,
+                question_text=_or_fallback_text(question.question_text, UNNAMED_QUESTION_TEXT),
+                question_created_at=question.created_at,
+                answers=tuple(answers_by_question.get(question.question_id, ())),
+            )
+            for question in questions
+        )
+
+    def _resolve_job_labels(self, *, owner_id: str, job_id: str) -> tuple[str, str]:
+        if not job_id:
+            return (UNNAMED_JOB_TITLE, UNNAMED_COMPANY_TITLE)
+        job = self._job_repository.get(job_id)
+        if job is None or job.owner_id != owner_id:
+            return (UNNAMED_JOB_TITLE, UNNAMED_COMPANY_TITLE)
+        return (
+            _or_fallback_text(job.title, UNNAMED_JOB_TITLE),
+            _or_fallback_text(job.company, UNNAMED_COMPANY_TITLE),
+        )
+
+    def _resolve_resume_title(self, *, owner_id: str, resume_id: str) -> str:
+        if not resume_id:
+            return UNNAMED_RESUME_TITLE
+        resume = self._resume_repository.get(resume_id)
+        if resume is None or resume.owner_ref.owner_id != owner_id:
+            return UNNAMED_RESUME_TITLE
+        return _or_fallback_text(resume.title, UNNAMED_RESUME_TITLE)
+
+    def _build_binding_label(self, *, job_title: str, resume_title: str) -> str:
+        if job_title and resume_title:
+            return f"{job_title} / {resume_title}"
+        return f"{job_title or UNNAMED_JOB_TITLE} / {resume_title or UNNAMED_RESUME_TITLE}"
+
 
 def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> DomainError | None:
     if topic_id is None:
@@ -354,6 +432,50 @@ def _custom_topic_summary(value: str | None) -> str | None:
         return None
     stripped = " ".join(value.split())
     return stripped[:240] if stripped else None
+
+
+def _to_session_answer_detail(
+    *,
+    answer: PolishAnswer,
+    feedback: PolishFeedback | None,
+) -> PolishSessionAnswerDetail:
+    feedback_text = feedback.feedback_summary if feedback is not None else None
+    return PolishSessionAnswerDetail(
+        answer_id=answer.answer_id,
+        answer_round=answer.answer_round,
+        answer_text=_or_fallback_text(answer.answer_text, UNNAMED_ANSWER_TEXT),
+        answer_created_at=answer.created_at,
+        feedback_text=_or_fallback_text(feedback_text, UNNAMED_FEEDBACK_TEXT),
+        feedback_id=feedback.feedback_id if feedback is not None else None,
+        score_result_id=feedback.score_result_id if feedback is not None else None,
+        feedback_created_at=feedback.created_at if feedback is not None else None,
+    )
+
+
+def _latest_feedback_by_answer_id(
+    feedbacks: tuple[PolishFeedback, ...],
+) -> dict[str, PolishFeedback]:
+    """
+    Keep only the latest feedback for each answer_id, using:
+    1) created_at
+    2) feedback_id
+    """
+    latest_by_answer_id: dict[str, PolishFeedback] = {}
+    for feedback in feedbacks:
+        current = latest_by_answer_id.get(feedback.answer_id)
+        if (
+            current is None
+            or (feedback.created_at, feedback.feedback_id) > (current.created_at, current.feedback_id)
+        ):
+            latest_by_answer_id[feedback.answer_id] = feedback
+    return latest_by_answer_id
+
+
+def _or_fallback_text(value: str | None, fallback: str) -> str:
+    if value is None:
+        return fallback
+    stripped = value.strip()
+    return stripped if stripped else fallback
 
 
 def _deterministic_question_text(session: PolishSession, progress_node_ref: str | None) -> str:

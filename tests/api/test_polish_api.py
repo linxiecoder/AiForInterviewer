@@ -143,6 +143,11 @@ def test_polish_session_list_returns_owner_scoped_summaries() -> None:
     assert sessions[0]["resume_job_binding_id"] == binding_a
     assert sessions[0]["topic_id"] == "topic_project_depth"
     assert sessions[0]["subtopic_id"] == "subtopic_project_impact"
+    assert "turns" not in sessions[0]
+    assert sessions[0]["job_title"] == "Backend Engineer"
+    assert sessions[0]["job_company"] == "ACME"
+    assert sessions[0]["resume_title"] == "Backend Resume"
+    assert sessions[0]["binding_label"] == "Backend Engineer / Backend Resume"
     assert sessions[0]["created_at"] is not None
     assert sessions[0]["updated_at"] is not None
 
@@ -168,6 +173,11 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     assert body["resource_type"] == "polish_session"
     session_data = body["data"]
     assert session_data["mode"] == "polish"
+    assert session_data["turns"] == []
+    assert session_data["job_title"] == "Backend Engineer"
+    assert session_data["job_company"] == "ACME"
+    assert session_data["resume_title"] == "Backend Resume"
+    assert session_data["binding_label"] == "Backend Engineer / Backend Resume"
     assert session_data["session_status"] == "running"
     assert session_data["resume_job_binding_id"] == binding_id
     assert session_data["topic_ref"]["topic_id"] == "topic_project_depth"
@@ -216,13 +226,14 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert question_ref["trace_type"] == "question"
     question_id = question_ref["trace_ref_id"]
 
+    answer_text = "我会先说明项目背景，再解释我负责的核心接口和取舍。"
     status_code, answer_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/answers",
         "POST",
         json_body={
             "question_id": question_id,
-            "answer_text": "我会先说明项目背景，再解释我负责的核心接口和取舍。",
+            "answer_text": answer_text,
             "base_question_version_ref": {"resource_type": "question", "resource_id": question_id, "version_id": "1"},
         },
     )
@@ -248,6 +259,83 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_body["data"]["candidate_refs"] == []
     assert feedback_body["data"]["suggestion_refs"] == []
     assert "provider_payload" not in _collect_keys(feedback_body)
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    assert status_code == 200
+    assert detail_body["resource_type"] == "polish_session"
+    detail_data = detail_body["data"]
+    assert detail_data["job_title"] == "Backend Engineer"
+    assert detail_data["job_company"] == "ACME"
+    assert detail_data["resume_title"] == "Backend Resume"
+    assert detail_data["binding_label"] == "Backend Engineer / Backend Resume"
+
+    turns = detail_data["turns"]
+    assert isinstance(turns, list) and len(turns) == 1
+    question_text = turns[0]["question_text"]
+    assert "topic_system_design" in question_text
+    assert "node_backend_depth" in question_text
+    assert turns[0]["answers"], "answers should be returned for submitted question"
+    assert turns[0]["answers"][0]["answer_text"] == answer_text
+    assert turns[0]["answers"][0]["feedback_text"] != "本轮反馈尚未生成"
+    assert "polish_answer" in turns[0]["answers"][0]["feedback_text"]
+
+
+def test_polish_session_returns_latest_feedback_when_multiple_feedback_records_exist() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_system_design",
+            "subtopic_id": "subtopic_tradeoff",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": "node_backend_depth"},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": "第一轮回答。",
+        },
+    )
+    answer_id = answer_body["data"]["answer_id"]
+
+    call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+    _, second_feedback = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    assert status_code == 200
+    turns = detail_body["data"]["turns"]
+    assert isinstance(turns, list) and len(turns) == 1
+    answers = turns[0]["answers"]
+    assert answers, "answers should exist"
+    assert answers[0]["answer_text"] == "第一轮回答。"
+    assert answers[0]["feedback_id"] == second_feedback["data"]["result_ref"]["trace_ref_id"]
 
 
 def test_polish_answer_rejects_blank_text_with_error_envelope() -> None:

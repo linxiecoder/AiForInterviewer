@@ -16,7 +16,13 @@ from app.application.polish.commands import (
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
 )
-from app.application.polish.entities import PolishAnswer, PolishSession, PolishTaskStatus, PolishTopic
+from app.application.polish.entities import (
+    PolishAnswer,
+    PolishSession,
+    PolishSessionDetail,
+    PolishTaskStatus,
+    PolishTopic,
+)
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
 from app.domain.auth.entities import CurrentActor
@@ -89,7 +95,7 @@ async def create_polish_session(
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
     use_cases = _use_cases(session_factory)
-    result = use_cases.create_session(
+    create_result = use_cases.create_session(
         CreatePolishSessionCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
@@ -99,11 +105,17 @@ async def create_polish_session(
             custom_topic_text=payload.custom_topic_text,
         )
     )
-    if not result.is_success:
-        _raise_result_error(result.error)
+    if not create_result.is_success:
+        _raise_result_error(create_result.error)
+
+    get_result = use_cases.get_session(
+        GetPolishSessionQuery(owner_id=actor.owner_id, session_id=create_result.value.session_id)
+    )
+    if not get_result.is_success:
+        _raise_result_error(get_result.error)
     return success_envelope(
         resource_type="polish_session",
-        data=_session_response(result.value).model_dump(mode="json"),
+        data=_session_response(get_result.value).model_dump(mode="json"),
     )
 
 
@@ -237,45 +249,79 @@ def _topic_response(topic: PolishTopic) -> PolishTopicResponse:
     )
 
 
-def _session_response(session: PolishSession) -> PolishSessionResponse:
+def _session_response(session: PolishSessionDetail) -> PolishSessionResponse:
+    core = session.session
+    turns = _session_turn_payloads(session)
     return PolishSessionResponse(
-        session_id=session.session_id,
-        session_status=session.status,
-        resume_job_binding_id=session.binding_id,
-        resume_id=session.resume_id,
-        resume_version_id=session.resume_version_id,
-        job_id=session.job_id,
-        job_version_id=session.job_version_id,
-        topic_ref=_topic_ref(session.topic_id),
-        subtopic_ref=_subtopic_ref(session.topic_id, session.subtopic_id),
-        custom_topic_text_summary=session.custom_topic_text_summary,
+        session_id=core.session_id,
+        session_status=core.status,
+        resume_job_binding_id=core.binding_id,
+        resume_id=core.resume_id,
+        resume_version_id=core.resume_version_id,
+        job_id=core.job_id,
+        job_version_id=core.job_version_id,
+        job_title=session.job_title or "\u672a\u547d\u540d\u5c97",
+        job_company=session.job_company or "\u672a\u547d\u540d\u516c\u53f8",
+        resume_title=session.resume_title or "\u672a\u547d\u540d\u7b80\u5386",
+        binding_label=session.binding_label or "",
+        turns=turns,
+        topic_ref=_topic_ref(core.topic_id),
+        subtopic_ref=_subtopic_ref(core.topic_id, core.subtopic_id),
+        custom_topic_text_summary=core.custom_topic_text_summary,
         current_question_ref=None,
         progress_position_ref=None,
         low_confidence_flags=[],
-        created_at=session.created_at,
-        updated_at=session.updated_at,
+        created_at=core.created_at,
+        updated_at=core.updated_at,
     )
 
 
-def _session_summary_response(session: PolishSession) -> PolishSessionSummaryResponse:
+def _session_summary_response(session: PolishSessionDetail) -> PolishSessionSummaryResponse:
+    core = session.session
     return PolishSessionSummaryResponse(
-        id=session.session_id,
-        session_id=session.session_id,
+        id=core.session_id,
+        session_id=core.session_id,
         title=_session_title(session),
-        status=session.status,
-        resume_job_binding_id=session.binding_id,
-        resume_id=session.resume_id,
-        resume_version_id=session.resume_version_id,
-        job_id=session.job_id,
-        job_version_id=session.job_version_id,
-        topic_id=session.topic_id,
-        subtopic_id=session.subtopic_id,
-        custom_topic_text_summary=session.custom_topic_text_summary,
-        created_at=session.created_at,
-        updated_at=session.updated_at,
+        status=core.status,
+        resume_job_binding_id=core.binding_id,
+        resume_id=core.resume_id,
+        resume_version_id=core.resume_version_id,
+        job_id=core.job_id,
+        job_version_id=core.job_version_id,
+        job_title=session.job_title or "\u672a\u547d\u540d\u5c97",
+        job_company=session.job_company or "\u672a\u547d\u540d\u516c\u53f8",
+        resume_title=session.resume_title or "\u672a\u547d\u540d\u7b80\u5386",
+        binding_label=session.binding_label or "",
+        topic_id=core.topic_id,
+        subtopic_id=core.subtopic_id,
+        custom_topic_text_summary=core.custom_topic_text_summary,
+        created_at=core.created_at,
+        updated_at=core.updated_at,
     )
 
 
+def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, object]]:
+    return [
+        {
+            "question_id": turn.question_id,
+            "question_text": turn.question_text,
+            "question_created_at": turn.question_created_at,
+            "answers": [
+                {
+                    "answer_id": answer.answer_id,
+                    "answer_round": answer.answer_round,
+                    "answer_text": answer.answer_text,
+                    "answer_created_at": answer.answer_created_at,
+                    "feedback_text": answer.feedback_text,
+                    "feedback_id": answer.feedback_id,
+                    "score_result_id": answer.score_result_id,
+                    "feedback_created_at": answer.feedback_created_at,
+                }
+                for answer in turn.answers
+            ],
+        }
+        for turn in getattr(session, "turns", ())
+    ]
 def _answer_response(answer: PolishAnswer) -> PolishAnswerResponse:
     return PolishAnswerResponse(
         answer_id=answer.answer_id,
@@ -330,14 +376,14 @@ def _subtopic_ref(topic_id: str | None, subtopic_id: str | None) -> PolishSubtop
     )
 
 
-def _session_title(session: PolishSession) -> str:
-    if session.custom_topic_text_summary:
-        return session.custom_topic_text_summary
-    if session.topic_id is not None and session.subtopic_id is not None:
-        subtopic = _subtopic_ref(session.topic_id, session.subtopic_id)
+def _session_title(session: PolishSessionDetail) -> str:
+    if session.session.custom_topic_text_summary:
+        return session.session.custom_topic_text_summary
+    if session.session.topic_id is not None and session.session.subtopic_id is not None:
+        subtopic = _subtopic_ref(session.session.topic_id, session.session.subtopic_id)
         if subtopic is not None and subtopic.title:
             return subtopic.title
-    topic = _topic_ref(session.topic_id)
+    topic = _topic_ref(session.session.topic_id)
     if topic is not None and topic.title:
         return topic.title
     return "Polish session"

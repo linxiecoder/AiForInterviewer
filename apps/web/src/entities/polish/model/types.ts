@@ -11,11 +11,33 @@ export interface PolishSessionSummary {
   resume_version_id: string;
   job_id: string;
   job_version_id: string;
+  job_title: string;
+  job_company: string;
+  resume_title: string;
+  binding_label: string;
   topic_id?: string | null;
   subtopic_id?: string | null;
   custom_topic_text_summary?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PolishSessionAnswer {
+  answer_id: string;
+  answer_round: number;
+  answer_text: string;
+  answer_created_at: string;
+  feedback_text: string;
+  feedback_id: string | null;
+  score_result_id: string | null;
+  feedback_created_at: string | null;
+}
+
+export interface PolishSessionTurn {
+  question_id: string;
+  question_text: string;
+  question_created_at: string;
+  answers: PolishSessionAnswer[];
 }
 
 export interface PolishSubtopic {
@@ -69,6 +91,11 @@ export interface PolishSessionDetail {
   resume_version_id: string;
   job_id: string;
   job_version_id: string;
+  job_title: string;
+  job_company: string;
+  resume_title: string;
+  binding_label: string;
+  turns: PolishSessionTurn[];
   topic_ref?: {
     topic_id: string;
     title?: string | null;

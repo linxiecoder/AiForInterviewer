@@ -54,6 +54,11 @@ class PolishSessionResponse(BaseModel):
     resume_version_id: str
     job_id: str
     job_version_id: str
+    job_title: str
+    job_company: str
+    resume_title: str
+    binding_label: str
+    turns: list[PolishSessionTurnResponse] = Field(default_factory=list)
     topic_ref: PolishTopicRefResponse | None = None
     subtopic_ref: PolishSubtopicRefResponse | None = None
     custom_topic_text_summary: str | None = None
@@ -75,6 +80,10 @@ class PolishSessionSummaryResponse(BaseModel):
     resume_version_id: str
     job_id: str
     job_version_id: str
+    job_title: str
+    job_company: str
+    resume_title: str
+    binding_label: str
     topic_id: str | None = None
     subtopic_id: str | None = None
     custom_topic_text_summary: str | None = None
@@ -100,6 +109,24 @@ class PolishAnswerResponse(BaseModel):
     answer_text: str
     created_at: datetime
     updated_at: datetime
+
+
+class PolishSessionAnswerResponse(BaseModel):
+    answer_id: str
+    answer_round: int = Field(ge=1)
+    answer_text: str
+    answer_created_at: datetime
+    feedback_text: str
+    feedback_id: str | None = None
+    score_result_id: str | None = None
+    feedback_created_at: datetime | None = None
+
+
+class PolishSessionTurnResponse(BaseModel):
+    question_id: str
+    question_text: str
+    question_created_at: datetime
+    answers: list[PolishSessionAnswerResponse] = Field(default_factory=list)
 
 
 class CreateFeedbackTaskRequest(BaseModel):

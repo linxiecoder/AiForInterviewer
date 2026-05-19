@@ -89,6 +89,36 @@ class PolishFeedback:
 
 
 @dataclass(frozen=True)
+class PolishSessionAnswerDetail:
+    answer_id: str
+    answer_round: int
+    answer_text: str
+    answer_created_at: datetime
+    feedback_text: str | None
+    feedback_id: str | None
+    score_result_id: str | None
+    feedback_created_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PolishSessionTurn:
+    question_id: str
+    question_text: str
+    question_created_at: datetime
+    answers: tuple[PolishSessionAnswerDetail, ...] = ()
+
+
+@dataclass(frozen=True)
+class PolishSessionDetail:
+    session: PolishSession
+    job_title: str | None
+    job_company: str | None
+    resume_title: str | None
+    binding_label: str | None
+    turns: tuple[PolishSessionTurn, ...]
+
+
+@dataclass(frozen=True)
 class PolishTaskStatus:
     ai_task_id: str
     task_type: str

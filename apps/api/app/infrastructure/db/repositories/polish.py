@@ -67,6 +67,18 @@ class SqlAlchemyPolishRepository(PolishRepository):
                 return None
             return _session_to_entity(session_model, detail_model)
 
+    def list_questions_for_session(self, owner_id: str, session_id: str) -> tuple[PolishQuestion, ...]:
+        with self._session_factory() as db:
+            rows = db.scalars(
+                select(QuestionModel)
+                .where(
+                    QuestionModel.owner_id == owner_id,
+                    QuestionModel.session_id == session_id,
+                )
+                .order_by(QuestionModel.created_at.asc(), QuestionModel.id.asc())
+            ).all()
+            return tuple(_question_to_entity(model) for model in rows)
+
     def add_question(self, question: PolishQuestion) -> None:
         with self._session_factory() as db:
             db.add(_question_to_model(question))
@@ -91,6 +103,23 @@ class SqlAlchemyPolishRepository(PolishRepository):
                 return None
             return _answer_to_entity(found)
 
+    def list_answers_for_session(self, owner_id: str, session_id: str) -> tuple[PolishAnswer, ...]:
+        with self._session_factory() as db:
+            rows = db.scalars(
+                select(AnswerModel)
+                .where(
+                    AnswerModel.owner_id == owner_id,
+                    AnswerModel.session_id == session_id,
+                )
+                .order_by(
+                    AnswerModel.question_id.asc(),
+                    AnswerModel.answer_round.asc(),
+                    AnswerModel.created_at.asc(),
+                    AnswerModel.id.asc(),
+                )
+            ).all()
+            return tuple(_answer_to_entity(model) for model in rows)
+
     def count_answers_for_question(self, owner_id: str, question_id: str) -> int:
         with self._session_factory() as db:
             return int(
@@ -109,6 +138,22 @@ class SqlAlchemyPolishRepository(PolishRepository):
         with self._session_factory() as db:
             db.add(_feedback_to_model(feedback))
             db.commit()
+
+    def list_feedbacks_for_session(self, owner_id: str, session_id: str) -> tuple[PolishFeedback, ...]:
+        with self._session_factory() as db:
+            rows = db.scalars(
+                select(FeedbackModel)
+                .where(
+                    FeedbackModel.owner_id == owner_id,
+                    FeedbackModel.session_id == session_id,
+                )
+                .order_by(
+                    FeedbackModel.answer_id.asc(),
+                    FeedbackModel.created_at.asc(),
+                    FeedbackModel.id.asc(),
+                )
+            ).all()
+            return tuple(_feedback_to_entity(model) for model in rows)
 
     def add_task(self, task: PolishTaskStatus, *, owner_id: str, actor_id: str, target_ref_id: str) -> None:
         with self._session_factory() as db:
@@ -277,4 +322,20 @@ def _feedback_to_model(feedback: PolishFeedback) -> FeedbackModel:
         ai_task_id=feedback.ai_task_id,
         score_result_id=feedback.score_result_id,
         feedback_summary=feedback.feedback_summary,
+    )
+
+
+def _feedback_to_entity(model: FeedbackModel) -> PolishFeedback:
+    return PolishFeedback(
+        feedback_id=model.id,
+        owner_id=model.owner_id,
+        actor_id=model.actor_id or model.owner_id,
+        session_id=model.session_id,
+        answer_id=model.answer_id,
+        ai_task_id=model.ai_task_id or "",
+        score_result_id=model.score_result_id,
+        feedback_summary=model.feedback_summary or "",
+        status=model.status,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
     )
