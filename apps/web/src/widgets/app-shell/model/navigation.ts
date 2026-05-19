@@ -46,8 +46,8 @@ export const APP_SHELL_NAV_ITEMS = [
     label: "模拟面试",
     icon: "interview",
     path: "/interview",
-    disabled: true,
-    disabledReason: "占位：模拟面试模块待联调",
+    disabled: false,
+    disabledReason: "模拟面试模块已开放",
   },
   {
     key: "review",
