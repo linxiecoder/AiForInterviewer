@@ -11,7 +11,9 @@ class InterviewSession(OwnedRecordMixin, Base):
     __tablename__ = "interview_sessions"
 
     binding_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    resume_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     resume_version_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     job_version_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     mode: Mapped[str] = mapped_column(String(32), nullable=False)
 
@@ -22,10 +24,10 @@ class PolishSessionDetail(OwnedRecordMixin, Base):
     session_id: Mapped[str] = mapped_column(String(80), unique=True)
     topic_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     subtopic_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    custom_topic_text_summary: Mapped[str | None] = mapped_column(String(240), nullable=True)
 
 
 class PressureSessionDetail(OwnedRecordMixin, Base):
     __tablename__ = "pressure_session_details"
 
     session_id: Mapped[str] = mapped_column(String(80), unique=True)
-

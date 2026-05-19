@@ -32,6 +32,23 @@ def test_route_inventory_registers_job_match_analysis_routes() -> None:
     assert "/api/v1/job-match-analyses/latest" in paths
 
 
+def test_route_inventory_registers_polish_core_routes() -> None:
+    app = create_app()
+    paths = {route.path for route in app.routes if hasattr(route, "path")}
+    methods_by_path: dict[str, set[str]] = {}
+    for route in app.routes:
+        if hasattr(route, "path") and hasattr(route, "methods"):
+            methods_by_path.setdefault(route.path, set()).update(route.methods or set())
+
+    assert "/api/v1/polish-topics" in paths
+    assert "/api/v1/polish-sessions" in paths
+    assert {"GET", "POST"}.issubset(methods_by_path["/api/v1/polish-sessions"])
+    assert "/api/v1/polish-sessions/{session_id}" in paths
+    assert "/api/v1/polish-sessions/{session_id}/questions" in paths
+    assert "/api/v1/polish-sessions/{session_id}/answers" in paths
+    assert "/api/v1/polish-sessions/{session_id}/feedback" in paths
+
+
 def test_baseline_route_inventory_has_no_export_download_or_upload_routes() -> None:
     app = create_app()
     api_paths = [

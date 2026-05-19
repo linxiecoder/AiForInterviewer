@@ -4,12 +4,19 @@ from dataclasses import dataclass
 from dataclasses import field
 from os import getenv
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.db.base import Base
+
+
+_KNOWN_SCHEMA_COLUMN_BACKFILLS: tuple[tuple[str, str, str], ...] = (
+    ("interview_sessions", "resume_id", "VARCHAR(80)"),
+    ("interview_sessions", "job_id", "VARCHAR(80)"),
+    ("polish_session_details", "custom_topic_text_summary", "VARCHAR(240)"),
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,7 @@ def initialize_schema(
     factory = session_factory or build_session_factory(settings)
     bind = factory.kw["bind"]
     Base.metadata.create_all(bind=bind)
+    _backfill_known_schema_columns(bind)
 
 
 def _build_engine(database_url: str) -> Engine:
@@ -83,3 +91,19 @@ def _default_database_url() -> str:
 
 def _load_models() -> None:
     import app.infrastructure.db.models  # noqa: F401
+
+
+def _backfill_known_schema_columns(bind: Engine) -> None:
+    inspector = inspect(bind)
+    table_names = set(inspector.get_table_names())
+    if not table_names:
+        return
+
+    with bind.begin() as connection:
+        for table_name, column_name, column_sql in _KNOWN_SCHEMA_COLUMN_BACKFILLS:
+            if table_name not in table_names:
+                continue
+            columns = {column["name"] for column in inspector.get_columns(table_name)}
+            if column_name in columns:
+                continue
+            connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"))

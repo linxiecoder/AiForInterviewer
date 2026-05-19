@@ -46,8 +46,8 @@ export const APP_SHELL_NAV_ITEMS = [
     label: "模拟面试",
     icon: "interview",
     path: "/interview",
-    disabled: true,
-    disabledReason: "占位：模拟面试模块待联调",
+    disabled: false,
+    disabledReason: "模拟面试模块已开放",
   },
   {
     key: "review",
@@ -74,5 +74,16 @@ export const APP_SHELL_NAV_ITEMS = [
     disabledReason: "占位：能力提升待联调",
   },
 ] as const satisfies readonly AppShellNavItem[];
+
+export function getActiveNavKey(path: "/interview" | `/interview/${string}`): "interview";
+export function getActiveNavKey(path: "/resume"): "resume";
+export function getActiveNavKey(path: "/job"): "job";
+export function getActiveNavKey(path: "/dashboard" | "/" | string): string;
+export function getActiveNavKey(path: string): string {
+  const target = APP_SHELL_NAV_ITEMS.find(
+    (item) => !item.disabled && (item.path === path || path.startsWith(`${item.path}/`)),
+  );
+  return target?.key ?? "dashboard";
+}
 
 export const TOPBAR_SEARCH_PLACEHOLDER = "搜索简历、岗位、面试记录...";
