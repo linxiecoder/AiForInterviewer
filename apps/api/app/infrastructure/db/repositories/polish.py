@@ -9,6 +9,7 @@ from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
     PolishQuestion,
+    PolishQuestionSource,
     PolishSession,
     PolishTaskStatus,
 )
@@ -283,6 +284,7 @@ def _question_to_model(question: PolishQuestion) -> QuestionModel:
         session_id=question.session_id,
         ai_task_id=question.ai_task_id,
         question_text=question.question_text,
+        question_sources_json=_question_sources_to_json(question.question_sources),
     )
 
 
@@ -294,10 +296,53 @@ def _question_to_entity(model: QuestionModel) -> PolishQuestion:
         session_id=model.session_id,
         ai_task_id=model.ai_task_id or "",
         question_text=model.question_text or "",
+        question_sources=_question_sources_to_entities(model.question_sources_json),
         status=model.status,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+
+
+def _question_sources_to_json(sources: tuple[PolishQuestionSource, ...]) -> list[dict]:
+    return [
+        {
+            "index": source.index,
+            "source_type": source.source_type,
+            "title": source.title,
+            "excerpt": source.excerpt,
+            "ref_id": source.ref_id,
+            "availability": source.availability,
+        }
+        for source in sources
+    ]
+
+
+def _question_sources_to_entities(raw_sources: object) -> tuple[PolishQuestionSource, ...]:
+    if not isinstance(raw_sources, list):
+        return ()
+    sources: list[PolishQuestionSource] = []
+    for raw_source in raw_sources:
+        if not isinstance(raw_source, dict):
+            continue
+        source_type = str(raw_source.get("source_type") or "")
+        title = str(raw_source.get("title") or "")
+        excerpt = str(raw_source.get("excerpt") or "")
+        if not source_type or not title or not excerpt:
+            continue
+        raw_index = raw_source.get("index")
+        index = raw_index if isinstance(raw_index, int) and raw_index >= 1 else len(sources) + 1
+        ref_id = raw_source.get("ref_id")
+        sources.append(
+            PolishQuestionSource(
+                index=index,
+                source_type=source_type,
+                title=title,
+                excerpt=excerpt,
+                ref_id=str(ref_id) if ref_id is not None else None,
+                availability=str(raw_source.get("availability") or "available"),
+            )
+        )
+    return tuple(sources)
 
 
 def _answer_to_model(answer: PolishAnswer) -> AnswerModel:

@@ -56,14 +56,36 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
                     """
                 )
             )
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE questions (
+                        session_id VARCHAR(80),
+                        ai_task_id VARCHAR(80),
+                        question_text TEXT,
+                        id VARCHAR(80) NOT NULL PRIMARY KEY,
+                        owner_id VARCHAR(80) NOT NULL,
+                        actor_id VARCHAR(80),
+                        record_version INTEGER NOT NULL,
+                        status VARCHAR(64) NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL,
+                        trace_ref_ids JSON,
+                        evidence_ref_ids JSON
+                    )
+                    """
+                )
+            )
 
         initialize_schema(settings)
 
         inspector = inspect(build_session_factory(settings).kw["bind"])
         interview_columns = {column["name"] for column in inspector.get_columns("interview_sessions")}
         polish_detail_columns = {column["name"] for column in inspector.get_columns("polish_session_details")}
+        question_columns = {column["name"] for column in inspector.get_columns("questions")}
 
         assert {"resume_id", "job_id"}.issubset(interview_columns)
         assert "custom_topic_text_summary" in polish_detail_columns
+        assert "question_sources_json" in question_columns
     finally:
         temp_artifacts.cleanup()

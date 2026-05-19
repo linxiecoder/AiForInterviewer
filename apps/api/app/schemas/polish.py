@@ -177,9 +177,19 @@ class PolishSessionAnswerResponse(BaseModel):
     feedback_created_at: datetime | None = None
 
 
+class PolishQuestionSourceResponse(BaseModel):
+    index: int = Field(ge=1)
+    source_type: str
+    title: str
+    excerpt: str
+    ref_id: str | None = None
+    availability: str
+
+
 class PolishSessionTurnResponse(BaseModel):
     question_id: str
     question_text: str
+    question_sources: list[PolishQuestionSourceResponse] = Field(default_factory=list)
     question_created_at: datetime
     answers: list[PolishSessionAnswerResponse] = Field(default_factory=list)
 

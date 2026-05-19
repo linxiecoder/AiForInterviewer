@@ -33,9 +33,28 @@ export interface PolishSessionAnswer {
   feedback_created_at: string | null;
 }
 
+export type PolishQuestionSourceType =
+  | "job_requirement"
+  | "resume_evidence"
+  | "progress_node"
+  | "missing_point"
+  | "history_feedback";
+
+export type PolishQuestionSourceAvailability = "available" | "partial" | "unavailable";
+
+export interface PolishQuestionSource {
+  index: number;
+  source_type: PolishQuestionSourceType;
+  title: string;
+  excerpt: string;
+  ref_id: string | null;
+  availability: PolishQuestionSourceAvailability;
+}
+
 export interface PolishSessionTurn {
   question_id: string;
   question_text: string;
+  question_sources: PolishQuestionSource[];
   question_created_at: string;
   answers: PolishSessionAnswer[];
 }

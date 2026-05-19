@@ -37,7 +37,7 @@ from app.application.polish.progress_tree import (
     PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
     PROGRESS_TREE_STATUS_READY,
     PolishProgressTreeLlmService,
-    build_progress_node_question_text,
+    build_progress_node_question,
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.resumes.ports import ResumeRepository
@@ -258,19 +258,21 @@ class PolishUseCases:
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
+        question_draft = build_progress_node_question(
+            session=session,
+            context=detail.progress_context,
+            plan=detail.progress_tree_plan,
+            state=detail.progress_tree_state,
+            requested_ref=command.progress_node_ref,
+        )
         question = PolishQuestion(
             question_id=question_id,
             owner_id=command.owner_id,
             actor_id=command.actor_id,
             session_id=command.session_id,
             ai_task_id=task_id,
-            question_text=build_progress_node_question_text(
-                session=session,
-                context=detail.progress_context,
-                plan=detail.progress_tree_plan,
-                state=detail.progress_tree_state,
-                requested_ref=command.progress_node_ref,
-            ),
+            question_text=question_draft.question_text,
+            question_sources=question_draft.question_sources,
             status=QUESTION_STATUS_GENERATED,
             created_at=now,
             updated_at=now,
@@ -484,6 +486,7 @@ class PolishUseCases:
                 question_id=question.question_id,
                 question_text=_or_fallback_text(question.question_text, UNNAMED_QUESTION_TEXT),
                 question_created_at=question.created_at,
+                question_sources=question.question_sources,
                 answers=tuple(answers_by_question.get(question.question_id, ())),
             )
             for question in questions

@@ -20,6 +20,7 @@ _KNOWN_SCHEMA_COLUMN_BACKFILLS: tuple[tuple[str, str, str], ...] = (
     ("polish_session_details", "progress_percent", "INTEGER"),
     ("polish_session_details", "progress_tree_plan_json", "JSON"),
     ("polish_session_details", "progress_tree_state_json", "JSON"),
+    ("questions", "question_sources_json", "JSON"),
 )
 
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import Any
 
-from app.application.polish.entities import PolishSession
-from app.application.polish.progress_evidence import select_progress_tree_evidence_chunks
+from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
+from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_PLAN_CONTRACT_IDS,
@@ -37,6 +37,15 @@ QUESTION_GENERATION_PROGRESS_NODE_CONTRACT = (
     "生成下一题时必须使用 progress_node_ref 对应节点的 title、expected_capability、相关岗位要求、"
     "相关简历证据、当前缺口和历史 turns。"
 )
+QUESTION_SOURCE_JOB_TYPES = {"job_requirement", "job_responsibility"}
+QUESTION_SOURCE_RESUME_TYPES = {"resume_project", "resume_skill", "resume_work_experience", "resume_summary"}
+QUESTION_SOURCE_TITLE_BY_TYPE = {
+    "job_requirement": "岗位要求",
+    "resume_evidence": "简历项目经历",
+    "progress_node": "当前进展节点",
+    "missing_point": "当前缺口",
+    "history_feedback": "历史反馈",
+}
 
 
 class PolishProgressTreeLlmService:
@@ -152,18 +161,32 @@ class PolishProgressTreeLlmService:
         }
 
 
-def build_progress_node_question_text(
+def build_progress_node_question(
     *,
     session: PolishSession,
     context: dict[str, Any],
     plan: dict[str, Any],
     state: dict[str, Any],
     requested_ref: str | None,
-) -> str:
+) -> PolishQuestionDraft:
     node = resolve_progress_node(plan=plan, state=state, requested_ref=requested_ref)
     if node is None:
         topic = session.topic_id or "manual_topic"
-        return f"请围绕 {topic} 说明一个具体案例，并补充你在当前进展节点中的关键取舍。"
+        source = PolishQuestionSource(
+            index=1,
+            source_type="progress_node",
+            title=QUESTION_SOURCE_TITLE_BY_TYPE["progress_node"],
+            excerpt="未找到可用的 progress_node_ref，已按当前打磨主题生成低置信问题。",
+            ref_id=requested_ref,
+            availability="unavailable",
+        )
+        return PolishQuestionDraft(
+            question_text=(
+                f"针对「{topic}」这个打磨目标，请选一个真实项目场景，讲清楚你当时负责的技术决策、"
+                "取舍依据和结果验证方式。[1]"
+            ),
+            question_sources=(source,),
+        )
 
     evidence_selection = select_progress_tree_evidence_chunks(
         context,
@@ -173,50 +196,220 @@ def build_progress_node_question_text(
         progress_node_ref=node["progress_node_ref"],
     )
     evidence_chunks = list(evidence_selection.selected_chunks)
-    job_requirement = _first_text(
-        *[
-            chunk.text
-            for chunk in evidence_chunks
-            if chunk.source_type in {"job_requirement", "job_responsibility"}
-        ],
-        *node.get("related_job_requirements", []),
-        *context["job_snapshot"].get("requirements", []),
-        *context["job_snapshot"].get("responsibilities", []),
+    sources = _index_question_sources(
+        [
+            _progress_node_source(node),
+            _source_from_chunks(
+                evidence_chunks,
+                source_types=QUESTION_SOURCE_JOB_TYPES,
+                normalized_source_type="job_requirement",
+                fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["job_requirement"],
+                fallback_ref_id=_snapshot_ref_id(context.get("job_snapshot", {}), "job_version_id", "job_id"),
+                fallback_values=[
+                    *node.get("related_job_requirements", []),
+                    *context["job_snapshot"].get("requirements", []),
+                    *context["job_snapshot"].get("responsibilities", []),
+                ],
+            ),
+            _source_from_chunks(
+                evidence_chunks,
+                source_types=QUESTION_SOURCE_RESUME_TYPES,
+                normalized_source_type="resume_evidence",
+                fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["resume_evidence"],
+                fallback_ref_id=_snapshot_ref_id(context.get("resume_snapshot", {}), "resume_version_id", "resume_id"),
+                fallback_values=[
+                    *node.get("related_resume_evidence", []),
+                    *context["resume_snapshot"].get("project_experiences", []),
+                    context["resume_snapshot"].get("summary"),
+                ],
+            ),
+            _source_from_chunks(
+                evidence_chunks,
+                source_types={"match_gap"},
+                normalized_source_type="missing_point",
+                fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["missing_point"],
+                fallback_ref_id=_snapshot_ref_id(context.get("match_context", {}), "analysis_id"),
+                fallback_values=[
+                    *node.get("missing_points", []),
+                    *context["match_context"].get("missing_points", []),
+                ],
+                required=False,
+            ),
+            _source_from_chunks(
+                evidence_chunks,
+                source_types={"turn_feedback"},
+                normalized_source_type="history_feedback",
+                fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["history_feedback"],
+                fallback_ref_id=None,
+                fallback_values=[_latest_turn_feedback(context.get("turns", []))],
+                required=False,
+            ),
+        ]
     )
-    snapshot_requirement = _first_text(*context["job_snapshot"].get("requirements", []))
-    requirement_hint = (
-        f"；核心岗位要求：{snapshot_requirement}"
-        if snapshot_requirement and snapshot_requirement != job_requirement
-        else ""
+    citations = "".join(f"[{source.index}]" for source in sources)
+    focus = _question_focus(node)
+    return PolishQuestionDraft(
+        question_text=(
+            f"针对「{focus}」这个进展节点，请选一个你实际参与的具体场景，讲清楚当时要解决的问题、"
+            f"你负责的技术改造或决策、为什么这样取舍，以及上线后如何验证效果。{citations}"
+        ),
+        question_sources=sources,
     )
-    resume_evidence = _first_text(
-        *[
-            chunk.text
-            for chunk in evidence_chunks
-            if chunk.source_type in {"resume_project", "resume_skill", "resume_work_experience"}
-        ],
-        *node.get("related_resume_evidence", []),
-        *context["resume_snapshot"].get("project_experiences", []),
-        context["resume_snapshot"].get("summary"),
+
+
+def build_progress_node_question_text(
+    *,
+    session: PolishSession,
+    context: dict[str, Any],
+    plan: dict[str, Any],
+    state: dict[str, Any],
+    requested_ref: str | None,
+) -> str:
+    return build_progress_node_question(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    ).question_text
+
+
+def _index_question_sources(sources: list[PolishQuestionSource | None]) -> tuple[PolishQuestionSource, ...]:
+    indexed: list[PolishQuestionSource] = []
+    seen: set[tuple[str, str, str]] = set()
+    for source in sources:
+        if source is None:
+            continue
+        key = (source.source_type, source.title, source.excerpt)
+        if key in seen:
+            continue
+        seen.add(key)
+        indexed.append(
+            PolishQuestionSource(
+                index=len(indexed) + 1,
+                source_type=source.source_type,
+                title=source.title,
+                excerpt=source.excerpt,
+                ref_id=source.ref_id,
+                availability=source.availability,
+            )
+        )
+    return tuple(indexed)
+
+
+def _progress_node_source(node: dict[str, Any]) -> PolishQuestionSource:
+    return PolishQuestionSource(
+        index=0,
+        source_type="progress_node",
+        title=QUESTION_SOURCE_TITLE_BY_TYPE["progress_node"],
+        excerpt=_source_excerpt(
+            "；".join(
+                item
+                for item in (
+                    f"节点：{truncate_text(node.get('title'), max_chars=80)}",
+                    f"能力目标：{truncate_text(node.get('expected_capability'), max_chars=120)}",
+                )
+                if item
+            )
+        ),
+        ref_id=truncate_text(node.get("progress_node_ref"), max_chars=120) or None,
+        availability="available",
     )
-    missing_point = _first_text(
-        *[
-            chunk.text
-            for chunk in evidence_chunks
-            if chunk.source_type in {"match_gap", "turn_feedback"}
-        ],
-        *node.get("missing_points", []),
-        *context["match_context"].get("missing_points", []),
-        "请主动说明你认为面试官最可能继续追问的薄弱点",
+
+
+def _source_from_chunks(
+    chunks: list[ProgressEvidenceChunk],
+    *,
+    source_types: set[str],
+    normalized_source_type: str,
+    fallback_title: str,
+    fallback_ref_id: str | None,
+    fallback_values: list[object | None],
+    required: bool = True,
+) -> PolishQuestionSource | None:
+    chunk = next((item for item in chunks if item.source_type in source_types and item.text), None)
+    if chunk is not None:
+        return PolishQuestionSource(
+            index=0,
+            source_type=normalized_source_type,
+            title=_question_source_title(normalized_source_type, chunk.source_type),
+            excerpt=_source_excerpt(chunk.text),
+            ref_id=_chunk_ref_id(chunk) or fallback_ref_id,
+            availability="available",
+        )
+
+    fallback_text = _first_available_text(*fallback_values)
+    if fallback_text:
+        return PolishQuestionSource(
+            index=0,
+            source_type=normalized_source_type,
+            title=fallback_title,
+            excerpt=_source_excerpt(fallback_text),
+            ref_id=fallback_ref_id,
+            availability="partial",
+        )
+    if not required:
+        return None
+    return PolishQuestionSource(
+        index=0,
+        source_type=normalized_source_type,
+        title=fallback_title,
+        excerpt="当前来源暂不可用，题目已按进展节点低置信生成。",
+        ref_id=fallback_ref_id,
+        availability="unavailable",
     )
-    previous_turn = _latest_turn_feedback(context.get("turns", []))
-    history_hint = f"上一轮反馈提示：{previous_turn}。" if previous_turn else ""
+
+
+def _question_source_title(normalized_source_type: str, raw_source_type: str) -> str:
+    if raw_source_type == "job_responsibility":
+        return "岗位职责"
+    if raw_source_type == "resume_skill":
+        return "简历技能证据"
+    if raw_source_type == "resume_work_experience":
+        return "简历工作经历"
+    return QUESTION_SOURCE_TITLE_BY_TYPE.get(normalized_source_type, "来源")
+
+
+def _question_focus(node: dict[str, Any]) -> str:
     return (
-        f"请围绕「{node['title']}」说明一个具体案例。"
-        f"岗位要求/职责依据：{job_requirement}{requirement_hint}；简历证据：{resume_evidence}。"
-        f"{history_hint}"
-        f"请补充你的关键取舍、结果指标、风险处理，并回应当前缺口：{missing_point}。"
+        truncate_text(node.get("title"), max_chars=80)
+        or truncate_text(node.get("expected_capability"), max_chars=80)
+        or "当前能力打磨目标"
     )
+
+
+def _source_excerpt(value: object | None) -> str:
+    return truncate_text(value, max_chars=180) or "内容待补充"
+
+
+def _first_available_text(*values: object | None) -> str | None:
+    for value in values:
+        if isinstance(value, (list, tuple)):
+            nested = _first_available_text(*value)
+            if nested:
+                return nested
+            continue
+        text = truncate_text(value, max_chars=320)
+        if text:
+            return text
+    return None
+
+
+def _chunk_ref_id(chunk: ProgressEvidenceChunk) -> str | None:
+    source_ref = chunk.source_ref or {}
+    for key in ("job_version_id", "resume_version_id", "analysis_id", "question_id", "turn_index"):
+        ref_value = source_ref.get(key)
+        if ref_value:
+            return str(ref_value)
+    return chunk.chunk_id
+
+
+def _snapshot_ref_id(snapshot: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = snapshot.get(key)
+        if value:
+            return str(value)
+    return None
 
 
 def resolve_progress_node(

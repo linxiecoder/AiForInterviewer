@@ -750,9 +750,19 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     turns = detail_data["turns"]
     assert isinstance(turns, list) and len(turns) == 1
     question_text = turns[0]["question_text"]
-    assert "Python and FastAPI experience." in question_text
-    assert "Built backend workflow automation." in question_text
-    assert "岗位要求/职责依据" in question_text
+    question_sources = turns[0]["question_sources"]
+    assert "Python and FastAPI experience." not in question_text
+    assert "Built backend workflow automation." not in question_text
+    assert "岗位要求/职责依据" not in question_text
+    assert "简历证据" not in question_text
+    assert "[1]" in question_text
+    assert isinstance(question_sources, list) and len(question_sources) >= 2
+    assert {"index", "source_type", "title", "excerpt"}.issubset(question_sources[0])
+    assert question_sources[0]["index"] == 1
+    assert question_sources[0]["availability"] == "available"
+    source_text = str(question_sources)
+    assert "Python and FastAPI experience." in source_text
+    assert "Built backend workflow automation." in source_text
     assert turns[0]["answers"], "answers should be returned for submitted question"
     assert turns[0]["answers"][0]["answer_text"] == answer_text
     assert turns[0]["answers"][0]["feedback_text"] != "本轮反馈尚未生成"
@@ -797,13 +807,22 @@ def test_polish_next_question_uses_progress_node_evidence_chunks() -> None:
     assert status_code == 202
     question_id = question_body["data"]["result_ref"]["trace_ref_id"]
     _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
-    question_text = next(
-        turn["question_text"]
+    turn = next(
+        turn
         for turn in detail_body["data"]["turns"]
         if turn["question_id"] == question_id
     )
-    assert "Kafka 事务消息" in question_text
-    assert "支付系统重构" in question_text
+    question_text = turn["question_text"]
+    question_sources = turn["question_sources"]
+    assert "[1]" in question_text
+    assert "[2]" in question_text
+    assert "需要候选人解释 Kafka 事务消息、Outbox 和最终一致性。" not in question_text
+    assert "支付系统重构：使用 FastAPI、Kafka、Outbox 和 PostgreSQL 完成一致性治理。" not in question_text
+    assert any(source["source_type"] == "job_requirement" for source in question_sources)
+    assert any(source["source_type"] == "resume_evidence" for source in question_sources)
+    source_text = str(question_sources)
+    assert "Kafka 事务消息" in source_text
+    assert "支付系统重构" in source_text
 
 
 def test_polish_session_returns_latest_feedback_when_multiple_feedback_records_exist() -> None:

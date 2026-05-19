@@ -351,6 +351,17 @@ def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, objec
         {
             "question_id": turn.question_id,
             "question_text": turn.question_text,
+            "question_sources": [
+                {
+                    "index": source.index,
+                    "source_type": source.source_type,
+                    "title": source.title,
+                    "excerpt": source.excerpt,
+                    "ref_id": source.ref_id,
+                    "availability": source.availability,
+                }
+                for source in turn.question_sources
+            ],
             "question_created_at": turn.question_created_at,
             "answers": [
                 {

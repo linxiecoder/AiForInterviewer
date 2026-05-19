@@ -8,7 +8,7 @@ import {
   RightOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Drawer, Form, Input, Progress, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Drawer, Form, Input, Popover, Progress, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { useRouteController } from "../../app/routes/router";
@@ -26,6 +26,7 @@ import {
 } from "../../entities/polish/api/polishApi";
 import type {
   CreatePolishSessionRequest,
+  PolishQuestionSource,
   PolishProgressTreeNode,
   PolishSessionDetail,
   PolishSessionSummary,
@@ -398,6 +399,63 @@ const FALLBACK_RESUME_TITLE = "未命名简历";
 const FALLBACK_QUESTION_TEXT = "题干缺失";
 const FALLBACK_ANSWER_TEXT = "暂无回答";
 const FALLBACK_FEEDBACK_TEXT = "本轮反馈尚未生成";
+const QUESTION_SOURCE_TYPE_LABELS: Record<PolishQuestionSource["source_type"], string> = {
+  job_requirement: "岗位",
+  resume_evidence: "简历",
+  progress_node: "进展节点",
+  missing_point: "缺口",
+  history_feedback: "历史反馈",
+};
+
+function renderQuestionSourcePopover(source: PolishQuestionSource) {
+  return (
+    <div className={styles.questionSourcePopover}>
+      <div className={styles.questionSourceHeader}>
+        <Typography.Text strong>{source.title}</Typography.Text>
+        <Tag className={styles.questionSourceTypeTag}>{QUESTION_SOURCE_TYPE_LABELS[source.source_type]}</Tag>
+      </div>
+      <Typography.Paragraph className={styles.questionSourceExcerpt}>
+        {source.excerpt}
+      </Typography.Paragraph>
+    </div>
+  );
+}
+
+function renderQuestionTextWithSources(
+  questionText: string,
+  questionSources: readonly PolishQuestionSource[],
+) {
+  if (questionSources.length === 0) {
+    return questionText;
+  }
+  const sourceByIndex = new Map(questionSources.map((source) => [source.index, source]));
+  return questionText.split(/(\[\d+\])/g).map((part, index) => {
+    const match = part.match(/^\[(\d+)\]$/);
+    if (match === null) {
+      return <span key={`${part}-${index}`}>{part}</span>;
+    }
+    const source = sourceByIndex.get(Number(match[1]));
+    if (source === undefined) {
+      return <span key={`${part}-${index}`}>{part}</span>;
+    }
+    return (
+      <Popover
+        key={`${part}-${index}`}
+        content={renderQuestionSourcePopover(source)}
+        placement="top"
+        trigger={["hover", "click"]}
+      >
+        <button
+          type="button"
+          className={styles.questionSourceRef}
+          aria-label={`查看题目来源 ${source.index}`}
+        >
+          [{source.index}]
+        </button>
+      </Popover>
+    );
+  });
+}
 
 export function buildPolishSessionClipboardMarkdown(session: PolishSessionDetail): string {
   const rows: string[] = [
@@ -1339,7 +1397,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   <section key={turn.question_id} style={{ display: "grid", gap: 12 }}>
                     <div className={styles.questionBubble}>
                       <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>
-                      <Typography.Text>{turn.question_text || FALLBACK_QUESTION_TEXT}</Typography.Text>
+                      <Typography.Text className={styles.questionText}>
+                        {renderQuestionTextWithSources(
+                          turn.question_text || FALLBACK_QUESTION_TEXT,
+                          turn.question_sources ?? [],
+                        )}
+                      </Typography.Text>
                     </div>
                     {turn.answers.length === 0 ? (
                       <div style={{ display: "grid", gap: 12 }}>

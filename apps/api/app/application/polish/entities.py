@@ -52,6 +52,22 @@ class PolishSession:
 
 
 @dataclass(frozen=True)
+class PolishQuestionSource:
+    index: int
+    source_type: str
+    title: str
+    excerpt: str
+    ref_id: str | None
+    availability: str
+
+
+@dataclass(frozen=True)
+class PolishQuestionDraft:
+    question_text: str
+    question_sources: tuple[PolishQuestionSource, ...] = ()
+
+
+@dataclass(frozen=True)
 class PolishQuestion:
     question_id: str
     owner_id: str
@@ -62,6 +78,7 @@ class PolishQuestion:
     status: str
     created_at: datetime
     updated_at: datetime
+    question_sources: tuple[PolishQuestionSource, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -110,6 +127,7 @@ class PolishSessionTurn:
     question_id: str
     question_text: str
     question_created_at: datetime
+    question_sources: tuple[PolishQuestionSource, ...] = ()
     answers: tuple[PolishSessionAnswerDetail, ...] = ()
 
 

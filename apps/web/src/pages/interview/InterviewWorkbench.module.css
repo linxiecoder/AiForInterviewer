@@ -202,6 +202,54 @@
   color: #1f2937;
 }
 
+.questionText {
+  display: inline;
+}
+
+.questionSourceRef {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 1px;
+  padding: 0 1px;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
+}
+
+.questionSourceRef:hover,
+.questionSourceRef:focus-visible {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.questionSourcePopover {
+  max-width: 280px;
+  display: grid;
+  gap: 8px;
+}
+
+.questionSourceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.questionSourceTypeTag {
+  margin: 0;
+}
+
+.questionSourceExcerpt {
+  margin: 0 !important;
+  color: #475569;
+}
+
 .answerBubble {
   align-self: flex-end;
   border: 1px solid #8ab8ff;
