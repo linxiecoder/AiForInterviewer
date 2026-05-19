@@ -6,6 +6,14 @@ import re
 from json import dumps
 from typing import Any
 
+from app.application.polish.progress_prompts import (
+    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
+    POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+)
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.shared.ids import stable_resource_id
 from app.schemas.job_match import (
@@ -26,6 +34,10 @@ class FakeLlmTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
+        if request.task_type == "polish_progress_tree_plan":
+            return _generate_fake_progress_tree_plan(request)
+        if request.task_type == "polish_progress_tree_state":
+            return _generate_fake_progress_tree_state(request)
         seed = dumps(
             {
                 "contract_ids": sorted(request.contract_ids),
@@ -56,6 +68,178 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransportResult:
+    context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
+    job_snapshot = context.get("job_snapshot", {}) if isinstance(context, dict) else {}
+    resume_snapshot = context.get("resume_snapshot", {}) if isinstance(context, dict) else {}
+    job_requirement = _first_text(*(job_snapshot.get("requirements") or []))
+    job_responsibility = _first_text(*(job_snapshot.get("responsibilities") or []))
+    resume_evidence = _first_text(
+        *(resume_snapshot.get("project_experiences") or []),
+        resume_snapshot.get("summary"),
+        resume_snapshot.get("markdown_text"),
+    )
+    seed = dumps(
+        {
+            "contract_ids": sorted(request.contract_ids),
+            "task_type": request.task_type,
+            "input_refs": sorted(request.input_refs),
+            "source_digest": request.evidence_bundle.get("source_digest"),
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-plan-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-plan-evidence:{seed}")
+    node_ref = "fake_llm_progress_backend_api"
+    child_ref = "fake_llm_progress_backend_api_fastapi"
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "contract_ids": list(request.contract_ids),
+            "result_ref": stable_resource_id("task", f"fake-polish-progress-plan-result:{seed}"),
+            "model_name": "fake_llm_polish_progress_v1",
+            "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+            "schema_id": POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
+            "progress_tree_plan": {
+                "schema_id": POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
+                "schema_version": POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
+                "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+                "status": "ready",
+                "nodes": [
+                    {
+                        "progress_node_ref": node_ref,
+                        "title": "Fake LLM 节点：岗位后端能力验证",
+                        "expected_capability": f"围绕岗位要求验证候选人的后端落地能力：{job_requirement}",
+                        "related_job_requirements": [job_requirement, job_responsibility],
+                        "related_resume_evidence": [resume_evidence],
+                        "missing_points": ["Fake LLM 缺口：需要继续证明真实贡献边界"],
+                        "children": [
+                            {
+                                "progress_node_ref": child_ref,
+                                "title": "Fake LLM 子节点：FastAPI 项目证据",
+                                "expected_capability": f"用简历证据说明项目中的技术取舍：{resume_evidence}",
+                                "related_job_requirements": [job_requirement, job_responsibility],
+                                "related_resume_evidence": [resume_evidence],
+                                "missing_points": ["Fake LLM 缺口：需要补充指标和风险处理"],
+                                "children": [],
+                            }
+                        ],
+                    }
+                ],
+            },
+            "progress_tree_state": {
+                "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+                "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+                "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+                "status": "ready",
+                "node_states": [
+                    {
+                        "progress_node_ref": node_ref,
+                        "status": "in_progress",
+                        "completed_questions_count": 0,
+                        "latest_feedback_summary": None,
+                    },
+                    {
+                        "progress_node_ref": child_ref,
+                        "status": "in_progress",
+                        "completed_questions_count": 0,
+                        "latest_feedback_summary": None,
+                    },
+                ],
+                "current_priority": {
+                    "progress_node_ref": child_ref,
+                    "title": "Fake LLM 子节点：FastAPI 项目证据",
+                    "expected_capability": f"用简历证据说明项目中的技术取舍：{resume_evidence}",
+                },
+                "updated_from_turns_count": 0,
+                "progress": {"progress_percent": 0},
+            },
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _generate_fake_progress_tree_state(request: LlmTransportRequest) -> LlmTransportResult:
+    existing_plan = request.evidence_bundle.get("existing_progress_tree_plan", {})
+    nodes = _flatten_nodes(existing_plan.get("nodes", []) if isinstance(existing_plan, dict) else [])
+    target = nodes[-1] if nodes else {"progress_node_ref": "fake_llm_progress_backend_api_fastapi"}
+    node_ref = target.get("progress_node_ref", "fake_llm_progress_backend_api_fastapi")
+    seed = dumps(
+        {
+            "contract_ids": sorted(request.contract_ids),
+            "task_type": request.task_type,
+            "input_refs": sorted(request.input_refs),
+            "source_digest": request.evidence_bundle.get("source_digest"),
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-state-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-state-evidence:{seed}")
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "contract_ids": list(request.contract_ids),
+            "result_ref": stable_resource_id("task", f"fake-polish-progress-state-result:{seed}"),
+            "model_name": "fake_llm_polish_progress_v1",
+            "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+            "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+            "progress_tree_state": {
+                "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+                "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+                "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+                "status": "ready",
+                "node_states": [
+                    {
+                        "progress_node_ref": item.get("progress_node_ref"),
+                        "status": "completed" if item.get("progress_node_ref") == node_ref else "pending",
+                        "completed_questions_count": 1 if item.get("progress_node_ref") == node_ref else 0,
+                        "latest_feedback_summary": "Fake LLM 状态刷新：回答已覆盖该节点，但仍需补指标。",
+                    }
+                    for item in nodes
+                    if item.get("progress_node_ref")
+                ],
+                "current_priority": {
+                    "progress_node_ref": node_ref,
+                    "title": target.get("title", "Fake LLM 当前优先级"),
+                    "expected_capability": target.get("expected_capability", "Fake LLM 当前能力要求"),
+                },
+                "updated_from_turns_count": len(request.evidence_bundle.get("context", {}).get("turns", [])),
+                "progress": {"progress_percent": 135},
+            },
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _flatten_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for node in nodes:
+        result.append(node)
+        result.extend(_flatten_nodes(node.get("children", [])))
+    return result
+
+
+def _first_text(*values: object | None) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "Fake LLM 输入证据不足"
 
 
 def _generate_fake_job_match(request: LlmTransportRequest) -> LlmTransportResult:

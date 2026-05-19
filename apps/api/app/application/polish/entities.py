@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.domain.shared.refs import ResourceRef, TraceRef
@@ -44,6 +45,10 @@ class PolishSession:
     custom_topic_text_summary: str | None
     created_at: datetime
     updated_at: datetime
+    progress_tree_status: str = "insufficient_context"
+    progress_percent: int = 0
+    progress_tree_plan: dict[str, Any] = field(default_factory=dict)
+    progress_tree_state: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -86,6 +91,41 @@ class PolishFeedback:
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True)
+class PolishSessionAnswerDetail:
+    answer_id: str
+    answer_round: int
+    answer_text: str
+    answer_created_at: datetime
+    feedback_text: str | None
+    feedback_id: str | None
+    score_result_id: str | None
+    feedback_created_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PolishSessionTurn:
+    question_id: str
+    question_text: str
+    question_created_at: datetime
+    answers: tuple[PolishSessionAnswerDetail, ...] = ()
+
+
+@dataclass(frozen=True)
+class PolishSessionDetail:
+    session: PolishSession
+    job_title: str | None
+    job_company: str | None
+    resume_title: str | None
+    binding_label: str | None
+    turns: tuple[PolishSessionTurn, ...]
+    progress_tree_status: str = "insufficient_context"
+    progress_percent: int = 0
+    progress_context: dict[str, Any] = field(default_factory=dict)
+    progress_tree_plan: dict[str, Any] = field(default_factory=dict)
+    progress_tree_state: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

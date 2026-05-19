@@ -1,8 +1,11 @@
 import {
-  ArrowRightOutlined,
+  ArrowLeftOutlined,
+  CopyOutlined,
+  DownOutlined,
   CheckCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RightOutlined,
   SendOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Card, Drawer, Form, Input, Progress, Select, Space, Table, Tag, Typography, message } from "antd";
@@ -12,13 +15,18 @@ import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import {
+  createPolishAnswer,
+  createPolishFeedbackTask,
   createPolishSession,
+  createPolishQuestionTask,
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
+  refreshPolishProgressTreeState,
 } from "../../entities/polish/api/polishApi";
 import type {
   CreatePolishSessionRequest,
+  PolishProgressTreeNode,
   PolishSessionDetail,
   PolishSessionSummary,
   PolishTopic,
@@ -40,7 +48,6 @@ export const INTERVIEW_CREATE_FIELD_KEYS = [
   "mode",
   "resume_job_binding_id",
   "topic_id",
-  "subtopic_id",
   "custom_topic_text",
 ] as const;
 export const INTERVIEW_CREATE_SUCCESS_ACTIONS = ["navigate_to_workbench"] as const;
@@ -76,13 +83,6 @@ export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
   "进度",
   "当前节点表现",
 ] as const;
-export const INTERVIEW_WORKBENCH_PROGRESS_NODE_TITLES = [
-  "项目经历",
-  "Java 多线程与并发",
-  "数据库事务与一致性",
-  "消息可靠性与缓存一致性",
-  "订单状态一致性",
-] as const;
 export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "点评",
   "打分",
@@ -107,6 +107,19 @@ export const INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY = [
 export const INTERVIEW_WORKBENCH_PRIMARY_ACTIONS = ["send_answer"] as const;
 export const INTERVIEW_WORKBENCH_DISABLED_ACTIONS = [] as const;
 export const INTERVIEW_WORKBENCH_STATE_REGIONS = ["loading", "error", "not_found"] as const;
+const WORKBENCH_PROGRESS_NODE_STATUS_TEXT = {
+  completed: "已完成",
+  in_progress: "进行中",
+  pending: "未开始",
+} as const;
+type WorkbenchProgressNodeStatus = keyof typeof WORKBENCH_PROGRESS_NODE_STATUS_TEXT;
+type WorkbenchProgressNode = {
+  key: string;
+  title: string;
+  status: WorkbenchProgressNodeStatus;
+  detail?: string;
+  children?: WorkbenchProgressNode[];
+};
 
 type InterviewListError = {
   message: string;
@@ -118,7 +131,6 @@ type InterviewCreateFormValues = {
   mode?: "polish";
   resume_job_binding_id?: string;
   topic_id?: string;
-  subtopic_id?: string;
   custom_topic_text?: string;
 };
 
@@ -247,14 +259,10 @@ export function buildPolishSessionCreateRequest(values: InterviewCreateFormValue
     resume_job_binding_id: values.resume_job_binding_id?.trim() ?? "",
   };
   const topicId = values.topic_id?.trim();
-  const subtopicId = values.subtopic_id?.trim();
   const customTopicText = values.custom_topic_text?.trim();
 
   if (topicId) {
     payload.topic_id = topicId;
-  }
-  if (subtopicId) {
-    payload.subtopic_id = subtopicId;
   }
   if (customTopicText) {
     payload.custom_topic_text = customTopicText;
@@ -384,23 +392,202 @@ function toTopicLabel(session: PolishSessionDetail): string {
   return topic ?? subtopic ?? session.custom_topic_text_summary ?? "未选择";
 }
 
-const WORKBENCH_PROGRESS_PLACEHOLDER = "--";
 const WORKBENCH_NODE_SCORE_PLACEHOLDER = "--";
-const WORKBENCH_QUESTION_PLACEHOLDER = "请结合订单创建、支付回调、超时取消和异常补偿说明设计思路";
-const WORKBENCH_ANSWER_PLACEHOLDER =
-  "我会将订单状态拆分为待支付、支付成功、已取消、已关闭，并通过支付回调幂等、超时任务和补偿机制保证状态最终一致。";
+const FALLBACK_JOB_TITLE = "未命名岗位";
+const FALLBACK_RESUME_TITLE = "未命名简历";
+const FALLBACK_QUESTION_TEXT = "题干缺失";
+const FALLBACK_ANSWER_TEXT = "暂无回答";
+const FALLBACK_FEEDBACK_TEXT = "本轮反馈尚未生成";
 
-function toCurrentNodeLabel(session: PolishSessionDetail): string {
-  const topic = toTopicLabel(session);
-  return topic === "未选择" ? "待生成" : topic;
+export function buildPolishSessionClipboardMarkdown(session: PolishSessionDetail): string {
+  const rows: string[] = [
+    "# 模拟面试复盘",
+    "",
+    `岗位：${session.job_title || FALLBACK_JOB_TITLE}`,
+    `简历：${session.resume_title || FALLBACK_RESUME_TITLE}`,
+    `主题：${toTopicLabel(session)}`,
+    `创建时间：${toDisplayDate(session.created_at)}`,
+    `更新时间：${toDisplayDate(session.updated_at)}`,
+    "",
+  ];
+
+  if (session.turns.length === 0) {
+    rows.push("## 题目与反馈");
+    rows.push("- 尚未生成题目记录");
+    return rows.join("\n");
+  }
+
+  rows.push("## 题目与反馈");
+  session.turns.forEach((turn, turnIndex) => {
+    const questionText = turn.question_text || FALLBACK_QUESTION_TEXT;
+    rows.push(`### 第${turnIndex + 1}轮`);
+    rows.push(`- 题干：${questionText}`);
+    if (turn.answers.length === 0) {
+      rows.push(`- 回答：${FALLBACK_ANSWER_TEXT}`);
+      rows.push(`- 反馈：${FALLBACK_FEEDBACK_TEXT}`);
+      return;
+    }
+
+    turn.answers.forEach((answer, answerIndex) => {
+      const answerText = answer.answer_text || FALLBACK_ANSWER_TEXT;
+      const feedbackText = answer.feedback_text || FALLBACK_FEEDBACK_TEXT;
+      rows.push(`- 回答 ${answerIndex + 1}：${answerText}`);
+      rows.push(`- 反馈 ${answerIndex + 1}：${feedbackText}`);
+    });
+  });
+
+  return rows.join("\n");
 }
 
-function buildWorkbenchHeaderChips(session: PolishSessionDetail) {
+type PolishSessionReadableHeader = PolishSessionDetail | PolishSessionSummary;
+
+export function toDisplayJobTitle(session: PolishSessionReadableHeader): string {
+  return session.job_title || FALLBACK_JOB_TITLE;
+}
+
+export function toDisplayResumeTitle(session: PolishSessionReadableHeader): string {
+  return session.resume_title || FALLBACK_RESUME_TITLE;
+}
+
+export function resolveCurrentQuestionId(session: PolishSessionDetail): string | null {
+  if (session.turns.length === 0) {
+    return null;
+  }
+  const lastTurn = session.turns[session.turns.length - 1];
+  return lastTurn.question_id || null;
+}
+
+function toCurrentNodeLabel(session: PolishSessionDetail): string {
+  return session.progress_tree_state.current_priority?.title ?? "待生成";
+}
+
+function buildWorkbenchProgressNodes(
+  session: PolishSessionDetail,
+): WorkbenchProgressNode[] {
+  const questionNodes = buildQuestionProgressNodes(session);
+  const activeNodeRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
+  const stateByRef = new Map(
+    session.progress_tree_state.node_states.map((nodeState) => [
+      nodeState.progress_node_ref,
+      normalizeProgressNodeStatus(nodeState.status),
+    ]),
+  );
+  return session.progress_tree_plan.nodes.map((node) =>
+    toWorkbenchProgressNode({
+      node,
+      stateByRef,
+      activeNodeRef,
+      questionNodes,
+      level: 0,
+    }),
+  );
+}
+
+function buildQuestionProgressNodes(session: PolishSessionDetail): WorkbenchProgressNode[] {
+  const questionNodes: WorkbenchProgressNode[] = [];
+  for (const [turnIndex, turn] of session.turns.entries()) {
+    const shortQuestion = turn.question_text.length > 24 ? `${turn.question_text.slice(0, 21)}...` : turn.question_text;
+    questionNodes.push({
+      key: `question:${turn.question_id}`,
+      title: `题目 ${turnIndex + 1}`,
+      status: turn.answers.length > 0 ? "completed" : "in_progress",
+      detail: shortQuestion,
+    });
+  }
+  return questionNodes;
+}
+
+function toWorkbenchProgressNode(params: {
+  node: PolishProgressTreeNode;
+  stateByRef: Map<string, WorkbenchProgressNodeStatus>;
+  activeNodeRef: string | null;
+  questionNodes: WorkbenchProgressNode[];
+  level: number;
+}): WorkbenchProgressNode {
+  const children = params.node.children.map((childNode) =>
+    toWorkbenchProgressNode({
+      node: childNode,
+      stateByRef: params.stateByRef,
+      activeNodeRef: params.activeNodeRef,
+      questionNodes: params.questionNodes,
+      level: params.level + 1,
+    }),
+  );
+  const shouldAttachQuestions = params.node.progress_node_ref === params.activeNodeRef && params.questionNodes.length > 0;
+  const mergedChildren = shouldAttachQuestions ? [...children, ...params.questionNodes] : children;
+  return {
+    key: params.node.progress_node_ref,
+    title: params.node.title,
+    status: params.stateByRef.get(params.node.progress_node_ref) ?? summarizeProgressNodeStatus(mergedChildren),
+    detail: params.level === 0 ? "一级方向" : params.node.expected_capability,
+    children: mergedChildren.length > 0 ? mergedChildren : undefined,
+  };
+}
+
+function normalizeProgressNodeStatus(status: string): WorkbenchProgressNodeStatus {
+  if (status === "completed" || status === "in_progress" || status === "pending") {
+    return status;
+  }
+  return "pending";
+}
+
+function summarizeProgressNodeStatus(children: readonly WorkbenchProgressNode[]): WorkbenchProgressNodeStatus {
+  if (children.some((child) => child.status === "in_progress")) {
+    return "in_progress";
+  }
+  if (children.length > 0 && children.every((child) => child.status === "completed")) {
+    return "completed";
+  }
+  return "pending";
+}
+
+function flattenWorkbenchProgressNodes(
+  nodes: readonly WorkbenchProgressNode[],
+): WorkbenchProgressNode[] {
+  return nodes.flatMap((node) => [
+    node,
+    ...(node.children ? flattenWorkbenchProgressNodes(node.children) : []),
+  ]);
+}
+
+function progressNodeStatusLabel(status: WorkbenchProgressNodeStatus): string {
+  return WORKBENCH_PROGRESS_NODE_STATUS_TEXT[status];
+}
+
+function resolveCurrentWorkbenchProgressNodeKey(nodes: readonly WorkbenchProgressNode[]): string | null {
+  const flattenedNodes = flattenWorkbenchProgressNodes(nodes);
+  for (const node of flattenedNodes) {
+    if (node.status === "in_progress") {
+      return node.key;
+    }
+  }
+  for (const node of flattenedNodes) {
+    if (node.status === "pending") {
+      return node.key;
+    }
+  }
+  return flattenedNodes.length > 0 ? flattenedNodes[flattenedNodes.length - 1].key : null;
+}
+
+function collectDefaultExpandedProgressNodeKeys(nodes: readonly WorkbenchProgressNode[]): string[] {
+  const expandedKeys: string[] = [];
+  for (const node of nodes) {
+    if (node.children && node.children.length > 0 && node.status !== "pending") {
+      expandedKeys.push(node.key);
+    }
+    if (node.children) {
+      expandedKeys.push(...collectDefaultExpandedProgressNodeKeys(node.children));
+    }
+  }
+  return Array.from(new Set(expandedKeys));
+}
+
+function buildWorkbenchHeaderChips(session: PolishSessionDetail, progressPercent: number) {
   return [
-    { key: "job", label: "岗位", value: "待关联岗位" },
-    { key: "resume", label: "简历", value: "待关联简历" },
+    { key: "job", label: "岗位", value: toDisplayJobTitle(session) },
+    { key: "resume", label: "简历", value: toDisplayResumeTitle(session) },
     { key: "node", label: "当前节点", value: toCurrentNodeLabel(session) },
-    { key: "progress", label: "进度", value: WORKBENCH_PROGRESS_PLACEHOLDER },
+    { key: "progress", label: "进度", value: `${progressPercent}%` },
     { key: "score", label: "当前节点表现", value: WORKBENCH_NODE_SCORE_PLACEHOLDER },
   ] as const;
 }
@@ -413,7 +600,6 @@ export function InterviewPage() {
   const [createOpen, setCreateOpen] = useState<boolean>(false);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [topics, setTopics] = useState<PolishTopic[]>([]);
-  const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>();
   const [createPrerequisiteLoading, setCreatePrerequisiteLoading] = useState<boolean>(false);
   const [createPrerequisiteError, setCreatePrerequisiteError] = useState<string | null>(null);
   const [topicLoadError, setTopicLoadError] = useState<string | null>(null);
@@ -453,7 +639,7 @@ export function InterviewPage() {
         setTopics(topicResult.value);
       } else {
         setTopics([]);
-        setTopicLoadError("主题列表加载失败。你仍可只选择绑定关系，并用自定义打磨目标描述本次模拟面试。");
+        setTopicLoadError("固定主题列表加载失败，请稍后重试。");
       }
     } finally {
       setCreatePrerequisiteLoading(false);
@@ -474,24 +660,9 @@ export function InterviewPage() {
       }),
     [bindingOptions, createPrerequisiteError, createPrerequisiteLoading],
   );
-  const selectedTopic = useMemo(
-    () => topics.find((topic) => topic.topic_id === selectedTopicId) ?? null,
-    [selectedTopicId, topics],
-  );
-  const subtopicOptions = useMemo(
-    () =>
-      (selectedTopic?.subtopics ?? []).map((subtopic) => ({
-        value: subtopic.subtopic_id,
-        label: subtopic.title,
-        disabled: Boolean(subtopic.disabled_reason),
-      })),
-    [selectedTopic],
-  );
-
   const openCreateEntry = () => {
     setCreateOpen(true);
     setCreateError(null);
-    setSelectedTopicId(undefined);
     createForm.resetFields();
     void loadCreatePrerequisites();
   };
@@ -502,7 +673,6 @@ export function InterviewPage() {
     }
     setCreateOpen(false);
     setCreateError(null);
-    setSelectedTopicId(undefined);
     createForm.resetFields();
   };
 
@@ -525,7 +695,6 @@ export function InterviewPage() {
       const created = await createPolishSession(buildPolishSessionCreateRequest(values));
       message.success(`模拟面试「${toSessionDisplayName(created)}」已创建。`);
       setCreateOpen(false);
-      setSelectedTopicId(undefined);
       createForm.resetFields();
       navigate(buildPolishSessionPath(created.session_id));
     } catch (submitError) {
@@ -560,21 +729,19 @@ export function InterviewPage() {
       },
       {
         title: "绑定关系",
-        dataIndex: "resume_job_binding_id",
-        key: "resume_job_binding_id",
+        dataIndex: "binding_label",
+        key: "binding_label",
         width: 180,
-        render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
+        render: (_: unknown, record) => {
+          const value = record.binding_label || `${toDisplayJobTitle(record)} / ${toDisplayResumeTitle(record)}`;
+          return <Typography.Text>{value}</Typography.Text>;
+        },
       },
       {
         title: "主题",
         key: "topic",
         width: 180,
-        render: (_, record) => (
-          <Space size={4} wrap>
-            {record.topic_id ? <Tag>{record.topic_id}</Tag> : <Tag>未选择</Tag>}
-            {record.subtopic_id ? <Tag>{record.subtopic_id}</Tag> : null}
-          </Space>
-        ),
+        render: (_, record) => <Typography.Text>{record.title || "未选择"}</Typography.Text>,
       },
       {
         title: "更新时间",
@@ -591,7 +758,7 @@ export function InterviewPage() {
           <Button
             type="link"
             size="small"
-            icon={<ArrowRightOutlined />}
+            icon={<RightOutlined />}
             onClick={() => navigate(buildPolishSessionPath(record.session_id))}
           >
             进入
@@ -731,12 +898,6 @@ export function InterviewPage() {
               form={createForm}
               layout="vertical"
               initialValues={{ mode: "polish" }}
-              onValuesChange={(changedValues, allValues) => {
-                if (Object.prototype.hasOwnProperty.call(changedValues, "topic_id")) {
-                  setSelectedTopicId(allValues.topic_id);
-                  createForm.setFieldValue("subtopic_id", undefined);
-                }
-              }}
             >
               <Form.Item
                 label="模拟模式"
@@ -768,25 +929,19 @@ export function InterviewPage() {
                 />
               </Form.Item>
 
-              <Form.Item label="打磨主题" name="topic_id">
+              <Form.Item
+                label="打磨主题"
+                name="topic_id"
+                rules={[{ required: true, message: "请选择 1 个模拟面试主题" }]}
+              >
                 <Select
-                  allowClear
                   disabled={topics.length === 0}
-                  placeholder="可选，选择本次重点主题"
+                  placeholder="选择 1 个模拟面试主题"
                   options={topics.map((topic) => ({
                     value: topic.topic_id,
                     label: topic.title,
                     disabled: Boolean(topic.disabled_reason),
                   }))}
-                />
-              </Form.Item>
-
-              <Form.Item label="细分方向" name="subtopic_id">
-                <Select
-                  allowClear
-                  disabled={subtopicOptions.length === 0}
-                  placeholder={selectedTopicId ? "可选，选择细分方向" : "先选择打磨主题"}
-                  options={subtopicOptions}
                 />
               </Form.Item>
 
@@ -816,8 +971,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<InterviewListError | null>(null);
   const [answerText, setAnswerText] = useState<string>("");
-  const [submittedAnswerText, setSubmittedAnswerText] = useState<string | null>(null);
   const [answerError, setAnswerError] = useState<string | null>(null);
+  const [creatingQuestion, setCreatingQuestion] = useState<boolean>(false);
+  const [submittingAnswer, setSubmittingAnswer] = useState<boolean>(false);
+  const [copyingSession, setCopyingSession] = useState<boolean>(false);
+  const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
 
   const loadSession = async () => {
     setLoading(true);
@@ -835,24 +993,171 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     setAnswerText("");
-    setSubmittedAnswerText(null);
     setAnswerError(null);
     void loadSession();
   }, [sessionId]);
 
-  const sendAnswer = () => {
+  const createQuestion = async () => {
+    if (session === null) {
+      return;
+    }
+    setCreatingQuestion(true);
+    setAnswerError(null);
+    try {
+      await createPolishQuestionTask(sessionId, {
+        progress_node_ref: session.progress_tree_state.current_priority?.progress_node_ref ?? null,
+      });
+      await loadSession();
+    } catch (createError) {
+      setAnswerError(
+        createError instanceof Error
+          ? createError.message
+          : "生成题目失败，请稍后重试。",
+      );
+    } finally {
+      setCreatingQuestion(false);
+    }
+  };
+
+  const sendAnswer = async () => {
     const trimmedAnswer = answerText.trim();
     if (!trimmedAnswer) {
       setAnswerError("请先输入回答内容。");
       return;
     }
+    if (session === null) {
+      setAnswerError("会话尚未加载完成，请稍后重试。");
+      return;
+    }
+    const questionId = resolveCurrentQuestionId(session);
+    if (!questionId) {
+      setAnswerError("请先生成题目后再提交回答。");
+      return;
+    }
+
     setAnswerError(null);
-    setSubmittedAnswerText(trimmedAnswer);
-    setAnswerText("");
+    setSubmittingAnswer(true);
+    try {
+      const answer = await createPolishAnswer(sessionId, {
+        question_id: questionId,
+        answer_text: trimmedAnswer,
+      });
+      await createPolishFeedbackTask(sessionId, {
+        answer_id: answer.answer_id,
+      });
+      await refreshPolishProgressTreeState(sessionId);
+      setAnswerText("");
+      await loadSession();
+    } catch (submitError) {
+      setAnswerError(
+        submitError instanceof Error
+          ? submitError.message
+          : "提交回答失败，请稍后重试。",
+      );
+    } finally {
+      setSubmittingAnswer(false);
+    }
   };
 
-  const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session);
-  const visibleAnswerText = submittedAnswerText ?? WORKBENCH_ANSWER_PLACEHOLDER;
+  const copySessionContent = async () => {
+    if (session === null) {
+      return;
+    }
+    if (!window.navigator.clipboard?.writeText) {
+      message.error("当前环境不支持剪贴板复制。");
+      return;
+    }
+    setCopyingSession(true);
+    try {
+      await window.navigator.clipboard.writeText(buildPolishSessionClipboardMarkdown(session));
+      message.success("复盘内容已复制到剪贴板。");
+    } catch (copyError) {
+      if (copyError instanceof Error) {
+        message.error(copyError.message);
+      } else {
+        message.error("复制失败，请稍后重试。");
+      }
+    } finally {
+      setCopyingSession(false);
+    }
+  };
+
+  const hasQuestion = session !== null && session.turns.length > 0;
+  const progressNodes = session === null ? [] : buildWorkbenchProgressNodes(session);
+  const progressPercent = session === null ? 0 : session.progress_tree_state.progress.progress_percent;
+  const currentProgressNodeKey =
+    session?.progress_tree_state.current_priority?.progress_node_ref ?? resolveCurrentWorkbenchProgressNodeKey(progressNodes);
+  const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
+  const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
+
+  useEffect(() => {
+    setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
+  }, [session]);
+
+  const toggleProgressNode = (nodeKey: string) => {
+    setExpandedProgressNodeKeys((currentKeys) => {
+      const nextKeys = new Set(currentKeys);
+      if (nextKeys.has(nodeKey)) {
+        nextKeys.delete(nodeKey);
+      } else {
+        nextKeys.add(nodeKey);
+      }
+      return nextKeys;
+    });
+  };
+
+  const renderProgressNode = (node: WorkbenchProgressNode, level = 0) => {
+    const isActive = node.key === currentProgressNodeKey;
+    const isExpandable = Boolean(node.children && node.children.length > 0);
+    const isExpanded = expandedProgressNodeKeys.has(node.key);
+    const cardClassName = [
+      isActive ? styles.nodeCardActive : styles.nodeCard,
+      level > 0 ? styles.nodeCardChild : "",
+    ].filter(Boolean).join(" ");
+
+    return (
+      <div className={styles.nodeBranch} key={node.key}>
+        <button
+          className={cardClassName}
+          type="button"
+          disabled={!isExpandable}
+          aria-expanded={isExpandable ? isExpanded : undefined}
+          onClick={isExpandable ? () => toggleProgressNode(node.key) : undefined}
+        >
+          <span>
+            <Typography.Text strong>{node.title}</Typography.Text>
+            {node.detail ? (
+              <Typography.Text type="secondary">
+                {node.detail} · {progressNodeStatusLabel(node.status)}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">{progressNodeStatusLabel(node.status)}</Typography.Text>
+            )}
+            {isActive ? (
+              <Tag
+                color={node.status === "completed" ? "success" : "processing"}
+                style={{ width: "fit-content", margin: 0 }}
+              >
+                当前优先级
+              </Tag>
+            ) : null}
+          </span>
+          {isExpandable ? (
+            <span className={styles.nodeChevron}>
+              {isExpanded ? <DownOutlined /> : <RightOutlined />}
+            </span>
+          ) : (
+            <span className={styles.nodeChevron} />
+          )}
+        </button>
+        {isExpandable && isExpanded ? (
+          <div className={styles.childNodeList}>
+            {node.children?.map((childNode) => renderProgressNode(childNode, level + 1))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <AppShell>
@@ -884,17 +1189,36 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       ) : (
         <div className={styles.workbenchRoot} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.root}>
           <section className={styles.heroPanel}>
-            <div>
-              <Typography.Title level={3} className={styles.heroTitle}>
-                打磨模式工作台
-              </Typography.Title>
-              <div className={styles.metaPills}>
-                {headerChips.map((chip) => (
-                  <span key={chip.key}>
-                    <strong>{chip.label}：</strong>
-                    {chip.value}
-                  </span>
-                ))}
+            <div className={styles.heroHeader}>
+              <div className={styles.heroSummary}>
+                <Typography.Title level={3} className={styles.heroTitle}>
+                  打磨模式工作台
+                </Typography.Title>
+                <div className={styles.metaPills}>
+                  {headerChips.map((chip) => (
+                    <span key={chip.key}>
+                      <strong>{chip.label}：</strong>
+                      {chip.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.heroActions}>
+                <Button
+                  type="primary"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => navigate("/interview")}
+                >
+                  返回模拟面试列表
+                </Button>
+                <Button
+                  icon={<CopyOutlined />}
+                  loading={copyingSession}
+                  onClick={() => void copySessionContent()}
+                >
+                  复制复盘内容
+                </Button>
               </div>
             </div>
           </section>
@@ -908,28 +1232,22 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   </Typography.Title>
                 </div>
                 <Typography.Text className={styles.progressLabel}>
-                  整体进度：{WORKBENCH_PROGRESS_PLACEHOLDER}
+                  整体进度：{progressPercent}%
                 </Typography.Text>
-                <Progress percent={0} showInfo={false} strokeColor="#2563eb" trailColor="#e4ecf7" />
+                <Progress percent={progressPercent} showInfo={false} strokeColor="#2563eb" trailColor="#e4ecf7" />
               </div>
 
               <div className={styles.nodeList} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressNodeList}>
-                {INTERVIEW_WORKBENCH_PROGRESS_NODE_TITLES.map((title, index) => (
-                  <button
-                    className={index === 0 ? styles.nodeCardActive : styles.nodeCard}
-                    key={title}
-                    type="button"
-                    disabled
-                  >
-                    <span>
-                      <Typography.Text strong>{title}</Typography.Text>
-                      {index === 0 ? (
-                        <Typography.Text type="secondary">点击查看细分技能</Typography.Text>
-                      ) : null}
-                    </span>
-                    <ArrowRightOutlined />
-                  </button>
-                ))}
+                {isProgressTreeInsufficient ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="岗位或简历内容不足，暂无法生成进展树。"
+                    description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
+                  />
+                ) : (
+                  progressNodes.map((node) => renderProgressNode(node))
+                )}
               </div>
             </aside>
 
@@ -938,37 +1256,74 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 <Typography.Title level={4} className={styles.panelTitle}>
                   对话与反馈
                 </Typography.Title>
+                {hasQuestion ? null : (
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      void createQuestion();
+                    }}
+                    loading={creatingQuestion}
+                    disabled={isProgressTreeInsufficient}
+                  >
+                    生成题目
+                  </Button>
+                )}
               </div>
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
-                <div className={styles.questionBubble}>
-                  <Typography.Text>{WORKBENCH_QUESTION_PLACEHOLDER}</Typography.Text>
-                </div>
-
-                <div className={styles.answerBubble}>
-                  <Typography.Text>{visibleAnswerText}</Typography.Text>
-                </div>
-
-                <section className={styles.feedbackAccordion} aria-label="反馈折叠区域">
-                  {INTERVIEW_WORKBENCH_FEEDBACK_ITEMS.map((label) => (
-                    <button className={styles.feedbackItem} key={label} type="button" disabled>
-                      <Typography.Text>{label}</Typography.Text>
-                      <Typography.Text type="secondary">点击展开</Typography.Text>
-                    </button>
-                  ))}
-                </section>
-
-                <div className={styles.questionBubble}>
-                  <Typography.Text>{WORKBENCH_QUESTION_PLACEHOLDER}</Typography.Text>
-                </div>
-
-                <div className={styles.answerBubble}>
-                  <Typography.Text>{visibleAnswerText}</Typography.Text>
-                </div>
+                {hasQuestion ? null : (
+                  <EmptyState
+                    compact
+                    title="暂无题目"
+                    description="请先生成题目后再开始作答。"
+                    reason="点击上方“生成题目”按钮，系统将基于当前主题生成题干。"
+                  />
+                )}
+                {session.turns.map((turn, turnIndex) => (
+                  <section key={turn.question_id} style={{ display: "grid", gap: 12 }}>
+                    <div className={styles.questionBubble}>
+                      <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>
+                      <Typography.Text>{turn.question_text || FALLBACK_QUESTION_TEXT}</Typography.Text>
+                    </div>
+                    {turn.answers.length === 0 ? (
+                      <div style={{ display: "grid", gap: 12 }}>
+                        <div className={styles.answerBubble}>
+                          <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
+                        </div>
+                        <section className={styles.feedbackAccordion} aria-label="反馈占位区域">
+                          <div className={styles.feedbackItem}>
+                            <Typography.Text type="secondary">{FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                          </div>
+                        </section>
+                      </div>
+                    ) : (
+                      turn.answers.map((answer) => (
+                        <section key={answer.answer_id} style={{ display: "grid", gap: 10 }}>
+                          <div className={styles.answerBubble}>
+                            <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
+                          </div>
+                          <section className={styles.feedbackAccordion} aria-label="反馈区域">
+                            <div className={styles.feedbackItem}>
+                              <Typography.Text>{answer.feedback_text || FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                            </div>
+                          </section>
+                        </section>
+                      ))
+                    )}
+                  </section>
+                ))}
               </div>
 
               <div className={styles.composer} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.composer}>
                 {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
+                {!hasQuestion && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="当前未生成题目"
+                    description="请先点击“生成题目”后提交回答。"
+                  />
+                )}
                 <Input.TextArea
                   className={styles.composerInput}
                   rows={4}
@@ -976,11 +1331,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   onChange={(event) => setAnswerText(event.target.value)}
                   placeholder="请输入你的回答"
                   maxLength={2000}
+                  disabled={submittingAnswer || creatingQuestion || !hasQuestion}
                 />
                 <div className={styles.composerActions}>
                   <Button
                     type="primary"
                     icon={<SendOutlined />}
+                    loading={submittingAnswer}
+                    disabled={submittingAnswer || creatingQuestion || !hasQuestion}
                     onClick={() => {
                       sendAnswer();
                     }}

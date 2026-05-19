@@ -1,6 +1,6 @@
 """Interview session model skeletons."""
 
-from sqlalchemy import String
+from sqlalchemy import Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.db.base import Base
@@ -25,6 +25,10 @@ class PolishSessionDetail(OwnedRecordMixin, Base):
     topic_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     subtopic_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     custom_topic_text_summary: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    progress_tree_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    progress_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    progress_tree_plan_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    progress_tree_state_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class PressureSessionDetail(OwnedRecordMixin, Base):

@@ -45,6 +45,53 @@ class CreatePolishSessionRequest(BaseModel):
     custom_topic_text: str | None = Field(default=None, max_length=240)
 
 
+class PolishProgressTreeNodeResponse(BaseModel):
+    progress_node_ref: str
+    title: str
+    expected_capability: str
+    related_job_requirements: list[str] = Field(default_factory=list)
+    related_resume_evidence: list[str] = Field(default_factory=list)
+    missing_points: list[str] = Field(default_factory=list)
+    children: list["PolishProgressTreeNodeResponse"] = Field(default_factory=list)
+
+
+class PolishProgressTreePlanResponse(BaseModel):
+    schema_id: str | None = None
+    schema_version: str | None = None
+    prompt_version: str | None = None
+    status: str
+    context_digest: str
+    nodes: list[PolishProgressTreeNodeResponse] = Field(default_factory=list)
+
+
+class PolishProgressTreeNodeStateResponse(BaseModel):
+    progress_node_ref: str
+    status: str
+    completed_questions_count: int = 0
+    latest_feedback_summary: str | None = None
+
+
+class PolishCurrentPriorityResponse(BaseModel):
+    progress_node_ref: str
+    title: str
+    expected_capability: str
+
+
+class PolishProgressResponse(BaseModel):
+    progress_percent: int = Field(ge=0, le=100)
+
+
+class PolishProgressTreeStateResponse(BaseModel):
+    schema_id: str | None = None
+    schema_version: str | None = None
+    prompt_version: str | None = None
+    status: str
+    node_states: list[PolishProgressTreeNodeStateResponse] = Field(default_factory=list)
+    current_priority: PolishCurrentPriorityResponse | None = None
+    updated_from_turns_count: int = 0
+    progress: PolishProgressResponse = Field(default_factory=lambda: PolishProgressResponse(progress_percent=0))
+
+
 class PolishSessionResponse(BaseModel):
     session_id: str
     mode: str = "polish"
@@ -54,6 +101,15 @@ class PolishSessionResponse(BaseModel):
     resume_version_id: str
     job_id: str
     job_version_id: str
+    job_title: str
+    job_company: str
+    resume_title: str
+    binding_label: str
+    turns: list[PolishSessionTurnResponse] = Field(default_factory=list)
+    progress_tree_status: str
+    progress_percent: int = Field(ge=0, le=100)
+    progress_tree_plan: PolishProgressTreePlanResponse
+    progress_tree_state: PolishProgressTreeStateResponse
     topic_ref: PolishTopicRefResponse | None = None
     subtopic_ref: PolishSubtopicRefResponse | None = None
     custom_topic_text_summary: str | None = None
@@ -75,6 +131,10 @@ class PolishSessionSummaryResponse(BaseModel):
     resume_version_id: str
     job_id: str
     job_version_id: str
+    job_title: str
+    job_company: str
+    resume_title: str
+    binding_label: str
     topic_id: str | None = None
     subtopic_id: str | None = None
     custom_topic_text_summary: str | None = None
@@ -100,6 +160,24 @@ class PolishAnswerResponse(BaseModel):
     answer_text: str
     created_at: datetime
     updated_at: datetime
+
+
+class PolishSessionAnswerResponse(BaseModel):
+    answer_id: str
+    answer_round: int = Field(ge=1)
+    answer_text: str
+    answer_created_at: datetime
+    feedback_text: str
+    feedback_id: str | None = None
+    score_result_id: str | None = None
+    feedback_created_at: datetime | None = None
+
+
+class PolishSessionTurnResponse(BaseModel):
+    question_id: str
+    question_text: str
+    question_created_at: datetime
+    answers: list[PolishSessionAnswerResponse] = Field(default_factory=list)
 
 
 class CreateFeedbackTaskRequest(BaseModel):

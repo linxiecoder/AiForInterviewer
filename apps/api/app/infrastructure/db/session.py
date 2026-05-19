@@ -16,6 +16,10 @@ _KNOWN_SCHEMA_COLUMN_BACKFILLS: tuple[tuple[str, str, str], ...] = (
     ("interview_sessions", "resume_id", "VARCHAR(80)"),
     ("interview_sessions", "job_id", "VARCHAR(80)"),
     ("polish_session_details", "custom_topic_text_summary", "VARCHAR(240)"),
+    ("polish_session_details", "progress_tree_status", "VARCHAR(40)"),
+    ("polish_session_details", "progress_percent", "INTEGER"),
+    ("polish_session_details", "progress_tree_plan_json", "JSON"),
+    ("polish_session_details", "progress_tree_state_json", "JSON"),
 )
 
 

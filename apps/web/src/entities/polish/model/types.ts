@@ -11,11 +11,72 @@ export interface PolishSessionSummary {
   resume_version_id: string;
   job_id: string;
   job_version_id: string;
+  job_title: string;
+  job_company: string;
+  resume_title: string;
+  binding_label: string;
   topic_id?: string | null;
   subtopic_id?: string | null;
   custom_topic_text_summary?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PolishSessionAnswer {
+  answer_id: string;
+  answer_round: number;
+  answer_text: string;
+  answer_created_at: string;
+  feedback_text: string;
+  feedback_id: string | null;
+  score_result_id: string | null;
+  feedback_created_at: string | null;
+}
+
+export interface PolishSessionTurn {
+  question_id: string;
+  question_text: string;
+  question_created_at: string;
+  answers: PolishSessionAnswer[];
+}
+
+export interface PolishProgressTreeNode {
+  progress_node_ref: string;
+  title: string;
+  expected_capability: string;
+  related_job_requirements: string[];
+  related_resume_evidence: string[];
+  missing_points: string[];
+  children: PolishProgressTreeNode[];
+}
+
+export interface PolishProgressTreePlan {
+  status: "ready" | "insufficient_context" | string;
+  context_digest: string;
+  nodes: PolishProgressTreeNode[];
+}
+
+export interface PolishProgressTreeNodeState {
+  progress_node_ref: string;
+  status: "completed" | "in_progress" | "pending" | string;
+  completed_questions_count: number;
+  latest_feedback_summary?: string | null;
+}
+
+export interface PolishCurrentPriority {
+  progress_node_ref: string;
+  title: string;
+  expected_capability: string;
+}
+
+export interface PolishProgressTreeState {
+  status: "ready" | "insufficient_context" | string;
+  node_states: PolishProgressTreeNodeState[];
+  current_priority?: PolishCurrentPriority | null;
+  updated_from_turns_count: number;
+  progress: {
+    progress_percent: number;
+  };
 }
 
 export interface PolishSubtopic {
@@ -69,6 +130,15 @@ export interface PolishSessionDetail {
   resume_version_id: string;
   job_id: string;
   job_version_id: string;
+  job_title: string;
+  job_company: string;
+  resume_title: string;
+  binding_label: string;
+  turns: PolishSessionTurn[];
+  progress_tree_status: "ready" | "insufficient_context" | string;
+  progress_percent: number;
+  progress_tree_plan: PolishProgressTreePlan;
+  progress_tree_state: PolishProgressTreeState;
   topic_ref?: {
     topic_id: string;
     title?: string | null;
