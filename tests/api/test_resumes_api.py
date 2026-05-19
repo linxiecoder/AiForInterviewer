@@ -132,6 +132,65 @@ def test_create_resume_rejects_blank_content() -> None:
     assert body["error"]["code"] == "validation_failed"
 
 
+def test_update_resume_creates_new_version_and_returns_detail() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resumes",
+        "POST",
+        json_body={
+            "title": "旧简历",
+            "markdown_text": "# 旧内容",
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 201
+    created = body["data"]
+    resume_id = created["resume_id"]
+    old_version_id = created["current_version_ref"]["version_id"]
+
+    detail_status, detail_body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "GET",
+        headers={"cookie": owner_cookie},
+    )
+    assert detail_status == 200
+    assert detail_body["data"]["markdown_text"] == "# 旧内容"
+
+    update_status, update_body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "PATCH",
+        json_body={
+            "title": "更新后的简历",
+            "markdown_text": "# 新内容\n\n- TypeScript",
+            "base_version_ref": created["current_version_ref"],
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert update_status == 200
+    assert update_body["resource_type"] == "resume_detail"
+    updated = update_body["data"]
+    assert updated["resume_id"] == resume_id
+    assert updated["title"] == "更新后的简历"
+    assert updated["markdown_text"] == "# 新内容\n\n- TypeScript"
+    assert updated["current_version_ref"]["version_id"] != old_version_id
+
+    list_status, list_body = call_json(
+        app,
+        "/api/v1/resumes",
+        "GET",
+        headers={"cookie": owner_cookie},
+    )
+    assert list_status == 200
+    assert list_body["data"][0]["title"] == "更新后的简历"
+    assert list_body["data"][0]["current_version_ref"]["version_id"] == updated["current_version_ref"]["version_id"]
+
+
 def test_user_b_cannot_list_user_a_resumes() -> None:
     app = _app_with_two_users()
     _reset_repositories()

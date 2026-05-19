@@ -6,6 +6,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.errors import raise_api_error
+from app.application.job_match.ports import JobMatchAnalyzer
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
 
@@ -30,6 +31,17 @@ async def get_db_session_factory(request: Request) -> sessionmaker[Session]:
             message="Database session factory is not available.",
         )
     return session_factory
+
+
+async def get_job_match_analyzer(request: Request) -> JobMatchAnalyzer:
+    analyzer = getattr(request.app.state, "job_match_analyzer", None)
+    if analyzer is None:
+        raise_api_error(
+            status_code=500,
+            code="internal_error",
+            message="Job match analyzer is not available.",
+        )
+    return analyzer
 
 
 def get_current_actor(request: Request) -> CurrentActor | None:

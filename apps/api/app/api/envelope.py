@@ -4,6 +4,7 @@ from typing import Any
 
 from app.domain.shared.enums import ApiStatus
 from app.domain.shared.ids import generate_request_id, generate_trace_id
+from app.infrastructure.observability.http_logging import get_request_trace_context
 from app.schemas.envelope import ApiSuccessEnvelope
 
 
@@ -15,11 +16,11 @@ def success_envelope(
     request_id: str | None = None,
     trace_id: str | None = None,
 ) -> ApiSuccessEnvelope:
+    context = get_request_trace_context()
     return ApiSuccessEnvelope(
-        request_id=request_id or generate_request_id(),
-        trace_id=trace_id or generate_trace_id(),
+        request_id=request_id or (context.request_id if context else None) or generate_request_id(),
+        trace_id=trace_id or (context.trace_id if context else None) or generate_trace_id(),
         status=status,
         resource_type=resource_type,
         data=data,
     )
-

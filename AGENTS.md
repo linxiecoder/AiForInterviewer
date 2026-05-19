@@ -77,41 +77,10 @@ permalink: ai-for-interviewer/agents
 
 ```bash
 cd /home/administrator/code/AiForInterviewer
+npm run dev
 ```
 
-后端运行时读取 `API_DATABASE_URL`，未设置时读取 `DATABASE_URL`，二者都未设置时回退到内存 SQLite。需要连接本地 PostgreSQL 时，先确认 `.env` 中包含 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_PORT` 和 `DATABASE_URL`，再启动数据库：
-
-```bash
-docker compose -f docker-compose.pg.yml up -d postgres
-```
-
-当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时也会执行同一初始化路径。需要在启动服务前手动初始化 schema 时，使用：
-
-```bash
-set -a; . ./.env; set +a
-PYTHONPATH=apps/api .venv/bin/python -c "from app.infrastructure.db.session import initialize_schema; initialize_schema(); print('schema initialized')"
-```
-
-启动后端 API：
-
-```bash
-set -a; . ./.env; set +a
-.venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port "${API_PORT:-8001}"
-```
-
-后端启动后用以下地址检查：
-
-```bash
-curl "http://127.0.0.1:${API_PORT:-8001}/api/v1/health"
-```
-
-启动前端前，确认 `apps/web/.env.local` 的 `VITE_API_BASE_URL` 与后端端口一致。例如后端使用 `8001` 时：
-
-```bash
-VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1 npm run web:dev
-```
-
-前端启动后访问 `http://127.0.0.1:5173/`。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
+`npm run dev` 会启动本地 PostgreSQL，检查并直接结束占用 `8001` / `5173` 的旧进程，然后并行启动后端 API 和前端页面。当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时会执行同一初始化路径。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
 
 ## 9. 禁止事项
 

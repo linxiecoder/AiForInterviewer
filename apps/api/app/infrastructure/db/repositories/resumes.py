@@ -21,6 +21,11 @@ class SqlAlchemyResumeRepository(ResumeRepository):
             found = session.get(ResumeModel, resume_id)
             return _to_domain_resume(found) if found is not None else None
 
+    def get_version(self, resume_version_id: str) -> ResumeVersion | None:
+        with self._session_factory() as session:
+            found = session.get(ResumeVersionModel, resume_version_id)
+            return _to_domain_resume_version(found) if found is not None else None
+
     def get_ref(self, resume_id: str) -> ResourceRef | None:
         with self._session_factory() as session:
             found = session.get(ResumeModel, resume_id)
@@ -113,4 +118,16 @@ def _to_resume_version_model(version: ResumeVersion) -> ResumeVersionModel:
         resume_id=version.resume_id,
         version_number=version.version_number,
         markdown_text=version.markdown_text,
+    )
+
+
+def _to_domain_resume_version(model: ResumeVersionModel) -> ResumeVersion:
+    return ResumeVersion(
+        resume_version_id=model.id,
+        owner_id=model.owner_id,
+        resume_id=model.resume_id,
+        version_number=model.version_number,
+        markdown_text=model.markdown_text,
+        status=model.status,
+        created_at=model.created_at,
     )

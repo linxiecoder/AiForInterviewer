@@ -30,6 +30,8 @@ import type {
   JobBindingSummary,
   JobCreateRequest,
   JobDetail,
+  JobMatchAnalysis,
+  JobMatchSummary,
   JobResumeBinding,
   JobSummary,
   JobUpdateRequest,
@@ -40,6 +42,7 @@ import { LoadingState } from "../../shared/ui/LoadingState";
 import { ErrorState } from "../../shared/ui/ErrorState";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { useRouteController } from "../../app/routes/router";
+import { JobMatchPanel } from "./JobMatchPanel";
 
 type JobFormMode = "create" | "edit";
 
@@ -144,6 +147,21 @@ function buildBindingLabel(binding: JobBindingSummary): string {
     return `已绑定 ${binding.resume_id}`;
   }
   return "已绑定";
+}
+
+function toLatestMatchSummary(analysis: JobMatchAnalysis): JobMatchSummary {
+  return {
+    status: analysis.status,
+    analysis_id: analysis.analysis_id,
+    display_score: analysis.overall_score ?? analysis.result_payload.overall_score,
+    score_scale: "0_100_product_scale",
+    score_version: analysis.score_rule_version,
+    rubric_version: analysis.score_rule_version,
+    confidence_level: analysis.confidence ?? analysis.result_payload.confidence,
+    summary_text: analysis.result_payload.summary,
+    generated_at: analysis.created_at,
+    stale_reason: null,
+  };
 }
 
 function parseApiError(error: unknown): UiError {
@@ -537,6 +555,29 @@ export function JobPage() {
     } finally {
       setBindingMode("idle");
     }
+  };
+
+  const updateJobMatchSummary = (analysis: JobMatchAnalysis) => {
+    const latestMatchSummary = toLatestMatchSummary(analysis);
+    setSelectedJob((prev) =>
+      prev !== null && prev.job_id === analysis.job_id
+        ? {
+            ...prev,
+            latest_match_summary: latestMatchSummary,
+          }
+        : prev,
+    );
+    setJobs((prev) =>
+      prev.map((item) =>
+        item.job_id === analysis.job_id
+          ? {
+              ...item,
+              latest_match_summary: latestMatchSummary,
+              updated_at: analysis.updated_at,
+            }
+          : item,
+      ),
+    );
   };
 
   const onFormValuesChange = (_: unknown, allValues: JobFormValues) => {
@@ -952,7 +993,7 @@ export function JobPage() {
                   </List.Item>
                   <List.Item>
                     <List.Item.Meta
-                      title="匹配分析占位"
+                      title="最近匹配分析"
                       description={selectedJob.latest_match_summary?.status || "match_not_generated"}
                     />
                   </List.Item>
@@ -987,6 +1028,16 @@ export function JobPage() {
               </Card>
 
               {renderBindingPanel(selectedJob)}
+
+              <JobMatchPanel
+                bindingId={
+                  selectedJob.binding_summary.status === "bound"
+                    ? selectedJob.binding_summary.resume_job_binding_id
+                    : null
+                }
+                bindingLabel={buildBindingLabel(selectedJob.binding_summary)}
+                onAnalysisCreated={updateJobMatchSummary}
+              />
             </Space>
           )}
         </Drawer>

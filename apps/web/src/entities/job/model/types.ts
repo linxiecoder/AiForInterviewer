@@ -26,6 +26,103 @@ export interface JobMatchSummary {
   stale_reason?: string | null;
 }
 
+export type JobMatchOverallLevel =
+  | "strong_match"
+  | "medium_match"
+  | "weak_match"
+  | "insufficient_evidence";
+
+export type JobMatchConfidence = "high" | "medium" | "low" | "insufficient";
+
+export type JobMatchDimensionKey =
+  | "requirement_alignment"
+  | "experience_evidence"
+  | "skill_coverage"
+  | "gap_risk"
+  | "readiness_actions";
+
+export interface JobMatchEvidenceRef {
+  chunk_id: string;
+  quote?: string | null;
+}
+
+export interface JobMatchDimensionScore {
+  key: JobMatchDimensionKey;
+  score: number;
+  max_score: number;
+  rationale: string;
+  supporting_evidence: JobMatchEvidenceRef[];
+  gaps: string[];
+  confidence: JobMatchConfidence;
+}
+
+export interface JobMatchMatchedRequirement {
+  requirement_chunk_id: string;
+  resume_evidence_chunk_ids: string[];
+  rationale: string;
+  confidence: JobMatchConfidence;
+}
+
+export interface JobMatchMissingRequirement {
+  requirement_chunk_id?: string | null;
+  reason: string;
+  confidence: JobMatchConfidence;
+  evidence_insufficient?: boolean;
+}
+
+export interface JobMatchResumeEvidence {
+  chunk_id: string;
+  summary: string;
+  confidence: JobMatchConfidence;
+}
+
+export interface JobMatchRiskFlag {
+  risk_type: string;
+  description: string;
+  severity: "low" | "medium" | "high";
+  supporting_evidence: JobMatchEvidenceRef[];
+}
+
+export interface JobMatchResultPayload {
+  overall_score: number;
+  overall_level: JobMatchOverallLevel;
+  confidence: JobMatchConfidence;
+  summary: string;
+  dimension_scores: JobMatchDimensionScore[];
+  matched_requirements: JobMatchMatchedRequirement[];
+  missing_requirements: JobMatchMissingRequirement[];
+  resume_evidence: JobMatchResumeEvidence[];
+  risk_flags: JobMatchRiskFlag[];
+  interview_focus: string[];
+  suggested_questions: string[];
+  markdown_report: string;
+}
+
+export interface CreateJobMatchAnalysisRequest {
+  resume_job_binding_id: string;
+}
+
+export interface JobMatchAnalysis {
+  analysis_id: string;
+  resume_job_binding_id: string;
+  resume_id: string;
+  resume_version_id: string;
+  job_id: string;
+  job_version_id: string;
+  status: "completed" | "failed";
+  overall_score: number | null;
+  overall_level: JobMatchOverallLevel | null;
+  confidence: JobMatchConfidence | null;
+  result_payload: JobMatchResultPayload;
+  markdown_report_text?: string | null;
+  score_rule_version: string;
+  prompt_version: string;
+  model_name: string;
+  source_digest: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface JobSummary {
   job_id: string;
   title: string;
