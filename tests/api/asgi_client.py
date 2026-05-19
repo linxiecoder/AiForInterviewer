@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from json import dumps, loads
+from urllib.parse import urlsplit
 from typing import Any
 
 
@@ -47,6 +48,9 @@ async def _call_json(
     messages: list[dict[str, Any]] = []
     request_sent = False
     request_body = b""
+    parsed_path = urlsplit(path)
+    scope_path = parsed_path.path or "/"
+    query_string = parsed_path.query.encode("ascii")
     request_headers = [(key.lower().encode("ascii"), value.encode("latin-1")) for key, value in (headers or {}).items()]
     if json_body is not None:
         request_body = dumps(json_body).encode("utf-8")
@@ -70,9 +74,9 @@ async def _call_json(
             "http_version": "1.1",
             "method": method,
             "scheme": "http",
-            "path": path,
-            "raw_path": path.encode("ascii"),
-            "query_string": b"",
+            "path": scope_path,
+            "raw_path": scope_path.encode("ascii"),
+            "query_string": query_string,
             "headers": request_headers,
             "client": ("testclient", 50000),
             "server": ("testserver", 80),

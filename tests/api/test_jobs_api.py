@@ -49,9 +49,14 @@ def test_create_job_success_and_returns_current_version() -> None:
     status_code, body = call_json(app, f"/api/v1/jobs/{job_id}", headers={"cookie": owner_cookie})
     assert status_code == 200
     assert body["data"]["current_version_ref"]["version_id"] == current_version_id
+    assert body["data"]["department"] == "Engineering"
     assert body["data"]["responsibilities"] == ["Build APIs", "Maintain code"]
     assert body["data"]["requirements"] == ["Python", "SQL"]
     assert body["data"]["other_notes"] == "Focus on correctness"
+
+    status_code, body = call_json(app, "/api/v1/jobs", headers={"cookie": owner_cookie})
+    assert status_code == 200
+    assert body["data"][0]["department"] == "Engineering"
 
 
 def test_jobs_are_scoped_to_current_owner() -> None:

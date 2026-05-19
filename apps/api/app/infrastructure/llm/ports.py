@@ -6,5 +6,6 @@ from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
 
 
 class LlmTransport(Protocol):
-    def generate(self, request: LlmTransportRequest) -> LlmTransportResult: ...
+    """LLM 基础调用接口：应用层只依赖该协议，不直接耦合具体模型厂商。"""
 
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult: ...

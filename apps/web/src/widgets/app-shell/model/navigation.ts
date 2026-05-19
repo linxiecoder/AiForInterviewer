@@ -16,7 +16,7 @@ export type AppShellNavItem = {
   disabledReason: string;
 };
 
-export const APP_SHELL_NAV_ITEMS: AppShellNavItem[] = [
+export const APP_SHELL_NAV_ITEMS = [
   {
     key: "dashboard",
     label: "工作台",
@@ -30,8 +30,8 @@ export const APP_SHELL_NAV_ITEMS: AppShellNavItem[] = [
     label: "我的简历",
     icon: "resume",
     path: "/resume",
-    disabled: true,
-    disabledReason: "占位：简历模块待联调",
+    disabled: false,
+    disabledReason: "简历模块已联调",
   },
   {
     key: "job",
@@ -73,6 +73,6 @@ export const APP_SHELL_NAV_ITEMS: AppShellNavItem[] = [
     disabled: true,
     disabledReason: "占位：能力提升待联调",
   },
-];
+] as const satisfies readonly AppShellNavItem[];
 
 export const TOPBAR_SEARCH_PLACEHOLDER = "搜索简历、岗位、面试记录...";

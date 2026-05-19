@@ -23,6 +23,15 @@ def test_route_inventory_keeps_health_and_contract_baseline() -> None:
     assert "/api/v1/auth/session" not in paths
 
 
+def test_route_inventory_registers_job_match_analysis_routes() -> None:
+    app = create_app()
+    paths = {route.path for route in app.routes if hasattr(route, "path")}
+
+    assert "/api/v1/job-match-analyses" in paths
+    assert "/api/v1/job-match-analyses/{analysis_id}" in paths
+    assert "/api/v1/job-match-analyses/latest" in paths
+
+
 def test_baseline_route_inventory_has_no_export_download_or_upload_routes() -> None:
     app = create_app()
     api_paths = [

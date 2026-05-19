@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session, sessionmaker
 from typing import Any
 
-from app.api.deps import require_authenticated_actor
+from app.api.deps import get_db_session_factory, require_authenticated_actor
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.application.bindings.use_cases import BindingUseCases
@@ -24,8 +25,11 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 @router.get("")
-async def list_jobs(actor: CurrentActor = Depends(require_authenticated_actor)) -> Any:
-    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository())
+async def list_jobs(
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository(session_factory))
     query = ListJobsQuery(owner_id=actor.owner_id)
     jobs_result = jobs_use_case.list_by_owner(query)
     if not jobs_result.is_success:
@@ -37,7 +41,7 @@ async def list_jobs(actor: CurrentActor = Depends(require_authenticated_actor)) 
             message=error.message,
         )
 
-    binding_summary = _binding_summary_builder(actor.owner_id)
+    binding_summary = _binding_summary_builder(actor.owner_id, session_factory)
     summaries = [
         _to_job_summary(job, jobs_result.value or [], binding_summary)
         for job in jobs_result.value or []
@@ -49,8 +53,9 @@ async def list_jobs(actor: CurrentActor = Depends(require_authenticated_actor)) 
 async def create_job(
     payload: CreateJobRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository())
+    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository(session_factory))
     command = CreateJobCommand(
         owner_id=actor.owner_id,
         title=payload.title,
@@ -70,15 +75,16 @@ async def create_job(
             message=error.message,
         )
 
-    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id))
+    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id, session_factory))
 
 
 @router.get("/{job_id}")
 async def get_job(
     job_id: str,
     actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository())
+    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository(session_factory))
     result = jobs_use_case.get(GetJobQuery(owner_id=actor.owner_id, job_id=job_id))
     if not result.is_success:
         error = result.error
@@ -87,7 +93,7 @@ async def get_job(
             code=error.code,
             message=error.message,
         )
-    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id))
+    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id, session_factory))
 
 
 @router.patch("/{job_id}")
@@ -95,8 +101,9 @@ async def patch_job(
     job_id: str,
     payload: UpdateJobRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository())
+    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository(session_factory))
     command = UpdateJobCommand(
         owner_id=actor.owner_id,
         title=payload.title,
@@ -120,7 +127,7 @@ async def patch_job(
             message=error.message,
         )
 
-    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id))
+    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id, session_factory))
 
 
 def _to_job_summary(job, jobs: list[object], binding_summary_builder) -> dict:
@@ -129,6 +136,7 @@ def _to_job_summary(job, jobs: list[object], binding_summary_builder) -> dict:
         job_id=job.job_id,
         title=job.title,
         company=job.company,
+        department=job.department,
         application_status=job.application_status,
         current_version_ref=_job_version_ref(job),
         archived_at=job.archived_at,
@@ -141,8 +149,8 @@ def _to_job_summary(job, jobs: list[object], binding_summary_builder) -> dict:
     ).model_dump(mode="json")
 
 
-def _to_job_detail(job, version, owner_id: str) -> dict:
-    binding_summary = _binding_summary_builder(owner_id)(job)
+def _to_job_detail(job, version, owner_id: str, session_factory: sessionmaker[Session]) -> dict:
+    binding_summary = _binding_summary_builder(owner_id, session_factory)(job)
     return JobDetail(
         job_id=job.job_id,
         title=job.title,
@@ -163,10 +171,10 @@ def _to_job_detail(job, version, owner_id: str) -> dict:
     ).model_dump(mode="json")
 
 
-def _binding_summary_builder(owner_id: str):
+def _binding_summary_builder(owner_id: str, session_factory: sessionmaker[Session]):
     binding_usecase = BindingUseCases(
-        binding_repository=SqlAlchemyBindingRepository(),
-        job_repository=SqlAlchemyJobRepository(),
+        binding_repository=SqlAlchemyBindingRepository(session_factory),
+        job_repository=SqlAlchemyJobRepository(session_factory),
     )
 
     def _build(job):

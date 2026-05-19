@@ -58,6 +58,7 @@ class JobSummary(BaseModel):
     job_id: str
     title: str
     company: str | None
+    department: str | None = None
     application_status: str
     current_version_ref: VersionRef
     archived_at: datetime | None = None

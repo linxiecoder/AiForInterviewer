@@ -30,6 +30,8 @@ import type {
   JobBindingSummary,
   JobCreateRequest,
   JobDetail,
+  JobMatchAnalysis,
+  JobMatchSummary,
   JobResumeBinding,
   JobSummary,
   JobUpdateRequest,
@@ -40,6 +42,7 @@ import { LoadingState } from "../../shared/ui/LoadingState";
 import { ErrorState } from "../../shared/ui/ErrorState";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { useRouteController } from "../../app/routes/router";
+import { JobMatchPanel } from "./JobMatchPanel";
 
 type JobFormMode = "create" | "edit";
 
@@ -146,6 +149,21 @@ function buildBindingLabel(binding: JobBindingSummary): string {
   return "已绑定";
 }
 
+function toLatestMatchSummary(analysis: JobMatchAnalysis): JobMatchSummary {
+  return {
+    status: analysis.status,
+    analysis_id: analysis.analysis_id,
+    display_score: analysis.overall_score ?? analysis.result_payload.overall_score,
+    score_scale: "0_100_product_scale",
+    score_version: analysis.score_rule_version,
+    rubric_version: analysis.score_rule_version,
+    confidence_level: analysis.confidence ?? analysis.result_payload.confidence,
+    summary_text: analysis.result_payload.summary,
+    generated_at: analysis.created_at,
+    stale_reason: null,
+  };
+}
+
 function parseApiError(error: unknown): UiError {
   if (isApiHttpError(error)) {
     const apiError = error as ApiHttpError;
@@ -214,6 +232,7 @@ export function JobPage() {
   const { navigate } = useRouteController();
 
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [jobSearchKeyword, setJobSearchKeyword] = useState<string>("");
   const [isJobsLoading, setIsJobsLoading] = useState<boolean>(false);
   const [jobsError, setJobsError] = useState<UiError | null>(null);
 
@@ -538,6 +557,29 @@ export function JobPage() {
     }
   };
 
+  const updateJobMatchSummary = (analysis: JobMatchAnalysis) => {
+    const latestMatchSummary = toLatestMatchSummary(analysis);
+    setSelectedJob((prev) =>
+      prev !== null && prev.job_id === analysis.job_id
+        ? {
+            ...prev,
+            latest_match_summary: latestMatchSummary,
+          }
+        : prev,
+    );
+    setJobs((prev) =>
+      prev.map((item) =>
+        item.job_id === analysis.job_id
+          ? {
+              ...item,
+              latest_match_summary: latestMatchSummary,
+              updated_at: analysis.updated_at,
+            }
+          : item,
+      ),
+    );
+  };
+
   const onFormValuesChange = (_: unknown, allValues: JobFormValues) => {
     const signature = JSON.stringify({
       title: allValues.title?.trim() ?? "",
@@ -555,6 +597,24 @@ export function JobPage() {
     loadJobs();
     void loadResumeState();
   }, []);
+
+  const filteredJobs = useMemo(() => {
+    const keyword = jobSearchKeyword.trim().toLowerCase();
+
+    if (!keyword) {
+      return jobs;
+    }
+
+    return jobs.filter((job) =>
+      [
+        job.title,
+        job.company,
+        job.department,
+        job.application_status,
+        job.status,
+      ].some((value) => (value ?? "").toLowerCase().includes(keyword)),
+    );
+  }, [jobs, jobSearchKeyword]);
 
   const tableColumns: ColumnsType<JobSummary> = useMemo(
     () => [
@@ -799,33 +859,35 @@ export function JobPage() {
   return (
     <AppShell>
       <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
-        <Space direction="vertical" size={4} style={{ width: "100%" }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            岗位 / JD 管理
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            支持岗位列表、创建 / 编辑、详情查看、归档与简历绑定联调。
-          </Typography.Text>
-        </Space>
-
         <Card>
-          <Space wrap>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreateForm}
-              disabled={formLoading}
-            >
-              新增岗位
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                void loadJobs();
+          <Space wrap style={{ width: "100%", justifyContent: "space-between" }}>
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreateForm}
+                disabled={formLoading}
+              >
+                新增岗位
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  void loadJobs();
+                }}
+              >
+                刷新
+              </Button>
+            </Space>
+            <Input.Search
+              allowClear
+              placeholder="搜索岗位、公司、部门"
+              value={jobSearchKeyword}
+              onChange={(event) => {
+                setJobSearchKeyword(event.target.value);
               }}
-            >
-              刷新
-            </Button>
+              style={{ width: 320 }}
+            />
           </Space>
         </Card>
 
@@ -862,8 +924,11 @@ export function JobPage() {
             <Table<JobSummary>
               rowKey="job_id"
               columns={tableColumns}
-              dataSource={jobs}
-              pagination={{ pageSize: 10, showSizeChanger: true }}
+              dataSource={filteredJobs}
+              pagination={{
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条`,
+              }}
               size="small"
               scroll={{ x: 1100 }}
             />
@@ -928,7 +993,7 @@ export function JobPage() {
                   </List.Item>
                   <List.Item>
                     <List.Item.Meta
-                      title="匹配分析占位"
+                      title="最近匹配分析"
                       description={selectedJob.latest_match_summary?.status || "match_not_generated"}
                     />
                   </List.Item>
@@ -963,6 +1028,16 @@ export function JobPage() {
               </Card>
 
               {renderBindingPanel(selectedJob)}
+
+              <JobMatchPanel
+                bindingId={
+                  selectedJob.binding_summary.status === "bound"
+                    ? selectedJob.binding_summary.resume_job_binding_id
+                    : null
+                }
+                bindingLabel={buildBindingLabel(selectedJob.binding_summary)}
+                onAnalysisCreated={updateJobMatchSummary}
+              />
             </Space>
           )}
         </Drawer>

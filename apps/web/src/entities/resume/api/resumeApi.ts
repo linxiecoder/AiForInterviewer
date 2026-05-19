@@ -1,6 +1,18 @@
 import { isApiHttpError, type ApiHttpError } from "../../../shared/api/errors";
 import { request, buildSuccessData } from "../../../shared/api/client";
-import type { ResumeSummary } from "../model/types";
+import type { ResumeDetail, ResumeSummary } from "../model/types";
+import type { VersionRef } from "../../job/model/types";
+
+export type CreateResumeRequest = {
+  title: string;
+  markdown_text: string;
+};
+
+export type UpdateResumeRequest = {
+  title: string;
+  markdown_text: string;
+  base_version_ref: VersionRef;
+};
 
 export type ResumeApiState =
   | {
@@ -13,6 +25,39 @@ export type ResumeApiState =
       resumes: [];
       status: number;
     };
+
+export async function createResume(payload: CreateResumeRequest): Promise<ResumeSummary> {
+  const response = await request<ResumeSummary>("/resumes", {
+    method: "POST",
+    body: payload,
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("简历创建返回为空");
+  }
+  return data;
+}
+
+export async function fetchResumeDetail(resumeId: string): Promise<ResumeDetail> {
+  const response = await request<ResumeDetail>(`/resumes/${resumeId}`);
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("简历详情返回为空");
+  }
+  return data;
+}
+
+export async function updateResume(resumeId: string, payload: UpdateResumeRequest): Promise<ResumeDetail> {
+  const response = await request<ResumeDetail>(`/resumes/${resumeId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("简历更新返回为空");
+  }
+  return data;
+}
 
 export async function fetchResumeSummaries(): Promise<ResumeApiState> {
   try {

@@ -16,3 +16,14 @@ class Resume:
     file_name: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ResumeVersion:
+    resume_version_id: str
+    owner_id: str
+    resume_id: str
+    version_number: int
+    markdown_text: str
+    status: str
+    created_at: datetime | None = None

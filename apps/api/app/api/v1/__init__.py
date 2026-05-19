@@ -8,6 +8,7 @@ from app.api.v1.assets import router as assets_router
 from app.api.v1.bindings import router as bindings_router
 from app.api.v1.contract_baseline import router as contract_baseline_router
 from app.api.v1.health import router as health_router
+from app.api.v1.job_match_analyses import router as job_match_analyses_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.polish import router as polish_router
 from app.api.v1.pressure import router as pressure_router
@@ -28,6 +29,7 @@ def build_api_v1_router(prefix: str) -> APIRouter:
     router.include_router(resumes_router)
     router.include_router(jobs_router)
     router.include_router(bindings_router)
+    router.include_router(job_match_analyses_router)
     router.include_router(ai_tasks_router)
     router.include_router(scoring_router)
     router.include_router(polish_router)

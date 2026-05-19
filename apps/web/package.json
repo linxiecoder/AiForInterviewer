@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --open",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort --open",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "test": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview --host 127.0.0.1"

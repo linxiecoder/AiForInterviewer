@@ -71,7 +71,18 @@ permalink: ai-for-interviewer/agents
 4. 只改当前窗口授权的文件。
 5. 完成后输出 `git status --short`、`git diff --stat`、新增/修改/移动清单、仍需确认项和旧体系残留检查结果。
 
-## 8. 禁止事项
+## 8. 本地页面验证启动命令
+
+以下命令用于本地页面验证和前后端联调。默认在 WSL / Linux shell 中从仓库根目录执行：
+
+```bash
+cd /home/administrator/code/AiForInterviewer
+npm run dev
+```
+
+`npm run dev` 会启动本地 PostgreSQL，检查并直接结束占用 `8001` / `5173` 的旧进程，然后并行启动后端 API 和前端页面。当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时会执行同一初始化路径。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
+
+## 9. 禁止事项
 
 - 禁止把历史计划、历史任务包或 archive 报告恢复为 active 事实源。
 - 禁止绕过 `BACKLOG.md` 直接开启任务。

@@ -10,7 +10,8 @@ from app.infrastructure.db.models.mixins import OwnedRecordMixin
 class Resume(OwnedRecordMixin, Base):
     __tablename__ = "resumes"
 
-    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_version_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
@@ -20,4 +21,3 @@ class ResumeVersion(OwnedRecordMixin, Base):
     resume_id: Mapped[str] = mapped_column(String(80), index=True)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     markdown_text: Mapped[str] = mapped_column(Text, nullable=False)
-
