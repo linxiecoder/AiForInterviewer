@@ -1,0 +1,277 @@
+.workbenchRoot {
+  height: calc(100dvh - 104px);
+  max-height: calc(100dvh - 104px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.workbenchState {
+  min-height: calc(100dvh - 136px);
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.heroPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.heroTitle {
+  margin: 0 !important;
+  color: #111827 !important;
+}
+
+.metaPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metaPills span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #25324a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.metaPills strong {
+  color: #475569;
+}
+
+.metaPills span:nth-child(2) {
+  background: #f5f7fb;
+}
+
+.metaPills span:nth-child(3) {
+  background: #ecfdf5;
+}
+
+.metaPills span:nth-child(4),
+.metaPills span:nth-child(5) {
+  background: #fff7ed;
+}
+
+.workspaceGrid {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.progressPanel,
+.conversationPanel {
+  min-height: 0;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.progressPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.conversationPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #f6f9fd;
+}
+
+.panelHeader,
+.conversationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelTitle {
+  margin: 0 !important;
+  color: #111827 !important;
+}
+
+.progressLabel {
+  display: block;
+  margin: 14px 0 8px;
+  color: #2563eb;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.progressPanelHeader {
+  flex: 0 0 auto;
+}
+
+.nodeList {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  margin-top: 18px;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.nodeCard,
+.nodeCardActive {
+  width: 100%;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  text-align: left;
+  background: #ffffff;
+}
+
+.nodeCard {
+  border: 1px solid #dfe7f1;
+}
+
+.nodeCardActive {
+  border: 1px solid #9fc0ff;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.nodeCard:disabled,
+.nodeCardActive:disabled,
+.feedbackItem:disabled {
+  color: inherit;
+  opacity: 1;
+  cursor: default;
+}
+
+.nodeCard span,
+.nodeCardActive span {
+  display: grid;
+  gap: 4px;
+}
+
+.conversationHeader {
+  padding: 18px 20px;
+  border-bottom: 1px solid #dce6f2;
+  background: #ffffff;
+}
+
+.chatScroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 20px 24px;
+  overflow-y: auto;
+}
+
+.questionBubble,
+.answerBubble {
+  max-width: min(760px, 82%);
+  padding: 14px 18px;
+  border-radius: 8px;
+  line-height: 1.7;
+}
+
+.questionBubble {
+  align-self: flex-start;
+  border: 1px solid #dce6f2;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+.answerBubble {
+  align-self: flex-end;
+  border: 1px solid #8ab8ff;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.answerBubble :global(.ant-typography) {
+  color: inherit;
+}
+
+.feedbackAccordion {
+  display: grid;
+  gap: 8px;
+  width: min(760px, 88%);
+  padding: 10px;
+  border: 1px solid #e1e9f3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.feedbackItem {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid #dfe7f1;
+  border-radius: 8px;
+  background: #f8fbff;
+  text-align: left;
+}
+
+.composer {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid #dce6f2;
+  background: #ffffff;
+}
+
+.composerInput {
+  max-height: 96px;
+  overflow-y: auto;
+  resize: none;
+}
+
+.composerActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1100px) {
+  .workspaceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workbenchRoot {
+    height: auto;
+    max-height: none;
+    min-height: calc(100dvh - 104px);
+    overflow: visible;
+  }
+
+  .questionBubble,
+  .answerBubble,
+  .feedbackAccordion {
+    max-width: 100%;
+    width: 100%;
+  }
+}

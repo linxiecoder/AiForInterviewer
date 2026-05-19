@@ -12,11 +12,12 @@ import { LoginPage } from "../../pages/login/LoginPage";
 import { DashboardPage } from "../../pages/dashboard/DashboardPage";
 import { JobPage } from "../../pages/job/JobPage";
 import { ResumePage } from "../../pages/resume/ResumePage";
-import { InterviewPage } from "../../pages/interview/InterviewPage";
+import { InterviewPage, InterviewWorkbenchPage } from "../../pages/interview/InterviewPage";
 import { ErrorState } from "../../shared/ui/ErrorState";
 import { LoadingState } from "../../shared/ui/LoadingState";
 
-export type RoutePath = "/login" | "/dashboard" | "/resume" | "/job" | "/interview" | "/";
+export type InterviewSessionPath = `/interview/${string}`;
+export type RoutePath = "/login" | "/dashboard" | "/resume" | "/job" | "/interview" | InterviewSessionPath | "/";
 type RouteAction = (path: string, options?: { replace?: boolean }) => void;
 
 interface RouteContextValue {
@@ -25,6 +26,10 @@ interface RouteContextValue {
 }
 
 const RouteContext = createContext<RouteContextValue | null>(null);
+
+function isInterviewSessionPath(pathname: string): pathname is InterviewSessionPath {
+  return /^\/interview\/[^/]+$/.test(pathname);
+}
 
 function normalizePath(pathname: string): RoutePath {
   if (
@@ -37,22 +42,21 @@ function normalizePath(pathname: string): RoutePath {
   ) {
     return pathname;
   }
+  if (isInterviewSessionPath(pathname)) {
+    return pathname;
+  }
   return "/";
 }
 
 function parsePath(rawPath: string | null): RoutePath {
-  const pathname = rawPath || window.location.pathname;
-  if (
-    pathname === "/dashboard" ||
-    pathname === "/resume" ||
-    pathname === "/job" ||
-    pathname === "/interview" ||
-    pathname === "/login" ||
-    pathname === "/"
-  ) {
-    return pathname;
+  return normalizePath(rawPath || window.location.pathname);
+}
+
+export function getInterviewSessionIdFromPath(path: string): string | null {
+  if (!isInterviewSessionPath(path)) {
+    return null;
   }
-  return "/";
+  return decodeURIComponent(path.slice("/interview/".length));
 }
 
 export function RouteProvider({ children }: { children: ReactNode }) {
@@ -152,6 +156,11 @@ export function AppRouter() {
 
   if (path === "/interview") {
     return <InterviewPage />;
+  }
+
+  const interviewSessionId = getInterviewSessionIdFromPath(path);
+  if (interviewSessionId !== null) {
+    return <InterviewWorkbenchPage sessionId={interviewSessionId} />;
   }
 
   return (

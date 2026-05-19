@@ -75,4 +75,15 @@ export const APP_SHELL_NAV_ITEMS = [
   },
 ] as const satisfies readonly AppShellNavItem[];
 
+export function getActiveNavKey(path: "/interview" | `/interview/${string}`): "interview";
+export function getActiveNavKey(path: "/resume"): "resume";
+export function getActiveNavKey(path: "/job"): "job";
+export function getActiveNavKey(path: "/dashboard" | "/" | string): string;
+export function getActiveNavKey(path: string): string {
+  const target = APP_SHELL_NAV_ITEMS.find(
+    (item) => !item.disabled && (item.path === path || path.startsWith(`${item.path}/`)),
+  );
+  return target?.key ?? "dashboard";
+}
+
 export const TOPBAR_SEARCH_PLACEHOLDER = "搜索简历、岗位、面试记录...";

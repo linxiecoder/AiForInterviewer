@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { useRoutePath } from "../../app/routes/router";
 import { useAuth } from "../../app/providers/AuthProvider";
-import { APP_SHELL_NAV_ITEMS, type AppShellIconKey } from "./model/navigation";
+import { APP_SHELL_NAV_ITEMS, getActiveNavKey, type AppShellIconKey } from "./model/navigation";
 import { UserMenu } from "./UserMenu";
 import styles from "./Sidebar.module.css";
 
@@ -33,8 +33,7 @@ export function Sidebar() {
   const { currentUser, logout } = useAuth();
 
   const selectedKeys = useMemo(() => {
-    const target = APP_SHELL_NAV_ITEMS.find((item) => item.path === path && !item.disabled);
-    return target ? [target.key] : ["dashboard"];
+    return [getActiveNavKey(path)];
   }, [path]);
 
   const userName = currentUser?.display_name || currentUser?.username || "王小明";
