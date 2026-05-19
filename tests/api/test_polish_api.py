@@ -25,6 +25,7 @@ from app.domain.shared.refs import OwnerRef, VersionRef
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
+from app.infrastructure.db.models.interview import PolishSessionDetail as PolishSessionDetailModel
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from app.infrastructure.llm.errors import LlmTransportResponseError
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
@@ -318,6 +319,162 @@ def test_polish_progress_tree_missing_schema_metadata_is_safely_completed() -> N
     assert session_data["progress_tree_state"]["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
 
 
+def test_progress_tree_refresh_regenerates_missing_persisted_plan_when_context_is_sufficient() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _clear_progress_tree_storage(session_factory, session_id)
+    transport.calls.clear()
+
+    status_code, refresh_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/state",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    data = refresh_body["data"]
+    assert data["progress_tree_status"] == "ready"
+    assert data["progress_tree_plan"]["nodes"]
+    assert data["progress_tree_state"]["node_states"]
+    assert data["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    assert [call.task_type for call in transport.calls] == ["polish_progress_tree_plan"]
+
+
+def test_progress_tree_refresh_keeps_insufficient_context_without_calling_llm() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown="",
+        responsibilities=[],
+        requirements=[],
+        other_notes=None,
+    )
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+
+    status_code, refresh_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/state",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    assert refresh_body["data"]["progress_tree_status"] == "insufficient_context"
+    assert refresh_body["data"]["progress_tree_plan"]["nodes"] == []
+    assert transport.calls == []
+
+
+def test_initial_progress_tree_keeps_valid_plan_when_initial_state_is_invalid() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_InvalidInitialStateProgressTreeTransport())
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+
+    assert status_code == 201
+    session_data = body["data"]
+    assert session_data["progress_tree_status"] == "ready"
+    assert session_data["progress_tree_plan"]["nodes"]
+    assert session_data["progress_tree_plan"].get("failure_reason") is None
+    assert session_data["progress_tree_state"]["status"] == "ready"
+    assert session_data["progress_tree_state"]["node_states"]
+    assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    assert session_data["progress_tree_state"]["progress"]["progress_percent"] == 0
+    assert session_data["progress_tree_state"]["failure_reason"] == "llm_state_invalid_state_fallback"
+
+
+def test_progress_tree_refresh_invalid_state_keeps_plan_and_returns_refresh_failed() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = _InvalidRefreshStateProgressTreeTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    original_nodes = create_body["data"]["progress_tree_plan"]["nodes"]
+
+    status_code, refresh_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/state",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    data = refresh_body["data"]
+    assert data["progress_tree_status"] == "refresh_failed"
+    assert data["progress_tree_plan"]["nodes"] == original_nodes
+    assert data["progress_tree_state"]["status"] == "refresh_failed"
+    assert data["progress_tree_state"]["node_states"]
+    assert data["progress_tree_state"]["failure_reason"] == "llm_state_invalid"
+
+
+def test_get_polish_session_does_not_regenerate_progress_tree() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _clear_progress_tree_storage(session_factory, session_id)
+    transport.calls.clear()
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    assert detail_body["data"]["progress_tree_status"] == "insufficient_context"
+    assert detail_body["data"]["progress_tree_plan"]["nodes"] == []
+    assert transport.calls == []
+
+
 def test_polish_question_answer_and_feedback_task_core() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -566,6 +723,27 @@ class _MissingSchemaProgressTreeTransport(FakeLlmTransport):
         return result
 
 
+class _InvalidInitialStateProgressTreeTransport(FakeLlmTransport):
+    def generate(self, request):
+        result = super().generate(request)
+        if request.task_type == "polish_progress_tree_plan":
+            result.result.pop("progress_tree_state", None)
+        return result
+
+
+class _InvalidRefreshStateProgressTreeTransport(FakeLlmTransport):
+    def generate(self, request):
+        result = super().generate(request)
+        if request.task_type == "polish_progress_tree_state":
+            result.result["progress_tree_state"] = {
+                "status": "ready",
+                "node_states": [],
+                "current_priority": None,
+                "progress": {"progress_percent": 80},
+            }
+        return result
+
+
 def _session_factory():
     settings = DbSettings(database_url="sqlite+pysqlite:///:memory:")
     session_factory = build_session_factory(settings)
@@ -684,6 +862,17 @@ def _seed_polish_sources(
         )
     )
     return binding_id
+
+
+def _clear_progress_tree_storage(session_factory, session_id: str) -> None:
+    with session_factory() as db:
+        detail = db.get(PolishSessionDetailModel, f"{session_id}_detail")
+        assert detail is not None
+        detail.progress_tree_status = None
+        detail.progress_percent = None
+        detail.progress_tree_plan_json = None
+        detail.progress_tree_state_json = None
+        db.commit()
 
 
 def _progress_tree_text(session_data: dict) -> str:

@@ -54,6 +54,7 @@ export interface PolishProgressTreePlan {
   status: "ready" | "insufficient_context" | string;
   context_digest: string;
   nodes: PolishProgressTreeNode[];
+  failure_reason?: string | null;
 }
 
 export interface PolishProgressTreeNodeState {
@@ -77,6 +78,8 @@ export interface PolishProgressTreeState {
   progress: {
     progress_percent: number;
   };
+  summary?: string | null;
+  failure_reason?: string | null;
 }
 
 export interface PolishSubtopic {

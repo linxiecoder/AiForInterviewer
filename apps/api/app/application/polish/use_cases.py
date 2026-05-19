@@ -33,6 +33,7 @@ from app.application.polish.progress_prompts import (
     PROGRESS_TREE_STATE_REFRESH_PROMPT_CONTRACT,
 )
 from app.application.polish.progress_tree import (
+    PROGRESS_TREE_STATUS_FAILED,
     PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
     PROGRESS_TREE_STATUS_READY,
     PolishProgressTreeLlmService,
@@ -391,11 +392,14 @@ class PolishUseCases:
             )
 
         detail = self._build_session_detail(owner_id=command.owner_id, session=session)
-        progress_artifacts = self._progress_tree_service.refresh_state(
-            context=detail.progress_context,
-            existing_plan=detail.progress_tree_plan,
-            existing_state=detail.progress_tree_state,
-        )
+        if _should_regenerate_progress_tree(detail):
+            progress_artifacts = self._progress_tree_service.generate_initial(detail.progress_context)
+        else:
+            progress_artifacts = self._progress_tree_service.refresh_state(
+                context=detail.progress_context,
+                existing_plan=detail.progress_tree_plan,
+                existing_state=detail.progress_tree_state,
+            )
         updated_session = replace(
             session,
             updated_at=utc_now(),
@@ -586,6 +590,19 @@ def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> 
             details={"field": "subtopic_id"},
         )
     return None
+
+
+def _should_regenerate_progress_tree(detail: PolishSessionDetail) -> bool:
+    if not _has_valid_progress_tree_plan(detail.progress_tree_plan):
+        return True
+    return detail.progress_tree_status in {
+        PROGRESS_TREE_STATUS_FAILED,
+        PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
+    }
+
+
+def _has_valid_progress_tree_plan(plan: dict[str, object]) -> bool:
+    return plan.get("status") == PROGRESS_TREE_STATUS_READY and bool(plan.get("nodes"))
 
 
 def _custom_topic_summary(value: str | None) -> str | None:

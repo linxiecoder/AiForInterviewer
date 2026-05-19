@@ -62,6 +62,7 @@ class PolishProgressTreePlanResponse(BaseModel):
     status: str
     context_digest: str
     nodes: list[PolishProgressTreeNodeResponse] = Field(default_factory=list)
+    failure_reason: str | None = None
 
 
 class PolishProgressTreeNodeStateResponse(BaseModel):
@@ -90,6 +91,8 @@ class PolishProgressTreeStateResponse(BaseModel):
     current_priority: PolishCurrentPriorityResponse | None = None
     updated_from_turns_count: int = 0
     progress: PolishProgressResponse = Field(default_factory=lambda: PolishProgressResponse(progress_percent=0))
+    summary: str | None = None
+    failure_reason: str | None = None
 
 
 class PolishSessionResponse(BaseModel):

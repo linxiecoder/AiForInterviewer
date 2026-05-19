@@ -81,7 +81,11 @@ class PolishProgressTreeLlmService:
                 "progress_percent": _progress_percent(existing_state),
             }
         if self._transport is None:
-            return _refresh_failed_artifacts(existing_plan, existing_state)
+            return _refresh_failed_artifacts(
+                existing_plan,
+                existing_state,
+                reason="llm_transport_missing",
+            )
 
         try:
             result = self._transport.generate(
@@ -97,11 +101,19 @@ class PolishProgressTreeLlmService:
                 )
             )
         except (LlmTransportConfigurationError, LlmTransportUnavailableError, LlmTransportResponseError):
-            return _refresh_failed_artifacts(existing_plan, existing_state)
+            return _refresh_failed_artifacts(
+                existing_plan,
+                existing_state,
+                reason="llm_transport_failed",
+            )
 
         state_payload = result.result.get("progress_tree_state") or result.result.get("state")
         if not isinstance(state_payload, dict):
-            return _refresh_failed_artifacts(existing_plan, existing_state)
+            return _refresh_failed_artifacts(
+                existing_plan,
+                existing_state,
+                reason="llm_state_invalid",
+            )
         normalized_state = _normalize_state(
             state_payload,
             existing_plan=existing_plan,
@@ -125,8 +137,12 @@ class PolishProgressTreeLlmService:
                 POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
             ),
         )
-        if normalized_state["status"] == PROGRESS_TREE_STATUS_REFRESH_FAILED:
-            return _refresh_failed_artifacts(existing_plan, existing_state)
+        if normalized_state["status"] != PROGRESS_TREE_STATUS_READY:
+            return _refresh_failed_artifacts(
+                existing_plan,
+                existing_state,
+                reason="llm_state_invalid",
+            )
         return {
             "status": PROGRESS_TREE_STATUS_READY,
             "progress_tree_plan": existing_plan,
@@ -236,7 +252,17 @@ def _normalize_initial_artifacts(result: dict[str, Any], context: dict[str, Any]
             "progress_percent": 0,
         }
     if not isinstance(state_payload, dict):
-        return _failed_artifacts(context, reason="llm_state_missing")
+        state = _initial_state_fallback(
+            plan,
+            prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+            failure_reason="llm_state_invalid_state_fallback",
+        )
+        return {
+            "status": PROGRESS_TREE_STATUS_READY,
+            "progress_tree_plan": plan,
+            "progress_tree_state": state,
+            "progress_percent": _progress_percent(state),
+        }
 
     state = _normalize_state(
         state_payload,
@@ -257,7 +283,11 @@ def _normalize_initial_artifacts(result: dict[str, Any], context: dict[str, Any]
         ),
     )
     if state["status"] != PROGRESS_TREE_STATUS_READY:
-        return _failed_artifacts(context, reason="llm_state_invalid")
+        state = _initial_state_fallback(
+            plan,
+            prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+            failure_reason="llm_state_invalid_state_fallback",
+        )
     return {
         "status": PROGRESS_TREE_STATUS_READY,
         "progress_tree_plan": plan,
@@ -474,12 +504,26 @@ def _failed_artifacts(context: dict[str, Any], *, reason: str) -> dict[str, Any]
     }
 
 
-def _refresh_failed_artifacts(existing_plan: dict[str, Any], existing_state: dict[str, Any]) -> dict[str, Any]:
-    state = {**existing_state, "status": PROGRESS_TREE_STATUS_REFRESH_FAILED}
+def _refresh_failed_artifacts(
+    existing_plan: dict[str, Any],
+    existing_state: dict[str, Any],
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    if _state_matches_plan(existing_state, existing_plan):
+        state = {**existing_state, "status": PROGRESS_TREE_STATUS_REFRESH_FAILED}
+    else:
+        state = _initial_state_fallback(
+            existing_plan,
+            status=PROGRESS_TREE_STATUS_REFRESH_FAILED,
+            prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+            failure_reason=reason,
+        )
     state.setdefault("schema_id", POLISH_PROGRESS_TREE_STATE_SCHEMA_ID)
     state.setdefault("schema_version", POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION)
     state.setdefault("prompt_version", POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION)
     state.setdefault("progress", {"progress_percent": _progress_percent(existing_state)})
+    state["failure_reason"] = reason
     return {
         "status": PROGRESS_TREE_STATUS_REFRESH_FAILED,
         "progress_tree_plan": existing_plan,
@@ -499,6 +543,63 @@ def _empty_state(status: str, *, prompt_version: str = POLISH_PROGRESS_TREE_STAT
         "updated_from_turns_count": 0,
         "progress": {"progress_percent": 0},
     }
+
+
+def _initial_state_fallback(
+    plan: dict[str, Any],
+    *,
+    status: str = PROGRESS_TREE_STATUS_READY,
+    prompt_version: str,
+    failure_reason: str,
+) -> dict[str, Any]:
+    plan_nodes = _flatten_progress_nodes(plan.get("nodes", []))
+    current_priority = _fallback_priority(plan_nodes)
+    return {
+        "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+        "prompt_version": prompt_version,
+        "status": status,
+        "node_states": [
+            {
+                "progress_node_ref": node["progress_node_ref"],
+                "status": "pending",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            }
+            for node in plan_nodes
+        ],
+        "current_priority": current_priority,
+        "updated_from_turns_count": 0,
+        "progress": {"progress_percent": 0},
+        "summary": "进展树已生成，等待首次问答后刷新进度",
+        "failure_reason": failure_reason,
+    }
+
+
+def _fallback_priority(plan_nodes: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not plan_nodes:
+        return None
+    node = plan_nodes[0]
+    return {
+        "progress_node_ref": node["progress_node_ref"],
+        "title": node["title"],
+        "expected_capability": node["expected_capability"],
+    }
+
+
+def _state_matches_plan(state: dict[str, Any], plan: dict[str, Any]) -> bool:
+    if not isinstance(state, dict):
+        return False
+    plan_refs = {node["progress_node_ref"] for node in _flatten_progress_nodes(plan.get("nodes", []))}
+    node_states = state.get("node_states")
+    if not plan_refs or not isinstance(node_states, list) or not node_states:
+        return False
+    state_refs = {
+        item.get("progress_node_ref")
+        for item in node_states
+        if isinstance(item, dict) and item.get("progress_node_ref")
+    }
+    return bool(state_refs) and state_refs.issubset(plan_refs)
 
 
 def _input_refs(context: dict[str, Any]) -> tuple[str, ...]:

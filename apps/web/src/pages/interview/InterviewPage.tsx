@@ -1084,11 +1084,32 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   const hasQuestion = session !== null && session.turns.length > 0;
   const progressNodes = session === null ? [] : buildWorkbenchProgressNodes(session);
-  const progressPercent = session === null ? 0 : session.progress_tree_state.progress.progress_percent;
+  const progressPercent =
+    session === null ? 0 : Math.max(0, Math.min(100, session.progress_tree_state?.progress?.progress_percent ?? 0));
   const currentProgressNodeKey =
     session?.progress_tree_state.current_priority?.progress_node_ref ?? resolveCurrentWorkbenchProgressNodeKey(progressNodes);
   const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
   const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
+  const isProgressTreeReady = session?.progress_tree_status === "ready";
+  const isProgressTreeRefreshFailed = session?.progress_tree_status === "refresh_failed";
+  const hasProgressTreeNodes = progressNodes.length > 0;
+  const canShowProgressTree = hasProgressTreeNodes && (isProgressTreeReady || isProgressTreeRefreshFailed);
+  const [refreshingProgressTree, setRefreshingProgressTree] = useState<boolean>(false);
+  const refreshProgressTree = async () => {
+    if (session === null || refreshingProgressTree) {
+      return;
+    }
+    setRefreshingProgressTree(true);
+    try {
+      await refreshPolishProgressTreeState(sessionId);
+      await loadSession();
+      message.success("进展树已刷新。");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "刷新进展树失败，请稍后重试。");
+    } finally {
+      setRefreshingProgressTree(false);
+    }
+  };
 
   useEffect(() => {
     setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
@@ -1242,11 +1263,46 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   <Alert
                     type="warning"
                     showIcon
-                    message="岗位或简历内容不足，暂无法生成进展树。"
+                    message="岗位或简历内容不足，暂不能生成进展树。"
                     description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
                   />
+                ) : !canShowProgressTree ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={hasProgressTreeNodes ? "进展树状态异常" : "进展树暂未生成"}
+                    description={
+                      isProgressTreeReady
+                        ? "当前会话尚无可展示进展节点，建议刷新后重试，或稍后再次访问。"
+                        : "进展树暂未就绪，建议点击刷新重新生成。"
+                    }
+                    action={
+                      <Button
+                        size="small"
+                        loading={refreshingProgressTree}
+                        onClick={refreshProgressTree}
+                      >
+                        刷新进展树
+                      </Button>
+                    }
+                  />
                 ) : (
-                  progressNodes.map((node) => renderProgressNode(node))
+                  <>
+                    {isProgressTreeRefreshFailed ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="进度刷新失败，可重试。"
+                        description="已保留当前进展树结构，本次只影响节点状态刷新。"
+                        action={
+                          <Button size="small" loading={refreshingProgressTree} onClick={refreshProgressTree}>
+                            重试刷新
+                          </Button>
+                        }
+                      />
+                    ) : null}
+                    {progressNodes.map((node) => renderProgressNode(node))}
+                  </>
                 )}
               </div>
             </aside>
@@ -1263,7 +1319,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                       void createQuestion();
                     }}
                     loading={creatingQuestion}
-                    disabled={isProgressTreeInsufficient}
+                    disabled={isProgressTreeInsufficient || !isProgressTreeReady || !hasProgressTreeNodes}
                   >
                     生成题目
                   </Button>
