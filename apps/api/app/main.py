@@ -12,7 +12,8 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1 import build_api_v1_router
 from app.infrastructure.db.session import DbSettings, configure_session_factory
-from app.infrastructure.llm.runtime import build_job_match_analyzer_from_env
+from app.infrastructure.llm.job_match import LlmJobMatchAnalyzer
+from app.infrastructure.llm.runtime import build_llm_transport_from_env
 from app.infrastructure.observability.http_logging import HttpAccessLogMiddleware
 from app.infrastructure.security.auth import AuthRuntime, build_auth_runtime_from_env
 
@@ -89,7 +90,8 @@ def create_app(
     )
     application.state.settings = resolved_settings
     application.state.db_session_factory = db_session_factory
-    application.state.job_match_analyzer = build_job_match_analyzer_from_env()
+    application.state.llm_transport = build_llm_transport_from_env()
+    application.state.job_match_analyzer = LlmJobMatchAnalyzer(application.state.llm_transport)
     application.state.auth_runtime = auth_runtime or build_auth_runtime_from_env(
         cookie_path=resolved_settings.api_prefix
     )

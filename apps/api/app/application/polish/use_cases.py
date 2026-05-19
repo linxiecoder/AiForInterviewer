@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.application.common.result import ApplicationResult
+from app.application.job_match.entities import JobMatchAnalysis
+from app.application.job_match.ports import JobMatchRepository
 from app.application.polish.commands import (
     CreatePolishAnswerCommand,
     CreatePolishFeedbackTaskCommand,
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
+    RefreshPolishProgressTreeStateCommand,
 )
 from app.application.polish.entities import (
     PolishAnswer,
@@ -22,10 +27,23 @@ from app.application.polish.entities import (
     PolishTopic,
 )
 from app.application.polish.ports import PolishRepository
+from app.application.polish.progress_context import build_polish_progress_context
+from app.application.polish.progress_prompts import (
+    INITIAL_PROGRESS_TREE_PROMPT_CONTRACT,
+    PROGRESS_TREE_STATE_REFRESH_PROMPT_CONTRACT,
+)
+from app.application.polish.progress_tree import (
+    PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
+    PROGRESS_TREE_STATUS_READY,
+    PolishProgressTreeLlmService,
+    build_progress_node_question_text,
+)
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.resumes.ports import ResumeRepository
 from app.domain.bindings.ports import BindingRepository
+from app.domain.jobs.entities import Job, JobVersion
 from app.domain.jobs.ports import JobRepository
+from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.domain.shared.errors import DomainError
@@ -54,58 +72,28 @@ UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
 
 POLISH_TOPICS: tuple[PolishTopic, ...] = (
     PolishTopic(
-        topic_id="topic_project_depth",
-        title="项目经历表达",
-        description="围绕简历项目经历的职责、证据、结果和取舍进行表达打磨。",
+        topic_id="topic_authenticity_contribution",
+        title="经历真实性与贡献拷问",
+        description="围绕简历经历真实性、个人贡献边界、关键证据和追问抗压能力进行模拟面试。",
         requires_job_binding=True,
-        subtopics=(
-            PolishSubtopic(
-                subtopic_id="subtopic_project_impact",
-                topic_id="topic_project_depth",
-                title="业务影响与个人贡献",
-                description="说明你负责了什么、产生了什么结果，以及如何证明。",
-            ),
-            PolishSubtopic(
-                subtopic_id="subtopic_project_challenge",
-                topic_id="topic_project_depth",
-                title="难点与解决方案",
-                description="梳理挑战、约束、备选方案和最终选择。",
-            ),
-        ),
     ),
     PolishTopic(
-        topic_id="topic_system_design",
-        title="系统设计与技术取舍",
-        description="打磨架构拆分、接口边界、可观测性、性能和风险控制表达。",
+        topic_id="topic_technical_depth",
+        title="能力深度与技术碾压",
+        description="围绕核心技术栈、架构设计、性能瓶颈和底层原理进行深度追问。",
         requires_job_binding=True,
-        subtopics=(
-            PolishSubtopic(
-                subtopic_id="subtopic_tradeoff",
-                topic_id="topic_system_design",
-                title="技术取舍",
-                description="解释方案比较、取舍依据、风险和回滚思路。",
-            ),
-            PolishSubtopic(
-                subtopic_id="subtopic_reliability",
-                topic_id="topic_system_design",
-                title="可靠性与排障",
-                description="说明监控、日志、降级和故障恢复设计。",
-            ),
-        ),
     ),
     PolishTopic(
-        topic_id="topic_behavioral",
-        title="行为面试表达",
-        description="打磨协作、冲突、推进、复盘和成长类回答。",
-        requires_job_binding=False,
-        subtopics=(
-            PolishSubtopic(
-                subtopic_id="subtopic_collaboration",
-                topic_id="topic_behavioral",
-                title="协作与推进",
-                description="用 STAR 结构表达协作场景、行动和结果。",
-            ),
-        ),
+        topic_id="topic_scenario_roleplay",
+        title="情景模拟与角色扮演",
+        description="围绕真实业务场景、团队协作、跨角色沟通和临场决策进行角色化模拟。",
+        requires_job_binding=True,
+    ),
+    PolishTopic(
+        topic_id="topic_risk_defense",
+        title="风险点排查与防御性打磨",
+        description="围绕简历和岗位匹配中的风险点、薄弱项、反问陷阱和防御性表达进行打磨。",
+        requires_job_binding=True,
     ),
 )
 
@@ -118,11 +106,15 @@ class PolishUseCases:
         binding_repository: BindingRepository,
         resume_repository: ResumeRepository,
         job_repository: JobRepository,
+        job_match_repository: JobMatchRepository | None = None,
+        progress_tree_service: PolishProgressTreeLlmService | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
         self._resume_repository = resume_repository
         self._job_repository = job_repository
+        self._job_match_repository = job_match_repository
+        self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
@@ -197,6 +189,35 @@ class PolishUseCases:
             created_at=now,
             updated_at=now,
         )
+        job = self._resolve_job(owner_id=command.owner_id, job_id=binding.job_id)
+        resume = self._resolve_resume(owner_id=command.owner_id, resume_id=binding.resume_id)
+        job_title, job_company = self._job_labels_from_job(job)
+        resume_title = self._resume_title_from_resume(resume)
+        progress_context = build_polish_progress_context(
+            PolishSessionDetail(
+                session=session,
+                job_title=job_title,
+                job_company=job_company,
+                resume_title=resume_title,
+                binding_label=self._build_binding_label(job_title=job_title, resume_title=resume_title),
+                turns=(),
+            ),
+            job=job,
+            job_version=job_version,
+            resume=resume,
+            resume_version=resume_version,
+            match_analysis=self._resolve_match_analysis(owner_id=command.owner_id, session=session),
+            weaknesses=None,
+            assets=None,
+        )
+        progress_artifacts = self._progress_tree_service.generate_initial(progress_context)
+        session = replace(
+            session,
+            progress_tree_status=progress_artifacts["status"],
+            progress_percent=progress_artifacts["progress_percent"],
+            progress_tree_plan=progress_artifacts["progress_tree_plan"],
+            progress_tree_state=progress_artifacts["progress_tree_state"],
+        )
         self._polish_repository.add_session(session)
         return ApplicationResult(value=session)
 
@@ -215,6 +236,23 @@ class PolishUseCases:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
             )
+        detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+        if detail.progress_tree_status == PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Progress tree context is insufficient",
+                    details={"progress_tree_status": detail.progress_tree_status},
+                )
+            )
+        if detail.progress_tree_status != PROGRESS_TREE_STATUS_READY:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Progress tree is not ready",
+                    details={"progress_tree_status": detail.progress_tree_status},
+                )
+            )
 
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
@@ -225,7 +263,13 @@ class PolishUseCases:
             actor_id=command.actor_id,
             session_id=command.session_id,
             ai_task_id=task_id,
-            question_text=_deterministic_question_text(session, command.progress_node_ref),
+            question_text=build_progress_node_question_text(
+                session=session,
+                context=detail.progress_context,
+                plan=detail.progress_tree_plan,
+                state=detail.progress_tree_state,
+                requested_ref=command.progress_node_ref,
+            ),
             status=QUESTION_STATUS_GENERATED,
             created_at=now,
             updated_at=now,
@@ -336,13 +380,75 @@ class PolishUseCases:
         )
         return ApplicationResult(value=task)
 
+    def refresh_progress_tree_state(
+        self,
+        command: RefreshPolishProgressTreeStateCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        session = self._polish_repository.get_session(command.owner_id, command.session_id)
+        if session is None:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+
+        detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+        progress_artifacts = self._progress_tree_service.refresh_state(
+            context=detail.progress_context,
+            existing_plan=detail.progress_tree_plan,
+            existing_state=detail.progress_tree_state,
+        )
+        updated_session = replace(
+            session,
+            updated_at=utc_now(),
+            progress_tree_status=progress_artifacts["status"],
+            progress_percent=progress_artifacts["progress_percent"],
+            progress_tree_plan=progress_artifacts["progress_tree_plan"],
+            progress_tree_state=progress_artifacts["progress_tree_state"],
+        )
+        self._polish_repository.update_progress_tree(updated_session)
+        return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
+
     def _build_session_detail(
         self, *, owner_id: str, session: PolishSession, include_turns: bool = True
     ) -> PolishSessionDetail:
-        job_title, job_company = self._resolve_job_labels(owner_id=owner_id, job_id=session.job_id)
-        resume_title = self._resolve_resume_title(owner_id=owner_id, resume_id=session.resume_id)
+        job = self._resolve_job(owner_id=owner_id, job_id=session.job_id)
+        job_version = self._resolve_job_version(owner_id=owner_id, session=session)
+        resume = self._resolve_resume(owner_id=owner_id, resume_id=session.resume_id)
+        resume_version = self._resolve_resume_version(owner_id=owner_id, session=session)
+        job_title, job_company = self._job_labels_from_job(job)
+        resume_title = self._resume_title_from_resume(resume)
         binding_label = self._build_binding_label(job_title=job_title, resume_title=resume_title)
         turns = self._build_session_turns(owner_id=owner_id, session_id=session.session_id) if include_turns else ()
+        detail = PolishSessionDetail(
+            session=session,
+            job_title=job_title,
+            job_company=job_company,
+            resume_title=resume_title,
+            binding_label=binding_label,
+            turns=tuple(turns),
+        )
+        match_analysis = self._resolve_match_analysis(owner_id=owner_id, session=session)
+        progress_context = build_polish_progress_context(
+            detail,
+            job=job,
+            job_version=job_version,
+            resume=resume,
+            resume_version=resume_version,
+            match_analysis=match_analysis,
+            weaknesses=None,
+            assets=None,
+        )
+        progress_tree_plan = session.progress_tree_plan or {
+            "status": session.progress_tree_status,
+            "context_digest": progress_context["content_digest"],
+            "nodes": [],
+        }
+        progress_tree_state = session.progress_tree_state or {
+            "status": session.progress_tree_status,
+            "node_states": [],
+            "current_priority": None,
+            "updated_from_turns_count": 0,
+            "progress": {"progress_percent": session.progress_percent},
+        }
         return PolishSessionDetail(
             session=session,
             job_title=job_title,
@@ -350,6 +456,11 @@ class PolishUseCases:
             resume_title=resume_title,
             binding_label=binding_label,
             turns=tuple(turns),
+            progress_tree_status=session.progress_tree_status,
+            progress_percent=session.progress_percent,
+            progress_context=progress_context,
+            progress_tree_plan=progress_tree_plan,
+            progress_tree_state=progress_tree_state,
         )
 
     def _build_session_turns(self, owner_id: str, session_id: str) -> tuple[PolishSessionTurn, ...]:
@@ -375,21 +486,71 @@ class PolishUseCases:
         )
 
     def _resolve_job_labels(self, *, owner_id: str, job_id: str) -> tuple[str, str]:
+        return self._job_labels_from_job(self._resolve_job(owner_id=owner_id, job_id=job_id))
+
+    def _resolve_resume_title(self, *, owner_id: str, resume_id: str) -> str:
+        return self._resume_title_from_resume(self._resolve_resume(owner_id=owner_id, resume_id=resume_id))
+
+    def _resolve_job(self, *, owner_id: str, job_id: str) -> Job | None:
         if not job_id:
-            return (UNNAMED_JOB_TITLE, UNNAMED_COMPANY_TITLE)
+            return None
         job = self._job_repository.get(job_id)
         if job is None or job.owner_id != owner_id:
+            return None
+        return job
+
+    def _resolve_job_version(self, *, owner_id: str, session: PolishSession) -> JobVersion | None:
+        if not session.job_version_id:
+            return None
+        job_version = self._job_repository.get_job_version(session.job_version_id)
+        if (
+            job_version is None
+            or job_version.owner_id != owner_id
+            or job_version.job_id != session.job_id
+        ):
+            return None
+        return job_version
+
+    def _resolve_resume(self, *, owner_id: str, resume_id: str) -> Resume | None:
+        if not resume_id:
+            return None
+        resume = self._resume_repository.get(resume_id)
+        if resume is None or resume.owner_ref.owner_id != owner_id:
+            return None
+        return resume
+
+    def _resolve_resume_version(self, *, owner_id: str, session: PolishSession) -> ResumeVersion | None:
+        if not session.resume_version_id:
+            return None
+        resume_version = self._resume_repository.get_version(session.resume_version_id)
+        if (
+            resume_version is None
+            or resume_version.owner_id != owner_id
+            or resume_version.resume_id != session.resume_id
+        ):
+            return None
+        return resume_version
+
+    def _resolve_match_analysis(self, *, owner_id: str, session: PolishSession) -> JobMatchAnalysis | None:
+        if self._job_match_repository is None:
+            return None
+        analysis = self._job_match_repository.get_latest_by_binding(owner_id, session.binding_id)
+        if analysis is None or analysis.owner_id != owner_id:
+            return None
+        if analysis.resume_version_id != session.resume_version_id or analysis.job_version_id != session.job_version_id:
+            return None
+        return analysis
+
+    def _job_labels_from_job(self, job: Job | None) -> tuple[str, str]:
+        if job is None:
             return (UNNAMED_JOB_TITLE, UNNAMED_COMPANY_TITLE)
         return (
             _or_fallback_text(job.title, UNNAMED_JOB_TITLE),
             _or_fallback_text(job.company, UNNAMED_COMPANY_TITLE),
         )
 
-    def _resolve_resume_title(self, *, owner_id: str, resume_id: str) -> str:
-        if not resume_id:
-            return UNNAMED_RESUME_TITLE
-        resume = self._resume_repository.get(resume_id)
-        if resume is None or resume.owner_ref.owner_id != owner_id:
+    def _resume_title_from_resume(self, resume: Resume | None) -> str:
+        if resume is None:
             return UNNAMED_RESUME_TITLE
         return _or_fallback_text(resume.title, UNNAMED_RESUME_TITLE)
 
@@ -476,9 +637,3 @@ def _or_fallback_text(value: str | None, fallback: str) -> str:
         return fallback
     stripped = value.strip()
     return stripped if stripped else fallback
-
-
-def _deterministic_question_text(session: PolishSession, progress_node_ref: str | None) -> str:
-    topic = session.topic_id or "manual_topic"
-    node = progress_node_ref or "current_progress"
-    return f"请围绕 {topic} 说明一个具体案例，并补充你在 {node} 中的关键取舍。"

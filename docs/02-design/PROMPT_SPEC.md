@@ -418,6 +418,17 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-POLISH-010` | Asset Candidate | 生成资产候选 | Draft | `prompt-contracts/POLISH_CONTRACTS.md` |
 | `P-POLISH-011` | Weakness Candidate | 生成薄弱项候选 | Draft | `prompt-contracts/POLISH_CONTRACTS.md` |
 
+#### 9.3.1 打磨进展树运行时 LLM task_type 登记
+
+以下 task_type 是 `P-POLISH-001` 打磨主题规划链路下的运行时拆分，不新增新的 contract ID；它们用于模拟面试进展树的 LLM 生成和状态刷新。
+
+| task_type | prompt version | schema id | 输入上下文 | 输出 | 失败状态 |
+|---|---|---|---|---|---|
+| `polish_progress_tree_plan` | `polish_progress_tree_plan_prompt_v1` | `llm_progress_tree_plan_v1` | `job_snapshot`、`resume_snapshot`、`match_context`、`weakness_context`、`asset_context`、session topic / custom target | `ProgressTreePlan`、initial `ProgressTreeState` | `insufficient_context`、`failed` |
+| `polish_progress_tree_state` | `polish_progress_tree_state_prompt_v1` | `llm_progress_tree_state_v1` | existing plan、existing state、`job_snapshot`、`resume_snapshot`、turns、feedback | refreshed `ProgressTreeState` | `refresh_failed` |
+
+治理约束：provider adapter 只负责通用 JSON transport 和错误处理；进展树业务 prompt、schema id 和 prompt version 由 Polish prompt builder / contract 管理。状态刷新不得重建 plan nodes，不得删除已有 `node_ref`，`current_priority` 必须引用现有 plan 中的节点。
+
 ### 9.4 压力面模式 Contract（Pressure Mode Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |

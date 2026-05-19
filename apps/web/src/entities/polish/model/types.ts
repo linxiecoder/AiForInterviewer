@@ -40,6 +40,45 @@ export interface PolishSessionTurn {
   answers: PolishSessionAnswer[];
 }
 
+export interface PolishProgressTreeNode {
+  progress_node_ref: string;
+  title: string;
+  expected_capability: string;
+  related_job_requirements: string[];
+  related_resume_evidence: string[];
+  missing_points: string[];
+  children: PolishProgressTreeNode[];
+}
+
+export interface PolishProgressTreePlan {
+  status: "ready" | "insufficient_context" | string;
+  context_digest: string;
+  nodes: PolishProgressTreeNode[];
+}
+
+export interface PolishProgressTreeNodeState {
+  progress_node_ref: string;
+  status: "completed" | "in_progress" | "pending" | string;
+  completed_questions_count: number;
+  latest_feedback_summary?: string | null;
+}
+
+export interface PolishCurrentPriority {
+  progress_node_ref: string;
+  title: string;
+  expected_capability: string;
+}
+
+export interface PolishProgressTreeState {
+  status: "ready" | "insufficient_context" | string;
+  node_states: PolishProgressTreeNodeState[];
+  current_priority?: PolishCurrentPriority | null;
+  updated_from_turns_count: number;
+  progress: {
+    progress_percent: number;
+  };
+}
+
 export interface PolishSubtopic {
   subtopic_id: string;
   topic_id: string;
@@ -96,6 +135,10 @@ export interface PolishSessionDetail {
   resume_title: string;
   binding_label: string;
   turns: PolishSessionTurn[];
+  progress_tree_status: "ready" | "insufficient_context" | string;
+  progress_percent: number;
+  progress_tree_plan: PolishProgressTreePlan;
+  progress_tree_state: PolishProgressTreeState;
   topic_ref?: {
     topic_id: string;
     title?: string | null;

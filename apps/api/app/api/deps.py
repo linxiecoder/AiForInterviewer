@@ -9,6 +9,7 @@ from app.api.errors import raise_api_error
 from app.application.job_match.ports import JobMatchAnalyzer
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
+from app.infrastructure.llm.ports import LlmTransport
 
 
 def get_auth_runtime(request: Request) -> Any:
@@ -42,6 +43,17 @@ async def get_job_match_analyzer(request: Request) -> JobMatchAnalyzer:
             message="Job match analyzer is not available.",
         )
     return analyzer
+
+
+async def get_llm_transport(request: Request) -> LlmTransport:
+    transport = getattr(request.app.state, "llm_transport", None)
+    if transport is None:
+        raise_api_error(
+            status_code=500,
+            code="internal_error",
+            message="LLM transport is not available.",
+        )
+    return transport
 
 
 def get_current_actor(request: Request) -> CurrentActor | None:

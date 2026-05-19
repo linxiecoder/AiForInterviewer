@@ -39,3 +39,10 @@ class CreatePolishFeedbackTaskCommand:
     actor_id: str
     session_id: str
     answer_id: str
+
+
+@dataclass(frozen=True)
+class RefreshPolishProgressTreeStateCommand:
+    owner_id: str
+    actor_id: str
+    session_id: str

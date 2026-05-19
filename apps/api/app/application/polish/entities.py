@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.domain.shared.refs import ResourceRef, TraceRef
@@ -44,6 +45,10 @@ class PolishSession:
     custom_topic_text_summary: str | None
     created_at: datetime
     updated_at: datetime
+    progress_tree_status: str = "insufficient_context"
+    progress_percent: int = 0
+    progress_tree_plan: dict[str, Any] = field(default_factory=dict)
+    progress_tree_state: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -116,6 +121,11 @@ class PolishSessionDetail:
     resume_title: str | None
     binding_label: str | None
     turns: tuple[PolishSessionTurn, ...]
+    progress_tree_status: str = "insufficient_context"
+    progress_percent: int = 0
+    progress_context: dict[str, Any] = field(default_factory=dict)
+    progress_tree_plan: dict[str, Any] = field(default_factory=dict)
+    progress_tree_state: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,11 @@
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
+from app.application.polish.progress_prompts import (
+    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+)
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from app.infrastructure.llm.types import LlmTransportRequest
 from app.schemas.job_match import JobRequirementChunk, ResumeChunk
@@ -54,3 +61,37 @@ def test_fake_llm_transport_marks_missing_evidence_as_low_confidence() -> None:
     assert result.validation_status is ValidationStatus.VALID_WITH_WARNINGS
     assert result.confidence_level is ConfidenceLevel.LOW
     assert result.low_confidence_flags == ("evidence_missing",)
+
+
+def test_fake_llm_transport_generates_polish_progress_tree_json() -> None:
+    result = FakeLlmTransport().generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-001", "P-SHARED-001", "P-SHARED-003"),
+            task_type="polish_progress_tree_plan",
+            input_refs=("sess_1", "job_ver_1", "res_ver_1"),
+            evidence_bundle={
+                "source_digest": "sha256:test",
+                "context": {
+                    "job_snapshot": {
+                        "requirements": ["Python and FastAPI experience."],
+                        "responsibilities": ["Own backend APIs."],
+                    },
+                    "resume_snapshot": {
+                        "project_experiences": ["Built backend workflow automation."],
+                        "summary": "Backend resume",
+                    },
+                },
+            },
+        )
+    )
+
+    assert result.validation_status is ValidationStatus.VALID
+    assert result.result["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
+    assert result.result["schema_id"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID
+    assert result.result["schema_version"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION
+    assert result.result["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID
+    assert result.result["progress_tree_plan"]["schema_version"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION
+    assert result.result["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
+    assert result.result["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
+    assert result.result["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == "fake_llm_progress_backend_api"
+    assert result.result["progress_tree_state"]["current_priority"]["progress_node_ref"] == "fake_llm_progress_backend_api_fastapi"

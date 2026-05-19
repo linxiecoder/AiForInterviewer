@@ -13,7 +13,6 @@ import {
   INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
   INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY,
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
-  INTERVIEW_WORKBENCH_PROGRESS_NODE_TITLES,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
   buildPolishBindingOptions,
@@ -48,7 +47,7 @@ type CreateEntryUsesDrawer = Expect<Equal<typeof INTERVIEW_CREATE_ENTRY_KIND, "d
 type CreateFieldKeys = Expect<
   Equal<
     typeof INTERVIEW_CREATE_FIELD_KEYS,
-    readonly ["mode", "resume_job_binding_id", "topic_id", "subtopic_id", "custom_topic_text"]
+    readonly ["mode", "resume_job_binding_id", "topic_id", "custom_topic_text"]
   >
 >;
 type CreateSuccessRefreshesList = Expect<
@@ -88,18 +87,6 @@ type WorkbenchScrollRegionsAreStable = Expect<
 >;
 type WorkbenchHeaderChipsAreStable = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS, readonly ["岗位", "简历", "当前节点", "进度", "当前节点表现"]>
->;
-type WorkbenchProgressNodesAreStable = Expect<
-  Equal<
-    typeof INTERVIEW_WORKBENCH_PROGRESS_NODE_TITLES,
-    readonly [
-      "项目经历",
-      "Java 多线程与并发",
-      "数据库事务与一致性",
-      "消息可靠性与缓存一致性",
-      "订单状态一致性",
-    ]
-  >
 >;
 type WorkbenchFeedbackItemsAreStable = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_FEEDBACK_ITEMS, readonly ["点评", "打分", "失分点评价", "参考回答", "考点解析", "技术原理扩展"]>
@@ -196,8 +183,7 @@ const noPrerequisiteAvailability = getInterviewCreateAvailability({
 });
 const createPayload = buildPolishSessionCreateRequest({
   resume_job_binding_id: "bind_001",
-  topic_id: "topic_project_depth",
-  subtopic_id: "subtopic_project_impact",
+  topic_id: "topic_authenticity_contribution",
   custom_topic_text: "  支付系统项目表达  ",
 });
 

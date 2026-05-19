@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.deps import get_db_session_factory, require_authenticated_actor
+from app.api.deps import get_db_session_factory, get_llm_transport, require_authenticated_actor
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.application.polish.commands import (
@@ -15,6 +15,7 @@ from app.application.polish.commands import (
     CreatePolishFeedbackTaskCommand,
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
+    RefreshPolishProgressTreeStateCommand,
 )
 from app.application.polish.entities import (
     PolishAnswer,
@@ -24,14 +25,17 @@ from app.application.polish.entities import (
     PolishTopic,
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
+from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
 from app.domain.auth.entities import CurrentActor
 from app.domain.shared.enums import ApiStatus
 from app.domain.shared.refs import TraceRef, VersionRef as DomainVersionRef
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
+from app.infrastructure.db.repositories.job_match import SqlAlchemyJobMatchAnalysisRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
+from app.infrastructure.llm.ports import LlmTransport
 from app.schemas.polish import (
     CreateAnswerRequest,
     CreateFeedbackTaskRequest,
@@ -51,14 +55,21 @@ from app.schemas.refs import ResourceRef, TraceRefSchema
 
 router = APIRouter(tags=["polish"])
 
+LEGACY_TOPIC_TITLE_BY_ID = {
+    "topic_project_depth": "经历真实性与贡献拷问",
+    "topic_system_design": "能力深度与技术碾压",
+    "topic_behavioral": "情景模拟与角色扮演",
+}
+
 
 @router.get("/polish-topics")
 async def list_polish_topics(
     resume_job_binding_id: str | None = None,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     result = use_cases.list_topics(
         ListPolishTopicsQuery(
             owner_id=actor.owner_id,
@@ -77,8 +88,9 @@ async def list_polish_topics(
 async def list_polish_sessions(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     result = use_cases.list_sessions(ListPolishSessionsQuery(owner_id=actor.owner_id))
     if not result.is_success:
         _raise_result_error(result.error)
@@ -93,8 +105,9 @@ async def create_polish_session(
     payload: CreatePolishSessionRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     create_result = use_cases.create_session(
         CreatePolishSessionCommand(
             owner_id=actor.owner_id,
@@ -124,8 +137,9 @@ async def get_polish_session(
     session_id: str,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     result = use_cases.get_session(GetPolishSessionQuery(owner_id=actor.owner_id, session_id=session_id))
     if not result.is_success:
         _raise_result_error(result.error)
@@ -141,8 +155,9 @@ async def create_polish_question_task(
     payload: CreateQuestionTaskRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     result = use_cases.create_question_task(
         CreatePolishQuestionTaskCommand(
             owner_id=actor.owner_id,
@@ -166,8 +181,9 @@ async def create_polish_answer(
     payload: CreateAnswerRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     base_ref = (
         DomainVersionRef(
             resource_type=payload.base_question_version_ref.resource_type,
@@ -201,8 +217,9 @@ async def create_polish_feedback_task(
     payload: CreateFeedbackTaskRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
-    use_cases = _use_cases(session_factory)
+    use_cases = _use_cases(session_factory, llm_transport)
     result = use_cases.create_feedback_task(
         CreatePolishFeedbackTaskCommand(
             owner_id=actor.owner_id,
@@ -220,12 +237,37 @@ async def create_polish_feedback_task(
     )
 
 
-def _use_cases(session_factory: sessionmaker[Session]) -> PolishUseCases:
+@router.post("/polish-sessions/{session_id}/progress-tree/state")
+async def refresh_polish_progress_tree_state(
+    session_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+) -> Any:
+    use_cases = _use_cases(session_factory, llm_transport)
+    result = use_cases.refresh_progress_tree_state(
+        RefreshPolishProgressTreeStateCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+        )
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        resource_type="polish_session",
+        data=_session_response(result.value).model_dump(mode="json"),
+    )
+
+
+def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTransport) -> PolishUseCases:
     return PolishUseCases(
         polish_repository=SqlAlchemyPolishRepository(session_factory),
         binding_repository=SqlAlchemyBindingRepository(session_factory),
         resume_repository=SqlAlchemyResumeRepository(session_factory),
         job_repository=SqlAlchemyJobRepository(session_factory),
+        job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
+        progress_tree_service=PolishProgressTreeLlmService(llm_transport),
     )
 
 
@@ -265,6 +307,10 @@ def _session_response(session: PolishSessionDetail) -> PolishSessionResponse:
         resume_title=session.resume_title or "\u672a\u547d\u540d\u7b80\u5386",
         binding_label=session.binding_label or "",
         turns=turns,
+        progress_tree_status=session.progress_tree_status,
+        progress_percent=session.progress_percent,
+        progress_tree_plan=session.progress_tree_plan,
+        progress_tree_state=session.progress_tree_state,
         topic_ref=_topic_ref(core.topic_id),
         subtopic_ref=_subtopic_ref(core.topic_id, core.subtopic_id),
         custom_topic_text_summary=core.custom_topic_text_summary,
@@ -359,7 +405,8 @@ def _topic_ref(topic_id: str | None) -> PolishTopicRefResponse | None:
     if topic_id is None:
         return None
     topic = next((item for item in POLISH_TOPICS if item.topic_id == topic_id), None)
-    return PolishTopicRefResponse(topic_id=topic_id, title=topic.title if topic else None)
+    title = topic.title if topic else LEGACY_TOPIC_TITLE_BY_ID.get(topic_id)
+    return PolishTopicRefResponse(topic_id=topic_id, title=title)
 
 
 def _subtopic_ref(topic_id: str | None, subtopic_id: str | None) -> PolishSubtopicRefResponse | None:

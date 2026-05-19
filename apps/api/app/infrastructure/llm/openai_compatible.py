@@ -132,7 +132,7 @@ class OpenAICompatibleLlmTransport:
 
         response_json = _response_json(response)
         result = _parse_json_result(response_json)
-        result.setdefault("prompt_version", JOB_MATCH_PROMPT_VERSION)
+        result.setdefault("prompt_version", _request_prompt_version(request))
         # model_name 用于审计和落库，只能来自 provider 外层响应或本地配置；
         # 不能信任模型正文里自报的 model_name，否则会出现“实际调用 deepseek，记录成 gpt-4”的偏差。
         result["model_name"] = _provider_model_name(response_json, self._settings.model)
@@ -157,7 +157,7 @@ def _chat_completion_payload(
         "messages": [
             {
                 "role": "system",
-                "content": _system_prompt(),
+                "content": _system_prompt(request.task_type),
             },
             {
                 "role": "user",
@@ -176,25 +176,45 @@ def _chat_completion_payload(
     }
 
 
-def _system_prompt() -> str:
+def _system_prompt(task_type: str) -> str:
+    if task_type == "job_match_analysis":
+        return "\n".join(
+            [
+                "你是 AiForInterviewer 的岗位匹配分析器。",
+                "必须使用中文输出，不要返回英文说明。",
+                "只返回合法 JSON，不要 Markdown 包裹。",
+                "根对象必须包含 prompt_version、job_match_result_payload；不要自行声明 model_name，服务端会记录 provider 实际模型。",
+                "job_match_result_payload 必须包含 overall_score、overall_level、confidence、summary、dimension_scores、matched_requirements、missing_requirements、resume_evidence、risk_flags、interview_focus、suggested_questions、markdown_report。",
+                "数组字段必须严格返回对象数组：dimension_scores、matched_requirements、missing_requirements、resume_evidence、risk_flags 都不能简写成字符串数组或字典。",
+                "matched_requirements 每项必须包含 requirement_chunk_id、resume_evidence_chunk_ids、rationale、confidence；missing_requirements 每项必须包含 requirement_chunk_id、reason、confidence、evidence_insufficient。",
+                "resume_evidence 每项必须包含 chunk_id、summary、confidence；risk_flags 每项必须包含 risk_type、description、severity、supporting_evidence。",
+                "dimension_scores 必须且只能包含 requirement_alignment(30)、experience_evidence(25)、skill_coverage(20)、gap_risk(15)、readiness_actions(10)，各维度分数总和必须等于 overall_score。",
+                "所有 evidence chunk_id 必须来自输入 evidence_bundle；不能编造来源。",
+                "overall_score 必须基于简历证据与岗位要求的分析判断，不得固定为模板分。",
+                "评分来源权重：岗位要求约占 65%，岗位职责约占 35%；岗位要求缺口应优先影响 requirement_alignment 与 gap_risk。",
+                "overall_level 阈值：80 及以上 strong_match，60-79 medium_match，60 以下 weak_match；证据不足时用 insufficient_evidence。",
+                f"prompt_version 固定为 {JOB_MATCH_PROMPT_VERSION}。",
+            ]
+        )
     return "\n".join(
         [
-            "你是 AiForInterviewer 的岗位匹配分析器。",
+            "你是 AiForInterviewer 的结构化 JSON 任务执行器。",
             "必须使用中文输出，不要返回英文说明。",
             "只返回合法 JSON，不要 Markdown 包裹。",
-            "根对象必须包含 prompt_version、job_match_result_payload；不要自行声明 model_name，服务端会记录 provider 实际模型。",
-            "job_match_result_payload 必须包含 overall_score、overall_level、confidence、summary、dimension_scores、matched_requirements、missing_requirements、resume_evidence、risk_flags、interview_focus、suggested_questions、markdown_report。",
-            "数组字段必须严格返回对象数组：dimension_scores、matched_requirements、missing_requirements、resume_evidence、risk_flags 都不能简写成字符串数组或字典。",
-            "matched_requirements 每项必须包含 requirement_chunk_id、resume_evidence_chunk_ids、rationale、confidence；missing_requirements 每项必须包含 requirement_chunk_id、reason、confidence、evidence_insufficient。",
-            "resume_evidence 每项必须包含 chunk_id、summary、confidence；risk_flags 每项必须包含 risk_type、description、severity、supporting_evidence。",
-            "dimension_scores 必须且只能包含 requirement_alignment(30)、experience_evidence(25)、skill_coverage(20)、gap_risk(15)、readiness_actions(10)，各维度分数总和必须等于 overall_score。",
-            "所有 evidence chunk_id 必须来自输入 evidence_bundle；不能编造来源。",
-            "overall_score 必须基于简历证据与岗位要求的分析判断，不得固定为模板分。",
-            "评分来源权重：岗位要求约占 65%，岗位职责约占 35%；岗位要求缺口应优先影响 requirement_alignment 与 gap_risk。",
-            "overall_level 阈值：80 及以上 strong_match，60-79 medium_match，60 以下 weak_match；证据不足时用 insufficient_evidence。",
-            f"prompt_version 固定为 {JOB_MATCH_PROMPT_VERSION}。",
+            "必须严格遵守 user message 中 evidence_bundle.prompt、output_schema、schema_id 和 prompt_version。",
+            "不得暴露 provider payload、secret、token 或原始 completion。",
         ]
     )
+
+
+def _request_prompt_version(request: LlmTransportRequest) -> str:
+    if isinstance(request.evidence_bundle, dict):
+        prompt_version = request.evidence_bundle.get("prompt_version")
+        if isinstance(prompt_version, str) and prompt_version.strip():
+            return prompt_version.strip()
+    if request.task_type == "job_match_analysis":
+        return JOB_MATCH_PROMPT_VERSION
+    return "unversioned_llm_task"
 
 
 def _response_json(response: httpx.Response) -> dict[str, Any]:

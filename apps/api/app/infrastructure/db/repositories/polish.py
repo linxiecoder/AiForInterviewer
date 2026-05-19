@@ -35,6 +35,25 @@ class SqlAlchemyPolishRepository(PolishRepository):
             db.add(_detail_to_model(session))
             db.commit()
 
+    def update_progress_tree(self, session: PolishSession) -> None:
+        with self._session_factory() as db:
+            detail = db.scalar(
+                select(PolishSessionDetailModel).where(
+                    PolishSessionDetailModel.owner_id == session.owner_id,
+                    PolishSessionDetailModel.session_id == session.session_id,
+                )
+            )
+            session_model = db.get(InterviewSessionModel, session.session_id)
+            if detail is None or session_model is None or session_model.owner_id != session.owner_id:
+                return
+            detail.progress_tree_status = session.progress_tree_status
+            detail.progress_percent = session.progress_percent
+            detail.progress_tree_plan_json = session.progress_tree_plan
+            detail.progress_tree_state_json = session.progress_tree_state
+            detail.updated_at = session.updated_at
+            session_model.updated_at = session.updated_at
+            db.commit()
+
     def list_sessions(self, owner_id: str) -> tuple[PolishSession, ...]:
         with self._session_factory() as db:
             rows = db.execute(
@@ -217,6 +236,10 @@ def _detail_to_model(session: PolishSession) -> PolishSessionDetailModel:
         topic_ref_id=session.topic_id,
         subtopic_ref_id=session.subtopic_id,
         custom_topic_text_summary=session.custom_topic_text_summary,
+        progress_tree_status=session.progress_tree_status,
+        progress_percent=session.progress_percent,
+        progress_tree_plan_json=session.progress_tree_plan,
+        progress_tree_state_json=session.progress_tree_state,
     )
 
 
@@ -239,6 +262,10 @@ def _session_to_entity(
         custom_topic_text_summary=detail_model.custom_topic_text_summary,
         created_at=session_model.created_at,
         updated_at=session_model.updated_at,
+        progress_tree_status=detail_model.progress_tree_status or "insufficient_context",
+        progress_percent=detail_model.progress_percent or 0,
+        progress_tree_plan=detail_model.progress_tree_plan_json or {},
+        progress_tree_state=detail_model.progress_tree_state_json or {},
     )
 
 
