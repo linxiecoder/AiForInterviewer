@@ -47,6 +47,7 @@ export interface PolishProgressTreeNode {
   related_job_requirements: string[];
   related_resume_evidence: string[];
   missing_points: string[];
+  evidence_chunk_ids?: string[];
   children: PolishProgressTreeNode[];
 }
 

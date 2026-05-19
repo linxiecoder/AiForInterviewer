@@ -72,14 +72,36 @@ class FakeLlmTransport:
 
 def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransportResult:
     context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
-    job_snapshot = context.get("job_snapshot", {}) if isinstance(context, dict) else {}
-    resume_snapshot = context.get("resume_snapshot", {}) if isinstance(context, dict) else {}
-    job_requirement = _first_text(*(job_snapshot.get("requirements") or []))
-    job_responsibility = _first_text(*(job_snapshot.get("responsibilities") or []))
-    resume_evidence = _first_text(
-        *(resume_snapshot.get("project_experiences") or []),
-        resume_snapshot.get("summary"),
-        resume_snapshot.get("markdown_text"),
+    selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
+    job_requirement = _chunk_text(
+        selected_chunks,
+        "job_requirement",
+        fallback=_legacy_context_text(context, "job_snapshot", "requirements"),
+    )
+    job_responsibility = _chunk_text(
+        selected_chunks,
+        "job_responsibility",
+        fallback=_legacy_context_text(context, "job_snapshot", "responsibilities"),
+    )
+    resume_evidence = _chunk_text(
+        selected_chunks,
+        "resume_project",
+        "resume_skill",
+        "resume_work_experience",
+        fallback=_legacy_context_text(
+            context,
+            "resume_snapshot",
+            "project_experiences",
+            "summary",
+            "markdown_text",
+        ),
+    )
+    evidence_chunk_ids = _chunk_ids(
+        selected_chunks,
+        "job_requirement",
+        "resume_project",
+        "resume_skill",
+        "resume_work_experience",
     )
     seed = dumps(
         {
@@ -118,6 +140,7 @@ def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransp
                         "related_job_requirements": [job_requirement, job_responsibility],
                         "related_resume_evidence": [resume_evidence],
                         "missing_points": ["Fake LLM 缺口：需要继续证明真实贡献边界"],
+                        "evidence_chunk_ids": evidence_chunk_ids,
                         "children": [
                             {
                                 "progress_node_ref": child_ref,
@@ -126,6 +149,7 @@ def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransp
                                 "related_job_requirements": [job_requirement, job_responsibility],
                                 "related_resume_evidence": [resume_evidence],
                                 "missing_points": ["Fake LLM 缺口：需要补充指标和风险处理"],
+                                "evidence_chunk_ids": evidence_chunk_ids,
                                 "children": [],
                             }
                         ],
@@ -215,7 +239,7 @@ def _generate_fake_progress_tree_state(request: LlmTransportRequest) -> LlmTrans
                     "title": target.get("title", "Fake LLM 当前优先级"),
                     "expected_capability": target.get("expected_capability", "Fake LLM 当前能力要求"),
                 },
-                "updated_from_turns_count": len(request.evidence_bundle.get("context", {}).get("turns", [])),
+                "updated_from_turns_count": _turns_count(request.evidence_bundle),
                 "progress": {"progress_percent": 135},
             },
         },
@@ -233,6 +257,68 @@ def _flatten_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result.append(node)
         result.extend(_flatten_nodes(node.get("children", [])))
     return result
+
+
+def _selected_evidence_chunks(evidence_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    chunks = evidence_bundle.get("selected_evidence_chunks")
+    if not chunks and isinstance(evidence_bundle.get("context"), dict):
+        chunks = evidence_bundle["context"].get("selected_evidence_chunks")
+    if not isinstance(chunks, list):
+        return []
+    return [chunk for chunk in chunks if isinstance(chunk, dict)]
+
+
+def _chunk_text(chunks: list[dict[str, Any]], *source_types: str, fallback: str | None = None) -> str:
+    source_type_set = set(source_types)
+    for chunk in chunks:
+        if chunk.get("source_type") in source_type_set:
+            text = _first_text(chunk.get("text"), chunk.get("title"))
+            if text:
+                return text
+    return fallback or ""
+
+
+def _chunk_ids(chunks: list[dict[str, Any]], *source_types: str) -> list[str]:
+    source_type_set = set(source_types)
+    result: list[str] = []
+    for chunk in chunks:
+        chunk_id = chunk.get("chunk_id")
+        if chunk.get("source_type") in source_type_set and isinstance(chunk_id, str) and chunk_id:
+            result.append(chunk_id)
+    return result[:8]
+
+
+def _legacy_context_text(
+    context: object,
+    snapshot_key: str,
+    *field_names: str,
+) -> str:
+    if not isinstance(context, dict):
+        return ""
+    snapshot = context.get(snapshot_key, {})
+    if not isinstance(snapshot, dict):
+        return ""
+    values: list[Any] = []
+    for field_name in field_names:
+        value = snapshot.get(field_name)
+        if isinstance(value, list):
+            values.extend(value)
+        else:
+            values.append(value)
+    return _first_text(*values)
+
+
+def _turns_count(evidence_bundle: dict[str, Any]) -> int:
+    context = evidence_bundle.get("context", {})
+    if not isinstance(context, dict):
+        return 0
+    turns_summary = context.get("turns_summary")
+    if isinstance(turns_summary, list):
+        return len(turns_summary)
+    turns = context.get("turns")
+    if isinstance(turns, list):
+        return len(turns)
+    return 0
 
 
 def _first_text(*values: object | None) -> str:

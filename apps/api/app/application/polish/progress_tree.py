@@ -6,6 +6,7 @@ from hashlib import sha256
 from typing import Any
 
 from app.application.polish.entities import PolishSession
+from app.application.polish.progress_evidence import select_progress_tree_evidence_chunks
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_PLAN_CONTRACT_IDS,
@@ -71,9 +72,9 @@ class PolishProgressTreeLlmService:
         existing_plan: dict[str, Any],
         existing_state: dict[str, Any],
     ) -> dict[str, Any]:
-        if not has_sufficient_progress_context(context):
-            return _insufficient_artifacts(context)
         if existing_plan.get("status") != PROGRESS_TREE_STATUS_READY:
+            if not has_sufficient_progress_context(context):
+                return _insufficient_artifacts(context)
             return {
                 "status": existing_plan.get("status") or PROGRESS_TREE_STATUS_FAILED,
                 "progress_tree_plan": existing_plan,
@@ -164,7 +165,20 @@ def build_progress_node_question_text(
         topic = session.topic_id or "manual_topic"
         return f"请围绕 {topic} 说明一个具体案例，并补充你在当前进展节点中的关键取舍。"
 
+    evidence_selection = select_progress_tree_evidence_chunks(
+        context,
+        purpose="next_question",
+        existing_plan=plan,
+        existing_state=state,
+        progress_node_ref=node["progress_node_ref"],
+    )
+    evidence_chunks = list(evidence_selection.selected_chunks)
     job_requirement = _first_text(
+        *[
+            chunk.text
+            for chunk in evidence_chunks
+            if chunk.source_type in {"job_requirement", "job_responsibility"}
+        ],
         *node.get("related_job_requirements", []),
         *context["job_snapshot"].get("requirements", []),
         *context["job_snapshot"].get("responsibilities", []),
@@ -176,11 +190,21 @@ def build_progress_node_question_text(
         else ""
     )
     resume_evidence = _first_text(
+        *[
+            chunk.text
+            for chunk in evidence_chunks
+            if chunk.source_type in {"resume_project", "resume_skill", "resume_work_experience"}
+        ],
         *node.get("related_resume_evidence", []),
         *context["resume_snapshot"].get("project_experiences", []),
         context["resume_snapshot"].get("summary"),
     )
     missing_point = _first_text(
+        *[
+            chunk.text
+            for chunk in evidence_chunks
+            if chunk.source_type in {"match_gap", "turn_feedback"}
+        ],
         *node.get("missing_points", []),
         *context["match_context"].get("missing_points", []),
         "请主动说明你认为面试官最可能继续追问的薄弱点",
@@ -365,8 +389,19 @@ def _normalize_node(item: object, *, index: int, context_digest: str) -> dict[st
         "related_job_requirements": _string_list(item.get("related_job_requirements"), limit=5),
         "related_resume_evidence": _string_list(item.get("related_resume_evidence"), limit=5),
         "missing_points": _string_list(item.get("missing_points"), limit=5),
+        "evidence_chunk_ids": _node_evidence_chunk_ids(item),
         "children": children[:10],
     }
+
+
+def _node_evidence_chunk_ids(item: dict[str, Any]) -> list[str]:
+    evidence_chunk_ids = _string_list(item.get("evidence_chunk_ids"), limit=20)
+    if evidence_chunk_ids:
+        return evidence_chunk_ids
+    evidence = item.get("evidence")
+    if isinstance(evidence, dict):
+        return _string_list(evidence.get("evidence_chunk_ids"), limit=20)
+    return []
 
 
 def _normalize_state(

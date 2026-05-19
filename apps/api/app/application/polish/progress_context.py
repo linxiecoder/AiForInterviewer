@@ -9,6 +9,7 @@ from typing import Any
 
 from app.application.job_match.entities import JobMatchAnalysis
 from app.application.polish.entities import PolishSessionDetail, PolishSessionTurn
+from app.application.polish.progress_evidence import has_sufficient_initial_evidence
 from app.domain.jobs.entities import Job, JobVersion
 from app.domain.resumes.entities import Resume, ResumeVersion
 
@@ -16,7 +17,7 @@ from app.domain.resumes.entities import Resume, ResumeVersion
 UNNAMED_JOB_TITLE = "未命名岗位"
 UNNAMED_RESUME_TITLE = "未命名简历"
 MAX_CONTEXT_TEXT_CHARS = 6000
-MAX_CONTEXT_LIST_ITEMS = 10
+MAX_CONTEXT_LIST_ITEMS = 50
 
 
 def build_polish_progress_context(
@@ -75,20 +76,7 @@ def build_polish_progress_context(
 
 
 def has_sufficient_progress_context(context: dict[str, Any]) -> bool:
-    job_snapshot = context["job_snapshot"]
-    resume_snapshot = context["resume_snapshot"]
-    has_job_content = bool(
-        job_snapshot.get("responsibilities")
-        or job_snapshot.get("requirements")
-        or job_snapshot.get("other_notes")
-    )
-    has_resume_content = bool(
-        resume_snapshot.get("markdown_text")
-        or resume_snapshot.get("skills")
-        or resume_snapshot.get("project_experiences")
-        or resume_snapshot.get("work_experiences")
-    )
-    return has_job_content and has_resume_content
+    return has_sufficient_initial_evidence(context)
 
 
 def stable_digest(value: dict[str, Any]) -> str:
@@ -156,13 +144,11 @@ def _build_resume_snapshot(
     resume: Resume | None,
     resume_version: ResumeVersion | None,
 ) -> dict[str, Any]:
-    markdown_text = truncate_text(resume_version.markdown_text if resume_version is not None else "")
+    markdown_text = resume_version.markdown_text if resume_version is not None else ""
     summary = _markdown_summary(markdown_text)
     skills = _extract_markdown_section_items(markdown_text, ("技能", "技术栈", "skills", "skill"))
     project_experiences = _extract_markdown_section_items(markdown_text, ("项目", "project"))
     work_experiences = _extract_markdown_section_items(markdown_text, ("工作", "实习", "经历", "experience"))
-    if not project_experiences and summary:
-        project_experiences = [summary]
 
     snapshot = {
         "resume_id": resume.resume_id if resume is not None else session_detail.session.resume_id,
@@ -196,6 +182,7 @@ def _build_match_context(match_analysis: JobMatchAnalysis | None) -> dict[str, A
     if match_analysis is None:
         return {
             "available": False,
+            "analysis_id": None,
             "overall_score": None,
             "summary": None,
             "matched_points": [],
@@ -208,6 +195,7 @@ def _build_match_context(match_analysis: JobMatchAnalysis | None) -> dict[str, A
     payload = match_analysis.result_payload_json or {}
     return {
         "available": True,
+        "analysis_id": match_analysis.analysis_id,
         "overall_score": match_analysis.overall_score or _coerce_int(payload.get("overall_score")),
         "summary": _payload_text(payload, ("summary", "overall_summary", "conclusion")),
         "matched_points": _payload_items(

@@ -52,6 +52,7 @@ class PolishProgressTreeNodeResponse(BaseModel):
     related_job_requirements: list[str] = Field(default_factory=list)
     related_resume_evidence: list[str] = Field(default_factory=list)
     missing_points: list[str] = Field(default_factory=list)
+    evidence_chunk_ids: list[str] = Field(default_factory=list)
     children: list["PolishProgressTreeNodeResponse"] = Field(default_factory=list)
 
 

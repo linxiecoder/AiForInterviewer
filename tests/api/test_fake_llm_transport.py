@@ -72,14 +72,22 @@ def test_fake_llm_transport_generates_polish_progress_tree_json() -> None:
             evidence_bundle={
                 "source_digest": "sha256:test",
                 "context": {
-                    "job_snapshot": {
-                        "requirements": ["Python and FastAPI experience."],
-                        "responsibilities": ["Own backend APIs."],
-                    },
-                    "resume_snapshot": {
-                        "project_experiences": ["Built backend workflow automation."],
-                        "summary": "Backend resume",
-                    },
+                    "selected_evidence_chunks": [
+                        {
+                            "chunk_id": "job_requirement_001",
+                            "source_type": "job_requirement",
+                            "title": "Python and FastAPI experience.",
+                            "text": "Python and FastAPI experience.",
+                            "reason": "岗位要求",
+                        },
+                        {
+                            "chunk_id": "resume_project_001",
+                            "source_type": "resume_project",
+                            "title": "Backend workflow automation",
+                            "text": "Built backend workflow automation.",
+                            "reason": "简历项目经历",
+                        },
+                    ],
                 },
             },
         )
@@ -94,4 +102,8 @@ def test_fake_llm_transport_generates_polish_progress_tree_json() -> None:
     assert result.result["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
     assert result.result["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
     assert result.result["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == "fake_llm_progress_backend_api"
+    assert result.result["progress_tree_plan"]["nodes"][0]["evidence_chunk_ids"] == [
+        "job_requirement_001",
+        "resume_project_001",
+    ]
     assert result.result["progress_tree_state"]["current_priority"]["progress_node_ref"] == "fake_llm_progress_backend_api_fastapi"

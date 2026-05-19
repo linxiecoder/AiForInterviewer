@@ -46,10 +46,16 @@ Polish 001-004、005-008、009-011 分别处于不同生命周期阶段，公共
 
 | task_type | prompt version | schema id | 输入上下文 | 输出 | 失败状态 |
 |---|---|---|---|---|---|
-| `polish_progress_tree_plan` | `polish_progress_tree_plan_prompt_v1` | `llm_progress_tree_plan_v1` | `job_snapshot`、`resume_snapshot`、`match_context`、`weakness_context`、`asset_context`、session topic / custom target | `ProgressTreePlan`、initial `ProgressTreeState` | `insufficient_context`、`failed` |
-| `polish_progress_tree_state` | `polish_progress_tree_state_prompt_v1` | `llm_progress_tree_state_v1` | existing plan、existing state、`job_snapshot`、`resume_snapshot`、turns、feedback | refreshed `ProgressTreeState` | `refresh_failed` |
+| `polish_progress_tree_plan` | `polish_progress_tree_plan_prompt_v1` | `llm_progress_tree_plan_v1` | `context_metadata`、`selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary`、`turns_summary` | `ProgressTreePlan`、initial `ProgressTreeState`，节点尽量包含 `evidence_chunk_ids` | `insufficient_context`、`failed` |
+| `polish_progress_tree_state` | `polish_progress_tree_state_prompt_v1` | `llm_progress_tree_state_v1` | existing plan、existing state、`selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary`、`turns_summary` | refreshed `ProgressTreeState`，状态更新引用 evidence / question / answer / score / missing point | `refresh_failed` |
 
-进展树 prompt 必须基于岗位版本内容、简历版本内容、岗位匹配分析、薄弱项、资产摘要和历史 turns；岗位名、公司名、简历名只用于展示或弱提示，不能作为主要语义依据。`polish_progress_tree_state` 只刷新状态，不重建 plan nodes，不删除已有 `node_ref`，`current_priority` 必须引用 existing plan 中存在的节点。provider adapter 只承载通用 JSON transport、provider request / response parse 和错误处理，不维护进展树业务 prompt 正文。
+进展树 prompt 必须基于岗位版本内容、简历版本内容、岗位匹配分析、薄弱项、资产摘要和历史 turns 分块后的 `selected_evidence_chunks`；岗位名、公司名、简历名、binding label 只作为 `context_metadata` 或展示信息，不能作为主要语义依据。`polish_progress_tree_state` 只刷新状态，不重建 plan nodes，不删除已有 `node_ref`，`current_priority` 必须引用 existing plan 中存在的节点。provider adapter 只承载通用 JSON transport、provider request / response parse 和错误处理，不维护进展树业务 prompt 正文。
+
+进展树上下文采用 RAG-lite / deterministic evidence chunking：从 `JobVersion` responsibilities / requirements / other_notes、`ResumeVersion` Markdown section、`JobMatchAnalysis` missing points / interview focus / suggested questions、最近 Polish turns feedback 和可用资产 / 薄弱项摘要中构造可追溯 chunks。该策略不是完整向量 RAG：当前不引入 embedding provider、不调用真实 embedding、不引入向量数据库、不持久化外部索引。后续可以在保持 `P-POLISH-001` contract ID 稳定的前提下升级为 chunk persistence、向量检索或 UI evidence drill-down。
+
+每个进入 prompt 的 chunk 必须有稳定 `chunk_id`、`source_type`、`source_ref`、`title`、`text`、`keywords`、`priority` 和 `reason`。`chunk_id` 推荐使用可复现顺序格式，例如 `job_requirement_001`、`job_responsibility_001`、`resume_project_001`、`resume_skill_001`、`match_gap_001`、`match_focus_001`、`turn_feedback_001`。`source_type` 至少覆盖：`job_responsibility`、`job_requirement`、`job_other_note`、`resume_summary`、`resume_skill`、`resume_project`、`resume_work_experience`、`resume_education`、`match_gap`、`match_focus`、`match_suggested_question`、`turn_question`、`turn_answer`、`turn_feedback`、`asset_summary` 和 `weakness`。节点 evidence 应尽量输出 `evidence_chunk_ids`，同时可保留 `related_question_indexes`、`related_answer_indexes`、`score_refs`、`feedback_summary` 和 `missing_points`，用于后续解释当前优先级。
+
+`polish_progress_tree_plan` 默认 selection 目标是生成“这份简历针对这个岗位”的全景考点树，优先保留岗位要求、匹配缺口、面试重点、简历项目、技能栈、岗位职责和工作经历。initial plan 至少需要 1 个 `job_requirement` 或 `job_responsibility`，且至少需要 1 个 `resume_project`、`resume_skill` 或 `resume_work_experience`；不足时返回 `insufficient_context`，不调用 LLM，不生成假树。`polish_progress_tree_state` 默认优先保留最近 feedback、match gap / focus、current priority 相关 chunks 和最近问答；已有 plan 时可以基于 turns 刷新状态，但不得重建 plan。
 
 #### `next_recommended_actions` 统一枚举索引
 

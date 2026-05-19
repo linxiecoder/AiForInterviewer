@@ -424,10 +424,12 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | task_type | prompt version | schema id | 输入上下文 | 输出 | 失败状态 |
 |---|---|---|---|---|---|
-| `polish_progress_tree_plan` | `polish_progress_tree_plan_prompt_v1` | `llm_progress_tree_plan_v1` | `job_snapshot`、`resume_snapshot`、`match_context`、`weakness_context`、`asset_context`、session topic / custom target | `ProgressTreePlan`、initial `ProgressTreeState` | `insufficient_context`、`failed` |
-| `polish_progress_tree_state` | `polish_progress_tree_state_prompt_v1` | `llm_progress_tree_state_v1` | existing plan、existing state、`job_snapshot`、`resume_snapshot`、turns、feedback | refreshed `ProgressTreeState` | `refresh_failed` |
+| `polish_progress_tree_plan` | `polish_progress_tree_plan_prompt_v1` | `llm_progress_tree_plan_v1` | `context_metadata`、`selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary`、`turns_summary` | `ProgressTreePlan`、initial `ProgressTreeState`，节点尽量包含 `evidence_chunk_ids` | `insufficient_context`、`failed` |
+| `polish_progress_tree_state` | `polish_progress_tree_state_prompt_v1` | `llm_progress_tree_state_v1` | existing plan、existing state、`selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary`、`turns_summary` | refreshed `ProgressTreeState`，状态更新引用 evidence / question / answer / score / missing point | `refresh_failed` |
 
-治理约束：provider adapter 只负责通用 JSON transport 和错误处理；进展树业务 prompt、schema id 和 prompt version 由 Polish prompt builder / contract 管理。状态刷新不得重建 plan nodes，不得删除已有 `node_ref`，`current_priority` 必须引用现有 plan 中的节点。
+治理约束：provider adapter 只负责通用 JSON transport 和错误处理；进展树业务 prompt、schema id 和 prompt version 由 Polish prompt builder / contract 管理。岗位名、公司名、简历名、binding label 只作为 `context_metadata`，不得作为进展树语义生成的主要依据。状态刷新不得重建 plan nodes，不得删除已有 `node_ref`，`current_priority` 必须引用现有 plan 中的节点。
+
+进展树上下文使用 RAG-lite / deterministic evidence chunking，不等于完整向量 RAG。当前不引入 embedding provider、不调用真实 embedding、不引入向量数据库，也不持久化 chunk 索引；后续可以在不改变 `P-POLISH-001` contract ID 的前提下升级为可持久化 evidence chunks、向量检索或 UI evidence drill-down。进入 prompt 的 chunk 必须有稳定 `chunk_id`，推荐格式包括 `job_requirement_001`、`job_responsibility_001`、`resume_project_001`、`resume_skill_001`、`match_gap_001`、`match_focus_001`、`turn_feedback_001`。`source_type` 至少覆盖 `job_responsibility`、`job_requirement`、`job_other_note`、`resume_summary`、`resume_skill`、`resume_project`、`resume_work_experience`、`resume_education`、`match_gap`、`match_focus`、`match_suggested_question`、`turn_question`、`turn_answer`、`turn_feedback`、`asset_summary` 和 `weakness`。
 
 ### 9.4 压力面模式 Contract（Pressure Mode Contracts）
 
@@ -570,6 +572,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-19 | 为打磨进展树登记 RAG-lite evidence chunking | `polish_progress_tree_plan` / `polish_progress_tree_state` 输入从粗粒度 snapshot 转为 `selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary` 和 `turns_summary`；节点 evidence 可引用稳定 `evidence_chunk_ids`；明确当前不引入 embedding、向量库或外部检索系统 |
 | 2026-05-17 | 增加 scoring / semantics / application flow 交接 | 明确评分细则以 `SCORING_SPEC.md` 为 canonical，Low Confidence / validation / source availability 以 `SEMANTICS_GLOSSARY.md` 为 canonical，P-* contract 运行编排以 `APPLICATION_FLOW_SPEC.md` 为 canonical；不新增 contract ID |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` Prompt 校对 / 沉淀目标断链 | 明确低置信校对只能形成 `CandidateCorrection` / `UserCorrectionRef` 并在确认后作为后续输入；Prompt 只能建议沉淀目标，不能静默决定正式 `DepositTarget` 或写入正式对象；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-006` Polish topic / subtopic Prompt 语义 | 明确 `PolishTopicRef` / `PolishSubtopicRef` / `custom_topic_text` 只作为打磨上下文装配与题目生成输入；主题 / 次主题不是正式业务对象；自定义主题文本必须经过 prompt injection 防护；不新增 contract ID，不进入实现 |

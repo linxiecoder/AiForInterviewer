@@ -15,6 +15,13 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    build_initial_progress_tree_prompt,
+    build_progress_tree_state_refresh_prompt,
+)
+from app.application.polish.progress_evidence import (
+    build_progress_evidence_chunks,
+    build_progress_prompt_context,
+    select_progress_tree_evidence_chunks,
 )
 from app.domain.auth.entities import CurrentActor
 from app.domain.bindings.entities import ResumeJobBinding
@@ -205,6 +212,7 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     assert session_data["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
     assert session_data["progress_tree_state"]["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
     assert session_data["progress_tree_plan"]["nodes"]
+    assert session_data["progress_tree_plan"]["nodes"][0]["evidence_chunk_ids"]
     assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
     assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"] == "fake_llm_progress_backend_api_fastapi"
     progress_text = _progress_tree_text(session_data)
@@ -224,9 +232,12 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
         == POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION
     )
     prompt_context = transport.calls[0].evidence_bundle["context"]
-    assert "Own backend APIs for interview preparation workflows." in str(prompt_context["job_snapshot"])
-    assert "Python and FastAPI experience." in str(prompt_context["job_snapshot"])
-    assert "Built backend workflow automation." in str(prompt_context["resume_snapshot"])
+    selected_text = str(prompt_context["selected_evidence_chunks"])
+    assert "Own backend APIs for interview preparation workflows." in selected_text
+    assert "Python and FastAPI experience." in selected_text
+    assert "Built backend workflow automation." in selected_text
+    assert "job_snapshot" not in prompt_context
+    assert "resume_snapshot" not in prompt_context
 
     session_id = session_data["session_id"]
     status_code, body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
@@ -267,6 +278,119 @@ def test_polish_progress_tree_returns_insufficient_context_without_job_or_resume
     assert session_data["progress_tree_plan"]["nodes"] == []
     assert session_data["progress_tree_state"]["current_priority"] is None
     assert transport.calls == []
+
+
+def test_progress_evidence_chunks_split_long_sources_and_keep_stable_ids() -> None:
+    context = _progress_context_fixture(
+        requirements=[
+            "Python FastAPI 服务治理能力",
+            "Kafka 事件驱动一致性和可观测性",
+        ],
+        responsibilities=[
+            "负责核心 API 和异步任务稳定性",
+        ],
+        resume_markdown=(
+            "# Summary\n"
+            + ("长摘要内容 " * 900)
+            + "\n## 项目经历\n"
+            + "支付系统重构：使用 FastAPI、Kafka 和 PostgreSQL 完成一致性治理，补齐监控指标。\n"
+            + "\n## 技能栈\n"
+            + "Python / FastAPI / Kafka / PostgreSQL\n"
+        ),
+    )
+
+    chunks = build_progress_evidence_chunks(context)
+    chunk_ids = [chunk.chunk_id for chunk in chunks]
+
+    assert "job_requirement_001" in chunk_ids
+    assert "job_requirement_002" in chunk_ids
+    assert "job_responsibility_001" in chunk_ids
+    assert "resume_project_001" in chunk_ids
+    assert "resume_skill_001" in chunk_ids
+    assert [chunk.chunk_id for chunk in build_progress_evidence_chunks(context)] == chunk_ids
+    assert any("支付系统重构" in chunk.text for chunk in chunks)
+    assert not any(chunk.text == context["resume_snapshot"]["markdown_text"] for chunk in chunks)
+
+
+def test_progress_evidence_selection_prioritizes_match_gaps_and_reports_dropped_chunks() -> None:
+    context = _progress_context_fixture(
+        requirements=[f"Requirement {index}" for index in range(1, 8)],
+        responsibilities=[f"Responsibility {index}" for index in range(1, 4)],
+        resume_markdown=(
+            "## 项目经历\n支付系统一致性项目\n\n"
+            "## 技能栈\nPython / FastAPI / Kafka\n\n"
+            "## 工作经历\n负责后端平台稳定性治理"
+        ),
+        match_context={
+            "available": True,
+            "overall_score": 68,
+            "summary": "存在关键匹配缺口",
+            "matched_points": [],
+            "missing_points": ["缺少 Kafka exactly-once 解释"],
+            "improvement_points": [],
+            "interview_focus": ["追问支付一致性方案"],
+            "suggested_questions": ["请解释事务消息失败补偿"],
+        },
+    )
+
+    selection = select_progress_tree_evidence_chunks(
+        context,
+        purpose="initial_plan",
+        max_chunks=4,
+        max_chars=600,
+    )
+
+    selected_ids = [chunk.chunk_id for chunk in selection.selected_chunks]
+    assert "match_gap_001" in selected_ids
+    assert "match_focus_001" in selected_ids
+    assert len(selection.selected_chunks) <= 4
+    assert sum(len(chunk.text) for chunk in selection.selected_chunks) <= 600
+    assert selection.dropped_context_summary["dropped_chunks_count"] > 0
+    assert "job_responsibility" in selection.dropped_context_summary["dropped_source_types"]
+
+
+def test_progress_tree_prompts_use_selected_evidence_chunks_instead_of_raw_long_text() -> None:
+    context = _progress_context_fixture(
+        requirements=["Python FastAPI 后端深度", "Kafka 消息一致性"],
+        resume_markdown=(
+            "## 项目经历\n支付系统重构：FastAPI + Kafka + PostgreSQL。\n"
+            "## 技能栈\nPython / FastAPI / Kafka"
+        ),
+    )
+
+    initial_prompt = build_initial_progress_tree_prompt(context)
+
+    assert initial_prompt["context"]["selected_evidence_chunks"]
+    assert initial_prompt["selected_evidence_chunks"] == initial_prompt["context"]["selected_evidence_chunks"]
+    assert "job_snapshot" not in initial_prompt["context"]
+    assert "resume_snapshot" not in initial_prompt["context"]
+    assert "evidence_chunk_ids" in initial_prompt["prompt"]
+    assert "不要编造 selected_evidence_chunks 中不存在的项目、技术栈、业务经验或岗位要求" in initial_prompt["prompt"]
+
+    state_prompt = build_progress_tree_state_refresh_prompt(
+        context=context,
+        existing_plan={
+            "status": "ready",
+            "nodes": [
+                {
+                    "progress_node_ref": "capability.kafka",
+                    "title": "Kafka 一致性",
+                    "expected_capability": "解释支付消息一致性",
+                    "evidence_chunk_ids": ["job_requirement_002", "resume_project_001"],
+                    "children": [],
+                }
+            ],
+        },
+        existing_state={
+            "status": "ready",
+            "node_states": [],
+            "current_priority": {"progress_node_ref": "capability.kafka"},
+        },
+    )
+    assert state_prompt["context"]["selected_evidence_chunks"]
+    assert state_prompt["context"]["turns_summary"]
+    assert "selected_evidence_chunks" in state_prompt["prompt"]
+    assert "不得删除或重命名 existing plan.nodes" in state_prompt["prompt"]
 
 
 def test_polish_progress_tree_invalid_llm_output_returns_failed_without_raw_prompt() -> None:
@@ -317,6 +441,57 @@ def test_polish_progress_tree_missing_schema_metadata_is_safely_completed() -> N
     assert session_data["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
     assert session_data["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
     assert session_data["progress_tree_state"]["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
+
+
+def test_progress_tree_parser_backfills_missing_evidence_chunk_ids() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_MissingEvidenceChunkIdsTransport())
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+
+    assert status_code == 201
+    node = body["data"]["progress_tree_plan"]["nodes"][0]
+    child = node["children"][0]
+    assert node["evidence_chunk_ids"] == []
+    assert child["evidence_chunk_ids"] == []
+
+
+def test_polish_progress_tree_requires_semantic_evidence_not_titles_only() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown="# Summary\n泛泛的个人介绍。",
+        responsibilities=[],
+        requirements=["Python and FastAPI experience."],
+        other_notes=None,
+    )
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+
+    assert status_code == 201
+    assert body["data"]["progress_tree_status"] == "insufficient_context"
+    assert body["data"]["progress_tree_plan"]["nodes"] == []
+    assert transport.calls == []
 
 
 def test_progress_tree_refresh_regenerates_missing_persisted_plan_when_context_is_sufficient() -> None:
@@ -587,6 +762,50 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert "Fake LLM 状态刷新" in state_text
 
 
+def test_polish_next_question_uses_progress_node_evidence_chunks() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown=(
+            "## 项目经历\n"
+            "支付系统重构：使用 FastAPI、Kafka、Outbox 和 PostgreSQL 完成一致性治理。\n"
+            "## 技能栈\nPython / FastAPI / Kafka"
+        ),
+        requirements=[
+            "需要候选人解释 Kafka 事务消息、Outbox 和最终一致性。",
+            "需要掌握 FastAPI 服务治理。",
+        ],
+    )
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 202
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    question_text = next(
+        turn["question_text"]
+        for turn in detail_body["data"]["turns"]
+        if turn["question_id"] == question_id
+    )
+    assert "Kafka 事务消息" in question_text
+    assert "支付系统重构" in question_text
+
+
 def test_polish_session_returns_latest_feedback_when_multiple_feedback_records_exist() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -723,6 +942,15 @@ class _MissingSchemaProgressTreeTransport(FakeLlmTransport):
         return result
 
 
+class _MissingEvidenceChunkIdsTransport(FakeLlmTransport):
+    def generate(self, request):
+        result = super().generate(request)
+        if request.task_type == "polish_progress_tree_plan":
+            for node in result.result["progress_tree_plan"]["nodes"]:
+                _remove_evidence_chunk_ids(node)
+        return result
+
+
 class _InvalidInitialStateProgressTreeTransport(FakeLlmTransport):
     def generate(self, request):
         result = super().generate(request)
@@ -777,7 +1005,7 @@ def _seed_polish_sources(
     session_factory,
     owner_id: str,
     *,
-    resume_markdown: str = "# Summary\nBuilt backend workflow automation.",
+    resume_markdown: str = "## 项目经历\nBuilt backend workflow automation.",
     responsibilities: list[str] | None = None,
     requirements: list[str] | None = None,
     other_notes: str | None = "PostgreSQL is a plus.",
@@ -862,6 +1090,78 @@ def _seed_polish_sources(
         )
     )
     return binding_id
+
+
+def _progress_context_fixture(
+    *,
+    requirements: list[str] | None = None,
+    responsibilities: list[str] | None = None,
+    resume_markdown: str = "## 项目经历\nBuilt backend workflow automation.",
+    match_context: dict | None = None,
+) -> dict:
+    context = {
+        "session": {
+            "session_id": "sess_test",
+            "mode": "polish",
+            "topic": "topic_technical_depth",
+            "subtopic": None,
+            "custom_topic": None,
+        },
+        "job_snapshot": {
+            "job_id": "job_test",
+            "job_version_id": "job_ver_test",
+            "title": "Backend Engineer",
+            "company": "ACME",
+            "department": "Engineering",
+            "responsibilities": responsibilities or ["Own backend APIs."],
+            "requirements": requirements or ["Python and FastAPI experience."],
+            "other_notes": "PostgreSQL is a plus.",
+            "application_status": "draft",
+            "content_digest": "job-digest",
+        },
+        "resume_snapshot": {
+            "resume_id": "res_test",
+            "resume_version_id": "res_ver_test",
+            "title": "Backend Resume",
+            "markdown_text": resume_markdown,
+            "summary": "Backend resume",
+            "skills": [],
+            "project_experiences": [],
+            "work_experiences": [],
+            "content_digest": "resume-digest",
+        },
+        "match_context": match_context
+        or {
+            "available": False,
+            "overall_score": None,
+            "summary": None,
+            "matched_points": [],
+            "missing_points": [],
+            "improvement_points": [],
+            "interview_focus": [],
+            "suggested_questions": [],
+        },
+        "weakness_context": {"items": []},
+        "asset_context": {"items": []},
+        "turns": [
+            {
+                "turn_index": 1,
+                "question_text": "请解释支付一致性方案。",
+                "answer_text": "我使用 Outbox 推动最终一致性。",
+                "feedback_text": "需要补充 Kafka 失败补偿和指标。",
+                "answers": [],
+            }
+        ],
+        "content_digest": "context-digest",
+    }
+    context["prompt_context"] = build_progress_prompt_context(context, purpose="initial_plan")
+    return context
+
+
+def _remove_evidence_chunk_ids(node: dict) -> None:
+    node.pop("evidence_chunk_ids", None)
+    for child in node.get("children", []):
+        _remove_evidence_chunk_ids(child)
 
 
 def _clear_progress_tree_storage(session_factory, session_id: str) -> None:
