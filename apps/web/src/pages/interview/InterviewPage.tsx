@@ -166,10 +166,9 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
   jd_gap_learning: "补齐学习类",
 } as const;
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
-export const INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE = "当前节点上下文";
-export const INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY = "请选择一个进展节点查看训练目标、建议第一题和追问方向。";
-export const INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY = "展开更多准备要点";
-export const INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT = "conversation_context_card" as const;
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE = "当前节点上下文";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY = "请选择一个进展节点查看本轮训练目标。";
+export const INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT = "conversation_context_banner" as const;
 export const INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS = [
   "category_header",
   "node_title",
@@ -179,7 +178,7 @@ export const INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS = [
   "question_entry",
 ] as const;
 export const INTERVIEW_PROGRESS_TREE_DETAIL_EMPTY_COPY = "该节点暂无完整详情，可先生成题目继续打磨。";
-export const INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY = INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY;
+export const INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY = INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY;
 
 export type ProgressTreeNodeDetailViewModel = {
   progressNodeRef: string;
@@ -199,28 +198,10 @@ export type ProgressTreeNodeDetailViewModel = {
   emptyDescription?: string;
 };
 
-type ProgressTreeContextCardSectionKey =
-  | "depth_requirement"
-  | "first_question"
-  | "follow_up_directions"
-  | "answer_signals"
-  | "loss_risks"
-  | "resume_evidence"
-  | "job_evidence";
-
-export type ProgressTreeContextCardSection = {
-  key: ProgressTreeContextCardSectionKey;
-  title: string;
-  items: string[];
-};
-
-export type ProgressTreeContextCardContent = {
-  title: string;
-  metaItems: string[];
-  defaultSections: ProgressTreeContextCardSection[];
-  moreSections: ProgressTreeContextCardSection[];
-  moreToggleCopy: typeof INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY;
-  defaultExpanded: false;
+export type ProgressTreeContextBannerContent = {
+  title: string | null;
+  depthRequirement: string | null;
+  emptyDescription?: string;
 };
 
 type InterviewListError = {
@@ -858,49 +839,36 @@ export function buildProgressTreeNodeDetailViewModel(
   };
 }
 
-function buildProgressTreeContextTextSection(
-  key: ProgressTreeContextCardSectionKey,
-  title: string,
-  content: string | null,
-): ProgressTreeContextCardSection[] {
-  return content ? [{ key, title, items: [content] }] : [];
-}
+export function buildProgressTreeContextBannerContent(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null,
+): ProgressTreeContextBannerContent {
+  const node = findProgressTreeNodeByRef(session.progress_tree_plan.nodes, progressNodeRef);
+  if (node === null) {
+    return {
+      title: null,
+      depthRequirement: null,
+      emptyDescription: INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
+    };
+  }
 
-function buildProgressTreeContextListSection(
-  key: ProgressTreeContextCardSectionKey,
-  title: string,
-  items: readonly string[],
-): ProgressTreeContextCardSection[] {
-  return items.length > 0 ? [{ key, title, items: [...items] }] : [];
-}
-
-export function buildProgressTreeContextCardContent(
-  detail: ProgressTreeNodeDetailViewModel,
-): ProgressTreeContextCardContent {
-  const title = [detail.nodeCode, detail.title]
-    .filter((item): item is string => Boolean(item))
-    .join(" ");
-  const metaItems = [
-    detail.categoryTitle,
-    detail.confidenceLevel ? `置信度：${detail.confidenceLevel}` : null,
-  ].filter((item): item is string => item !== null);
+  const displayNode = node as ProgressTreeDisplayNode;
+  const currentPriority =
+    session.progress_tree_state.current_priority?.progress_node_ref === node.progress_node_ref
+      ? session.progress_tree_state.current_priority
+      : null;
+  const title =
+    firstSafeProgressTreeText(displayNode.display_title, node.title, currentPriority?.title) ?? node.progress_node_ref;
+  const depthRequirement = firstSafeProgressTreeText(
+    displayNode.depth_goal,
+    node.expected_capability,
+    displayNode.preparation_goal,
+    currentPriority?.expected_capability,
+  );
 
   return {
     title,
-    metaItems,
-    defaultSections: [
-      ...buildProgressTreeContextTextSection("depth_requirement", "深度要求", detail.depthRequirement),
-      ...buildProgressTreeContextTextSection("first_question", "建议第一题", detail.firstQuestion),
-    ],
-    moreSections: [
-      ...buildProgressTreeContextListSection("follow_up_directions", "追问方向", detail.followUpDirections),
-      ...buildProgressTreeContextListSection("answer_signals", "好回答信号", detail.answerSignals),
-      ...buildProgressTreeContextListSection("loss_risks", "常见失分风险", detail.lossRisks),
-      ...buildProgressTreeContextListSection("resume_evidence", "简历线索", detail.resumeEvidence),
-      ...buildProgressTreeContextListSection("job_evidence", "岗位依据", detail.jobEvidence),
-    ],
-    moreToggleCopy: INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY,
-    defaultExpanded: false,
+    depthRequirement,
   };
 }
 
@@ -1576,8 +1544,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   const selectedProgressNodeDetailRef =
     session === null ? null : resolveProgressTreeDetailNodeRef(session, selectedProgressNodeRef);
-  const selectedProgressNodeDetail =
-    session === null ? null : buildProgressTreeNodeDetailViewModel(session, selectedProgressNodeDetailRef);
+  const selectedProgressNodeBanner =
+    session === null ? null : buildProgressTreeContextBannerContent(session, selectedProgressNodeDetailRef);
   const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
   const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
   const isProgressTreeReady = session?.progress_tree_status === "ready";
@@ -1617,99 +1585,38 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     });
   };
 
-  const renderProgressTreeContextSection = (section: ProgressTreeContextCardSection) => {
-    const content = section.items[0];
-    if (!content) {
-      return null;
-    }
-    return (
-      <section className={styles.progressTreeContextSection}>
-        <Typography.Text strong>{section.title}</Typography.Text>
-        <Typography.Paragraph>{content}</Typography.Paragraph>
-      </section>
-    );
-  };
-
-  const renderProgressTreeContextList = (section: ProgressTreeContextCardSection) => {
-    if (section.items.length === 0) {
-      return null;
-    }
-    return (
-      <section className={styles.progressTreeContextSection}>
-        <Typography.Text strong>{section.title}</Typography.Text>
-        <ul className={styles.progressTreeContextList}>
-          {section.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </section>
-    );
-  };
-
-  const renderProgressTreeContextMore = (cardContent: ProgressTreeContextCardContent) => {
-    if (cardContent.moreSections.length === 0) {
-      return null;
-    }
-
-    return (
-      <details className={styles.progressTreeContextMore} open={cardContent.defaultExpanded}>
-        <summary>{cardContent.moreToggleCopy}</summary>
-        <div className={styles.progressTreeContextMoreBody}>
-          {cardContent.moreSections.map((section) => (
-            <div key={section.key}>{renderProgressTreeContextList(section)}</div>
-          ))}
-        </div>
-      </details>
-    );
-  };
-
-  const renderProgressTreeContextCard = () => {
-    if (selectedProgressNodeDetail === null) {
+  const renderProgressTreeContextBanner = () => {
+    if (selectedProgressNodeBanner === null || selectedProgressNodeBanner.title === null) {
       return (
         <section
-          className={`${styles.progressTreeContextCard} ${styles.progressTreeContextEmpty}`}
-          aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
+          className={`${styles.progressNodeContextBanner} ${styles.progressNodeContextEmpty}`}
+          aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
         >
-          <Typography.Text strong className={styles.progressTreeContextEyebrow}>
-            {INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
+          <Typography.Text strong className={styles.progressNodeContextLabel}>
+            {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
           </Typography.Text>
-          <Typography.Text type="secondary">{INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY}</Typography.Text>
+          <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
+            {selectedProgressNodeBanner?.emptyDescription ?? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY}
+          </Typography.Text>
         </section>
       );
     }
 
-    const cardContent = buildProgressTreeContextCardContent(selectedProgressNodeDetail);
-
     return (
-      <section className={styles.progressTreeContextCard} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}>
-        <header className={styles.progressTreeContextHeader}>
-          <Typography.Text strong className={styles.progressTreeContextEyebrow}>
-            {INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
+      <section className={styles.progressNodeContextBanner} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}>
+        <Typography.Text strong className={styles.progressNodeContextLabel}>
+          {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
+        </Typography.Text>
+        <div className={styles.progressNodeContextBody}>
+          <Typography.Text strong className={styles.progressNodeContextTitle}>
+            {selectedProgressNodeBanner.title}
           </Typography.Text>
-          <Typography.Text strong className={styles.progressTreeContextTitle}>
-            {cardContent.title}
-          </Typography.Text>
-          {cardContent.metaItems.length > 0 ? (
-            <Typography.Text type="secondary" className={styles.progressTreeContextMeta}>
-              {cardContent.metaItems.join(" · ")}
+          {selectedProgressNodeBanner.depthRequirement ? (
+            <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
+              {selectedProgressNodeBanner.depthRequirement}
             </Typography.Text>
           ) : null}
-        </header>
-
-        {!selectedProgressNodeDetail.hasAnyDetail ? (
-          <Typography.Text type="secondary" className={styles.progressTreeContextEmpty}>
-            {selectedProgressNodeDetail.emptyDescription}
-          </Typography.Text>
-        ) : (
-          <>
-            <div className={styles.progressTreeContextCore}>
-              {cardContent.defaultSections.map((section) => (
-                <div key={section.key}>{renderProgressTreeContextSection(section)}</div>
-              ))}
-            </div>
-            {renderProgressTreeContextMore(cardContent)}
-          </>
-        )}
+        </div>
       </section>
     );
   };
@@ -1978,7 +1885,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               </div>
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
-                {renderProgressTreeContextCard()}
+                {renderProgressTreeContextBanner()}
                 {hasQuestion ? null : (
                   <EmptyState
                     compact
