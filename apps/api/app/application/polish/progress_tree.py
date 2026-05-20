@@ -20,6 +20,7 @@ from app.application.polish.progress_prompts import (
     build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
+from app.application.polish.progress_tree_v2 import PolishProgressTreeV2Pipeline
 from app.infrastructure.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
@@ -46,6 +47,7 @@ QUESTION_SOURCE_TITLE_BY_TYPE = {
     "missing_point": "当前缺口",
     "history_feedback": "历史反馈",
 }
+USE_PROGRESS_TREE_V2 = True
 
 
 class PolishProgressTreeLlmService:
@@ -55,6 +57,9 @@ class PolishProgressTreeLlmService:
         self._transport = transport
 
     def generate_initial(self, context: dict[str, Any]) -> dict[str, Any]:
+        if USE_PROGRESS_TREE_V2:
+            return PolishProgressTreeV2Pipeline(self._transport).generate_initial(context)
+
         if not has_sufficient_progress_context(context):
             return _insufficient_artifacts(context)
         if self._transport is None:
@@ -89,6 +94,28 @@ class PolishProgressTreeLlmService:
                 "progress_tree_plan": existing_plan,
                 "progress_tree_state": existing_state,
                 "progress_percent": _progress_percent(existing_state),
+            }
+        if USE_PROGRESS_TREE_V2 and existing_plan.get("schema_id") == "polish_progress_tree_grounded_plan_v2":
+            if _state_matches_plan(existing_state, existing_plan):
+                state = {
+                    **existing_state,
+                    "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+                    "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+                    "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+                    "status": PROGRESS_TREE_STATUS_READY,
+                }
+            else:
+                state = _initial_state_fallback(
+                    existing_plan,
+                    prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+                    failure_reason="v2_local_state_refresh",
+                )
+            state = _apply_turn_progress_to_state(state, context)
+            return {
+                "status": PROGRESS_TREE_STATUS_READY,
+                "progress_tree_plan": existing_plan,
+                "progress_tree_state": state,
+                "progress_percent": _progress_percent(state),
             }
         if self._transport is None:
             return _refresh_failed_artifacts(
@@ -802,6 +829,60 @@ def _initial_state_fallback(
         "summary": "进展树已生成，等待首次问答后刷新进度",
         "failure_reason": failure_reason,
     }
+
+
+def _apply_turn_progress_to_state(state: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    node_states = [item for item in state.get("node_states", []) if isinstance(item, dict)]
+    if not node_states:
+        return state
+    completed_turns_count = _completed_turns_count(context)
+    if completed_turns_count <= 0:
+        return {
+            **state,
+            "summary": "v2_local_state_refresh",
+            "progress": {"progress_percent": _progress_percent(state)},
+        }
+
+    updated_node_states = []
+    for index, item in enumerate(node_states):
+        updated = {**item}
+        if index < completed_turns_count:
+            updated["status"] = "completed"
+            updated["completed_questions_count"] = max(
+                _bounded_int(updated.get("completed_questions_count"), 0, 999),
+                1,
+            )
+        updated_node_states.append(updated)
+
+    completed_nodes_count = sum(1 for item in updated_node_states if item.get("status") == "completed")
+    progress_percent = _bounded_int(round(completed_nodes_count * 100 / len(updated_node_states)), 0, 100)
+    return {
+        **state,
+        "node_states": updated_node_states,
+        "updated_from_turns_count": completed_turns_count,
+        "summary": "v2_local_state_refresh",
+        "progress": {"progress_percent": progress_percent},
+    }
+
+
+def _completed_turns_count(context: dict[str, Any]) -> int:
+    turns = context.get("turns")
+    if not isinstance(turns, list):
+        return 0
+    completed_count = 0
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        if turn.get("feedback_text") or _turn_answers_have_feedback(turn):
+            completed_count += 1
+    return completed_count
+
+
+def _turn_answers_have_feedback(turn: dict[str, Any]) -> bool:
+    answers = turn.get("answers")
+    if not isinstance(answers, list):
+        return False
+    return any(isinstance(answer, dict) and bool(answer.get("feedback_text")) for answer in answers)
 
 
 def _fallback_priority(plan_nodes: list[dict[str, Any]]) -> dict[str, Any] | None:

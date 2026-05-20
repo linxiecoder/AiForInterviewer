@@ -1,4 +1,5 @@
 import json
+import logging
 
 import httpx
 import pytest
@@ -162,6 +163,80 @@ def test_openai_compatible_transport_records_provider_model_not_model_claim() ->
     )
 
     assert result.result["model_name"] == "deepseek-v4-flash"
+
+
+def test_openai_compatible_transport_logs_progress_without_sensitive_payload(caplog) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_log_test",
+                "model": "deepseek-v4-flash",
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "prompt_version": JOB_MATCH_PROMPT_VERSION,
+                                    "job_match_result_payload": {
+                                        "overall_score": 60,
+                                        "overall_level": "medium_match",
+                                        "confidence": "medium",
+                                        "summary": "基于模型分析生成的中文岗位匹配摘要。",
+                                        "dimension_scores": [],
+                                        "matched_requirements": [],
+                                        "missing_requirements": [],
+                                        "resume_evidence": [],
+                                        "risk_flags": [],
+                                        "interview_focus": ["继续核实候选人的项目深度。"],
+                                        "suggested_questions": ["请说明最能对应岗位要求的经历。"],
+                                        "markdown_report": "# 岗位匹配分析",
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ],
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="secret-test-key",
+            model="deepseek-v4-flash",
+            base_url="https://llm.example/v1",
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.llm.transport"):
+        transport.generate(
+            LlmTransportRequest(
+                contract_ids=("P-JOBMATCH-001",),
+                task_type="job_match_analysis",
+                input_refs=("resume_version:res_ver_1",),
+                evidence_bundle={"raw_prompt_like_text": "不应进入日志的简历正文"},
+            )
+        )
+
+    llm_records = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "app.llm.transport"
+    ]
+    assert [record["event"] for record in llm_records] == [
+        "llm_transport_request_start",
+        "llm_transport_request_success",
+    ]
+    assert llm_records[0]["task_type"] == "job_match_analysis"
+    assert llm_records[0]["model"] == "deepseek-v4-flash"
+    assert llm_records[0]["input_ref_count"] == 1
+    joined_logs = "\n".join(record.message for record in caplog.records)
+    assert "secret-test-key" not in joined_logs
+    assert "不应进入日志的简历正文" not in joined_logs
+    assert "provider_payload" not in joined_logs
+    assert "raw_completion" not in joined_logs
 
 
 def test_openai_compatible_transport_maps_rate_limit_to_provider_unavailable() -> None:

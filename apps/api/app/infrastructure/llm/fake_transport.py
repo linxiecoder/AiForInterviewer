@@ -14,6 +14,21 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
+from app.application.polish.progress_v2_prompts import (
+    POLISH_PROGRESS_GLOBAL_UNDERSTANDING_PROMPT_VERSION,
+    POLISH_PROGRESS_GLOBAL_UNDERSTANDING_SCHEMA_ID,
+    POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE,
+    POLISH_PROGRESS_TREE_CRITIC_REFINER_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_CRITIC_REFINER_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_CRITIC_REFINER_TASK_TYPE,
+    POLISH_PROGRESS_TREE_DRAFT_PLAN_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_DRAFT_PLAN_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_DRAFT_PLAN_TASK_TYPE,
+    POLISH_PROGRESS_TREE_GROUNDED_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
+    POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE,
+)
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.shared.ids import stable_resource_id
 from app.schemas.job_match import (
@@ -34,6 +49,14 @@ class FakeLlmTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
+        if request.task_type == POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE:
+            return _generate_fake_progress_global_understanding(request)
+        if request.task_type == POLISH_PROGRESS_TREE_DRAFT_PLAN_TASK_TYPE:
+            return _generate_fake_progress_tree_draft_plan_v2(request)
+        if request.task_type == POLISH_PROGRESS_TREE_CRITIC_REFINER_TASK_TYPE:
+            return _generate_fake_progress_tree_critic_refiner(request)
+        if request.task_type == POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE:
+            return _generate_fake_progress_tree_grounding(request)
         if request.task_type == "polish_progress_tree_plan":
             return _generate_fake_progress_tree_plan(request)
         if request.task_type == "polish_progress_tree_state":
@@ -68,6 +91,578 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_progress_global_understanding(request: LlmTransportRequest) -> LlmTransportResult:
+    context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
+    job_payload = context.get("job_payload", {}) if isinstance(context, dict) else {}
+    requirements = job_payload.get("requirements") if isinstance(job_payload, dict) else []
+    resume_markdown = context.get("resume_markdown") if isinstance(context, dict) else ""
+    job_requirement = _first_text(*(requirements or []))
+    resume_evidence = _first_text(resume_markdown)
+    seed = _request_seed(request)
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-v2-global-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-v2-global-evidence:{seed}")
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "schema_id": POLISH_PROGRESS_GLOBAL_UNDERSTANDING_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_GLOBAL_UNDERSTANDING_PROMPT_VERSION,
+            "status": "success",
+            "candidate_profile_summary": {
+                "one_sentence_positioning": f"候选人具备可追问的后端项目证据：{resume_evidence}",
+                "experience_level_assessment": "可按中级后端候选人进行真实性和技术深度打磨。",
+                "core_strengths": ["有后端工作流项目证据", "能与岗位后端 API 要求形成交集"],
+                "core_risks": ["真实贡献边界需要追问", "业务结果和指标证据需要补强"],
+                "most_interviewable_projects": [resume_evidence],
+                "least_supported_claims": ["上线效果、指标和故障恢复细节"],
+                "communication_risk_notes": ["需要避免只讲技术名词，改为按场景、动作、结果表达。"],
+            },
+            "target_role_competency_map": [
+                {
+                    "competency_id": "competency_backend_api",
+                    "title": "后端 API 与服务治理",
+                    "importance": "high",
+                    "job_requirement_refs": [job_requirement],
+                    "why_it_matters": "岗位要求候选人能承担后端 API 和面试准备工作流。",
+                    "expected_interview_depth": "advanced",
+                }
+            ],
+            "resume_evidence_map": [
+                {
+                    "evidence_id": "evidence_backend_project",
+                    "source_area": "project",
+                    "title": "后端工作流项目证据",
+                    "evidence_summary": resume_evidence,
+                    "explicit_evidence": [resume_evidence],
+                    "reasonable_inferences": ["可追问接口设计、数据流和落地职责"],
+                    "unsupported_or_weak_parts": ["指标、故障恢复、贡献边界"],
+                    "interview_value": "high",
+                }
+            ],
+            "role_gap_risk_map": [
+                {
+                    "risk_id": "risk_contribution_boundary",
+                    "risk_title": "项目贡献边界和结果证据不够稳",
+                    "risk_type": "unclear_contribution",
+                    "severity": "high",
+                    "evidence_summary": resume_evidence,
+                    "likely_interviewer_attack": "你具体负责哪一段？如果没有你，项目会有什么不同？",
+                    "defense_strategy_hint": "用背景、个人动作、技术取舍、验证结果和协作边界回答。",
+                }
+            ],
+            "interview_strategy": {
+                "overall_strategy": "先验证真实项目和贡献边界，再进入技术原理、工程取舍和风险说明。",
+                "recommended_sequence": ["项目真实性", "后端技术深度", "工程取舍", "缺口说明", "表达结构"],
+                "high_value_attack_points": ["贡献边界", "指标验证", "失败恢复"],
+                "avoid_overfitting_notes": ["不要只围绕 FastAPI 技术名生成菜单。"],
+                "suggested_difficulty_curve": "从 intermediate 项目核验进入 advanced 技术追问，再到连续追问准备。",
+            },
+            "recommended_progress_axes": [
+                {
+                    "axis_id": "axis_authenticity",
+                    "title": "项目真实性与贡献边界",
+                    "reason": "该方向最能提升打磨模式第一轮问题质量。",
+                    "related_competency_ids": ["competency_backend_api"],
+                    "related_evidence_ids": ["evidence_backend_project"],
+                    "related_risk_ids": ["risk_contribution_boundary"],
+                    "priority": 1,
+                }
+            ],
+            "low_confidence_flags": [],
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _generate_fake_progress_tree_draft_plan_v2(request: LlmTransportRequest) -> LlmTransportResult:
+    selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
+    job_requirement = _join_text(
+        _chunk_text(selected_chunks, "job_requirement"),
+        _chunk_text(selected_chunks, "job_responsibility"),
+    )
+    resume_evidence = _chunk_text(selected_chunks, "resume_project", "resume_skill", "resume_work_experience")
+    match_gap = _chunk_text(selected_chunks, "match_gap", fallback="需要继续证明真实贡献边界")
+    evidence_chunk_ids = _chunk_ids(
+        selected_chunks,
+        "job_requirement",
+        "resume_project",
+        "resume_skill",
+        "resume_work_experience",
+        "match_gap",
+    )
+    nodes = _fake_progress_menu_nodes(
+        selected_chunks,
+        job_requirement=job_requirement,
+        resume_evidence=resume_evidence,
+        match_gap=match_gap,
+        evidence_chunk_ids=evidence_chunk_ids,
+        grounded=False,
+    )
+    seed = _request_seed(request)
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-v2-draft-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-v2-draft-evidence:{seed}")
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "schema_id": POLISH_PROGRESS_TREE_DRAFT_PLAN_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_TREE_DRAFT_PLAN_PROMPT_VERSION,
+            "status": "success",
+            "plan_quality_intent": {
+                "tree_positioning": "先给出可用但略普通的后端项目打磨树，等待 critic 强化。",
+                "target_interview_level": "advanced",
+                "planning_rationale": "围绕岗位后端要求和简历项目证据构造可追问节点。",
+            },
+            "progress_tree_plan": {"status": "ready", "nodes": nodes},
+            "coverage_summary": {
+                "covered_competencies": [node["display_title"] for node in nodes if node["category"] == "jd_gap_learning"],
+                "covered_projects": [node["display_title"] for node in nodes if node["category"] == "resume_deep_dive"],
+                "covered_job_gaps": [match_gap],
+                "covered_risks": ["贡献边界"],
+                "missing_but_important": ["指标验证"],
+            },
+            "critic_notes_for_next_task": ["草案节点需要继续强化证据绑定和连续追问方向。"],
+            "low_confidence_flags": [],
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _generate_fake_progress_tree_critic_refiner(request: LlmTransportRequest) -> LlmTransportResult:
+    selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
+    job_requirement = _join_text(
+        _chunk_text(selected_chunks, "job_requirement"),
+        _chunk_text(selected_chunks, "job_responsibility"),
+    )
+    resume_evidence = _chunk_text(selected_chunks, "resume_project", "resume_skill", "resume_work_experience")
+    match_gap = _chunk_text(selected_chunks, "match_gap", fallback="需要补强指标和贡献边界")
+    evidence_chunk_ids = _chunk_ids(
+        selected_chunks,
+        "job_requirement",
+        "resume_project",
+        "resume_skill",
+        "resume_work_experience",
+        "match_gap",
+    )
+    seed = _request_seed(request)
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-v2-critic-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-v2-critic-evidence:{seed}")
+    nodes = _fake_progress_menu_nodes(
+        selected_chunks,
+        job_requirement=job_requirement,
+        resume_evidence=resume_evidence,
+        match_gap=match_gap,
+        evidence_chunk_ids=evidence_chunk_ids,
+        grounded=False,
+    )
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "schema_id": POLISH_PROGRESS_TREE_CRITIC_REFINER_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_TREE_CRITIC_REFINER_PROMPT_VERSION,
+            "status": "success",
+            "quality_review": {
+                "personalization_score": 92,
+                "job_alignment_score": 91,
+                "interview_value_score": 93,
+                "evidence_groundability_score": 90,
+                "structure_quality_score": 88,
+                "non_generic_score": 91,
+                "overall_quality_score": 91,
+                "major_findings": ["已将普通项目介绍重写为具体面试菜单节点。"],
+                "must_fix_items": [],
+                "generic_node_refs": ["fake_v2_draft_backend_project"],
+                "weak_evidence_node_refs": [],
+                "duplicate_node_refs": [],
+                "over_inferred_node_refs": [],
+                "missing_high_value_topics": [],
+            },
+            "refinement_strategy": {
+                "strategy_summary": "保留岗位后端主线，强化真实性、贡献边界、指标和失败恢复追问。",
+                "nodes_to_keep": [],
+                "nodes_to_merge": [],
+                "nodes_to_delete": ["fake_v2_draft_backend_project"],
+                "nodes_to_add": [node["progress_node_ref"] for node in nodes],
+                "nodes_to_rewrite": ["fake_v2_draft_backend_project"],
+            },
+            "refined_progress_tree_plan": {"status": "ready", "nodes": nodes},
+            "quality_gate": {
+                "passed": True,
+                "reason": "节点具备岗位贴合、个性化证据和追问价值。",
+                "remaining_risks": ["真实业务结果仍需候选人回答时补证据。"],
+            },
+            "low_confidence_flags": [],
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _generate_fake_progress_tree_grounding(request: LlmTransportRequest) -> LlmTransportResult:
+    selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
+    job_requirement = _join_text(
+        _chunk_text(selected_chunks, "job_requirement"),
+        _chunk_text(selected_chunks, "job_responsibility"),
+    )
+    resume_evidence = _chunk_text(selected_chunks, "resume_project", "resume_skill", "resume_work_experience")
+    match_gap = _chunk_text(selected_chunks, "match_gap", fallback="需要补强指标和贡献边界")
+    evidence_chunk_ids = _chunk_ids(
+        selected_chunks,
+        "job_requirement",
+        "resume_project",
+        "resume_skill",
+        "resume_work_experience",
+        "match_gap",
+    )
+    nodes = _fake_progress_menu_nodes(
+        selected_chunks,
+        job_requirement=job_requirement,
+        resume_evidence=resume_evidence,
+        match_gap=match_gap,
+        evidence_chunk_ids=evidence_chunk_ids,
+        grounded=True,
+    )
+    seed = _request_seed(request)
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-v2-grounding-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-v2-grounding-evidence:{seed}")
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "schema_id": POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_TREE_GROUNDED_PROMPT_VERSION,
+            "status": "success",
+            "progress_tree_plan": {"status": "ready", "nodes": nodes},
+            "grounding_summary": {
+                "strongly_grounded_nodes_count": len(nodes),
+                "partially_grounded_nodes_count": 0,
+                "weakly_grounded_nodes_count": 0,
+                "ungrounded_nodes_count": 0,
+                "unsupported_claims": [],
+                "evidence_gaps": [],
+                "recommended_user_visible_warning": None,
+            },
+            "initial_progress_tree_state": {
+                "status": "ready",
+                "node_states": [
+                    {
+                        "progress_node_ref": node["progress_node_ref"],
+                        "status": "pending",
+                        "completed_questions_count": 0,
+                        "latest_feedback_summary": None,
+                    }
+                    for node in nodes
+                ],
+                "current_priority": {
+                    "progress_node_ref": nodes[0]["progress_node_ref"],
+                    "title": nodes[0]["title"],
+                    "expected_capability": nodes[0]["expected_capability"],
+                    "priority_reason": nodes[0]["priority_reason"],
+                },
+                "progress": {"progress_percent": 135},
+            },
+            "low_confidence_flags": [],
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _fake_progress_menu_nodes(
+    selected_chunks: list[dict[str, Any]],
+    *,
+    job_requirement: str,
+    resume_evidence: str,
+    match_gap: str,
+    evidence_chunk_ids: list[str],
+    grounded: bool,
+) -> list[dict[str, Any]]:
+    resume_sources = _fake_menu_sources(
+        selected_chunks,
+        {"resume_project", "resume_skill", "resume_work_experience", "match_focus", "turn_feedback", "asset_summary"},
+        fallback_text=resume_evidence,
+        fallback_titles=("项目职责说明", "关键技术取舍", "结果验证与异常恢复"),
+    )
+    gap_sources = _fake_menu_sources(
+        selected_chunks,
+        {"job_requirement", "job_responsibility", "match_gap", "match_suggested_question"},
+        fallback_text=job_requirement or match_gap,
+        fallback_titles=("岗位核心要求", "缺口补齐路径", "工程实践边界"),
+    )
+    nodes = []
+    for index, source in enumerate(resume_sources[:3], start=1):
+        title = _fake_menu_title(source["text"], category="resume_deep_dive")
+        chunk_id = source["chunk_id"] or (evidence_chunk_ids[0] if evidence_chunk_ids else "")
+        nodes.append(
+            {
+                "progress_node_ref": stable_resource_id("trace", f"fake-v2-menu-D{index}:{source['text']}"),
+                "node_code": f"D{index}",
+                "category": "resume_deep_dive",
+                "display_category_title": "深度打磨类",
+                "display_title": title,
+                "exam_point": title,
+                "title": title,
+                "basis_type": "resume_signal",
+                "resume_signal": source["text"] or resume_evidence,
+                "jd_basis": job_requirement or None,
+                "depth_goal": f"准备到能讲清「{title}」的业务场景、个人负责范围、关键取舍和验证结果。",
+                "preparation_goal": f"训练用户把「{title}」讲成具体项目经历，而不是只罗列技术名词。",
+                "expected_capability": f"准备到能讲清「{title}」的业务场景、个人负责范围、关键取舍和验证结果。",
+                "priority_reason": "该项来自简历已有线索，适合优先做深度打磨。",
+                "node_type": "project_deep_dive",
+                "first_question": f"请结合简历线索说明你在「{title}」中具体负责什么、为什么这样设计，以及如何验证结果。",
+                "follow_up_focus": [
+                    "连续追问个人负责范围和协作边界",
+                    "连续追问关键方案的取舍依据",
+                    "连续追问上线验证、指标或异常恢复过程",
+                ],
+                "expected_answer_signals": [
+                    "能说明真实场景和个人动作",
+                    "能解释关键技术取舍",
+                    "能给出验证结果或证据边界",
+                ],
+                "common_loss_risks": [
+                    "只复述技术栈，缺少场景",
+                    "个人贡献边界不清",
+                    "缺少结果验证方式",
+                ],
+                "related_job_requirements": [job_requirement] if job_requirement else [],
+                "related_resume_evidence": [source["text"] or resume_evidence],
+                "related_match_gaps": [match_gap] if match_gap else [],
+                "evidence_chunk_ids": [chunk_id] if chunk_id else evidence_chunk_ids[:1],
+                "evidence_bindings": [_binding(chunk_id, source["source_type"], "该证据支撑深度打磨菜单项。")]
+                if chunk_id
+                else [],
+                "grounding_status": "strongly_grounded" if grounded and chunk_id else "partially_grounded",
+                "confidence_level": "high" if grounded and chunk_id else "medium",
+                "children": [],
+            }
+        )
+    for index, source in enumerate(gap_sources[:3], start=1):
+        title = _fake_menu_title(source["text"], category="jd_gap_learning")
+        chunk_id = source["chunk_id"] or (evidence_chunk_ids[0] if evidence_chunk_ids else "")
+        nodes.append(
+            {
+                "progress_node_ref": stable_resource_id("trace", f"fake-v2-menu-A{index}:{source['text']}"),
+                "node_code": f"A{index}",
+                "category": "jd_gap_learning",
+                "display_category_title": "补齐学习类",
+                "display_title": title,
+                "exam_point": title,
+                "title": title,
+                "basis_type": "jd_requirement" if source["source_type"].startswith("job_") else "match_gap",
+                "resume_signal": resume_evidence or None,
+                "jd_basis": source["text"] or job_requirement or match_gap,
+                "depth_goal": f"准备到能说明「{title}」的核心原理、常见方案、适用边界和补齐计划。",
+                "preparation_goal": f"训练用户把「{title}」讲成原理、方案和学习补齐路径。",
+                "expected_capability": f"准备到能说明「{title}」的核心原理、常见方案、适用边界和补齐计划。",
+                "priority_reason": "该项来自 JD 要求或匹配缺口，适合补齐学习。",
+                "node_type": "job_gap",
+                "first_question": f"JD 提到「{title}」时，你会如何说明它的原理、适用场景和当前补齐计划？",
+                "follow_up_focus": [
+                    "连续追问核心概念和典型方案",
+                    "连续追问与已有项目的可迁移经验",
+                    "连续追问短期补齐计划和验证方式",
+                ],
+                "expected_answer_signals": [
+                    "能解释基础原理和常见实践",
+                    "能诚实区分已实践和待补齐部分",
+                    "能给出具体补齐路径",
+                ],
+                "common_loss_risks": [
+                    "只背关键词，无法解释原理",
+                    "把学习项说成已主导经验",
+                    "补齐计划不够具体",
+                ],
+                "related_job_requirements": [source["text"] or job_requirement or match_gap],
+                "related_resume_evidence": [resume_evidence] if resume_evidence else [],
+                "related_match_gaps": [match_gap] if match_gap else [],
+                "evidence_chunk_ids": [chunk_id] if chunk_id else evidence_chunk_ids[:1],
+                "evidence_bindings": [_binding(chunk_id, source["source_type"], "该证据支撑补齐学习菜单项。")]
+                if chunk_id
+                else [],
+                "grounding_status": "strongly_grounded" if grounded and chunk_id else "partially_grounded",
+                "confidence_level": "high" if grounded and chunk_id else "medium",
+                "children": [],
+            }
+        )
+    return nodes
+
+
+def _fake_menu_sources(
+    chunks: list[dict[str, Any]],
+    source_types: set[str],
+    *,
+    fallback_text: str,
+    fallback_titles: tuple[str, str, str],
+) -> list[dict[str, str]]:
+    sources: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        if chunk.get("source_type") not in source_types:
+            continue
+        chunk_id = chunk.get("chunk_id") if isinstance(chunk.get("chunk_id"), str) else ""
+        for text in _fake_menu_text_candidates(_first_text(chunk.get("text"), chunk.get("title"))):
+            if text in seen:
+                continue
+            seen.add(text)
+            sources.append({"text": text, "chunk_id": chunk_id, "source_type": chunk.get("source_type") or "other"})
+            if len(sources) >= 3:
+                return sources
+    fallback_basis = fallback_text or "来自当前材料的可训练考点"
+    for title in fallback_titles:
+        if len(sources) >= 3:
+            break
+        text = f"{title}：{fallback_basis}"
+        if text not in seen:
+            seen.add(text)
+            sources.append({"text": text, "chunk_id": "", "source_type": "fallback"})
+    return sources
+
+
+def _fake_menu_text_candidates(value: str) -> list[str]:
+    normalized = value.replace("；", "\n").replace("。", "\n")
+    result = []
+    for line in normalized.splitlines():
+        text = line.strip(" \t-•*、，；。")
+        if text:
+            result.append(text)
+    return result or ([value] if value else [])
+
+
+def _fake_menu_title(value: str, *, category: str) -> str:
+    compact = _fake_compact_text(value)
+    if "硬件测试" in compact and ("智能辅助平台" in compact or "辅助平台" in compact or "平台" in compact):
+        return "硬件测试智能辅助平台的服务端架构设计"
+    if (
+        "专业术语" in compact
+        or "单一检索" in compact
+        or "检索准确率" in compact
+        or "混合检索" in compact
+        or "召回" in compact
+    ):
+        return "专业术语场景下的混合检索与召回优化"
+    if "aiagent" in compact:
+        if "任务规划" in compact or "工具调用" in compact or "java" not in compact:
+            return "AI Agent 任务规划与工具调用机制"
+    if "java" in compact and ("服务端" in compact or "后端" in compact or "高可用" in compact):
+        return "Java 服务端高可用架构设计"
+    if "rag" in compact:
+        return "RAG 检索增强生成架构设计"
+    if "rocketmq" in compact or "kafka" in compact or "消息" in compact:
+        return "消息一致性与失败补偿机制"
+    if "redis" in compact or "分布式锁" in compact:
+        return "分布式锁与状态一致性保障"
+    if "postgresql" in compact or "数据模型" in compact:
+        return "数据模型与持久化边界设计"
+    if "fastapi" in compact or "后端api" in compact or "接口编排" in compact or "异步任务" in compact:
+        return "后端 API 编排与任务状态治理"
+    if "prompt" in compact or "多模型" in compact or "结构化输出" in compact:
+        return "Prompt 结构化输出与模型降级机制"
+    title = _fake_clean_exam_point_phrase(value)
+    if title:
+        return title[:32]
+    return "岗位能力补齐与验证计划" if category == "jd_gap_learning" else "项目经历深挖与贡献边界验证"
+
+
+def _fake_compact_text(value: str) -> str:
+    return "".join(ch.lower() for ch in value if ch.isalnum())
+
+
+def _fake_clean_exam_point_phrase(value: str) -> str:
+    title = value.strip(" \t-•*、，；。")
+    if "：" in title:
+        title = title.split("：", 1)[1].strip()
+    if ":" in title:
+        title = title.split(":", 1)[1].strip()
+    for prefix in (
+        "面向",
+        "针对",
+        "负责",
+        "建设",
+        "保障",
+        "熟悉",
+        "理解",
+        "了解",
+        "具备",
+        "掌握",
+        "参与",
+        "主导",
+        "5年以上",
+        "3年以上",
+        "2年以上",
+        "要求",
+        "Built",
+        "Build",
+        "Owned",
+        "Own",
+        "Implemented",
+        "Developed",
+    ):
+        if title.startswith(prefix):
+            title = title[len(prefix) :].strip(" ，,.、")
+    for marker in ("或者", "及以上", "以上", "经验", "要求"):
+        title = title.replace(marker, " ")
+    for separator in ("，", ",", "；", ";", "。", ".", "、"):
+        if separator in title:
+            title = title.split(separator, 1)[0].strip()
+    return title
+
+
+def _request_seed(request: LlmTransportRequest) -> str:
+    return dumps(
+        {
+            "contract_ids": sorted(request.contract_ids),
+            "task_type": request.task_type,
+            "input_refs": sorted(request.input_refs),
+            "source_digest": request.evidence_bundle.get("source_digest"),
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+
+
+def _chunk_id(chunks: list[dict[str, Any]], *source_types: str) -> str:
+    source_type_set = set(source_types)
+    for chunk in chunks:
+        chunk_id = chunk.get("chunk_id")
+        if chunk.get("source_type") in source_type_set and isinstance(chunk_id, str) and chunk_id:
+            return chunk_id
+    return ""
+
+
+def _join_text(*values: str) -> str:
+    return "；".join(value for value in values if value)
+
+
+def _binding(chunk_id: str, source_type: str, reason: str) -> dict[str, str]:
+    return {
+        "evidence_chunk_id": chunk_id,
+        "source_type": source_type,
+        "binding_reason": reason,
+        "supports_field": "interview_intent",
+    }
 
 
 def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransportResult:

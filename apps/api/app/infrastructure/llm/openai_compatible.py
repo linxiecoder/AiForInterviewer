@@ -5,8 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
+import logging
 import os
+from time import perf_counter
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -31,6 +34,7 @@ LLM_OPENAI_BASE_URL_ENV = "LLM_OPENAI_BASE_URL"
 LLM_OPENAI_MODEL_ENV = "LLM_OPENAI_MODEL"
 LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
+LLM_TRANSPORT_LOGGER_NAME = "app.llm.transport"
 
 
 @dataclass(frozen=True)
@@ -87,6 +91,7 @@ class OpenAICompatibleLlmTransport:
     ) -> None:
         self._settings = settings
         self._client = client
+        self._logger = _llm_transport_logger()
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         if not self._settings.api_key.strip():
@@ -106,6 +111,8 @@ class OpenAICompatibleLlmTransport:
         client: httpx.Client,
         request: LlmTransportRequest,
     ) -> LlmTransportResult:
+        started_at = perf_counter()
+        self._log_request_start(request)
         try:
             response = client.post(
                 f"{self._settings.base_url}/chat/completions",
@@ -117,17 +124,43 @@ class OpenAICompatibleLlmTransport:
                 timeout=self._settings.timeout_seconds,
             )
         except httpx.TimeoutException as exc:
+            self._log_request_failed(request, started_at=started_at, error_type="timeout")
             raise LlmTransportUnavailableError("LLM provider 请求超时。") from exc
         except httpx.HTTPError as exc:
+            self._log_request_failed(request, started_at=started_at, error_type=type(exc).__name__)
             raise LlmTransportUnavailableError("LLM provider 请求失败。") from exc
 
         if response.status_code in {401, 403}:
+            self._log_request_failed(
+                request,
+                started_at=started_at,
+                error_type="authentication_failed",
+                status_code=response.status_code,
+            )
             raise LlmTransportConfigurationError("LLM provider 鉴权失败，请检查 .env 中的模型密钥。")
         if response.status_code == 429:
+            self._log_request_failed(
+                request,
+                started_at=started_at,
+                error_type="rate_limited",
+                status_code=response.status_code,
+            )
             raise LlmTransportUnavailableError("LLM provider 当前限流，请稍后重试。")
         if response.status_code >= 500:
+            self._log_request_failed(
+                request,
+                started_at=started_at,
+                error_type="provider_unavailable",
+                status_code=response.status_code,
+            )
             raise LlmTransportUnavailableError("LLM provider 暂时不可用。")
         if response.status_code >= 400:
+            self._log_request_failed(
+                request,
+                started_at=started_at,
+                error_type="provider_http_error",
+                status_code=response.status_code,
+            )
             raise LlmTransportUnavailableError(f"LLM provider 返回 HTTP {response.status_code}。")
 
         response_json = _response_json(response)
@@ -136,6 +169,12 @@ class OpenAICompatibleLlmTransport:
         # model_name 用于审计和落库，只能来自 provider 外层响应或本地配置；
         # 不能信任模型正文里自报的 model_name，否则会出现“实际调用 deepseek，记录成 gpt-4”的偏差。
         result["model_name"] = _provider_model_name(response_json, self._settings.model)
+        self._log_request_success(
+            request,
+            started_at=started_at,
+            status_code=response.status_code,
+            provider_model=result["model_name"],
+        )
         return LlmTransportResult(
             result=result,
             validation_status=ValidationStatus.VALID,
@@ -144,6 +183,61 @@ class OpenAICompatibleLlmTransport:
             trace_refs=(_trace_ref(request, response_json),),
             evidence_refs=(_evidence_ref(request),),
         )
+
+    def _log_request_start(self, request: LlmTransportRequest) -> None:
+        self._logger.info(
+            _json_log(
+                {
+                    "event": "llm_transport_request_start",
+                    "task_type": request.task_type,
+                    "model": self._settings.model,
+                    "provider_base_host": _base_url_host(self._settings.base_url),
+                    "contract_ids": list(request.contract_ids),
+                    "input_ref_count": len(request.input_refs),
+                    "timeout_seconds": self._settings.timeout_seconds,
+                }
+            )
+        )
+
+    def _log_request_success(
+        self,
+        request: LlmTransportRequest,
+        *,
+        started_at: float,
+        status_code: int,
+        provider_model: str,
+    ) -> None:
+        self._logger.info(
+            _json_log(
+                {
+                    "event": "llm_transport_request_success",
+                    "task_type": request.task_type,
+                    "model": self._settings.model,
+                    "provider_model": provider_model,
+                    "status_code": status_code,
+                    "duration_ms": _duration_ms(started_at),
+                }
+            )
+        )
+
+    def _log_request_failed(
+        self,
+        request: LlmTransportRequest,
+        *,
+        started_at: float,
+        error_type: str,
+        status_code: int | None = None,
+    ) -> None:
+        record: dict[str, Any] = {
+            "event": "llm_transport_request_failed",
+            "task_type": request.task_type,
+            "model": self._settings.model,
+            "error_type": error_type,
+            "duration_ms": _duration_ms(started_at),
+        }
+        if status_code is not None:
+            record["status_code"] = status_code
+        self._logger.info(_json_log(record))
 
 
 def _chat_completion_payload(
@@ -174,6 +268,36 @@ def _chat_completion_payload(
             },
         ],
     }
+
+
+def _llm_transport_logger() -> logging.Logger:
+    logger = logging.getLogger(LLM_TRANSPORT_LOGGER_NAME)
+    if logger.level == logging.NOTSET:
+        logger.setLevel(logging.INFO)
+    _ensure_console_handler(logger)
+    return logger
+
+
+def _ensure_console_handler(logger: logging.Logger) -> None:
+    if any(getattr(handler, "_aifi_llm_transport_handler", False) for handler in logger.handlers):
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler._aifi_llm_transport_handler = True  # type: ignore[attr-defined]
+    logger.addHandler(handler)
+
+
+def _json_log(record: dict[str, Any]) -> str:
+    return json.dumps(record, ensure_ascii=False, sort_keys=True)
+
+
+def _duration_ms(started_at: float) -> float:
+    return round((perf_counter() - started_at) * 1000, 3)
+
+
+def _base_url_host(base_url: str) -> str:
+    parsed = urlparse(base_url)
+    return parsed.netloc or parsed.path or "unknown"
 
 
 def _system_prompt(task_type: str) -> str:

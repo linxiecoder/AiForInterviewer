@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_db_session_factory, get_llm_transport, require_authenticated_actor
 from app.api.envelope import success_envelope
@@ -56,8 +57,8 @@ from app.schemas.refs import ResourceRef, TraceRefSchema
 router = APIRouter(tags=["polish"])
 
 LEGACY_TOPIC_TITLE_BY_ID = {
-    "topic_project_depth": "经历真实性与贡献拷问",
-    "topic_system_design": "能力深度与技术碾压",
+    "topic_project_depth": "经历真实性与贡献澄清",
+    "topic_system_design": "能力深度与技术深挖",
     "topic_behavioral": "情景模拟与角色扮演",
 }
 
@@ -108,7 +109,8 @@ async def create_polish_session(
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
-    create_result = use_cases.create_session(
+    create_result = await run_in_threadpool(
+        use_cases.create_session,
         CreatePolishSessionCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
@@ -116,7 +118,7 @@ async def create_polish_session(
             topic_id=payload.topic_id,
             subtopic_id=payload.subtopic_id,
             custom_topic_text=payload.custom_topic_text,
-        )
+        ),
     )
     if not create_result.is_success:
         _raise_result_error(create_result.error)
@@ -158,13 +160,14 @@ async def create_polish_question_task(
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
-    result = use_cases.create_question_task(
+    result = await run_in_threadpool(
+        use_cases.create_question_task,
         CreatePolishQuestionTaskCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
             session_id=session_id,
             progress_node_ref=payload.progress_node_ref,
-        )
+        ),
     )
     if not result.is_success:
         _raise_result_error(result.error)
@@ -220,13 +223,14 @@ async def create_polish_feedback_task(
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
-    result = use_cases.create_feedback_task(
+    result = await run_in_threadpool(
+        use_cases.create_feedback_task,
         CreatePolishFeedbackTaskCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
             session_id=session_id,
             answer_id=payload.answer_id,
-        )
+        ),
     )
     if not result.is_success:
         _raise_result_error(result.error)
@@ -245,12 +249,13 @@ async def refresh_polish_progress_tree_state(
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
-    result = use_cases.refresh_progress_tree_state(
+    result = await run_in_threadpool(
+        use_cases.refresh_progress_tree_state,
         RefreshPolishProgressTreeStateCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
             session_id=session_id,
-        )
+        ),
     )
     if not result.is_success:
         _raise_result_error(result.error)

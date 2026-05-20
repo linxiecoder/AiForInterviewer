@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -49,10 +50,40 @@ class PolishProgressTreeNodeResponse(BaseModel):
     progress_node_ref: str
     title: str
     expected_capability: str
+    node_code: str | None = None
+    category: str | None = None
+    display_category_title: str | None = None
+    display_title: str | None = None
+    exam_point: str | None = None
+    basis_type: str | None = None
+    resume_signal: str | None = None
+    jd_basis: str | None = None
+    depth_goal: str | None = None
+    preparation_goal: str | None = None
+    first_question: str | None = None
+    follow_up_focus: list[str] = Field(default_factory=list)
+    common_loss_risks: list[str] = Field(default_factory=list)
+    node_type: str | None = None
+    interview_intent: str | None = None
+    interview_method: str | None = None
+    follow_up_method: str | None = None
+    attack_style: str | None = None
+    difficulty_level: str | None = None
+    priority: int | None = None
+    priority_reason: str | None = None
     related_job_requirements: list[str] = Field(default_factory=list)
     related_resume_evidence: list[str] = Field(default_factory=list)
+    related_match_gaps: list[str] = Field(default_factory=list)
     missing_points: list[str] = Field(default_factory=list)
+    expected_answer_signals: list[str] = Field(default_factory=list)
+    red_flags: list[str] = Field(default_factory=list)
+    recommended_first_question: str | None = None
+    follow_up_directions: list[str] = Field(default_factory=list)
     evidence_chunk_ids: list[str] = Field(default_factory=list)
+    evidence_bindings: list[dict[str, Any]] = Field(default_factory=list)
+    grounding_status: str | None = None
+    confidence_level: str | None = None
+    low_confidence_flags: list[str] = Field(default_factory=list)
     children: list["PolishProgressTreeNodeResponse"] = Field(default_factory=list)
 
 
@@ -64,6 +95,7 @@ class PolishProgressTreePlanResponse(BaseModel):
     context_digest: str
     nodes: list[PolishProgressTreeNodeResponse] = Field(default_factory=list)
     failure_reason: str | None = None
+    v2_metadata: dict[str, Any] | None = None
 
 
 class PolishProgressTreeNodeStateResponse(BaseModel):
