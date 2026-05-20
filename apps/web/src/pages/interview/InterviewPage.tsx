@@ -168,6 +168,7 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE = "当前节点上下文";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY = "请选择一个进展节点查看训练目标、建议第一题和追问方向。";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY = "展开更多准备要点";
 export const INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT = "conversation_context_card" as const;
 export const INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS = [
   "category_header",
@@ -196,6 +197,30 @@ export type ProgressTreeNodeDetailViewModel = {
   jobEvidence: string[];
   hasAnyDetail: boolean;
   emptyDescription?: string;
+};
+
+type ProgressTreeContextCardSectionKey =
+  | "depth_requirement"
+  | "first_question"
+  | "follow_up_directions"
+  | "answer_signals"
+  | "loss_risks"
+  | "resume_evidence"
+  | "job_evidence";
+
+export type ProgressTreeContextCardSection = {
+  key: ProgressTreeContextCardSectionKey;
+  title: string;
+  items: string[];
+};
+
+export type ProgressTreeContextCardContent = {
+  title: string;
+  metaItems: string[];
+  defaultSections: ProgressTreeContextCardSection[];
+  moreSections: ProgressTreeContextCardSection[];
+  moreToggleCopy: typeof INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY;
+  defaultExpanded: false;
 };
 
 type InterviewListError = {
@@ -830,6 +855,52 @@ export function buildProgressTreeNodeDetailViewModel(
     jobEvidence,
     hasAnyDetail,
     emptyDescription: hasAnyDetail ? undefined : INTERVIEW_PROGRESS_TREE_DETAIL_EMPTY_COPY,
+  };
+}
+
+function buildProgressTreeContextTextSection(
+  key: ProgressTreeContextCardSectionKey,
+  title: string,
+  content: string | null,
+): ProgressTreeContextCardSection[] {
+  return content ? [{ key, title, items: [content] }] : [];
+}
+
+function buildProgressTreeContextListSection(
+  key: ProgressTreeContextCardSectionKey,
+  title: string,
+  items: readonly string[],
+): ProgressTreeContextCardSection[] {
+  return items.length > 0 ? [{ key, title, items: [...items] }] : [];
+}
+
+export function buildProgressTreeContextCardContent(
+  detail: ProgressTreeNodeDetailViewModel,
+): ProgressTreeContextCardContent {
+  const title = [detail.nodeCode, detail.title]
+    .filter((item): item is string => Boolean(item))
+    .join(" ");
+  const metaItems = [
+    detail.categoryTitle,
+    detail.confidenceLevel ? `置信度：${detail.confidenceLevel}` : null,
+  ].filter((item): item is string => item !== null);
+
+  return {
+    title,
+    metaItems,
+    defaultSections: [
+      ...buildProgressTreeContextTextSection("depth_requirement", "深度要求", detail.depthRequirement),
+      ...buildProgressTreeContextTextSection("first_question", "建议第一题", detail.firstQuestion),
+    ],
+    moreSections: [
+      ...buildProgressTreeContextListSection("follow_up_directions", "追问方向", detail.followUpDirections),
+      ...buildProgressTreeContextListSection("answer_signals", "好回答信号", detail.answerSignals),
+      ...buildProgressTreeContextListSection("loss_risks", "常见失分风险", detail.lossRisks),
+      ...buildProgressTreeContextListSection("resume_evidence", "简历线索", detail.resumeEvidence),
+      ...buildProgressTreeContextListSection("job_evidence", "岗位依据", detail.jobEvidence),
+    ],
+    moreToggleCopy: INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY,
+    defaultExpanded: false,
   };
 }
 
@@ -1546,27 +1617,28 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     });
   };
 
-  const renderProgressTreeContextSection = (title: string, content: string | null) => {
-    if (content === null) {
+  const renderProgressTreeContextSection = (section: ProgressTreeContextCardSection) => {
+    const content = section.items[0];
+    if (!content) {
       return null;
     }
     return (
       <section className={styles.progressTreeContextSection}>
-        <Typography.Text strong>{title}</Typography.Text>
+        <Typography.Text strong>{section.title}</Typography.Text>
         <Typography.Paragraph>{content}</Typography.Paragraph>
       </section>
     );
   };
 
-  const renderProgressTreeContextList = (title: string, items: readonly string[]) => {
-    if (items.length === 0) {
+  const renderProgressTreeContextList = (section: ProgressTreeContextCardSection) => {
+    if (section.items.length === 0) {
       return null;
     }
     return (
       <section className={styles.progressTreeContextSection}>
-        <Typography.Text strong>{title}</Typography.Text>
+        <Typography.Text strong>{section.title}</Typography.Text>
         <ul className={styles.progressTreeContextList}>
-          {items.map((item) => (
+          {section.items.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
@@ -1574,56 +1646,18 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   };
 
-  const renderProgressTreeContextEvidence = (detail: ProgressTreeNodeDetailViewModel) => {
-    if (detail.resumeEvidence.length === 0 && detail.jobEvidence.length === 0) {
-      return null;
-    }
-    return (
-      <section className={styles.progressTreeContextSection}>
-        <Typography.Text strong>依据</Typography.Text>
-        <div className={styles.progressTreeContextEvidence}>
-          {detail.resumeEvidence.length > 0 ? (
-            <div>
-              <Typography.Text type="secondary">简历线索</Typography.Text>
-              <ul className={styles.progressTreeContextList}>
-                {detail.resumeEvidence.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {detail.jobEvidence.length > 0 ? (
-            <div>
-              <Typography.Text type="secondary">岗位依据</Typography.Text>
-              <ul className={styles.progressTreeContextList}>
-                {detail.jobEvidence.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </section>
-    );
-  };
-
-  const renderProgressTreeContextMore = (detail: ProgressTreeNodeDetailViewModel) => {
-    const hasMore =
-      detail.answerSignals.length > 0 ||
-      detail.lossRisks.length > 0 ||
-      detail.resumeEvidence.length > 0 ||
-      detail.jobEvidence.length > 0;
-    if (!hasMore) {
+  const renderProgressTreeContextMore = (cardContent: ProgressTreeContextCardContent) => {
+    if (cardContent.moreSections.length === 0) {
       return null;
     }
 
     return (
-      <details className={styles.progressTreeContextMore}>
-        <summary>更多准备要点</summary>
+      <details className={styles.progressTreeContextMore} open={cardContent.defaultExpanded}>
+        <summary>{cardContent.moreToggleCopy}</summary>
         <div className={styles.progressTreeContextMoreBody}>
-          {renderProgressTreeContextList("好回答信号", detail.answerSignals)}
-          {renderProgressTreeContextList("常见失分风险", detail.lossRisks)}
-          {renderProgressTreeContextEvidence(detail)}
+          {cardContent.moreSections.map((section) => (
+            <div key={section.key}>{renderProgressTreeContextList(section)}</div>
+          ))}
         </div>
       </details>
     );
@@ -1644,18 +1678,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       );
     }
 
-    const metaItems = [
-      selectedProgressNodeDetail.categoryTitle,
-      selectedProgressNodeDetail.confidenceLevel
-        ? `置信度：${selectedProgressNodeDetail.confidenceLevel}`
-        : null,
-      selectedProgressNodeDetail.groundingStatus
-        ? `证据：${selectedProgressNodeDetail.groundingStatus}`
-        : null,
-    ].filter((item): item is string => item !== null);
-    const title = [selectedProgressNodeDetail.nodeCode, selectedProgressNodeDetail.title]
-      .filter((item): item is string => Boolean(item))
-      .join(" ");
+    const cardContent = buildProgressTreeContextCardContent(selectedProgressNodeDetail);
 
     return (
       <section className={styles.progressTreeContextCard} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}>
@@ -1664,11 +1687,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             {INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
           </Typography.Text>
           <Typography.Text strong className={styles.progressTreeContextTitle}>
-            {title}
+            {cardContent.title}
           </Typography.Text>
-          {metaItems.length > 0 ? (
+          {cardContent.metaItems.length > 0 ? (
             <Typography.Text type="secondary" className={styles.progressTreeContextMeta}>
-              {metaItems.join(" · ")}
+              {cardContent.metaItems.join(" · ")}
             </Typography.Text>
           ) : null}
         </header>
@@ -1680,11 +1703,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         ) : (
           <>
             <div className={styles.progressTreeContextCore}>
-              {renderProgressTreeContextSection("深度要求", selectedProgressNodeDetail.depthRequirement)}
-              {renderProgressTreeContextSection("建议第一题", selectedProgressNodeDetail.firstQuestion)}
-              {renderProgressTreeContextList("追问方向", selectedProgressNodeDetail.followUpDirections)}
+              {cardContent.defaultSections.map((section) => (
+                <div key={section.key}>{renderProgressTreeContextSection(section)}</div>
+              ))}
             </div>
-            {renderProgressTreeContextMore(selectedProgressNodeDetail)}
+            {renderProgressTreeContextMore(cardContent)}
           </>
         )}
       </section>

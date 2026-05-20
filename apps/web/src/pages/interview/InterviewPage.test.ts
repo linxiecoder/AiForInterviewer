@@ -18,6 +18,7 @@ import {
   INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE,
+  INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY,
   INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS,
   INTERVIEW_PROGRESS_TREE_SCROLL_CLASS,
@@ -28,6 +29,7 @@ import {
   buildPolishSessionPath,
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
+  buildProgressTreeContextCardContent,
   buildProgressTreeNodeDetailViewModel,
   buildWorkbenchProgressNodes,
   collectDefaultExpandedProgressNodeKeys,
@@ -135,6 +137,9 @@ type ProgressTreeDetailPlacementIsStable = Expect<
 >;
 type ProgressTreeContextCardCopyIsStable = Expect<
   Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE, "当前节点上下文">
+>;
+type ProgressTreeContextMoreToggleCopyIsStable = Expect<
+  Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY, "展开更多准备要点">
 >;
 type ProgressTreeContextCardEmptyCopyIsStable = Expect<
   Equal<
@@ -415,7 +420,7 @@ function test_progress_tree_detail_moves_to_conversation_context_card(): void {
   assertContract(detail?.title === "混合检索策略设计与优化", "上下文卡应显示节点标题");
   assertContract(detail?.depthRequirement === "能解释召回、排序、重排和评估指标之间的取舍。", "上下文卡应显示深度要求");
   assertContract(detail?.firstQuestion === "如果让你设计混合检索链路，你会如何分层？", "上下文卡应显示建议第一题");
-  assertContract(Boolean(detail?.followUpDirections.includes("如何处理召回不足")), "上下文卡应显示追问方向");
+  assertContract(Boolean(detail?.followUpDirections.includes("如何处理召回不足")), "上下文卡数据应保留追问方向");
 }
 
 function test_progress_tree_left_list_stays_compact(): void {
@@ -546,6 +551,61 @@ function test_progress_tree_context_card_updates_when_node_selected(): void {
   assertContract(selectedRef === "node_selected", "点击另一个真实节点后应切换上下文卡节点");
   assertContract(contextDetail?.title === "缓存一致性问题定位", "上下文卡应展示新选中节点标题");
   assertContract(contextDetail?.depthRequirement === "选中节点目标", "上下文卡应展示新选中节点详情");
+}
+
+function test_progress_node_context_card_is_compact_by_default(): void {
+  const session = buildTestSession([
+    {
+      ...buildTestProgressNode("node_compact_context", "混合检索策略设计与优化", "resume_deep_dive", "深度打磨类"),
+      node_code: "R-02",
+      depth_goal: "能解释召回、排序、重排和评估指标之间的取舍。",
+      first_question: "如果让你设计混合检索链路，你会如何分层？",
+      follow_up_focus: ["如何处理召回不足", "如何验证排序质量"],
+      expected_answer_signals: ["能给出指标闭环"],
+      common_loss_risks: ["只描述工具名称，缺少系统取舍"],
+      resume_signal: "简历中提到检索服务优化经验",
+      jd_basis: "JD 要求具备搜索架构和效果评估能力",
+    },
+  ]);
+  const detail = buildProgressTreeNodeDetailViewModel(session, "node_compact_context");
+  const cardContent = detail ? buildProgressTreeContextCardContent(detail) : null;
+  const defaultSectionKeys = cardContent?.defaultSections.map((section) => section.key).join(",");
+  const moreSectionKeys = cardContent?.moreSections.map((section) => section.key).join(",");
+
+  assertContract(cardContent?.title === "R-02 混合检索策略设计与优化", "默认紧凑卡应显示节点标题");
+  assertContract(defaultSectionKeys === "depth_requirement,first_question", "默认只显示深度要求和建议第一题");
+  assertContract(moreSectionKeys?.includes("follow_up_directions") === true, "追问方向应收纳到更多准备要点");
+  assertContract(moreSectionKeys?.includes("answer_signals") === true, "好回答信号应收纳到更多准备要点");
+  assertContract(moreSectionKeys?.includes("loss_risks") === true, "失分风险应收纳到更多准备要点");
+  assertContract(cardContent?.defaultExpanded === false, "当前节点上下文卡默认不展开更多准备要点");
+}
+
+function test_progress_node_context_card_expands_more_preparation_points(): void {
+  const session = buildTestSession([
+    {
+      ...buildTestProgressNode("node_more_context", "混合检索策略设计与优化", "resume_deep_dive", "深度打磨类"),
+      depth_goal: "能解释召回、排序、重排和评估指标之间的取舍。",
+      first_question: "如果让你设计混合检索链路，你会如何分层？",
+      follow_up_directions: ["如何处理召回不足"],
+      expected_answer_signals: ["能给出指标闭环"],
+      red_flags: ["只描述工具名称，缺少系统取舍"],
+      resume_signal: "简历中提到检索服务优化经验",
+      jd_basis: "JD 要求具备搜索架构和效果评估能力",
+    },
+  ]);
+  const detail = buildProgressTreeNodeDetailViewModel(session, "node_more_context");
+  const cardContent = detail ? buildProgressTreeContextCardContent(detail) : null;
+  const expandedCopy = cardContent?.moreSections
+    .flatMap((section) => [section.title, ...section.items])
+    .join(" ");
+
+  assertContract(cardContent?.moreToggleCopy === INTERVIEW_PROGRESS_TREE_CONTEXT_MORE_TOGGLE_COPY, "应提供展开更多准备要点入口");
+  assertContract(expandedCopy?.includes("追问方向") === true, "展开后应显示追问方向");
+  assertContract(expandedCopy?.includes("如何处理召回不足") === true, "展开后应显示追问方向内容");
+  assertContract(expandedCopy?.includes("好回答信号") === true, "展开后应显示好回答信号");
+  assertContract(expandedCopy?.includes("常见失分风险") === true, "展开后应显示失分风险");
+  assertContract(expandedCopy?.includes("简历线索") === true, "展开后应显示简历依据");
+  assertContract(expandedCopy?.includes("岗位依据") === true, "展开后应显示岗位依据");
 }
 
 function test_progress_tree_detail_uses_display_safe_copy(): void {
@@ -689,6 +749,8 @@ test_progress_tree_group_header_does_not_show_node_detail();
 test_progress_tree_category_header_is_group_only();
 test_progress_tree_context_card_defaults_to_current_priority();
 test_progress_tree_context_card_updates_when_node_selected();
+test_progress_node_context_card_is_compact_by_default();
+test_progress_node_context_card_expands_more_preparation_points();
 test_progress_tree_detail_uses_display_safe_copy();
 test_progress_tree_display_safe_copy_still_applies();
 test_progress_tree_detail_handles_missing_optional_fields();
