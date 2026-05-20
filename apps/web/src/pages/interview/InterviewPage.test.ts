@@ -18,9 +18,13 @@ import {
   INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE,
+  INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY,
   INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS,
+  INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES,
+  INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_SCROLL_CLASS,
+  INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT,
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
@@ -30,15 +34,18 @@ import {
   buildInterviewCreatePendingDescription,
   buildProgressTreeContextBannerContent,
   buildProgressTreeNodeDetailViewModel,
+  buildWorkbenchProgressNodeTitleMeta,
   buildWorkbenchProgressNodes,
   collectDefaultExpandedProgressNodeKeys,
   getInterviewCreateAvailability,
   getWorkbenchProgressNodeQuestionTargetRef,
+  getWorkbenchProgressNodeStatusLightTone,
   normalizeInterviewTopicTitle,
   normalizeProgressTreeDetailCopy,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveProgressTreeSelectedNodeRefAfterClick,
+  shouldShowProgressTreeContextBannerToggle,
   type PolishBindingOption,
 } from "./InterviewPage";
 import {
@@ -143,11 +150,26 @@ type ProgressTreeContextBannerEmptyCopyIsStable = Expect<
     "请选择一个进展节点查看本轮训练目标。"
   >
 >;
+type ProgressTreeContextBannerToggleCopyIsStable = Expect<
+  Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY, { readonly expand: "展开"; readonly collapse: "收起" }>
+>;
 type ProgressTreeLeftListFieldsAreStable = Expect<
   Equal<
     typeof INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS,
-    readonly ["category_header", "node_title", "node_code", "node_status", "current_priority", "question_entry"]
+    readonly ["category_header", "node_title", "node_status", "current_priority", "question_entry"]
   >
+>;
+type ProgressTreeNodeStatusPlacementIsStable = Expect<
+  Equal<typeof INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT, "node_title_suffix_light">
+>;
+type ProgressTreeNodeStatusLightTonesAreStable = Expect<
+  Equal<
+    typeof INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES,
+    { readonly completed: "green"; readonly in_progress: "blue"; readonly pending: "orange" }
+  >
+>;
+type WorkbenchChatBubbleAlignmentIsStable = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT, { readonly system: "left"; readonly user_answer: "right" }>
 >;
 type ProgressTreeScrollClassIsScoped = Expect<
   Equal<typeof INTERVIEW_PROGRESS_TREE_SCROLL_CLASS, "progressTreeScroll">
@@ -437,13 +459,21 @@ function test_progress_tree_left_list_stays_compact(): void {
     },
   ]);
   const listNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0];
+  const titleMeta = listNode ? buildWorkbenchProgressNodeTitleMeta(listNode) : null;
   const contextDetail = buildProgressTreeNodeDetailViewModel(session, "node_compact_1");
   const bannerContent = buildProgressTreeContextBannerContent(session, "node_compact_1");
   const bannerVisibleCopy = [bannerContent.title, bannerContent.depthRequirement].join(" ");
+  const leftTitleVisibleCopy = [
+    titleMeta?.title,
+    titleMeta?.statusLabel,
+  ].join(" ");
 
   assertContract(listNode?.title === "混合检索策略设计与优化", "左侧真实节点应显示标题");
-  assertContract(listNode?.nodeCode === "R-01", "左侧真实节点应显示 node_code");
+  assertContract(listNode?.nodeCode === "R-01", "node_code 可保留在数据中");
   assertContract(listNode?.status === "pending", "左侧真实节点应显示状态");
+  assertContract(titleMeta?.statusLabel === "未开始", "左侧节点状态应移动到节点名称同行");
+  assertContract(titleMeta?.statusLightTone === "orange", "未开始状态应使用橙色点灯");
+  assertContract(!leftTitleVisibleCopy.includes("R-01"), "左侧节点可见文案不应显示 node_code");
   assertContract(listNode?.detail !== longDepthGoal, "左侧列表不应显示完整 depth_goal 长文本");
   assertContract(contextDetail?.depthRequirement === longDepthGoal, "节点详情模型应继续保留 depth_goal");
   assertContract(contextDetail?.firstQuestion === "你会如何验证混合检索效果？", "建议第一题可保留在数据模型中");
@@ -599,6 +629,48 @@ function test_progress_node_context_banner_hides_question_and_detail_lists(): vo
   ]) {
     assertContract(!visibleCopy.includes(hiddenCopy), `公告条不应展示 ${hiddenCopy}`);
   }
+}
+
+function test_progress_tree_node_status_uses_title_suffix_lights(): void {
+  const session = buildTestSession(
+    [
+      buildTestProgressNode("node_pending", "待开始节点", "resume_deep_dive", "深度打磨类"),
+      buildTestProgressNode("node_active", "进行中节点", "resume_deep_dive", "深度打磨类"),
+    ],
+    "node_active",
+  );
+  const realNodes = buildWorkbenchProgressNodes(session)[0]?.children ?? [];
+  const pendingMeta = buildWorkbenchProgressNodeTitleMeta(realNodes[0]);
+  const activeMeta = buildWorkbenchProgressNodeTitleMeta(realNodes[1]);
+
+  assertContract(INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT === "node_title_suffix_light", "节点状态应放在标题后并使用点灯");
+  assertContract(pendingMeta.statusLabel === "未开始", "待开始节点应显示未开始状态");
+  assertContract(pendingMeta.statusLightTone === "orange", "待开始节点应使用橙色点灯");
+  assertContract(activeMeta.statusLabel === "进行中", "当前节点应显示进行中状态");
+  assertContract(activeMeta.statusLightTone === "blue", "进行中节点应使用蓝色点灯");
+  assertContract(getWorkbenchProgressNodeStatusLightTone("completed") === "green", "已完成节点应使用绿色点灯");
+  assertContract(getWorkbenchProgressNodeStatusLightTone("pending") === "orange", "未开始节点应使用橙色点灯");
+}
+
+function test_progress_node_context_banner_supports_expand_toggle_for_depth(): void {
+  const session = buildTestSession([
+    {
+      ...buildTestProgressNode("node_expand_context", "混合检索策略设计与优化", "resume_deep_dive", "深度打磨类"),
+      depth_goal: "从双路召回设计、融合排序公式、向量模型领域适配、阈值调优等方面展开深挖，验证候选人对检索增强全链路的掌控力。",
+    },
+  ]);
+  const bannerContent = buildProgressTreeContextBannerContent(session, "node_expand_context");
+  const emptyBanner = buildProgressTreeContextBannerContent(session, "missing_node");
+
+  assertContract(shouldShowProgressTreeContextBannerToggle(bannerContent), "有深度要求时公告条应支持展开");
+  assertContract(!shouldShowProgressTreeContextBannerToggle(emptyBanner), "空态公告条不应显示展开入口");
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand === "展开", "公告条展开按钮文案应为展开");
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse === "收起", "公告条收起按钮文案应为收起");
+}
+
+function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right(): void {
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.system === "left", "系统消息应位于聊天区左侧");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer === "right", "用户回答应位于聊天区右侧");
 }
 
 function test_progress_node_context_banner_ignores_group_header_click(): void {
@@ -778,6 +850,9 @@ test_progress_tree_category_header_is_group_only();
 test_progress_node_context_banner_defaults_to_current_priority();
 test_progress_node_context_banner_updates_when_node_selected();
 test_progress_node_context_banner_hides_question_and_detail_lists();
+test_progress_tree_node_status_uses_title_suffix_lights();
+test_progress_node_context_banner_supports_expand_toggle_for_depth();
+test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
 test_progress_node_context_banner_ignores_group_header_click();
 test_progress_node_context_banner_uses_safe_copy();
 test_progress_tree_detail_uses_display_safe_copy();

@@ -120,11 +120,21 @@ export const INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY = [
 export const INTERVIEW_WORKBENCH_PRIMARY_ACTIONS = ["send_answer"] as const;
 export const INTERVIEW_WORKBENCH_DISABLED_ACTIONS = [] as const;
 export const INTERVIEW_WORKBENCH_STATE_REGIONS = ["loading", "error", "not_found"] as const;
+export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
+  system: "left",
+  user_answer: "right",
+} as const;
 const WORKBENCH_PROGRESS_NODE_STATUS_TEXT = {
   completed: "已完成",
   in_progress: "进行中",
   pending: "未开始",
 } as const;
+export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES = {
+  completed: "green",
+  in_progress: "blue",
+  pending: "orange",
+} as const;
+export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT = "node_title_suffix_light" as const;
 type WorkbenchProgressNodeStatus = keyof typeof WORKBENCH_PROGRESS_NODE_STATUS_TEXT;
 type WorkbenchProgressNodeKind = "group" | "node" | "question";
 export type WorkbenchProgressNode = {
@@ -168,11 +178,14 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE = "当前节点上下文";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY = "请选择一个进展节点查看本轮训练目标。";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY = {
+  expand: "展开",
+  collapse: "收起",
+} as const;
 export const INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT = "conversation_context_banner" as const;
 export const INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS = [
   "category_header",
   "node_title",
-  "node_code",
   "node_status",
   "current_priority",
   "question_entry",
@@ -872,6 +885,10 @@ export function buildProgressTreeContextBannerContent(
   };
 }
 
+export function shouldShowProgressTreeContextBannerToggle(content: ProgressTreeContextBannerContent): boolean {
+  return Boolean(content.depthRequirement);
+}
+
 function toWorkbenchProgressNode(params: {
   node: PolishProgressTreeNode;
   stateByRef: Map<string, WorkbenchProgressNodeStatus>;
@@ -941,6 +958,20 @@ function flattenWorkbenchProgressNodes(
 
 function progressNodeStatusLabel(status: WorkbenchProgressNodeStatus): string {
   return WORKBENCH_PROGRESS_NODE_STATUS_TEXT[status];
+}
+
+export function getWorkbenchProgressNodeStatusLightTone(
+  status: WorkbenchProgressNodeStatus,
+): typeof INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES[WorkbenchProgressNodeStatus] {
+  return INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES[status];
+}
+
+export function buildWorkbenchProgressNodeTitleMeta(node: WorkbenchProgressNode) {
+  return {
+    title: node.title,
+    statusLabel: progressNodeStatusLabel(node.status),
+    statusLightTone: getWorkbenchProgressNodeStatusLightTone(node.status),
+  };
 }
 
 export function resolveCurrentWorkbenchProgressNodeKey(
@@ -1426,6 +1457,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [copyingSession, setCopyingSession] = useState<boolean>(false);
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
+  const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
 
   const loadSession = async () => {
     setLoading(true);
@@ -1573,6 +1605,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
   }, [session]);
 
+  useEffect(() => {
+    setProgressNodeContextExpanded(false);
+  }, [selectedProgressNodeDetailRef]);
+
   const toggleProgressNode = (nodeKey: string) => {
     setExpandedProgressNodeKeys((currentKeys) => {
       const nextKeys = new Set(currentKeys);
@@ -1602,6 +1638,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       );
     }
 
+    const canExpandContext = shouldShowProgressTreeContextBannerToggle(selectedProgressNodeBanner);
+    const depthClassName = [
+      styles.progressNodeContextDepth,
+      isProgressNodeContextExpanded ? styles.progressNodeContextDepthExpanded : "",
+    ].filter(Boolean).join(" ");
+
     return (
       <section className={styles.progressNodeContextBanner} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}>
         <Typography.Text strong className={styles.progressNodeContextLabel}>
@@ -1612,11 +1654,23 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             {selectedProgressNodeBanner.title}
           </Typography.Text>
           {selectedProgressNodeBanner.depthRequirement ? (
-            <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
+            <Typography.Text type="secondary" className={depthClassName}>
               {selectedProgressNodeBanner.depthRequirement}
             </Typography.Text>
           ) : null}
         </div>
+        {canExpandContext ? (
+          <button
+            className={styles.progressNodeContextToggle}
+            type="button"
+            aria-expanded={isProgressNodeContextExpanded}
+            onClick={() => setProgressNodeContextExpanded((isExpanded) => !isExpanded)}
+          >
+            {isProgressNodeContextExpanded
+              ? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse
+              : INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand}
+          </button>
+        ) : null}
       </section>
     );
   };
@@ -1659,6 +1713,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
     const isExpandable = !canCreateQuestionFromNode && Boolean(node.children && node.children.length > 0);
     const isExpanded = expandedProgressNodeKeys.has(node.key);
+    const titleMeta = buildWorkbenchProgressNodeTitleMeta(node);
     const cardClassName = [
       isActive ? styles.nodeCardActive : styles.nodeCard,
       isCurrentPriority ? styles.nodeCardCurrentPriority : "",
@@ -1696,18 +1751,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           }
         >
           <span className={styles.nodeContent}>
-            <Typography.Text strong>{node.title}</Typography.Text>
             {node.kind === "question" && node.detail ? (
-              <Typography.Text type="secondary">{node.detail}</Typography.Text>
+              <>
+                <Typography.Text strong>{node.title}</Typography.Text>
+                <Typography.Text type="secondary">{node.detail}</Typography.Text>
+              </>
             ) : (
-              <span className={styles.nodeMetaRow}>
+              <span className={styles.nodeTitleRow}>
+                <Typography.Text strong className={styles.nodeTitleText}>
+                  {titleMeta.title}
+                </Typography.Text>
                 <span className={statusDotClassName} />
-                {node.nodeCode ? (
-                  <Typography.Text type="secondary" className={styles.nodeCode}>
-                    {node.nodeCode}
-                  </Typography.Text>
-                ) : null}
-                <Typography.Text type="secondary">{progressNodeStatusLabel(node.status)}</Typography.Text>
+                <Typography.Text type="secondary" className={styles.nodeStatusLabel}>
+                  {titleMeta.statusLabel}
+                </Typography.Text>
               </span>
             )}
             {isCurrentPriority ? (
@@ -1907,7 +1964,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     </div>
                     {turn.answers.length === 0 ? (
                       <div style={{ display: "grid", gap: 12 }}>
-                        <div className={styles.answerBubble}>
+                        <div className={styles.systemBubble}>
                           <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
                         </div>
                         <section className={styles.feedbackAccordion} aria-label="反馈占位区域">

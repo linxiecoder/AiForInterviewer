@@ -303,13 +303,13 @@
   margin: 0;
 }
 
-.nodeContent :global(.ant-typography:first-child) {
+.nodeContent > :global(.ant-typography:first-child) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.nodeContent :global(.ant-typography:nth-child(2)) {
+.nodeContent > :global(.ant-typography:nth-child(2)) {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -317,22 +317,26 @@
   line-height: 1.45;
 }
 
-.nodeMetaRow {
+.nodeTitleRow {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
 }
 
-.nodeCode {
-  flex: 0 1 auto;
-  max-width: 96px;
+.nodeTitleText {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nodeStatusLabel {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .nodeStatusDot {
@@ -352,7 +356,7 @@
 }
 
 .nodeStatusDotPending {
-  background: #94a3b8;
+  background: #f59e0b;
 }
 
 .nodeChevron {
@@ -365,7 +369,7 @@
   min-height: 56px;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -410,6 +414,32 @@
   -webkit-line-clamp: 2;
 }
 
+.progressNodeContextDepthExpanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.progressNodeContextToggle {
+  align-self: center;
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.progressNodeContextToggle:hover,
+.progressNodeContextToggle:focus-visible {
+  background: rgba(37, 99, 235, 0.08);
+}
+
 .progressNodeContextEmpty {
   grid-template-columns: max-content minmax(0, 1fr);
 }
@@ -431,6 +461,7 @@
 }
 
 .questionBubble,
+.systemBubble,
 .answerBubble {
   max-width: min(760px, 82%);
   padding: 14px 18px;
@@ -443,6 +474,13 @@
   border: 1px solid #dce6f2;
   background: #ffffff;
   color: #1f2937;
+}
+
+.systemBubble {
+  align-self: flex-start;
+  border: 1px solid #dce6f2;
+  background: #ffffff;
+  color: #475569;
 }
 
 .questionText {
