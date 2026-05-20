@@ -14,17 +14,21 @@ POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE = "polish_progress_global_underst
 POLISH_PROGRESS_TREE_DRAFT_PLAN_TASK_TYPE = "polish_progress_tree_draft_plan"
 POLISH_PROGRESS_TREE_CRITIC_REFINER_TASK_TYPE = "polish_progress_tree_critic_refiner"
 POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE = "polish_progress_tree_evidence_grounding"
+POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE = "polish_progress_quality_first_menu"
 
 POLISH_PROGRESS_GLOBAL_UNDERSTANDING_SCHEMA_ID = "polish_progress_global_understanding_v2"
 POLISH_PROGRESS_TREE_DRAFT_PLAN_SCHEMA_ID = "polish_progress_tree_draft_plan_v2"
 POLISH_PROGRESS_TREE_CRITIC_REFINER_SCHEMA_ID = "polish_progress_tree_critic_refiner_v2"
 POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_ID = "polish_progress_tree_grounded_plan_v2"
+POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID = "polish_progress_quality_first_menu_v1"
 
 POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION = "v2"
+POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION = "v1"
 POLISH_PROGRESS_GLOBAL_UNDERSTANDING_PROMPT_VERSION = "polish_progress_global_understanding_prompt_v2"
 POLISH_PROGRESS_TREE_DRAFT_PLAN_PROMPT_VERSION = "polish_progress_tree_draft_plan_prompt_v2"
 POLISH_PROGRESS_TREE_CRITIC_REFINER_PROMPT_VERSION = "polish_progress_tree_critic_refiner_prompt_v2"
 POLISH_PROGRESS_TREE_GROUNDED_PROMPT_VERSION = "polish_progress_tree_evidence_grounding_prompt_v2"
+POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION = "polish_progress_quality_first_menu_prompt_v1"
 
 _COMMON_JSON_RULES = [
     "只输出合法 JSON，不要 Markdown 包裹。",
@@ -38,6 +42,144 @@ _COMMON_JSON_RULES = [
     "项目背景、业务问题、JD 年限或任职要求只能进入 resume_signal、jd_basis、related_* 或 evidence 字段。",
     "任何可能页面展示的字段不得出现 P7、攻击、拷问、碾压、吊打、火力、红队、必挂、必过、压迫、击穿、杀招。",
 ]
+
+
+def build_progress_quality_first_menu_prompt(context: dict[str, Any]) -> dict[str, Any]:
+    """Build the single-call quality-first initial menu planning bundle."""
+
+    job = context.get("job_snapshot", {})
+    resume = context.get("resume_snapshot", {})
+    session = context.get("session", {})
+    prompt_context = {
+        "context_metadata": _context_metadata(context),
+        "resume_version_ref": {
+            "resume_id": resume.get("resume_id"),
+            "resume_version_id": resume.get("resume_version_id"),
+        },
+        "resume_markdown": truncate_text(resume.get("markdown_text"), max_chars=30000),
+        "job_version_ref": {
+            "job_id": job.get("job_id"),
+            "job_version_id": job.get("job_version_id"),
+        },
+        "job_payload": _quality_first_job_payload(job),
+        "match_context": _quality_first_match_context(context.get("match_context", {})),
+        "topic": session.get("topic"),
+        "subtopic": session.get("subtopic"),
+        "custom_topic": truncate_text(session.get("custom_topic"), max_chars=1200),
+        "quality_rules": [
+            "先完整阅读简历、JD 和岗位匹配分析，再规划初始训练菜单。",
+            "leaf node 必须是可训练面试考点，不是材料摘要、业务背景或 JD 年限要求。",
+            "默认目标是 10 到 14 个叶子节点，深度打磨类和补齐学习类各 5 到 7 个。",
+            "不得重复节点，不得输出 fallback 风格模板节点，不得只列技术栈。",
+            "页面可见字段不得出现禁用词，必要时改写为安全表达。",
+        ],
+        "golden_menu_shape": {
+            "categories": [
+                {
+                    "category": "resume_deep_dive",
+                    "display_category_title": "深度打磨类",
+                    "target_leaf_count": "5-7",
+                    "example_leaf_titles": [
+                        "硬件测试智能辅助平台的服务端架构设计",
+                        "专业术语场景下的混合检索与召回优化",
+                        "硬件测试知识库的切片与索引设计",
+                        "RAG 问答准确率评估与阈值控制",
+                        "检索失败时的澄清、降级与兜底策略",
+                        "企业内部 AI 平台的权限、审计与可观测性",
+                    ],
+                },
+                {
+                    "category": "jd_gap_learning",
+                    "display_category_title": "补齐学习类",
+                    "target_leaf_count": "5-7",
+                    "example_leaf_titles": [
+                        "AI Agent 任务规划与工具调用机制",
+                        "Agent 记忆管理与知识库协同",
+                        "Java 服务端高可用架构设计",
+                        "高并发接口限流、降级与压测方案",
+                        "Elasticsearch / 向量检索底层原理",
+                        "模型评测、灰度与成本控制",
+                    ],
+                },
+            ]
+        },
+        "bad_examples": [
+            "面向 xxx 构建 xxx",
+            "针对 xxx 问题",
+            "5年以上 xxx 经验",
+            "项目经历深挖与贡献边界验证",
+            "1能力补齐",
+            "Java服务端高可用架构设计",
+            "Java服务端高可用架构设计",
+        ],
+    }
+    return {
+        "source_digest": context["content_digest"],
+        "task_type": POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+        "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+        "prompt": "\n".join(
+            [
+                "你是资深技术面试官和 AI 面试训练产品规划专家。",
+                "任务：为初始 Progress Tree 生成质量优先的面试训练菜单。",
+                "你必须像资深面试官一样先完整阅读简历、完整 JD、岗位匹配分析、菜单规则、好例和坏例，再一次性规划可训练菜单。",
+                "这是单次 quality-first LLM call，不要依赖 selected chunks 驱动，不要把 evidence 原句、项目背景、业务问题、JD 年限要求直接当节点标题。",
+                "不要生成泛化节点、重复节点、fallback 风格模板节点，也不要只列技术栈。",
+                "不要只输出 3 到 6 个保守节点；默认目标是 10 到 14 个叶子节点。",
+                "必须包含 resume_deep_dive / 深度打磨类 和 jd_gap_learning / 补齐学习类；每类建议 5 到 7 个节点。",
+                "每个 leaf node 必须是可训练面试考点，不是材料摘要；必须能直接生成第一题与连续追问方向。",
+                "页面可见字段不得出现 P7、攻击、拷问、碾压、吊打、火力、红队、必挂、必过、压迫、击穿、杀招。",
+                "替代表达：P7 深度改为高阶深度目标或深度要求；攻击点改为追问方向或易失分点；拷问改为深入追问；红旗改为常见失分风险；防御改为表达准备或风险说明；压力追问改为连续追问；技术碾压改为技术深挖。",
+                "深度打磨类结构样例：硬件测试智能辅助平台的服务端架构设计、专业术语场景下的混合检索与召回优化、硬件测试知识库的切片与索引设计、RAG 问答准确率评估与阈值控制、检索失败时的澄清、降级与兜底策略、企业内部 AI 平台的权限、审计与可观测性。",
+                "补齐学习类结构样例：AI Agent 任务规划与工具调用机制、Agent 记忆管理与知识库协同、Java 服务端高可用架构设计、高并发接口限流、降级与压测方案、Elasticsearch / 向量检索底层原理、模型评测、灰度与成本控制。",
+                "坏例不能作为 leaf title：面向 xxx 构建 xxx、针对 xxx 问题、5年以上 xxx 经验、项目经历深挖与贡献边界验证、1能力补齐、重复的 Java 服务端高可用架构设计。",
+                "注意：Java 服务端高可用架构设计这个考点本身允许出现一次；禁止的是重复、孤立、无具体训练字段的模板化输出。",
+                *_COMMON_JSON_RULES,
+                "根对象必须包含 schema_id、schema_version、prompt_version、task_type、status、planner_summary、menu_categories、metadata、low_confidence_flags。",
+                "category 必须包含 category、display_category_title、nodes。",
+                "leaf node 必须包含 node_code、category、display_category_title、display_title、exam_point、basis_type、resume_signal、jd_basis、depth_goal、preparation_goal、first_question、follow_up_focus、expected_answer_signals、common_loss_risks、evidence_refs、evidence_notes、confidence_level、low_confidence_flags。",
+            ]
+        ),
+        "context": prompt_context,
+        "output_schema": {
+            "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+            "required_root_fields": [
+                "schema_id",
+                "schema_version",
+                "prompt_version",
+                "task_type",
+                "status",
+                "planner_summary",
+                "menu_categories",
+                "metadata",
+                "low_confidence_flags",
+            ],
+            "required_category_fields": ["category", "display_category_title", "nodes"],
+            "required_leaf_fields": [
+                "node_code",
+                "category",
+                "display_category_title",
+                "display_title",
+                "exam_point",
+                "basis_type",
+                "resume_signal",
+                "jd_basis",
+                "depth_goal",
+                "preparation_goal",
+                "first_question",
+                "follow_up_focus",
+                "expected_answer_signals",
+                "common_loss_risks",
+                "evidence_refs",
+                "evidence_notes",
+                "confidence_level",
+                "low_confidence_flags",
+            ],
+        },
+    }
 
 
 def build_progress_global_understanding_prompt(context: dict[str, Any]) -> dict[str, Any]:
@@ -261,6 +403,31 @@ def _job_payload(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _quality_first_job_payload(job: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "title": truncate_text(job.get("title"), max_chars=240),
+        "company": truncate_text(job.get("company"), max_chars=240),
+        "department": truncate_text(job.get("department"), max_chars=240),
+        "responsibilities": _truncated_list_total(job.get("responsibilities"), max_chars=12000),
+        "requirements": _truncated_list_total(job.get("requirements"), max_chars=12000),
+        "other_notes": truncate_text(job.get("other_notes"), max_chars=12000),
+    }
+
+
+def _quality_first_match_context(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "overall_score": value.get("overall_score"),
+        "summary": truncate_text(value.get("summary"), max_chars=1600),
+        "matched_points": _truncated_list_total(value.get("matched_points"), max_chars=8000),
+        "missing_points": _truncated_list_total(value.get("missing_points"), max_chars=8000),
+        "improvement_points": _truncated_list_total(value.get("improvement_points"), max_chars=8000),
+        "interview_focus": _truncated_list_total(value.get("interview_focus"), max_chars=8000),
+        "suggested_questions": _truncated_list_total(value.get("suggested_questions"), max_chars=8000),
+    }
+
+
 def _safe_context(value: object) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -293,4 +460,19 @@ def _truncated_list(value: object, *, max_chars: int) -> list[str]:
         text = truncate_text(item, max_chars=max_chars)
         if text:
             result.append(text)
+    return result
+
+
+def _truncated_list_total(value: object, *, max_chars: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    remaining = max_chars
+    for item in value:
+        if remaining <= 0:
+            break
+        text = truncate_text(item, max_chars=remaining)
+        if text:
+            result.append(text)
+            remaining -= len(text)
     return result

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import os
 from typing import Any
 
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
@@ -20,7 +21,10 @@ from app.application.polish.progress_prompts import (
     build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
-from app.application.polish.progress_tree_v2 import PolishProgressTreeV2Pipeline
+from app.application.polish.progress_tree_v2 import (
+    PolishProgressTreeQualityFirstPlanner,
+    PolishProgressTreeV2Pipeline,
+)
 from app.infrastructure.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
@@ -47,7 +51,10 @@ QUESTION_SOURCE_TITLE_BY_TYPE = {
     "missing_point": "当前缺口",
     "history_feedback": "历史反馈",
 }
-USE_PROGRESS_TREE_V2 = True
+PROGRESS_TREE_PLANNER_ENV = "AIFI_PROGRESS_TREE_PLANNER"
+DEFAULT_PROGRESS_TREE_PLANNER = "quality_first"
+PROGRESS_TREE_PLANNER_QUALITY_FIRST = "quality_first"
+PROGRESS_TREE_PLANNER_V2_PIPELINE = "v2_pipeline"
 
 
 class PolishProgressTreeLlmService:
@@ -57,7 +64,10 @@ class PolishProgressTreeLlmService:
         self._transport = transport
 
     def generate_initial(self, context: dict[str, Any]) -> dict[str, Any]:
-        if USE_PROGRESS_TREE_V2:
+        planner = _progress_tree_planner()
+        if planner == PROGRESS_TREE_PLANNER_QUALITY_FIRST:
+            return PolishProgressTreeQualityFirstPlanner(self._transport).generate_initial(context)
+        if planner == PROGRESS_TREE_PLANNER_V2_PIPELINE:
             return PolishProgressTreeV2Pipeline(self._transport).generate_initial(context)
 
         if not has_sufficient_progress_context(context):
@@ -95,7 +105,10 @@ class PolishProgressTreeLlmService:
                 "progress_tree_state": existing_state,
                 "progress_percent": _progress_percent(existing_state),
             }
-        if USE_PROGRESS_TREE_V2 and existing_plan.get("schema_id") == "polish_progress_tree_grounded_plan_v2":
+        if existing_plan.get("schema_id") in {
+            "polish_progress_tree_grounded_plan_v2",
+            "polish_progress_quality_first_menu_v1",
+        }:
             if _state_matches_plan(existing_state, existing_plan):
                 state = {
                     **existing_state,
@@ -186,6 +199,13 @@ class PolishProgressTreeLlmService:
             "progress_tree_state": normalized_state,
             "progress_percent": _progress_percent(normalized_state),
         }
+
+
+def _progress_tree_planner() -> str:
+    value = os.getenv(PROGRESS_TREE_PLANNER_ENV, DEFAULT_PROGRESS_TREE_PLANNER).strip().lower()
+    if value in {PROGRESS_TREE_PLANNER_QUALITY_FIRST, PROGRESS_TREE_PLANNER_V2_PIPELINE}:
+        return value
+    return DEFAULT_PROGRESS_TREE_PLANNER
 
 
 def build_progress_node_question(

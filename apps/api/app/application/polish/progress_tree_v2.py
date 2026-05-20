@@ -13,6 +13,10 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
 from app.application.polish.progress_v2_prompts import (
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     POLISH_PROGRESS_GLOBAL_UNDERSTANDING_PROMPT_VERSION,
     POLISH_PROGRESS_GLOBAL_UNDERSTANDING_SCHEMA_ID,
     POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE,
@@ -27,6 +31,7 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE,
     POLISH_PROGRESS_TREE_V2_CONTRACT_IDS,
+    build_progress_quality_first_menu_prompt,
     build_progress_global_understanding_prompt,
     build_progress_tree_critic_refiner_prompt,
     build_progress_tree_draft_plan_prompt,
@@ -137,6 +142,7 @@ _FORBIDDEN_DISPLAY_REPLACEMENTS = (
     ("红队", "审查"),
     ("必挂", "高风险"),
     ("必过", "更稳妥"),
+    ("压力追问", "连续追问"),
     ("压迫", "连续追问"),
     ("击穿", "暴露"),
     ("杀招", "关键策略"),
@@ -221,6 +227,107 @@ _PIPELINE_PROMPT_VERSIONS = [
     POLISH_PROGRESS_TREE_CRITIC_REFINER_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_GROUNDED_PROMPT_VERSION,
 ]
+
+
+class PolishProgressTreeQualityFirstPlanner:
+    """Generate the initial Progress Tree with one quality-first planning call."""
+
+    def __init__(self, transport: LlmTransport | None) -> None:
+        self._transport = transport
+
+    def generate_initial(self, context: dict[str, Any]) -> dict[str, Any]:
+        if not has_sufficient_progress_context(context):
+            return _quality_first_insufficient_artifacts(context)
+        if self._transport is None:
+            return _quality_first_failed_artifacts(
+                context,
+                reason="llm_transport_missing",
+                validation_errors=[
+                    {
+                        "field": "transport",
+                        "code": "missing",
+                        "reason": "LLM transport is not configured.",
+                    }
+                ],
+            )
+
+        try:
+            result = self._transport.generate(
+                LlmTransportRequest(
+                    contract_ids=POLISH_PROGRESS_TREE_V2_CONTRACT_IDS,
+                    task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
+                    input_refs=_input_refs(context),
+                    evidence_bundle=build_progress_quality_first_menu_prompt(context),
+                )
+            )
+        except TimeoutError:
+            return _quality_first_failed_artifacts(context, reason="provider_timeout")
+        except (LlmTransportConfigurationError, LlmTransportUnavailableError):
+            return _quality_first_failed_artifacts(context, reason="provider_unavailable")
+        except LlmTransportResponseError:
+            return _quality_first_failed_artifacts(context, reason="provider_response_invalid")
+
+        payload = result.result
+        if not isinstance(payload, dict):
+            return _quality_first_failed_artifacts(
+                context,
+                reason="provider_response_invalid",
+                validation_errors=[
+                    {
+                        "field": "result",
+                        "code": "invalid_type",
+                        "reason": "Quality-first planner result root must be an object.",
+                    }
+                ],
+            )
+        normalized = _normalize_quality_first_menu_payload(payload, context=context)
+        if normalized is None:
+            reason = _quality_first_payload_failure_reason(payload)
+            return _quality_first_failed_artifacts(
+                context,
+                reason=reason,
+                validation_errors=_quality_first_validation_errors(payload, reason=reason),
+            )
+        nodes, low_confidence_flags, quality_summary = normalized
+        if not nodes:
+            return _quality_first_failed_artifacts(
+                context,
+                reason="quality_first_no_usable_nodes",
+                validation_errors=[
+                    {
+                        "field": "menu_categories.nodes",
+                        "code": "empty",
+                        "reason": "Quality-first planner returned no usable nodes.",
+                    }
+                ],
+            )
+
+        metadata = {
+            "pipeline_status": "success",
+            "generation_mode": "quality_first",
+            "planner_schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+            "input_context_mode": "full_resume_full_job",
+            "task_types": [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE],
+            "prompt_versions": [POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION],
+            "low_confidence_flags": _dedupe_strings(low_confidence_flags, limit=20),
+            "failure_reason": None,
+            "quality_summary": quality_summary,
+        }
+        plan = {
+            "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+            "status": PROGRESS_TREE_STATUS_READY,
+            "context_digest": context["content_digest"],
+            "nodes": nodes,
+            "v2_metadata": metadata,
+        }
+        return {
+            "status": PROGRESS_TREE_STATUS_READY,
+            "progress_tree_plan": plan,
+            "progress_tree_state": _quality_first_initial_state_from_nodes(nodes, context=context),
+            "progress_percent": 0,
+        }
 
 
 class PolishProgressTreeV2Pipeline:
@@ -695,6 +802,437 @@ def _fallback_menu_nodes(
             }
         )
     return [_sanitize_node_display_fields(node) for node in nodes]
+
+
+def _normalize_quality_first_menu_payload(
+    payload: dict[str, Any],
+    *,
+    context: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]] | None:
+    status = str(payload.get("status") or "").strip().lower()
+    if status not in {"ready", "success", "partial"}:
+        return None
+    categories = payload.get("menu_categories")
+    if not isinstance(categories, list):
+        return None
+
+    nodes: list[dict[str, Any]] = []
+    seen_titles: set[str] = set()
+    low_confidence_flags = _sanitize_string_list(payload.get("low_confidence_flags"), limit=20)
+    category_counts = {_RESUME_DEEP_DIVE: 0, _JD_GAP_LEARNING: 0}
+    for category_index, category_payload in enumerate(categories, start=1):
+        if not isinstance(category_payload, dict):
+            low_confidence_flags.append("quality_first_category_invalid")
+            continue
+        category = str(category_payload.get("category") or "").strip()
+        if category not in _ALLOWED_CATEGORIES:
+            low_confidence_flags.append("quality_first_category_unknown")
+            continue
+        display_category_title = _sanitize_display_text(
+            category_payload.get("display_category_title") or _DISPLAY_CATEGORY_TITLES[category],
+            max_chars=80,
+        ) or _DISPLAY_CATEGORY_TITLES[category]
+        raw_nodes = category_payload.get("nodes")
+        if not isinstance(raw_nodes, list):
+            low_confidence_flags.append(f"quality_first_{category}_nodes_missing")
+            continue
+        for node_index, item in enumerate(raw_nodes, start=1):
+            node = _normalize_quality_first_node(
+                item,
+                category=category,
+                display_category_title=display_category_title,
+                index=(category_index * 100) + node_index,
+                category_node_index=node_index,
+                context_digest=context["content_digest"],
+            )
+            if node is None:
+                low_confidence_flags.append("quality_first_bad_leaf_removed")
+                continue
+            normalized_title = _normalize_label_for_compare(node["display_title"])
+            if normalized_title in seen_titles:
+                low_confidence_flags.append("quality_first_duplicate_leaf_removed")
+                continue
+            seen_titles.add(normalized_title)
+            category_counts[category] += 1
+            nodes.append(node)
+
+    if category_counts[_RESUME_DEEP_DIVE] == 0 or category_counts[_JD_GAP_LEARNING] == 0:
+        return None
+    if len(nodes) < 8:
+        low_confidence_flags.append("quality_first_low_leaf_count")
+    if category_counts[_RESUME_DEEP_DIVE] < 5:
+        low_confidence_flags.append("quality_first_resume_deep_dive_under_target")
+    if category_counts[_JD_GAP_LEARNING] < 5:
+        low_confidence_flags.append("quality_first_jd_gap_learning_under_target")
+
+    planner_summary = _sanitize_display_text(payload.get("planner_summary"), max_chars=800)
+    quality_summary = {
+        "status": "ready",
+        "planner_summary": planner_summary,
+        "leaf_count": len(nodes),
+        "category_counts": category_counts,
+        "validation": "light",
+    }
+    return nodes, low_confidence_flags, quality_summary
+
+
+def _normalize_quality_first_node(
+    item: object,
+    *,
+    category: str,
+    display_category_title: str,
+    index: int,
+    category_node_index: int,
+    context_digest: str,
+) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    raw_title = item.get("display_title") or item.get("exam_point") or item.get("title")
+    if _looks_bad_quality_first_title(raw_title):
+        return None
+    display_title = _sanitize_display_text(raw_title, max_chars=120) or "待补充考点"
+    exam_point = _sanitize_display_text(item.get("exam_point") or display_title, max_chars=160) or display_title
+    if _looks_bad_quality_first_title(display_title) or _looks_bad_quality_first_title(exam_point):
+        return None
+    basis_type_default = "resume_signal" if category == _RESUME_DEEP_DIVE else "jd_requirement"
+    basis_type = _enum_value(item.get("basis_type"), _ALLOWED_BASIS_TYPES, basis_type_default)
+    resume_signal = _sanitize_optional_text(item.get("resume_signal"), max_chars=600)
+    jd_basis = _sanitize_optional_text(item.get("jd_basis"), max_chars=600)
+    depth_goal = (
+        _sanitize_display_text(item.get("depth_goal"), max_chars=600)
+        or "补充该方向的关键原理、设计取舍和落地细节"
+    )
+    preparation_goal = (
+        _sanitize_display_text(item.get("preparation_goal"), max_chars=600)
+        or _default_preparation_goal(category, exam_point)
+    )
+    first_question = (
+        _sanitize_display_text(item.get("first_question"), max_chars=600)
+        or "请结合你的经历说明这个方向的设计思路和关键取舍。"
+    )
+    follow_up_focus = _sanitize_string_list(item.get("follow_up_focus"), limit=8)
+    if not follow_up_focus:
+        follow_up_focus = _default_follow_up_focus(category, exam_point)
+    expected_answer_signals = _sanitize_string_list(item.get("expected_answer_signals"), limit=8)
+    if not expected_answer_signals:
+        expected_answer_signals = _default_expected_answer_signals(category)
+    common_loss_risks = _sanitize_string_list(item.get("common_loss_risks"), limit=8)
+    if not common_loss_risks:
+        common_loss_risks = _default_common_loss_risks(category)
+    evidence_refs = _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8)
+    evidence_notes = _sanitize_string_list(item.get("evidence_notes"), limit=8)
+    low_confidence_flags = _sanitize_string_list(item.get("low_confidence_flags"), limit=8)
+    node_code = _sanitize_display_text(item.get("node_code"), max_chars=20) or _default_node_code(
+        category,
+        category_node_index,
+    )
+    confidence_level = _enum_value(item.get("confidence_level"), _ALLOWED_CONFIDENCE_LEVELS, "medium")
+    node_ref = truncate_text(item.get("progress_node_ref") or item.get("node_ref"), max_chars=120)
+    related_match_gaps = _sanitize_string_list(item.get("related_match_gaps"), limit=6)
+    node = {
+        "progress_node_ref": node_ref or _node_ref(context_digest, f"quality:{category}:{node_code}:{display_title}"),
+        "node_code": node_code,
+        "category": category,
+        "display_category_title": display_category_title,
+        "display_title": display_title,
+        "exam_point": exam_point,
+        "basis_type": basis_type,
+        "resume_signal": resume_signal,
+        "jd_basis": jd_basis,
+        "depth_goal": depth_goal,
+        "preparation_goal": preparation_goal,
+        "first_question": first_question,
+        "follow_up_focus": follow_up_focus,
+        "expected_answer_signals": expected_answer_signals,
+        "common_loss_risks": common_loss_risks,
+        "evidence_refs": evidence_refs,
+        "evidence_notes": evidence_notes,
+        "confidence_level": confidence_level,
+        "low_confidence_flags": low_confidence_flags,
+        "title": display_title,
+        "expected_capability": depth_goal,
+        "children": [],
+        "node_type": "project_deep_dive" if category == _RESUME_DEEP_DIVE else "job_gap",
+        "interview_intent": preparation_goal,
+        "interview_method": "technical_deep_dive" if category == _RESUME_DEEP_DIVE else "learning_plan",
+        "follow_up_method": "technical_deep_dive" if category == _RESUME_DEEP_DIVE else "learning_plan",
+        "attack_style": "technical_deep_dive" if category == _RESUME_DEEP_DIVE else "learning_plan",
+        "difficulty_level": "advanced" if confidence_level == "high" else "intermediate",
+        "priority": _bounded_int(item.get("priority"), lower=1, upper=999, fallback=index),
+        "priority_reason": _sanitize_display_text(item.get("priority_reason"), max_chars=600)
+        or "该节点具备岗位贴合和面试追问价值。",
+        "related_job_requirements": _dedupe_strings([jd_basis], limit=3),
+        "related_resume_evidence": _dedupe_strings([resume_signal], limit=3),
+        "related_match_gaps": related_match_gaps,
+        "missing_points": related_match_gaps,
+        "recommended_first_question": first_question,
+        "follow_up_directions": follow_up_focus,
+        "red_flags": common_loss_risks,
+        "evidence_chunk_ids": evidence_refs,
+        "evidence_bindings": [],
+        "grounding_status": "partially_grounded" if evidence_refs else "weakly_grounded",
+    }
+    return _sanitize_node_display_fields(node)
+
+
+def _quality_first_initial_state_from_nodes(
+    nodes: list[dict[str, Any]],
+    *,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    flat_nodes = _flatten_v2_nodes(nodes)
+    node_states = [
+        {
+            "progress_node_ref": node["progress_node_ref"],
+            "status": "pending",
+            "completed_questions_count": 0,
+            "latest_feedback_summary": None,
+        }
+        for node in flat_nodes
+    ]
+    current_priority = _quality_first_priority(flat_nodes, context=context)
+    return {
+        "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+        "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+        "status": PROGRESS_TREE_STATUS_READY if flat_nodes and current_priority else PROGRESS_TREE_STATUS_FAILED,
+        "node_states": node_states,
+        "current_priority": current_priority,
+        "updated_from_turns_count": 0,
+        "progress": {"progress_percent": 0},
+    }
+
+
+def _quality_first_priority(
+    flat_nodes: list[dict[str, Any]],
+    *,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not flat_nodes:
+        return None
+    keywords = _quality_first_priority_keywords(context)
+
+    def sort_key(node: dict[str, Any]) -> tuple[int, int, int, int]:
+        node_text = " ".join(
+            str(node.get(field) or "")
+            for field in ("title", "exam_point", "resume_signal", "jd_basis", "depth_goal")
+        )
+        is_resume_high = node.get("category") == _RESUME_DEEP_DIVE and node.get("confidence_level") == "high"
+        is_resume = node.get("category") == _RESUME_DEEP_DIVE
+        matches_focus = any(keyword and keyword in node_text for keyword in keywords)
+        return (
+            0 if is_resume_high else 1 if is_resume else 2,
+            0 if matches_focus else 1,
+            0 if node.get("confidence_level") == "high" else 1,
+            _bounded_int(node.get("priority"), lower=1, upper=999, fallback=999),
+        )
+
+    node = sorted(flat_nodes, key=sort_key)[0]
+    return {
+        "progress_node_ref": node["progress_node_ref"],
+        "title": _sanitize_display_text(node["title"], max_chars=120) or "待补充考点",
+        "expected_capability": _sanitize_display_text(
+            node["expected_capability"],
+            max_chars=600,
+        )
+        or "补充该方向的关键原理、设计取舍和落地细节",
+        "priority_reason": _sanitize_display_text(node.get("priority_reason"), max_chars=600)
+        or "优先从简历中置信度较高且可连续追问的节点开始。",
+    }
+
+
+def _quality_first_priority_keywords(context: dict[str, Any]) -> list[str]:
+    match_context = context.get("match_context")
+    if not isinstance(match_context, dict):
+        return []
+    values: list[str] = []
+    for field in ("interview_focus", "missing_points", "improvement_points"):
+        values.extend(_string_list(match_context.get(field), limit=6))
+    return [value for value in values if len(value) >= 2][:12]
+
+
+def _quality_first_payload_failure_reason(payload: dict[str, Any]) -> str:
+    categories = payload.get("menu_categories")
+    if not isinstance(categories, list):
+        return "quality_first_menu_categories_missing"
+
+    valid_categories = [
+        item
+        for item in categories
+        if isinstance(item, dict) and str(item.get("category") or "").strip() in _ALLOWED_CATEGORIES
+    ]
+    if not valid_categories:
+        return "quality_first_schema_invalid"
+
+    present_categories = {str(item.get("category") or "").strip() for item in valid_categories}
+    if not {_RESUME_DEEP_DIVE, _JD_GAP_LEARNING}.issubset(present_categories):
+        return "quality_first_menu_categories_missing"
+
+    has_raw_nodes = any(isinstance(item.get("nodes"), list) and item.get("nodes") for item in valid_categories)
+    if not has_raw_nodes:
+        return "quality_first_no_usable_nodes"
+    return "quality_first_schema_invalid"
+
+
+def _quality_first_validation_errors(payload: dict[str, Any], *, reason: str) -> list[dict[str, str]]:
+    categories = payload.get("menu_categories")
+    if not isinstance(categories, list):
+        return [
+            {
+                "field": "menu_categories",
+                "code": "missing_or_invalid",
+                "reason": "menu_categories must be a list.",
+            }
+        ]
+
+    errors: list[dict[str, str]] = []
+    present_categories: set[str] = set()
+    for index, item in enumerate(categories[:12]):
+        if not isinstance(item, dict):
+            errors.append(
+                {
+                    "field": f"menu_categories[{index}]",
+                    "code": "invalid_type",
+                    "reason": "Category item must be an object.",
+                }
+            )
+            continue
+        category = str(item.get("category") or "").strip()
+        if category not in _ALLOWED_CATEGORIES:
+            errors.append(
+                {
+                    "field": f"menu_categories[{index}].category",
+                    "code": "unsupported",
+                    "reason": "Category is not allowed.",
+                }
+            )
+            continue
+        present_categories.add(category)
+        if not isinstance(item.get("nodes"), list):
+            errors.append(
+                {
+                    "field": f"menu_categories[{index}].nodes",
+                    "code": "missing_or_invalid",
+                    "reason": "Category nodes must be a list.",
+                }
+            )
+
+    missing_categories = [_RESUME_DEEP_DIVE, _JD_GAP_LEARNING]
+    missing_categories = [category for category in missing_categories if category not in present_categories]
+    if missing_categories:
+        errors.append(
+            {
+                "field": "menu_categories",
+                "code": "missing_required_category",
+                "reason": ",".join(missing_categories),
+            }
+        )
+    if reason == "quality_first_no_usable_nodes":
+        errors.append(
+            {
+                "field": "menu_categories.nodes",
+                "code": "no_usable_nodes",
+                "reason": "No usable menu nodes were returned.",
+            }
+        )
+    if not errors:
+        errors.append(
+            {
+                "field": "menu_categories",
+                "code": "schema_invalid",
+                "reason": "Quality-first menu payload failed validation.",
+            }
+        )
+    return errors[:8]
+
+
+def _quality_first_failed_artifacts(
+    context: dict[str, Any],
+    *,
+    reason: str,
+    validation_errors: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    low_confidence_flags = _dedupe_strings([reason], limit=20)
+    metadata = {
+        "pipeline_status": "failed",
+        "generation_mode": "quality_first",
+        "planner_schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        "input_context_mode": "full_resume_full_job",
+        "task_types": [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE],
+        "prompt_versions": [POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION],
+        "low_confidence_flags": low_confidence_flags,
+        "failure_reason": reason,
+        "validation_errors": validation_errors or [],
+        "quality_summary": {
+            "status": "failed",
+            "leaf_count": 0,
+            "validation": "failed",
+        },
+    }
+    plan = {
+        "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+        "status": PROGRESS_TREE_STATUS_FAILED,
+        "context_digest": context["content_digest"],
+        "nodes": [],
+        "failure_reason": reason,
+        "v2_metadata": metadata,
+    }
+    return {
+        "status": PROGRESS_TREE_STATUS_FAILED,
+        "progress_tree_plan": plan,
+        "progress_tree_state": _empty_state(PROGRESS_TREE_STATUS_FAILED),
+        "progress_percent": 0,
+    }
+
+
+def _quality_first_insufficient_artifacts(context: dict[str, Any]) -> dict[str, Any]:
+    plan = {
+        "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+        "status": PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
+        "context_digest": context["content_digest"],
+        "nodes": [],
+        "v2_metadata": {
+            "pipeline_status": "partial",
+            "generation_mode": "quality_first",
+            "planner_schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+            "input_context_mode": "full_resume_full_job",
+            "task_types": [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE],
+            "prompt_versions": [POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION],
+            "low_confidence_flags": ["insufficient_context"],
+            "failure_reason": "insufficient_context",
+            "quality_summary": {"status": "insufficient_context"},
+        },
+    }
+    return {
+        "status": PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
+        "progress_tree_plan": plan,
+        "progress_tree_state": _empty_state(PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT),
+        "progress_percent": 0,
+    }
+
+
+def _looks_bad_quality_first_title(value: object) -> bool:
+    text = truncate_text(value, max_chars=160) or ""
+    normalized = _normalize_label_for_compare(text)
+    bad_exact = {
+        "1能力补齐",
+        "能力补齐",
+        "类别一",
+        "类别二",
+        "项目经历深挖与贡献边界验证",
+    }
+    bad_normalized = {_normalize_label_for_compare(item) for item in bad_exact}
+    if normalized in bad_normalized:
+        return True
+    if text.startswith(("面向 xxx 构建 xxx", "针对 xxx 问题", "5年以上 xxx")):
+        return True
+    if _looks_abstract_title(text):
+        return True
+    return False
 
 
 def _normalize_draft_plan(

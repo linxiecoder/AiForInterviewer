@@ -15,6 +15,10 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
 from app.application.polish.progress_v2_prompts import (
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     POLISH_PROGRESS_GLOBAL_UNDERSTANDING_PROMPT_VERSION,
     POLISH_PROGRESS_GLOBAL_UNDERSTANDING_SCHEMA_ID,
     POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE,
@@ -49,6 +53,8 @@ class FakeLlmTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
+        if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return _generate_fake_progress_quality_first_menu(request)
         if request.task_type == POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE:
             return _generate_fake_progress_global_understanding(request)
         if request.task_type == POLISH_PROGRESS_TREE_DRAFT_PLAN_TASK_TYPE:
@@ -91,6 +97,153 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> LlmTransportResult:
+    context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
+    context_text = dumps(context, ensure_ascii=False, sort_keys=True) if isinstance(context, dict) else ""
+    hardware_mode = "硬件测试" in context_text
+    resume_signal = _first_text(
+        context.get("resume_markdown") if isinstance(context, dict) else None,
+        "候选人具备可深挖的后端与 AI 工程项目经历。",
+    )[:480]
+    job_payload = context.get("job_payload", {}) if isinstance(context, dict) else {}
+    job_basis = _first_text(
+        *((job_payload.get("requirements") or []) if isinstance(job_payload, dict) else []),
+        *((job_payload.get("responsibilities") or []) if isinstance(job_payload, dict) else []),
+        "岗位要求后端服务治理、AI Agent、RAG 和工程落地能力。",
+    )[:480]
+    if hardware_mode:
+        resume_titles = [
+            "硬件测试智能辅助平台的服务端架构设计",
+            "专业术语场景下的混合检索与召回优化",
+            "硬件测试知识库的切片与索引设计",
+            "RAG 问答准确率评估与阈值控制",
+            "检索失败时的澄清、降级与兜底策略",
+            "企业内部 AI 平台的权限、审计与可观测性",
+        ]
+    else:
+        resume_titles = [
+            "面试训练工作台的 FastAPI 接口编排",
+            "面试训练工作台的任务状态一致性设计",
+            "搜索问答助手的混合检索与模型降级",
+            "交易通知系统的消息一致性与失败补偿",
+            "PostgreSQL 数据模型与后台任务管道治理",
+            "Prompt 结构化输出与多模型调用策略",
+        ]
+    jd_titles = [
+        "AI Agent 任务规划与工具调用机制",
+        "Agent 记忆管理与知识库协同",
+        "Java 服务端高可用架构设计",
+        "高并发接口限流、降级与压测方案",
+        "Elasticsearch / 向量检索底层原理",
+        "模型评测、灰度与成本控制",
+    ]
+    categories = [
+        {
+            "category": "resume_deep_dive",
+            "display_category_title": "深度打磨类",
+            "nodes": [
+                _quality_first_fake_node(
+                    title=title,
+                    category="resume_deep_dive",
+                    display_category_title="深度打磨类",
+                    index=index,
+                    resume_signal=resume_signal,
+                    jd_basis=job_basis,
+                    confidence_level="high" if index <= 2 else "medium",
+                )
+                for index, title in enumerate(resume_titles, start=1)
+            ],
+        },
+        {
+            "category": "jd_gap_learning",
+            "display_category_title": "补齐学习类",
+            "nodes": [
+                _quality_first_fake_node(
+                    title=title,
+                    category="jd_gap_learning",
+                    display_category_title="补齐学习类",
+                    index=index,
+                    resume_signal=resume_signal,
+                    jd_basis=job_basis,
+                    confidence_level="medium",
+                )
+                for index, title in enumerate(jd_titles, start=1)
+            ],
+        },
+    ]
+    seed = _request_seed(request)
+    trace_ref = stable_resource_id("trace", f"fake-polish-progress-quality-first-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-quality-first-evidence:{seed}")
+    return LlmTransportResult(
+        result={
+            "transport": "fake",
+            "task_type": request.task_type,
+            "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+            "status": "ready",
+            "planner_summary": "已按完整简历、完整 JD 和匹配分析生成初始训练菜单。",
+            "menu_categories": categories,
+            "metadata": {
+                "quality_target": "10-14 leaves",
+                "input_context_mode": "full_resume_full_job",
+            },
+            "low_confidence_flags": [],
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.HIGH,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
+
+
+def _quality_first_fake_node(
+    *,
+    title: str,
+    category: str,
+    display_category_title: str,
+    index: int,
+    resume_signal: str,
+    jd_basis: str,
+    confidence_level: str,
+) -> dict[str, Any]:
+    prefix = "D" if category == "resume_deep_dive" else "A"
+    basis_type = "resume_signal" if category == "resume_deep_dive" else "jd_requirement"
+    return {
+        "node_code": f"{prefix}{index}",
+        "category": category,
+        "display_category_title": display_category_title,
+        "display_title": title,
+        "exam_point": title,
+        "basis_type": basis_type,
+        "resume_signal": resume_signal,
+        "jd_basis": jd_basis,
+        "depth_goal": f"准备到能讲清「{title}」的关键原理、设计取舍、落地细节和验证方式。",
+        "preparation_goal": f"把「{title}」训练成可连续追问、可举证、可说明边界的面试表达。",
+        "first_question": f"请结合你的经历或岗位要求，说明你对「{title}」的设计思路、关键取舍和验证方式。",
+        "follow_up_focus": [
+            "继续追问核心方案和替代方案",
+            "继续追问落地边界、异常处理和可验证结果",
+            "继续追问与岗位要求的关联和补齐计划",
+        ],
+        "expected_answer_signals": [
+            "能说明场景、约束、方案和结果之间的因果链路",
+            "能区分已实践经验、合理推断和需要补齐的部分",
+            "能给出指标、验证方式或明确的风险说明",
+        ],
+        "common_loss_risks": [
+            "只复述技术名词，缺少场景和取舍",
+            "把团队成果全部归为个人成果",
+            "无法说明验证方式、异常路径或边界条件",
+        ],
+        "evidence_refs": [f"fake_quality_first_{prefix.lower()}_{index}"],
+        "evidence_notes": ["fake transport 基于完整上下文生成的稳定考点"],
+        "confidence_level": confidence_level,
+        "low_confidence_flags": [],
+    }
 
 
 def _generate_fake_progress_global_understanding(request: LlmTransportRequest) -> LlmTransportResult:
