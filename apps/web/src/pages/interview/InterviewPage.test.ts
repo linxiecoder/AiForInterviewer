@@ -388,11 +388,11 @@ function test_progress_tree_shows_node_detail_when_node_selected(): void {
   assertContract(detail?.title === "混合检索策略设计与优化", "详情区应显示节点标题");
   assertContract(detail?.depthRequirement === "能解释召回、排序、重排和评估指标之间的取舍。", "详情区应显示深度要求");
   assertContract(detail?.firstQuestion === "如果让你设计混合检索链路，你会如何分层？", "详情区应显示建议第一题");
-  assertContract(detail?.followUpDirections.includes("如何处理召回不足"), "详情区应显示连续追问方向");
-  assertContract(detail?.answerSignals.includes("能给出指标闭环"), "详情区应显示好回答信号");
-  assertContract(detail?.lossRisks.includes("只描述工具名称，缺少系统取舍"), "详情区应显示常见失分风险");
-  assertContract(detail?.resumeEvidence.includes("简历中提到检索服务优化经验"), "详情区应显示简历线索");
-  assertContract(detail?.jobEvidence.includes("JD 要求具备搜索架构和效果评估能力"), "详情区应显示岗位依据");
+  assertContract(Boolean(detail?.followUpDirections.includes("如何处理召回不足")), "详情区应显示连续追问方向");
+  assertContract(Boolean(detail?.answerSignals.includes("能给出指标闭环")), "详情区应显示好回答信号");
+  assertContract(Boolean(detail?.lossRisks.includes("只描述工具名称，缺少系统取舍")), "详情区应显示常见失分风险");
+  assertContract(Boolean(detail?.resumeEvidence.includes("简历中提到检索服务优化经验")), "详情区应显示简历线索");
+  assertContract(Boolean(detail?.jobEvidence.includes("JD 要求具备搜索架构和效果评估能力")), "详情区应显示岗位依据");
 }
 
 function test_progress_tree_detail_defaults_to_current_priority(): void {

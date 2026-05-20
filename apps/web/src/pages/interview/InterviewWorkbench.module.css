@@ -139,13 +139,23 @@
   gap: 10px;
 }
 
+.progressTreeBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+  overflow: hidden;
+}
+
 .nodeList {
   flex: 1;
   min-height: 0;
   display: grid;
   align-content: start;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 0;
   padding-right: 4px;
   overflow-y: auto;
 }
@@ -299,6 +309,88 @@
 .nodeChevron {
   flex: 0 0 auto;
   color: #1f2937;
+}
+
+.progressTreeDetail {
+  flex: 1 1 42%;
+  min-height: 172px;
+  max-height: 48%;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8e3f0;
+  border-radius: 8px;
+  background: #f8fbff;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: rgba(148, 163, 184, 0.58) transparent;
+  scrollbar-width: thin;
+}
+
+.progressTreeDetailHeader {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e3edf8;
+}
+
+.progressTreeDetailTitle {
+  display: block;
+  color: #0f172a;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.progressTreeDetailMeta {
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.progressTreeDetailSection {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.progressTreeDetailSection :global(.ant-typography) {
+  margin: 0;
+}
+
+.progressTreeDetailSection :global(.ant-typography-secondary) {
+  font-size: 12px;
+}
+
+.progressTreeDetailList {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.progressTreeDetailList li {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.progressTreeDetailEvidence {
+  display: grid;
+  gap: 10px;
+}
+
+.progressTreeDetailEmpty {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .conversationHeader {

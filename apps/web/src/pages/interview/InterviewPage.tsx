@@ -138,9 +138,26 @@ export type WorkbenchProgressNode = {
 };
 
 type ProgressTreeDisplayNode = PolishProgressTreeNode & {
+  basis_type?: string | null;
   category?: string | null;
+  common_loss_risks?: string[] | string | null;
+  confidence_level?: string | null;
+  depth_goal?: string | null;
   display_category_title?: string | null;
   display_title?: string | null;
+  expected_answer_signals?: string[] | string | null;
+  first_question?: string | null;
+  follow_up_directions?: string[] | string | null;
+  follow_up_focus?: string[] | string | null;
+  grounding_status?: string | null;
+  jd_basis?: string[] | string | null;
+  low_confidence_flags?: string[] | string | null;
+  node_code?: string | null;
+  preparation_goal?: string | null;
+  recommended_first_question?: string | null;
+  red_flags?: string[] | string | null;
+  related_match_gaps?: string[] | string | null;
+  resume_signal?: string[] | string | null;
 };
 
 export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
@@ -148,6 +165,26 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
   jd_gap_learning: "补齐学习类",
 } as const;
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
+export const INTERVIEW_PROGRESS_TREE_DETAIL_EMPTY_COPY = "该节点暂无完整详情，可先生成题目继续打磨。";
+export const INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY = "请选择一个进展节点查看训练目标、第一题和追问方向。";
+
+export type ProgressTreeNodeDetailViewModel = {
+  progressNodeRef: string;
+  title: string;
+  nodeCode: string | null;
+  categoryTitle: string | null;
+  confidenceLevel: string | null;
+  groundingStatus: string | null;
+  depthRequirement: string | null;
+  firstQuestion: string | null;
+  followUpDirections: string[];
+  answerSignals: string[];
+  lossRisks: string[];
+  resumeEvidence: string[];
+  jobEvidence: string[];
+  hasAnyDetail: boolean;
+  emptyDescription?: string;
+};
 
 type InterviewListError = {
   message: string;
@@ -408,11 +445,65 @@ function toCreateErrorMessage(error: unknown): string {
 }
 
 export function normalizeInterviewTopicTitle(title: string): string {
-  return title.replace("经历真实性与贡献拷问", "经历真实性与贡献边界");
+  return normalizeProgressTreeDetailCopy(title);
 }
 
 function toNeutralOptionalTitle(title: string | null | undefined): string | null {
   return title ? normalizeInterviewTopicTitle(title) : null;
+}
+
+export function normalizeProgressTreeDetailCopy(value: string): string {
+  return value
+    .replaceAll("经历真实性与贡献拷问", "经历真实性与贡献边界")
+    .replaceAll("P7", "高阶")
+    .replaceAll("攻击", "追问")
+    .replaceAll("拷问", "深入追问")
+    .replaceAll("碾压", "深挖")
+    .replaceAll("吊打", "对比强化")
+    .replaceAll("火力", "追问强度")
+    .replaceAll("红队", "反向检验")
+    .replaceAll("必挂", "风险较高")
+    .replaceAll("必过", "准备较充分")
+    .replaceAll("压迫", "连续追问")
+    .replaceAll("击穿", "发现薄弱点")
+    .replaceAll("杀招", "关键方法");
+}
+
+function toSafeProgressTreeText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? normalizeProgressTreeDetailCopy(trimmed) : null;
+}
+
+function toSafeProgressTreeTextList(value: string[] | string | null | undefined, limit?: number): string[] {
+  const rawItems = Array.isArray(value) ? value : value ? [value] : [];
+  const safeItems = rawItems
+    .map((item) => toSafeProgressTreeText(item))
+    .filter((item): item is string => item !== null);
+  return typeof limit === "number" ? safeItems.slice(0, limit) : safeItems;
+}
+
+function firstSafeProgressTreeTextList(
+  ...values: Array<string[] | string | null | undefined>
+): string[] {
+  for (const value of values) {
+    const safeItems = toSafeProgressTreeTextList(value);
+    if (safeItems.length > 0) {
+      return safeItems;
+    }
+  }
+  return [];
+}
+
+function firstSafeProgressTreeText(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    const safeValue = toSafeProgressTreeText(value);
+    if (safeValue !== null) {
+      return safeValue;
+    }
+  }
+  return null;
 }
 
 function toSessionDisplayName(session: PolishSessionDetail): string {
@@ -621,9 +712,26 @@ function dedupeProgressTreeNodesByRef(nodes: readonly PolishProgressTreeNode[]):
   return dedupedNodes;
 }
 
+function flattenProgressTreePlanNodes(nodes: readonly PolishProgressTreeNode[]): PolishProgressTreeNode[] {
+  return nodes.flatMap((node) => [
+    node,
+    ...flattenProgressTreePlanNodes(node.children ?? []),
+  ]);
+}
+
+function findProgressTreeNodeByRef(
+  nodes: readonly PolishProgressTreeNode[],
+  progressNodeRef: string | null | undefined,
+): PolishProgressTreeNode | null {
+  if (!progressNodeRef) {
+    return null;
+  }
+  return flattenProgressTreePlanNodes(nodes).find((node) => node.progress_node_ref === progressNodeRef) ?? null;
+}
+
 function resolveProgressNodeCategoryTitle(node: PolishProgressTreeNode): string {
   const displayNode = node as ProgressTreeDisplayNode;
-  const displayCategoryTitle = displayNode.display_category_title?.trim();
+  const displayCategoryTitle = toSafeProgressTreeText(displayNode.display_category_title);
   if (displayCategoryTitle) {
     return displayCategoryTitle;
   }
@@ -634,8 +742,83 @@ function resolveProgressNodeCategoryTitle(node: PolishProgressTreeNode): string 
 }
 
 function resolveProgressNodeTitle(node: PolishProgressTreeNode): string {
-  const displayTitle = (node as ProgressTreeDisplayNode).display_title?.trim();
-  return displayTitle || node.title;
+  const displayTitle = toSafeProgressTreeText((node as ProgressTreeDisplayNode).display_title);
+  return displayTitle || toSafeProgressTreeText(node.title) || node.progress_node_ref;
+}
+
+export function resolveProgressTreeDetailNodeRef(
+  session: PolishSessionDetail,
+  selectedProgressNodeRef: string | null,
+): string | null {
+  const planNodes = flattenProgressTreePlanNodes(session.progress_tree_plan.nodes);
+  if (selectedProgressNodeRef && planNodes.some((node) => node.progress_node_ref === selectedProgressNodeRef)) {
+    return selectedProgressNodeRef;
+  }
+
+  const currentPriorityRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
+  if (currentPriorityRef && planNodes.some((node) => node.progress_node_ref === currentPriorityRef)) {
+    return currentPriorityRef;
+  }
+
+  return planNodes[0]?.progress_node_ref ?? null;
+}
+
+export function buildProgressTreeNodeDetailViewModel(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null,
+): ProgressTreeNodeDetailViewModel | null {
+  const node = findProgressTreeNodeByRef(session.progress_tree_plan.nodes, progressNodeRef);
+  if (node === null) {
+    return null;
+  }
+
+  const detailNode = node as ProgressTreeDisplayNode;
+  const depthRequirement = firstSafeProgressTreeText(
+    detailNode.depth_goal,
+    node.expected_capability,
+    detailNode.preparation_goal,
+  );
+  const firstQuestion = firstSafeProgressTreeText(
+    detailNode.first_question,
+    detailNode.recommended_first_question,
+  );
+  const followUpDirections = firstSafeProgressTreeTextList(
+    detailNode.follow_up_focus,
+    detailNode.follow_up_directions,
+  ).slice(0, 5);
+  const answerSignals = toSafeProgressTreeTextList(detailNode.expected_answer_signals);
+  const lossRisks = firstSafeProgressTreeTextList(detailNode.common_loss_risks, detailNode.red_flags);
+  const resumeSignal = toSafeProgressTreeTextList(detailNode.resume_signal);
+  const resumeEvidence = resumeSignal.length > 0 ? resumeSignal : toSafeProgressTreeTextList(node.related_resume_evidence, 2);
+  const jdBasis = toSafeProgressTreeTextList(detailNode.jd_basis);
+  const jobEvidence = jdBasis.length > 0 ? jdBasis : toSafeProgressTreeTextList(node.related_job_requirements, 2);
+  const hasAnyDetail = Boolean(
+    depthRequirement ||
+      firstQuestion ||
+      followUpDirections.length > 0 ||
+      answerSignals.length > 0 ||
+      lossRisks.length > 0 ||
+      resumeEvidence.length > 0 ||
+      jobEvidence.length > 0,
+  );
+
+  return {
+    progressNodeRef: node.progress_node_ref,
+    title: resolveProgressNodeTitle(node),
+    nodeCode: toSafeProgressTreeText(detailNode.node_code),
+    categoryTitle: resolveProgressNodeCategoryTitle(node),
+    confidenceLevel: toSafeProgressTreeText(detailNode.confidence_level),
+    groundingStatus: toSafeProgressTreeText(detailNode.grounding_status),
+    depthRequirement,
+    firstQuestion,
+    followUpDirections,
+    answerSignals,
+    lossRisks,
+    resumeEvidence,
+    jobEvidence,
+    hasAnyDetail,
+    emptyDescription: hasAnyDetail ? undefined : INTERVIEW_PROGRESS_TREE_DETAIL_EMPTY_COPY,
+  };
 }
 
 function toWorkbenchProgressNode(params: {
@@ -669,6 +852,13 @@ function toWorkbenchProgressNode(params: {
 
 export function getWorkbenchProgressNodeQuestionTargetRef(node: WorkbenchProgressNode | null | undefined): string | null {
   return node?.kind === "node" ? node.questionTargetRef ?? node.key : null;
+}
+
+export function resolveProgressTreeSelectedNodeRefAfterClick(
+  node: WorkbenchProgressNode | null | undefined,
+  currentSelectedProgressNodeRef: string | null,
+): string | null {
+  return node?.kind === "node" ? node.key : currentSelectedProgressNodeRef;
 }
 
 function normalizeProgressNodeStatus(status: string): WorkbenchProgressNodeStatus {
@@ -1183,6 +1373,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [submittingAnswer, setSubmittingAnswer] = useState<boolean>(false);
   const [copyingSession, setCopyingSession] = useState<boolean>(false);
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
+  const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
 
   const loadSession = async () => {
     setLoading(true);
@@ -1201,6 +1392,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     setAnswerText("");
     setAnswerError(null);
+    setSelectedProgressNodeRef(null);
     void loadSession();
   }, [sessionId]);
 
@@ -1298,6 +1490,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       progressNodes,
       session?.progress_tree_state.current_priority?.progress_node_ref ?? null,
     );
+  const selectedProgressNodeDetailRef =
+    session === null ? null : resolveProgressTreeDetailNodeRef(session, selectedProgressNodeRef);
+  const selectedProgressNodeDetail =
+    session === null ? null : buildProgressTreeNodeDetailViewModel(session, selectedProgressNodeDetailRef);
   const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
   const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
   const isProgressTreeReady = session?.progress_tree_status === "ready";
@@ -1337,6 +1533,120 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     });
   };
 
+  const renderProgressTreeDetailSection = (title: string, content: string | null) => {
+    if (content === null) {
+      return null;
+    }
+    return (
+      <section className={styles.progressTreeDetailSection}>
+        <Typography.Text strong>{title}</Typography.Text>
+        <Typography.Paragraph>{content}</Typography.Paragraph>
+      </section>
+    );
+  };
+
+  const renderProgressTreeDetailList = (title: string, items: readonly string[]) => {
+    if (items.length === 0) {
+      return null;
+    }
+    return (
+      <section className={styles.progressTreeDetailSection}>
+        <Typography.Text strong>{title}</Typography.Text>
+        <ul className={styles.progressTreeDetailList}>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </section>
+    );
+  };
+
+  const renderProgressTreeDetailEvidence = (detail: ProgressTreeNodeDetailViewModel) => {
+    if (detail.resumeEvidence.length === 0 && detail.jobEvidence.length === 0) {
+      return null;
+    }
+    return (
+      <section className={styles.progressTreeDetailSection}>
+        <Typography.Text strong>依据</Typography.Text>
+        <div className={styles.progressTreeDetailEvidence}>
+          {detail.resumeEvidence.length > 0 ? (
+            <div>
+              <Typography.Text type="secondary">简历线索</Typography.Text>
+              <ul className={styles.progressTreeDetailList}>
+                {detail.resumeEvidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {detail.jobEvidence.length > 0 ? (
+            <div>
+              <Typography.Text type="secondary">岗位依据</Typography.Text>
+              <ul className={styles.progressTreeDetailList}>
+                {detail.jobEvidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </section>
+    );
+  };
+
+  const renderProgressTreeDetail = () => {
+    if (selectedProgressNodeDetail === null) {
+      return (
+        <section className={`${styles.progressTreeDetail} ${styles.progressTreeDetailEmpty}`}>
+          <Typography.Text type="secondary">{INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY}</Typography.Text>
+        </section>
+      );
+    }
+
+    const metaItems = [
+      selectedProgressNodeDetail.categoryTitle,
+      selectedProgressNodeDetail.confidenceLevel
+        ? `置信度：${selectedProgressNodeDetail.confidenceLevel}`
+        : null,
+      selectedProgressNodeDetail.groundingStatus
+        ? `证据：${selectedProgressNodeDetail.groundingStatus}`
+        : null,
+    ].filter((item): item is string => item !== null);
+    const title = [selectedProgressNodeDetail.nodeCode, selectedProgressNodeDetail.title]
+      .filter((item): item is string => Boolean(item))
+      .join(" ");
+
+    return (
+      <section className={styles.progressTreeDetail} aria-label="进展节点详情">
+        <header className={styles.progressTreeDetailHeader}>
+          <Typography.Text strong className={styles.progressTreeDetailTitle}>
+            {title}
+          </Typography.Text>
+          {metaItems.length > 0 ? (
+            <Typography.Text type="secondary" className={styles.progressTreeDetailMeta}>
+              {metaItems.join(" · ")}
+            </Typography.Text>
+          ) : null}
+        </header>
+
+        {!selectedProgressNodeDetail.hasAnyDetail ? (
+          <Typography.Text type="secondary" className={styles.progressTreeDetailEmpty}>
+            {selectedProgressNodeDetail.emptyDescription}
+          </Typography.Text>
+        ) : (
+          <>
+            {renderProgressTreeDetailSection("深度要求", selectedProgressNodeDetail.depthRequirement)}
+            {renderProgressTreeDetailSection("建议第一题", selectedProgressNodeDetail.firstQuestion)}
+            {renderProgressTreeDetailList("连续追问方向", selectedProgressNodeDetail.followUpDirections)}
+            {renderProgressTreeDetailList("好回答信号", selectedProgressNodeDetail.answerSignals)}
+            {renderProgressTreeDetailList("常见失分风险", selectedProgressNodeDetail.lossRisks)}
+            {renderProgressTreeDetailEvidence(selectedProgressNodeDetail)}
+          </>
+        )}
+      </section>
+    );
+  };
+
   const renderProgressNode = (node: WorkbenchProgressNode, level = 0) => {
     if (node.kind === "group") {
       const isExpanded = expandedProgressNodeKeys.has(node.key);
@@ -1368,7 +1678,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     const questionTargetRef = getWorkbenchProgressNodeQuestionTargetRef(node);
     const canCreateQuestionFromNode =
       questionTargetRef !== null && !hasQuestion && isProgressTreeReady && !creatingQuestion;
-    const isActive = node.kind === "node" && node.key === currentProgressNodeKey;
+    const canSelectNode = node.kind === "node";
+    const isActive = canSelectNode && node.key === selectedProgressNodeDetailRef;
+    const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
     const isExpandable = !canCreateQuestionFromNode && Boolean(node.children && node.children.length > 0);
     const isExpanded = expandedProgressNodeKeys.has(node.key);
     const cardClassName = [
@@ -1381,12 +1693,19 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         <button
           className={cardClassName}
           type="button"
-          disabled={!canCreateQuestionFromNode && !isExpandable}
+          disabled={!canSelectNode && !isExpandable}
           aria-expanded={isExpandable ? isExpanded : undefined}
           onClick={
-            canCreateQuestionFromNode
+            canSelectNode
               ? () => {
-                  void createQuestion(questionTargetRef);
+                  setSelectedProgressNodeRef(resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef));
+                  if (canCreateQuestionFromNode) {
+                    void createQuestion(questionTargetRef);
+                    return;
+                  }
+                  if (isExpandable) {
+                    toggleProgressNode(node.key);
+                  }
                 }
               : isExpandable
                 ? () => toggleProgressNode(node.key)
@@ -1402,7 +1721,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             ) : (
               <Typography.Text type="secondary">{progressNodeStatusLabel(node.status)}</Typography.Text>
             )}
-            {isActive ? (
+            {isCurrentPriority ? (
               <Tag
                 color={node.status === "completed" ? "success" : "processing"}
                 style={{ width: "fit-content", margin: 0 }}
@@ -1503,55 +1822,58 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 <Progress percent={progressPercent} showInfo={false} strokeColor="#2563eb" trailColor="#e4ecf7" />
               </div>
 
-              <div
-                className={`${styles.nodeList} ${styles[INTERVIEW_PROGRESS_TREE_SCROLL_CLASS]}`}
-                data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressNodeList}
-              >
-                {isProgressTreeInsufficient ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message="岗位或简历内容不足，暂不能生成进展树。"
-                    description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
-                  />
-                ) : !canShowProgressTree ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message={hasProgressTreeNodes ? "进展树状态异常" : "进展树暂未生成"}
-                    description={
-                      isProgressTreeReady
-                        ? "当前会话尚无可展示进展节点，建议刷新后重试，或稍后再次访问。"
-                        : "进展树暂未就绪，建议点击刷新重新生成。"
-                    }
-                    action={
-                      <Button
-                        size="small"
-                        loading={refreshingProgressTree}
-                        onClick={refreshProgressTree}
-                      >
-                        刷新进展树
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <>
-                    {isProgressTreeRefreshFailed ? (
-                      <Alert
-                        type="warning"
-                        showIcon
-                        message="进度刷新失败，可重试。"
-                        description="已保留当前进展树结构，本次只影响节点状态刷新。"
-                        action={
-                          <Button size="small" loading={refreshingProgressTree} onClick={refreshProgressTree}>
-                            重试刷新
-                          </Button>
-                        }
-                      />
-                    ) : null}
-                    {progressNodes.map((node) => renderProgressNode(node))}
-                  </>
-                )}
+              <div className={styles.progressTreeBody}>
+                <div
+                  className={`${styles.nodeList} ${styles[INTERVIEW_PROGRESS_TREE_SCROLL_CLASS]}`}
+                  data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressNodeList}
+                >
+                  {isProgressTreeInsufficient ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="岗位或简历内容不足，暂不能生成进展树。"
+                      description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
+                    />
+                  ) : !canShowProgressTree ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={hasProgressTreeNodes ? "进展树状态异常" : "进展树暂未生成"}
+                      description={
+                        isProgressTreeReady
+                          ? "当前会话尚无可展示进展节点，建议刷新后重试，或稍后再次访问。"
+                          : "进展树暂未就绪，建议点击刷新重新生成。"
+                      }
+                      action={
+                        <Button
+                          size="small"
+                          loading={refreshingProgressTree}
+                          onClick={refreshProgressTree}
+                        >
+                          刷新进展树
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <>
+                      {isProgressTreeRefreshFailed ? (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          message="进度刷新失败，可重试。"
+                          description="已保留当前进展树结构，本次只影响节点状态刷新。"
+                          action={
+                            <Button size="small" loading={refreshingProgressTree} onClick={refreshProgressTree}>
+                              重试刷新
+                            </Button>
+                          }
+                        />
+                      ) : null}
+                      {progressNodes.map((node) => renderProgressNode(node))}
+                    </>
+                  )}
+                </div>
+                {renderProgressTreeDetail()}
               </div>
             </aside>
 
