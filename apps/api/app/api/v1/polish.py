@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from time import perf_counter
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -37,6 +40,7 @@ from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.infrastructure.llm.ports import LlmTransport
+from app.infrastructure.observability.http_logging import get_request_trace_context
 from app.schemas.polish import (
     CreateAnswerRequest,
     CreateFeedbackTaskRequest,
@@ -55,6 +59,7 @@ from app.schemas.refs import ResourceRef, TraceRefSchema
 
 
 router = APIRouter(tags=["polish"])
+POLISH_EVENT_LOGGER = logging.getLogger("app.http.access")
 
 LEGACY_TOPIC_TITLE_BY_ID = {
     "topic_project_depth": "经历真实性与贡献澄清",
@@ -109,6 +114,14 @@ async def create_polish_session(
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
+    started_at = perf_counter()
+    _log_polish_session_create_event(
+        "polish_session_create_started",
+        resume_job_binding_id=payload.resume_job_binding_id,
+        topic_id=payload.topic_id,
+        subtopic_id=payload.subtopic_id,
+        has_custom_topic_text=bool(payload.custom_topic_text),
+    )
     create_result = await run_in_threadpool(
         use_cases.create_session,
         CreatePolishSessionCommand(
@@ -121,13 +134,33 @@ async def create_polish_session(
         ),
     )
     if not create_result.is_success:
+        _log_polish_session_create_event(
+            "polish_session_create_failed",
+            duration_ms=_elapsed_ms(started_at),
+            error_code=create_result.error.code,
+            error_message=create_result.error.message,
+        )
         _raise_result_error(create_result.error)
 
     get_result = use_cases.get_session(
         GetPolishSessionQuery(owner_id=actor.owner_id, session_id=create_result.value.session_id)
     )
     if not get_result.is_success:
+        _log_polish_session_create_event(
+            "polish_session_create_failed",
+            duration_ms=_elapsed_ms(started_at),
+            session_id=create_result.value.session_id,
+            error_code=get_result.error.code,
+            error_message=get_result.error.message,
+        )
         _raise_result_error(get_result.error)
+    _log_polish_session_create_event(
+        "polish_session_create_completed",
+        duration_ms=_elapsed_ms(started_at),
+        session_id=create_result.value.session_id,
+        progress_tree_status=create_result.value.progress_tree_status,
+        progress_percent=create_result.value.progress_percent,
+    )
     return success_envelope(
         resource_type="polish_session",
         data=_session_response(get_result.value).model_dump(mode="json"),
@@ -274,6 +307,19 @@ def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTranspo
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
     )
+
+
+def _elapsed_ms(started_at: float) -> float:
+    return round((perf_counter() - started_at) * 1000, 3)
+
+
+def _log_polish_session_create_event(event: str, **fields: Any) -> None:
+    context = get_request_trace_context()
+    record = {"event": event, **fields}
+    if context is not None:
+        record["request_id"] = context.request_id
+        record["trace_id"] = context.trace_id
+    POLISH_EVENT_LOGGER.info(json.dumps(record, ensure_ascii=False, sort_keys=True))
 
 
 def _topic_response(topic: PolishTopic) -> PolishTopicResponse:

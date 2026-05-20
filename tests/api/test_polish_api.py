@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from contextlib import contextmanager
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -259,6 +260,29 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     assert body["data"]["resume_version_id"].startswith("res_ver_polish_")
     assert body["data"]["job_version_id"].startswith("job_ver_polish_")
 
+
+def test_create_polish_session_logs_start_and_completion(caplog) -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    caplog.set_level(logging.INFO, logger="app.http.access")
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_authenticity_contribution",
+        },
+    )
+
+    assert status_code == 201
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "polish_session_create_started" in log_text
+    assert "polish_session_create_completed" in log_text
+    assert binding_id in log_text
+    assert body["data"]["session_id"] in log_text
 
 
 def test_polish_progress_tree_returns_insufficient_context_without_job_or_resume_content() -> None:

@@ -25,6 +25,28 @@
   background: #ffffff;
 }
 
+.heroHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.heroSummary {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.heroActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 1px;
+}
+
 .heroTitle {
   margin: 0 !important;
   color: #111827 !important;
@@ -111,16 +133,10 @@
   color: #111827 !important;
 }
 
-.progressLabel {
-  display: block;
-  margin: 14px 0 8px;
-  color: #2563eb;
-  font-size: 16px;
-  font-weight: 700;
-}
-
 .progressPanelHeader {
   flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
 }
 
 .nodeList {
@@ -128,24 +144,110 @@
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 8px;
   margin-top: 18px;
   padding-right: 4px;
   overflow-y: auto;
 }
 
-.nodeCard,
-.nodeCardActive {
+.progressTreeScroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: rgba(148, 163, 184, 0.58) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.progressTreeScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.progressTreeScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.progressTreeScroll::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.46);
+}
+
+.progressTreeScroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.68);
+}
+
+.progressTreeScroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.nodeBranch,
+.nodeGroupBranch {
+  display: grid;
+  gap: 6px;
+}
+
+.nodeGroupBranch {
+  position: relative;
+}
+
+.nodeGroupHeader {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   width: 100%;
-  min-height: 70px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid #b8d9ff;
+  border-radius: 8px;
+  text-align: left;
+  background: #d9ecff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+}
+
+.nodeGroupTitleRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nodeGroupTitleRow :global(.ant-typography:first-child) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeCount {
+  flex: 0 0 auto;
+}
+
+.childNodeList {
+  display: grid;
+  gap: 6px;
+}
+
+.nodeCard,
+.nodeCardActive {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   text-align: left;
   background: #ffffff;
+}
+
+.nodeCardChild {
+  min-height: 66px;
 }
 
 .nodeCard {
@@ -165,10 +267,38 @@
   cursor: default;
 }
 
-.nodeCard span,
-.nodeCardActive span {
+.nodeCard:not(:disabled),
+.nodeCardActive:not(:disabled) {
+  cursor: pointer;
+}
+
+.nodeContent {
+  min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 3px;
+}
+
+.nodeContent :global(.ant-typography) {
+  margin: 0;
+}
+
+.nodeContent :global(.ant-typography:first-child) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeContent :global(.ant-typography:nth-child(2)) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.45;
+}
+
+.nodeChevron {
+  flex: 0 0 auto;
+  color: #1f2937;
 }
 
 .conversationHeader {
