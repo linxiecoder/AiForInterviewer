@@ -133,6 +133,7 @@ export type WorkbenchProgressNode = {
   title: string;
   status: WorkbenchProgressNodeStatus;
   detail?: string;
+  nodeCode?: string | null;
   questionTargetRef?: string;
   children?: WorkbenchProgressNode[];
 };
@@ -165,8 +166,19 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
   jd_gap_learning: "补齐学习类",
 } as const;
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE = "当前节点上下文";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY = "请选择一个进展节点查看训练目标、建议第一题和追问方向。";
+export const INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT = "conversation_context_card" as const;
+export const INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS = [
+  "category_header",
+  "node_title",
+  "node_code",
+  "node_status",
+  "current_priority",
+  "question_entry",
+] as const;
 export const INTERVIEW_PROGRESS_TREE_DETAIL_EMPTY_COPY = "该节点暂无完整详情，可先生成题目继续打磨。";
-export const INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY = "请选择一个进展节点查看训练目标、第一题和追问方向。";
+export const INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY = INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY;
 
 export type ProgressTreeNodeDetailViewModel = {
   progressNodeRef: string;
@@ -679,7 +691,7 @@ export function buildWorkbenchProgressNodes(
     kind: "group",
     title: groupTitle,
     status: summarizeProgressNodeStatus(children),
-    detail: `${children.length} 项`,
+    detail: `${children.length}`,
     children,
   }));
 }
@@ -839,12 +851,13 @@ function toWorkbenchProgressNode(params: {
   );
   const shouldAttachQuestions = params.node.progress_node_ref === params.activeNodeRef && params.questionNodes.length > 0;
   const mergedChildren = shouldAttachQuestions ? [...children, ...params.questionNodes] : children;
+  const displayNode = params.node as ProgressTreeDisplayNode;
   return {
     key: params.node.progress_node_ref,
     kind: "node",
     title: resolveProgressNodeTitle(params.node),
     status: params.stateByRef.get(params.node.progress_node_ref) ?? summarizeProgressNodeStatus(mergedChildren),
-    detail: params.node.expected_capability,
+    nodeCode: toSafeProgressTreeText(displayNode.node_code),
     questionTargetRef: params.node.progress_node_ref,
     children: mergedChildren.length > 0 ? mergedChildren : undefined,
   };
@@ -1533,26 +1546,26 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     });
   };
 
-  const renderProgressTreeDetailSection = (title: string, content: string | null) => {
+  const renderProgressTreeContextSection = (title: string, content: string | null) => {
     if (content === null) {
       return null;
     }
     return (
-      <section className={styles.progressTreeDetailSection}>
+      <section className={styles.progressTreeContextSection}>
         <Typography.Text strong>{title}</Typography.Text>
         <Typography.Paragraph>{content}</Typography.Paragraph>
       </section>
     );
   };
 
-  const renderProgressTreeDetailList = (title: string, items: readonly string[]) => {
+  const renderProgressTreeContextList = (title: string, items: readonly string[]) => {
     if (items.length === 0) {
       return null;
     }
     return (
-      <section className={styles.progressTreeDetailSection}>
+      <section className={styles.progressTreeContextSection}>
         <Typography.Text strong>{title}</Typography.Text>
-        <ul className={styles.progressTreeDetailList}>
+        <ul className={styles.progressTreeContextList}>
           {items.map((item) => (
             <li key={item}>{item}</li>
           ))}
@@ -1561,18 +1574,18 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   };
 
-  const renderProgressTreeDetailEvidence = (detail: ProgressTreeNodeDetailViewModel) => {
+  const renderProgressTreeContextEvidence = (detail: ProgressTreeNodeDetailViewModel) => {
     if (detail.resumeEvidence.length === 0 && detail.jobEvidence.length === 0) {
       return null;
     }
     return (
-      <section className={styles.progressTreeDetailSection}>
+      <section className={styles.progressTreeContextSection}>
         <Typography.Text strong>依据</Typography.Text>
-        <div className={styles.progressTreeDetailEvidence}>
+        <div className={styles.progressTreeContextEvidence}>
           {detail.resumeEvidence.length > 0 ? (
             <div>
               <Typography.Text type="secondary">简历线索</Typography.Text>
-              <ul className={styles.progressTreeDetailList}>
+              <ul className={styles.progressTreeContextList}>
                 {detail.resumeEvidence.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
@@ -1582,7 +1595,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           {detail.jobEvidence.length > 0 ? (
             <div>
               <Typography.Text type="secondary">岗位依据</Typography.Text>
-              <ul className={styles.progressTreeDetailList}>
+              <ul className={styles.progressTreeContextList}>
                 {detail.jobEvidence.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
@@ -1594,11 +1607,39 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   };
 
-  const renderProgressTreeDetail = () => {
+  const renderProgressTreeContextMore = (detail: ProgressTreeNodeDetailViewModel) => {
+    const hasMore =
+      detail.answerSignals.length > 0 ||
+      detail.lossRisks.length > 0 ||
+      detail.resumeEvidence.length > 0 ||
+      detail.jobEvidence.length > 0;
+    if (!hasMore) {
+      return null;
+    }
+
+    return (
+      <details className={styles.progressTreeContextMore}>
+        <summary>更多准备要点</summary>
+        <div className={styles.progressTreeContextMoreBody}>
+          {renderProgressTreeContextList("好回答信号", detail.answerSignals)}
+          {renderProgressTreeContextList("常见失分风险", detail.lossRisks)}
+          {renderProgressTreeContextEvidence(detail)}
+        </div>
+      </details>
+    );
+  };
+
+  const renderProgressTreeContextCard = () => {
     if (selectedProgressNodeDetail === null) {
       return (
-        <section className={`${styles.progressTreeDetail} ${styles.progressTreeDetailEmpty}`}>
-          <Typography.Text type="secondary">{INTERVIEW_PROGRESS_TREE_DETAIL_UNSELECTED_COPY}</Typography.Text>
+        <section
+          className={`${styles.progressTreeContextCard} ${styles.progressTreeContextEmpty}`}
+          aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
+        >
+          <Typography.Text strong className={styles.progressTreeContextEyebrow}>
+            {INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
+          </Typography.Text>
+          <Typography.Text type="secondary">{INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_EMPTY_COPY}</Typography.Text>
         </section>
       );
     }
@@ -1617,30 +1658,33 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       .join(" ");
 
     return (
-      <section className={styles.progressTreeDetail} aria-label="进展节点详情">
-        <header className={styles.progressTreeDetailHeader}>
-          <Typography.Text strong className={styles.progressTreeDetailTitle}>
+      <section className={styles.progressTreeContextCard} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}>
+        <header className={styles.progressTreeContextHeader}>
+          <Typography.Text strong className={styles.progressTreeContextEyebrow}>
+            {INTERVIEW_PROGRESS_TREE_CONTEXT_CARD_TITLE}
+          </Typography.Text>
+          <Typography.Text strong className={styles.progressTreeContextTitle}>
             {title}
           </Typography.Text>
           {metaItems.length > 0 ? (
-            <Typography.Text type="secondary" className={styles.progressTreeDetailMeta}>
+            <Typography.Text type="secondary" className={styles.progressTreeContextMeta}>
               {metaItems.join(" · ")}
             </Typography.Text>
           ) : null}
         </header>
 
         {!selectedProgressNodeDetail.hasAnyDetail ? (
-          <Typography.Text type="secondary" className={styles.progressTreeDetailEmpty}>
+          <Typography.Text type="secondary" className={styles.progressTreeContextEmpty}>
             {selectedProgressNodeDetail.emptyDescription}
           </Typography.Text>
         ) : (
           <>
-            {renderProgressTreeDetailSection("深度要求", selectedProgressNodeDetail.depthRequirement)}
-            {renderProgressTreeDetailSection("建议第一题", selectedProgressNodeDetail.firstQuestion)}
-            {renderProgressTreeDetailList("连续追问方向", selectedProgressNodeDetail.followUpDirections)}
-            {renderProgressTreeDetailList("好回答信号", selectedProgressNodeDetail.answerSignals)}
-            {renderProgressTreeDetailList("常见失分风险", selectedProgressNodeDetail.lossRisks)}
-            {renderProgressTreeDetailEvidence(selectedProgressNodeDetail)}
+            <div className={styles.progressTreeContextCore}>
+              {renderProgressTreeContextSection("深度要求", selectedProgressNodeDetail.depthRequirement)}
+              {renderProgressTreeContextSection("建议第一题", selectedProgressNodeDetail.firstQuestion)}
+              {renderProgressTreeContextList("追问方向", selectedProgressNodeDetail.followUpDirections)}
+            </div>
+            {renderProgressTreeContextMore(selectedProgressNodeDetail)}
           </>
         )}
       </section>
@@ -1659,12 +1703,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             onClick={() => toggleProgressNode(node.key)}
           >
             <span className={styles.nodeGroupTitleRow}>
-              <Typography.Text strong>{node.title}</Typography.Text>
+              <span className={styles.nodeChevron}>{isExpanded ? <DownOutlined /> : <RightOutlined />}</span>
+              <Typography.Text strong className={styles.nodeGroupTitle}>
+                {node.title}
+              </Typography.Text>
               <Typography.Text type="secondary" className={styles.nodeCount}>
-                {node.detail}
+                · {node.detail}
               </Typography.Text>
             </span>
-            <span className={styles.nodeChevron}>{isExpanded ? <DownOutlined /> : <RightOutlined />}</span>
           </button>
           {isExpanded ? (
             <div className={styles.childNodeList}>
@@ -1685,7 +1731,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     const isExpanded = expandedProgressNodeKeys.has(node.key);
     const cardClassName = [
       isActive ? styles.nodeCardActive : styles.nodeCard,
+      isCurrentPriority ? styles.nodeCardCurrentPriority : "",
       level > 0 ? styles.nodeCardChild : "",
+    ].filter(Boolean).join(" ");
+    const statusDotClassName = [
+      styles.nodeStatusDot,
+      node.status === "completed" ? styles.nodeStatusDotCompleted : "",
+      node.status === "in_progress" ? styles.nodeStatusDotInProgress : "",
+      node.status === "pending" ? styles.nodeStatusDotPending : "",
     ].filter(Boolean).join(" ");
 
     return (
@@ -1714,19 +1767,25 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         >
           <span className={styles.nodeContent}>
             <Typography.Text strong>{node.title}</Typography.Text>
-            {node.detail ? (
-              <Typography.Text type="secondary">
-                {node.detail} · {progressNodeStatusLabel(node.status)}
-              </Typography.Text>
+            {node.kind === "question" && node.detail ? (
+              <Typography.Text type="secondary">{node.detail}</Typography.Text>
             ) : (
-              <Typography.Text type="secondary">{progressNodeStatusLabel(node.status)}</Typography.Text>
+              <span className={styles.nodeMetaRow}>
+                <span className={statusDotClassName} />
+                {node.nodeCode ? (
+                  <Typography.Text type="secondary" className={styles.nodeCode}>
+                    {node.nodeCode}
+                  </Typography.Text>
+                ) : null}
+                <Typography.Text type="secondary">{progressNodeStatusLabel(node.status)}</Typography.Text>
+              </span>
             )}
             {isCurrentPriority ? (
               <Tag
                 color={node.status === "completed" ? "success" : "processing"}
                 style={{ width: "fit-content", margin: 0 }}
               >
-                当前优先级
+                当前优先
               </Tag>
             ) : null}
           </span>
@@ -1873,7 +1932,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     </>
                   )}
                 </div>
-                {renderProgressTreeDetail()}
               </div>
             </aside>
 
@@ -1897,6 +1955,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               </div>
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
+                {renderProgressTreeContextCard()}
                 {hasQuestion ? null : (
                   <EmptyState
                     compact

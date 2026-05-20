@@ -144,7 +144,6 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   margin-top: 18px;
   overflow: hidden;
 }
@@ -154,7 +153,7 @@
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 2px;
   margin-top: 0;
   padding-right: 4px;
   overflow-y: auto;
@@ -193,7 +192,7 @@
 .nodeBranch,
 .nodeGroupBranch {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .nodeGroupBranch {
@@ -205,17 +204,18 @@
   top: 0;
   z-index: 3;
   width: 100%;
-  min-height: 42px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid #b8d9ff;
-  border-radius: 8px;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 1px solid #d8e3f0;
+  border-radius: 0;
   text-align: left;
-  background: #d9ecff;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  background: #f8fbff;
+  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.18);
   cursor: pointer;
 }
 
@@ -223,10 +223,10 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.nodeGroupTitleRow :global(.ant-typography:first-child) {
+.nodeGroupTitle {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -235,29 +235,33 @@
 
 .nodeCount {
   flex: 0 0 auto;
+  font-size: 12px;
 }
 
 .childNodeList {
   display: grid;
-  gap: 6px;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 5px 0 8px 12px;
+  border-left: 1px solid #dbe7f3;
 }
 
 .nodeCard,
 .nodeCardActive {
   width: 100%;
-  min-height: 56px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
   text-align: left;
   background: #ffffff;
 }
 
 .nodeCardChild {
-  min-height: 66px;
+  min-height: 50px;
 }
 
 .nodeCard {
@@ -266,6 +270,13 @@
 
 .nodeCardActive {
   border: 1px solid #9fc0ff;
+  background: #eef5ff;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.nodeCardCurrentPriority {
+  border-color: #9fc0ff;
+  background: #eff6ff;
   box-shadow: inset 3px 0 0 #2563eb;
 }
 
@@ -285,7 +296,7 @@
 .nodeContent {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 
 .nodeContent :global(.ant-typography) {
@@ -302,8 +313,46 @@
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   line-height: 1.45;
+}
+
+.nodeMetaRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.nodeCode {
+  flex: 0 1 auto;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeStatusDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.nodeStatusDotCompleted {
+  background: #16a34a;
+}
+
+.nodeStatusDotInProgress {
+  background: #2563eb;
+}
+
+.nodeStatusDotPending {
+  background: #94a3b8;
 }
 
 .nodeChevron {
@@ -311,14 +360,14 @@
   color: #1f2937;
 }
 
-.progressTreeDetail {
-  flex: 1 1 42%;
-  min-height: 172px;
-  max-height: 48%;
+.progressTreeContextCard {
+  width: min(760px, 100%);
+  max-height: min(42vh, 360px);
+  flex: 0 0 auto;
   display: grid;
   align-content: start;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 14px 16px;
   border: 1px solid #d8e3f0;
   border-radius: 8px;
   background: #f8fbff;
@@ -328,42 +377,64 @@
   scrollbar-width: thin;
 }
 
-.progressTreeDetailHeader {
+.progressTreeContextHeader {
   min-width: 0;
   display: grid;
   gap: 4px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e3edf8;
 }
 
-.progressTreeDetailTitle {
+.progressTreeContextEyebrow {
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.progressTreeContextTitle {
   display: block;
   color: #0f172a;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-.progressTreeDetailMeta {
+.progressTreeContextMeta {
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.progressTreeDetailSection {
+.progressTreeContextCore,
+.progressTreeContextMoreBody {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
-.progressTreeDetailSection :global(.ant-typography) {
+.progressTreeContextSection {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.progressTreeContextSection :global(.ant-typography) {
   margin: 0;
 }
 
-.progressTreeDetailSection :global(.ant-typography-secondary) {
+.progressTreeContextSection :global(.ant-typography-secondary) {
   font-size: 12px;
 }
 
-.progressTreeDetailList {
+.progressTreeContextSection :global(.ant-typography) {
+  overflow-wrap: anywhere;
+}
+
+.progressTreeContextCore .progressTreeContextSection :global(.ant-typography:last-child) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.progressTreeContextList {
   min-width: 0;
   display: grid;
   gap: 5px;
@@ -374,7 +445,7 @@
   line-height: 1.55;
 }
 
-.progressTreeDetailList li {
+.progressTreeContextList li {
   overflow: hidden;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -382,12 +453,31 @@
   -webkit-line-clamp: 3;
 }
 
-.progressTreeDetailEvidence {
+.progressTreeContextEvidence {
   display: grid;
   gap: 10px;
 }
 
-.progressTreeDetailEmpty {
+.progressTreeContextMore {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.progressTreeContextMore summary {
+  width: fit-content;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.progressTreeContextMore[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.progressTreeContextEmpty {
   color: #64748b;
   font-size: 13px;
   line-height: 1.6;
