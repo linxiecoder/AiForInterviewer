@@ -25,6 +25,7 @@ import {
   INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_SCROLL_CLASS,
   INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT,
+  INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS,
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
@@ -33,6 +34,7 @@ import {
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
   buildProgressTreeContextBannerContent,
+  buildProgressTreeContextBannerExpandedSections,
   buildProgressTreeNodeDetailViewModel,
   buildWorkbenchProgressNodeTitleMeta,
   buildWorkbenchProgressNodes,
@@ -45,6 +47,7 @@ import {
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveProgressTreeSelectedNodeRefAfterClick,
+  shouldSubmitAnswerFromKeyboard,
   shouldShowProgressTreeContextBannerToggle,
   type PolishBindingOption,
 } from "./InterviewPage";
@@ -169,7 +172,10 @@ type ProgressTreeNodeStatusLightTonesAreStable = Expect<
   >
 >;
 type WorkbenchChatBubbleAlignmentIsStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT, { readonly system: "left"; readonly user_answer: "right" }>
+  Equal<typeof INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT, { readonly system_question: "left"; readonly user_answer: "right" }>
+>;
+type WorkbenchKeyboardShortcutsAreStable = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS, { readonly send_answer: "Ctrl+Enter" }>
 >;
 type ProgressTreeScrollClassIsScoped = Expect<
   Equal<typeof INTERVIEW_PROGRESS_TREE_SCROLL_CLASS, "progressTreeScroll">
@@ -657,20 +663,45 @@ function test_progress_node_context_banner_supports_expand_toggle_for_depth(): v
     {
       ...buildTestProgressNode("node_expand_context", "混合检索策略设计与优化", "resume_deep_dive", "深度打磨类"),
       depth_goal: "从双路召回设计、融合排序公式、向量模型领域适配、阈值调优等方面展开深挖，验证候选人对检索增强全链路的掌控力。",
+      follow_up_focus: ["如何验证融合排序收益", "如何处理召回不足"],
+      common_loss_risks: ["只讲工具链，不说明阈值调优依据"],
+      expected_answer_signals: ["能给出评估闭环"],
+      first_question: "你会如何设计第一题？",
+      resume_signal: "简历中提到搜索优化",
+      jd_basis: "岗位要求检索增强能力",
     },
   ]);
   const bannerContent = buildProgressTreeContextBannerContent(session, "node_expand_context");
   const emptyBanner = buildProgressTreeContextBannerContent(session, "missing_node");
+  const expandedSections = buildProgressTreeContextBannerExpandedSections(bannerContent);
+  const expandedCopy = expandedSections.flatMap((section) => [section.title, ...section.items]).join(" ");
 
   assertContract(shouldShowProgressTreeContextBannerToggle(bannerContent), "有深度要求时公告条应支持展开");
   assertContract(!shouldShowProgressTreeContextBannerToggle(emptyBanner), "空态公告条不应显示展开入口");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand === "展开", "公告条展开按钮文案应为展开");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse === "收起", "公告条收起按钮文案应为收起");
+  assertContract(expandedSections.map((section) => section.key).join(",") === "depth_requirement,follow_up_directions,loss_risks", "展开后应只显示深度要求、连续追问方向、常见失分风险");
+  assertContract(expandedCopy.includes("深度要求"), "展开后应展示深度要求标题");
+  assertContract(expandedCopy.includes("连续追问方向"), "展开后应展示连续追问方向标题");
+  assertContract(expandedCopy.includes("常见失分风险"), "展开后应展示常见失分风险标题");
+  assertContract(expandedCopy.includes("如何验证融合排序收益"), "展开后应展示追问方向内容");
+  assertContract(expandedCopy.includes("只讲工具链，不说明阈值调优依据"), "展开后应展示常见失分风险内容");
+  for (const hiddenCopy of ["建议第一题", "你会如何设计第一题？", "好回答信号", "简历线索", "岗位依据", "简历中提到搜索优化", "岗位要求检索增强能力"]) {
+    assertContract(!expandedCopy.includes(hiddenCopy), `展开后不应展示 ${hiddenCopy}`);
+  }
 }
 
 function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right(): void {
-  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.system === "left", "系统消息应位于聊天区左侧");
-  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer === "right", "用户回答应位于聊天区右侧");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.system_question === "left", "系统题目应位于聊天区左侧");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer === "right", "用户回答及暂无回答占位应位于聊天区右侧");
+}
+
+function test_workbench_ctrl_enter_submits_answer(): void {
+  assertContract(INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS.send_answer === "Ctrl+Enter", "发送快捷键应登记为 Ctrl+Enter");
+  assertContract(shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true }), "Ctrl+Enter 应触发发送");
+  assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: false }), "单独 Enter 不应触发发送");
+  assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true, shiftKey: true }), "Ctrl+Shift+Enter 不应触发发送");
+  assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true, isComposing: true }), "输入法组合态不应触发发送");
 }
 
 function test_progress_node_context_banner_ignores_group_header_click(): void {
@@ -853,6 +884,7 @@ test_progress_node_context_banner_hides_question_and_detail_lists();
 test_progress_tree_node_status_uses_title_suffix_lights();
 test_progress_node_context_banner_supports_expand_toggle_for_depth();
 test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
+test_workbench_ctrl_enter_submits_answer();
 test_progress_node_context_banner_ignores_group_header_click();
 test_progress_node_context_banner_uses_safe_copy();
 test_progress_tree_detail_uses_display_safe_copy();

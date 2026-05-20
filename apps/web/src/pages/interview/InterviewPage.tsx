@@ -121,8 +121,11 @@ export const INTERVIEW_WORKBENCH_PRIMARY_ACTIONS = ["send_answer"] as const;
 export const INTERVIEW_WORKBENCH_DISABLED_ACTIONS = [] as const;
 export const INTERVIEW_WORKBENCH_STATE_REGIONS = ["loading", "error", "not_found"] as const;
 export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
-  system: "left",
+  system_question: "left",
   user_answer: "right",
+} as const;
+export const INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS = {
+  send_answer: "Ctrl+Enter",
 } as const;
 const WORKBENCH_PROGRESS_NODE_STATUS_TEXT = {
   completed: "已完成",
@@ -214,7 +217,20 @@ export type ProgressTreeNodeDetailViewModel = {
 export type ProgressTreeContextBannerContent = {
   title: string | null;
   depthRequirement: string | null;
+  followUpDirections: string[];
+  lossRisks: string[];
   emptyDescription?: string;
+};
+
+type ProgressTreeContextBannerSectionKey =
+  | "depth_requirement"
+  | "follow_up_directions"
+  | "loss_risks";
+
+export type ProgressTreeContextBannerSection = {
+  key: ProgressTreeContextBannerSectionKey;
+  title: string;
+  items: string[];
 };
 
 type InterviewListError = {
@@ -861,6 +877,8 @@ export function buildProgressTreeContextBannerContent(
     return {
       title: null,
       depthRequirement: null,
+      followUpDirections: [],
+      lossRisks: [],
       emptyDescription: INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
     };
   }
@@ -878,15 +896,44 @@ export function buildProgressTreeContextBannerContent(
     displayNode.preparation_goal,
     currentPriority?.expected_capability,
   );
+  const followUpDirections = firstSafeProgressTreeTextList(
+    displayNode.follow_up_focus,
+    displayNode.follow_up_directions,
+  ).slice(0, 5);
+  const lossRisks = firstSafeProgressTreeTextList(displayNode.common_loss_risks, displayNode.red_flags);
 
   return {
     title,
     depthRequirement,
+    followUpDirections,
+    lossRisks,
   };
 }
 
 export function shouldShowProgressTreeContextBannerToggle(content: ProgressTreeContextBannerContent): boolean {
-  return Boolean(content.depthRequirement);
+  return buildProgressTreeContextBannerExpandedSections(content).length > 0;
+}
+
+function buildProgressTreeContextBannerListSection(
+  key: ProgressTreeContextBannerSectionKey,
+  title: string,
+  items: readonly string[],
+): ProgressTreeContextBannerSection[] {
+  return items.length > 0 ? [{ key, title, items: [...items] }] : [];
+}
+
+export function buildProgressTreeContextBannerExpandedSections(
+  content: ProgressTreeContextBannerContent,
+): ProgressTreeContextBannerSection[] {
+  return [
+    ...buildProgressTreeContextBannerListSection(
+      "depth_requirement",
+      "深度要求",
+      content.depthRequirement ? [content.depthRequirement] : [],
+    ),
+    ...buildProgressTreeContextBannerListSection("follow_up_directions", "连续追问方向", content.followUpDirections),
+    ...buildProgressTreeContextBannerListSection("loss_risks", "常见失分风险", content.lossRisks),
+  ];
 }
 
 function toWorkbenchProgressNode(params: {
@@ -972,6 +1019,16 @@ export function buildWorkbenchProgressNodeTitleMeta(node: WorkbenchProgressNode)
     statusLabel: progressNodeStatusLabel(node.status),
     statusLightTone: getWorkbenchProgressNodeStatusLightTone(node.status),
   };
+}
+
+export function shouldSubmitAnswerFromKeyboard(event: {
+  key: string;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  isComposing?: boolean;
+}): boolean {
+  return event.key === "Enter" && Boolean(event.ctrlKey) && !event.shiftKey && !event.altKey && !event.isComposing;
 }
 
 export function resolveCurrentWorkbenchProgressNodeKey(
@@ -1639,10 +1696,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
 
     const canExpandContext = shouldShowProgressTreeContextBannerToggle(selectedProgressNodeBanner);
-    const depthClassName = [
-      styles.progressNodeContextDepth,
-      isProgressNodeContextExpanded ? styles.progressNodeContextDepthExpanded : "",
-    ].filter(Boolean).join(" ");
+    const expandedSections = buildProgressTreeContextBannerExpandedSections(selectedProgressNodeBanner);
 
     return (
       <section className={styles.progressNodeContextBanner} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}>
@@ -1653,8 +1707,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           <Typography.Text strong className={styles.progressNodeContextTitle}>
             {selectedProgressNodeBanner.title}
           </Typography.Text>
-          {selectedProgressNodeBanner.depthRequirement ? (
-            <Typography.Text type="secondary" className={depthClassName}>
+          {selectedProgressNodeBanner.depthRequirement && !isProgressNodeContextExpanded ? (
+            <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
               {selectedProgressNodeBanner.depthRequirement}
             </Typography.Text>
           ) : null}
@@ -1670,6 +1724,28 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               ? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse
               : INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand}
           </button>
+        ) : null}
+        {isProgressNodeContextExpanded ? (
+          <div className={styles.progressNodeContextExpandedBody}>
+            {expandedSections.map((section) => (
+              <section className={styles.progressNodeContextSection} key={section.key}>
+                <Typography.Text strong className={styles.progressNodeContextSectionTitle}>
+                  {section.title}
+                </Typography.Text>
+                {section.items.length === 1 ? (
+                  <Typography.Text type="secondary" className={styles.progressNodeContextSectionText}>
+                    {section.items[0]}
+                  </Typography.Text>
+                ) : (
+                  <ul className={styles.progressNodeContextList}>
+                    {section.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ))}
+          </div>
         ) : null}
       </section>
     );
@@ -1964,7 +2040,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     </div>
                     {turn.answers.length === 0 ? (
                       <div style={{ display: "grid", gap: 12 }}>
-                        <div className={styles.systemBubble}>
+                        <div className={styles.answerBubble}>
                           <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
                         </div>
                         <section className={styles.feedbackAccordion} aria-label="反馈占位区域">
@@ -2006,6 +2082,18 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   rows={4}
                   value={answerText}
                   onChange={(event) => setAnswerText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (shouldSubmitAnswerFromKeyboard({
+                      key: event.key,
+                      ctrlKey: event.ctrlKey,
+                      shiftKey: event.shiftKey,
+                      altKey: event.altKey,
+                      isComposing: event.nativeEvent.isComposing,
+                    })) {
+                      event.preventDefault();
+                      sendAnswer();
+                    }
+                  }}
                   placeholder="请输入你的回答"
                   maxLength={2000}
                   disabled={submittingAnswer || creatingQuestion || !hasQuestion}

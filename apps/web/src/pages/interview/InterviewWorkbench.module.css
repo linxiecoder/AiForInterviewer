@@ -414,12 +414,6 @@
   -webkit-line-clamp: 2;
 }
 
-.progressNodeContextDepthExpanded {
-  display: block;
-  overflow: visible;
-  -webkit-line-clamp: unset;
-}
-
 .progressNodeContextToggle {
   align-self: center;
   flex: 0 0 auto;
@@ -438,6 +432,48 @@
 .progressNodeContextToggle:hover,
 .progressNodeContextToggle:focus-visible {
   background: rgba(37, 99, 235, 0.08);
+}
+
+.progressNodeContextExpandedBody {
+  grid-column: 2 / -1;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.progressNodeContextSection {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.progressNodeContextSectionTitle {
+  color: #1f2937;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.progressNodeContextSectionText {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.progressNodeContextList {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 16px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.progressNodeContextList li {
+  overflow-wrap: anywhere;
 }
 
 .progressNodeContextEmpty {
@@ -461,7 +497,6 @@
 }
 
 .questionBubble,
-.systemBubble,
 .answerBubble {
   max-width: min(760px, 82%);
   padding: 14px 18px;
@@ -474,13 +509,6 @@
   border: 1px solid #dce6f2;
   background: #ffffff;
   color: #1f2937;
-}
-
-.systemBubble {
-  align-self: flex-start;
-  border: 1px solid #dce6f2;
-  background: #ffffff;
-  color: #475569;
 }
 
 .questionText {
