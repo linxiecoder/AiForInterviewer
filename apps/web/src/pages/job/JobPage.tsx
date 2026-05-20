@@ -21,7 +21,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CheckCircleOutlined, EditOutlined, EyeOutlined, InboxOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, EditOutlined, EyeOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { AppShell } from "../../widgets/app-shell/AppShell";
 import type { ResumeApiState } from "../../entities/resume/api/resumeApi";
 import { fetchResumeSummaries } from "../../entities/resume/api/resumeApi";
@@ -860,7 +860,16 @@ export function JobPage() {
     <AppShell>
       <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
         <Card>
-          <Space wrap style={{ width: "100%", justifyContent: "space-between" }}>
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
             <Space wrap>
               <Button
                 type="primary"
@@ -881,14 +890,18 @@ export function JobPage() {
             </Space>
             <Input.Search
               allowClear
+              enterButton={<SearchOutlined aria-label="搜索" />}
               placeholder="搜索岗位、公司、部门"
               value={jobSearchKeyword}
               onChange={(event) => {
                 setJobSearchKeyword(event.target.value);
               }}
-              style={{ width: 320 }}
+              onSearch={(value) => {
+                setJobSearchKeyword(value);
+              }}
+              style={{ width: 360, maxWidth: "100%", marginLeft: "auto" }}
             />
-          </Space>
+          </div>
         </Card>
 
         <Card>

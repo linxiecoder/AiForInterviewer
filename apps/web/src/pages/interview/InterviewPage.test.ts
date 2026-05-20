@@ -6,10 +6,18 @@ import {
   INTERVIEW_CREATE_PENDING_LOG_EVENTS,
   INTERVIEW_CREATE_PENDING_STATUS,
   INTERVIEW_CREATE_SUCCESS_ACTIONS,
+  INTERVIEW_LIST_HEADER_CONTROL_ORDER,
+  INTERVIEW_LIST_HEADER_TEXT_STATE,
+  INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY,
+  INTERVIEW_LIST_TABLE_COLUMN_WIDTHS,
+  INTERVIEW_LIST_TABLE_SCROLL_X,
+  INTERVIEW_SEARCH_PLACEHOLDER,
   INTERVIEW_SESSION_WORKBENCH_FIELDS,
   INTERVIEW_SUPPORTED_MODES,
   INTERVIEW_WORKBENCH_DISABLED_ACTIONS,
   INTERVIEW_WORKBENCH_FEEDBACK_ITEMS,
+  INTERVIEW_WORKBENCH_HERO_ACTION_COPY,
+  INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY,
   INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT,
   INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS,
   INTERVIEW_WORKBENCH_LAYOUT_AREAS,
@@ -17,6 +25,7 @@ import {
   INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY,
   INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
+  INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY,
   INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT,
@@ -33,6 +42,7 @@ import {
   buildPolishSessionPath,
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
+  filterPolishSessionsBySearch,
   buildProgressTreeContextBannerContent,
   buildProgressTreeContextBannerExpandedSections,
   buildProgressTreeNodeDetailViewModel,
@@ -62,6 +72,7 @@ import type {
   CreatePolishSessionRequest,
   PolishProgressTreeNode,
   PolishSessionDetail,
+  PolishSessionSummary,
   PolishTopic,
 } from "../../entities/polish/model/types";
 
@@ -107,6 +118,35 @@ type CreateModeFieldIsVisible = Expect<Equal<typeof INTERVIEW_CREATE_MODE_FIELD_
 type SupportedModesArePolishOnly = Expect<
   Equal<typeof INTERVIEW_SUPPORTED_MODES, readonly [{ readonly value: "polish"; readonly label: "打磨模式 / Polish" }]>
 >;
+type InterviewListHeaderMatchesAssetPages = Expect<
+  Equal<typeof INTERVIEW_LIST_HEADER_CONTROL_ORDER, readonly ["actions", "search"]>
+>;
+type InterviewListHeaderTextIsRemoved = Expect<Equal<typeof INTERVIEW_LIST_HEADER_TEXT_STATE, "removed">>;
+type InterviewListSearchPlaceholderIsStable = Expect<
+  Equal<typeof INTERVIEW_SEARCH_PLACEHOLDER, "搜索模拟面试名称、岗位、简历、主题">
+>;
+type InterviewListTableColumnWidthsAreStable = Expect<
+  Equal<
+    typeof INTERVIEW_LIST_TABLE_COLUMN_WIDTHS,
+    {
+      readonly title: 220;
+      readonly mode: 118;
+      readonly status: 96;
+      readonly binding_label: 280;
+      readonly topic: 240;
+      readonly updated_at: 168;
+      readonly actions: 88;
+    }
+  >
+>;
+type InterviewListTableScrollWidthIsStable = Expect<Equal<typeof INTERVIEW_LIST_TABLE_SCROLL_X, 1210>>;
+type InterviewListTableCellTextPolicyIsStable = Expect<
+  Equal<
+    typeof INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY,
+    { readonly overflow: "single_line_ellipsis"; readonly hover: "tooltip" }
+  >
+>;
+
 type WorkbenchFieldsAreStable = Expect<
   Equal<
     typeof INTERVIEW_SESSION_WORKBENCH_FIELDS,
@@ -138,6 +178,15 @@ type WorkbenchScrollRegionsAreStable = Expect<
 type WorkbenchHeroActionsStayOnTitleRowEnd = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT, "title_row_end">
 >;
+type WorkbenchHeroActionsUseTextOnlyButtons = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY, "text_only">
+>;
+type WorkbenchHeroActionCopyMatchesActualBehavior = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_HERO_ACTION_COPY,
+    readonly ["返回模拟面试列表", "复制模拟面试内容"]
+  >
+>;
 type WorkbenchProgressHeaderCopyOmitsPercentText = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY, readonly ["模拟面试进度"]>
 >;
@@ -146,6 +195,9 @@ type ProgressTreeDetailPlacementIsStable = Expect<
 >;
 type ProgressTreeContextBannerCopyIsStable = Expect<
   Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE, "当前节点上下文">
+>;
+type ProgressTreeContextBannerHeaderLayoutIsStable = Expect<
+  Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT, "label_and_node_title_same_row">
 >;
 type ProgressTreeContextBannerEmptyCopyIsStable = Expect<
   Equal<
@@ -163,7 +215,7 @@ type ProgressTreeLeftListFieldsAreStable = Expect<
   >
 >;
 type ProgressTreeNodeStatusPlacementIsStable = Expect<
-  Equal<typeof INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT, "node_title_suffix_light">
+  Equal<typeof INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT, "node_row_trailing_status_light">
 >;
 type ProgressTreeNodeStatusLightTonesAreStable = Expect<
   Equal<
@@ -286,6 +338,31 @@ const createPendingDescription = buildInterviewCreatePendingDescription(12);
 const payloadShape: CreatePolishSessionRequest = createPayload;
 const sessionWorkbenchPath = buildPolishSessionPath("ses_001");
 
+function buildTestSessionSummary(overrides: Partial<PolishSessionSummary> = {}): PolishSessionSummary {
+  return {
+    id: "ses_summary_001",
+    session_id: "ses_summary_001",
+    title: "经历真实性与贡献边界",
+    mode: "polish",
+    status: "running",
+    resume_job_binding_id: "bind_001",
+    resume_id: "res_001",
+    resume_version_id: "res_ver_001",
+    job_id: "job_001",
+    job_version_id: "job_ver_001",
+    job_title: "AI 工程化岗位",
+    job_company: "ACME",
+    resume_title: "分布式系统简历",
+    binding_label: "AI 工程化岗位 / 分布式系统简历",
+    topic_id: "topic_001",
+    subtopic_id: null,
+    custom_topic_text_summary: "混合检索主题",
+    created_at: "2026-05-20T10:00:00Z",
+    updated_at: "2026-05-20T10:00:00Z",
+    ...overrides,
+  };
+}
+
 type TestProgressTreeNode = PolishProgressTreeNode & {
   basis_type?: string | null;
   category?: string | null;
@@ -386,6 +463,33 @@ function assertContract(condition: boolean, message: string): void {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function test_interview_list_toolbar_uses_shared_actions_and_search(): void {
+  const sessions = [
+    buildTestSessionSummary(),
+    buildTestSessionSummary({
+      id: "ses_summary_002",
+      session_id: "ses_summary_002",
+      title: "高并发缓存一致性",
+      job_title: "后端架构师",
+      resume_title: "缓存治理简历",
+      binding_label: "后端架构师 / 缓存治理简历",
+      custom_topic_text_summary: "缓存一致性主题",
+    }),
+  ];
+
+  assertContract(INTERVIEW_LIST_HEADER_TEXT_STATE === "removed", "模拟面试列表工具栏不应展示额外标题和说明文案");
+  assertContract(INTERVIEW_LIST_HEADER_CONTROL_ORDER.join(",") === "actions,search", "模拟面试列表工具栏应与简历、岗位页一样左操作右搜索");
+  assertContract(INTERVIEW_SEARCH_PLACEHOLDER === "搜索模拟面试名称、岗位、简历、主题", "模拟面试搜索框应使用稳定暗纹提示");
+  assertContract(INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.binding_label === 280, "绑定关系列应加宽以减少换行");
+  assertContract(INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.topic === 240, "主题列应保留足够宽度");
+  assertContract(INTERVIEW_LIST_TABLE_SCROLL_X === 1210, "模拟面试列表应使用稳定横向表格宽度");
+  assertContract(INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY.overflow === "single_line_ellipsis", "表格文本超出一行应省略");
+  assertContract(INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY.hover === "tooltip", "表格文本 hover 应展示全文");
+  assertContract(filterPolishSessionsBySearch(sessions, "缓存").map((session) => session.session_id).join(",") === "ses_summary_002", "模拟面试搜索应匹配名称、岗位、简历或主题");
+  assertContract(filterPolishSessionsBySearch(sessions, "分布式系统").length === 1, "模拟面试搜索应匹配简历标题");
+  assertContract(filterPolishSessionsBySearch(sessions, "").length === 2, "空搜索应保留全部模拟面试记录");
 }
 
 function test_progress_tree_groups_flat_nodes_by_display_category_title(): void {
@@ -637,7 +741,14 @@ function test_progress_node_context_banner_hides_question_and_detail_lists(): vo
   }
 }
 
-function test_progress_tree_node_status_uses_title_suffix_lights(): void {
+function test_workbench_hero_actions_are_text_only_and_copy_session_content(): void {
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT === "title_row_end", "顶部按钮组应位于标题行右侧");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY === "text_only", "顶部按钮应只展示文字，不展示图标");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0] === "返回模拟面试列表", "返回按钮文案应稳定");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1] === "复制模拟面试内容", "复制按钮文案应匹配实际复制内容");
+}
+
+function test_progress_tree_node_status_uses_row_trailing_lights(): void {
   const session = buildTestSession(
     [
       buildTestProgressNode("node_pending", "待开始节点", "resume_deep_dive", "深度打磨类"),
@@ -649,7 +760,7 @@ function test_progress_tree_node_status_uses_title_suffix_lights(): void {
   const pendingMeta = buildWorkbenchProgressNodeTitleMeta(realNodes[0]);
   const activeMeta = buildWorkbenchProgressNodeTitleMeta(realNodes[1]);
 
-  assertContract(INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT === "node_title_suffix_light", "节点状态应放在标题后并使用点灯");
+  assertContract(INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT === "node_row_trailing_status_light", "节点状态应位于节点栏目最右侧并使用点灯");
   assertContract(pendingMeta.statusLabel === "未开始", "待开始节点应显示未开始状态");
   assertContract(pendingMeta.statusLightTone === "orange", "待开始节点应使用橙色点灯");
   assertContract(activeMeta.statusLabel === "进行中", "当前节点应显示进行中状态");
@@ -678,6 +789,7 @@ function test_progress_node_context_banner_supports_expand_toggle_for_depth(): v
 
   assertContract(shouldShowProgressTreeContextBannerToggle(bannerContent), "有深度要求时公告条应支持展开");
   assertContract(!shouldShowProgressTreeContextBannerToggle(emptyBanner), "空态公告条不应显示展开入口");
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT === "label_and_node_title_same_row", "公告条标题和节点名称应固定在同一行");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand === "展开", "公告条展开按钮文案应为展开");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse === "收起", "公告条收起按钮文案应为收起");
   assertContract(expandedSections.map((section) => section.key).join(",") === "depth_requirement,follow_up_directions,loss_risks", "展开后应只显示深度要求、连续追问方向、常见失分风险");
@@ -868,6 +980,7 @@ function test_interview_topic_title_neutralizes_interrogation_copy(): void {
   );
 }
 
+test_interview_list_toolbar_uses_shared_actions_and_search();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();
 test_progress_tree_group_headers_default_expanded_for_collapse_control();
@@ -881,7 +994,8 @@ test_progress_tree_category_header_is_group_only();
 test_progress_node_context_banner_defaults_to_current_priority();
 test_progress_node_context_banner_updates_when_node_selected();
 test_progress_node_context_banner_hides_question_and_detail_lists();
-test_progress_tree_node_status_uses_title_suffix_lights();
+test_workbench_hero_actions_are_text_only_and_copy_session_content();
+test_progress_tree_node_status_uses_row_trailing_lights();
 test_progress_node_context_banner_supports_expand_toggle_for_depth();
 test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
 test_workbench_ctrl_enter_submits_answer();

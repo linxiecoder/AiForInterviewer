@@ -1,14 +1,13 @@
 import {
-  ArrowLeftOutlined,
-  CopyOutlined,
   DownOutlined,
   CheckCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   RightOutlined,
+  SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Drawer, Form, Input, Popover, Progress, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Drawer, Form, Input, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { useRouteController } from "../../app/routes/router";
@@ -61,6 +60,23 @@ export const INTERVIEW_CREATE_PENDING_STATUS = {
   message: "正在创建模拟面试",
   logHint: "后端日志可搜索 polish_session_create_started / polish_session_create_completed / polish_session_create_failed。",
 } as const;
+export const INTERVIEW_LIST_HEADER_CONTROL_ORDER = ["actions", "search"] as const;
+export const INTERVIEW_LIST_HEADER_TEXT_STATE = "removed" as const;
+export const INTERVIEW_SEARCH_PLACEHOLDER = "搜索模拟面试名称、岗位、简历、主题" as const;
+export const INTERVIEW_LIST_TABLE_COLUMN_WIDTHS = {
+  title: 220,
+  mode: 118,
+  status: 96,
+  binding_label: 280,
+  topic: 240,
+  updated_at: 168,
+  actions: 88,
+} as const;
+export const INTERVIEW_LIST_TABLE_SCROLL_X = 1210 as const;
+export const INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY = {
+  overflow: "single_line_ellipsis",
+  hover: "tooltip",
+} as const;
 export const INTERVIEW_SESSION_WORKBENCH_FIELDS = [
   "title",
   "mode",
@@ -88,6 +104,11 @@ export const INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS = {
 export const INTERVIEW_WORKBENCH_SCROLL_REGIONS = ["progress_node_list", "chat_scroll"] as const;
 export const INTERVIEW_PROGRESS_TREE_SCROLL_CLASS = "progressTreeScroll" as const;
 export const INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT = "title_row_end" as const;
+export const INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY = "text_only" as const;
+export const INTERVIEW_WORKBENCH_HERO_ACTION_COPY = [
+  "返回模拟面试列表",
+  "复制模拟面试内容",
+] as const;
 export const INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY = ["模拟面试进度"] as const;
 export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
   "岗位",
@@ -137,7 +158,7 @@ export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES = {
   in_progress: "blue",
   pending: "orange",
 } as const;
-export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT = "node_title_suffix_light" as const;
+export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT = "node_row_trailing_status_light" as const;
 type WorkbenchProgressNodeStatus = keyof typeof WORKBENCH_PROGRESS_NODE_STATUS_TEXT;
 type WorkbenchProgressNodeKind = "group" | "node" | "question";
 export type WorkbenchProgressNode = {
@@ -180,6 +201,7 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
 } as const;
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE = "当前节点上下文";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT = "label_and_node_title_same_row" as const;
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY = "请选择一个进展节点查看本轮训练目标。";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY = {
   expand: "展开",
@@ -392,6 +414,32 @@ export function buildInterviewCreatePendingDescription(elapsedSeconds: number): 
   return `已等待 ${safeElapsedSeconds} 秒，正在创建会话并生成进展树。耗时较长时请勿重复点击；${INTERVIEW_CREATE_PENDING_STATUS.logHint}`;
 }
 
+export function filterPolishSessionsBySearch(
+  sessions: readonly PolishSessionSummary[],
+  rawKeyword: string,
+): PolishSessionSummary[] {
+  const keyword = rawKeyword.trim().toLowerCase();
+  if (keyword.length === 0) {
+    return [...sessions];
+  }
+
+  return sessions.filter((session) =>
+    [
+      session.title,
+      session.mode,
+      session.status,
+      session.binding_label,
+      session.job_title,
+      session.job_company,
+      session.resume_title,
+      session.topic_id,
+      session.subtopic_id,
+      session.custom_topic_text_summary,
+      session.session_id,
+    ].some((value) => (value ?? "").toLowerCase().includes(keyword)),
+  );
+}
+
 function toDisplayDate(raw: string): string {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) {
@@ -405,6 +453,17 @@ function toModeLabel(mode: string): string {
     return "打磨模式 / Polish";
   }
   return mode;
+}
+
+function renderInterviewListEllipsisText(value: string, options: { strong?: boolean } = {}) {
+  const displayValue = value.trim() || "-";
+  return (
+    <Tooltip title={displayValue} placement="topLeft">
+      <Typography.Text strong={options.strong} className={styles.tableCellText}>
+        {displayValue}
+      </Typography.Text>
+    </Tooltip>
+  );
 }
 
 function parseListError(error: unknown): InterviewListError {
@@ -637,7 +696,7 @@ function renderQuestionTextWithSources(
 
 export function buildPolishSessionClipboardMarkdown(session: PolishSessionDetail): string {
   const rows: string[] = [
-    "# 模拟面试复盘",
+    "# 模拟面试内容",
     "",
     `岗位：${session.job_title || FALLBACK_JOB_TITLE}`,
     `简历：${session.resume_title || FALLBACK_RESUME_TITLE}`,
@@ -1087,6 +1146,7 @@ function logInterviewCreateEvent(event: string, payload: Record<string, unknown>
 export function InterviewPage() {
   const { navigate } = useRouteController();
   const [sessions, setSessions] = useState<PolishSessionSummary[]>([]);
+  const [sessionSearchKeyword, setSessionSearchKeyword] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<InterviewListError | null>(null);
   const [createOpen, setCreateOpen] = useState<boolean>(false);
@@ -1159,6 +1219,10 @@ export function InterviewPage() {
   }, [createStartedAt, createSubmitLoading]);
 
   const bindingOptions = useMemo(() => buildPolishBindingOptions(jobs), [jobs]);
+  const filteredSessions = useMemo(
+    () => filterPolishSessionsBySearch(sessions, sessionSearchKeyword),
+    [sessions, sessionSearchKeyword],
+  );
   const createAvailability = useMemo(
     () =>
       getInterviewCreateAvailability({
@@ -1235,50 +1299,57 @@ export function InterviewPage() {
         title: "名称",
         dataIndex: "title",
         key: "title",
-        width: 220,
-        render: (value: string) => <Typography.Text strong>{value}</Typography.Text>,
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.title,
+        ellipsis: true,
+        render: (value: string) => renderInterviewListEllipsisText(value, { strong: true }),
       },
       {
         title: "模式",
         dataIndex: "mode",
         key: "mode",
-        width: 110,
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.mode,
+        ellipsis: true,
         render: (value: string) => <Tag color="blue">{toModeLabel(value)}</Tag>,
       },
       {
         title: "状态",
         dataIndex: "status",
         key: "status",
-        width: 110,
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.status,
+        ellipsis: true,
         render: (value: string) => <Tag color={value === "running" ? "green" : "default"}>{value}</Tag>,
       },
       {
         title: "绑定关系",
         dataIndex: "binding_label",
         key: "binding_label",
-        width: 180,
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.binding_label,
+        ellipsis: true,
         render: (_: unknown, record) => {
           const value = record.binding_label || `${toDisplayJobTitle(record)} / ${toDisplayResumeTitle(record)}`;
-          return <Typography.Text>{value}</Typography.Text>;
+          return renderInterviewListEllipsisText(value);
         },
       },
       {
         title: "主题",
         key: "topic",
-        width: 180,
-        render: (_, record) => <Typography.Text>{record.title || "未选择"}</Typography.Text>,
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.topic,
+        ellipsis: true,
+        render: (_, record) => renderInterviewListEllipsisText(record.title || "未选择"),
       },
       {
         title: "更新时间",
         dataIndex: "updated_at",
         key: "updated_at",
-        width: 180,
-        render: (value: string) => toDisplayDate(value),
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.updated_at,
+        ellipsis: true,
+        render: (value: string) => renderInterviewListEllipsisText(toDisplayDate(value)),
       },
       {
         title: "操作",
         key: "actions",
-        width: 96,
+        width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.actions,
+        fixed: "right",
         render: (_, record) => (
           <Button
             type="link"
@@ -1298,16 +1369,20 @@ export function InterviewPage() {
     <AppShell>
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <Card>
-          <Space wrap style={{ width: "100%", justifyContent: "space-between" }}>
-            <div>
-              <Typography.Title level={4} style={{ marginBottom: 4 }}>
-                模拟面试
-              </Typography.Title>
-              <Typography.Text type="secondary">
-                查看当前账号下的打磨模式会话记录。
-              </Typography.Text>
-            </div>
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
             <Space wrap>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateEntry}>
+                发起模拟面试
+              </Button>
               <Button
                 icon={<ReloadOutlined />}
                 onClick={() => {
@@ -1316,11 +1391,21 @@ export function InterviewPage() {
               >
                 刷新
               </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateEntry}>
-                发起模拟面试
-              </Button>
             </Space>
-          </Space>
+            <Input.Search
+              allowClear
+              enterButton={<SearchOutlined aria-label="搜索" />}
+              value={sessionSearchKeyword}
+              onChange={(event) => {
+                setSessionSearchKeyword(event.target.value);
+              }}
+              onSearch={(value) => {
+                setSessionSearchKeyword(value);
+              }}
+              placeholder={INTERVIEW_SEARCH_PLACEHOLDER}
+              style={{ width: 360, maxWidth: "100%", marginLeft: "auto" }}
+            />
+          </div>
         </Card>
 
         <Card>
@@ -1351,13 +1436,14 @@ export function InterviewPage() {
             <Table<PolishSessionSummary>
               rowKey="id"
               columns={columns}
-              dataSource={sessions}
+              dataSource={filteredSessions}
               pagination={{
                 showSizeChanger: true,
                 showTotal: (total) => `共 ${total} 条`,
               }}
               size="small"
-              scroll={{ x: 1080 }}
+              tableLayout="fixed"
+              scroll={{ x: INTERVIEW_LIST_TABLE_SCROLL_X }}
             />
           )}
         </Card>
@@ -1610,7 +1696,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setCopyingSession(true);
     try {
       await window.navigator.clipboard.writeText(buildPolishSessionClipboardMarkdown(session));
-      message.success("复盘内容已复制到剪贴板。");
+      message.success("模拟面试内容已复制到剪贴板。");
     } catch (copyError) {
       if (copyError instanceof Error) {
         message.error(copyError.message);
@@ -1685,12 +1771,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           className={`${styles.progressNodeContextBanner} ${styles.progressNodeContextEmpty}`}
           aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
         >
-          <Typography.Text strong className={styles.progressNodeContextLabel}>
-            {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
-          </Typography.Text>
-          <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
-            {selectedProgressNodeBanner?.emptyDescription ?? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY}
-          </Typography.Text>
+          <div className={styles.progressNodeContextHeader}>
+            <Typography.Text strong className={styles.progressNodeContextLabel}>
+              {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
+            </Typography.Text>
+            <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
+              {selectedProgressNodeBanner?.emptyDescription ?? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY}
+            </Typography.Text>
+          </div>
         </section>
       );
     }
@@ -1700,18 +1788,13 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
     return (
       <section className={styles.progressNodeContextBanner} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}>
-        <Typography.Text strong className={styles.progressNodeContextLabel}>
-          {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
-        </Typography.Text>
-        <div className={styles.progressNodeContextBody}>
+        <div className={styles.progressNodeContextHeader}>
+          <Typography.Text strong className={styles.progressNodeContextLabel}>
+            {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
+          </Typography.Text>
           <Typography.Text strong className={styles.progressNodeContextTitle}>
             {selectedProgressNodeBanner.title}
           </Typography.Text>
-          {selectedProgressNodeBanner.depthRequirement && !isProgressNodeContextExpanded ? (
-            <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
-              {selectedProgressNodeBanner.depthRequirement}
-            </Typography.Text>
-          ) : null}
         </div>
         {canExpandContext ? (
           <button
@@ -1724,6 +1807,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               ? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse
               : INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand}
           </button>
+        ) : null}
+        {selectedProgressNodeBanner.depthRequirement && !isProgressNodeContextExpanded ? (
+          <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
+            {selectedProgressNodeBanner.depthRequirement}
+          </Typography.Text>
         ) : null}
         {isProgressNodeContextExpanded ? (
           <div className={styles.progressNodeContextExpandedBody}>
@@ -1837,10 +1925,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 <Typography.Text strong className={styles.nodeTitleText}>
                   {titleMeta.title}
                 </Typography.Text>
-                <span className={statusDotClassName} />
-                <Typography.Text type="secondary" className={styles.nodeStatusLabel}>
-                  {titleMeta.statusLabel}
-                </Typography.Text>
               </span>
             )}
             {isCurrentPriority ? (
@@ -1852,6 +1936,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               </Tag>
             ) : null}
           </span>
+          {node.kind === "question" ? null : (
+            <span className={styles.nodeStatusCluster}>
+              <span className={statusDotClassName} />
+              <Typography.Text type="secondary" className={styles.nodeStatusLabel}>
+                {titleMeta.statusLabel}
+              </Typography.Text>
+            </span>
+          )}
           {isExpandable ? (
             <span className={styles.nodeChevron}>
               {isExpanded ? <DownOutlined /> : <RightOutlined />}
@@ -1917,17 +2009,15 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               <div className={styles.heroActions}>
                 <Button
                   type="primary"
-                  icon={<ArrowLeftOutlined />}
                   onClick={() => navigate("/interview")}
                 >
-                  返回模拟面试列表
+                  {INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0]}
                 </Button>
                 <Button
-                  icon={<CopyOutlined />}
                   loading={copyingSession}
                   onClick={() => void copySessionContent()}
                 >
-                  复制复盘内容
+                  {INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1]}
                 </Button>
               </div>
             </div>

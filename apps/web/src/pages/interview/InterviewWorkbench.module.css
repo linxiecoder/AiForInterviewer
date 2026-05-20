@@ -250,9 +250,9 @@
 .nodeCardActive {
   width: 100%;
   min-height: 48px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 8px 10px;
   border-radius: 6px;
@@ -321,7 +321,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 
 .nodeTitleText {
@@ -330,6 +329,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nodeStatusCluster {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+  min-width: max-content;
 }
 
 .nodeStatusLabel {
@@ -360,7 +367,11 @@
 }
 
 .nodeChevron {
+  width: 16px;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #1f2937;
 }
 
@@ -369,9 +380,10 @@
   min-height: 56px;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 6px;
   padding: 10px 12px;
   border: 1px solid #cfe0f7;
   border-left: 4px solid #2563eb;
@@ -380,21 +392,24 @@
   overflow: hidden;
 }
 
+.progressNodeContextHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .progressNodeContextLabel {
+  flex: 0 0 auto;
   color: #1d4ed8;
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
 }
 
-.progressNodeContextBody {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
 .progressNodeContextTitle {
   min-width: 0;
+  flex: 1 1 auto;
   color: #0f172a;
   line-height: 1.45;
   overflow: hidden;
@@ -403,7 +418,9 @@
 }
 
 .progressNodeContextDepth {
+  grid-column: 1 / -1;
   min-width: 0;
+  flex: 1 1 auto;
   color: #475569;
   font-size: 13px;
   line-height: 1.45;
@@ -435,7 +452,7 @@
 }
 
 .progressNodeContextExpandedBody {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   min-width: 0;
   display: grid;
   gap: 8px;
@@ -477,7 +494,7 @@
 }
 
 .progressNodeContextEmpty {
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .conversationHeader {
@@ -631,4 +648,12 @@
     max-width: 100%;
     width: 100%;
   }
+}
+
+.tableCellText {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

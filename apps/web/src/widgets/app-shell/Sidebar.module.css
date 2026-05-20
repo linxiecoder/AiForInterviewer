@@ -7,6 +7,13 @@
   flex-direction: column;
   border-right: 1px solid #e6edf4;
   background: linear-gradient(180deg, #fbfdff 0%, #f5f8fd 100%);
+  transition: width 0.2s ease, min-width 0.2s ease, max-width 0.2s ease;
+}
+
+.sidebarCollapsed {
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px !important;
 }
 
 .sidebar :global(.ant-layout-sider-children) {
@@ -16,12 +23,31 @@
 }
 
 .sidebarHeader {
-  padding: 16px 16px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 64px;
+  padding: 16px 12px 10px 16px;
+}
+
+.sidebarCollapsed .sidebarHeader {
+  justify-content: center;
+  padding: 16px 8px 10px;
 }
 
 .productName {
-  font-size: 20px;
+  min-width: 0;
+  overflow: hidden;
   color: #1f2937;
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapseButton {
+  flex: 0 0 auto;
+  color: #334155;
 }
 
 .navMenu {
@@ -32,14 +58,44 @@
   overflow: auto;
 }
 
+.sidebarCollapsed .navMenu {
+  overflow-x: hidden;
+}
+
+.sidebarCollapsed .navMenu :global(.ant-menu-item) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 16px);
+  height: var(--sidebar-menu-item-height);
+  margin-block: 4px;
+  margin-inline: 8px;
+  padding-inline: 0 !important;
+  line-height: var(--sidebar-menu-item-height);
+}
+
+.sidebarCollapsed .navMenu :global(.ant-menu-item-icon) {
+  margin-inline-end: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
 .footer {
   margin-top: auto;
   padding: 12px 12px 16px;
   border-top: 1px solid #edf2f8;
 }
 
+.sidebarCollapsed .footer {
+  padding: 12px 8px 16px;
+}
+
 .footerDivider {
   margin: 0 0 12px 0;
+}
+
+.sidebarCollapsed .footerDivider {
+  margin-bottom: 10px;
 }
 
 .userInfoWrap {
@@ -49,9 +105,20 @@
   margin-bottom: 8px;
 }
 
+.sidebarCollapsed .userInfoWrap {
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
 .userTextWrap {
   flex: 1;
   min-width: 0;
+}
+
+.sidebarCollapsed .userTextWrap {
+  display: none;
 }
 
 .userAvatar {
