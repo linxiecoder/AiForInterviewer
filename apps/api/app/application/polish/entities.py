@@ -69,6 +69,11 @@ class PolishQuestionDraft:
     progress_node_ref: str | None = None
     evidence_refs: tuple[str, ...] = ()
     context_digest: str | None = None
+    question_pattern: str | None = None
+    quality_score: int | None = None
+    confidence_level: str | None = None
+    low_confidence_flags: tuple[str, ...] = ()
+    expected_answer_dimensions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

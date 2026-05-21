@@ -8,6 +8,14 @@ from typing import Any
 
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
+from app.application.polish.question_patterns import QuestionPattern, get_question_pattern, select_question_pattern
+from app.application.polish.question_quality import (
+    QuestionQualityResult,
+    fallback_question_text,
+    repair_question_text,
+    validate_question_quality,
+)
+from app.application.polish.scenario_constraints import ScenarioConstraint, build_scenario_constraints
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_prompts import (
@@ -225,11 +233,19 @@ def build_progress_node_question(
 ) -> PolishQuestionDraft:
     node = resolve_progress_node(plan=plan, state=state, requested_ref=requested_ref)
     if node is None:
-        topic = session.topic_id or "manual_topic"
+        topic = session.custom_topic_text_summary or session.topic_id or "manual_topic"
         fallback_progress_node_ref = truncate_text(requested_ref, max_chars=120) or _node_ref(
             str(context.get("content_digest") or "fallback"),
             f"manual:{topic}",
         )
+        fallback_node = {
+            "progress_node_ref": fallback_progress_node_ref,
+            "title": topic,
+            "expected_capability": "补充业务链路、关键指标、失败案例和系统组件后再继续打磨。",
+            "related_job_requirements": [],
+            "related_resume_evidence": [],
+            "missing_points": ["progress_node_ref 不可用"],
+        }
         source = PolishQuestionSource(
             index=1,
             source_type="progress_node",
@@ -239,17 +255,27 @@ def build_progress_node_question(
             availability="unavailable",
         )
         strategy = _safe_polish_theme_strategy(session.polish_theme)
+        question_text, pattern, scenario, quality = _build_deterministic_v2_question(
+            session=session,
+            context=context,
+            node=fallback_node,
+            evidence_chunks=[],
+            evidence_refs=(),
+            sources=(source,),
+            citations="[1]",
+            strategy=strategy,
+        )
         return PolishQuestionDraft(
-            question_text=_themed_progress_question_text(
-                strategy=strategy,
-                focus=topic,
-                citations="[1]",
-                low_confidence=True,
-            ),
+            question_text=question_text,
             question_sources=(source,),
             progress_node_ref=fallback_progress_node_ref,
             evidence_refs=(),
             context_digest=truncate_text(context.get("content_digest"), max_chars=120),
+            question_pattern=pattern.pattern_id,
+            quality_score=quality.quality_score,
+            confidence_level=scenario.confidence_level,
+            low_confidence_flags=scenario.low_confidence_flags,
+            expected_answer_dimensions=pattern.expected_answer_dimensions,
         )
 
     evidence_selection = select_progress_tree_evidence_chunks(
@@ -312,19 +338,222 @@ def build_progress_node_question(
         ]
     )
     citations = "".join(f"[{source.index}]" for source in sources)
-    focus = _question_focus(node)
     strategy = _safe_polish_theme_strategy(session.polish_theme)
+    question_text, pattern, scenario, quality = _build_deterministic_v2_question(
+        session=session,
+        context=context,
+        node=node,
+        evidence_chunks=evidence_chunks,
+        evidence_refs=evidence_refs,
+        sources=sources,
+        citations=citations,
+        strategy=strategy,
+    )
     return PolishQuestionDraft(
-        question_text=_themed_progress_question_text(
-            strategy=strategy,
-            focus=focus,
-            citations=citations,
-        ),
+        question_text=question_text,
         question_sources=sources,
         progress_node_ref=node.get("progress_node_ref"),
         evidence_refs=evidence_refs,
         context_digest=truncate_text(context.get("content_digest"), max_chars=120),
+        question_pattern=pattern.pattern_id,
+        quality_score=quality.quality_score,
+        confidence_level=scenario.confidence_level,
+        low_confidence_flags=scenario.low_confidence_flags,
+        expected_answer_dimensions=pattern.expected_answer_dimensions,
     )
+
+
+def _build_deterministic_v2_question(
+    *,
+    session: PolishSession,
+    context: dict[str, Any],
+    node: dict[str, Any],
+    evidence_chunks: list[ProgressEvidenceChunk],
+    evidence_refs: tuple[str, ...],
+    sources: tuple[PolishQuestionSource, ...],
+    citations: str,
+    strategy: PolishThemeStrategy,
+) -> tuple[str, QuestionPattern, ScenarioConstraint, QuestionQualityResult]:
+    focus = _question_focus(node)
+    scenario = build_scenario_constraints(
+        progress_node_title=focus,
+        expected_capability=truncate_text(node.get("expected_capability"), max_chars=240),
+        related_job_requirements=_node_text_list(node, "related_job_requirements"),
+        related_resume_evidence=_node_text_list(node, "related_resume_evidence"),
+        missing_points=[*_node_text_list(node, "missing_points"), *_node_text_list(node, "related_match_gaps")],
+        selected_evidence_chunks=evidence_chunks,
+        history_feedback=_recent_feedback_texts(context.get("turns", [])),
+        custom_topic_text=session.custom_topic_text_summary,
+        polish_theme=strategy.theme,
+    )
+    pattern = select_question_pattern(
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        progress_node_title=focus,
+    )
+    question_text = _deterministic_v2_question_text(
+        focus=focus,
+        pattern=pattern,
+        strategy=strategy,
+        scenario=scenario,
+        citations=citations,
+    )
+    quality = validate_question_quality(
+        question_text=question_text,
+        selected_pattern=pattern,
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=evidence_refs,
+        recent_question_texts=_recent_question_texts(context.get("turns", [])),
+        source_availability=_question_source_availability(sources),
+        confidence_level=scenario.confidence_level,
+    )
+    if quality.allow_emit:
+        return question_text, pattern, scenario, quality
+
+    repaired_text = repair_question_text(
+        question_text=question_text,
+        selected_pattern=pattern,
+        theme_strategy=strategy,
+        citations=citations,
+    )
+    repaired_quality = validate_question_quality(
+        question_text=repaired_text,
+        selected_pattern=pattern,
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=evidence_refs,
+        recent_question_texts=_recent_question_texts(context.get("turns", [])),
+        source_availability=_question_source_availability(sources),
+        confidence_level=scenario.confidence_level,
+    )
+    if repaired_quality.allow_emit:
+        return repaired_text, pattern, scenario, repaired_quality
+
+    if strategy.theme == "communication":
+        fallback_pattern = get_question_pattern("star_communication_refactor")
+    elif strategy.theme == "mixed":
+        fallback_pattern = get_question_pattern("mixed_technical_expression")
+    else:
+        fallback_pattern = get_question_pattern("owner_tradeoff_system_design")
+    fallback_text = fallback_question_text(focus=focus, selected_pattern=fallback_pattern, citations=citations)
+    fallback_quality = validate_question_quality(
+        question_text=fallback_text,
+        selected_pattern=fallback_pattern,
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=evidence_refs,
+        recent_question_texts=(),
+        source_availability=_question_source_availability(sources),
+        confidence_level="low",
+    )
+    return fallback_text, fallback_pattern, scenario, fallback_quality
+
+
+def _deterministic_v2_question_text(
+    *,
+    focus: str,
+    pattern: QuestionPattern,
+    strategy: PolishThemeStrategy,
+    scenario: ScenarioConstraint,
+    citations: str,
+) -> str:
+    dimensions = "、".join(pattern.expected_answer_dimensions[:6])
+    if pattern.pattern_id == "real_request_trace_deep_dive":
+        return (
+            f"围绕「{focus}」，业务约束是并发请求下仍要保持最终一致。请沿完整请求链路拆解："
+            "请求进入后锁在哪一层取得，哪些步骤放进本地事务，半事务消息如何提交和确认；"
+            "如果锁释放、事务提交、消息发送或消费任一步失败，失败兜底与重试收敛怎么设计？"
+            "最后说明为什么不用本地消息表或纯补偿方案，以及你的核心 trade-off 和验证指标。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "constraint_change_refactor":
+        return (
+            f"围绕「{focus}」，请先说明新业务约束如何从单一库存演进到仓库维度并发扣减，"
+            "再解释如何在获得吞吐提升的同时保持总库存一致、防止总量超卖风险，并控制对账复杂度。"
+            "请补充失败路径、上线验证指标和关键 trade-off。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "state_machine_and_reconciliation":
+        return (
+            f"围绕「{focus}」，业务约束是双层库存必须可追踪并最终收敛。请定义核心状态和状态流转，"
+            "说明如何防重复扣减、防重复回补，遇到重复消息、超时或人工修正时如何定义对账口径和收敛判断。"
+            "请给出失败路径、验证指标和必要 trade-off。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "partial_success_failure_recovery":
+        return (
+            f"围绕「{focus}」，业务约束是 MinIO、MQ、向量化服务和 MySQL / Redis / ES 多组件结果要对用户可解释。"
+            "请设计向量化超时后的状态机：当出现部分成功 / 部分失败时，如何做重试收敛、断点续跑、幂等保护，"
+            "并用线程池隔离、消息堆积治理和成本上限避免高峰期失控。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "performance_cost_observability":
+        return (
+            f"围绕「{focus}」，业务约束是 1GB 日志从上传入口进入异步处理后要可追踪地完成。"
+            "请按上传入口、解析、切块、向量化、入库拆解管道，说明如何从 15 秒到 3 秒，"
+            "并设计削峰填谷、并行度控制、资源隔离、失败重试、成本权衡和可观测指标。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "star_communication_refactor":
+        return (
+            f"围绕「{focus}」，请用 STAR 结构重讲一遍：用 30 秒做背景压缩，明确个人职责边界，"
+            "按逻辑顺序说明关键动作和取舍表达，最后用结果指标、复盘总结和面试口语化表达收束。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "mixed_technical_expression":
+        return (
+            f"本题权重比例为显性技术 {strategy.explicit_weight}%、隐性表达 {strategy.implicit_weight}%。"
+            f"围绕「{focus}」，请先说明业务约束，再展开技术深度：{scenario.failure_mode}"
+            "你会如何组织方案链路、失败兜底、验证指标和成本控制；同时请按背景、约束、方案、结果、复盘的表达结构回答。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    low_confidence_prefix = "低置信度：" if scenario.confidence_level == "low" else ""
+    return (
+        f"{low_confidence_prefix}围绕「{focus}」，请先限定业务约束、项目链路、系统组件和用户可见结果，"
+        "再选择一个失败路径说明状态机或幂等设计、性能或成本约束、验证指标、状态收敛口径和核心 trade-off。"
+        "如果当前材料不足，请补充项目链路、关键指标、失败案例和系统组件后再继续深挖。"
+        f"回答重点：{dimensions}。{citations}"
+    )
+
+
+def _node_text_list(node: dict[str, Any], key: str) -> list[str]:
+    value = node.get(key)
+    if isinstance(value, (list, tuple)):
+        return [text for item in value if (text := truncate_text(item, max_chars=240))]
+    text = truncate_text(value, max_chars=240)
+    return [text] if text else []
+
+
+def _recent_question_texts(turns: object) -> list[str]:
+    if not isinstance(turns, list):
+        return []
+    result: list[str] = []
+    for turn in turns[-5:]:
+        if isinstance(turn, dict) and (text := truncate_text(turn.get("question_text"), max_chars=400)):
+            result.append(text)
+    return result
+
+
+def _recent_feedback_texts(turns: object) -> list[str]:
+    if not isinstance(turns, list):
+        return []
+    result: list[str] = []
+    for turn in turns[-5:]:
+        if isinstance(turn, dict) and (text := truncate_text(turn.get("feedback_text"), max_chars=240)):
+            result.append(text)
+    return result
+
+
+def _question_source_availability(sources: tuple[PolishQuestionSource, ...]) -> str:
+    if not sources:
+        return "unavailable"
+    availability = {source.availability for source in sources}
+    if availability == {"available"}:
+        return "available"
+    if "available" in availability:
+        return "partial"
+    return "unavailable"
 
 
 def _safe_polish_theme_strategy(theme: str | None) -> PolishThemeStrategy:
@@ -332,35 +561,6 @@ def _safe_polish_theme_strategy(theme: str | None) -> PolishThemeStrategy:
         return resolve_polish_theme_strategy(theme)
     except ValueError:
         return resolve_polish_theme_strategy(None)
-
-
-def _themed_progress_question_text(
-    *,
-    strategy: PolishThemeStrategy,
-    focus: str,
-    citations: str,
-    low_confidence: bool = False,
-) -> str:
-    target = "打磨目标" if low_confidence else "进展节点"
-    if strategy.theme == "technical":
-        return (
-            f"针对「{focus}」这个{target}，请从 owner 视角做技术深挖：如果现在出现部分成功、部分失败的不一致，"
-            "你会如何设计链路完整性、状态机、幂等键、失败路径、重试收敛、对账与补偿机制，"
-            "同时说明降级/限流策略、性能指标、成本控制、可观测性和关键 trade-off。"
-            f"{citations}"
-        )
-    if strategy.theme == "communication":
-        return (
-            f"针对「{focus}」这个{target}，请用 STAR 结构重新讲一遍：30 秒完成背景压缩，"
-            "明确个人职责边界，按逻辑顺序讲关键动作和取舍表达，最后用指标、复盘总结和面试口语化收束。"
-            f"{citations}"
-        )
-    return (
-        f"本题按显性技术 {strategy.explicit_weight}%、隐性表达 {strategy.implicit_weight}% 权重评分。"
-        f"请围绕「{focus}」这个{target}，从 owner 视角讲清楚技术深度、方案链路、失败兜底和技术取舍，"
-        "并按背景、约束、方案、指标、复盘组织答案，让表达结构服务于技术判断。"
-        f"{citations}"
-    )
 
 
 def build_progress_node_question_text(
