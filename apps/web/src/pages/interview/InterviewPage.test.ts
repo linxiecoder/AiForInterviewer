@@ -34,31 +34,39 @@ import {
   INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_SCROLL_CLASS,
   INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT,
+  INTERVIEW_WORKBENCH_CURRENT_QUESTION_COMPOSER_PLACEMENT,
   INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS,
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
+  INTERVIEW_WORKBENCH_STATE_MACHINE,
   buildPolishBindingOptions,
   buildPolishSessionPath,
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
+  buildFeedbackCardViewModel,
   filterPolishSessionsBySearch,
   buildProgressTreeContextBannerContent,
   buildProgressTreeContextBannerExpandedSections,
   buildProgressTreeNodeDetailViewModel,
   buildWorkbenchProgressNodeTitleMeta,
   buildWorkbenchProgressNodes,
+  canAutoCreateQuestionFromProgressNode,
   collectDefaultExpandedProgressNodeKeys,
+  deriveWorkbenchMachineState,
   getInterviewCreateAvailability,
   getWorkbenchProgressNodeQuestionTargetRef,
   getWorkbenchProgressNodeStatusLightTone,
   normalizeInterviewTopicTitle,
   normalizeProgressTreeDetailCopy,
+  resolveCurrentQuestionId,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveProgressTreeSelectedNodeRefAfterClick,
   shouldSubmitAnswerFromKeyboard,
+  shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
+  toNextRecommendedActionLabel,
   type PolishBindingOption,
 } from "./InterviewPage";
 import {
@@ -71,6 +79,7 @@ import type { JobSummary } from "../../entities/job/model/types";
 import type {
   CreatePolishSessionRequest,
   PolishProgressTreeNode,
+  PolishSessionAnswer,
   PolishSessionDetail,
   PolishSessionSummary,
   PolishTopic,
@@ -156,7 +165,7 @@ type WorkbenchFieldsAreStable = Expect<
 type WorkbenchLayoutAreasAreStable = Expect<
   Equal<
     typeof INTERVIEW_WORKBENCH_LAYOUT_AREAS,
-    readonly ["top_summary", "progress_panel", "conversation_panel", "feedback_accordion", "bottom_composer"]
+    readonly ["top_summary", "progress_panel", "conversation_panel", "feedback_accordion", "current_question_answer"]
   >
 >;
 type WorkbenchLayoutTestIdsAreStable = Expect<
@@ -168,18 +177,18 @@ type WorkbenchLayoutTestIdsAreStable = Expect<
       readonly progressNodeList: "interview-workbench-progress-node-list";
       readonly conversationPanel: "interview-workbench-conversation-panel";
       readonly chatScroll: "interview-workbench-chat-scroll";
-      readonly composer: "interview-workbench-composer";
+      readonly currentQuestionComposer: "interview-workbench-current-question-composer";
     }
   >
 >;
 type WorkbenchScrollRegionsAreStable = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_SCROLL_REGIONS, readonly ["progress_node_list", "chat_scroll"]>
 >;
-type WorkbenchHeroActionsStayOnTitleRowEnd = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT, "title_row_end">
+type WorkbenchHeroActionsStayOnSummaryRowEnd = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT, "summary_row_end">
 >;
-type WorkbenchHeroActionsUseTextOnlyButtons = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY, "text_only">
+type WorkbenchHeroActionsUseIconTooltipButtons = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY, "icon_only_with_tooltip">
 >;
 type WorkbenchHeroActionCopyMatchesActualBehavior = Expect<
   Equal<
@@ -741,9 +750,9 @@ function test_progress_node_context_banner_hides_question_and_detail_lists(): vo
   }
 }
 
-function test_workbench_hero_actions_are_text_only_and_copy_session_content(): void {
-  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT === "title_row_end", "顶部按钮组应位于标题行右侧");
-  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY === "text_only", "顶部按钮应只展示文字，不展示图标");
+function test_workbench_hero_actions_are_icon_only_and_copy_session_content(): void {
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT === "summary_row_end", "顶部按钮组应位于状态摘要行右侧");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY === "icon_only_with_tooltip", "顶部按钮应只展示图标，文字通过 Tooltip 和 aria-label 提供");
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0] === "返回模拟面试列表", "返回按钮文案应稳定");
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1] === "复制模拟面试内容", "复制按钮文案应匹配实际复制内容");
 }
@@ -808,6 +817,86 @@ function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right()
   assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer === "right", "用户回答及暂无回答占位应位于聊天区右侧");
 }
 
+function test_progress_tree_click_auto_generates_only_for_nodes_without_question(): void {
+  const session = buildTestSession(
+    [
+      buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+      buildTestProgressNode("node_without_question", "待生成节点", "jd_gap_learning", "补齐学习类"),
+    ],
+    "node_with_question",
+  );
+  const sessionWithTurn: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const groupedNodes = buildWorkbenchProgressNodes(sessionWithTurn);
+  const realNodes = groupedNodes.flatMap((group) => group.children ?? []);
+  const nodeWithQuestion = realNodes.find((node) => node.key === "node_with_question");
+  const nodeWithoutQuestion = realNodes.find((node) => node.key === "node_without_question");
+
+  const sessionWithHistoricalTurn: PolishSessionDetail = {
+    ...sessionWithTurn,
+    turns: [
+      ...sessionWithTurn.turns,
+      {
+        question_id: "q_current_other",
+        question_text: "其他节点当前题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:02:00Z",
+        progress_node_ref: "node_without_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const refreshFailedSession: PolishSessionDetail = {
+    ...session,
+    progress_tree_status: "refresh_failed",
+  };
+
+  assertContract(!shouldAutoCreateQuestionForProgressNode(sessionWithTurn, "node_with_question"), "active question 位于该节点时不应重复自动生成题");
+  assertContract(shouldAutoCreateQuestionForProgressNode(sessionWithTurn, "node_without_question"), "无题目的真实节点点击后应自动生成题");
+  assertContract(shouldAutoCreateQuestionForProgressNode(sessionWithHistoricalTurn, "node_with_question"), "只有历史题目但无 active question 的节点仍应可生成新题");
+  assertContract(!shouldAutoCreateQuestionForProgressNode(sessionWithTurn, null), "空节点 ref 不应生成题");
+  assertContract(canAutoCreateQuestionFromProgressNode({
+    session: refreshFailedSession,
+    progressNodeRef: "node_without_question",
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+  }), "refresh_failed 但 plan 可展示时仍应允许点击节点生成题");
+  assertContract(nodeWithQuestion?.children?.some((node) => node.key === "question:q_existing") === true, "题目记录应挂到自己的 progress_node_ref 节点下");
+  assertContract(!nodeWithoutQuestion?.children?.some((node) => node.kind === "question"), "其他节点不应承载已有题目记录");
+  assertContract(resolveCurrentQuestionId(sessionWithTurn, "node_with_question") === "q_existing", "当前题目应可按选中节点解析");
+}
+
+function test_waiting_answer_bar_is_removed_from_workbench_contract(): void {
+  const machineState = deriveWorkbenchMachineState({
+    session: buildTestSession([buildTestProgressNode("node_current", "当前题目节点", "resume_deep_dive", "深度打磨类")], "node_current"),
+    creatingQuestion: false,
+    feedbackGenerating: false,
+    failureState: null,
+  });
+
+  assertContract(INTERVIEW_WORKBENCH_CURRENT_QUESTION_COMPOSER_PLACEMENT === "right_panel_bottom_fixed", "回答输入区应固定在右侧详情区底部");
+  assertContract(!INTERVIEW_WORKBENCH_STATE_MACHINE.map(String).includes("waitingAnswer"), "状态机不应再暴露等待回答栏");
+  assertContract(String(machineState) !== "waitingAnswer", "无反馈时也不应回退到等待回答栏状态");
+  assertContract(!INTERVIEW_WORKBENCH_LAYOUT_AREAS.includes("bottom_composer" as never), "布局不应再包含底部等待回答栏");
+}
+
+
 function test_workbench_ctrl_enter_submits_answer(): void {
   assertContract(INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS.send_answer === "Ctrl+Enter", "发送快捷键应登记为 Ctrl+Enter");
   assertContract(shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true }), "Ctrl+Enter 应触发发送");
@@ -815,6 +904,88 @@ function test_workbench_ctrl_enter_submits_answer(): void {
   assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true, shiftKey: true }), "Ctrl+Shift+Enter 不应触发发送");
   assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true, isComposing: true }), "输入法组合态不应触发发送");
 }
+
+function test_feedback_card_view_model_uses_contract_payload_sections_and_actions(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_001",
+    answer_round: 2,
+    answer_text: "我负责 FastAPI 接口编排，并通过错误率和延迟指标验证上线结果。",
+    answer_created_at: "2026-05-20T10:10:00Z",
+    feedback_text: "结构完整，但技术取舍需要补充替代方案。",
+    feedback_id: "fb_001",
+    score_result_id: "score_001",
+    feedback_created_at: "2026-05-20T10:11:00Z",
+    feedback_payload: {
+      contract_id: "P-POLISH-005",
+      contract_ids: ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005", "P-POLISH-009"],
+      status: "generated",
+      feedback_id: "fb_001",
+      feedback_text: "结构完整，但技术取舍需要补充替代方案。",
+      feedback_summary: "补充替代方案和量化结果。",
+      score_result: {
+        score_result_id: "score_001",
+        score_type: "polish_answer",
+        score_value: 72,
+        confidence_level: "medium",
+      },
+      loss_points: [
+        {
+          title: "技术取舍说明不足",
+          deducted_points: 12,
+          reason: "需要说明替代方案、失败路径和验证指标。",
+          answer_excerpt: "我负责 FastAPI 接口编排",
+        },
+      ],
+      reference_answer: {
+        summary: "先讲业务目标，再讲本人职责、方案取舍和结果指标。",
+        outline: ["背景与约束", "关键技术方案", "量化结果"],
+      },
+      knowledge_points: [
+        {
+          title: "STAR + 技术决策链路",
+          explanation: "覆盖场景、任务、行动、结果和技术取舍。",
+        },
+      ],
+      technical_principles: [
+        {
+          title: "可观测结果优先",
+          explanation: "用指标、日志、告警或压测结果支撑方案价值。",
+        },
+      ],
+      next_recommended_actions: ["provide_more_answer_detail", "generate_next_question"],
+      candidate_refs: [{ resource_type: "weakness_candidate", resource_id: "weak_001" }],
+      validation_result_ref: { resource_type: "validation_result", resource_id: "val_001" },
+      trace_refs: [{ trace_type: "feedback", trace_ref_id: "fb_001" }],
+      low_confidence_flags: [{ flag_id: "needs_more_metrics", reason: "missing_metrics" }],
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = [
+    card.title,
+    card.status,
+    card.contractId,
+    ...card.contractIds,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.traceItems,
+  ].join(" ");
+
+  assertContract(card.sections.map((section) => section.title).join(",") === "点评,打分,失分点评价,参考回答,考点解析,技术原理扩展", "反馈卡应固定六个高保真模块");
+  assertContract(visibleCopy.includes("P-POLISH-005"), "反馈卡应展示 contract_id / contract_ids");
+  assertContract(visibleCopy.includes("72"), "反馈卡应展示 score_result 分值");
+  assertContract(visibleCopy.includes("技术取舍说明不足"), "反馈卡应展示 loss_points");
+  assertContract(visibleCopy.includes("先讲业务目标"), "反馈卡应展示 reference_answer");
+  assertContract(visibleCopy.includes("STAR + 技术决策链路"), "反馈卡应展示 knowledge_points");
+  assertContract(visibleCopy.includes("可观测结果优先"), "反馈卡应展示 technical_principles");
+  assertContract(visibleCopy.includes("weakness_candidate:weak_001"), "反馈卡应保留 candidate_refs");
+  assertContract(visibleCopy.includes("validation_result:val_001"), "反馈卡应保留 validation_result_ref");
+  assertContract(visibleCopy.includes("feedback:fb_001"), "反馈卡应保留 trace_refs");
+  assertContract(visibleCopy.includes("needs_more_metrics"), "反馈卡应保留 low_confidence_flags");
+  assertContract(card.nextActions.join(",") === "provide_more_answer_detail,generate_next_question", "下一步建议应去重并保持 contract enum");
+  assertContract(toNextRecommendedActionLabel("provide_more_answer_detail") === "补充回答细节", "contract enum 应映射为按钮文案");
+  assertContract(toNextRecommendedActionLabel("generate_next_question") === "生成下一题", "生成下一题 enum 应映射为按钮文案");
+}
+
 
 function test_progress_node_context_banner_ignores_group_header_click(): void {
   const session = buildTestSession([
@@ -994,11 +1165,14 @@ test_progress_tree_category_header_is_group_only();
 test_progress_node_context_banner_defaults_to_current_priority();
 test_progress_node_context_banner_updates_when_node_selected();
 test_progress_node_context_banner_hides_question_and_detail_lists();
-test_workbench_hero_actions_are_text_only_and_copy_session_content();
+test_workbench_hero_actions_are_icon_only_and_copy_session_content();
 test_progress_tree_node_status_uses_row_trailing_lights();
 test_progress_node_context_banner_supports_expand_toggle_for_depth();
 test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
 test_workbench_ctrl_enter_submits_answer();
+test_waiting_answer_bar_is_removed_from_workbench_contract();
+test_progress_tree_click_auto_generates_only_for_nodes_without_question();
+test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
 test_progress_node_context_banner_ignores_group_header_click();
 test_progress_node_context_banner_uses_safe_copy();
 test_progress_tree_detail_uses_display_safe_copy();

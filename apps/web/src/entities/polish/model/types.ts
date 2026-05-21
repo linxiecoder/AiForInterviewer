@@ -45,6 +45,41 @@ export interface PolishLowConfidenceFlag {
   recommended_action?: PolishRecommendedAction;
 }
 
+export interface PolishFeedbackResourceRef {
+  resource_type: string;
+  resource_id: string;
+}
+
+export interface PolishScoreResultPayload {
+  score_result_id?: string;
+  score_type?: "polish_answer" | string;
+  score_value?: number;
+  score_version?: string;
+  rubric_version?: string;
+  contract_id?: string;
+  confidence_level?: "low" | "medium" | "high" | string;
+}
+
+export interface PolishLossPointPayload extends Record<string, unknown> {
+  loss_point_id?: string;
+  title?: string;
+  deducted_points?: number;
+  reason?: string;
+  answer_excerpt?: string;
+  related_answer_ref?: PolishFeedbackResourceRef | null;
+}
+
+export interface PolishReferenceAnswerPayload extends Record<string, unknown> {
+  contract_id?: string;
+  summary?: string;
+  outline?: string[];
+}
+
+export interface PolishExplanationPayload extends Record<string, unknown> {
+  title?: string;
+  explanation?: string;
+}
+
 export interface PolishFeedbackPayload {
   contract_id?: string;
   contract_ids?: string[];
@@ -52,17 +87,14 @@ export interface PolishFeedbackPayload {
   feedback_id?: string | null;
   feedback_text: string;
   feedback_summary?: string | null;
-  score_result?: {
-    score_result_id?: string;
-    score_type?: "polish_answer" | string;
-    score_value?: number;
-    confidence_level?: "low" | "medium" | "high" | string;
-  } | null;
-  loss_points?: Array<Record<string, unknown>>;
-  reference_answer?: Record<string, unknown> | null;
-  knowledge_points?: Array<Record<string, unknown>>;
-  technical_principles?: Array<Record<string, unknown>>;
+  score_result?: PolishScoreResultPayload | null;
+  loss_points?: PolishLossPointPayload[];
+  reference_answer?: PolishReferenceAnswerPayload | null;
+  knowledge_points?: PolishExplanationPayload[];
+  technical_principles?: PolishExplanationPayload[];
   next_recommended_actions: PolishRecommendedAction[];
+  candidate_refs?: PolishFeedbackResourceRef[];
+  validation_result_ref?: PolishFeedbackResourceRef | null;
   trace_refs?: Array<Record<string, unknown>>;
   low_confidence_flags?: PolishLowConfidenceFlag[];
 }

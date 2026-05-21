@@ -21,6 +21,7 @@ from app.application.polish.progress_prompts import (
     build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
+from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
@@ -1445,6 +1446,122 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert detail_data["progress_tree_state"]["updated_from_turns_count"] == 1
     state_text = str(detail_data["progress_tree_state"])
     assert "v2_local_state_refresh" in state_text
+
+
+def test_progress_tree_refresh_rolls_up_parent_from_all_children_without_mutating_plan() -> None:
+    def node(progress_node_ref: str, title: str) -> dict:
+        return {
+            "progress_node_ref": progress_node_ref,
+            "title": title,
+            "expected_capability": f"{title} 能力",
+            "related_job_requirements": [],
+            "related_resume_evidence": [],
+            "missing_points": [],
+            "children": [],
+        }
+
+    child_a = node("node_child_a", "FastAPI 接口编排")
+    child_b = node("node_child_b", "异步任务补偿")
+    original_plan = {
+        "schema_id": "polish_progress_quality_first_menu_v1",
+        "status": "ready",
+        "context_digest": "digest",
+        "nodes": [
+            {
+                **node("node_parent", "服务端工程治理"),
+                "children": [child_a, child_b],
+            }
+        ],
+    }
+    existing_state = {
+        "status": "ready",
+        "node_states": [
+            {
+                "progress_node_ref": "node_parent",
+                "status": "completed",
+                "completed_questions_count": 1,
+                "latest_feedback_summary": "父节点被错误提前完成",
+            },
+            {
+                "progress_node_ref": "node_child_a",
+                "status": "completed",
+                "completed_questions_count": 1,
+                "latest_feedback_summary": "第一个子节点已完成",
+            },
+            {
+                "progress_node_ref": "node_child_b",
+                "status": "pending",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            },
+        ],
+        "current_priority": {
+            "progress_node_ref": "node_parent",
+            "title": "服务端工程治理",
+            "expected_capability": "服务端工程治理 能力",
+        },
+        "updated_from_turns_count": 1,
+        "progress": {"progress_percent": 80},
+    }
+    context = {
+        "turns": [
+            {
+                "progress_node_ref": "node_child_a",
+                "feedback_text": "第一个子节点反馈已生成",
+                "answers": [],
+            }
+        ]
+    }
+
+    result = PolishProgressTreeLlmService(None).refresh_state(
+        context=context,
+        existing_plan=original_plan,
+        existing_state=existing_state,
+    )
+
+    state_by_ref = {
+        item["progress_node_ref"]: item
+        for item in result["progress_tree_state"]["node_states"]
+    }
+    assert result["progress_tree_plan"] == original_plan
+    assert list(state_by_ref) == ["node_parent", "node_child_a", "node_child_b"]
+    assert state_by_ref["node_parent"]["status"] == "in_progress"
+    assert state_by_ref["node_child_a"]["status"] == "completed"
+    assert state_by_ref["node_child_b"]["status"] == "pending"
+    assert result["progress_tree_state"]["progress"]["progress_percent"] == 50
+
+
+def test_polish_question_generation_allows_refresh_failed_state_when_plan_is_ready() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    with session_factory() as db:
+        detail = db.get(PolishSessionDetailModel, f"{session_id}_detail")
+        assert detail is not None
+        detail.progress_tree_status = "refresh_failed"
+        db.commit()
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 202
+    assert question_body["data"]["active_question_progress_node_ref"] == progress_node_ref
 
 
 def test_polish_next_question_uses_progress_node_evidence_chunks() -> None:

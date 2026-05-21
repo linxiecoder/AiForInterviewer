@@ -1,4 +1,6 @@
 import {
+  ArrowLeftOutlined,
+  CopyOutlined,
   DownOutlined,
   CheckCircleOutlined,
   PlusOutlined,
@@ -25,6 +27,7 @@ import {
 } from "../../entities/polish/api/polishApi";
 import type {
   CreatePolishSessionRequest,
+  PolishFeedbackPayload,
   PolishQuestionSource,
   PolishRecommendedAction,
   PolishProgressTreeNode,
@@ -93,7 +96,7 @@ export const INTERVIEW_WORKBENCH_LAYOUT_AREAS = [
   "progress_panel",
   "conversation_panel",
   "feedback_accordion",
-  "bottom_composer",
+  "current_question_answer",
 ] as const;
 export const INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS = {
   root: "interview-workbench-viewport",
@@ -101,12 +104,12 @@ export const INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS = {
   progressNodeList: "interview-workbench-progress-node-list",
   conversationPanel: "interview-workbench-conversation-panel",
   chatScroll: "interview-workbench-chat-scroll",
-  composer: "interview-workbench-composer",
+  currentQuestionComposer: "interview-workbench-current-question-composer",
 } as const;
 export const INTERVIEW_WORKBENCH_SCROLL_REGIONS = ["progress_node_list", "chat_scroll"] as const;
 export const INTERVIEW_PROGRESS_TREE_SCROLL_CLASS = "progressTreeScroll" as const;
-export const INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT = "title_row_end" as const;
-export const INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY = "text_only" as const;
+export const INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT = "summary_row_end" as const;
+export const INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY = "icon_only_with_tooltip" as const;
 export const INTERVIEW_WORKBENCH_HERO_ACTION_COPY = [
   "返回模拟面试列表",
   "复制模拟面试内容",
@@ -129,14 +132,14 @@ export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
 ] as const;
 export type WorkbenchMachineState =
   | "creatingQuestion"
-  | "waitingAnswer"
+  | "questionReady"
   | "feedbackGenerating"
   | "feedbackReady"
   | "feedbackFailedAnswerSaved"
   | "progressRefreshFailed";
 export const INTERVIEW_WORKBENCH_STATE_MACHINE: readonly WorkbenchMachineState[] = [
   "creatingQuestion",
-  "waitingAnswer",
+  "questionReady",
   "feedbackGenerating",
   "feedbackReady",
   "feedbackFailedAnswerSaved",
@@ -144,7 +147,7 @@ export const INTERVIEW_WORKBENCH_STATE_MACHINE: readonly WorkbenchMachineState[]
 ] as const;
 const WORKBENCH_MACHINE_STATE_COPY: Record<WorkbenchMachineState, { label: string; description: string; color: string }> = {
   creatingQuestion: { label: "正在生成题目", description: "题目生成中，请稍候。", color: "processing" },
-  waitingAnswer: { label: "等待回答", description: "可以提交当前题目的下一轮回答。", color: "default" },
+  questionReady: { label: "当前题目", description: "在当前题目区域继续作答。", color: "default" },
   feedbackGenerating: { label: "正在生成反馈", description: "回答已保存，正在生成点评和下一步建议。", color: "processing" },
   feedbackReady: { label: "反馈已生成", description: "本轮反馈和下一步建议已同步。", color: "success" },
   feedbackFailedAnswerSaved: { label: "反馈生成失败", description: "回答已保存，可重试生成反馈或继续补充回答。", color: "warning" },
@@ -174,6 +177,7 @@ export const INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY = [
   "job_version_id",
 ] as const;
 export const INTERVIEW_WORKBENCH_PRIMARY_ACTIONS = ["send_answer"] as const;
+export const INTERVIEW_WORKBENCH_CURRENT_QUESTION_COMPOSER_PLACEMENT = "right_panel_bottom_fixed" as const;
 export const INTERVIEW_WORKBENCH_DISABLED_ACTIONS = [] as const;
 export const INTERVIEW_WORKBENCH_STATE_REGIONS = ["loading", "error", "not_found"] as const;
 export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
@@ -779,13 +783,52 @@ export function toDisplayResumeTitle(session: PolishSessionReadableHeader): stri
   return session.resume_title || FALLBACK_RESUME_TITLE;
 }
 
-export function resolveCurrentQuestionId(session: PolishSessionDetail): string | null {
-  const lastTurn = getLatestTurn(session);
-  return lastTurn?.question_id || null;
+export function resolveCurrentQuestionId(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null = null,
+): string | null {
+  if (progressNodeRef !== null) {
+    return getLatestTurnForProgressNode(session, progressNodeRef)?.question_id || null;
+  }
+  return getLatestTurn(session)?.question_id || null;
 }
 
 function getLatestTurn(session: PolishSessionDetail) {
   return session.turns.length > 0 ? session.turns[session.turns.length - 1] : null;
+}
+
+function getLatestTurnForProgressNode(session: PolishSessionDetail, progressNodeRef: string) {
+  const matchingTurns = session.turns.filter((turn) => turn.progress_node_ref === progressNodeRef);
+  return matchingTurns.length > 0 ? matchingTurns[matchingTurns.length - 1] : null;
+}
+
+export function shouldAutoCreateQuestionForProgressNode(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null,
+): boolean {
+  if (!progressNodeRef) {
+    return false;
+  }
+  const activeNodeRef = resolveSessionCurrentProgressNodeRef(session);
+  return activeNodeRef !== progressNodeRef || resolveCurrentQuestionId(session, progressNodeRef) === null;
+}
+
+export function canAutoCreateQuestionFromProgressNode(params: {
+  session: PolishSessionDetail;
+  progressNodeRef: string | null;
+  creatingQuestion: boolean;
+  submittingAnswer: boolean;
+  feedbackGenerating: boolean;
+}): boolean {
+  const canUseProgressTreePlan = ["ready", "refresh_failed"].includes(params.session.progress_tree_status);
+  return Boolean(
+    params.progressNodeRef &&
+      canUseProgressTreePlan &&
+      shouldAutoCreateQuestionForProgressNode(params.session, params.progressNodeRef) &&
+      !params.creatingQuestion &&
+      !params.submittingAnswer &&
+      !params.feedbackGenerating,
+  );
 }
 
 function getLatestAnswer(session: PolishSessionDetail): PolishSessionAnswer | null {
@@ -832,14 +875,13 @@ export function deriveWorkbenchMachineState(params: {
     return params.failureState;
   }
   const latestAnswer = params.session === null ? null : getLatestAnswer(params.session);
-  return answerHasGeneratedFeedback(latestAnswer) ? "feedbackReady" : "waitingAnswer";
+  return answerHasGeneratedFeedback(latestAnswer) ? "feedbackReady" : "questionReady";
 }
 
 export function buildWorkbenchProgressNodes(
   session: PolishSessionDetail,
 ): WorkbenchProgressNode[] {
-  const questionNodes = buildQuestionProgressNodes(session);
-  const activeNodeRef = resolveSessionCurrentProgressNodeRef(session);
+  const questionNodesByRef = buildQuestionProgressNodesByRef(session);
   const stateByRef = new Map(
     session.progress_tree_state.node_states.map((nodeState) => [
       nodeState.progress_node_ref,
@@ -852,8 +894,7 @@ export function buildWorkbenchProgressNodes(
     const workbenchNode = toWorkbenchProgressNode({
       node,
       stateByRef,
-      activeNodeRef,
-      questionNodes,
+      questionNodesByRef,
       level: 1,
     });
     groupedNodes.set(groupTitle, [...(groupedNodes.get(groupTitle) ?? []), workbenchNode]);
@@ -869,19 +910,26 @@ export function buildWorkbenchProgressNodes(
   }));
 }
 
-function buildQuestionProgressNodes(session: PolishSessionDetail): WorkbenchProgressNode[] {
-  const questionNodes: WorkbenchProgressNode[] = [];
+function buildQuestionProgressNodesByRef(session: PolishSessionDetail): Map<string, WorkbenchProgressNode[]> {
+  const questionNodesByRef = new Map<string, WorkbenchProgressNode[]>();
   for (const [turnIndex, turn] of session.turns.entries()) {
+    if (!turn.progress_node_ref) {
+      continue;
+    }
     const shortQuestion = turn.question_text.length > 24 ? `${turn.question_text.slice(0, 21)}...` : turn.question_text;
-    questionNodes.push({
+    const questionNode: WorkbenchProgressNode = {
       key: `question:${turn.question_id}`,
       kind: "question",
       title: `题目 ${turnIndex + 1}`,
       status: turn.answers.length > 0 ? "completed" : "in_progress",
       detail: shortQuestion,
-    });
+    };
+    questionNodesByRef.set(turn.progress_node_ref, [
+      ...(questionNodesByRef.get(turn.progress_node_ref) ?? []),
+      questionNode,
+    ]);
   }
-  return questionNodes;
+  return questionNodesByRef;
 }
 
 function dedupeProgressTreeNodesByRef(nodes: readonly PolishProgressTreeNode[]): PolishProgressTreeNode[] {
@@ -1077,21 +1125,19 @@ export function buildProgressTreeContextBannerExpandedSections(
 function toWorkbenchProgressNode(params: {
   node: PolishProgressTreeNode;
   stateByRef: Map<string, WorkbenchProgressNodeStatus>;
-  activeNodeRef: string | null;
-  questionNodes: WorkbenchProgressNode[];
+  questionNodesByRef: Map<string, WorkbenchProgressNode[]>;
   level: number;
 }): WorkbenchProgressNode {
   const children = params.node.children.map((childNode) =>
     toWorkbenchProgressNode({
       node: childNode,
       stateByRef: params.stateByRef,
-      activeNodeRef: params.activeNodeRef,
-      questionNodes: params.questionNodes,
+      questionNodesByRef: params.questionNodesByRef,
       level: params.level + 1,
     }),
   );
-  const shouldAttachQuestions = params.node.progress_node_ref === params.activeNodeRef && params.questionNodes.length > 0;
-  const mergedChildren = shouldAttachQuestions ? [...children, ...params.questionNodes] : children;
+  const attachedQuestionNodes = params.questionNodesByRef.get(params.node.progress_node_ref) ?? [];
+  const mergedChildren = [...children, ...attachedQuestionNodes];
   const displayNode = params.node as ProgressTreeDisplayNode;
   return {
     key: params.node.progress_node_ref,
@@ -1227,8 +1273,217 @@ function getAnswerNextRecommendedActions(answer: PolishSessionAnswer): PolishRec
   return actions.filter((action, index) => actions.indexOf(action) === index);
 }
 
-function toNextRecommendedActionLabel(action: PolishRecommendedAction): string {
+export function toNextRecommendedActionLabel(action: PolishRecommendedAction): string {
   return NEXT_RECOMMENDED_ACTION_LABELS[action] ?? action;
+}
+
+type FeedbackSectionKey = "feedback" | "score" | "loss_points" | "reference_answer" | "knowledge_points" | "technical_principles";
+
+export type FeedbackCardSectionViewModel = {
+  key: FeedbackSectionKey;
+  title: string;
+  items: string[];
+  defaultOpen: boolean;
+};
+
+export type FeedbackCardViewModel = {
+  title: string;
+  status: string;
+  contractId: string | null;
+  contractIds: string[];
+  sections: FeedbackCardSectionViewModel[];
+  nextActions: PolishRecommendedAction[];
+  traceItems: string[];
+};
+
+export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): FeedbackCardViewModel {
+  const payload = answer.feedback_payload;
+  const feedbackText = payload?.feedback_text || answer.feedback_text || FALLBACK_FEEDBACK_TEXT;
+  const contractId = toOptionalText(payload?.contract_id) ?? null;
+  const contractIds = Array.from(new Set([...(payload?.contract_ids ?? []), ...(contractId ? [contractId] : [])]));
+  return {
+    title: `第 ${answer.answer_round} 轮反馈`,
+    status: toOptionalText(payload?.status) ?? (answer.feedback_id ? "generated" : "pending"),
+    contractId,
+    contractIds,
+    sections: [
+      {
+        key: "feedback",
+        title: "点评",
+        items: dedupeTextItems([payload?.feedback_summary, feedbackText]).length > 0
+          ? dedupeTextItems([payload?.feedback_summary, feedbackText])
+          : [FALLBACK_FEEDBACK_TEXT],
+        defaultOpen: true,
+      },
+      {
+        key: "score",
+        title: "打分",
+        items: buildScoreResultItems(payload, answer.score_result_id),
+        defaultOpen: true,
+      },
+      {
+        key: "loss_points",
+        title: "失分点评价",
+        items: buildRecordListItems(payload?.loss_points, [
+          ["title", "失分点"],
+          ["deducted_points", "扣分"],
+          ["reason", "原因"],
+          ["answer_excerpt", "回答片段"],
+        ], "暂无明确失分点"),
+        defaultOpen: false,
+      },
+      {
+        key: "reference_answer",
+        title: "参考回答",
+        items: buildReferenceAnswerItems(payload?.reference_answer),
+        defaultOpen: false,
+      },
+      {
+        key: "knowledge_points",
+        title: "考点解析",
+        items: buildRecordListItems(payload?.knowledge_points, [
+          ["title", "考点"],
+          ["explanation", "解析"],
+        ], "暂无考点解析"),
+        defaultOpen: false,
+      },
+      {
+        key: "technical_principles",
+        title: "技术原理扩展",
+        items: buildRecordListItems(payload?.technical_principles, [
+          ["title", "原理"],
+          ["explanation", "说明"],
+        ], "暂无技术原理扩展"),
+        defaultOpen: false,
+      },
+    ],
+    nextActions: getAnswerNextRecommendedActions(answer),
+    traceItems: buildFeedbackTraceItems(payload),
+  };
+}
+
+function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallbackScoreResultId: string | null): string[] {
+  const score = payload?.score_result;
+  if (!score) {
+    return fallbackScoreResultId ? [`score_result_id：${fallbackScoreResultId}`] : ["暂无打分结果"];
+  }
+  return dedupeTextItems([
+    typeof score.score_value === "number" ? `分数：${score.score_value}` : null,
+    score.score_type ? `评分类型：${score.score_type}` : null,
+    score.confidence_level ? `置信度：${score.confidence_level}` : null,
+    score.score_result_id ? `score_result_id：${score.score_result_id}` : fallbackScoreResultId ? `score_result_id：${fallbackScoreResultId}` : null,
+    score.rubric_version ? `rubric_version：${score.rubric_version}` : null,
+  ]);
+}
+
+function buildReferenceAnswerItems(value: unknown): string[] {
+  const record = toRecord(value);
+  if (record === null) {
+    return ["暂无参考回答"];
+  }
+  const outline = Array.isArray(record.outline) ? record.outline.map(toOptionalText).filter((item): item is string => Boolean(item)) : [];
+  return dedupeTextItems([
+    record.summary ? `摘要：${toOptionalText(record.summary)}` : null,
+    outline.length > 0 ? `提纲：${outline.join(" / ")}` : null,
+    record.contract_id ? `contract_id：${toOptionalText(record.contract_id)}` : null,
+  ]);
+}
+
+function buildRecordListItems(
+  values: unknown,
+  fieldLabels: Array<[string, string]>,
+  fallback: string,
+): string[] {
+  if (!Array.isArray(values) || values.length === 0) {
+    return [fallback];
+  }
+  const items = values.flatMap((value) => buildRecordItems(value, fieldLabels));
+  return items.length > 0 ? items : [fallback];
+}
+
+function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>): string[] {
+  const record = toRecord(value);
+  if (record === null) {
+    const text = toOptionalText(value);
+    return text ? [text] : [];
+  }
+  const preferredItems = fieldLabels
+    .map(([field, label]) => {
+      const text = toOptionalText(record[field]);
+      return text ? `${label}：${text}` : null;
+    })
+    .filter((item): item is string => item !== null);
+  if (preferredItems.length > 0) {
+    return preferredItems;
+  }
+  return Object.entries(record)
+    .map(([key, item]) => {
+      const text = toOptionalText(item);
+      return text ? `${key}：${text}` : null;
+    })
+    .filter((item): item is string => item !== null)
+    .slice(0, 6);
+}
+
+function buildFeedbackTraceItems(payload: PolishFeedbackPayload | undefined): string[] {
+  if (!payload) {
+    return [];
+  }
+  return dedupeTextItems([
+    ...(payload.candidate_refs ?? []).map(formatResourceRef),
+    formatResourceRef(payload.validation_result_ref),
+    ...(payload.trace_refs ?? []).map(formatTraceRef),
+    ...(payload.low_confidence_flags ?? []).map((flag) => toOptionalText(flag.flag_id) ?? toOptionalText(flag.reason)),
+  ]);
+}
+
+function formatResourceRef(value: unknown): string | null {
+  const record = toRecord(value);
+  if (record === null) {
+    return null;
+  }
+  const resourceType = toOptionalText(record.resource_type);
+  const resourceId = toOptionalText(record.resource_id);
+  return resourceType && resourceId ? `${resourceType}:${resourceId}` : null;
+}
+
+function formatTraceRef(value: unknown): string | null {
+  const record = toRecord(value);
+  if (record === null) {
+    return null;
+  }
+  const traceType = toOptionalText(record.trace_type);
+  const traceRefId = toOptionalText(record.trace_ref_id);
+  return traceType && traceRefId ? `${traceType}:${traceRefId}` : null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function toOptionalText(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return null;
+}
+
+function dedupeTextItems(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const text = toOptionalText(value);
+    if (!text || seen.has(text)) {
+      continue;
+    }
+    seen.add(text);
+    result.push(text);
+  }
+  return result;
 }
 
 export function InterviewPage() {
@@ -1747,7 +2002,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("会话尚未加载完成，请稍后重试。");
       return;
     }
-    const questionId = resolveCurrentQuestionId(session);
+    const questionId = resolveCurrentQuestionId(session, selectedProgressNodeDetailRef);
     if (!questionId) {
       setAnswerError("请先生成题目后再提交回答。");
       return;
@@ -1773,7 +2028,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             ? `回答已保存，但反馈生成失败：${feedbackError.message}`
             : "回答已保存，但反馈生成失败，请稍后重试。",
         );
-        setAnswerText("");
+        setAnswerText(trimmedAnswer);
         await loadSession();
         return;
       } finally {
@@ -1797,7 +2052,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             ? `反馈已生成，但进展树刷新失败：${refreshError.message}`
             : "反馈已生成，但进展树刷新失败；当前题目、回答和反馈不会丢失。",
         );
-        setAnswerText("");
+        setAnswerText(trimmedAnswer);
         await loadSession();
       }
     } catch (submitError) {
@@ -1846,6 +2101,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   const selectedProgressNodeDetailRef =
     session === null ? null : resolveProgressTreeDetailNodeRef(session, selectedProgressNodeRef);
+  const currentQuestionId = session === null ? null : resolveCurrentQuestionId(session, selectedProgressNodeDetailRef);
   const selectedProgressNodeBanner =
     session === null ? null : buildProgressTreeContextBannerContent(session, selectedProgressNodeDetailRef);
   const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
@@ -1994,6 +2250,54 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   };
 
+  const renderCurrentQuestionComposer = () => {
+    if (currentQuestionId === null) {
+      return null;
+    }
+    return (
+      <div
+        className={styles.currentQuestionComposer}
+        data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.currentQuestionComposer}
+      >
+        {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
+        <Input.TextArea
+          className={styles.currentQuestionComposerInput}
+          rows={4}
+          value={answerText}
+          onChange={(event) => setAnswerText(event.target.value)}
+          onKeyDown={(event) => {
+            if (shouldSubmitAnswerFromKeyboard({
+              key: event.key,
+              ctrlKey: event.ctrlKey,
+              shiftKey: event.shiftKey,
+              altKey: event.altKey,
+              isComposing: event.nativeEvent.isComposing,
+            })) {
+              event.preventDefault();
+              sendAnswer();
+            }
+          }}
+          placeholder="请输入当前题目的回答"
+          maxLength={2000}
+          disabled={submittingAnswer || feedbackGenerating || creatingQuestion || currentQuestionId === null}
+        />
+        <div className={styles.currentQuestionComposerActions}>
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            loading={submittingAnswer || feedbackGenerating}
+            disabled={submittingAnswer || feedbackGenerating || creatingQuestion || currentQuestionId === null}
+            onClick={() => {
+              sendAnswer();
+            }}
+          >
+            发送
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   const renderProgressNode = (node: WorkbenchProgressNode, level = 0) => {
     if (node.kind === "group") {
       const isExpanded = expandedProgressNodeKeys.has(node.key);
@@ -2025,12 +2329,17 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
 
     const questionTargetRef = getWorkbenchProgressNodeQuestionTargetRef(node);
-    const canCreateQuestionFromNode =
-      questionTargetRef !== null && isProgressTreeReady && !creatingQuestion && !submittingAnswer && !feedbackGenerating;
+    const canCreateQuestionFromNode = session !== null && canAutoCreateQuestionFromProgressNode({
+      session,
+      progressNodeRef: questionTargetRef,
+      creatingQuestion,
+      submittingAnswer,
+      feedbackGenerating,
+    });
     const canSelectNode = node.kind === "node";
     const isActive = canSelectNode && node.key === selectedProgressNodeDetailRef;
     const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
-    const isExpandable = !canCreateQuestionFromNode && Boolean(node.children && node.children.length > 0);
+    const isExpandable = Boolean(node.children && node.children.length > 0);
     const isExpanded = expandedProgressNodeKeys.has(node.key);
     const titleMeta = buildWorkbenchProgressNodeTitleMeta(node);
     const cardClassName = [
@@ -2055,7 +2364,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           onClick={
             canSelectNode
               ? () => {
-                  setSelectedProgressNodeRef(resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef));
+                  const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
+                  setSelectedProgressNodeRef(nextSelectedRef);
                   if (canCreateQuestionFromNode) {
                     void createQuestion(questionTargetRef);
                     return;
@@ -2148,9 +2458,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           <section className={styles.heroPanel}>
             <div className={styles.heroHeader}>
               <div className={styles.heroSummary}>
-                <Typography.Title level={3} className={styles.heroTitle}>
-                  打磨模式工作台
-                </Typography.Title>
                 <div className={styles.metaPills}>
                   {headerChips.map((chip) => (
                     <span key={chip.key}>
@@ -2160,20 +2467,25 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   ))}
                 </div>
               </div>
-
               <div className={styles.heroActions}>
-                <Button
-                  type="primary"
-                  onClick={() => navigate("/interview")}
-                >
-                  {INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0]}
-                </Button>
-                <Button
-                  loading={copyingSession}
-                  onClick={() => void copySessionContent()}
-                >
-                  {INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1]}
-                </Button>
+                <Tooltip title={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0]}>
+                  <Button
+                    type="primary"
+                    shape="circle"
+                    icon={<ArrowLeftOutlined />}
+                    aria-label={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0]}
+                    onClick={() => navigate("/interview")}
+                  />
+                </Tooltip>
+                <Tooltip title={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1]}>
+                  <Button
+                    shape="circle"
+                    icon={<CopyOutlined />}
+                    aria-label={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1]}
+                    loading={copyingSession}
+                    onClick={() => void copySessionContent()}
+                  />
+                </Tooltip>
               </div>
             </div>
           </section>
@@ -2269,6 +2581,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
                 {renderProgressTreeContextBanner()}
+                {answerError !== null && currentQuestionId === null ? <Alert type="error" showIcon message={answerError} /> : null}
                 {hasQuestion ? null : (
                   <EmptyState
                     compact
@@ -2301,19 +2614,54 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                       </div>
                     ) : (
                       turn.answers.map((answer) => {
-                        const nextActions = getAnswerNextRecommendedActions(answer);
+                        const feedbackCard = buildFeedbackCardViewModel(answer);
+                        const nextActions = feedbackCard.nextActions;
                         return (
                           <section key={answer.answer_id} style={{ display: "grid", gap: 10 }}>
                             <div className={styles.answerBubble}>
                               <Typography.Text strong>{`第 ${answer.answer_round} 轮回答`}</Typography.Text>
                               <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
                             </div>
-                            <section className={styles.feedbackAccordion} aria-label="反馈区域">
-                              <div className={styles.feedbackItem}>
+                            <section className={styles.feedbackAccordion} aria-label={`${feedbackCard.title}区域`}>
+                              <div className={styles.feedbackCardHeader}>
                                 <div className={styles.feedbackTextBlock}>
-                                  <Typography.Text strong>{`第 ${answer.answer_round} 轮反馈`}</Typography.Text>
-                                  <Typography.Text>{answer.feedback_text || FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                                  <Typography.Text strong>{feedbackCard.title}</Typography.Text>
+                                  <div className={styles.feedbackMetaRow}>
+                                    <Tag color={feedbackCard.status === "generated" ? "success" : "default"} className={styles.feedbackMetaTag}>
+                                      {feedbackCard.status}
+                                    </Tag>
+                                    {feedbackCard.contractId ? (
+                                      <Tag color="blue" className={styles.feedbackMetaTag}>{feedbackCard.contractId}</Tag>
+                                    ) : null}
+                                    {feedbackCard.contractIds.map((contractId) => (
+                                      contractId === feedbackCard.contractId ? null : (
+                                        <Tag key={contractId} className={styles.feedbackMetaTag}>{contractId}</Tag>
+                                      )
+                                    ))}
+                                  </div>
                                 </div>
+                              </div>
+                              <div className={styles.feedbackSectionList}>
+                                {feedbackCard.sections.map((section) => (
+                                  <details key={section.key} className={styles.feedbackSection} open={section.defaultOpen}>
+                                    <summary className={styles.feedbackSectionSummary}>{section.title}</summary>
+                                    <ul className={styles.feedbackSectionItems}>
+                                      {section.items.map((item) => (
+                                        <li key={`${section.key}:${item}`}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                ))}
+                                {feedbackCard.traceItems.length > 0 ? (
+                                  <details className={styles.feedbackSection}>
+                                    <summary className={styles.feedbackSectionSummary}>引用与置信度</summary>
+                                    <ul className={styles.feedbackSectionItems}>
+                                      {feedbackCard.traceItems.map((item) => (
+                                        <li key={`trace:${item}`}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                ) : null}
                               </div>
                               {nextActions.length > 0 ? (
                                 <div className={styles.nextActionBar} aria-label="下一步建议">
@@ -2338,53 +2686,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   </section>
                 ))}
               </div>
-
-              <div className={styles.composer} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.composer}>
-                <Alert type={workbenchMachineState === "feedbackReady" ? "success" : "info"} showIcon message={workbenchMachineCopy.label} description={workbenchMachineCopy.description} />
-                {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
-                {!hasQuestion && (
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="当前未生成题目"
-                    description="请先点击“生成题目”后提交回答。"
-                  />
-                )}
-                <Input.TextArea
-                  className={styles.composerInput}
-                  rows={4}
-                  value={answerText}
-                  onChange={(event) => setAnswerText(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (shouldSubmitAnswerFromKeyboard({
-                      key: event.key,
-                      ctrlKey: event.ctrlKey,
-                      shiftKey: event.shiftKey,
-                      altKey: event.altKey,
-                      isComposing: event.nativeEvent.isComposing,
-                    })) {
-                      event.preventDefault();
-                      sendAnswer();
-                    }
-                  }}
-                  placeholder="请输入你的回答"
-                  maxLength={2000}
-                  disabled={submittingAnswer || feedbackGenerating || creatingQuestion || !hasQuestion}
-                />
-                <div className={styles.composerActions}>
-                  <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    loading={submittingAnswer || feedbackGenerating}
-                    disabled={submittingAnswer || feedbackGenerating || creatingQuestion || !hasQuestion}
-                    onClick={() => {
-                      sendAnswer();
-                    }}
-                  >
-                    发送
-                  </Button>
-                </div>
-              </div>
+              {renderCurrentQuestionComposer()}
             </main>
           </section>
         </div>

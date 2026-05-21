@@ -674,28 +674,22 @@ def _normalize_state(
         return _empty_state(PROGRESS_TREE_STATUS_REFRESH_FAILED, prompt_version=prompt_version)
 
     plan_nodes = _flatten_progress_nodes(existing_plan.get("nodes", []))
-    plan_ref_set = {node["progress_node_ref"] for node in plan_nodes}
+    if not plan_nodes:
+        return _empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version)
     plan_by_ref = {node["progress_node_ref"]: node for node in plan_nodes}
-    node_states = []
-    for item in state_payload.get("node_states", []):
-        if not isinstance(item, dict):
-            continue
-        node_ref = truncate_text(item.get("progress_node_ref") or item.get("node_ref"), max_chars=120)
-        if not node_ref or node_ref not in plan_ref_set:
-            continue
-        node_states.append(
-            {
-                "progress_node_ref": node_ref,
-                "status": _normalize_status(item.get("status")),
-                "completed_questions_count": _bounded_int(item.get("completed_questions_count"), 0, 999),
-                "latest_feedback_summary": truncate_text(item.get("latest_feedback_summary"), max_chars=480),
-            }
-        )
+    node_states = _complete_node_states_for_plan(
+        existing_plan.get("nodes", []),
+        state_payload.get("node_states", []),
+    )
+    node_states = _rollup_node_states(existing_plan.get("nodes", []), node_states)
 
     current_priority = _normalize_priority(state_payload.get("current_priority"), plan_by_ref)
     if current_priority is None:
-        current_priority = _first_non_completed_priority(node_states, plan_nodes)
-    if not node_states or current_priority is None:
+        current_priority = _first_non_completed_priority(
+            node_states,
+            _flatten_leaf_nodes(existing_plan.get("nodes", [])) or plan_nodes,
+        )
+    if current_priority is None:
         return _empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version)
 
     return {
@@ -707,12 +701,9 @@ def _normalize_state(
         "current_priority": current_priority,
         "updated_from_turns_count": _bounded_int(state_payload.get("updated_from_turns_count"), 0, 999),
         "progress": {
-            "progress_percent": _bounded_int(
-                (state_payload.get("progress") or {}).get("progress_percent")
-                if isinstance(state_payload.get("progress"), dict)
-                else state_payload.get("progress_percent"),
-                0,
-                100,
+            "progress_percent": _progress_percent_from_leaf_nodes(
+                _flatten_leaf_nodes(existing_plan.get("nodes", [])) or plan_nodes,
+                node_states,
             )
         },
     }
@@ -845,7 +836,7 @@ def _initial_state_fallback(
     failure_reason: str,
 ) -> dict[str, Any]:
     plan_nodes = _flatten_progress_nodes(plan.get("nodes", []))
-    current_priority = _fallback_priority(plan_nodes)
+    current_priority = _fallback_priority(_flatten_leaf_nodes(plan.get("nodes", [])) or plan_nodes)
     return {
         "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
         "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
@@ -874,15 +865,27 @@ def _apply_turn_progress_to_state(
     *,
     existing_plan: dict[str, Any],
 ) -> dict[str, Any]:
-    node_states = [item for item in state.get("node_states", []) if isinstance(item, dict)]
+    plan_nodes = existing_plan.get("nodes", [])
+    flat_plan_nodes = _flatten_progress_nodes(plan_nodes)
+    if not flat_plan_nodes:
+        return state
+    node_states = _complete_node_states_for_plan(plan_nodes, state.get("node_states", []))
     if not node_states:
         return state
-    turn_updates = _turn_progress_updates(context, node_states)
+    plan_ref_set = {node["progress_node_ref"] for node in flat_plan_nodes}
+    turn_updates = _turn_progress_updates(context, node_states, plan_ref_set)
     if not turn_updates:
+        rolled_node_states = _rollup_node_states(plan_nodes, node_states)
         return {
             **state,
+            "node_states": rolled_node_states,
             "summary": "v2_local_state_refresh",
-            "progress": {"progress_percent": _progress_percent(state)},
+            "progress": {
+                "progress_percent": _progress_percent_from_leaf_nodes(
+                    _flatten_leaf_nodes(plan_nodes) or flat_plan_nodes,
+                    rolled_node_states,
+                )
+            },
         }
 
     completed_counts_by_ref: dict[str, int] = {}
@@ -919,44 +922,161 @@ def _apply_turn_progress_to_state(
             updated["latest_feedback_summary"] = latest_feedback_by_ref[node_ref]
         updated_node_states.append(updated)
 
-    completed_nodes_count = sum(1 for item in updated_node_states if item.get("status") == "completed")
-    progress_percent = _bounded_int(round(completed_nodes_count * 100 / len(updated_node_states)), 0, 100)
+    rolled_node_states = _rollup_node_states(plan_nodes, updated_node_states)
     current_priority = _current_priority_from_turns(
         latest_turn_ref=latest_turn_ref,
-        updated_node_states=updated_node_states,
+        updated_node_states=rolled_node_states,
         existing_state=state,
         existing_plan=existing_plan,
     )
     return {
         **state,
-        "node_states": updated_node_states,
+        "node_states": rolled_node_states,
         "current_priority": current_priority,
         "updated_from_turns_count": len(turn_updates),
         "summary": "v2_local_state_refresh",
-        "progress": {"progress_percent": progress_percent},
+        "progress": {
+            "progress_percent": _progress_percent_from_leaf_nodes(
+                _flatten_leaf_nodes(plan_nodes) or flat_plan_nodes,
+                rolled_node_states,
+            )
+        },
     }
+
+
+def _complete_node_states_for_plan(
+    plan_nodes: list[dict[str, Any]],
+    raw_node_states: object,
+) -> list[dict[str, Any]]:
+    flat_plan_nodes = _flatten_progress_nodes(plan_nodes)
+    plan_ref_set = {node["progress_node_ref"] for node in flat_plan_nodes}
+    raw_by_ref: dict[str, dict[str, Any]] = {}
+    if isinstance(raw_node_states, list):
+        for item in raw_node_states:
+            if not isinstance(item, dict):
+                continue
+            node_ref = truncate_text(item.get("progress_node_ref") or item.get("node_ref"), max_chars=120)
+            if node_ref and node_ref in plan_ref_set:
+                raw_by_ref[node_ref] = item
+    return [
+        {
+            "progress_node_ref": node["progress_node_ref"],
+            "status": _normalize_status(raw_by_ref.get(node["progress_node_ref"], {}).get("status")),
+            "completed_questions_count": _bounded_int(
+                raw_by_ref.get(node["progress_node_ref"], {}).get("completed_questions_count"),
+                0,
+                999,
+            ),
+            "latest_feedback_summary": truncate_text(
+                raw_by_ref.get(node["progress_node_ref"], {}).get("latest_feedback_summary"),
+                max_chars=480,
+            ),
+        }
+        for node in flat_plan_nodes
+    ]
+
+
+def _rollup_node_states(
+    plan_nodes: list[dict[str, Any]],
+    node_states: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    state_by_ref = {
+        str(item.get("progress_node_ref")): {**item}
+        for item in node_states
+        if item.get("progress_node_ref")
+    }
+
+    def rollup(node: dict[str, Any]) -> dict[str, Any]:
+        node_ref = node["progress_node_ref"]
+        current = state_by_ref.setdefault(
+            node_ref,
+            {
+                "progress_node_ref": node_ref,
+                "status": "pending",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            },
+        )
+        children = [child for child in node.get("children", []) if isinstance(child, dict)]
+        if not children:
+            current["status"] = _normalize_status(current.get("status"))
+            current["completed_questions_count"] = _bounded_int(current.get("completed_questions_count"), 0, 999)
+            current["latest_feedback_summary"] = truncate_text(current.get("latest_feedback_summary"), max_chars=480)
+            return current
+
+        child_states = [rollup(child) for child in children]
+        child_statuses = [_normalize_status(child.get("status")) for child in child_states]
+        own_status = _normalize_status(current.get("status"))
+        has_started = own_status in {"completed", "in_progress"} or any(status != "pending" for status in child_statuses)
+        if child_statuses and all(status == "completed" for status in child_statuses) and own_status != "in_progress":
+            current["status"] = "completed"
+        elif has_started:
+            current["status"] = "in_progress"
+        else:
+            current["status"] = "pending"
+        current["completed_questions_count"] = max(
+            _bounded_int(current.get("completed_questions_count"), 0, 999),
+            sum(_bounded_int(child.get("completed_questions_count"), 0, 999) for child in child_states),
+        )
+        latest_child_feedback = next(
+            (
+                truncate_text(child.get("latest_feedback_summary"), max_chars=480)
+                for child in reversed(child_states)
+                if truncate_text(child.get("latest_feedback_summary"), max_chars=480)
+            ),
+            None,
+        )
+        current["latest_feedback_summary"] = latest_child_feedback or truncate_text(
+            current.get("latest_feedback_summary"),
+            max_chars=480,
+        )
+        return current
+
+    for node in plan_nodes:
+        rollup(node)
+    return [
+        state_by_ref[node["progress_node_ref"]]
+        for node in _flatten_progress_nodes(plan_nodes)
+        if node.get("progress_node_ref") in state_by_ref
+    ]
+
+
+def _progress_percent_from_leaf_nodes(
+    leaf_nodes: list[dict[str, Any]],
+    node_states: list[dict[str, Any]],
+) -> int:
+    if not leaf_nodes:
+        return 0
+    status_by_ref = {
+        str(item.get("progress_node_ref")): _normalize_status(item.get("status"))
+        for item in node_states
+        if item.get("progress_node_ref")
+    }
+    completed_leaf_count = sum(
+        1 for node in leaf_nodes if status_by_ref.get(node["progress_node_ref"]) == "completed"
+    )
+    return _bounded_int(round(completed_leaf_count * 100 / len(leaf_nodes)), 0, 100)
 
 
 def _turn_progress_updates(
     context: dict[str, Any],
     node_states: list[dict[str, Any]],
+    plan_ref_set: set[str],
 ) -> list[dict[str, str]]:
     turns = context.get("turns")
     if not isinstance(turns, list):
         return []
-    fallback_refs = [
+    existing_refs = {
         str(item.get("progress_node_ref"))
         for item in node_states
         if isinstance(item.get("progress_node_ref"), str) and item.get("progress_node_ref")
-    ]
+    }
     updates: list[dict[str, str]] = []
     for turn in turns:
         if not isinstance(turn, dict):
             continue
         node_ref = truncate_text(turn.get("progress_node_ref"), max_chars=120)
-        if not node_ref and len(updates) < len(fallback_refs):
-            node_ref = fallback_refs[len(updates)]
-        if not node_ref:
+        if not node_ref or node_ref not in existing_refs or node_ref not in plan_ref_set:
             continue
         status = "completed" if _turn_has_feedback(turn) else "in_progress"
         feedback_summary = _latest_turn_feedback(turn) if status == "completed" else None
@@ -997,12 +1117,13 @@ def _current_priority_from_turns(
     existing_plan: dict[str, Any],
 ) -> dict[str, Any] | None:
     plan_nodes = _flatten_progress_nodes(existing_plan.get("nodes", []))
+    leaf_plan_nodes = _flatten_leaf_nodes(existing_plan.get("nodes", [])) or plan_nodes
     plan_by_ref = {node["progress_node_ref"]: node for node in plan_nodes}
     if latest_turn_ref:
         priority = _priority_for_ref(latest_turn_ref, plan_by_ref, existing_state)
         if priority is not None:
             return priority
-    return _first_non_completed_priority(updated_node_states, plan_nodes)
+    return _first_non_completed_priority(updated_node_states, leaf_plan_nodes)
 
 
 def _priority_for_ref(

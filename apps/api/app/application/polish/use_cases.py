@@ -39,6 +39,7 @@ from app.application.polish.progress_tree import (
     PROGRESS_TREE_STATUS_FAILED,
     PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
     PROGRESS_TREE_STATUS_READY,
+    PROGRESS_TREE_STATUS_REFRESH_FAILED,
     PolishProgressTreeLlmService,
     build_progress_node_question,
 )
@@ -265,11 +266,19 @@ class PolishUseCases:
                     details={"progress_tree_status": detail.progress_tree_status},
                 )
             )
-        if detail.progress_tree_status != PROGRESS_TREE_STATUS_READY:
+        if detail.progress_tree_status not in {PROGRESS_TREE_STATUS_READY, PROGRESS_TREE_STATUS_REFRESH_FAILED}:
             return ApplicationResult(
                 error=DomainError(
                     code="validation_failed",
                     message="Progress tree is not ready",
+                    details={"progress_tree_status": detail.progress_tree_status},
+                )
+            )
+        if not _has_valid_progress_tree_plan(detail.progress_tree_plan):
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Progress tree plan is not ready",
                     details={"progress_tree_status": detail.progress_tree_status},
                 )
             )
