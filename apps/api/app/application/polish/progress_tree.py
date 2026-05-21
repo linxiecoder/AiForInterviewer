@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from hashlib import sha256
 import os
 from typing import Any
@@ -67,6 +68,40 @@ DEFAULT_PROGRESS_TREE_PLANNER = "quality_first"
 PROGRESS_TREE_PLANNER_QUALITY_FIRST = "quality_first"
 PROGRESS_TREE_PLANNER_V2_PIPELINE = "v2_pipeline"
 PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
+
+
+@dataclass(frozen=True)
+class ProgressNodeQuestionContext:
+    session: PolishSession
+    context: dict[str, Any]
+    plan: dict[str, Any]
+    state: dict[str, Any]
+    requested_ref: str | None
+    node: dict[str, Any]
+    evidence_chunks: tuple[ProgressEvidenceChunk, ...]
+    evidence_refs: tuple[str, ...]
+    sources: tuple[PolishQuestionSource, ...]
+    citations: str
+    strategy: PolishThemeStrategy
+    source_availability: str
+    progress_node_ref: str | None
+    context_digest: str | None
+
+
+@dataclass(frozen=True)
+class DeterministicProgressNodeQuestionBuild:
+    session: PolishSession
+    context: dict[str, Any]
+    plan: dict[str, Any]
+    state: dict[str, Any]
+    requested_ref: str | None
+    question_context: ProgressNodeQuestionContext
+    draft: PolishQuestionDraft
+    question_pattern: QuestionPattern
+    scenario_constraint: ScenarioConstraint
+    quality_result: QuestionQualityResult
+    question_metadata: QuestionMetadata
+    evidence_signals: EvidenceSignalSet
 
 
 class PolishProgressTreeLlmService:
@@ -225,15 +260,18 @@ def _progress_tree_planner() -> str:
     return DEFAULT_PROGRESS_TREE_PLANNER
 
 
-def build_progress_node_question(
+
+def build_progress_node_question_context(
     *,
     session: PolishSession,
     context: dict[str, Any],
     plan: dict[str, Any],
     state: dict[str, Any],
     requested_ref: str | None,
-) -> PolishQuestionDraft:
+) -> ProgressNodeQuestionContext:
     node = resolve_progress_node(plan=plan, state=state, requested_ref=requested_ref)
+    strategy = _safe_polish_theme_strategy(session.polish_theme)
+    context_digest = truncate_text(context.get("content_digest"), max_chars=120)
     if node is None:
         topic = session.custom_topic_text_summary or session.topic_id or "manual_topic"
         fallback_progress_node_ref = truncate_text(requested_ref, max_chars=120) or _node_ref(
@@ -256,32 +294,21 @@ def build_progress_node_question(
             ref_id=fallback_progress_node_ref,
             availability="unavailable",
         )
-        strategy = _safe_polish_theme_strategy(session.polish_theme)
-        question_text, pattern, scenario, quality, metadata, evidence_signals = _build_deterministic_v2_question(
+        return ProgressNodeQuestionContext(
             session=session,
             context=context,
+            plan=plan,
+            state=state,
+            requested_ref=requested_ref,
             node=fallback_node,
-            evidence_chunks=[],
+            evidence_chunks=(),
             evidence_refs=(),
             sources=(source,),
             citations="[1]",
             strategy=strategy,
-        )
-        return PolishQuestionDraft(
-            question_text=question_text,
-            question_sources=(source,),
+            source_availability="unavailable",
             progress_node_ref=fallback_progress_node_ref,
-            evidence_refs=(),
-            context_digest=truncate_text(context.get("content_digest"), max_chars=120),
-            question_pattern=pattern.pattern_id,
-            quality_score=quality.quality_score,
-            confidence_level=scenario.confidence_level,
-            low_confidence_flags=metadata.low_confidence_flags,
-            expected_answer_dimensions=pattern.expected_answer_dimensions,
-            question_metadata=metadata.to_dict(),
-            evidence_signal_refs=metadata.evidence_signal_refs,
-            builder_version=metadata.builder_version,
-            validator_version=metadata.validator_version,
+            context_digest=context_digest,
         )
 
     evidence_selection = select_progress_tree_evidence_chunks(
@@ -291,49 +318,52 @@ def build_progress_node_question(
         existing_state=state,
         progress_node_ref=node["progress_node_ref"],
     )
-    evidence_chunks = list(evidence_selection.selected_chunks)
+    evidence_chunks = tuple(evidence_selection.selected_chunks)
     evidence_refs = tuple(chunk.chunk_id for chunk in evidence_chunks)
+    job_snapshot = context.get("job_snapshot", {}) if isinstance(context.get("job_snapshot"), dict) else {}
+    resume_snapshot = context.get("resume_snapshot", {}) if isinstance(context.get("resume_snapshot"), dict) else {}
+    match_context = context.get("match_context", {}) if isinstance(context.get("match_context"), dict) else {}
     sources = _index_question_sources(
         [
             _progress_node_source(node),
             _source_from_chunks(
-                evidence_chunks,
+                list(evidence_chunks),
                 source_types=QUESTION_SOURCE_JOB_TYPES,
                 normalized_source_type="job_requirement",
                 fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["job_requirement"],
-                fallback_ref_id=_snapshot_ref_id(context.get("job_snapshot", {}), "job_version_id", "job_id"),
+                fallback_ref_id=_snapshot_ref_id(job_snapshot, "job_version_id", "job_id"),
                 fallback_values=[
                     *node.get("related_job_requirements", []),
-                    *context["job_snapshot"].get("requirements", []),
-                    *context["job_snapshot"].get("responsibilities", []),
+                    *job_snapshot.get("requirements", []),
+                    *job_snapshot.get("responsibilities", []),
                 ],
             ),
             _source_from_chunks(
-                evidence_chunks,
+                list(evidence_chunks),
                 source_types=QUESTION_SOURCE_RESUME_TYPES,
                 normalized_source_type="resume_evidence",
                 fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["resume_evidence"],
-                fallback_ref_id=_snapshot_ref_id(context.get("resume_snapshot", {}), "resume_version_id", "resume_id"),
+                fallback_ref_id=_snapshot_ref_id(resume_snapshot, "resume_version_id", "resume_id"),
                 fallback_values=[
                     *node.get("related_resume_evidence", []),
-                    *context["resume_snapshot"].get("project_experiences", []),
-                    context["resume_snapshot"].get("summary"),
+                    *resume_snapshot.get("project_experiences", []),
+                    resume_snapshot.get("summary"),
                 ],
             ),
             _source_from_chunks(
-                evidence_chunks,
+                list(evidence_chunks),
                 source_types={"match_gap"},
                 normalized_source_type="missing_point",
                 fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["missing_point"],
-                fallback_ref_id=_snapshot_ref_id(context.get("match_context", {}), "analysis_id"),
+                fallback_ref_id=_snapshot_ref_id(match_context, "analysis_id"),
                 fallback_values=[
                     *node.get("missing_points", []),
-                    *context["match_context"].get("missing_points", []),
+                    *match_context.get("missing_points", []),
                 ],
                 required=False,
             ),
             _source_from_chunks(
-                evidence_chunks,
+                list(evidence_chunks),
                 source_types={"turn_feedback"},
                 normalized_source_type="history_feedback",
                 fallback_title=QUESTION_SOURCE_TITLE_BY_TYPE["history_feedback"],
@@ -344,23 +374,55 @@ def build_progress_node_question(
         ]
     )
     citations = "".join(f"[{source.index}]" for source in sources)
-    strategy = _safe_polish_theme_strategy(session.polish_theme)
-    question_text, pattern, scenario, quality, metadata, evidence_signals = _build_deterministic_v2_question(
+    return ProgressNodeQuestionContext(
         session=session,
         context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
         node=node,
         evidence_chunks=evidence_chunks,
         evidence_refs=evidence_refs,
         sources=sources,
         citations=citations,
         strategy=strategy,
-    )
-    return PolishQuestionDraft(
-        question_text=question_text,
-        question_sources=sources,
+        source_availability=_question_source_availability(sources),
         progress_node_ref=node.get("progress_node_ref"),
-        evidence_refs=evidence_refs,
-        context_digest=truncate_text(context.get("content_digest"), max_chars=120),
+        context_digest=context_digest,
+    )
+
+
+def build_deterministic_progress_node_question(
+    *,
+    session: PolishSession,
+    context: dict[str, Any],
+    plan: dict[str, Any],
+    state: dict[str, Any],
+    requested_ref: str | None,
+) -> DeterministicProgressNodeQuestionBuild:
+    question_context = build_progress_node_question_context(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    )
+    question_text, pattern, scenario, quality, metadata, evidence_signals = _build_deterministic_v2_question(
+        session=session,
+        context=context,
+        node=question_context.node,
+        evidence_chunks=list(question_context.evidence_chunks),
+        evidence_refs=question_context.evidence_refs,
+        sources=question_context.sources,
+        citations=question_context.citations,
+        strategy=question_context.strategy,
+    )
+    draft = PolishQuestionDraft(
+        question_text=question_text,
+        question_sources=question_context.sources,
+        progress_node_ref=question_context.progress_node_ref,
+        evidence_refs=question_context.evidence_refs,
+        context_digest=question_context.context_digest,
         question_pattern=pattern.pattern_id,
         quality_score=quality.quality_score,
         confidence_level=scenario.confidence_level,
@@ -371,6 +433,37 @@ def build_progress_node_question(
         builder_version=metadata.builder_version,
         validator_version=metadata.validator_version,
     )
+    return DeterministicProgressNodeQuestionBuild(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+        question_context=question_context,
+        draft=draft,
+        question_pattern=pattern,
+        scenario_constraint=scenario,
+        quality_result=quality,
+        question_metadata=metadata,
+        evidence_signals=evidence_signals,
+    )
+
+
+def build_progress_node_question(
+    *,
+    session: PolishSession,
+    context: dict[str, Any],
+    plan: dict[str, Any],
+    state: dict[str, Any],
+    requested_ref: str | None,
+) -> PolishQuestionDraft:
+    return build_deterministic_progress_node_question(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    ).draft
 
 
 def _build_deterministic_v2_question(

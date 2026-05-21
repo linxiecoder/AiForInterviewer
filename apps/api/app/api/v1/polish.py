@@ -378,6 +378,7 @@ def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTranspo
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
+        llm_transport=llm_transport,
     )
 
 

@@ -6,6 +6,12 @@ import re
 from json import dumps
 from typing import Any
 
+from app.application.polish.question_prompts import (
+    POLISH_QUESTION_GENERATION_PROMPT_VERSION,
+    POLISH_QUESTION_GENERATION_SCHEMA_ID,
+    POLISH_QUESTION_GENERATION_SCHEMA_VERSION,
+    POLISH_QUESTION_GENERATION_TASK_TYPE,
+)
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
@@ -44,6 +50,7 @@ from app.schemas.job_match import (
     ResumeEvidence,
     SourceEvidenceRef,
 )
+from app.infrastructure.llm.errors import LlmTransportUnavailableError
 from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
 
 
@@ -53,6 +60,8 @@ class FakeLlmTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
+        if request.task_type == POLISH_QUESTION_GENERATION_TASK_TYPE:
+            return _generate_fake_polish_question(request)
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
             return _generate_fake_progress_quality_first_menu(request)
         if request.task_type == POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE:
@@ -97,6 +106,107 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:
+    evidence_bundle = request.evidence_bundle.get("evidence_bundle", {}) if isinstance(request.evidence_bundle, dict) else {}
+    marker = str(evidence_bundle.get("fixture_marker") or "valid_high_quality")
+    evidence_refs = [str(ref) for ref in evidence_bundle.get("input_evidence_refs", []) if str(ref)]
+    if marker == "provider_unavailable":
+        raise LlmTransportUnavailableError("fake question provider unavailable")
+    if marker == "timeout_or_transport_error":
+        raise TimeoutError("fake question provider timeout")
+    if marker == "schema_invalid":
+        payload = {"schema_id": "unexpected_schema", "schema_version": 999, "question_text": "schema invalid"}
+    else:
+        payload = _fake_polish_question_payload(evidence_bundle, evidence_refs=evidence_refs)
+        if marker == "semantic_invalid":
+            payload["question_text"] = "请简单聊聊这个项目。"
+        elif marker == "fabricated_entity":
+            payload["question_text"] = (
+                "LLM 合同测试题：围绕「支付链路一致性」，请从 Owner 视角先限定业务约束，"
+                "再说明 Kafka 和 RocketMQ 同时失败时的失败路径、性能或成本约束、验证指标、可观测指标和核心 trade-off；"
+                "如何让状态收敛？回答重点：业务边界、核心链路、失败路径、资源约束、验证指标、后续补材料。[1][2]"
+            )
+        elif marker == "answer_leak":
+            payload["question_text"] = "参考答案：可以这样回答：先做幂等，再做补偿。"
+        elif marker == "evidence_refs_invalid":
+            payload["evidence_refs"] = [*evidence_refs, "fabricated_evidence_ref"]
+        elif marker == "low_confidence_valid":
+            payload["confidence_level"] = "low"
+            payload["low_confidence_flags"] = ["llm_low_confidence"]
+        elif marker == "repair_then_valid":
+            payload["question_text"] = payload["question_text"].replace("回答重点", "请按回答重点")
+            payload["requires_repair"] = True
+        elif marker == "repair_then_fallback":
+            payload["question_text"] = "；".join([payload["question_text"]] * 10)
+            payload["requires_repair"] = True
+    confidence_level = ConfidenceLevel.LOW if payload.get("confidence_level") == "low" else ConfidenceLevel.MEDIUM
+    low_flags = tuple(payload.get("low_confidence_flags") or ())
+    return LlmTransportResult(
+        result=payload,
+        validation_status=ValidationStatus.VALID,
+        confidence_level=confidence_level,
+        low_confidence_flags=low_flags,
+        trace_refs=(stable_resource_id("trace", f"fake-question-trace:{marker}:{','.join(evidence_refs)}"),),
+        evidence_refs=tuple(evidence_refs),
+    )
+
+
+def _fake_polish_question_payload(evidence_bundle: dict[str, Any], *, evidence_refs: list[str]) -> dict[str, Any]:
+    node = evidence_bundle.get("progress_node_summary", {}) if isinstance(evidence_bundle, dict) else {}
+    pattern = evidence_bundle.get("question_pattern", {}) if isinstance(evidence_bundle, dict) else {}
+    focus = node.get("title") or "当前进展节点"
+    pattern_id = pattern.get("pattern_id") or "owner_tradeoff_system_design"
+    dimensions = [str(item) for item in (pattern.get("expected_answer_dimensions") or []) if str(item)]
+    if not dimensions:
+        dimensions = ["业务边界", "核心链路", "失败路径", "资源约束", "验证指标", "后续补材料"]
+    selected_refs = evidence_refs[:]
+    if pattern_id == "mixed_technical_expression":
+        question_text = (
+            f"LLM 合同测试题：本题权重比例为显性技术 60%、隐性表达 40%。围绕「{focus}」，"
+            "请先说明业务约束，再展开技术深度：选择一个失败路径说明方案链路、失败兜底、"
+            "验证指标、可观测指标、成本控制和核心 trade-off；同时请按背景、约束、方案、结果、复盘的表达结构回答。"
+            f"回答重点：{'、'.join(dimensions[:6])}。[1][2]"
+        )
+    elif pattern_id == "star_communication_refactor":
+        question_text = (
+            f"LLM 合同测试题：围绕「{focus}」，请用 STAR 结构重讲一遍：先做背景压缩，"
+            "明确个人职责边界，按逻辑顺序说明关键动作、失败处理和取舍表达，最后用结果指标、复盘总结和面试口语化表达收束。"
+            f"回答重点：{'、'.join(dimensions[:6])}。[1][2]"
+        )
+    elif pattern_id == "partial_success_failure_recovery":
+        question_text = (
+            f"LLM 合同测试题：围绕「{focus}」，请从 Owner 视角先限定业务约束，"
+            "再说明部分成功 / 部分失败时的状态机、重试收敛、断点续跑、幂等保护、成本上限、验证指标和可观测指标；"
+            "如果恢复链路失败，如何让状态收敛并解释核心 trade-off？"
+            f"回答重点：{'、'.join(dimensions[:6])}。[1][2]"
+        )
+    else:
+        question_text = (
+            f"LLM 合同测试题：围绕「{focus}」，请从 Owner 视角先限定业务约束，"
+            "再选择一个失败路径说明性能或成本约束、验证指标、可观测指标和核心 trade-off；"
+            "如果接口幂等、补偿或重试失败，如何让状态收敛？"
+            f"回答重点：{'、'.join(dimensions[:6])}。[1][2]"
+        )
+    return {
+        "schema_id": POLISH_QUESTION_GENERATION_SCHEMA_ID,
+        "schema_version": POLISH_QUESTION_GENERATION_SCHEMA_VERSION,
+        "prompt_version": POLISH_QUESTION_GENERATION_PROMPT_VERSION,
+        "status": "generated",
+        "question_text": question_text,
+        "question_pattern": pattern_id,
+        "interview_intent": "验证候选人能否把当前节点的异常收敛讲清楚。",
+        "scenario_constraint_summary": "基于 compact evidence 的题目生成。",
+        "expected_answer_dimensions": dimensions,
+        "evidence_refs": selected_refs,
+        "source_availability": "available" if selected_refs else "partial",
+        "confidence_level": "medium",
+        "low_confidence_flags": [],
+        "quality_hints": ["绑定 progress_node_ref", "不得泄露参考答案"],
+        "requires_repair": False,
+        "redaction_boundary": "no_raw_prompt_completion_provider_payload",
+    }
 
 
 def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> LlmTransportResult:

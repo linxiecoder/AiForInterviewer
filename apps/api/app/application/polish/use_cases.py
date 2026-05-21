@@ -31,6 +31,7 @@ from app.application.polish.entities import (
 )
 from app.application.polish.ports import PolishRepository
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
+from app.application.polish.question_llm import PolishQuestionLlmService
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
 from app.application.polish.progress_prompts import (
@@ -43,7 +44,7 @@ from app.application.polish.progress_tree import (
     PROGRESS_TREE_STATUS_READY,
     PROGRESS_TREE_STATUS_REFRESH_FAILED,
     PolishProgressTreeLlmService,
-    build_progress_node_question,
+    build_deterministic_progress_node_question,
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.resumes.ports import ResumeRepository
@@ -56,6 +57,7 @@ from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.domain.shared.errors import DomainError
 from app.domain.shared.ids import ResourceIdPrefix, generate_resource_id
 from app.domain.shared.refs import ResourceRef, TraceRef
+from app.infrastructure.llm.ports import LlmTransport
 
 
 SESSION_STATUS_RUNNING = "running"
@@ -131,6 +133,7 @@ class PolishUseCases:
         job_repository: JobRepository,
         job_match_repository: JobMatchRepository | None = None,
         progress_tree_service: PolishProgressTreeLlmService | None = None,
+        llm_transport: LlmTransport | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
@@ -138,6 +141,7 @@ class PolishUseCases:
         self._job_repository = job_repository
         self._job_match_repository = job_match_repository
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
+        self._question_llm_service = PolishQuestionLlmService(llm_transport)
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
@@ -302,13 +306,21 @@ class PolishUseCases:
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
-        question_draft = build_progress_node_question(
+        question_result = self._question_llm_service.generate_with_llm_or_fallback(
             session=session,
             context=detail.progress_context,
             plan=detail.progress_tree_plan,
             state=detail.progress_tree_state,
             requested_ref=command.progress_node_ref,
+            deterministic_builder=lambda: build_deterministic_progress_node_question(
+                session=session,
+                context=detail.progress_context,
+                plan=detail.progress_tree_plan,
+                state=detail.progress_tree_state,
+                requested_ref=command.progress_node_ref,
+            ),
         )
+        question_draft = question_result.draft
         question_metadata = _metadata_for_new_question(
             getattr(question_draft, "question_metadata", None),
             generated_at=now.isoformat(),

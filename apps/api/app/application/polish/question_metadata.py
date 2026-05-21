@@ -133,7 +133,7 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
     if not payload:
         return empty_question_metadata().to_dict()
 
-    return {
+    normalized = {
         "schema_id": _string_or_none(payload.get("schema_id")) or QUESTION_METADATA_SCHEMA_ID,
         "schema_version": _string_or_none(payload.get("schema_version")) or QUESTION_METADATA_SCHEMA_VERSION,
         "builder_version": _string_or_none(payload.get("builder_version")) or BUILDER_VERSION,
@@ -151,6 +151,38 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "source_availability": _string_or_none(payload.get("source_availability")),
         "generated_at": _string_or_none(payload.get("generated_at"), max_chars=80),
     }
+    llm_keys = {
+        "llm_task_type",
+        "prompt_version",
+        "question_schema_version",
+        "llm_output_validation_status",
+        "llm_generation_mode",
+        "fallback_reason",
+        "repair_attempted",
+        "provider_summary",
+        "model_summary",
+        "validation_errors",
+        "redaction_boundary",
+    }
+    if any(key in payload for key in llm_keys):
+        normalized.update(
+            {
+                "llm_task_type": _string_or_none(payload.get("llm_task_type"), max_chars=120),
+                "prompt_version": _string_or_none(payload.get("prompt_version"), max_chars=120),
+                "question_schema_version": _int_or_none(payload.get("question_schema_version")),
+                "llm_output_validation_status": _string_or_none(
+                    payload.get("llm_output_validation_status"), max_chars=80
+                ),
+                "llm_generation_mode": _string_or_none(payload.get("llm_generation_mode"), max_chars=80),
+                "fallback_reason": _string_or_none(payload.get("fallback_reason"), max_chars=120),
+                "repair_attempted": _bool_or_false(payload.get("repair_attempted")),
+                "provider_summary": _safe_summary_dict(payload.get("provider_summary")),
+                "model_summary": _safe_summary_dict(payload.get("model_summary")),
+                "validation_errors": _validation_errors(payload.get("validation_errors")),
+                "redaction_boundary": _string_or_none(payload.get("redaction_boundary"), max_chars=160),
+            }
+        )
+    return normalized
 
 
 def question_metadata_to_dict(raw: object) -> dict[str, Any]:
@@ -219,6 +251,54 @@ def _string_list(value: object, *, max_item_chars: int = 240) -> list[str]:
         text = _string_or_none(item, max_chars=max_item_chars)
         if text and text not in result:
             result.append(text)
+    return result
+
+
+def _int_or_none(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bool_or_false(value: object) -> bool:
+    return bool(value) if isinstance(value, bool) else False
+
+
+def _safe_summary_dict(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        text = _string_or_none(value, max_chars=80)
+        return {"kind": text} if text else {}
+    allowed = {"kind", "status", "validation_status", "confidence_level", "model_name", "error_type"}
+    result: dict[str, Any] = {}
+    for key in allowed:
+        if key not in value:
+            continue
+        raw = value.get(key)
+        if isinstance(raw, bool):
+            result[key] = raw
+        elif isinstance(raw, int):
+            result[key] = raw
+        else:
+            text = _string_or_none(raw, max_chars=120)
+            if text:
+                result[key] = text
+    return result
+
+
+def _validation_errors(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, str]] = []
+    for item in value[:20]:
+        if not isinstance(item, dict):
+            continue
+        code = _string_or_none(item.get("code"), max_chars=120)
+        message = _string_or_none(item.get("message"), max_chars=200)
+        if code:
+            result.append({"code": code, "message": message or code})
     return result
 
 
