@@ -207,12 +207,11 @@ def _payload_with_theme_metadata(payload: dict | None, theme: str | None) -> dic
     if payload is None:
         return None
     result = dict(payload)
-    strategy = _resolve_strategy_or_none(theme)
-    if strategy is not None:
-        result["polish_theme"] = strategy.theme
-        result["polish_theme_label"] = strategy.label
-        result["explicit_weight"] = strategy.explicit_weight
-        result["implicit_weight"] = strategy.implicit_weight
+    strategy = _resolve_strategy_or_none(theme) or resolve_polish_theme_strategy(None)
+    result["polish_theme"] = strategy.theme
+    result["polish_theme_label"] = strategy.label
+    result["explicit_weight"] = strategy.explicit_weight
+    result["implicit_weight"] = strategy.implicit_weight
     return result
 
 

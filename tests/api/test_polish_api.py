@@ -1203,6 +1203,59 @@ def test_progress_tree_refresh_regenerates_missing_persisted_plan_when_context_i
     assert [call.task_type for call in transport.calls] == [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE]
 
 
+def test_progress_tree_refresh_writes_back_mixed_metadata_for_legacy_session() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _clear_progress_tree_theme_metadata(session_factory, session_id)
+
+    status_code, get_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    assert get_body["data"]["polish_theme"] == "mixed"
+    assert get_body["data"]["polish_theme_label"] == "混合"
+    assert get_body["data"]["explicit_weight"] == 60
+    assert get_body["data"]["implicit_weight"] == 40
+    assert "polish_theme" not in get_body["data"]["progress_tree_plan"]
+    assert "polish_theme" not in get_body["data"]["progress_tree_state"]
+    transport.calls.clear()
+
+    status_code, refresh_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/state",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    data = refresh_body["data"]
+    assert data["polish_theme"] == "mixed"
+    assert data["polish_theme_label"] == "混合"
+    assert data["explicit_weight"] == 60
+    assert data["implicit_weight"] == 40
+    assert data["progress_tree_plan"]["polish_theme"] == "mixed"
+    assert data["progress_tree_plan"]["polish_theme_label"] == "混合"
+    assert data["progress_tree_plan"]["explicit_weight"] == 60
+    assert data["progress_tree_plan"]["implicit_weight"] == 40
+    assert data["progress_tree_state"]["polish_theme"] == "mixed"
+    assert data["progress_tree_state"]["polish_theme_label"] == "混合"
+    assert data["progress_tree_state"]["explicit_weight"] == 60
+    assert data["progress_tree_state"]["implicit_weight"] == 40
+    assert data["progress_tree_plan"]["nodes"]
+    assert data["progress_tree_state"]["node_states"]
+
+
 def test_progress_tree_refresh_keeps_insufficient_context_without_calling_llm() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(
@@ -2335,6 +2388,20 @@ def _clear_progress_tree_storage(session_factory, session_id: str) -> None:
         detail.progress_percent = None
         detail.progress_tree_plan_json = None
         detail.progress_tree_state_json = None
+        db.commit()
+
+
+def _clear_progress_tree_theme_metadata(session_factory, session_id: str) -> None:
+    with session_factory() as db:
+        detail = db.get(PolishSessionDetailModel, f"{session_id}_detail")
+        assert detail is not None
+        for field_name in ("progress_tree_plan_json", "progress_tree_state_json"):
+            payload = getattr(detail, field_name)
+            assert isinstance(payload, dict)
+            updated = dict(payload)
+            for metadata_key in ("polish_theme", "polish_theme_label", "explicit_weight", "implicit_weight"):
+                updated.pop(metadata_key, None)
+            setattr(detail, field_name, updated)
         db.commit()
 
 
