@@ -232,6 +232,7 @@ class PolishSessionTurnResponse(BaseModel):
     question_text: str
     question_sources: list[PolishQuestionSourceResponse] = Field(default_factory=list)
     question_created_at: datetime
+    question_metadata: dict[str, Any] | None = None
     answers: list[PolishSessionAnswerResponse] = Field(default_factory=list)
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -9,6 +10,8 @@ from typing import Any
 from app.application.polish.evidence_signals import EvidenceSignalSet, SIGNAL_VERSION
 
 
+QUESTION_METADATA_SCHEMA_ID = "polish_question_metadata"
+QUESTION_METADATA_SCHEMA_VERSION = "1"
 BUILDER_VERSION = "evidence-aware-question-builder-v1"
 VALIDATOR_VERSION = "question-quality-validator-v2"
 
@@ -38,12 +41,21 @@ class QuestionMetadata:
     low_confidence_flags: tuple[str, ...]
     evidence_signal_refs: tuple[str, ...]
     anti_repeat_refs: tuple[str, ...]
+    source_availability: str | None = None
+    generated_at: str | None = None
     builder_version: str = BUILDER_VERSION
     validator_version: str = VALIDATOR_VERSION
     signal_version: str = SIGNAL_VERSION
+    schema_id: str = QUESTION_METADATA_SCHEMA_ID
+    schema_version: str = QUESTION_METADATA_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema_id": self.schema_id,
+            "schema_version": self.schema_version,
+            "builder_version": self.builder_version,
+            "validator_version": self.validator_version,
+            "signal_version": self.signal_version,
             "question_pattern": self.question_pattern,
             "scenario_constraint_summary": self.scenario_constraint_summary,
             "expected_answer_dimensions": list(self.expected_answer_dimensions),
@@ -53,9 +65,8 @@ class QuestionMetadata:
             "low_confidence_flags": list(self.low_confidence_flags),
             "evidence_signal_refs": list(self.evidence_signal_refs),
             "anti_repeat_refs": list(self.anti_repeat_refs),
-            "builder_version": self.builder_version,
-            "validator_version": self.validator_version,
-            "signal_version": self.signal_version,
+            "source_availability": self.source_availability,
+            "generated_at": self.generated_at,
         }
 
 
@@ -68,6 +79,8 @@ def build_question_metadata(
     evidence_signals: EvidenceSignalSet | None,
     anti_repeat_refs: tuple[str, ...] = (),
     additional_low_confidence_flags: tuple[str, ...] = (),
+    source_availability: str | None = None,
+    generated_at: str | None = None,
 ) -> QuestionMetadata:
     signal_refs = evidence_signals.evidence_refs if evidence_signals is not None else ()
     quality_flags = tuple(getattr(quality_result, "low_confidence_flags", ()))
@@ -94,6 +107,8 @@ def build_question_metadata(
         low_confidence_flags=low_flags,
         evidence_signal_refs=signal_refs,
         anti_repeat_refs=anti_repeat_refs,
+        source_availability=source_availability,
+        generated_at=generated_at,
     )
 
 
@@ -111,6 +126,64 @@ def empty_question_metadata() -> QuestionMetadata:
     )
 
 
+def normalize_question_metadata(raw: object) -> dict[str, Any]:
+    """Return a safe C-lite metadata object from persisted or legacy payloads."""
+
+    payload = _metadata_payload(raw)
+    if not payload:
+        return empty_question_metadata().to_dict()
+
+    return {
+        "schema_id": _string_or_none(payload.get("schema_id")) or QUESTION_METADATA_SCHEMA_ID,
+        "schema_version": _string_or_none(payload.get("schema_version")) or QUESTION_METADATA_SCHEMA_VERSION,
+        "builder_version": _string_or_none(payload.get("builder_version")) or BUILDER_VERSION,
+        "validator_version": _string_or_none(payload.get("validator_version")) or VALIDATOR_VERSION,
+        "signal_version": _string_or_none(payload.get("signal_version")) or SIGNAL_VERSION,
+        "question_pattern": _string_or_none(payload.get("question_pattern")),
+        "scenario_constraint_summary": _string_or_none(payload.get("scenario_constraint_summary"), max_chars=500),
+        "expected_answer_dimensions": _string_list(payload.get("expected_answer_dimensions")),
+        "quality_score": _quality_score_or_none(payload.get("quality_score")),
+        "quality_warnings": _string_list(payload.get("quality_warnings")),
+        "confidence_level": _string_or_none(payload.get("confidence_level")),
+        "low_confidence_flags": _string_list(payload.get("low_confidence_flags")),
+        "evidence_signal_refs": _string_list(payload.get("evidence_signal_refs")),
+        "anti_repeat_refs": _string_list(payload.get("anti_repeat_refs")),
+        "source_availability": _string_or_none(payload.get("source_availability")),
+        "generated_at": _string_or_none(payload.get("generated_at"), max_chars=80),
+    }
+
+
+def question_metadata_to_dict(raw: object) -> dict[str, Any]:
+    if isinstance(raw, QuestionMetadata):
+        return normalize_question_metadata(raw.to_dict())
+    to_dict = getattr(raw, "to_dict", None)
+    if callable(to_dict):
+        try:
+            return normalize_question_metadata(to_dict())
+        except Exception:
+            return empty_question_metadata().to_dict()
+    return normalize_question_metadata(raw)
+
+
+def _metadata_payload(raw: object) -> dict[str, Any]:
+    if isinstance(raw, QuestionMetadata):
+        return raw.to_dict()
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return {}
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
+    return {}
+
+
 def _scenario_summary(scenario_constraint: Any) -> str | None:
     parts = [
         getattr(scenario_constraint, "business_constraint", None),
@@ -120,6 +193,43 @@ def _scenario_summary(scenario_constraint: Any) -> str | None:
     ]
     text = "；".join(str(part) for part in parts if part)
     return text[:500] if text else None
+
+
+def _string_or_none(value: object, *, max_chars: int = 240) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        text = str(value).strip()
+    return text[:max_chars] if text else None
+
+
+def _string_list(value: object, *, max_item_chars: int = 240) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_items: list[object] = [value]
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = list(value)
+    else:
+        return []
+    result: list[str] = []
+    for item in raw_items:
+        text = _string_or_none(item, max_chars=max_item_chars)
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _quality_score_or_none(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        score = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(100, score))
 
 
 def _dedupe(items: list[str]) -> tuple[str, ...]:

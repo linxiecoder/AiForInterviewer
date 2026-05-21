@@ -87,5 +87,6 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
         assert {"resume_id", "job_id"}.issubset(interview_columns)
         assert "custom_topic_text_summary" in polish_detail_columns
         assert "question_sources_json" in question_columns
+        assert "question_metadata_json" in question_columns
     finally:
         temp_artifacts.cleanup()

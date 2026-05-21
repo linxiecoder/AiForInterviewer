@@ -95,6 +95,7 @@ class PolishQuestion:
     progress_node_ref: str | None = None
     evidence_refs: tuple[str, ...] = ()
     context_digest: str | None = None
+    question_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,7 @@ class PolishSessionTurn:
     progress_node_ref: str | None = None
     evidence_refs: tuple[str, ...] = ()
     context_digest: str | None = None
+    question_metadata: dict[str, Any] = field(default_factory=dict)
     answers: tuple[PolishSessionAnswerDetail, ...] = ()
 
 

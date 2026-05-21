@@ -418,6 +418,7 @@ def _build_deterministic_v2_question(
         scenario=scenario,
         citations=citations,
     )
+    source_availability = _question_source_availability(sources)
     quality = validate_question_quality(
         question_text=question_text,
         selected_pattern=pattern,
@@ -425,7 +426,7 @@ def _build_deterministic_v2_question(
         scenario_constraint=scenario,
         evidence_refs=evidence_refs,
         recent_question_texts=_recent_question_texts(context.get("turns", [])),
-        source_availability=_question_source_availability(sources),
+        source_availability=source_availability,
         confidence_level=scenario.confidence_level,
         evidence_signals=evidence_signals,
     )
@@ -437,6 +438,7 @@ def _build_deterministic_v2_question(
             quality_result=quality,
             evidence_signals=evidence_signals,
             anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
+            source_availability=source_availability,
         )
         return question_text, pattern, scenario, quality, metadata, evidence_signals
 
@@ -453,7 +455,7 @@ def _build_deterministic_v2_question(
         scenario_constraint=scenario,
         evidence_refs=evidence_refs,
         recent_question_texts=_recent_question_texts(context.get("turns", [])),
-        source_availability=_question_source_availability(sources),
+        source_availability=source_availability,
         confidence_level=scenario.confidence_level,
         evidence_signals=evidence_signals,
     )
@@ -466,6 +468,7 @@ def _build_deterministic_v2_question(
             evidence_signals=evidence_signals,
             anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
             additional_low_confidence_flags=("validator_repaired",),
+            source_availability=source_availability,
         )
         return repaired_text, pattern, scenario, repaired_quality, metadata, evidence_signals
 
@@ -483,7 +486,7 @@ def _build_deterministic_v2_question(
         scenario_constraint=scenario,
         evidence_refs=evidence_refs,
         recent_question_texts=(),
-        source_availability=_question_source_availability(sources),
+        source_availability=source_availability,
         confidence_level="low",
         evidence_signals=evidence_signals,
     )
@@ -495,6 +498,7 @@ def _build_deterministic_v2_question(
         evidence_signals=evidence_signals,
         anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
         additional_low_confidence_flags=("pattern_fallback",),
+        source_availability=source_availability,
     )
     return fallback_text, fallback_pattern, scenario, fallback_quality, metadata, evidence_signals
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Sequence
 
 import pytest
@@ -11,6 +12,8 @@ from app.application.polish.question_metadata import (
     QuestionBuilderVersion,
     build_question_metadata,
     empty_question_metadata,
+    normalize_question_metadata,
+    question_metadata_to_dict,
 )
 from app.application.polish.question_patterns import QUESTION_PATTERNS, get_question_pattern
 from app.application.polish.question_quality import validate_question_quality
@@ -352,6 +355,40 @@ def test_question_metadata_roundtrip_and_low_confidence_merge() -> None:
     assert empty["question_pattern"] is None
     assert empty["quality_score"] is None
     assert empty["builder_version"]
+
+
+def test_question_metadata_normalizes_legacy_unknown_and_malformed_payloads() -> None:
+    empty = empty_question_metadata().to_dict()
+
+    assert normalize_question_metadata(None) == empty
+    assert normalize_question_metadata({}) == empty
+    assert normalize_question_metadata(["not", "a", "dict"]) == empty
+    assert normalize_question_metadata("{not valid json") == empty
+
+    legacy_json = json.dumps(
+        {
+            "question_pattern": "mixed_technical_expression",
+            "quality_score": 87,
+            "confidence_level": "medium",
+            "low_confidence_flags": ["weak_metric_evidence", "weak_metric_evidence"],
+            "expected_answer_dimensions": ["技术深度", "表达结构"],
+            "quality_warnings": ["metrics_not_specific"],
+            "unknown_field": "must be dropped",
+        }
+    )
+    normalized = normalize_question_metadata(legacy_json)
+
+    assert normalized["schema_id"]
+    assert normalized["schema_version"]
+    assert normalized["question_pattern"] == "mixed_technical_expression"
+    assert normalized["quality_score"] == 87
+    assert normalized["confidence_level"] == "medium"
+    assert normalized["low_confidence_flags"] == ["weak_metric_evidence"]
+    assert normalized["expected_answer_dimensions"] == ["技术深度", "表达结构"]
+    assert normalized["quality_warnings"] == ["metrics_not_specific"]
+    assert normalized["generated_at"] is None
+    assert "unknown_field" not in normalized
+    assert question_metadata_to_dict(normalized) == normalized
 
 
 def test_communication_question_requires_star_expression_structure() -> None:

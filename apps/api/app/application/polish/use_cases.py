@@ -30,6 +30,7 @@ from app.application.polish.entities import (
     PolishTopic,
 )
 from app.application.polish.ports import PolishRepository
+from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
 from app.application.polish.progress_prompts import (
@@ -308,6 +309,10 @@ class PolishUseCases:
             state=detail.progress_tree_state,
             requested_ref=command.progress_node_ref,
         )
+        question_metadata = _metadata_for_new_question(
+            getattr(question_draft, "question_metadata", None),
+            generated_at=now.isoformat(),
+        )
         question = PolishQuestion(
             question_id=question_id,
             owner_id=command.owner_id,
@@ -319,6 +324,7 @@ class PolishUseCases:
             progress_node_ref=question_draft.progress_node_ref,
             evidence_refs=question_draft.evidence_refs,
             context_digest=question_draft.context_digest,
+            question_metadata=question_metadata,
             status=QUESTION_STATUS_GENERATED,
             created_at=now,
             updated_at=now,
@@ -600,6 +606,7 @@ class PolishUseCases:
                 progress_node_ref=question.progress_node_ref,
                 evidence_refs=question.evidence_refs,
                 context_digest=question.context_digest,
+                question_metadata=question.question_metadata,
                 answers=tuple(answers_by_question.get(question.question_id, ())),
             )
             for question in questions
@@ -678,6 +685,15 @@ class PolishUseCases:
         if job_title and resume_title:
             return f"{job_title} / {resume_title}"
         return f"{job_title or UNNAMED_JOB_TITLE} / {resume_title or UNNAMED_RESUME_TITLE}"
+
+
+def _metadata_for_new_question(raw_metadata: object, *, generated_at: str) -> dict[str, Any]:
+    try:
+        metadata = normalize_question_metadata(raw_metadata)
+    except Exception:
+        metadata = empty_question_metadata().to_dict()
+    metadata["generated_at"] = generated_at
+    return metadata
 
 
 def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> DomainError | None:

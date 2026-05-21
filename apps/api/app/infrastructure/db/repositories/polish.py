@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,6 +16,11 @@ from app.application.polish.entities import (
     PolishTaskStatus,
 )
 from app.application.polish.ports import PolishRepository
+from app.application.polish.question_metadata import (
+    empty_question_metadata,
+    normalize_question_metadata,
+    question_metadata_to_dict,
+)
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.domain.shared.refs import ResourceRef
 from app.infrastructure.db.models.ai_task import AiTask
@@ -320,6 +327,7 @@ def _question_to_model(question: PolishQuestion) -> QuestionModel:
         ai_task_id=question.ai_task_id,
         question_text=question.question_text,
         question_sources_json=_question_sources_to_json(question.question_sources),
+        question_metadata_json=_question_metadata_to_json(question.question_metadata),
         progress_node_ref=question.progress_node_ref,
         context_digest=question.context_digest,
     )
@@ -334,6 +342,7 @@ def _question_to_entity(model: QuestionModel) -> PolishQuestion:
         ai_task_id=model.ai_task_id or "",
         question_text=model.question_text or "",
         question_sources=_question_sources_to_entities(model.question_sources_json),
+        question_metadata=_question_metadata_to_entity(getattr(model, "question_metadata_json", None)),
         progress_node_ref=model.progress_node_ref,
         evidence_refs=_question_evidence_refs_to_entities(model.evidence_ref_ids),
         context_digest=model.context_digest,
@@ -347,6 +356,20 @@ def _question_evidence_refs_to_entities(raw_refs: object) -> tuple[str, ...]:
     if not isinstance(raw_refs, list):
         return ()
     return tuple(str(ref) for ref in raw_refs if str(ref))
+
+
+def _question_metadata_to_json(raw_metadata: object) -> dict[str, Any]:
+    try:
+        return question_metadata_to_dict(raw_metadata)
+    except Exception:
+        return empty_question_metadata().to_dict()
+
+
+def _question_metadata_to_entity(raw_metadata: object) -> dict[str, Any]:
+    try:
+        return normalize_question_metadata(raw_metadata)
+    except Exception:
+        return empty_question_metadata().to_dict()
 
 
 def _question_sources_to_json(sources: tuple[PolishQuestionSource, ...]) -> list[dict]:

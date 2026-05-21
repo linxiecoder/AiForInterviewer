@@ -31,6 +31,7 @@ from app.application.polish.entities import (
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
+from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
 from app.domain.auth.entities import CurrentActor
@@ -588,6 +589,7 @@ def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, objec
             "progress_node_ref": turn.progress_node_ref,
             "evidence_refs": list(turn.evidence_refs),
             "context_digest": turn.context_digest,
+            "question_metadata": _question_metadata_payload(turn.question_metadata),
             "answers": [
                 _session_answer_payload(
                     answer,
@@ -599,6 +601,13 @@ def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, objec
         }
         for turn in getattr(session, "turns", ())
     ]
+
+
+def _question_metadata_payload(raw_metadata: object) -> dict[str, Any]:
+    try:
+        return normalize_question_metadata(raw_metadata)
+    except Exception:
+        return empty_question_metadata().to_dict()
 
 
 def _active_progress_node_ref(

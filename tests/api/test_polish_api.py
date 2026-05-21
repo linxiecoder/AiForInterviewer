@@ -21,7 +21,8 @@ from app.application.polish.progress_prompts import (
     build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
-from app.application.polish.entities import PolishSession
+from app.application.polish.entities import PolishQuestion, PolishSession
+from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.progress_tree import PolishProgressTreeLlmService, build_progress_node_question
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
 from app.application.polish.progress_v2_prompts import (
@@ -51,6 +52,8 @@ from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingReposit
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.infrastructure.db.models.interview import PolishSessionDetail as PolishSessionDetailModel
+from app.infrastructure.db.models.question import Question as QuestionModel
+from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from app.infrastructure.llm.errors import LlmTransportResponseError
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
@@ -1517,6 +1520,18 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert turn["progress_node_ref"] == progress_node_ref
     assert turn["evidence_refs"] == question_evidence_refs
     assert turn["context_digest"]
+    question_metadata = turn["question_metadata"]
+    assert question_metadata["question_pattern"]
+    assert question_metadata["confidence_level"]
+    assert "low_confidence_flags" in question_metadata
+    assert question_metadata["expected_answer_dimensions"]
+    assert "quality_score" in question_metadata
+    assert "quality_warnings" in question_metadata
+    assert question_metadata["builder_version"]
+    assert question_metadata["validator_version"]
+    assert question_metadata["signal_version"]
+    assert question_metadata["source_availability"]
+    assert question_metadata["generated_at"]
     assert detail_data["active_question_progress_node_ref"] == progress_node_ref
     assert detail_data["active_question_evidence_refs"] == question_evidence_refs
     assert detail_data["active_question_context_digest"] == turn["context_digest"]
@@ -1549,6 +1564,153 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert detail_data["progress_tree_state"]["updated_from_turns_count"] == 1
     state_text = str(detail_data["progress_tree_state"])
     assert "v2_local_state_refresh" in state_text
+
+
+def test_polish_question_metadata_repository_roundtrips_and_falls_back_safely() -> None:
+    session_factory = _session_factory()
+    repository = SqlAlchemyPolishRepository(session_factory)
+    now = utc_now()
+    metadata = {
+        "question_pattern": "mixed_technical_expression",
+        "quality_score": 91,
+        "confidence_level": "medium",
+        "low_confidence_flags": ["weak_metric_evidence"],
+        "expected_answer_dimensions": ["技术深度", "表达结构"],
+        "quality_warnings": ["metrics_not_specific"],
+        "source_availability": "available",
+        "generated_at": now.isoformat(),
+    }
+    question = PolishQuestion(
+        question_id="que_metadata_roundtrip",
+        owner_id=OWNER_A,
+        actor_id=OWNER_A,
+        session_id="ses_metadata_roundtrip",
+        ai_task_id="task_metadata_roundtrip",
+        question_text="请说明一次带业务约束的系统设计取舍。",
+        status="generated",
+        created_at=now,
+        updated_at=now,
+        question_metadata=metadata,
+    )
+
+    repository.add_question(question)
+
+    listed = repository.list_questions_for_session(OWNER_A, "ses_metadata_roundtrip")
+    loaded = repository.get_question(OWNER_A, "que_metadata_roundtrip")
+
+    assert len(listed) == 1
+    assert loaded is not None
+    for item in (listed[0], loaded):
+        assert item.question_metadata["question_pattern"] == "mixed_technical_expression"
+        assert item.question_metadata["quality_score"] == 91
+        assert item.question_metadata["confidence_level"] == "medium"
+        assert item.question_metadata["low_confidence_flags"] == ["weak_metric_evidence"]
+
+    with session_factory() as db:
+        db.add(
+            QuestionModel(
+                id="que_legacy_null_metadata",
+                owner_id=OWNER_A,
+                actor_id=OWNER_A,
+                record_version=1,
+                status="generated",
+                trace_ref_ids=None,
+                evidence_ref_ids=None,
+                created_at=now,
+                updated_at=now,
+                session_id="ses_metadata_roundtrip",
+                ai_task_id="task_legacy_null_metadata",
+                question_text="旧题目无 metadata。",
+                question_metadata_json=None,
+            )
+        )
+        db.add(
+            QuestionModel(
+                id="que_malformed_metadata",
+                owner_id=OWNER_A,
+                actor_id=OWNER_A,
+                record_version=1,
+                status="generated",
+                trace_ref_ids=None,
+                evidence_ref_ids=None,
+                created_at=now,
+                updated_at=now,
+                session_id="ses_metadata_roundtrip",
+                ai_task_id="task_malformed_metadata",
+                question_text="旧题目 metadata 非 dict。",
+                question_metadata_json="not a dict",
+            )
+        )
+        db.commit()
+
+    by_id = {
+        question.question_id: question
+        for question in repository.list_questions_for_session(OWNER_A, "ses_metadata_roundtrip")
+    }
+    empty = empty_question_metadata().to_dict()
+    assert by_id["que_legacy_null_metadata"].question_metadata == empty
+    assert by_id["que_malformed_metadata"].question_metadata == empty
+
+
+def test_polish_session_detail_returns_empty_metadata_for_legacy_or_malformed_questions() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    now = utc_now()
+    with session_factory() as db:
+        db.add(
+            QuestionModel(
+                id="que_session_legacy_metadata",
+                owner_id=OWNER_A,
+                actor_id=OWNER_A,
+                record_version=1,
+                status="generated",
+                trace_ref_ids=None,
+                evidence_ref_ids=None,
+                created_at=now,
+                updated_at=now,
+                session_id=session_id,
+                ai_task_id="task_session_legacy_metadata",
+                question_text="旧 session detail 题目无 metadata。",
+                question_metadata_json=None,
+            )
+        )
+        db.add(
+            QuestionModel(
+                id="que_session_malformed_metadata",
+                owner_id=OWNER_A,
+                actor_id=OWNER_A,
+                record_version=1,
+                status="generated",
+                trace_ref_ids=None,
+                evidence_ref_ids=None,
+                created_at=now,
+                updated_at=now,
+                session_id=session_id,
+                ai_task_id="task_session_malformed_metadata",
+                question_text="旧 session detail 题目 metadata 非 dict。",
+                question_metadata_json="not a dict",
+            )
+        )
+        db.commit()
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    turns_by_id = {
+        turn["question_id"]: turn
+        for turn in detail_body["data"]["turns"]
+    }
+    empty = empty_question_metadata().to_dict()
+    assert turns_by_id["que_session_legacy_metadata"]["question_metadata"] == empty
+    assert turns_by_id["que_session_malformed_metadata"]["question_metadata"] == empty
 
 
 def test_progress_tree_refresh_rolls_up_parent_from_all_children_without_mutating_plan() -> None:

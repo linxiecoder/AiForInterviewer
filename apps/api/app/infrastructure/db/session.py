@@ -21,6 +21,7 @@ _KNOWN_SCHEMA_COLUMN_BACKFILLS: tuple[tuple[str, str, str], ...] = (
     ("polish_session_details", "progress_tree_plan_json", "JSON"),
     ("polish_session_details", "progress_tree_state_json", "JSON"),
     ("questions", "question_sources_json", "JSON"),
+    ("questions", "question_metadata_json", "JSON"),
     ("questions", "progress_node_ref", "VARCHAR(120)"),
     ("questions", "context_digest", "VARCHAR(120)"),
     ("questions", "evidence_ref_ids", "JSON"),
