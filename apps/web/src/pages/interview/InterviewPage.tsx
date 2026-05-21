@@ -29,6 +29,7 @@ import type {
   CreatePolishSessionRequest,
   PolishFeedbackPayload,
   PolishQuestionSource,
+  PolishTheme,
   PolishRecommendedAction,
   PolishProgressTreeNode,
   PolishSessionAnswer,
@@ -49,9 +50,15 @@ export const INTERVIEW_SUPPORTED_MODES = [
   { value: "polish", label: "打磨模式 / Polish" },
 ] as const;
 export const INTERVIEW_CREATE_MODE_FIELD_KEY = "mode";
+export const POLISH_THEME_OPTIONS = [
+  { value: "technical", label: "技术打磨" },
+  { value: "communication", label: "表达能力" },
+  { value: "mixed", label: "混合" },
+] as const satisfies readonly { value: PolishTheme; label: string }[];
 export const INTERVIEW_CREATE_FIELD_KEYS = [
   "mode",
   "resume_job_binding_id",
+  "polish_theme",
   "topic_id",
   "custom_topic_text",
 ] as const;
@@ -119,6 +126,7 @@ export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
   "岗位",
   "简历",
   "当前节点",
+  "能力主题",
   "进度",
   "当前节点表现",
 ] as const;
@@ -129,6 +137,13 @@ export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "参考回答",
   "考点解析",
   "技术原理扩展",
+  "权重说明",
+  "面试意图",
+  "技术短板",
+  "表达短板",
+  "P7 级参考答案",
+  "口语化范本",
+  "下一轮训练建议",
 ] as const;
 export type WorkbenchMachineState =
   | "creatingQuestion"
@@ -303,6 +318,7 @@ type InterviewListError = {
 type InterviewCreateFormValues = {
   mode?: "polish";
   resume_job_binding_id?: string;
+  polish_theme?: PolishTheme;
   topic_id?: string;
   custom_topic_text?: string;
 };
@@ -430,6 +446,7 @@ export function getInterviewCreateAvailability(params: {
 export function buildPolishSessionCreateRequest(values: InterviewCreateFormValues): CreatePolishSessionRequest {
   const payload: CreatePolishSessionRequest = {
     resume_job_binding_id: values.resume_job_binding_id?.trim() ?? "",
+    polish_theme: values.polish_theme ?? "mixed",
   };
   const topicId = values.topic_id?.trim();
   const customTopicText = values.custom_topic_text?.trim();
@@ -471,6 +488,8 @@ export function filterPolishSessionsBySearch(
       session.job_title,
       session.job_company,
       session.resume_title,
+      session.polish_theme_label,
+      session.polish_theme,
       session.topic_id,
       session.subtopic_id,
       session.custom_topic_text_summary,
@@ -660,6 +679,10 @@ function toSessionDisplayName(session: PolishSessionDetail): string {
   );
 }
 
+function toPolishThemeLabel(session: { polish_theme_label?: string | null; polish_theme?: string | null }): string {
+  return session.polish_theme_label || session.polish_theme || "混合";
+}
+
 function toTopicLabel(session: PolishSessionDetail): string {
   const topic = toNeutralOptionalTitle(session.topic_ref?.title) ?? session.topic_ref?.topic_id;
   const subtopic = toNeutralOptionalTitle(session.subtopic_ref?.title) ?? session.subtopic_ref?.subtopic_id;
@@ -739,7 +762,8 @@ export function buildPolishSessionClipboardMarkdown(session: PolishSessionDetail
     "",
     `岗位：${session.job_title || FALLBACK_JOB_TITLE}`,
     `简历：${session.resume_title || FALLBACK_RESUME_TITLE}`,
-    `主题：${toTopicLabel(session)}`,
+    `能力主题：${toPolishThemeLabel(session)}`,
+    `打磨主题：${toTopicLabel(session)}`,
     `创建时间：${toDisplayDate(session.created_at)}`,
     `更新时间：${toDisplayDate(session.updated_at)}`,
     "",
@@ -1256,6 +1280,7 @@ function buildWorkbenchHeaderChips(session: PolishSessionDetail, progressPercent
     { key: "job", label: "岗位", value: toDisplayJobTitle(session) },
     { key: "resume", label: "简历", value: toDisplayResumeTitle(session) },
     { key: "node", label: "当前节点", value: toCurrentNodeLabel(session) },
+    { key: "theme", label: "能力主题", value: toPolishThemeLabel(session) },
     { key: "progress", label: "进度", value: `${progressPercent}%` },
     { key: "score", label: "当前节点表现", value: WORKBENCH_NODE_SCORE_PLACEHOLDER },
   ] as const;
@@ -1277,7 +1302,20 @@ export function toNextRecommendedActionLabel(action: PolishRecommendedAction): s
   return NEXT_RECOMMENDED_ACTION_LABELS[action] ?? action;
 }
 
-type FeedbackSectionKey = "feedback" | "score" | "loss_points" | "reference_answer" | "knowledge_points" | "technical_principles";
+type FeedbackSectionKey =
+  | "feedback"
+  | "score"
+  | "loss_points"
+  | "reference_answer"
+  | "knowledge_points"
+  | "technical_principles"
+  | "weight_explanation"
+  | "interview_intent"
+  | "technical_gaps"
+  | "communication_gaps"
+  | "p7_reference_answer"
+  | "oral_script"
+  | "next_training_suggestions";
 
 export type FeedbackCardSectionViewModel = {
   key: FeedbackSectionKey;
@@ -1356,11 +1394,51 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         ], "暂无技术原理扩展"),
         defaultOpen: false,
       },
+      ...buildThemeFeedbackSections(payload),
     ],
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: buildFeedbackTraceItems(payload),
   };
 }
+
+function buildThemeFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  if (!payload) {
+    return [];
+  }
+  return [
+    buildOptionalFeedbackSection("weight_explanation", "权重说明", dedupeTextItems([
+      payload.polish_theme_label ? `主题：${payload.polish_theme_label}` : null,
+      typeof payload.explicit_weight === "number" ? `显性技术权重：${payload.explicit_weight}%` : null,
+      typeof payload.implicit_weight === "number" ? `隐性表达权重：${payload.implicit_weight}%` : null,
+      typeof payload.explicit_score === "number" ? `显性技术得分：${payload.explicit_score}` : null,
+      typeof payload.implicit_score === "number" ? `隐性表达得分：${payload.implicit_score}` : null,
+      payload.weight_explanation,
+    ]), true),
+    buildOptionalFeedbackSection("interview_intent", "面试意图", compactTextList(payload.interview_intent), false),
+    buildOptionalFeedbackSection("technical_gaps", "技术短板", compactTextList(payload.technical_gaps), false),
+    buildOptionalFeedbackSection("communication_gaps", "表达短板", compactTextList(payload.communication_gaps), false),
+    buildOptionalFeedbackSection("p7_reference_answer", "P7 级参考答案", compactTextList(payload.p7_reference_answer), false),
+    buildOptionalFeedbackSection("oral_script", "口语化范本", compactTextList(payload.oral_script), false),
+    buildOptionalFeedbackSection("next_training_suggestions", "下一轮训练建议", compactTextList(payload.next_training_suggestions), false),
+  ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
+}
+
+function buildOptionalFeedbackSection(
+  key: FeedbackSectionKey,
+  title: string,
+  items: string[],
+  defaultOpen: boolean,
+): FeedbackCardSectionViewModel | null {
+  return items.length > 0 ? { key, title, items, defaultOpen } : null;
+}
+
+function compactTextList(value: string | string[] | null | undefined): string[] {
+  if (Array.isArray(value)) {
+    return dedupeTextItems(value);
+  }
+  return dedupeTextItems([value]);
+}
+
 
 function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallbackScoreResultId: string | null): string[] {
   const score = payload?.score_result;
@@ -1611,6 +1689,7 @@ export function InterviewPage() {
     setCreateError(null);
     logInterviewCreateEvent("polish_session_create_submit_started", {
       resume_job_binding_id: requestPayload.resume_job_binding_id,
+      polish_theme: requestPayload.polish_theme ?? null,
       topic_id: requestPayload.topic_id ?? null,
       has_custom_topic_text: Boolean(requestPayload.custom_topic_text),
     });
@@ -1678,7 +1757,7 @@ export function InterviewPage() {
         key: "topic",
         width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.topic,
         ellipsis: true,
-        render: (_, record) => renderInterviewListEllipsisText(record.title || "未选择"),
+        render: (_, record) => renderInterviewListEllipsisText(`${toPolishThemeLabel(record)} / ${record.title || "未选择"}`),
       },
       {
         title: "更新时间",
@@ -1862,7 +1941,7 @@ export function InterviewPage() {
             <Form<InterviewCreateFormValues>
               form={createForm}
               layout="vertical"
-              initialValues={{ mode: "polish" }}
+              initialValues={{ mode: "polish", polish_theme: "mixed" }}
             >
               <Form.Item
                 label="模拟模式"
@@ -1890,6 +1969,21 @@ export function InterviewPage() {
                   options={bindingOptions.map((option) => ({
                     value: option.resume_job_binding_id,
                     label: option.label,
+                  }))}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="能力主题"
+                name="polish_theme"
+                rules={[{ required: true, message: "请选择能力主题" }]}
+              >
+                <Select
+                  disabled={createSubmitLoading}
+                  placeholder="选择能力主题"
+                  options={POLISH_THEME_OPTIONS.map((theme) => ({
+                    value: theme.value,
+                    label: theme.label,
                   }))}
                 />
               </Form.Item>

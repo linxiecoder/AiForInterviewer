@@ -30,6 +30,7 @@ from app.application.polish.entities import (
     PolishTopic,
 )
 from app.application.polish.ports import PolishRepository
+from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
 from app.application.polish.progress_prompts import (
     INITIAL_PROGRESS_TREE_PROMPT_CONTRACT,
@@ -172,6 +173,16 @@ class PolishUseCases:
         topic_error = _validate_topic_selection(command.topic_id, command.subtopic_id)
         if topic_error is not None:
             return ApplicationResult(error=topic_error)
+        try:
+            theme_strategy = resolve_polish_theme_strategy(command.polish_theme)
+        except ValueError:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Invalid polish theme",
+                    details={"field": "polish_theme"},
+                )
+            )
 
         resume_version = self._resume_repository.get_version(binding.resume_version_id)
         if (
@@ -209,6 +220,7 @@ class PolishUseCases:
             custom_topic_text_summary=_custom_topic_summary(command.custom_topic_text),
             created_at=now,
             updated_at=now,
+            polish_theme=theme_strategy.theme,
         )
         job = self._resolve_job(owner_id=command.owner_id, job_id=binding.job_id)
         resume = self._resolve_resume(owner_id=command.owner_id, resume_id=binding.resume_id)
@@ -231,7 +243,10 @@ class PolishUseCases:
             weaknesses=None,
             assets=None,
         )
-        progress_artifacts = self._progress_tree_service.generate_initial(progress_context)
+        progress_artifacts = _progress_artifacts_with_theme(
+            self._progress_tree_service.generate_initial(progress_context),
+            theme_strategy,
+        )
         session = replace(
             session,
             progress_tree_status=progress_artifacts["status"],
@@ -496,6 +511,7 @@ class PolishUseCases:
                 existing_plan=detail.progress_tree_plan,
                 existing_state=detail.progress_tree_state,
             )
+        progress_artifacts = _progress_artifacts_with_theme(progress_artifacts, _session_theme_strategy(session))
         updated_session = replace(
             session,
             updated_at=utc_now(),
@@ -796,29 +812,32 @@ def _build_contract_shaped_feedback_payload(
     score_result_id: str,
     created_at,
 ) -> dict[str, Any]:
+    strategy = _session_theme_strategy(session)
     answer_text = _or_fallback_text(answer.answer_text, UNNAMED_ANSWER_TEXT)
     low_confidence_flags = _feedback_low_confidence_flags(answer_text)
     score_value = 58 if low_confidence_flags else 72
+    explicit_score, implicit_score = _theme_scores(strategy, score_value)
     deducted_points = 100 - score_value
     primary_action = "provide_more_answer_detail" if low_confidence_flags else "continue_same_question"
+    theme_profile = _theme_feedback_profile(strategy)
     feedback_text = (
-        f"polish_answer 评分 {score_value}/100：回答已保存，主要失分在结构化举证、"
-        "技术取舍说明和结果量化。"
+        f"polish_answer / {strategy.label} 评分 {score_value}/100："
+        f"{theme_profile['summary']}"
     )
     loss_points = [
         {
             "loss_point_id": f"{feedback_id}_loss_001",
-            "title": "结构化举证不足",
+            "title": theme_profile["primary_loss_title"],
             "deducted_points": min(16, deducted_points),
-            "reason": "回答需要补充场景、个人职责、关键约束和可验证结果之间的因果链路。",
+            "reason": theme_profile["primary_loss_reason"],
             "answer_excerpt": answer_text[:160],
             "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
         },
         {
             "loss_point_id": f"{feedback_id}_loss_002",
-            "title": "技术取舍与边界说明不足",
+            "title": theme_profile["secondary_loss_title"],
             "deducted_points": max(deducted_points - 16, 0),
-            "reason": "建议说明替代方案、失败路径、指标或风险处理，而不是只陈述做了什么。",
+            "reason": theme_profile["secondary_loss_reason"],
             "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
         },
     ]
@@ -830,6 +849,22 @@ def _build_contract_shaped_feedback_payload(
         "status": FEEDBACK_STATUS_GENERATED,
         "feedback_id": feedback_id,
         "ai_task_id": ai_task_id,
+        "polish_theme": strategy.theme,
+        "polish_theme_label": strategy.label,
+        "explicit_weight": strategy.explicit_weight,
+        "implicit_weight": strategy.implicit_weight,
+        "weight_explanation": (
+            f"本轮按显性技术 {strategy.explicit_weight}%、隐性表达 {strategy.implicit_weight}% 综合打磨；"
+            "显性分看技术链路和工程约束，隐性分看表达结构和 owner 视角。"
+        ),
+        "interview_intent": strategy.question_intent,
+        "explicit_score": explicit_score,
+        "implicit_score": implicit_score,
+        "technical_gaps": list(theme_profile["technical_gaps"]),
+        "communication_gaps": list(theme_profile["communication_gaps"]),
+        "p7_reference_answer": theme_profile["p7_reference_answer"],
+        "oral_script": theme_profile["oral_script"],
+        "next_training_suggestions": list(theme_profile["next_training_suggestions"]),
         "polish_session_ref": {"resource_type": "polish_session", "resource_id": session.session_id},
         "question_ref": {"resource_type": "question", "resource_id": answer.question_id},
         "answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
@@ -839,7 +874,7 @@ def _build_contract_shaped_feedback_payload(
             "score_result_id": score_result_id,
             "score_type": str(ScoreType.POLISH_ANSWER),
             "score_value": score_value,
-            "score_version": "polish_answer.runtime_fake.v1",
+            "score_version": f"polish_answer.{strategy.theme}.runtime_fake.v1",
             "rubric_version": "polish_round_score.v1",
             "contract_id": "P-POLISH-004",
             "confidence_level": "low" if low_confidence_flags else "medium",
@@ -848,19 +883,19 @@ def _build_contract_shaped_feedback_payload(
         "loss_points": loss_points,
         "reference_answer": {
             "contract_id": "P-POLISH-006",
-            "summary": "先交代业务背景和目标，再说明本人负责的关键模块、技术取舍、异常处理和最终指标。",
-            "outline": ["背景与约束", "本人负责范围", "关键技术方案与取舍", "验证结果与复盘"],
+            "summary": theme_profile["reference_summary"],
+            "outline": list(theme_profile["reference_outline"]),
         },
         "knowledge_points": [
             {
-                "title": "STAR + 技术决策链路",
-                "explanation": "回答项目经历时需要同时覆盖场景、任务、行动、结果和技术取舍。",
+                "title": theme_profile["knowledge_title"],
+                "explanation": theme_profile["knowledge_explanation"],
             }
         ],
         "technical_principles": [
             {
-                "title": "可观测结果优先",
-                "explanation": "技术方案表达应绑定指标、日志、告警、压测或线上结果，避免停留在名词罗列。",
+                "title": theme_profile["principle_title"],
+                "explanation": theme_profile["principle_explanation"],
             }
         ],
         "next_recommended_actions": _feedback_next_actions(primary_action),
@@ -892,6 +927,104 @@ def _build_contract_shaped_feedback_payload(
         "low_confidence_flags": low_confidence_flags,
         "user_confirmation_required": False,
         "legacy_compatibility": {"feedback_text": feedback_text},
+    }
+
+
+def _session_theme_strategy(session: PolishSession) -> PolishThemeStrategy:
+    try:
+        return resolve_polish_theme_strategy(session.polish_theme)
+    except ValueError:
+        return resolve_polish_theme_strategy(None)
+
+
+def _progress_artifacts_with_theme(
+    artifacts: dict[str, Any],
+    strategy: PolishThemeStrategy,
+) -> dict[str, Any]:
+    return {
+        **artifacts,
+        "progress_tree_plan": _progress_payload_with_theme(artifacts.get("progress_tree_plan"), strategy),
+        "progress_tree_state": _progress_payload_with_theme(artifacts.get("progress_tree_state"), strategy),
+    }
+
+
+def _progress_payload_with_theme(payload: object, strategy: PolishThemeStrategy) -> dict[str, Any]:
+    result = dict(payload) if isinstance(payload, dict) else {}
+    result["polish_theme"] = strategy.theme
+    result["polish_theme_label"] = strategy.label
+    result["explicit_weight"] = strategy.explicit_weight
+    result["implicit_weight"] = strategy.implicit_weight
+    return result
+
+
+def _theme_scores(strategy: PolishThemeStrategy, score_value: int) -> tuple[int, int]:
+    if strategy.theme == "technical":
+        return score_value, _clamp_score(score_value - 8)
+    if strategy.theme == "communication":
+        return _clamp_score(score_value - 10), score_value
+    return _clamp_score(score_value - 2), _clamp_score(score_value + 2)
+
+
+def _clamp_score(value: int) -> int:
+    return max(0, min(100, value))
+
+
+def _theme_feedback_profile(strategy: PolishThemeStrategy) -> dict[str, object]:
+    if strategy.theme == "technical":
+        return {
+            "summary": "重点看技术链路、异常路径和指标验证；当前回答需要把状态流转、幂等和补偿方案讲实。",
+            "primary_loss_title": "工程链路拆解不足",
+            "primary_loss_reason": "需要补充状态机、幂等键、失败路径、对账补偿和性能指标，而不是只描述做了功能。",
+            "secondary_loss_title": "技术 trade-off 与指标不足",
+            "secondary_loss_reason": "建议说明限流、降级、成本控制、可观测性和上线验证指标。",
+            "technical_gaps": ["状态机边界不够清晰", "幂等和失败补偿需要具体设计", "缺少性能、成本或可观测性指标"],
+            "communication_gaps": ["技术结论需要先给 owner 判断，再展开细节"],
+            "p7_reference_answer": "从 owner 视角先定义链路状态机，再说明幂等键、重试收敛、对账补偿、降级限流和观测指标，最后给出成本上限与 trade-off。",
+            "oral_script": "我会先说这个链路最怕部分成功，因此我把状态机和幂等键作为收敛核心，再讲失败路径、补偿任务和监控指标。",
+            "next_training_suggestions": ["下一轮只讲状态机和幂等设计", "补一版失败路径、对账和补偿的 owner 方案"],
+            "reference_summary": "按链路完整性、状态机、幂等、失败兜底、指标验证和 trade-off 组织答案。",
+            "reference_outline": ["链路与状态机", "幂等和失败路径", "对账补偿与降级", "性能/成本/可观测性指标"],
+            "knowledge_title": "工程一致性表达",
+            "knowledge_explanation": "技术打磨需要把状态、失败收敛和验证指标串成可追问的工程闭环。",
+            "principle_title": "异常收敛优先",
+            "principle_explanation": "复杂链路先保证状态可判定、操作可重试、结果可对账，再谈性能和成本优化。",
+        }
+    if strategy.theme == "communication":
+        return {
+            "summary": "重点看 STAR、背景压缩、职责边界和复盘表达；当前回答需要更像面试现场的一分钟版本。",
+            "primary_loss_title": "表达结构不够清晰",
+            "primary_loss_reason": "建议用 STAR 组织，30 秒压缩背景，突出个人职责边界和关键行动。",
+            "secondary_loss_title": "复盘收束不足",
+            "secondary_loss_reason": "需要用指标、取舍和复盘总结收束，避免流水账。",
+            "technical_gaps": ["技术细节需要挑一个关键取舍作为表达支点"],
+            "communication_gaps": ["背景压缩不够", "个人职责边界不够明确", "复盘总结缺少口语化收束"],
+            "p7_reference_answer": "先用一句话给结论，再按 STAR 讲背景、任务、个人行动和结果，用一个技术取舍支撑能力深度。",
+            "oral_script": "我先用 30 秒交代背景和目标，然后讲我负责的动作，最后用指标和复盘说明这件事为什么有效。",
+            "next_training_suggestions": ["下一轮限定 90 秒回答", "先写出 STAR 四句骨架再口述"],
+            "reference_summary": "按 STAR、背景压缩、个人职责、关键动作、指标结果和复盘总结组织答案。",
+            "reference_outline": ["Situation 背景压缩", "Task 职责边界", "Action 关键动作", "Result 指标与复盘"],
+            "knowledge_title": "STAR + 口语化表达",
+            "knowledge_explanation": "表达打磨要让面试官快速听到背景、职责、动作、结果和复盘，而不是堆项目细节。",
+            "principle_title": "先结论后展开",
+            "principle_explanation": "面试表达先给判断和贡献边界，再展开证据，最后用指标收束。",
+        }
+    return {
+        "summary": "同时看技术深度和表达结构；当前回答需要补足 owner 视角、失败兜底和结构化复盘。",
+        "primary_loss_title": "技术链路与表达结构未完全合流",
+        "primary_loss_reason": "需要把方案链路、失败兜底、技术取舍放进背景、约束、方案、指标、复盘的表达顺序里。",
+        "secondary_loss_title": "显性/隐性权重感不足",
+        "secondary_loss_reason": "建议明确哪些内容支撑显性技术分，哪些表达方式支撑隐性表达分。",
+        "technical_gaps": ["失败兜底和技术取舍还不够具体", "owner 视角下的指标验证需要加强"],
+        "communication_gaps": ["表达结构需要显式分层", "复盘总结可以更有收束感"],
+        "p7_reference_answer": "从 owner 视角讲背景和约束，展开方案链路、失败兜底、技术取舍和指标复盘，同时说明为什么这套方案能支撑业务目标。",
+        "oral_script": "这题我会按背景、约束、方案、指标、复盘来讲：先说业务目标，再说我作为 owner 如何处理链路和失败兜底。",
+        "next_training_suggestions": ["下一轮按显性技术 60%、隐性表达 40% 再答", "把技术取舍压进 2 分钟口语化版本"],
+        "reference_summary": "按 owner 视角同时覆盖方案链路、失败兜底、技术取舍、指标和复盘。",
+        "reference_outline": ["背景与约束", "owner 方案链路", "失败兜底与取舍", "指标结果与复盘"],
+        "knowledge_title": "技术深度 + 表达结构",
+        "knowledge_explanation": "混合主题要求显性技术内容和隐性表达质量同时在线。",
+        "principle_title": "权重驱动回答取舍",
+        "principle_explanation": "先满足技术链路的可信度，再用清晰结构降低面试官理解成本。",
     }
 
 
@@ -929,6 +1062,19 @@ def _validate_contract_shaped_feedback_payload(payload: dict[str, Any]) -> Domai
         "validation_result_ref",
         "trace_refs",
         "low_confidence_flags",
+        "polish_theme",
+        "polish_theme_label",
+        "explicit_weight",
+        "implicit_weight",
+        "weight_explanation",
+        "interview_intent",
+        "explicit_score",
+        "implicit_score",
+        "technical_gaps",
+        "communication_gaps",
+        "p7_reference_answer",
+        "oral_script",
+        "next_training_suggestions",
     }
     missing = sorted(key for key in required_keys if key not in payload)
     if missing:
@@ -957,14 +1103,19 @@ def _serialize_feedback_payload(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-def _feedback_text_from_summary(value: str | None) -> str | None:
+def _feedback_payload_from_summary(value: str | None) -> dict[str, Any] | None:
     if value is None:
         return None
     try:
         payload = json.loads(value)
     except json.JSONDecodeError:
-        return value
-    if not isinstance(payload, dict):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _feedback_text_from_summary(value: str | None) -> str | None:
+    payload = _feedback_payload_from_summary(value)
+    if payload is None:
         return value
     legacy = payload.get("legacy_compatibility")
     if isinstance(legacy, dict) and legacy.get("feedback_text"):
@@ -1001,6 +1152,7 @@ def _to_session_answer_detail(
     answer: PolishAnswer,
     feedback: PolishFeedback | None,
 ) -> PolishSessionAnswerDetail:
+    feedback_payload = _feedback_payload_from_summary(feedback.feedback_summary) if feedback is not None else None
     feedback_text = _feedback_text_from_summary(feedback.feedback_summary) if feedback is not None else None
     return PolishSessionAnswerDetail(
         answer_id=answer.answer_id,
@@ -1011,6 +1163,7 @@ def _to_session_answer_detail(
         feedback_id=feedback.feedback_id if feedback is not None else None,
         score_result_id=feedback.score_result_id if feedback is not None else None,
         feedback_created_at=feedback.created_at if feedback is not None else None,
+        feedback_payload=feedback_payload,
     )
 
 

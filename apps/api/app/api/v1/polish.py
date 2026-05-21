@@ -31,6 +31,7 @@ from app.application.polish.entities import (
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
+from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
 from app.domain.auth.entities import CurrentActor
 from app.domain.shared.clock import utc_now
@@ -139,6 +140,7 @@ async def create_polish_session(
         topic_id=payload.topic_id,
         subtopic_id=payload.subtopic_id,
         has_custom_topic_text=bool(payload.custom_topic_text),
+        polish_theme=payload.polish_theme,
     )
     create_result = await run_in_threadpool(
         use_cases.create_session,
@@ -149,6 +151,7 @@ async def create_polish_session(
             topic_id=payload.topic_id,
             subtopic_id=payload.subtopic_id,
             custom_topic_text=payload.custom_topic_text,
+            polish_theme=payload.polish_theme,
         ),
     )
     if not create_result.is_success:
@@ -480,6 +483,7 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
         if active_node_ref is not None
         else None
     )
+    theme_strategy = _theme_strategy_for_session(core)
     return {
         "session_id": core.session_id,
         "session_status": core.status,
@@ -492,6 +496,10 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
         "job_company": session.job_company or "未命名公司",
         "resume_title": session.resume_title or "未命名简历",
         "binding_label": session.binding_label or "",
+        "polish_theme": theme_strategy.theme,
+        "polish_theme_label": theme_strategy.label,
+        "explicit_weight": theme_strategy.explicit_weight,
+        "implicit_weight": theme_strategy.implicit_weight,
         "turns": turns,
         "progress_tree_status": session.progress_tree_status,
         "progress_percent": session.progress_percent,
@@ -526,6 +534,7 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
 
 def _session_summary_response(session: PolishSessionDetail) -> PolishSessionSummaryResponse:
     core = session.session
+    theme_strategy = _theme_strategy_for_session(core)
     return PolishSessionSummaryResponse(
         id=core.session_id,
         session_id=core.session_id,
@@ -540,12 +549,23 @@ def _session_summary_response(session: PolishSessionDetail) -> PolishSessionSumm
         job_company=session.job_company or "未命名公司",
         resume_title=session.resume_title or "未命名简历",
         binding_label=session.binding_label or "",
+        polish_theme=theme_strategy.theme,
+        polish_theme_label=theme_strategy.label,
+        explicit_weight=theme_strategy.explicit_weight,
+        implicit_weight=theme_strategy.implicit_weight,
         topic_id=core.topic_id,
         subtopic_id=core.subtopic_id,
         custom_topic_text_summary=core.custom_topic_text_summary,
         created_at=core.created_at,
         updated_at=core.updated_at,
     )
+
+
+def _theme_strategy_for_session(session: PolishSession) -> PolishThemeStrategy:
+    try:
+        return resolve_polish_theme_strategy(session.polish_theme)
+    except ValueError:
+        return resolve_polish_theme_strategy(None)
 
 
 def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, object]]:
@@ -687,6 +707,9 @@ def _answer_feedback_payload(
     answer_session_id = session_id or str(getattr(answer, "session_id", ""))
     answer_question_id = question_id or str(getattr(answer, "question_id", ""))
     feedback_id = getattr(answer, "feedback_id", None)
+    stored_payload = getattr(answer, "feedback_payload", None)
+    if isinstance(stored_payload, dict) and feedback_id:
+        return stored_payload
     feedback_text = _legacy_feedback_text(getattr(answer, "feedback_text", None))
     if not feedback_id:
         return {

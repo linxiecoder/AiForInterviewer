@@ -98,7 +98,7 @@ type CreateEntryUsesDrawer = Expect<Equal<typeof INTERVIEW_CREATE_ENTRY_KIND, "d
 type CreateFieldKeys = Expect<
   Equal<
     typeof INTERVIEW_CREATE_FIELD_KEYS,
-    readonly ["mode", "resume_job_binding_id", "topic_id", "custom_topic_text"]
+    readonly ["mode", "resume_job_binding_id", "polish_theme", "topic_id", "custom_topic_text"]
   >
 >;
 type CreateSuccessRefreshesList = Expect<
@@ -242,10 +242,10 @@ type ProgressTreeScrollClassIsScoped = Expect<
   Equal<typeof INTERVIEW_PROGRESS_TREE_SCROLL_CLASS, "progressTreeScroll">
 >;
 type WorkbenchHeaderChipsAreStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS, readonly ["岗位", "简历", "当前节点", "进度", "当前节点表现"]>
+  Equal<typeof INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS, readonly ["岗位", "简历", "当前节点", "能力主题", "进度", "当前节点表现"]>
 >;
 type WorkbenchFeedbackItemsAreStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_FEEDBACK_ITEMS, readonly ["点评", "打分", "失分点评价", "参考回答", "考点解析", "技术原理扩展"]>
+  Equal<typeof INTERVIEW_WORKBENCH_FEEDBACK_ITEMS, readonly ["点评", "打分", "失分点评价", "参考回答", "考点解析", "技术原理扩展", "权重说明", "面试意图", "技术短板", "表达短板", "P7 级参考答案", "口语化范本", "下一轮训练建议"]>
 >;
 type WorkbenchPrimaryActionsAreStable = Expect<
   Equal<
@@ -339,6 +339,7 @@ const noPrerequisiteAvailability = getInterviewCreateAvailability({
 });
 const createPayload = buildPolishSessionCreateRequest({
   resume_job_binding_id: "bind_001",
+  polish_theme: "mixed",
   topic_id: "topic_authenticity_contribution",
   custom_topic_text: "  支付系统项目表达  ",
 });
@@ -922,6 +923,19 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
       feedback_id: "fb_001",
       feedback_text: "结构完整，但技术取舍需要补充替代方案。",
       feedback_summary: "补充替代方案和量化结果。",
+      polish_theme: "mixed",
+      polish_theme_label: "混合",
+      explicit_weight: 60,
+      implicit_weight: 40,
+      weight_explanation: "本轮按显性技术 60%、隐性表达 40% 综合打磨。",
+      interview_intent: "同时观察技术链路和表达结构。",
+      explicit_score: 70,
+      implicit_score: 76,
+      technical_gaps: ["幂等键设计还不够具体"],
+      communication_gaps: ["背景压缩可以更短"],
+      p7_reference_answer: "从 owner 视角补齐状态机、失败兜底和指标复盘。",
+      oral_script: "我会先用 30 秒交代背景，再说明我的职责和关键取舍。",
+      next_training_suggestions: ["下一轮用 60/40 权重再答一版"],
       score_result: {
         score_result_id: "score_001",
         score_type: "polish_answer",
@@ -970,13 +984,20 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
     ...card.traceItems,
   ].join(" ");
 
-  assertContract(card.sections.map((section) => section.title).join(",") === "点评,打分,失分点评价,参考回答,考点解析,技术原理扩展", "反馈卡应固定六个高保真模块");
+  assertContract(card.sections.map((section) => section.title).join(",") === "点评,打分,失分点评价,参考回答,考点解析,技术原理扩展,权重说明,面试意图,技术短板,表达短板,P7 级参考答案,口语化范本,下一轮训练建议", "反馈卡应展示旧模块和主题化模块");
   assertContract(visibleCopy.includes("P-POLISH-005"), "反馈卡应展示 contract_id / contract_ids");
   assertContract(visibleCopy.includes("72"), "反馈卡应展示 score_result 分值");
   assertContract(visibleCopy.includes("技术取舍说明不足"), "反馈卡应展示 loss_points");
   assertContract(visibleCopy.includes("先讲业务目标"), "反馈卡应展示 reference_answer");
   assertContract(visibleCopy.includes("STAR + 技术决策链路"), "反馈卡应展示 knowledge_points");
   assertContract(visibleCopy.includes("可观测结果优先"), "反馈卡应展示 technical_principles");
+  assertContract(visibleCopy.includes("显性技术 60%、隐性表达 40%"), "反馈卡应展示权重说明");
+  assertContract(visibleCopy.includes("同时观察技术链路和表达结构"), "反馈卡应展示面试意图");
+  assertContract(visibleCopy.includes("幂等键设计还不够具体"), "反馈卡应展示技术短板");
+  assertContract(visibleCopy.includes("背景压缩可以更短"), "反馈卡应展示表达短板");
+  assertContract(visibleCopy.includes("owner 视角"), "反馈卡应展示 P7 级参考答案");
+  assertContract(visibleCopy.includes("30 秒交代背景"), "反馈卡应展示口语化范本");
+  assertContract(visibleCopy.includes("下一轮用 60/40 权重再答一版"), "反馈卡应展示下一轮训练建议");
   assertContract(visibleCopy.includes("weakness_candidate:weak_001"), "反馈卡应保留 candidate_refs");
   assertContract(visibleCopy.includes("validation_result:val_001"), "反馈卡应保留 validation_result_ref");
   assertContract(visibleCopy.includes("feedback:fb_001"), "反馈卡应保留 trace_refs");
@@ -986,6 +1007,48 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(toNextRecommendedActionLabel("generate_next_question") === "生成下一题", "生成下一题 enum 应映射为按钮文案");
 }
 
+function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_legacy",
+    answer_round: 1,
+    answer_text: "我负责接口改造，并说明了上线结果。",
+    answer_created_at: "2026-05-20T10:00:00Z",
+    feedback_text: "旧版反馈仍应可展示。",
+    feedback_id: "fb_legacy",
+    score_result_id: null,
+    feedback_created_at: "2026-05-20T10:01:00Z",
+    feedback_payload: {
+      contract_id: "P-POLISH-005",
+      contract_ids: ["P-POLISH-005"],
+      status: "generated",
+      feedback_id: "fb_legacy",
+      feedback_text: "旧版反馈仍应可展示。",
+      feedback_summary: "旧版总结。",
+      score_result: null,
+      loss_points: [],
+      reference_answer: null,
+      knowledge_points: [],
+      technical_principles: [],
+      next_recommended_actions: ["generate_next_question"],
+      candidate_refs: [],
+      validation_result_ref: null,
+      trace_refs: [],
+      low_confidence_flags: [],
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const titles = card.sections.map((section) => section.title);
+  const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
+
+  assertContract(titles.includes("点评"), "旧 payload 应继续展示旧反馈区块");
+  assertContract(visibleCopy.includes("旧版反馈仍应可展示"), "旧 payload 应继续展示 feedback_text");
+  assertContract(!titles.includes("权重说明"), "旧 payload 缺主题字段时不应展示权重说明");
+  assertContract(!titles.includes("面试意图"), "旧 payload 缺主题字段时不应展示面试意图");
+  assertContract(!titles.includes("技术短板"), "旧 payload 缺主题字段时不应展示技术短板");
+  assertContract(!titles.includes("表达短板"), "旧 payload 缺主题字段时不应展示表达短板");
+  assertContract(card.nextActions.join(",") === "generate_next_question", "旧 payload 应继续保留下一步 action");
+}
 
 function test_progress_node_context_banner_ignores_group_header_click(): void {
   const session = buildTestSession([
@@ -1173,6 +1236,7 @@ test_workbench_ctrl_enter_submits_answer();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
+test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_progress_node_context_banner_ignores_group_header_click();
 test_progress_node_context_banner_uses_safe_copy();
 test_progress_tree_detail_uses_display_safe_copy();
@@ -1182,6 +1246,7 @@ test_progress_tree_detail_handles_missing_optional_fields();
 type ReadyAllowsSubmit = Expect<Equal<typeof readyAvailability.canSubmit, true>>;
 type NoPrerequisiteBlocksSubmit = Expect<Equal<typeof noPrerequisiteAvailability.canSubmit, false>>;
 type CreatePayloadDoesNotSubmitMode = Expect<Equal<"mode" extends keyof typeof createPayload ? true : false, false>>;
+type CreatePayloadSubmitsTheme = Expect<Equal<typeof createPayload.polish_theme, "technical" | "communication" | "mixed" | null | undefined>>;
 type SessionWorkbenchPathIsStable = Expect<Equal<typeof sessionWorkbenchPath, "/interview/ses_001">>;
 
 void payloadShape;

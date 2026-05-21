@@ -45,6 +45,7 @@ class PolishSession:
     custom_topic_text_summary: str | None
     created_at: datetime
     updated_at: datetime
+    polish_theme: str | None = None
     progress_tree_status: str = "insufficient_context"
     progress_percent: int = 0
     progress_tree_plan: dict[str, Any] = field(default_factory=dict)
@@ -126,6 +127,7 @@ class PolishSessionAnswerDetail:
     feedback_id: str | None
     score_result_id: str | None
     feedback_created_at: datetime | None
+    feedback_payload: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,7 @@ from typing import Any
 
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
+from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_PLAN_CONTRACT_IDS,
@@ -237,10 +238,13 @@ def build_progress_node_question(
             ref_id=fallback_progress_node_ref,
             availability="unavailable",
         )
+        strategy = _safe_polish_theme_strategy(session.polish_theme)
         return PolishQuestionDraft(
-            question_text=(
-                f"针对「{topic}」这个打磨目标，请选一个真实项目场景，讲清楚你当时负责的技术决策、"
-                "取舍依据和结果验证方式。[1]"
+            question_text=_themed_progress_question_text(
+                strategy=strategy,
+                focus=topic,
+                citations="[1]",
+                low_confidence=True,
             ),
             question_sources=(source,),
             progress_node_ref=fallback_progress_node_ref,
@@ -309,15 +313,53 @@ def build_progress_node_question(
     )
     citations = "".join(f"[{source.index}]" for source in sources)
     focus = _question_focus(node)
+    strategy = _safe_polish_theme_strategy(session.polish_theme)
     return PolishQuestionDraft(
-        question_text=(
-            f"针对「{focus}」这个进展节点，请选一个你实际参与的具体场景，讲清楚当时要解决的问题、"
-            f"你负责的技术改造或决策、为什么这样取舍，以及上线后如何验证效果。{citations}"
+        question_text=_themed_progress_question_text(
+            strategy=strategy,
+            focus=focus,
+            citations=citations,
         ),
         question_sources=sources,
         progress_node_ref=node.get("progress_node_ref"),
         evidence_refs=evidence_refs,
         context_digest=truncate_text(context.get("content_digest"), max_chars=120),
+    )
+
+
+def _safe_polish_theme_strategy(theme: str | None) -> PolishThemeStrategy:
+    try:
+        return resolve_polish_theme_strategy(theme)
+    except ValueError:
+        return resolve_polish_theme_strategy(None)
+
+
+def _themed_progress_question_text(
+    *,
+    strategy: PolishThemeStrategy,
+    focus: str,
+    citations: str,
+    low_confidence: bool = False,
+) -> str:
+    target = "打磨目标" if low_confidence else "进展节点"
+    if strategy.theme == "technical":
+        return (
+            f"针对「{focus}」这个{target}，请从 owner 视角做技术深挖：如果现在出现部分成功、部分失败的不一致，"
+            "你会如何设计链路完整性、状态机、幂等键、失败路径、重试收敛、对账与补偿机制，"
+            "同时说明降级/限流策略、性能指标、成本控制、可观测性和关键 trade-off。"
+            f"{citations}"
+        )
+    if strategy.theme == "communication":
+        return (
+            f"针对「{focus}」这个{target}，请用 STAR 结构重新讲一遍：30 秒完成背景压缩，"
+            "明确个人职责边界，按逻辑顺序讲关键动作和取舍表达，最后用指标、复盘总结和面试口语化收束。"
+            f"{citations}"
+        )
+    return (
+        f"本题按显性技术 {strategy.explicit_weight}%、隐性表达 {strategy.implicit_weight}% 权重评分。"
+        f"请围绕「{focus}」这个{target}，从 owner 视角讲清楚技术深度、方案链路、失败兜底和技术取舍，"
+        "并按背景、约束、方案、指标、复盘组织答案，让表达结构服务于技术判断。"
+        f"{citations}"
     )
 
 

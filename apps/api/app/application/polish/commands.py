@@ -13,6 +13,7 @@ class CreatePolishSessionCommand:
     topic_id: str | None = None
     subtopic_id: str | None = None
     custom_topic_text: str | None = None
+    polish_theme: str | None = None
 
 
 @dataclass(frozen=True)

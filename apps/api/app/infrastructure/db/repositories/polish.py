@@ -14,6 +14,7 @@ from app.application.polish.entities import (
     PolishTaskStatus,
 )
 from app.application.polish.ports import PolishRepository
+from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.domain.shared.refs import ResourceRef
 from app.infrastructure.db.models.ai_task import AiTask
 from app.infrastructure.db.models.answer import Answer as AnswerModel
@@ -49,8 +50,8 @@ class SqlAlchemyPolishRepository(PolishRepository):
                 return
             detail.progress_tree_status = session.progress_tree_status
             detail.progress_percent = session.progress_percent
-            detail.progress_tree_plan_json = session.progress_tree_plan
-            detail.progress_tree_state_json = session.progress_tree_state
+            detail.progress_tree_plan_json = _payload_with_theme_metadata(session.progress_tree_plan, session.polish_theme)
+            detail.progress_tree_state_json = _payload_with_theme_metadata(session.progress_tree_state, session.polish_theme)
             detail.updated_at = session.updated_at
             session_model.updated_at = session.updated_at
             db.commit()
@@ -202,6 +203,40 @@ class SqlAlchemyPolishRepository(PolishRepository):
             return ResourceRef(resource_type="polish_session", resource_id=session_id)
 
 
+def _payload_with_theme_metadata(payload: dict | None, theme: str | None) -> dict | None:
+    if payload is None:
+        return None
+    result = dict(payload)
+    strategy = _resolve_strategy_or_none(theme)
+    if strategy is not None:
+        result["polish_theme"] = strategy.theme
+        result["polish_theme_label"] = strategy.label
+        result["explicit_weight"] = strategy.explicit_weight
+        result["implicit_weight"] = strategy.implicit_weight
+    return result
+
+
+def _theme_from_detail(detail_model: PolishSessionDetailModel) -> str | None:
+    for payload in (detail_model.progress_tree_plan_json, detail_model.progress_tree_state_json):
+        if not isinstance(payload, dict):
+            continue
+        raw_theme = payload.get("polish_theme")
+        if isinstance(raw_theme, str):
+            strategy = _resolve_strategy_or_none(raw_theme)
+            if strategy is not None:
+                return strategy.theme
+    return None
+
+
+def _resolve_strategy_or_none(theme: str | None) -> PolishThemeStrategy | None:
+    if theme is None:
+        return None
+    try:
+        return resolve_polish_theme_strategy(theme)
+    except ValueError:
+        return None
+
+
 def _session_to_model(session: PolishSession) -> InterviewSessionModel:
     return InterviewSessionModel(
         id=session.session_id,
@@ -239,8 +274,8 @@ def _detail_to_model(session: PolishSession) -> PolishSessionDetailModel:
         custom_topic_text_summary=session.custom_topic_text_summary,
         progress_tree_status=session.progress_tree_status,
         progress_percent=session.progress_percent,
-        progress_tree_plan_json=session.progress_tree_plan,
-        progress_tree_state_json=session.progress_tree_state,
+        progress_tree_plan_json=_payload_with_theme_metadata(session.progress_tree_plan, session.polish_theme),
+        progress_tree_state_json=_payload_with_theme_metadata(session.progress_tree_state, session.polish_theme),
     )
 
 
@@ -263,6 +298,7 @@ def _session_to_entity(
         custom_topic_text_summary=detail_model.custom_topic_text_summary,
         created_at=session_model.created_at,
         updated_at=session_model.updated_at,
+        polish_theme=_theme_from_detail(detail_model),
         progress_tree_status=detail_model.progress_tree_status or "insufficient_context",
         progress_percent=detail_model.progress_percent or 0,
         progress_tree_plan=detail_model.progress_tree_plan_json or {},

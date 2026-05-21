@@ -44,6 +44,7 @@ class CreatePolishSessionRequest(BaseModel):
     topic_id: str | None = Field(default=None, min_length=1)
     subtopic_id: str | None = Field(default=None, min_length=1)
     custom_topic_text: str | None = Field(default=None, max_length=240)
+    polish_theme: str | None = Field(default=None)
 
 
 class PolishProgressTreeNodeResponse(BaseModel):
@@ -141,6 +142,10 @@ class PolishSessionResponse(BaseModel):
     job_company: str
     resume_title: str
     binding_label: str
+    polish_theme: str
+    polish_theme_label: str
+    explicit_weight: int
+    implicit_weight: int
     turns: list[PolishSessionTurnResponse] = Field(default_factory=list)
     progress_tree_status: str
     progress_percent: int = Field(ge=0, le=100)
@@ -171,6 +176,10 @@ class PolishSessionSummaryResponse(BaseModel):
     job_company: str
     resume_title: str
     binding_label: str
+    polish_theme: str
+    polish_theme_label: str
+    explicit_weight: int
+    implicit_weight: int
     topic_id: str | None = None
     subtopic_id: str | None = None
     custom_topic_text_summary: str | None = None

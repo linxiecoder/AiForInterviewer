@@ -1,4 +1,5 @@
 export type PolishSessionMode = "polish";
+export type PolishTheme = "technical" | "communication" | "mixed";
 
 export interface PolishSessionSummary {
   id: string;
@@ -15,6 +16,10 @@ export interface PolishSessionSummary {
   job_company: string;
   resume_title: string;
   binding_label: string;
+  polish_theme?: PolishTheme | null;
+  polish_theme_label?: string | null;
+  explicit_weight?: number | null;
+  implicit_weight?: number | null;
   topic_id?: string | null;
   subtopic_id?: string | null;
   custom_topic_text_summary?: string | null;
@@ -87,6 +92,19 @@ export interface PolishFeedbackPayload {
   feedback_id?: string | null;
   feedback_text: string;
   feedback_summary?: string | null;
+  polish_theme?: PolishTheme | string | null;
+  polish_theme_label?: string | null;
+  explicit_weight?: number | null;
+  implicit_weight?: number | null;
+  weight_explanation?: string | null;
+  interview_intent?: string | null;
+  explicit_score?: number | null;
+  implicit_score?: number | null;
+  technical_gaps?: string[];
+  communication_gaps?: string[];
+  p7_reference_answer?: string | null;
+  oral_script?: string | null;
+  next_training_suggestions?: string[];
   score_result?: PolishScoreResultPayload | null;
   loss_points?: PolishLossPointPayload[];
   reference_answer?: PolishReferenceAnswerPayload | null;
@@ -205,6 +223,7 @@ export interface PolishTopic {
 
 export interface CreatePolishSessionRequest {
   resume_job_binding_id: string;
+  polish_theme?: PolishTheme | null;
   topic_id?: string | null;
   subtopic_id?: string | null;
   custom_topic_text?: string | null;
@@ -241,6 +260,10 @@ export interface PolishSessionDetail {
   job_company: string;
   resume_title: string;
   binding_label: string;
+  polish_theme?: PolishTheme | null;
+  polish_theme_label?: string | null;
+  explicit_weight?: number | null;
+  implicit_weight?: number | null;
   turns: PolishSessionTurn[];
   current_question_ref?: PolishResourceRef | null;
   active_question_ref?: PolishResourceRef | null;

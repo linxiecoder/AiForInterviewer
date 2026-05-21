@@ -21,7 +21,9 @@ from app.application.polish.progress_prompts import (
     build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
-from app.application.polish.progress_tree import PolishProgressTreeLlmService
+from app.application.polish.entities import PolishSession
+from app.application.polish.progress_tree import PolishProgressTreeLlmService, build_progress_node_question
+from app.application.polish.theme_strategy import resolve_polish_theme_strategy
 from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
@@ -72,6 +74,38 @@ ACTOR_B = CurrentActor(
     email_normalized="owner-b@example.com",
     display_name="Owner B",
 )
+
+
+def test_polish_theme_strategies_expose_expected_weights() -> None:
+    technical = resolve_polish_theme_strategy("technical")
+    communication = resolve_polish_theme_strategy("communication")
+    mixed = resolve_polish_theme_strategy("mixed")
+
+    assert technical.label == "技术打磨"
+    assert technical.explicit_weight == 80
+    assert technical.implicit_weight == 20
+    assert communication.label == "表达能力"
+    assert communication.explicit_weight == 25
+    assert communication.implicit_weight == 75
+    assert mixed.label == "混合"
+    assert mixed.explicit_weight == 60
+    assert mixed.implicit_weight == 40
+    assert resolve_polish_theme_strategy(None).theme == "mixed"
+    assert resolve_polish_theme_strategy("   ").theme == "mixed"
+
+
+def test_progress_node_question_uses_polish_theme_strategy() -> None:
+    technical = _theme_question_text("technical")
+    communication = _theme_question_text("communication")
+    mixed = _theme_question_text("mixed")
+
+    technical_keywords = ["状态机", "幂等", "失败路径", "指标"]
+    assert sum(1 for keyword in technical_keywords if keyword in technical) >= 3
+    assert sum(1 for keyword in ["STAR", "背景压缩", "个人职责", "复盘"] if keyword in communication) >= 2
+    assert "显性技术" in mixed
+    assert "隐性表达" in mixed
+    assert "权重" in mixed
+    assert technical != communication != mixed
 
 
 def test_polish_topics_require_authentication() -> None:
@@ -1138,8 +1172,13 @@ def test_progress_tree_refresh_regenerates_missing_persisted_plan_when_context_i
         json_body={
             "resume_job_binding_id": binding_id,
             "topic_id": "topic_technical_depth",
+            "polish_theme": "mixed",
         },
     )
+    assert create_body["data"]["polish_theme"] == "mixed"
+    assert create_body["data"]["polish_theme_label"] == "混合"
+    assert create_body["data"]["explicit_weight"] == 60
+    assert create_body["data"]["implicit_weight"] == 40
     session_id = create_body["data"]["session_id"]
     _clear_progress_tree_storage(session_factory, session_id)
     transport.calls.clear()
@@ -1154,6 +1193,10 @@ def test_progress_tree_refresh_regenerates_missing_persisted_plan_when_context_i
     assert status_code == 200
     data = refresh_body["data"]
     assert data["progress_tree_status"] == "ready"
+    assert data["polish_theme"] == "mixed"
+    assert data["polish_theme_label"] == "混合"
+    assert data["progress_tree_plan"]["polish_theme"] == "mixed"
+    assert data["progress_tree_state"]["polish_theme"] == "mixed"
     assert data["progress_tree_plan"]["nodes"]
     assert data["progress_tree_state"]["node_states"]
     assert data["progress_tree_state"]["current_priority"]["progress_node_ref"]
@@ -1352,6 +1395,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_body["data"]["task_type"] == "polish_feedback_generation"
     assert feedback_body["data"]["status"] == "succeeded"
     assert feedback_body["data"]["score_type"] == "polish_answer"
+    assert feedback_body["data"]["feedback_payload"]["polish_theme"] == "mixed"
+    assert feedback_body["data"]["feedback_payload"]["explicit_score"] is not None
+    assert feedback_body["data"]["feedback_payload"]["implicit_score"] is not None
+    assert feedback_body["data"]["feedback_payload"]["weight_explanation"]
     assert feedback_body["data"]["candidate_refs"] == []
     assert feedback_body["data"]["suggestion_refs"] == []
     assert "provider_payload" not in _collect_keys(feedback_body)
@@ -1427,6 +1474,9 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert "岗位要求/职责依据" not in question_text
     assert "简历证据" not in question_text
     assert "[1]" in question_text
+    assert "显性技术" in question_text
+    assert "隐性表达" in question_text
+    assert "权重" in question_text
     assert isinstance(question_sources, list) and len(question_sources) >= 2
     assert {"index", "source_type", "title", "excerpt"}.issubset(question_sources[0])
     assert question_sources[0]["index"] == 1
@@ -1955,6 +2005,77 @@ def _session_factory():
     session_factory = build_session_factory(settings)
     initialize_schema(session_factory=session_factory)
     return session_factory
+
+
+def _theme_question_text(polish_theme: str) -> str:
+    now = utc_now()
+    session = PolishSession(
+        session_id="ses_theme_test",
+        owner_id=OWNER_A,
+        actor_id=OWNER_A,
+        binding_id="bind_theme_test",
+        resume_id="res_theme_test",
+        resume_version_id="res_ver_theme_test",
+        job_id="job_theme_test",
+        job_version_id="job_ver_theme_test",
+        status="running",
+        topic_id="topic_technical_depth",
+        subtopic_id=None,
+        custom_topic_text_summary=None,
+        created_at=now,
+        updated_at=now,
+        progress_tree_status="ready",
+        progress_percent=0,
+        polish_theme=polish_theme,
+    )
+    node = {
+        "progress_node_ref": "node_payment_consistency",
+        "title": "支付链路一致性",
+        "expected_capability": "能说明支付链路的状态流转、异常兜底和上线验证。",
+        "related_job_requirements": ["Python and FastAPI experience."],
+        "related_resume_evidence": ["Built backend workflow automation."],
+        "missing_points": ["需要补足幂等和失败补偿。"],
+        "children": [],
+    }
+    context = {
+        "content_digest": "theme-test-digest",
+        "job_snapshot": {
+            "job_id": "job_theme_test",
+            "job_version_id": "job_ver_theme_test",
+            "requirements": ["Python and FastAPI experience."],
+            "responsibilities": ["Own payment workflow reliability."],
+        },
+        "resume_snapshot": {
+            "resume_id": "res_theme_test",
+            "resume_version_id": "res_ver_theme_test",
+            "summary": "Backend engineer",
+            "project_experiences": ["Built backend workflow automation."],
+            "skills": ["FastAPI", "PostgreSQL"],
+        },
+        "match_context": {
+            "analysis_id": "ana_theme_test",
+            "missing_points": ["需要补足幂等和失败补偿。"],
+        },
+        "turns": [],
+    }
+    draft = build_progress_node_question(
+        session=session,
+        context=context,
+        plan={"status": "ready", "context_digest": "theme-test-digest", "nodes": [node]},
+        state={
+            "status": "ready",
+            "current_priority": {
+                "progress_node_ref": "node_payment_consistency",
+                "title": "支付链路一致性",
+                "expected_capability": "能说明支付链路的状态流转、异常兜底和上线验证。",
+            },
+            "node_states": [],
+            "updated_from_turns_count": 0,
+            "progress": {"progress_percent": 0},
+        },
+        requested_ref="node_payment_consistency",
+    )
+    return draft.question_text
 
 
 @contextmanager
