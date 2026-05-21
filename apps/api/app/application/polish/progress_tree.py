@@ -55,6 +55,7 @@ PROGRESS_TREE_PLANNER_ENV = "AIFI_PROGRESS_TREE_PLANNER"
 DEFAULT_PROGRESS_TREE_PLANNER = "quality_first"
 PROGRESS_TREE_PLANNER_QUALITY_FIRST = "quality_first"
 PROGRESS_TREE_PLANNER_V2_PIPELINE = "v2_pipeline"
+PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
 
 
 class PolishProgressTreeLlmService:
@@ -123,7 +124,7 @@ class PolishProgressTreeLlmService:
                     prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
                     failure_reason="v2_local_state_refresh",
                 )
-            state = _apply_turn_progress_to_state(state, context)
+            state = _apply_turn_progress_to_state(state, context, existing_plan=existing_plan)
             return {
                 "status": PROGRESS_TREE_STATUS_READY,
                 "progress_tree_plan": existing_plan,
@@ -193,6 +194,11 @@ class PolishProgressTreeLlmService:
                 existing_state,
                 reason="llm_state_invalid",
             )
+        normalized_state = _apply_turn_progress_to_state(
+            normalized_state,
+            context,
+            existing_plan=existing_plan,
+        )
         return {
             "status": PROGRESS_TREE_STATUS_READY,
             "progress_tree_plan": existing_plan,
@@ -219,12 +225,16 @@ def build_progress_node_question(
     node = resolve_progress_node(plan=plan, state=state, requested_ref=requested_ref)
     if node is None:
         topic = session.topic_id or "manual_topic"
+        fallback_progress_node_ref = truncate_text(requested_ref, max_chars=120) or _node_ref(
+            str(context.get("content_digest") or "fallback"),
+            f"manual:{topic}",
+        )
         source = PolishQuestionSource(
             index=1,
             source_type="progress_node",
             title=QUESTION_SOURCE_TITLE_BY_TYPE["progress_node"],
             excerpt="未找到可用的 progress_node_ref，已按当前打磨主题生成低置信问题。",
-            ref_id=requested_ref,
+            ref_id=fallback_progress_node_ref,
             availability="unavailable",
         )
         return PolishQuestionDraft(
@@ -233,6 +243,9 @@ def build_progress_node_question(
                 "取舍依据和结果验证方式。[1]"
             ),
             question_sources=(source,),
+            progress_node_ref=fallback_progress_node_ref,
+            evidence_refs=(),
+            context_digest=truncate_text(context.get("content_digest"), max_chars=120),
         )
 
     evidence_selection = select_progress_tree_evidence_chunks(
@@ -243,6 +256,7 @@ def build_progress_node_question(
         progress_node_ref=node["progress_node_ref"],
     )
     evidence_chunks = list(evidence_selection.selected_chunks)
+    evidence_refs = tuple(chunk.chunk_id for chunk in evidence_chunks)
     sources = _index_question_sources(
         [
             _progress_node_source(node),
@@ -301,6 +315,9 @@ def build_progress_node_question(
             f"你负责的技术改造或决策、为什么这样取舍，以及上线后如何验证效果。{citations}"
         ),
         question_sources=sources,
+        progress_node_ref=node.get("progress_node_ref"),
+        evidence_refs=evidence_refs,
+        context_digest=truncate_text(context.get("content_digest"), max_chars=120),
     )
 
 
@@ -851,59 +868,164 @@ def _initial_state_fallback(
     }
 
 
-def _apply_turn_progress_to_state(state: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+def _apply_turn_progress_to_state(
+    state: dict[str, Any],
+    context: dict[str, Any],
+    *,
+    existing_plan: dict[str, Any],
+) -> dict[str, Any]:
     node_states = [item for item in state.get("node_states", []) if isinstance(item, dict)]
     if not node_states:
         return state
-    completed_turns_count = _completed_turns_count(context)
-    if completed_turns_count <= 0:
+    turn_updates = _turn_progress_updates(context, node_states)
+    if not turn_updates:
         return {
             **state,
             "summary": "v2_local_state_refresh",
             "progress": {"progress_percent": _progress_percent(state)},
         }
 
+    completed_counts_by_ref: dict[str, int] = {}
+    latest_feedback_by_ref: dict[str, str] = {}
+    in_progress_refs: set[str] = set()
+    completed_refs: set[str] = set()
+    latest_turn_ref: str | None = None
+    for update in turn_updates:
+        node_ref = update["progress_node_ref"]
+        latest_turn_ref = node_ref
+        if update["status"] == "completed":
+            completed_refs.add(node_ref)
+            in_progress_refs.discard(node_ref)
+            completed_counts_by_ref[node_ref] = completed_counts_by_ref.get(node_ref, 0) + 1
+        elif node_ref not in completed_refs:
+            in_progress_refs.add(node_ref)
+        feedback_summary = update.get("latest_feedback_summary")
+        if feedback_summary:
+            latest_feedback_by_ref[node_ref] = feedback_summary
+
     updated_node_states = []
-    for index, item in enumerate(node_states):
+    for item in node_states:
         updated = {**item}
-        if index < completed_turns_count:
+        node_ref = str(updated.get("progress_node_ref") or "")
+        if node_ref in completed_refs:
             updated["status"] = "completed"
             updated["completed_questions_count"] = max(
                 _bounded_int(updated.get("completed_questions_count"), 0, 999),
-                1,
+                completed_counts_by_ref.get(node_ref, 1),
             )
+        elif node_ref in in_progress_refs:
+            updated["status"] = "in_progress"
+        if node_ref in latest_feedback_by_ref:
+            updated["latest_feedback_summary"] = latest_feedback_by_ref[node_ref]
         updated_node_states.append(updated)
 
     completed_nodes_count = sum(1 for item in updated_node_states if item.get("status") == "completed")
     progress_percent = _bounded_int(round(completed_nodes_count * 100 / len(updated_node_states)), 0, 100)
+    current_priority = _current_priority_from_turns(
+        latest_turn_ref=latest_turn_ref,
+        updated_node_states=updated_node_states,
+        existing_state=state,
+        existing_plan=existing_plan,
+    )
     return {
         **state,
         "node_states": updated_node_states,
-        "updated_from_turns_count": completed_turns_count,
+        "current_priority": current_priority,
+        "updated_from_turns_count": len(turn_updates),
         "summary": "v2_local_state_refresh",
         "progress": {"progress_percent": progress_percent},
     }
 
 
-def _completed_turns_count(context: dict[str, Any]) -> int:
+def _turn_progress_updates(
+    context: dict[str, Any],
+    node_states: list[dict[str, Any]],
+) -> list[dict[str, str]]:
     turns = context.get("turns")
     if not isinstance(turns, list):
-        return 0
-    completed_count = 0
+        return []
+    fallback_refs = [
+        str(item.get("progress_node_ref"))
+        for item in node_states
+        if isinstance(item.get("progress_node_ref"), str) and item.get("progress_node_ref")
+    ]
+    updates: list[dict[str, str]] = []
     for turn in turns:
         if not isinstance(turn, dict):
             continue
-        if turn.get("feedback_text") or _turn_answers_have_feedback(turn):
-            completed_count += 1
-    return completed_count
+        node_ref = truncate_text(turn.get("progress_node_ref"), max_chars=120)
+        if not node_ref and len(updates) < len(fallback_refs):
+            node_ref = fallback_refs[len(updates)]
+        if not node_ref:
+            continue
+        status = "completed" if _turn_has_feedback(turn) else "in_progress"
+        feedback_summary = _latest_turn_feedback(turn) if status == "completed" else None
+        update: dict[str, str] = {
+            "progress_node_ref": node_ref,
+            "status": status,
+        }
+        if feedback_summary:
+            update["latest_feedback_summary"] = truncate_text(feedback_summary, max_chars=480) or feedback_summary
+        updates.append(update)
+    return updates
 
 
-def _turn_answers_have_feedback(turn: dict[str, Any]) -> bool:
+def _turn_has_feedback(turn: dict[str, Any]) -> bool:
+    if turn.get("feedback_id") or turn.get("feedback_created_at") or turn.get("score_result_id"):
+        return True
+    feedback_text = truncate_text(turn.get("feedback_text"), max_chars=640)
+    if feedback_text and feedback_text != PENDING_FEEDBACK_TEXT:
+        return True
     answers = turn.get("answers")
     if not isinstance(answers, list):
         return False
-    return any(isinstance(answer, dict) and bool(answer.get("feedback_text")) for answer in answers)
+    return any(isinstance(answer, dict) and _answer_has_feedback(answer) for answer in answers)
 
+
+def _answer_has_feedback(answer: dict[str, Any]) -> bool:
+    if answer.get("feedback_id") or answer.get("feedback_created_at") or answer.get("score_result_id"):
+        return True
+    feedback_text = truncate_text(answer.get("feedback_text"), max_chars=640)
+    return bool(feedback_text and feedback_text != PENDING_FEEDBACK_TEXT)
+
+
+def _current_priority_from_turns(
+    *,
+    latest_turn_ref: str | None,
+    updated_node_states: list[dict[str, Any]],
+    existing_state: dict[str, Any],
+    existing_plan: dict[str, Any],
+) -> dict[str, Any] | None:
+    plan_nodes = _flatten_progress_nodes(existing_plan.get("nodes", []))
+    plan_by_ref = {node["progress_node_ref"]: node for node in plan_nodes}
+    if latest_turn_ref:
+        priority = _priority_for_ref(latest_turn_ref, plan_by_ref, existing_state)
+        if priority is not None:
+            return priority
+    return _first_non_completed_priority(updated_node_states, plan_nodes)
+
+
+def _priority_for_ref(
+    node_ref: str,
+    plan_by_ref: dict[str, dict[str, Any]],
+    existing_state: dict[str, Any],
+) -> dict[str, Any] | None:
+    node = plan_by_ref.get(node_ref)
+    if node is None:
+        return None
+    current_priority = existing_state.get("current_priority")
+    if isinstance(current_priority, dict) and current_priority.get("progress_node_ref") == node_ref:
+        return {
+            "progress_node_ref": node_ref,
+            "title": truncate_text(current_priority.get("title"), max_chars=120) or node["title"],
+            "expected_capability": truncate_text(current_priority.get("expected_capability"), max_chars=480)
+            or node["expected_capability"],
+        }
+    return {
+        "progress_node_ref": node_ref,
+        "title": node["title"],
+        "expected_capability": node["expected_capability"],
+    }
 
 def _fallback_priority(plan_nodes: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not plan_nodes:
@@ -1037,9 +1159,21 @@ def _first_text(*values: object | None) -> str:
     return "内容待补充"
 
 
-def _latest_turn_feedback(turns: list[dict[str, Any]]) -> str | None:
-    for turn in reversed(turns):
-        feedback_text = turn.get("feedback_text")
-        if feedback_text:
-            return str(feedback_text)
+def _latest_turn_feedback(turns: list[dict[str, Any]] | dict[str, Any]) -> str | None:
+    turn_list = [turns] if isinstance(turns, dict) else turns
+    for turn in reversed(turn_list):
+        if not isinstance(turn, dict):
+            continue
+        feedback_text = truncate_text(turn.get("feedback_text"), max_chars=640)
+        if feedback_text and feedback_text != PENDING_FEEDBACK_TEXT:
+            return feedback_text
+        answers = turn.get("answers")
+        if not isinstance(answers, list):
+            continue
+        for answer in reversed(answers):
+            if not isinstance(answer, dict):
+                continue
+            answer_feedback = truncate_text(answer.get("feedback_text"), max_chars=640)
+            if answer_feedback and answer_feedback != PENDING_FEEDBACK_TEXT:
+                return answer_feedback
     return None

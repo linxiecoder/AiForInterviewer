@@ -1314,6 +1314,12 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     question_ref = question_body["data"]["result_ref"]
     assert question_ref["trace_type"] == "question"
     question_id = question_ref["trace_ref_id"]
+    assert question_body["data"]["active_question_progress_node_ref"] == progress_node_ref
+    question_evidence_refs = [
+        ref["resource_id"]
+        for ref in question_body["data"]["active_question_evidence_refs"]
+    ]
+    assert question_evidence_refs
 
     answer_text = "我会先说明项目背景，再解释我负责的核心接口和取舍。"
     status_code, answer_body = call_json(
@@ -1331,13 +1337,13 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert answer_body["resource_type"] == "polish_answer"
     assert answer_body["data"]["answer_round"] == 1
     assert answer_body["data"]["question_id"] == question_id
-    answer_id = answer_body["data"]["answer_id"]
+    first_answer_id = answer_body["data"]["answer_id"]
 
     status_code, feedback_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
-        json_body={"answer_id": answer_id},
+        json_body={"answer_id": first_answer_id},
     )
 
     assert status_code == 202
@@ -1348,6 +1354,32 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_body["data"]["candidate_refs"] == []
     assert feedback_body["data"]["suggestion_refs"] == []
     assert "provider_payload" not in _collect_keys(feedback_body)
+
+    second_answer_text = "第二轮我会补充接口幂等、失败补偿和上线后指标，说明为什么选择该方案。"
+    status_code, second_answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": second_answer_text,
+        },
+    )
+    assert status_code == 201
+    assert second_answer_body["data"]["answer_round"] == 2
+    assert second_answer_body["data"]["question_id"] == question_id
+    second_answer_id = second_answer_body["data"]["answer_id"]
+
+    status_code, second_feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": second_answer_id},
+    )
+    assert status_code == 202
+    assert second_feedback_body["data"]["answer_id"] == second_answer_id
+    assert second_feedback_body["data"]["answer_round"] == 2
+    assert second_feedback_body["data"]["feedback_payload"]["answer_ref"]["resource_id"] == second_answer_id
 
     status_code, refresh_body = call_json(
         app,
@@ -1380,8 +1412,15 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
 
     turns = detail_data["turns"]
     assert isinstance(turns, list) and len(turns) == 1
-    question_text = turns[0]["question_text"]
-    question_sources = turns[0]["question_sources"]
+    turn = turns[0]
+    assert turn["progress_node_ref"] == progress_node_ref
+    assert turn["evidence_refs"] == question_evidence_refs
+    assert turn["context_digest"]
+    assert detail_data["active_question_progress_node_ref"] == progress_node_ref
+    assert detail_data["active_question_evidence_refs"] == question_evidence_refs
+    assert detail_data["active_question_context_digest"] == turn["context_digest"]
+    question_text = turn["question_text"]
+    question_sources = turn["question_sources"]
     assert "Python and FastAPI experience." not in question_text
     assert "Built backend workflow automation." not in question_text
     assert "岗位要求/职责依据" not in question_text
@@ -1394,10 +1433,15 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     source_text = str(question_sources)
     assert "Python and FastAPI experience." in source_text
     assert "Built backend workflow automation." in source_text
-    assert turns[0]["answers"], "answers should be returned for submitted question"
-    assert turns[0]["answers"][0]["answer_text"] == answer_text
-    assert turns[0]["answers"][0]["feedback_text"] != "本轮反馈尚未生成"
-    assert "polish_answer" in turns[0]["answers"][0]["feedback_text"]
+    assert turn["answers"], "answers should be returned for submitted question"
+    assert [answer["answer_round"] for answer in turn["answers"]] == [1, 2]
+    assert [answer["answer_id"] for answer in turn["answers"]] == [first_answer_id, second_answer_id]
+    assert turn["answers"][0]["answer_text"] == answer_text
+    assert turn["answers"][1]["answer_text"] == second_answer_text
+    assert turn["answers"][0]["feedback_text"] != "本轮反馈尚未生成"
+    assert turn["answers"][1]["feedback_text"] != "本轮反馈尚未生成"
+    assert "polish_answer" in turn["answers"][0]["feedback_text"]
+    assert "polish_answer" in turn["answers"][1]["feedback_text"]
     assert detail_data["progress_tree_state"]["updated_from_turns_count"] == 1
     state_text = str(detail_data["progress_tree_state"])
     assert "v2_local_state_refresh" in state_text

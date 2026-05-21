@@ -26,7 +26,9 @@ import {
 import type {
   CreatePolishSessionRequest,
   PolishQuestionSource,
+  PolishRecommendedAction,
   PolishProgressTreeNode,
+  PolishSessionAnswer,
   PolishSessionDetail,
   PolishSessionSummary,
   PolishTopic,
@@ -125,6 +127,39 @@ export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "考点解析",
   "技术原理扩展",
 ] as const;
+export type WorkbenchMachineState =
+  | "creatingQuestion"
+  | "waitingAnswer"
+  | "feedbackGenerating"
+  | "feedbackReady"
+  | "feedbackFailedAnswerSaved"
+  | "progressRefreshFailed";
+export const INTERVIEW_WORKBENCH_STATE_MACHINE: readonly WorkbenchMachineState[] = [
+  "creatingQuestion",
+  "waitingAnswer",
+  "feedbackGenerating",
+  "feedbackReady",
+  "feedbackFailedAnswerSaved",
+  "progressRefreshFailed",
+] as const;
+const WORKBENCH_MACHINE_STATE_COPY: Record<WorkbenchMachineState, { label: string; description: string; color: string }> = {
+  creatingQuestion: { label: "正在生成题目", description: "题目生成中，请稍候。", color: "processing" },
+  waitingAnswer: { label: "等待回答", description: "可以提交当前题目的下一轮回答。", color: "default" },
+  feedbackGenerating: { label: "正在生成反馈", description: "回答已保存，正在生成点评和下一步建议。", color: "processing" },
+  feedbackReady: { label: "反馈已生成", description: "本轮反馈和下一步建议已同步。", color: "success" },
+  feedbackFailedAnswerSaved: { label: "反馈生成失败", description: "回答已保存，可重试生成反馈或继续补充回答。", color: "warning" },
+  progressRefreshFailed: { label: "进展刷新失败", description: "题目、回答和反馈已保留，仅进展树状态刷新失败。", color: "warning" },
+};
+const NEXT_RECOMMENDED_ACTION_LABELS: Record<string, string> = {
+  answer_again: "再答一版",
+  continue_same_question: "继续打磨本题",
+  generate_reference_answer: "查看参考回答",
+  explain_knowledge_point: "查看考点解析",
+  expand_technical_principle: "展开技术原理",
+  generate_next_round_suggestion: "生成下一轮建议",
+  generate_next_question: "生成下一题",
+  provide_more_answer_detail: "补充回答细节",
+};
 export const INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY = [
   "fake task boundary",
   "题目引用",
@@ -745,22 +780,66 @@ export function toDisplayResumeTitle(session: PolishSessionReadableHeader): stri
 }
 
 export function resolveCurrentQuestionId(session: PolishSessionDetail): string | null {
-  if (session.turns.length === 0) {
+  const lastTurn = getLatestTurn(session);
+  return lastTurn?.question_id || null;
+}
+
+function getLatestTurn(session: PolishSessionDetail) {
+  return session.turns.length > 0 ? session.turns[session.turns.length - 1] : null;
+}
+
+function getLatestAnswer(session: PolishSessionDetail): PolishSessionAnswer | null {
+  const latestTurn = getLatestTurn(session);
+  if (latestTurn === null || latestTurn.answers.length === 0) {
     return null;
   }
-  const lastTurn = session.turns[session.turns.length - 1];
-  return lastTurn.question_id || null;
+  return latestTurn.answers[latestTurn.answers.length - 1];
+}
+
+function answerHasGeneratedFeedback(answer: PolishSessionAnswer | null): boolean {
+  return Boolean(answer?.feedback_id || answer?.feedback_created_at || answer?.feedback_payload?.status === "generated");
+}
+
+export function resolveSessionCurrentProgressNodeRef(session: PolishSessionDetail): string | null {
+  return (
+    session.active_question_progress_node_ref ??
+    getLatestTurn(session)?.progress_node_ref ??
+    session.current_node_progress_node_ref ??
+    session.progress_tree_state.current_priority?.progress_node_ref ??
+    null
+  );
 }
 
 function toCurrentNodeLabel(session: PolishSessionDetail): string {
-  return session.progress_tree_state.current_priority?.title ?? "待生成";
+  const currentNodeRef = resolveSessionCurrentProgressNodeRef(session);
+  const node = findProgressTreeNodeByRef(session.progress_tree_plan.nodes, currentNodeRef);
+  return node !== null ? resolveProgressNodeTitle(node) : session.progress_tree_state.current_priority?.title ?? "待生成";
+}
+
+export function deriveWorkbenchMachineState(params: {
+  session: PolishSessionDetail | null;
+  creatingQuestion: boolean;
+  feedbackGenerating: boolean;
+  failureState: WorkbenchMachineState | null;
+}): WorkbenchMachineState {
+  if (params.creatingQuestion) {
+    return "creatingQuestion";
+  }
+  if (params.feedbackGenerating) {
+    return "feedbackGenerating";
+  }
+  if (params.failureState === "feedbackFailedAnswerSaved" || params.failureState === "progressRefreshFailed") {
+    return params.failureState;
+  }
+  const latestAnswer = params.session === null ? null : getLatestAnswer(params.session);
+  return answerHasGeneratedFeedback(latestAnswer) ? "feedbackReady" : "waitingAnswer";
 }
 
 export function buildWorkbenchProgressNodes(
   session: PolishSessionDetail,
 ): WorkbenchProgressNode[] {
   const questionNodes = buildQuestionProgressNodes(session);
-  const activeNodeRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
+  const activeNodeRef = resolveSessionCurrentProgressNodeRef(session);
   const stateByRef = new Map(
     session.progress_tree_state.node_states.map((nodeState) => [
       nodeState.progress_node_ref,
@@ -1141,6 +1220,15 @@ function logInterviewCreateEvent(event: string, payload: Record<string, unknown>
     return;
   }
   console.info(`[interview:create] ${event}`, payload);
+}
+
+function getAnswerNextRecommendedActions(answer: PolishSessionAnswer): PolishRecommendedAction[] {
+  const actions = answer.next_recommended_actions ?? answer.feedback_payload?.next_recommended_actions ?? [];
+  return actions.filter((action, index) => actions.indexOf(action) === index);
+}
+
+function toNextRecommendedActionLabel(action: PolishRecommendedAction): string {
+  return NEXT_RECOMMENDED_ACTION_LABELS[action] ?? action;
 }
 
 export function InterviewPage() {
@@ -1597,6 +1685,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [creatingQuestion, setCreatingQuestion] = useState<boolean>(false);
   const [submittingAnswer, setSubmittingAnswer] = useState<boolean>(false);
+  const [feedbackGenerating, setFeedbackGenerating] = useState<boolean>(false);
+  const [workbenchFailureState, setWorkbenchFailureState] = useState<WorkbenchMachineState | null>(null);
   const [copyingSession, setCopyingSession] = useState<boolean>(false);
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
@@ -1619,6 +1709,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     setAnswerText("");
     setAnswerError(null);
+    setWorkbenchFailureState(null);
     setSelectedProgressNodeRef(null);
     void loadSession();
   }, [sessionId]);
@@ -1629,6 +1720,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
     setCreatingQuestion(true);
     setAnswerError(null);
+    setWorkbenchFailureState(null);
     try {
       await createPolishQuestionTask(sessionId, {
         progress_node_ref: progressNodeRef ?? session.progress_tree_state.current_priority?.progress_node_ref ?? null,
@@ -1662,18 +1754,52 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
 
     setAnswerError(null);
+    setWorkbenchFailureState(null);
     setSubmittingAnswer(true);
     try {
       const answer = await createPolishAnswer(sessionId, {
         question_id: questionId,
         answer_text: trimmedAnswer,
       });
-      await createPolishFeedbackTask(sessionId, {
-        answer_id: answer.answer_id,
-      });
-      await refreshPolishProgressTreeState(sessionId);
-      setAnswerText("");
-      await loadSession();
+      setFeedbackGenerating(true);
+      try {
+        await createPolishFeedbackTask(sessionId, {
+          answer_id: answer.answer_id,
+        });
+      } catch (feedbackError) {
+        setWorkbenchFailureState("feedbackFailedAnswerSaved");
+        setAnswerError(
+          feedbackError instanceof Error
+            ? `回答已保存，但反馈生成失败：${feedbackError.message}`
+            : "回答已保存，但反馈生成失败，请稍后重试。",
+        );
+        setAnswerText("");
+        await loadSession();
+        return;
+      } finally {
+        setFeedbackGenerating(false);
+      }
+
+      try {
+        const refreshed = await refreshPolishProgressTreeState(sessionId);
+        setSession(refreshed);
+        setAnswerText("");
+        if (refreshed.progress_tree_status === "refresh_failed") {
+          setWorkbenchFailureState("progressRefreshFailed");
+          setAnswerError("反馈已生成，但进展树刷新失败；当前题目、回答和反馈不会丢失。");
+        } else {
+          setWorkbenchFailureState(null);
+        }
+      } catch (refreshError) {
+        setWorkbenchFailureState("progressRefreshFailed");
+        setAnswerError(
+          refreshError instanceof Error
+            ? `反馈已生成，但进展树刷新失败：${refreshError.message}`
+            : "反馈已生成，但进展树刷新失败；当前题目、回答和反馈不会丢失。",
+        );
+        setAnswerText("");
+        await loadSession();
+      }
     } catch (submitError) {
       setAnswerError(
         submitError instanceof Error
@@ -1681,6 +1807,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           : "提交回答失败，请稍后重试。",
       );
     } finally {
+      setFeedbackGenerating(false);
       setSubmittingAnswer(false);
     }
   };
@@ -1715,7 +1842,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const currentProgressNodeKey =
     resolveCurrentWorkbenchProgressNodeKey(
       progressNodes,
-      session?.progress_tree_state.current_priority?.progress_node_ref ?? null,
+      session === null ? null : resolveSessionCurrentProgressNodeRef(session),
     );
   const selectedProgressNodeDetailRef =
     session === null ? null : resolveProgressTreeDetailNodeRef(session, selectedProgressNodeRef);
@@ -1727,17 +1854,31 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const isProgressTreeRefreshFailed = session?.progress_tree_status === "refresh_failed";
   const hasProgressTreeNodes = progressNodes.length > 0;
   const canShowProgressTree = hasProgressTreeNodes && (isProgressTreeReady || isProgressTreeRefreshFailed);
+  const workbenchMachineState = deriveWorkbenchMachineState({
+    session,
+    creatingQuestion,
+    feedbackGenerating,
+    failureState: isProgressTreeRefreshFailed ? "progressRefreshFailed" : workbenchFailureState,
+  });
+  const workbenchMachineCopy = WORKBENCH_MACHINE_STATE_COPY[workbenchMachineState];
   const [refreshingProgressTree, setRefreshingProgressTree] = useState<boolean>(false);
   const refreshProgressTree = async () => {
     if (session === null || refreshingProgressTree) {
       return;
     }
     setRefreshingProgressTree(true);
+    setWorkbenchFailureState(null);
     try {
-      await refreshPolishProgressTreeState(sessionId);
-      await loadSession();
-      message.success("进展树已刷新。");
+      const refreshed = await refreshPolishProgressTreeState(sessionId);
+      setSession(refreshed);
+      if (refreshed.progress_tree_status === "refresh_failed") {
+        setWorkbenchFailureState("progressRefreshFailed");
+        message.warning("进展树刷新失败，已保留当前题目、回答和反馈。");
+      } else {
+        message.success("进展树已刷新。");
+      }
     } catch (error) {
+      setWorkbenchFailureState("progressRefreshFailed");
       message.error(error instanceof Error ? error.message : "刷新进展树失败，请稍后重试。");
     } finally {
       setRefreshingProgressTree(false);
@@ -1762,6 +1903,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       }
       return nextKeys;
     });
+  };
+
+  const handleNextRecommendedAction = (action: PolishRecommendedAction, progressNodeRef?: string | null) => {
+    if (action === "generate_next_question") {
+      void createQuestion(progressNodeRef ?? resolveSessionCurrentProgressNodeRef(session!));
+      return;
+    }
+    if (action === "answer_again" || action === "continue_same_question" || action === "provide_more_answer_detail") {
+      setSelectedProgressNodeRef(progressNodeRef ?? selectedProgressNodeDetailRef);
+      setAnswerError(null);
+      message.info("可以在下方输入区继续补充本题回答。");
+      return;
+    }
+    message.info(`${toNextRecommendedActionLabel(action)}已在反馈区呈现，可结合本轮内容继续打磨。`);
   };
 
   const renderProgressTreeContextBanner = () => {
@@ -1871,7 +2026,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
     const questionTargetRef = getWorkbenchProgressNodeQuestionTargetRef(node);
     const canCreateQuestionFromNode =
-      questionTargetRef !== null && !hasQuestion && isProgressTreeReady && !creatingQuestion;
+      questionTargetRef !== null && isProgressTreeReady && !creatingQuestion && !submittingAnswer && !feedbackGenerating;
     const canSelectNode = node.kind === "node";
     const isActive = canSelectNode && node.key === selectedProgressNodeDetailRef;
     const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
@@ -2090,9 +2245,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
             <main className={styles.conversationPanel} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.conversationPanel}>
               <div className={styles.conversationHeader}>
-                <Typography.Title level={4} className={styles.panelTitle}>
-                  对话与反馈
-                </Typography.Title>
+                <div className={styles.conversationHeaderTitle}>
+                  <Typography.Title level={4} className={styles.panelTitle}>
+                    对话与反馈
+                  </Typography.Title>
+                  <Tag color={workbenchMachineCopy.color} className={styles.workbenchStateTag}>
+                    {workbenchMachineCopy.label}
+                  </Tag>
+                </div>
                 {hasQuestion ? null : (
                   <Button
                     type="primary"
@@ -2140,24 +2300,47 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                         </section>
                       </div>
                     ) : (
-                      turn.answers.map((answer) => (
-                        <section key={answer.answer_id} style={{ display: "grid", gap: 10 }}>
-                          <div className={styles.answerBubble}>
-                            <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
-                          </div>
-                          <section className={styles.feedbackAccordion} aria-label="反馈区域">
-                            <div className={styles.feedbackItem}>
-                              <Typography.Text>{answer.feedback_text || FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                      turn.answers.map((answer) => {
+                        const nextActions = getAnswerNextRecommendedActions(answer);
+                        return (
+                          <section key={answer.answer_id} style={{ display: "grid", gap: 10 }}>
+                            <div className={styles.answerBubble}>
+                              <Typography.Text strong>{`第 ${answer.answer_round} 轮回答`}</Typography.Text>
+                              <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
                             </div>
+                            <section className={styles.feedbackAccordion} aria-label="反馈区域">
+                              <div className={styles.feedbackItem}>
+                                <div className={styles.feedbackTextBlock}>
+                                  <Typography.Text strong>{`第 ${answer.answer_round} 轮反馈`}</Typography.Text>
+                                  <Typography.Text>{answer.feedback_text || FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                                </div>
+                              </div>
+                              {nextActions.length > 0 ? (
+                                <div className={styles.nextActionBar} aria-label="下一步建议">
+                                  {nextActions.map((action) => (
+                                    <Button
+                                      key={`${answer.answer_id}:${action}`}
+                                      size="small"
+                                      disabled={creatingQuestion || submittingAnswer || feedbackGenerating}
+                                      loading={action === "generate_next_question" && creatingQuestion}
+                                      onClick={() => handleNextRecommendedAction(action, turn.progress_node_ref)}
+                                    >
+                                      {toNextRecommendedActionLabel(action)}
+                                    </Button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </section>
                           </section>
-                        </section>
-                      ))
+                        );
+                      })
                     )}
                   </section>
                 ))}
               </div>
 
               <div className={styles.composer} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.composer}>
+                <Alert type={workbenchMachineState === "feedbackReady" ? "success" : "info"} showIcon message={workbenchMachineCopy.label} description={workbenchMachineCopy.description} />
                 {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
                 {!hasQuestion && (
                   <Alert
@@ -2186,14 +2369,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   }}
                   placeholder="请输入你的回答"
                   maxLength={2000}
-                  disabled={submittingAnswer || creatingQuestion || !hasQuestion}
+                  disabled={submittingAnswer || feedbackGenerating || creatingQuestion || !hasQuestion}
                 />
                 <div className={styles.composerActions}>
                   <Button
                     type="primary"
                     icon={<SendOutlined />}
-                    loading={submittingAnswer}
-                    disabled={submittingAnswer || creatingQuestion || !hasQuestion}
+                    loading={submittingAnswer || feedbackGenerating}
+                    disabled={submittingAnswer || feedbackGenerating || creatingQuestion || !hasQuestion}
                     onClick={() => {
                       sendAnswer();
                     }}

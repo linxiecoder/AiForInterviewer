@@ -14,3 +14,5 @@ class Question(OwnedRecordMixin, Base):
     ai_task_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     question_sources_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    progress_node_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    context_digest: Mapped[str | None] = mapped_column(String(120), nullable=True)

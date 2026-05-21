@@ -22,6 +22,51 @@ export interface PolishSessionSummary {
   updated_at: string;
 }
 
+export type PolishRecommendedAction =
+  | "answer_again"
+  | "continue_same_question"
+  | "generate_reference_answer"
+  | "explain_knowledge_point"
+  | "expand_technical_principle"
+  | "generate_next_round_suggestion"
+  | "generate_next_question"
+  | "provide_more_answer_detail"
+  | string;
+
+export interface PolishResourceRef {
+  resource_type: string;
+  resource_id: string;
+}
+
+export interface PolishLowConfidenceFlag {
+  flag_id?: string;
+  reason?: string;
+  impact_scope?: string;
+  recommended_action?: PolishRecommendedAction;
+}
+
+export interface PolishFeedbackPayload {
+  contract_id?: string;
+  contract_ids?: string[];
+  status: "pending" | "generated" | string;
+  feedback_id?: string | null;
+  feedback_text: string;
+  feedback_summary?: string | null;
+  score_result?: {
+    score_result_id?: string;
+    score_type?: "polish_answer" | string;
+    score_value?: number;
+    confidence_level?: "low" | "medium" | "high" | string;
+  } | null;
+  loss_points?: Array<Record<string, unknown>>;
+  reference_answer?: Record<string, unknown> | null;
+  knowledge_points?: Array<Record<string, unknown>>;
+  technical_principles?: Array<Record<string, unknown>>;
+  next_recommended_actions: PolishRecommendedAction[];
+  trace_refs?: Array<Record<string, unknown>>;
+  low_confidence_flags?: PolishLowConfidenceFlag[];
+}
+
 export interface PolishSessionAnswer {
   answer_id: string;
   answer_round: number;
@@ -31,6 +76,10 @@ export interface PolishSessionAnswer {
   feedback_id: string | null;
   score_result_id: string | null;
   feedback_created_at: string | null;
+  feedback_payload?: PolishFeedbackPayload;
+  next_recommended_actions?: PolishRecommendedAction[];
+  low_confidence_flags?: PolishLowConfidenceFlag[];
+  trace_refs?: Array<Record<string, unknown>>;
 }
 
 export type PolishQuestionSourceType =
@@ -56,6 +105,9 @@ export interface PolishSessionTurn {
   question_text: string;
   question_sources: PolishQuestionSource[];
   question_created_at: string;
+  progress_node_ref?: string | null;
+  evidence_refs?: string[];
+  context_digest?: string | null;
   answers: PolishSessionAnswer[];
 }
 
@@ -158,6 +210,15 @@ export interface PolishSessionDetail {
   resume_title: string;
   binding_label: string;
   turns: PolishSessionTurn[];
+  current_question_ref?: PolishResourceRef | null;
+  active_question_ref?: PolishResourceRef | null;
+  progress_position_ref?: PolishResourceRef | null;
+  current_node_ref?: PolishResourceRef | null;
+  current_node_progress_node_ref?: string | null;
+  active_question_refs?: PolishResourceRef[];
+  active_question_progress_node_ref?: string | null;
+  active_question_evidence_refs?: Array<PolishResourceRef | string>;
+  active_question_context_digest?: string | null;
   progress_tree_status: "ready" | "insufficient_context" | string;
   progress_percent: number;
   progress_tree_plan: PolishProgressTreePlan;
@@ -193,6 +254,18 @@ export interface PolishTaskStatus {
   score_type?: "polish_answer" | string | null;
   candidate_refs: Array<{ resource_type: string; resource_id: string }>;
   suggestion_refs: Array<{ resource_type: string; resource_id: string }>;
+  contract_shaped_fake?: Record<string, unknown> | PolishFeedbackPayload | null;
+  feedback_id?: string | null;
+  feedback_status?: string;
+  session_id?: string;
+  question_id?: string;
+  answer_id?: string;
+  answer_round?: number;
+  feedback_text?: string;
+  feedback_created_at?: string | null;
+  score_result_id?: string | null;
+  feedback_payload?: PolishFeedbackPayload;
+  next_recommended_actions?: PolishRecommendedAction[];
 }
 
 export interface PolishAnswer {
@@ -201,6 +274,11 @@ export interface PolishAnswer {
   question_id: string;
   answer_round: number;
   answer_text: string;
+  status?: string;
   created_at: string;
   updated_at: string;
+  feedback_payload?: PolishFeedbackPayload;
+  next_recommended_actions?: PolishRecommendedAction[];
+  feedback_text?: string;
+  feedback_id?: string | null;
 }

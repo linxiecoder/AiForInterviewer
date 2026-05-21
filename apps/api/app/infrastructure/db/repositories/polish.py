@@ -278,13 +278,15 @@ def _question_to_model(question: PolishQuestion) -> QuestionModel:
         record_version=1,
         status=question.status,
         trace_ref_ids=None,
-        evidence_ref_ids=None,
+        evidence_ref_ids=list(question.evidence_refs) or None,
         created_at=question.created_at,
         updated_at=question.updated_at,
         session_id=question.session_id,
         ai_task_id=question.ai_task_id,
         question_text=question.question_text,
         question_sources_json=_question_sources_to_json(question.question_sources),
+        progress_node_ref=question.progress_node_ref,
+        context_digest=question.context_digest,
     )
 
 
@@ -297,10 +299,19 @@ def _question_to_entity(model: QuestionModel) -> PolishQuestion:
         ai_task_id=model.ai_task_id or "",
         question_text=model.question_text or "",
         question_sources=_question_sources_to_entities(model.question_sources_json),
+        progress_node_ref=model.progress_node_ref,
+        evidence_refs=_question_evidence_refs_to_entities(model.evidence_ref_ids),
+        context_digest=model.context_digest,
         status=model.status,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+
+
+def _question_evidence_refs_to_entities(raw_refs: object) -> tuple[str, ...]:
+    if not isinstance(raw_refs, list):
+        return ()
+    return tuple(str(ref) for ref in raw_refs if str(ref))
 
 
 def _question_sources_to_json(sources: tuple[PolishQuestionSource, ...]) -> list[dict]:

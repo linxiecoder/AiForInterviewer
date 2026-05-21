@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import threading
 from dataclasses import replace
+from typing import Any
 
 from app.application.common.result import ApplicationResult
 from app.application.job_match.entities import JobMatchAnalysis
@@ -49,7 +52,7 @@ from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.domain.shared.errors import DomainError
 from app.domain.shared.ids import ResourceIdPrefix, generate_resource_id
-from app.domain.shared.refs import TraceRef
+from app.domain.shared.refs import ResourceRef, TraceRef
 
 
 SESSION_STATUS_RUNNING = "running"
@@ -64,12 +67,28 @@ FEEDBACK_CONTRACT_IDS = (
     "P-POLISH-005",
     "P-POLISH-009",
 )
+FEEDBACK_NEXT_RECOMMENDED_ACTIONS = (
+    "answer_again",
+    "continue_same_question",
+    "generate_reference_answer",
+    "explain_knowledge_point",
+    "expand_technical_principle",
+    "generate_next_round_suggestion",
+    "generate_next_question",
+)
+ANSWER_TEXT_MIN_LENGTH = 2
+ANSWER_TEXT_MAX_LENGTH = 8000
+ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 UNNAMED_JOB_TITLE = "未命名岗位"
 UNNAMED_RESUME_TITLE = "未命名简历"
 UNNAMED_COMPANY_TITLE = "未命名公司"
 UNNAMED_QUESTION_TEXT = "题干缺失"
 UNNAMED_ANSWER_TEXT = "暂无回答"
 UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
+_ANSWER_SUBMISSION_LOCKS_GUARD = threading.Lock()
+_ANSWER_SUBMISSION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
+_ANSWER_IDEMPOTENCY_CACHE_GUARD = threading.Lock()
+_ANSWER_IDEMPOTENCY_CACHE: dict[tuple[str, str, str, str], tuple[str, str]] = {}
 
 POLISH_TOPICS: tuple[PolishTopic, ...] = (
     PolishTopic(
@@ -273,6 +292,9 @@ class PolishUseCases:
             ai_task_id=task_id,
             question_text=question_draft.question_text,
             question_sources=question_draft.question_sources,
+            progress_node_ref=question_draft.progress_node_ref,
+            evidence_refs=question_draft.evidence_refs,
+            context_digest=question_draft.context_digest,
             status=QUESTION_STATUS_GENERATED,
             created_at=now,
             updated_at=now,
@@ -285,6 +307,14 @@ class PolishUseCases:
             retryable=False,
             result_ref=TraceRef(trace_ref_id=question_id, trace_type="question", created_at=now),
             user_visible_status="题目已生成",
+            candidate_refs=(
+                (ResourceRef(resource_type="question", resource_id=question_id),)
+                + ((ResourceRef(resource_type="progress_node", resource_id=question_draft.progress_node_ref),) if question_draft.progress_node_ref is not None else ())
+                + tuple(
+                    ResourceRef(resource_type="evidence", resource_id=evidence_ref)
+                    for evidence_ref in question_draft.evidence_refs
+                )
+            ),
         )
         self._polish_repository.add_question(question)
         self._polish_repository.add_task(
@@ -307,33 +337,76 @@ class PolishUseCases:
                 error=DomainError(code="not_found_or_inaccessible", message="Question not found")
             )
         answer_text = command.answer_text.strip()
-        if not answer_text:
-            return ApplicationResult(
-                error=DomainError(
-                    code="validation_failed",
-                    message="Answer text cannot be empty",
-                    details={"field": "answer_text"},
-                )
-            )
+        text_error = _validate_answer_text(answer_text)
+        if text_error is not None:
+            return ApplicationResult(error=text_error)
+        raw_idempotency_key = getattr(command, "idempotency_key", None)
+        idempotency_key_error = _validate_answer_idempotency_key(raw_idempotency_key)
+        if idempotency_key_error is not None:
+            return ApplicationResult(error=idempotency_key_error)
+        idempotency_key = _normalize_answer_idempotency_key(raw_idempotency_key)
 
-        answer_round = self._polish_repository.count_answers_for_question(
-            command.owner_id,
-            command.question_id,
-        ) + 1
-        now = utc_now()
-        answer = PolishAnswer(
-            answer_id=generate_resource_id(ResourceIdPrefix.ANSWER),
+        answer_lock = _answer_submission_lock(
             owner_id=command.owner_id,
-            actor_id=command.actor_id,
             session_id=command.session_id,
             question_id=command.question_id,
-            answer_round=answer_round,
-            answer_text=answer_text,
-            status=ANSWER_STATUS_SAVED,
-            created_at=now,
-            updated_at=now,
         )
-        self._polish_repository.add_answer(answer)
+        with answer_lock:
+            if idempotency_key is not None:
+                cached = _cached_answer_idempotency_record(
+                    owner_id=command.owner_id,
+                    session_id=command.session_id,
+                    question_id=command.question_id,
+                    idempotency_key=idempotency_key,
+                )
+                if cached is not None:
+                    cached_answer_id, cached_answer_text = cached
+                    if cached_answer_text != answer_text:
+                        return ApplicationResult(
+                            error=DomainError(
+                                code="validation_failed",
+                                message="Idempotency key conflicts with a different answer payload",
+                                details={
+                                    "field": "idempotency_key",
+                                    "reason": "idempotency_conflict",
+                                },
+                            )
+                        )
+                    existing_answer = self._polish_repository.get_answer(command.owner_id, cached_answer_id)
+                    if (
+                        existing_answer is not None
+                        and existing_answer.session_id == command.session_id
+                        and existing_answer.question_id == command.question_id
+                    ):
+                        return ApplicationResult(value=existing_answer)
+
+            answer_round = self._polish_repository.count_answers_for_question(
+                command.owner_id,
+                command.question_id,
+            ) + 1
+            now = utc_now()
+            answer = PolishAnswer(
+                answer_id=generate_resource_id(ResourceIdPrefix.ANSWER),
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                session_id=command.session_id,
+                question_id=command.question_id,
+                answer_round=answer_round,
+                answer_text=answer_text,
+                status=ANSWER_STATUS_SAVED,
+                created_at=now,
+                updated_at=now,
+            )
+            self._polish_repository.add_answer(answer)
+            if idempotency_key is not None:
+                _remember_answer_idempotency_record(
+                    owner_id=command.owner_id,
+                    session_id=command.session_id,
+                    question_id=command.question_id,
+                    idempotency_key=idempotency_key,
+                    answer_id=answer.answer_id,
+                    answer_text=answer_text,
+                )
         return ApplicationResult(value=answer)
 
     def create_feedback_task(self, command: CreatePolishFeedbackTaskCommand) -> ApplicationResult[PolishTaskStatus]:
@@ -351,6 +424,18 @@ class PolishUseCases:
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
+        score_result_id = generate_resource_id(ResourceIdPrefix.SCORE)
+        feedback_payload = _build_contract_shaped_feedback_payload(
+            session=session,
+            answer=answer,
+            feedback_id=feedback_id,
+            ai_task_id=task_id,
+            score_result_id=score_result_id,
+            created_at=now,
+        )
+        payload_error = _validate_contract_shaped_feedback_payload(feedback_payload)
+        if payload_error is not None:
+            return ApplicationResult(error=payload_error)
         feedback = PolishFeedback(
             feedback_id=feedback_id,
             owner_id=command.owner_id,
@@ -358,8 +443,8 @@ class PolishUseCases:
             session_id=command.session_id,
             answer_id=command.answer_id,
             ai_task_id=task_id,
-            score_result_id=None,
-            feedback_summary="测试可复现反馈：已保存回答，并生成 polish_answer 评分边界。",
+            score_result_id=score_result_id,
+            feedback_summary=_serialize_feedback_payload(feedback_payload),
             status=FEEDBACK_STATUS_GENERATED,
             created_at=now,
             updated_at=now,
@@ -487,6 +572,9 @@ class PolishUseCases:
                 question_text=_or_fallback_text(question.question_text, UNNAMED_QUESTION_TEXT),
                 question_created_at=question.created_at,
                 question_sources=question.question_sources,
+                progress_node_ref=question.progress_node_ref,
+                evidence_refs=question.evidence_refs,
+                context_digest=question.context_digest,
                 answers=tuple(answers_by_question.get(question.question_id, ())),
             )
             for question in questions
@@ -595,6 +683,290 @@ def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> 
     return None
 
 
+def _validate_answer_text(answer_text: str) -> DomainError | None:
+    if not answer_text:
+        return DomainError(
+            code="validation_failed",
+            message="Answer text cannot be empty",
+            details={
+                "field": "answer_text",
+                "min_length": ANSWER_TEXT_MIN_LENGTH,
+                "max_length": ANSWER_TEXT_MAX_LENGTH,
+            },
+        )
+    if len(answer_text) < ANSWER_TEXT_MIN_LENGTH:
+        return DomainError(
+            code="validation_failed",
+            message="Answer text is too short",
+            details={
+                "field": "answer_text",
+                "min_length": ANSWER_TEXT_MIN_LENGTH,
+                "actual_length": len(answer_text),
+            },
+        )
+    if len(answer_text) > ANSWER_TEXT_MAX_LENGTH:
+        return DomainError(
+            code="validation_failed",
+            message="Answer text is too long",
+            details={
+                "field": "answer_text",
+                "max_length": ANSWER_TEXT_MAX_LENGTH,
+                "actual_length": len(answer_text),
+            },
+        )
+    return None
+
+
+def _validate_answer_idempotency_key(raw_key: object) -> DomainError | None:
+    key = _normalize_answer_idempotency_key(raw_key)
+    if key is None:
+        return None
+    if len(key) > ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH:
+        return DomainError(
+            code="validation_failed",
+            message="Idempotency key is too long",
+            details={
+                "field": "idempotency_key",
+                "max_length": ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH,
+                "actual_length": len(key),
+            },
+        )
+    return None
+
+
+def _normalize_answer_idempotency_key(raw_key: object) -> str | None:
+    if raw_key is None:
+        return None
+    key = str(raw_key).strip()
+    return key or None
+
+
+def _answer_submission_lock(*, owner_id: str, session_id: str, question_id: str) -> threading.Lock:
+    lock_key = (owner_id, session_id, question_id)
+    with _ANSWER_SUBMISSION_LOCKS_GUARD:
+        lock = _ANSWER_SUBMISSION_LOCKS.get(lock_key)
+        if lock is None:
+            lock = threading.Lock()
+            _ANSWER_SUBMISSION_LOCKS[lock_key] = lock
+        return lock
+
+
+def _cached_answer_idempotency_record(
+    *,
+    owner_id: str,
+    session_id: str,
+    question_id: str,
+    idempotency_key: str,
+) -> tuple[str, str] | None:
+    with _ANSWER_IDEMPOTENCY_CACHE_GUARD:
+        return _ANSWER_IDEMPOTENCY_CACHE.get((owner_id, session_id, question_id, idempotency_key))
+
+
+def _remember_answer_idempotency_record(
+    *,
+    owner_id: str,
+    session_id: str,
+    question_id: str,
+    idempotency_key: str,
+    answer_id: str,
+    answer_text: str,
+) -> None:
+    with _ANSWER_IDEMPOTENCY_CACHE_GUARD:
+        _ANSWER_IDEMPOTENCY_CACHE[(owner_id, session_id, question_id, idempotency_key)] = (
+            answer_id,
+            answer_text,
+        )
+
+
+def _build_contract_shaped_feedback_payload(
+    *,
+    session: PolishSession,
+    answer: PolishAnswer,
+    feedback_id: str,
+    ai_task_id: str,
+    score_result_id: str,
+    created_at,
+) -> dict[str, Any]:
+    answer_text = _or_fallback_text(answer.answer_text, UNNAMED_ANSWER_TEXT)
+    low_confidence_flags = _feedback_low_confidence_flags(answer_text)
+    score_value = 58 if low_confidence_flags else 72
+    deducted_points = 100 - score_value
+    primary_action = "provide_more_answer_detail" if low_confidence_flags else "continue_same_question"
+    feedback_text = (
+        f"polish_answer 评分 {score_value}/100：回答已保存，主要失分在结构化举证、"
+        "技术取舍说明和结果量化。"
+    )
+    loss_points = [
+        {
+            "loss_point_id": f"{feedback_id}_loss_001",
+            "title": "结构化举证不足",
+            "deducted_points": min(16, deducted_points),
+            "reason": "回答需要补充场景、个人职责、关键约束和可验证结果之间的因果链路。",
+            "answer_excerpt": answer_text[:160],
+            "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+        },
+        {
+            "loss_point_id": f"{feedback_id}_loss_002",
+            "title": "技术取舍与边界说明不足",
+            "deducted_points": max(deducted_points - 16, 0),
+            "reason": "建议说明替代方案、失败路径、指标或风险处理，而不是只陈述做了什么。",
+            "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+        },
+    ]
+    return {
+        "schema_id": "polish_feedback_payload_v1",
+        "schema_version": "1.0",
+        "contract_id": "P-POLISH-005",
+        "contract_ids": list(FEEDBACK_CONTRACT_IDS),
+        "status": FEEDBACK_STATUS_GENERATED,
+        "feedback_id": feedback_id,
+        "ai_task_id": ai_task_id,
+        "polish_session_ref": {"resource_type": "polish_session", "resource_id": session.session_id},
+        "question_ref": {"resource_type": "question", "resource_id": answer.question_id},
+        "answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+        "feedback_text": feedback_text,
+        "feedback_summary": feedback_text,
+        "score_result": {
+            "score_result_id": score_result_id,
+            "score_type": str(ScoreType.POLISH_ANSWER),
+            "score_value": score_value,
+            "score_version": "polish_answer.runtime_fake.v1",
+            "rubric_version": "polish_round_score.v1",
+            "contract_id": "P-POLISH-004",
+            "confidence_level": "low" if low_confidence_flags else "medium",
+        },
+        "score_result_ref": {"resource_type": "score_result", "resource_id": score_result_id},
+        "loss_points": loss_points,
+        "reference_answer": {
+            "contract_id": "P-POLISH-006",
+            "summary": "先交代业务背景和目标，再说明本人负责的关键模块、技术取舍、异常处理和最终指标。",
+            "outline": ["背景与约束", "本人负责范围", "关键技术方案与取舍", "验证结果与复盘"],
+        },
+        "knowledge_points": [
+            {
+                "title": "STAR + 技术决策链路",
+                "explanation": "回答项目经历时需要同时覆盖场景、任务、行动、结果和技术取舍。",
+            }
+        ],
+        "technical_principles": [
+            {
+                "title": "可观测结果优先",
+                "explanation": "技术方案表达应绑定指标、日志、告警、压测或线上结果，避免停留在名词罗列。",
+            }
+        ],
+        "next_recommended_actions": _feedback_next_actions(primary_action),
+        "candidate_refs": [
+            {"resource_type": "weakness_candidate", "resource_id": f"{feedback_id}_weakness_001"},
+            {"resource_type": "asset_candidate", "resource_id": f"{feedback_id}_asset_001"},
+        ],
+        "validation_result_ref": {"resource_type": "validation_result", "resource_id": f"{feedback_id}_validation"},
+        "trace_refs": [
+            {
+                "trace_ref_id": answer.answer_id,
+                "trace_type": "answer",
+                "created_at": answer.created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+            {
+                "trace_ref_id": feedback_id,
+                "trace_type": "feedback",
+                "created_at": created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+            {
+                "trace_ref_id": score_result_id,
+                "trace_type": "score_result",
+                "created_at": created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+        ],
+        "low_confidence_flags": low_confidence_flags,
+        "user_confirmation_required": False,
+        "legacy_compatibility": {"feedback_text": feedback_text},
+    }
+
+
+def _feedback_next_actions(primary_action: str) -> list[str]:
+    actions: list[str] = []
+    for action in (primary_action, *FEEDBACK_NEXT_RECOMMENDED_ACTIONS):
+        if action not in actions:
+            actions.append(action)
+    return actions
+
+
+def _feedback_low_confidence_flags(answer_text: str) -> list[dict[str, str]]:
+    if len(answer_text.strip()) >= 18:
+        return []
+    return [
+        {
+            "flag_id": "answer_detail_insufficient",
+            "reason": "answer_too_short_for_full_scoring",
+            "impact_scope": "score_result, loss_points, reference_answer",
+            "recommended_action": "provide_more_answer_detail",
+        }
+    ]
+
+
+def _validate_contract_shaped_feedback_payload(payload: dict[str, Any]) -> DomainError | None:
+    required_keys = {
+        "contract_id",
+        "status",
+        "loss_points",
+        "reference_answer",
+        "knowledge_points",
+        "technical_principles",
+        "next_recommended_actions",
+        "candidate_refs",
+        "validation_result_ref",
+        "trace_refs",
+        "low_confidence_flags",
+    }
+    missing = sorted(key for key in required_keys if key not in payload)
+    if missing:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback payload is missing required contract fields",
+            details={"fields": missing},
+        )
+    if not isinstance(payload.get("loss_points"), list):
+        return DomainError(
+            code="validation_failed",
+            message="Feedback payload loss_points must be a list",
+            details={"field": "loss_points"},
+        )
+    actions = payload.get("next_recommended_actions")
+    if not isinstance(actions, list) or not all(isinstance(action, str) for action in actions):
+        return DomainError(
+            code="validation_failed",
+            message="Feedback payload next_recommended_actions must be contract enum strings",
+            details={"field": "next_recommended_actions"},
+        )
+    return None
+
+
+def _serialize_feedback_payload(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _feedback_text_from_summary(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return value
+    if not isinstance(payload, dict):
+        return value
+    legacy = payload.get("legacy_compatibility")
+    if isinstance(legacy, dict) and legacy.get("feedback_text"):
+        return str(legacy["feedback_text"])
+    for key in ("feedback_text", "feedback_summary"):
+        text = payload.get(key)
+        if isinstance(text, str) and text.strip():
+            return text
+    return value
+
+
 def _should_regenerate_progress_tree(detail: PolishSessionDetail) -> bool:
     if not _has_valid_progress_tree_plan(detail.progress_tree_plan):
         return True
@@ -620,7 +992,7 @@ def _to_session_answer_detail(
     answer: PolishAnswer,
     feedback: PolishFeedback | None,
 ) -> PolishSessionAnswerDetail:
-    feedback_text = feedback.feedback_summary if feedback is not None else None
+    feedback_text = _feedback_text_from_summary(feedback.feedback_summary) if feedback is not None else None
     return PolishSessionAnswerDetail(
         answer_id=answer.answer_id,
         answer_round=answer.answer_round,

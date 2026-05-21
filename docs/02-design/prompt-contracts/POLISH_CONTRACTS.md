@@ -85,6 +85,127 @@ Polish 001-004、005-008、009-011 分别处于不同生命周期阶段，公共
 | `provide_more_answer_detail` | 001-008 | 请求用户补充当前回答细节。 | 否 | 是 |
 | `provide_more_resume_evidence` | 001-011 | 请求用户补充简历或经历证据。 | 否 | 是 |
 | `skip_current_question` | 001-011 | 用户跳过当前题。 | 否 | 是 |
+#### Step 1C Answer 闭环运行时契约
+
+Step 1C 在不新增 contract ID、不改变 `P-POLISH-003` 至 `P-POLISH-005` 语义的前提下，补齐 answer 提交闭环的运行时 API 形状。目标是让 `POST /polish-sessions/{session_id}/answers` 和 session detail 都能被前端按 `question -> answers[]` 多轮消费，同时保留旧版 `feedback_text` 字段。
+
+Answer 提交规则：
+
+- `answer_text` 服务端裁剪首尾空白后校验，MVP 运行时限制为 `2` 至 `8000` 个字符；空串、过短或过长均返回 `validation_failed`。
+- 同一个 `owner_id + session_id + question_id` 下，服务端按提交锁串行计算 `answer_round`，从已有回答数递增，避免并发下两个请求拿到同一轮次。
+- `Idempotency-Key` 通过 HTTP header 传入，运行时限制为不超过 `128` 个字符；同一 `owner_id + session_id + question_id + Idempotency-Key` 且相同 `answer_text` 的重复提交返回同一个 answer DTO。
+- 同一 `Idempotency-Key` 携带不同 `answer_text` 时返回 `validation_failed`，`details.reason = idempotency_conflict`。
+- 当前 Step 1C 不引入数据库迁移或新物理字段；幂等记录和提交锁为应用进程内保护。F7 / 发布前若需要多 worker 强一致，应升级为持久化 idempotency record 与数据库唯一约束。
+
+`POST /polish-sessions/{session_id}/answers` 返回 answer DTO 必须包含 `answer_id`、`session_id`、`question_id`、`answer_round`、`answer_text`、`status`、`created_at`、`updated_at`、`feedback_text`、`feedback_payload`、`next_recommended_actions`、`low_confidence_flags`、`trace_refs`；请求提供幂等键时回显 `idempotency_key`。
+
+Session detail 中 `turns[*].answers[*]` 必须按同一题多轮返回，并保留旧版字段 `feedback_text`、`feedback_id`、`score_result_id`、`feedback_created_at`；新增字段与 `POST /answers` 保持同形：`feedback_payload`、`next_recommended_actions`、`low_confidence_flags`、`trace_refs`。
+
+Contract-shaped fake JSON 示例：
+
+```json
+{
+  "contract_id": "P-POLISH-003",
+  "status": "pending",
+  "answer_ref": {"resource_type": "answer", "resource_id": "answer_001"},
+  "feedback_text": "本轮反馈尚未生成",
+  "next_recommended_actions": ["answer_again", "continue_same_question", "generate_reference_answer", "generate_next_question"],
+  "low_confidence_flags": [],
+  "trace_refs": [{"trace_ref_id": "answer_001", "trace_type": "answer", "redaction_boundary": "none"}],
+  "user_confirmation_required": false,
+  "legacy_compatibility": {"feedback_text": "本轮反馈尚未生成"}
+}
+```
+
+
+#### Step 1D Feedback 闭环运行时契约
+
+Step 1D 在不新增 contract ID、不改变 `P-POLISH-003`、`P-POLISH-004`、`P-POLISH-005` 和 `P-POLISH-009` 语义的前提下，补齐 answer 后的 feedback 闭环。运行时目标是让 `POST /polish-sessions/{session_id}/feedback` 直接返回可消费的完整 feedback DTO，同时让 session detail 中 `turns[*].answers[*].feedback_payload` 与对应 answer 多轮对齐。
+
+Feedback 生成规则：
+
+- `POST /polish-sessions/{session_id}/feedback` 以 `answer_id` 为输入，只给该 answer 生成一条新 feedback；同一 answer 多次生成时，session detail 使用最新 feedback，历史 feedback 保留为记录。
+- `feedback_payload` 必须是 contract-shaped JSON，至少包含 `contract_id`、`status`、`loss_points`、`reference_answer`、`knowledge_points`、`technical_principles`、`next_recommended_actions`、`candidate_refs`、`validation_result_ref`、`trace_refs` 和 `low_confidence_flags`。
+- `score_result` 使用 `P-POLISH-004` 的 `polish_answer` 0-100 产品刻度，当前 Step 1D fake 输出只提供 deterministic runtime score，不引入长期评分算法或真实校准。
+- `next_recommended_actions` 必须来自本节统一枚举；当前 feedback fake 使用 `answer_again`、`continue_same_question`、`generate_reference_answer`、`explain_knowledge_point`、`expand_technical_principle`、`generate_next_round_suggestion`、`generate_next_question`，证据不足时可把 `provide_more_answer_detail` 放在首位。
+- `low_confidence_flags` 必须是可展示、可追踪对象；当回答文本过短或证据不足时，至少返回 `flag_id`、`reason`、`impact_scope` 和 `recommended_action`。
+- 保留 legacy `feedback_text` 字段；旧消费方可以继续读取 `feedback_text`，新消费方读取 `feedback_payload`。
+- 当前 Step 1D 不扩大 DB / schema / repository 文件修改范围；运行时先生成并校验 JSON payload，再通过现有 feedback 持久化通道承载。后续若允许 schema 扩展，应把该 payload 迁入专用 `feedback_payload_json` 字段，并保持 `feedback_text` 兼容输出。
+
+`POST /polish-sessions/{session_id}/feedback` 返回 data 必须保留既有 ai_task 兼容字段，同时直接带完整 feedback DTO：
+
+```json
+{
+  "ai_task_id": "task_...",
+  "task_type": "polish_feedback_generation",
+  "status": "succeeded",
+  "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005", "P-POLISH-009"],
+  "result_ref": {"trace_ref_id": "trace_feedback_002", "trace_type": "feedback"},
+  "score_type": "polish_answer",
+  "feedback_id": "trace_feedback_002",
+  "feedback_status": "generated",
+  "session_id": "sess_001",
+  "question_id": "q_001",
+  "answer_id": "ans_002",
+  "answer_round": 2,
+  "feedback_text": "polish_answer 评分 72/100：回答已保存，主要失分在结构化举证、技术取舍说明和结果量化。",
+  "score_result_id": "score_002",
+  "next_recommended_actions": ["continue_same_question", "answer_again", "generate_reference_answer", "explain_knowledge_point", "expand_technical_principle", "generate_next_round_suggestion", "generate_next_question"],
+  "low_confidence_flags": [],
+  "trace_refs": [
+    {"trace_ref_id": "ans_002", "trace_type": "answer", "redaction_boundary": "none"},
+    {"trace_ref_id": "trace_feedback_002", "trace_type": "feedback", "redaction_boundary": "none"}
+  ],
+  "feedback_payload": {
+    "schema_id": "polish_feedback_payload_v1",
+    "schema_version": "1.0",
+    "contract_id": "P-POLISH-005",
+    "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005", "P-POLISH-009"],
+    "status": "generated",
+    "answer_ref": {"resource_type": "answer", "resource_id": "ans_002"},
+    "score_result": {"score_type": "polish_answer", "score_value": 72, "contract_id": "P-POLISH-004"},
+    "loss_points": [{"title": "结构化举证不足", "deducted_points": 16}],
+    "reference_answer": {"summary": "先交代业务背景和目标，再说明本人负责的关键模块、技术取舍、异常处理和最终指标。"},
+    "knowledge_points": [{"title": "STAR + 技术决策链路"}],
+    "technical_principles": [{"title": "可观测结果优先"}],
+    "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "trace_feedback_002_weakness_001"}],
+    "validation_result_ref": {"resource_type": "validation_result", "resource_id": "trace_feedback_002_validation"},
+    "trace_refs": [{"trace_ref_id": "trace_feedback_002", "trace_type": "feedback"}],
+    "low_confidence_flags": []
+  }
+}
+```
+
+Session detail 多轮示例：
+
+```json
+{
+  "turns": [
+    {
+      "question_id": "q_001",
+      "answers": [
+        {
+          "answer_id": "ans_001",
+          "answer_round": 1,
+          "feedback_id": "trace_feedback_001",
+          "feedback_text": "polish_answer 评分 58/100：回答已保存，主要失分在结构化举证、技术取舍说明和结果量化。",
+          "feedback_payload": {"contract_id": "P-POLISH-005", "status": "generated", "low_confidence_flags": [{"flag_id": "answer_detail_insufficient"}]},
+          "next_recommended_actions": ["provide_more_answer_detail", "answer_again", "continue_same_question"]
+        },
+        {
+          "answer_id": "ans_002",
+          "answer_round": 2,
+          "feedback_id": "trace_feedback_002",
+          "feedback_text": "polish_answer 评分 72/100：回答已保存，主要失分在结构化举证、技术取舍说明和结果量化。",
+          "feedback_payload": {"contract_id": "P-POLISH-005", "status": "generated", "score_result": {"score_value": 72}},
+          "next_recommended_actions": ["continue_same_question", "answer_again", "generate_reference_answer"]
+        }
+      ]
+    }
+  ]
+}
+```
+
 
 ### 12.1 Polish 第一组公共字段与边界
 
@@ -373,6 +494,93 @@ Polish 第一组不得直接写入正式 `Weakness`、正式 `Asset`、正式 `T
 - 安全说明（Security Notes）： 题目生成只使用当前 owner 的必要岗位、简历、topic、session summary 和已授权增强材料；日志不记录原始 Prompt、completion、provider payload 或隐私正文。
 - 测试策略（Test Strategy）： 使用 fixture 覆盖有 topic、无 topic、禁止重复列表缺失、重复题、无 RAG、技术题缺证据、过泛题、答题前提示可见性、违法 / 隐私题拒绝和题目不转正式弱项 / 资产 / 训练建议。
 - 开放问题（Open Questions）： 题目推荐算法、难度排序、题目数量控制、time box 默认值和后续题目 API 字段仍待后续 contract / API / UX 收敛，为 deferred_non_blocking。进展树 plan/state prompt contract 已登记，题目如何利用 `current_priority.progress_node_ref` 深挖仍按后续策略细化处理。
+
+### 12.3.1 Step 1B API 闭环字段补齐说明
+
+- 在本步中保持 `P-POLISH-002` 合同输出语义不变的前提下，补齐 session / question API 的可消费字段：
+  - `POST /polish-sessions/{session_id}/questions` 在 `ai_task` 响应中返回：
+    - `active_question_refs`
+    - `active_question_progress_node_ref`
+    - `active_question_evidence_refs`
+    - `active_question_context_digest`
+  - `GET /polish-sessions/{session_id}` 及 session detail 响应中的 `turns` 返回：
+    - `progress_node_ref`
+    - `evidence_refs`
+    - `context_digest`
+  - `feedback_text` 保持在 `turns[*].answers[*].feedback_text` 兼容旧版消费方。
+
+#### POST /polish-sessions/{session_id}/questions 返回示例
+
+```json
+{
+  "ai_task_id": "task_polish_...",
+  "task_type": "polish_question_generation",
+  "status": "succeeded",
+  "contract_ids": ["P-POLISH-002", "P-SHARED-001", "P-SHARED-003"],
+  "retryable": false,
+  "result_ref": {
+    "trace_ref_id": "trace_...",
+    "trace_type": "trace",
+    "created_at": "2026-05-21T00:00:00+08:00",
+    "redaction_boundary": "none"
+  },
+  "user_visible_status": "题目已生成",
+  "score_type": null,
+  "active_question_refs": [{"resource_type": "question", "resource_id": "q_..."}],
+  "active_question_progress_node_ref": "pn_...",
+  "active_question_evidence_refs": [{"resource_type": "evidence", "resource_id": "ev_..."}],
+  "active_question_context_digest": null,
+  "candidate_refs": [
+    {"resource_type": "question", "resource_id": "q_..."},
+    {"resource_type": "progress_node", "resource_id": "pn_..."},
+    {"resource_type": "evidence", "resource_id": "ev_..."}
+  ],
+  "suggestion_refs": [],
+  "contract_shaped_fake": {
+    "contract_id": "P-POLISH-002",
+    "status": "succeeded",
+    "source_refs": [
+      {"resource_type": "question", "resource_id": "q_..."},
+      {"resource_type": "progress_node", "resource_id": "pn_..."},
+      {"resource_type": "evidence", "resource_id": "ev_..."}
+    ],
+    "source_availability": "available",
+    "question_ref": {"resource_type": "question", "resource_id": "q_..."},
+    "progress_node_ref": "pn_...",
+    "evidence_refs": [{"resource_type": "evidence", "resource_id": "ev_..."}],
+    "context_digest": null,
+    "low_confidence_flags": [],
+    "validation_result_ref": null,
+    "trace_refs": [],
+    "session_summary_update_ref": null,
+    "next_recommended_actions": ["continue_same_question"],
+    "user_confirmation_required": false
+  }
+}
+```
+
+#### session detail 返回示例（包含新闭环字段）
+
+```json
+{
+  "turns": [
+    {
+      "question_id": "q_...",
+      "question_text": "...",
+      "question_created_at": "2026-05-21T00:00:00+08:00",
+      "progress_node_ref": "pn_...",
+      "evidence_refs": ["ev_..."],
+      "context_digest": "digest_...",
+      "answers": []
+    }
+  ],
+  "active_question_refs": [{"resource_type": "question", "resource_id": "q_..."}],
+  "active_question_progress_node_ref": "pn_...",
+  "active_question_evidence_refs": ["ev_..."],
+  "active_question_context_digest": "digest_..."
+}
+```
+
 
 ### 12.4 `P-POLISH-003` 回答诊断（Answer Diagnosis）
 

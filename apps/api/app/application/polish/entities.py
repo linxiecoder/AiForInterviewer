@@ -65,6 +65,9 @@ class PolishQuestionSource:
 class PolishQuestionDraft:
     question_text: str
     question_sources: tuple[PolishQuestionSource, ...] = ()
+    progress_node_ref: str | None = None
+    evidence_refs: tuple[str, ...] = ()
+    context_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,9 @@ class PolishQuestion:
     created_at: datetime
     updated_at: datetime
     question_sources: tuple[PolishQuestionSource, ...] = ()
+    progress_node_ref: str | None = None
+    evidence_refs: tuple[str, ...] = ()
+    context_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +134,9 @@ class PolishSessionTurn:
     question_text: str
     question_created_at: datetime
     question_sources: tuple[PolishQuestionSource, ...] = ()
+    progress_node_ref: str | None = None
+    evidence_refs: tuple[str, ...] = ()
+    context_digest: str | None = None
     answers: tuple[PolishSessionAnswerDetail, ...] = ()
 
 
