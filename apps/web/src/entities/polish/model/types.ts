@@ -155,6 +155,7 @@ export interface PolishSessionTurn {
   question_text: string;
   question_sources: PolishQuestionSource[];
   question_created_at: string;
+  question_metadata?: Record<string, unknown> | null;
   progress_node_ref?: string | null;
   evidence_refs?: string[];
   context_digest?: string | null;

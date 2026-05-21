@@ -42,6 +42,7 @@ import {
   INTERVIEW_WORKBENCH_STATE_MACHINE,
   buildPolishBindingOptions,
   buildPolishSessionPath,
+  buildPolishSessionClipboardMarkdown,
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
   buildFeedbackCardViewModel,
@@ -73,6 +74,7 @@ import {
   POLISH_API_PATHS,
   createPolishSession,
   fetchPolishSession,
+  fetchPolishSessions,
   fetchPolishTopics,
 } from "../../entities/polish/api/polishApi";
 import type { JobSummary } from "../../entities/job/model/types";
@@ -283,6 +285,9 @@ type CreateApiReturnsSessionDetail = Expect<
 >;
 type DetailApiReturnsSessionDetail = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishSession>>, PolishSessionDetail>
+>;
+type ListApiReturnsSessionSummaries = Expect<
+  Equal<Awaited<ReturnType<typeof fetchPolishSessions>>, PolishSessionSummary[]>
 >;
 type TopicApiReturnsControlledCatalog = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishTopics>>, PolishTopic[]>
@@ -883,6 +888,94 @@ function test_progress_tree_click_auto_generates_only_for_nodes_without_question
   assertContract(resolveCurrentQuestionId(sessionWithTurn, "node_with_question") === "q_existing", "当前题目应可按选中节点解析");
 }
 
+function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata(): void {
+  const smokeSessionSummary = buildTestSessionSummary({
+    id: "ses_auth_smoke",
+    session_id: "ses_auth_smoke",
+    title: "认证 smoke 模拟面试",
+    job_title: "后端工程师",
+    resume_title: "后端简历",
+    binding_label: "后端工程师 / 后端简历",
+    custom_topic_text_summary: "认证前端 smoke 主题",
+  });
+  const baseDetail = buildTestSession(
+    [
+      {
+        ...buildTestProgressNode("node_auth_smoke", "认证工作台 smoke 节点", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "验证登录后的题目与 metadata 详情不会让工作台白屏。",
+      },
+    ],
+    "node_auth_smoke",
+  );
+  const detailWithMetadata: PolishSessionDetail = {
+    ...baseDetail,
+    session_id: "ses_auth_smoke",
+    turns: [
+      {
+        question_id: "q_auth_smoke_metadata",
+        question_text: "请说明你如何验证登录后的前端工作台路径。",
+        question_sources: [
+          {
+            index: 1,
+            source_type: "progress_node",
+            title: "认证 smoke 节点",
+            excerpt: "覆盖认证后的列表、详情和题目 metadata。",
+            ref_id: "node_auth_smoke",
+            availability: "available",
+          },
+        ],
+        question_created_at: "2026-05-21T10:20:00Z",
+        progress_node_ref: "node_auth_smoke",
+        evidence_refs: ["node_auth_smoke"],
+        context_digest: "auth-smoke-digest",
+        question_metadata: {
+          question_pattern: "authenticated_frontend_smoke",
+          confidence_level: "medium",
+          low_confidence_flags: [],
+          expected_answer_dimensions: ["authenticated_list", "workbench_detail"],
+          quality_score: 88,
+          source_availability: "available",
+        },
+        answers: [],
+      },
+    ],
+  };
+  const detailWithoutMetadata: PolishSessionDetail = {
+    ...baseDetail,
+    session_id: "ses_auth_smoke_legacy",
+    turns: [
+      {
+        question_id: "q_auth_smoke_legacy",
+        question_text: "旧题目缺少 metadata 时也应稳定展示。",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:25:00Z",
+        progress_node_ref: "node_auth_smoke",
+        evidence_refs: [],
+        context_digest: null,
+        answers: [],
+      },
+    ],
+  };
+
+  const list = [smokeSessionSummary];
+  const groupedNodesWithMetadata = buildWorkbenchProgressNodes(detailWithMetadata);
+  const groupedNodesWithoutMetadata = buildWorkbenchProgressNodes(detailWithoutMetadata);
+  const clipboardWithMetadata = buildPolishSessionClipboardMarkdown(detailWithMetadata);
+  const clipboardWithoutMetadata = buildPolishSessionClipboardMarkdown(detailWithoutMetadata);
+  const metadata = detailWithMetadata.turns[0].question_metadata;
+
+  assertContract(POLISH_API_PATHS.sessions === "/polish-sessions", "列表 smoke 应命中 polish session list API");
+  assertContract(POLISH_API_PATHS.sessionDetail("ses_auth_smoke") === "/polish-sessions/ses_auth_smoke", "工作台 smoke 应命中 session detail API");
+  assertContract(filterPolishSessionsBySearch(list, "认证").length === 1, "认证后的列表响应应可被 /interview 列表消费");
+  assertContract(groupedNodesWithMetadata[0]?.children?.[0]?.children?.[0]?.key === "question:q_auth_smoke_metadata", "带 metadata 的题目应挂入工作台进展树");
+  assertContract(groupedNodesWithoutMetadata[0]?.children?.[0]?.children?.[0]?.key === "question:q_auth_smoke_legacy", "缺 metadata 的旧题目也应挂入工作台进展树");
+  assertContract(resolveCurrentQuestionId(detailWithMetadata, "node_auth_smoke") === "q_auth_smoke_metadata", "带 metadata 的工作台详情应可解析当前题目");
+  assertContract(resolveCurrentQuestionId(detailWithoutMetadata, "node_auth_smoke") === "q_auth_smoke_legacy", "缺 metadata 的工作台详情应可解析当前题目");
+  assertContract(metadata?.question_pattern === "authenticated_frontend_smoke", "前端类型应允许 session detail 携带 question_metadata");
+  assertContract(clipboardWithMetadata.includes("请说明你如何验证登录后的前端工作台路径。"), "带 metadata 的详情应可生成复制内容");
+  assertContract(clipboardWithoutMetadata.includes("旧题目缺少 metadata 时也应稳定展示。"), "缺 metadata 的详情应可生成复制内容");
+}
+
 function test_waiting_answer_bar_is_removed_from_workbench_contract(): void {
   const machineState = deriveWorkbenchMachineState({
     session: buildTestSession([buildTestProgressNode("node_current", "当前题目节点", "resume_deep_dive", "深度打磨类")], "node_current"),
@@ -1235,6 +1328,7 @@ test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
 test_workbench_ctrl_enter_submits_answer();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
+test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_progress_node_context_banner_ignores_group_header_click();

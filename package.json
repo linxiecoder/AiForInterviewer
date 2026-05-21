@@ -16,6 +16,7 @@
     "api:dev": "npm run dev:api",
     "web:dev": "npm run dev:web",
     "web:build": "npm --workspace apps/web run build",
-    "web:test": "npm --workspace apps/web run test"
+    "web:test": "npm --workspace apps/web run test",
+    "web:smoke:auth": "node scripts/qa/authenticated-frontend-smoke.mjs"
   }
 }
