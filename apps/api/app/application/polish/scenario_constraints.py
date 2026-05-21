@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.application.polish.evidence_signals import EvidenceSignalSet
+
 
 @dataclass(frozen=True)
 class ScenarioConstraint:
@@ -35,7 +37,11 @@ def build_scenario_constraints(
     history_feedback: list[str],
     custom_topic_text: str | None,
     polish_theme: str,
+    evidence_signals: EvidenceSignalSet | None = None,
 ) -> ScenarioConstraint:
+    if evidence_signals is not None:
+        return _constraints_from_signals(evidence_signals, polish_theme=polish_theme)
+
     evidence_refs = tuple(
         str(chunk.chunk_id)
         for chunk in selected_evidence_chunks
@@ -71,24 +77,108 @@ def build_scenario_constraints(
     return _abstract_constraints(entities, evidence_refs, has_evidence, polish_theme=polish_theme)
 
 
+def _constraints_from_signals(
+    evidence_signals: EvidenceSignalSet,
+    *,
+    polish_theme: str,
+) -> ScenarioConstraint:
+    entities = _signal_entities(evidence_signals)
+    evidence_refs = evidence_signals.evidence_refs
+    has_evidence = evidence_signals.source_availability == "available"
+    failures = set(evidence_signals.failure_signals)
+    technical = set(evidence_signals.technical_components)
+    external = set(evidence_signals.external_services)
+    queues = set(evidence_signals.message_queues)
+    data_stores = set(evidence_signals.data_stores)
+    consistency = set(evidence_signals.consistency_signals)
+    states = set(evidence_signals.state_machine_signals)
+    reconciliation = set(evidence_signals.reconciliation_signals)
+    domains = set(evidence_signals.business_domains)
+    scale = set(evidence_signals.scale_indicators)
+    performance = set(evidence_signals.performance_indicators)
+    cost = set(evidence_signals.cost_signals)
+
+    if (
+        {"Agent", "工具调用"}.issubset(technical)
+        and ({"RAG", "记忆"} & technical)
+        and ({"上下文污染", "工具调用失败"} & failures or {"回滚"} & reconciliation or cost)
+    ):
+        return _agent_constraints(entities, evidence_refs, has_evidence, signal_flags=evidence_signals.low_confidence_flags)
+    if ({"部分成功", "部分失败"} & failures) and {"MinIO"} & external and queues and "向量化" in technical and data_stores:
+        return _partial_success_constraints(entities, evidence_refs, has_evidence, signal_flags=evidence_signals.low_confidence_flags)
+    if _has_signal_metric(evidence_signals, "scale") and (
+        _has_signal_metric(evidence_signals, "latency_improvement") or "异步处理" in performance
+    ):
+        return _large_log_pipeline_constraints(entities, evidence_refs, has_evidence, signal_flags=evidence_signals.low_confidence_flags)
+    if "分布式锁" in consistency and ({"事务消息", "半事务消息", "最终一致"} & consistency):
+        return _distributed_lock_constraints(entities, evidence_refs, has_evidence, signal_flags=evidence_signals.low_confidence_flags)
+    if "库存" in domains and ({"并发", "消息堆积"} & scale or {"吞吐", "耗时"} & performance):
+        return _warehouse_deduction_constraints(entities, evidence_refs, has_evidence, signal_flags=evidence_signals.low_confidence_flags)
+    if states and ({"对账", "回补"} & reconciliation):
+        return _inventory_state_machine_constraints(entities, evidence_refs, has_evidence, signal_flags=evidence_signals.low_confidence_flags)
+    return _abstract_constraints(
+        entities,
+        evidence_refs,
+        has_evidence,
+        polish_theme=polish_theme,
+        signal_flags=evidence_signals.low_confidence_flags,
+        confidence_level=evidence_signals.confidence_level,
+    )
+
+
+def _signal_entities(evidence_signals: EvidenceSignalSet) -> tuple[str, ...]:
+    return _dedupe_strings(
+        [
+            *evidence_signals.all_components(),
+            *evidence_signals.failure_signals,
+            *evidence_signals.consistency_signals,
+            *evidence_signals.state_machine_signals,
+            *evidence_signals.idempotency_signals,
+            *evidence_signals.reconciliation_signals,
+            *evidence_signals.cost_signals,
+            *evidence_signals.observability_signals,
+            *evidence_signals.performance_indicators,
+            *evidence_signals.scale_indicators,
+        ]
+    )
+
+
+def _has_signal_metric(evidence_signals: EvidenceSignalSet, metric_type: str) -> bool:
+    return any(metric.metric_type == metric_type for metric in evidence_signals.metrics)
+
+
+def _merge_flags(base: tuple[str, ...], extra: tuple[str, ...] = ()) -> tuple[str, ...]:
+    return tuple(dict.fromkeys([*base, *extra]))
+
+
+def _dedupe_strings(values: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in values:
+        if value and value not in result:
+            result.append(value)
+    return tuple(result)
+
+
 def _partial_success_constraints(
     entities: tuple[str, ...],
     evidence_refs: tuple[str, ...],
     has_evidence: bool,
+    signal_flags: tuple[str, ...] = (),
 ) -> ScenarioConstraint:
+    storage_text = " / ".join(_ordered_supported(entities, ("MySQL", "Redis", "Elasticsearch", "ES"))) or "下游存储"
     return ScenarioConstraint(
         business_constraint="业务约束：文件上传、消息触发、向量化和多存储写入必须给用户一个一致的处理结果。",
-        failure_mode="向量化超时、消息堆积或 MySQL / Redis / ES 只有部分写入成功，形成部分成功 / 部分失败。",
+        failure_mode=f"向量化超时、消息堆积或 {storage_text} 只有部分写入成功，形成部分成功 / 部分失败。",
         scale_or_performance_constraint="高峰期需要控制线程池、消费并行度和消息堆积，避免拖垮在线请求。",
         consistency_constraint="用状态机、幂等键、断点续跑和重试收敛把多组件状态拉回一致。",
         cost_constraint="设置成本上限，避免高峰期无限重试和向量化资源失控。",
         observability_constraint="按对象、消息、向量化任务和存储写入记录 trace，暴露堆积、超时、重试和失败率。",
         ownership_constraint="要求候选人从 owner 视角说明边界、降级和最终收敛口径。",
-        system_components=_ordered_supported(entities, ("MinIO", "MQ", "向量化服务", "MySQL", "Redis", "ES")),
+        system_components=_ordered_supported(entities, ("MinIO", "MQ", "向量化", "向量化服务", "MySQL", "Redis", "Elasticsearch", "ES")),
         technical_entities=_ordered_supported(entities, ("状态机", "幂等", "断点续跑", "线程池", "消息堆积", "重试收敛")),
         metrics=("向量化超时率", "消息堆积长度", "重试收敛时长", "成本上限"),
         confidence_level="high" if has_evidence else "low",
-        low_confidence_flags=() if has_evidence else ("source_unavailable",),
+        low_confidence_flags=_merge_flags(() if has_evidence else ("source_unavailable",), signal_flags),
         evidence_refs=evidence_refs,
     )
 
@@ -97,6 +187,7 @@ def _large_log_pipeline_constraints(
     entities: tuple[str, ...],
     evidence_refs: tuple[str, ...],
     has_evidence: bool,
+    signal_flags: tuple[str, ...] = (),
 ) -> ScenarioConstraint:
     return ScenarioConstraint(
         business_constraint="业务约束：1GB 日志从上传入口进入异步处理管道，用户需要看到可追踪的处理进度。",
@@ -110,7 +201,7 @@ def _large_log_pipeline_constraints(
         technical_entities=_ordered_supported(entities, ("异步处理", "削峰填谷", "并行度控制", "资源隔离", "失败重试")),
         metrics=("1GB 日志", "15 秒到 3 秒", "队列水位", "资源成本"),
         confidence_level="high" if has_evidence else "low",
-        low_confidence_flags=() if has_evidence else ("source_unavailable",),
+        low_confidence_flags=_merge_flags(() if has_evidence else ("source_unavailable",), signal_flags),
         evidence_refs=evidence_refs,
     )
 
@@ -119,6 +210,7 @@ def _distributed_lock_constraints(
     entities: tuple[str, ...],
     evidence_refs: tuple[str, ...],
     has_evidence: bool,
+    signal_flags: tuple[str, ...] = (),
 ) -> ScenarioConstraint:
     return ScenarioConstraint(
         business_constraint="业务约束：库存扣减请求链路需要在并发下保持最终一致，并且不能让锁和消息边界互相掩盖失败。",
@@ -132,7 +224,7 @@ def _distributed_lock_constraints(
         technical_entities=_ordered_supported(entities, ("分布式锁", "本地事务", "半事务消息", "最终一致", "幂等")),
         metrics=("锁等待时间", "消息确认延迟", "失败兜底成功率"),
         confidence_level="high" if has_evidence else "low",
-        low_confidence_flags=() if has_evidence else ("source_unavailable",),
+        low_confidence_flags=_merge_flags(() if has_evidence else ("source_unavailable",), signal_flags),
         evidence_refs=evidence_refs,
     )
 
@@ -141,6 +233,7 @@ def _warehouse_deduction_constraints(
     entities: tuple[str, ...],
     evidence_refs: tuple[str, ...],
     has_evidence: bool,
+    signal_flags: tuple[str, ...] = (),
 ) -> ScenarioConstraint:
     return ScenarioConstraint(
         business_constraint="新业务约束：物料库存从全局扣减扩展为仓库维度并发扣减。",
@@ -154,7 +247,7 @@ def _warehouse_deduction_constraints(
         technical_entities=_ordered_supported(entities, ("并发扣减", "总库存一致", "超卖风险", "对账复杂度")),
         metrics=("吞吐提升", "总库存差异", "超卖风险", "对账复杂度"),
         confidence_level="high" if has_evidence else "low",
-        low_confidence_flags=() if has_evidence else ("source_unavailable",),
+        low_confidence_flags=_merge_flags(() if has_evidence else ("source_unavailable",), signal_flags),
         evidence_refs=evidence_refs,
     )
 
@@ -163,6 +256,7 @@ def _inventory_state_machine_constraints(
     entities: tuple[str, ...],
     evidence_refs: tuple[str, ...],
     has_evidence: bool,
+    signal_flags: tuple[str, ...] = (),
 ) -> ScenarioConstraint:
     return ScenarioConstraint(
         business_constraint="业务约束：双层库存需要通过状态机表达预占、扣减、回补和完成等核心状态。",
@@ -176,7 +270,7 @@ def _inventory_state_machine_constraints(
         technical_entities=_ordered_supported(entities, ("核心状态", "状态流转", "防重复扣减", "防重复回补", "对账口径", "收敛判断")),
         metrics=("状态滞留时长", "对账差异", "重复扣减次数", "重复回补次数"),
         confidence_level="high" if has_evidence else "low",
-        low_confidence_flags=() if has_evidence else ("source_unavailable",),
+        low_confidence_flags=_merge_flags(() if has_evidence else ("source_unavailable",), signal_flags),
         evidence_refs=evidence_refs,
     )
 
@@ -185,6 +279,7 @@ def _agent_constraints(
     entities: tuple[str, ...],
     evidence_refs: tuple[str, ...],
     has_evidence: bool,
+    signal_flags: tuple[str, ...] = (),
 ) -> ScenarioConstraint:
     return ScenarioConstraint(
         business_constraint="业务约束：Agent 需要在任务规划、工具调用和上下文记忆之间保持可解释、可回滚的执行链路。",
@@ -198,7 +293,7 @@ def _agent_constraints(
         technical_entities=_ordered_supported(entities, ("工具调用失败", "计划回滚", "上下文污染", "成本控制")),
         metrics=("工具调用成功率", "回滚成功率", "token 成本", "重试次数"),
         confidence_level="high" if has_evidence else "medium",
-        low_confidence_flags=() if has_evidence else ("evidence_partial",),
+        low_confidence_flags=_merge_flags(() if has_evidence else ("evidence_partial",), signal_flags),
         evidence_refs=evidence_refs,
     )
 
@@ -209,8 +304,11 @@ def _abstract_constraints(
     has_evidence: bool,
     *,
     polish_theme: str,
+    signal_flags: tuple[str, ...] = (),
+    confidence_level: str | None = None,
 ) -> ScenarioConstraint:
     flags = () if has_evidence else ("evidence_insufficient", "need_project_chain_metrics_failure_case")
+    resolved_confidence = confidence_level if confidence_level is not None else ("medium" if has_evidence else "low")
     return ScenarioConstraint(
         business_constraint="业务约束：当前材料较抽象，需要先限定业务入口、上下游依赖和用户可见结果。",
         failure_mode="失败路径：上游输入缺失、处理超时、结果不一致或降级策略不清会导致方案无法落地。",
@@ -222,8 +320,8 @@ def _abstract_constraints(
         system_components=("业务入口", "处理服务", "结果存储", "监控告警") if polish_theme != "communication" else (),
         technical_entities=entities,
         metrics=("验证指标", "性能或成本约束"),
-        confidence_level="medium" if has_evidence else "low",
-        low_confidence_flags=flags,
+        confidence_level=resolved_confidence,
+        low_confidence_flags=_merge_flags(flags, signal_flags),
         evidence_refs=evidence_refs,
     )
 

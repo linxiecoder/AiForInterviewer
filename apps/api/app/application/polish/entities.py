@@ -74,6 +74,10 @@ class PolishQuestionDraft:
     confidence_level: str | None = None
     low_confidence_flags: tuple[str, ...] = ()
     expected_answer_dimensions: tuple[str, ...] = ()
+    question_metadata: dict[str, Any] = field(default_factory=dict)
+    evidence_signal_refs: tuple[str, ...] = ()
+    builder_version: str | None = None
+    validator_version: str | None = None
 
 
 @dataclass(frozen=True)

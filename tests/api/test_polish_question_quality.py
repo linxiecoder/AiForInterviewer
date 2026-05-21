@@ -5,7 +5,13 @@ from collections.abc import Iterable, Sequence
 import pytest
 
 from app.application.polish.entities import PolishSession
+from app.application.polish.evidence_signals import extract_evidence_signals
 from app.application.polish.progress_tree import build_progress_node_question
+from app.application.polish.question_metadata import (
+    QuestionBuilderVersion,
+    build_question_metadata,
+    empty_question_metadata,
+)
 from app.application.polish.question_patterns import QUESTION_PATTERNS, get_question_pattern
 from app.application.polish.question_quality import validate_question_quality
 from app.application.polish.scenario_constraints import build_scenario_constraints
@@ -196,6 +202,158 @@ def test_partial_success_without_concrete_entities_falls_back_safely() -> None:
         assert unsupported_entity not in draft.question_text
 
 
+def test_partial_success_metadata_uses_only_signaled_storage_components() -> None:
+    draft = _build_question(
+        title="MinIO / MQ / 向量化部分成功不一致",
+        evidence="MinIO 上传后通过 MQ 触发向量化，MySQL 出现部分成功，需要重试收敛。",
+        polish_theme="technical",
+        node_ref="node_partial_success_mysql_only",
+        expected_capability="能说明多组件链路的失败恢复。",
+    )
+
+    assert draft.question_pattern == "partial_success_failure_recovery"
+    summary = draft.question_metadata["scenario_constraint_summary"]
+    assert "MySQL" in summary
+    assert "Redis" not in summary
+    assert "ES" not in summary
+    assert "Elasticsearch" not in summary
+
+
+def test_quality_validator_blocks_fabricated_concrete_entities_from_signals() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    signals = extract_evidence_signals(
+        progress_node={"progress_node_ref": "node_no_minio", "title": "缓存链路失败恢复"},
+        selected_evidence_chunks=[],
+        session_context={},
+        theme=strategy.theme,
+    )
+    scenario = build_scenario_constraints(
+        progress_node_title="缓存链路失败恢复",
+        expected_capability="能说明失败恢复。",
+        related_job_requirements=[],
+        related_resume_evidence=[],
+        missing_points=[],
+        selected_evidence_chunks=[],
+        history_feedback=[],
+        custom_topic_text=None,
+        polish_theme=strategy.theme,
+        evidence_signals=signals,
+    )
+
+    result = validate_question_quality(
+        question_text="围绕「缓存链路失败恢复」，请说明 MinIO、Redis 和 ES 的失败路径、成本和验证指标。",
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=[],
+        recent_question_texts=[],
+        source_availability="unavailable",
+        confidence_level=scenario.confidence_level,
+        evidence_signals=signals,
+    )
+
+    assert result.allow_emit is False
+    assert "unsupported_entity_reference" in result.blocking_issues
+
+
+def test_quality_validator_blocks_fabricated_mq_from_signals() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    signals = extract_evidence_signals(
+        progress_node={"progress_node_ref": "node_no_mq", "title": "缓存链路失败恢复"},
+        selected_evidence_chunks=[],
+        session_context={},
+        theme=strategy.theme,
+    )
+    scenario = build_scenario_constraints(
+        progress_node_title="缓存链路失败恢复",
+        expected_capability="能说明失败恢复。",
+        related_job_requirements=[],
+        related_resume_evidence=[],
+        missing_points=[],
+        selected_evidence_chunks=[],
+        history_feedback=[],
+        custom_topic_text=None,
+        polish_theme=strategy.theme,
+        evidence_signals=signals,
+    )
+
+    result = validate_question_quality(
+        question_text="围绕「缓存链路失败恢复」，业务约束是链路需要可恢复。请说明 MQ 的失败路径、性能或成本约束、验证指标和 trade-off。",
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=[],
+        recent_question_texts=[],
+        source_availability="unavailable",
+        confidence_level=scenario.confidence_level,
+        evidence_signals=signals,
+    )
+
+    assert result.allow_emit is False
+    assert "unsupported_entity_reference" in result.blocking_issues
+
+
+def test_question_metadata_roundtrip_and_low_confidence_merge() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    signals = extract_evidence_signals(
+        progress_node={"progress_node_ref": "node_metadata", "title": "系统设计能力"},
+        selected_evidence_chunks=[],
+        session_context={},
+        theme=strategy.theme,
+    )
+    scenario = build_scenario_constraints(
+        progress_node_title="系统设计能力",
+        expected_capability=None,
+        related_job_requirements=[],
+        related_resume_evidence=[],
+        missing_points=[],
+        selected_evidence_chunks=[],
+        history_feedback=[],
+        custom_topic_text=None,
+        polish_theme=strategy.theme,
+        evidence_signals=signals,
+    )
+    quality = validate_question_quality(
+        question_text=(
+            "低置信度：围绕「系统设计能力」，请先限定业务约束、失败路径、"
+            "性能或成本约束、验证指标和 trade-off。"
+        ),
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=[],
+        recent_question_texts=[],
+        source_availability="unavailable",
+        confidence_level=scenario.confidence_level,
+        evidence_signals=signals,
+    )
+
+    metadata = build_question_metadata(
+        question_pattern="owner_tradeoff_system_design",
+        scenario_constraint=scenario,
+        expected_answer_dimensions=("业务边界", "失败路径"),
+        quality_result=quality,
+        evidence_signals=signals,
+        anti_repeat_refs=("recent_question_001",),
+        additional_low_confidence_flags=("validator_repaired",),
+    )
+    payload = metadata.to_dict()
+
+    assert payload["question_pattern"] == "owner_tradeoff_system_design"
+    assert payload["builder_version"] == QuestionBuilderVersion.EVIDENCE_AWARE_V1.value
+    assert payload["validator_version"]
+    assert payload["signal_version"]
+    assert payload["evidence_signal_refs"]
+    assert "validator_repaired" in payload["low_confidence_flags"]
+    assert "weak_metric_evidence" in payload["low_confidence_flags"]
+    assert payload["anti_repeat_refs"] == ["recent_question_001"]
+
+    empty = empty_question_metadata().to_dict()
+    assert empty["question_pattern"] is None
+    assert empty["quality_score"] is None
+    assert empty["builder_version"]
+
+
 def test_communication_question_requires_star_expression_structure() -> None:
     draft = _build_question(
         title="项目贡献与沟通复盘",
@@ -225,6 +383,9 @@ def test_mixed_question_exposes_weights_and_expression_structure() -> None:
     _assert_contains_any(draft.question_text, ("工具调用失败", "计划回滚", "上下文污染", "成本控制"))
     assert draft.question_pattern == "mixed_technical_expression"
     assert draft.quality_score >= 80
+    assert draft.question_metadata
+    assert draft.question_metadata["builder_version"] == QuestionBuilderVersion.EVIDENCE_AWARE_V1.value
+    assert draft.evidence_signal_refs
 
 
 def _build_question(

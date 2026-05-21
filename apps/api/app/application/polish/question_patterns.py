@@ -79,6 +79,18 @@ QUESTION_PATTERN_LIST: tuple[QuestionPattern, ...] = (
         golden_case_ids=("minio_mq_vector_partial_success",),
     ),
     QuestionPattern(
+        pattern_id="agent_tool_failure_context_contamination",
+        title="Agent 工具调用失败与上下文污染",
+        applicable_themes=("technical", "mixed"),
+        required_signals=("Agent", "工具调用", "RAG", "记忆", "上下文污染", "回滚", "成本"),
+        required_question_elements=("Agent", "工具调用", "RAG", "记忆", "上下文污染", "回滚", "成本"),
+        forbidden_question_elements=_LEGACY_TEMPLATE_ELEMENTS,
+        expected_answer_dimensions=("任务边界", "工具调用链路", "上下文隔离", "回滚策略", "成本控制", "可观测性"),
+        interview_intent="验证候选人能否把 Agent 执行链路中的工具失败、记忆污染和回滚成本讲清楚。",
+        quality_rules=("必须说明工具调用失败", "必须追问上下文污染", "必须包含回滚和成本控制"),
+        golden_case_ids=("agent_tool_context_contamination",),
+    ),
+    QuestionPattern(
         pattern_id="owner_tradeoff_system_design",
         title="Owner 视角系统设计取舍",
         applicable_themes=("technical", "mixed"),
@@ -143,10 +155,20 @@ def select_question_pattern(
     theme_strategy: Any,
     scenario_constraint: Any,
     progress_node_title: str,
+    evidence_signals: Any | None = None,
 ) -> QuestionPattern:
     theme = getattr(theme_strategy, "theme", "mixed")
     if theme == "communication":
         return get_question_pattern("star_communication_refactor")
+
+    if evidence_signals is not None:
+        if theme == "mixed":
+            return get_question_pattern("mixed_technical_expression")
+        signal_pattern = _pattern_from_evidence_signals(evidence_signals)
+        if signal_pattern is not None:
+            return get_question_pattern(signal_pattern)
+        return get_question_pattern("owner_tradeoff_system_design")
+
     if theme == "mixed":
         return get_question_pattern("mixed_technical_expression")
 
@@ -155,6 +177,8 @@ def select_question_pattern(
         return get_question_pattern("partial_success_failure_recovery")
     if _has_any(signal_text, ("1gb", "日志", "异步处理", "向量化", "入库")):
         return get_question_pattern("performance_cost_observability")
+    if _has_any(signal_text, ("agent", "工具调用", "rag", "记忆", "上下文污染")):
+        return get_question_pattern("agent_tool_failure_context_contamination")
     if _has_any(signal_text, ("分布式锁", "事务消息", "半事务消息", "最终一致")):
         return get_question_pattern("real_request_trace_deep_dive")
     if _has_any(signal_text, ("仓库维度", "并发扣减", "总库存")):
@@ -163,6 +187,48 @@ def select_question_pattern(
         return get_question_pattern("state_machine_and_reconciliation")
     return get_question_pattern("owner_tradeoff_system_design")
 
+
+def _pattern_from_evidence_signals(evidence_signals: Any) -> str | None:
+    technical = set(getattr(evidence_signals, "technical_components", ()))
+    components = set(getattr(evidence_signals, "all_components", lambda: ())())
+    data_stores = set(getattr(evidence_signals, "data_stores", ()))
+    queues = set(getattr(evidence_signals, "message_queues", ()))
+    external = set(getattr(evidence_signals, "external_services", ()))
+    failures = set(getattr(evidence_signals, "failure_signals", ()))
+    consistency = set(getattr(evidence_signals, "consistency_signals", ()))
+    states = set(getattr(evidence_signals, "state_machine_signals", ()))
+    reconciliation = set(getattr(evidence_signals, "reconciliation_signals", ()))
+    domains = set(getattr(evidence_signals, "business_domains", ()))
+    scale = set(getattr(evidence_signals, "scale_indicators", ()))
+    performance = set(getattr(evidence_signals, "performance_indicators", ()))
+    cost = set(getattr(evidence_signals, "cost_signals", ()))
+    metrics = tuple(getattr(evidence_signals, "metrics", ()))
+
+    if (
+        {"Agent", "工具调用"}.issubset(technical)
+        and ({"RAG", "记忆"} & technical)
+        and ({"上下文污染", "工具调用失败"} & failures or {"回滚"} & reconciliation or cost)
+    ):
+        return "agent_tool_failure_context_contamination"
+    if ({"部分成功", "部分失败"} & failures) and {"MinIO"} & external and queues and "向量化" in technical and data_stores:
+        return "partial_success_failure_recovery"
+    if _has_size_metric(metrics) and (_has_latency_improvement(metrics) or "异步处理" in performance):
+        return "performance_cost_observability"
+    if "分布式锁" in consistency and ({"事务消息", "半事务消息", "最终一致"} & consistency):
+        return "real_request_trace_deep_dive"
+    if "仓库维度" in " ".join([*domains, *scale, *performance, *components]) or ({"并发", "吞吐"} & (scale | performance) and "库存" in domains):
+        return "constraint_change_refactor"
+    if states and ({"对账", "回补"} & reconciliation):
+        return "state_machine_and_reconciliation"
+    return None
+
+
+def _has_size_metric(metrics: tuple[Any, ...]) -> bool:
+    return any(getattr(metric, "metric_type", "") == "scale" for metric in metrics)
+
+
+def _has_latency_improvement(metrics: tuple[Any, ...]) -> bool:
+    return any(getattr(metric, "metric_type", "") == "latency_improvement" for metric in metrics)
 
 def _joined_signals(scenario_constraint: Any, progress_node_title: str) -> str:
     parts: list[str] = [progress_node_title]

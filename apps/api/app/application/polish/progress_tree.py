@@ -7,7 +7,9 @@ import os
 from typing import Any
 
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
+from app.application.polish.evidence_signals import EvidenceSignalSet, extract_evidence_signals
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
+from app.application.polish.question_metadata import QuestionMetadata, build_question_metadata
 from app.application.polish.question_patterns import QuestionPattern, get_question_pattern, select_question_pattern
 from app.application.polish.question_quality import (
     QuestionQualityResult,
@@ -255,7 +257,7 @@ def build_progress_node_question(
             availability="unavailable",
         )
         strategy = _safe_polish_theme_strategy(session.polish_theme)
-        question_text, pattern, scenario, quality = _build_deterministic_v2_question(
+        question_text, pattern, scenario, quality, metadata, evidence_signals = _build_deterministic_v2_question(
             session=session,
             context=context,
             node=fallback_node,
@@ -274,8 +276,12 @@ def build_progress_node_question(
             question_pattern=pattern.pattern_id,
             quality_score=quality.quality_score,
             confidence_level=scenario.confidence_level,
-            low_confidence_flags=scenario.low_confidence_flags,
+            low_confidence_flags=metadata.low_confidence_flags,
             expected_answer_dimensions=pattern.expected_answer_dimensions,
+            question_metadata=metadata.to_dict(),
+            evidence_signal_refs=metadata.evidence_signal_refs,
+            builder_version=metadata.builder_version,
+            validator_version=metadata.validator_version,
         )
 
     evidence_selection = select_progress_tree_evidence_chunks(
@@ -339,7 +345,7 @@ def build_progress_node_question(
     )
     citations = "".join(f"[{source.index}]" for source in sources)
     strategy = _safe_polish_theme_strategy(session.polish_theme)
-    question_text, pattern, scenario, quality = _build_deterministic_v2_question(
+    question_text, pattern, scenario, quality, metadata, evidence_signals = _build_deterministic_v2_question(
         session=session,
         context=context,
         node=node,
@@ -358,8 +364,12 @@ def build_progress_node_question(
         question_pattern=pattern.pattern_id,
         quality_score=quality.quality_score,
         confidence_level=scenario.confidence_level,
-        low_confidence_flags=scenario.low_confidence_flags,
+        low_confidence_flags=metadata.low_confidence_flags,
         expected_answer_dimensions=pattern.expected_answer_dimensions,
+        question_metadata=metadata.to_dict(),
+        evidence_signal_refs=metadata.evidence_signal_refs,
+        builder_version=metadata.builder_version,
+        validator_version=metadata.validator_version,
     )
 
 
@@ -373,8 +383,16 @@ def _build_deterministic_v2_question(
     sources: tuple[PolishQuestionSource, ...],
     citations: str,
     strategy: PolishThemeStrategy,
-) -> tuple[str, QuestionPattern, ScenarioConstraint, QuestionQualityResult]:
+) -> tuple[str, QuestionPattern, ScenarioConstraint, QuestionQualityResult, QuestionMetadata, EvidenceSignalSet]:
     focus = _question_focus(node)
+    evidence_signals = extract_evidence_signals(
+        progress_node=node,
+        selected_evidence_chunks=evidence_chunks,
+        session_context=context,
+        theme=strategy.theme,
+        custom_topic_text=session.custom_topic_text_summary,
+        recent_turns=context.get("turns", []),
+    )
     scenario = build_scenario_constraints(
         progress_node_title=focus,
         expected_capability=truncate_text(node.get("expected_capability"), max_chars=240),
@@ -385,11 +403,13 @@ def _build_deterministic_v2_question(
         history_feedback=_recent_feedback_texts(context.get("turns", [])),
         custom_topic_text=session.custom_topic_text_summary,
         polish_theme=strategy.theme,
+        evidence_signals=evidence_signals,
     )
     pattern = select_question_pattern(
         theme_strategy=strategy,
         scenario_constraint=scenario,
         progress_node_title=focus,
+        evidence_signals=evidence_signals,
     )
     question_text = _deterministic_v2_question_text(
         focus=focus,
@@ -407,9 +427,18 @@ def _build_deterministic_v2_question(
         recent_question_texts=_recent_question_texts(context.get("turns", [])),
         source_availability=_question_source_availability(sources),
         confidence_level=scenario.confidence_level,
+        evidence_signals=evidence_signals,
     )
     if quality.allow_emit:
-        return question_text, pattern, scenario, quality
+        metadata = build_question_metadata(
+            question_pattern=pattern.pattern_id,
+            scenario_constraint=scenario,
+            expected_answer_dimensions=pattern.expected_answer_dimensions,
+            quality_result=quality,
+            evidence_signals=evidence_signals,
+            anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
+        )
+        return question_text, pattern, scenario, quality, metadata, evidence_signals
 
     repaired_text = repair_question_text(
         question_text=question_text,
@@ -426,9 +455,19 @@ def _build_deterministic_v2_question(
         recent_question_texts=_recent_question_texts(context.get("turns", [])),
         source_availability=_question_source_availability(sources),
         confidence_level=scenario.confidence_level,
+        evidence_signals=evidence_signals,
     )
     if repaired_quality.allow_emit:
-        return repaired_text, pattern, scenario, repaired_quality
+        metadata = build_question_metadata(
+            question_pattern=pattern.pattern_id,
+            scenario_constraint=scenario,
+            expected_answer_dimensions=pattern.expected_answer_dimensions,
+            quality_result=repaired_quality,
+            evidence_signals=evidence_signals,
+            anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
+            additional_low_confidence_flags=("validator_repaired",),
+        )
+        return repaired_text, pattern, scenario, repaired_quality, metadata, evidence_signals
 
     if strategy.theme == "communication":
         fallback_pattern = get_question_pattern("star_communication_refactor")
@@ -446,8 +485,18 @@ def _build_deterministic_v2_question(
         recent_question_texts=(),
         source_availability=_question_source_availability(sources),
         confidence_level="low",
+        evidence_signals=evidence_signals,
     )
-    return fallback_text, fallback_pattern, scenario, fallback_quality
+    metadata = build_question_metadata(
+        question_pattern=fallback_pattern.pattern_id,
+        scenario_constraint=scenario,
+        expected_answer_dimensions=fallback_pattern.expected_answer_dimensions,
+        quality_result=fallback_quality,
+        evidence_signals=evidence_signals,
+        anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
+        additional_low_confidence_flags=("pattern_fallback",),
+    )
+    return fallback_text, fallback_pattern, scenario, fallback_quality, metadata, evidence_signals
 
 
 def _deterministic_v2_question_text(
@@ -482,9 +531,13 @@ def _deterministic_v2_question_text(
             f"回答重点：{dimensions}。{citations}"
         )
     if pattern.pattern_id == "partial_success_failure_recovery":
+        component_text = _component_display(scenario.system_components) or "已出现的多组件链路"
+        storage_text = _component_display(
+            tuple(component for component in scenario.system_components if component in {"MySQL", "Redis", "Elasticsearch", "ES"})
+        ) or "已出现的存储组件"
         return (
-            f"围绕「{focus}」，业务约束是 MinIO、MQ、向量化服务和 MySQL / Redis / ES 多组件结果要对用户可解释。"
-            "请设计向量化超时后的状态机：当出现部分成功 / 部分失败时，如何做重试收敛、断点续跑、幂等保护，"
+            f"围绕「{focus}」，业务约束是 {component_text} 多组件结果要对用户可解释。"
+            f"请设计向量化超时后的状态机：当 {storage_text} 出现部分成功 / 部分失败时，如何做重试收敛、断点续跑、幂等保护，"
             "并用线程池隔离、消息堆积治理和成本上限避免高峰期失控。"
             f"回答重点：{dimensions}。{citations}"
         )
@@ -493,6 +546,13 @@ def _deterministic_v2_question_text(
             f"围绕「{focus}」，业务约束是 1GB 日志从上传入口进入异步处理后要可追踪地完成。"
             "请按上传入口、解析、切块、向量化、入库拆解管道，说明如何从 15 秒到 3 秒，"
             "并设计削峰填谷、并行度控制、资源隔离、失败重试、成本权衡和可观测指标。"
+            f"回答重点：{dimensions}。{citations}"
+        )
+    if pattern.pattern_id == "agent_tool_failure_context_contamination":
+        return (
+            f"围绕「{focus}」，业务约束是 Agent 在工具调用、RAG 和记忆之间必须可解释、可回滚。"
+            "请拆解一次工具调用失败后的链路：上下文污染如何隔离，计划回滚如何保证不重复执行，"
+            "记忆写入和 RAG 召回如何校验，成本和重试上限如何控制，并说明可观测指标。"
             f"回答重点：{dimensions}。{citations}"
         )
     if pattern.pattern_id == "star_communication_refactor":
@@ -515,6 +575,37 @@ def _deterministic_v2_question_text(
         "如果当前材料不足，请补充项目链路、关键指标、失败案例和系统组件后再继续深挖。"
         f"回答重点：{dimensions}。{citations}"
     )
+
+
+def _component_display(components: tuple[str, ...]) -> str:
+    display = []
+    for component in components:
+        if component == "Elasticsearch":
+            label = "Elasticsearch（ES）"
+        elif component == "向量化":
+            label = "向量化服务"
+        else:
+            label = component
+        if label not in display:
+            display.append(label)
+    return " / ".join(display)
+
+
+def _recent_question_refs(turns: object) -> tuple[str, ...]:
+    if not isinstance(turns, list):
+        return ()
+    refs: list[str] = []
+    for index, turn in enumerate(turns[-5:], start=1):
+        if not isinstance(turn, dict):
+            continue
+        explicit_ref = truncate_text(turn.get("question_id") or turn.get("question_ref"), max_chars=120)
+        if explicit_ref:
+            refs.append(explicit_ref)
+            continue
+        text = truncate_text(turn.get("question_text"), max_chars=400)
+        if text:
+            refs.append(f"recent_question:{index}:{sha256(text.encode('utf-8')).hexdigest()[:12]}")
+    return tuple(refs)
 
 
 def _node_text_list(node: dict[str, Any], key: str) -> list[str]:

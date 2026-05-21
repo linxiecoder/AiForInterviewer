@@ -18,7 +18,20 @@ LEGACY_TEMPLATE_PHRASES = (
     "上线后如何验证效果",
 )
 
-KNOWN_CONCRETE_ENTITIES = ("MinIO", "MQ", "MySQL", "Redis", "ES")
+KNOWN_CONCRETE_ENTITIES = (
+    "MinIO",
+    "MQ",
+    "MySQL",
+    "PostgreSQL",
+    "Redis",
+    "Elasticsearch",
+    "ES",
+    "RocketMQ",
+    "Kafka",
+    "RabbitMQ",
+    "OSS",
+    "S3",
+)
 
 
 @dataclass(frozen=True)
@@ -28,6 +41,7 @@ class QuestionQualityResult:
     warnings: tuple[str, ...]
     repair_suggestions: tuple[str, ...]
     allow_emit: bool
+    low_confidence_flags: tuple[str, ...] = ()
 
 
 def validate_question_quality(
@@ -40,10 +54,14 @@ def validate_question_quality(
     recent_question_texts: list[str] | tuple[str, ...],
     source_availability: str,
     confidence_level: str,
+    evidence_signals: Any | None = None,
+    question_metadata: Any | None = None,
 ) -> QuestionQualityResult:
     blocking: list[str] = []
     warnings: list[str] = []
     repairs: list[str] = []
+    low_flags: list[str] = [*getattr(evidence_signals, "low_confidence_flags", ())]
+    low_flags.extend(getattr(question_metadata, "low_confidence_flags", ()) if question_metadata is not None else ())
     theme = getattr(theme_strategy, "theme", "mixed")
 
     if _is_legacy_template(question_text):
@@ -74,7 +92,7 @@ def validate_question_quality(
         blocking.append("question_too_broad")
         repairs.append("compress_to_main_question")
 
-    unsupported_entities = _unsupported_entities(question_text, scenario_constraint)
+    unsupported_entities = _unsupported_entities(question_text, scenario_constraint, evidence_signals)
     if unsupported_entities:
         blocking.append("unsupported_entity_reference")
 
@@ -82,6 +100,10 @@ def validate_question_quality(
         warnings.append("evidence_partially_available")
     if confidence_level == "low":
         warnings.append("low_confidence")
+    if "weak_metric_evidence" in low_flags:
+        warnings.append("weak_metric_evidence")
+    if "weak_failure_evidence" in low_flags:
+        warnings.append("weak_failure_evidence")
     if not _has_any(question_text, ("指标", "吞吐", "耗时", "错误率", "成功率", "水位", "成本")):
         warnings.append("metrics_not_specific")
     if "成本" not in question_text:
@@ -102,6 +124,7 @@ def validate_question_quality(
         warnings=tuple(dict.fromkeys(warnings)),
         repair_suggestions=tuple(dict.fromkeys(repairs)),
         allow_emit=allow_emit,
+        low_confidence_flags=tuple(dict.fromkeys(low_flags)),
     )
 
 
@@ -211,16 +234,34 @@ def _too_broad(question_text: str) -> bool:
     return len(question_text) > 760 or question_marks + separators > 8
 
 
-def _unsupported_entities(question_text: str, scenario_constraint: Any) -> tuple[str, ...]:
+def _unsupported_entities(question_text: str, scenario_constraint: Any, evidence_signals: Any | None) -> tuple[str, ...]:
     supported = set(getattr(scenario_constraint, "system_components", ())) | set(
         getattr(scenario_constraint, "technical_entities", ())
     )
+    if evidence_signals is not None:
+        supported |= set(getattr(evidence_signals, "all_components", lambda: ())())
+    supported |= _supported_aliases(supported)
+
     unsupported: list[str] = []
     for entity in KNOWN_CONCRETE_ENTITIES:
-        if entity in question_text and entity not in supported:
+        if _mentions_entity(question_text, entity) and entity not in supported:
             unsupported.append(entity)
     return tuple(unsupported)
 
+
+def _supported_aliases(supported: set[str]) -> set[str]:
+    aliases: set[str] = set()
+    if "Elasticsearch" in supported:
+        aliases.add("ES")
+    if "ES" in supported:
+        aliases.add("Elasticsearch")
+    return aliases
+
+
+def _mentions_entity(question_text: str, entity: str) -> bool:
+    if entity in {"ES", "S3", "MQ"}:
+        return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(entity)}(?![A-Za-z0-9])", question_text))
+    return entity in question_text
 
 def _has_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term in text for term in terms)
