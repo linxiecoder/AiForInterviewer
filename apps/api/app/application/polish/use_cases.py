@@ -29,6 +29,16 @@ from app.application.polish.entities import (
     PolishTaskStatus,
     PolishTopic,
 )
+from app.application.polish.feedback_contracts import (
+    FEEDBACK_SCHEMA_ID,
+    FEEDBACK_SCHEMA_VERSION,
+    FeedbackInput,
+    RetryFeedbackInput,
+)
+from app.application.polish.feedback_quality import (
+    compute_score_result_from_dimensions,
+    validate_feedback_consistency,
+)
 from app.application.polish.ports import PolishRepository
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.question_llm import PolishQuestionLlmService
@@ -94,6 +104,10 @@ _ANSWER_SUBMISSION_LOCKS_GUARD = threading.Lock()
 _ANSWER_SUBMISSION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
 _ANSWER_IDEMPOTENCY_CACHE_GUARD = threading.Lock()
 _ANSWER_IDEMPOTENCY_CACHE: dict[tuple[str, str, str, str], tuple[str, str]] = {}
+PREVIOUS_FEEDBACK_SUMMARY_LIMIT = 5
+PREVIOUS_FEEDBACK_LOSS_POINT_LIMIT = 12
+PREVIOUS_FEEDBACK_DIMENSION_LIMIT = 12
+PREVIOUS_FEEDBACK_TEXT_LIMIT = 600
 
 POLISH_TOPICS: tuple[PolishTopic, ...] = (
     PolishTopic(
@@ -462,17 +476,65 @@ class PolishUseCases:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Answer not found")
             )
+        question = self._polish_repository.get_question(command.owner_id, answer.question_id)
+        if question is None or question.session_id != command.session_id:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Question not found")
+            )
+        same_session_answers = self._polish_repository.list_answers_for_session(
+            command.owner_id,
+            command.session_id,
+        )
+        same_session_feedbacks = self._polish_repository.list_feedbacks_for_session(
+            command.owner_id,
+            command.session_id,
+        )
+        previous_answers = tuple(
+            previous_answer
+            for previous_answer in same_session_answers
+            if previous_answer.question_id == answer.question_id
+            and previous_answer.answer_id != answer.answer_id
+            and previous_answer.answer_round < answer.answer_round
+        )
+        latest_feedback_by_answer_id = _latest_feedback_by_answer_id(same_session_feedbacks)
+        previous_feedbacks = tuple(
+            previous_feedback
+            for previous_answer in previous_answers
+            if (previous_feedback := latest_feedback_by_answer_id.get(previous_answer.answer_id)) is not None
+        )
 
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
         score_result_id = generate_resource_id(ResourceIdPrefix.SCORE)
-        feedback_payload = _build_contract_shaped_feedback_payload(
+        feedback_input = _build_feedback_input(
             session=session,
+            question=question,
+            answer=answer,
+            previous_answers=previous_answers,
+            previous_feedbacks=previous_feedbacks,
+        )
+        raw_feedback_payload = _build_deterministic_structured_feedback_payload(
+            feedback_input=feedback_input,
+            session=session,
+            question=question,
             answer=answer,
             feedback_id=feedback_id,
             ai_task_id=task_id,
             score_result_id=score_result_id,
+            created_at=now,
+        )
+        validation_result = validate_feedback_consistency(raw_feedback_payload)
+        feedback_payload = validation_result["normalized_feedback_payload"]
+        feedback_payload = _ensure_feedback_legacy_compatibility(
+            feedback_payload,
+            session=session,
+            question=question,
+            answer=answer,
+            feedback_id=feedback_id,
+            ai_task_id=task_id,
+            score_result_id=score_result_id,
+            validation_result=validation_result,
             created_at=now,
         )
         payload_error = _validate_contract_shaped_feedback_payload(feedback_payload)
@@ -829,6 +891,979 @@ def _remember_answer_idempotency_record(
             answer_id,
             answer_text,
         )
+
+
+def _build_feedback_input(
+    *,
+    session: PolishSession,
+    question: PolishQuestion,
+    answer: PolishAnswer,
+    previous_answers: tuple[PolishAnswer, ...],
+    previous_feedbacks: tuple[PolishFeedback, ...],
+) -> FeedbackInput:
+    strategy = _session_theme_strategy(session)
+    question_metadata = _safe_question_metadata(question.question_metadata)
+    previous_feedback_payloads = _previous_feedback_payloads(previous_feedbacks)
+    previous_loss_points = _previous_loss_points_from_payloads(previous_feedback_payloads)
+    current_missing_dimensions = _feedback_missing_dimension_ids(answer.answer_text)
+    repeated_gaps = tuple(
+        point["loss_point_id"]
+        for point in previous_loss_points
+        if point.get("dimension_id") in current_missing_dimensions and point.get("loss_point_id")
+    )
+    fixed_gaps = tuple(
+        point["loss_point_id"]
+        for point in previous_loss_points
+        if point.get("dimension_id") not in current_missing_dimensions and point.get("loss_point_id")
+    )
+    previous_loss_dimensions = {
+        str(point.get("dimension_id"))
+        for point in previous_loss_points
+        if point.get("dimension_id")
+    }
+    regression_signals = tuple(
+        dimension_id
+        for dimension_id in current_missing_dimensions
+        if dimension_id not in previous_loss_dimensions
+    )
+    base_kwargs = {
+        "owner_id": answer.owner_id,
+        "actor_id": answer.actor_id,
+        "session_id": answer.session_id,
+        "question_id": question.question_id,
+        "answer_id": answer.answer_id,
+        "answer_round": answer.answer_round,
+        "question_text": _or_fallback_text(question.question_text, UNNAMED_QUESTION_TEXT),
+        "question_metadata": question_metadata,
+        "question_pattern": _metadata_text(question_metadata, "question_pattern", "fallback_general"),
+        "expected_answer_dimensions": _expected_answer_dimensions(question_metadata),
+        "interview_intent": _metadata_text(question_metadata, "interview_intent", strategy.question_intent),
+        "question_sources": _question_sources_for_feedback_input(question),
+        "evidence_refs": _evidence_refs_for_feedback_input(question),
+        "answer_text": _or_fallback_text(answer.answer_text, UNNAMED_ANSWER_TEXT),
+        "polish_theme": strategy.theme,
+        "source_availability": _metadata_text(question_metadata, "source_availability", "unknown"),
+        "low_confidence_flags": _feedback_input_low_confidence_flags(
+            question_metadata=question_metadata,
+            answer_text=answer.answer_text,
+            metadata_missing=_is_question_metadata_missing(question.question_metadata),
+        ),
+        "feedback_generation_mode": "deterministic_retry" if answer.answer_round > 1 else "deterministic_initial",
+    }
+    if answer.answer_round <= 1:
+        return FeedbackInput(**base_kwargs)
+    return RetryFeedbackInput(
+        **base_kwargs,
+        previous_answer_rounds=tuple(
+            {
+                "answer_id": previous_answer.answer_id,
+                "answer_round": previous_answer.answer_round,
+                "answer_text": previous_answer.answer_text,
+                "created_at": previous_answer.created_at.isoformat(),
+            }
+            for previous_answer in previous_answers
+        ),
+        previous_feedbacks=previous_feedback_payloads,
+        previous_score_results=tuple(
+            payload.get("score_result")
+            for payload in previous_feedback_payloads
+            if isinstance(payload.get("score_result"), dict)
+        ),
+        previous_dimension_scores=tuple(
+            {
+                **dimension,
+                "feedback_id": payload.get("feedback_id"),
+            }
+            for payload in previous_feedback_payloads
+            for dimension in _dict_list(payload.get("scoring_dimensions"))
+        ),
+        previous_loss_points=previous_loss_points,
+        previous_reference_answer=_latest_payload_text(previous_feedback_payloads, "p7_reference_answer"),
+        previous_oral_script=_latest_payload_text(previous_feedback_payloads, "oral_script"),
+        repeated_gaps=repeated_gaps,
+        fixed_gaps=fixed_gaps,
+        regression_signals=regression_signals,
+        mastery_threshold="score>=80_and_no_remaining_critical_loss",
+    )
+
+
+def _build_deterministic_structured_feedback_payload(
+    *,
+    feedback_input: FeedbackInput,
+    session: PolishSession,
+    question: PolishQuestion,
+    answer: PolishAnswer,
+    feedback_id: str,
+    ai_task_id: str,
+    score_result_id: str,
+    created_at,
+) -> dict[str, Any]:
+    strategy = _session_theme_strategy(session)
+    theme_profile = _theme_feedback_profile(strategy)
+    answer_text = _or_fallback_text(feedback_input.answer_text, UNNAMED_ANSWER_TEXT)
+    scoring_dimensions = _structured_scoring_dimensions(answer_text)
+    score_result = compute_score_result_from_dimensions(scoring_dimensions)
+    score_result = {
+        **score_result,
+        "score_result_id": score_result_id,
+        "score_type": str(ScoreType.POLISH_ANSWER),
+        "score_version": f"polish_answer.{strategy.theme}.deterministic.v1",
+        "rubric_version": "polish_round_score.structured.v1",
+        "contract_id": "P-POLISH-004",
+        "confidence_level": "low" if feedback_input.low_confidence_flags else "medium",
+    }
+    score_value = int(score_result["score_value"])
+    explicit_score, implicit_score = _theme_scores(strategy, score_value)
+    loss_points = _structured_loss_points(
+        feedback_id=feedback_id,
+        answer=answer,
+        scoring_dimensions=scoring_dimensions,
+    )
+    positive_evidence_points = _structured_positive_evidence_points(
+        answer=answer,
+        answer_text=answer_text,
+        scoring_dimensions=scoring_dimensions,
+    )
+    p7_reference_answer = _structured_reference_answer(
+        theme_profile=theme_profile,
+        loss_points=loss_points,
+        question_text=feedback_input.question_text,
+    )
+    oral_script = _structured_oral_script(
+        theme_profile=theme_profile,
+        loss_points=loss_points,
+    )
+    feedback_text = (
+        f"polish_answer / {strategy.label} structured feedback {score_value}/100："
+        f"{theme_profile['summary']}"
+    )
+    candidate_refs = _feedback_candidate_refs(feedback_id)
+    payload: dict[str, Any] = {
+        "schema_id": FEEDBACK_SCHEMA_ID,
+        "schema_version": FEEDBACK_SCHEMA_VERSION,
+        "contract_id": "P-POLISH-005",
+        "contract_ids": list(FEEDBACK_CONTRACT_IDS),
+        "status": FEEDBACK_STATUS_GENERATED,
+        "feedback_id": feedback_id,
+        "ai_task_id": ai_task_id,
+        "polish_theme": strategy.theme,
+        "polish_theme_label": strategy.label,
+        "explicit_weight": strategy.explicit_weight,
+        "implicit_weight": strategy.implicit_weight,
+        "weight_explanation": (
+            f"本轮按显性技术 {strategy.explicit_weight}%、隐性表达 {strategy.implicit_weight}% 综合打磨；"
+            "structured feedback 由回答、题目 metadata 和同题历史轮次确定性生成。"
+        ),
+        "interview_intent": feedback_input.interview_intent,
+        "explicit_score": explicit_score,
+        "implicit_score": implicit_score,
+        "feedback_text": feedback_text,
+        "feedback_summary": feedback_text,
+        "answer_diagnosis": {
+            "strengths": _answer_strengths(answer_text),
+            "weaknesses": [point["title"] for point in loss_points],
+            "risks": _answer_risks(loss_points),
+            "recommendations": [
+                "下一轮优先修复 critical loss_points。",
+                "口述时先给结论，再补技术链路、失败路径和指标。",
+            ],
+        },
+        "scoring_dimensions": scoring_dimensions,
+        "score_result": score_result,
+        "score_result_ref": {"resource_type": "score_result", "resource_id": score_result_id},
+        "positive_evidence_points": positive_evidence_points,
+        "loss_points": loss_points,
+        "missing_answer_dimensions": [
+            {
+                "dimension": point["dimension_id"],
+                "reason": point["reason"],
+                "impact_scope": "score_result, reference_answer, oral_script",
+            }
+            for point in loss_points
+        ],
+        "technical_gaps": [
+            point["title"] for point in loss_points if point.get("dimension_id") == "technical_depth"
+        ],
+        "communication_gaps": [
+            point["title"] for point in loss_points if point.get("dimension_id") == "answer_structure"
+        ],
+        "p7_reference_answer": p7_reference_answer,
+        "reference_answer": {
+            "contract_id": "P-POLISH-006",
+            "summary": p7_reference_answer,
+            "outline": list(theme_profile["reference_outline"]),
+        },
+        "reference_answer_requirements": _reference_requirements(loss_points),
+        "oral_script": oral_script,
+        "oral_script_requirements": _oral_script_requirements(loss_points),
+        "knowledge_points": [
+            {
+                "title": theme_profile["knowledge_title"],
+                "explanation": theme_profile["knowledge_explanation"],
+            }
+        ],
+        "technical_principles": [
+            {
+                "title": theme_profile["principle_title"],
+                "explanation": theme_profile["principle_explanation"],
+            }
+        ],
+        "next_training_suggestions": list(theme_profile["next_training_suggestions"]),
+        "next_recommended_actions": _feedback_next_actions(
+            "answer_again" if loss_points else "generate_next_question"
+        ),
+        "polish_session_ref": {"resource_type": "polish_session", "resource_id": session.session_id},
+        "question_ref": {"resource_type": "question", "resource_id": question.question_id},
+        "answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+        "candidate_refs": candidate_refs,
+        "weakness_candidates": [
+            {
+                "candidate_ref": candidate_refs[0],
+                "status": "candidate",
+                "source_loss_points": [point["loss_point_id"] for point in loss_points],
+            }
+        ],
+        "asset_candidates": [
+            {
+                "candidate_ref": candidate_refs[1],
+                "status": "candidate",
+                "source_positive_points": [point["point_id"] for point in positive_evidence_points],
+            }
+        ],
+        "validation_result_ref": {"resource_type": "validation_result", "resource_id": f"{feedback_id}_validation"},
+        "trace_refs": [
+            {
+                "trace_ref_id": answer.answer_id,
+                "trace_type": "answer",
+                "created_at": answer.created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+            {
+                "trace_ref_id": feedback_id,
+                "trace_type": "feedback",
+                "created_at": created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+            {
+                "trace_ref_id": score_result_id,
+                "trace_type": "score_result",
+                "created_at": created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+        ],
+        "low_confidence_flags": list(feedback_input.low_confidence_flags),
+        "user_confirmation_required": False,
+        "feedback_metadata": {
+            "feedback_input_type": type(feedback_input).__name__,
+            "feedback_generation_mode": feedback_input.feedback_generation_mode,
+            "question_pattern": feedback_input.question_pattern,
+            "source_availability": feedback_input.source_availability,
+            "previous_answer_rounds_count": (
+                len(feedback_input.previous_answer_rounds)
+                if isinstance(feedback_input, RetryFeedbackInput)
+                else 0
+            ),
+        },
+        "legacy_compatibility": {"feedback_text": feedback_text},
+        "answer_id": answer.answer_id,
+        "question_id": question.question_id,
+        "question_text": feedback_input.question_text,
+        "answer_text": answer_text,
+        "score_delta": 0,
+        "dimension_delta": {},
+        "improved_points": [],
+        "remaining_gaps": [],
+        "repeated_loss_points": [],
+        "regressed_points": [],
+        "mastery_status": None,
+        "should_continue_same_question": bool(loss_points),
+        "should_generate_next_question": not bool(loss_points),
+        "next_retry_focus": [],
+        "updated_reference_answer": None,
+        "updated_oral_script": None,
+        "previous_loss_points": [],
+    }
+    if isinstance(feedback_input, RetryFeedbackInput):
+        payload.update(
+            _retry_delta_payload(
+                feedback_input=feedback_input,
+                score_result=score_result,
+                scoring_dimensions=scoring_dimensions,
+                loss_points=loss_points,
+                p7_reference_answer=p7_reference_answer,
+                oral_script=oral_script,
+            )
+        )
+    return payload
+
+
+def _ensure_feedback_legacy_compatibility(
+    payload: dict[str, Any],
+    *,
+    session: PolishSession,
+    question: PolishQuestion,
+    answer: PolishAnswer,
+    feedback_id: str,
+    ai_task_id: str,
+    score_result_id: str,
+    validation_result: dict[str, Any],
+    created_at,
+) -> dict[str, Any]:
+    strategy = _session_theme_strategy(session)
+    theme_profile = _theme_feedback_profile(strategy)
+    result = dict(payload)
+    result.setdefault("schema_id", FEEDBACK_SCHEMA_ID)
+    result.setdefault("schema_version", FEEDBACK_SCHEMA_VERSION)
+    result.setdefault("contract_id", "P-POLISH-005")
+    result.setdefault("contract_ids", list(FEEDBACK_CONTRACT_IDS))
+    result.setdefault("feedback_id", feedback_id)
+    result.setdefault("ai_task_id", ai_task_id)
+    result.setdefault("status", FEEDBACK_STATUS_GENERATED)
+    result.setdefault("polish_theme", strategy.theme)
+    result.setdefault("polish_theme_label", strategy.label)
+    result.setdefault("explicit_weight", strategy.explicit_weight)
+    result.setdefault("implicit_weight", strategy.implicit_weight)
+    result.setdefault(
+        "weight_explanation",
+        f"本轮按显性技术 {strategy.explicit_weight}%、隐性表达 {strategy.implicit_weight}% 综合打磨。",
+    )
+    result.setdefault("interview_intent", strategy.question_intent)
+    result.setdefault("p7_reference_answer", theme_profile["p7_reference_answer"])
+    result.setdefault("oral_script", theme_profile["oral_script"])
+    result.setdefault("next_training_suggestions", list(theme_profile["next_training_suggestions"]))
+    result.setdefault("technical_gaps", [])
+    result.setdefault("communication_gaps", [])
+    score_result = result.get("score_result")
+    if not isinstance(score_result, dict):
+        score_result = {
+            **compute_score_result_from_dimensions(result.get("scoring_dimensions", [])),
+            "score_result_id": score_result_id,
+            "score_type": str(ScoreType.POLISH_ANSWER),
+            "score_version": FEEDBACK_SCHEMA_VERSION,
+            "rubric_version": "polish_round_score.structured.v1",
+            "contract_id": "P-POLISH-004",
+            "confidence_level": "low",
+        }
+        result["score_result"] = score_result
+    score_value = int(score_result.get("score_value", 0))
+    explicit_score, implicit_score = _theme_scores(strategy, score_value)
+    result.setdefault("explicit_score", explicit_score)
+    result.setdefault("implicit_score", implicit_score)
+    result.setdefault("score_result_ref", {"resource_type": "score_result", "resource_id": score_result_id})
+    feedback_text = str(result.get("feedback_text") or result.get("feedback_summary") or UNNAMED_FEEDBACK_TEXT)
+    result["feedback_text"] = feedback_text
+    result["feedback_summary"] = str(result.get("feedback_summary") or feedback_text)
+    result.setdefault(
+        "reference_answer",
+        {
+            "contract_id": "P-POLISH-006",
+            "summary": result["p7_reference_answer"],
+            "outline": list(theme_profile["reference_outline"]),
+        },
+    )
+    result.setdefault("knowledge_points", [])
+    result.setdefault("technical_principles", [])
+    result.setdefault("next_recommended_actions", _feedback_next_actions("answer_again"))
+    if not isinstance(result.get("candidate_refs"), list) or not result["candidate_refs"]:
+        result["candidate_refs"] = _feedback_candidate_refs(feedback_id)
+    result.setdefault("validation_result_ref", {"resource_type": "validation_result", "resource_id": f"{feedback_id}_validation"})
+    result.setdefault(
+        "trace_refs",
+        [
+            {
+                "trace_ref_id": answer.answer_id,
+                "trace_type": "answer",
+                "created_at": answer.created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+            {
+                "trace_ref_id": feedback_id,
+                "trace_type": "feedback",
+                "created_at": created_at.isoformat(),
+                "redaction_boundary": "none",
+            },
+        ],
+    )
+    result.setdefault("low_confidence_flags", [])
+    result.setdefault("polish_session_ref", {"resource_type": "polish_session", "resource_id": session.session_id})
+    result.setdefault("question_ref", {"resource_type": "question", "resource_id": question.question_id})
+    result.setdefault("answer_ref", {"resource_type": "answer", "resource_id": answer.answer_id})
+    result.setdefault("legacy_compatibility", {})
+    if isinstance(result["legacy_compatibility"], dict):
+        result["legacy_compatibility"]["feedback_text"] = feedback_text
+    if answer.answer_round > 1 and result.get("mastery_status") not in {"regressed", "stuck", "improving", "mastered"}:
+        result["mastery_status"] = "stuck"
+    result.setdefault("score_delta", 0)
+    result.setdefault("dimension_delta", {})
+    result.setdefault("improved_points", [])
+    result.setdefault("remaining_gaps", [])
+    result.setdefault("repeated_loss_points", [])
+    result.setdefault("regressed_points", [])
+    result.setdefault("should_continue_same_question", False)
+    result.setdefault("should_generate_next_question", False)
+    result.setdefault("next_retry_focus", [])
+    result.setdefault("updated_reference_answer", None)
+    result.setdefault("updated_oral_script", None)
+    result.setdefault("previous_loss_points", [])
+    metadata = result.get("feedback_metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata["validation_allow_emit"] = bool(validation_result.get("allow_emit"))
+    metadata["validation_blocking_issues"] = list(validation_result.get("blocking_issues", []))
+    metadata["validation_warnings"] = list(validation_result.get("warnings", []))
+    result["feedback_metadata"] = metadata
+    return result
+
+
+def _safe_question_metadata(raw_metadata: object) -> dict[str, Any]:
+    try:
+        return normalize_question_metadata(raw_metadata)
+    except Exception:
+        return empty_question_metadata().to_dict()
+
+
+def _is_question_metadata_missing(raw_metadata: object) -> bool:
+    return (
+        not isinstance(raw_metadata, dict)
+        or not raw_metadata.get("question_pattern")
+        or not raw_metadata.get("expected_answer_dimensions")
+    )
+
+
+def _metadata_text(metadata: dict[str, Any], key: str, fallback: str) -> str:
+    value = metadata.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return fallback
+
+
+def _expected_answer_dimensions(metadata: dict[str, Any]) -> tuple[str, ...]:
+    raw_dimensions = metadata.get("expected_answer_dimensions")
+    if isinstance(raw_dimensions, (list, tuple)):
+        dimensions = tuple(str(item).strip() for item in raw_dimensions if str(item).strip())
+        if dimensions:
+            return dimensions
+    return ("technical_depth", "answer_structure", "evidence_alignment")
+
+
+def _question_sources_for_feedback_input(question: PolishQuestion) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {
+            "index": source.index,
+            "source_type": source.source_type,
+            "title": source.title,
+            "excerpt": source.excerpt,
+            "ref_id": source.ref_id,
+            "availability": source.availability,
+        }
+        for source in question.question_sources
+    )
+
+
+def _evidence_refs_for_feedback_input(question: PolishQuestion) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {"resource_type": "evidence", "resource_id": evidence_ref}
+        for evidence_ref in question.evidence_refs
+    )
+
+
+def _feedback_input_low_confidence_flags(
+    *,
+    question_metadata: dict[str, Any],
+    answer_text: str,
+    metadata_missing: bool,
+) -> tuple[dict[str, Any], ...]:
+    flags: list[dict[str, Any]] = []
+    raw_flags = question_metadata.get("low_confidence_flags", [])
+    if isinstance(raw_flags, (list, tuple)):
+        for index, raw_flag in enumerate(raw_flags, start=1):
+            if isinstance(raw_flag, dict):
+                flags.append(dict(raw_flag))
+            elif str(raw_flag).strip():
+                flags.append(
+                    {
+                        "flag_id": str(raw_flag).strip(),
+                        "reason": "question_metadata_low_confidence",
+                        "impact_scope": "feedback_input",
+                        "recommended_action": "use_safe_structured_feedback",
+                    }
+                )
+            elif index == 1:
+                continue
+    if metadata_missing:
+        flags.append(
+            {
+                "flag_id": "question_metadata_missing",
+                "reason": "question_metadata_missing_or_legacy_question",
+                "impact_scope": "question_pattern, expected_answer_dimensions, source_availability",
+                "recommended_action": "fallback_to_empty_question_metadata",
+            }
+        )
+    flags.extend(_feedback_low_confidence_flags(answer_text))
+    return tuple(flags)
+
+
+def _previous_feedback_payloads(previous_feedbacks: tuple[PolishFeedback, ...]) -> tuple[dict[str, Any], ...]:
+    payloads: list[dict[str, Any]] = []
+    for feedback in previous_feedbacks[-PREVIOUS_FEEDBACK_SUMMARY_LIMIT:]:
+        payload = _feedback_payload_from_summary(feedback.feedback_summary)
+        if payload is not None:
+            payloads.append(_compact_previous_feedback_summary(payload))
+    return tuple(payloads)
+
+
+def _compact_previous_feedback_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    reference_answer = _compact_text(payload.get("p7_reference_answer"))
+    oral_script = _compact_text(payload.get("oral_script"))
+    return {
+        "feedback_id": payload.get("feedback_id"),
+        "score_result": _compact_score_result(payload.get("score_result")),
+        "scoring_dimensions": _compact_scoring_dimensions(payload.get("scoring_dimensions")),
+        "loss_points": _compact_loss_points(payload.get("loss_points")),
+        "p7_reference_answer": reference_answer,
+        "reference_answer_summary": reference_answer,
+        "oral_script": oral_script,
+        "oral_script_summary": oral_script,
+        "next_recommended_actions": [
+            str(action)
+            for action in (payload.get("next_recommended_actions") or [])
+            if isinstance(action, str)
+        ],
+    }
+
+
+def _compact_score_result(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    allowed_keys = {
+        "score_result_id",
+        "score_type",
+        "score_value",
+        "score_version",
+        "rubric_version",
+        "contract_id",
+        "confidence_level",
+        "weight_total",
+    }
+    return {key: value[key] for key in allowed_keys if key in value}
+
+
+def _compact_scoring_dimensions(value: object) -> list[dict[str, Any]]:
+    dimensions: list[dict[str, Any]] = []
+    for dimension in _dict_list(value)[:PREVIOUS_FEEDBACK_DIMENSION_LIMIT]:
+        dimensions.append(
+            {
+                key: dimension[key]
+                for key in (
+                    "dimension_id",
+                    "score_value",
+                    "max_score",
+                    "weight",
+                    "is_critical",
+                    "rationale",
+                )
+                if key in dimension
+            }
+        )
+    return dimensions
+
+
+def _compact_loss_points(value: object) -> list[dict[str, Any]]:
+    loss_points: list[dict[str, Any]] = []
+    for point in _dict_list(value)[:PREVIOUS_FEEDBACK_LOSS_POINT_LIMIT]:
+        loss_points.append(
+            {
+                key: point[key]
+                for key in (
+                    "loss_point_id",
+                    "title",
+                    "deducted_points",
+                    "reason",
+                    "critical",
+                    "dimension_id",
+                    "required_reference_terms",
+                    "required_oral_terms",
+                )
+                if key in point
+            }
+        )
+    return loss_points
+
+
+def _compact_text(value: object) -> str:
+    text = str(value or "").strip()
+    if len(text) <= PREVIOUS_FEEDBACK_TEXT_LIMIT:
+        return text
+    return text[:PREVIOUS_FEEDBACK_TEXT_LIMIT]
+
+
+def _previous_loss_points_from_payloads(payloads: tuple[dict[str, Any], ...]) -> tuple[dict[str, Any], ...]:
+    return tuple(point for payload in payloads for point in _dict_list(payload.get("loss_points")))
+
+
+def _latest_payload_text(payloads: tuple[dict[str, Any], ...], key: str) -> str:
+    for payload in reversed(payloads):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _dict_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _structured_scoring_dimensions(answer_text: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "dimension_id": "technical_depth",
+            "score_value": _score_by_terms(
+                answer_text,
+                base=56,
+                increment=8,
+                terms=("幂等", "失败", "补偿", "指标", "取舍", "状态", "监控", "一致性"),
+            ),
+            "max_score": 100,
+            "weight": 0.5,
+            "is_critical": True,
+            "rationale": "评估技术链路、失败路径、工程约束和指标验证。",
+        },
+        {
+            "dimension_id": "answer_structure",
+            "score_value": _score_by_terms(
+                answer_text,
+                base=62,
+                increment=5,
+                terms=("背景", "负责", "先", "结果", "复盘", "说明", "为什么", "方案"),
+            ),
+            "max_score": 100,
+            "weight": 0.3,
+            "is_critical": False,
+            "rationale": "评估回答是否先结论、再结构化展开。",
+        },
+        {
+            "dimension_id": "evidence_alignment",
+            "score_value": _score_by_terms(
+                answer_text,
+                base=58,
+                increment=7,
+                terms=("指标", "上线", "业务", "项目", "核心", "接口", "验证", "数据"),
+            ),
+            "max_score": 100,
+            "weight": 0.2,
+            "is_critical": False,
+            "rationale": "评估回答是否绑定题目证据和可验证结果。",
+        },
+    ]
+
+
+def _score_by_terms(answer_text: str, *, base: int, increment: int, terms: tuple[str, ...]) -> int:
+    compact_answer = answer_text.lower()
+    hits = sum(1 for term in terms if term.lower() in compact_answer)
+    return _clamp_score(base + hits * increment)
+
+
+def _feedback_missing_dimension_ids(answer_text: str) -> set[str]:
+    dimensions = _structured_scoring_dimensions(answer_text)
+    return {
+        str(dimension["dimension_id"])
+        for dimension in dimensions
+        if int(dimension["score_value"]) < 70
+    }
+
+
+def _structured_loss_points(
+    *,
+    feedback_id: str,
+    answer: PolishAnswer,
+    scoring_dimensions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    dimensions_by_id = {str(dimension["dimension_id"]): dimension for dimension in scoring_dimensions}
+    loss_points: list[dict[str, Any]] = []
+    technical_score = int(dimensions_by_id["technical_depth"]["score_value"])
+    if technical_score < 70:
+        loss_points.append(
+            {
+                "loss_point_id": f"{feedback_id}_loss_technical_depth",
+                "title": "失败路径和指标验证不足",
+                "deducted_points": max(8, 80 - technical_score),
+                "reason": "需要补充幂等、失败补偿、状态收敛和指标验证，而不是只描述做了功能。",
+                "critical": True,
+                "dimension_id": "technical_depth",
+                "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+                "required_reference_terms": ["失败补偿", "指标"],
+                "required_oral_terms": ["失败补偿", "指标"],
+            }
+        )
+    structure_score = int(dimensions_by_id["answer_structure"]["score_value"])
+    if structure_score < 70:
+        loss_points.append(
+            {
+                "loss_point_id": f"{feedback_id}_loss_answer_structure",
+                "title": "回答结构不足",
+                "deducted_points": max(6, 78 - structure_score),
+                "reason": "建议先给结论，再按背景、职责、动作、结果和复盘展开。",
+                "critical": False,
+                "dimension_id": "answer_structure",
+                "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+                "required_reference_terms": ["背景", "结果"],
+                "required_oral_terms": ["先给结论"],
+            }
+        )
+    evidence_score = int(dimensions_by_id["evidence_alignment"]["score_value"])
+    if evidence_score < 70:
+        loss_points.append(
+            {
+                "loss_point_id": f"{feedback_id}_loss_evidence_alignment",
+                "title": "证据和结果绑定不足",
+                "deducted_points": max(6, 76 - evidence_score),
+                "reason": "需要把项目证据、业务目标、上线结果或验证指标讲清楚。",
+                "critical": False,
+                "dimension_id": "evidence_alignment",
+                "related_answer_ref": {"resource_type": "answer", "resource_id": answer.answer_id},
+                "required_reference_terms": ["验证指标"],
+                "required_oral_terms": ["验证指标"],
+            }
+        )
+    return loss_points
+
+
+def _structured_positive_evidence_points(
+    *,
+    answer: PolishAnswer,
+    answer_text: str,
+    scoring_dimensions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    best_dimension = max(scoring_dimensions, key=lambda item: int(item["score_value"]))
+    return [
+        {
+            "point_id": f"{answer.answer_id}_positive_001",
+            "title": "回答中已有可复用表达",
+            "evidence_excerpt": answer_text[:80],
+            "dimension_id": best_dimension["dimension_id"],
+            "related_dimension": best_dimension["dimension_id"],
+            "evidence_source": "answer_text",
+            "location": "answer",
+        }
+    ]
+
+
+def _structured_reference_answer(
+    *,
+    theme_profile: dict[str, object],
+    loss_points: list[dict[str, Any]],
+    question_text: str,
+) -> str:
+    required_terms = _required_terms_from_loss_points(loss_points, "required_reference_terms")
+    required_text = "、".join(required_terms) if required_terms else "业务目标、技术取舍和验证指标"
+    return (
+        f"{theme_profile['p7_reference_answer']} 针对题目“{question_text[:80]}”，"
+        f"参考答案必须补齐 {required_text}，并按结论、约束、方案、结果复盘的顺序展开。"
+    )
+
+
+def _structured_oral_script(
+    *,
+    theme_profile: dict[str, object],
+    loss_points: list[dict[str, Any]],
+) -> str:
+    required_terms = _required_terms_from_loss_points(loss_points, "required_oral_terms")
+    required_text = "、".join(required_terms) if required_terms else "业务目标和验证指标"
+    return (
+        f"{theme_profile['oral_script']} 面试现场我会先给结论，再用一句话补充 {required_text}，"
+        "最后说明复盘和下一步优化。"
+    )
+
+
+def _required_terms_from_loss_points(loss_points: list[dict[str, Any]], key: str) -> list[str]:
+    terms: list[str] = []
+    for point in loss_points:
+        raw_terms = point.get(key)
+        if not isinstance(raw_terms, (list, tuple)):
+            continue
+        for term in raw_terms:
+            text = str(term).strip()
+            if text and text not in terms:
+                terms.append(text)
+    return terms
+
+
+def _reference_requirements(loss_points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "requirement_id": f"{point['loss_point_id']}_reference_requirement",
+            "requirement": point["reason"],
+            "required_coverage_terms": list(point.get("required_reference_terms", [])),
+        }
+        for point in loss_points
+        if point.get("required_reference_terms")
+    ]
+
+
+def _oral_script_requirements(loss_points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "requirement_id": f"{point['loss_point_id']}_oral_requirement",
+            "requirement": point["reason"],
+            "required_coverage_terms": list(point.get("required_oral_terms", [])),
+        }
+        for point in loss_points
+        if point.get("required_oral_terms")
+    ]
+
+
+def _answer_strengths(answer_text: str) -> list[str]:
+    strengths: list[str] = []
+    if any(term in answer_text for term in ("背景", "负责", "先")):
+        strengths.append("回答具备基础结构意识。")
+    if any(term in answer_text for term in ("幂等", "失败", "补偿", "指标", "取舍")):
+        strengths.append("回答开始覆盖工程约束或技术取舍。")
+    return strengths or ["回答已提供可继续打磨的基础信息。"]
+
+
+def _answer_risks(loss_points: list[dict[str, Any]]) -> list[str]:
+    if any(point.get("critical") for point in loss_points):
+        return ["critical loss_points 未修复前，不应进入正式 ScoreResult 或正式 Weakness 写入。"]
+    if loss_points:
+        return ["仍有非关键缺口，需要继续同题打磨。"]
+    return []
+
+
+def _feedback_candidate_refs(feedback_id: str) -> list[dict[str, str]]:
+    return [
+        {"resource_type": "weakness_candidate", "resource_id": f"{feedback_id}_weakness_001"},
+        {"resource_type": "asset_candidate", "resource_id": f"{feedback_id}_asset_001"},
+    ]
+
+
+def _retry_delta_payload(
+    *,
+    feedback_input: RetryFeedbackInput,
+    score_result: dict[str, Any],
+    scoring_dimensions: list[dict[str, Any]],
+    loss_points: list[dict[str, Any]],
+    p7_reference_answer: str,
+    oral_script: str,
+) -> dict[str, Any]:
+    previous_payload = feedback_input.previous_feedbacks[-1] if feedback_input.previous_feedbacks else {}
+    previous_score = _score_value_from_payload(previous_payload)
+    previous_dimensions = {
+        str(dimension.get("dimension_id")): int(dimension.get("score_value", 0))
+        for dimension in _dict_list(previous_payload.get("scoring_dimensions"))
+        if dimension.get("dimension_id")
+    }
+    current_dimensions = {
+        str(dimension["dimension_id"]): int(dimension["score_value"])
+        for dimension in scoring_dimensions
+    }
+    dimension_delta = {
+        dimension_id: current_score - previous_dimensions.get(dimension_id, 0)
+        for dimension_id, current_score in current_dimensions.items()
+    }
+    current_loss_dimensions = {
+        str(point.get("dimension_id"))
+        for point in loss_points
+        if point.get("dimension_id")
+    }
+    previous_loss_dimensions = {
+        str(point.get("dimension_id"))
+        for point in feedback_input.previous_loss_points
+        if point.get("dimension_id")
+    }
+    repeated_loss_points = tuple(
+        str(point["loss_point_id"])
+        for point in feedback_input.previous_loss_points
+        if point.get("dimension_id") in current_loss_dimensions and point.get("loss_point_id")
+    )
+    improved_points = tuple(
+        str(point["loss_point_id"])
+        for point in feedback_input.previous_loss_points
+        if point.get("dimension_id") not in current_loss_dimensions and point.get("loss_point_id")
+    )
+    regressed_points = tuple(
+        str(point["loss_point_id"])
+        for point in loss_points
+        if point.get("dimension_id") not in previous_loss_dimensions and point.get("loss_point_id")
+    )
+    remaining_gaps = tuple(
+        str(point["loss_point_id"])
+        for point in loss_points
+        if point.get("loss_point_id")
+    )
+    score_delta = int(score_result.get("score_value", 0)) - previous_score
+    mastery_status = _retry_mastery_status(
+        score_value=int(score_result.get("score_value", 0)),
+        score_delta=score_delta,
+        loss_points=loss_points,
+        repeated_loss_points=repeated_loss_points,
+        improved_points=improved_points,
+        regressed_points=regressed_points,
+    )
+    should_generate_next_question = mastery_status == "mastered"
+    should_continue_same_question = not should_generate_next_question
+    return {
+        "score_delta": score_delta,
+        "dimension_delta": dimension_delta,
+        "improved_points": list(improved_points),
+        "remaining_gaps": list(remaining_gaps),
+        "repeated_loss_points": list(repeated_loss_points),
+        "regressed_points": list(regressed_points),
+        "mastery_status": mastery_status,
+        "should_continue_same_question": should_continue_same_question,
+        "should_generate_next_question": should_generate_next_question,
+        "next_retry_focus": _next_retry_focus(loss_points, remaining_gaps),
+        "updated_reference_answer": p7_reference_answer,
+        "updated_oral_script": oral_script,
+        "previous_loss_points": list(feedback_input.previous_loss_points),
+    }
+
+
+def _score_value_from_payload(payload: dict[str, Any]) -> int:
+    score_result = payload.get("score_result")
+    if isinstance(score_result, dict):
+        try:
+            return int(score_result.get("score_value", 0))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _retry_mastery_status(
+    *,
+    score_value: int,
+    score_delta: int,
+    loss_points: list[dict[str, Any]],
+    repeated_loss_points: tuple[str, ...],
+    improved_points: tuple[str, ...],
+    regressed_points: tuple[str, ...],
+) -> str:
+    if regressed_points:
+        return "regressed"
+    if repeated_loss_points:
+        return "stuck"
+    if not loss_points and score_value >= 80:
+        return "mastered"
+    if score_delta > 0 or improved_points:
+        return "improving"
+    return "stuck"
+
+
+def _next_retry_focus(
+    loss_points: list[dict[str, Any]],
+    remaining_gaps: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    if not loss_points or not remaining_gaps:
+        return []
+    first_loss = loss_points[0]
+    return [
+        {
+            "focus_area": remaining_gaps[0],
+            "priority": 1,
+            "related_dimension": first_loss.get("dimension_id"),
+        }
+    ]
 
 
 def _build_contract_shaped_feedback_payload(

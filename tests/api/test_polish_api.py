@@ -1,15 +1,21 @@
 ﻿from __future__ import annotations
 
 from contextlib import contextmanager
+import json
 import logging
 from pathlib import Path
+from time import perf_counter
 from unittest.mock import patch
 
 from fastapi import FastAPI
 
+import pytest
+
+import app.api.v1.polish as polish_api
 from app.api.deps import get_db_session_factory, get_llm_transport, require_authenticated_actor
 from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1.polish import router as polish_router
+from app.application.polish import use_cases as polish_use_cases
 from app.application.polish.progress_prompts import (
     INITIAL_PROGRESS_TREE_PROMPT_CONTRACT,
     POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
@@ -21,7 +27,8 @@ from app.application.polish.progress_prompts import (
     build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
-from app.application.polish.entities import PolishQuestion, PolishSession
+from app.application.polish.entities import PolishFeedback, PolishQuestion, PolishSession
+from app.application.polish.feedback_quality import compute_score_result_from_dimensions
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.progress_tree import PolishProgressTreeLlmService, build_progress_node_question
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
@@ -77,6 +84,15 @@ ACTOR_B = CurrentActor(
     email_normalized="owner-b@example.com",
     display_name="Owner B",
 )
+
+
+async def _run_inline_threadpool(func, *args, **kwargs):
+    return func(*args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _patch_polish_run_in_threadpool(monkeypatch):
+    monkeypatch.setattr(polish_api, "run_in_threadpool", _run_inline_threadpool)
 
 
 def test_polish_theme_strategies_expose_expected_weights() -> None:
@@ -1451,10 +1467,34 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_body["data"]["task_type"] == "polish_feedback_generation"
     assert feedback_body["data"]["status"] == "succeeded"
     assert feedback_body["data"]["score_type"] == "polish_answer"
-    assert feedback_body["data"]["feedback_payload"]["polish_theme"] == "mixed"
-    assert feedback_body["data"]["feedback_payload"]["explicit_score"] is not None
-    assert feedback_body["data"]["feedback_payload"]["implicit_score"] is not None
-    assert feedback_body["data"]["feedback_payload"]["weight_explanation"]
+    feedback_payload = feedback_body["data"]["feedback_payload"]
+    assert feedback_payload["schema_id"] == "polish_feedback_payload_v1"
+    assert feedback_payload["schema_version"] == "1.0"
+    assert feedback_payload["polish_theme"] == "mixed"
+    assert feedback_payload["explicit_score"] is not None
+    assert feedback_payload["implicit_score"] is not None
+    assert feedback_payload["weight_explanation"]
+    assert feedback_payload["feedback_metadata"]["feedback_input_type"] == "FeedbackInput"
+    assert feedback_payload["feedback_metadata"]["validation_allow_emit"] is True
+    assert feedback_payload["scoring_dimensions"]
+    expected_score = compute_score_result_from_dimensions(feedback_payload["scoring_dimensions"])["score_value"]
+    assert feedback_payload["score_result"]["score_value"] == expected_score
+    dimension_ids = {dimension["dimension_id"] for dimension in feedback_payload["scoring_dimensions"]}
+    assert all(point["dimension_id"] in dimension_ids for point in feedback_payload["loss_points"])
+    critical_loss_points = [point for point in feedback_payload["loss_points"] if point["critical"]]
+    assert critical_loss_points
+    for point in critical_loss_points:
+        for term in point["required_reference_terms"]:
+            assert term in feedback_payload["p7_reference_answer"]
+        for term in point["required_oral_terms"]:
+            assert term in feedback_payload["oral_script"]
+    assert feedback_payload["candidate_refs"]
+    assert feedback_payload["candidate_refs"][0]["resource_type"] == "weakness_candidate"
+    assert feedback_payload["weakness_candidates"][0]["status"] == "candidate"
+    assert feedback_payload["asset_candidates"][0]["status"] == "candidate"
+    assert "weaknesses" not in feedback_payload
+    assert "assets" not in feedback_payload
+    assert feedback_payload["legacy_compatibility"]["feedback_text"] == feedback_payload["feedback_text"]
     assert feedback_body["data"]["candidate_refs"] == []
     assert feedback_body["data"]["suggestion_refs"] == []
     assert "provider_payload" not in _collect_keys(feedback_body)
@@ -1483,7 +1523,36 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert status_code == 202
     assert second_feedback_body["data"]["answer_id"] == second_answer_id
     assert second_feedback_body["data"]["answer_round"] == 2
-    assert second_feedback_body["data"]["feedback_payload"]["answer_ref"]["resource_id"] == second_answer_id
+    retry_payload = second_feedback_body["data"]["feedback_payload"]
+    assert retry_payload["answer_ref"]["resource_id"] == second_answer_id
+    assert retry_payload["feedback_metadata"]["feedback_input_type"] == "RetryFeedbackInput"
+    for field in (
+        "score_delta",
+        "dimension_delta",
+        "improved_points",
+        "remaining_gaps",
+        "repeated_loss_points",
+        "regressed_points",
+        "mastery_status",
+        "should_continue_same_question",
+        "should_generate_next_question",
+        "next_retry_focus",
+        "updated_reference_answer",
+        "updated_oral_script",
+    ):
+        assert field in retry_payload
+    assert retry_payload["score_delta"] == (
+        retry_payload["score_result"]["score_value"] - feedback_payload["score_result"]["score_value"]
+    )
+    assert set(retry_payload["dimension_delta"]) == dimension_ids
+    assert retry_payload["improved_points"]
+    assert retry_payload["mastery_status"] in {"regressed", "stuck", "improving", "mastered"}
+    assert retry_payload["updated_reference_answer"] == retry_payload["p7_reference_answer"]
+    assert retry_payload["updated_oral_script"] == retry_payload["oral_script"]
+    json.dumps(retry_payload, ensure_ascii=False)
+    retry_payload_keys = _collect_keys(retry_payload)
+    assert "previous_feedbacks" not in retry_payload_keys
+    assert "feedback_payload" not in retry_payload_keys
 
     status_code, refresh_body = call_json(
         app,
@@ -1564,6 +1633,246 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert detail_data["progress_tree_state"]["updated_from_turns_count"] == 1
     state_text = str(detail_data["progress_tree_state"])
     assert "v2_local_state_refresh" in state_text
+
+
+def test_polish_retry_previous_feedback_summary_is_compact() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={"question_id": question_id, "answer_text": "第一轮回答。"},
+    )
+    _, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_body["data"]["answer_id"]},
+    )
+
+    stored_feedbacks = SqlAlchemyPolishRepository(session_factory).list_feedbacks_for_session(OWNER_A, session_id)
+    summaries = polish_use_cases._previous_feedback_payloads(stored_feedbacks)
+
+    assert len(summaries) == 1
+    summary = summaries[0]
+    assert {
+        "score_result",
+        "scoring_dimensions",
+        "loss_points",
+        "p7_reference_answer",
+        "oral_script",
+        "next_recommended_actions",
+    }.issubset(summary)
+    assert summary["score_result"]["score_value"] == feedback_body["data"]["feedback_payload"]["score_result"]["score_value"]
+    assert summary["scoring_dimensions"]
+    assert summary["loss_points"]
+    assert summary["p7_reference_answer"]
+    assert summary["oral_script"]
+    assert summary["next_recommended_actions"]
+    summary_keys = _collect_keys(summary)
+    assert "previous_feedbacks" not in summary_keys
+    assert "feedback_payload" not in summary_keys
+    assert "feedback_metadata" not in summary_keys
+    assert "answer_diagnosis" not in summary_keys
+    assert "positive_evidence_points" not in summary_keys
+
+
+def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, first_answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={"question_id": question_id, "answer_text": "第一轮回答。"},
+    )
+    call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": first_answer_body["data"]["answer_id"]},
+    )
+    _, second_answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={"question_id": question_id, "answer_text": "第二轮回答。"},
+    )
+
+    started_at = perf_counter()
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": second_answer_body["data"]["answer_id"]},
+    )
+    elapsed_seconds = perf_counter() - started_at
+
+    assert status_code == 202
+    assert elapsed_seconds < 5.0
+    payload = feedback_body["data"]["feedback_payload"]
+    assert payload["repeated_loss_points"]
+    assert payload["mastery_status"] == "stuck"
+    assert payload["should_continue_same_question"] is True
+    assert payload["should_generate_next_question"] is False
+    assert payload["next_retry_focus"]
+
+
+def test_polish_feedback_falls_back_when_question_metadata_missing() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    with session_factory() as db:
+        question = db.get(QuestionModel, question_id)
+        assert question is not None
+        question.question_metadata_json = None
+        db.commit()
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": "我会补充接口幂等、失败补偿、指标验证和上线复盘。",
+        },
+    )
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_body["data"]["answer_id"]},
+    )
+
+    assert status_code == 202
+    payload = feedback_body["data"]["feedback_payload"]
+    assert payload["feedback_text"]
+    assert payload["feedback_metadata"]["validation_allow_emit"] is True
+    assert any(flag["flag_id"] == "question_metadata_missing" for flag in payload["low_confidence_flags"])
+
+
+def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={"question_id": question_id, "answer_text": "第一轮回答。"},
+    )
+    answer_id = answer_body["data"]["answer_id"]
+    now = utc_now()
+    SqlAlchemyPolishRepository(session_factory).add_feedback(
+        PolishFeedback(
+            feedback_id="trc_legacy_feedback_payload",
+            owner_id=OWNER_A,
+            actor_id=OWNER_A,
+            session_id=session_id,
+            answer_id=answer_id,
+            ai_task_id="task_legacy_feedback_payload",
+            score_result_id="score_legacy_feedback_payload",
+            feedback_summary=json.dumps(
+                {
+                    "contract_id": "P-POLISH-005",
+                    "status": "generated",
+                    "feedback_id": "trc_legacy_feedback_payload",
+                    "feedback_text": "legacy feedback text",
+                    "feedback_summary": "legacy feedback text",
+                    "next_recommended_actions": ["answer_again"],
+                    "low_confidence_flags": [],
+                    "trace_refs": [],
+                    "legacy_compatibility": {"feedback_text": "legacy feedback text"},
+                },
+                ensure_ascii=False,
+            ),
+            status="generated",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    answer = detail_body["data"]["turns"][0]["answers"][0]
+    assert answer["feedback_text"] == "legacy feedback text"
+    assert answer["feedback_payload"]["feedback_text"] == "legacy feedback text"
 
 
 def test_polish_question_metadata_repository_roundtrips_and_falls_back_safely() -> None:
