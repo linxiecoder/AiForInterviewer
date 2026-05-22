@@ -10,6 +10,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 
 import pytest
+from sqlalchemy import text
 
 import app.api.v1.polish as polish_api
 from app.api.deps import get_db_session_factory, get_llm_transport, require_authenticated_actor
@@ -101,6 +102,11 @@ STRUCTURED_FEEDBACK_OPTIONAL_FIELDS = (
     "repeated_loss_points",
     "regressed_points",
     "next_retry_focus",
+    "weakness_candidates",
+    "asset_candidates",
+    "training_suggestion_candidates",
+    "oral_script_candidates",
+    "polished_answer_candidates",
 )
 
 
@@ -1539,8 +1545,33 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_payload["candidate_refs"][0]["resource_type"] == "weakness_candidate"
     assert feedback_payload["weakness_candidates"][0]["status"] == "candidate"
     assert feedback_payload["asset_candidates"][0]["status"] == "candidate"
+    assert feedback_payload["training_suggestion_candidates"][0]["status"] == "candidate"
+    assert feedback_payload["oral_script_candidates"][0]["status"] == "candidate"
+    assert feedback_payload["polished_answer_candidates"][0]["status"] == "candidate"
+    for candidate in (
+        feedback_payload["weakness_candidates"]
+        + feedback_payload["asset_candidates"]
+        + feedback_payload["training_suggestion_candidates"]
+        + feedback_payload["oral_script_candidates"]
+        + feedback_payload["polished_answer_candidates"]
+    ):
+        assert candidate["source_refs"]
+        assert candidate["trace_refs"]
+        assert candidate["merge_key"]
+        assert candidate["user_confirmation_required"] is True
+        assert candidate["target_formal_ref"] is None
+    assert feedback_payload["polished_answer_candidates"][0]["candidate_payload"]["model_suggested"] is True
     assert "weaknesses" not in feedback_payload
     assert "assets" not in feedback_payload
+    with session_factory() as db:
+        for table_name in (
+            "weaknesses",
+            "weakness_candidates",
+            "assets",
+            "asset_versions",
+            "training_recommendations",
+        ):
+            assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
     assert feedback_payload["legacy_compatibility"]["feedback_text"] == feedback_payload["feedback_text"]
     assert feedback_body["data"]["candidate_refs"] == []
     assert feedback_body["data"]["suggestion_refs"] == []
@@ -1552,6 +1583,9 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_task_schema_payload["feedback_payload"]["scoring_dimensions"]
     assert feedback_task_schema_payload["feedback_payload"]["positive_evidence_points"]
     assert feedback_task_schema_payload["feedback_payload"]["candidate_refs"][0]["resource_type"] == "weakness_candidate"
+    assert feedback_task_schema_payload["feedback_payload"]["training_suggestion_candidates"]
+    assert feedback_task_schema_payload["feedback_payload"]["oral_script_candidates"]
+    assert feedback_task_schema_payload["feedback_payload"]["polished_answer_candidates"]
     assert "weaknesses" not in feedback_task_schema_payload["feedback_payload"]
     assert "assets" not in feedback_task_schema_payload["feedback_payload"]
 
@@ -1567,6 +1601,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     structured_session_payload = structured_answer_schema_payload["feedback_payload"]
     for field in STRUCTURED_FEEDBACK_OPTIONAL_FIELDS:
         assert field in structured_session_payload
+    assert structured_session_payload["candidate_refs"]
+    assert structured_session_payload["training_suggestion_candidates"]
+    assert structured_session_payload["oral_script_candidates"]
+    assert structured_session_payload["polished_answer_candidates"]
     assert structured_session_payload["score_result"]["score_value"] == expected_score
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(structured_detail_body)
@@ -1958,6 +1996,54 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
     assert legacy_schema_payload["feedback_payload"]["legacy_compatibility"]["feedback_text"] == "legacy feedback text"
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_completion"):
         assert forbidden_key not in _collect_keys(detail_body)
+
+
+def test_polish_feedback_candidate_extraction_failure_does_not_500(monkeypatch) -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={"question_id": question_id, "answer_text": "我会补充接口幂等和失败补偿。"},
+    )
+
+    def _raise_candidate_failure(*args, **kwargs):
+        raise RuntimeError("candidate extraction failure")
+
+    monkeypatch.setattr(polish_use_cases, "extract_feedback_candidates", _raise_candidate_failure)
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_body["data"]["answer_id"]},
+    )
+
+    assert status_code == 202
+    payload = feedback_body["data"]["feedback_payload"]
+    assert payload["feedback_metadata"]["candidate_extraction_failed"] is True
+    assert payload["feedback_metadata"]["candidate_extraction_error"] == "RuntimeError"
+    assert payload["legacy_compatibility"]["feedback_text"] == payload["feedback_text"]
 
 
 def test_polish_question_metadata_repository_roundtrips_and_falls_back_safely() -> None:

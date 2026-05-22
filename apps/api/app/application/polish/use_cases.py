@@ -17,6 +17,7 @@ from app.application.polish.commands import (
     CreatePolishSessionCommand,
     RefreshPolishProgressTreeStateCommand,
 )
+from app.application.polish.candidates import CandidateExtractionInput, extract_feedback_candidates
 from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
@@ -544,6 +545,27 @@ class PolishUseCases:
             validation_result=validation_result,
             created_at=now,
         )
+        try:
+            feedback_payload = extract_feedback_candidates(
+                CandidateExtractionInput(
+                    owner_id=command.owner_id,
+                    session_id=command.session_id,
+                    question_id=question.question_id,
+                    answer_id=answer.answer_id,
+                    feedback_id=feedback_id,
+                    score_result_id=score_result_id,
+                    feedback_payload=feedback_payload,
+                    question_metadata=question.question_metadata,
+                    created_at=now,
+                )
+            )
+        except Exception as exc:
+            metadata = feedback_payload.get("feedback_metadata")
+            if not isinstance(metadata, dict):
+                metadata = {}
+            metadata["candidate_extraction_failed"] = True
+            metadata["candidate_extraction_error"] = type(exc).__name__
+            feedback_payload["feedback_metadata"] = metadata
         payload_error = _validate_contract_shaped_feedback_payload(feedback_payload)
         if payload_error is not None:
             return ApplicationResult(error=payload_error)

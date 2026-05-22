@@ -263,6 +263,9 @@ class PolishFeedbackPayload(BaseModel):
     feedback_metadata: dict[str, Any] | None = None
     weakness_candidates: list[dict[str, Any]] | None = None
     asset_candidates: list[dict[str, Any]] | None = None
+    training_suggestion_candidates: list[dict[str, Any]] | None = None
+    oral_script_candidates: list[dict[str, Any]] | None = None
+    polished_answer_candidates: list[dict[str, Any]] | None = None
     technical_gaps: list[str] | None = None
     communication_gaps: list[str] | None = None
     should_continue_same_question: bool | None = None
