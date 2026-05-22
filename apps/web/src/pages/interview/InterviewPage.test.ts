@@ -247,7 +247,27 @@ type WorkbenchHeaderChipsAreStable = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS, readonly ["岗位", "简历", "当前节点", "能力主题", "进度", "当前节点表现"]>
 >;
 type WorkbenchFeedbackItemsAreStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_FEEDBACK_ITEMS, readonly ["点评", "打分", "失分点评价", "参考回答", "考点解析", "技术原理扩展", "权重说明", "面试意图", "技术短板", "表达短板", "P7 级参考答案", "口语化范本", "下一轮训练建议"]>
+  Equal<
+    typeof INTERVIEW_WORKBENCH_FEEDBACK_ITEMS,
+    readonly [
+      "点评",
+      "打分",
+      "得分点",
+      "失分点",
+      "参考回答",
+      "考点解析",
+      "技术原理扩展",
+      "权重说明",
+      "面试意图",
+      "技术短板",
+      "表达短板",
+      "高阶参考答案",
+      "口语化范本",
+      "多次回答改进",
+      "下一轮重答重点",
+      "下一轮训练建议",
+    ]
+  >
 >;
 type WorkbenchPrimaryActionsAreStable = Expect<
   Equal<
@@ -1026,9 +1046,43 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
       implicit_score: 76,
       technical_gaps: ["幂等键设计还不够具体"],
       communication_gaps: ["背景压缩可以更短"],
+      positive_evidence_points: [
+        {
+          title: "回答中已有可复用表达",
+          evidence_excerpt: "我负责 FastAPI 接口编排",
+          dimension_id: "answer_structure",
+          trace_id: "trace_should_not_render",
+          internal_notes: "internal_should_not_render",
+          contract_shaped_fake: "fake_should_not_render",
+        },
+        {
+          raw_prompt: "raw_prompt_should_not_render",
+          completion: "completion_should_not_render",
+          provider_payload: "provider_payload_should_not_render",
+          candidate_ref: "candidate_ref_should_not_render",
+        },
+      ],
       p7_reference_answer: "从 owner 视角补齐状态机、失败兜底和指标复盘。",
       oral_script: "我会先用 30 秒交代背景，再说明我的职责和关键取舍。",
       next_training_suggestions: ["下一轮用 60/40 权重再答一版"],
+      mastery_status: "improving",
+      score_delta: 8,
+      dimension_delta: {
+        technical_depth: 6,
+        answer_structure: 4,
+      },
+      improved_points: ["补充接口幂等说明"],
+      remaining_gaps: ["失败补偿仍需更具体"],
+      repeated_loss_points: ["技术取舍说明不足"],
+      regressed_points: [],
+      next_retry_focus: [
+        {
+          focus_area: "失败补偿仍需更具体",
+          priority: 1,
+          related_dimension: "technical_depth",
+          internal_trace_ref: "retry_trace_should_not_render",
+        },
+      ],
       score_result: {
         score_result_id: "score_001",
         score_type: "polish_answer",
@@ -1077,9 +1131,10 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
     ...card.traceItems,
   ].join(" ");
 
-  assertContract(card.sections.map((section) => section.title).join(",") === "点评,打分,失分点评价,参考回答,考点解析,技术原理扩展,权重说明,面试意图,技术短板,表达短板,P7 级参考答案,口语化范本,下一轮训练建议", "反馈卡应展示旧模块和主题化模块");
+  assertContract(card.sections.map((section) => section.title).join(",") === "点评,打分,得分点,失分点,参考回答,考点解析,技术原理扩展,权重说明,面试意图,技术短板,表达短板,高阶参考答案,口语化范本,多次回答改进,下一轮重答重点,下一轮训练建议", "反馈卡应展示旧模块和结构化反馈模块");
   assertContract(visibleCopy.includes("P-POLISH-005"), "反馈卡应展示 contract_id / contract_ids");
   assertContract(visibleCopy.includes("72"), "反馈卡应展示 score_result 分值");
+  assertContract(visibleCopy.includes("回答中已有可复用表达"), "反馈卡应展示 positive_evidence_points 得分点");
   assertContract(visibleCopy.includes("技术取舍说明不足"), "反馈卡应展示 loss_points");
   assertContract(visibleCopy.includes("先讲业务目标"), "反馈卡应展示 reference_answer");
   assertContract(visibleCopy.includes("STAR + 技术决策链路"), "反馈卡应展示 knowledge_points");
@@ -1088,13 +1143,24 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(visibleCopy.includes("同时观察技术链路和表达结构"), "反馈卡应展示面试意图");
   assertContract(visibleCopy.includes("幂等键设计还不够具体"), "反馈卡应展示技术短板");
   assertContract(visibleCopy.includes("背景压缩可以更短"), "反馈卡应展示表达短板");
-  assertContract(visibleCopy.includes("owner 视角"), "反馈卡应展示 P7 级参考答案");
+  assertContract(visibleCopy.includes("owner 视角"), "反馈卡应展示高阶参考答案");
   assertContract(visibleCopy.includes("30 秒交代背景"), "反馈卡应展示口语化范本");
+  assertContract(visibleCopy.includes("分数变化：+8"), "反馈卡应展示 retry score_delta payload");
+  assertContract(visibleCopy.includes("已改进：补充接口幂等说明"), "反馈卡应展示 improved_points");
+  assertContract(visibleCopy.includes("仍需补齐：失败补偿仍需更具体"), "反馈卡应展示 remaining_gaps");
+  assertContract(visibleCopy.includes("重复失分：技术取舍说明不足"), "反馈卡应展示 repeated_loss_points");
+  assertContract(visibleCopy.includes("重点：失败补偿仍需更具体"), "反馈卡应展示 next_retry_focus");
   assertContract(visibleCopy.includes("下一轮用 60/40 权重再答一版"), "反馈卡应展示下一轮训练建议");
-  assertContract(visibleCopy.includes("weakness_candidate:weak_001"), "反馈卡应保留 candidate_refs");
-  assertContract(visibleCopy.includes("validation_result:val_001"), "反馈卡应保留 validation_result_ref");
-  assertContract(visibleCopy.includes("feedback:fb_001"), "反馈卡应保留 trace_refs");
-  assertContract(visibleCopy.includes("needs_more_metrics"), "反馈卡应保留 low_confidence_flags");
+  assertContract(card.traceItems.length === 0, "反馈卡 view model 不应暴露 trace 引用字段");
+  assertContract(!visibleCopy.includes("trace_should_not_render"), "反馈卡不应暴露 trace 字段");
+  assertContract(!visibleCopy.includes("internal_should_not_render"), "反馈卡不应暴露 internal 字段");
+  assertContract(!visibleCopy.includes("fake_should_not_render"), "反馈卡不应暴露 fake 字段");
+  assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "反馈卡不应暴露 raw prompt 字段");
+  assertContract(!visibleCopy.includes("completion_should_not_render"), "反馈卡不应暴露 completion 字段");
+  assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "反馈卡不应暴露 provider payload 字段");
+  assertContract(!visibleCopy.includes("candidate_ref_should_not_render"), "反馈卡不应暴露 candidate ref 字段");
+  assertContract(!visibleCopy.includes("weakness_candidate:weak_001"), "反馈卡不应暴露 candidate ref");
+  assertContract(!visibleCopy.includes("feedback:fb_001"), "反馈卡不应暴露 trace_refs");
   assertContract(card.nextActions.join(",") === "provide_more_answer_detail,generate_next_question", "下一步建议应去重并保持 contract enum");
   assertContract(toNextRecommendedActionLabel("provide_more_answer_detail") === "补充回答细节", "contract enum 应映射为按钮文案");
   assertContract(toNextRecommendedActionLabel("generate_next_question") === "生成下一题", "生成下一题 enum 应映射为按钮文案");
@@ -1117,11 +1183,35 @@ function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload()
       feedback_id: "fb_legacy",
       feedback_text: "旧版反馈仍应可展示。",
       feedback_summary: "旧版总结。",
-      score_result: null,
-      loss_points: [],
-      reference_answer: null,
-      knowledge_points: [],
-      technical_principles: [],
+      score_result: {
+        score_result_id: "score_legacy",
+        score_type: "polish_answer",
+        score_value: 68,
+        confidence_level: "medium",
+      },
+      loss_points: [
+        {
+          title: "旧失分点",
+          deducted_points: 8,
+          reason: "旧 payload 仍可展示失分原因。",
+        },
+      ],
+      reference_answer: {
+        summary: "旧参考回答摘要。",
+        outline: ["先说结论", "补充证据"],
+      },
+      knowledge_points: [
+        {
+          title: "旧考点",
+          explanation: "旧 payload 仍可展示考点解析。",
+        },
+      ],
+      technical_principles: [
+        {
+          title: "旧技术原理",
+          explanation: "旧 payload 仍可展示技术原理扩展。",
+        },
+      ],
       next_recommended_actions: ["generate_next_question"],
       candidate_refs: [],
       validation_result_ref: null,
@@ -1136,11 +1226,130 @@ function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload()
 
   assertContract(titles.includes("点评"), "旧 payload 应继续展示旧反馈区块");
   assertContract(visibleCopy.includes("旧版反馈仍应可展示"), "旧 payload 应继续展示 feedback_text");
+  assertContract(visibleCopy.includes("68"), "旧 payload 应继续展示 score_result");
+  assertContract(visibleCopy.includes("旧失分点"), "旧 payload 应继续展示 loss_points");
+  assertContract(visibleCopy.includes("旧参考回答摘要"), "旧 payload 应继续展示 reference_answer");
+  assertContract(visibleCopy.includes("旧考点"), "旧 payload 应继续展示 knowledge_points");
+  assertContract(visibleCopy.includes("旧技术原理"), "旧 payload 应继续展示 technical_principles");
+  assertContract(!titles.includes("得分点"), "旧 payload 缺 positive_evidence_points 时不应展示得分点空区块");
   assertContract(!titles.includes("权重说明"), "旧 payload 缺主题字段时不应展示权重说明");
   assertContract(!titles.includes("面试意图"), "旧 payload 缺主题字段时不应展示面试意图");
   assertContract(!titles.includes("技术短板"), "旧 payload 缺主题字段时不应展示技术短板");
   assertContract(!titles.includes("表达短板"), "旧 payload 缺主题字段时不应展示表达短板");
+  assertContract(!titles.includes("高阶参考答案"), "旧 payload 缺 p7_reference_answer 时不应展示高阶参考答案空区块");
+  assertContract(!titles.includes("口语化范本"), "旧 payload 缺 oral_script 时不应展示口语化范本空区块");
+  assertContract(!titles.includes("多次回答改进"), "旧 payload 缺 retry delta 时不应展示多次回答改进空区块");
+  assertContract(!titles.includes("下一轮重答重点"), "旧 payload 缺 next_retry_focus 时不应展示下一轮重答重点空区块");
   assertContract(card.nextActions.join(",") === "generate_next_question", "旧 payload 应继续保留下一步 action");
+}
+
+function test_feedback_card_view_model_handles_pending_payload(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_pending",
+    answer_round: 1,
+    answer_text: "回答已保存，反馈仍在生成。",
+    answer_created_at: "2026-05-20T10:00:00Z",
+    feedback_text: "",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "pending",
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const titles = card.sections.map((section) => section.title);
+  const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
+
+  assertContract(card.status === "pending", "pending payload 应保持 pending 状态");
+  assertContract(visibleCopy.includes("反馈生成中"), "pending payload 缺 feedback_text 时应使用稳定 fallback");
+  assertContract(visibleCopy.includes("暂无打分结果"), "pending payload 缺 score_result 时不应崩溃");
+  assertContract(!titles.includes("得分点"), "pending payload 不应展示空得分点");
+  assertContract(!titles.includes("高阶参考答案"), "pending payload 不应展示空高阶参考答案");
+  assertContract(!titles.includes("口语化范本"), "pending payload 不应展示空口语化范本");
+  assertContract(!titles.includes("多次回答改进"), "pending payload 不应展示空 retry delta");
+  assertContract(!titles.includes("下一轮重答重点"), "pending payload 不应展示空下一轮重答重点");
+}
+
+function test_feedback_card_view_model_does_not_calculate_score_on_frontend(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_score_calc",
+    answer_round: 1,
+    answer_text: "回答文本。",
+    answer_created_at: "2026-05-20T10:00:00Z",
+    feedback_text: "只展示后端 payload。",
+    feedback_id: "fb_score_calc",
+    score_result_id: null,
+    feedback_created_at: "2026-05-20T10:01:00Z",
+    feedback_payload: {
+      status: "generated",
+      feedback_text: "只展示后端 payload。",
+      explicit_score: 41,
+      implicit_score: 99,
+      score_result: null,
+      next_recommended_actions: [],
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const scoreSection = card.sections.find((section) => section.key === "score");
+  const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
+
+  assertContract(scoreSection?.items.join(",") === "暂无打分结果", "无 score_result 时不应由前端计算综合分");
+  assertContract(visibleCopy.includes("显性技术得分：41"), "前端可展示后端传入的显性分");
+  assertContract(visibleCopy.includes("隐性表达得分：99"), "前端可展示后端传入的隐性分");
+  assertContract(!scoreSection?.items.includes("分数：70"), "前端不应用 explicit_score / implicit_score 计算平均分");
+}
+
+function test_clipboard_markdown_stays_compatible_with_structured_feedback_payload(): void {
+  const session: PolishSessionDetail = {
+    ...buildTestSession([
+      buildTestProgressNode("node_clipboard", "剪贴板兼容节点", "resume_deep_dive", "深度打磨类"),
+    ], "node_clipboard"),
+    session_id: "ses_clipboard_structured",
+    turns: [
+      {
+        question_id: "q_clipboard",
+        question_text: "请说明结构化反馈如何复制。",
+        question_sources: [],
+        question_created_at: "2026-05-20T10:00:00Z",
+        progress_node_ref: "node_clipboard",
+        answers: [
+          {
+            answer_id: "ans_clipboard",
+            answer_round: 1,
+            answer_text: "我会保持用户可见反馈文本兼容。",
+            answer_created_at: "2026-05-20T10:01:00Z",
+            feedback_text: "结构化反馈用户可见文本。",
+            feedback_id: "fb_clipboard",
+            score_result_id: "score_clipboard",
+            feedback_created_at: "2026-05-20T10:02:00Z",
+            feedback_payload: {
+              status: "generated",
+              feedback_text: "结构化反馈用户可见文本。",
+              positive_evidence_points: [
+                {
+                  title: "已有清晰结论",
+                  evidence_excerpt: "保持用户可见反馈文本兼容",
+                },
+              ],
+              p7_reference_answer: "高阶参考答案仍留在 card view model 中展示。",
+              oral_script: "口语化范本仍留在 card view model 中展示。",
+              next_recommended_actions: [],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const markdown = buildPolishSessionClipboardMarkdown(session);
+
+  assertContract(markdown.includes("- 题干：请说明结构化反馈如何复制。"), "clipboard markdown 应继续包含题干");
+  assertContract(markdown.includes("- 回答 1：我会保持用户可见反馈文本兼容。"), "clipboard markdown 应继续包含回答文本");
+  assertContract(markdown.includes("- 反馈 1：结构化反馈用户可见文本。"), "clipboard markdown 应继续使用 feedback_text");
+  assertContract(!markdown.includes("positive_evidence_points"), "clipboard markdown 不应泄漏结构化字段名");
 }
 
 function test_progress_node_context_banner_ignores_group_header_click(): void {
@@ -1331,6 +1540,9 @@ test_progress_tree_click_auto_generates_only_for_nodes_without_question();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
+test_feedback_card_view_model_handles_pending_payload();
+test_feedback_card_view_model_does_not_calculate_score_on_frontend();
+test_clipboard_markdown_stays_compatible_with_structured_feedback_payload();
 test_progress_node_context_banner_ignores_group_header_click();
 test_progress_node_context_banner_uses_safe_copy();
 test_progress_tree_detail_uses_display_safe_copy();

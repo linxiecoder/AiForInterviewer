@@ -85,12 +85,14 @@ export interface PolishExplanationPayload extends Record<string, unknown> {
   explanation?: string;
 }
 
+export interface PolishStructuredFeedbackRecordPayload extends Record<string, unknown> {}
+
 export interface PolishFeedbackPayload {
   contract_id?: string;
   contract_ids?: string[];
-  status: "pending" | "generated" | string;
+  status?: "pending" | "generated" | string;
   feedback_id?: string | null;
-  feedback_text: string;
+  feedback_text?: string | null;
   feedback_summary?: string | null;
   polish_theme?: PolishTheme | string | null;
   polish_theme_label?: string | null;
@@ -102,15 +104,29 @@ export interface PolishFeedbackPayload {
   implicit_score?: number | null;
   technical_gaps?: string[];
   communication_gaps?: string[];
+  answer_diagnosis?: Record<string, unknown> | null;
+  scoring_dimensions?: PolishStructuredFeedbackRecordPayload[];
+  positive_evidence_points?: PolishStructuredFeedbackRecordPayload[];
+  missing_answer_dimensions?: PolishStructuredFeedbackRecordPayload[];
   p7_reference_answer?: string | null;
+  reference_answer_requirements?: PolishStructuredFeedbackRecordPayload[];
   oral_script?: string | null;
+  oral_script_requirements?: PolishStructuredFeedbackRecordPayload[];
   next_training_suggestions?: string[];
+  mastery_status?: string | null;
+  score_delta?: number | null;
+  dimension_delta?: Record<string, unknown> | null;
+  improved_points?: string[];
+  remaining_gaps?: string[];
+  repeated_loss_points?: string[];
+  regressed_points?: string[];
+  next_retry_focus?: PolishStructuredFeedbackRecordPayload[];
   score_result?: PolishScoreResultPayload | null;
   loss_points?: PolishLossPointPayload[];
   reference_answer?: PolishReferenceAnswerPayload | null;
   knowledge_points?: PolishExplanationPayload[];
   technical_principles?: PolishExplanationPayload[];
-  next_recommended_actions: PolishRecommendedAction[];
+  next_recommended_actions?: PolishRecommendedAction[];
   candidate_refs?: PolishFeedbackResourceRef[];
   validation_result_ref?: PolishFeedbackResourceRef | null;
   trace_refs?: Array<Record<string, unknown>>;

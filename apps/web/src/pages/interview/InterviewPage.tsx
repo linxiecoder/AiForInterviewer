@@ -133,7 +133,8 @@ export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
 export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "点评",
   "打分",
-  "失分点评价",
+  "得分点",
+  "失分点",
   "参考回答",
   "考点解析",
   "技术原理扩展",
@@ -141,8 +142,10 @@ export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "面试意图",
   "技术短板",
   "表达短板",
-  "P7 级参考答案",
+  "高阶参考答案",
   "口语化范本",
+  "多次回答改进",
+  "下一轮重答重点",
   "下一轮训练建议",
 ] as const;
 export type WorkbenchMachineState =
@@ -1305,6 +1308,7 @@ export function toNextRecommendedActionLabel(action: PolishRecommendedAction): s
 type FeedbackSectionKey =
   | "feedback"
   | "score"
+  | "positive_evidence_points"
   | "loss_points"
   | "reference_answer"
   | "knowledge_points"
@@ -1315,6 +1319,8 @@ type FeedbackSectionKey =
   | "communication_gaps"
   | "p7_reference_answer"
   | "oral_script"
+  | "retry_delta"
+  | "next_retry_focus"
   | "next_training_suggestions";
 
 export type FeedbackCardSectionViewModel = {
@@ -1359,9 +1365,10 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         items: buildScoreResultItems(payload, answer.score_result_id),
         defaultOpen: true,
       },
+      ...buildStructuredEvidenceSections(payload),
       {
         key: "loss_points",
-        title: "失分点评价",
+        title: "失分点",
         items: buildRecordListItems(payload?.loss_points, [
           ["title", "失分点"],
           ["deducted_points", "扣分"],
@@ -1395,10 +1402,27 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         defaultOpen: false,
       },
       ...buildThemeFeedbackSections(payload),
+      ...buildRetryFeedbackSections(payload),
+      ...buildNextTrainingFeedbackSections(payload),
     ],
     nextActions: getAnswerNextRecommendedActions(answer),
-    traceItems: buildFeedbackTraceItems(payload),
+    traceItems: buildFeedbackTraceItems(),
   };
+}
+
+function buildStructuredEvidenceSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  if (!payload) {
+    return [];
+  }
+  return [
+    buildOptionalFeedbackSection("positive_evidence_points", "得分点", buildOptionalRecordListItems(payload.positive_evidence_points, [
+      ["title", "得分点"],
+      ["evidence_excerpt", "回答证据"],
+      ["dimension_id", "关联维度"],
+      ["related_dimension", "关联维度"],
+      ["evidence_source", "证据来源"],
+    ]), false),
+  ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
 }
 
 function buildThemeFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
@@ -1417,8 +1441,31 @@ function buildThemeFeedbackSections(payload: PolishFeedbackPayload | undefined):
     buildOptionalFeedbackSection("interview_intent", "面试意图", compactTextList(payload.interview_intent), false),
     buildOptionalFeedbackSection("technical_gaps", "技术短板", compactTextList(payload.technical_gaps), false),
     buildOptionalFeedbackSection("communication_gaps", "表达短板", compactTextList(payload.communication_gaps), false),
-    buildOptionalFeedbackSection("p7_reference_answer", "P7 级参考答案", compactTextList(payload.p7_reference_answer), false),
+    buildOptionalFeedbackSection("p7_reference_answer", "高阶参考答案", compactTextList(payload.p7_reference_answer), false),
     buildOptionalFeedbackSection("oral_script", "口语化范本", compactTextList(payload.oral_script), false),
+  ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
+}
+
+function buildRetryFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  if (!payload) {
+    return [];
+  }
+  return [
+    buildOptionalFeedbackSection("retry_delta", "多次回答改进", buildRetryDeltaItems(payload), false),
+    buildOptionalFeedbackSection("next_retry_focus", "下一轮重答重点", buildOptionalRecordListItems(payload.next_retry_focus, [
+      ["focus_area", "重点"],
+      ["priority", "优先级"],
+      ["related_dimension", "关联维度"],
+      ["suggested_action", "建议动作"],
+    ]), false),
+  ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
+}
+
+function buildNextTrainingFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  if (!payload) {
+    return [];
+  }
+  return [
     buildOptionalFeedbackSection("next_training_suggestions", "下一轮训练建议", compactTextList(payload.next_training_suggestions), false),
   ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
 }
@@ -1439,6 +1486,23 @@ function compactTextList(value: string | string[] | null | undefined): string[] 
   return dedupeTextItems([value]);
 }
 
+function buildRetryDeltaItems(payload: PolishFeedbackPayload): string[] {
+  const dimensionDeltaItems = Object.entries(payload.dimension_delta ?? {})
+    .filter(([key]) => isUserVisibleFeedbackRecordKey(key))
+    .map(([key, value]) => {
+      const text = toOptionalText(value);
+      return text ? `维度变化：${key} ${text}` : null;
+    });
+  return dedupeTextItems([
+    typeof payload.score_delta === "number" ? `分数变化：${payload.score_delta > 0 ? "+" : ""}${payload.score_delta}` : null,
+    payload.mastery_status ? `掌握状态：${payload.mastery_status}` : null,
+    ...compactTextList(payload.improved_points).map((item) => `已改进：${item}`),
+    ...compactTextList(payload.remaining_gaps).map((item) => `仍需补齐：${item}`),
+    ...compactTextList(payload.repeated_loss_points).map((item) => `重复失分：${item}`),
+    ...compactTextList(payload.regressed_points).map((item) => `退步点：${item}`),
+    ...dimensionDeltaItems,
+  ]);
+}
 
 function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallbackScoreResultId: string | null): string[] {
   const score = payload?.score_result;
@@ -1479,6 +1543,16 @@ function buildRecordListItems(
   return items.length > 0 ? items : [fallback];
 }
 
+function buildOptionalRecordListItems(
+  values: unknown,
+  fieldLabels: Array<[string, string]>,
+): string[] {
+  if (!Array.isArray(values) || values.length === 0) {
+    return [];
+  }
+  return dedupeTextItems(values.flatMap((value) => buildRecordItems(value, fieldLabels)));
+}
+
 function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>): string[] {
   const record = toRecord(value);
   if (record === null) {
@@ -1495,6 +1569,7 @@ function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>):
     return preferredItems;
   }
   return Object.entries(record)
+    .filter(([key]) => isUserVisibleFeedbackRecordKey(key))
     .map(([key, item]) => {
       const text = toOptionalText(item);
       return text ? `${key}：${text}` : null;
@@ -1503,36 +1578,22 @@ function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>):
     .slice(0, 6);
 }
 
-function buildFeedbackTraceItems(payload: PolishFeedbackPayload | undefined): string[] {
-  if (!payload) {
-    return [];
-  }
-  return dedupeTextItems([
-    ...(payload.candidate_refs ?? []).map(formatResourceRef),
-    formatResourceRef(payload.validation_result_ref),
-    ...(payload.trace_refs ?? []).map(formatTraceRef),
-    ...(payload.low_confidence_flags ?? []).map((flag) => toOptionalText(flag.flag_id) ?? toOptionalText(flag.reason)),
-  ]);
+function buildFeedbackTraceItems(): string[] {
+  return [];
 }
 
-function formatResourceRef(value: unknown): string | null {
-  const record = toRecord(value);
-  if (record === null) {
-    return null;
-  }
-  const resourceType = toOptionalText(record.resource_type);
-  const resourceId = toOptionalText(record.resource_id);
-  return resourceType && resourceId ? `${resourceType}:${resourceId}` : null;
-}
-
-function formatTraceRef(value: unknown): string | null {
-  const record = toRecord(value);
-  if (record === null) {
-    return null;
-  }
-  const traceType = toOptionalText(record.trace_type);
-  const traceRefId = toOptionalText(record.trace_ref_id);
-  return traceType && traceRefId ? `${traceType}:${traceRefId}` : null;
+function isUserVisibleFeedbackRecordKey(key: string): boolean {
+  const normalized = key.toLowerCase();
+  return ![
+    "trace",
+    "internal",
+    "fake",
+    "raw",
+    "prompt",
+    "completion",
+    "provider",
+    "candidate",
+  ].some((privateMarker) => normalized.includes(privateMarker));
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
