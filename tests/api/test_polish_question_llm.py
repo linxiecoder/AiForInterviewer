@@ -4,6 +4,9 @@ import json
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
+import app.api.v1.polish as polish_api
 from app.application.polish.entities import PolishSession
 from app.application.polish.progress_tree import build_deterministic_progress_node_question
 from app.application.polish.question_llm import PolishQuestionLlmService
@@ -17,11 +20,23 @@ from app.infrastructure.llm.errors import LlmTransportConfigurationError
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
 from tests.api.asgi_client import call_json
-from tests.api.test_polish_api import ACTOR_A, OWNER_A, _isolated_polish_app, _seed_polish_sources, _session_factory
+from tests.api.test_polish_api import (
+    ACTOR_A,
+    OWNER_A,
+    _isolated_polish_app,
+    _run_inline_threadpool,
+    _seed_polish_sources,
+    _session_factory,
+)
 
 
 RAW_RESUME_SENTINEL = "RAW_RESUME_SENTINEL_DO_NOT_PROMPT " * 80
 RAW_JD_SENTINEL = "RAW_JD_SENTINEL_DO_NOT_PROMPT " * 80
+
+
+@pytest.fixture(autouse=True)
+def _patch_question_api_run_in_threadpool(monkeypatch):
+    monkeypatch.setattr(polish_api, "run_in_threadpool", _run_inline_threadpool)
 
 
 def test_prompt_builder_excludes_raw_resume_and_jd_while_including_compact_signals() -> None:
