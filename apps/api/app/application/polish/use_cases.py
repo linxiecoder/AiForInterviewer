@@ -39,6 +39,7 @@ from app.application.polish.feedback_quality import (
     compute_score_result_from_dimensions,
     validate_feedback_consistency,
 )
+from app.application.polish.feedback_llm import PolishFeedbackLlmService
 from app.application.polish.ports import PolishRepository
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.question_llm import PolishQuestionLlmService
@@ -156,6 +157,7 @@ class PolishUseCases:
         self._job_match_repository = job_match_repository
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
         self._question_llm_service = PolishQuestionLlmService(llm_transport)
+        self._feedback_llm_service = PolishFeedbackLlmService(llm_transport)
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
@@ -524,6 +526,11 @@ class PolishUseCases:
             score_result_id=score_result_id,
             created_at=now,
         )
+        feedback_llm_result = self._feedback_llm_service.generate_with_llm_or_fallback(
+            feedback_input=feedback_input,
+            deterministic_payload=raw_feedback_payload,
+        )
+        raw_feedback_payload = feedback_llm_result.feedback_payload
         validation_result = validate_feedback_consistency(raw_feedback_payload)
         feedback_payload = validation_result["normalized_feedback_payload"]
         feedback_payload = _ensure_feedback_legacy_compatibility(

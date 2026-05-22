@@ -4,6 +4,7 @@ SUPPORTED_FAKE_TASK_TYPES = frozenset(
     {
         "job_match_analysis",
         "polish_feedback",
+        "polish_answer_feedback_generation",
         "polish_progress_tree_plan",
         "polish_progress_tree_state",
         "polish_question_generation",

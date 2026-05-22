@@ -6,6 +6,11 @@ import re
 from json import dumps
 from typing import Any
 
+from app.application.polish.feedback_prompts import (
+    POLISH_ANSWER_FEEDBACK_SCHEMA_ID,
+    POLISH_ANSWER_FEEDBACK_SCHEMA_VERSION,
+    POLISH_ANSWER_FEEDBACK_TASK_TYPE,
+)
 from app.application.polish.question_prompts import (
     POLISH_QUESTION_GENERATION_PROMPT_VERSION,
     POLISH_QUESTION_GENERATION_SCHEMA_ID,
@@ -62,6 +67,8 @@ class FakeLlmTransport:
             return _generate_fake_job_match(request)
         if request.task_type == POLISH_QUESTION_GENERATION_TASK_TYPE:
             return _generate_fake_polish_question(request)
+        if request.task_type == POLISH_ANSWER_FEEDBACK_TASK_TYPE:
+            return _generate_fake_polish_feedback(request)
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
             return _generate_fake_progress_quality_first_menu(request)
         if request.task_type == POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE:
@@ -106,6 +113,203 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransportResult:
+    evidence_bundle = request.evidence_bundle.get("evidence_bundle", {}) if isinstance(request.evidence_bundle, dict) else {}
+    answer_round = int(evidence_bundle.get("answer_round") or 1)
+    marker = str(evidence_bundle.get("fixture_marker") or ("valid_retry" if answer_round > 1 else "valid_first"))
+    if marker == "provider_unavailable":
+        raise LlmTransportUnavailableError("fake feedback provider unavailable")
+    if marker == "timeout":
+        raise TimeoutError("fake feedback provider timeout")
+    if marker == "schema_invalid":
+        payload = {
+            "schema_id": "unexpected_feedback_schema",
+            "schema_version": 999,
+            "feedback_summary": "schema invalid",
+        }
+    else:
+        payload = _fake_polish_feedback_payload(evidence_bundle, answer_round=answer_round)
+        if marker == "valid_first":
+            payload["feedback_summary"] = "LLM fake first feedback: accepted"
+            payload["feedback_text"] = payload["feedback_summary"]
+        elif marker == "valid_retry":
+            payload["feedback_summary"] = "LLM fake retry feedback: accepted"
+            payload["feedback_text"] = payload["feedback_summary"]
+            payload.update(_fake_retry_delta())
+        elif marker == "missing_critical_loss_coverage":
+            payload["p7_reference_answer"] = "回答可以先说明背景和职责，但这里故意不覆盖关键术语。"
+        elif marker == "oral_script_ignores_loss":
+            payload["oral_script"] = "我先说明背景，再介绍自己负责的模块。"
+        elif marker == "score_dimension_mismatch":
+            payload["score_result"]["score_value"] = 41
+        elif marker == "raw_prompt_leak":
+            payload["raw_prompt"] = "RAW_PROMPT_SHOULD_NOT_ESCAPE"
+        elif marker == "raw_prompt_value_leak":
+            payload["feedback_summary"] = "raw_prompt=RAW_PROMPT_SHOULD_NOT_ESCAPE"
+            payload["feedback_text"] = payload["feedback_summary"]
+        elif marker == "metadata_full_evidence_leak":
+            payload["feedback_metadata"]["full_evidence_text"] = "FULL_EVIDENCE_TEXT_SHOULD_NOT_ESCAPE"
+        elif marker == "unsupported_user_fact":
+            payload["feedback_metadata"]["unsupported_user_facts"] = ["候选人负责了未出现在输入中的支付清算平台"]
+        elif marker == "low_confidence_valid":
+            payload["low_confidence_flags"] = [
+                {
+                    "flag_id": "feedback_low_confidence_fake",
+                    "reason": "fake low confidence branch",
+                    "impact_scope": "feedback_payload",
+                    "recommended_action": "manual_review",
+                }
+            ]
+            payload["score_result"]["confidence_level"] = "low"
+        elif marker == "repair_then_valid":
+            payload["score_result"]["score_value"] = 41
+        elif marker == "repair_then_fallback":
+            payload["score_result"]["score_value"] = 41
+            payload["p7_reference_answer"] = "回答可以先说明背景和职责，但这里故意不覆盖关键术语。"
+        else:
+            payload["feedback_summary"] = "LLM fake first feedback: accepted"
+            payload["feedback_text"] = payload["feedback_summary"]
+    validation_status = ValidationStatus.VALID
+    confidence_level = ConfidenceLevel.LOW if marker == "low_confidence_valid" else ConfidenceLevel.MEDIUM
+    seed = dumps(
+        {
+            "task_type": request.task_type,
+            "marker": marker,
+            "input_refs": sorted(request.input_refs),
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    return LlmTransportResult(
+        result=payload,
+        validation_status=validation_status,
+        confidence_level=confidence_level,
+        low_confidence_flags=("feedback_low_confidence_fake",) if marker == "low_confidence_valid" else (),
+        trace_refs=(stable_resource_id("trace", f"fake-feedback-trace:{seed}"),),
+        evidence_refs=(stable_resource_id("trace", f"fake-feedback-evidence:{seed}"),),
+    )
+
+
+def _fake_polish_feedback_payload(evidence_bundle: dict[str, Any], *, answer_round: int) -> dict[str, Any]:
+    dimensions = [
+        {"dimension_id": "technical_depth", "score_value": 80, "max_score": 100, "weight": 1.0},
+        {"dimension_id": "answer_structure", "score_value": 70, "max_score": 100, "weight": 1.0},
+        {"dimension_id": "evidence_alignment", "score_value": 60, "max_score": 100, "weight": 1.0},
+    ]
+    payload: dict[str, Any] = {
+        "schema_id": POLISH_ANSWER_FEEDBACK_SCHEMA_ID,
+        "schema_version": POLISH_ANSWER_FEEDBACK_SCHEMA_VERSION,
+        "status": "generated",
+        "feedback_summary": "LLM fake first feedback: accepted",
+        "feedback_text": "LLM fake first feedback: accepted",
+        "answer_diagnosis": {
+            "strengths": ["回答开始覆盖背景和关键链路。"],
+            "weaknesses": ["失败路径和验证指标仍需展开。"],
+            "risks": ["critical loss_points 未修复前，不应进入正式对象写入。"],
+            "recommendations": ["下一轮优先补失败路径、补偿机制和验证指标。"],
+        },
+        "scoring_dimensions": dimensions,
+        "score_result": {
+            "score_result_id": "fake_feedback_score",
+            "score_type": "polish_answer",
+            "score_value": 70,
+            "score_version": POLISH_ANSWER_FEEDBACK_SCHEMA_VERSION,
+            "rubric_version": "polish_round_score.fake_feedback.v1",
+            "confidence_level": "medium",
+        },
+        "positive_evidence_points": [
+            {
+                "point_id": "fake_positive_metrics",
+                "title": "保留验证指标",
+                "evidence_excerpt": "验证指标",
+                "dimension_id": "evidence_alignment",
+                "location": "both",
+            }
+        ],
+        "loss_points": [
+            {
+                "loss_point_id": "fake_loss_failure_path",
+                "title": "失败路径仍需展开",
+                "deducted_points": 12,
+                "reason": "需要补充失败路径、补偿机制和验证指标。",
+                "critical": True,
+                "dimension_id": "technical_depth",
+                "required_reference_terms": ["失败路径", "验证指标"],
+                "required_oral_terms": ["失败路径", "验证指标"],
+            }
+        ],
+        "missing_answer_dimensions": [
+            {"dimension": "technical_depth", "reason": "失败路径和补偿机制需要更具体。"}
+        ],
+        "p7_reference_answer": "参考回答应覆盖失败路径、补偿机制和验证指标，并保留验证指标作为证据。",
+        "reference_answer_requirements": [
+            {
+                "requirement_id": "fake_reference_requirement",
+                "requirement": "覆盖失败路径和验证指标。",
+                "required_coverage_terms": ["失败路径", "验证指标"],
+            }
+        ],
+        "oral_script": "我先说明业务背景，再讲失败路径、补偿机制、验证指标和技术取舍。",
+        "oral_script_requirements": [
+            {
+                "requirement_id": "fake_oral_requirement",
+                "requirement": "口述覆盖失败路径和验证指标。",
+                "required_coverage_terms": ["失败路径", "验证指标"],
+            }
+        ],
+        "knowledge_points": [{"title": "幂等与补偿", "explanation": "用状态机和补偿任务收敛异常链路。"}],
+        "technical_principles": [{"title": "可观测验证", "explanation": "用指标、日志和告警验证方案有效性。"}],
+        "technical_gaps": ["失败路径仍需展开"],
+        "communication_gaps": ["结论可以更前置"],
+        "next_recommended_actions": ["continue_same_question"],
+        "low_confidence_flags": [],
+        "feedback_metadata": {
+            "fake_feedback_marker": str(evidence_bundle.get("fixture_marker") or ""),
+            "prompt_answer_round": answer_round,
+        },
+        "score_delta": 0,
+        "dimension_delta": {},
+        "improved_points": [],
+        "remaining_gaps": ["fake_loss_failure_path"],
+        "repeated_loss_points": [],
+        "regressed_points": [],
+        "mastery_status": "stuck" if answer_round > 1 else None,
+        "should_continue_same_question": True,
+        "should_generate_next_question": False,
+        "next_retry_focus": [{"focus_area": "fake_loss_failure_path", "priority": 1}],
+        "updated_reference_answer": None,
+        "updated_oral_script": None,
+        "weakness_candidates": [],
+        "asset_candidates": [],
+        "validation_result_ref": None,
+        "trace_refs": [],
+    }
+    if answer_round > 1:
+        payload.update(_fake_retry_delta())
+    return payload
+
+
+def _fake_retry_delta() -> dict[str, Any]:
+    return {
+        "score_delta": 8,
+        "dimension_delta": {
+            "technical_depth": 10,
+            "answer_structure": 4,
+            "evidence_alignment": 8,
+        },
+        "improved_points": ["lp_previous_metrics"],
+        "remaining_gaps": ["fake_loss_failure_path"],
+        "repeated_loss_points": [],
+        "regressed_points": [],
+        "mastery_status": "improving",
+        "should_continue_same_question": True,
+        "should_generate_next_question": False,
+        "next_retry_focus": [{"focus_area": "fake_loss_failure_path", "priority": 1}],
+        "updated_reference_answer": "参考回答应覆盖失败路径、补偿机制和验证指标，并保留验证指标作为证据。",
+        "updated_oral_script": "我先说明业务背景，再讲失败路径、补偿机制、验证指标和技术取舍。",
+    }
 
 
 def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:

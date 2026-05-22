@@ -605,6 +605,7 @@ def _collect_forbidden_fields(payload: Any, path: str = "") -> set[str]:
                 found.update(_collect_forbidden_fields(value, path=next_path))
             elif (
                 isinstance(value, str)
+                and normalized != "prompt_version"
                 and any(token in lowered for token in ("prompt", "completion"))
                 and (
                     "prompt_version" in lowered
