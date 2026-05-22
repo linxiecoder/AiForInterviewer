@@ -55,6 +55,59 @@ export interface PolishFeedbackResourceRef {
   resource_id: string;
 }
 
+export type PolishCandidateType =
+  | "weakness_candidate"
+  | "asset_candidate"
+  | "training_suggestion_candidate"
+  | "oral_script_candidate"
+  | "polished_answer_candidate"
+  | string;
+
+export type PolishCandidateStatus =
+  | "candidate"
+  | "confirmed"
+  | "dismissed"
+  | "merged"
+  | "archived"
+  | string;
+
+export interface PolishCandidate {
+  candidate_id: string;
+  owner_id?: string;
+  candidate_type: PolishCandidateType;
+  status: PolishCandidateStatus;
+  source_type?: string | null;
+  source_refs?: Array<Record<string, unknown>>;
+  evidence_refs?: Array<Record<string, unknown>>;
+  trace_refs?: Array<Record<string, unknown>>;
+  session_id?: string | null;
+  question_id?: string | null;
+  answer_id?: string | null;
+  feedback_id?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  evidence_excerpt?: string | null;
+  reason?: string | null;
+  confidence_level?: "low" | "medium" | "high" | string | null;
+  merge_key?: string | null;
+  merge_target_candidate_id?: string | null;
+  target_formal_ref?: PolishFeedbackResourceRef | Record<string, unknown> | null;
+  candidate_payload?: Record<string, unknown> | null;
+  user_confirmation_required?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  dismissed_at?: string | null;
+  confirmed_at?: string | null;
+  archived_at?: string | null;
+}
+
+export interface PolishCandidateActionResult {
+  action: string;
+  candidate: PolishCandidate;
+  formal_ref?: PolishFeedbackResourceRef | Record<string, unknown> | null;
+  asset_version_ref?: PolishFeedbackResourceRef | Record<string, unknown> | null;
+}
+
 export interface PolishScoreResultPayload {
   score_result_id?: string;
   score_type?: "polish_answer" | string;

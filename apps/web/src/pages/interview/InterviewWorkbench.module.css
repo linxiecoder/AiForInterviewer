@@ -699,6 +699,67 @@
   overflow-wrap: anywhere;
 }
 
+.candidateReviewPanel {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dfe7f1;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.candidateReviewHeader,
+.candidateReviewItemHeader {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.candidateReviewSummary {
+  font-size: 13px;
+}
+
+.candidateReviewList {
+  display: grid;
+  gap: 8px;
+}
+
+.candidateReviewItem {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e4ebf5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.candidateReviewBody {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.candidateReviewTitle,
+.candidateReviewText,
+.candidateReviewEvidence {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.candidateReviewText {
+  margin: 0 !important;
+  color: #475569;
+}
+
+.candidateReviewEvidence {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .nextActionBar {
   display: flex;
   flex-wrap: wrap;

@@ -5,6 +5,8 @@ import type {
   CreatePolishQuestionTaskRequest,
   CreatePolishSessionRequest,
   PolishAnswer,
+  PolishCandidate,
+  PolishCandidateActionResult,
   PolishSessionDetail,
   PolishSessionSummary,
   PolishTaskStatus,
@@ -19,7 +21,21 @@ export const POLISH_API_PATHS = {
   answers: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/answers` as `/polish-sessions/${string}/answers`,
   feedbackTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/feedback` as `/polish-sessions/${string}/feedback`,
   topics: "/polish-topics",
+  candidates: "/polish-candidates",
+  candidateDetail: (candidateId: string) => `/polish-candidates/${encodeURIComponent(candidateId)}` as `/polish-candidates/${string}`,
+  confirmCandidate: (candidateId: string) => `/polish-candidates/${encodeURIComponent(candidateId)}/confirm` as `/polish-candidates/${string}/confirm`,
+  dismissCandidate: (candidateId: string) => `/polish-candidates/${encodeURIComponent(candidateId)}/dismiss` as `/polish-candidates/${string}/dismiss`,
 } as const;
+
+export interface FetchPolishCandidateFilters {
+  status?: string | null;
+  candidate_type?: string | null;
+  session_id?: string | null;
+  source_type?: string | null;
+  confidence_level?: string | null;
+  limit?: number | null;
+  offset?: number | null;
+}
 
 export async function fetchPolishSessions(): Promise<PolishSessionSummary[]> {
   const response = await request<PolishSessionSummary[]>(POLISH_API_PATHS.sessions);
@@ -57,6 +73,35 @@ export async function fetchPolishSession(sessionId: string): Promise<PolishSessi
   return data;
 }
 
+export async function fetchPolishCandidates(filters: FetchPolishCandidateFilters = {}): Promise<PolishCandidate[]> {
+  const query = buildPolishCandidateQuery(filters);
+  const response = await request<PolishCandidate[]>(`${POLISH_API_PATHS.candidates}${query}`);
+  const data = buildSuccessData(response);
+  return data ?? [];
+}
+
+export async function confirmPolishCandidate(candidateId: string): Promise<PolishCandidateActionResult> {
+  const response = await request<PolishCandidateActionResult>(POLISH_API_PATHS.confirmCandidate(candidateId), {
+    method: "POST",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("候选确认返回为空");
+  }
+  return data;
+}
+
+export async function dismissPolishCandidate(candidateId: string): Promise<PolishCandidateActionResult> {
+  const response = await request<PolishCandidateActionResult>(POLISH_API_PATHS.dismissCandidate(candidateId), {
+    method: "POST",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("候选忽略返回为空");
+  }
+  return data;
+}
+
 export async function createPolishQuestionTask(
   sessionId: string,
   payload: CreatePolishQuestionTaskRequest,
@@ -70,6 +115,18 @@ export async function createPolishQuestionTask(
     throw new Error("题目生成任务返回为空");
   }
   return data;
+}
+
+function buildPolishCandidateQuery(filters: FetchPolishCandidateFilters): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+    params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 export async function refreshPolishProgressTreeState(sessionId: string): Promise<PolishSessionDetail> {

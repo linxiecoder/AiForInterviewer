@@ -35,6 +35,7 @@ import {
   INTERVIEW_PROGRESS_TREE_SCROLL_CLASS,
   INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT,
   INTERVIEW_WORKBENCH_CURRENT_QUESTION_COMPOSER_PLACEMENT,
+  INTERVIEW_WORKBENCH_CANDIDATE_REVIEW_ITEMS,
   INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS,
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
@@ -45,6 +46,7 @@ import {
   buildPolishSessionClipboardMarkdown,
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
+  buildCandidateReviewViewModel,
   buildFeedbackCardViewModel,
   filterPolishSessionsBySearch,
   buildProgressTreeContextBannerContent,
@@ -72,7 +74,10 @@ import {
 } from "./InterviewPage";
 import {
   POLISH_API_PATHS,
+  confirmPolishCandidate,
   createPolishSession,
+  dismissPolishCandidate,
+  fetchPolishCandidates,
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
@@ -80,6 +85,8 @@ import {
 import type { JobSummary } from "../../entities/job/model/types";
 import type {
   CreatePolishSessionRequest,
+  PolishCandidate,
+  PolishCandidateActionResult,
   PolishProgressTreeNode,
   PolishSessionAnswer,
   PolishSessionDetail,
@@ -269,6 +276,12 @@ type WorkbenchFeedbackItemsAreStable = Expect<
     ]
   >
 >;
+type WorkbenchCandidateReviewItemsAreStable = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_CANDIDATE_REVIEW_ITEMS,
+    readonly ["candidate_type", "status", "title", "summary", "confidence_level", "evidence_excerpt", "confirm", "dismiss"]
+  >
+>;
 type WorkbenchPrimaryActionsAreStable = Expect<
   Equal<
     typeof INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
@@ -306,6 +319,15 @@ type CreateApiReturnsSessionDetail = Expect<
 type DetailApiReturnsSessionDetail = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishSession>>, PolishSessionDetail>
 >;
+type CandidateListApiReturnsCandidates = Expect<
+  Equal<Awaited<ReturnType<typeof fetchPolishCandidates>>, PolishCandidate[]>
+>;
+type CandidateConfirmApiReturnsActionResult = Expect<
+  Equal<Awaited<ReturnType<typeof confirmPolishCandidate>>, PolishCandidateActionResult>
+>;
+type CandidateDismissApiReturnsActionResult = Expect<
+  Equal<Awaited<ReturnType<typeof dismissPolishCandidate>>, PolishCandidateActionResult>
+>;
 type ListApiReturnsSessionSummaries = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishSessions>>, PolishSessionSummary[]>
 >;
@@ -315,6 +337,16 @@ type TopicApiReturnsControlledCatalog = Expect<
 type PolishSessionCreatePathIsStable = Expect<Equal<typeof POLISH_API_PATHS.sessions, "/polish-sessions">>;
 type PolishSessionDetailPathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.sessionDetail>, `/polish-sessions/${string}`>
+>;
+type PolishCandidateListPathIsStable = Expect<Equal<typeof POLISH_API_PATHS.candidates, "/polish-candidates">>;
+type PolishCandidateDetailPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.candidateDetail>, `/polish-candidates/${string}`>
+>;
+type PolishCandidateConfirmPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.confirmCandidate>, `/polish-candidates/${string}/confirm`>
+>;
+type PolishCandidateDismissPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.dismissCandidate>, `/polish-candidates/${string}/dismiss`>
 >;
 type PolishTopicListPathIsStable = Expect<Equal<typeof POLISH_API_PATHS.topics, "/polish-topics">>;
 
@@ -1166,6 +1198,86 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(toNextRecommendedActionLabel("generate_next_question") === "生成下一题", "生成下一题 enum 应映射为按钮文案");
 }
 
+function test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only(): void {
+  const candidates: PolishCandidate[] = [
+    {
+      candidate_id: "cand_weak_001",
+      candidate_type: "weakness_candidate",
+      status: "candidate",
+      title: "指标表达薄弱",
+      summary: "回答缺少上线指标和验证方式。",
+      evidence_excerpt: "没有说明延迟、错误率或告警结果。",
+      confidence_level: "medium",
+      answer_id: "ans_feedback_001",
+      feedback_id: "fb_001",
+      merge_target_candidate_id: "cand_weak_existing",
+      trace_refs: [{ trace_ref_id: "trace_should_not_render", trace_type: "feedback", created_at: "2026-05-22T10:00:00Z" }],
+      candidate_payload: {
+        raw_prompt: "raw_prompt_should_not_render",
+        completion: "completion_should_not_render",
+        provider_payload: "provider_payload_should_not_render",
+        hidden_rubric: "hidden_rubric_should_not_render",
+        secret: "secret_should_not_render",
+      },
+    },
+    {
+      candidate_id: "cand_asset_001",
+      candidate_type: "asset_candidate",
+      status: "confirmed",
+      title: "可复用项目表达",
+      summary: "已经由后端确认并写入正式资产。",
+      confidence_level: "high",
+      answer_id: "ans_feedback_001",
+      feedback_id: "fb_001",
+    },
+  ];
+
+  const viewModel = buildCandidateReviewViewModel(candidates);
+  const emptyViewModel = buildCandidateReviewViewModel(undefined);
+  const visibleCopy = viewModel.items
+    .flatMap((item) => [
+      item.candidateId,
+      item.typeLabel,
+      item.statusLabel,
+      item.title,
+      item.summary,
+      item.evidenceExcerpt,
+      item.confidenceLabel,
+      item.mergeHint,
+    ])
+    .join(" ");
+
+  assertContract(emptyViewModel.items.length === 0, "旧 session 没有 candidates 时不应崩溃");
+  assertContract(viewModel.items.length === 2, "候选确认入口应展示 answer 关联 candidates");
+  assertContract(viewModel.pendingCount === 1, "candidate 状态应进入待确认计数");
+  assertContract(viewModel.settledCount === 1, "confirmed 状态应进入已处理计数");
+  assertContract(viewModel.items[0].typeLabel === "薄弱项候选", "candidate type 应映射为用户可读文案");
+  assertContract(viewModel.items[0].statusLabel === "待确认", "candidate status 应映射为用户可读文案");
+  assertContract(viewModel.items[0].canConfirm, "待确认 candidate 应允许调用后端 confirm endpoint");
+  assertContract(viewModel.items[0].canDismiss, "待确认 candidate 应允许调用后端 dismiss endpoint");
+  assertContract(!viewModel.items[1].canConfirm, "已确认 candidate 不应再次展示确认动作");
+  assertContract(!viewModel.items[1].canDismiss, "已确认 candidate 不应再次展示忽略动作");
+  assertContract(String(viewModel.mergeHint).includes("合并"), "后端支持 merge 时应展示基础合并提示");
+  assertContract(visibleCopy.includes("指标表达薄弱"), "候选确认入口应展示标题");
+  assertContract(visibleCopy.includes("回答缺少上线指标"), "候选确认入口应展示摘要");
+  assertContract(visibleCopy.includes("没有说明延迟"), "候选确认入口应展示用户可见证据片段");
+  assertContract(!visibleCopy.includes("trace_should_not_render"), "候选确认入口不应暴露 internal trace");
+  assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "候选确认入口不应暴露 raw prompt");
+  assertContract(!visibleCopy.includes("completion_should_not_render"), "候选确认入口不应暴露 completion");
+  assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "候选确认入口不应暴露 provider payload");
+  assertContract(!visibleCopy.includes("hidden_rubric_should_not_render"), "候选确认入口不应暴露 hidden rubric");
+  assertContract(!visibleCopy.includes("secret_should_not_render"), "候选确认入口不应暴露 secret");
+  assertContract(POLISH_API_PATHS.candidates === "/polish-candidates", "候选列表必须调用后端 candidate list endpoint");
+  assertContract(
+    POLISH_API_PATHS.confirmCandidate("cand_weak_001") === "/polish-candidates/cand_weak_001/confirm",
+    "确认操作必须调用后端 confirm endpoint",
+  );
+  assertContract(
+    POLISH_API_PATHS.dismissCandidate("cand_weak_001") === "/polish-candidates/cand_weak_001/dismiss",
+    "忽略操作必须调用后端 dismiss endpoint",
+  );
+}
+
 function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_feedback_legacy",
@@ -1539,6 +1651,7 @@ test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
+test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only();
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();

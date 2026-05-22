@@ -1,5 +1,6 @@
 import {
   ArrowLeftOutlined,
+  CloseCircleOutlined,
   CopyOutlined,
   DownOutlined,
   CheckCircleOutlined,
@@ -16,10 +17,13 @@ import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import {
+  confirmPolishCandidate,
   createPolishAnswer,
   createPolishFeedbackTask,
   createPolishSession,
   createPolishQuestionTask,
+  dismissPolishCandidate,
+  fetchPolishCandidates,
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
@@ -27,6 +31,7 @@ import {
 } from "../../entities/polish/api/polishApi";
 import type {
   CreatePolishSessionRequest,
+  PolishCandidate,
   PolishFeedbackPayload,
   PolishQuestionSource,
   PolishTheme,
@@ -147,6 +152,16 @@ export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "多次回答改进",
   "下一轮重答重点",
   "下一轮训练建议",
+] as const;
+export const INTERVIEW_WORKBENCH_CANDIDATE_REVIEW_ITEMS = [
+  "candidate_type",
+  "status",
+  "title",
+  "summary",
+  "confidence_level",
+  "evidence_excerpt",
+  "confirm",
+  "dismiss",
 ] as const;
 export type WorkbenchMachineState =
   | "creatingQuestion"
@@ -1340,6 +1355,51 @@ export type FeedbackCardViewModel = {
   traceItems: string[];
 };
 
+export type CandidateReviewItemViewModel = {
+  candidateId: string;
+  typeLabel: string;
+  statusLabel: string;
+  statusColor: string;
+  title: string;
+  summary: string;
+  evidenceExcerpt: string | null;
+  confidenceLabel: string | null;
+  canConfirm: boolean;
+  canDismiss: boolean;
+  mergeHint: string | null;
+};
+
+export type CandidateReviewViewModel = {
+  items: CandidateReviewItemViewModel[];
+  pendingCount: number;
+  settledCount: number;
+  mergeHint: string | null;
+};
+
+const CANDIDATE_TYPE_LABELS: Record<string, string> = {
+  weakness_candidate: "薄弱项候选",
+  asset_candidate: "资产候选",
+  training_suggestion_candidate: "训练建议候选",
+  oral_script_candidate: "口语化候选",
+  polished_answer_candidate: "高阶回答候选",
+};
+
+const CANDIDATE_STATUS_LABELS: Record<string, string> = {
+  candidate: "待确认",
+  confirmed: "已确认",
+  dismissed: "已忽略",
+  merged: "已合并",
+  archived: "已归档",
+};
+
+const CANDIDATE_STATUS_COLORS: Record<string, string> = {
+  candidate: "processing",
+  confirmed: "success",
+  dismissed: "default",
+  merged: "blue",
+  archived: "default",
+};
+
 export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): FeedbackCardViewModel {
   const payload = answer.feedback_payload;
   const feedbackText = payload?.feedback_text || answer.feedback_text || FALLBACK_FEEDBACK_TEXT;
@@ -1408,6 +1468,49 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: buildFeedbackTraceItems(),
   };
+}
+
+export function buildCandidateReviewViewModel(
+  candidates: readonly PolishCandidate[] | null | undefined,
+): CandidateReviewViewModel {
+  const records = Array.isArray(candidates) ? candidates : [];
+  const items = records.map((candidate) => {
+    const candidateType = toOptionalText(candidate.candidate_type) ?? "candidate";
+    const status = toOptionalText(candidate.status) ?? "candidate";
+    const title = toOptionalText(candidate.title) ?? CANDIDATE_TYPE_LABELS[candidateType] ?? "候选对象";
+    const summary = toOptionalText(candidate.summary) ?? "该候选对象暂无摘要，可根据证据片段判断是否沉淀。";
+    const evidenceExcerpt = toOptionalText(candidate.evidence_excerpt);
+    const confidence = toOptionalText(candidate.confidence_level);
+    const mergeTarget = toOptionalText(candidate.merge_target_candidate_id);
+    return {
+      candidateId: candidate.candidate_id,
+      typeLabel: CANDIDATE_TYPE_LABELS[candidateType] ?? candidateType,
+      statusLabel: CANDIDATE_STATUS_LABELS[status] ?? status,
+      statusColor: CANDIDATE_STATUS_COLORS[status] ?? "default",
+      title,
+      summary,
+      evidenceExcerpt,
+      confidenceLabel: confidence ? `置信度：${confidence}` : null,
+      canConfirm: status === "candidate",
+      canDismiss: status === "candidate",
+      mergeHint: mergeTarget ? "后端支持候选合并；当前最小入口先提供确认或忽略，合并将在后续面板完善。" : null,
+    };
+  });
+  return {
+    items,
+    pendingCount: items.filter((item) => item.canConfirm || item.canDismiss).length,
+    settledCount: items.filter((item) => !item.canConfirm && !item.canDismiss).length,
+    mergeHint: items.length > 0
+      ? "后端支持候选合并；当前最小入口先提供确认或忽略，合并将在后续面板完善。"
+      : null,
+  };
+}
+
+function candidateBelongsToAnswer(candidate: PolishCandidate, answer: PolishSessionAnswer): boolean {
+  if (candidate.answer_id && candidate.answer_id === answer.answer_id) {
+    return true;
+  }
+  return Boolean(candidate.feedback_id && answer.feedback_id && candidate.feedback_id === answer.feedback_id);
 }
 
 function buildStructuredEvidenceSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
@@ -2101,6 +2204,27 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
   const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
+  const [candidates, setCandidates] = useState<PolishCandidate[]>([]);
+  const [candidateLoadError, setCandidateLoadError] = useState<string | null>(null);
+  const [candidateActionKey, setCandidateActionKey] = useState<string | null>(null);
+
+  const loadCandidateRecords = async () => {
+    try {
+      const records = await fetchPolishCandidates({
+        session_id: sessionId,
+        limit: 100,
+      });
+      setCandidates(records);
+      setCandidateLoadError(null);
+    } catch (loadError) {
+      setCandidates([]);
+      setCandidateLoadError(
+        loadError instanceof Error
+          ? loadError.message
+          : "候选对象加载失败，请稍后重试。",
+      );
+    }
+  };
 
   const loadSession = async () => {
     setLoading(true);
@@ -2108,8 +2232,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     try {
       const detail = await fetchPolishSession(sessionId);
       setSession(detail);
+      await loadCandidateRecords();
     } catch (loadError) {
       setSession(null);
+      setCandidates([]);
       setError(parseWorkbenchError(loadError));
     } finally {
       setLoading(false);
@@ -2121,6 +2247,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setAnswerError(null);
     setWorkbenchFailureState(null);
     setSelectedProgressNodeRef(null);
+    setCandidates([]);
+    setCandidateLoadError(null);
+    setCandidateActionKey(null);
     void loadSession();
   }, [sessionId]);
 
@@ -2193,6 +2322,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       try {
         const refreshed = await refreshPolishProgressTreeState(sessionId);
         setSession(refreshed);
+        await loadCandidateRecords();
         setAnswerText("");
         if (refreshed.progress_tree_status === "refresh_failed") {
           setWorkbenchFailureState("progressRefreshFailed");
@@ -2282,6 +2412,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     try {
       const refreshed = await refreshPolishProgressTreeState(sessionId);
       setSession(refreshed);
+      await loadCandidateRecords();
       if (refreshed.progress_tree_status === "refresh_failed") {
         setWorkbenchFailureState("progressRefreshFailed");
         message.warning("进展树刷新失败，已保留当前题目、回答和反馈。");
@@ -2328,6 +2459,30 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       return;
     }
     message.info(`${toNextRecommendedActionLabel(action)}已在反馈区呈现，可结合本轮内容继续打磨。`);
+  };
+
+  const runCandidateAction = async (candidateId: string, action: "confirm" | "dismiss") => {
+    const actionKey = `${candidateId}:${action}`;
+    setCandidateActionKey(actionKey);
+    try {
+      const result = action === "confirm"
+        ? await confirmPolishCandidate(candidateId)
+        : await dismissPolishCandidate(candidateId);
+      setCandidates((currentCandidates) => {
+        const exists = currentCandidates.some((candidate) => candidate.candidate_id === result.candidate.candidate_id);
+        if (!exists) {
+          return [result.candidate, ...currentCandidates];
+        }
+        return currentCandidates.map((candidate) =>
+          candidate.candidate_id === result.candidate.candidate_id ? result.candidate : candidate,
+        );
+      });
+      message.success(action === "confirm" ? "候选对象已确认。" : "候选对象已忽略。");
+    } catch (actionError) {
+      message.error(actionError instanceof Error ? actionError.message : "候选对象操作失败，请稍后重试。");
+    } finally {
+      setCandidateActionKey(null);
+    }
   };
 
   const renderProgressTreeContextBanner = () => {
@@ -2737,6 +2892,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
                 {renderProgressTreeContextBanner()}
                 {answerError !== null && currentQuestionId === null ? <Alert type="error" showIcon message={answerError} /> : null}
+                {candidateLoadError !== null ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="候选对象加载失败"
+                    description={candidateLoadError}
+                  />
+                ) : null}
                 {hasQuestion ? null : (
                   <EmptyState
                     compact
@@ -2771,6 +2934,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                       turn.answers.map((answer) => {
                         const feedbackCard = buildFeedbackCardViewModel(answer);
                         const nextActions = feedbackCard.nextActions;
+                        const candidateReview = buildCandidateReviewViewModel(
+                          candidates.filter((candidate) => candidateBelongsToAnswer(candidate, answer)),
+                        );
                         return (
                           <section key={answer.answer_id} style={{ display: "grid", gap: 10 }}>
                             <div className={styles.answerBubble}>
@@ -2818,6 +2984,84 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                   </details>
                                 ) : null}
                               </div>
+                              {candidateReview.items.length > 0 ? (
+                                <section className={styles.candidateReviewPanel} aria-label="候选对象确认">
+                                  <div className={styles.candidateReviewHeader}>
+                                    <div className={styles.feedbackTextBlock}>
+                                      <Typography.Text strong>候选确认</Typography.Text>
+                                      <Typography.Text type="secondary" className={styles.candidateReviewSummary}>
+                                        {`待确认 ${candidateReview.pendingCount} 项，已处理 ${candidateReview.settledCount} 项`}
+                                      </Typography.Text>
+                                    </div>
+                                    <Tag color={candidateReview.pendingCount > 0 ? "processing" : "default"} className={styles.feedbackMetaTag}>
+                                      内容沉淀
+                                    </Tag>
+                                  </div>
+                                  {candidateReview.mergeHint ? (
+                                    <Alert type="info" showIcon message={candidateReview.mergeHint} />
+                                  ) : null}
+                                  <div className={styles.candidateReviewList}>
+                                    {candidateReview.items.map((item) => (
+                                      <article className={styles.candidateReviewItem} key={item.candidateId}>
+                                        <div className={styles.candidateReviewItemHeader}>
+                                          <Space size={[6, 6]} wrap>
+                                            <Tag color="blue" className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
+                                            <Tag color={item.statusColor} className={styles.feedbackMetaTag}>{item.statusLabel}</Tag>
+                                            {item.confidenceLabel ? (
+                                              <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag>
+                                            ) : null}
+                                          </Space>
+                                          <Space size={6} wrap>
+                                            {item.canConfirm ? (
+                                              <Tooltip title="确认并交给后端写入正式对象">
+                                                <Button
+                                                  size="small"
+                                                  type="primary"
+                                                  icon={<CheckCircleOutlined />}
+                                                  loading={candidateActionKey === `${item.candidateId}:confirm`}
+                                                  disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`}
+                                                  onClick={() => {
+                                                    void runCandidateAction(item.candidateId, "confirm");
+                                                  }}
+                                                >
+                                                  确认
+                                                </Button>
+                                              </Tooltip>
+                                            ) : null}
+                                            {item.canDismiss ? (
+                                              <Tooltip title="忽略该候选对象">
+                                                <Button
+                                                  size="small"
+                                                  danger
+                                                  icon={<CloseCircleOutlined />}
+                                                  loading={candidateActionKey === `${item.candidateId}:dismiss`}
+                                                  disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`}
+                                                  onClick={() => {
+                                                    void runCandidateAction(item.candidateId, "dismiss");
+                                                  }}
+                                                >
+                                                  忽略
+                                                </Button>
+                                              </Tooltip>
+                                            ) : null}
+                                          </Space>
+                                        </div>
+                                        <div className={styles.candidateReviewBody}>
+                                          <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
+                                          <Typography.Paragraph className={styles.candidateReviewText}>
+                                            {item.summary}
+                                          </Typography.Paragraph>
+                                          {item.evidenceExcerpt ? (
+                                            <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
+                                              {`证据片段：${item.evidenceExcerpt}`}
+                                            </Typography.Text>
+                                          ) : null}
+                                        </div>
+                                      </article>
+                                    ))}
+                                  </div>
+                                </section>
+                              ) : null}
                               {nextActions.length > 0 ? (
                                 <div className={styles.nextActionBar} aria-label="下一步建议">
                                   {nextActions.map((action) => (
