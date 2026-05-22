@@ -20,8 +20,10 @@ from app.application.polish.candidates import (
     extract_training_suggestion_candidates,
     extract_weakness_candidates,
 )
+from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.auth.entities import CurrentActor
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
 from app.infrastructure.db.repositories.polish_candidates import SqlAlchemyPolishCandidateRepository
 from tests.api.asgi_client import call_json
 from tests.api.test_polish_api import (
@@ -976,6 +978,54 @@ def test_training_task_requires_explicit_user_action_and_completion_only_returns
     assert _table_count(session_factory, "weaknesses") + _table_count(session_factory, "assets") == baseline_formal_count
 
 
+def test_candidate_llm_enhancement_uses_fake_provider_without_formal_writes(monkeypatch) -> None:
+    monkeypatch.setenv("AIFI_POLISH_CANDIDATE_LLM_ENABLED", "true")
+    session_factory = _session_factory()
+    feedback_payload = _create_feedback_payload(
+        session_factory,
+        ACTOR_A,
+        OWNER_A,
+        llm_transport=FakeLlmTransport(),
+    )
+
+    metadata = feedback_payload["feedback_metadata"]["candidate_llm_enhancement"]
+    assert metadata["mode"] == "llm_accepted"
+    assert metadata["task_type"] == "polish_candidate_memory_review"
+    assert feedback_payload["review_recommendation_candidates"]
+    all_candidates = (
+        feedback_payload["weakness_candidates"]
+        + feedback_payload["asset_candidates"]
+        + feedback_payload["training_suggestion_candidates"]
+        + feedback_payload["oral_script_candidates"]
+        + feedback_payload["polished_answer_candidates"]
+    )
+    assert all(candidate["candidate_payload"]["llm_enhancement"]["status"] == "accepted" for candidate in all_candidates)
+    assert all(candidate["target_formal_ref"] is None for candidate in all_candidates)
+    assert _table_count(session_factory, "weaknesses") == 0
+    assert _table_count(session_factory, "assets") == 0
+    assert _table_count(session_factory, "training_recommendations") == 0
+
+
+def test_candidate_llm_enhancement_falls_back_on_forbidden_provider_payload(monkeypatch) -> None:
+    monkeypatch.setenv("AIFI_POLISH_CANDIDATE_LLM_ENABLED", "true")
+    session_factory = _session_factory()
+    feedback_payload = _create_feedback_payload(
+        session_factory,
+        ACTOR_A,
+        OWNER_A,
+        llm_transport=_ForbiddenCandidateLlmTransport(),
+    )
+
+    metadata = feedback_payload["feedback_metadata"]["candidate_llm_enhancement"]
+    serialized_payload = json.dumps(feedback_payload, ensure_ascii=False)
+    assert metadata["mode"] == "llm_fallback"
+    assert metadata["fallback_reason"] == "forbidden_output_field"
+    assert "RAW_PROMPT_SHOULD_NOT_ESCAPE" not in serialized_payload
+    assert "PROVIDER_PAYLOAD_SHOULD_NOT_ESCAPE" not in serialized_payload
+    assert "hidden_rubric" not in serialized_payload
+    assert feedback_payload["candidate_refs"]
+
+
 def _isolated_candidates_app(session_factory, actor: CurrentActor) -> FastAPI:
     app = FastAPI()
     app.state.llm_transport = FakeLlmTransport()
@@ -993,8 +1043,14 @@ def _isolated_candidates_app(session_factory, actor: CurrentActor) -> FastAPI:
     return app
 
 
-def _create_feedback_payload(session_factory, actor: CurrentActor, owner_id: str) -> dict[str, Any]:
-    app = _isolated_polish_app(session_factory, actor)
+def _create_feedback_payload(
+    session_factory,
+    actor: CurrentActor,
+    owner_id: str,
+    *,
+    llm_transport=None,
+) -> dict[str, Any]:
+    app = _isolated_polish_app(session_factory, actor, llm_transport=llm_transport)
     binding_id = _seed_polish_sources(session_factory, owner_id)
     _, create_body = call_json(
         app,
@@ -1079,3 +1135,31 @@ def _decode_json(value: Any) -> Any:
     if isinstance(value, str):
         return json.loads(value)
     return value
+
+
+class _ForbiddenCandidateLlmTransport(FakeLlmTransport):
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        if request.task_type != "polish_candidate_memory_review":
+            return super().generate(request)
+        candidate_ids = list(request.evidence_bundle.get("candidate_ids", []))
+        return LlmTransportResult(
+            result={
+                "schema_id": "polish_candidate_memory_review_v1",
+                "schema_version": "1.0",
+                "status": "generated",
+                "candidate_enhancements": [
+                    {
+                        "candidate_id": candidate_ids[0] if candidate_ids else "cand_missing",
+                        "summary_hint": "RAW_PROMPT_SHOULD_NOT_ESCAPE",
+                    }
+                ],
+                "review_recommendation_candidates": [],
+                "provider_payload": "PROVIDER_PAYLOAD_SHOULD_NOT_ESCAPE",
+                "hidden_rubric": "hidden_rubric_should_not_escape",
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_forbidden_candidate_llm",),
+            evidence_refs=("evidence_forbidden_candidate_llm",),
+        )

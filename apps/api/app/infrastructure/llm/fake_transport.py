@@ -11,6 +11,11 @@ from app.application.polish.feedback_prompts import (
     POLISH_ANSWER_FEEDBACK_SCHEMA_VERSION,
     POLISH_ANSWER_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.candidate_llm import (
+    POLISH_CANDIDATE_MEMORY_REVIEW_SCHEMA_ID,
+    POLISH_CANDIDATE_MEMORY_REVIEW_SCHEMA_VERSION,
+    POLISH_CANDIDATE_MEMORY_REVIEW_TASK_TYPE,
+)
 from app.application.polish.question_prompts import (
     POLISH_QUESTION_GENERATION_PROMPT_VERSION,
     POLISH_QUESTION_GENERATION_SCHEMA_ID,
@@ -69,6 +74,8 @@ class FakeLlmTransport:
             return _generate_fake_polish_question(request)
         if request.task_type == POLISH_ANSWER_FEEDBACK_TASK_TYPE:
             return _generate_fake_polish_feedback(request)
+        if request.task_type == POLISH_CANDIDATE_MEMORY_REVIEW_TASK_TYPE:
+            return _generate_fake_candidate_memory_review(request)
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
             return _generate_fake_progress_quality_first_menu(request)
         if request.task_type == POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE:
@@ -198,6 +205,62 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
         low_confidence_flags=("feedback_low_confidence_fake",) if marker == "low_confidence_valid" else (),
         trace_refs=(stable_resource_id("trace", f"fake-feedback-trace:{seed}"),),
         evidence_refs=(stable_resource_id("trace", f"fake-feedback-evidence:{seed}"),),
+    )
+
+
+def _generate_fake_candidate_memory_review(request: LlmTransportRequest) -> LlmTransportResult:
+    candidate_ids = [
+        str(candidate_id)
+        for candidate_id in request.evidence_bundle.get("candidate_ids", [])
+        if str(candidate_id).strip()
+    ]
+    candidates = request.evidence_bundle.get("candidates", [])
+    evidence_refs = request.evidence_bundle.get("evidence_refs", [])
+    seed = dumps(
+        {
+            "task_type": request.task_type,
+            "candidate_ids": candidate_ids,
+            "input_refs": sorted(request.input_refs),
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    enhancements = []
+    for candidate in candidates if isinstance(candidates, list) else []:
+        if not isinstance(candidate, dict):
+            continue
+        candidate_id = str(candidate.get("candidate_id") or "").strip()
+        if not candidate_id:
+            continue
+        enhancements.append(
+            {
+                "candidate_id": candidate_id,
+                "summary_hint": "Fake LLM 候选增强：保留候选态，等待用户确认。",
+                "review_focus": str(candidate.get("candidate_type") or "candidate"),
+            }
+        )
+    first_candidate_id = candidate_ids[0] if candidate_ids else "cand_fake_missing"
+    return LlmTransportResult(
+        result={
+            "schema_id": POLISH_CANDIDATE_MEMORY_REVIEW_SCHEMA_ID,
+            "schema_version": POLISH_CANDIDATE_MEMORY_REVIEW_SCHEMA_VERSION,
+            "status": "generated",
+            "candidate_enhancements": enhancements,
+            "review_recommendation_candidates": [
+                {
+                    "recommendation_id": stable_resource_id("task", f"fake-review-rec:{seed}"),
+                    "title": "Fake LLM 候选复盘建议",
+                    "summary": "建议用户基于候选对象完成一次可解释复盘；不自动写正式对象。",
+                    "candidate_refs": [{"resource_type": "polish_candidate", "resource_id": first_candidate_id}],
+                    "evidence_refs": evidence_refs[:3] if isinstance(evidence_refs, list) else [],
+                }
+            ],
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(stable_resource_id("trace", f"fake-candidate-review-trace:{seed}"),),
+        evidence_refs=(stable_resource_id("trace", f"fake-candidate-review-evidence:{seed}"),),
     )
 
 

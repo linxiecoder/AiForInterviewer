@@ -17,6 +17,7 @@ from app.application.polish.commands import (
     CreatePolishSessionCommand,
     RefreshPolishProgressTreeStateCommand,
 )
+from app.application.polish.candidate_llm import PolishCandidateLlmService
 from app.application.polish.candidates import CandidateExtractionInput, extract_feedback_candidates
 from app.application.polish.entities import (
     PolishAnswer,
@@ -161,6 +162,7 @@ class PolishUseCases:
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
         self._question_llm_service = PolishQuestionLlmService(llm_transport)
         self._feedback_llm_service = PolishFeedbackLlmService(llm_transport)
+        self._candidate_llm_service = PolishCandidateLlmService(llm_transport)
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
@@ -568,6 +570,9 @@ class PolishUseCases:
             metadata["candidate_extraction_failed"] = True
             metadata["candidate_extraction_error"] = type(exc).__name__
             feedback_payload["feedback_metadata"] = metadata
+        feedback_payload = self._candidate_llm_service.enhance_with_llm_or_fallback(
+            feedback_payload=feedback_payload,
+        )
         payload_error = _validate_contract_shaped_feedback_payload(feedback_payload)
         if payload_error is not None:
             return ApplicationResult(error=payload_error)
