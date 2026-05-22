@@ -474,6 +474,8 @@ def extract_training_suggestion_candidates(extraction_input: CandidateExtraction
             "mastery_status": mastery_status or None,
             "should_continue_same_question": should_continue_same_question,
             "should_generate_next_question": should_generate_next_question,
+            "question_pattern": _question_pattern(extraction_input),
+            "expected_answer_dimensions": _expected_answer_dimensions(extraction_input),
             "formal_write_intent": False,
         },
     )
@@ -790,6 +792,16 @@ def _question_pattern(extraction_input: CandidateExtractionInput) -> str | None:
     if extraction_input.feedback_payload.get("question_pattern"):
         return str(extraction_input.feedback_payload["question_pattern"])
     return None
+
+
+def _expected_answer_dimensions(extraction_input: CandidateExtractionInput) -> list[str]:
+    metadata = extraction_input.question_metadata or {}
+    raw_dimensions = metadata.get("expected_answer_dimensions")
+    if not isinstance(raw_dimensions, list):
+        raw_dimensions = extraction_input.feedback_payload.get("expected_answer_dimensions")
+    if not isinstance(raw_dimensions, list):
+        return []
+    return [str(item) for item in raw_dimensions if str(item).strip()]
 
 
 def _resource_ref(resource_type: str, resource_id: str) -> dict[str, Any]:

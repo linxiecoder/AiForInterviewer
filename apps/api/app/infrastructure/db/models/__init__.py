@@ -23,7 +23,7 @@ from app.infrastructure.db.models.scoring import (
     ScoreRuleSet,
     ScoreRuleVersion,
 )
-from app.infrastructure.db.models.training import TrainingRecommendation
+from app.infrastructure.db.models.training import TrainingRecommendation, TrainingTask
 from app.infrastructure.db.models.user import UserAccount
 from app.infrastructure.db.models.weakness import Weakness, WeaknessCandidate
 
@@ -59,6 +59,7 @@ __all__ = [
     "ScoreRuleVersion",
     "TraceRef",
     "TrainingRecommendation",
+    "TrainingTask",
     "UserAccount",
     "UserConfirmation",
     "Weakness",

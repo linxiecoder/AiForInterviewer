@@ -846,7 +846,7 @@ def test_confirm_polished_answer_keeps_model_suggested_reference_out_of_user_fac
     assert any(ref["resource_type"] == "p7_reference_answer" for ref in _decode_json(asset_row["source_refs_json"]))
 
 
-def test_confirm_training_suggestion_is_deferred_to_phase_5c() -> None:
+def test_confirm_training_suggestion_candidate_creates_training_recommendation_without_task() -> None:
     session_factory = _session_factory()
     app = _isolated_candidates_app(session_factory, ACTOR_A)
     _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
@@ -858,9 +858,122 @@ def test_confirm_training_suggestion_is_deferred_to_phase_5c() -> None:
         "POST",
     )
 
-    assert status_code == 409
-    assert body["error"]["code"] == "unsupported_candidate_type"
-    assert _table_count(session_factory, "training_recommendations") == 0
+    assert status_code == 200
+    assert body["resource_type"] == "polish_candidate_action"
+    result = body["data"]
+    assert result["action"] == "confirm"
+    assert result["candidate"]["status"] == "confirmed"
+    assert result["candidate"]["target_formal_ref"]["resource_type"] == "training_recommendation"
+    assert result["formal_ref"] == result["candidate"]["target_formal_ref"]
+    assert _table_count(session_factory, "training_recommendations") == 1
+    assert _table_count(session_factory, "training_tasks") == 0
+
+    row = _fetch_one(
+        session_factory,
+        "select id, owner_id, title, summary, status, confidence_level, source_refs_json, "
+        "evidence_refs_json, trace_refs_json, created_from_candidate_id, user_confirmation_ref_json, "
+        "question_pattern, expected_answer_dimensions_json, target_weakness_refs_json "
+        "from training_recommendations",
+    )
+    assert row["id"] == result["formal_ref"]["resource_id"]
+    assert row["owner_id"] == OWNER_A
+    assert row["title"] == training["title"]
+    assert row["summary"] == training["summary"]
+    assert row["status"] == "confirmed"
+    assert row["confidence_level"] == training["confidence_level"]
+    assert row["created_from_candidate_id"] == training["candidate_id"]
+    assert _decode_json(row["user_confirmation_ref_json"])["resource_type"] == "user_confirmation"
+    assert _decode_json(row["trace_refs_json"])
+    assert _decode_json(row["evidence_refs_json"])
+    assert row["question_pattern"] or _decode_json(row["target_weakness_refs_json"])
+    assert _decode_json(row["expected_answer_dimensions_json"])
+
+
+def test_training_recommendation_list_is_owner_scoped() -> None:
+    session_factory = _session_factory()
+    app_a = _isolated_candidates_app(session_factory, ACTOR_A)
+    app_b = _isolated_candidates_app(session_factory, ACTOR_B)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    _create_feedback_payload(session_factory, ACTOR_B, OWNER_B)
+    training_a = _candidate_by_type(app_a, "training_suggestion_candidate")
+    training_b = _candidate_by_type(app_b, "training_suggestion_candidate")
+    call_json(app_a, f"/api/v1/polish-candidates/{training_a['candidate_id']}/confirm", "POST")
+    call_json(app_b, f"/api/v1/polish-candidates/{training_b['candidate_id']}/confirm", "POST")
+
+    status_code, body_a = call_json(app_a, "/api/v1/training-suggestions")
+    status_code_b, body_b = call_json(app_b, "/api/v1/training-suggestions")
+
+    assert status_code == 200
+    assert status_code_b == 200
+    assert len(body_a["data"]) == 1
+    assert len(body_b["data"]) == 1
+    assert body_a["data"][0]["owner_id"] == OWNER_A
+    assert body_b["data"][0]["owner_id"] == OWNER_B
+    assert body_a["data"][0]["training_recommendation_id"] != body_b["data"][0]["training_recommendation_id"]
+
+
+def test_training_recommendation_can_be_dismissed_by_owner() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    training = _candidate_by_type(app, "training_suggestion_candidate")
+    _, confirm_body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{training['candidate_id']}/confirm",
+        "POST",
+    )
+    recommendation_id = confirm_body["data"]["formal_ref"]["resource_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/training-suggestions/{recommendation_id}/dismiss",
+        "POST",
+    )
+
+    assert status_code == 200
+    assert body["data"]["status"] == "dismissed"
+    assert body["data"]["user_confirmation_ref"]["resource_type"] == "user_confirmation"
+
+
+def test_training_task_requires_explicit_user_action_and_completion_only_returns_progress_hint() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    training = _candidate_by_type(app, "training_suggestion_candidate")
+    _, confirm_body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{training['candidate_id']}/confirm",
+        "POST",
+    )
+    recommendation_id = confirm_body["data"]["formal_ref"]["resource_id"]
+    assert _table_count(session_factory, "training_tasks") == 0
+    baseline_formal_count = _table_count(session_factory, "weaknesses") + _table_count(session_factory, "assets")
+
+    status_code, start_body = call_json(
+        app,
+        f"/api/v1/training-suggestions/{recommendation_id}/tasks",
+        "POST",
+    )
+
+    assert status_code == 200
+    task = start_body["data"]
+    assert task["status"] == "in_progress"
+    assert task["training_recommendation_id"] == recommendation_id
+    assert _table_count(session_factory, "training_tasks") == 1
+
+    status_code, complete_body = call_json(
+        app,
+        f"/api/v1/training-suggestions/{recommendation_id}/tasks/{task['training_task_id']}/complete",
+        "POST",
+    )
+
+    assert status_code == 200
+    completed = complete_body["data"]
+    assert completed["status"] == "completed"
+    assert completed["progress_update_hint"]["resource_type"] == "training_progress_hint"
+    assert completed["progress_update_hint"]["training_task_id"] == task["training_task_id"]
+    assert completed["progress_update_hint"]["writes_formal_memory"] is False
+    assert _table_count(session_factory, "weaknesses") + _table_count(session_factory, "assets") == baseline_formal_count
 
 
 def _isolated_candidates_app(session_factory, actor: CurrentActor) -> FastAPI:

@@ -87,6 +87,8 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
         weakness_columns = {column["name"] for column in inspector.get_columns("weaknesses")}
         asset_columns = {column["name"] for column in inspector.get_columns("assets")}
         asset_version_columns = {column["name"] for column in inspector.get_columns("asset_versions")}
+        training_recommendation_columns = {column["name"] for column in inspector.get_columns("training_recommendations")}
+        training_task_columns = {column["name"] for column in inspector.get_columns("training_tasks")}
 
         assert {"resume_id", "job_id"}.issubset(interview_columns)
         assert "custom_topic_text_summary" in polish_detail_columns
@@ -151,5 +153,34 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
             "created_by_actor_id",
             "created_from_candidate_id",
         }.issubset(asset_version_columns)
+        assert {
+            "title",
+            "summary",
+            "reason",
+            "confidence_level",
+            "source_refs_json",
+            "evidence_refs_json",
+            "trace_refs_json",
+            "candidate_ref_json",
+            "target_weakness_refs_json",
+            "question_pattern",
+            "expected_answer_dimensions_json",
+            "created_from_candidate_id",
+            "user_confirmation_ref_json",
+            "dismissed_at",
+        }.issubset(training_recommendation_columns)
+        assert {
+            "training_recommendation_id",
+            "target_weakness_refs_json",
+            "question_pattern",
+            "expected_answer_dimensions_json",
+            "source_refs_json",
+            "evidence_refs_json",
+            "trace_refs_json",
+            "explicit_action_ref_json",
+            "progress_update_hint_json",
+            "started_at",
+            "completed_at",
+        }.issubset(training_task_columns)
     finally:
         temp_artifacts.cleanup()

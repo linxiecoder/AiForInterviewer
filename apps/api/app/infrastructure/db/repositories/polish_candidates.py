@@ -19,6 +19,7 @@ from app.domain.shared.clock import utc_now
 from app.infrastructure.db.models.asset import Asset, AssetVersion
 from app.infrastructure.db.models.polish_candidate import PolishCandidateRecord
 from app.infrastructure.db.models.reference import UserConfirmation
+from app.infrastructure.db.models.training import TrainingRecommendation
 from app.infrastructure.db.models.weakness import Weakness
 from app.infrastructure.db.session import get_session_factory
 
@@ -136,12 +137,6 @@ class SqlAlchemyPolishCandidateRepository:
                         "candidate_not_confirmable",
                         "Only candidate status can be confirmed",
                     )
-                if candidate.candidate_type == CandidateType.TRAINING_SUGGESTION.value:
-                    raise PolishCandidateActionError(
-                        "unsupported_candidate_type",
-                        "Training suggestion confirmation is deferred to Phase 5C",
-                    )
-
                 now = utc_now()
                 previous_status = candidate.status
                 candidate.status = CandidateStatus.CONFIRMED.value
@@ -171,6 +166,14 @@ class SqlAlchemyPolishCandidateRepository:
                         candidate=candidate,
                         actor_id=actor_id,
                         confirmation_ref=confirmation_ref,
+                    )
+                elif candidate.candidate_type == CandidateType.TRAINING_SUGGESTION.value:
+                    formal_ref = _create_formal_training_recommendation_from_candidate(
+                        session=session,
+                        candidate=candidate,
+                        actor_id=actor_id,
+                        confirmation_ref=confirmation_ref,
+                        now=now,
                     )
                 else:
                     raise PolishCandidateActionError(
@@ -486,6 +489,51 @@ def _create_formal_asset_from_candidate(
     )
 
 
+def _create_formal_training_recommendation_from_candidate(
+    *,
+    session: Session,
+    candidate: PolishCandidateRecord,
+    actor_id: str,
+    confirmation_ref: dict[str, str],
+    now: datetime,
+) -> dict[str, str]:
+    source_refs = list(candidate.source_refs_json or [])
+    evidence_refs = list(candidate.evidence_refs_json or [])
+    trace_refs = list(candidate.trace_refs_json or [])
+    candidate_payload = dict(candidate.candidate_payload_json or {})
+    recommendation_id = f"trainrec_{_stable_hash('|'.join([candidate.owner_id, candidate.candidate_id]), 24)}"
+    recommendation = TrainingRecommendation(
+        id=recommendation_id,
+        owner_id=candidate.owner_id,
+        actor_id=actor_id,
+        record_version=1,
+        status="confirmed",
+        created_at=now,
+        updated_at=now,
+        trace_ref_ids=_ref_id_list(trace_refs),
+        evidence_ref_ids=_ref_id_list(evidence_refs),
+        normalized_topic=_normalized_title(candidate.title),
+        title=candidate.title,
+        summary=candidate.summary,
+        reason=candidate.reason,
+        confidence_level=candidate.confidence_level,
+        source_refs_json=source_refs,
+        evidence_refs_json=evidence_refs,
+        trace_refs_json=trace_refs,
+        candidate_ref_json={"resource_type": "polish_candidate", "resource_id": candidate.candidate_id},
+        target_weakness_refs_json=_refs_of_type([*source_refs, *evidence_refs], {"weakness", "weakness_candidate"}),
+        question_pattern=_optional_text(candidate_payload.get("question_pattern")),
+        expected_answer_dimensions_json=_string_list(candidate_payload.get("expected_answer_dimensions")),
+        created_from_candidate_id=candidate.candidate_id,
+        user_confirmation_ref_json=confirmation_ref,
+        ai_task_id=None,
+        confirmation_id=confirmation_ref["resource_id"],
+        dismissed_at=None,
+    )
+    session.add(recommendation)
+    return {"resource_type": "training_recommendation", "resource_id": recommendation_id}
+
+
 def candidate_payloads_from_feedback_payload(feedback_payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     candidates: list[dict[str, Any]] = []
     for field_name in CANDIDATE_PAYLOAD_FIELDS:
@@ -595,6 +643,12 @@ def _required_text(value: Any) -> str | None:
 
 def _optional_text(value: Any) -> str | None:
     return _required_text(value)
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _parse_datetime(value: Any) -> datetime:

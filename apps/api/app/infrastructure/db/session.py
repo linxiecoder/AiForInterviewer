@@ -59,6 +59,20 @@ _KNOWN_SCHEMA_COLUMN_BACKFILLS: tuple[tuple[str, str, str], ...] = (
     ("asset_versions", "content", "TEXT"),
     ("asset_versions", "edit_summary", "TEXT"),
     ("asset_versions", "created_by_actor_id", "VARCHAR(80)"),
+    ("training_recommendations", "title", "VARCHAR(160)"),
+    ("training_recommendations", "summary", "TEXT"),
+    ("training_recommendations", "reason", "TEXT"),
+    ("training_recommendations", "confidence_level", "VARCHAR(40)"),
+    ("training_recommendations", "source_refs_json", "JSON"),
+    ("training_recommendations", "evidence_refs_json", "JSON"),
+    ("training_recommendations", "trace_refs_json", "JSON"),
+    ("training_recommendations", "candidate_ref_json", "JSON"),
+    ("training_recommendations", "target_weakness_refs_json", "JSON"),
+    ("training_recommendations", "question_pattern", "VARCHAR(120)"),
+    ("training_recommendations", "expected_answer_dimensions_json", "JSON"),
+    ("training_recommendations", "created_from_candidate_id", "VARCHAR(80)"),
+    ("training_recommendations", "user_confirmation_ref_json", "JSON"),
+    ("training_recommendations", "dismissed_at", "DATETIME"),
 )
 
 
