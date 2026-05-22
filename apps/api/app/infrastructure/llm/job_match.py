@@ -7,13 +7,13 @@ from typing import Any
 
 from app.domain.shared.enums import ConfidenceLevel
 from app.application.job_match.ports import JobMatchAnalyzerOutput, JobMatchAnalyzerUnavailableError
-from app.infrastructure.llm.errors import (
+from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
-from app.infrastructure.llm.ports import LlmTransport
-from app.infrastructure.llm.types import LlmTransportRequest
+from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest
 from app.schemas.job_match import JobMatchSourceBundle
 
 

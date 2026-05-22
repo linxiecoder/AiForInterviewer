@@ -6,14 +6,14 @@ from copy import deepcopy
 import os
 from typing import Any
 
-from app.infrastructure.llm.errors import (
+from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportError,
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
-from app.infrastructure.llm.ports import LlmTransport
-from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 
 
 CANDIDATE_LLM_ENABLED_ENV = "AIFI_POLISH_CANDIDATE_LLM_ENABLED"

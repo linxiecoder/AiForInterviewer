@@ -60,8 +60,8 @@ from app.schemas.job_match import (
     ResumeEvidence,
     SourceEvidenceRef,
 )
-from app.infrastructure.llm.errors import LlmTransportUnavailableError
-from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.llm.errors import LlmTransportUnavailableError
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 
 
 class FakeLlmTransport:

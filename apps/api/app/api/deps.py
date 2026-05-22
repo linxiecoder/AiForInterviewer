@@ -9,7 +9,7 @@ from app.api.errors import raise_api_error
 from app.application.job_match.ports import JobMatchAnalyzer
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
-from app.infrastructure.llm.ports import LlmTransport
+from app.application.llm.ports import LlmTransport
 
 
 def get_auth_runtime(request: Request) -> Any:

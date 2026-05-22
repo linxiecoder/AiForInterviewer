@@ -11,7 +11,7 @@ from app.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLlmSettings,
     OpenAICompatibleLlmTransport,
 )
-from app.infrastructure.llm.ports import LlmTransport
+from app.application.llm.ports import LlmTransport
 
 
 def build_job_match_analyzer_from_env() -> LlmJobMatchAnalyzer:

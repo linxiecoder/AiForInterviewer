@@ -70,7 +70,7 @@ from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.domain.shared.errors import DomainError
 from app.domain.shared.ids import ResourceIdPrefix, generate_resource_id
 from app.domain.shared.refs import ResourceRef, TraceRef
-from app.infrastructure.llm.ports import LlmTransport
+from app.application.llm.ports import LlmTransport
 
 
 SESSION_STATUS_RUNNING = "running"

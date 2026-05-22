@@ -46,7 +46,7 @@ from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.repositories.polish_candidates import SqlAlchemyPolishCandidateRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
-from app.infrastructure.llm.ports import LlmTransport
+from app.application.llm.ports import LlmTransport
 from app.infrastructure.observability.http_logging import get_request_trace_context
 from app.schemas.polish import (
     CreateAnswerRequest,

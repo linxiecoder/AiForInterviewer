@@ -37,13 +37,13 @@ from app.application.polish.progress_tree_v2 import (
     PolishProgressTreeQualityFirstPlanner,
     PolishProgressTreeV2Pipeline,
 )
-from app.infrastructure.llm.errors import (
+from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
-from app.infrastructure.llm.ports import LlmTransport
-from app.infrastructure.llm.types import LlmTransportRequest
+from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest
 
 
 PROGRESS_TREE_STATUS_READY = "ready"

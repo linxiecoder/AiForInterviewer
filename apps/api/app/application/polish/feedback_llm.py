@@ -25,14 +25,14 @@ from app.application.polish.feedback_quality import (
     normalize_feedback_payload,
     validate_feedback_consistency,
 )
-from app.infrastructure.llm.errors import (
+from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportError,
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
-from app.infrastructure.llm.ports import LlmTransport
-from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 
 
 FEEDBACK_LLM_ENABLED_ENV = "AIFI_POLISH_FEEDBACK_LLM_ENABLED"

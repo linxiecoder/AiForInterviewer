@@ -15,13 +15,13 @@ import httpx
 
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.shared.ids import stable_resource_id
-from app.infrastructure.llm.errors import (
+from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
 from app.infrastructure.llm.job_match import JOB_MATCH_PROMPT_VERSION
-from app.infrastructure.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
