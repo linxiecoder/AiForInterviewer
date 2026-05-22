@@ -84,6 +84,9 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
         polish_detail_columns = {column["name"] for column in inspector.get_columns("polish_session_details")}
         question_columns = {column["name"] for column in inspector.get_columns("questions")}
         candidate_columns = {column["name"] for column in inspector.get_columns("polish_candidates")}
+        weakness_columns = {column["name"] for column in inspector.get_columns("weaknesses")}
+        asset_columns = {column["name"] for column in inspector.get_columns("assets")}
+        asset_version_columns = {column["name"] for column in inspector.get_columns("asset_versions")}
 
         assert {"resume_id", "job_id"}.issubset(interview_columns)
         assert "custom_topic_text_summary" in polish_detail_columns
@@ -118,5 +121,35 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
             "confirmed_at",
             "archived_at",
         }.issubset(candidate_columns)
+        assert {
+            "title",
+            "summary",
+            "confidence_level",
+            "source_refs_json",
+            "evidence_refs_json",
+            "trace_refs_json",
+            "created_from_candidate_id",
+            "user_confirmation_ref_json",
+        }.issubset(weakness_columns)
+        assert {
+            "asset_type",
+            "title",
+            "summary",
+            "content",
+            "source_refs_json",
+            "evidence_refs_json",
+            "trace_refs_json",
+            "created_from_candidate_id",
+            "user_confirmation_ref_json",
+            "fact_source",
+        }.issubset(asset_columns)
+        assert {
+            "asset_id",
+            "version_number",
+            "content",
+            "edit_summary",
+            "created_by_actor_id",
+            "created_from_candidate_id",
+        }.issubset(asset_version_columns)
     finally:
         temp_artifacts.cleanup()

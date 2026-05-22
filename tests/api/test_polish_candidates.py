@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -603,6 +604,265 @@ def test_candidate_repository_allows_same_candidate_id_across_different_owners()
     assert repository.get_candidate(owner_id=OWNER_B, candidate_id="cand_shared_content_hash")["owner_id"] == OWNER_B
 
 
+def test_confirm_weakness_candidate_creates_formal_weakness_with_refs() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    weakness = _candidate_by_type(app, "weakness_candidate")
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{weakness['candidate_id']}/confirm",
+        "POST",
+    )
+
+    assert status_code == 200
+    assert body["resource_type"] == "polish_candidate_action"
+    result = body["data"]
+    assert result["action"] == "confirm"
+    assert result["candidate"]["status"] == "confirmed"
+    assert result["candidate"]["confirmed_at"] is not None
+    assert result["candidate"]["target_formal_ref"]["resource_type"] == "weakness"
+    assert result["formal_ref"] == result["candidate"]["target_formal_ref"]
+
+    row = _fetch_one(
+        session_factory,
+        "select id, owner_id, title, summary, status, confidence_level, source_refs_json, "
+        "evidence_refs_json, trace_refs_json, created_from_candidate_id, user_confirmation_ref_json "
+        "from weaknesses",
+    )
+    assert row["id"] == result["formal_ref"]["resource_id"]
+    assert row["owner_id"] == OWNER_A
+    assert row["status"] == "active"
+    assert row["created_from_candidate_id"] == weakness["candidate_id"]
+    assert row["title"] == weakness["title"]
+    assert row["summary"] == weakness["summary"]
+    assert row["confidence_level"] == weakness["confidence_level"]
+    assert _decode_json(row["source_refs_json"]) == weakness["source_refs"]
+    assert _decode_json(row["evidence_refs_json"]) == weakness["evidence_refs"]
+    assert _decode_json(row["trace_refs_json"]) == weakness["trace_refs"]
+    assert _decode_json(row["user_confirmation_ref_json"])["resource_type"] == "user_confirmation"
+
+
+def test_confirm_asset_candidate_creates_formal_asset_and_asset_version() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    asset_candidate = _candidate_by_type(app, "asset_candidate")
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{asset_candidate['candidate_id']}/confirm",
+        "POST",
+    )
+
+    assert status_code == 200
+    result = body["data"]
+    assert result["candidate"]["status"] == "confirmed"
+    assert result["candidate"]["target_formal_ref"]["resource_type"] == "asset"
+    assert result["asset_version_ref"]["resource_type"] == "asset_version"
+
+    asset_row = _fetch_one(
+        session_factory,
+        "select id, owner_id, asset_type, title, summary, content, current_version_id, status, "
+        "source_refs_json, evidence_refs_json, trace_refs_json, created_from_candidate_id, "
+        "user_confirmation_ref_json, fact_source from assets",
+    )
+    version_row = _fetch_one(
+        session_factory,
+        "select id, owner_id, asset_id, version_number, content, edit_summary, "
+        "created_from_candidate_id from asset_versions",
+    )
+    assert asset_row["id"] == result["formal_ref"]["resource_id"]
+    assert asset_row["owner_id"] == OWNER_A
+    assert asset_row["asset_type"] == "asset"
+    assert asset_row["status"] == "active"
+    assert asset_row["created_from_candidate_id"] == asset_candidate["candidate_id"]
+    assert asset_row["title"] == asset_candidate["title"]
+    assert asset_row["summary"] == asset_candidate["summary"]
+    assert asset_row["content"] == asset_candidate["evidence_excerpt"]
+    assert asset_row["current_version_id"] == version_row["id"]
+    assert asset_row["fact_source"] in {"user_fact", "score_signal"}
+    assert _decode_json(asset_row["source_refs_json"]) == asset_candidate["source_refs"]
+    assert _decode_json(asset_row["evidence_refs_json"]) == asset_candidate["evidence_refs"]
+    assert _decode_json(asset_row["trace_refs_json"]) == asset_candidate["trace_refs"]
+    assert _decode_json(asset_row["user_confirmation_ref_json"])["resource_type"] == "user_confirmation"
+    assert version_row["asset_id"] == asset_row["id"]
+    assert version_row["version_number"] == 1
+    assert version_row["content"] == asset_candidate["evidence_excerpt"]
+    assert version_row["created_from_candidate_id"] == asset_candidate["candidate_id"]
+
+
+def test_dismiss_merge_and_archive_candidate_state_flow_without_formal_write() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    candidates = _candidate_list(app)
+    dismissed = candidates[0]
+    merged = candidates[1]
+    merge_target = candidates[2]
+    archived = candidates[3]
+
+    status_code, dismiss_body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{dismissed['candidate_id']}/dismiss",
+        "POST",
+    )
+    assert status_code == 200
+    assert dismiss_body["data"]["candidate"]["status"] == "dismissed"
+    assert dismiss_body["data"]["candidate"]["dismissed_at"] is not None
+
+    status_code, merge_body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{merged['candidate_id']}/merge",
+        "POST",
+        json_body={"target_candidate_id": merge_target["candidate_id"]},
+    )
+    assert status_code == 200
+    assert merge_body["data"]["candidate"]["status"] == "merged"
+    assert merge_body["data"]["candidate"]["merge_target_candidate_id"] == merge_target["candidate_id"]
+
+    status_code, archive_body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{archived['candidate_id']}/archive",
+        "POST",
+    )
+    assert status_code == 200
+    assert archive_body["data"]["candidate"]["status"] == "archived"
+    assert archive_body["data"]["candidate"]["archived_at"] is not None
+    _assert_no_formal_memory_written(session_factory)
+
+
+def test_confirm_enforces_owner_isolation_and_repeated_confirm_is_safe() -> None:
+    session_factory = _session_factory()
+    app_a = _isolated_candidates_app(session_factory, ACTOR_A)
+    app_b = _isolated_candidates_app(session_factory, ACTOR_B)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    weakness = _candidate_by_type(app_a, "weakness_candidate")
+
+    status_code, body_b = call_json(
+        app_b,
+        f"/api/v1/polish-candidates/{weakness['candidate_id']}/confirm",
+        "POST",
+    )
+    assert status_code == 404
+    assert body_b["error"]["code"] == "not_found_or_inaccessible"
+    assert _table_count(session_factory, "weaknesses") == 0
+
+    status_code, _ = call_json(
+        app_a,
+        f"/api/v1/polish-candidates/{weakness['candidate_id']}/confirm",
+        "POST",
+    )
+    assert status_code == 200
+    status_code, repeat_body = call_json(
+        app_a,
+        f"/api/v1/polish-candidates/{weakness['candidate_id']}/confirm",
+        "POST",
+    )
+    assert status_code == 409
+    assert repeat_body["error"]["code"] == "candidate_not_confirmable"
+    assert _table_count(session_factory, "weaknesses") == 1
+
+
+def test_confirm_failure_rolls_back_candidate_status_and_formal_write(monkeypatch) -> None:
+    import app.infrastructure.db.repositories.polish_candidates as candidate_repo
+
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    weakness = _candidate_by_type(app, "weakness_candidate")
+    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+
+    def _raise_after_candidate_status_update(*args, **kwargs):
+        raise RuntimeError("forced formal write failure")
+
+    monkeypatch.setattr(candidate_repo, "_create_formal_weakness_from_candidate", _raise_after_candidate_status_update)
+
+    with pytest.raises(RuntimeError, match="forced formal write failure"):
+        repository.confirm_candidate(
+            owner_id=OWNER_A,
+            actor_id=ACTOR_A.actor_id,
+            candidate_id=weakness["candidate_id"],
+        )
+
+    rolled_back = repository.get_candidate(owner_id=OWNER_A, candidate_id=weakness["candidate_id"])
+    assert rolled_back["status"] == "candidate"
+    assert rolled_back["target_formal_ref"] is None
+    assert _table_count(session_factory, "weaknesses") == 0
+
+
+def test_confirm_keeps_sanitizer_effective_on_formal_objects() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    weakness = _candidate_by_type(app, "weakness_candidate")
+    asset_candidate = _candidate_by_type(app, "asset_candidate")
+
+    call_json(app, f"/api/v1/polish-candidates/{weakness['candidate_id']}/confirm", "POST")
+    call_json(app, f"/api/v1/polish-candidates/{asset_candidate['candidate_id']}/confirm", "POST")
+
+    rows = _fetch_all(session_factory, "select * from weaknesses") + _fetch_all(session_factory, "select * from assets")
+    forbidden = {
+        "raw_prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "api_key",
+        "cookie",
+        "secret",
+        "token",
+    }
+    serialized = json.dumps([dict(row) for row in rows], ensure_ascii=False, default=str).lower()
+    for forbidden_text in forbidden:
+        assert forbidden_text not in serialized
+
+
+def test_confirm_polished_answer_keeps_model_suggested_reference_out_of_user_fact() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    polished = _candidate_by_type(app, "polished_answer_candidate")
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{polished['candidate_id']}/confirm",
+        "POST",
+    )
+
+    assert status_code == 200
+    asset_row = _fetch_one(
+        session_factory,
+        "select id, asset_type, fact_source, source_refs_json, content from assets",
+    )
+    assert asset_row["id"] == body["data"]["formal_ref"]["resource_id"]
+    assert asset_row["asset_type"] == "polished_answer"
+    assert asset_row["fact_source"] == "model_suggested_phrasing"
+    assert asset_row["content"] == polished["evidence_excerpt"]
+    assert any(ref["resource_type"] == "p7_reference_answer" for ref in _decode_json(asset_row["source_refs_json"]))
+
+
+def test_confirm_training_suggestion_is_deferred_to_phase_5c() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    training = _candidate_by_type(app, "training_suggestion_candidate")
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-candidates/{training['candidate_id']}/confirm",
+        "POST",
+    )
+
+    assert status_code == 409
+    assert body["error"]["code"] == "unsupported_candidate_type"
+    assert _table_count(session_factory, "training_recommendations") == 0
+
+
 def _isolated_candidates_app(session_factory, actor: CurrentActor) -> FastAPI:
     app = FastAPI()
     app.state.llm_transport = FakeLlmTransport()
@@ -670,3 +930,39 @@ def _assert_no_formal_memory_written(session_factory) -> None:
             "training_recommendations",
         ):
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
+
+
+def _candidate_list(app: FastAPI) -> list[dict[str, Any]]:
+    status_code, body = call_json(app, "/api/v1/polish-candidates")
+    assert status_code == 200
+    assert len(body["data"]) >= 4
+    return body["data"]
+
+
+def _candidate_by_type(app: FastAPI, candidate_type: str) -> dict[str, Any]:
+    status_code, body = call_json(app, f"/api/v1/polish-candidates?candidate_type={candidate_type}")
+    assert status_code == 200
+    assert body["data"]
+    return body["data"][0]
+
+
+def _table_count(session_factory, table_name: str) -> int:
+    with session_factory() as db:
+        return int(db.execute(text(f"select count(*) from {table_name}")).scalar_one())
+
+
+def _fetch_one(session_factory, query: str) -> dict[str, Any]:
+    rows = _fetch_all(session_factory, query)
+    assert len(rows) == 1
+    return rows[0]
+
+
+def _fetch_all(session_factory, query: str) -> list[dict[str, Any]]:
+    with session_factory() as db:
+        return [dict(row) for row in db.execute(text(query)).mappings().all()]
+
+
+def _decode_json(value: Any) -> Any:
+    if isinstance(value, str):
+        return json.loads(value)
+    return value

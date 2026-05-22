@@ -49,6 +49,16 @@ def test_route_inventory_registers_polish_core_routes() -> None:
     assert "/api/v1/polish-sessions/{session_id}/feedback" in paths
     assert "/api/v1/polish-candidates" in paths
     assert "/api/v1/polish-candidates/{candidate_id}" in paths
+    assert {"GET"}.issubset(methods_by_path["/api/v1/polish-candidates"])
+    assert {"GET"}.issubset(methods_by_path["/api/v1/polish-candidates/{candidate_id}"])
+    assert "/api/v1/polish-candidates/{candidate_id}/confirm" in paths
+    assert "/api/v1/polish-candidates/{candidate_id}/dismiss" in paths
+    assert "/api/v1/polish-candidates/{candidate_id}/merge" in paths
+    assert "/api/v1/polish-candidates/{candidate_id}/archive" in paths
+    assert {"POST"}.issubset(methods_by_path["/api/v1/polish-candidates/{candidate_id}/confirm"])
+    assert {"POST"}.issubset(methods_by_path["/api/v1/polish-candidates/{candidate_id}/dismiss"])
+    assert {"POST"}.issubset(methods_by_path["/api/v1/polish-candidates/{candidate_id}/merge"])
+    assert {"POST"}.issubset(methods_by_path["/api/v1/polish-candidates/{candidate_id}/archive"])
 
 
 def test_baseline_route_inventory_has_no_export_download_or_upload_routes() -> None:

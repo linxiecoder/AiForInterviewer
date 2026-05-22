@@ -96,10 +96,15 @@ API_ERROR_CODES = frozenset(
         "task_timeout",
         "task_cancelled",
         "task_retry_not_allowed",
+        "candidate_not_confirmable",
+        "candidate_not_dismissable",
+        "candidate_not_mergeable",
+        "candidate_not_archivable",
+        "invalid_merge_target",
+        "unsupported_candidate_type",
         "rate_limited",
         "copy_boundary_violation",
         "export_not_supported",
         "internal_error",
     }
 )
-
