@@ -498,12 +498,59 @@ def build_candidate_merge_key(
     return f"{candidate_type_value}:{owner_hash}:{title}:{pattern}:{dimension}:{source_type_value}"
 
 
+_REDACTED_SENSITIVE_DETAIL = "redacted_sensitive_detail"
+_FORBIDDEN_CANDIDATE_KEY_OVERRIDES = frozenset({"full_resume"})
+_FORBIDDEN_CANDIDATE_VALUE_MARKERS = (
+    "raw_prompt",
+    "system_prompt",
+    "raw_completion",
+    "completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "provider_response",
+    "raw_provider_response",
+    "hidden_rubric",
+    "full_evidence_text",
+    "full_resume",
+    "full_resume_markdown",
+    "full_jd",
+    "full_jd_text",
+)
+_FORBIDDEN_CANDIDATE_ASSIGNMENT_PATTERNS = (
+    re.compile(r"api[_-]?key\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"cookie\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"token\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"secret\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+)
+
+
+def _is_forbidden_candidate_key(key: str) -> bool:
+    normalized = key.strip().lower()
+    return (
+        normalized in FORBIDDEN_CANDIDATE_KEYS
+        or normalized in _FORBIDDEN_CANDIDATE_KEY_OVERRIDES
+        or "prompt" in normalized
+    )
+
+
+def _normalized_sensitive_marker_text(value: str) -> str:
+    return re.sub(r"[\s-]+", "_", value.lower())
+
+
+def _has_forbidden_candidate_value(value: str) -> bool:
+    normalized = _normalized_sensitive_marker_text(value)
+    if any(marker in normalized for marker in _FORBIDDEN_CANDIDATE_VALUE_MARKERS):
+        return True
+    if any(pattern.search(value) for pattern in _FORBIDDEN_VALUE_PATTERNS):
+        return True
+    return any(pattern.search(value) for pattern in _FORBIDDEN_CANDIDATE_ASSIGNMENT_PATTERNS)
+
 def normalize_candidate_payload(value: Any) -> Any:
     if isinstance(value, dict):
         return {
             str(key): normalize_candidate_payload(item)
             for key, item in value.items()
-            if str(key) not in FORBIDDEN_CANDIDATE_KEYS
+            if not _is_forbidden_candidate_key(str(key))
         }
     if isinstance(value, list):
         return [normalize_candidate_payload(item) for item in value]
@@ -825,10 +872,9 @@ def _short_text(value: Any, limit: int = _MAX_TEXT_LENGTH) -> str:
 
 
 def _redact_forbidden_text(value: str) -> str:
-    redacted = value
-    for pattern in _FORBIDDEN_VALUE_PATTERNS:
-        redacted = pattern.sub("[redacted]", redacted)
-    return redacted
+    if _has_forbidden_candidate_value(value):
+        return _REDACTED_SENSITIVE_DETAIL
+    return value
 
 
 def _candidate_id(

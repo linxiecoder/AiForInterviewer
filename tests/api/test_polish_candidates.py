@@ -269,12 +269,15 @@ def test_candidate_payload_sanitizes_raw_prompt_completion_and_provider_payload(
     payload["raw_prompt"] = "raw prompt must not be returned"
     payload["completion"] = "raw completion must not be returned"
     payload["provider_payload"] = {"api_key": "secret"}
+    payload["full_resume"] = "full resume markdown must not be returned"
+    payload["full_jd"] = "full JD text must not be returned"
     payload["loss_points"][0]["hidden_rubric"] = "internal scoring rule"
     payload["positive_evidence_points"][0]["full_evidence_text"] = "full answer evidence"
-    payload["loss_points"][0]["answer_excerpt"] = "raw prompt must not be returned"
-    payload["positive_evidence_points"][0]["evidence_excerpt"] = "full evidence text must not be returned"
+    payload["loss_points"][0]["title"] = "raw_prompt must not be returned"
+    payload["loss_points"][0]["answer_excerpt"] = "provider_payload must not be returned"
+    payload["positive_evidence_points"][0]["evidence_excerpt"] = "full_evidence_text must not be returned"
     payload["technical_gaps"] = ["cookie=session-secret must not be returned"]
-    payload["oral_script"] = "provider payload must not be returned"
+    payload["oral_script"] = "provider_payload must not be returned"
     payload["p7_reference_answer"] = "api_key=sk-test-secret must not be returned"
     result = extract_feedback_candidates(_candidate_input(feedback_payload=payload))
 
@@ -285,6 +288,8 @@ def test_candidate_payload_sanitizes_raw_prompt_completion_and_provider_payload(
         "provider_payload",
         "hidden_rubric",
         "full_evidence_text",
+        "full_resume",
+        "full_jd",
         "api_key",
         "cookie",
         "secret",
@@ -294,9 +299,91 @@ def test_candidate_payload_sanitizes_raw_prompt_completion_and_provider_payload(
     serialized_values = "\n".join(_string_values(result)).lower()
     for forbidden_text in (
         "raw prompt must not be returned",
-        "full evidence text must not be returned",
+        "raw_prompt must not be returned",
+        "provider_payload must not be returned",
+        "full_evidence_text must not be returned",
+        "full resume markdown must not be returned",
+        "full jd text must not be returned",
         "cookie=session-secret must not be returned",
-        "provider payload must not be returned",
         "api_key=sk-test-secret must not be returned",
+    ):
+        assert forbidden_text not in serialized_values
+
+
+def test_safe_candidate_dict_sanitizes_candidate_fields_refs_payload_and_merge_key() -> None:
+    from app.application.polish.candidates import (
+        CandidateSourceType,
+        CandidateStatus,
+        PolishCandidate,
+        safe_candidate_dict,
+    )
+
+    candidate = PolishCandidate(
+        candidate_id="cand_sensitive",
+        candidate_type=CandidateType.WEAKNESS,
+        owner_id="usr_candidate_owner_a",
+        source_type=CandidateSourceType.STRUCTURED_FEEDBACK,
+        source_refs=({"resource_type": "answer", "resource_id": "token=answer-secret"},),
+        evidence_refs=({"resource_type": "loss_point", "resource_id": "cookie=session-secret"},),
+        trace_refs=({"trace_type": "feedback", "trace_ref_id": "secret=trace-secret"},),
+        session_id="psess_candidate_001",
+        question_id="ques_candidate_001",
+        answer_id="ans_candidate_001",
+        feedback_id="trc_candidate_feedback_001",
+        title="raw_prompt must not be returned",
+        summary="provider_payload must not be returned",
+        evidence_excerpt="api_key=sk-test-secret must not be returned",
+        reason="token=reason-secret cookie=session-secret secret=plain-secret",
+        confidence_level="medium",
+        merge_key="weakness_candidate:完整原始回答不应进入:raw_prompt:api_key=sk-test-secret",
+        created_at=datetime(2026, 5, 22, 10, 30, tzinfo=UTC),
+        updated_at=datetime(2026, 5, 22, 10, 30, tzinfo=UTC),
+        status=CandidateStatus.CANDIDATE,
+        candidate_payload={
+            "full_resume": "full resume markdown must not be returned",
+            "nested": {
+                "hidden_rubric": "hidden rubric must not be returned",
+                "full_evidence_text": "full evidence text must not be returned",
+                "full_jd": "full JD text must not be returned",
+                "provider_payload": {"secret": "secret=payload-secret"},
+            },
+            "list": [
+                {"raw_prompt": "raw_prompt must not be returned"},
+                "token=list-secret must not be returned",
+            ],
+            "safe_note": "safe note remains",
+        },
+    )
+
+    result = safe_candidate_dict(candidate)
+
+    assert result["candidate_payload"]["safe_note"] == "safe note remains"
+    forbidden = {
+        "raw_prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "api_key",
+        "cookie",
+        "secret",
+        "token",
+    }
+    assert not (_collect_keys(result) & forbidden)
+    serialized_values = "\n".join(_string_values(result)).lower()
+    for forbidden_text in (
+        "raw_prompt",
+        "provider_payload",
+        "api_key=sk-test-secret",
+        "token=answer-secret",
+        "cookie=session-secret",
+        "secret=trace-secret",
+        "full resume markdown",
+        "full jd text",
+        "full evidence text",
+        "完整原始回答不应进入",
     ):
         assert forbidden_text not in serialized_values

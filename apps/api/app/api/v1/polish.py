@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import replace
 from time import perf_counter
 from typing import Any
@@ -819,6 +820,64 @@ def _answer_feedback_payload(
     }
 
 
+REDACTED_SENSITIVE_FEEDBACK_DETAIL = "redacted_sensitive_detail"
+ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
+    {
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "token",
+        "api_key",
+        "cookie",
+        "secret",
+    }
+)
+FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS = (
+    "raw_prompt",
+    "system_prompt",
+    "raw_completion",
+    "completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "provider_response",
+    "raw_provider_response",
+    "hidden_rubric",
+    "full_evidence_text",
+    "full_resume",
+    "full_resume_markdown",
+    "full_jd",
+    "full_jd_text",
+)
+FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_ASSIGNMENT_PATTERNS = (
+    re.compile(r"api[_-]?key\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"cookie\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"token\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"secret\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+)
+
+
+def _is_forbidden_feedback_payload_response_key(key: str) -> bool:
+    normalized = key.strip().lower()
+    return (
+        normalized in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS
+        or normalized in ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS
+        or "prompt" in normalized
+    )
+
+
+def _normalized_feedback_sensitive_marker_text(value: str) -> str:
+    return re.sub(r"[\s-]+", "_", value.lower())
+
+
+def _redact_forbidden_feedback_payload_response_text(value: str) -> str:
+    normalized = _normalized_feedback_sensitive_marker_text(value)
+    if any(marker in normalized for marker in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS):
+        return REDACTED_SENSITIVE_FEEDBACK_DETAIL
+    if any(pattern.search(value) for pattern in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_ASSIGNMENT_PATTERNS):
+        return REDACTED_SENSITIVE_FEEDBACK_DETAIL
+    return value
+
 def _response_safe_feedback_payload(payload: dict[str, Any]) -> dict[str, object]:
     sanitized = _drop_forbidden_feedback_payload_response_keys(payload)
     if isinstance(sanitized, dict):
@@ -831,12 +890,14 @@ def _drop_forbidden_feedback_payload_response_keys(value: Any) -> Any:
         return {
             str(key): _drop_forbidden_feedback_payload_response_keys(item)
             for key, item in value.items()
-            if str(key) not in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS
+            if not _is_forbidden_feedback_payload_response_key(str(key))
         }
     if isinstance(value, list):
         return [_drop_forbidden_feedback_payload_response_keys(item) for item in value]
     if isinstance(value, tuple):
         return [_drop_forbidden_feedback_payload_response_keys(item) for item in value]
+    if isinstance(value, str):
+        return _redact_forbidden_feedback_payload_response_text(value)
     return value
 
 

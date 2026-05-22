@@ -126,6 +126,186 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
     assert legacy_payload["legacy_compatibility"]["feedback_text"] == "legacy feedback text"
 
 
+def test_response_safe_feedback_payload_filters_forbidden_keys_values_and_preserves_fields() -> None:
+    forbidden_keys = (
+        "raw_prompt",
+        "prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "token",
+        "api_key",
+        "cookie",
+        "secret",
+    )
+    payload = {
+        "status": "generated",
+        "feedback_text": "normal structured feedback remains readable",
+        "score_result": {"score_value": 72, "confidence_level": "medium"},
+        "loss_points": [{"title": "结构化举证不足", "reason": "需要补充指标"}],
+        "reference_answer": {"summary": "正常参考回答摘要"},
+        "oral_script": "正常口语脚本",
+        "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "cand_safe"}],
+        "weakness_candidates": [{"title": "可读候选", "candidate_payload": {"safe_note": "safe"}}],
+        "asset_candidates": [],
+        "training_suggestion_candidates": [],
+        **{key: f"{key} must not be returned" for key in forbidden_keys},
+        "nested": {
+            "list": [
+                {"full_resume": "full resume markdown must not be returned"},
+                {"full_jd": "full JD text must not be returned"},
+                "api_key=sk-test-secret token=raw-token cookie=session-secret secret=plain-secret",
+                "raw_prompt provider_payload full_evidence_text must not be returned",
+            ]
+        },
+    }
+
+    result = polish_api._response_safe_feedback_payload(payload)
+
+    assert result["feedback_text"] == "normal structured feedback remains readable"
+    assert result["score_result"]["score_value"] == 72
+    assert result["loss_points"][0]["title"] == "结构化举证不足"
+    assert result["reference_answer"]["summary"] == "正常参考回答摘要"
+    assert result["oral_script"] == "正常口语脚本"
+    assert result["candidate_refs"][0]["resource_type"] == "weakness_candidate"
+    assert result["weakness_candidates"][0]["candidate_payload"]["safe_note"] == "safe"
+    assert not (_collect_keys(result) & set(forbidden_keys))
+    serialized_values = "\n".join(_string_values(result)).lower()
+    for forbidden_text in (
+        "raw_prompt",
+        "provider_payload",
+        "full_evidence_text",
+        "full resume markdown",
+        "full jd text",
+        "api_key=sk-test-secret",
+        "token=raw-token",
+        "cookie=session-secret",
+        "secret=plain-secret",
+    ):
+        assert forbidden_text not in serialized_values
+    assert "redacted_sensitive_detail" in serialized_values
+
+
+def test_feedback_task_response_sanitizes_stored_sensitive_feedback_payload() -> None:
+    from types import SimpleNamespace
+
+    from app.application.polish.entities import PolishTaskStatus
+    from app.domain.shared.refs import TraceRef
+
+    now = utc_now()
+    task = PolishTaskStatus(
+        ai_task_id="task_sensitive_feedback",
+        task_type="polish_feedback_generation",
+        status="succeeded",
+        contract_ids=("P-POLISH-005",),
+        retryable=False,
+        result_ref=TraceRef(trace_ref_id="trc_sensitive_feedback", trace_type="feedback", created_at=now),
+        user_visible_status="反馈已生成",
+        score_type="polish_answer",
+    )
+    answer = SimpleNamespace(
+        answer_id="ans_sensitive_feedback",
+        answer_round=1,
+        feedback_id="trc_sensitive_feedback",
+        feedback_created_at=now,
+        score_result_id="score_sensitive_feedback",
+        feedback_payload={
+            "status": "generated",
+            "feedback_text": "stored feedback text",
+            "score_result": {"score_value": 70},
+            "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "cand_safe"}],
+            "hidden_rubric": "hidden rubric must not be returned",
+            "nested": [
+                {"full_resume": "full resume markdown must not be returned"},
+                "provider_payload raw_prompt api_key=sk-test-secret token=raw-token cookie=session-secret secret=plain-secret",
+            ],
+        },
+    )
+
+    result = polish_api._feedback_response(
+        task,
+        answer,
+        session_id="psess_sensitive_feedback",
+        question_id="ques_sensitive_feedback",
+    )
+
+    assert result["feedback_payload"]["feedback_text"] == "stored feedback text"
+    assert result["feedback_payload"]["score_result"]["score_value"] == 70
+    assert result["feedback_payload"]["candidate_refs"][0]["resource_type"] == "weakness_candidate"
+    forbidden = {
+        "raw_prompt",
+        "prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "token",
+        "api_key",
+        "cookie",
+        "secret",
+    }
+    assert not (_collect_keys(result) & forbidden)
+    serialized_values = "\n".join(_string_values(result)).lower()
+    for forbidden_text in (
+        "hidden rubric",
+        "full resume markdown",
+        "provider_payload",
+        "raw_prompt",
+        "api_key=sk-test-secret",
+        "token=raw-token",
+        "cookie=session-secret",
+        "secret=plain-secret",
+    ):
+        assert forbidden_text not in serialized_values
+
+
+def test_pending_feedback_payload_remains_safe_when_no_feedback_exists() -> None:
+    from types import SimpleNamespace
+
+    answer = SimpleNamespace(
+        answer_id="ans_pending_sensitive",
+        session_id="psess_pending_sensitive",
+        question_id="ques_pending_sensitive",
+        feedback_id=None,
+        feedback_text="token=legacy-secret should be ignored for pending payload",
+        feedback_payload={"full_resume": "full resume markdown must not be returned"},
+        created_at=utc_now(),
+    )
+
+    result = polish_api._answer_feedback_payload(answer)
+
+    assert result["status"] == "pending"
+    assert result["feedback_text"] == "本轮反馈尚未生成"
+    assert not (
+        _collect_keys(result)
+        & {
+            "raw_prompt",
+            "prompt",
+            "completion",
+            "raw_completion",
+            "provider_payload",
+            "hidden_rubric",
+            "full_evidence_text",
+            "full_resume",
+            "full_jd",
+            "token",
+            "api_key",
+            "cookie",
+            "secret",
+        }
+    )
+    serialized_values = "\n".join(_string_values(result)).lower()
+    assert "token=legacy-secret" not in serialized_values
+    assert "full resume markdown" not in serialized_values
+
+
 async def _run_inline_threadpool(func, *args, **kwargs):
     return func(*args, **kwargs)
 
@@ -1972,10 +2152,22 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
                     "low_confidence_flags": [],
                     "trace_refs": [],
                     "legacy_compatibility": {"feedback_text": "legacy feedback text"},
+                    "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "legacy_weakness"}],
                     "prompt": "raw prompt must not leave the API boundary",
                     "completion": "raw completion must not leave the API boundary",
                     "provider_payload": {"secret": "raw provider payload"},
-                    "feedback_metadata": {"raw_completion": "hidden provider completion"},
+                    "hidden_rubric": "hidden rubric must not leave the API boundary",
+                    "full_resume": "full resume markdown must not leave the API boundary",
+                    "full_jd": "full JD text must not leave the API boundary",
+                    "feedback_metadata": {
+                        "raw_completion": "hidden provider completion",
+                        "full_evidence_text": "full evidence text must not leave the API boundary",
+                        "nested": [
+                            {"api_key": "sk-test-secret"},
+                            "token=raw-token cookie=session-secret secret=plain-secret",
+                            "raw_prompt provider_payload full_evidence_text must not leave the API boundary",
+                        ],
+                    },
                 },
                 ensure_ascii=False,
             ),
@@ -1991,11 +2183,43 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
     answer = detail_body["data"]["turns"][0]["answers"][0]
     assert answer["feedback_text"] == "legacy feedback text"
     assert answer["feedback_payload"]["feedback_text"] == "legacy feedback text"
+    assert answer["feedback_payload"]["candidate_refs"][0]["resource_type"] == "weakness_candidate"
     legacy_schema_payload = PolishSessionAnswerResponse.model_validate(answer).model_dump(mode="json")
     assert legacy_schema_payload["feedback_payload"]["feedback_text"] == "legacy feedback text"
     assert legacy_schema_payload["feedback_payload"]["legacy_compatibility"]["feedback_text"] == "legacy feedback text"
-    for forbidden_key in ("prompt", "completion", "provider_payload", "raw_completion"):
-        assert forbidden_key not in _collect_keys(detail_body)
+    forbidden = {
+        "raw_prompt",
+        "prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "token",
+        "api_key",
+        "cookie",
+        "secret",
+    }
+    assert not (_collect_keys(detail_body) & forbidden)
+    serialized_values = "\n".join(_string_values(detail_body)).lower()
+    for forbidden_text in (
+        "raw prompt must not leave",
+        "raw completion must not leave",
+        "raw provider payload",
+        "hidden rubric",
+        "full resume markdown",
+        "full jd text",
+        "full evidence text",
+        "api_key=sk-test-secret",
+        "token=raw-token",
+        "cookie=session-secret",
+        "secret=plain-secret",
+        "raw_prompt",
+        "provider_payload",
+    ):
+        assert forbidden_text not in serialized_values
 
 
 def test_polish_feedback_candidate_extraction_failure_does_not_500(monkeypatch) -> None:
