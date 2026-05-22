@@ -1753,7 +1753,18 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
         ):
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
     assert feedback_payload["legacy_compatibility"]["feedback_text"] == feedback_payload["feedback_text"]
-    assert feedback_body["data"]["candidate_refs"] == []
+    assert {ref["resource_id"] for ref in feedback_body["data"]["candidate_refs"]} == {
+        ref["resource_id"] for ref in feedback_payload["candidate_refs"]
+    }
+    assert {
+        ref["resource_type"] for ref in feedback_body["data"]["candidate_refs"]
+    } >= {
+        "weakness_candidate",
+        "asset_candidate",
+        "training_suggestion_candidate",
+        "oral_script_candidate",
+        "polished_answer_candidate",
+    }
     assert feedback_body["data"]["suggestion_refs"] == []
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(feedback_body)

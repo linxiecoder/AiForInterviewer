@@ -83,10 +83,40 @@ def test_initialize_schema_backfills_polish_session_summary_columns() -> None:
         interview_columns = {column["name"] for column in inspector.get_columns("interview_sessions")}
         polish_detail_columns = {column["name"] for column in inspector.get_columns("polish_session_details")}
         question_columns = {column["name"] for column in inspector.get_columns("questions")}
+        candidate_columns = {column["name"] for column in inspector.get_columns("polish_candidates")}
 
         assert {"resume_id", "job_id"}.issubset(interview_columns)
         assert "custom_topic_text_summary" in polish_detail_columns
         assert "question_sources_json" in question_columns
         assert "question_metadata_json" in question_columns
+        assert {
+            "candidate_id",
+            "owner_id",
+            "candidate_type",
+            "status",
+            "source_type",
+            "source_refs_json",
+            "evidence_refs_json",
+            "trace_refs_json",
+            "session_id",
+            "question_id",
+            "answer_id",
+            "feedback_id",
+            "title",
+            "summary",
+            "evidence_excerpt",
+            "reason",
+            "confidence_level",
+            "merge_key",
+            "merge_target_candidate_id",
+            "target_formal_ref_json",
+            "candidate_payload_json",
+            "user_confirmation_required",
+            "created_at",
+            "updated_at",
+            "dismissed_at",
+            "confirmed_at",
+            "archived_at",
+        }.issubset(candidate_columns)
     finally:
         temp_artifacts.cleanup()

@@ -3,8 +3,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from fastapi import FastAPI
 import pytest
+from sqlalchemy import text
 
+from app.api.deps import get_db_session_factory, require_authenticated_actor
+from app.api.errors import ApiHttpError, api_http_error_handler
+import app.api.v1.polish as polish_api
+from app.api.v1 import build_api_v1_router
 from app.application.polish.candidates import (
     CandidateExtractionInput,
     CandidateType,
@@ -13,6 +19,28 @@ from app.application.polish.candidates import (
     extract_training_suggestion_candidates,
     extract_weakness_candidates,
 )
+from app.domain.auth.entities import CurrentActor
+from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from app.infrastructure.db.repositories.polish_candidates import SqlAlchemyPolishCandidateRepository
+from tests.api.asgi_client import call_json
+from tests.api.test_polish_api import (
+    ACTOR_A,
+    ACTOR_B,
+    OWNER_A,
+    OWNER_B,
+    _isolated_polish_app,
+    _seed_polish_sources,
+    _session_factory,
+)
+
+
+async def _run_inline_threadpool(func, *args, **kwargs):
+    return func(*args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _patch_polish_run_in_threadpool(monkeypatch):
+    monkeypatch.setattr(polish_api, "run_in_threadpool", _run_inline_threadpool)
 
 
 def _candidate_input(
@@ -387,3 +415,258 @@ def test_safe_candidate_dict_sanitizes_candidate_fields_refs_payload_and_merge_k
         "完整原始回答不应进入",
     ):
         assert forbidden_text not in serialized_values
+
+
+def test_feedback_generation_persists_candidates_and_exposes_list_get() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    feedback_payload = _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+
+    status_code, list_body = call_json(app, "/api/v1/polish-candidates")
+
+    assert status_code == 200
+    candidates = list_body["data"]
+    assert candidates
+    assert {candidate["candidate_type"] for candidate in candidates} >= {
+        "weakness_candidate",
+        "asset_candidate",
+        "training_suggestion_candidate",
+        "oral_script_candidate",
+        "polished_answer_candidate",
+    }
+    assert {candidate["candidate_id"] for candidate in candidates} == {
+        ref["resource_id"] for ref in feedback_payload["candidate_refs"]
+    }
+    assert all(candidate["status"] == "candidate" for candidate in candidates)
+    assert all(candidate["user_confirmation_required"] is True for candidate in candidates)
+    assert all(candidate["target_formal_ref"] is None for candidate in candidates)
+
+    weakness = next(candidate for candidate in candidates if candidate["candidate_type"] == "weakness_candidate")
+    assert {"polish_session", "question", "answer", "feedback"} <= {
+        ref["resource_type"] for ref in weakness["source_refs"]
+    }
+    assert {"question", "answer", "feedback"} <= {
+        ref["resource_type"] for ref in weakness["trace_refs"]
+    }
+    assert weakness["evidence_refs"]
+    assert weakness["candidate_payload"]["formal_write_intent"] is False
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-candidates/{weakness['candidate_id']}")
+
+    assert status_code == 200
+    assert detail_body["resource_type"] == "polish_candidate"
+    assert detail_body["data"] == weakness
+    _assert_no_formal_memory_written(session_factory)
+
+
+def test_candidate_list_filters_status_type_session_source_and_confidence() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    feedback_payload = _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    session_id = feedback_payload["polish_session_ref"]["resource_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-candidates?status=candidate&candidate_type=weakness_candidate&session_id={session_id}",
+    )
+
+    assert status_code == 200
+    assert body["data"]
+    assert all(candidate["status"] == "candidate" for candidate in body["data"])
+    assert all(candidate["candidate_type"] == "weakness_candidate" for candidate in body["data"])
+    assert all(candidate["session_id"] == session_id for candidate in body["data"])
+
+    source_type = body["data"][0]["source_type"]
+    confidence_level = body["data"][0]["confidence_level"]
+    status_code, filtered_body = call_json(
+        app,
+        f"/api/v1/polish-candidates?source_type={source_type}&confidence_level={confidence_level}",
+    )
+
+    assert status_code == 200
+    assert filtered_body["data"]
+    assert all(candidate["source_type"] == source_type for candidate in filtered_body["data"])
+    assert all(candidate["confidence_level"] == confidence_level for candidate in filtered_body["data"])
+
+
+def test_candidate_api_enforces_owner_isolation_and_not_found() -> None:
+    session_factory = _session_factory()
+    app_a = _isolated_candidates_app(session_factory, ACTOR_A)
+    app_b = _isolated_candidates_app(session_factory, ACTOR_B)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+
+    _, list_a = call_json(app_a, "/api/v1/polish-candidates?candidate_type=weakness_candidate")
+    candidate_id = list_a["data"][0]["candidate_id"]
+
+    status_code, list_b = call_json(app_b, "/api/v1/polish-candidates")
+    assert status_code == 200
+    assert list_b["data"] == []
+
+    status_code, detail_b = call_json(app_b, f"/api/v1/polish-candidates/{candidate_id}")
+    assert status_code == 404
+    assert detail_b["error"]["code"] == "not_found_or_inaccessible"
+
+
+def test_persisted_candidate_payload_keeps_sanitizer_effective() -> None:
+    session_factory = _session_factory()
+    app = _isolated_candidates_app(session_factory, ACTOR_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+
+    status_code, list_body = call_json(app, "/api/v1/polish-candidates")
+
+    assert status_code == 200
+    forbidden = {
+        "raw_prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "hidden_rubric",
+        "full_evidence_text",
+        "full_resume",
+        "full_jd",
+        "api_key",
+        "cookie",
+        "secret",
+        "token",
+    }
+    assert not (_collect_keys(list_body) & forbidden)
+    serialized_values = "\n".join(_string_values(list_body)).lower()
+    for forbidden_text in (
+        "raw_prompt",
+        "provider_payload",
+        "hidden_rubric",
+        "full resume markdown",
+        "full jd text",
+        "api_key=",
+        "cookie=",
+        "secret=",
+        "token=",
+    ):
+        assert forbidden_text not in serialized_values
+
+
+def test_old_payloads_do_not_persist_invalid_candidates_and_duplicate_merge_key_is_owner_scoped() -> None:
+    session_factory = _session_factory()
+    app_a = _isolated_candidates_app(session_factory, ACTOR_A)
+    app_b = _isolated_candidates_app(session_factory, ACTOR_B)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    _create_feedback_payload(session_factory, ACTOR_A, OWNER_A)
+    _create_feedback_payload(session_factory, ACTOR_B, OWNER_B)
+
+    status_code, list_a = call_json(app_a, "/api/v1/polish-candidates")
+    status_code_b, list_b = call_json(app_b, "/api/v1/polish-candidates")
+
+    assert status_code == 200
+    assert status_code_b == 200
+    merge_keys_a = {candidate["merge_key"] for candidate in list_a["data"]}
+    merge_keys_b = {candidate["merge_key"] for candidate in list_b["data"]}
+    assert len(list_a["data"]) == len(merge_keys_a)
+    assert merge_keys_a.isdisjoint(merge_keys_b)
+
+
+def test_candidate_repository_allows_same_candidate_id_across_different_owners() -> None:
+    session_factory = _session_factory()
+    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    payload = {
+        "weakness_candidates": [
+            {
+                "candidate_id": "cand_shared_content_hash",
+                "candidate_type": "weakness_candidate",
+                "status": "candidate",
+                "source_type": "structured_feedback",
+                "source_refs": [{"resource_type": "feedback", "resource_id": "feedback_shared"}],
+                "evidence_refs": [{"resource_type": "loss_point", "resource_id": "loss_shared"}],
+                "trace_refs": [{"trace_type": "feedback", "trace_ref_id": "feedback_shared"}],
+                "session_id": "psess_shared",
+                "question_id": "ques_shared",
+                "answer_id": "ans_shared",
+                "feedback_id": "feedback_shared",
+                "title": "同内容候选",
+                "summary": "同内容候选摘要",
+                "evidence_excerpt": "同内容证据",
+                "reason": "同内容原因",
+                "confidence_level": "medium",
+                "merge_key": "weakness_candidate:shared-content",
+                "target_formal_ref": None,
+                "candidate_payload": {"formal_write_intent": False},
+                "user_confirmation_required": True,
+            }
+        ]
+    }
+
+    persisted_a = repository.upsert_from_feedback_payload(OWNER_A, payload)
+    persisted_b = repository.upsert_from_feedback_payload(OWNER_B, payload)
+
+    assert persisted_a[0]["candidate_id"] == "cand_shared_content_hash"
+    assert persisted_b[0]["candidate_id"] == "cand_shared_content_hash"
+    assert repository.get_candidate(owner_id=OWNER_A, candidate_id="cand_shared_content_hash")["owner_id"] == OWNER_A
+    assert repository.get_candidate(owner_id=OWNER_B, candidate_id="cand_shared_content_hash")["owner_id"] == OWNER_B
+
+
+def _isolated_candidates_app(session_factory, actor: CurrentActor) -> FastAPI:
+    app = FastAPI()
+    app.state.llm_transport = FakeLlmTransport()
+    app.add_exception_handler(ApiHttpError, api_http_error_handler)
+    app.include_router(build_api_v1_router("/api/v1"))
+
+    async def _actor_override() -> CurrentActor:
+        return actor
+
+    async def _session_factory_override():
+        return session_factory
+
+    app.dependency_overrides[require_authenticated_actor] = _actor_override
+    app.dependency_overrides[get_db_session_factory] = _session_factory_override
+    return app
+
+
+def _create_feedback_payload(session_factory, actor: CurrentActor, owner_id: str) -> dict[str, Any]:
+    app = _isolated_polish_app(session_factory, actor)
+    binding_id = _seed_polish_sources(session_factory, owner_id)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": "我会补充接口幂等、失败补偿、指标验证和上线复盘。",
+        },
+    )
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_body["data"]["answer_id"]},
+    )
+    assert status_code == 202
+    return feedback_body["data"]["feedback_payload"]
+
+
+def _assert_no_formal_memory_written(session_factory) -> None:
+    with session_factory() as db:
+        for table_name in (
+            "weaknesses",
+            "weakness_candidates",
+            "assets",
+            "asset_versions",
+            "training_recommendations",
+        ):
+            assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0

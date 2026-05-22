@@ -11,6 +11,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.job_match_analyses import router as job_match_analyses_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.polish import router as polish_router
+from app.api.v1.polish_candidates import router as polish_candidates_router
 from app.api.v1.pressure import router as pressure_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.resumes import router as resumes_router
@@ -33,6 +34,7 @@ def build_api_v1_router(prefix: str) -> APIRouter:
     router.include_router(ai_tasks_router)
     router.include_router(scoring_router)
     router.include_router(polish_router)
+    router.include_router(polish_candidates_router)
     router.include_router(pressure_router)
     router.include_router(reports_router)
     router.include_router(reviews_router)

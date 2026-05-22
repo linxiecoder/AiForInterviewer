@@ -41,7 +41,7 @@ from app.application.polish.feedback_quality import (
     validate_feedback_consistency,
 )
 from app.application.polish.feedback_llm import PolishFeedbackLlmService
-from app.application.polish.ports import PolishRepository
+from app.application.polish.ports import PolishCandidateRepository, PolishRepository
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.question_llm import PolishQuestionLlmService
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
@@ -148,6 +148,7 @@ class PolishUseCases:
         resume_repository: ResumeRepository,
         job_repository: JobRepository,
         job_match_repository: JobMatchRepository | None = None,
+        candidate_repository: PolishCandidateRepository | None = None,
         progress_tree_service: PolishProgressTreeLlmService | None = None,
         llm_transport: LlmTransport | None = None,
     ) -> None:
@@ -156,6 +157,7 @@ class PolishUseCases:
         self._resume_repository = resume_repository
         self._job_repository = job_repository
         self._job_match_repository = job_match_repository
+        self._candidate_repository = candidate_repository
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
         self._question_llm_service = PolishQuestionLlmService(llm_transport)
         self._feedback_llm_service = PolishFeedbackLlmService(llm_transport)
@@ -569,6 +571,20 @@ class PolishUseCases:
         payload_error = _validate_contract_shaped_feedback_payload(feedback_payload)
         if payload_error is not None:
             return ApplicationResult(error=payload_error)
+        persisted_candidate_refs: tuple[ResourceRef, ...] = ()
+        if self._candidate_repository is not None:
+            persisted_candidates = self._candidate_repository.upsert_from_feedback_payload(
+                command.owner_id,
+                feedback_payload,
+            )
+            persisted_candidate_refs = tuple(
+                ResourceRef(
+                    resource_type=str(candidate["candidate_type"]),
+                    resource_id=str(candidate["candidate_id"]),
+                )
+                for candidate in persisted_candidates
+                if candidate.get("candidate_type") and candidate.get("candidate_id")
+            )
         feedback = PolishFeedback(
             feedback_id=feedback_id,
             owner_id=command.owner_id,
@@ -591,6 +607,7 @@ class PolishUseCases:
             result_ref=TraceRef(trace_ref_id=feedback_id, trace_type="feedback", created_at=now),
             user_visible_status="反馈已生成",
             score_type=ScoreType.POLISH_ANSWER,
+            candidate_refs=persisted_candidate_refs,
         )
         self._polish_repository.add_feedback(feedback)
         self._polish_repository.add_task(

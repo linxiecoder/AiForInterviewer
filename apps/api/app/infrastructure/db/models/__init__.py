@@ -9,6 +9,7 @@ from app.infrastructure.db.models.feedback import Feedback
 from app.infrastructure.db.models.interview import InterviewSession, PolishSessionDetail, PressureSessionDetail
 from app.infrastructure.db.models.job import Job, JobVersion
 from app.infrastructure.db.models.job_match import JobMatchAnalysis
+from app.infrastructure.db.models.polish_candidate import PolishCandidateRecord
 from app.infrastructure.db.models.question import Question
 from app.infrastructure.db.models.reference import EvidenceRef, TraceRef, UserConfirmation
 from app.infrastructure.db.models.report import InterviewReport, ReportSection
@@ -44,6 +45,7 @@ __all__ = [
     "JobVersion",
     "LowConfidenceFlag",
     "PolishSessionDetail",
+    "PolishCandidateRecord",
     "PressureSessionDetail",
     "Question",
     "ReportSection",

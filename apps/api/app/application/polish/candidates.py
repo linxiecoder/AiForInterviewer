@@ -887,7 +887,7 @@ def _candidate_id(
     evidence_key = "|".join(
         f"{ref.get('resource_type')}:{ref.get('resource_id')}" for ref in evidence_refs
     )
-    return f"cand_{_stable_hash('|'.join([extraction_input.feedback_id, candidate_type.value, merge_key, evidence_key]), 24)}"
+    return f"cand_{_stable_hash('|'.join([candidate_type.value, merge_key, evidence_key]), 24)}"
 
 
 def _stable_hash(value: str, size: int = 16) -> str:

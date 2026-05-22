@@ -12,6 +12,7 @@ MODEL_MODULES = (
     "app.infrastructure.db.models.question",
     "app.infrastructure.db.models.answer",
     "app.infrastructure.db.models.feedback",
+    "app.infrastructure.db.models.polish_candidate",
     "app.infrastructure.db.models.scoring",
     "app.infrastructure.db.models.ai_task",
     "app.infrastructure.db.models.report",
@@ -41,6 +42,7 @@ def test_sqlalchemy_model_modules_import_without_side_effect_errors() -> None:
         "questions",
         "answers",
         "feedback",
+        "polish_candidates",
         "score_rule_sets",
         "score_rule_versions",
         "score_dimensions",
@@ -55,4 +57,3 @@ def test_sqlalchemy_model_modules_import_without_side_effect_errors() -> None:
         "trace_refs",
         "user_confirmations",
     }.issubset(Base.metadata.tables)
-

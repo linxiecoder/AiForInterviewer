@@ -44,6 +44,7 @@ from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingReposit
 from app.infrastructure.db.repositories.job_match import SqlAlchemyJobMatchAnalysisRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
+from app.infrastructure.db.repositories.polish_candidates import SqlAlchemyPolishCandidateRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.infrastructure.llm.ports import LlmTransport
 from app.infrastructure.observability.http_logging import get_request_trace_context
@@ -391,6 +392,7 @@ def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTranspo
         resume_repository=SqlAlchemyResumeRepository(session_factory),
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
+        candidate_repository=SqlAlchemyPolishCandidateRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
         llm_transport=llm_transport,
     )
