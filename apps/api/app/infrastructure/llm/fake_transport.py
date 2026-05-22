@@ -137,7 +137,16 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
         elif marker == "valid_retry":
             payload["feedback_summary"] = "LLM fake retry feedback: accepted"
             payload["feedback_text"] = payload["feedback_summary"]
-            payload.update(_fake_retry_delta())
+            payload.update(_fake_retry_delta(evidence_bundle))
+        elif marker == "invalid_retry_unknown_improved_point":
+            payload["feedback_summary"] = "LLM fake retry feedback: invalid unknown improved point"
+            payload["feedback_text"] = payload["feedback_summary"]
+            payload.update(
+                _fake_retry_delta(
+                    evidence_bundle,
+                    improved_loss_point_id="fake_unknown_previous_loss_point",
+                )
+            )
         elif marker == "missing_critical_loss_coverage":
             payload["p7_reference_answer"] = "回答可以先说明背景和职责，但这里故意不覆盖关键术语。"
         elif marker == "oral_script_ignores_loss":
@@ -287,11 +296,17 @@ def _fake_polish_feedback_payload(evidence_bundle: dict[str, Any], *, answer_rou
         "trace_refs": [],
     }
     if answer_round > 1:
-        payload.update(_fake_retry_delta())
+        payload.update(_fake_retry_delta(evidence_bundle))
     return payload
 
 
-def _fake_retry_delta() -> dict[str, Any]:
+def _fake_retry_delta(
+    evidence_bundle: dict[str, Any] | None = None,
+    *,
+    improved_loss_point_id: str | None = None,
+) -> dict[str, Any]:
+    loss_point_id = improved_loss_point_id or _first_previous_loss_point_id(evidence_bundle)
+    improved_points = [loss_point_id] if loss_point_id else ["fake_missing_previous_loss_point"]
     return {
         "score_delta": 8,
         "dimension_delta": {
@@ -299,7 +314,7 @@ def _fake_retry_delta() -> dict[str, Any]:
             "answer_structure": 4,
             "evidence_alignment": 8,
         },
-        "improved_points": ["lp_previous_metrics"],
+        "improved_points": improved_points,
         "remaining_gaps": ["fake_loss_failure_path"],
         "repeated_loss_points": [],
         "regressed_points": [],
@@ -310,6 +325,23 @@ def _fake_retry_delta() -> dict[str, Any]:
         "updated_reference_answer": "参考回答应覆盖失败路径、补偿机制和验证指标，并保留验证指标作为证据。",
         "updated_oral_script": "我先说明业务背景，再讲失败路径、补偿机制、验证指标和技术取舍。",
     }
+
+
+def _first_previous_loss_point_id(evidence_bundle: dict[str, Any] | None) -> str | None:
+    if not isinstance(evidence_bundle, dict):
+        return None
+    for summary in _dict_items(evidence_bundle.get("previous_feedback_compact_summaries")):
+        for point in _dict_items(summary.get("loss_points")):
+            loss_point_id = str(point.get("loss_point_id") or "").strip()
+            if loss_point_id:
+                return loss_point_id
+    return None
+
+
+def _dict_items(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
 
 
 def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:

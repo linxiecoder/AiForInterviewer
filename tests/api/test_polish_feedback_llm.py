@@ -20,7 +20,10 @@ from app.application.polish.feedback_prompts import (
     POLISH_ANSWER_FEEDBACK_TASK_TYPE,
     build_polish_feedback_prompt_bundle,
 )
-from app.application.polish.feedback_quality import compute_score_result_from_dimensions
+from app.application.polish.feedback_quality import (
+    compute_score_result_from_dimensions,
+    validate_feedback_consistency,
+)
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.llm.errors import LlmTransportUnavailableError
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
@@ -146,13 +149,161 @@ def test_valid_fake_retry_feedback_is_accepted_with_delta_fields() -> None:
     payload = result.feedback_payload
     metadata = payload["feedback_metadata"]
     assert metadata["feedback_generation_mode"] == "llm_accepted"
+    assert metadata["fallback_reason"] is None
     assert payload["score_delta"] > 0
     assert payload["dimension_delta"]
     assert payload["improved_points"]
+    assert payload["improved_points"] == [
+        feedback_input.previous_loss_points[0]["loss_point_id"]
+    ]
     assert payload["remaining_gaps"]
     assert payload["mastery_status"] in {"regressed", "stuck", "improving", "mastered"}
     assert payload["updated_reference_answer"] == payload["p7_reference_answer"]
     assert payload["updated_oral_script"] == payload["oral_script"]
+
+
+def test_feedback_api_valid_fake_retry_is_accepted_with_previous_loss_point_delta() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_feedback_app(session_factory)
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AIFI_POLISH_FEEDBACK_LLM_ENABLED": "true",
+            "AIFI_POLISH_FEEDBACK_REAL_PROVIDER_ENABLED": "false",
+        },
+        clear=False,
+    ):
+        _, create_body = call_json(
+            app,
+            "/api/v1/polish-sessions",
+            "POST",
+            json_body={
+                "resume_job_binding_id": binding_id,
+                "topic_id": "topic_technical_depth",
+            },
+        )
+        session_id = create_body["data"]["session_id"]
+        progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+        status_code, question_body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/questions",
+            "POST",
+            json_body={"progress_node_ref": progress_node_ref},
+        )
+        assert status_code == 202
+        question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+
+        status_code, first_answer_body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/answers",
+            "POST",
+            json_body={
+                "question_id": question_id,
+                "answer_text": "我会先说明系统背景，再补充幂等、失败路径、验证指标和权衡。",
+            },
+        )
+        assert status_code == 201
+        assert first_answer_body["data"]["answer_round"] == 1
+        first_answer_id = first_answer_body["data"]["answer_id"]
+        status_code, first_feedback_body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/feedback",
+            "POST",
+            json_body={"answer_id": first_answer_id},
+        )
+        assert status_code == 202
+        first_payload = first_feedback_body["data"]["feedback_payload"]
+        assert first_payload["feedback_metadata"]["feedback_generation_mode"] == "llm_accepted"
+        assert first_payload["feedback_metadata"]["fallback_reason"] is None
+        previous_loss_point_id = first_payload["loss_points"][0]["loss_point_id"]
+
+        status_code, second_answer_body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/answers",
+            "POST",
+            json_body={
+                "question_id": question_id,
+                "answer_text": "第二轮我补充失败路径、补偿机制、验证指标、可观测指标和核心取舍。",
+            },
+        )
+        assert status_code == 201
+        assert second_answer_body["data"]["answer_round"] == 2
+        second_answer_id = second_answer_body["data"]["answer_id"]
+        status_code, second_feedback_body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/feedback",
+            "POST",
+            json_body={"answer_id": second_answer_id},
+        )
+
+    assert status_code == 202
+    retry_payload = second_feedback_body["data"]["feedback_payload"]
+    retry_metadata = retry_payload["feedback_metadata"]
+    assert retry_metadata["feedback_generation_mode"] == "llm_accepted"
+    assert retry_metadata["fallback_reason"] is None
+    assert retry_payload["improved_points"] == [previous_loss_point_id]
+    assert retry_payload["mastery_status"] in {"regressed", "stuck", "improving", "mastered"}
+    assert retry_payload["score_delta"] > 0
+    assert retry_payload["dimension_delta"]
+    assert retry_payload["next_retry_focus"]
+    _assert_no_raw_llm_payload(second_feedback_body)
+
+
+def test_invalid_fake_retry_unknown_improved_point_still_falls_back() -> None:
+    feedback_input = _feedback_input(
+        answer_round=2,
+        fixture_marker="invalid_retry_unknown_improved_point",
+    )
+    result = _generate_with_fake_feedback_llm(feedback_input)
+
+    metadata = result.feedback_payload["feedback_metadata"]
+    assert metadata["feedback_generation_mode"] == "llm_fallback"
+    assert metadata["fallback_reason"] == "consistency_invalid"
+    assert any(
+        "improved_points_not_from_previous_loss_points" in error.get("message", "")
+        for error in metadata["validation_errors"]
+    )
+    _assert_no_raw_llm_payload(result.feedback_payload)
+
+
+def test_valid_retry_without_previous_loss_points_does_not_pretend_valid() -> None:
+    feedback_input = _retry_feedback_input_without_previous_loss_points()
+    result = _generate_with_fake_feedback_llm(feedback_input)
+
+    metadata = result.feedback_payload["feedback_metadata"]
+    assert metadata["feedback_generation_mode"] == "llm_fallback"
+    assert metadata["fallback_reason"] == "consistency_invalid"
+    assert any(
+        "improved_points_without_previous_loss_points" in error.get("message", "")
+        for error in metadata["validation_errors"]
+    )
+
+
+def test_feedback_consistency_keeps_improved_points_strict_to_previous_losses() -> None:
+    feedback_input = _feedback_input(answer_round=2, fixture_marker="valid_retry")
+    payload = _deterministic_payload(feedback_input=feedback_input)
+
+    invalid_payload = {
+        **payload,
+        "improved_points": ["unknown_loss_point"],
+        "previous_loss_points": list(feedback_input.previous_loss_points),
+    }
+    invalid_result = validate_feedback_consistency(invalid_payload)
+    assert invalid_result["allow_emit"] is False
+    assert invalid_result["blocking_issues"] == [
+        "improved_points_not_from_previous_loss_points:unknown_loss_point"
+    ]
+
+    valid_payload = {
+        **payload,
+        "improved_points": [feedback_input.previous_loss_points[0]["loss_point_id"]],
+        "previous_loss_points": list(feedback_input.previous_loss_points),
+    }
+    valid_result = validate_feedback_consistency(valid_payload)
+    assert valid_result["allow_emit"] is True
+    assert valid_result["blocking_issues"] == []
 
 
 @pytest.mark.parametrize(
@@ -418,18 +569,53 @@ def _feedback_input(
         previous_dimension_scores=(),
         previous_loss_points=(
             {
-                "loss_point_id": "lp_previous_metrics",
-                "title": "验证指标不足",
-                "dimension_id": "evidence_alignment",
+                "loss_point_id": "lp_failure_path",
+                "title": "失败路径仍需展开",
+                "dimension_id": "technical_depth",
                 "critical": True,
             },
         ),
         previous_reference_answer="需要覆盖失败路径和验证指标。",
         previous_oral_script="我会补充失败路径和验证指标。",
-        repeated_gaps=("lp_previous_metrics",),
+        repeated_gaps=("lp_failure_path",),
         fixed_gaps=(),
         regression_signals=(),
         mastery_threshold="score>=80_and_no_remaining_critical_loss",
+    )
+
+
+def _retry_feedback_input_without_previous_loss_points() -> RetryFeedbackInput:
+    base = _feedback_input(answer_round=2, fixture_marker="valid_retry")
+    return RetryFeedbackInput(
+        owner_id=base.owner_id,
+        actor_id=base.actor_id,
+        session_id=base.session_id,
+        question_id=base.question_id,
+        answer_id=base.answer_id,
+        answer_round=base.answer_round,
+        question_text=base.question_text,
+        question_metadata=base.question_metadata,
+        question_pattern=base.question_pattern,
+        expected_answer_dimensions=base.expected_answer_dimensions,
+        interview_intent=base.interview_intent,
+        question_sources=base.question_sources,
+        evidence_refs=base.evidence_refs,
+        answer_text=base.answer_text,
+        polish_theme=base.polish_theme,
+        source_availability=base.source_availability,
+        low_confidence_flags=base.low_confidence_flags,
+        feedback_generation_mode=base.feedback_generation_mode,
+        previous_answer_rounds=base.previous_answer_rounds,
+        previous_feedbacks=(),
+        previous_score_results=(),
+        previous_dimension_scores=(),
+        previous_loss_points=(),
+        previous_reference_answer="",
+        previous_oral_script="",
+        repeated_gaps=(),
+        fixed_gaps=(),
+        regression_signals=(),
+        mastery_threshold=base.mastery_threshold,
     )
 
 
@@ -519,6 +705,11 @@ def _deterministic_payload(*, feedback_input: FeedbackInput) -> dict[str, Any]:
         "question_id": feedback_input.question_id,
     }
     if isinstance(feedback_input, RetryFeedbackInput):
+        previous_loss_point_id = (
+            str(feedback_input.previous_loss_points[0]["loss_point_id"])
+            if feedback_input.previous_loss_points
+            else "lp_missing_previous_loss"
+        )
         payload.update(
             {
                 "score_delta": 8,
@@ -527,7 +718,7 @@ def _deterministic_payload(*, feedback_input: FeedbackInput) -> dict[str, Any]:
                     "answer_structure": 4,
                     "evidence_alignment": 8,
                 },
-                "improved_points": ["lp_previous_metrics"],
+                "improved_points": [previous_loss_point_id],
                 "remaining_gaps": ["lp_failure_path"],
                 "repeated_loss_points": [],
                 "regressed_points": [],
