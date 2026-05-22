@@ -86,6 +86,19 @@ FEEDBACK_NEXT_RECOMMENDED_ACTIONS = (
     "generate_next_round_suggestion",
     "generate_next_question",
 )
+FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
+    {
+        "prompt",
+        "raw_prompt",
+        "system_prompt",
+        "completion",
+        "raw_completion",
+        "provider_payload",
+        "raw_provider_payload",
+        "provider_response",
+        "raw_provider_response",
+    }
+)
 
 
 @router.get("/polish-topics")
@@ -719,7 +732,7 @@ def _answer_feedback_payload(
     feedback_id = getattr(answer, "feedback_id", None)
     stored_payload = getattr(answer, "feedback_payload", None)
     if isinstance(stored_payload, dict) and feedback_id:
-        return stored_payload
+        return _response_safe_feedback_payload(stored_payload)
     feedback_text = _legacy_feedback_text(getattr(answer, "feedback_text", None))
     if not feedback_id:
         return {
@@ -804,6 +817,27 @@ def _answer_feedback_payload(
         "user_confirmation_required": False,
         "legacy_compatibility": {"feedback_text": feedback_text},
     }
+
+
+def _response_safe_feedback_payload(payload: dict[str, Any]) -> dict[str, object]:
+    sanitized = _drop_forbidden_feedback_payload_response_keys(payload)
+    if isinstance(sanitized, dict):
+        return sanitized
+    return {}
+
+
+def _drop_forbidden_feedback_payload_response_keys(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _drop_forbidden_feedback_payload_response_keys(item)
+            for key, item in value.items()
+            if str(key) not in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS
+        }
+    if isinstance(value, list):
+        return [_drop_forbidden_feedback_payload_response_keys(item) for item in value]
+    if isinstance(value, tuple):
+        return [_drop_forbidden_feedback_payload_response_keys(item) for item in value]
+    return value
 
 
 def _feedback_loss_points(*, feedback_id: str, answer_id: str, answer_text: str, score_value: int) -> list[dict[str, object]]:

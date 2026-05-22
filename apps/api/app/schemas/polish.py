@@ -207,6 +207,70 @@ class PolishAnswerResponse(BaseModel):
     updated_at: datetime
 
 
+class PolishFeedbackLegacyCompatibility(BaseModel):
+    feedback_text: str | None = None
+
+
+class PolishFeedbackPayload(BaseModel):
+    schema_id: str | None = None
+    schema_version: str | None = None
+    contract_id: str | None = None
+    contract_ids: list[str] | None = None
+    status: str | None = None
+    feedback_id: str | None = None
+    polish_session_ref: dict[str, Any] | None = None
+    question_ref: dict[str, Any] | None = None
+    answer_ref: dict[str, Any] | None = None
+    feedback_text: str | None = None
+    feedback_summary: str | None = None
+    score_result: dict[str, Any] | None = None
+    score_result_ref: dict[str, Any] | None = None
+    loss_points: list[dict[str, Any]] | None = None
+    reference_answer: Any | None = None
+    knowledge_points: list[dict[str, Any]] | None = None
+    technical_principles: list[dict[str, Any]] | None = None
+    next_recommended_actions: list[str] | None = None
+    candidate_refs: list[dict[str, Any]] | None = None
+    validation_result_ref: dict[str, Any] | None = None
+    trace_refs: list[dict[str, Any]] | None = None
+    low_confidence_flags: list[dict[str, Any]] | None = None
+    user_confirmation_required: bool | None = None
+    legacy_compatibility: PolishFeedbackLegacyCompatibility | None = None
+    answer_diagnosis: dict[str, Any] | None = None
+    scoring_dimensions: list[dict[str, Any]] | None = None
+    positive_evidence_points: list[dict[str, Any]] | None = None
+    missing_answer_dimensions: list[dict[str, Any]] | None = None
+    p7_reference_answer: str | None = None
+    reference_answer_requirements: list[dict[str, Any]] | None = None
+    oral_script: str | None = None
+    oral_script_requirements: list[dict[str, Any]] | None = None
+    mastery_status: str | None = None
+    score_delta: int | None = None
+    dimension_delta: dict[str, int] | None = None
+    improved_points: list[str] | None = None
+    remaining_gaps: list[str] | None = None
+    repeated_loss_points: list[str] | None = None
+    regressed_points: list[str] | None = None
+    next_retry_focus: list[dict[str, Any]] | None = None
+    polish_theme: str | None = None
+    polish_theme_label: str | None = None
+    explicit_weight: int | None = None
+    implicit_weight: int | None = None
+    explicit_score: int | None = None
+    implicit_score: int | None = None
+    weight_explanation: str | None = None
+    interview_intent: str | None = None
+    feedback_metadata: dict[str, Any] | None = None
+    weakness_candidates: list[dict[str, Any]] | None = None
+    asset_candidates: list[dict[str, Any]] | None = None
+    technical_gaps: list[str] | None = None
+    communication_gaps: list[str] | None = None
+    should_continue_same_question: bool | None = None
+    should_generate_next_question: bool | None = None
+    updated_reference_answer: str | None = None
+    updated_oral_script: str | None = None
+
+
 class PolishSessionAnswerResponse(BaseModel):
     answer_id: str
     answer_round: int = Field(ge=1)
@@ -216,6 +280,10 @@ class PolishSessionAnswerResponse(BaseModel):
     feedback_id: str | None = None
     score_result_id: str | None = None
     feedback_created_at: datetime | None = None
+    feedback_payload: PolishFeedbackPayload | None = None
+    next_recommended_actions: list[str] = Field(default_factory=list)
+    low_confidence_flags: list[dict[str, Any]] = Field(default_factory=list)
+    trace_refs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PolishQuestionSourceResponse(BaseModel):
@@ -251,3 +319,22 @@ class PolishTaskStatusResponse(BaseModel):
     score_type: ScoreType | None = None
     candidate_refs: list[ResourceRef] = Field(default_factory=list)
     suggestion_refs: list[ResourceRef] = Field(default_factory=list)
+    active_question_refs: list[ResourceRef] = Field(default_factory=list)
+    active_question_progress_node_ref: str | None = None
+    active_question_evidence_refs: list[ResourceRef] = Field(default_factory=list)
+    active_question_context_digest: str | None = None
+    contract_shaped_fake: dict[str, Any] | None = None
+    feedback_id: str | None = None
+    feedback_status: str | None = None
+    session_id: str | None = None
+    question_id: str | None = None
+    answer_id: str | None = None
+    answer_round: int | None = Field(default=None, ge=1)
+    feedback_text: str | None = None
+    feedback_created_at: datetime | None = None
+    score_result_id: str | None = None
+    score_result: dict[str, Any] | None = None
+    feedback_payload: PolishFeedbackPayload | None = None
+    next_recommended_actions: list[str] = Field(default_factory=list)
+    low_confidence_flags: list[dict[str, Any]] = Field(default_factory=list)
+    trace_refs: list[dict[str, Any]] = Field(default_factory=list)
