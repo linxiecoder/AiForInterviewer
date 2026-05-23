@@ -55,6 +55,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | docs/02 深度语义关联审计验收记录 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_ACCEPTANCE.md` | AIFI-ARCH-006 深度语义审计证据；记录审计范围、语义链路矩阵完成情况、finding 数量、F5/F6/F7/F8 readiness 结论、人工决策项和 MCP approval 状态占位；F4/M4 人工批准后作为后续 F6/F8 refinement evidence 保留，不阻断 F5，不替代 active design docs |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
+| F5 LangGraph MultiAgent 重构专题设计包 | `docs/03-delivery/refactor-multiagent-langgraph/` | AIFI-BE-002 PR1 planning package；登记 LangGraph MultiAgent 重构的专题设计包、SubAgent recon、架构比较、runtime / graph / data / API / frontend / test / validation / PR 拆分骨架；不替代 `docs/02-design/*`、`prompt-contracts/*.md`、`DELIVERY_PLAN.md`、`BACKLOG.md` 或 ADR；`docs/tmp` 只作为 PR1 输入，不作为事实源 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
 | 归档台账 | `archive/MANIFEST.md` | 归档动作、替代路径、阻断条件和状态 |
 | 文档治理决策 | `docs/04-decisions/ADR-0001-document-governance.md` | 唯一文档体系、docs/archive 边界和归档机制 |
@@ -69,7 +70,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | `docs/00-governance/` | active | 只承载当前治理入口 |
 | `docs/01-product/` | active | 当前 `PRD.md` 为产品需求唯一事实源，`REQUIREMENT_TRACEABILITY.md` 只登记历史需求处理 |
 | `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 和 `RELEASE_HANDOFF_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
-| `docs/03-delivery/` | active | 当前仅 `DELIVERY_PLAN.md`、`BACKLOG.md` 生效 |
+| `docs/03-delivery/` | active | 当前 `DELIVERY_PLAN.md`、`BACKLOG.md` 是阶段与任务入口；`refactor-multiagent-langgraph/` 仅作为 AIFI-BE-002 的 F5 专题 planning package，不替代 active design docs、阶段计划、任务入口或 ADR |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
 
