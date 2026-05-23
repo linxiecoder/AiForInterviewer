@@ -539,7 +539,7 @@ def test_create_polish_session_logs_start_and_completion(caplog) -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
-    caplog.set_level(logging.INFO, logger="app.http.access")
+    caplog.set_level(logging.INFO, logger="app")
 
     status_code, body = call_json(
         app,
@@ -556,7 +556,8 @@ def test_create_polish_session_logs_start_and_completion(caplog) -> None:
     assert "polish_session_create_started" in log_text
     assert "polish_session_create_completed" in log_text
     assert binding_id in log_text
-    assert body["data"]["session_id"] in log_text
+    assert body["data"]["session_id"] not in log_text
+    assert '"session_id": "***"' in log_text
 
 
 def test_polish_progress_tree_returns_insufficient_context_without_job_or_resume_content() -> None:
@@ -2542,6 +2543,401 @@ def test_polish_question_generation_allows_refresh_failed_state_when_plan_is_rea
 
     assert status_code == 202
     assert question_body["data"]["active_question_progress_node_ref"] == progress_node_ref
+
+
+def test_polish_question_generation_records_selected_category_context() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={
+            "generation_mode": "new_question",
+            "selected_primary_category_ref": "category_backend_depth",
+            "selected_secondary_category_ref": progress_node_ref,
+            "selected_progress_node_ref": progress_node_ref,
+            "selected_category_path": ["技术深度", "一致性治理"],
+            "exclude_question_refs": ["que_existing_same_category"],
+            "completed_focus_refs": ["focus_observability"],
+        },
+    )
+
+    assert status_code == 202
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turn = next(turn for turn in detail_body["data"]["turns"] if turn["question_id"] == question_id)
+    metadata = turn["question_metadata"]
+    assert metadata["generation_mode"] == "new_question"
+    assert metadata["request_source"] == "explicit_selected_category"
+    assert metadata["selected_primary_category_ref"] == "category_backend_depth"
+    assert metadata["selected_secondary_category_ref"] == progress_node_ref
+    assert metadata["selected_progress_node_ref"] == progress_node_ref
+    assert metadata["selected_category_path"] == ["技术深度", "一致性治理"]
+    assert metadata["exclude_question_refs"] == ["que_existing_same_category"]
+    assert metadata["completed_focus_refs"] == ["focus_observability"]
+
+
+def test_polish_question_generation_rejects_follow_up_without_parent_refs() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "follow_up", "parent_question_id": "que_parent_only"},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["field"] == "parent_answer_id"
+
+
+def test_polish_follow_up_question_uses_parent_answer_and_feedback_target() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    parent_question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": parent_question_id,
+            "answer_text": "我主要做了接口串联，但没有展开失败兜底和指标验证。",
+        },
+    )
+    parent_answer_id = answer_body["data"]["answer_id"]
+    _, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": parent_answer_id},
+    )
+    parent_feedback_id = feedback_body["data"]["feedback_payload"]["feedback_id"]
+
+    status_code, follow_up_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={
+            "generation_mode": "follow_up",
+            "selected_progress_node_ref": progress_node_ref,
+            "parent_question_id": parent_question_id,
+            "parent_answer_id": parent_answer_id,
+            "parent_feedback_id": parent_feedback_id,
+        },
+    )
+
+    assert status_code == 202
+    follow_up_question_id = follow_up_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turns = {turn["question_id"]: turn for turn in detail_body["data"]["turns"]}
+    parent_metadata = turns[parent_question_id]["question_metadata"]
+    follow_up_turn = turns[follow_up_question_id]
+    follow_up_metadata = follow_up_turn["question_metadata"]
+    assert follow_up_metadata["generation_mode"] == "follow_up"
+    assert follow_up_metadata["parent_question_id"] == parent_question_id
+    assert follow_up_metadata["parent_answer_id"] == parent_answer_id
+    assert follow_up_metadata["parent_feedback_id"] == parent_feedback_id
+    assert follow_up_metadata["follow_up_reason"]
+    assert follow_up_metadata["follow_up_target_dimension"]
+    assert follow_up_metadata["template_signature"] != parent_metadata["template_signature"]
+    assert "你上一轮回答中提到" in follow_up_turn["question_text"]
+    assert "接口串联" in follow_up_turn["question_text"]
+    assert "只聚焦" in follow_up_turn["question_text"]
+
+
+def test_polish_question_generation_rejects_ended_session() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    with session_factory() as db:
+        db.execute(text("UPDATE interview_sessions SET status = 'ended' WHERE id = :session_id"), {"session_id": session_id})
+        db.commit()
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["field"] == "session_status"
+
+
+def test_polish_question_generation_marks_legacy_progress_node_request() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 202
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turn = next(turn for turn in detail_body["data"]["turns"] if turn["question_id"] == question_id)
+    assert turn["question_metadata"]["generation_mode"] == "new_question"
+    assert turn["question_metadata"]["request_source"] == "legacy_progress_node_ref"
+    assert turn["question_metadata"]["selected_progress_node_ref"] == progress_node_ref
+
+
+def test_polish_question_generation_rotates_signature_in_same_session_category() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown=(
+            "## 项目经历\n"
+            "1GB 日志从上传入口进入异步处理，解析、切块、向量化、入库从 15 秒优化到 3 秒。"
+        ),
+        requirements=["需要解释异步处理管道的性能、成本、失败重试和可观测性。"],
+    )
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    _, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    _, second_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={
+            "generation_mode": "new_question",
+            "selected_progress_node_ref": progress_node_ref,
+            "exclude_question_refs": [first_body["data"]["result_ref"]["trace_ref_id"]],
+        },
+    )
+
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turns = {
+        turn["question_id"]: turn
+        for turn in detail_body["data"]["turns"]
+        if turn["progress_node_ref"] == progress_node_ref
+    }
+    first_metadata = turns[first_body["data"]["result_ref"]["trace_ref_id"]]["question_metadata"]
+    second_metadata = turns[second_body["data"]["result_ref"]["trace_ref_id"]]["question_metadata"]
+    assert first_metadata["focus_key"] != second_metadata["focus_key"]
+    assert first_metadata["template_signature"] != second_metadata["template_signature"]
+    assert first_metadata["blueprint_signature"] != second_metadata["blueprint_signature"]
+    assert second_metadata["similarity_checked"] is True
+    assert second_metadata["max_similarity_in_same_category"] >= 0
+
+
+def test_polish_question_generation_keeps_nine_same_category_questions_distinct() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown=(
+            "## 项目经历\n"
+            "1GB 日志从上传入口进入异步处理，解析、切块、向量化、入库从 15 秒优化到 3 秒。"
+        ),
+        requirements=["需要解释异步处理管道的性能、成本、失败重试和可观测性。"],
+    )
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    question_ids: list[str] = []
+
+    for _ in range(9):
+        status_code, question_body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/questions",
+            "POST",
+            json_body={
+                "generation_mode": "new_question",
+                "selected_progress_node_ref": progress_node_ref,
+                "exclude_question_refs": question_ids,
+            },
+        )
+        assert status_code == 202
+        question_ids.append(question_body["data"]["result_ref"]["trace_ref_id"])
+
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turns = [
+        turn
+        for turn in detail_body["data"]["turns"]
+        if turn["question_id"] in question_ids and turn["progress_node_ref"] == progress_node_ref
+    ]
+    metadata_items = [turn["question_metadata"] for turn in turns]
+    assert len(metadata_items) == 9
+    assert len({item["focus_key"] for item in metadata_items}) == 9
+    assert len({item["template_signature"] for item in metadata_items}) == 9
+    assert len({item["blueprint_signature"] for item in metadata_items}) == 9
+
+
+def test_polish_question_completion_records_focus_and_next_question_avoids_it() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown=(
+            "## 项目经历\n"
+            "1GB 日志从上传入口进入异步处理，解析、切块、向量化、入库从 15 秒优化到 3 秒。"
+        ),
+        requirements=["需要解释异步处理管道的性能、成本、失败重试和可观测性。"],
+    )
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    _, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    first_question_id = first_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    first_turn = next(turn for turn in detail_body["data"]["turns"] if turn["question_id"] == first_question_id)
+    first_metadata = first_turn["question_metadata"]
+
+    complete_status, complete_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions/{first_question_id}/complete",
+        "POST",
+    )
+
+    assert complete_status == 200
+    completed_refs = complete_body["data"]["progress_tree_state"]["completed_focus_refs"]
+    completed_ref = next(item for item in completed_refs if item["question_id"] == first_question_id)
+    assert completed_ref["progress_node_ref"] == progress_node_ref
+    assert completed_ref["focus_key"] == first_metadata["focus_key"]
+    assert completed_ref["focus_dimension"] == first_metadata["focus_dimension"]
+    assert completed_ref["blueprint_signature"] == first_metadata["blueprint_signature"]
+
+    _, second_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    second_question_id = second_body["data"]["result_ref"]["trace_ref_id"]
+    _, after_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    second_turn = next(turn for turn in after_body["data"]["turns"] if turn["question_id"] == second_question_id)
+    assert second_turn["question_metadata"]["focus_key"] != first_metadata["focus_key"]
+
+
+def test_polish_end_session_rejects_generation_and_answer_submission() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+
+    end_status, end_body = call_json(app, f"/api/v1/polish-sessions/{session_id}/end", "POST")
+
+    assert end_status == 200
+    assert end_body["data"]["session_status"] == "ended"
+    generation_status, generation_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    answer_status, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={"question_id": question_id, "answer_text": "结束后不应继续提交回答。"},
+    )
+    assert generation_status == 422
+    assert generation_body["error"]["details"]["field"] == "session_status"
+    assert answer_status == 422
+    assert answer_body["error"]["details"]["field"] == "session_status"
 
 
 def test_polish_next_question_uses_progress_node_evidence_chunks() -> None:

@@ -82,10 +82,20 @@ cd /home/administrator/code/AiForInterviewer
 npm run dev
 
 # 后端 API debug 模式，前端启动方式不变
-npm run dev debug
+npm run dev:debug
 ```
 
-`npm run dev` 会启动本地 PostgreSQL，检查并直接结束占用 `8001` / `5173` 的旧进程，然后并行启动后端 API 和前端页面。`npm run dev debug` 使用同一启动链路，但后端 API 会设置 `API_DEBUG=true` 并以 `uvicorn --log-level debug` 启动；等价别名为 `npm run dev:debug`。当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时会执行同一初始化路径。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
+`npm run dev` 会启动本地 PostgreSQL，检查并直接结束占用 `8001` / `5173` 的旧进程，然后并行启动后端 API 和前端页面。`npm run dev:debug` 使用同一启动链路，但后端 API 会设置 `API_DEBUG=true`，先连接 PyCharm `Python Debug Server`，再以 `uvicorn --log-level debug` 启动；底层等价命令为 `npm run dev -- debug`。debug 模式默认关闭 uvicorn `--reload`，避免断点落在 reload supervisor 而不是实际 API worker；修改后端代码后需要重启 `npm run dev:debug`。
+
+使用 PyCharm 调试时，先在 PyCharm 中启动 `Python Debug Server`，默认监听 `127.0.0.1:5678`，再从仓库根目录执行 `npm run dev:debug`。如 PyCharm 在 Windows、后端在 WSL，且 `127.0.0.1` 无法连接，可显式设置 `PYCHARM_DEBUG_HOST` 和 `PYCHARM_DEBUG_PORT`：
+
+```bash
+PYCHARM_DEBUG_HOST=<windows-host-ip> PYCHARM_DEBUG_PORT=5678 npm run dev:debug
+```
+
+若 PyCharm 提示 debugger 版本错误，以 IDE 提示的 `pydevd-pycharm` 版本为准更新 `requirements.txt` 并重新安装；当前依赖钉到 `pydevd-pycharm~=251.23774.444`。
+
+当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时会执行同一初始化路径。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
 
 ## 9. 禁止事项
 

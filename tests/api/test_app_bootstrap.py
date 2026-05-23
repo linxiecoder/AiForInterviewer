@@ -1,4 +1,7 @@
-from app.main import ApiSettings, _startup_log_lines, create_app, get_settings
+import json
+import logging
+
+from app.main import ApiSettings, _log_runtime_ready, _startup_log_lines, create_app, get_settings
 from tests.api.asgi_client import call_json
 
 
@@ -38,3 +41,16 @@ def test_startup_log_reports_debug_mode() -> None:
     lines = _startup_log_lines(ApiSettings(debug=True))
 
     assert "API debug: enabled" in lines
+
+
+def test_startup_runtime_ready_uses_structured_app_log(caplog) -> None:
+    with caplog.at_level(logging.INFO, logger="app"):
+        _log_runtime_ready(ApiSettings(debug=True))
+
+    records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.name == "app"
+    ]
+    assert {record["event"] for record in records} == {"api_runtime_ready"}
+    assert any(record["message"] == "API debug: enabled" for record in records)

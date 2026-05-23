@@ -2,7 +2,6 @@
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import logging
 import os
 from typing import Iterable
 
@@ -15,9 +14,9 @@ from app.infrastructure.db.session import DbSettings, configure_session_factory
 from app.infrastructure.llm.job_match import LlmJobMatchAnalyzer
 from app.infrastructure.llm.runtime import build_llm_transport_from_env
 from app.infrastructure.observability.http_logging import HttpAccessLogMiddleware
+from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
 from app.infrastructure.security.auth import AuthRuntime, build_auth_runtime_from_env
 
-STARTUP_LOGGER = logging.getLogger("uvicorn.error")
 DEFAULT_API_TITLE = "ai-for-interviewer"
 DEFAULT_API_VERSION = "0.1.0"
 DEFAULT_API_PREFIX = "/api/v1"
@@ -76,6 +75,9 @@ def create_app(
 ) -> FastAPI:
     """构建当前保留的 API app，并初始化当前 SQLAlchemy schema。"""
     resolved_settings = settings or get_settings()
+    LogUtil.configure(
+        BackendLogSettings(level="DEBUG" if resolved_settings.debug else "INFO")
+    )
     db_session_factory = configure_session_factory(
         db_settings,
         initialize=initialize_schema,
@@ -108,7 +110,7 @@ def create_app(
 
 def _log_runtime_ready(settings: ApiSettings) -> None:
     for line in _startup_log_lines(settings):
-        STARTUP_LOGGER.info(line)
+        LogUtil.api_runtime_ready(message=line)
 
 
 def _startup_log_lines(settings: ApiSettings) -> tuple[str, ...]:
@@ -189,9 +191,7 @@ def _parse_cors_origins(raw: str) -> tuple[str, ...]:
 
 def _filter_cors_wildcards(origins: tuple[str, ...]) -> tuple[str, ...]:
     if "*" in origins:
-        STARTUP_LOGGER.warning(
-            "API_CORS_ALLOW_ORIGINS contains wildcard '*'; dropping it because credentials mode is enabled."
-        )
+        LogUtil.api_cors_wildcard_dropped()
     return tuple(dict.fromkeys(origin for origin in origins if origin != "*"))
 
 

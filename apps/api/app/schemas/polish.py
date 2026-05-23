@@ -125,6 +125,7 @@ class PolishProgressTreeStateResponse(BaseModel):
     current_priority: PolishCurrentPriorityResponse | None = None
     updated_from_turns_count: int = 0
     progress: PolishProgressResponse = Field(default_factory=lambda: PolishProgressResponse(progress_percent=0))
+    completed_focus_refs: list[dict[str, Any]] = Field(default_factory=list)
     summary: str | None = None
     failure_reason: str | None = None
 
@@ -189,6 +190,16 @@ class PolishSessionSummaryResponse(BaseModel):
 
 class CreateQuestionTaskRequest(BaseModel):
     progress_node_ref: str | None = Field(default=None, min_length=1)
+    generation_mode: str | None = Field(default=None, min_length=1)
+    selected_primary_category_ref: str | None = Field(default=None, min_length=1)
+    selected_secondary_category_ref: str | None = Field(default=None, min_length=1)
+    selected_progress_node_ref: str | None = Field(default=None, min_length=1)
+    selected_category_path: list[str] = Field(default_factory=list)
+    parent_question_id: str | None = Field(default=None, min_length=1)
+    parent_answer_id: str | None = Field(default=None, min_length=1)
+    parent_feedback_id: str | None = Field(default=None, min_length=1)
+    exclude_question_refs: list[str] = Field(default_factory=list)
+    completed_focus_refs: list[str] = Field(default_factory=list)
 
 
 class CreateAnswerRequest(BaseModel):

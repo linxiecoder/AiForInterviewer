@@ -43,6 +43,27 @@ class QuestionMetadata:
     anti_repeat_refs: tuple[str, ...]
     source_availability: str | None = None
     generated_at: str | None = None
+    generation_mode: str | None = None
+    request_source: str | None = None
+    selected_primary_category_ref: str | None = None
+    selected_secondary_category_ref: str | None = None
+    selected_progress_node_ref: str | None = None
+    selected_category_path: tuple[str, ...] = ()
+    parent_question_id: str | None = None
+    parent_answer_id: str | None = None
+    parent_feedback_id: str | None = None
+    exclude_question_refs: tuple[str, ...] = ()
+    completed_focus_refs: tuple[str, ...] = ()
+    focus_dimension: str | None = None
+    focus_key: str | None = None
+    template_signature: str | None = None
+    blueprint_signature: str | None = None
+    duplicate_gate_result: str | None = None
+    similarity_checked: bool = False
+    max_similarity_in_same_category: float | None = None
+    mastery_exception_used: bool = False
+    follow_up_reason: str | None = None
+    follow_up_target_dimension: str | None = None
     builder_version: str = BUILDER_VERSION
     validator_version: str = VALIDATOR_VERSION
     signal_version: str = SIGNAL_VERSION
@@ -67,6 +88,27 @@ class QuestionMetadata:
             "anti_repeat_refs": list(self.anti_repeat_refs),
             "source_availability": self.source_availability,
             "generated_at": self.generated_at,
+            "generation_mode": self.generation_mode,
+            "request_source": self.request_source,
+            "selected_primary_category_ref": self.selected_primary_category_ref,
+            "selected_secondary_category_ref": self.selected_secondary_category_ref,
+            "selected_progress_node_ref": self.selected_progress_node_ref,
+            "selected_category_path": list(self.selected_category_path),
+            "parent_question_id": self.parent_question_id,
+            "parent_answer_id": self.parent_answer_id,
+            "parent_feedback_id": self.parent_feedback_id,
+            "exclude_question_refs": list(self.exclude_question_refs),
+            "completed_focus_refs": list(self.completed_focus_refs),
+            "focus_dimension": self.focus_dimension,
+            "focus_key": self.focus_key,
+            "template_signature": self.template_signature,
+            "blueprint_signature": self.blueprint_signature,
+            "duplicate_gate_result": self.duplicate_gate_result,
+            "similarity_checked": self.similarity_checked,
+            "max_similarity_in_same_category": self.max_similarity_in_same_category,
+            "mastery_exception_used": self.mastery_exception_used,
+            "follow_up_reason": self.follow_up_reason,
+            "follow_up_target_dimension": self.follow_up_target_dimension,
         }
 
 
@@ -81,6 +123,14 @@ def build_question_metadata(
     additional_low_confidence_flags: tuple[str, ...] = (),
     source_availability: str | None = None,
     generated_at: str | None = None,
+    focus_dimension: str | None = None,
+    focus_key: str | None = None,
+    template_signature: str | None = None,
+    blueprint_signature: str | None = None,
+    duplicate_gate_result: str | None = None,
+    similarity_checked: bool = False,
+    max_similarity_in_same_category: float | None = None,
+    mastery_exception_used: bool = False,
 ) -> QuestionMetadata:
     signal_refs = evidence_signals.evidence_refs if evidence_signals is not None else ()
     quality_flags = tuple(getattr(quality_result, "low_confidence_flags", ()))
@@ -109,6 +159,14 @@ def build_question_metadata(
         anti_repeat_refs=anti_repeat_refs,
         source_availability=source_availability,
         generated_at=generated_at,
+        focus_dimension=focus_dimension,
+        focus_key=focus_key,
+        template_signature=template_signature,
+        blueprint_signature=blueprint_signature,
+        duplicate_gate_result=duplicate_gate_result,
+        similarity_checked=similarity_checked,
+        max_similarity_in_same_category=max_similarity_in_same_category,
+        mastery_exception_used=mastery_exception_used,
     )
 
 
@@ -150,6 +208,31 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "anti_repeat_refs": _string_list(payload.get("anti_repeat_refs")),
         "source_availability": _string_or_none(payload.get("source_availability")),
         "generated_at": _string_or_none(payload.get("generated_at"), max_chars=80),
+        "generation_mode": _string_or_none(payload.get("generation_mode"), max_chars=80),
+        "request_source": _string_or_none(payload.get("request_source"), max_chars=120),
+        "selected_primary_category_ref": _string_or_none(
+            payload.get("selected_primary_category_ref"), max_chars=120
+        ),
+        "selected_secondary_category_ref": _string_or_none(
+            payload.get("selected_secondary_category_ref"), max_chars=120
+        ),
+        "selected_progress_node_ref": _string_or_none(payload.get("selected_progress_node_ref"), max_chars=120),
+        "selected_category_path": _string_list(payload.get("selected_category_path")),
+        "parent_question_id": _string_or_none(payload.get("parent_question_id"), max_chars=120),
+        "parent_answer_id": _string_or_none(payload.get("parent_answer_id"), max_chars=120),
+        "parent_feedback_id": _string_or_none(payload.get("parent_feedback_id"), max_chars=120),
+        "exclude_question_refs": _string_list(payload.get("exclude_question_refs")),
+        "completed_focus_refs": _string_list(payload.get("completed_focus_refs")),
+        "focus_dimension": _string_or_none(payload.get("focus_dimension"), max_chars=160),
+        "focus_key": _string_or_none(payload.get("focus_key"), max_chars=160),
+        "template_signature": _string_or_none(payload.get("template_signature"), max_chars=240),
+        "blueprint_signature": _string_or_none(payload.get("blueprint_signature"), max_chars=240),
+        "duplicate_gate_result": _string_or_none(payload.get("duplicate_gate_result"), max_chars=120),
+        "similarity_checked": _bool_or_false(payload.get("similarity_checked")),
+        "max_similarity_in_same_category": _float_or_none(payload.get("max_similarity_in_same_category")),
+        "mastery_exception_used": _bool_or_false(payload.get("mastery_exception_used")),
+        "follow_up_reason": _string_or_none(payload.get("follow_up_reason"), max_chars=240),
+        "follow_up_target_dimension": _string_or_none(payload.get("follow_up_target_dimension"), max_chars=240),
     }
     llm_keys = {
         "llm_task_type",
@@ -259,6 +342,15 @@ def _int_or_none(value: object) -> int | None:
         return None
     try:
         return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(value: object) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return None
 

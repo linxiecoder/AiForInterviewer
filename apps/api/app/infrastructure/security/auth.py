@@ -5,15 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from os import getenv
-import logging
 
 from app.application.auth.use_cases import AuthUseCases
 from app.domain.shared.ids import ResourceIdPrefix, stable_resource_id
+from app.infrastructure.observability.logging import LogUtil
 from app.infrastructure.security.passwords import Pbkdf2PasswordHasher
 from app.infrastructure.security.stores import InMemorySessionStore, InMemoryUserStore
-
-
-_AUTH_LOGGER = logging.getLogger("app.infrastructure.security.auth")
 
 
 @dataclass(frozen=True)
@@ -81,9 +78,7 @@ def build_auth_runtime_from_env(*, cookie_path: str = "/api/v1") -> AuthRuntime:
     dev_user_identifier = _env("API_AUTH_DEV_USER_IDENTIFIER", "developer")
     dev_user_password = _env_optional("API_AUTH_DEV_USER_PASSWORD")
     if seed_enabled and not dev_user_password:
-        _AUTH_LOGGER.warning(
-            "API_AUTH_DEV_USER_ENABLED=true but API_AUTH_DEV_USER_PASSWORD is missing; dev seed user is disabled."
-        )
+        LogUtil.auth_dev_seed_disabled_missing_password()
         seed_enabled = False
 
     if seed_enabled and dev_user_password is None:

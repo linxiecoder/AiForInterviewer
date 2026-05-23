@@ -5,16 +5,19 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import replace
+from hashlib import sha256
 from typing import Any
 
 from app.application.common.result import ApplicationResult
 from app.application.job_match.entities import JobMatchAnalysis
 from app.application.job_match.ports import JobMatchRepository
 from app.application.polish.commands import (
+    CompletePolishQuestionCommand,
     CreatePolishAnswerCommand,
     CreatePolishFeedbackTaskCommand,
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
+    EndPolishSessionCommand,
     RefreshPolishProgressTreeStateCommand,
 )
 from app.application.polish.candidate_llm import PolishCandidateLlmService
@@ -23,6 +26,8 @@ from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
     PolishQuestion,
+    PolishQuestionDraft,
+    PolishQuestionSource,
     PolishSessionAnswerDetail,
     PolishSessionDetail,
     PolishSessionTurn,
@@ -74,9 +79,13 @@ from app.application.llm.ports import LlmTransport
 
 
 SESSION_STATUS_RUNNING = "running"
+SESSION_STATUS_ENDED = "ended"
 QUESTION_STATUS_GENERATED = "generated"
 ANSWER_STATUS_SAVED = "saved"
 FEEDBACK_STATUS_GENERATED = "generated"
+QUESTION_GENERATION_MODE_NEW = "new_question"
+QUESTION_GENERATION_MODE_FOLLOW_UP = "follow_up"
+QUESTION_GENERATION_MODES = {QUESTION_GENERATION_MODE_NEW, QUESTION_GENERATION_MODE_FOLLOW_UP}
 
 QUESTION_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
 FEEDBACK_CONTRACT_IDS = (
@@ -298,6 +307,17 @@ class PolishUseCases:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
             )
+        if session.status != SESSION_STATUS_RUNNING:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Polish session is not running",
+                    details={"field": "session_status", "session_status": session.status},
+                )
+            )
+        request_error = _validate_question_generation_request(command)
+        if request_error is not None:
+            return ApplicationResult(error=request_error)
         detail = self._build_session_detail(owner_id=command.owner_id, session=session)
         if detail.progress_tree_status == PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT:
             return ApplicationResult(
@@ -327,25 +347,49 @@ class PolishUseCases:
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
-        question_result = self._question_llm_service.generate_with_llm_or_fallback(
-            session=session,
-            context=detail.progress_context,
-            plan=detail.progress_tree_plan,
-            state=detail.progress_tree_state,
-            requested_ref=command.progress_node_ref,
-            deterministic_builder=lambda: build_deterministic_progress_node_question(
+        requested_progress_node_ref = _question_generation_requested_ref(command)
+        completed_focus_refs = _combined_completed_focus_refs(
+            command.completed_focus_refs,
+            detail.progress_tree_state,
+            progress_node_ref=requested_progress_node_ref,
+        )
+        progress_context = _progress_context_with_completed_focus_refs(
+            detail.progress_context,
+            completed_focus_refs,
+        )
+        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
+            follow_up_result = _build_follow_up_question_draft(command=command, detail=detail)
+            if isinstance(follow_up_result, DomainError):
+                return ApplicationResult(error=follow_up_result)
+            question_draft = follow_up_result
+        else:
+            question_result = self._question_llm_service.generate_with_llm_or_fallback(
                 session=session,
-                context=detail.progress_context,
+                context=progress_context,
                 plan=detail.progress_tree_plan,
                 state=detail.progress_tree_state,
-                requested_ref=command.progress_node_ref,
-            ),
-        )
-        question_draft = question_result.draft
+                requested_ref=requested_progress_node_ref,
+                deterministic_builder=lambda: build_deterministic_progress_node_question(
+                    session=session,
+                    context=progress_context,
+                    plan=detail.progress_tree_plan,
+                    state=detail.progress_tree_state,
+                    requested_ref=requested_progress_node_ref,
+                ),
+            )
+            question_draft = question_result.draft
         question_metadata = _metadata_for_new_question(
             getattr(question_draft, "question_metadata", None),
             generated_at=now.isoformat(),
         )
+        question_metadata.update(
+            _question_generation_request_metadata(
+                command,
+                requested_progress_node_ref=requested_progress_node_ref,
+                resolved_progress_node_ref=question_draft.progress_node_ref,
+            )
+        )
+        question_metadata["completed_focus_refs"] = list(completed_focus_refs)
         question = PolishQuestion(
             question_id=question_id,
             owner_id=command.owner_id,
@@ -388,11 +432,68 @@ class PolishUseCases:
         )
         return ApplicationResult(value=task)
 
+    def complete_question(self, command: CompletePolishQuestionCommand) -> ApplicationResult[PolishSessionDetail]:
+        session = self._polish_repository.get_session(command.owner_id, command.session_id)
+        if session is None:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+        if session.status != SESSION_STATUS_RUNNING:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Polish session is not running",
+                    details={"field": "session_status", "session_status": session.status},
+                )
+            )
+        question = self._polish_repository.get_question(command.owner_id, command.question_id)
+        if question is None or question.session_id != command.session_id:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Question not found")
+            )
+        now = utc_now()
+        progress_tree_state = _progress_tree_state_with_completed_question(
+            session.progress_tree_state,
+            progress_tree_plan=session.progress_tree_plan,
+            question=question,
+            completed_at=now,
+        )
+        updated_session = replace(session, progress_tree_state=progress_tree_state, updated_at=now)
+        self._polish_repository.update_progress_tree(updated_session)
+        return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
+
+    def end_session(self, command: EndPolishSessionCommand) -> ApplicationResult[PolishSessionDetail]:
+        session = self._polish_repository.get_session(command.owner_id, command.session_id)
+        if session is None:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+        if session.status == SESSION_STATUS_ENDED:
+            return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=session))
+        now = utc_now()
+        updated_state = _progress_tree_state_with_session_ended(session.progress_tree_state, ended_at=now)
+        updated_session = replace(
+            session,
+            status=SESSION_STATUS_ENDED,
+            progress_tree_state=updated_state,
+            updated_at=now,
+        )
+        self._polish_repository.update_progress_tree(updated_session)
+        return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
+
     def create_answer(self, command: CreatePolishAnswerCommand) -> ApplicationResult[PolishAnswer]:
         session = self._polish_repository.get_session(command.owner_id, command.session_id)
         if session is None:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+        if session.status != SESSION_STATUS_RUNNING:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Polish session is not running",
+                    details={"field": "session_status", "session_status": session.status},
+                )
             )
         question = self._polish_repository.get_question(command.owner_id, command.question_id)
         if question is None or question.session_id != command.session_id:
@@ -819,6 +920,415 @@ def _metadata_for_new_question(raw_metadata: object, *, generated_at: str) -> di
         metadata = empty_question_metadata().to_dict()
     metadata["generated_at"] = generated_at
     return metadata
+
+
+def _progress_tree_state_with_completed_question(
+    raw_state: object,
+    *,
+    progress_tree_plan: object,
+    question: PolishQuestion,
+    completed_at: object,
+) -> dict[str, Any]:
+    state = dict(raw_state) if isinstance(raw_state, dict) else {}
+    metadata = question.question_metadata if isinstance(question.question_metadata, dict) else {}
+    focus_key = _clean_question_request_text(metadata.get("focus_key")) or _question_request_focus_key(question.question_id)
+    progress_node_ref = _clean_question_request_text(question.progress_node_ref)
+    completed_entry = {
+        "question_id": question.question_id,
+        "progress_node_ref": progress_node_ref,
+        "focus_key": focus_key,
+        "focus_dimension": _clean_question_request_text(metadata.get("focus_dimension")),
+        "template_signature": _clean_question_request_text(metadata.get("template_signature")),
+        "blueprint_signature": _clean_question_request_text(metadata.get("blueprint_signature")),
+        "completed_at": completed_at.isoformat() if hasattr(completed_at, "isoformat") else None,
+        "source": "manual_question_complete",
+    }
+    state["completed_focus_refs"] = _completed_focus_refs_with_entry(
+        state.get("completed_focus_refs"),
+        completed_entry,
+    )
+    state["node_states"] = _node_states_with_completed_question(
+        state.get("node_states"),
+        progress_node_ref=progress_node_ref,
+        plan_refs=_plan_progress_node_refs(progress_tree_plan),
+    )
+    state["summary"] = "manual_question_completed"
+    return state
+
+
+def _progress_tree_state_with_session_ended(raw_state: object, *, ended_at: object) -> dict[str, Any]:
+    state = dict(raw_state) if isinstance(raw_state, dict) else {}
+    state["session_ended_at"] = ended_at.isoformat() if hasattr(ended_at, "isoformat") else None
+    state["summary"] = "session_ended"
+    return state
+
+
+def _completed_focus_refs_with_entry(raw_refs: object, entry: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = _normalized_completed_focus_entries(raw_refs)
+    entry_key = _completed_focus_entry_key(entry)
+    if not any(_completed_focus_entry_key(item) == entry_key for item in entries):
+        entries.append(entry)
+    return entries
+
+
+def _normalized_completed_focus_entries(raw_refs: object) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    if not isinstance(raw_refs, list):
+        return entries
+    for item in raw_refs:
+        if not isinstance(item, dict):
+            continue
+        focus_key = _clean_question_request_text(item.get("focus_key"))
+        question_id = _clean_question_request_text(item.get("question_id"))
+        if focus_key is None and question_id is None:
+            continue
+        entries.append(
+            {
+                "question_id": question_id,
+                "progress_node_ref": _clean_question_request_text(item.get("progress_node_ref")),
+                "focus_key": focus_key,
+                "focus_dimension": _clean_question_request_text(item.get("focus_dimension")),
+                "template_signature": _clean_question_request_text(item.get("template_signature")),
+                "blueprint_signature": _clean_question_request_text(item.get("blueprint_signature")),
+                "completed_at": _clean_question_request_text(item.get("completed_at")),
+                "source": _clean_question_request_text(item.get("source")) or "manual_question_complete",
+            }
+        )
+    return entries
+
+
+def _completed_focus_entry_key(entry: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    return (
+        _clean_question_request_text(entry.get("question_id")),
+        _clean_question_request_text(entry.get("progress_node_ref")),
+        _clean_question_request_text(entry.get("focus_key")),
+    )
+
+
+def _node_states_with_completed_question(
+    raw_node_states: object,
+    *,
+    progress_node_ref: str | None,
+    plan_refs: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_node_states, list):
+        return []
+    updated_states: list[dict[str, Any]] = []
+    for item in raw_node_states:
+        if not isinstance(item, dict):
+            continue
+        updated = {**item}
+        node_ref = _clean_question_request_text(updated.get("progress_node_ref"))
+        if progress_node_ref and node_ref == progress_node_ref and (not plan_refs or progress_node_ref in plan_refs):
+            updated["status"] = "completed"
+            updated["completed_questions_count"] = max(_safe_int(updated.get("completed_questions_count")), 1)
+        updated_states.append(updated)
+    return updated_states
+
+
+def _plan_progress_node_refs(raw_plan: object) -> set[str]:
+    if not isinstance(raw_plan, dict):
+        return set()
+    refs: set[str] = set()
+
+    def collect(nodes: object) -> None:
+        if not isinstance(nodes, list):
+            return
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            node_ref = _clean_question_request_text(node.get("progress_node_ref"))
+            if node_ref:
+                refs.add(node_ref)
+            collect(node.get("children"))
+
+    collect(raw_plan.get("nodes"))
+    return refs
+
+
+def _safe_int(value: object) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _combined_completed_focus_refs(
+    command_refs: tuple[str, ...],
+    raw_state: object,
+    *,
+    progress_node_ref: str | None,
+) -> tuple[str, ...]:
+    refs = list(_clean_question_request_list(command_refs))
+    state = raw_state if isinstance(raw_state, dict) else {}
+    for item in _normalized_completed_focus_entries(state.get("completed_focus_refs")):
+        item_node_ref = _clean_question_request_text(item.get("progress_node_ref"))
+        if progress_node_ref is not None and item_node_ref not in {None, progress_node_ref}:
+            continue
+        focus_key = _clean_question_request_text(item.get("focus_key"))
+        if focus_key and focus_key not in refs:
+            refs.append(focus_key)
+    return tuple(refs)
+
+
+def _progress_context_with_completed_focus_refs(
+    progress_context: dict[str, Any],
+    completed_focus_refs: tuple[str, ...],
+) -> dict[str, Any]:
+    if not completed_focus_refs:
+        return progress_context
+    return {
+        **progress_context,
+        "completed_focus_refs": list(completed_focus_refs),
+    }
+
+
+def _build_follow_up_question_draft(
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    detail: PolishSessionDetail,
+) -> PolishQuestionDraft | DomainError:
+    parent_turn = _find_turn(detail.turns, command.parent_question_id)
+    if parent_turn is None:
+        return DomainError(
+            code="validation_failed",
+            message="follow_up parent question is not in this session",
+            details={"field": "parent_question_id"},
+        )
+    parent_answer = _find_turn_answer(parent_turn, command.parent_answer_id)
+    if parent_answer is None:
+        return DomainError(
+            code="validation_failed",
+            message="follow_up parent answer is not in this session",
+            details={"field": "parent_answer_id"},
+        )
+    if command.parent_feedback_id is not None and parent_answer.feedback_id != command.parent_feedback_id:
+        return DomainError(
+            code="validation_failed",
+            message="follow_up parent feedback does not match parent answer",
+            details={"field": "parent_feedback_id"},
+        )
+
+    target_dimension, follow_up_reason = _select_follow_up_target(parent_turn, parent_answer)
+    answer_excerpt = _follow_up_excerpt(parent_answer.answer_text)
+    focus_key = _question_request_focus_key(target_dimension)
+    progress_node_ref = _clean_question_request_text(command.selected_progress_node_ref) or parent_turn.progress_node_ref
+    question_text = (
+        f"你上一轮回答中提到「{answer_excerpt}」，但还没有讲清楚「{target_dimension}」。"
+        "现在只聚焦这个点：请结合上一题背景，说明你的具体判断、边界、失败处理、验证指标和关键取舍。"
+    )
+    metadata = empty_question_metadata().to_dict()
+    metadata.update(
+        {
+            "question_pattern": "follow_up_targeted",
+            "expected_answer_dimensions": [target_dimension],
+            "quality_score": 90,
+            "quality_warnings": [],
+            "confidence_level": "medium",
+            "low_confidence_flags": [],
+            "source_availability": "available",
+            "focus_dimension": target_dimension,
+            "focus_key": focus_key,
+            "template_signature": f"tpl:follow_up_targeted:{focus_key}",
+            "blueprint_signature": _follow_up_blueprint_signature(
+                parent_turn.question_id,
+                parent_answer.answer_id,
+                focus_key,
+            ),
+            "duplicate_gate_result": "follow_up_parent_bound",
+            "similarity_checked": True,
+            "max_similarity_in_same_category": 0.0,
+            "mastery_exception_used": True,
+            "follow_up_reason": follow_up_reason,
+            "follow_up_target_dimension": target_dimension,
+        }
+    )
+    return PolishQuestionDraft(
+        question_text=question_text,
+        question_sources=(
+            PolishQuestionSource(
+                index=1,
+                source_type="history_feedback",
+                title="上一轮回答与反馈",
+                excerpt=_follow_up_source_excerpt(parent_answer),
+                ref_id=parent_answer.feedback_id or parent_answer.answer_id,
+                availability="available",
+            ),
+        ),
+        progress_node_ref=progress_node_ref,
+        evidence_refs=parent_turn.evidence_refs,
+        context_digest=parent_turn.context_digest or detail.progress_context.get("content_digest"),
+        question_pattern="follow_up_targeted",
+        quality_score=90,
+        confidence_level="medium",
+        expected_answer_dimensions=(target_dimension,),
+        question_metadata=metadata,
+    )
+
+
+def _find_turn(turns: tuple[PolishSessionTurn, ...], question_id: str | None) -> PolishSessionTurn | None:
+    if question_id is None:
+        return None
+    return next((turn for turn in turns if turn.question_id == question_id), None)
+
+
+def _find_turn_answer(
+    turn: PolishSessionTurn,
+    answer_id: str | None,
+) -> PolishSessionAnswerDetail | None:
+    if answer_id is None:
+        return None
+    return next((answer for answer in turn.answers if answer.answer_id == answer_id), None)
+
+
+def _select_follow_up_target(
+    parent_turn: PolishSessionTurn,
+    parent_answer: PolishSessionAnswerDetail,
+) -> tuple[str, str]:
+    payload = parent_answer.feedback_payload if isinstance(parent_answer.feedback_payload, dict) else {}
+    for item in _dict_list(payload.get("missing_answer_dimensions")):
+        target = _compact_follow_up_target(
+            item.get("title") or item.get("dimension_id") or item.get("expected_dimension")
+        )
+        if target:
+            return target, "missing_answer_dimension"
+    for key, reason in (("technical_gaps", "technical_gap"), ("communication_gaps", "communication_gap")):
+        for item in payload.get(key) or []:
+            target = _compact_follow_up_target(item)
+            if target:
+                return target, reason
+    for item in _dict_list(payload.get("loss_points")):
+        target = _compact_follow_up_target(item.get("title") or item.get("reason"))
+        if target:
+            return target, "loss_point"
+    for dimension in parent_turn.question_metadata.get("expected_answer_dimensions") or []:
+        target = _compact_follow_up_target(dimension)
+        if target and target not in parent_answer.answer_text:
+            return target, "unanswered_expected_dimension"
+    return "失败路径、边界和验证指标", "category_uncovered_direction"
+
+
+def _compact_follow_up_target(value: object) -> str | None:
+    text = _clean_question_request_text(value, max_chars=80)
+    return text or None
+
+
+def _follow_up_excerpt(answer_text: str) -> str:
+    return _clean_question_request_text(answer_text, max_chars=80) or "上一轮回答"
+
+
+def _follow_up_source_excerpt(parent_answer: PolishSessionAnswerDetail) -> str:
+    feedback_text = _clean_question_request_text(parent_answer.feedback_text, max_chars=120)
+    answer_text = _follow_up_excerpt(parent_answer.answer_text)
+    if feedback_text:
+        return f"回答：{answer_text}；反馈：{feedback_text}"
+    return f"回答：{answer_text}"
+
+
+def _question_request_focus_key(target_dimension: str) -> str:
+    seed = _clean_question_request_text(target_dimension, max_chars=160) or "follow_up"
+    return f"focus_{sha256(seed.encode('utf-8')).hexdigest()[:12]}"
+
+
+def _follow_up_blueprint_signature(parent_question_id: str, parent_answer_id: str, focus_key: str) -> str:
+    seed = f"{parent_question_id}:{parent_answer_id}:{focus_key}"
+    return f"bp:{sha256(seed.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _validate_question_generation_request(command: CreatePolishQuestionTaskCommand) -> DomainError | None:
+    mode = _question_generation_mode(command)
+    if mode not in QUESTION_GENERATION_MODES:
+        return DomainError(
+            code="validation_failed",
+            message="Invalid question generation mode",
+            details={"field": "generation_mode"},
+        )
+    if command.generation_mode is not None and mode == QUESTION_GENERATION_MODE_NEW:
+        if _question_generation_requested_ref(command) is None:
+            return DomainError(
+                code="validation_failed",
+                message="new_question requires a selected progress node",
+                details={"field": "selected_progress_node_ref"},
+            )
+    if mode == QUESTION_GENERATION_MODE_FOLLOW_UP:
+        if _clean_question_request_text(command.parent_question_id) is None:
+            return DomainError(
+                code="validation_failed",
+                message="follow_up requires parent_question_id",
+                details={"field": "parent_question_id"},
+            )
+        if _clean_question_request_text(command.parent_answer_id) is None:
+            return DomainError(
+                code="validation_failed",
+                message="follow_up requires parent_answer_id",
+                details={"field": "parent_answer_id"},
+            )
+    return None
+
+
+def _question_generation_mode(command: CreatePolishQuestionTaskCommand) -> str:
+    return _clean_question_request_text(command.generation_mode) or QUESTION_GENERATION_MODE_NEW
+
+
+def _question_generation_requested_ref(command: CreatePolishQuestionTaskCommand) -> str | None:
+    return (
+        _clean_question_request_text(command.selected_progress_node_ref)
+        or _clean_question_request_text(command.selected_secondary_category_ref)
+        or _clean_question_request_text(command.progress_node_ref)
+    )
+
+
+def _question_generation_request_metadata(
+    command: CreatePolishQuestionTaskCommand,
+    *,
+    requested_progress_node_ref: str | None,
+    resolved_progress_node_ref: str | None,
+) -> dict[str, Any]:
+    mode = _question_generation_mode(command)
+    selected_progress_node_ref = (
+        _clean_question_request_text(command.selected_progress_node_ref)
+        or requested_progress_node_ref
+        or _clean_question_request_text(resolved_progress_node_ref)
+    )
+    return {
+        "generation_mode": mode,
+        "request_source": _question_generation_request_source(command, mode),
+        "selected_primary_category_ref": _clean_question_request_text(command.selected_primary_category_ref),
+        "selected_secondary_category_ref": _clean_question_request_text(command.selected_secondary_category_ref),
+        "selected_progress_node_ref": selected_progress_node_ref,
+        "selected_category_path": list(_clean_question_request_list(command.selected_category_path)),
+        "parent_question_id": _clean_question_request_text(command.parent_question_id),
+        "parent_answer_id": _clean_question_request_text(command.parent_answer_id),
+        "parent_feedback_id": _clean_question_request_text(command.parent_feedback_id),
+        "exclude_question_refs": list(_clean_question_request_list(command.exclude_question_refs)),
+        "completed_focus_refs": list(_clean_question_request_list(command.completed_focus_refs)),
+    }
+
+
+def _question_generation_request_source(command: CreatePolishQuestionTaskCommand, mode: str) -> str:
+    if command.generation_mode is None:
+        return "legacy_progress_node_ref" if _clean_question_request_text(command.progress_node_ref) else "legacy_fallback"
+    if mode == QUESTION_GENERATION_MODE_FOLLOW_UP:
+        return "explicit_follow_up"
+    return "explicit_selected_category"
+
+
+def _clean_question_request_list(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    cleaned: list[str] = []
+    for value in values:
+        text = _clean_question_request_text(value)
+        if text is not None and text not in cleaned:
+            cleaned.append(text)
+    return tuple(cleaned)
+
+
+def _clean_question_request_text(value: object, *, max_chars: int = 240) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    return text[:max_chars]
 
 
 def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> DomainError | None:

@@ -37,7 +37,7 @@ SENSITIVE_PROMPT_SENTINEL = "SENSITIVE_PROMPT_TEXT_SHOULD_NOT_APPEAR"
 SENSITIVE_COMPLETION_SENTINEL = "SENSITIVE_COMPLETION_TEXT_SHOULD_NOT_APPEAR"
 SENSITIVE_SOURCE_EXCERPT_SENTINEL = "SENSITIVE_SOURCE_EXCERPT_TEXT_SHOULD_NOT_APPEAR"
 SENSITIVE_SECRET_SENTINEL = "SENSITIVE_API_KEY_TOKEN_SECRET_SHOULD_NOT_APPEAR"
-QUESTION_LLM_LOGGER = "app.application.polish.question_llm"
+QUESTION_LLM_LOGGER = "app"
 
 
 @pytest.fixture(autouse=True)
@@ -207,7 +207,7 @@ def test_feature_disabled_path_returns_deterministic_question_without_transport_
 
     assert _has_log_record(
         caplog,
-        "polish.question.llm.fallback",
+        "polish_question_llm_fallback",
         "feature_disabled",
         "deterministic_only",
     )
@@ -243,7 +243,7 @@ def test_real_provider_is_not_used_unless_question_real_provider_flag_is_enabled
 
     assert _has_log_record(
         caplog,
-        "polish.question.llm.fallback",
+        "polish_question_llm_fallback",
         "real_provider_disabled",
         "llm_fallback",
     )
@@ -288,7 +288,7 @@ def test_fake_llm_schema_invalid_output_falls_back_to_deterministic(caplog) -> N
 
     assert _has_log_record(
         caplog,
-        "polish.question.llm.fallback",
+        "polish_question_llm_fallback",
         "schema_invalid",
         "llm_fallback",
     )

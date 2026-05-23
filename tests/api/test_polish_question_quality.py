@@ -222,6 +222,44 @@ def test_partial_success_metadata_uses_only_signaled_storage_components() -> Non
     assert "Elasticsearch" not in summary
 
 
+def test_repeated_same_category_question_rotates_template_and_focus() -> None:
+    title = "1GB 日志文件异步处理管道"
+    evidence = "1GB 日志从上传入口进入异步处理，解析、切块、向量化、入库从 15 秒优化到 3 秒。"
+    first = _build_question(
+        title=title,
+        evidence=evidence,
+        polish_theme="technical",
+        node_ref="node_large_log_repeat",
+        expected_capability="能解释异步处理管道的性能、成本和可观测性。",
+    )
+    second = _build_question(
+        title=title,
+        evidence=evidence,
+        polish_theme="technical",
+        node_ref="node_large_log_repeat",
+        expected_capability="能解释异步处理管道的性能、成本和可观测性。",
+        turns=[
+            {
+                "question_id": "que_first_large_log",
+                "progress_node_ref": "node_large_log_repeat",
+                "question_text": first.question_text,
+                "question_metadata": first.question_metadata,
+            }
+        ],
+    )
+
+    first_metadata = first.question_metadata
+    second_metadata = second.question_metadata
+    assert first_metadata["template_signature"] != second_metadata["template_signature"]
+    assert first_metadata["blueprint_signature"] != second_metadata["blueprint_signature"]
+    assert first_metadata["focus_key"] != second_metadata["focus_key"]
+    assert second_metadata["duplicate_gate_result"] == "rotated"
+    assert second_metadata["similarity_checked"] is True
+    assert second_metadata["mastery_exception_used"] is False
+    assert "15 秒到 3 秒" in first.question_text
+    assert "15 秒到 3 秒" not in second.question_text
+
+
 def test_quality_validator_blocks_fabricated_concrete_entities_from_signals() -> None:
     strategy = resolve_polish_theme_strategy("technical")
     signals = extract_evidence_signals(
@@ -529,6 +567,7 @@ def _build_question(
     node_ref: str,
     expected_capability: str,
     include_evidence: bool = True,
+    turns: list[dict] | None = None,
 ):
     now = utc_now()
     session = PolishSession(
@@ -577,7 +616,7 @@ def _build_question(
             "analysis_id": "ana_quality",
             "missing_points": [],
         },
-        "turns": [],
+        "turns": turns or [],
     }
     return build_progress_node_question(
         session=session,

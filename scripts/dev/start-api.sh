@@ -38,12 +38,10 @@ UVICORN_ARGS=(
 )
 
 if [ "$MODE" = "debug" ]; then
-  UVICORN_ARGS+=(--log-level debug)
+  echo "[dev] starting api on http://127.0.0.1:8001 (debug, PyCharm attach)"
+  echo "[dev] PyCharm debug server: ${PYCHARM_DEBUG_HOST:-127.0.0.1}:${PYCHARM_DEBUG_PORT:-5678}"
+  exec .venv/bin/python scripts/dev/pycharm_debug_uvicorn.py
 fi
 
-if [ "$MODE" = "debug" ]; then
-  echo "[dev] starting api on http://127.0.0.1:8001 (debug)"
-else
-  echo "[dev] starting api on http://127.0.0.1:8001"
-fi
+echo "[dev] starting api on http://127.0.0.1:8001"
 exec .venv/bin/python -m uvicorn "${UVICORN_ARGS[@]}"

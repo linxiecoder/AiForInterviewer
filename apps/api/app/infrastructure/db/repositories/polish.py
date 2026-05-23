@@ -60,6 +60,7 @@ class SqlAlchemyPolishRepository(PolishRepository):
             detail.progress_tree_plan_json = _payload_with_theme_metadata(session.progress_tree_plan, session.polish_theme)
             detail.progress_tree_state_json = _payload_with_theme_metadata(session.progress_tree_state, session.polish_theme)
             detail.updated_at = session.updated_at
+            session_model.status = session.status
             session_model.updated_at = session.updated_at
             db.commit()
 

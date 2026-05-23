@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
-import logging
 import os
 from time import perf_counter
 from typing import Any
@@ -22,6 +21,7 @@ from app.application.llm.errors import (
 )
 from app.infrastructure.llm.job_match import JOB_MATCH_PROMPT_VERSION
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.infrastructure.observability.logging import LogUtil
 
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -34,7 +34,6 @@ LLM_OPENAI_BASE_URL_ENV = "LLM_OPENAI_BASE_URL"
 LLM_OPENAI_MODEL_ENV = "LLM_OPENAI_MODEL"
 LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
-LLM_TRANSPORT_LOGGER_NAME = "app.llm.transport"
 
 @dataclass(frozen=True)
 class OpenAICompatibleLlmSettings:
@@ -92,7 +91,6 @@ class OpenAICompatibleLlmTransport:
         """初始化传输层；可注入外部 httpx.Client（用于测试）。"""
         self._settings = settings
         self._client = client
-        self._logger = _llm_transport_logger()
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         """调用 LLM provider 生成结果。密钥为空时抛出配置异常。"""
@@ -189,18 +187,13 @@ class OpenAICompatibleLlmTransport:
 
     def _log_request_start(self, request: LlmTransportRequest) -> None:
         """记录 LLM 请求启动日志（含 task_type / model / contract_ids 等关键字段）。"""
-        self._logger.info(
-            _json_log(
-                {
-                    "event": "llm_transport_request_start",
-                    "task_type": request.task_type,
-                    "model": self._settings.model,
-                    "provider_base_host": _base_url_host(self._settings.base_url),
-                    "contract_ids": list(request.contract_ids),
-                    "input_ref_count": len(request.input_refs),
-                    "timeout_seconds": self._settings.timeout_seconds,
-                }
-            )
+        LogUtil.llm_transport_request_start(
+            task_type=request.task_type,
+            model=self._settings.model,
+            provider_base_host=_base_url_host(self._settings.base_url),
+            contract_ids=request.contract_ids,
+            input_ref_count=len(request.input_refs),
+            timeout_seconds=self._settings.timeout_seconds,
         )
 
     def _log_request_success(
@@ -212,17 +205,12 @@ class OpenAICompatibleLlmTransport:
         provider_model: str,
     ) -> None:
         """记录 LLM 请求成功日志（含耗时和 provider 实际模型名）。"""
-        self._logger.info(
-            _json_log(
-                {
-                    "event": "llm_transport_request_success",
-                    "task_type": request.task_type,
-                    "model": self._settings.model,
-                    "provider_model": provider_model,
-                    "status_code": status_code,
-                    "duration_ms": _duration_ms(started_at),
-                }
-            )
+        LogUtil.llm_transport_request_success(
+            task_type=request.task_type,
+            model=self._settings.model,
+            provider_model=provider_model,
+            status_code=status_code,
+            duration_ms=_duration_ms(started_at),
         )
 
     def _log_request_failed(
@@ -234,16 +222,13 @@ class OpenAICompatibleLlmTransport:
         status_code: int | None = None,
     ) -> None:
         """记录 LLM 请求失败日志（含错误类型和可选 HTTP 状态码）。"""
-        record: dict[str, Any] = {
-            "event": "llm_transport_request_failed",
-            "task_type": request.task_type,
-            "model": self._settings.model,
-            "error_type": error_type,
-            "duration_ms": _duration_ms(started_at),
-        }
-        if status_code is not None:
-            record["status_code"] = status_code
-        self._logger.info(_json_log(record))
+        LogUtil.llm_transport_request_failed(
+            task_type=request.task_type,
+            model=self._settings.model,
+            error_type=error_type,
+            duration_ms=_duration_ms(started_at),
+            status_code=status_code,
+        )
 
 
 def _chat_completion_payload(
@@ -275,30 +260,6 @@ def _chat_completion_payload(
             },
         ],
     }
-
-
-def _llm_transport_logger() -> logging.Logger:
-    """获取 LLM 传输日志记录器（自动添加控制台 handler）。"""
-    logger = logging.getLogger(LLM_TRANSPORT_LOGGER_NAME)
-    if logger.level == logging.NOTSET:
-        logger.setLevel(logging.INFO)
-    _ensure_console_handler(logger)
-    return logger
-
-
-def _ensure_console_handler(logger: logging.Logger) -> None:
-    """确保日志记录器已添加控制台 handler（避免重复添加）。"""
-    if any(getattr(handler, "_aifi_llm_transport_handler", False) for handler in logger.handlers):
-        return
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    handler._aifi_llm_transport_handler = True  # type: ignore[attr-defined]
-    logger.addHandler(handler)
-
-
-def _json_log(record: dict[str, Any]) -> str:
-    """将日志字典序列化为 JSON 字符串（中文不转义，key 排序）。"""
-    return json.dumps(record, ensure_ascii=False, sort_keys=True)
 
 
 def _duration_ms(started_at: float) -> float:

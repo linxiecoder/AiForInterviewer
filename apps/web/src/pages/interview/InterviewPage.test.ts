@@ -74,9 +74,11 @@ import {
 } from "./InterviewPage";
 import {
   POLISH_API_PATHS,
+  completePolishQuestion,
   confirmPolishCandidate,
   createPolishSession,
   dismissPolishCandidate,
+  endPolishSession,
   fetchPolishCandidates,
   fetchPolishSession,
   fetchPolishSessions,
@@ -337,6 +339,18 @@ type TopicApiReturnsControlledCatalog = Expect<
 type PolishSessionCreatePathIsStable = Expect<Equal<typeof POLISH_API_PATHS.sessions, "/polish-sessions">>;
 type PolishSessionDetailPathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.sessionDetail>, `/polish-sessions/${string}`>
+>;
+type PolishQuestionCompletePathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.completeQuestion>, `/polish-sessions/${string}/questions/${string}/complete`>
+>;
+type PolishSessionEndPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.endSession>, `/polish-sessions/${string}/end`>
+>;
+type PolishQuestionCompleteReturnsSession = Expect<
+  Equal<Awaited<ReturnType<typeof completePolishQuestion>>, PolishSessionDetail>
+>;
+type PolishSessionEndReturnsSession = Expect<
+  Equal<Awaited<ReturnType<typeof endPolishSession>>, PolishSessionDetail>
 >;
 type PolishCandidateListPathIsStable = Expect<Equal<typeof POLISH_API_PATHS.candidates, "/polish-candidates">>;
 type PolishCandidateDetailPathIsStable = Expect<
@@ -925,16 +939,16 @@ function test_progress_tree_click_auto_generates_only_for_nodes_without_question
   };
 
   assertContract(!shouldAutoCreateQuestionForProgressNode(sessionWithTurn, "node_with_question"), "active question 位于该节点时不应重复自动生成题");
-  assertContract(shouldAutoCreateQuestionForProgressNode(sessionWithTurn, "node_without_question"), "无题目的真实节点点击后应自动生成题");
-  assertContract(shouldAutoCreateQuestionForProgressNode(sessionWithHistoricalTurn, "node_with_question"), "只有历史题目但无 active question 的节点仍应可生成新题");
+  assertContract(!shouldAutoCreateQuestionForProgressNode(sessionWithTurn, "node_without_question"), "无题目的真实节点点击后也只选择栏目");
+  assertContract(!shouldAutoCreateQuestionForProgressNode(sessionWithHistoricalTurn, "node_with_question"), "只有历史题目但无 active question 的节点点击后也只选择栏目");
   assertContract(!shouldAutoCreateQuestionForProgressNode(sessionWithTurn, null), "空节点 ref 不应生成题");
-  assertContract(canAutoCreateQuestionFromProgressNode({
+  assertContract(!canAutoCreateQuestionFromProgressNode({
     session: refreshFailedSession,
     progressNodeRef: "node_without_question",
     creatingQuestion: false,
     submittingAnswer: false,
     feedbackGenerating: false,
-  }), "refresh_failed 但 plan 可展示时仍应允许点击节点生成题");
+  }), "refresh_failed 但 plan 可展示时，点击节点仍不应自动生成题");
   assertContract(nodeWithQuestion?.children?.some((node) => node.key === "question:q_existing") === true, "题目记录应挂到自己的 progress_node_ref 节点下");
   assertContract(!nodeWithoutQuestion?.children?.some((node) => node.kind === "question"), "其他节点不应承载已有题目记录");
   assertContract(resolveCurrentQuestionId(sessionWithTurn, "node_with_question") === "q_existing", "当前题目应可按选中节点解析");
@@ -1018,6 +1032,8 @@ function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_met
 
   assertContract(POLISH_API_PATHS.sessions === "/polish-sessions", "列表 smoke 应命中 polish session list API");
   assertContract(POLISH_API_PATHS.sessionDetail("ses_auth_smoke") === "/polish-sessions/ses_auth_smoke", "工作台 smoke 应命中 session detail API");
+  assertContract(POLISH_API_PATHS.completeQuestion("ses_auth_smoke", "q_auth_smoke_metadata") === "/polish-sessions/ses_auth_smoke/questions/q_auth_smoke_metadata/complete", "标记完成应命中 question complete API");
+  assertContract(POLISH_API_PATHS.endSession("ses_auth_smoke") === "/polish-sessions/ses_auth_smoke/end", "结束模拟面试应命中 session end API");
   assertContract(filterPolishSessionsBySearch(list, "认证").length === 1, "认证后的列表响应应可被 /interview 列表消费");
   assertContract(groupedNodesWithMetadata[0]?.children?.[0]?.children?.[0]?.key === "question:q_auth_smoke_metadata", "带 metadata 的题目应挂入工作台进展树");
   assertContract(groupedNodesWithoutMetadata[0]?.children?.[0]?.children?.[0]?.key === "question:q_auth_smoke_legacy", "缺 metadata 的旧题目也应挂入工作台进展树");

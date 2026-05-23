@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import logging
 import os
 from typing import Any, Callable
 
 from app.application.polish.entities import PolishQuestionDraft
-
-logger = logging.getLogger(__name__)
 from app.application.polish.question_metadata import build_question_metadata
 from app.application.polish.question_prompts import (
     POLISH_QUESTION_GENERATION_CONTRACT_IDS,
@@ -28,6 +25,7 @@ from app.application.llm.errors import (
 )
 from app.application.llm.ports import LlmTransport
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.common.logging import LogUtil
 
 
 QUESTION_LLM_ENABLED_ENV = "AIFI_POLISH_QUESTION_LLM_ENABLED"
@@ -136,7 +134,10 @@ class PolishQuestionLlmService:
         provider_summary = _provider_summary(self._transport)
 
         if not should_enable_question_llm():
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_FEATURE_DISABLED, LLM_GENERATION_MODE_DETERMINISTIC_ONLY)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_FEATURE_DISABLED,
+                mode=LLM_GENERATION_MODE_DETERMINISTIC_ONLY,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_DETERMINISTIC_ONLY,
@@ -146,7 +147,10 @@ class PolishQuestionLlmService:
                 validation_errors=(),
             )
         if not deterministic_build.question_context.evidence_refs:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROMPT_INPUT_INSUFFICIENT, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_PROMPT_INPUT_INSUFFICIENT,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -156,7 +160,10 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "prompt_input_insufficient", "message": "input evidence refs are empty"},),
             )
         if self._transport is None:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_UNAVAILABLE, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_PROVIDER_UNAVAILABLE,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -166,7 +173,10 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_unavailable", "message": "llm transport is missing"},),
             )
         if _provider_kind(self._transport) != "fake" and not should_allow_real_question_provider(self._transport):
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_REAL_PROVIDER_DISABLED, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_REAL_PROVIDER_DISABLED,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -194,7 +204,10 @@ class PolishQuestionLlmService:
                 )
             )
         except TimeoutError:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_TIMEOUT, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_PROVIDER_TIMEOUT,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -204,7 +217,10 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_timeout", "message": "transport timed out"},),
             )
         except LlmTransportConfigurationError as exc:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_TRANSPORT_CONFIGURATION_ERROR, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_TRANSPORT_CONFIGURATION_ERROR,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -214,7 +230,10 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "transport_configuration_error", "message": _safe_error(exc)},),
             )
         except LlmTransportUnavailableError as exc:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_UNAVAILABLE, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_PROVIDER_UNAVAILABLE,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -224,7 +243,10 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_unavailable", "message": _safe_error(exc)},),
             )
         except LlmTransportResponseError as exc:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_SCHEMA_INVALID, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_SCHEMA_INVALID,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -234,7 +256,10 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_response_invalid", "message": _safe_error(exc)},),
             )
         except LlmTransportError as exc:
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_UNAVAILABLE, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=FALLBACK_PROVIDER_UNAVAILABLE,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -249,7 +274,10 @@ class PolishQuestionLlmService:
             deterministic_build=deterministic_build,
         )
         if isinstance(normalized, _InvalidLlmOutput):
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", normalized.fallback_reason, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=normalized.fallback_reason,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -266,7 +294,10 @@ class PolishQuestionLlmService:
             provider_summary=_provider_summary(self._transport, result=transport_result),
         )
         if isinstance(adapted, _InvalidAdaptedQuestion):
-            logger.info("polish.question.llm.fallback reason=%s mode=%s", adapted.fallback_reason, LLM_GENERATION_MODE_FALLBACK)
+            LogUtil.polish_question_llm_fallback(
+                fallback_reason=adapted.fallback_reason,
+                mode=LLM_GENERATION_MODE_FALLBACK,
+            )
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -492,6 +523,18 @@ def adapt_llm_output_to_question_draft(
         source_availability=llm_output.source_availability,
     )
     metadata = metadata_model.to_dict()
+    for metadata_key in (
+        "focus_dimension",
+        "focus_key",
+        "template_signature",
+        "blueprint_signature",
+        "duplicate_gate_result",
+        "similarity_checked",
+        "max_similarity_in_same_category",
+        "mastery_exception_used",
+    ):
+        if metadata_key in deterministic_build.draft.question_metadata:
+            metadata[metadata_key] = deterministic_build.draft.question_metadata[metadata_key]
     metadata["confidence_level"] = llm_output.confidence_level
     metadata["expected_answer_dimensions"] = list(llm_output.expected_answer_dimensions or pattern.expected_answer_dimensions)
     metadata["low_confidence_flags"] = _dedupe(

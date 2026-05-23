@@ -256,6 +256,17 @@ export interface PolishProgressTreeNodeState {
   latest_feedback_summary?: string | null;
 }
 
+export interface PolishCompletedFocusRef {
+  question_id?: string | null;
+  progress_node_ref?: string | null;
+  focus_key?: string | null;
+  focus_dimension?: string | null;
+  template_signature?: string | null;
+  blueprint_signature?: string | null;
+  completed_at?: string | null;
+  source?: string | null;
+}
+
 export interface PolishCurrentPriority {
   progress_node_ref: string;
   title: string;
@@ -270,6 +281,8 @@ export interface PolishProgressTreeState {
   progress: {
     progress_percent: number;
   };
+  completed_focus_refs?: PolishCompletedFocusRef[];
+  session_ended_at?: string | null;
   summary?: string | null;
   failure_reason?: string | null;
 }
@@ -301,6 +314,16 @@ export interface CreatePolishSessionRequest {
 
 export interface CreatePolishQuestionTaskRequest {
   progress_node_ref?: string | null;
+  generation_mode?: "new_question" | "follow_up" | string | null;
+  selected_primary_category_ref?: string | null;
+  selected_secondary_category_ref?: string | null;
+  selected_progress_node_ref?: string | null;
+  selected_category_path?: string[];
+  parent_question_id?: string | null;
+  parent_answer_id?: string | null;
+  parent_feedback_id?: string | null;
+  exclude_question_refs?: string[];
+  completed_focus_refs?: string[];
 }
 
 export interface CreatePolishAnswerRequest {

@@ -243,6 +243,8 @@ def _build_turn_context(turns: tuple[PolishSessionTurn, ...]) -> list[dict[str, 
                 "turn_index": index,
                 "question_id": turn.question_id,
                 "question_text": truncate_text(turn.question_text),
+                "progress_node_ref": truncate_text(turn.progress_node_ref),
+                "question_metadata": turn.question_metadata,
                 "created_at": _isoformat(turn.question_created_at),
                 "answer_text": truncate_text(latest_answer.answer_text if latest_answer is not None else None),
                 "feedback_text": truncate_text(
@@ -255,7 +257,9 @@ def _build_turn_context(turns: tuple[PolishSessionTurn, ...]) -> list[dict[str, 
                 ),
                 "answers": [
                     {
+                        "answer_id": answer.answer_id,
                         "answer_text": truncate_text(answer.answer_text),
+                        "feedback_id": answer.feedback_id,
                         "feedback_text": truncate_text(answer.feedback_text),
                         "score": None,
                         "answer_round": answer.answer_round,

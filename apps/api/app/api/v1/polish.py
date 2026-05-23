@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import logging
 import re
 from dataclasses import replace
 from time import perf_counter
@@ -17,10 +15,12 @@ from app.api.deps import get_db_session_factory, get_llm_transport, require_auth
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.application.polish.commands import (
+    CompletePolishQuestionCommand,
     CreatePolishAnswerCommand,
     CreatePolishFeedbackTaskCommand,
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
+    EndPolishSessionCommand,
     RefreshPolishProgressTreeStateCommand,
 )
 from app.application.polish.entities import (
@@ -47,7 +47,7 @@ from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.repositories.polish_candidates import SqlAlchemyPolishCandidateRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.application.llm.ports import LlmTransport
-from app.infrastructure.observability.http_logging import get_request_trace_context
+from app.infrastructure.observability.logging import LogUtil
 from app.schemas.polish import (
     CreateAnswerRequest,
     CreateFeedbackTaskRequest,
@@ -65,7 +65,6 @@ from app.schemas.refs import ResourceRef, TraceRefSchema
 
 
 router = APIRouter(tags=["polish"])
-POLISH_EVENT_LOGGER = logging.getLogger("app.http.access")
 
 LEGACY_TOPIC_TITLE_BY_ID = {
     "topic_project_depth": "经历真实性与贡献澄清",
@@ -150,8 +149,7 @@ async def create_polish_session(
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
     started_at = perf_counter()
-    _log_polish_session_create_event(
-        "polish_session_create_started",
+    LogUtil.polish_session_create_started(
         resume_job_binding_id=payload.resume_job_binding_id,
         topic_id=payload.topic_id,
         subtopic_id=payload.subtopic_id,
@@ -171,8 +169,7 @@ async def create_polish_session(
         ),
     )
     if not create_result.is_success:
-        _log_polish_session_create_event(
-            "polish_session_create_failed",
+        LogUtil.polish_session_create_failed(
             duration_ms=_elapsed_ms(started_at),
             error_code=create_result.error.code,
             error_message=create_result.error.message,
@@ -183,16 +180,14 @@ async def create_polish_session(
         GetPolishSessionQuery(owner_id=actor.owner_id, session_id=create_result.value.session_id)
     )
     if not get_result.is_success:
-        _log_polish_session_create_event(
-            "polish_session_create_failed",
+        LogUtil.polish_session_create_failed(
             duration_ms=_elapsed_ms(started_at),
             session_id=create_result.value.session_id,
             error_code=get_result.error.code,
             error_message=get_result.error.message,
         )
         _raise_result_error(get_result.error)
-    _log_polish_session_create_event(
-        "polish_session_create_completed",
+    LogUtil.polish_session_create_completed(
         duration_ms=_elapsed_ms(started_at),
         session_id=create_result.value.session_id,
         progress_tree_status=create_result.value.progress_tree_status,
@@ -237,6 +232,16 @@ async def create_polish_question_task(
             actor_id=actor.actor_id,
             session_id=session_id,
             progress_node_ref=payload.progress_node_ref,
+            generation_mode=payload.generation_mode,
+            selected_primary_category_ref=payload.selected_primary_category_ref,
+            selected_secondary_category_ref=payload.selected_secondary_category_ref,
+            selected_progress_node_ref=payload.selected_progress_node_ref,
+            selected_category_path=tuple(payload.selected_category_path),
+            parent_question_id=payload.parent_question_id,
+            parent_answer_id=payload.parent_answer_id,
+            parent_feedback_id=payload.parent_feedback_id,
+            exclude_question_refs=tuple(payload.exclude_question_refs),
+            completed_focus_refs=tuple(payload.completed_focus_refs),
         ),
     )
     if not result.is_success:
@@ -248,6 +253,56 @@ async def create_polish_question_task(
             result.value,
             contract_shape=_question_task_contract_shape(result.value),
         ),
+    )
+
+
+@router.post("/polish-sessions/{session_id}/questions/{question_id}/complete")
+async def complete_polish_question(
+    session_id: str,
+    question_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+) -> Any:
+    use_cases = _use_cases(session_factory, llm_transport)
+    result = await run_in_threadpool(
+        use_cases.complete_question,
+        CompletePolishQuestionCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+            question_id=question_id,
+        ),
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        resource_type="polish_session",
+        data=_session_response(result.value),
+    )
+
+
+@router.post("/polish-sessions/{session_id}/end")
+async def end_polish_session(
+    session_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+) -> Any:
+    use_cases = _use_cases(session_factory, llm_transport)
+    result = await run_in_threadpool(
+        use_cases.end_session,
+        EndPolishSessionCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+        ),
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        resource_type="polish_session",
+        data=_session_response(result.value),
     )
 
 
@@ -455,15 +510,6 @@ def _to_iso_string(value: Any) -> str | None:
 
 def _elapsed_ms(started_at: float) -> float:
     return round((perf_counter() - started_at) * 1000, 3)
-
-
-def _log_polish_session_create_event(event: str, **fields: Any) -> None:
-    context = get_request_trace_context()
-    record = {"event": event, **fields}
-    if context is not None:
-        record["request_id"] = context.request_id
-        record["trace_id"] = context.trace_id
-    POLISH_EVENT_LOGGER.info(json.dumps(record, ensure_ascii=False, sort_keys=True))
 
 
 def _topic_response(topic: PolishTopic) -> PolishTopicResponse:

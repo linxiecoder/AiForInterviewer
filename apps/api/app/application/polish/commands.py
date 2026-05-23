@@ -22,6 +22,31 @@ class CreatePolishQuestionTaskCommand:
     actor_id: str
     session_id: str
     progress_node_ref: str | None = None
+    generation_mode: str | None = None
+    selected_primary_category_ref: str | None = None
+    selected_secondary_category_ref: str | None = None
+    selected_progress_node_ref: str | None = None
+    selected_category_path: tuple[str, ...] = ()
+    parent_question_id: str | None = None
+    parent_answer_id: str | None = None
+    parent_feedback_id: str | None = None
+    exclude_question_refs: tuple[str, ...] = ()
+    completed_focus_refs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CompletePolishQuestionCommand:
+    owner_id: str
+    actor_id: str
+    session_id: str
+    question_id: str
+
+
+@dataclass(frozen=True)
+class EndPolishSessionCommand:
+    owner_id: str
+    actor_id: str
+    session_id: str
 
 
 @dataclass(frozen=True)

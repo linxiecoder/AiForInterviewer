@@ -17,12 +17,14 @@ import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import {
+  completePolishQuestion,
   confirmPolishCandidate,
   createPolishAnswer,
   createPolishFeedbackTask,
   createPolishSession,
   createPolishQuestionTask,
   dismissPolishCandidate,
+  endPolishSession,
   fetchPolishCandidates,
   fetchPolishSession,
   fetchPolishSessions,
@@ -848,11 +850,9 @@ export function shouldAutoCreateQuestionForProgressNode(
   session: PolishSessionDetail,
   progressNodeRef: string | null,
 ): boolean {
-  if (!progressNodeRef) {
-    return false;
-  }
-  const activeNodeRef = resolveSessionCurrentProgressNodeRef(session);
-  return activeNodeRef !== progressNodeRef || resolveCurrentQuestionId(session, progressNodeRef) === null;
+  void session;
+  void progressNodeRef;
+  return false;
 }
 
 export function canAutoCreateQuestionFromProgressNode(params: {
@@ -871,6 +871,55 @@ export function canAutoCreateQuestionFromProgressNode(params: {
       !params.submittingAnswer &&
       !params.feedbackGenerating,
   );
+}
+
+function isPolishSessionEnded(session: PolishSessionDetail | null): boolean {
+  return session?.session_status === "ended";
+}
+
+function resolveQuestionGenerationProgressNodeRef(
+  session: PolishSessionDetail,
+  explicitProgressNodeRef: string | null | undefined,
+  selectedProgressNodeRef: string | null,
+): string | null {
+  return (
+    explicitProgressNodeRef ??
+    selectedProgressNodeRef ??
+    session.progress_tree_state.current_priority?.progress_node_ref ??
+    null
+  );
+}
+
+function buildSelectedCategoryPath(
+  nodes: readonly PolishProgressTreeNode[],
+  progressNodeRef: string | null,
+): string[] {
+  if (progressNodeRef === null) {
+    return [];
+  }
+  for (const node of nodes) {
+    const currentPath = [resolveProgressNodeCategoryTitle(node), resolveProgressNodeTitle(node)]
+      .filter((item, index, list) => item && list.indexOf(item) === index);
+    if (node.progress_node_ref === progressNodeRef) {
+      return currentPath;
+    }
+    const childPath = buildSelectedCategoryPath(node.children ?? [], progressNodeRef);
+    if (childPath.length > 0) {
+      return [resolveProgressNodeCategoryTitle(node), ...childPath]
+        .filter((item, index, list) => item && list.indexOf(item) === index);
+    }
+  }
+  return [];
+}
+
+function completedFocusRefsForProgressNode(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null,
+): string[] {
+  return (session.progress_tree_state.completed_focus_refs ?? [])
+    .filter((item) => item.focus_key && (!progressNodeRef || !item.progress_node_ref || item.progress_node_ref === progressNodeRef))
+    .map((item) => item.focus_key!)
+    .filter((item, index, list) => list.indexOf(item) === index);
 }
 
 function getLatestAnswer(session: PolishSessionDetail): PolishSessionAnswer | null {
@@ -2197,6 +2246,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [answerText, setAnswerText] = useState<string>("");
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [creatingQuestion, setCreatingQuestion] = useState<boolean>(false);
+  const [completingQuestion, setCompletingQuestion] = useState<boolean>(false);
+  const [endingSession, setEndingSession] = useState<boolean>(false);
   const [submittingAnswer, setSubmittingAnswer] = useState<boolean>(false);
   const [feedbackGenerating, setFeedbackGenerating] = useState<boolean>(false);
   const [workbenchFailureState, setWorkbenchFailureState] = useState<WorkbenchMachineState | null>(null);
@@ -2250,6 +2301,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setCandidates([]);
     setCandidateLoadError(null);
     setCandidateActionKey(null);
+    setCompletingQuestion(false);
+    setEndingSession(false);
     void loadSession();
   }, [sessionId]);
 
@@ -2257,12 +2310,29 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     if (session === null) {
       return;
     }
+    if (isPolishSessionEnded(session)) {
+      setAnswerError("模拟面试已结束，不能继续生成题目。");
+      return;
+    }
+    const targetProgressNodeRef = resolveQuestionGenerationProgressNodeRef(
+      session,
+      progressNodeRef,
+      selectedProgressNodeDetailRef,
+    );
+    if (targetProgressNodeRef === null) {
+      setAnswerError("请先选择一个进展栏目后再生成题目。");
+      return;
+    }
     setCreatingQuestion(true);
     setAnswerError(null);
     setWorkbenchFailureState(null);
     try {
       await createPolishQuestionTask(sessionId, {
-        progress_node_ref: progressNodeRef ?? session.progress_tree_state.current_priority?.progress_node_ref ?? null,
+        generation_mode: "new_question",
+        progress_node_ref: targetProgressNodeRef,
+        selected_progress_node_ref: targetProgressNodeRef,
+        selected_category_path: buildSelectedCategoryPath(session.progress_tree_plan.nodes, targetProgressNodeRef),
+        completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
       });
       await loadSession();
     } catch (createError) {
@@ -2284,6 +2354,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
     if (session === null) {
       setAnswerError("会话尚未加载完成，请稍后重试。");
+      return;
+    }
+    if (isPolishSessionEnded(session)) {
+      setAnswerError("模拟面试已结束，不能继续提交回答。");
       return;
     }
     const questionId = resolveCurrentQuestionId(session, selectedProgressNodeDetailRef);
@@ -2389,12 +2463,31 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const currentQuestionId = session === null ? null : resolveCurrentQuestionId(session, selectedProgressNodeDetailRef);
   const selectedProgressNodeBanner =
     session === null ? null : buildProgressTreeContextBannerContent(session, selectedProgressNodeDetailRef);
+  const isSessionEnded = isPolishSessionEnded(session);
   const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
   const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
   const isProgressTreeReady = session?.progress_tree_status === "ready";
   const isProgressTreeRefreshFailed = session?.progress_tree_status === "refresh_failed";
   const hasProgressTreeNodes = progressNodes.length > 0;
   const canShowProgressTree = hasProgressTreeNodes && (isProgressTreeReady || isProgressTreeRefreshFailed);
+  const canRequestNewQuestion =
+    session !== null &&
+    !isSessionEnded &&
+    canShowProgressTree &&
+    !creatingQuestion &&
+    !submittingAnswer &&
+    !feedbackGenerating &&
+    !completingQuestion &&
+    !endingSession;
+  const canMarkCurrentQuestionCompleted =
+    session !== null &&
+    currentQuestionId !== null &&
+    !isSessionEnded &&
+    !creatingQuestion &&
+    !submittingAnswer &&
+    !feedbackGenerating &&
+    !completingQuestion &&
+    !endingSession;
   const workbenchMachineState = deriveWorkbenchMachineState({
     session,
     creatingQuestion,
@@ -2427,6 +2520,57 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
   };
 
+  const completeCurrentQuestion = async () => {
+    if (session === null || currentQuestionId === null) {
+      setAnswerError("请先选择当前问题。");
+      return;
+    }
+    if (isSessionEnded) {
+      setAnswerError("模拟面试已结束，不能继续标记问题。");
+      return;
+    }
+    setCompletingQuestion(true);
+    setAnswerError(null);
+    try {
+      const updatedSession = await completePolishQuestion(sessionId, currentQuestionId);
+      setSession(updatedSession);
+      await loadCandidateRecords();
+      message.success("当前问题已标记为完成。");
+    } catch (completeError) {
+      setAnswerError(
+        completeError instanceof Error
+          ? completeError.message
+          : "标记问题完成失败，请稍后重试。",
+      );
+    } finally {
+      setCompletingQuestion(false);
+    }
+  };
+
+  const endCurrentSession = async () => {
+    if (session === null || isSessionEnded) {
+      return;
+    }
+    if (!window.confirm("确认结束模拟面试？结束后不能继续生成题目或提交回答。")) {
+      return;
+    }
+    setEndingSession(true);
+    setAnswerError(null);
+    try {
+      const updatedSession = await endPolishSession(sessionId);
+      setSession(updatedSession);
+      message.success("模拟面试已结束。");
+    } catch (endError) {
+      setAnswerError(
+        endError instanceof Error
+          ? endError.message
+          : "结束模拟面试失败，请稍后重试。",
+      );
+    } finally {
+      setEndingSession(false);
+    }
+  };
+
   useEffect(() => {
     setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
   }, [session]);
@@ -2448,6 +2592,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   };
 
   const handleNextRecommendedAction = (action: PolishRecommendedAction, progressNodeRef?: string | null) => {
+    if (isSessionEnded) {
+      message.info("模拟面试已结束。");
+      return;
+    }
     if (action === "generate_next_question") {
       void createQuestion(progressNodeRef ?? resolveSessionCurrentProgressNodeRef(session!));
       return;
@@ -2589,14 +2737,30 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           }}
           placeholder="请输入当前题目的回答"
           maxLength={2000}
-          disabled={submittingAnswer || feedbackGenerating || creatingQuestion || currentQuestionId === null}
+          disabled={
+            submittingAnswer ||
+            feedbackGenerating ||
+            creatingQuestion ||
+            completingQuestion ||
+            endingSession ||
+            isSessionEnded ||
+            currentQuestionId === null
+          }
         />
         <div className={styles.currentQuestionComposerActions}>
           <Button
             type="primary"
             icon={<SendOutlined />}
             loading={submittingAnswer || feedbackGenerating}
-            disabled={submittingAnswer || feedbackGenerating || creatingQuestion || currentQuestionId === null}
+            disabled={
+              submittingAnswer ||
+              feedbackGenerating ||
+              creatingQuestion ||
+              completingQuestion ||
+              endingSession ||
+              isSessionEnded ||
+              currentQuestionId === null
+            }
             onClick={() => {
               sendAnswer();
             }}
@@ -2638,14 +2802,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       );
     }
 
-    const questionTargetRef = getWorkbenchProgressNodeQuestionTargetRef(node);
-    const canCreateQuestionFromNode = session !== null && canAutoCreateQuestionFromProgressNode({
-      session,
-      progressNodeRef: questionTargetRef,
-      creatingQuestion,
-      submittingAnswer,
-      feedbackGenerating,
-    });
     const canSelectNode = node.kind === "node";
     const isActive = canSelectNode && node.key === selectedProgressNodeDetailRef;
     const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
@@ -2676,10 +2832,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               ? () => {
                   const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
                   setSelectedProgressNodeRef(nextSelectedRef);
-                  if (canCreateQuestionFromNode) {
-                    void createQuestion(questionTargetRef);
-                    return;
-                  }
                   if (isExpandable) {
                     toggleProgressNode(node.key);
                   }
@@ -2875,22 +3027,45 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     {workbenchMachineCopy.label}
                   </Tag>
                 </div>
-                {hasQuestion ? null : (
+                <Space wrap size={8}>
                   <Button
                     type="primary"
+                    icon={<PlusOutlined />}
                     onClick={() => {
                       void createQuestion();
                     }}
                     loading={creatingQuestion}
-                    disabled={isProgressTreeInsufficient || !isProgressTreeReady || !hasProgressTreeNodes}
+                    disabled={!canRequestNewQuestion}
                   >
-                    生成题目
+                    新生成题目
                   </Button>
-                )}
+                  <Button
+                    icon={<CheckCircleOutlined />}
+                    loading={completingQuestion}
+                    disabled={!canMarkCurrentQuestionCompleted}
+                    onClick={() => {
+                      void completeCurrentQuestion();
+                    }}
+                  >
+                    将该问题标记为已完成
+                  </Button>
+                  <Button
+                    danger
+                    icon={<CloseCircleOutlined />}
+                    loading={endingSession}
+                    disabled={isSessionEnded || endingSession}
+                    onClick={() => {
+                      void endCurrentSession();
+                    }}
+                  >
+                    结束模拟面试
+                  </Button>
+                </Space>
               </div>
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
                 {renderProgressTreeContextBanner()}
+                {isSessionEnded ? <Alert type="info" showIcon message="模拟面试已结束" /> : null}
                 {answerError !== null && currentQuestionId === null ? <Alert type="error" showIcon message={answerError} /> : null}
                 {candidateLoadError !== null ? (
                   <Alert

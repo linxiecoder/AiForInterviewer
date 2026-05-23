@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
-from contextvars import ContextVar
-from dataclasses import dataclass
-from datetime import datetime
 import json
-import logging
 from time import perf_counter
 from typing import Any
 from urllib.parse import parse_qs
-from zoneinfo import ZoneInfo
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.domain.shared.ids import generate_request_id, generate_trace_id
+from app.infrastructure.observability.logging import (
+    LogUtil,
+    RequestTraceContext,
+    get_request_trace_context,
+    reset_request_trace_context,
+    set_request_trace_context,
+)
 
 
 ACCESS_LOGGER_NAME = "app.http.access"
-BEIJING_TIMEZONE = ZoneInfo("Asia/Shanghai")
 DEFAULT_BODY_LIMIT_BYTES = 4096
 REDACTED_VALUE = "***"
 SENSITIVE_FIELD_MARKERS = (
@@ -31,23 +32,6 @@ SENSITIVE_FIELD_MARKERS = (
     "api_key",
 )
 
-
-@dataclass(frozen=True)
-class RequestTraceContext:
-    request_id: str
-    trace_id: str
-
-
-_REQUEST_TRACE_CONTEXT: ContextVar[RequestTraceContext | None] = ContextVar(
-    "request_trace_context",
-    default=None,
-)
-
-
-def get_request_trace_context() -> RequestTraceContext | None:
-    return _REQUEST_TRACE_CONTEXT.get()
-
-
 class HttpAccessLogMiddleware:
     """Log one structured access record for each HTTP request."""
 
@@ -59,10 +43,7 @@ class HttpAccessLogMiddleware:
         max_body_bytes: int = DEFAULT_BODY_LIMIT_BYTES,
     ) -> None:
         self.app = app
-        self.logger = logging.getLogger(logger_name)
-        if self.logger.level == logging.NOTSET:
-            self.logger.setLevel(logging.INFO)
-        _ensure_console_handler(self.logger)
+        self.logger_name = logger_name
         self.max_body_bytes = max_body_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -74,9 +55,7 @@ class HttpAccessLogMiddleware:
         response_headers: list[tuple[bytes, bytes]] = []
         request_id = _header_value(request_headers, "x-request-id") or generate_request_id()
         trace_id = _header_value(request_headers, "x-trace-id") or generate_trace_id()
-        context_token = _REQUEST_TRACE_CONTEXT.set(
-            RequestTraceContext(request_id=request_id, trace_id=trace_id)
-        )
+        context_token = set_request_trace_context(request_id=request_id, trace_id=trace_id)
 
         request_body = _BodyCapture(self.max_body_bytes)
         response_body = _BodyCapture(self.max_body_bytes)
@@ -111,25 +90,26 @@ class HttpAccessLogMiddleware:
             raise
         finally:
             duration_ms = round((perf_counter() - start) * 1000, 3)
-            self.logger.info(
-                json.dumps(
-                    _build_access_record(
-                        scope,
-                        request_headers=request_headers,
-                        response_headers=response_headers,
-                        request_id=request_id,
-                        trace_id=trace_id,
-                        request_body=request_body,
-                        response_body=response_body,
-                        status_code=status_code,
-                        duration_ms=duration_ms,
-                        exception_name=exception_name,
-                    ),
-                    ensure_ascii=False,
-                    sort_keys=True,
-                )
+            LogUtil.http_access(
+                request_id=request_id,
+                trace_id=trace_id,
+                method=scope.get("method"),
+                path=scope.get("path"),
+                query=_query_params(scope),
+                request_body=_summarize_body(
+                    request_body,
+                    content_type=_header_value(request_headers, "content-type"),
+                ),
+                response_body=_summarize_body(
+                    response_body,
+                    content_type=_header_value(_decode_headers(response_headers), "content-type"),
+                ),
+                status_code=status_code,
+                duration_ms=duration_ms,
+                client=_client(scope),
+                exception_name=exception_name,
             )
-            _REQUEST_TRACE_CONTEXT.reset(context_token)
+            reset_request_trace_context(context_token)
 
 
 class _BodyCapture:
@@ -154,44 +134,6 @@ class _BodyCapture:
 
     def raw(self) -> bytes:
         return b"".join(self.chunks)
-
-
-def _build_access_record(
-    scope: Scope,
-    *,
-    request_headers: list[tuple[str, str]],
-    response_headers: list[tuple[bytes, bytes]],
-    request_id: str,
-    trace_id: str,
-    request_body: _BodyCapture,
-    response_body: _BodyCapture,
-    status_code: int,
-    duration_ms: float,
-    exception_name: str | None,
-) -> dict[str, Any]:
-    record: dict[str, Any] = {
-        "event": "http_access",
-        "occurred_at": datetime.now(BEIJING_TIMEZONE).isoformat(timespec="milliseconds"),
-        "request_id": request_id,
-        "trace_id": trace_id,
-        "method": scope.get("method"),
-        "path": scope.get("path"),
-        "query": _query_params(scope),
-        "request_body": _summarize_body(
-            request_body,
-            content_type=_header_value(request_headers, "content-type"),
-        ),
-        "status_code": status_code,
-        "response_body": _summarize_body(
-            response_body,
-            content_type=_header_value(_decode_headers(response_headers), "content-type"),
-        ),
-        "duration_ms": duration_ms,
-        "client": _client(scope),
-    }
-    if exception_name is not None:
-        record["exception"] = exception_name
-    return record
 
 
 def _summarize_body(body: _BodyCapture, *, content_type: str | None) -> Any:
@@ -286,12 +228,3 @@ def _is_json_content_type(content_type: str | None) -> bool:
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.lower().replace("-", "_")
     return any(marker in normalized for marker in SENSITIVE_FIELD_MARKERS)
-
-
-def _ensure_console_handler(logger: logging.Logger) -> None:
-    if any(getattr(handler, "_aifi_access_handler", False) for handler in logger.handlers):
-        return
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    handler._aifi_access_handler = True  # type: ignore[attr-defined]
-    logger.addHandler(handler)

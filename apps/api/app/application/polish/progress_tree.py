@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from hashlib import sha256
 import os
 from typing import Any
@@ -11,7 +12,12 @@ from app.application.polish.entities import PolishQuestionDraft, PolishQuestionS
 from app.application.polish.evidence_signals import EvidenceSignalSet, extract_evidence_signals
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
 from app.application.polish.question_metadata import QuestionMetadata, build_question_metadata
-from app.application.polish.question_patterns import QuestionPattern, get_question_pattern, select_question_pattern
+from app.application.polish.question_patterns import (
+    QUESTION_PATTERN_LIST,
+    QuestionPattern,
+    get_question_pattern,
+    select_question_pattern,
+)
 from app.application.polish.question_quality import (
     QuestionQualityResult,
     fallback_question_text,
@@ -102,6 +108,18 @@ class DeterministicProgressNodeQuestionBuild:
     quality_result: QuestionQualityResult
     question_metadata: QuestionMetadata
     evidence_signals: EvidenceSignalSet
+
+
+@dataclass(frozen=True)
+class QuestionDeduplicationPlan:
+    pattern: QuestionPattern
+    focus: str
+    focus_dimension: str
+    focus_key: str
+    template_signature: str
+    blueprint_signature: str
+    duplicate_gate_result: str
+    mastery_exception_used: bool
 
 
 class PolishProgressTreeLlmService:
@@ -504,6 +522,9 @@ def _build_deterministic_v2_question(
         progress_node_title=focus,
         evidence_signals=evidence_signals,
     )
+    dedupe_plan = _question_deduplication_plan(context=context, node=node, focus=focus, pattern=pattern)
+    pattern = dedupe_plan.pattern
+    focus = dedupe_plan.focus
     question_text = _deterministic_v2_question_text(
         focus=focus,
         pattern=pattern,
@@ -532,6 +553,7 @@ def _build_deterministic_v2_question(
             evidence_signals=evidence_signals,
             anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
             source_availability=source_availability,
+            **_dedupe_metadata_kwargs(dedupe_plan, question_text=question_text, context=context, node=node),
         )
         return question_text, pattern, scenario, quality, metadata, evidence_signals
 
@@ -562,6 +584,7 @@ def _build_deterministic_v2_question(
             anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
             additional_low_confidence_flags=("validator_repaired",),
             source_availability=source_availability,
+            **_dedupe_metadata_kwargs(dedupe_plan, question_text=repaired_text, context=context, node=node),
         )
         return repaired_text, pattern, scenario, repaired_quality, metadata, evidence_signals
 
@@ -571,7 +594,15 @@ def _build_deterministic_v2_question(
         fallback_pattern = get_question_pattern("mixed_technical_expression")
     else:
         fallback_pattern = get_question_pattern("owner_tradeoff_system_design")
-    fallback_text = fallback_question_text(focus=focus, selected_pattern=fallback_pattern, citations=citations)
+    fallback_dedupe_plan = _question_deduplication_plan(
+        context=context,
+        node=node,
+        focus=_question_focus(node),
+        pattern=fallback_pattern,
+    )
+    fallback_pattern = fallback_dedupe_plan.pattern
+    fallback_focus = fallback_dedupe_plan.focus
+    fallback_text = fallback_question_text(focus=fallback_focus, selected_pattern=fallback_pattern, citations=citations)
     fallback_quality = validate_question_quality(
         question_text=fallback_text,
         selected_pattern=fallback_pattern,
@@ -592,8 +623,213 @@ def _build_deterministic_v2_question(
         anti_repeat_refs=_recent_question_refs(context.get("turns", [])),
         additional_low_confidence_flags=("pattern_fallback",),
         source_availability=source_availability,
+        **_dedupe_metadata_kwargs(fallback_dedupe_plan, question_text=fallback_text, context=context, node=node),
     )
     return fallback_text, fallback_pattern, scenario, fallback_quality, metadata, evidence_signals
+
+
+def _question_deduplication_plan(
+    *,
+    context: dict[str, Any],
+    node: dict[str, Any],
+    focus: str,
+    pattern: QuestionPattern,
+) -> QuestionDeduplicationPlan:
+    same_category_turns = _same_category_turns(context, node.get("progress_node_ref"))
+    used_template_signatures = set(_turn_metadata_values(same_category_turns, "template_signature"))
+    used_focus_keys = set(_turn_metadata_values(same_category_turns, "focus_key"))
+    used_focus_keys.update(_completed_focus_keys_for_node(context, node.get("progress_node_ref")))
+    used_blueprint_signatures = set(_turn_metadata_values(same_category_turns, "blueprint_signature"))
+    selected_pattern, focus_dimension, focus_key, template_signature, blueprint_signature, duplicate_gate_result = (
+        _select_distinct_question_blueprint(
+            pattern=pattern,
+            progress_node_ref=node.get("progress_node_ref"),
+            used_focus_keys=used_focus_keys,
+            used_template_signatures=used_template_signatures,
+            used_blueprint_signatures=used_blueprint_signatures,
+        )
+    )
+
+    selected_focus = f"{focus}：{focus_dimension}" if focus_dimension else focus
+    return QuestionDeduplicationPlan(
+        pattern=selected_pattern,
+        focus=selected_focus,
+        focus_dimension=focus_dimension,
+        focus_key=focus_key,
+        template_signature=template_signature,
+        blueprint_signature=blueprint_signature,
+        duplicate_gate_result=duplicate_gate_result,
+        mastery_exception_used=False,
+    )
+
+
+def _select_distinct_question_blueprint(
+    *,
+    pattern: QuestionPattern,
+    progress_node_ref: object,
+    used_focus_keys: set[str],
+    used_template_signatures: set[str],
+    used_blueprint_signatures: set[str],
+) -> tuple[QuestionPattern, str, str, str, str, str]:
+    for candidate in _question_deduplication_pattern_candidates(pattern):
+        for focus_dimension in candidate.expected_answer_dimensions:
+            focus_key = _focus_key(focus_dimension)
+            template_signature = _template_signature(candidate, focus_key)
+            blueprint_signature = _blueprint_signature(progress_node_ref, candidate, focus_key)
+            if focus_key in used_focus_keys:
+                continue
+            if template_signature in used_template_signatures:
+                continue
+            if blueprint_signature in used_blueprint_signatures:
+                continue
+            duplicate_gate_result = "passed" if candidate.pattern_id == pattern.pattern_id else "rotated"
+            return (
+                candidate,
+                focus_dimension,
+                focus_key,
+                template_signature,
+                blueprint_signature,
+                duplicate_gate_result,
+            )
+
+    fallback_dimension = _fallback_distinct_focus_dimension(pattern, used_focus_keys)
+    fallback_focus_key = _focus_key(fallback_dimension)
+    fallback_template_signature = _template_signature(pattern, fallback_focus_key)
+    fallback_blueprint_signature = _blueprint_signature(progress_node_ref, pattern, fallback_focus_key)
+    return (
+        pattern,
+        fallback_dimension,
+        fallback_focus_key,
+        fallback_template_signature,
+        fallback_blueprint_signature,
+        "rotated_exhausted",
+    )
+
+
+def _question_deduplication_pattern_candidates(pattern: QuestionPattern) -> tuple[QuestionPattern, ...]:
+    candidates: list[QuestionPattern] = [pattern]
+    if pattern.pattern_id == "performance_cost_observability":
+        candidates.append(get_question_pattern("owner_tradeoff_system_design"))
+    for candidate in QUESTION_PATTERN_LIST:
+        if candidate.pattern_id not in {item.pattern_id for item in candidates}:
+            candidates.append(candidate)
+    return tuple(candidates)
+
+
+def _fallback_distinct_focus_dimension(pattern: QuestionPattern, used_focus_keys: set[str]) -> str:
+    base_dimensions = pattern.expected_answer_dimensions or ("综合追问",)
+    ordinal = len(used_focus_keys) + 1
+    for offset in range(len(base_dimensions) + 3):
+        base_dimension = base_dimensions[offset % len(base_dimensions)]
+        focus_dimension = f"{base_dimension}（第 {ordinal + offset} 轮差异化追问）"
+        if _focus_key(focus_dimension) not in used_focus_keys:
+            return focus_dimension
+    return f"综合追问（第 {ordinal} 轮差异化追问）"
+
+
+def _dedupe_metadata_kwargs(
+    plan: QuestionDeduplicationPlan,
+    *,
+    question_text: str,
+    context: dict[str, Any],
+    node: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "focus_dimension": plan.focus_dimension,
+        "focus_key": plan.focus_key,
+        "template_signature": plan.template_signature,
+        "blueprint_signature": plan.blueprint_signature,
+        "duplicate_gate_result": plan.duplicate_gate_result,
+        "similarity_checked": True,
+        "max_similarity_in_same_category": _max_same_category_similarity(question_text, context, node),
+        "mastery_exception_used": plan.mastery_exception_used,
+    }
+
+
+def _same_category_turns(context: dict[str, Any], progress_node_ref: object) -> tuple[dict[str, Any], ...]:
+    node_ref = truncate_text(progress_node_ref, max_chars=120)
+    turns = context.get("turns")
+    if not node_ref or not isinstance(turns, list):
+        return ()
+    return tuple(
+        turn
+        for turn in turns
+        if isinstance(turn, dict) and truncate_text(turn.get("progress_node_ref"), max_chars=120) == node_ref
+    )
+
+
+def _turn_metadata_values(turns: tuple[dict[str, Any], ...], key: str) -> tuple[str, ...]:
+    values: list[str] = []
+    for turn in turns:
+        metadata = turn.get("question_metadata")
+        if not isinstance(metadata, dict):
+            continue
+        value = truncate_text(metadata.get(key), max_chars=240)
+        if value and value not in values:
+            values.append(value)
+    return tuple(values)
+
+
+def _completed_focus_keys_for_node(context: dict[str, Any], progress_node_ref: object) -> tuple[str, ...]:
+    node_ref = truncate_text(progress_node_ref, max_chars=120)
+    raw_refs = context.get("completed_focus_refs")
+    if not isinstance(raw_refs, list):
+        return ()
+    focus_keys: list[str] = []
+    for item in raw_refs:
+        focus_key: str | None = None
+        item_node_ref: str | None = None
+        if isinstance(item, str):
+            focus_key = truncate_text(item, max_chars=240)
+        elif isinstance(item, dict):
+            focus_key = truncate_text(item.get("focus_key"), max_chars=240)
+            item_node_ref = truncate_text(item.get("progress_node_ref"), max_chars=120)
+        if focus_key and (not node_ref or item_node_ref in {None, node_ref}) and focus_key not in focus_keys:
+            focus_keys.append(focus_key)
+    return tuple(focus_keys)
+
+
+def _first_unused_focus_dimension(dimensions: tuple[str, ...], used_focus_keys: set[str]) -> str:
+    for dimension in dimensions:
+        focus_key = _focus_key(dimension)
+        if focus_key and focus_key not in used_focus_keys:
+            return dimension
+    return dimensions[0] if dimensions else "综合追问"
+
+
+def _focus_key(focus_dimension: str) -> str:
+    normalized = " ".join(str(focus_dimension or "").strip().lower().split())
+    if not normalized:
+        return "focus_empty"
+    return f"focus_{sha256(normalized.encode('utf-8')).hexdigest()[:12]}"
+
+
+def _template_signature(pattern: QuestionPattern, focus_key: str) -> str:
+    if pattern.pattern_id == "performance_cost_observability":
+        return "tpl:performance_cost_observability:fixed_large_log_pipeline"
+    return f"tpl:{pattern.pattern_id}:{focus_key}"
+
+
+def _blueprint_signature(progress_node_ref: object, pattern: QuestionPattern, focus_key: str) -> str:
+    node_ref = truncate_text(progress_node_ref, max_chars=120) or "unknown_node"
+    seed = f"{node_ref}:{pattern.pattern_id}:{focus_key}"
+    return f"bp:{sha256(seed.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _max_same_category_similarity(question_text: str, context: dict[str, Any], node: dict[str, Any]) -> float:
+    normalized = _normalize_question_text_for_similarity(question_text)
+    similarities: list[float] = []
+    for turn in _same_category_turns(context, node.get("progress_node_ref")):
+        recent_text = truncate_text(turn.get("question_text"), max_chars=1200)
+        if recent_text:
+            similarities.append(
+                SequenceMatcher(None, normalized, _normalize_question_text_for_similarity(recent_text)).ratio()
+            )
+    return round(max(similarities), 3) if similarities else 0.0
+
+
+def _normalize_question_text_for_similarity(text: str) -> str:
+    return " ".join(str(text or "").replace("：", ":").split()).lower()
 
 
 def _deterministic_v2_question_text(
