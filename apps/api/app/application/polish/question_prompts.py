@@ -41,6 +41,22 @@ def build_polish_question_generation_prompt_bundle(
             "基于 compact evidence 生成一题打磨模式面试题。",
             "只返回结构化 JSON，不输出 Markdown。",
             "题目必须绑定 progress_node_ref、输入 evidence_refs 和 selected question_pattern。",
+            "evidence_refs must be string[] and contain at least 1 value.",
+            "Each evidence_refs value must copy exactly one string from input_evidence_refs.",
+            "do not use input_source_refs or input_source_refs[].ref_id as evidence_refs.",
+            "Do not return refs outside input_evidence_refs: source refs, progress refs, natural language citations, object refs, or invented refs.",
+            'evidence_refs values are not object values, e.g. not object {"ref_id":"..."}; do not return a comma-separated string.',
+            "If evidence is uncertain, choose the most relevant ref from input_evidence_refs; do not invent.",
+            "progress_node_ref and evidence_refs are different fields; do not mix them.",
+            "selected_question_pattern.required_question_elements is a hard semantic validation contract.",
+            "question_text must copy/include each required element exactly from selected_question_pattern.required_question_elements.",
+            "Do not satisfy required_question_elements only in question_pattern, scenario_constraint_summary, or metadata.",
+            "Do not paraphrase required element tokens; put Chinese or English phrases verbatim into question_text.",
+            "Missing any required element in question_text triggers semantic validation fallback: missing_pattern_required_elements.",
+            "scenario_constraint.business_constraint is a hard semantic validation contract.",
+            "For technical / mixed themes, question_text must include the business constraint and marker 业务约束 or 新业务约束.",
+            "scenario_constraint_summary cannot replace question_text business constraint expression.",
+            "Missing business constraint in question_text triggers semantic validation fallback: missing_business_constraint.",
             "不得输出完整参考答案、隐藏评分规则、raw prompt、completion 或 provider payload。",
             "不得编造未在 compact evidence 中出现的具体组件、系统或实体。",
         ],
@@ -140,6 +156,40 @@ def _output_schema() -> dict[str, Any]:
             "provider_payload",
             "hidden_rubric",
         ],
+        "field_contracts": {
+            "question_text": {
+                "type": "string",
+                "role": "semantic validation target",
+                "required_elements": "must include all selected pattern required elements from selected_question_pattern.required_question_elements",
+                "required_element_copy_rule": "copy/include each required element exactly; question_pattern or metadata do not satisfy this contract",
+                "business_constraint": "for technical / mixed themes, must include scenario_constraint.business_constraint and marker 业务约束 or 新业务约束",
+                "semantic_validation_failures": [
+                    "missing_pattern_required_elements",
+                    "missing_business_constraint",
+                ],
+            },
+            "question_pattern": {
+                "role": "selected pattern identifier or title summary only",
+                "contract": "question_pattern does not satisfy required_question_elements; question_text must include all required tokens",
+            },
+            "scenario_constraint_summary": {
+                "role": "summary only",
+                "contract": "scenario_constraint_summary cannot replace question_text business constraint marker or expression",
+            },
+            "evidence_refs": {
+                "type": "array<string>",
+                "min_items": 1,
+                "allowed_values": "copy exactly from input_evidence_refs strings",
+                "forbidden_values": [
+                    "source refs",
+                    "progress refs",
+                    "object refs",
+                    "invented refs",
+                    "natural language citations",
+                    "comma-separated string",
+                ],
+            },
+        },
     }
 
 

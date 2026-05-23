@@ -65,9 +65,12 @@ from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 
 
 class FakeLlmTransport:
+    """确定性 Fake LLM 传输层，用于合同测试和离线验证。所有 task_type 的分发入口。"""
+
     status = "deterministic_fake_only"
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        """根据 request.task_type 分发到对应的 fake 生成函数；未知 task_type 返回骨架结果。"""
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
         if request.task_type == POLISH_QUESTION_GENERATION_TASK_TYPE:
@@ -123,6 +126,7 @@ class FakeLlmTransport:
 
 
 def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 答案反馈结果，支持多种 fixture_marker 控制不同分支（超时/无效schema/低置信度等）。"""
     evidence_bundle = request.evidence_bundle.get("evidence_bundle", {}) if isinstance(request.evidence_bundle, dict) else {}
     answer_round = int(evidence_bundle.get("answer_round") or 1)
     marker = str(evidence_bundle.get("fixture_marker") or ("valid_retry" if answer_round > 1 else "valid_first"))
@@ -209,6 +213,7 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
 
 
 def _generate_fake_candidate_memory_review(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 候选记忆回顾结果，包含候选增强和复盘建议。"""
     candidate_ids = [
         str(candidate_id)
         for candidate_id in request.evidence_bundle.get("candidate_ids", [])
@@ -265,6 +270,7 @@ def _generate_fake_candidate_memory_review(request: LlmTransportRequest) -> LlmT
 
 
 def _fake_polish_feedback_payload(evidence_bundle: dict[str, Any], *, answer_round: int) -> dict[str, Any]:
+    """构造 fake 答案反馈的固定载荷，包含评分维度、失分点、改进建议等。"""
     dimensions = [
         {"dimension_id": "technical_depth", "score_value": 80, "max_score": 100, "weight": 1.0},
         {"dimension_id": "answer_structure", "score_value": 70, "max_score": 100, "weight": 1.0},
@@ -368,6 +374,7 @@ def _fake_retry_delta(
     *,
     improved_loss_point_id: str | None = None,
 ) -> dict[str, Any]:
+    """生成重试轮的增量数据（分数变化、改进点、剩余缺口等）。"""
     loss_point_id = improved_loss_point_id or _first_previous_loss_point_id(evidence_bundle)
     improved_points = [loss_point_id] if loss_point_id else ["fake_missing_previous_loss_point"]
     return {
@@ -391,6 +398,7 @@ def _fake_retry_delta(
 
 
 def _first_previous_loss_point_id(evidence_bundle: dict[str, Any] | None) -> str | None:
+    """从 previous_feedback_compact_summaries 中提取首个失分点 ID。"""
     if not isinstance(evidence_bundle, dict):
         return None
     for summary in _dict_items(evidence_bundle.get("previous_feedback_compact_summaries")):
@@ -402,12 +410,14 @@ def _first_previous_loss_point_id(evidence_bundle: dict[str, Any] | None) -> str
 
 
 def _dict_items(value: Any) -> list[dict[str, Any]]:
+    """安全地从任意值中提取字典列表（过滤非字典项）。"""
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
 
 
 def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 题目，支持多种 fixture_marker 控制分支（超时/无效语义/编造实体等）。"""
     evidence_bundle = request.evidence_bundle.get("evidence_bundle", {}) if isinstance(request.evidence_bundle, dict) else {}
     marker = str(evidence_bundle.get("fixture_marker") or "valid_high_quality")
     evidence_refs = [str(ref) for ref in evidence_bundle.get("input_evidence_refs", []) if str(ref)]
@@ -453,6 +463,7 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
 
 
 def _fake_polish_question_payload(evidence_bundle: dict[str, Any], *, evidence_refs: list[str]) -> dict[str, Any]:
+    """根据 question_pattern 构造 fake 题目文本载荷。"""
     node = evidence_bundle.get("progress_node_summary", {}) if isinstance(evidence_bundle, dict) else {}
     pattern = evidence_bundle.get("question_pattern", {}) if isinstance(evidence_bundle, dict) else {}
     focus = node.get("title") or "当前进展节点"
@@ -509,6 +520,7 @@ def _fake_polish_question_payload(evidence_bundle: dict[str, Any], *, evidence_r
 
 
 def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 质量优先初始训练菜单（含深度打磨类和补齐学习类节点）。"""
     context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
     context_text = dumps(context, ensure_ascii=False, sort_keys=True) if isinstance(context, dict) else ""
     hardware_mode = "硬件测试" in context_text
@@ -619,6 +631,7 @@ def _quality_first_fake_node(
     jd_basis: str,
     confidence_level: str,
 ) -> dict[str, Any]:
+    """构造单个 fake 质量优先菜单节点（含题目、追问方向、失分风险等）。"""
     prefix = "D" if category == "resume_deep_dive" else "A"
     basis_type = "resume_signal" if category == "resume_deep_dive" else "jd_requirement"
     return {
@@ -656,6 +669,7 @@ def _quality_first_fake_node(
 
 
 def _generate_fake_progress_global_understanding(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 全局理解分析结果（候选人画像、岗位能力映射、面试策略等）。"""
     context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
     job_payload = context.get("job_payload", {}) if isinstance(context, dict) else {}
     requirements = job_payload.get("requirements") if isinstance(job_payload, dict) else []
@@ -744,6 +758,7 @@ def _generate_fake_progress_global_understanding(request: LlmTransportRequest) -
 
 
 def _generate_fake_progress_tree_draft_plan_v2(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake v2 进度树草案计划（基于选中证据块构造初始菜单节点）。"""
     selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
     job_requirement = _join_text(
         _chunk_text(selected_chunks, "job_requirement"),
@@ -803,6 +818,7 @@ def _generate_fake_progress_tree_draft_plan_v2(request: LlmTransportRequest) -> 
 
 
 def _generate_fake_progress_tree_critic_refiner(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 进度树批评精炼结果（质量评分、精炼策略、门控检查）。"""
     selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
     job_requirement = _join_text(
         _chunk_text(selected_chunks, "job_requirement"),
@@ -878,6 +894,7 @@ def _generate_fake_progress_tree_critic_refiner(request: LlmTransportRequest) ->
 
 
 def _generate_fake_progress_tree_grounding(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 进度树证据锚定结果（含节点状态、优先级和进展百分比）。"""
     selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
     job_requirement = _join_text(
         _chunk_text(selected_chunks, "job_requirement"),
@@ -960,6 +977,7 @@ def _fake_progress_menu_nodes(
     evidence_chunk_ids: list[str],
     grounded: bool,
 ) -> list[dict[str, Any]]:
+    """构造 fake 进度树菜单节点列表（深度打磨类 + 补齐学习类，最多各 3 个）。"""
     resume_sources = _fake_menu_sources(
         selected_chunks,
         {"resume_project", "resume_skill", "resume_work_experience", "match_focus", "turn_feedback", "asset_summary"},
@@ -1079,6 +1097,7 @@ def _fake_menu_sources(
     fallback_text: str,
     fallback_titles: tuple[str, str, str],
 ) -> list[dict[str, str]]:
+    """从证据块中提取最多 3 个不重复的菜单源文本；不足时使用降级标题。"""
     sources: list[dict[str, str]] = []
     seen: set[str] = set()
     for chunk in chunks:
@@ -1104,6 +1123,7 @@ def _fake_menu_sources(
 
 
 def _fake_menu_text_candidates(value: str) -> list[str]:
+    """将文本按中文分隔符拆分为候选菜单文本列表。"""
     normalized = value.replace("；", "\n").replace("。", "\n")
     result = []
     for line in normalized.splitlines():
@@ -1114,6 +1134,7 @@ def _fake_menu_text_candidates(value: str) -> list[str]:
 
 
 def _fake_menu_title(value: str, *, category: str) -> str:
+    """根据文本关键词匹配生成固定菜单标题（关键词匹配失败时从文本提取）。"""
     compact = _fake_compact_text(value)
     if "硬件测试" in compact and ("智能辅助平台" in compact or "辅助平台" in compact or "平台" in compact):
         return "硬件测试智能辅助平台的服务端架构设计"
@@ -1149,10 +1170,12 @@ def _fake_menu_title(value: str, *, category: str) -> str:
 
 
 def _fake_compact_text(value: str) -> str:
+    """将文本压缩为纯字母数字小写字符串（用于关键词匹配）。"""
     return "".join(ch.lower() for ch in value if ch.isalnum())
 
 
 def _fake_clean_exam_point_phrase(value: str) -> str:
+    """从文本中清理出干净的考点短语（去除前缀、分隔符截断等）。"""
     title = value.strip(" \t-•*、，；。")
     if "：" in title:
         title = title.split("：", 1)[1].strip()
@@ -1193,6 +1216,7 @@ def _fake_clean_exam_point_phrase(value: str) -> str:
 
 
 def _request_seed(request: LlmTransportRequest) -> str:
+    """基于请求生成确定性种子字符串（用于稳定的 trace/evidence ID）。"""
     return dumps(
         {
             "contract_ids": sorted(request.contract_ids),
@@ -1206,6 +1230,7 @@ def _request_seed(request: LlmTransportRequest) -> str:
 
 
 def _chunk_id(chunks: list[dict[str, Any]], *source_types: str) -> str:
+    """从 chunks 列表中查找首个匹配 source_type 的 chunk_id。"""
     source_type_set = set(source_types)
     for chunk in chunks:
         chunk_id = chunk.get("chunk_id")
@@ -1215,10 +1240,12 @@ def _chunk_id(chunks: list[dict[str, Any]], *source_types: str) -> str:
 
 
 def _join_text(*values: str) -> str:
+    """用中文分号连接多个非空字符串片段。"""
     return "；".join(value for value in values if value)
 
 
 def _binding(chunk_id: str, source_type: str, reason: str) -> dict[str, str]:
+    """构造证据绑定记录（evidence_chunk_id + source_type + binding_reason）。"""
     return {
         "evidence_chunk_id": chunk_id,
         "source_type": source_type,
@@ -1228,6 +1255,7 @@ def _binding(chunk_id: str, source_type: str, reason: str) -> dict[str, str]:
 
 
 def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake v1 进度树计划（含根节点和子节点，以及初始状态）。"""
     context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
     selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
     job_requirement = _chunk_text(
@@ -1350,6 +1378,7 @@ def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransp
 
 
 def _generate_fake_progress_tree_state(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 进度树状态刷新结果（更新节点完成状态和优先级）。"""
     existing_plan = request.evidence_bundle.get("existing_progress_tree_plan", {})
     nodes = _flatten_nodes(existing_plan.get("nodes", []) if isinstance(existing_plan, dict) else [])
     target = nodes[-1] if nodes else {"progress_node_ref": "fake_llm_progress_backend_api_fastapi"}
@@ -1409,6 +1438,7 @@ def _generate_fake_progress_tree_state(request: LlmTransportRequest) -> LlmTrans
 
 
 def _flatten_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """递归展开进度树节点列表（含所有子节点）。"""
     result: list[dict[str, Any]] = []
     for node in nodes:
         result.append(node)
@@ -1417,6 +1447,7 @@ def _flatten_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _selected_evidence_chunks(evidence_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """从 evidence_bundle 中提取已选证据块列表（兼容 context 内嵌结构）。"""
     chunks = evidence_bundle.get("selected_evidence_chunks")
     if not chunks and isinstance(evidence_bundle.get("context"), dict):
         chunks = evidence_bundle["context"].get("selected_evidence_chunks")
@@ -1426,6 +1457,7 @@ def _selected_evidence_chunks(evidence_bundle: dict[str, Any]) -> list[dict[str,
 
 
 def _chunk_text(chunks: list[dict[str, Any]], *source_types: str, fallback: str | None = None) -> str:
+    """从 chunks 中提取首个匹配 source_type 的文本内容。"""
     source_type_set = set(source_types)
     for chunk in chunks:
         if chunk.get("source_type") in source_type_set:
@@ -1436,6 +1468,7 @@ def _chunk_text(chunks: list[dict[str, Any]], *source_types: str, fallback: str 
 
 
 def _chunk_ids(chunks: list[dict[str, Any]], *source_types: str) -> list[str]:
+    """从 chunks 中提取匹配 source_type 的 chunk_id 列表（最多 8 个）。"""
     source_type_set = set(source_types)
     result: list[str] = []
     for chunk in chunks:
@@ -1450,6 +1483,7 @@ def _legacy_context_text(
     snapshot_key: str,
     *field_names: str,
 ) -> str:
+    """从旧版 context 字典中提取指定快照字段的文本（兼容旧证据结构）。"""
     if not isinstance(context, dict):
         return ""
     snapshot = context.get(snapshot_key, {})
@@ -1466,6 +1500,7 @@ def _legacy_context_text(
 
 
 def _turns_count(evidence_bundle: dict[str, Any]) -> int:
+    """从 evidence_bundle 中提取已完成的轮次数量。"""
     context = evidence_bundle.get("context", {})
     if not isinstance(context, dict):
         return 0
@@ -1479,6 +1514,7 @@ def _turns_count(evidence_bundle: dict[str, Any]) -> int:
 
 
 def _first_text(*values: object | None) -> str:
+    """返回第一个非空字符串；全部为空时返回默认降级文本。"""
     for value in values:
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -1486,6 +1522,7 @@ def _first_text(*values: object | None) -> str:
 
 
 def _generate_fake_job_match(request: LlmTransportRequest) -> LlmTransportResult:
+    """生成 fake 岗位匹配分析结果（基于 token 重叠率计算各维度分数）。"""
     resume_chunks = _resume_chunks(request.evidence_bundle)
     job_chunks = _job_requirement_chunks(request.evidence_bundle)
     seed = dumps(
@@ -1523,6 +1560,7 @@ def _fake_job_match_payload(
     resume_chunks: list[ResumeChunk],
     job_chunks: list[JobRequirementChunk],
 ) -> JobMatchResultPayload:
+    """基于 token 重叠率计算 fake 岗位匹配分数并构造结果载荷。"""
     resume_text = "\n".join(chunk.text for chunk in resume_chunks)
     job_text = "\n".join(chunk.text for chunk in job_chunks)
     resume_tokens = _tokens(resume_text)
@@ -1631,6 +1669,7 @@ def _fake_job_match_payload(
 
 
 def _resume_chunks(evidence_bundle: dict[str, Any]) -> list[ResumeChunk]:
+    """从 evidence_bundle 中提取并解析简历块列表。"""
     return [
         ResumeChunk.model_validate(chunk)
         for chunk in evidence_bundle.get("resume_chunks", [])
@@ -1638,6 +1677,7 @@ def _resume_chunks(evidence_bundle: dict[str, Any]) -> list[ResumeChunk]:
 
 
 def _job_requirement_chunks(evidence_bundle: dict[str, Any]) -> list[JobRequirementChunk]:
+    """从 evidence_bundle 中提取并解析岗位要求块列表。"""
     return [
         JobRequirementChunk.model_validate(chunk)
         for chunk in evidence_bundle.get("job_requirement_chunks", [])
@@ -1645,6 +1685,7 @@ def _job_requirement_chunks(evidence_bundle: dict[str, Any]) -> list[JobRequirem
 
 
 def _tokens(text: str) -> set[str]:
+    """将文本拆分为 token 集合（英文词块 + 中文二元组），用于文本匹配。"""
     lowered = text.lower()
     ascii_tokens = set(re.findall(r"[a-z0-9]{2,}", lowered))
     cjk_tokens: set[str] = set()
@@ -1657,4 +1698,5 @@ def _tokens(text: str) -> set[str]:
 
 
 def _bounded_score(value: int, lower: int, upper: int) -> int:
+    """将分数限制在 [lower, upper] 范围内。"""
     return max(lower, min(upper, value))

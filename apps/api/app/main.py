@@ -28,6 +28,7 @@ API_VERSION_ENV = "API_VERSION"
 API_PREFIX_ENV = "API_PREFIX"
 API_HOST_ENV = "API_HOST"
 API_PORT_ENV = "API_PORT"
+API_DEBUG_ENV = "API_DEBUG"
 API_CORS_ALLOW_ORIGINS_ENV = "API_CORS_ALLOW_ORIGINS"
 API_CORS_LOCAL_LIKE_ENV_VALUES = {"local", "test", "development", "dev"}
 DEFAULT_CORS_ALLOW_ORIGINS = (
@@ -49,6 +50,7 @@ class ApiSettings:
     api_prefix: str = DEFAULT_API_PREFIX
     host: str = DEFAULT_API_HOST
     port: int = DEFAULT_API_PORT
+    debug: bool = False
     cors_allow_origins: tuple[str, ...] = ()
 
 
@@ -60,6 +62,7 @@ def get_settings() -> ApiSettings:
         api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
         host=_env(API_HOST_ENV, DEFAULT_API_HOST),
         port=_env_int(API_PORT_ENV, DEFAULT_API_PORT),
+        debug=_env_bool(API_DEBUG_ENV, False),
         cors_allow_origins=_read_cors_allow_origins(),
     )
 
@@ -86,6 +89,7 @@ def create_app(
     application = FastAPI(
         title=resolved_settings.title,
         version=resolved_settings.version,
+        debug=resolved_settings.debug,
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
@@ -111,6 +115,7 @@ def _startup_log_lines(settings: ApiSettings) -> tuple[str, ...]:
     server_url = _server_url(settings)
     return (
         "API server ready",
+        f"API debug: {'enabled' if settings.debug else 'disabled'}",
         f"API base URL: {server_url}{settings.api_prefix}",
         f"Swagger UI: {server_url}/docs",
         f"OpenAPI JSON: {server_url}/openapi.json",
@@ -138,6 +143,18 @@ def _env_int(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _env_optional(name: str) -> str | None:

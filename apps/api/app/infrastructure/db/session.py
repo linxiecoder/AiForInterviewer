@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from dataclasses import field
 from os import getenv
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import DateTime, create_engine, inspect, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -150,6 +151,12 @@ def _load_models() -> None:
     import app.infrastructure.db.models  # noqa: F401
 
 
+def _column_sql_for_dialect(column_sql: str, dialect: Dialect) -> str:
+    if column_sql.upper() == "DATETIME":
+        return str(DateTime(timezone=True).compile(dialect=dialect))
+    return column_sql
+
+
 def _backfill_known_schema_columns(bind: Engine) -> None:
     inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
@@ -163,4 +170,5 @@ def _backfill_known_schema_columns(bind: Engine) -> None:
             columns = {column["name"] for column in inspector.get_columns(table_name)}
             if column_name in columns:
                 continue
-            connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"))
+            column_type_sql = _column_sql_for_dialect(column_sql, bind.dialect)
+            connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type_sql}"))

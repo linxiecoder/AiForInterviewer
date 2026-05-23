@@ -36,7 +36,6 @@ LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
 LLM_TRANSPORT_LOGGER_NAME = "app.llm.transport"
 
-
 @dataclass(frozen=True)
 class OpenAICompatibleLlmSettings:
     """OpenAI 协议运行配置，密钥只从环境变量读取，不进入前端响应或日志。"""
@@ -52,6 +51,7 @@ class OpenAICompatibleLlmSettings:
         cls,
         environ: Mapping[str, str] | None = None,
     ) -> "OpenAICompatibleLlmSettings":
+        """从环境变量（或传入字典）读取 LLM 配置。API 密钥只从环境变量读取，不进入前端响应或日志。"""
         values = environ or os.environ
         return cls(
             api_key=_env_optional(values, LLM_OPENAI_API_KEY_ENV)
@@ -89,11 +89,13 @@ class OpenAICompatibleLlmTransport:
         *,
         client: httpx.Client | None = None,
     ) -> None:
+        """初始化传输层；可注入外部 httpx.Client（用于测试）。"""
         self._settings = settings
         self._client = client
         self._logger = _llm_transport_logger()
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        """调用 LLM provider 生成结果。密钥为空时抛出配置异常。"""
         if not self._settings.api_key.strip():
             raise LlmTransportConfigurationError(
                 f"{LLM_OPENAI_API_KEY_ENV} 未配置，请在 .env 中设置 OpenAI 兼容模型密钥。"
@@ -111,6 +113,7 @@ class OpenAICompatibleLlmTransport:
         client: httpx.Client,
         request: LlmTransportRequest,
     ) -> LlmTransportResult:
+        """使用指定 httpx 客户端向 /chat/completions 发送请求并解析响应。"""
         started_at = perf_counter()
         self._log_request_start(request)
         try:
@@ -167,7 +170,7 @@ class OpenAICompatibleLlmTransport:
         result = _parse_json_result(response_json)
         result.setdefault("prompt_version", _request_prompt_version(request))
         # model_name 用于审计和落库，只能来自 provider 外层响应或本地配置；
-        # 不能信任模型正文里自报的 model_name，否则会出现“实际调用 deepseek，记录成 gpt-4”的偏差。
+        # 不能信任模型正文里自报的 model_name，否则会出现"实际调用 deepseek，记录成 gpt-4"的偏差。
         result["model_name"] = _provider_model_name(response_json, self._settings.model)
         self._log_request_success(
             request,
@@ -185,6 +188,7 @@ class OpenAICompatibleLlmTransport:
         )
 
     def _log_request_start(self, request: LlmTransportRequest) -> None:
+        """记录 LLM 请求启动日志（含 task_type / model / contract_ids 等关键字段）。"""
         self._logger.info(
             _json_log(
                 {
@@ -207,6 +211,7 @@ class OpenAICompatibleLlmTransport:
         status_code: int,
         provider_model: str,
     ) -> None:
+        """记录 LLM 请求成功日志（含耗时和 provider 实际模型名）。"""
         self._logger.info(
             _json_log(
                 {
@@ -228,6 +233,7 @@ class OpenAICompatibleLlmTransport:
         error_type: str,
         status_code: int | None = None,
     ) -> None:
+        """记录 LLM 请求失败日志（含错误类型和可选 HTTP 状态码）。"""
         record: dict[str, Any] = {
             "event": "llm_transport_request_failed",
             "task_type": request.task_type,
@@ -244,6 +250,7 @@ def _chat_completion_payload(
     settings: OpenAICompatibleLlmSettings,
     request: LlmTransportRequest,
 ) -> dict[str, Any]:
+    """构造 OpenAI Chat Completions 请求体，含 system prompt 和 evidence bundle。"""
     return {
         "model": settings.model,
         "temperature": settings.temperature,
@@ -271,6 +278,7 @@ def _chat_completion_payload(
 
 
 def _llm_transport_logger() -> logging.Logger:
+    """获取 LLM 传输日志记录器（自动添加控制台 handler）。"""
     logger = logging.getLogger(LLM_TRANSPORT_LOGGER_NAME)
     if logger.level == logging.NOTSET:
         logger.setLevel(logging.INFO)
@@ -279,6 +287,7 @@ def _llm_transport_logger() -> logging.Logger:
 
 
 def _ensure_console_handler(logger: logging.Logger) -> None:
+    """确保日志记录器已添加控制台 handler（避免重复添加）。"""
     if any(getattr(handler, "_aifi_llm_transport_handler", False) for handler in logger.handlers):
         return
     handler = logging.StreamHandler()
@@ -288,19 +297,23 @@ def _ensure_console_handler(logger: logging.Logger) -> None:
 
 
 def _json_log(record: dict[str, Any]) -> str:
+    """将日志字典序列化为 JSON 字符串（中文不转义，key 排序）。"""
     return json.dumps(record, ensure_ascii=False, sort_keys=True)
 
 
 def _duration_ms(started_at: float) -> float:
+    """计算从 started_at 到当前时间的毫秒数。"""
     return round((perf_counter() - started_at) * 1000, 3)
 
 
 def _base_url_host(base_url: str) -> str:
+    """从 base_url 中提取主机名（用于日志脱敏）。"""
     parsed = urlparse(base_url)
     return parsed.netloc or parsed.path or "unknown"
 
 
 def _system_prompt(task_type: str) -> str:
+    """根据 task_type 构造 system prompt。job_match_analysis 使用专用 prompt，其余使用通用 prompt。"""
     if task_type == "job_match_analysis":
         return "\n".join(
             [
@@ -332,6 +345,7 @@ def _system_prompt(task_type: str) -> str:
 
 
 def _request_prompt_version(request: LlmTransportRequest) -> str:
+    """从 evidence_bundle 中提取 prompt_version；若无则返回默认版本。"""
     if isinstance(request.evidence_bundle, dict):
         prompt_version = request.evidence_bundle.get("prompt_version")
         if isinstance(prompt_version, str) and prompt_version.strip():
@@ -342,6 +356,7 @@ def _request_prompt_version(request: LlmTransportRequest) -> str:
 
 
 def _response_json(response: httpx.Response) -> dict[str, Any]:
+    """解析 HTTP 响应为 JSON 字典，非 JSON 或非对象时报错。"""
     try:
         data = response.json()
     except ValueError as exc:
@@ -352,6 +367,7 @@ def _response_json(response: httpx.Response) -> dict[str, Any]:
 
 
 def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
+    """从 Chat Completions 响应中提取 choices[0].message.content 并解析为 JSON。"""
     choices = response_json.get("choices")
     if not isinstance(choices, list) or not choices:
         raise LlmTransportResponseError("LLM provider 响应缺少 choices。")
@@ -374,6 +390,7 @@ def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
 
 
 def _provider_model_name(response_json: dict[str, Any], configured_model: str) -> str:
+    """从 provider 响应中提取实际模型名；不存在则返回配置的模型名。"""
     model = response_json.get("model")
     if isinstance(model, str) and model.strip():
         return model.strip()
@@ -381,6 +398,7 @@ def _provider_model_name(response_json: dict[str, Any], configured_model: str) -
 
 
 def _confidence_level(result: dict[str, Any]) -> ConfidenceLevel:
+    """从 LLM 结果中提取置信度等级；默认 MEDIUM。"""
     payload = result.get("job_match_result_payload")
     confidence = payload.get("confidence") if isinstance(payload, dict) else None
     try:
@@ -390,6 +408,7 @@ def _confidence_level(result: dict[str, Any]) -> ConfidenceLevel:
 
 
 def _low_confidence_flags(result: dict[str, Any]) -> tuple[str, ...]:
+    """根据置信度等级生成低置信度标记元组。"""
     confidence = _confidence_level(result)
     if confidence is ConfidenceLevel.LOW:
         return ("llm_low_confidence",)
@@ -399,6 +418,7 @@ def _low_confidence_flags(result: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _trace_ref(request: LlmTransportRequest, response_json: dict[str, Any]) -> str:
+    """生成 LLM 调用的 trace 引用 ID（基于 request 和 provider 响应）。"""
     seed = json.dumps(
         {
             "provider_response_id": response_json.get("id"),
@@ -413,6 +433,7 @@ def _trace_ref(request: LlmTransportRequest, response_json: dict[str, Any]) -> s
 
 
 def _evidence_ref(request: LlmTransportRequest) -> str:
+    """生成 LLM 调用的 evidence 引用 ID（基于 request 摘要）。"""
     seed = json.dumps(
         {
             "task_type": request.task_type,
@@ -426,6 +447,7 @@ def _evidence_ref(request: LlmTransportRequest) -> str:
 
 
 def _env_optional(values: Mapping[str, str], name: str) -> str | None:
+    """从环境变量字典中读取可选字符串；不存在或空白时返回 None。"""
     value = values.get(name)
     if value is None:
         return None
@@ -434,6 +456,7 @@ def _env_optional(values: Mapping[str, str], name: str) -> str | None:
 
 
 def _env_float(values: Mapping[str, str], name: str, default: float) -> float:
+    """从环境变量字典中读取浮点数；解析失败时返回默认值。"""
     value = _env_optional(values, name)
     if value is None:
         return default
@@ -444,4 +467,5 @@ def _env_float(values: Mapping[str, str], name: str, default: float) -> float:
 
 
 def _normalize_base_url(raw: str) -> str:
+    """标准化 base_url：去除首尾空白和尾部斜杠，为空时返回默认值。"""
     return raw.strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL

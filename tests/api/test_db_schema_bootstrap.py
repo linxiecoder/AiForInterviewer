@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 from sqlalchemy import inspect, text
+from sqlalchemy.dialects import postgresql, sqlite
 
-from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
+from app.infrastructure.db.session import (
+    DbSettings,
+    _column_sql_for_dialect,
+    build_session_factory,
+    initialize_schema,
+)
 from tools.testing.temp_artifacts import ManagedTempArtifacts
+
+
+def test_backfill_datetime_column_sql_compiles_per_dialect() -> None:
+    assert _column_sql_for_dialect("DATETIME", sqlite.dialect()) == "DATETIME"
+    assert _column_sql_for_dialect("DATETIME", postgresql.dialect()) == "TIMESTAMP WITH TIME ZONE"
+    assert _column_sql_for_dialect("VARCHAR(80)", postgresql.dialect()) == "VARCHAR(80)"
 
 
 def test_initialize_schema_backfills_polish_session_summary_columns() -> None:

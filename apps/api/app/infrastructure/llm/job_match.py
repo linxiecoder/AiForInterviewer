@@ -36,10 +36,14 @@ DIMENSION_SPECS: dict[str, tuple[int, str]] = {
 
 
 class LlmJobMatchAnalyzer:
+    """基于 LLM 传输层的岗位匹配分析器。"""
+
     def __init__(self, transport: LlmTransport) -> None:
+        """初始化分析器，注入 LLM 传输层。"""
         self._transport = transport
 
     def analyze(self, source_bundle: JobMatchSourceBundle) -> JobMatchAnalyzerOutput:
+        """执行岗位匹配分析，返回规范化后的分析结果。"""
         try:
             result = self._transport.generate(
                 LlmTransportRequest(
@@ -71,6 +75,7 @@ class LlmJobMatchAnalyzer:
 
 
 def _source_input_refs(source_bundle: JobMatchSourceBundle) -> tuple[str, ...]:
+    """从 source_bundle 中提取所有输入引用的排序元组。"""
     refs = {
         *(f"resume_version:{chunk.resume_version_id}" for chunk in source_bundle.resume_chunks),
         *(f"job_version:{chunk.job_version_id}" for chunk in source_bundle.job_requirement_chunks),
@@ -79,6 +84,7 @@ def _source_input_refs(source_bundle: JobMatchSourceBundle) -> tuple[str, ...]:
 
 
 def _evidence_bundle(source_bundle: JobMatchSourceBundle) -> dict[str, Any]:
+    """将 source_bundle 转为 LLM 传输层所需的 evidence_bundle 字典。"""
     return {
         "source_digest": source_bundle.source_digest,
         "resume_chunks": [
@@ -92,6 +98,7 @@ def _evidence_bundle(source_bundle: JobMatchSourceBundle) -> dict[str, Any]:
 
 
 def _looks_like_result_payload(value: dict[str, Any]) -> bool:
+    """判断字典是否包含岗位匹配结果的关键字段。"""
     return any(key in value for key in ("overall_score", "dimension_scores", "summary"))
 
 
@@ -99,7 +106,10 @@ def _normalize_job_match_payload(
     raw_payload: dict[str, Any],
     source_bundle: JobMatchSourceBundle,
 ) -> dict[str, Any]:
-    """把常见的 LLM 宽松输出整理为项目内部严格契约，再交给领域校验层兜底。"""
+    """
+    把常见的 LLM 宽松输出整理为项目内部严格契约，再交给领域校验层兜底。
+    包括：置信度、匹配/缺失要求、维度评分、简历证据、风险标记等字段的归一化。
+    """
 
     payload = dict(raw_payload)
     confidence = _normalize_confidence(payload.get("confidence"), default="medium")
@@ -171,6 +181,7 @@ def _normalize_dimension_scores(
     source_bundle: JobMatchSourceBundle,
     default_confidence: str,
 ) -> list[dict[str, Any]]:
+    """归一化维度评分列表：从 LLM 宽松格式转为严格格式，确保每个维度都有值。"""
     raw_scores = payload.get("dimension_scores")
     score_by_key: dict[str, Any] = {}
     if isinstance(raw_scores, dict):
@@ -229,6 +240,7 @@ def _calibrate_dimension_scores_for_gap_coverage(
     missing_requirements: list[dict[str, Any]],
     source_bundle: JobMatchSourceBundle,
 ) -> list[dict[str, Any]]:
+    """根据未覆盖的岗位要求对维度评分进行扣减校准。"""
     missing_chunk_ids = {
         item["requirement_chunk_id"]
         for item in missing_requirements
@@ -262,7 +274,10 @@ def _calibrate_dimension_scores_for_gap_coverage(
 
 
 def _job_source_weights(source_bundle: JobMatchSourceBundle) -> dict[str, float]:
-    """为岗位来源分配评分权重：岗位要求偏硬门槛，职责偏场景佐证。"""
+    """
+    为岗位来源分配评分权重：岗位要求偏硬门槛（65%），职责偏场景佐证（35%）。
+    无明确类型时均分权重。
+    """
 
     requirement_chunks = []
     responsibility_chunks = []
@@ -308,6 +323,7 @@ def _target_dimension_scores(
     payload: dict[str, Any],
     score_by_key: dict[str, Any],
 ) -> dict[str, int]:
+    """从 payload 和逐维度评分中提取目标维度分数；LLM 未给出时按 overall_score 等比分配。"""
     direct_scores: dict[str, int] = {}
     for key, (max_score, _label) in DIMENSION_SPECS.items():
         raw_item = score_by_key.get(key)
@@ -342,6 +358,7 @@ def _normalize_matched_requirements(
     source_bundle: JobMatchSourceBundle,
     default_confidence: str,
 ) -> list[dict[str, Any]]:
+    """归一化已匹配的岗位要求列表：为每项绑定 requirement_chunk_id 和 resume_evidence_chunk_ids。"""
     items = _list_items(raw_value)
     matches: list[dict[str, Any]] = []
     fallback_resume_refs = _resume_chunk_ids(source_bundle)[:1]
@@ -386,6 +403,7 @@ def _normalize_missing_requirements(
     raw_value: Any,
     source_bundle: JobMatchSourceBundle,
 ) -> list[dict[str, Any]]:
+    """归一化未覆盖的岗位要求列表：为每项绑定 requirement_chunk_id 和原因。"""
     missing: list[dict[str, Any]] = []
     for item in _list_items(raw_value):
         if isinstance(item, dict):
@@ -421,6 +439,7 @@ def _fill_uncovered_missing_requirements(
     matched_requirements: list[dict[str, Any]],
     source_bundle: JobMatchSourceBundle,
 ) -> list[dict[str, Any]]:
+    """补充 LLM 未覆盖的岗位要求项（确保输出的 missing_requirements 与 source_bundle 一一对应）。"""
     covered_job_chunk_ids = {
         item["requirement_chunk_id"]
         for item in matched_requirements
@@ -450,6 +469,7 @@ def _normalize_resume_evidence(
     source_bundle: JobMatchSourceBundle,
     default_confidence: str,
 ) -> list[dict[str, Any]]:
+    """归一化简历证据列表：将 LLM 输出的各种格式统一为 chunk_id + summary + confidence。"""
     evidence: list[dict[str, Any]] = []
     if isinstance(raw_value, dict):
         iterable: list[Any] = [
@@ -495,6 +515,7 @@ def _normalize_risk_flags(
     raw_value: Any,
     source_bundle: JobMatchSourceBundle,
 ) -> list[dict[str, Any]]:
+    """归一化风险标记列表：统一为 risk_type + description + severity + supporting_evidence。"""
     risks: list[dict[str, Any]] = []
     for item in _list_items(raw_value):
         if isinstance(item, dict):
@@ -524,6 +545,7 @@ def _source_refs(
     *,
     default_refs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    """从 LLM 输出中提取 source 引用列表，绑定到已知 chunk_id；未知 ID 自动匹配最佳块。"""
     known_ids = _known_chunk_ids(source_bundle)
     refs: list[dict[str, Any]] = []
     for item in _list_items(raw_value):
@@ -552,6 +574,7 @@ def _resume_chunk_ids_from_value(
     *,
     default_refs: list[str],
 ) -> list[str]:
+    """从 LLM 输出值中提取简历 chunk ID 列表，只返回属于简历的 ID。"""
     resume_ids = set(_resume_chunk_ids(source_bundle))
     chunk_ids: list[str] = []
     for ref in _source_refs(raw_value, source_bundle):
@@ -562,6 +585,7 @@ def _resume_chunk_ids_from_value(
 
 
 def _known_chunk_ids(source_bundle: JobMatchSourceBundle) -> set[str]:
+    """返回 source_bundle 中所有已知的 chunk ID 集合（简历+岗位）。"""
     return {
         *(chunk.chunk_id for chunk in source_bundle.resume_chunks),
         *(chunk.chunk_id for chunk in source_bundle.job_requirement_chunks),
@@ -569,10 +593,12 @@ def _known_chunk_ids(source_bundle: JobMatchSourceBundle) -> set[str]:
 
 
 def _resume_chunk_ids(source_bundle: JobMatchSourceBundle) -> list[str]:
+    """返回 source_bundle 中所有简历 chunk ID 列表。"""
     return [chunk.chunk_id for chunk in source_bundle.resume_chunks]
 
 
 def _known_job_chunk_id(value: Any, source_bundle: JobMatchSourceBundle) -> str | None:
+    """验证 value 是否为已知的岗位 chunk ID；是则返回，否则返回 None。"""
     if not isinstance(value, str):
         return None
     job_ids = {chunk.chunk_id for chunk in source_bundle.job_requirement_chunks}
@@ -580,10 +606,12 @@ def _known_job_chunk_id(value: Any, source_bundle: JobMatchSourceBundle) -> str 
 
 
 def _best_chunk_id(text: str, source_bundle: JobMatchSourceBundle) -> str | None:
+    """在简历和岗位中分别尝试匹配最佳 chunk ID。"""
     return _best_resume_chunk_id(text, source_bundle) or _best_job_chunk_id(text, source_bundle)
 
 
 def _best_resume_chunk_id(text: str, source_bundle: JobMatchSourceBundle) -> str | None:
+    """在简历 chunks 中查找与 text 最佳匹配的 chunk ID。"""
     return _best_source_chunk_id(
         text,
         [(chunk.chunk_id, chunk.text) for chunk in source_bundle.resume_chunks],
@@ -591,6 +619,7 @@ def _best_resume_chunk_id(text: str, source_bundle: JobMatchSourceBundle) -> str
 
 
 def _best_job_chunk_id(text: str, source_bundle: JobMatchSourceBundle) -> str | None:
+    """在岗位 chunks 中查找与 text 最佳匹配的 chunk ID。"""
     return _best_source_chunk_id(
         text,
         [(chunk.chunk_id, chunk.text) for chunk in source_bundle.job_requirement_chunks],
@@ -598,6 +627,7 @@ def _best_job_chunk_id(text: str, source_bundle: JobMatchSourceBundle) -> str | 
 
 
 def _best_source_chunk_id(text: str, candidates: list[tuple[str, str]]) -> str | None:
+    """通过子串匹配和 token 交集评分，从候选列表中找出与 text 最匹配的 chunk ID。"""
     stripped = text.strip()
     if not candidates:
         return None
@@ -618,6 +648,7 @@ def _best_source_chunk_id(text: str, candidates: list[tuple[str, str]]) -> str |
 
 
 def _tokens(text: str) -> set[str]:
+    """将文本拆分为 token 集合（含英文词块和中文二元组），用于文本匹配。"""
     lowered = text.lower()
     ascii_tokens = set(re.findall(r"[a-z0-9]{2,}", lowered))
     cjk_tokens: set[str] = set()
@@ -630,6 +661,7 @@ def _tokens(text: str) -> set[str]:
 
 
 def _list_items(value: Any) -> list[Any]:
+    """将任意值规范化为列表：None→[]，列表/元组/集合→列表，其他→[value]。"""
     if value is None:
         return []
     if isinstance(value, list):
@@ -642,6 +674,7 @@ def _list_items(value: Any) -> list[Any]:
 
 
 def _string_list(value: Any) -> list[str]:
+    """从任意值中提取所有非空字符串文本（支持从字典的 text/summary/reason 字段提取）。"""
     strings: list[str] = []
     for item in _list_items(value):
         if isinstance(item, dict):
@@ -656,12 +689,14 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _text_or(value: Any, default: str) -> str:
+    """如果 value 是非空字符串则返回，否则返回 default。"""
     if isinstance(value, str) and value.strip():
         return value.strip()
     return default
 
 
 def _short_text(value: str, *, limit: int = 80) -> str:
+    """截断长文本到指定长度，超出时追加 ...。"""
     text = re.sub(r"\s+", " ", value).strip()
     if len(text) <= limit:
         return text
@@ -669,19 +704,23 @@ def _short_text(value: str, *, limit: int = 80) -> str:
 
 
 def _chinese_text_or(value: Any, default: str) -> str:
+    """如果 value 是含中文的字符串则返回，否则返回 default。"""
     text = _text_or(value, "")
     return text if _has_cjk(text) else default
 
 
 def _chinese_string_list(value: Any) -> list[str]:
+    """从 string_list 中筛选出含中文的字符串列表。"""
     return [text for text in _string_list(value) if _has_cjk(text)]
 
 
 def _has_cjk(value: str) -> bool:
+    """检测字符串是否包含中文字符（CJK 统一表意文字）。"""
     return bool(re.search(r"[\u4e00-\u9fff]", value))
 
 
 def _normalize_confidence(value: Any, *, default: str) -> str:
+    """归一化置信度字符串：支持中英文别名，统一为 high / medium / low / insufficient。"""
     if isinstance(value, ConfidenceLevel):
         return value.value
     if isinstance(value, str):
@@ -706,6 +745,7 @@ def _normalize_confidence(value: Any, *, default: str) -> str:
 
 
 def _overall_level(score: int, confidence: str) -> str:
+    """根据总分和置信度计算总体匹配等级。"""
     if confidence == "insufficient":
         return "insufficient_evidence"
     if score >= 80:
@@ -716,6 +756,7 @@ def _overall_level(score: int, confidence: str) -> str:
 
 
 def _severity(value: Any) -> str:
+    """归一化严重等级：支持中英文，统一为 low / medium / high。"""
     if isinstance(value, str):
         normalized = value.strip().lower()
         if normalized in {"low", "medium", "high"}:
@@ -728,6 +769,7 @@ def _severity(value: Any) -> str:
 
 
 def _optional_int(value: Any) -> int | None:
+    """尝试从任意值中提取整数（支持字符串中的首数字）。"""
     if isinstance(value, str):
         match = re.search(r"-?\d+", value)
         if match is None:
@@ -740,6 +782,7 @@ def _optional_int(value: Any) -> int | None:
 
 
 def _bounded_int(value: Any, *, default: int, lower: int, upper: int) -> int:
+    """将任意值解析为整数并限制在 [lower, upper] 范围内。"""
     parsed = _optional_int(value)
     if parsed is None:
         parsed = default

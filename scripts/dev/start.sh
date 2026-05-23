@@ -6,6 +6,17 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 cd "$ROOT_DIR"
 
+MODE="${1:-}"
+case "$MODE" in
+  "" | "debug")
+    ;;
+  *)
+    echo "[dev] unsupported mode: ${MODE}"
+    echo "[dev] usage: npm run dev [debug]"
+    exit 2
+    ;;
+esac
+
 bash scripts/dev/kill-ports.sh 8001 5173
 
 cleanup() {
@@ -23,7 +34,7 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-bash scripts/dev/start-api.sh &
+bash scripts/dev/start-api.sh "$MODE" &
 API_PID="$!"
 echo "[dev] api PID ${API_PID}"
 

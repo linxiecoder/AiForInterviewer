@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import logging
 import os
 from typing import Any, Callable
 
 from app.application.polish.entities import PolishQuestionDraft
+
+logger = logging.getLogger(__name__)
 from app.application.polish.question_metadata import build_question_metadata
 from app.application.polish.question_prompts import (
     POLISH_QUESTION_GENERATION_CONTRACT_IDS,
@@ -111,7 +114,7 @@ class PolishQuestionLlmResult:
     llm_output_validation_status: str
     fallback_reason: str | None
     repair_attempted: bool = False
-    validation_errors: tuple[dict[str, str], ...] = ()
+    validation_errors: tuple[dict[str, Any], ...] = ()
 
 
 class PolishQuestionLlmService:
@@ -133,6 +136,7 @@ class PolishQuestionLlmService:
         provider_summary = _provider_summary(self._transport)
 
         if not should_enable_question_llm():
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_FEATURE_DISABLED, LLM_GENERATION_MODE_DETERMINISTIC_ONLY)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_DETERMINISTIC_ONLY,
@@ -142,6 +146,7 @@ class PolishQuestionLlmService:
                 validation_errors=(),
             )
         if not deterministic_build.question_context.evidence_refs:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROMPT_INPUT_INSUFFICIENT, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -151,6 +156,7 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "prompt_input_insufficient", "message": "input evidence refs are empty"},),
             )
         if self._transport is None:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_UNAVAILABLE, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -160,6 +166,7 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_unavailable", "message": "llm transport is missing"},),
             )
         if _provider_kind(self._transport) != "fake" and not should_allow_real_question_provider(self._transport):
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_REAL_PROVIDER_DISABLED, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -187,6 +194,7 @@ class PolishQuestionLlmService:
                 )
             )
         except TimeoutError:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_TIMEOUT, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -196,6 +204,7 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_timeout", "message": "transport timed out"},),
             )
         except LlmTransportConfigurationError as exc:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_TRANSPORT_CONFIGURATION_ERROR, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -205,6 +214,7 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "transport_configuration_error", "message": _safe_error(exc)},),
             )
         except LlmTransportUnavailableError as exc:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_UNAVAILABLE, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -214,6 +224,7 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_unavailable", "message": _safe_error(exc)},),
             )
         except LlmTransportResponseError as exc:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_SCHEMA_INVALID, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -223,6 +234,7 @@ class PolishQuestionLlmService:
                 validation_errors=({"code": "provider_response_invalid", "message": _safe_error(exc)},),
             )
         except LlmTransportError as exc:
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", FALLBACK_PROVIDER_UNAVAILABLE, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -237,6 +249,7 @@ class PolishQuestionLlmService:
             deterministic_build=deterministic_build,
         )
         if isinstance(normalized, _InvalidLlmOutput):
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", normalized.fallback_reason, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -253,6 +266,7 @@ class PolishQuestionLlmService:
             provider_summary=_provider_summary(self._transport, result=transport_result),
         )
         if isinstance(adapted, _InvalidAdaptedQuestion):
+            logger.info("polish.question.llm.fallback reason=%s mode=%s", adapted.fallback_reason, LLM_GENERATION_MODE_FALLBACK)
             return _fallback_result(
                 deterministic_draft,
                 mode=LLM_GENERATION_MODE_FALLBACK,
@@ -317,18 +331,36 @@ def validate_llm_question_output(raw_output: object, *, deterministic_build: Any
     if not isinstance(evidence_refs_raw, list):
         return _invalid(FALLBACK_SCHEMA_INVALID, LLM_VALIDATION_STATUS_SCHEMA_INVALID, "evidence_refs_not_list")
     evidence_refs = tuple(str(ref).strip() for ref in evidence_refs_raw if str(ref).strip())
+    allowed_refs = tuple(deterministic_build.question_context.evidence_refs)
     if not evidence_refs:
         return _invalid(
             FALLBACK_EVIDENCE_REFS_INVALID,
             LLM_VALIDATION_STATUS_SEMANTIC_INVALID,
             "evidence_refs_empty",
+            diagnostics=_evidence_ref_diagnostics(
+                allowed_refs=allowed_refs,
+                returned_refs=evidence_refs_raw,
+                invalid_refs=(),
+                validation_error_code="evidence_refs_empty",
+                fallback_reason=FALLBACK_EVIDENCE_REFS_INVALID,
+            ),
         )
-    allowed_refs = set(deterministic_build.question_context.evidence_refs)
-    if not set(evidence_refs).issubset(allowed_refs):
+    allowed_ref_set = set(allowed_refs)
+    invalid_refs = tuple(
+        ref for ref in evidence_refs_raw if str(ref).strip() and str(ref).strip() not in allowed_ref_set
+    )
+    if invalid_refs:
         return _invalid(
             FALLBACK_EVIDENCE_REFS_INVALID,
             LLM_VALIDATION_STATUS_SEMANTIC_INVALID,
             "evidence_refs_invalid",
+            diagnostics=_evidence_ref_diagnostics(
+                allowed_refs=allowed_refs,
+                returned_refs=evidence_refs_raw,
+                invalid_refs=invalid_refs,
+                validation_error_code="evidence_refs_invalid",
+                fallback_reason=FALLBACK_EVIDENCE_REFS_INVALID,
+            ),
         )
     expected_dimensions_raw = raw_output.get("expected_answer_dimensions")
     if not isinstance(expected_dimensions_raw, list):
@@ -437,11 +469,14 @@ def adapt_llm_output_to_question_draft(
             evidence_signals=deterministic_build.evidence_signals,
         )
     if not quality.allow_emit:
+        fallback_reason = _quality_fallback_reason(quality)
         return _InvalidAdaptedQuestion(
-            fallback_reason=_quality_fallback_reason(quality),
-            validation_errors=tuple(
-                {"code": issue, "message": "question quality validator blocked LLM output"}
-                for issue in quality.blocking_issues
+            fallback_reason=fallback_reason,
+            validation_errors=_quality_validation_errors(
+                quality,
+                deterministic_build=deterministic_build,
+                question_text=question_text,
+                fallback_reason=fallback_reason,
             ),
             repair_attempted=repair_attempted,
         )
@@ -493,7 +528,7 @@ def adapt_llm_output_to_question_draft(
 class _InvalidLlmOutput:
     fallback_reason: str
     validation_status: str
-    validation_errors: tuple[dict[str, str], ...]
+    validation_errors: tuple[dict[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -505,7 +540,7 @@ class _AdaptedQuestion:
 @dataclass(frozen=True)
 class _InvalidAdaptedQuestion:
     fallback_reason: str
-    validation_errors: tuple[dict[str, str], ...]
+    validation_errors: tuple[dict[str, Any], ...]
     repair_attempted: bool
 
 
@@ -516,7 +551,7 @@ def _fallback_result(
     fallback_reason: str,
     validation_status: str,
     provider_summary: dict[str, Any],
-    validation_errors: tuple[dict[str, str], ...],
+    validation_errors: tuple[dict[str, Any], ...],
     repair_attempted: bool = False,
 ) -> PolishQuestionLlmResult:
     metadata = _extend_llm_metadata(
@@ -548,7 +583,7 @@ def _extend_llm_metadata(
     fallback_reason: str | None,
     provider_summary: dict[str, Any],
     model_summary: dict[str, Any],
-    validation_errors: tuple[dict[str, str], ...],
+    validation_errors: tuple[dict[str, Any], ...],
     repair_attempted: bool,
 ) -> dict[str, Any]:
     metadata.update(
@@ -569,13 +604,172 @@ def _extend_llm_metadata(
     return metadata
 
 
-def _invalid(reason: str, validation_status: str, code: str, detail: str | None = None) -> _InvalidLlmOutput:
-    error = {"code": code, "message": detail or code}
+def _invalid(
+    reason: str,
+    validation_status: str,
+    code: str,
+    detail: str | None = None,
+    *,
+    diagnostics: dict[str, Any] | None = None,
+) -> _InvalidLlmOutput:
+    error: dict[str, Any] = {"code": code, "message": detail or code}
+    if diagnostics:
+        error.update(diagnostics)
     return _InvalidLlmOutput(
         fallback_reason=reason,
         validation_status=validation_status,
         validation_errors=(error,),
     )
+
+
+def _evidence_ref_diagnostics(
+    *,
+    allowed_refs: tuple[Any, ...],
+    returned_refs: list[Any],
+    invalid_refs: tuple[Any, ...],
+    validation_error_code: str,
+    fallback_reason: str,
+) -> dict[str, Any]:
+    return {
+        "validation_error_code": validation_error_code,
+        "fallback_reason": fallback_reason,
+        "allowed_refs_sample": _safe_ref_sample(allowed_refs),
+        "returned_refs_sample": _safe_ref_sample(tuple(returned_refs)),
+        "invalid_refs": _safe_ref_sample(invalid_refs),
+    }
+
+
+def _quality_validation_errors(
+    quality: Any,
+    *,
+    deterministic_build: Any,
+    question_text: str,
+    fallback_reason: str,
+) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        _quality_validation_error(
+            issue,
+            deterministic_build=deterministic_build,
+            question_text=question_text,
+            fallback_reason=fallback_reason,
+        )
+        for issue in quality.blocking_issues
+    )
+
+
+def _quality_validation_error(
+    issue: str,
+    *,
+    deterministic_build: Any,
+    question_text: str,
+    fallback_reason: str,
+) -> dict[str, Any]:
+    pattern = deterministic_build.question_pattern
+    scenario_constraint = deterministic_build.scenario_constraint
+    theme = getattr(deterministic_build.question_context.strategy, "theme", None)
+    error: dict[str, Any] = {
+        "code": issue,
+        "message": "question quality validator blocked LLM output",
+        "validation_error_code": issue,
+        "fallback_reason": fallback_reason,
+        "selected_pattern_id": _safe_diagnostic_text(getattr(pattern, "pattern_id", None), max_chars=80),
+        "selected_pattern_name": _safe_diagnostic_text(getattr(pattern, "title", None), max_chars=80),
+        "theme": _safe_diagnostic_text(theme, max_chars=40),
+    }
+    if issue == "missing_pattern_required_elements":
+        required_elements = tuple(getattr(pattern, "required_question_elements", ()))
+        missing_required = tuple(element for element in required_elements if element not in question_text)
+        error.update(
+            {
+                "required_elements_sample": _safe_token_sample(required_elements),
+                "missing_required_elements_sample": _safe_token_sample(missing_required),
+            }
+        )
+    if issue == "missing_business_constraint":
+        error.update(
+            {
+                "business_constraint_label": _safe_diagnostic_text(
+                    getattr(scenario_constraint, "business_constraint", None),
+                    max_chars=120,
+                ),
+                "business_constraint_marker_required": ["业务约束", "新业务约束"],
+            }
+        )
+    return error
+
+
+def _safe_token_sample(values: tuple[Any, ...], *, limit: int = 10) -> list[str]:
+    sample: list[str] = []
+    for value in values:
+        token = _safe_diagnostic_text(value, max_chars=80)
+        if not token:
+            continue
+        sample.append(token)
+        if len(sample) >= limit:
+            break
+    return sample
+
+
+def _safe_diagnostic_text(value: Any, *, max_chars: int) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if any(
+        marker in lowered
+        for marker in (
+            "prompt",
+            "completion",
+            "raw_response",
+            "provider_payload",
+            "api_key",
+            "token",
+            "secret",
+        )
+    ):
+        return "<redacted>"
+    if len(text) > max_chars:
+        return f"{text[:max_chars].rstrip()}..."
+    return text
+
+
+def _safe_ref_sample(refs: tuple[Any, ...], *, limit: int = 10) -> list[str]:
+    sample: list[str] = []
+    for ref in refs:
+        ref_id = _safe_ref_id(ref)
+        if not ref_id:
+            continue
+        sample.append(ref_id)
+        if len(sample) >= limit:
+            break
+    return sample
+
+
+def _safe_ref_id(ref: Any) -> str:
+    if not isinstance(ref, str):
+        return f"<{type(ref).__name__}>"
+    value = ref.strip()
+    if not value:
+        return ""
+    lowered = value.lower()
+    if any(
+        marker in lowered
+        for marker in (
+            "prompt",
+            "completion",
+            "raw_response",
+            "provider_payload",
+            "api_key",
+            "token",
+            "secret",
+        )
+    ):
+        return "<redacted_ref>"
+    if len(value) > 160:
+        return "<redacted_ref>"
+    return value
 
 
 def _quality_fallback_reason(quality: Any) -> str:

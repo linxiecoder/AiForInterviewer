@@ -296,6 +296,102 @@ def test_quality_validator_blocks_fabricated_mq_from_signals() -> None:
     assert "unsupported_entity_reference" in result.blocking_issues
 
 
+def test_quality_validator_blocks_missing_pattern_required_elements() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    scenario = build_scenario_constraints(
+        progress_node_title="支付链路一致性",
+        expected_capability="能说明接口幂等、失败补偿和成本取舍。",
+        related_job_requirements=[],
+        related_resume_evidence=[],
+        missing_points=[],
+        selected_evidence_chunks=[],
+        history_feedback=[],
+        custom_topic_text=None,
+        polish_theme=strategy.theme,
+    )
+
+    result = validate_question_quality(
+        question_text=(
+            "围绕「支付链路一致性」，业务约束是支付链路需要稳定状态。"
+            "请从 Owner 视角说明一个失败路径下的性能或成本约束和核心 trade-off。"
+        ),
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=[],
+        recent_question_texts=[],
+        source_availability="unavailable",
+        confidence_level=scenario.confidence_level,
+    )
+
+    assert result.allow_emit is False
+    assert "missing_pattern_required_elements" in result.blocking_issues
+
+
+def test_quality_validator_blocks_missing_business_constraint_marker() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    scenario = build_scenario_constraints(
+        progress_node_title="双层库存状态机与对账机制",
+        expected_capability="能说明状态机和对账收敛。",
+        related_job_requirements=[],
+        related_resume_evidence=[],
+        missing_points=[],
+        selected_evidence_chunks=[],
+        history_feedback=[],
+        custom_topic_text=None,
+        polish_theme=strategy.theme,
+    )
+
+    result = validate_question_quality(
+        question_text=(
+            "围绕「双层库存状态机与对账机制」，请从 Owner 视角说明核心状态、状态流转、"
+            "防重复扣减、防重复回补、对账口径和收敛判断，并覆盖失败路径和核心 trade-off。"
+        ),
+        selected_pattern=get_question_pattern("state_machine_and_reconciliation"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=[],
+        recent_question_texts=[],
+        source_availability="unavailable",
+        confidence_level=scenario.confidence_level,
+    )
+
+    assert result.allow_emit is False
+    assert "missing_business_constraint" in result.blocking_issues
+
+
+def test_quality_validator_accepts_required_elements_and_business_marker_contract() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    scenario = build_scenario_constraints(
+        progress_node_title="支付链路一致性",
+        expected_capability="能说明接口幂等、失败补偿和成本取舍。",
+        related_job_requirements=[],
+        related_resume_evidence=[],
+        missing_points=[],
+        selected_evidence_chunks=[],
+        history_feedback=[],
+        custom_topic_text=None,
+        polish_theme=strategy.theme,
+    )
+
+    result = validate_question_quality(
+        question_text=(
+            "围绕「支付链路一致性」，业务约束是支付链路需要稳定状态。"
+            "请从 Owner 视角说明一个失败路径下的性能或成本约束、验证指标和核心 trade-off。"
+        ),
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=[],
+        recent_question_texts=[],
+        source_availability="unavailable",
+        confidence_level=scenario.confidence_level,
+    )
+
+    assert "missing_pattern_required_elements" not in result.blocking_issues
+    assert "missing_business_constraint" not in result.blocking_issues
+
+
 def test_question_metadata_roundtrip_and_low_confidence_merge() -> None:
     strategy = resolve_polish_theme_strategy("technical")
     signals = extract_evidence_signals(

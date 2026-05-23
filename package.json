@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "npm run db:up && bash scripts/dev/start.sh",
+    "dev:debug": "npm run dev -- debug",
     "db:up": "docker compose -f docker-compose.pg.yml up -d postgres",
     "dev:kill": "bash scripts/dev/kill-ports.sh 8001 5173",
     "dev:api": "bash scripts/dev/kill-ports.sh 8001 && bash scripts/dev/start-api.sh",
