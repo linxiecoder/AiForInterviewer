@@ -55,13 +55,14 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | docs/02 深度语义关联审计验收记录 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_ACCEPTANCE.md` | AIFI-ARCH-006 深度语义审计证据；记录审计范围、语义链路矩阵完成情况、finding 数量、F5/F6/F7/F8 readiness 结论、人工决策项和 MCP approval 状态占位；F4/M4 人工批准后作为后续 F6/F8 refinement evidence 保留，不阻断 F5，不替代 active design docs |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
-| F5 LangGraph MultiAgent 重构专题设计包 | `docs/03-delivery/refactor-multiagent-langgraph/` | AIFI-BE-002 PR1 planning package；登记 LangGraph MultiAgent 重构的专题设计包、SubAgent recon、架构比较、runtime / graph / data / API / frontend / test / validation / PR 拆分骨架；不替代 `docs/02-design/*`、`prompt-contracts/*.md`、`DELIVERY_PLAN.md`、`BACKLOG.md` 或 ADR；`docs/tmp` 只作为 PR1 输入，不作为事实源 |
+| F5 LangGraph MultiAgent 重构专题设计包 | `docs/03-delivery/refactor-multiagent-langgraph/` | AIFI-BE-002 PR1 planning package 与 AIFI-BE-003 PR1.5 implementation-ready spec remediation；本目录仍是 F5 LangGraph 重构 planning package，不替代 `docs/02-design/*`、`prompt-contracts/*.md`、`DELIVERY_PLAN.md`、`BACKLOG.md` 或 ADR；PR1.5 后仅 README、01-18 中明确标注的 PR2 / PR4-LG-DEP 输入可作为受控实现前置规格，长期事实必须按 `16_DESIGN_DOCS_REFACTOR_PLAN.md` 回写 active docs 或 ADR；`docs/tmp` 只作为 PR1 输入，不作为事实源 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
 | 归档台账 | `archive/MANIFEST.md` | 归档动作、替代路径、阻断条件和状态 |
 | 文档治理决策 | `docs/04-decisions/ADR-0001-document-governance.md` | 唯一文档体系、docs/archive 边界和归档机制 |
 | 交付体系决策 | `docs/04-decisions/ADR-0002-unified-delivery-system.md` | 统一阶段、里程碑、任务编号和优先级体系 |
 | 高保真设计工具治理决策 | `docs/04-decisions/ADR-0003-high-fidelity-design-tooling.md` | 状态 Proposed；Use OpenDesign as a high-fidelity exploration tool；记录 OpenDesign 作为 F3 高保真探索工具的治理边界；OpenDesign 输出不作为 active docs，不替代 Figma Prototype，不作为 M3 单独通过证据 |
 | AI 协作治理决策 | `docs/04-decisions/ADR-0004-ai-collaboration-governance.md` | 状态 Accepted；以 ADR-0001 和 ADR-0002 为上位依据；登记 Claude Code / Codex / ChatGPT 协作治理、Prompt Markdown、安全读取、最小审计、三轮推进和 Scope 外本地改动报告规则；ADR-0003 不作为依据；不定义产品 Prompt，不替代 F4 `PROMPT_SPEC.md` |
+| LangGraph Agentic Workflow Runtime 架构决策 | `docs/04-decisions/ADR-0005-langgraph-agentic-workflow-runtime.md` | 状态 Proposed；基于 AIFI-BE-003 将 Option C 作为 PR2-PR8 的候选长期架构决策，冻结单微服务双域、Core 不依赖 LangGraph、checkpoint 非业务事实源、raw payload 禁止、candidate/formal 边界和 active docs 回写边界；正式执行仍以 active docs、`BACKLOG.md`、`DELIVERY_PLAN.md` 和受权 PR scope 为准 |
 
 ## 2. 当前目录边界
 
@@ -70,7 +71,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | `docs/00-governance/` | active | 只承载当前治理入口 |
 | `docs/01-product/` | active | 当前 `PRD.md` 为产品需求唯一事实源，`REQUIREMENT_TRACEABILITY.md` 只登记历史需求处理 |
 | `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 和 `RELEASE_HANDOFF_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
-| `docs/03-delivery/` | active | 当前 `DELIVERY_PLAN.md`、`BACKLOG.md` 是阶段与任务入口；`refactor-multiagent-langgraph/` 仅作为 AIFI-BE-002 的 F5 专题 planning package，不替代 active design docs、阶段计划、任务入口或 ADR |
+| `docs/03-delivery/` | active | 当前 `DELIVERY_PLAN.md`、`BACKLOG.md` 是阶段与任务入口；`refactor-multiagent-langgraph/` 仅作为 AIFI-BE-002 / AIFI-BE-003 的 F5 专题 planning package 和 PR1.5 implementation-ready spec remediation，不替代 active design docs、阶段计划、任务入口或 ADR |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
 
