@@ -28,7 +28,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 | PR | 目标 | Scope | Allowed | Forbidden | Done condition |
 |---|---|---|---|---|---|
-| PR2 | AI Runtime 基础模型 | inert data model / repository / backend tests | `20_PR2_PREFLIGHT_READINESS_REPORT.md` exact scope lock 中列出的文件 | LangGraph runtime、graph execution、real provider、frontend、dependency、migration、business graph | schema/import/bootstrap/repository/redaction/idempotency/boundary tests pass |
+| PR2 | AI Runtime 基础模型 | inert data model / repository / backend tests | 本文 §4 allowlist / forbidden operations 和 §5 launch gates | LangGraph runtime、graph execution、real provider、frontend、dependency、migration、business graph | schema/import/bootstrap/repository/redaction/idempotency/boundary tests pass |
 | PR3 | AI Orchestration Facade + application contracts | facade、runner port、registry、guard、handoff、interrupt contracts | `apps/api/app/application/ai_runtime/**` and tests after explicit PR3 scope lock | concrete LangGraph import、adapter、checkpointer、business graph | Core only sees project-owned DTO / port |
 | PR4-LG-DEP | LangGraph dependency spike gate | dependency / fake graph spike only | dependency files and `infrastructure/ai_runtime/langgraph/**` after explicit authorization | business graph、real provider、frontend | dependency pin、serializer/checkpointer/fake graph verified |
 | PR4 | LangGraph runtime + fake graph | concrete adapter、checkpointer、fake graph runtime API | AI Runtime infrastructure + runtime API + tests | business graph migration、provider calls | fake graph start/resume/replay/timeline sanitized |
@@ -80,11 +80,14 @@ Forbidden scope:
 
 ## 4. PR2 exact scope
 
-PR2 仍是 `CONDITIONAL GO`，并且在编辑代码前必须采用 `docs/03-delivery/refactor-multiagent-langgraph/20_PR2_PREFLIGHT_READINESS_REPORT.md` 的 exact Scope Lock。
+PR2 executable source of truth is this document §4 allowlist / forbidden operations plus §5 launch gates.
+
+PR2 仍是 `CONDITIONAL GO`。任何 PR2 implementation turn 在编辑代码前必须重新锁定本节 allowlist / forbidden operations 和 §5 launch gates；不得从历史 planning package、Git history 或其他旧文档扩 scope。
 
 Allowed PR2 files are limited to:
 
 - `apps/api/app/infrastructure/db/models/ai_runtime.py`
+- `apps/api/app/infrastructure/db/models/__init__.py`，仅允许为 `Base.metadata` discovery 导入 / 导出 `ai_runtime` model classes
 - `apps/api/app/infrastructure/db/repositories/ai_runtime/**`
 - `tests/api/test_model_imports.py`
 - `tests/api/test_db_schema_bootstrap.py`
@@ -107,6 +110,7 @@ PR2 forbidden operations:
 - migration / Alembic edits。
 - CI edits。
 - PR2 scope 外业务代码 edits。
+- `apps/api/app/infrastructure/db/models/__init__.py` 中除 `ai_runtime` model class import / export 外的任何行为变更。
 
 ## 5. PR2 launch gates
 
@@ -143,7 +147,30 @@ git diff --check
 .venv/bin/python -m tools.doc_governor.cli doc-quality-gate --repo-root .
 ```
 
-后续 PR2 implementation 还必须运行 exact scope lock 中列出的 PR2 backend subset 和 forbidden scan。
+如果 `doc-quality-gate` 生成 `docs/governance/DOC_QUALITY_GATE_REPORT.md`，最终必须受控提交或删除；不得把该报告作为未跟踪文件留在工作区。
+
+后续 PR2 implementation preflight 必须内联运行以下命令，不再引用历史 validation 文档：
+
+```bash
+git status --short --untracked-files=all
+git branch --show-current
+git rev-parse HEAD
+git rev-list --left-right --count origin/main...HEAD
+rg -n "class .*\\(OwnedRecordMixin, Base\\)|__tablename__|mapped_column\\(|JSON|DateTime\\(timezone=True\\)|String\\(80\\)" apps/api/app/infrastructure/db/models tests/api/test_db_schema_bootstrap.py tests/api/test_model_imports.py
+rg -n "LangGraph|langgraph|AgentState|application/agents|from app.application.agents|import langgraph" apps/api/app/infrastructure/db/models apps/api/app/application
+.venv/bin/python -m pytest tests/api/test_model_imports.py tests/api/test_db_schema_bootstrap.py -q
+rg -n "LLM_OPENAI_API_KEY|AIFI_.*REAL_PROVIDER|REAL_PROVIDER|provider manual" tests apps/api
+```
+
+后续 PR2 implementation completion 必须运行以下 backend subset 和 forbidden scans：
+
+```bash
+.venv/bin/python -m pytest tests/api/test_model_imports.py tests/api/test_db_schema_bootstrap.py tests/api/test_agent_run_repository.py tests/api/test_agent_interrupt_repository.py tests/api/test_llm_call_repository.py tests/api/test_sensitive_payload_redaction.py tests/api/test_agent_side_effect_idempotency.py tests/api/test_agent_replay_resume_policy.py tests/api/test_architecture_boundaries.py -q
+rg -n "LangGraph|langgraph|AgentState|application/agents|from app.application.agents|import langgraph" apps/api/app/infrastructure/db/models apps/api/app/application
+rg -n "LLM_OPENAI_API_KEY|AIFI_.*REAL_PROVIDER|REAL_PROVIDER|provider manual" tests apps/api
+git diff --check
+git status --short --untracked-files=all
+```
 
 ## 8. Rollback policy
 
@@ -171,4 +198,4 @@ Stop before implementation if any of the following is true:
 
 ## 10. Old-doc handling
 
-旧 `docs/03-delivery/refactor-multiagent-langgraph/` 保留为 evidence-only。本文在本目录内替代旧 PR sequence 文档的后端迁移总计划职责，但不修改 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR-0005 或任何旧文档。
+Historical planning package status: superseded; see Git history. 本文在本目录内承担后端迁移总计划职责；当前 PR2 executable source of truth 只来自本文 §4 / §5。

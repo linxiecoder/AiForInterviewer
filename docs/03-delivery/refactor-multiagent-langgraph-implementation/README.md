@@ -13,7 +13,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 本文是 `docs/03-delivery/refactor-multiagent-langgraph-implementation/` 的唯一 implementation entry。后续阅读、执行、评审和 PR Scope Lock 必须先从本文进入，再跳转到下游子文档。
 
-本目录把旧 `docs/03-delivery/refactor-multiagent-langgraph/` 中分散的 PR1 / PR1.5 / PR1.6 planning evidence 合并为新的实施文档集。旧目录大部分文件保留为 evidence-only，不再作为实施 source of truth；只有 `DOCS_INDEX.md` 明确登记为 active 的旧目录文件或被本目录明确引用为 scope-lock 证据的文件保留特殊状态。
+Historical package status: superseded; see Git history。当前 implementation source of truth 只在本目录。
 
 ## 2. 权威规则
 
@@ -24,14 +24,14 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | 后端迁移总计划、PR 顺序、PR2 exact scope 约束 | `02_BACKEND_REFACTOR_MASTER_PLAN.md`，其中 §4 / §5 已内联 PR2 exact scope 和 launch gates |
 | 后端 method / field / Agent / Graph / Prompt / Skill / Trace 实施细节 | `03_BACKEND_FUNCTION_PACKAGES/*.md` |
 | 前端 LangGraph / AI Runtime Graph Configuration Console 实施计划 | `04_FRONTEND_LANGGRAPH_UI_PLAN.md` |
-| PR2 是否可开始代码实现 | `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5 + 旧 `20_PR2_PREFLIGHT_READINESS_REPORT.md` 的 evidence |
-| 旧专题包处理 | `docs/03-delivery/refactor-multiagent-langgraph/` 大部分只作 evidence，不作为实施入口；特殊状态见 §6 |
+| PR2 是否可开始代码实现 | `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5 |
+| 历史 planning package 处理 | superseded; see Git history |
 
 ## 3. 目录结构
 
 | 文件 | 职责 | 禁止承载内容 |
 |---|---|---|
-| `README.md` | 唯一入口、阅读顺序、source-of-truth 边界、PR2 状态和旧目录处理 | 不放架构图、后端迁移总计划、方法级实现表或前端状态机细节 |
+| `README.md` | 唯一入口、阅读顺序、source-of-truth 边界和 PR2 状态 | 不放架构图、后端迁移总计划、方法级实现表或前端状态机细节 |
 | `01_ARCHITECTURE_ASIS_TOBE.md` | as-is / to-be 架构、依赖方向、表边界、运行时事件流图 | 不放 PR 迁移任务表或方法级实现计划 |
 | `02_BACKEND_REFACTOR_MASTER_PLAN.md` | 后端 PR2-PR8 总计划、scope、门禁、验证和回滚 | 不放 graph node 级实现表、字段级 ORM 表或前端 UI 状态机 |
 | `03_BACKEND_FUNCTION_PACKAGES/README.md` | 后端功能包索引和跨包规则 | 不作为实施入口替代根 README |
@@ -47,7 +47,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 ## 4. 阅读顺序
 
-1. 先读本 README，确认入口、旧目录处理和 PR2 状态。
+1. 先读本 README，确认入口、source-of-truth 边界和 PR2 状态。
 2. 需要架构图时读 `01_ARCHITECTURE_ASIS_TOBE.md`。
 3. 需要启动或评审后端 PR 时读 `02_BACKEND_REFACTOR_MASTER_PLAN.md`。
 4. 进入具体后端实现前，只读对应的 backend function package。
@@ -55,7 +55,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 ## 5. PR2 当前状态
 
-PR2 仍是 `CONDITIONAL GO`。PR2 exact scope 已内联到 `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5；旧 `docs/03-delivery/refactor-multiagent-langgraph/20_PR2_PREFLIGHT_READINESS_REPORT.md` 只作为 scope-lock evidence，不再作为实施入口。
+PR2 仍是 `CONDITIONAL GO`。PR2 exact scope 已内联到 `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5；PR2 code implementation 只能以该文件 §4 allowlist / forbidden operations 和 §5 launch gates 为可执行依据。
 
 PR2 不授权以下事项：
 
@@ -69,21 +69,15 @@ PR2 不授权以下事项：
 - active docs 全量 backfill。
 - 修改 PR2 exact scope 外文件。
 
-## 6. 旧目录处理
+## 6. 历史 planning package 处理
 
-`docs/03-delivery/refactor-multiagent-langgraph/` 保留为历史 evidence 和 planning package。它不再是本轮 consolidated implementation 的入口，也不替代本目录。
-
-当前特殊状态：
-
-- `19_AI_PRODUCT_PROMPT_SKILL_PRESSURE_REMEDIATION_PLAN.md` 仍在 `DOCS_INDEX.md` 中作为 PR1.6 blocker identification / remediation planning active 特殊文档登记；它不是本 implementation set 的实施入口。
-- `20_PR2_PREFLIGHT_READINESS_REPORT.md` 未在 `DOCS_INDEX.md` 中作为独立 active 文档行登记，但仍被 `BACKLOG.md` 和本目录引用为 PR2 exact scope lock 的 evidence；PR2 exact scope 已内联到 `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5。
-- 除 `DOCS_INDEX.md` 明确 active 的旧目录文件和本目录明确引用的 scope-lock evidence 外，旧目录不得作为 PR2-PR8 implementation source of truth。
+旧 `docs/03-delivery/refactor-multiagent-langgraph/` 已被删除；历史内容可通过 Git history 查看；当前 implementation source of truth 只在本目录。Historical package status: superseded; see Git history.
 
 ## 7. 接受前风险
 
 如果 PR2 在本 consolidation 被接受前启动，主要风险是：
 
-- implementer 继续从旧 00-20 分散文档取数，导致入口混乱。
+- implementer 继续从 Git history 中的旧 00-20 分散文档取数，导致入口混乱。
 - PR2 scope 被误读为完整 LangGraph runtime GO。
 - `application/ai_runtime/**`、`infrastructure/ai_runtime/langgraph/**` 和旧 `application/ai/**` / `application/agents/**` 命名边界再次分裂。
 - Method / field / Prompt / Skill / Trace 计划分散，测试只能覆盖局部而无法证明 raw-off、owner scope、checkpoint non-truth-source 和 candidate/formal boundary。
@@ -93,7 +87,6 @@ PR2 不授权以下事项：
 
 - 不修改 `apps/**`、`tests/**`、依赖、migration、CI、后端代码、前端代码或业务代码。
 - 不调用真实 LLM provider。
-- 不移动、删除或重命名旧文档。
 - 不创建新的 roadmap、parallel plan 或替代 `BACKLOG.md` / `DELIVERY_PLAN.md` 的任务体系。
 
 ## 9. 完成定义
@@ -105,5 +98,5 @@ PR2 不授权以下事项：
 - 后端迁移总计划只出现在 `02_BACKEND_REFACTOR_MASTER_PLAN.md`。
 - 后端 method / field / Agent / Graph / Prompt / Skill / Trace 计划只出现在 function package docs。
 - 前端计划只出现在 `04_FRONTEND_LANGGRAPH_UI_PLAN.md`。
-- 旧 `refactor-multiagent-langgraph/` 已说明为大部分 evidence-only，并明确 19 / 20 的特殊状态。
-- PR2 保持 `CONDITIONAL GO`，且未扩大 `20_PR2_PREFLIGHT_READINESS_REPORT.md` 的 exact scope。
+- 历史 planning package 已标记为 superseded; see Git history。
+- PR2 保持 `CONDITIONAL GO`，且未扩大 `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5 的 exact scope。

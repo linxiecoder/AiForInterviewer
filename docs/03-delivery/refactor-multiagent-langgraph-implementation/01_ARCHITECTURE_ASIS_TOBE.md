@@ -22,7 +22,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | 后端方法 / 字段 / graph node 细节 | `03_BACKEND_FUNCTION_PACKAGES/*.md`，但只能引用本文架构定义 |
 | 前端状态机和组件计划 | `04_FRONTEND_LANGGRAPH_UI_PLAN.md` |
 | 当前有效文档 | `docs/02-design/*`、`docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md`、ADR-0005 |
-| 旧专题目录 | `docs/03-delivery/refactor-multiagent-langgraph/` 只作 evidence，不作为本 implementation set 的入口 |
+| 历史 planning package | superseded; see Git history；不作为本 implementation set 的入口 |
 
 本文不授权代码实现，不修改 `apps/**`、`tests/**`、依赖、migration、CI、ADR、`BACKLOG.md` 或 `DOCS_INDEX.md`。本文也不把 ADR-0005 从 `Proposed` 升级为完整 Accepted。PR2 仍保持 `CONDITIONAL GO`，只允许在 exact scope lock 内实施 inert AI Runtime data model / repository / backend tests。
 

@@ -27,7 +27,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 ### 3.1 Shared fields
 
-All six tables must preserve `OwnedRecordMixin` semantics unless implementation proves a smaller equivalent is needed.
+All PR2 runtime tables must use `OwnedRecordMixin` unless a prior docs-only scope-lock update records a bounded exception. PR2 implementation cannot replace this with an ad hoc owner field pattern during code review.
 
 | Field | Type | Rule |
 |---|---|---|
@@ -70,8 +70,10 @@ All six tables must preserve `OwnedRecordMixin` semantics unless implementation 
 | `AgentInterruptRepository` | `create_interrupt`, `get_open_interrupt_for_owner`, `resume_interrupt_once`, `expire_interrupts` | resume requires owner, base version and idempotency hash |
 | `AgentCheckpointRefRepository` | `record_checkpoint_ref`, `list_refs_by_run`, `get_latest_ref`, `expire_refs` | refs and metadata only; no checkpoint payload read as business result |
 | `LlmCallRepository` | `create_planned_call`, `mark_running`, `mark_succeeded`, `mark_failed`, `mark_replay_reused`, `get_summary_for_owner`, `list_by_run` | returns sanitized model/usage/hash/validation/fallback summary only |
-| `LlmCallPayloadRepository` | `capture_sanitized_summary`, `capture_debug_raw_ref`, `expire_payloads`, `audit_payload_access` | raw requires feature flag, encryption, TTL and audit; production summary never reads raw |
-| `AgentSideEffectRepository` | `persist_question_once`, `persist_feedback_once`, `persist_report_once`, `persist_candidate_once`, `record_pending_write`, `finalize_pending_write`, `mark_pending_write_failed` | deterministic side-effect keys prevent duplicate formal writes |
+| `LlmCallPayloadRepository` | `capture_sanitized_summary`, `capture_debug_raw_ref`, `expire_payloads`, `audit_payload_access` | PR2 `capture_debug_raw_ref` must fail closed or be marked PR4+; raw requires feature flag, encryption, TTL and audit; production summary never reads raw |
+| `AgentSideEffectRepository` | `record_pending_write`, `finalize_pending_write`, `mark_pending_write_failed`; PR5+ only: `persist_question_once`, `persist_feedback_once`, `persist_report_once`, `persist_candidate_once` | PR2 only records inert pending-write / side-effect-key metadata; PR2 must not call Core formal write paths or persist `Question` / `Feedback` / `Report` / `Candidate` formal objects |
+
+Formal-write methods on `AgentSideEffectRepository` are PR5+ only. In PR2, side-effect persistence is limited to inert pending-write and side-effect-key records that prove idempotency behavior without invoking `persist_question_once`, `persist_feedback_once`, `persist_report_once`, `persist_candidate_once` or any Core formal write command.
 
 ## 6. LLM Trace implementation plan
 
@@ -111,9 +113,9 @@ All six tables must preserve `OwnedRecordMixin` semantics unless implementation 
 | `tests/api/test_agent_run_repository.py` | timeline sorted, owner isolation, interrupts recorded, no checkpoint payload |
 | `tests/api/test_agent_interrupt_repository.py` | resume once, stale version conflict, owner isolation |
 | `tests/api/test_llm_call_repository.py` | summary saved without raw prompt/completion/provider payload; retention/owner scope |
-| `tests/api/test_sensitive_payload_redaction.py` | forbidden markers never reach summary/API-like DTO |
-| `tests/api/test_agent_side_effect_idempotency.py` | same side-effect key reuses existing ref; different body conflicts |
-| `tests/api/test_agent_replay_resume_policy.py` | production resume reuses existing sanitized result; debug replay does not write formal object |
+| `tests/api/test_sensitive_payload_redaction.py` | forbidden markers never reach summary/API-like DTO; `raw_enabled` defaults to `false`; `raw_payload_ciphertext_ref` and `encryption_key_ref` default to `null` |
+| `tests/api/test_agent_side_effect_idempotency.py` | same side-effect key reuses existing pending-write ref; different body conflicts; PR2 never calls formal-write methods |
+| `tests/api/test_agent_replay_resume_policy.py` | production resume reuses existing sanitized result; debug replay does not write formal object; raw debug ref capture fails closed in PR2 or remains PR4+ |
 | `tests/api/test_architecture_boundaries.py` | runtime models/repositories do not import LangGraph; Core does not import runtime internals |
 
 ## 10. Forbidden in PR2

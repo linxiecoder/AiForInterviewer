@@ -36,7 +36,7 @@ Backend function package docs 承载 method-level、field-level、Agent / Graph 
 | checkpoint | Checkpoint is runtime recovery only; never business truth source |
 | candidate/formal | Graphs may create candidate/suggestion refs; formal write requires Core command or explicit user confirmation |
 | real provider | 除非后续 PR 明确授权且 real-provider gates 满足，否则不得调用 real provider |
-| PR2 | PR2 cannot use package docs to expand beyond exact `20_PR2_PREFLIGHT_READINESS_REPORT.md` scope |
+| PR2 | PR2 cannot use package docs to expand beyond `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5 scope |
 | PR order | PR5 是 Polish first migration target；PR6 是 Graph Configuration Backend；PR7 是 Graph Configuration Frontend；PR8 是 conditional business graph migration / closure |
 
 ## 4. Package 使用规则
