@@ -10,7 +10,9 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 ## 1. Package 目标
 
-本 package 冻结 `polish_progress_tree_graph`、`polish_question_graph`、`polish_feedback_graph` 的 implementation plan。它同时冻结 answer save 非 AI 边界。
+本 package 冻结 PR5 Polish first migration target 的 implementation plan：`polish_progress_tree_graph`、`polish_question_graph`、`polish_feedback_graph`。它同时冻结 answer save 非 AI 边界。
+
+PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enhancement、candidate confirmation、formal Weakness / Asset / Training closure 留到 PR8，不作为 PR5 退出条件。
 
 ## 2. Non-negotiable boundaries
 
@@ -19,6 +21,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | answer save | `PolishUseCases.create_answer` remains Core Business synchronous write; it does not call LLM and does not start graph |
 | feedback generation | independent AI task; answer save cannot implicitly generate feedback |
 | candidate | feedback graph may produce candidate refs; it cannot create formal Weakness / Asset / Training object |
+| candidate enhancement | LLM-based candidate enhancement and formal closure are PR8 scope, not PR5 |
 | raw-off | no raw prompt/completion/provider payload in checkpoint/log/API/timeline |
 | Core dependency | Core Polish use case cannot import LangGraph or graph node |
 
@@ -26,9 +29,9 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 | Graph | Target | Persistence targets | PR |
 |---|---|---|---:|
-| `polish_progress_tree_graph` | generate or refresh session progress tree | progress tree/state, AI task result, trace/evidence | PR6 |
-| `polish_question_graph` | generate question from progress node and context | questions, AI task result, trace/evidence, low confidence flags | PR6 |
-| `polish_feedback_graph` | generate feedback / score / candidates for saved answer | feedback, score results, candidate refs, trace/evidence | PR6 / PR8 for candidate enhancement |
+| `polish_progress_tree_graph` | generate or refresh session progress tree | progress tree/state, AI task result, trace/evidence | PR5 |
+| `polish_question_graph` | generate question from progress node and context | questions, AI task result, trace/evidence, low confidence flags | PR5 |
+| `polish_feedback_graph` | generate feedback / score / candidate refs for saved answer | feedback, score results, candidate refs, trace/evidence | PR5；candidate enhancement / formal closure PR8 |
 
 ## 4. `polish_question_graph` node plan
 
@@ -68,7 +71,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | `feedback_schema_gate` | candidate payload | schema-valid payload | none | `polish_feedback:{feedback_id}:schema:{candidate_digest}` | `validation_failed` | schema invalid fallback |
 | `feedback_consistency_gate` | schema-valid payload | normalized feedback and score candidate | none | `polish_feedback:{feedback_id}:consistency:{payload_digest}` | `validation_failed` / `low_confidence` | score repair and no leaks |
 | `extract_weakness_asset_candidates` | normalized payload, question metadata | candidate refs/payloads | none | `polish_feedback:{feedback_id}:extract-candidates:{payload_digest}` | `partial` | candidate refs, no formal write |
-| `enhance_candidates_with_llm_if_enabled` | candidate payload | enhanced candidate payload | LLM only if feature and provider gates allow | `polish_feedback:{feedback_id}:candidate-llm:{candidate_digest}` | `partial` / `low_confidence` | forbidden provider fallback |
+| `enhance_candidates_with_llm_if_enabled` | candidate payload | enhanced candidate payload | PR8 only；LLM only if feature and provider gates allow | `polish_feedback:{feedback_id}:candidate-llm:{candidate_digest}` | `partial` / `low_confidence` | forbidden provider fallback |
 | `persist_feedback` | normalized/enhanced payload | feedback ref | write `feedback` | `feedback:{owner_id}:{answer_id}:{feedback_id}` | `generation_failed` | legacy API sanitizer |
 | `persist_score` | score candidate, feedback ref | score ref | write `ScoreResult(polish_answer)` when valid | `score_result:{owner_id}:polish_answer:{feedback_id}:{score_version}` | `partial` / `validation_failed` | invalid score skips formal score |
 | `persist_candidates` | candidate payload | candidate refs | upsert candidates only | `polish_candidates:{owner_id}:{feedback_id}:{candidate_digest}` | `partial` | no formal write |
@@ -91,7 +94,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | `extract_feedback_candidates` | `extract_weakness_asset_candidates` | wrap |
 | `SqlAlchemyPolishRepository.add_question/add_feedback/update_progress_tree/add_task` | persistence nodes | keep / wrap |
 
-## 8. PR6 tests
+## 8. PR5 tests
 
 | Test area | Assertions |
 |---|---|
@@ -99,7 +102,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | progress tree | refresh keeps node refs; low confidence path does not wipe valid previous tree |
 | answer save | answer save does not call LLM or start graph |
 | feedback graph | independent AI task; feedback / score / candidates persisted with redaction |
-| candidate boundary | candidate refs only; formal object not created before confirmation |
+| candidate boundary | candidate refs only; formal object not created before confirmation；candidate enhancement is deferred to PR8 |
 
 ## 9. Non-goals
 
@@ -108,3 +111,4 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 - No vector database.
 - No hidden raw provider fields in API responses.
 - No automatic formal candidate promotion.
+- No candidate enhancement or formal closure before PR8.

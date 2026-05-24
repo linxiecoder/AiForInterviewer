@@ -191,8 +191,8 @@ F7 / graph migration 至少覆盖以下 fixture：
 
 1. AIFI-ARCH-007 先冻结本文件、`DOCS_INDEX.md` 登记和轻量 cross-reference。
 2. AIFI-BE-005 的 PR2 preflight 必须确认 PR2 不创建任何 `Skill*` formal object，也不把现有对象临时升级为 Skill。
-3. PR5 Job Match graph 只能引用已冻结 mapping，输出 `SkillGap` candidate refs；保留 legacy fallback parity。
-4. PR6 Polish graph 读取 SkillGap / SkillToQuestionPattern，反馈只写 assessment / gap candidate refs。
+3. PR5 = Polish first migration target：读取 SkillGap / SkillToQuestionPattern，反馈只写 assessment / gap candidate refs。
+4. PR6 = JobMatch / ResumeAnalysis trace-compatible wrapper / descriptor first；graph 只有在 PR5 first migration target 完成后仍需要时才迁移，并且只能引用已冻结 mapping、输出 `SkillGap` candidate refs、保留 legacy fallback parity。
 5. Pressure graph 只有在 AIFI-BE-004 关闭后才能读取 pressure focus skill refs。
 6. PR8 Report / Review / Candidate closure 聚合 SkillAssessment / SkillGap，并通过确认流进入 Weakness / Asset / Training。
 7. F7 fixtures 覆盖 low confidence、conflicting evidence、manual correction 和 training result update。

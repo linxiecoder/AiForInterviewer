@@ -80,7 +80,9 @@ PR2 runtime foundation 必须默认关闭：
 - 在 PR2 设计和实现 `agent_runs`、`agent_node_runs`、`agent_interrupts`、`llm_calls`、`agent_checkpoint_refs` 等 inert AI Runtime 基础对象、repository 和后端测试。
 - 在 PR3 设计和实现 `AiOrchestrationFacade`、`AgentGraphRunner` port、runtime command/result contract。
 - 在 PR4 设计和实现 concrete LangGraph adapter、fake graph、checkpointer factory、interrupt/resume、sanitized timeline。
-- 在 PR5-PR8 逐步把 Job Match、Polish、Pressure、Report、Review、Weakness、Asset、Training 迁移到 graph。
+- 在 PR5 迁移 Polish first graph target。
+- 在 PR6 先以 JobMatch / ResumeAnalysis trace-compatible wrapper / descriptor 验证兼容性；graph 只有在上一迁移目标完成后仍需要时才迁移。
+- 在 PR7-PR8 逐步把 Pressure、Report、Review、Weakness、Asset、Training 迁移到 graph。
 
 本 ADR 禁止：
 

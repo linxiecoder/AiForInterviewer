@@ -32,10 +32,10 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | PR3 | AI Orchestration Facade + application contracts | facade、runner port、registry、guard、handoff、interrupt contracts | `apps/api/app/application/ai_runtime/**` and tests after explicit PR3 scope lock | concrete LangGraph import、adapter、checkpointer、business graph | Core only sees project-owned DTO / port |
 | PR4-LG-DEP | LangGraph dependency spike gate | dependency / fake graph spike only | dependency files and `infrastructure/ai_runtime/langgraph/**` after explicit authorization | business graph、real provider、frontend | dependency pin、serializer/checkpointer/fake graph verified |
 | PR4 | LangGraph runtime + fake graph | concrete adapter、checkpointer、fake graph runtime API | AI Runtime infrastructure + runtime API + tests | business graph migration、provider calls | fake graph start/resume/replay/timeline sanitized |
-| PR5 | Job Match graph | first business graph | job match graph, facade wiring and tests | Polish / report / frontend | existing Job Match API compatibility preserved |
-| PR6 | Polish graphs | progress tree / question / feedback graph | Polish graph and compatibility tests | Pressure / report / frontend | answer save remains non-AI; feedback remains independent task |
+| PR5 | Polish first migration target | progress tree / question / feedback graph | Polish graph descriptors, facade wiring and compatibility tests | JobMatch / ResumeAnalysis graph、Pressure / report / frontend、candidate enhancement / formal closure | existing Polish API compatibility preserved；answer save remains non-AI；feedback remains independent task |
+| PR6 | JobMatch / ResumeAnalysis trace-compatible or graph if still needed | descriptor / DTO / trace-compatible wrapper / placeholder；full graph only after PR6 decision confirms it is still needed | trace wrapper, placeholders, or scoped `job_match_graph` / `resume_analysis_graph` after explicit PR6 scope lock | frontend、Pressure / Report / Review / Candidate / Skill / Training closure、silent direct-path removal | existing Job Match API compatibility preserved；direct path remains available until at least PR7 frontend ready |
 | PR7 | Frontend AI Runtime UI | task status, timeline, interrupt, candidate confirmation base | frontend files after PR7 authorization | backend graph logic | UI hides raw / checkpoint internals |
-| PR8 | Pressure / Report / Review / Candidate closure | advanced business graphs and confirmation closure | scoped backend + frontend files after PR8 authorization | export/download, exact probability, silent formal write | report/review/candidate/copy/privacy gates pass |
+| PR8 | Pressure / Report / Review / Candidate / Skill / Training closure | advanced business graphs and confirmation closure | scoped backend + frontend files after PR8 authorization | export/download, exact probability, silent formal write | report/review/candidate/skill/training/copy/privacy gates pass |
 
 ## 4. PR2 exact scope
 
@@ -112,7 +112,9 @@ git diff --check
 | PR3 | Disable facade wiring and restore legacy direct AI task path; no LangGraph dependency should exist |
 | PR4-LG-DEP | Revert dependency files and fake adapter spike; no business graph state should exist |
 | PR4 | Disable runtime feature flag and fake graph API; checkpoint refs must not be used as business facts |
-| PR5-PR8 | Keep Core business formal objects authoritative; cancel / fail in-flight agent runs before fallback |
+| PR5 | Keep Polish direct path available until graph parity; cancel / fail in-flight Polish graph runs before fallback |
+| PR6 | Keep JobMatch / ResumeAnalysis direct path available until at least PR7 frontend ready; full graph rollback must return to trace-compatible direct wrapper |
+| PR7-PR8 | Keep Core business formal objects authoritative; cancel / fail in-flight agent runs before fallback |
 
 ## 9. Stop conditions
 
