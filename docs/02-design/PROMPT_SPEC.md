@@ -32,6 +32,8 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | `docs/02-design/SCORING_SPEC.md` | score type、rubric dimensions、默认权重、公式、低置信度和正式 `ScoreResult` 规则 |
 | `docs/02-design/SEMANTICS_GLOSSARY.md` | Low Confidence、`confidence_level`、`validation_status`、`source_availability` 和 candidate / suggestion / formal object 统一语义 |
 | `docs/02-design/APPLICATION_FLOW_SPEC.md` | P-* contract 到 application service、AiTask、LLM call plan、Prompt 输入结构和 persistence handoff 的运行编排 |
+| `docs/02-design/PROMPT_ASSET_SPEC.md` | Production Prompt Asset registry、asset 字段、runtime bundle、builder、validator、fixture 和 trace 映射 |
+| `docs/02-design/PROMPT_EVALUATION_SPEC.md` | Golden / regression / negative fixtures、quality metrics、fake / real provider gate、human review、CI gate 和 rollback policy |
 | `docs/03-delivery/BACKLOG.md` | `AIFI-PROMPT-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-SEC-001` 的依赖 |
 
 ### 2.2 非目标
@@ -67,6 +69,9 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | EvidenceRef | 支撑评分、建议、弱项、资产候选和报告结论的证据引用 |
 | TraceRef | 支撑模型调用、检索、上下文装配、输出校验和失败记录的过程引用 |
 | Failure Signal | 跨 Shared Contract 传递的标准化失败信号，统一使用 snake_case 命名 |
+| Production Prompt Asset | `PROMPT_ASSET_SPEC.md` 登记的可版本化、可评审、可灰度、可回滚 Prompt 模板 / 文案资产 |
+| Runtime Prompt Bundle | 运行时代码构造并传入 `LlmTransportRequest` 的 compact prompt 输入包，必须映射到 Production Prompt Asset |
+| Prompt Evaluation Fixture | `PROMPT_EVALUATION_SPEC.md` 定义的 golden、regression、negative、redaction 或 model comparison fixture |
 
 ### 3.1 Contract ID 命名空间治理（Contract ID Namespace Governance）
 
@@ -544,8 +549,9 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 1. 以 `APPLICATION_FLOW_SPEC.md` 对齐 P-* contract 的运行编排、LLM call plan 和 persistence handoff。
 2. 以 `SCORING_SPEC.md` / `SEMANTICS_GLOSSARY.md` 对齐评分、低置信度和状态枚举。
 3. 以 `SKILL_MODEL_SPEC.md` 对齐跨 Job Match、Polish、Pressure、Report、Review、Weakness、Asset、Training 的 Skill taxonomy、SkillEvidence、SkillAssessment、SkillGap 和 SkillProgress 引用；不得新增未登记 `P-*` contract ID。
-4. 以 `API_SPEC.md` / `DATA_MODEL.md` / `PERSISTENCE_MODEL.md` 做跨文档回归门禁。
-5. `AIFI-PROMPT-001` 关闭前置检查。
+4. 以 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 对齐 Production Prompt Asset、Runtime Prompt Bundle、Prompt Evaluation Fixture、Golden Fixture、Counterexample、Prompt Regression Suite 和 Model Comparison Policy。
+5. 以 `API_SPEC.md` / `DATA_MODEL.md` / `PERSISTENCE_MODEL.md` 做跨文档回归门禁。
+6. `AIFI-PROMPT-001` 关闭前置检查。
 
 `AIFI-PROMPT-001` 当前仍不自动 DONE；跨文档证据已在本轮转入 `AR-F4-FULL-001` 处置表，后续进入 verification，而不是继续保留阻断式 Prompt UNKNOWN。
 
@@ -559,6 +565,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | Prompt contract 输出状态、低置信度、source unavailable、validation failed | must_close_in_F4 | Shared failure signals、source availability、Output Validation、Low Confidence、Evidence Binding、Trace / Persistence 已冻结；业务 contract 必须复用 `status`、`validation_result_ref`、`low_confidence_flags`、`evidence_refs` 和 `trace_refs`。 | `P-SHARED-003` / `P-SHARED-004` / `P-SHARED-005`；API response envelope |
 | candidate / suggestion / confirmation / formal object 边界 | must_close_in_F4 | AI 输出只能进入 candidate、draft、suggestion、validation result、trace 或 low confidence；正式 `Weakness`、`Asset`、`AssetVersion`、`TrainingRecommendation`、`TrainingTask` 需用户确认或显式业务动作。 | `DATA_MODEL.md` §4.3；`API_SPEC.md` §7；Weakness / Asset / Training contracts |
 | Skill / Capability Model 引用 | already_closed_by_aifi_arch_007 | Prompt contracts 不新增未登记 ID；Job Match、Polish、Pressure、Report、Review、Weakness、Asset、Training 只通过 `skill_refs[]`、`skill_gap_candidate_refs[]`、`skill_evidence_refs[]`、`skill_assessment_candidate_refs[]` 等字段族引用 `SKILL_MODEL_SPEC.md` 冻结的 taxonomy 和 mapping。 | `SKILL_MODEL_SPEC.md`; F7 skill fixture |
+| Prompt Asset / Evaluation 设计 | already_closed_by_aifi_prompt_002 | Production Prompt Asset registry、Prompt Evaluation Fixture、Golden Fixture、Counterexample、Prompt Regression Suite、Model Comparison Policy、redaction / rollback 和 LLM trace 关系已冻结；runtime builder 必须映射到 asset registry，fake provider 不再承载业务真相。 | `PROMPT_ASSET_SPEC.md`; `PROMPT_EVALUATION_SPEC.md`; PR5-PR8 prompt migration fixture |
 | Prompt 输入最小化、system prompt、provider payload、隐藏评分规则 | must_close_in_F4 | Context Assembly 和 Security 边界禁止前端、日志、trace、copy content 或 API response 暴露 system prompt、Prompt 模板、completion、provider payload、密钥、隐藏评分规则或内部校准细节。 | `SECURITY_PRIVACY.md` §9 / §17.1 / §21；`API_SPEC.md` §8 |
 | 题目推荐、压力面题量 / 节奏、连续追问深度、同题结束阈值 | deferred_non_blocking | MVP contract 已冻结输入、输出、状态、证据、trace、低置信度和用户动作边界；排序、强度、题量、追问深度和结束阈值为策略优化，不阻断 M4。 | `POLISH_CONTRACTS.md` / `PRESSURE_CONTRACTS.md`; `AR-F4-FULL-005` |
 | 复盘切分、题级复盘合并、跨复盘聚合 | deferred_non_blocking | Review contracts 已冻结模拟 / 真实复盘输入、可信度、完整度、ReviewItem、证据和候选回流边界；复杂合并与最终 UX 展示后置。 | `REVIEW_CONTRACTS.md`; F7 review fixture |
@@ -574,6 +581,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 补充 Prompt Asset / Evaluation 交叉引用 | 明确 `PROMPT_SPEC.md` 只维护 `P-*` contract registry；Production Prompt Asset、fixture、model comparison、release / rollback 和 runtime builder 映射由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 承接 |
 | 2026-05-24 | 补充 Skill / Capability Model 交叉引用 | 明确 Prompt contracts 通过字段族引用 `SKILL_MODEL_SPEC.md`，不新增 `P-*` contract ID，不把 Prompt 输出直接 formalize 为 Weakness / Asset / Training 或 Skill 事实 |
 | 2026-05-19 | 为打磨进展树登记 RAG-lite evidence chunking | `polish_progress_tree_plan` / `polish_progress_tree_state` 输入从粗粒度 snapshot 转为 `selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary` 和 `turns_summary`；节点 evidence 可引用稳定 `evidence_chunk_ids`；明确当前不引入 embedding、向量库或外部检索系统 |
 | 2026-05-17 | 增加 scoring / semantics / application flow 交接 | 明确评分细则以 `SCORING_SPEC.md` 为 canonical，Low Confidence / validation / source availability 以 `SEMANTICS_GLOSSARY.md` 为 canonical，P-* contract 运行编排以 `APPLICATION_FLOW_SPEC.md` 为 canonical；不新增 contract ID |
