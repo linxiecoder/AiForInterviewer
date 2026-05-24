@@ -14,6 +14,10 @@ class LlmTransportRequest:
     task_type: str
     input_refs: tuple[str, ...] = field(default_factory=tuple)
     evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    graph_name: str | None = None
+    node_name: str | None = None
+    prompt_version: str | None = None
+    schema_id: str | None = None
 
 
 @dataclass(frozen=True)

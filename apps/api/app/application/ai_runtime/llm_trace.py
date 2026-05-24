@@ -22,6 +22,7 @@ class LlmTraceContext:
     agent_node_run_id: str
     contract_ids: tuple[str, ...]
     replay_mode: str
+    actor_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.application.ai_runtime.contracts import (
@@ -14,9 +15,12 @@ from app.application.ai_runtime.contracts import (
     GraphDisabledError,
     RuntimePolicyError,
     RuntimeValidationError,
+    contains_sensitive_payload,
     sanitize_payload,
 )
+from app.application.ai_runtime.llm_trace import LlmTraceContext, PersistedLlmTransport
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.llm.types import LlmTransportRequest
 
 if TYPE_CHECKING:
     from app.application.ai_runtime.registry import GraphDescriptor
@@ -26,6 +30,10 @@ POLISH_FEEDBACK_GRAPH_NAME = "polish_feedback_graph"
 POLISH_FEEDBACK_GRAPH_VERSION = "pr5-skeleton"
 POLISH_FEEDBACK_FAKE_RUNTIME_VERSION = "pr6-fake-runtime"
 POLISH_FEEDBACK_READONLY_PARITY_VERSION = "pr7-readonly-parity"
+POLISH_FEEDBACK_TRACE_GATE_PROMPT_VERSION = "polish_feedback_trace_gate_v1"
+POLISH_FEEDBACK_TRACE_GATE_SCHEMA_ID = "polish_feedback_trace_request.v1"
+POLISH_FEEDBACK_TRACE_GATE_NODE_NAME = "polish_feedback_trace_gate"
+POLISH_FEEDBACK_TRACE_TASK_TYPE = "polish_feedback_generation"
 POLISH_FEEDBACK_GRAPH_FLAG = "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
 
 _DEFAULT_ENTRYPOINTS = ("start", "replay")
@@ -83,6 +91,36 @@ _PR7_FORBIDDEN_INPUT_KEYS = frozenset(
         "sec" + "ret",
     }
 )
+_PR8_ALLOWED_EVIDENCE_BUNDLE_KEYS = frozenset(
+    {
+        "session_ref",
+        "question_ref",
+        "answer_ref",
+        "prior_answer_refs",
+        "prior_feedback_refs",
+        "rubric_summary_ref",
+        "idempotency_digest",
+        "question_digest",
+        "answer_digest",
+        "evidence_ref_ids",
+        "validation_ref_ids",
+        "low_confidence_ref_ids",
+        "parity_result_ref",
+    }
+)
+_PR8_FORBIDDEN_INPUT_KEYS = _PR7_FORBIDDEN_INPUT_KEYS | frozenset(
+    {
+        "raw" + "_llm_messages",
+        "raw" + "_provider" + "_response",
+        "source" + "_payload",
+    }
+)
+
+
+@dataclass(frozen=True)
+class PolishFeedbackTraceRequestPlan:
+    trace_context: LlmTraceContext
+    transport_request: LlmTransportRequest
 
 
 def build_polish_feedback_graph_descriptor() -> "GraphDescriptor":
@@ -282,6 +320,136 @@ def build_polish_feedback_readonly_parity_gate(
     return sanitize_payload(payload)
 
 
+def build_polish_feedback_trace_request(
+    *,
+    owner_id: str,
+    actor_id: str,
+    ai_task_id: str,
+    agent_run_id: str,
+    agent_node_run_id: str,
+    session_ref: str,
+    question_ref: str,
+    answer_ref: str,
+    rubric_summary_ref: str,
+    idempotency_digest: str,
+    question_digest: str,
+    answer_digest: str,
+    parity_result_ref: str,
+    prior_answer_refs: tuple[str, ...] | list[str] = (),
+    prior_feedback_refs: tuple[str, ...] | list[str] = (),
+    evidence_ref_ids: tuple[str, ...] | list[str] = (),
+    validation_ref_ids: tuple[str, ...] | list[str] = (),
+    low_confidence_ref_ids: tuple[str, ...] | list[str] = (),
+    evidence_bundle_extra: dict[str, Any] | None = None,
+    **raw_inputs: Any,
+) -> PolishFeedbackTraceRequestPlan:
+    _validate_pr8_raw_inputs(raw_inputs)
+    _validate_pr8_scoped_id("owner_id", owner_id)
+    _validate_pr8_scoped_id("actor_id", actor_id)
+    _validate_pr8_scoped_id("ai_task_id", ai_task_id)
+    _validate_pr8_scoped_id("agent_run_id", agent_run_id)
+    _validate_pr8_scoped_id("agent_node_run_id", agent_node_run_id)
+
+    evidence_bundle = _pr8_evidence_bundle(
+        session_ref=session_ref,
+        question_ref=question_ref,
+        answer_ref=answer_ref,
+        prior_answer_refs=prior_answer_refs,
+        prior_feedback_refs=prior_feedback_refs,
+        rubric_summary_ref=rubric_summary_ref,
+        idempotency_digest=idempotency_digest,
+        question_digest=question_digest,
+        answer_digest=answer_digest,
+        evidence_ref_ids=evidence_ref_ids,
+        validation_ref_ids=validation_ref_ids,
+        low_confidence_ref_ids=low_confidence_ref_ids,
+        parity_result_ref=parity_result_ref,
+    )
+    if evidence_bundle_extra:
+        evidence_bundle = evidence_bundle | dict(evidence_bundle_extra)
+    _validate_pr8_evidence_bundle(evidence_bundle)
+
+    input_refs = (
+        evidence_bundle["session_ref"],
+        evidence_bundle["question_ref"],
+        evidence_bundle["answer_ref"],
+    )
+    _validate_pr8_input_refs(input_refs)
+
+    trace_context = LlmTraceContext(
+        owner_id=owner_id,
+        actor_id=actor_id,
+        ai_task_id=ai_task_id,
+        agent_run_id=agent_run_id,
+        agent_node_run_id=agent_node_run_id,
+        contract_ids=("P-POLISH-FEEDBACK-001",),
+        replay_mode="production_resume",
+    )
+    transport_request = LlmTransportRequest(
+        contract_ids=("P-POLISH-FEEDBACK-001",),
+        task_type=POLISH_FEEDBACK_TRACE_TASK_TYPE,
+        input_refs=input_refs,
+        evidence_bundle=sanitize_payload(evidence_bundle),
+        graph_name=POLISH_FEEDBACK_GRAPH_NAME,
+        node_name=POLISH_FEEDBACK_TRACE_GATE_NODE_NAME,
+        prompt_version=POLISH_FEEDBACK_TRACE_GATE_PROMPT_VERSION,
+        schema_id=POLISH_FEEDBACK_TRACE_GATE_SCHEMA_ID,
+    )
+    return PolishFeedbackTraceRequestPlan(
+        trace_context=trace_context,
+        transport_request=transport_request,
+    )
+
+
+def plan_polish_feedback_provider_trace_gate(
+    *,
+    transport: PersistedLlmTransport,
+    owner_id: str,
+    actor_id: str,
+    ai_task_id: str,
+    agent_run_id: str,
+    agent_node_run_id: str,
+    session_ref: str,
+    question_ref: str,
+    answer_ref: str,
+    rubric_summary_ref: str,
+    idempotency_digest: str,
+    question_digest: str,
+    answer_digest: str,
+    parity_result_ref: str,
+    prior_answer_refs: tuple[str, ...] | list[str] = (),
+    prior_feedback_refs: tuple[str, ...] | list[str] = (),
+    evidence_ref_ids: tuple[str, ...] | list[str] = (),
+    validation_ref_ids: tuple[str, ...] | list[str] = (),
+    low_confidence_ref_ids: tuple[str, ...] | list[str] = (),
+    evidence_bundle_extra: dict[str, Any] | None = None,
+    **raw_inputs: Any,
+) -> None:
+    trace_request = build_polish_feedback_trace_request(
+        owner_id=owner_id,
+        actor_id=actor_id,
+        ai_task_id=ai_task_id,
+        agent_run_id=agent_run_id,
+        agent_node_run_id=agent_node_run_id,
+        session_ref=session_ref,
+        question_ref=question_ref,
+        answer_ref=answer_ref,
+        prior_answer_refs=prior_answer_refs,
+        prior_feedback_refs=prior_feedback_refs,
+        rubric_summary_ref=rubric_summary_ref,
+        idempotency_digest=idempotency_digest,
+        question_digest=question_digest,
+        answer_digest=answer_digest,
+        evidence_ref_ids=evidence_ref_ids,
+        validation_ref_ids=validation_ref_ids,
+        low_confidence_ref_ids=low_confidence_ref_ids,
+        parity_result_ref=parity_result_ref,
+        evidence_bundle_extra=evidence_bundle_extra,
+        **raw_inputs,
+    )
+    transport.generate(trace_request.transport_request, trace_request.trace_context)
+
+
 def replay_polish_feedback_skeleton(*, context: AgentRunContext, checkpoint_ref: str) -> AgentReplayResult:
     if context.graph_name != POLISH_FEEDBACK_GRAPH_NAME:
         raise RuntimePolicyError("replay context graph does not match polish feedback skeleton")
@@ -381,6 +549,94 @@ def _validate_pr7_raw_inputs(raw_inputs: dict[str, Any]) -> None:
         if normalized in _PR7_FORBIDDEN_INPUT_KEYS:
             raise RuntimePolicyError("PR7 readonly parity gate rejects raw inputs")
     raise RuntimePolicyError("PR7 readonly parity gate accepts only scoped ids, refs, and digests")
+
+
+def _validate_pr8_raw_inputs(raw_inputs: dict[str, Any]) -> None:
+    if not raw_inputs:
+        return
+    for key, value in raw_inputs.items():
+        normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in _PR8_FORBIDDEN_INPUT_KEYS or contains_sensitive_payload({key: value}):
+            raise RuntimePolicyError("PR8 polish trace gate rejects raw inputs")
+    raise RuntimePolicyError("PR8 polish trace gate accepts only scoped ids, refs, and digests")
+
+
+def _validate_pr8_scoped_id(name: str, value: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimePolicyError(f"PR8 polish trace gate requires {name}")
+
+
+def _pr8_evidence_bundle(
+    *,
+    session_ref: str,
+    question_ref: str,
+    answer_ref: str,
+    prior_answer_refs: tuple[str, ...] | list[str],
+    prior_feedback_refs: tuple[str, ...] | list[str],
+    rubric_summary_ref: str,
+    idempotency_digest: str,
+    question_digest: str,
+    answer_digest: str,
+    evidence_ref_ids: tuple[str, ...] | list[str],
+    validation_ref_ids: tuple[str, ...] | list[str],
+    low_confidence_ref_ids: tuple[str, ...] | list[str],
+    parity_result_ref: str,
+) -> dict[str, Any]:
+    return {
+        "session_ref": _validate_pr8_ref("session_ref", session_ref, "session_ref_"),
+        "question_ref": _validate_pr8_ref("question_ref", question_ref, "question_ref_"),
+        "answer_ref": _validate_pr8_ref("answer_ref", answer_ref, "answer_ref_"),
+        "prior_answer_refs": [
+            _validate_pr8_ref("prior_answer_refs", ref, "answer_ref_") for ref in prior_answer_refs
+        ],
+        "prior_feedback_refs": [
+            _validate_pr8_ref("prior_feedback_refs", ref, "feedback_ref_") for ref in prior_feedback_refs
+        ],
+        "rubric_summary_ref": _validate_pr8_ref(
+            "rubric_summary_ref",
+            rubric_summary_ref,
+            "rubric_summary_ref_",
+        ),
+        "idempotency_digest": _validate_pr8_digest("idempotency_digest", idempotency_digest),
+        "question_digest": _validate_pr8_digest("question_digest", question_digest),
+        "answer_digest": _validate_pr8_digest("answer_digest", answer_digest),
+        "evidence_ref_ids": [
+            _validate_pr8_ref("evidence_ref_ids", ref, "evidence_ref_") for ref in evidence_ref_ids
+        ],
+        "validation_ref_ids": [
+            _validate_pr8_ref("validation_ref_ids", ref, "validation_ref_") for ref in validation_ref_ids
+        ],
+        "low_confidence_ref_ids": [
+            _validate_pr8_ref("low_confidence_ref_ids", ref, "low_confidence_ref_")
+            for ref in low_confidence_ref_ids
+        ],
+        "parity_result_ref": _validate_pr8_ref("parity_result_ref", parity_result_ref, "parity_result_ref_"),
+    }
+
+
+def _validate_pr8_evidence_bundle(evidence_bundle: dict[str, Any]) -> None:
+    extra_keys = set(evidence_bundle) - _PR8_ALLOWED_EVIDENCE_BUNDLE_KEYS
+    if extra_keys:
+        raise RuntimePolicyError("PR8 polish trace gate evidence bundle accepts only locked refs and digests")
+    if contains_sensitive_payload(evidence_bundle):
+        raise RuntimePolicyError("PR8 polish trace gate evidence bundle must be sanitized")
+
+
+def _validate_pr8_input_refs(input_refs: tuple[str, ...]) -> None:
+    if len(input_refs) != 3 or any(not isinstance(ref, str) or not ref.strip() for ref in input_refs):
+        raise RuntimePolicyError("PR8 polish trace gate requires non-empty input refs")
+
+
+def _validate_pr8_ref(name: str, value: str, prefix: str) -> str:
+    if not isinstance(value, str) or not value.startswith(prefix):
+        raise RuntimePolicyError(f"PR8 polish trace gate requires {name} as ref")
+    return value
+
+
+def _validate_pr8_digest(name: str, value: str) -> str:
+    if not isinstance(value, str) or not value.startswith("sha256:"):
+        raise RuntimePolicyError(f"PR8 polish trace gate requires {name} as digest")
+    return value
 
 
 def _validate_pr7_scoped_id(name: str, value: str) -> None:

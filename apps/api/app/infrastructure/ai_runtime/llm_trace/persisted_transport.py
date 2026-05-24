@@ -34,17 +34,17 @@ class FailClosedPersistedLlmTransport:
         request_hash = _hash_request(request)
         call = self._calls.create_planned_call(
             owner_id=trace_context.owner_id,
-            actor_id=None,
+            actor_id=trace_context.actor_id,
             ai_task_id=trace_context.ai_task_id,
             agent_run_id=trace_context.agent_run_id,
             agent_node_run_id=trace_context.agent_node_run_id,
-            graph_name=request.task_type,
-            node_name="pr4_persisted_transport",
+            graph_name=request.graph_name or request.task_type,
+            node_name=request.node_name or "pr4_persisted_transport",
             contract_ids_json=list(trace_context.contract_ids or request.contract_ids),
             configured_model="provider-disabled",
             provider_model=None,
-            prompt_version="pr4-fail-closed",
-            schema_id=None,
+            prompt_version=request.prompt_version or "pr4-fail-closed",
+            schema_id=request.schema_id,
             request_hash=request_hash,
         )
         return str(call["id"])
@@ -58,7 +58,7 @@ class FailClosedPersistedLlmTransport:
     def generate(self, request: LlmTransportRequest, trace_context: LlmTraceContext) -> LlmTransportResult:
         llm_call_id = self.plan_call(request, trace_context)
         self._before_call_policy.authorize_provider_invocation(llm_call_id=llm_call_id)
-        decision = self._flag_resolver.is_real_provider_enabled(actor_id=trace_context.owner_id)
+        decision = self._flag_resolver.is_real_provider_enabled(actor_id=trace_context.actor_id or trace_context.owner_id)
         call = self._calls.get_summary_for_owner(trace_context.owner_id, llm_call_id)
         if call is None:
             raise RuntimePolicyError("LLM call trace disappeared before provider gate")
@@ -93,6 +93,10 @@ def _hash_request(request: LlmTransportRequest) -> str:
         "task_type": request.task_type,
         "input_refs": request.input_refs,
         "evidence_bundle": sanitize_payload(request.evidence_bundle),
+        "graph_name": request.graph_name,
+        "node_name": request.node_name,
+        "prompt_version": request.prompt_version,
+        "schema_id": request.schema_id,
     }
     encoded = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
