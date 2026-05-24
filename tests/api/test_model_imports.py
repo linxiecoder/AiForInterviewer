@@ -1,4 +1,5 @@
 import importlib
+import sys
 
 from app.infrastructure.db.base import Base
 
@@ -22,6 +23,7 @@ MODEL_MODULES = (
     "app.infrastructure.db.models.training",
     "app.infrastructure.db.models.reference",
     "app.infrastructure.db.models.audit",
+    "app.infrastructure.db.models.ai_runtime",
 )
 
 
@@ -56,4 +58,20 @@ def test_sqlalchemy_model_modules_import_without_side_effect_errors() -> None:
         "evidence_refs",
         "trace_refs",
         "user_confirmations",
+        "agent_runs",
+        "agent_node_runs",
+        "agent_interrupts",
+        "agent_checkpoint_refs",
+        "llm_calls",
+        "llm_call_payloads",
     }.issubset(Base.metadata.tables)
+
+
+def test_ai_runtime_model_import_does_not_load_langgraph_or_langchain() -> None:
+    before = set(sys.modules)
+
+    importlib.import_module("app.infrastructure.db.models.ai_runtime")
+
+    loaded = set(sys.modules) - before
+    assert not any(module == "langgraph" or module.startswith("langgraph.") for module in loaded)
+    assert not any(module == "langchain" or module.startswith("langchain.") for module in loaded)

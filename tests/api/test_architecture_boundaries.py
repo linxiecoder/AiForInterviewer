@@ -56,6 +56,49 @@ def test_no_unbounded_utils_file_exists() -> None:
     assert list((APP_ROOT).rglob("utils.py")) == []
 
 
+def test_pr2_ai_runtime_persistence_does_not_import_langgraph_langchain_or_providers() -> None:
+    violations = _find_forbidden_imports(
+        APP_ROOT / "infrastructure" / "db" / "repositories" / "ai_runtime",
+        forbidden_prefixes=(
+            "langgraph",
+            "langchain",
+            "app.application.agents",
+            "app.infrastructure.ai_runtime.langgraph",
+            "app.infrastructure.llm",
+            "openai",
+            "anthropic",
+        ),
+    )
+    model_violations = _find_forbidden_imports(
+        APP_ROOT / "infrastructure" / "db" / "models" / "ai_runtime.py",
+        forbidden_prefixes=("langgraph", "langchain", "app.infrastructure.llm", "openai", "anthropic"),
+    )
+
+    assert violations == []
+    assert model_violations == []
+
+
+def test_core_business_layers_do_not_import_ai_runtime_internals() -> None:
+    violations = _find_forbidden_imports(
+        APP_ROOT / "domain",
+        forbidden_prefixes=(
+            "app.infrastructure.db.models.ai_runtime",
+            "app.infrastructure.db.repositories.ai_runtime",
+        ),
+    )
+    violations.extend(
+        _find_forbidden_imports(
+            APP_ROOT / "application",
+            forbidden_prefixes=(
+                "app.infrastructure.db.models.ai_runtime",
+                "app.infrastructure.db.repositories.ai_runtime",
+            ),
+        )
+    )
+
+    assert violations == []
+
+
 def test_shared_kernel_objects_are_reusable() -> None:
     from app.application.ai_tasks.commands import CreateAiTaskCommand
     from app.application.scoring.commands import CreateScoringTaskCommand

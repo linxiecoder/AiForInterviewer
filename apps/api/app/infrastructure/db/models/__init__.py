@@ -1,6 +1,14 @@
 """SQLAlchemy model skeleton exports."""
 
 from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
+from app.infrastructure.db.models.ai_runtime import (
+    AgentCheckpointRef,
+    AgentInterrupt,
+    AgentNodeRun,
+    AgentRun,
+    LlmCall,
+    LlmCallPayload,
+)
 from app.infrastructure.db.models.answer import Answer
 from app.infrastructure.db.models.asset import Asset, AssetVersion
 from app.infrastructure.db.models.audit import ApiRequestTrace, AuditEvent
@@ -30,6 +38,10 @@ from app.infrastructure.db.models.weakness import Weakness, WeaknessCandidate
 __all__ = [
     "AiTask",
     "AiTaskResult",
+    "AgentCheckpointRef",
+    "AgentInterrupt",
+    "AgentNodeRun",
+    "AgentRun",
     "Answer",
     "ApiRequestTrace",
     "Asset",
@@ -44,6 +56,8 @@ __all__ = [
     "JobMatchAnalysis",
     "JobVersion",
     "LowConfidenceFlag",
+    "LlmCall",
+    "LlmCallPayload",
     "PolishSessionDetail",
     "PolishCandidateRecord",
     "PressureSessionDetail",
