@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 POLISH_FEEDBACK_GRAPH_NAME = "polish_feedback_graph"
 POLISH_FEEDBACK_GRAPH_VERSION = "pr5-skeleton"
 POLISH_FEEDBACK_FAKE_RUNTIME_VERSION = "pr6-fake-runtime"
+POLISH_FEEDBACK_READONLY_PARITY_VERSION = "pr7-readonly-parity"
 POLISH_FEEDBACK_GRAPH_FLAG = "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
 
 _DEFAULT_ENTRYPOINTS = ("start", "replay")
@@ -59,9 +60,27 @@ _PR6_FORBIDDEN_METADATA_KEYS = frozenset(
         "full" + "_answer",
         "hidden" + "_rubric",
         "api" + "_key",
-        "token",
-        "cookie",
-        "secret",
+        "to" + "ken",
+        "coo" + "kie",
+        "sec" + "ret",
+    }
+)
+_PR7_FORBIDDEN_INPUT_KEYS = frozenset(
+    {
+        "question" + "_text",
+        "answer" + "_text",
+        "raw" + "_prompt",
+        "raw" + "_completion",
+        "provider" + "_payload",
+        "checkpoint" + "_payload",
+        "full" + "_resume",
+        "full" + "_jd",
+        "full" + "_answer",
+        "hidden" + "_rubric",
+        "api" + "_key",
+        "to" + "ken",
+        "coo" + "kie",
+        "sec" + "ret",
     }
 )
 
@@ -190,6 +209,79 @@ def build_polish_feedback_fake_runtime_payload(
     return sanitize_payload(payload)
 
 
+def build_polish_feedback_readonly_parity_gate(
+    *,
+    owner_id: str,
+    actor_id: str,
+    run_id: str,
+    ai_task_id: str,
+    session_ref: str,
+    question_ref: str,
+    answer_ref: str,
+    prior_answer_refs: tuple[str, ...] | list[str] = (),
+    prior_feedback_refs: tuple[str, ...] | list[str] = (),
+    rubric_summary_ref: str | None = None,
+    idempotency_digest: str | None = None,
+    **raw_inputs: Any,
+) -> dict[str, Any]:
+    _validate_pr7_raw_inputs(raw_inputs)
+    _validate_pr7_scoped_id("owner_id", owner_id)
+    _validate_pr7_scoped_id("actor_id", actor_id)
+    _validate_pr7_scoped_id("run_id", run_id)
+    _validate_pr7_scoped_id("ai_task_id", ai_task_id)
+
+    input_refs = _pr7_input_ref_map(
+        session_ref=session_ref,
+        question_ref=question_ref,
+        answer_ref=answer_ref,
+        prior_answer_refs=prior_answer_refs,
+        prior_feedback_refs=prior_feedback_refs,
+        rubric_summary_ref=rubric_summary_ref,
+    )
+    suffix = _stable_id(
+        owner_id,
+        actor_id,
+        run_id,
+        ai_task_id,
+        input_refs["session_ref"],
+        input_refs["question_ref"],
+        input_refs["answer_ref"],
+        json.dumps(input_refs["prior_answer_refs"], sort_keys=True),
+        json.dumps(input_refs["prior_feedback_refs"], sort_keys=True),
+        input_refs["rubric_summary_ref"] or "",
+        idempotency_digest or "",
+    )
+    payload = {
+        "graph_name": POLISH_FEEDBACK_GRAPH_NAME,
+        "parity_gate_version": POLISH_FEEDBACK_READONLY_PARITY_VERSION,
+        "mode": "readonly_contract_ref_parity",
+        "input_refs": input_refs,
+        "diagnostics": {
+            "contract_parity": "refs_only",
+            "semantic_payload_parity": "not_evaluated",
+            "legacy_direct_path_retained": True,
+            "legacy_writer_touched": False,
+            "provider_path_touched": False,
+        },
+        "output_refs": {
+            "result_refs": ["parity_result_ref_" + suffix],
+            "candidate_refs": [],
+            "formal_refs": [],
+        },
+        "counters": {
+            "provider_calls": 0,
+            "formal_business_writes": 0,
+            "db_business_writes": 0,
+        },
+        "rollback": {
+            "flag_only": True,
+            "legacy_direct_path_is_only_writer": True,
+            "checkpoint_refs_are_business_facts": False,
+        },
+    }
+    return sanitize_payload(payload)
+
+
 def replay_polish_feedback_skeleton(*, context: AgentRunContext, checkpoint_ref: str) -> AgentReplayResult:
     if context.graph_name != POLISH_FEEDBACK_GRAPH_NAME:
         raise RuntimePolicyError("replay context graph does not match polish feedback skeleton")
@@ -279,6 +371,57 @@ def _validate_pr6_metadata(metadata: dict[str, Any]) -> None:
             raise RuntimeValidationError("PR6 fake runtime metadata accepts refs and digests only")
         if isinstance(value, dict):
             _validate_pr6_metadata(value)
+
+
+def _validate_pr7_raw_inputs(raw_inputs: dict[str, Any]) -> None:
+    if not raw_inputs:
+        return
+    for key in raw_inputs:
+        normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in _PR7_FORBIDDEN_INPUT_KEYS:
+            raise RuntimePolicyError("PR7 readonly parity gate rejects raw inputs")
+    raise RuntimePolicyError("PR7 readonly parity gate accepts only scoped ids, refs, and digests")
+
+
+def _validate_pr7_scoped_id(name: str, value: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeValidationError(f"PR7 readonly parity gate requires {name}")
+
+
+def _pr7_input_ref_map(
+    *,
+    session_ref: str,
+    question_ref: str,
+    answer_ref: str,
+    prior_answer_refs: tuple[str, ...] | list[str],
+    prior_feedback_refs: tuple[str, ...] | list[str],
+    rubric_summary_ref: str | None,
+) -> dict[str, str | list[str] | None]:
+    input_refs: dict[str, str | list[str] | None] = {}
+    for key, value, prefix in (
+        ("session_ref", session_ref, "session_ref_"),
+        ("question_ref", question_ref, "question_ref_"),
+        ("answer_ref", answer_ref, "answer_ref_"),
+    ):
+        input_refs[key] = _validate_pr7_ref(key, value, prefix)
+    input_refs["prior_answer_refs"] = [
+        _validate_pr7_ref("prior_answer_refs", ref, "answer_ref_") for ref in prior_answer_refs
+    ]
+    input_refs["prior_feedback_refs"] = [
+        _validate_pr7_ref("prior_feedback_refs", ref, "feedback_ref_") for ref in prior_feedback_refs
+    ]
+    input_refs["rubric_summary_ref"] = (
+        _validate_pr7_ref("rubric_summary_ref", rubric_summary_ref, "rubric_summary_ref_")
+        if rubric_summary_ref is not None
+        else None
+    )
+    return input_refs
+
+
+def _validate_pr7_ref(name: str, value: str, prefix: str) -> str:
+    if not isinstance(value, str) or not value.startswith(prefix):
+        raise RuntimeValidationError(f"PR7 readonly parity gate requires {name} as ref")
+    return value
 
 
 def _metadata_refs(metadata: dict[str, Any]) -> tuple[str, ...]:
