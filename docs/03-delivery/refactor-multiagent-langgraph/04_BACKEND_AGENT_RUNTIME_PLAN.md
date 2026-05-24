@@ -12,12 +12,12 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph/bac
 
 本文规划后端 Agent Runtime 与 LangGraph 接入的 implementation-ready contract，确保 Core Business 不依赖 LangGraph，所有 AI graph 调度都经由 `AiOrchestrationFacade`、`AgentGraphRunner` port 和 `LangGraphAgentRunner` infrastructure adapter。
 
-PR1.5 的冻结点：
+AIFI-ARCH-008 关闭后的冻结点：
 
 - `AiOrchestrationFacade` 是 Core UseCase 触达 AI Runtime 的唯一入口。
 - `AgentGraphRunner` 是 application port。
-- `LangGraphAgentRunner`、checkpointer factory、serializer factory 只能位于 `apps/api/app/infrastructure/agent_runtime/langgraph/**`。
-- `AgentTraceBridge` 是 application contract；实际 DB write 由 `apps/api/app/infrastructure/db/repositories/**` adapter / repository 完成。
+- `LangGraphAgentRunner`、checkpointer factory、serializer factory 只能位于 `apps/api/app/infrastructure/ai_runtime/langgraph/**`。
+- `AgentTraceBridge` 是 application contract；实际 DB write 由 `apps/api/app/infrastructure/db/repositories/ai_runtime/**` adapter / repository 完成。
 - LangGraph checkpoint 不是业务事实源；formal object 写入只能通过 Core Business command / confirmation API。
 
 ## 2. 输入来源
@@ -32,24 +32,35 @@ PR1.5 的冻结点：
 
 当前 active docs 已有 `AiTask`、LLM call plan、Prompt contract、trace/evidence、candidate/formal handoff 等设计；当前代码已有 LLM transport protocol 与 deterministic fake transport。缺口是统一 Agent Runtime 层、graph runner port、LangGraph adapter、checkpointer factory、interrupt/resume、timeline 和 runtime side-effect policy。
 
-PR1.5 不实现这些 symbol，只把每个 symbol 的 inputs / outputs / side effects / errors / tests 冻结到可直接落 PR3 / PR4 的粒度。
+AIFI-ARCH-008 不实现这些 symbol，只把每个 symbol 的 inputs / outputs / side effects / errors / tests 冻结到可直接落 PR3 / PR4 的粒度。
 
 ## 4. 目标输出
 
 | File | Symbol | PR | 归属 |
 |---|---|---:|---|
-| `apps/api/app/application/ai/orchestration_facade.py` | `AiOrchestrationFacade` | PR3 | application AI boundary |
-| `apps/api/app/application/agents/contracts.py` | `AgentGraphRunner`、runtime DTO / errors | PR3 | application port |
-| `apps/api/app/application/agents/registry.py` | `AgentGraphRegistry` | PR3 | application service |
-| `apps/api/app/application/agents/trace_bridge.py` | `AgentTraceBridge` | PR3 | application contract |
-| `apps/api/app/application/agents/side_effect_guard.py` | `AgentSideEffectGuard` | PR3 | application policy |
-| `apps/api/app/application/agents/persistence_handoff.py` | `AgentPersistenceHandoff` | PR3-PR4 | application handoff contract |
-| `apps/api/app/application/agents/interrupts.py` | `AgentInterruptService` | PR3-PR4 | application service |
-| `apps/api/app/infrastructure/agent_runtime/langgraph/runner.py` | `LangGraphAgentRunner` | PR4 | infrastructure adapter |
-| `apps/api/app/infrastructure/agent_runtime/langgraph/checkpointer_factory.py` | `build_langgraph_checkpointer` | PR4 | infrastructure adapter |
-| `apps/api/app/infrastructure/agent_runtime/langgraph/serializer.py` | `build_encrypted_serializer` | PR4 | infrastructure adapter |
+| `apps/api/app/application/ai_runtime/facade.py` | `AiOrchestrationFacade` | PR3 | application AI Runtime boundary |
+| `apps/api/app/application/ai_runtime/contracts.py` | `AgentGraphRunner`、`AgentGraphState`、runtime DTO / errors | PR3 | application port / DTO |
+| `apps/api/app/application/ai_runtime/registry.py` | `AgentGraphRegistry` | PR3 | application service |
+| `apps/api/app/application/ai_runtime/trace_bridge.py` | `AgentTraceBridge` | PR3 | application contract |
+| `apps/api/app/application/ai_runtime/side_effect_guard.py` | `AgentSideEffectGuard` | PR3 | application policy |
+| `apps/api/app/application/ai_runtime/handoff.py` | `AgentPersistenceHandoff` | PR3-PR4 | application handoff contract |
+| `apps/api/app/application/ai_runtime/interrupts.py` | `AgentInterruptService` | PR3-PR4 | application service |
+| `apps/api/app/application/ai_runtime/runtime_flags.py` | runtime default-off / per-graph / real-provider gate policy | PR3 | application policy |
+| `apps/api/app/infrastructure/ai_runtime/langgraph/runner.py` | `LangGraphAgentRunner` | PR4 | infrastructure adapter |
+| `apps/api/app/infrastructure/ai_runtime/langgraph/checkpointer_factory.py` | `build_langgraph_checkpointer` | PR4 | infrastructure adapter |
+| `apps/api/app/infrastructure/ai_runtime/langgraph/serializer.py` | `build_encrypted_serializer` | PR4 | infrastructure adapter |
 
 ## 5. Runtime 边界
+
+### 5.0 AIFI-ARCH-008 目录决策
+
+AIFI-ARCH-008 采用聚合 AI Runtime 目录：
+
+- `apps/api/app/application/ai_runtime/**` 取代 PR1.5 中的 `application/ai/**` 与 `application/agents/**`。
+- `apps/api/app/infrastructure/ai_runtime/langgraph/**` 取代 PR1.5 中的 `infrastructure/agent_runtime/langgraph/**`。
+- `application` 层不得存在 `langgraph_adapters/**`；adapter descriptor 只能作为 project-owned DTO 存放在 `contracts.py` 或 `registry.py`。
+- 唯一 LangGraph import root 是 `apps/api/app/infrastructure/ai_runtime/langgraph/**`。
+- graph / node / tool / validator 的共享 contract 先按 technical layer 放在 `application/ai_runtime` 根目录；业务 graph 只能在 PR5-PR8 受权后按 `application/ai_runtime/graphs/<business-domain>/**` 创建，PR2 和 PR3 不创建业务 graph 目录。
 
 ### 5.1 允许调用链
 
@@ -75,6 +86,9 @@ Core UseCase -> LangGraph
 Core UseCase -> checkpointer
 Repository -> LangGraph
 DB Model -> LangGraph
+Repository / DB Model -> AgentGraphState
+application/ai_runtime -> SQLAlchemy concrete session
+application/ai_runtime -> infrastructure/ai_runtime/langgraph
 Graph node -> formal object direct write
 Graph node -> provider SDK direct call
 Frontend -> AgentState / checkpoint payload / raw prompt / completion / provider payload
@@ -124,7 +138,7 @@ Facade contract constraints:
 
 Port constraints:
 
-- `AgentGraphRunner` lives in `application/agents/contracts.py`.
+- `AgentGraphRunner` lives in `application/ai_runtime/contracts.py`.
 - It exposes project DTO only; no LangGraph type in signature, docstring example, return type, exception type, or test fixture.
 
 ### 6.3 `LangGraphAgentRunner`
@@ -173,7 +187,7 @@ Registry constraints:
 
 TraceBridge constraints:
 
-- `AgentTraceBridge` is an application contract; concrete DB write adapter lives in `infrastructure/db/repositories`.
+- `AgentTraceBridge` is an application contract; concrete DB write adapter lives in `infrastructure/db/repositories/ai_runtime/**`.
 - Trace write failure must fail closed before any formal write. It may leave task in `generation_failed` / `validation_failed`, but cannot silently continue to formal object creation.
 
 ### 6.6 `AgentSideEffectGuard`
@@ -276,13 +290,14 @@ Production checkpointer policy is frozen in `18_LANGGRAPH_DEPENDENCY_AND_SPIKE_P
 | PR | 使用方式 | 必须验证 |
 |---|---|---|
 | PR2 | 落 runtime 表、repository、sanitized LLM persistence | runtime refs owner scoped；raw-off tests |
-| PR3 | 落 facade、runner port、registry、contracts、guard、handoff、interrupt service | application layer no LangGraph import；Core only calls facade / port |
-| PR4 | 落 LangGraph adapter、checkpointer、serializer、fake graph、interrupt/resume/timeline | only `infrastructure/agent_runtime/langgraph/**` imports LangGraph；fake graph deterministic；checkpoint ref no payload |
+| PR3 | 落 `application/ai_runtime` facade、runner port、registry、contracts、guard、handoff、interrupt service | application layer no LangGraph import；Core only calls facade / port；不创建 `langgraph_adapters/**` |
+| PR4 | 落 LangGraph adapter、checkpointer、serializer、fake graph、interrupt/resume/timeline | only `infrastructure/ai_runtime/langgraph/**` imports LangGraph；fake graph deterministic；checkpoint ref no payload |
 | PR5-PR8 | 迁移业务 graph | graph nodes use ports/tools/handoff；no direct formal write |
 
 ## 12. Definition of Done
 
 - `AiOrchestrationFacade`、`AgentGraphRunner`、`LangGraphAgentRunner`、`AgentGraphRegistry`、`AgentTraceBridge`、`AgentSideEffectGuard`、`AgentPersistenceHandoff`、`AgentInterruptService` 的方法级 inputs / outputs / side effects / errors / tests 已覆盖。
+- `application/ai_runtime/**` 与 `infrastructure/ai_runtime/langgraph/**` 是唯一最终目录形态；`application/ai/**`、`application/agents/**`、`infrastructure/agent_runtime/**` 和 `langgraph_adapters/**` 不再作为 PR2-PR8 创建目标。
 - checkpointer factory 和 serializer factory 归属 infrastructure LangGraph adapter。
 - trace bridge 是 application contract，DB write adapter / repository 归属 infrastructure DB repositories。
 - Core Business 不依赖 LangGraph。

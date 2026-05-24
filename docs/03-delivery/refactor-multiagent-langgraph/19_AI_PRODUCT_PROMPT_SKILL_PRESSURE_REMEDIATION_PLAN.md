@@ -12,7 +12,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph/ai-
 
 本文执行 PR1.6 docs-only remediation，用于识别并规划修复 PR1 / PR1.5 后仍未满足 implementation-ready 的 AI 产品设计、Prompt、Skill、Pressure 和 AI/Core 目录边界问题。
 
-本轮结论是：**PR2 code implementation 不可启动**。PR2 在 `AIFI-BE-004`、`AIFI-PROMPT-002`、`AIFI-ARCH-007`、`AIFI-ARCH-008`、`AIFI-BE-005` 关闭，或主 Agent 显式接受风险并重新授权前，只能执行 repo-state preflight、只读 recon 和受权文档回写；不得修改 `apps/**`、`tests/**`、依赖、migration、CI、后端代码、前端代码或业务代码。
+本轮结论是：**PR2 code implementation 不可启动**。AIFI-ARCH-008 已关闭目录边界；PR2 在 `AIFI-BE-004`、`AIFI-PROMPT-002`、`AIFI-ARCH-007`、`AIFI-BE-005` 关闭，或主 Agent 显式接受风险并重新授权前，只能执行 repo-state preflight、只读 recon 和受权文档回写；不得修改 `apps/**`、`tests/**`、依赖、migration、CI、后端代码、前端代码或业务代码。
 
 本文不替代 `docs/02-design/*`、`docs/02-design/prompt-contracts/*.md`、`docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md`、`docs/00-governance/DOCS_INDEX.md` 或 ADR。长期事实必须回写 active docs、进入 `BACKLOG.md` AIFI 任务或进入 ADR 后，才可作为实现依据。
 
@@ -30,7 +30,7 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 |---|---|---|---|
 | 治理入口 | `AGENTS.md`; `docs/00-governance/DOCS_INDEX.md`; `docs/tmp/GOAL_PR1_6_AI_PRODUCT_PROMPT_SKILL_PRESSURE.md` | 确认 PR1.6 scope、禁止修改范围、required reading、required validation | `docs/tmp` 不是事实源 |
 | 专题文档 | `docs/03-delivery/refactor-multiagent-langgraph/README.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`; `18_LANGGRAPH_DEPENDENCY_AND_SPIKE_PLAN.md`; `03_TARGET_DIRECTORY_STRUCTURE.md`; `04_BACKEND_AGENT_RUNTIME_PLAN.md`; `10_DATA_MODEL_AND_MIGRATION_PLAN.md`; `13_TEST_PLAN_BACKEND.md`; `15_VALIDATION_PLAN.md`; `16_DESIGN_DOCS_REFACTOR_PLAN.md` | 确认 PR1.6 blocker freeze、PR2 blocked、Option C、runtime / repository / validation / backfill planning | 仅作为 F5 专题 planning package |
-| ADR | `docs/04-decisions/ADR-0005-langgraph-agentic-workflow-runtime.md` | 确认 Option C、Core 不依赖 LangGraph、checkpoint 非业务事实源、raw-off、candidate/formal 边界、AI/Core directory open issue | ADR 状态为 Proposed，不代表 active docs 全部回写 |
+| ADR | `docs/04-decisions/ADR-0005-langgraph-agentic-workflow-runtime.md` | 确认 Option C、Core 不依赖 LangGraph、checkpoint 非业务事实源、raw-off、candidate/formal 边界、AIFI-ARCH-008 directory closure | ADR 状态为 Proposed，不代表 active docs 全部回写 |
 | active design docs | `APPLICATION_FLOW_SPEC.md`; `PERSISTENCE_MODEL.md`; `DATA_MODEL.md`; `PROMPT_SPEC.md`; `SCORING_SPEC.md`; `SECURITY_PRIVACY.md`; `API_SPEC.md`; `UX_SPEC.md`; `UI_DESIGN_SYSTEM.md` | 核对 API / data / prompt / score / security / UX / UI 对 Pressure、Prompt、Skill、candidate/formal 和 raw-off 的当前事实 | 不在本轮修改 |
 | prompt contracts | `docs/02-design/prompt-contracts/*.md` | 核对 `P-PRESSURE-*`、`P-POLISH-*`、`P-REPORT-*`、`P-REVIEW-*`、`P-WEAKNESS-*`、`P-ASSET-*`、`P-TRAINING-*` 为 Draft contract，不是生产 Prompt Asset | 不新增 contract ID |
 | Pressure code | `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `apps/api/app/schemas/pressure.py`; `CreatePressureQuestionTaskCommand`; `GetPressureSessionQuery` | 证明 Pressure 代码仍是 placeholder / skeleton | 只读，不修改代码 |
@@ -42,11 +42,11 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 
 | 问题 | 结论 | 证据 |
 |---|---|---|
-| AI/Core 目录不一致与 AI 嵌套过深 | 确认。当前规划同时出现 `application/ai`、`application/agents`、`application/ai_runtime`、`infrastructure/agent_runtime`、`infrastructure/ai_runtime`，ADR-0005 也将目录形态列为 open issue | `03_TARGET_DIRECTORY_STRUCTURE.md` §5.1-§5.4；`04_BACKEND_AGENT_RUNTIME_PLAN.md` §4；ADR-0005 §6 |
+| AI/Core 目录不一致与 AI 嵌套过深 | 已由 AIFI-ARCH-008 关闭。最终目录形态冻结为 `application/ai_runtime/**` + `infrastructure/ai_runtime/langgraph/**`；`application/ai/**`、`application/agents/**`、`infrastructure/agent_runtime/**` 和 `langgraph_adapters/**` 不再作为 PR2-PR8 创建目标 | `03_TARGET_DIRECTORY_STRUCTURE.md` §5；`04_BACKEND_AGENT_RUNTIME_PLAN.md` §4-§5；ADR-0005 §Decision / §Consequences |
 | Pressure mode 缺 mode-level spec 与代码未实现 | 确认。active docs 和 prompt contracts 有 Pressure Draft 语义，但代码只有 router prefix、DTO placeholder、`PressureUseCases.bootstrap()` 返回 `pressure_skeleton` | `PROMPT_SPEC.md` §9.4；`PRESSURE_CONTRACTS.md` §13；`apps/api/app/application/pressure/use_cases.py` `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `apps/api/app/schemas/pressure.py` |
 | Polish prompt design 不足 | 确认。Polish question / feedback / progress tree 已有 runtime builders 和 LLM service，但 `PROMPT_SPEC.md` 只冻结 contract registry，不承载 Production Prompt Asset registry、golden fixtures 或 model comparison policy | `question_prompts.py` `build_polish_question_generation_prompt_bundle`; `feedback_prompts.py` `build_polish_feedback_prompt_bundle`; `question_llm.py` `PolishQuestionLlmService`; `feedback_llm.py` `PolishFeedbackLlmService`; `PROMPT_SPEC.md` §9 |
 | Skill model 缺失 | 确认。当前只有 `ScoreDimension`、`ProgressTree`、`Weakness`、`Asset`、`TrainingRecommendation` 等对象，各自承载评分、会话状态、薄弱项、内容资产、训练建议，不能替代统一 Skill taxonomy | `DATA_MODEL.md` §9.4-§9.5; `SCORING_SPEC.md` §6; `progress_tree_v2.py`; `models/scoring.py`; `models/weakness.py`; `models/asset.py`; `models/training.py` |
-| 其他 implementation readiness 问题 | 确认。PR2 仍受 source-of-truth backfill、runtime flag、repository contract、bootstrap / rollback、test list、raw-off security、Prompt Asset、Pressure hold、Skill hold 阻断 | `README.md` §3.3 / §8.1；`17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-004 / AIFI-PROMPT-002 / AIFI-ARCH-007 / AIFI-ARCH-008 / AIFI-BE-005 |
+| 其他 implementation readiness 问题 | 确认。AIFI-ARCH-008 只关闭目录边界；PR2 仍受 source-of-truth backfill、runtime flag、repository contract、bootstrap / rollback、test list、raw-off security、Prompt Asset、Pressure hold、Skill hold 阻断 | `README.md` §3.3 / §8.1；`17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-004 / AIFI-PROMPT-002 / AIFI-ARCH-007 / AIFI-BE-005 |
 
 ## 4. 补充问题清单
 
@@ -54,7 +54,7 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 
 | ID | Severity | Area | Evidence | Impact | Required Fix | Target Document | Target PR |
 |---|---|---|---|---|---|---|---|
-| PR16-BLOCKER-001 | Blocker | PR2 启动门槛 | `README.md` §3.3 / §8.1；`17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-004 / AIFI-PROMPT-002 / AIFI-ARCH-007 / AIFI-ARCH-008 / AIFI-BE-005 | PR2 如果启动代码实现，会绕过已登记 blocker | 维持 PR2 blocked；先关闭 blocker 任务或登记人工 accepted risk | `BACKLOG.md`; `README.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`; 本文 §10-§12 | PR1.6; PR2 blocked |
+| PR16-BLOCKER-001 | Blocker | PR2 启动门槛 | `README.md` §3.3 / §8.1；`17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-004 / AIFI-PROMPT-002 / AIFI-ARCH-007 / AIFI-BE-005；AIFI-ARCH-008 已关闭目录边界 | PR2 如果启动代码实现，会绕过仍未关闭的 PR1.6 blocker | 维持 PR2 blocked；先关闭剩余 blocker 任务或登记人工 accepted risk | `BACKLOG.md`; `README.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`; 本文 §10-§12 | PR1.6; PR2 blocked |
 | PR16-BLOCKER-002 | Blocker | Source-of-truth backfill | `DOCS_INDEX.md` §1 / §2 说明专题包不替代 active docs；`16_DESIGN_DOCS_REFACTOR_PLAN.md` §4 映射 active docs 回写 | 代码实现可能直接引用 planning package，而非 active API / DATA / PROMPT / SECURITY 事实源 | 冻结 active docs 回写清单；回写完成或显式登记不阻断理由后再授权实现 | `APPLICATION_FLOW_SPEC.md`; `PERSISTENCE_MODEL.md`; `DATA_MODEL.md`; `API_SPEC.md`; `PROMPT_SPEC.md`; `SECURITY_PRIVACY.md`; `BACKLOG.md` | PR1.6 decision; authorized active-docs-sync PR |
 | PR16-BLOCKER-003 | Blocker | Runtime enablement / feature flag | `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6 G6；`04_BACKEND_AGENT_RUNTIME_PLAN.md` §6.7 / §10 | 未冻结 default-off、per-graph flag、real-provider gate、rollback，PR2 无法证明 runtime 不会误触发 provider 或业务 graph | 冻结 runtime enablement flag、per-graph flag、real-provider gate、default-off、disable / rollback 行为 | `04_BACKEND_AGENT_RUNTIME_PLAN.md`; `15_VALIDATION_PLAN.md`; `SECURITY_PRIVACY.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` | PR1.6 remediation; PR2 blocked |
 | PR16-BLOCKER-004 | Blocker | Pressure mode-level spec | `apps/api/app/application/pressure/use_cases.py` `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `PRESSURE_CONTRACTS.md` §13 | Pressure contracts 已 Draft，但 runtime、API、data、UI、graph、tests 没有 mode-level spec，Pressure graph 不能进入实现 | 新增或回写 Pressure mode-level spec，覆盖 session / turn / pace / end / report handoff / review handoff / candidates / API / data / prompt / graph / UI / tests | `APPLICATION_FLOW_SPEC.md`; `DATA_MODEL.md`; `API_SPEC.md`; `UX_SPEC.md`; `UI_DESIGN_SYSTEM.md`; `PROMPT_SPEC.md`; `PRESSURE_CONTRACTS.md` | AIFI-BE-004; PR2 blocked; Pressure graph held |
@@ -65,7 +65,7 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 
 | ID | Severity | Area | Evidence | Impact | Required Fix | Target Document | Target PR |
 |---|---|---|---|---|---|---|---|
-| PR16-MAJOR-001 | Major | AI/Core directory boundary | `03_TARGET_DIRECTORY_STRUCTURE.md` §5 使用 `application/agents` 与 `infrastructure/agent_runtime`; ADR-0005 §6 不允许把目录并存视为最终决策 | PR3 / PR4 import scan 规则和长期维护路径不稳定 | 采用本文 §5 推荐 Option 2，收敛为 `application/ai_runtime/**` + `infrastructure/ai_runtime/langgraph/**`，或在 ADR 中显式说明保留旧命名的原因 | `03_TARGET_DIRECTORY_STRUCTURE.md`; `04_BACKEND_AGENT_RUNTIME_PLAN.md`; ADR-0005 | AIFI-ARCH-008 |
+| PR16-MAJOR-001 | Major | AI/Core directory boundary | `03_TARGET_DIRECTORY_STRUCTURE.md` §5、`04_BACKEND_AGENT_RUNTIME_PLAN.md` §4-§5 和 ADR-0005 已冻结最终目录形态 | AIFI-ARCH-008 关闭后，PR3 / PR4 import scan 规则可稳定落到唯一路径 | **Closed by AIFI-ARCH-008**：采用 Option 2，收敛为 `application/ai_runtime/**` + `infrastructure/ai_runtime/langgraph/**`；禁止 `application/ai/**`、`application/agents/**`、`infrastructure/agent_runtime/**` 和 `langgraph_adapters/**` | `03_TARGET_DIRECTORY_STRUCTURE.md`; `04_BACKEND_AGENT_RUNTIME_PLAN.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`; ADR-0005 | AIFI-ARCH-008 |
 | PR16-MAJOR-002 | Major | Prompt Asset / Evaluation | `PROMPT_SPEC.md` §9 为 contract registry；`question_prompts.py` / `feedback_prompts.py` 已有 runtime bundle builders | 生产 Prompt 资产、版本、golden fixtures、model comparison 和 rollback 无统一设计 | 定义 Prompt Asset registry、Evaluation Fixture、model comparison policy、redaction / rollback policy | `PROMPT_SPEC.md`; `prompt-contracts/*.md`; proposed Prompt Asset registry; `13_TEST_PLAN_BACKEND.md` | AIFI-PROMPT-002 |
 | PR16-MAJOR-003 | Major | Skill / Capability Model | `rg` 未发现 `SkillTaxonomyVersion` / `SkillArea` / `SkillLevel` / `SkillAssessment` 等统一模型；现有模型见 `DATA_MODEL.md` §9.4-§9.5 | 多模式能力语义无法共享，评分、进展树、弱项、资产、训练会产生不可追踪映射 | 新建或回写 Skill Model active design，冻结 Skill taxonomy 与现有对象映射 | proposed `docs/02-design/SKILL_MODEL_SPEC.md`; `DATA_MODEL.md`; `SCORING_SPEC.md`; `SEMANTICS_GLOSSARY.md`; `APPLICATION_FLOW_SPEC.md` | AIFI-ARCH-007 |
 | PR16-MAJOR-004 | Major | Legacy direct LLM migration | `LlmJobMatchAnalyzer.analyze`; `PolishQuestionLlmService.generate_with_llm_or_fallback`; `PolishFeedbackLlmService.generate_with_llm_or_fallback` 仍直接经 `LlmTransport` | graph 迁移若缺 parity policy，可能破坏现有 API、fallback、validation 和 candidate-only 行为 | 每个 graph 迁移前冻结 legacy fallback、parity tests、response compatibility、deprecation / rollback policy | `06_BACKEND_GRAPH_PLANS_RESUME_JOBMATCH.md`; `07_BACKEND_GRAPH_PLANS_POLISH.md`; `13_TEST_PLAN_BACKEND.md`; `15_VALIDATION_PLAN.md` | PR5 / PR6 / PR8 |
@@ -91,10 +91,10 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 | Option | Directory Shape | Pros | Cons | Migration Cost | Long-term Maintainability | Recommendation |
 |---|---|---|---|---|---|---|
 | 1. 保持 PR1.5 方案但加强规则 | `apps/api/app/application/agents/**`; `apps/api/app/application/ai/**`; `apps/api/app/infrastructure/agent_runtime/langgraph/**` | 改动最小；贴近 `03_TARGET_DIRECTORY_STRUCTURE.md` 与 `04_BACKEND_AGENT_RUNTIME_PLAN.md` 当前表格 | 命名与 ADR-0005 的 open issue 冲突；`agents` 与 `ai` 语义分裂；后续 `application/ai_runtime` 再出现会扩大迁移 | Low now, High later | 中等偏低，依赖持续人工解释 | 不推荐作为长期形态；只能作为历史输入 |
-| 2. 聚合 AI runtime 目录，减少深嵌 | `apps/api/app/application/ai_runtime/{facade,contracts,registry,trace_bridge,side_effect_guard,handoff,interrupts}.py`; `apps/api/app/infrastructure/ai_runtime/langgraph/**`; `apps/api/app/infrastructure/db/repositories/ai_runtime/**` | AI Runtime 与 Core Business 边界清晰；命名与 ADR open issue 可一次收敛；import scan 更稳定；PR2 可只落 repository / persistence，不创建业务 graph | 需要更新 `03`、`04`、`17` 和 ADR-0005 的目录命名；PR3 需要迁移旧规划中的 `application/agents` 命名 | Medium | 高，目录职责可被测试和 review 稳定执行 | **推荐**。PR1.6 后由 AIFI-ARCH-008 回写目录与 ADR |
+| 2. 聚合 AI runtime 目录，减少深嵌 | `apps/api/app/application/ai_runtime/{facade,contracts,registry,trace_bridge,side_effect_guard,handoff,interrupts,runtime_flags}.py`; `apps/api/app/infrastructure/ai_runtime/langgraph/**`; `apps/api/app/infrastructure/db/repositories/ai_runtime/**` | AI Runtime 与 Core Business 边界清晰；命名与 ADR open issue 可一次收敛；import scan 更稳定；PR2 可只落 repository / persistence，不创建业务 graph | 已由 AIFI-ARCH-008 更新 `03`、`04`、`17` 和 ADR-0005；PR3 只需按最终路径实现 | Medium | 高，目录职责可被测试和 review 稳定执行 | **最终采用**。AIFI-ARCH-008 已回写目录与 ADR caveat |
 | 3. 按业务 graph domain 组织 AI runtime | `apps/api/app/application/ai_runtime/graphs/{job_match,polish,pressure,report,review}/**`; shared runtime contracts 分散到各 graph 下 | 每个业务 graph 就近维护 descriptor、node contract、prompt mapping | PR2 / PR3 过早暴露业务 graph；Pressure / Skill / Prompt blockers 未关闭时容易把 planning gap 写进代码；共享 guard / trace / handoff 易重复 | High | 中等，graph 多后共享语义易漂移 | 不推荐作为 PR2/PR3 形态；可在 PR5-PR8 逐 graph 引入 |
 
-推荐方案：**Option 2，聚合 AI runtime 目录**。PR1.6 本轮不修改 ADR-0005 或 `03_TARGET_DIRECTORY_STRUCTURE.md`；AIFI-ARCH-008 关闭时必须决定是否把 ADR-0005 §6 的 open issue 更新为 accepted directory shape，并同步 `03_TARGET_DIRECTORY_STRUCTURE.md`、`04_BACKEND_AGENT_RUNTIME_PLAN.md`、`17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`。在该任务关闭前，PR2 不得创建业务 graph 目录，也不得扩大 LangGraph import 边界。
+最终决策：**Option 2，聚合 AI runtime 目录**。AIFI-ARCH-008 已把 ADR-0005 的 directory open issue 更新为 accepted directory shape，并同步 `03_TARGET_DIRECTORY_STRUCTURE.md`、`04_BACKEND_AGENT_RUNTIME_PLAN.md`、`17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`。PR2 仍不得创建业务 graph 目录，也不得扩大 LangGraph import 边界；PR2 code implementation 仍需其他 PR1.6 blocker 关闭或 accepted risk 后重新授权。
 
 ## 6. Pressure Mode Remediation Plan
 
@@ -265,13 +265,13 @@ Contract -> Runtime prompt -> Code builder -> Validator -> Tests 映射表：
 | 问题 | 回答 |
 |---|---|
 | PR2 是否可以启动 | **不可以启动 code implementation**。只能做 repo-state preflight、只读 recon 和受权文档回写。 |
-| 如果不能，阻塞项是什么 | `AIFI-BE-004` Pressure mode-level spec；`AIFI-PROMPT-002` Prompt Asset / Evaluation；`AIFI-ARCH-007` Skill / Capability Model；`AIFI-ARCH-008` AI/Core directory boundary；`AIFI-BE-005` PR2 runtime data model preflight readiness gate；以及本文 §4 blocker。 |
+| 如果不能，阻塞项是什么 | `AIFI-BE-004` Pressure mode-level spec；`AIFI-PROMPT-002` Prompt Asset / Evaluation；`AIFI-ARCH-007` Skill / Capability Model；`AIFI-BE-005` PR2 runtime data model preflight readiness gate；以及本文 §4 blocker。AIFI-ARCH-008 AI/Core directory boundary 已关闭，不再作为 PR2 blocker。 |
 | 是否新增 PR1.6 | **是，PR1.6 必需**。当前仓库已登记 PR1.6 文档和 blocker note，本轮只更新本文档。 |
 | PR1.6 应做哪些文档修复 | 创建 / 完善本文；冻结 PR2 blocked；登记 Pressure / Prompt Asset / Skill / Directory / PR2 readiness findings；明确 active docs 回写目标和验证命令。 |
-| PR2 / PR3 / PR4 / PR5 / PR6 / PR8 是否需要重排 | 需要局部重排：PR2 保持 blocked；PR3/PR4 不创建业务 graph；PR5/PR6/PR8 必须在 Prompt Asset、Skill Model、Pressure spec、directory boundary 关闭后按 graph 分批进入。 |
+| PR2 / PR3 / PR4 / PR5 / PR6 / PR8 是否需要重排 | 需要局部重排：PR2 保持 blocked；PR3/PR4 不创建业务 graph；PR5/PR6/PR8 必须在 Prompt Asset、Skill Model、Pressure spec 关闭后按 graph 分批进入。directory boundary 已由 AIFI-ARCH-008 关闭。 |
 | Pressure / Skill / Prompt 应该插入哪个 PR | Pressure spec 插入 AIFI-BE-004，在 PR8 或单独 Pressure PR 之前；Skill 插入 AIFI-ARCH-007，在任何 skill-based graph 前；Prompt Asset / Evaluation 插入 AIFI-PROMPT-002，在 PR5-PR8 prompt migration 前。 |
 | 是否要新增 AIFI 任务 | 当前 `BACKLOG.md` 已存在 AIFI-BE-004、AIFI-PROMPT-002、AIFI-ARCH-007、AIFI-ARCH-008、AIFI-BE-005；本轮不新增任务。若后续拆出 Prompt Asset registry 或 `SKILL_MODEL_SPEC.md` 独立文档，需另行授权更新 `BACKLOG.md`。 |
-| 是否要更新 DOCS_INDEX / BACKLOG / ADR-0005 | 本轮不更新。当前 `DOCS_INDEX.md` 已登记 19 号文档，`BACKLOG.md` 已登记 PR1.6 blocker tasks，ADR-0005 已标目录形态为 open issue。若 AIFI-ARCH-008 决定最终目录形态，需另行授权更新 ADR-0005 / `03_TARGET_DIRECTORY_STRUCTURE.md` / `DOCS_INDEX.md`。 |
+| 是否要更新 DOCS_INDEX / BACKLOG / ADR-0005 | AIFI-ARCH-008 本轮只更新 ADR-0005 和授权专题文档；不更新 `DOCS_INDEX.md` 或 `BACKLOG.md`。当前 `DOCS_INDEX.md` 已登记 19 号文档，`BACKLOG.md` 已登记 PR1.6 blocker tasks；BACKLOG 状态需另行授权维护。 |
 
 修正后的 PR sequence：
 
@@ -281,7 +281,7 @@ Contract -> Runtime prompt -> Code builder -> Validator -> Tests 映射表：
 | AIFI-BE-004 | Pressure mode-level spec | Pressure graph held until accepted |
 | AIFI-PROMPT-002 | Prompt Asset / Evaluation design | PR5-PR8 prompt migration held until registry / fixtures accepted |
 | AIFI-ARCH-007 | Skill / Capability Model | skill-based graph / training mapping held until active doc accepted |
-| AIFI-ARCH-008 | AI/Core directory boundary + ADR caveat | PR3/PR4 directory / import boundary frozen |
+| AIFI-ARCH-008 | AI/Core directory boundary + ADR caveat | **Closed in this revision**：PR3/PR4 directory / import boundary frozen |
 | AIFI-BE-005 | PR2 Runtime Data Model preflight readiness gate | PR2 code implementation can be re-authorized only after pass or accepted risk |
 | PR2 | AI Runtime data / repository foundation only after re-authorization | no business graph, no LangGraph dependency, no real provider |
 | PR3 | `application/ai_runtime` facade / contracts / registry / guard | Core no LangGraph import |
@@ -311,7 +311,7 @@ PR2 code implementation 的 P0 gates：
 |---|---|---|
 | P0-1 Source-of-truth backfill | PR1.6 决定 active docs 回写范围；必要回写完成或 accepted risk 登记 | PR2 blocked |
 | P0-2 Runtime feature flags | runtime enablement、per-graph flag、real-provider gate、default-off、rollback 冻结 | PR2 blocked |
-| P0-3 Directory boundary | `application/ai_runtime/**` / `infrastructure/ai_runtime/langgraph/**` 或等价目录唯一冻结 | PR2 blocked |
+| P0-3 Directory boundary | `application/ai_runtime/**` / `infrastructure/ai_runtime/langgraph/**` 唯一冻结；`application/ai/**`、`application/agents/**`、`infrastructure/agent_runtime/**` 和 `langgraph_adapters/**` 禁止创建 | Satisfied by AIFI-ARCH-008；若后续 PR 改变目录形态则重新阻断 |
 | P0-4 Repository contract | runtime repository methods、owner scope、timeline read、LLM summary read、idempotency replay、retention cleanup 冻结 | PR2 blocked |
 | P0-5 Bootstrap / rollback | SQLAlchemy bootstrap、rollback order、in-flight run handling、pending writes fail-closed 规则明确 | PR2 blocked |
 | P0-6 Test list consistency | PR2 tests 文件名、method、fixtures、redaction markers、owner cases 与 repository contract 对齐 | PR2 blocked |
@@ -326,7 +326,7 @@ PR2 code implementation 的 P0 gates：
 
 1. 完成本 PR1.6 文档验证，确保只存在本文档 diff。
 2. 不启动 PR2 code implementation；PR2 仅可做 repo-state preflight、只读 recon 和受权文档回写。
-3. 由主 Agent 另行授权后，按 `AIFI-BE-004`、`AIFI-PROMPT-002`、`AIFI-ARCH-007`、`AIFI-ARCH-008`、`AIFI-BE-005` 顺序关闭 blocker。
+3. 由主 Agent 另行授权后，继续按 `AIFI-BE-004`、`AIFI-PROMPT-002`、`AIFI-ARCH-007`、`AIFI-BE-005` 关闭剩余 blocker；AIFI-ARCH-008 本轮已关闭。
 4. 若需要修改 `BACKLOG.md`、`DOCS_INDEX.md` 或 ADR-0005，必须先停止当前 PR1.6 docs-only scope 并获得新授权。
 5. 只有 §11 P0 gates 全部关闭，或 accepted risk 被明确登记后，才允许给出 PR2 runtime foundation 代码实现 prompt。
 
