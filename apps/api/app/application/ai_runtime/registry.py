@@ -28,6 +28,11 @@ class GraphDescriptor:
     config_schema_ref: str | None = None
     implementation_pr: str = "PR3"
     migration_status: str = "not_started"
+    provider_enabled: bool = False
+    formal_write_targets: tuple[str, ...] = field(default_factory=tuple)
+    db_business_write_targets: tuple[str, ...] = field(default_factory=tuple)
+    rollback_safe: bool = True
+    disabled_behavior: str = "legacy_direct_path_retained"
 
     def __post_init__(self) -> None:
         allowed_lifecycle = frozenset({"active", "disabled", "planned", "placeholder", "deferred"})
@@ -44,6 +49,10 @@ class AgentGraphRegistry:
 
     @classmethod
     def default(cls) -> "AgentGraphRegistry":
+        from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
+            build_polish_feedback_graph_descriptor,
+        )
+
         descriptors = {
             "polish_question_graph": GraphDescriptor(
                 graph_name="polish_question_graph",
@@ -62,29 +71,10 @@ class AgentGraphRegistry:
                 visibility="owner_only",
                 health_summary_refs=("health.polish_question.placeholder",),
                 config_schema_ref="graph_config.polish_question.v1",
-                implementation_pr="PR5",
+                implementation_pr="PR3",
                 migration_status="direct_path_retained",
             ),
-            "polish_feedback_graph": GraphDescriptor(
-                graph_name="polish_feedback_graph",
-                graph_version="pr3-contract",
-                capability="polish_feedback",
-                lifecycle_status="placeholder",
-                runtime_flag_key="AIFI_GRAPH_POLISH_FEEDBACK_ENABLED",
-                default_enabled=False,
-                supported_entrypoints=("start", "resume", "replay", "timeline", "cancel"),
-                supported_outputs=("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs"),
-                prompt_contract_ids=("P-POLISH-FEEDBACK-001",),
-                eval_suite_ids=("EVAL-POLISH-FEEDBACK-001",),
-                resume_schema_ids={"user_confirmation": "agent.resume.user_confirmation.v1"},
-                interrupt_types=("user_confirmation",),
-                required_permissions=("owner",),
-                visibility="owner_only",
-                health_summary_refs=("health.polish_feedback.placeholder",),
-                config_schema_ref="graph_config.polish_feedback.v1",
-                implementation_pr="PR5",
-                migration_status="direct_path_retained",
-            ),
+            "polish_feedback_graph": build_polish_feedback_graph_descriptor(),
             "job_match_graph": GraphDescriptor(
                 graph_name="job_match_graph",
                 graph_version="pr3-contract",
@@ -178,6 +168,9 @@ class AgentGraphRegistry:
             return self._descriptors[graph_name]
         except KeyError as exc:
             raise RuntimeValidationError(f"unknown graph descriptor: {task_type}") from exc
+
+    def list_graph_descriptors(self) -> tuple[GraphDescriptor, ...]:
+        return tuple(self._descriptors.values())
 
     def get_contract_ids(self, task_type: str) -> tuple[str, ...]:
         return self.get_graph_descriptor(task_type).prompt_contract_ids

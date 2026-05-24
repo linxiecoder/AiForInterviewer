@@ -119,13 +119,15 @@ def test_pr3_application_ai_runtime_keeps_contract_boundary() -> None:
     assert violations == []
 
 
-def test_pr4_concrete_runtime_exists_only_in_infrastructure_and_business_graphs_remain_absent() -> None:
+def test_pr5_business_graph_boundary_does_not_import_concrete_runtime() -> None:
     concrete_runtime = "lang" + "graph"
     concrete_chain = "lang" + "chain"
     business_graph_dir = "business_" + "graphs"
 
     assert (APP_ROOT / "infrastructure" / "ai_runtime" / concrete_runtime).exists()
-    assert not (APP_ROOT / "application" / "ai_runtime" / business_graph_dir).exists()
+    assert sorted(
+        path.name for path in (APP_ROOT / "application" / "ai_runtime" / business_graph_dir).glob("*.py")
+    ) == ["__init__.py", "polish_feedback_graph.py"]
     assert _find_forbidden_imports(
         APP_ROOT / "application",
         forbidden_prefixes=(concrete_runtime, concrete_chain),

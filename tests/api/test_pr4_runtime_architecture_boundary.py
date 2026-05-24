@@ -11,18 +11,42 @@ from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRu
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "apps" / "api" / "app"
 ALLOWED_LANG_IMPORT_PREFIX = Path("apps/api/app/infrastructure/ai_runtime/langgraph")
+BUSINESS_GRAPH_ROOT = APP_ROOT / "application" / "ai_runtime" / "business_graphs"
+ALLOWED_PR5_BUSINESS_GRAPH_FILES = {
+    BUSINESS_GRAPH_ROOT / "__init__.py",
+    BUSINESS_GRAPH_ROOT / "polish_feedback_graph.py",
+}
 ALLOWED_TEST_IMPORTS = {
     Path("tests/api/test_langgraph_dependency_spike.py"),
     Path("tests/api/test_pr4_runtime_architecture_boundary.py"),
 }
+FORBIDDEN_BUSINESS_GRAPH_IMPORT_PREFIXES = (
+    "langgraph",
+    "langchain",
+    "openai",
+    "anthropic",
+    "sqlalchemy",
+    "fastapi",
+    "app.infrastructure",
+)
+FORBIDDEN_BUSINESS_GRAPH_SOURCE_MARKERS = (
+    "openai",
+    "anthropic",
+    "api_key",
+    "provider.invoke",
+    "provider.call",
+    "chat.completions",
+    "responses.create",
+)
 
 
 def test_pr4_concrete_langgraph_imports_do_not_leak_outside_infra_runtime_root() -> None:
     assert _concrete_lang_import_violations() == []
 
 
-def test_pr4_no_business_graph_directory_or_formal_business_write_bypass() -> None:
-    assert not (APP_ROOT / "application" / "ai_runtime" / "business_graphs").exists()
+def test_pr4_pr5_boundary_allows_only_authorized_skeleton_and_no_formal_write_bypass() -> None:
+    assert _business_graph_skeleton_boundary_violations() == []
+
     runtime = FakeLangGraphRuntime(
         flag_resolver=RuntimeFlagResolver(
             test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True}
@@ -48,6 +72,31 @@ def test_pr4_no_business_graph_directory_or_formal_business_write_bypass() -> No
     assert result.formal_refs == ()
     assert result.metadata["formal_business_writes"] == 0
     assert result.metadata["db_business_writes"] == 0
+
+
+def _business_graph_skeleton_boundary_violations() -> list[str]:
+    if not BUSINESS_GRAPH_ROOT.exists():
+        return []
+
+    violations: list[str] = []
+    business_graph_files = set(_python_files(BUSINESS_GRAPH_ROOT))
+    unauthorized_files = business_graph_files - ALLOWED_PR5_BUSINESS_GRAPH_FILES
+    violations.extend(
+        f"unexpected business graph file: {path.relative_to(REPO_ROOT)}" for path in unauthorized_files
+    )
+
+    for path in sorted(business_graph_files & ALLOWED_PR5_BUSINESS_GRAPH_FILES):
+        rel = path.relative_to(REPO_ROOT)
+        for module_name in _imported_modules(path):
+            if module_name.startswith(FORBIDDEN_BUSINESS_GRAPH_IMPORT_PREFIXES):
+                violations.append(f"{rel}: forbidden import {module_name}")
+
+        source = path.read_text(encoding="utf-8-sig").lower()
+        for marker in FORBIDDEN_BUSINESS_GRAPH_SOURCE_MARKERS:
+            if marker in source:
+                violations.append(f"{rel}: forbidden provider marker {marker}")
+
+    return sorted(violations)
 
 
 def _concrete_lang_import_violations() -> list[str]:
