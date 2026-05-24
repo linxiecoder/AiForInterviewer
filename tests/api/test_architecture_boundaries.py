@@ -119,12 +119,25 @@ def test_pr3_application_ai_runtime_keeps_contract_boundary() -> None:
     assert violations == []
 
 
-def test_pr3_does_not_create_concrete_runtime_or_business_graph_packages() -> None:
+def test_pr4_concrete_runtime_exists_only_in_infrastructure_and_business_graphs_remain_absent() -> None:
     concrete_runtime = "lang" + "graph"
+    concrete_chain = "lang" + "chain"
     business_graph_dir = "business_" + "graphs"
 
-    assert not (APP_ROOT / "infrastructure" / "ai_runtime" / concrete_runtime).exists()
+    assert (APP_ROOT / "infrastructure" / "ai_runtime" / concrete_runtime).exists()
     assert not (APP_ROOT / "application" / "ai_runtime" / business_graph_dir).exists()
+    assert _find_forbidden_imports(
+        APP_ROOT / "application",
+        forbidden_prefixes=(concrete_runtime, concrete_chain),
+    ) == []
+    assert _find_forbidden_imports(
+        APP_ROOT / "api",
+        forbidden_prefixes=(concrete_runtime, concrete_chain),
+    ) == []
+    assert _find_forbidden_imports(
+        APP_ROOT / "domain",
+        forbidden_prefixes=(concrete_runtime, concrete_chain),
+    ) == []
 
 
 def test_shared_kernel_objects_are_reusable() -> None:
