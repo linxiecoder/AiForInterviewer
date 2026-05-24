@@ -40,6 +40,7 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 | `docs/02-design/SEMANTICS_GLOSSARY.md` | `confidence_level`、`validation_status`、`source_availability` 和 low confidence 状态语义 |
 | `docs/02-design/PERSISTENCE_MODEL.md` | API schema 到建议物理模型、join / reference table 和 persistence fixture 的交接 |
 | `docs/02-design/APPLICATION_FLOW_SPEC.md` | endpoint 到 use-case orchestration、LLM call plan、Prompt 输入结构和持久化流程的交接 |
+| `docs/02-design/PRESSURE_MODE_SPEC.md` | Pressure Mode session lifecycle、turn loop、pause / resume / end、report / review handoff、graph boundary 和实现前 API 承接 |
 | `docs/03-delivery/DELIVERY_PLAN.md` | F4 / F5 / F7 阶段交接、无文件导出和 F7 可测试性要求 |
 | `docs/03-delivery/BACKLOG.md` | `AIFI-API-001`、`AIFI-BE-001`、`AIFI-FE-001`、`AIFI-QA-001` 的范围和依赖 |
 
@@ -2255,6 +2256,12 @@ HTTP: 202 Accepted
 - `api.pressure_feedback.create.source_unavailable`
 - `api.pressure_feedback.create.provider_unavailable`
 - `api.pressure_feedback.create.task_timeout`
+
+### AIFI-BE-004 Pressure mode API handoff
+
+`PRESSURE_MODE_SPEC.md` 冻结 Pressure Mode 的 mode-level API 承接。当前 `API-PRESSURE-001` 至 `API-PRESSURE-005` 覆盖 create / get / question / answer / feedback，但 `pressure_interview_graph` 实现前，active API contract 必须能表达 start、pause、resume、end、report handoff 和 mock review handoff；可以扩展现有 request / response schema，也可以另行登记 dedicated endpoint，但代码不得发明未登记 route。
+
+本节只增加 AIFI-BE-004 交叉引用，不实现 endpoint、不修改 schema 文件、不进入 PR2 code implementation。
 
 ### API-PROGRESS-001 获取进展树（Get progress tree）
 
@@ -5553,6 +5560,7 @@ F8 changelog input 至少从以下 API 变化提取：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 增加 AIFI-BE-004 Pressure mode API handoff | 将 Pressure start / pause / resume / end / report / review handoff 的实现前置条件交给 `PRESSURE_MODE_SPEC.md`；不新增 endpoint，不修改代码，不授权 PR2 graph |
 | 2026-05-17 | 修复 `AR-F4-F8-003` API release handoff 缺口 | 新增 F8 API 发布检查映射，覆盖 route inventory、no export endpoint、copy content / copy event、rate limit、provider failure、async task status、retry / cancel、health / trace / audit 可见性、response / error envelope、source unavailable、low confidence、validation failed、no exact probability 和 provider payload / system prompt / hidden scoring rules 禁止项；不新增 endpoint，不进入 implementation |
 | 2026-05-17 | 增加 scoring / semantics / persistence / application flow 交接 | 将评分 canonical 规则交给 `SCORING_SPEC.md`，语义枚举交给 `SEMANTICS_GLOSSARY.md`，物理关系交给 `PERSISTENCE_MODEL.md`，应用编排交给 `APPLICATION_FLOW_SPEC.md`；更新 `score_type` canonical enum 和 `ScoreResultResponse` 必填字段 |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` UX 可见任务 API 断链 | 新增岗位-简历解绑、复盘列表、复盘复制内容 / 复制事件、低置信候选校对保存和内容沉淀目标确认 endpoint；补齐 request / response、状态、错误、owner、幂等、历史保留和 F7 assertion；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |

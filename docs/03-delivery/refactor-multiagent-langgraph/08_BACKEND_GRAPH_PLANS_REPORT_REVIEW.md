@@ -15,20 +15,20 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph/bac
 ## 2. 输入来源
 
 - `docs/tmp/CODEX_LANGGRAPH_AI_NON_AI_BOUNDARY.md`
-- active docs：`APPLICATION_FLOW_SPEC.md`、`DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`PROMPT_SPEC.md`、`SCORING_SPEC.md`、`SECURITY_PRIVACY.md`、`API_SPEC.md`
+- active docs：`APPLICATION_FLOW_SPEC.md`、`PRESSURE_MODE_SPEC.md`、`DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`PROMPT_SPEC.md`、`SCORING_SPEC.md`、`SECURITY_PRIVACY.md`、`API_SPEC.md`
 - `docs/02-design/prompt-contracts/PRESSURE_CONTRACTS.md`
 - `docs/02-design/prompt-contracts/REPORT_CONTRACTS.md`
 - `docs/02-design/prompt-contracts/REVIEW_CONTRACTS.md`
 
 ## 3. 当前状态
 
-Pressure、Report、Review prompt contracts 已作为 Draft 设计存在。请求的代码 recon 清单中没有 report/review repository 或 use case symbol，因此本文冻结 graph contract、state、worker/reducer、persistence target 和 failure policy；PR8 实现前必须由主 Agent 授权读取或创建对应 repository/tool 文件。
+Pressure、Report、Review prompt contracts 已作为 Draft 设计存在。AIFI-BE-004 已由 `PRESSURE_MODE_SPEC.md` 接受 Pressure mode-level spec；Pressure code 仍是 placeholder，`pressure_interview_graph` 仍不得进入 PR2。请求的代码 recon 清单中没有 report/review repository 或 use case symbol，因此本文冻结 graph contract、state、worker/reducer、persistence target 和 failure policy；PR8 或独立受权 Pressure PR 实现前必须由主 Agent 授权读取或创建对应 repository/tool 文件。
 
 ## 4. Graph 总览
 
 | Graph | 目标 | State 字段 | Edge / conditional edge | Persistence targets | Trace policy | Tests |
 |---|---|---|---|---|---|---|
-| `pressure_interview_graph` | 编排压力面开场、题目、追问、节奏、结束检查和报告输入包 | `owner_id`, `actor_id`, `ai_task_id`, `agent_run_id`, `session_id`, `turn_refs`, `question_refs`, `answer_refs`, `score_ref`, `report_input_ref`, `trace_refs`, `evidence_refs`, `error_state` | answer missing -> interrupt; continue -> next turn; end -> assemble report input | questions, score_results, report input package, trace/evidence | turn refs and validation summaries only | pause/resume, follow-up, end check, report input is not report body |
+| `pressure_interview_graph` | 编排压力面开场、题目、追问、节奏、结束检查和报告输入包；必须先引用 `PRESSURE_MODE_SPEC.md` | `owner_id`, `actor_id`, `ai_task_id`, `agent_run_id`, `session_id`, `turn_refs`, `question_refs`, `answer_refs`, `score_ref`, `report_input_ref`, `trace_refs`, `evidence_refs`, `error_state` | answer missing -> interrupt; continue -> next turn; end -> assemble report input | questions, score_results, report input package, trace/evidence | turn refs and validation summaries only | pause/resume, follow-up, end check, report input is not report body |
 | `report_generation_graph` | 生成报告、section、score explanation 和 copyable content | `owner_id`, `actor_id`, `ai_task_id`, `agent_run_id`, `report_type`, `session_ref`, `report_input_package_ref`, `section_plan`, `section_worker_results`, `report_ref`, `score_ref`, `copy_content_ref`, `trace_refs`, `evidence_refs`, `error_state` | worker failed -> partial; missing score -> low confidence; copy path deterministic if needed | reports, report_sections, copyable content, trace/evidence, low confidence | orchestrator + worker sanitized traces; no raw worker prompt | fanout/fanin, partial, no export, no exact probability |
 | `mock_review_generation_graph` | 基于系统内模拟面试生成复盘 | `owner_id`, `actor_id`, `ai_task_id`, `agent_run_id`, `session_ref`, `report_ref`, `turn_refs`, `score_refs`, `review_ref`, `candidate_refs`, `trace_refs`, `evidence_refs`, `error_state` | missing report -> blocked; low confidence inherited; candidates -> confirmation | interview_reviews, review_items, candidate refs, trace/evidence | source refs only | no rescore, candidate-only, source unavailable |
 | `real_review_generation_graph` | 基于用户确认的真实面试输入生成复盘 | `owner_id`, `actor_id`, `ai_task_id`, `agent_run_id`, `real_input_ref`, `user_confirmation_ref`, `job_ref`, `resume_ref`, `review_ref`, `candidate_refs`, `third_party_redaction_summary`, `trace_refs`, `evidence_refs`, `error_state` | unconfirmed -> interrupt; incomplete -> low confidence; third-party sensitive -> redacted | real interview input, real review, review items, trace/evidence | redacted source summary only | confirmed input, no outcome prediction, privacy redaction |
@@ -146,7 +146,7 @@ PR8 implementation should use LangGraph `Send` or equivalent fanout only from `d
 
 ## 10. 与 active docs 的关系
 
-本文只细化 active Prompt contracts 与 `APPLICATION_FLOW_SPEC.md` 的运行编排，不替代 API、DATA、PERSISTENCE、SCORING、SECURITY 或 Prompt canonical 文档。report/review persistence target 以 `PERSISTENCE_MODEL.md` 和 `API_SPEC.md` 已登记对象为准；PR8 需要代码实现时由主 Agent 授权具体文件。
+本文只细化 active Prompt contracts、`APPLICATION_FLOW_SPEC.md` 与 `PRESSURE_MODE_SPEC.md` 的运行编排，不替代 API、DATA、PERSISTENCE、SCORING、SECURITY 或 Prompt canonical 文档。Pressure mode-level lifecycle、turn、pace、API handoff、report / review handoff 和 PR2 hold 以 `PRESSURE_MODE_SPEC.md` 为准；report/review persistence target 以 `PERSISTENCE_MODEL.md` 和 `API_SPEC.md` 已登记对象为准；PR8 需要代码实现时由主 Agent 授权具体文件。
 
 ## 11. 非目标
 
@@ -159,7 +159,7 @@ PR8 implementation should use LangGraph `Send` or equivalent fanout only from `d
 
 ## 12. 后续 PR 使用方式
 
-PR8 按本文实现 report/review/candidate closure；如 PR5/PR6 需要压力面或报告输入包，必须先在 active flow/API 中确认触发方式。实现前需要主 Agent 汇总确认 report/review repository 文件、runtime `Send` API 版本和 test fixture 范围。
+PR8 按本文实现 report/review/candidate closure；如 PR5/PR6 需要压力面或报告输入包，必须先在 `PRESSURE_MODE_SPEC.md`、active flow/API 中确认触发方式。实现前需要主 Agent 汇总确认 pressure/report/review repository 文件、runtime `Send` API 版本和 test fixture 范围。
 
 ## 13. Definition of Done
 

@@ -12,7 +12,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph/ai-
 
 本文执行 PR1.6 docs-only remediation，用于识别并规划修复 PR1 / PR1.5 后仍未满足 implementation-ready 的 AI 产品设计、Prompt、Skill、Pressure 和 AI/Core 目录边界问题。
 
-本轮结论是：**PR2 code implementation 不可启动**。AIFI-ARCH-007 已由 `docs/02-design/SKILL_MODEL_SPEC.md` 接受并关闭 Skill Model blocker；AIFI-PROMPT-002 已由 `docs/02-design/PROMPT_ASSET_SPEC.md` 和 `docs/02-design/PROMPT_EVALUATION_SPEC.md` 接受并关闭 Prompt Asset / Evaluation 设计 blocker；PR2 在 `AIFI-BE-004`、`AIFI-BE-005` 及 `BACKLOG.md` 仍登记的其他 blocker 关闭，或主 Agent 显式接受风险并重新授权前，只能执行 repo-state preflight、只读 recon 和受权文档回写；不得修改 `apps/**`、`tests/**`、依赖、migration、CI、后端代码、前端代码或业务代码。
+本轮结论是：**PR2 code implementation 不可启动**。AIFI-BE-004 已由 `docs/02-design/PRESSURE_MODE_SPEC.md` 接受并关闭 Pressure Mode blocker；AIFI-ARCH-007 已由 `docs/02-design/SKILL_MODEL_SPEC.md` 接受并关闭 Skill Model blocker；AIFI-PROMPT-002 已由 `docs/02-design/PROMPT_ASSET_SPEC.md` 和 `docs/02-design/PROMPT_EVALUATION_SPEC.md` 接受并关闭 Prompt Asset / Evaluation 设计 blocker；PR2 在 `AIFI-BE-005` 及 `BACKLOG.md` 仍登记的其他 blocker 关闭，或主 Agent 显式接受风险并重新授权前，只能执行 repo-state preflight、只读 recon 和受权文档回写；不得修改 `apps/**`、`tests/**`、依赖、migration、CI、后端代码、前端代码或业务代码。
 
 本文不替代 `docs/02-design/*`、`docs/02-design/prompt-contracts/*.md`、`docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md`、`docs/00-governance/DOCS_INDEX.md` 或 ADR。长期事实必须回写 active docs、进入 `BACKLOG.md` AIFI 任务或进入 ADR 后，才可作为实现依据。
 
@@ -43,10 +43,10 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 | 问题 | 结论 | 证据 |
 |---|---|---|
 | AI/Core 目录不一致与 AI 嵌套过深 | 已由 AIFI-ARCH-008 关闭。最终目录形态冻结为 `application/ai_runtime/**` + `infrastructure/ai_runtime/langgraph/**`；`application/ai/**`、`application/agents/**`、`infrastructure/agent_runtime/**` 和 `langgraph_adapters/**` 不再作为 PR2-PR8 创建目标 | `03_TARGET_DIRECTORY_STRUCTURE.md` §5；`04_BACKEND_AGENT_RUNTIME_PLAN.md` §4-§5；ADR-0005 §Decision / §Consequences |
-| Pressure mode 缺 mode-level spec 与代码未实现 | 确认。active docs 和 prompt contracts 有 Pressure Draft 语义，但代码只有 router prefix、DTO placeholder、`PressureUseCases.bootstrap()` 返回 `pressure_skeleton` | `PROMPT_SPEC.md` §9.4；`PRESSURE_CONTRACTS.md` §13；`apps/api/app/application/pressure/use_cases.py` `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `apps/api/app/schemas/pressure.py` |
+| Pressure mode 缺 mode-level spec 与代码未实现 | mode-level spec 已由 AIFI-BE-004 补齐；代码仍只有 router prefix、DTO placeholder、`PressureUseCases.bootstrap()` 返回 `pressure_skeleton` | `docs/02-design/PRESSURE_MODE_SPEC.md`；`PROMPT_SPEC.md` §9.4；`PRESSURE_CONTRACTS.md` §13；`apps/api/app/application/pressure/use_cases.py` `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `apps/api/app/schemas/pressure.py` |
 | Polish prompt design 不足 | 确认。Polish question / feedback / progress tree 已有 runtime builders 和 LLM service，但 `PROMPT_SPEC.md` 只冻结 contract registry，不承载 Production Prompt Asset registry、golden fixtures 或 model comparison policy | `question_prompts.py` `build_polish_question_generation_prompt_bundle`; `feedback_prompts.py` `build_polish_feedback_prompt_bundle`; `question_llm.py` `PolishQuestionLlmService`; `feedback_llm.py` `PolishFeedbackLlmService`; `PROMPT_SPEC.md` §9 |
 | Skill model 缺失 | 已由 AIFI-ARCH-007 关闭。`SKILL_MODEL_SPEC.md` 已登记 active design doc，冻结统一 Skill taxonomy，并明确 `ScoreDimension`、`ProgressTree`、`Weakness`、`Asset`、`TrainingRecommendation` 等对象不能替代 Skill Model | `SKILL_MODEL_SPEC.md`; `DATA_MODEL.md` §11.2; `SCORING_SPEC.md` §8-§9; `PROMPT_SPEC.md` §12-§13; `progress_tree_v2.py`; `models/scoring.py`; `models/weakness.py`; `models/asset.py`; `models/training.py` |
-| 其他 implementation readiness 问题 | 确认。AIFI-ARCH-007 只关闭 Skill Model blocker，AIFI-PROMPT-002 只关闭 Prompt Asset / Evaluation design blocker；PR2 仍受 source-of-truth backfill、runtime flag、repository contract、bootstrap / rollback、test list、raw-off security、Pressure hold 和 PR2 preflight readiness 阻断 | `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-004 / AIFI-BE-005 |
+| 其他 implementation readiness 问题 | 确认。AIFI-BE-004 只关闭 Pressure Mode blocker，AIFI-ARCH-007 只关闭 Skill Model blocker，AIFI-PROMPT-002 只关闭 Prompt Asset / Evaluation design blocker；PR2 仍受 source-of-truth backfill、runtime flag、repository contract、bootstrap / rollback、test list、raw-off security 和 PR2 preflight readiness 阻断 | `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-005 及仍登记的其他 blocker |
 
 ## 4. 补充问题清单
 
@@ -54,10 +54,10 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 
 | ID | Severity | Area | Evidence | Impact | Required Fix | Target Document | Target PR |
 |---|---|---|---|---|---|---|---|
-| PR16-BLOCKER-001 | Blocker | PR2 启动门槛 | `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-004 / AIFI-BE-005；`SKILL_MODEL_SPEC.md` 已关闭 AIFI-ARCH-007；`PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 已关闭 AIFI-PROMPT-002 | PR2 如果启动代码实现，会绕过仍未关闭的 PR1.6 blocker | 维持 PR2 blocked；先关闭剩余 blocker 任务或登记人工 accepted risk | `BACKLOG.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`; 本文 §10-§12 | PR1.6; PR2 blocked |
+| PR16-BLOCKER-001 | Blocker | PR2 启动门槛 | `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6；`BACKLOG.md` AIFI-BE-005 及仍登记的其他 blocker；`PRESSURE_MODE_SPEC.md` 已关闭 AIFI-BE-004；`SKILL_MODEL_SPEC.md` 已关闭 AIFI-ARCH-007；`PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 已关闭 AIFI-PROMPT-002 | PR2 如果启动代码实现，会绕过仍未关闭的 PR1.6 blocker | 维持 PR2 blocked；先关闭剩余 blocker 任务或登记人工 accepted risk | `BACKLOG.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md`; 本文 §10-§12 | PR1.6; PR2 blocked |
 | PR16-BLOCKER-002 | Blocker | Source-of-truth backfill | `DOCS_INDEX.md` §1 / §2 说明专题包不替代 active docs；`16_DESIGN_DOCS_REFACTOR_PLAN.md` §4 映射 active docs 回写 | 代码实现可能直接引用 planning package，而非 active API / DATA / PROMPT / SECURITY 事实源 | 冻结 active docs 回写清单；回写完成或显式登记不阻断理由后再授权实现 | `APPLICATION_FLOW_SPEC.md`; `PERSISTENCE_MODEL.md`; `DATA_MODEL.md`; `API_SPEC.md`; `PROMPT_SPEC.md`; `SECURITY_PRIVACY.md`; `BACKLOG.md` | PR1.6 decision; authorized active-docs-sync PR |
 | PR16-BLOCKER-003 | Blocker | Runtime enablement / feature flag | `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` §6 G6；`04_BACKEND_AGENT_RUNTIME_PLAN.md` §6.7 / §10 | 未冻结 default-off、per-graph flag、real-provider gate、rollback，PR2 无法证明 runtime 不会误触发 provider 或业务 graph | 冻结 runtime enablement flag、per-graph flag、real-provider gate、default-off、disable / rollback 行为 | `04_BACKEND_AGENT_RUNTIME_PLAN.md`; `15_VALIDATION_PLAN.md`; `SECURITY_PRIVACY.md`; `17_PR_BREAKDOWN_AND_IMPLEMENTATION_SEQUENCE.md` | PR1.6 remediation; PR2 blocked |
-| PR16-BLOCKER-004 | Blocker | Pressure mode-level spec | `apps/api/app/application/pressure/use_cases.py` `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `PRESSURE_CONTRACTS.md` §13 | Pressure contracts 已 Draft，但 runtime、API、data、UI、graph、tests 没有 mode-level spec，Pressure graph 不能进入实现 | 新增或回写 Pressure mode-level spec，覆盖 session / turn / pace / end / report handoff / review handoff / candidates / API / data / prompt / graph / UI / tests | `APPLICATION_FLOW_SPEC.md`; `DATA_MODEL.md`; `API_SPEC.md`; `UX_SPEC.md`; `UI_DESIGN_SYSTEM.md`; `PROMPT_SPEC.md`; `PRESSURE_CONTRACTS.md` | AIFI-BE-004; PR2 blocked; Pressure graph held |
+| PR16-BLOCKER-004 | Blocker | Pressure mode-level spec | `docs/02-design/PRESSURE_MODE_SPEC.md`; `apps/api/app/application/pressure/use_cases.py` `PressureUseCases.bootstrap`; `apps/api/app/api/v1/pressure.py`; `PRESSURE_CONTRACTS.md` §13 | **Closed by AIFI-BE-004 for design**。Pressure runtime code 仍是 placeholder；Pressure graph 仍不得进入 PR2 | 后续实现必须引用 `PRESSURE_MODE_SPEC.md` 的 session / turn / pace / end / report handoff / review handoff / candidates / API / data / prompt / graph / UI / tests 冻结规则 | `PRESSURE_MODE_SPEC.md`; `APPLICATION_FLOW_SPEC.md`; `DATA_MODEL.md`; `API_SPEC.md`; `PERSISTENCE_MODEL.md`; `PROMPT_SPEC.md`; `PRESSURE_CONTRACTS.md` | AIFI-BE-004 accepted; PR2 blocked; Pressure graph held |
 | PR16-BLOCKER-005 | Blocker | Repository / bootstrap / rollback / tests | `10_DATA_MODEL_AND_MIGRATION_PLAN.md` repository planning；`13_TEST_PLAN_BACKEND.md` test planning；`15_VALIDATION_PLAN.md` validation planning；当前仓库无 Alembic | PR2 若直接写 runtime tables / repositories，会把方法级 contract、SQLAlchemy bootstrap、rollback 和 test method 缺口转移到代码评审 | 逐项冻结 repository methods、owner scope、idempotency replay、timeline read、LLM summary read、retention cleanup、SQLAlchemy bootstrap / rollback、test names | `10_DATA_MODEL_AND_MIGRATION_PLAN.md`; `13_TEST_PLAN_BACKEND.md`; `15_VALIDATION_PLAN.md`; `PERSISTENCE_MODEL.md`; `DATA_MODEL.md` | AIFI-BE-005; PR2 blocked |
 | PR16-BLOCKER-006 | Blocker | Security / privacy raw-off | `ADR-0005` §3 / §8；`SECURITY_PRIVACY.md` LLM / trace / log 边界；`API_SPEC.md` AiTask status 不返回 provider payload | raw prompt、raw completion、provider payload、checkpoint payload 一旦进入日志 / checkpoint / API，会破坏隐私与可回滚边界 | 补 negative tests 和可见性矩阵，证明 raw payload 不进入 checkpoint、timeline、API response、copy content、普通 trace | `SECURITY_PRIVACY.md`; `API_SPEC.md`; `15_VALIDATION_PLAN.md`; `13_TEST_PLAN_BACKEND.md` | AIFI-BE-005; PR2 blocked |
 
@@ -69,7 +69,7 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 | PR16-MAJOR-002 | Major | Prompt Asset / Evaluation | `PROMPT_SPEC.md` §9 为 contract registry；`question_prompts.py` / `feedback_prompts.py` 已有 runtime bundle builders；`PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 已登记 active | 生产 Prompt 资产、版本、golden fixtures、model comparison 和 rollback 已有统一设计；后续实现仍需落 fixture runner 和 PR5-PR8 graph tests | **Closed by AIFI-PROMPT-002**：Prompt Asset registry、Evaluation Fixture、model comparison policy、redaction / rollback policy 已冻结 | `PROMPT_ASSET_SPEC.md`; `PROMPT_EVALUATION_SPEC.md`; `PROMPT_SPEC.md` | AIFI-PROMPT-002 |
 | PR16-MAJOR-003 | Major | Skill / Capability Model | 已新增 `docs/02-design/SKILL_MODEL_SPEC.md` 并登记 `DOCS_INDEX.md`；`DATA_MODEL.md`、`SCORING_SPEC.md`、`PROMPT_SPEC.md` 已补最小交叉引用 | 多模式能力语义已具备 active doc；后续实现若绕过该 doc 仍会产生不可追踪映射 | **Closed by AIFI-ARCH-007**：后续 graph 只能引用已冻结 Skill taxonomy 与现有对象映射 | `docs/02-design/SKILL_MODEL_SPEC.md`; `DATA_MODEL.md`; `SCORING_SPEC.md`; `PROMPT_SPEC.md` | AIFI-ARCH-007 |
 | PR16-MAJOR-004 | Major | Legacy direct LLM migration | `LlmJobMatchAnalyzer.analyze`; `PolishQuestionLlmService.generate_with_llm_or_fallback`; `PolishFeedbackLlmService.generate_with_llm_or_fallback` 仍直接经 `LlmTransport` | graph 迁移若缺 parity policy，可能破坏现有 API、fallback、validation 和 candidate-only 行为 | 每个 graph 迁移前冻结 legacy fallback、parity tests、response compatibility、deprecation / rollback policy | `06_BACKEND_GRAPH_PLANS_RESUME_JOBMATCH.md`; `07_BACKEND_GRAPH_PLANS_POLISH.md`; `13_TEST_PLAN_BACKEND.md`; `15_VALIDATION_PLAN.md` | PR5 / PR6 / PR8 |
-| PR16-MAJOR-005 | Major | Pressure / Report / Review handoff | `APPLICATION_FLOW_SPEC.md` flows 8-10；`PROMPT_SPEC.md` §9.4-§9.6；`PRESSURE_CONTRACTS.md` §13 | Pressure score、report input、review candidates 容易混成一次 graph output，绕过 report/review/candidate 边界 | 拆清 Pressure graph、Report graph、Review graph、Weakness / Asset / Training candidate handoff | `APPLICATION_FLOW_SPEC.md`; `PROMPT_SPEC.md`; `REPORT_CONTRACTS.md`; `REVIEW_CONTRACTS.md`; `PRESSURE_CONTRACTS.md`; `DATA_MODEL.md` | AIFI-BE-004; PR8 |
+| PR16-MAJOR-005 | Major | Pressure / Report / Review handoff | `PRESSURE_MODE_SPEC.md` §16-§18；`APPLICATION_FLOW_SPEC.md` flows 8-10；`PROMPT_SPEC.md` §9.4-§9.6；`PRESSURE_CONTRACTS.md` §13 | **Closed by AIFI-BE-004 for mode-level design**。实现时仍必须避免把 Pressure score、report input、review candidates 混成一次 graph output | 后续 PR8 / 独立授权 Pressure PR 按 `PRESSURE_MODE_SPEC.md` 拆清 Pressure graph、Report graph、Review graph、Weakness / Asset / Training candidate handoff | `PRESSURE_MODE_SPEC.md`; `APPLICATION_FLOW_SPEC.md`; `PROMPT_SPEC.md`; `REPORT_CONTRACTS.md`; `REVIEW_CONTRACTS.md`; `PRESSURE_CONTRACTS.md`; `DATA_MODEL.md` | AIFI-BE-004 accepted; PR8 |
 
 ### 4.3 Minor
 
@@ -84,7 +84,7 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 |---|---|---|---|---|---|---|---|
 | PR16-FOLLOW-001 | Follow-up | Prompt quality metrics | `PROMPT_EVALUATION_SPEC.md` 已冻结 `schema_valid_rate`、`semantic_valid_rate`、`evidence_ref_valid_rate`、`repeat_question_rate`、`hallucination_rate`、`score_consistency_rate`、`low_confidence_accuracy`、`fallback_rate` | PR5-PR8 有统一 Prompt acceptance 口径；后续实现仍需采集指标 | **Closed by AIFI-PROMPT-002 for design**：quality metrics、model comparison 和 release / rollback 已冻结 | `PROMPT_EVALUATION_SPEC.md`; `15_VALIDATION_PLAN.md` | AIFI-PROMPT-002 |
 | PR16-FOLLOW-002 | Follow-up | Skill migration fixtures | `SKILL_MODEL_SPEC.md` 已定义 Skill fixture 名称和断言 | 后续 Skill graph 或 training graph 仍需在实现测试中落地 low confidence / conflicting evidence 行为 | 在后续 PR 的 backend / frontend test plan 中引用并实现这些 fixtures | `SKILL_MODEL_SPEC.md`; `13_TEST_PLAN_BACKEND.md`; `14_TEST_PLAN_FRONTEND.md` | PR5-PR8 / F7 |
-| PR16-FOLLOW-003 | Follow-up | Pressure UI states | `UX_SPEC.md` / `UI_DESIGN_SYSTEM.md` 有 pressure 页面与状态，但缺 mode-level spec 后的 turn loop / pace / interrupt 映射 | PR7 / PR8 前端可能照搬 Polish 行为 | 回写 Pressure UI state machine 和组件状态映射 | `UX_SPEC.md`; `UI_DESIGN_SYSTEM.md`; `API_SPEC.md` | AIFI-BE-004; PR7 / PR8 |
+| PR16-FOLLOW-003 | Follow-up | Pressure UI states | `PRESSURE_MODE_SPEC.md` §24；`UX_SPEC.md` / `UI_DESIGN_SYSTEM.md` 有 pressure 页面与状态 | mode-level spec 已冻结 turn loop / pace / interrupt UI 映射；PR7 / PR8 仍需实现级组件与状态测试 | 前端实现只能引用 Pressure UI state machine，不得照搬 Polish 默认动作 | `PRESSURE_MODE_SPEC.md`; `UX_SPEC.md`; `UI_DESIGN_SYSTEM.md`; `API_SPEC.md` | AIFI-BE-004 accepted; PR7 / PR8 |
 
 ## 5. AI/Core 目录方案重审
 
@@ -98,16 +98,16 @@ raw prompt、raw completion、provider payload 不得进入普通日志、checkp
 
 ## 6. Pressure Mode Remediation Plan
 
-当前成熟度判定：**Pressure code = placeholder；Pressure active docs / prompt contracts = Draft planning；Pressure graph = blocked until mode-level spec closes**。
+当前成熟度判定：**Pressure code = placeholder；Pressure mode-level spec = accepted by AIFI-BE-004；Pressure graph = held from PR2 and only enters PR8 or a separately authorized Pressure PR**。
 
 | 检查项 | 当前状态 | 证据 | PR2 / PR8 影响 |
 |---|---|---|---|
 | 代码成熟度 | placeholder | `PressureUseCases.bootstrap()` 返回 `pressure_skeleton`; `pressure.py` 只有 `APIRouter`; `PressureSessionResponse` 只有 `session_id` / `status` | PR2 不可实现 Pressure runtime；PR8 或单独 Pressure PR 才能进入 |
-| active docs | 有 API / application flow / data / UX 片段，但没有统一 mode-level spec | `APPLICATION_FLOW_SPEC.md` flows 8-10；`API_SPEC.md` API-PRESSURE-*；`DATA_MODEL.md` PressureSessionDetail | 需回写或新建 spec 后再做 graph |
+| active docs | 已有统一 mode-level spec，并已补 API / application flow / data / persistence / prompt cross-reference | `PRESSURE_MODE_SPEC.md`；`APPLICATION_FLOW_SPEC.md` flows 8-10；`API_SPEC.md` API-PRESSURE-*；`DATA_MODEL.md` PressureSessionDetail | 可作为后续 PR8 / 独立 Pressure PR 的实现输入；不授权 PR2 graph |
 | prompt contracts | `P-PRESSURE-001` 至 `P-PRESSURE-009` 为 Draft | `PROMPT_SPEC.md` §9.4；`PRESSURE_CONTRACTS.md` §13 | 只能指导 contract，不等于 runtime prompt asset ready |
-| graph plan | Pressure 与 Report / Review 在后段 graph planning 中相关 | `08_BACKEND_GRAPH_PLANS_REPORT_REVIEW.md`; `17` PR8 行 | Pressure graph 推迟到 mode-level spec 后 |
+| graph plan | Pressure 与 Report / Review 在后段 graph planning 中相关，且必须引用 mode-level spec | `PRESSURE_MODE_SPEC.md`; `08_BACKEND_GRAPH_PLANS_REPORT_REVIEW.md`; `17` PR8 行 | Pressure graph 推迟到 PR8 或独立授权 Pressure PR |
 
-Pressure mode-level spec 必须补齐：
+Pressure mode-level spec 已由 AIFI-BE-004 补齐并冻结以下主题：
 
 | Required Topic | Required Content | Target Document | Target PR |
 |---|---|---|---|
@@ -133,7 +133,7 @@ Pressure mode-level spec 必须补齐：
 | frontend UI | session state、turn chain、pace, intensity, low confidence, end CTA, report entry | `UX_SPEC.md`; `UI_DESIGN_SYSTEM.md` | PR7 / PR8 |
 | tests | no same-question loop、answer save no LLM、candidate-only、no exact probability、raw-off | `13_TEST_PLAN_BACKEND.md`; `14_TEST_PLAN_FRONTEND.md`; `15_VALIDATION_PLAN.md` | AIFI-BE-004; PR8 |
 
-是否应在 PR2 前完成：**是**，至少需要完成 mode-level spec 与 PR2 hold 决策；Pressure graph 本身不进入 PR2。Pressure graph 应推迟到 mode-level spec、Prompt Asset / Evaluation 和必要目录边界关闭后。Skill Model 已由 `SKILL_MODEL_SPEC.md` 接受，Pressure graph 只能引用该 active doc 的 skill refs。应新建或回写的文档包括：`APPLICATION_FLOW_SPEC.md`、`DATA_MODEL.md`、`API_SPEC.md`、`UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`PROMPT_SPEC.md`、`PRESSURE_CONTRACTS.md`、`08_BACKEND_GRAPH_PLANS_REPORT_REVIEW.md`，必要时新增经 `BACKLOG.md` / `DOCS_INDEX.md` 登记的 Pressure mode-level spec。
+是否应在 PR2 前完成：**已完成 mode-level spec 与 PR2 hold 决策**。Pressure graph 本身不进入 PR2；后续只能在 PR8 或独立受权 Pressure PR 中引用 `PRESSURE_MODE_SPEC.md`、Prompt Asset / Evaluation、Skill Model 和 active API / Data / Persistence / Prompt contract 实现。Skill Model 已由 `SKILL_MODEL_SPEC.md` 接受，Pressure graph 只能引用该 active doc 的 skill refs。
 
 ## 7. Prompt Design Remediation Plan
 
@@ -233,7 +233,7 @@ AIFI-PROMPT-002 design verdict：**implementation-ready for Prompt Asset / Evalu
 | asset | Asset 可支撑 SkillEvidence 或训练材料 | Asset 不是 Skill |
 | training | TrainingRecommendation / TrainingTask 作用于 SkillGap | AI suggestion 不自动创建 TrainingTask |
 
-`SKILL_MODEL_SPEC.md` 状态：**已新增并登记为 active design doc**。AIFI-ARCH-007 已关闭 Skill Model 设计 blocker；PR2 code implementation 仍需等待 Pressure、Prompt Asset / Evaluation、PR2 preflight readiness 等剩余 blocker 关闭，或主 Agent 显式接受风险。
+`SKILL_MODEL_SPEC.md` 状态：**已新增并登记为 active design doc**。AIFI-ARCH-007 已关闭 Skill Model 设计 blocker；AIFI-BE-004 已关闭 Pressure Mode 设计 blocker；PR2 code implementation 仍需等待 PR2 preflight readiness 等剩余 blocker 关闭，或主 Agent 显式接受风险。
 
 迁移顺序：
 
@@ -251,7 +251,7 @@ AIFI-PROMPT-002 design verdict：**implementation-ready for Prompt Asset / Evalu
 | `apps/api/app/application/polish/question_llm.py` | `PolishQuestionLlmService` | question generation LLM / fallback / validation service | Graph node callable through project-owned port; legacy fallback retained | wrap then parity migrate | `application/ai_runtime/graphs/polish/question_node.py` or equivalent descriptor | PR6 | question schema; semantic constraints; repeated question; fallback parity |
 | `apps/api/app/application/polish/feedback_llm.py` | `PolishFeedbackLlmService` | feedback LLM / deterministic fallback / consistency validation | Graph node callable through project-owned port; candidate-only preserved | wrap then parity migrate | `application/ai_runtime/graphs/polish/feedback_node.py` or equivalent descriptor | PR6 / PR8 | feedback consistency; raw payload leak negative; candidate formal boundary |
 | `apps/api/app/infrastructure/llm/job_match.py` | `LlmJobMatchAnalyzer` | direct LLM job match analyzer via `LlmTransport` | Job Match graph node with legacy analyzer fallback and parity policy | wrap then deprecate | `application/ai_runtime/graphs/job_match/**`; `infrastructure/llm/job_match.py` fallback | PR5 | API parity; score refs; weakness candidate; no exact probability |
-| `apps/api/app/application/pressure/use_cases.py` | `PressureUseCases` | placeholder bootstrap returning `pressure_skeleton` | Pressure mode Core use case / AI Runtime graph entry after mode spec | hold | Target only after AIFI-BE-004: `application/pressure/**` + `application/ai_runtime/graphs/pressure/**` | PR8 or authorized Pressure PR | session lifecycle; turn loop; answer save no LLM; no same-question loop |
+| `apps/api/app/application/pressure/use_cases.py` | `PressureUseCases` | placeholder bootstrap returning `pressure_skeleton` | Pressure mode Core use case / AI Runtime graph entry after accepted mode spec | hold | Target only after explicit PR8 or authorized Pressure PR scope: `application/pressure/**` + `application/ai_runtime/graphs/pressure/**` | PR8 or authorized Pressure PR | session lifecycle; turn loop; answer save no LLM; no same-question loop |
 | `apps/api/app/api/v1/pressure.py` | `router` | route prefix placeholder | Pressure API endpoints after mode-level API contract | hold | `apps/api/app/api/v1/pressure.py` | PR8 or authorized Pressure PR | owner scoped endpoints; async status; source unavailable; no export |
 | `apps/api/app/schemas/pressure.py` | `PressureSessionResponse` | minimal DTO placeholder | Pressure session / question / answer / feedback / score DTOs after active contract | hold | `apps/api/app/schemas/pressure.py` | PR8 or authorized Pressure PR | schema contract; low confidence visible; candidate refs |
 | `apps/api/app/application/polish/question_prompts.py` | `build_polish_question_generation_prompt_bundle` | runtime compact prompt bundle builder | registered Runtime Prompt Bundle tied to Production Prompt Asset | keep + register | Prompt Asset registry; builder metadata | AIFI-PROMPT-002 then PR6 | golden fixtures; redaction; evidence refs invalid |
@@ -269,20 +269,20 @@ AIFI-PROMPT-002 design verdict：**implementation-ready for Prompt Asset / Evalu
 | 问题 | 回答 |
 |---|---|
 | PR2 是否可以启动 | **不可以启动 code implementation**。只能做 repo-state preflight、只读 recon 和受权文档回写。 |
-| 如果不能，阻塞项是什么 | `AIFI-BE-004` Pressure mode-level spec；`AIFI-BE-005` PR2 runtime data model preflight readiness gate；以及本文 §4 / `BACKLOG.md` 仍未关闭的其他 blocker。`AIFI-PROMPT-002` Prompt Asset / Evaluation 已由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 接受并关闭；`AIFI-ARCH-007` Skill / Capability Model 已由 `SKILL_MODEL_SPEC.md` 接受并关闭。 |
+| 如果不能，阻塞项是什么 | `AIFI-BE-005` PR2 runtime data model preflight readiness gate；以及本文 §4 / `BACKLOG.md` 仍未关闭的其他 blocker。`AIFI-BE-004` Pressure Mode 已由 `PRESSURE_MODE_SPEC.md` 接受并关闭；`AIFI-PROMPT-002` Prompt Asset / Evaluation 已由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 接受并关闭；`AIFI-ARCH-007` Skill / Capability Model 已由 `SKILL_MODEL_SPEC.md` 接受并关闭。 |
 | 是否新增 PR1.6 | **是，PR1.6 必需**。当前仓库已登记 PR1.6 文档和 blocker note，本轮只更新本文档。 |
 | PR1.6 应做哪些文档修复 | 创建 / 完善本文；冻结 PR2 blocked；登记 Pressure / Prompt Asset / Skill / Directory / PR2 readiness findings；明确 active docs 回写目标和验证命令。 |
 | PR2 / PR3 / PR4 / PR5 / PR6 / PR8 是否需要重排 | 需要局部重排：PR2 保持 blocked；PR3/PR4 不创建业务 graph；PR5/PR6/PR8 必须在 Pressure spec 等剩余 blocker 关闭后按 graph 分批进入，并统一引用 `SKILL_MODEL_SPEC.md`、`PROMPT_ASSET_SPEC.md` 和 `PROMPT_EVALUATION_SPEC.md`。 |
-| Pressure / Skill / Prompt 应该插入哪个 PR | Pressure spec 插入 AIFI-BE-004，在 PR8 或单独 Pressure PR 之前；Skill 已由 AIFI-ARCH-007 / `SKILL_MODEL_SPEC.md` 关闭，后续任何 skill-based graph 只能引用该 active doc；Prompt Asset / Evaluation 已由 AIFI-PROMPT-002 / `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 关闭，PR5-PR8 prompt migration 必须引用这两个 active docs。 |
-| 是否要新增 AIFI 任务 | 当前 `BACKLOG.md` 已存在 AIFI-BE-004、AIFI-PROMPT-002、AIFI-ARCH-007、AIFI-ARCH-008、AIFI-BE-005；本轮不新增任务。`SKILL_MODEL_SPEC.md` 已由 AIFI-ARCH-007 落为 active doc；`PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 已由 AIFI-PROMPT-002 落为 active docs。 |
-| 是否要更新 DOCS_INDEX / BACKLOG / ADR-0005 | AIFI-ARCH-008 本轮只更新 ADR-0005 和授权专题文档；不更新 `DOCS_INDEX.md` 或 `BACKLOG.md`。当前 `DOCS_INDEX.md` 已登记 19 号文档，`BACKLOG.md` 已登记 PR1.6 blocker tasks；BACKLOG 状态需另行授权维护。 |
+| Pressure / Skill / Prompt 应该插入哪个 PR | Pressure spec 已由 AIFI-BE-004 / `PRESSURE_MODE_SPEC.md` 关闭；Pressure runtime graph 只能在 PR8 或单独受权 Pressure PR 中进入；Skill 已由 AIFI-ARCH-007 / `SKILL_MODEL_SPEC.md` 关闭，后续任何 skill-based graph 只能引用该 active doc；Prompt Asset / Evaluation 已由 AIFI-PROMPT-002 / `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 关闭，PR5-PR8 prompt migration 必须引用这两个 active docs。 |
+| 是否要新增 AIFI 任务 | 当前 `BACKLOG.md` 已存在 AIFI-BE-004、AIFI-PROMPT-002、AIFI-ARCH-007、AIFI-ARCH-008、AIFI-BE-005；本轮不新增任务。`PRESSURE_MODE_SPEC.md` 已由 AIFI-BE-004 落为 active doc；`SKILL_MODEL_SPEC.md` 已由 AIFI-ARCH-007 落为 active doc；`PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 已由 AIFI-PROMPT-002 落为 active docs。 |
+| 是否要更新 DOCS_INDEX / BACKLOG / ADR-0005 | AIFI-BE-004 本轮更新 `DOCS_INDEX.md` 和 `BACKLOG.md`，不更新 ADR-0005。当前 `DOCS_INDEX.md` 已登记 `PRESSURE_MODE_SPEC.md`，`BACKLOG.md` 已将 AIFI-BE-004 标为 ACCEPTED；PR2 blocker 状态仍以 `BACKLOG.md` 其余任务为准。 |
 
 修正后的 PR sequence：
 
 | PR | Corrected Scope | Gate |
 |---|---|---|
 | PR1.6 | docs-only blocker identification / remediation planning | 本文验证通过；PR2 remains blocked |
-| AIFI-BE-004 | Pressure mode-level spec | Pressure graph held until accepted |
+| AIFI-BE-004 | Pressure mode-level spec | **Accepted**：`PRESSURE_MODE_SPEC.md` 已登记；Pressure graph 仍不进入 PR2 |
 | AIFI-PROMPT-002 | Prompt Asset / Evaluation design | **Accepted**：`PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 已登记；PR5-PR8 prompt migration 必须引用 registry / fixtures |
 | AIFI-ARCH-007 | Skill / Capability Model | **Accepted**：`SKILL_MODEL_SPEC.md` 已登记；skill-based graph / training mapping 只能按该 active doc 实现 |
 | AIFI-ARCH-008 | AI/Core directory boundary + ADR caveat | **Closed in this revision**：PR3/PR4 directory / import boundary frozen |
@@ -320,7 +320,7 @@ PR2 code implementation 的 P0 gates：
 | P0-5 Bootstrap / rollback | SQLAlchemy bootstrap、rollback order、in-flight run handling、pending writes fail-closed 规则明确 | PR2 blocked |
 | P0-6 Test list consistency | PR2 tests 文件名、method、fixtures、redaction markers、owner cases 与 repository contract 对齐 | PR2 blocked |
 | P0-7 Prompt asset boundary | PR2 不依赖 production prompt asset；PR5-PR8 前 Prompt Asset registry / fixtures 已由 AIFI-PROMPT-002 冻结 | Satisfied for design；PR5-PR8 implementation still requires fixtures/tests |
-| P0-8 Pressure hold | Pressure mode-level spec 未完成前不创建 Pressure business graph | Pressure graph blocked |
+| P0-8 Pressure hold | Pressure mode-level spec 已由 AIFI-BE-004 完成；Pressure business graph 仍不得进入 PR2 | Satisfied for mode-level spec；Pressure graph blocked from PR2 |
 | P0-9 Skill model accepted | `SKILL_MODEL_SPEC.md` 已登记；任何 graph 不得生成未授权 `Skill*` formal object，且不得把 Weakness / ScoreDimension / ProgressTree / Asset / Training 对象当 Skill | Skill-based graph allowed only after remaining PR scope authorization |
 | P0-10 Security/privacy | raw prompt、raw completion、provider payload、checkpoint payload、system prompt、hidden scoring rules 禁止边界和 negative tests 明确 | PR2 blocked |
 
@@ -328,12 +328,12 @@ PR2 code implementation 的 P0 gates：
 
 推荐下一步：
 
-1. 完成 AIFI-PROMPT-002 文档验证，确保 diff 只落在本任务授权 docs-only 范围。
+1. 完成 AIFI-BE-004 文档验证，确保 diff 只落在本任务授权 docs-only 范围。
 2. 不启动 PR2 code implementation；PR2 仅可做 repo-state preflight、只读 recon 和受权文档回写。
-3. 由主 Agent 另行授权后，继续按 `AIFI-BE-004`、`AIFI-BE-005` 关闭剩余 blocker；AIFI-ARCH-007 已由 `SKILL_MODEL_SPEC.md` 接受，AIFI-PROMPT-002 已由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 接受。
-4. `BACKLOG.md` 与 `DOCS_INDEX.md` 已在 AIFI-PROMPT-002 授权范围内同步；若后续需要修改 ADR-0005 或其他非本任务文件，必须重新授权。
+3. 由主 Agent 另行授权后，继续按 `AIFI-BE-005` 和 `BACKLOG.md` 仍登记的其他 blocker 关闭剩余 blocker；AIFI-BE-004 已由 `PRESSURE_MODE_SPEC.md` 接受，AIFI-ARCH-007 已由 `SKILL_MODEL_SPEC.md` 接受，AIFI-PROMPT-002 已由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 接受。
+4. `BACKLOG.md` 与 `DOCS_INDEX.md` 已在 AIFI-BE-004 授权范围内同步；若后续需要修改 ADR-0005 或其他非本任务文件，必须重新授权。
 5. 只有 §11 P0 gates 全部关闭，或 accepted risk 被明确登记后，才允许给出 PR2 runtime foundation 代码实现 prompt。
 
 是否先提交当前 PR1.5：可以先提交 PR1.5 或当前 PR1.6 文档 diff，但提交 / push 不在本轮授权范围内。是否启动 PR1.6：**是，本轮正在执行 PR1.6**。是否禁止 PR2：**禁止 PR2 code implementation**。如果未来允许 PR2，前置条件是 blocker 关闭或 accepted risk 登记，并重新锁定 PR2 allowed files / tests / validation。
 
-本轮验证必须覆盖 repo-state、diff stat、whitespace check 和 doc governor；实际命令以 `docs/tmp/GOAL_AIFI_PROMPT_002_PROMPT_ASSET_EVALUATION.md` 的 Validation 段为准。
+本轮验证必须覆盖 repo-state、diff stat、whitespace check 和 doc governor；实际命令以 `docs/tmp/GOAL_AIFI_BE_004_PRESSURE_MODE_SPEC.md` 的 Validation 段为准。

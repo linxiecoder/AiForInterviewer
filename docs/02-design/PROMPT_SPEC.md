@@ -34,6 +34,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | `docs/02-design/APPLICATION_FLOW_SPEC.md` | P-* contract 到 application service、AiTask、LLM call plan、Prompt 输入结构和 persistence handoff 的运行编排 |
 | `docs/02-design/PROMPT_ASSET_SPEC.md` | Production Prompt Asset registry、asset 字段、runtime bundle、builder、validator、fixture 和 trace 映射 |
 | `docs/02-design/PROMPT_EVALUATION_SPEC.md` | Golden / regression / negative fixtures、quality metrics、fake / real provider gate、human review、CI gate 和 rollback policy |
+| `docs/02-design/PRESSURE_MODE_SPEC.md` | Pressure Mode lifecycle、turn loop、pace/end/report handoff、runtime graph boundary 和 `P-PRESSURE-*` mode-level sequencing |
 | `docs/03-delivery/BACKLOG.md` | `AIFI-PROMPT-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-SEC-001` 的依赖 |
 
 ### 2.2 非目标
@@ -450,6 +451,8 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | `P-PRESSURE-008` | Session Score | 生成整场评分 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 | `P-PRESSURE-009` | Report Input Assembly | 组装报告输入 | Draft | `prompt-contracts/PRESSURE_CONTRACTS.md` |
 
+`PRESSURE_MODE_SPEC.md` 是 `P-PRESSURE-*` 的 mode-level lifecycle、runtime handoff 和 graph boundary 入口；它不新增 contract ID，不替代 `PRESSURE_CONTRACTS.md` 或 `PROMPT_ASSET_SPEC.md`，也不授权 PR2 创建 Pressure graph。
+
 ### 9.5 报告 Contract（Report Contracts）
 
 | Contract ID | 名称 | 目标 | 状态 | 子文档 |
@@ -581,6 +584,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 增加 Pressure Mode mode-level spec 交叉引用 | 将 `P-PRESSURE-*` 的 lifecycle、runtime handoff、graph boundary 和 PR2 hold 交给 `PRESSURE_MODE_SPEC.md`；不新增 contract ID，不替代 Prompt Asset / Evaluation 设计 |
 | 2026-05-24 | 补充 Prompt Asset / Evaluation 交叉引用 | 明确 `PROMPT_SPEC.md` 只维护 `P-*` contract registry；Production Prompt Asset、fixture、model comparison、release / rollback 和 runtime builder 映射由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 承接 |
 | 2026-05-24 | 补充 Skill / Capability Model 交叉引用 | 明确 Prompt contracts 通过字段族引用 `SKILL_MODEL_SPEC.md`，不新增 `P-*` contract ID，不把 Prompt 输出直接 formalize 为 Weakness / Asset / Training 或 Skill 事实 |
 | 2026-05-19 | 为打磨进展树登记 RAG-lite evidence chunking | `polish_progress_tree_plan` / `polish_progress_tree_state` 输入从粗粒度 snapshot 转为 `selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary` 和 `turns_summary`；节点 evidence 可引用稳定 `evidence_chunk_ids`；明确当前不引入 embedding、向量库或外部检索系统 |
