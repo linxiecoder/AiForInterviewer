@@ -21,6 +21,11 @@ from app.application.ai_runtime.contracts import (
     RuntimePolicyError,
     sanitize_payload,
 )
+from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
+    POLISH_FEEDBACK_GRAPH_NAME,
+    build_polish_feedback_fake_runtime_payload,
+    build_polish_feedback_graph_descriptor,
+)
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
 from app.infrastructure.ai_runtime.langgraph.serializer import LangGraphRuntimeSerializer
@@ -40,6 +45,7 @@ class FakeLangGraphRuntime:
     """A provider-free, deterministic runtime implementing the PR3 runner port."""
 
     _checkpoint_namespace = "pr4_fake_runtime"
+    _polish_feedback_checkpoint_namespace = "pr6_polish_feedback_fake_runtime"
 
     def __init__(
         self,
@@ -58,6 +64,8 @@ class FakeLangGraphRuntime:
     def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
         if command != context.command:
             raise RuntimePolicyError("command must match context command")
+        if context.graph_name == POLISH_FEEDBACK_GRAPH_NAME:
+            return self._start_polish_feedback_fake(context=context, command=command)
         gate = self._require_runtime_enabled(context)
         state = self._invoke_graph(context=context, entrypoint="start")
         checkpoint = self._record_checkpoint(context=context, node_name="fake_start", state=state)
@@ -211,6 +219,79 @@ class FakeLangGraphRuntime:
             checkpoint_id="ckpt_" + _stable_id(context.owner_id, context.run_id, node_name, state_hash),
             state_hash=state_hash,
             metadata={"retention_ref": "retention_pr4_fake"},
+        )
+
+    def _start_polish_feedback_fake(
+        self, *, context: AgentRunContext, command: AgentCommandEnvelope
+    ) -> AgentRunResult:
+        self._require_runtime_enabled(context)
+        descriptor = build_polish_feedback_graph_descriptor()
+        graph_decision = self._flag_resolver.resolve_graph_flag(
+            descriptor, actor_id=context.actor_id, caller="runner_entry"
+        )
+        if not graph_decision.enabled:
+            raise GraphDisabledError(f"graph disabled: {descriptor.graph_name}")
+
+        state = self._invoke_graph(context=context, entrypoint="polish_feedback_fake_start")
+        checkpoint = self._record_polish_feedback_checkpoint(context=context, state=state)
+        payload = build_polish_feedback_fake_runtime_payload(
+            context=context,
+            command=command,
+            checkpoint_refs=(checkpoint.checkpoint_ref,),
+        )
+        result_ref = tuple(payload["output_refs"]["result_refs"])
+        candidate_ref = tuple(payload["output_refs"]["candidate_refs"])
+        checkpoint_refs = tuple(payload["trace_refs"]["checkpoint_refs"])
+        validation_refs = tuple(payload["trace_refs"]["validation_refs"])
+        events = self._timeline_for(context)
+        events.extend(
+            (
+                _event("run_started", "polish feedback fake runtime started", refs=(context.ai_task_id,)),
+                _event("checkpoint_recorded", "checkpoint ref recorded", refs=checkpoint_refs),
+                _event("validation_recorded", "validation ref recorded", refs=validation_refs),
+                _event("run_succeeded", "polish feedback fake runtime succeeded", refs=(*result_ref, *candidate_ref)),
+            )
+        )
+        result = AgentRunResult(
+            run_id=context.run_id,
+            status=payload["status"],
+            output_refs=(*result_ref, *candidate_ref),
+            trace_refs=checkpoint_refs,
+            interrupt_refs=(),
+            formal_refs=(),
+            metadata=payload,
+        )
+        self._statuses[(context.owner_id, context.run_id)] = AgentRunStatus(
+            run_id=context.run_id,
+            status=result.status,
+            owner_id=context.owner_id,
+            output_refs=result.output_refs,
+            trace_refs=result.trace_refs,
+            interrupt_refs=(),
+            formal_write_blocked=True,
+            metadata=payload,
+        )
+        self._serializer.serialize_run_result(result)
+        return result
+
+    def _record_polish_feedback_checkpoint(
+        self, *, context: AgentRunContext, state: _FakeGraphState
+    ):
+        state_hash = _hash_payload(state)
+        return self._checkpointer.record_ref(
+            owner_id=context.owner_id,
+            actor_id=context.actor_id,
+            agent_run_id=context.run_id,
+            agent_node_run_id=None,
+            graph_name=context.graph_name,
+            graph_version=context.graph_version,
+            node_name="polish_feedback_fake_start",
+            checkpoint_namespace=self._polish_feedback_checkpoint_namespace,
+            thread_id=context.run_id,
+            checkpoint_id="ckpt_"
+            + _stable_id(context.owner_id, context.run_id, "polish_feedback_fake_start", state_hash),
+            state_hash=state_hash,
+            metadata={"retention_ref": "retention_pr6_polish_feedback_fake"},
         )
 
     def _require_runtime_enabled(self, context: AgentRunContext) -> dict[str, bool]:

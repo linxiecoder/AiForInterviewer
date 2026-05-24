@@ -24,10 +24,46 @@ if TYPE_CHECKING:
 
 POLISH_FEEDBACK_GRAPH_NAME = "polish_feedback_graph"
 POLISH_FEEDBACK_GRAPH_VERSION = "pr5-skeleton"
+POLISH_FEEDBACK_FAKE_RUNTIME_VERSION = "pr6-fake-runtime"
 POLISH_FEEDBACK_GRAPH_FLAG = "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
 
 _DEFAULT_ENTRYPOINTS = ("start", "replay")
 _SUPPORTED_OUTPUTS = ("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs")
+_PR6_INPUT_REF_PREFIXES = (
+    ("session_ref", "session_ref_"),
+    ("question_ref", "question_ref_"),
+    ("answer_ref", "answer_ref_"),
+)
+_PR6_ALLOWED_METADATA_KEYS = frozenset(
+    {
+        "task_type",
+        "graph_name",
+        "graph_version",
+        "request_digest",
+        "idempotency_key_hash",
+        "idempotency_digest",
+        "idempotency_ref",
+    }
+)
+_PR6_FORBIDDEN_METADATA_KEYS = frozenset(
+    {
+        "question" + "_text",
+        "answer" + "_text",
+        "raw" + "_prompt",
+        "raw" + "_completion",
+        "provider" + "_payload",
+        "checkpoint" + "_payload",
+        "full" + "_source_body",
+        "full" + "_resume",
+        "full" + "_jd",
+        "full" + "_answer",
+        "hidden" + "_rubric",
+        "api" + "_key",
+        "token",
+        "cookie",
+        "secret",
+    }
+)
 
 
 def build_polish_feedback_graph_descriptor() -> "GraphDescriptor":
@@ -103,6 +139,57 @@ def run_polish_feedback_skeleton(
     )
 
 
+def build_polish_feedback_fake_runtime_payload(
+    *,
+    context: AgentRunContext,
+    command: AgentCommandEnvelope,
+    checkpoint_refs: tuple[str, ...],
+) -> dict[str, Any]:
+    descriptor = build_polish_feedback_graph_descriptor()
+    _validate_context(context, command, descriptor)
+    input_refs = _pr6_input_ref_map(command)
+    _validate_pr6_metadata(command.metadata)
+    if not checkpoint_refs or any(not ref.startswith("ackpt_") for ref in checkpoint_refs):
+        raise RuntimeValidationError("PR6 fake runtime requires checkpoint refs")
+
+    suffix = _stable_id(
+        context.owner_id,
+        context.run_id,
+        context.ai_task_id,
+        input_refs["session_ref"],
+        input_refs["question_ref"],
+        input_refs["answer_ref"],
+        command.metadata.get("request_digest", ""),
+    )
+    payload = {
+        "graph_name": POLISH_FEEDBACK_GRAPH_NAME,
+        "graph_version": POLISH_FEEDBACK_FAKE_RUNTIME_VERSION,
+        "status": "fake_runtime_succeeded",
+        "input_refs": input_refs,
+        "output_refs": {
+            "result_refs": ["result_ref_" + suffix],
+            "candidate_refs": ["candidate_ref_" + suffix],
+            "suggestion_refs": [],
+            "formal_refs": [],
+        },
+        "trace_refs": {
+            "checkpoint_refs": list(checkpoint_refs),
+            "validation_refs": ["validation_ref_" + suffix],
+            "low_confidence_refs": [],
+        },
+        "counters": {
+            "provider_calls": 0,
+            "formal_business_writes": 0,
+            "db_business_writes": 0,
+        },
+        "rollback": {
+            "checkpoint_refs_are_business_facts": False,
+            "legacy_direct_path_retained_when_disabled": True,
+        },
+    }
+    return sanitize_payload(payload)
+
+
 def replay_polish_feedback_skeleton(*, context: AgentRunContext, checkpoint_ref: str) -> AgentReplayResult:
     if context.graph_name != POLISH_FEEDBACK_GRAPH_NAME:
         raise RuntimePolicyError("replay context graph does not match polish feedback skeleton")
@@ -162,6 +249,36 @@ def _build_output_refs(
         elif requested_output == "interrupt_refs":
             interrupt_refs.append("interrupt_ref_" + suffix)
     return tuple(output_refs), tuple(interrupt_refs)
+
+
+def _pr6_input_ref_map(command: AgentCommandEnvelope) -> dict[str, str]:
+    if len(command.input_refs) != len(_PR6_INPUT_REF_PREFIXES):
+        raise RuntimeValidationError("PR6 fake runtime requires session, question, and answer refs")
+
+    input_refs: dict[str, str] = {}
+    for value, (key, prefix) in zip(command.input_refs, _PR6_INPUT_REF_PREFIXES, strict=True):
+        ref = str(value)
+        if not ref.startswith(prefix):
+            raise RuntimeValidationError("PR6 fake runtime accepts refs only")
+        input_refs[key] = ref
+    return input_refs
+
+
+def _validate_pr6_metadata(metadata: dict[str, Any]) -> None:
+    for key, value in metadata.items():
+        normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in _PR6_FORBIDDEN_METADATA_KEYS:
+            raise RuntimeValidationError("PR6 fake runtime metadata accepts refs and digests only")
+        if (
+            normalized not in _PR6_ALLOWED_METADATA_KEYS
+            and not normalized.endswith("_ref")
+            and not normalized.endswith("_refs")
+            and not normalized.endswith("_digest")
+            and not normalized.endswith("_hash")
+        ):
+            raise RuntimeValidationError("PR6 fake runtime metadata accepts refs and digests only")
+        if isinstance(value, dict):
+            _validate_pr6_metadata(value)
 
 
 def _metadata_refs(metadata: dict[str, Any]) -> tuple[str, ...]:
