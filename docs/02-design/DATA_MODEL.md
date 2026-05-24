@@ -724,6 +724,7 @@ Rubric / rule version 的最小维度如下：
 | 匹配分析 | `JobMatchAnalysis`、`JobMatchSummary (derived_read_model)`、`MatchScore`、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`EvidenceSummary` |
 | 知识库与 RAG | `KnowledgeBase`、`KnowledgeDocument`、`KnowledgeChunk`、`KnowledgeEmbeddingRef`、`RetrievalQuery`、`RetrievalResult`、`RetrievalEvidence`、`Citation` / `EvidenceRef`、`RAGContextAssembly` |
 | 模拟面试 | `InterviewSession`、`PolishSessionDetail`、`PolishTopicRef`、`PolishSubtopicRef`、`PressureSessionDetail`、`Question`、`Answer`、`Feedback`、`SessionSummary` |
+| Skill / Capability Model | `SkillTaxonomyVersion`、`SkillArea`、`Skill`、`SkillLevel`、`SkillEvidence`、`SkillAssessment`、`SkillGap`、`SkillProgress`、`SkillToQuestionPattern`、`SkillToScoreDimension`、`SkillToTrainingAction`；逻辑语义以 `SKILL_MODEL_SPEC.md` 为 canonical，不在本文定义物理表 |
 | 评分规则与解释 | `ScoreRuleSet`、`ScoreRuleVersion`、`ScoreDimension`、`ScoreRubric`、`ScoreResult`、`ScoreExplanation`、`ScoreEvidenceLink`、`LowConfidenceFlag` |
 | 题级解释材料 | `LossPoint`、`ReferenceAnswer`、`KnowledgePointExplanation` |
 | 进展 | `ProgressTree`、`ProgressNode`、`ProgressPosition` |
@@ -762,6 +763,7 @@ Rubric / rule version 的最小维度如下：
 |---|---|---|
 | `API_SPEC.md` | 逻辑对象、状态域、引用关系、生成任务状态、历史引用原则、MVP role scope、候选 / 建议 / 确认对象和审计对象边界 | endpoint、request / response schema、错误码、分页过滤参数、异步任务协议、具体鉴权 API |
 | `SCORING_SPEC.md` | `ScoreResult`、`ScoreRuleVersion`、score type、维度、权重、公式、低置信度和正式落库规则 | 复杂算法、真实招聘结果校准、隐藏规则实现细节 |
+| `SKILL_MODEL_SPEC.md` | Skill taxonomy、SkillArea、Skill、SkillLevel、SkillEvidence、SkillAssessment、SkillGap、SkillProgress 及与 Score / Progress / Weakness / Asset / Training 的非替代映射 | ORM、DDL、migration、endpoint、前端实现和生产 Prompt 文案 |
 | `SEMANTICS_GLOSSARY.md` | Low Confidence、validation、source availability、candidate / suggestion / formal object 的 canonical 语义 | API endpoint、物理表和 UI 文案最终稿 |
 | `PERSISTENCE_MODEL.md` | 将本文逻辑对象映射为 F5 建议物理模型、关系、join / reference table、唯一约束、derived / read model 和 API schema 映射 | SQL DDL、ORM model、migration、数据库供应商特性 |
 | `PROMPT_SPEC.md` | LLM 输出应落到哪些结构化对象、RAG 上下文组装结果如何被引用、低置信度、候选态 / 建议态和部分可用状态应被持久化；scoring candidate 进入正式 `ScoreResult` 前必须完成 schema validation、rule version、evidence、confidence 和 trace 校验 | Prompt 模板、模型选择、模型调用参数、上下文裁剪、重试降级策略、隐藏评分规则实现细节 |
@@ -773,6 +775,7 @@ Rubric / rule version 的最小维度如下：
 | 日期 | 变更 | 影响 |
 |---|---|---|
 | 2026-05-17 | 增加 F5 persistence handoff 交接 | 明确本文仍是逻辑模型，物理模型、join / reference table、关系和 API schema 映射以 `PERSISTENCE_MODEL.md` 为 canonical；避免 F5 从逻辑对象自行推导物理关系 |
+| 2026-05-24 | 增加 Skill / Capability Model 交叉引用 | 将 Skill taxonomy、SkillEvidence、SkillAssessment、SkillGap、SkillProgress 作为逻辑对象登记，并明确 canonical 语义以 `SKILL_MODEL_SPEC.md` 为准；不进入物理 schema 或 implementation |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` 数据模型断链 | 补齐岗位解绑历史保留字段、复盘列表投影、复盘复制内容 / 审计、低置信候选校对记录和内容沉淀目标类型；不定义物理 schema，不处理 `AR-DOCS02-SEM-002/003` |
 | 2026-05-17 | 修复 `AR-F4-F8-004` / `AR-F4-F8-005` / `AR-F4-F8-006` 人工审计数据语义偏差 | 将 Resume 收敛为 Markdown-only，项目经历降级为 Markdown 片段 / derived non-persistent outline；补 `JobBindingSummary` / `JobMatchSummary` 作为 F6 read model；补 `PolishTopicRef` / `PolishSubtopicRef` 与 `custom_topic_text` 安全输入边界；不进入物理 schema 或 implementation |
 | 2026-05-17 | 修复 `AR-F4-F8-001` 数据承接缺口 | 新增 `IdempotencyRecord`、`AiTask` / `AiTaskResult`、`ApiRequestTrace` / `TraceRef`、`AuditEvent` 覆盖范围和 persistence handoff 规则；承接 API 字段级 contract、幂等重试、AI task result、source availability、candidate / suggestion / formal object 边界；不进入物理 schema 或 implementation |

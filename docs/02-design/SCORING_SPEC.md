@@ -231,6 +231,7 @@ low confidence 时：
 | `LowConfidenceFlag` | 连接 scoring candidate / `ScoreResult`、validation result、source availability 和用户可见影响 |
 | `TraceRef` | 指向 context assembly、LLM request、validation、low confidence classification、persistence handoff 和 audit |
 | `EvidenceRef` | 指向题目、回答、反馈、RAG evidence、用户确认、生成时版本或快照 |
+| `SkillToScoreDimension` | 由 `SKILL_MODEL_SPEC.md` 定义，用于把 stable `Skill` 映射到 score type / dimension key；不改变 `ScoreDimension` 的评分职责，也不允许把 `ScoreDimension` 当作 Skill |
 
 ## 9. 版本变更与校准边界
 
@@ -239,6 +240,7 @@ low confidence 时：
 - 重新评分生成新 `ScoreResult`；不得覆盖历史分数。
 - MVP 校准只要求固定 rule version、人工验收样例、F7 fixture 和回归样例。不要求真实招聘结果校准。
 - 若后续引入真实结果校准，必须另行设计隐私、偏差、样本代表性、用户授权和版本迁移规则。
+- 跨模式能力语义以 `SKILL_MODEL_SPEC.md` 为 canonical；评分只能通过 `SkillToScoreDimension` 引用 Skill，不得在 LLM 输出中临时发明 skill key 或把低分维度直接写成正式 `Weakness`。
 
 ## 10. F7 fixture 最小要求
 

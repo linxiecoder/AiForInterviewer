@@ -543,8 +543,9 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 1. 以 `APPLICATION_FLOW_SPEC.md` 对齐 P-* contract 的运行编排、LLM call plan 和 persistence handoff。
 2. 以 `SCORING_SPEC.md` / `SEMANTICS_GLOSSARY.md` 对齐评分、低置信度和状态枚举。
-3. 以 `API_SPEC.md` / `DATA_MODEL.md` / `PERSISTENCE_MODEL.md` 做跨文档回归门禁。
-4. `AIFI-PROMPT-001` 关闭前置检查。
+3. 以 `SKILL_MODEL_SPEC.md` 对齐跨 Job Match、Polish、Pressure、Report、Review、Weakness、Asset、Training 的 Skill taxonomy、SkillEvidence、SkillAssessment、SkillGap 和 SkillProgress 引用；不得新增未登记 `P-*` contract ID。
+4. 以 `API_SPEC.md` / `DATA_MODEL.md` / `PERSISTENCE_MODEL.md` 做跨文档回归门禁。
+5. `AIFI-PROMPT-001` 关闭前置检查。
 
 `AIFI-PROMPT-001` 当前仍不自动 DONE；跨文档证据已在本轮转入 `AR-F4-FULL-001` 处置表，后续进入 verification，而不是继续保留阻断式 Prompt UNKNOWN。
 
@@ -557,6 +558,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 | 评分、权重、阈值、通过倾向、风险提示、可信度和免责声明 | already_closed_by_recent_remediation | `PROMPT_SPEC.md` §7.2 和 scoring / report contracts 已冻结 0-100 产品刻度、rubric / rule version、分档倾向、风险字段、低置信度降级、版本追踪、免责声明和禁止精确概率边界；score type、默认维度、权重、公式、缺失维度处理和 F7 scoring fixture 以 `SCORING_SPEC.md` 为 canonical。 | `SCORING_SPEC.md`; F7 scoring / risk fixture |
 | Prompt contract 输出状态、低置信度、source unavailable、validation failed | must_close_in_F4 | Shared failure signals、source availability、Output Validation、Low Confidence、Evidence Binding、Trace / Persistence 已冻结；业务 contract 必须复用 `status`、`validation_result_ref`、`low_confidence_flags`、`evidence_refs` 和 `trace_refs`。 | `P-SHARED-003` / `P-SHARED-004` / `P-SHARED-005`；API response envelope |
 | candidate / suggestion / confirmation / formal object 边界 | must_close_in_F4 | AI 输出只能进入 candidate、draft、suggestion、validation result、trace 或 low confidence；正式 `Weakness`、`Asset`、`AssetVersion`、`TrainingRecommendation`、`TrainingTask` 需用户确认或显式业务动作。 | `DATA_MODEL.md` §4.3；`API_SPEC.md` §7；Weakness / Asset / Training contracts |
+| Skill / Capability Model 引用 | already_closed_by_aifi_arch_007 | Prompt contracts 不新增未登记 ID；Job Match、Polish、Pressure、Report、Review、Weakness、Asset、Training 只通过 `skill_refs[]`、`skill_gap_candidate_refs[]`、`skill_evidence_refs[]`、`skill_assessment_candidate_refs[]` 等字段族引用 `SKILL_MODEL_SPEC.md` 冻结的 taxonomy 和 mapping。 | `SKILL_MODEL_SPEC.md`; F7 skill fixture |
 | Prompt 输入最小化、system prompt、provider payload、隐藏评分规则 | must_close_in_F4 | Context Assembly 和 Security 边界禁止前端、日志、trace、copy content 或 API response 暴露 system prompt、Prompt 模板、completion、provider payload、密钥、隐藏评分规则或内部校准细节。 | `SECURITY_PRIVACY.md` §9 / §17.1 / §21；`API_SPEC.md` §8 |
 | 题目推荐、压力面题量 / 节奏、连续追问深度、同题结束阈值 | deferred_non_blocking | MVP contract 已冻结输入、输出、状态、证据、trace、低置信度和用户动作边界；排序、强度、题量、追问深度和结束阈值为策略优化，不阻断 M4。 | `POLISH_CONTRACTS.md` / `PRESSURE_CONTRACTS.md`; `AR-F4-FULL-005` |
 | 复盘切分、题级复盘合并、跨复盘聚合 | deferred_non_blocking | Review contracts 已冻结模拟 / 真实复盘输入、可信度、完整度、ReviewItem、证据和候选回流边界；复杂合并与最终 UX 展示后置。 | `REVIEW_CONTRACTS.md`; F7 review fixture |
@@ -572,6 +574,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 补充 Skill / Capability Model 交叉引用 | 明确 Prompt contracts 通过字段族引用 `SKILL_MODEL_SPEC.md`，不新增 `P-*` contract ID，不把 Prompt 输出直接 formalize 为 Weakness / Asset / Training 或 Skill 事实 |
 | 2026-05-19 | 为打磨进展树登记 RAG-lite evidence chunking | `polish_progress_tree_plan` / `polish_progress_tree_state` 输入从粗粒度 snapshot 转为 `selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary` 和 `turns_summary`；节点 evidence 可引用稳定 `evidence_chunk_ids`；明确当前不引入 embedding、向量库或外部检索系统 |
 | 2026-05-17 | 增加 scoring / semantics / application flow 交接 | 明确评分细则以 `SCORING_SPEC.md` 为 canonical，Low Confidence / validation / source availability 以 `SEMANTICS_GLOSSARY.md` 为 canonical，P-* contract 运行编排以 `APPLICATION_FLOW_SPEC.md` 为 canonical；不新增 contract ID |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` Prompt 校对 / 沉淀目标断链 | 明确低置信校对只能形成 `CandidateCorrection` / `UserCorrectionRef` 并在确认后作为后续输入；Prompt 只能建议沉淀目标，不能静默决定正式 `DepositTarget` 或写入正式对象；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |
