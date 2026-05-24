@@ -33,9 +33,50 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | PR4-LG-DEP | LangGraph dependency spike gate | dependency / fake graph spike only | dependency files and `infrastructure/ai_runtime/langgraph/**` after explicit authorization | business graph、real provider、frontend | dependency pin、serializer/checkpointer/fake graph verified |
 | PR4 | LangGraph runtime + fake graph | concrete adapter、checkpointer、fake graph runtime API | AI Runtime infrastructure + runtime API + tests | business graph migration、provider calls | fake graph start/resume/replay/timeline sanitized |
 | PR5 | Polish first migration target | progress tree / question / feedback graph | Polish graph descriptors, facade wiring and compatibility tests | JobMatch / ResumeAnalysis graph、Pressure / report / frontend、candidate enhancement / formal closure | existing Polish API compatibility preserved；answer save remains non-AI；feedback remains independent task |
-| PR6 | JobMatch / ResumeAnalysis trace-compatible or graph if still needed | descriptor / DTO / trace-compatible wrapper / placeholder；full graph only after PR6 decision confirms it is still needed | trace wrapper, placeholders, or scoped `job_match_graph` / `resume_analysis_graph` after explicit PR6 scope lock | frontend、Pressure / Report / Review / Candidate / Skill / Training closure、silent direct-path removal | existing Job Match API compatibility preserved；direct path remains available until at least PR7 frontend ready |
-| PR7 | Frontend AI Runtime UI | task status, timeline, interrupt, candidate confirmation base | frontend files after PR7 authorization | backend graph logic | UI hides raw / checkpoint internals |
-| PR8 | Pressure / Report / Review / Candidate / Skill / Training closure | advanced business graphs and confirmation closure | scoped backend + frontend files after PR8 authorization | export/download, exact probability, silent formal write | report/review/candidate/skill/training/copy/privacy gates pass |
+| PR6 | Graph Configuration Backend / Registry Config API | graph descriptor API、graph config schema、enablement/default-off config API、placeholder registry、policy refs、admin audit | graph descriptor API、graph config schema、graph enablement/default-off config API、placeholder graph registry、prompt/eval/provider policy refs、admin/owner scope、config audit | business full graph migration、provider call、raw prompt/completion/provider payload exposure、LangGraph debug internals exposure、frontend | config API default-off；placeholder registry only；audit sanitized；admin/owner scoped |
+| PR7 | Graph Configuration Frontend / AI Runtime graph configuration console | graph list/detail/config form、placeholder graph view、sanitized health/status/audit view | graph list page、graph detail/config page、enable/disable form using PR6 API、prompt/eval/model policy refs display、sanitized health/status/audit view | Agent debug page for normal users、AgentState/checkpoint/raw payload display、backend graph logic、provider secret/model key exposure | controlled configuration console works against PR6 API；no raw internals；no normal-user debug page |
+| PR8 | JobMatch / ResumeAnalysis / Pressure / Report / Review / Candidate / Skill / Training conditional later migrations | conditional business graph migrations after PR5-PR7 foundation and config console | scoped backend + frontend files after explicit PR8 authorization | export/download、exact probability、silent formal write、unapproved provider calls、raw payload exposure | each migrated graph passes parity, privacy, copy, candidate/formal and rollback gates |
+
+### 3.1 PR6 Graph Configuration Backend scope
+
+本阶段不再迁移 JobMatch / ResumeAnalysis 业务 graph。目标是建立 default-off 的 Graph Configuration Backend / Registry Config API，使后续业务 graph 可以被描述、登记、配置、审计和按 owner/admin scope 受控启用。
+
+Allowed scope:
+
+- graph descriptor API。
+- graph config schema。
+- graph enablement/default-off config API。
+- placeholder graph registry。
+- prompt/eval/provider policy refs。
+- admin/owner scope。
+- config audit。
+
+Forbidden scope:
+
+- JobMatch / ResumeAnalysis full graph。
+- Pressure / Report / Review graph。
+- provider call。
+- raw prompt/completion/provider payload exposure。
+- LangGraph debug internals exposure。
+
+### 3.2 PR7 Graph Configuration Frontend scope
+
+本阶段不再是普通 task status only runtime UI，也不是 LangGraph debug page。目标是 AI Runtime graph configuration console，只消费 PR6 提供的 sanitized config/status/audit API。
+
+Allowed scope:
+
+- graph list page。
+- graph detail/config page。
+- enable/disable form using PR6 API。
+- prompt/eval/model policy refs display。
+- sanitized health/status/audit view。
+
+Forbidden scope:
+
+- Agent debug page for normal users。
+- AgentState/checkpoint/raw payload display。
+- backend graph logic。
+- provider secret/model key exposure。
 
 ## 4. PR2 exact scope
 
@@ -113,8 +154,9 @@ git diff --check
 | PR4-LG-DEP | Revert dependency files and fake adapter spike; no business graph state should exist |
 | PR4 | Disable runtime feature flag and fake graph API; checkpoint refs must not be used as business facts |
 | PR5 | Keep Polish direct path available until graph parity; cancel / fail in-flight Polish graph runs before fallback |
-| PR6 | Keep JobMatch / ResumeAnalysis direct path available until at least PR7 frontend ready; full graph rollback must return to trace-compatible direct wrapper |
-| PR7-PR8 | Keep Core business formal objects authoritative; cancel / fail in-flight agent runs before fallback |
+| PR6 | Disable graph configuration API / feature flag and keep all graph configs default-off; no business graph state should exist; sanitized config audit remains reviewable |
+| PR7 | Disable graph configuration console route or navigation entry; backend config state remains default-off and owner/admin scoped |
+| PR8 | Keep Core business formal objects authoritative; cancel / fail in-flight agent runs before fallback |
 
 ## 9. Stop conditions
 

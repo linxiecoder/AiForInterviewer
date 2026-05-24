@@ -81,8 +81,9 @@ PR2 runtime foundation 必须默认关闭：
 - 在 PR3 设计和实现 `AiOrchestrationFacade`、`AgentGraphRunner` port、runtime command/result contract。
 - 在 PR4 设计和实现 concrete LangGraph adapter、fake graph、checkpointer factory、interrupt/resume、sanitized timeline。
 - 在 PR5 迁移 Polish first graph target。
-- 在 PR6 先以 JobMatch / ResumeAnalysis trace-compatible wrapper / descriptor 验证兼容性；graph 只有在上一迁移目标完成后仍需要时才迁移。
-- 在 PR7-PR8 逐步把 Pressure、Report、Review、Weakness、Asset、Training 迁移到 graph。
+- 在 PR6 建立 Graph Configuration Backend / Registry Config API，包括 default-off graph descriptor、config schema、policy refs、placeholder registry 和 sanitized config audit。
+- 在 PR7 建立 AI Runtime graph configuration console，只消费 sanitized configuration/status/audit API，不提供普通用户 Agent debug page。
+- 在 PR8 以后按条件迁移 JobMatch、ResumeAnalysis、Pressure、Report、Review、Weakness、Asset、Training 等业务 graph。
 
 本 ADR 禁止：
 
@@ -113,7 +114,7 @@ PR2 runtime foundation 必须默认关闭：
 | `docs/02-design/APPLICATION_FLOW_SPEC.md` | `AiOrchestrationFacade`、runtime event flow、business handoff、interrupt/resume 编排 | PR3/PR4 |
 | `docs/02-design/API_SPEC.md` | Agent Runtime API、timeline、interrupt resume、sanitized LLM summary response | PR3/PR4 |
 | `docs/02-design/PROMPT_SPEC.md` 与 `prompt-contracts/*.md` | contract 到 graph/node 的 execution mapping | PR5-PR8 |
-| `docs/02-design/SCORING_SPEC.md` | graph 评分节点和 `ScoreRuleVersion` handoff | PR5/PR6/PR8 |
-| `docs/02-design/UX_SPEC.md`、`UI_DESIGN_SYSTEM.md` | timeline、interrupt drawer、candidate confirmation、low confidence / validation failed UI 状态 | PR7 |
+| `docs/02-design/SCORING_SPEC.md` | graph 评分节点和 `ScoreRuleVersion` handoff | PR5/PR8 |
+| `docs/02-design/UX_SPEC.md`、`UI_DESIGN_SYSTEM.md` | Graph Configuration Console、timeline、interrupt drawer、candidate confirmation、low confidence / validation failed UI 状态 | PR7/PR8 |
 | `docs/00-governance/DOCS_INDEX.md` | 登记本 ADR 和 PR1.5 专题包边界 | 主 Agent 受权 PR |
 | `docs/03-delivery/BACKLOG.md` | 消除 AIFI-BE-002 DONE 等于 skeleton 的歧义，登记 PR1.6 blockers，并承接 PR2-PR8 后续任务 | 主 Agent 受权 PR |

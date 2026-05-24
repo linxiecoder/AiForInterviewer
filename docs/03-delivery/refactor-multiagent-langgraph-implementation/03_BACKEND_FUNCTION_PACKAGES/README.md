@@ -20,11 +20,12 @@ Backend function package docs 承载 method-level、field-level、Agent / Graph 
 |---|---|---:|---|
 | AI Runtime Infra | `01_AI_RUNTIME_INFRA_PACKAGE.md` | PR3 / PR4 | Facade、runner port、registry、guard、handoff、interrupt、LangGraph adapter contract |
 | LLM Trace / Persistence | `02_LLM_TRACE_PERSISTENCE_PACKAGE.md` | PR2 / PR4 | Runtime tables、LLM trace、payload、repository、retention、raw-off tests |
-| Job Match Agent | `03_JOB_MATCH_AGENT_PACKAGE.md` | PR6 if still needed | PR2-PR5 只允许 descriptor / DTO / trace-compatible wrapper / placeholder；完整 JobMatch / ResumeAnalysis graph 只能在 PR6 决策仍需要后实施 |
+| Job Match Agent | `03_JOB_MATCH_AGENT_PACKAGE.md` | PR8 conditional | PR2-PR7 只允许 descriptor / placeholder / direct path retention / config registry metadata；完整 JobMatch / ResumeAnalysis graph 只能在 PR8 conditional migration 后实施 |
 | Polish Agent | `04_POLISH_AGENT_PACKAGE.md` | PR5 | Polish first migration target；progress tree、question、feedback graph、answer-save boundary |
 | Pressure Agent | `05_PRESSURE_AGENT_PACKAGE.md` | PR8 or separate authorized Pressure PR | Pressure session lifecycle、turn loop、pace、end condition、report input |
 | Report / Review Agent | `06_REPORT_REVIEW_AGENT_PACKAGE.md` | PR8 | Report generation、mock review、real review、copy boundary、privacy redaction |
 | Candidate / Skill / Training | `07_CANDIDATE_SKILL_TRAINING_PACKAGE.md` | PR8 | Candidate schema、Skill mapping、confirmation interrupt、formal write handoff、training suggestion |
+| Graph Configuration | `08_GRAPH_CONFIGURATION_PACKAGE.md` | PR6 | Graph descriptor API、config schema、default-off enablement API、placeholder registry、policy refs、admin/owner audit |
 
 ## 3. 跨包硬规则
 
@@ -36,7 +37,7 @@ Backend function package docs 承载 method-level、field-level、Agent / Graph 
 | candidate/formal | Graphs may create candidate/suggestion refs; formal write requires Core command or explicit user confirmation |
 | real provider | 除非后续 PR 明确授权且 real-provider gates 满足，否则不得调用 real provider |
 | PR2 | PR2 cannot use package docs to expand beyond exact `20_PR2_PREFLIGHT_READINESS_REPORT.md` scope |
-| PR order | PR5 是 Polish first migration target；PR6 才评估 JobMatch / ResumeAnalysis trace-compatible wrapper 或 graph；PR7 是 Frontend；PR8 是 Pressure / Report / Review / Candidate / Skill / Training closure |
+| PR order | PR5 是 Polish first migration target；PR6 是 Graph Configuration Backend；PR7 是 Graph Configuration Frontend；PR8 是 conditional business graph migration / closure |
 
 ## 4. Package 使用规则
 

@@ -92,10 +92,10 @@ Prompt Asset registry 是本文的 canonical 设计模型。PR5-PR8 开始迁移
 | `prompt_asset.review.real_input.001` | `P-REVIEW-002` | target `real_interview_input_structuring` | target `real_input_structuring_prompt_v1` | Target Review prompt builder | Target Review validator | `eval.review.real_input.v1` | target for PR8 |
 | `prompt_asset.review.real_review.001` | `P-REVIEW-003` | target `real_interview_review` | target `real_review_prompt_v1` | Target Review prompt builder | Target Review validator | `eval.review.real_review.v1` | target for PR8 |
 | `prompt_asset.review.item_extraction.001` | `P-REVIEW-004` | target `review_item_extraction` | target `review_item_extraction_prompt_v1` | Target Review prompt builder | Target Review validator | `eval.review.item_extraction.v1` | target for PR8 |
-| `prompt_asset.jobmatch.analysis.001` | `P-JOBMATCH-001` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | `_normalize_job_match_payload`; scoring / evidence normalization | `eval.jobmatch.analysis.v1` | PR6 conditional: trace-compatible wrapper / descriptor first; graph only if still needed after PR5 first migration target |
-| `prompt_asset.jobmatch.score.001` | `P-JOBMATCH-002` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | scoring normalization | `eval.jobmatch.score.v1` | PR6 conditional: trace-compatible wrapper / descriptor first; graph only if still needed after PR5 first migration target |
-| `prompt_asset.jobmatch.points.001` | `P-JOBMATCH-003` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | points / evidence normalization | `eval.jobmatch.points.v1` | PR6 conditional: trace-compatible wrapper / descriptor first; graph only if still needed after PR5 first migration target |
-| `prompt_asset.jobmatch.weakness.001` | `P-JOBMATCH-004` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | weakness candidate boundary checks | `eval.jobmatch.weakness.v1` | PR6 conditional: trace-compatible wrapper / descriptor first; graph only if still needed after PR5 first migration target |
+| `prompt_asset.jobmatch.analysis.001` | `P-JOBMATCH-001` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | `_normalize_job_match_payload`; scoring / evidence normalization | `eval.jobmatch.analysis.v1` | PR8 deferred / conditional: direct path retention / descriptor first; graph only if still needed after PR7 configuration console |
+| `prompt_asset.jobmatch.score.001` | `P-JOBMATCH-002` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | scoring normalization | `eval.jobmatch.score.v1` | PR8 deferred / conditional: direct path retention / descriptor first; graph only if still needed after PR7 configuration console |
+| `prompt_asset.jobmatch.points.001` | `P-JOBMATCH-003` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | points / evidence normalization | `eval.jobmatch.points.v1` | PR8 deferred / conditional: direct path retention / descriptor first; graph only if still needed after PR7 configuration console |
+| `prompt_asset.jobmatch.weakness.001` | `P-JOBMATCH-004` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | weakness candidate boundary checks | `eval.jobmatch.weakness.v1` | PR8 deferred / conditional: direct path retention / descriptor first; graph only if still needed after PR7 configuration console |
 
 ## 6. Required Mapping Table
 
@@ -123,10 +123,10 @@ Prompt Asset registry 是本文的 canonical 设计模型。PR5-PR8 开始迁移
 | `P-REVIEW-002` | target `real_interview_input_structuring` | target `real_input_structuring_prompt_v1` | Target Review prompt builder | Target Review validator | target fixture: third-party privacy and confirmation required | target PR8 |
 | `P-REVIEW-003` | target `real_interview_review` | target `real_review_prompt_v1` | Target Review prompt builder | Target Review validator | target fixture: source trust flags and low confidence | target PR8 |
 | `P-REVIEW-004` | target `review_item_extraction` | target `review_item_extraction_prompt_v1` | Target Review prompt builder | Target Review validator | target fixture: review item extraction and candidate-only | target PR8 |
-| `P-JOBMATCH-001` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | `_normalize_job_match_payload` | target parity fixture: analysis summary and evidence refs | PR6 conditional wrapper / descriptor parity |
-| `P-JOBMATCH-002` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | scoring normalization | target parity fixture: score range, confidence, no exact probability | PR6 conditional wrapper / descriptor parity |
-| `P-JOBMATCH-003` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | points / evidence normalization | target parity fixture: match / mismatch / improvement points | PR6 conditional wrapper / descriptor parity |
-| `P-JOBMATCH-004` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | weakness candidate boundary checks | target parity fixture: candidate, confirmation required, no formal write | PR6 conditional wrapper / descriptor parity |
+| `P-JOBMATCH-001` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | `_normalize_job_match_payload` | target parity fixture: analysis summary and evidence refs | PR8 deferred / conditional descriptor parity |
+| `P-JOBMATCH-002` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | scoring normalization | target parity fixture: score range, confidence, no exact probability | PR8 deferred / conditional descriptor parity |
+| `P-JOBMATCH-003` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | points / evidence normalization | target parity fixture: match / mismatch / improvement points | PR8 deferred / conditional descriptor parity |
+| `P-JOBMATCH-004` | `job_match_analysis` | `JOB_MATCH_PROMPT_VERSION` | `LlmJobMatchAnalyzer.analyze` | weakness candidate boundary checks | target parity fixture: candidate, confirmation required, no formal write | PR8 deferred / conditional descriptor parity |
 
 ## 7. Prompt Asset Field Contract
 
@@ -151,7 +151,7 @@ Polish 现有 runtime builder 已具备 compact prompt bundle 和校验闭环；
 |---|---|---|---|---|
 | `prompt_asset.polish.question.001` | selected topic、progress node、question pattern、scenario constraint、compact evidence、recent questions、schema | `input_evidence_refs` 必须精确复制 allowed chunk id；不得用 source ref / object ref 替代 | 输出单题 draft；不得输出参考答案、raw prompt、provider payload、编造组件 | `eval.polish.question.v1` 全部通过 |
 | `prompt_asset.polish.feedback.001` | current question、answer、question metadata、expected dimensions、scoring summary、previous answer / feedback compact summaries | evidence refs 使用 answer / question / score / loss refs；retry 只引用真实 previous loss point | 输出 feedback payload candidate；不得写正式 ScoreResult / Weakness / Asset | `eval.polish.feedback.v1` 全部通过 |
-| `prompt_asset.polish.progress.001` | resume / JD / match summary、selected evidence chunks、turn summaries、schema | evidence chunk ids 稳定且可追踪 | 输出 progress tree plan / grounded plan；不得把 evidence 原句直接当 display title | `eval.polish.progress.v1` 通过后进入 PR6 |
+| `prompt_asset.polish.progress.001` | resume / JD / match summary、selected evidence chunks、turn summaries、schema | evidence chunk ids 稳定且可追踪 | 输出 progress tree plan / grounded plan；不得把 evidence 原句直接当 display title | `eval.polish.progress.v1` 通过后进入 PR5 Polish migration |
 
 ## 9. Pressure Prompt Asset Plan
 

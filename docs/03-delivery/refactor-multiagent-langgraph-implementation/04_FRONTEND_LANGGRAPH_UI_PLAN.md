@@ -10,15 +10,17 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 ## 1. 文档目的
 
-本文是前端 LangGraph / AI Runtime UI 计划的唯一位置。它覆盖 route、API client、DTO、polling、timeline、interrupt resume、candidate confirmation、report/review states、copy boundary 和前端测试。
+本文是前端 LangGraph / AI Runtime UI 计划的唯一位置。PR7 的重点是 AI Runtime Graph Configuration Console：graph list、graph detail、graph config form、placeholder graph view 和 config audit history。timeline、interrupt、candidate confirmation、report/review states 和 copy boundary 仍是后续业务 graph UI 的受控能力，不得把 PR7 扩成 LangGraph debug page。
 
 ## 2. Frontend boundaries
 
 | Boundary | Rule |
 |---|---|
-| no debug page | 不新增普通用户 Agent debug page |
-| sanitized only | UI 只展示 sanitized task status、timeline、interrupt summary、candidate refs、LLM summary |
+| controlled config console | PR7 是受控 graph 配置页面，不是 LangGraph debug page |
+| no debug page | 不新增普通用户 Agent debug page，也不提供 AgentState / checkpoint 浏览器 |
+| sanitized only | UI 只展示 sanitized graph descriptor、enablement、policy refs、health/status、config audit、task status、timeline、interrupt summary、candidate refs、LLM summary |
 | no raw internals | 不展示 AgentState、checkpoint payload、raw prompt、raw completion、provider payload |
+| no secret exposure | 不展示 provider secret、model key、系统提示词或 hidden scoring internals |
 | no export | 报告/复盘只提供 copy boundary，不提供文件导出/下载 |
 | candidate/formal | candidate confirmation requires explicit user action |
 | default polling | PR7 默认 polling；streaming 需要独立受权和测试 |
@@ -27,19 +29,22 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 | Surface | Route | Files | Entry | Rule |
 |---|---|---|---|---|
-| AI task status | no standalone route | `features/ai-task-status/**`, `widgets/task-status-panel/**` | embedded in report/review/job match/interview surfaces | no Agent debug page |
-| Agent timeline | no standalone route | `widgets/agent-run-timeline/**` | task status panel expands timeline | sanitized timeline only |
-| Report detail | `/interview/:session_id` drawer; review can open associated report drawer | `widgets/report-viewer/**`, `widgets/copy-boundary/**` | interview list/detail/workbench/pressure completed state | no first-level report list |
-| Review list | `/review` | `pages/review/ReviewPage.tsx` | AppShell navigation | adds route when PR7/PR8 authorized |
-| Review detail | `/review` drawer or route state | `widgets/review-viewer/**` | review row, generation completion, report entry | drawer, not standalone detail page |
-| Real review input | `/review` drawer | `features/review-generation/RealReviewInputDrawer.tsx` | review list add action | saving input does not create AI task |
-| Candidate confirmation | no standalone route | `features/candidate-confirmation/**` | report/review/feedback/training surfaces | no silent formal write |
-| Interrupt resume | no standalone route | `features/agent-interrupt-resume/**` | task panel or interrupt timeline event | approve/edit/reject via resume API |
+| Graph list | `/ai-runtime/graphs` | `pages/ai-runtime/GraphListPage.tsx`, `entities/graph-config/**` | admin/owner AI Runtime navigation after PR7 authorization | list sanitized descriptors only；no raw graph internals |
+| Graph detail | `/ai-runtime/graphs/:graph_id` | `pages/ai-runtime/GraphDetailPage.tsx`, `widgets/graph-config-detail/**` | graph list row/action | show descriptor、status、policy refs、placeholder status |
+| Graph config form | `/ai-runtime/graphs/:graph_id/config` drawer or route state | `features/graph-config-form/**` | graph detail enable/config action | enable/disable uses PR6 API；default-off；owner/admin scoped |
+| Placeholder graph view | embedded in graph detail | `widgets/placeholder-graph-view/**` | graph detail for not-yet-migrated graphs | shows migration status and allowed next PR；no graph execution UI |
+| Config audit history | graph detail tab or drawer | `widgets/graph-config-audit/**` | graph detail audit tab | sanitized actor/action/status/error summary only |
+| Sanitized health/status | graph detail panel | `widgets/graph-runtime-health/**` | graph detail status card | health/status only；no checkpoint, AgentState, prompt or completion |
+| AI task status | no standalone route | `features/ai-task-status/**`, `widgets/task-status-panel/**` | later business surfaces after explicit scope | no Agent debug page |
+| Agent timeline | no standalone route | `widgets/agent-run-timeline/**` | later task status panel expands timeline | sanitized timeline only |
+| Report / Review / Candidate surfaces | existing business routes or drawers | `widgets/report-viewer/**`, `widgets/review-viewer/**`, `features/candidate-confirmation/**` | PR8 or separate authorized business graph UI | not part of PR7 graph configuration console |
 
 ## 4. API client / DTO plan
 
 | File | Symbol | API | Assertions |
 |---|---|---|---|
+| `entities/graph-config/model/types.ts` | `GraphDescriptor`, `GraphConfig`, `GraphPolicyRefs`, `GraphHealthStatus`, `GraphConfigAuditEvent` | PR6 graph descriptor / config API | excludes AgentState、checkpoint、raw prompt、raw completion、provider payload、provider secret/model key |
+| `entities/graph-config/api/graphConfigApi.ts` | `listGraphs`, `getGraphDescriptor`, `getGraphConfig`, `updateGraphConfig`, `getGraphConfigAudit` | PR6 graph descriptor / config / audit endpoints | owner/admin scoped；enable/disable default-off；422/403/409 sanitized |
 | `entities/ai-task/model/types.ts` | `AiTaskStatus`, `AiTaskStatusResponse` | `GET /api/v1/ai-tasks/{ai_task_id}` | covers queued/running/succeeded/partial/low_confidence/validation_failed/source_unavailable/generation_failed/timed_out/cancelled |
 | `entities/ai-task/api/aiTaskApi.ts` | `getAiTask`, `retryAiTask`, `cancelAiTask` | AI task endpoints | uses shared envelope and propagates `ApiHttpError` |
 | `entities/agent-run/model/types.ts` | `AgentRunSummaryResponse`, `AgentTimelineEvent` | Agent runtime API | excludes AgentState, checkpoint, Prompt, completion, provider payload |
@@ -120,6 +125,10 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 | Test file | Assertions |
 |---|---|
+| `entities/graph-config/api/graphConfigApi.test.ts` | descriptor/config/audit envelope handling, 403/409/422 sanitized |
+| `pages/ai-runtime/GraphListPage.test.tsx` | graph list renders descriptors and default-off state; no raw internals |
+| `features/graph-config-form/GraphConfigForm.test.tsx` | enable/disable uses PR6 API, preserves owner/admin scope and validation errors |
+| `widgets/graph-config-audit/GraphConfigAudit.test.tsx` | audit history is sanitized and hides provider secrets/model keys |
 | `entities/ai-task/api/aiTaskApi.test.ts` | envelope handling, path, status enum |
 | `entities/agent-run/model/types.test.ts` | no raw runtime fields in timeline event |
 | `features/ai-task-status/useAgentTaskStatus.test.tsx` | polling interval, terminal stop, retry |
@@ -130,13 +139,13 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | `widgets/review-viewer/ReviewInsightPanel.test.tsx` | candidate-only and no outcome prediction |
 | `features/agent-interrupt-resume/AgentInterruptPanel.test.tsx` | approve/edit/reject, stale conflict preserves input |
 | `features/candidate-confirmation/CandidateConfirmationDrawer.test.tsx` | confirm/edit/reject/merge explicit actions; failure does not mark formal |
-| optional E2E smoke | login -> review/task timeline/candidate/copy; no raw payload or export |
+| optional E2E smoke | login -> graph list -> graph detail -> config form -> audit history; no raw payload, no provider secret/model key, no debug page |
 
 ## 11. Frontend PR gates
 
 | Gate | Rule |
 |---|---|
-| PR7 route changes | Only add `/review` if backend/API contract and navigation scope are authorized |
+| PR7 route changes | Only add graph configuration console routes such as `/ai-runtime/graphs` after PR6 backend/API contract and navigation scope are authorized |
 | test dependencies | Vitest/Testing Library/MSW/Playwright changes require explicit PR7 scope |
 | streaming | EventSource/SSE requires backend endpoint, shared client wrapper and tests; otherwise polling |
 | design | Follow `UX_SPEC.md` / `UI_DESIGN_SYSTEM.md`; no Agent debug UI |
@@ -145,7 +154,9 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 ## 12. Non-goals
 
 - 不实现后端逻辑。
+- 不把 PR7 graph configuration console 做成 LangGraph debug page。
 - No LangGraph internals in frontend DTOs.
 - 不展示 raw prompt、raw completion、provider payload 或 checkpoint payload。
+- 不展示 provider secret、model key、系统提示词或完整 AgentState。
 - No file export or download.
 - No exact probability or hidden scoring display.

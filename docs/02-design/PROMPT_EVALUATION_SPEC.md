@@ -161,11 +161,11 @@ Rollback must be fail-closed: if asset registry, schema, validator or evaluation
 |---|---|---|---|
 | `eval.polish.question.v1` | schema, semantic, evidence refs, repeat question, hallucination, fallback | fabricated entity, answer leak, invalid evidence refs, missing required elements | ready as design input; runtime tests already cover key cases |
 | `eval.polish.feedback.v1` | schema, score consistency, evidence, low confidence, fallback | raw payload leak, invalid retry, score mismatch, provider error | ready as design input; runtime tests already cover key cases |
-| `eval.polish.progress.v1` | schema, hallucination, grounding, low confidence | copied evidence title, unsupported topic, source unavailable | needs implementation fixture expansion before PR6 |
+| `eval.polish.progress.v1` | schema, hallucination, grounding, low confidence | copied evidence title, unsupported topic, source unavailable | needs implementation fixture expansion before PR5 Polish migration |
 | `eval.pressure.*.v1` | schema, semantic, repeat question, pace, score consistency, fallback | same-question loop, unsupported pressure tone, report body leak | blocked by AIFI-BE-004 mode-level spec |
 | `eval.report.*.v1` | schema, evidence, score consistency, low confidence, redaction | exact probability, hidden rubric, copy content leak | target PR8 |
 | `eval.review.*.v1` | schema, evidence, privacy, candidate boundary, low confidence | third-party privacy leak, unconfirmed input, formal write | target PR8 |
-| `eval.jobmatch.*.v1` | schema, score consistency, evidence, hallucination, fallback | exact probability, missing evidence, formal weakness write | PR6 conditional wrapper / descriptor parity |
+| `eval.jobmatch.*.v1` | schema, score consistency, evidence, hallucination, fallback | exact probability, missing evidence, formal weakness write | PR8 deferred / conditional descriptor parity |
 
 ## 13. AIFI-PROMPT-002 Readiness Verdict
 

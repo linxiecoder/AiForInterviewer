@@ -23,7 +23,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | 架构 as-is / to-be 和所有架构图 | `01_ARCHITECTURE_ASIS_TOBE.md` |
 | 后端迁移总计划、PR 顺序、PR2 exact scope 约束 | `02_BACKEND_REFACTOR_MASTER_PLAN.md`，其中 §4 / §5 已内联 PR2 exact scope 和 launch gates |
 | 后端 method / field / Agent / Graph / Prompt / Skill / Trace 实施细节 | `03_BACKEND_FUNCTION_PACKAGES/*.md` |
-| 前端 LangGraph / AI Runtime UI 实施计划 | `04_FRONTEND_LANGGRAPH_UI_PLAN.md` |
+| 前端 LangGraph / AI Runtime Graph Configuration Console 实施计划 | `04_FRONTEND_LANGGRAPH_UI_PLAN.md` |
 | PR2 是否可开始代码实现 | `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5 + 旧 `20_PR2_PREFLIGHT_READINESS_REPORT.md` 的 evidence |
 | 旧专题包处理 | `docs/03-delivery/refactor-multiagent-langgraph/` 大部分只作 evidence，不作为实施入口；特殊状态见 §6 |
 
@@ -37,12 +37,13 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 | `03_BACKEND_FUNCTION_PACKAGES/README.md` | 后端功能包索引和跨包规则 | 不作为实施入口替代根 README |
 | `03_BACKEND_FUNCTION_PACKAGES/01_AI_RUNTIME_INFRA_PACKAGE.md` | AI Runtime facade / runner / registry / interrupt / handoff / guard 的方法级计划 | 不写 LLM trace 表字段细节 |
 | `03_BACKEND_FUNCTION_PACKAGES/02_LLM_TRACE_PERSISTENCE_PACKAGE.md` | AI Runtime tables、LLM trace、payload、repository、retention 和 PR2 测试 | 不写业务 graph node 计划 |
-| `03_BACKEND_FUNCTION_PACKAGES/03_JOB_MATCH_AGENT_PACKAGE.md` | Job Match / ResumeAnalysis descriptor、DTO、trace-compatible wrapper、PR6-if-needed graph sketch | 不写 Polish / Pressure 计划；不把 Job Match 提前为 PR5 |
+| `03_BACKEND_FUNCTION_PACKAGES/03_JOB_MATCH_AGENT_PACKAGE.md` | Job Match / ResumeAnalysis descriptor、placeholder、direct path retention、PR8 conditional graph sketch | 不写 Polish / Pressure 计划；不把 Job Match 提前为 PR5 |
 | `03_BACKEND_FUNCTION_PACKAGES/04_POLISH_AGENT_PACKAGE.md` | PR5 Polish first migration target；progress tree / question / feedback graph | 不写 Pressure 或 report/review 计划；不把 candidate enhancement / formal closure 放入 PR5 |
 | `03_BACKEND_FUNCTION_PACKAGES/05_PRESSURE_AGENT_PACKAGE.md` | Pressure Mode graph、turn、pace、end condition、report handoff | 不写 report body generation 计划 |
 | `03_BACKEND_FUNCTION_PACKAGES/06_REPORT_REVIEW_AGENT_PACKAGE.md` | Report / mock review / real review graph、copy boundary、privacy redaction | 不写 candidate formal write package 细节 |
 | `03_BACKEND_FUNCTION_PACKAGES/07_CANDIDATE_SKILL_TRAINING_PACKAGE.md` | Candidate / Skill / Weakness / Asset / Training suggestion / confirmation | 不写 frontend drawer 实现细节 |
-| `04_FRONTEND_LANGGRAPH_UI_PLAN.md` | 前端 route、API client、hook、component、状态机、测试 | 不写后端 graph node 级计划 |
+| `03_BACKEND_FUNCTION_PACKAGES/08_GRAPH_CONFIGURATION_PACKAGE.md` | Graph Configuration Backend、descriptor/config API、default-off enablement、policy refs、config audit | 不写业务 graph execution、provider call 或 LangGraph debug internals |
+| `04_FRONTEND_LANGGRAPH_UI_PLAN.md` | PR7 AI Runtime graph configuration console、route、API client、hook、component、状态机、测试 | 不写后端 graph node 级计划 |
 
 ## 4. 阅读顺序
 
