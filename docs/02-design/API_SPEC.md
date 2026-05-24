@@ -316,6 +316,26 @@ Async 规则：
 - timeout 后必须返回 `task_timeout` 或 `generation_failed`，保留可用输入和部分结果引用。
 - `low_confidence` 和 `partial` 结果可以读取，但不得被前端展示为高置信完成态。
 
+### 5.4 Agent Runtime API contract skeleton（PR3 / PR4）
+
+本节只登记 PR3 / PR4 Runtime Contracts 的 API skeleton。PR3 / PR4 API exposure 如未实现，只作为后端 contract skeleton，不授权 F6/F7 frontend 接入或普通用户 debug page。PR6 Graph Configuration Backend 可读取 graph descriptor / config，但不得暴露 LangGraph internals。
+
+| Endpoint | 作用 | PR | 关键边界 |
+|---|---|---:|---|
+| `GET /api/v1/agent-runs/{agent_run_id}` | get agent run status | PR4 skeleton | owner-scoped；返回 sanitized status、graph descriptor refs、task refs、validation / failure summary；不返回 `AgentState` |
+| `GET /api/v1/agent-runs/{agent_run_id}/timeline` | get agent run timeline | PR4 skeleton | 只返回 sanitized events、node status、trace refs、checkpoint metadata summary refs；不返回 checkpoint payload |
+| `GET /api/v1/agent-interrupts/{interrupt_id}` | get interrupt detail | PR4 skeleton | drawer payload sanitized；只返回 allowed actions、candidate refs、resume schema id、validation summary |
+| `POST /api/v1/agent-interrupts/{interrupt_id}/resume` | resume interrupt | PR4 skeleton | required idempotency；owner/base_version/schema 校验；不允许 late formal write 或 raw payload |
+| `POST /api/v1/agent-runs/{agent_run_id}/cancel` | cancel run | PR4 skeleton | 可取消状态才允许；取消后阻断 provider continuation 和 formal write |
+| `GET /api/v1/graph-descriptors` / `GET /api/v1/graph-descriptors/{graph_name}` | graph descriptor/config read | PR6 | read-only descriptor / config refs；不暴露 provider secrets、LangGraph internals、AgentState、checkpoint payload 或 raw provider data |
+
+所有 Agent Runtime response 必须 sanitized：
+
+- 不返回 `AgentState`、checkpoint payload、raw prompt、raw completion、provider payload、system prompt、hidden scoring rule、token、cookie、secret。
+- 不返回 `raw_payload_ciphertext_ref`、`encryption_key_ref` 或 raw debug ref。
+- timeline 和 interrupt detail 只返回 refs、hashes、status、validation、failure category、low confidence flags、allowed actions 和 display-safe summary。
+- PR3 / PR4 不开放普通用户 debug page；debug raw capture 默认关闭。
+
 ## 6. API 清单总表
 
 本节作为 F5 后端实现、F6 前端接入和 F7 API contract tests 的稳定 route inventory。旧版 endpoint matrix 不再作为唯一交接面；逐接口字段级 contract 见 §7，Schema 索引（Schema Index）见 §8。
@@ -376,6 +396,12 @@ Async 规则：
 | API-AITASK-003 | GET | /api/v1/ai-tasks/{ai_task_id}/result | 获取 AI 任务结果（Get AI task result） | AI task | sync | required | not required | ai_task.owner_ref 必须匹配当前 actor, 不返回 provider payload | N/A | AiTaskResultResponse | ApiErrorEnvelope | AiTaskResult, CandidateRef, SuggestionRef, EvidenceRef, TraceRef | 已登记 P-* | api.ai_task.result.no_provider_payload |
 | API-AITASK-004 | POST | /api/v1/ai-tasks/{ai_task_id}/retry | 重试 AI 任务（Retry AI task） | AI task | async | required | required | ai_task.owner_ref 必须匹配当前 actor, retry 不得扩大上下文 | RetryAiTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | AiTask, AiTaskResult, LlmFailureRecord, IdempotencyRecord | 已登记 P-* | api.ai_task.retry.idempotent_and_scope_safe |
 | API-AITASK-005 | POST | /api/v1/ai-tasks/{ai_task_id}/cancel | 取消 AI 任务（Cancel AI task） | AI task | sync | required | required | ai_task.owner_ref 必须匹配当前 actor, cancel 后不得 late write formal object | CancelAiTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | AiTask, AuditEvent, IdempotencyRecord | 已登记 P-* | api.ai_task.cancel.no_late_write |
+| API-AGENT-RUNTIME-001 | GET | /api/v1/agent-runs/{agent_run_id} | 获取 Agent run 状态（Get agent run status） | Agent runtime | sync | required | not required | agent_run.owner_ref 必须匹配当前 actor；response sanitized | N/A | AgentRunStatusResponse | ApiErrorEnvelope | AgentRun, AiTask, TraceRef, ValidationResultRef | N/A | api.agent_run.status.sanitized |
+| API-AGENT-RUNTIME-002 | GET | /api/v1/agent-runs/{agent_run_id}/timeline | 获取 Agent run timeline（Get agent run timeline） | Agent runtime | sync | required | not required | agent_run.owner_ref 必须匹配当前 actor；不返回 AgentState/checkpoint/raw payload | N/A（查询参数） | AgentRunTimelineResponse | ApiErrorEnvelope | AgentRun, AgentNodeRun, AgentCheckpointRef, LlmCall, TraceRef | N/A | api.agent_run.timeline.no_raw_payload |
+| API-AGENT-RUNTIME-003 | GET | /api/v1/agent-interrupts/{interrupt_id} | 获取 Agent interrupt 详情（Get interrupt detail） | Agent runtime | sync | required | not required | interrupt.owner_ref 必须匹配当前 actor；drawer payload sanitized | N/A | AgentInterruptDetailResponse | ApiErrorEnvelope | AgentInterrupt, CandidateRef, ValidationResultRef, AuditEvent | N/A | api.agent_interrupt.get.sanitized |
+| API-AGENT-RUNTIME-004 | POST | /api/v1/agent-interrupts/{interrupt_id}/resume | 恢复 Agent interrupt（Resume interrupt） | Agent runtime | async | required | required | interrupt/run owner、base_version、resume_schema 和 idempotency 必须通过；不允许 late formal write | ResumeAgentInterruptRequest | AgentRunStatusResponse | ApiErrorEnvelope | AgentInterrupt, AgentRun, IdempotencyRecord, AuditEvent | N/A | api.agent_interrupt.resume.idempotent |
+| API-AGENT-RUNTIME-005 | POST | /api/v1/agent-runs/{agent_run_id}/cancel | 取消 Agent run（Cancel agent run） | Agent runtime | sync | required | required | agent_run.owner_ref 必须匹配当前 actor；cancel 后阻断 provider continuation 和 formal write | CancelAgentRunRequest | AgentRunStatusResponse | ApiErrorEnvelope | AgentRun, AgentInterrupt, AuditEvent, IdempotencyRecord | N/A | api.agent_run.cancel.no_late_formal_write |
+| API-AGENT-RUNTIME-006 | GET | /api/v1/graph-descriptors | 读取 graph descriptor 列表（List graph descriptors） | Graph configuration | sync | required | not required | PR6 read-only；owner/admin scoped；不暴露 LangGraph internals 或 provider secrets | N/A（查询参数） | GraphDescriptorResponse[] | ApiErrorEnvelope | GraphDescriptor, GraphConfigAuditEvent | N/A | api.graph_descriptor.list.sanitized |
 
 
 ### 6.1 F6 Page/API Handoff Matrix
@@ -5560,6 +5586,7 @@ F8 changelog input 至少从以下 API 变化提取：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 增加 PR3 / PR4 Agent Runtime API contract skeleton | 登记 Agent run status、timeline、interrupt detail、resume interrupt、cancel run 和 PR6 graph descriptor read-only skeleton，并明确 sanitized response、no AgentState、no checkpoint payload、no raw prompt/completion/provider payload、no normal-user debug page |
 | 2026-05-24 | 增加 AIFI-BE-004 Pressure mode API handoff | 将 Pressure start / pause / resume / end / report / review handoff 的实现前置条件交给 `PRESSURE_MODE_SPEC.md`；不新增 endpoint，不修改代码，不授权 PR2 graph |
 | 2026-05-17 | 修复 `AR-F4-F8-003` API release handoff 缺口 | 新增 F8 API 发布检查映射，覆盖 route inventory、no export endpoint、copy content / copy event、rate limit、provider failure、async task status、retry / cancel、health / trace / audit 可见性、response / error envelope、source unavailable、low confidence、validation failed、no exact probability 和 provider payload / system prompt / hidden scoring rules 禁止项；不新增 endpoint，不进入 implementation |
 | 2026-05-17 | 增加 scoring / semantics / persistence / application flow 交接 | 将评分 canonical 规则交给 `SCORING_SPEC.md`，语义枚举交给 `SEMANTICS_GLOSSARY.md`，物理关系交给 `PERSISTENCE_MODEL.md`，应用编排交给 `APPLICATION_FLOW_SPEC.md`；更新 `score_type` canonical enum 和 `ScoreResultResponse` 必填字段 |

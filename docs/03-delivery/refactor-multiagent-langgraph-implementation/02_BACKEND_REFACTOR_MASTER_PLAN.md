@@ -136,6 +136,19 @@ Before runtime exposure in PR3 / PR4, the owner must either backfill active docs
 | `APPLICATION_FLOW_SPEC.md` | facade, runtime event flow, handoff, interrupt/resume orchestration |
 | `API_SPEC.md` | Agent Runtime API, timeline, interrupt resume, sanitized LLM summary |
 
+2026-05-24 PR3 / PR4 Runtime Contracts remediation status:
+
+| Gate | Status | Evidence | Remaining boundary |
+|---|---|---|---|
+| Active docs backfill | satisfied for PR3 contract start | `DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`SECURITY_PRIVACY.md`、`APPLICATION_FLOW_SPEC.md`、`API_SPEC.md` 已回写 AgentRun / AgentNodeRun / AgentInterrupt / AgentCheckpointRef / LlmCall / LlmCallPayload、runtime persistence、raw-off、facade flow 和 Agent Runtime API skeleton | PR3 仍需 explicit PR3 scope lock；PR4 concrete adapter / dependency / fake runtime 仍需 explicit PR4 authorization |
+| Handoff formal write boundary | satisfied for PR3 / PR4 contract | `01_AI_RUNTIME_INFRA_PACKAGE.md` 明确 PR3 / PR4 only contract / stub；formal write path 为 PR5+ 或对应业务迁移 PR Core command | PR3 / PR4 不调用 Core formal write repository，不写 business graph |
+| Runtime flags precedence | satisfied for PR3 contract | `01_AI_RUNTIME_INFRA_PACKAGE.md` 与 `01_ARCHITECTURE_ASIS_TOBE.md` 冻结 default false、test override -> explicit env/settings -> PR6 persisted config -> default false 的优先级 | graph node 不直接读 flag；real provider gate 独立且默认 false |
+| Checkpointer / serializer method contract | satisfied for PR4 planning | `01_AI_RUNTIME_INFRA_PACKAGE.md` 冻结 method-level contract 和 raw reject rules | PR4 前仍需 dependency spike / fake runtime authorization |
+| GraphDescriptor DTO | satisfied for PR3 / PR6 handoff | `01_AI_RUNTIME_INFRA_PACKAGE.md` 冻结 descriptor 字段和 no LangGraph internals；PR6 read-only API skeleton 已登记 | PR3 / PR4 不创建 business graph implementation |
+| PR3 / PR4 contract-to-test matrix | satisfied for implementation planning | `01_AI_RUNTIME_INFRA_PACKAGE.md` 明确 PR3 / PR4 test rows | 实现时必须按对应 PR scope 执行 test-first / contract tests |
+
+Decision: PR3 implementation may start only after a fresh PR3 Scope Lock confirms allowed files, branch/worktree state, and validation commands. This section does not authorize PR4 dependency, PR4 concrete runtime, business graph, frontend, real provider default-on, migration, CI, or PR5+ formal write implementation.
+
 ## 7. Validation commands
 
 Docs-only consolidation validation:

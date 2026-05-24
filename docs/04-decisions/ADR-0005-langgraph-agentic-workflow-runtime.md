@@ -17,6 +17,8 @@ PR2 governance closure：本 ADR 仍保持 `Proposed`，不在本轮升级为完
 
 PR2-only accepted risk：主 Agent 接受在 `docs/03-delivery/refactor-multiagent-langgraph-implementation/02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5 exact scope lock 内实施 inert AI Runtime data model / repository / backend tests 的有限风险。该接受不授权 LangGraph runtime enablement、graph execution、real provider call、business graph migration、runtime facade / adapter、frontend UI 或 active docs 全量 backfill；这些仍需后续 PR scope 重新授权。
 
+PR3 / PR4 active docs backfill：2026-05-24 已将 Runtime Contracts 所需的 `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall`、`LlmCallPayload`、runtime persistence rules、raw-off / checkpoint / timeline visibility、facade flow 和 Agent Runtime API skeleton 回写到 active design docs。该回写只解除 PR3 implementation 的文档阻断；不授权 PR4 dependency / concrete runtime、business graph、frontend、real provider default-on、migration、CI 或 PR5+ formal write implementation。
+
 ## Context
 
 AIFI-BE-002 的 PR1 专题规划包已经登记 LangGraph MultiAgent 重构方向，但 `DONE` 只代表 planning package skeleton 完成，不代表实现完成。当前 active docs 已冻结 AI task、Prompt contract、candidate / formal object、trace / evidence、security / privacy、API async task 和 persistence handoff 边界；缺口在于后续 PR2-PR8 需要一个长期架构决策来约束 Agent Runtime、checkpoint、timeline、interrupt/resume、raw payload 和业务写入边界。
@@ -108,11 +110,11 @@ PR2 runtime foundation 必须默认关闭：
 
 | Active doc | 回写内容 | PR |
 |---|---|---|
-| `docs/02-design/PERSISTENCE_MODEL.md` | AI Runtime Tables、checkpoint ref、migration / rollback / in-flight task policy | PR2 accepted-risk deferral；PR3 / PR4 runtime exposure 前回写 |
-| `docs/02-design/DATA_MODEL.md` | `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`LlmCall`、`AgentCheckpointRef` 逻辑对象和状态域 | PR2 accepted-risk deferral；PR3 / PR4 runtime exposure 前回写 |
-| `docs/02-design/SECURITY_PRIVACY.md` | raw-off payload、checkpoint / timeline / debug 可见性、redaction、retention、audit 边界 | PR2 通过 tests 承接 raw-off；PR4 runtime exposure 前回写 |
-| `docs/02-design/APPLICATION_FLOW_SPEC.md` | `AiOrchestrationFacade`、runtime event flow、business handoff、interrupt/resume 编排 | PR3/PR4 |
-| `docs/02-design/API_SPEC.md` | Agent Runtime API、timeline、interrupt resume、sanitized LLM summary response | PR3/PR4 |
+| `docs/02-design/PERSISTENCE_MODEL.md` | AI Runtime Tables、checkpoint ref、migration / rollback / in-flight task policy | Completed 2026-05-24 for PR3 / PR4 contract gate；future PR4 implementation still needs explicit scope |
+| `docs/02-design/DATA_MODEL.md` | `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`LlmCall`、`LlmCallPayload`、`AgentCheckpointRef` 逻辑对象和状态域 | Completed 2026-05-24 for PR3 / PR4 contract gate |
+| `docs/02-design/SECURITY_PRIVACY.md` | raw-off payload、checkpoint / timeline / debug 可见性、redaction、retention、audit 边界 | Completed 2026-05-24；raw debug and real provider remain default-off |
+| `docs/02-design/APPLICATION_FLOW_SPEC.md` | `AiOrchestrationFacade`、runtime event flow、business handoff、interrupt/resume 编排 | Completed 2026-05-24 for PR3 contract start |
+| `docs/02-design/API_SPEC.md` | Agent Runtime API、timeline、interrupt resume、sanitized LLM summary response | Completed 2026-05-24 as PR3 / PR4 skeleton；not frontend authorization |
 | `docs/02-design/PROMPT_SPEC.md` 与 `prompt-contracts/*.md` | contract 到 graph/node 的 execution mapping | PR5-PR8 |
 | `docs/02-design/SCORING_SPEC.md` | graph 评分节点和 `ScoreRuleVersion` handoff | PR5/PR8 |
 | `docs/02-design/UX_SPEC.md`、`UI_DESIGN_SYSTEM.md` | Graph Configuration Console、timeline、interrupt drawer、candidate confirmation、low confidence / validation failed UI 状态 | PR7/PR8 |

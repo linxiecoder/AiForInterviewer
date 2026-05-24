@@ -27,6 +27,29 @@ permalink: ai-for-interviewer/docs/02-design/application-flow-spec
 5. 用户输入保存和 AI 生成拆开。保存 `Answer`、真实面试输入、用户确认、复制事件等同步完成，不隐式触发不可见 LLM 调用。
 6. Low confidence、source unavailable、validation failed、partial result 必须进入 API status、持久化对象和 F7 fixture，不得被普通 success 吞掉。
 
+### 2.1 AI Runtime PR3 / PR4 编排边界
+
+本节补齐 PR3 / PR4 Runtime Contracts 的 application flow。它只定义 facade / port / runtime API skeleton，不实现 concrete LangGraph、business graph、frontend 或 real provider default-on。
+
+| 编排点 | PR3 / PR4 contract | 禁止事项 |
+|---|---|---|
+| Core -> Runtime 入口 | Core UseCase 只通过 `AiOrchestrationFacade` 调用 `AgentGraphRunner` port；输入为 owner-scoped refs、contract ids、idempotency key 和 sanitized command envelope | Core 不 import LangGraph、AgentState、checkpoint schema、provider SDK 或 runtime DB model |
+| PR3 contract scope | 定义 facade、runner port、registry、runtime flags resolver、side-effect guard、trace bridge、handoff DTO、interrupt service、status/timeline DTO | 不执行 concrete LangGraph，不写 business graph，不调用 Core formal write repository |
+| PR4 fake runtime scope | concrete adapter 可以在 default-off feature flag 下 start / resume / replay / timeline fake graph，验证 checkpoint refs、serializer、timeline 和 interrupt contract | 不迁移 Polish / JobMatch / Pressure / Report business graph，不默认调用 real provider |
+| Interrupt lifecycle | create -> get detail -> validate resume payload -> resume / reject / expire；所有动作 owner-scoped、base-version checked、idempotent，并写 audit summary | drawer payload 不暴露 AgentState、checkpoint payload、Prompt、completion 或 provider payload |
+| Handoff | handoff 只携带 refs、sanitized summaries、validation result、candidate refs、confirmation refs 和 `side_effect_key` | PR3 / PR4 只定义 contract / stub，不实现 `write_question_result`、`write_feedback_result`、`write_report_result`、`write_review_result`、`write_candidate_result` 或 `finalize_after_confirmation` 的真实 formal write path |
+| Formal write | formal write 是 PR5+ 或对应业务迁移 PR 的 Core command 责任，必须通过 owner、version、confirmation、validation 和 side-effect guard | PR4 LangGraph adapter 不允许绕过 handoff 直接写 Core Business tables |
+| Replay / cancel | replay 默认 read-only；cancel / timeout / expired interrupt 必须阻断 late formal write，并返回 sanitized status | 不从 checkpoint payload 或 raw LLM payload 恢复业务事实 |
+
+最小 runtime flow：
+
+1. Core UseCase 校验业务 owner/source/version 后调用 `AiOrchestrationFacade`。
+2. Facade 解析 runtime / graph flags，默认 false；仅 facade、registry 或 runner entry 可读 flag。
+3. Facade 创建或复用 `AiTask` / `AgentRun`，经 `AgentGraphRunner` port start / resume。
+4. Runner / adapter 只能写 `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall` 和 sanitized timeline refs。
+5. 需要业务落库时，runner 返回 handoff request；PR3 / PR4 只校验 handoff contract，不执行真实 formal write。
+6. API mapper 只返回 sanitized run status、timeline、interrupt detail 或 task refs。
+
 ## 3. Prompt 输入结构模板
 
 本节定义结构，不写生产完整 Prompt 文案。
@@ -128,5 +151,6 @@ session summary update 可以在 feedback task 后执行；短会话可用 deter
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 增加 PR3 / PR4 AI Runtime application flow backfill | 补齐 Core UseCase -> `AiOrchestrationFacade` -> `AgentGraphRunner` port、PR3 contract scope、PR4 fake runtime、interrupt、handoff、formal write PR5+、replay/cancel/late write block；不进入代码实现 |
 | 2026-05-24 | 增加 Pressure Mode mode-level spec 交叉引用 | 将 Pressure lifecycle、turn loop、pace、end condition、report / review handoff 和 PR2 hold 交给 `PRESSURE_MODE_SPEC.md`；流程矩阵只保留 application orchestration 引用，不进入 implementation |
 | 2026-05-17 | 初始化 application flow handoff | 补齐 API 到应用编排、P-* contract、LLM call plan、Prompt 输入结构、持久化和 F7 fixture 的映射 |

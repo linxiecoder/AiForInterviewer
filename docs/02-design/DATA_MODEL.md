@@ -126,6 +126,7 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | 明细或值对象 / Value Object or Detail Object | `ResumeMarkdownOutline`、Markdown 位置范围、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`JobBindingSummary`、`JobMatchSummary`、`PolishTopicRef`、`PolishSubtopicRef`、`InterviewQuestion`、`InterviewAnswer`、`Feedback`、`ScoreDimension`、`ScoreExplanation`、`ScoreEvidenceLink`、`ReviewItem`、`WeaknessEvidence`、`RetrievalEvidence`、`Citation` / `CitationRef`、`TrainingResult`、`AssetPromotionRecord` | 依附于主对象，通常不独立管理生命周期；其中 `ResumeMarkdownOutline`、`JobBindingSummary`、`JobMatchSummary` 为 derived / read-model 语义，不要求物理持久化 |
 | 候选 / 建议 / AI 结果交接对象 | `CandidateRef`、`WeaknessCandidate`、`AssetCandidate`、`AssetQualityHint`、`AssetVersionSuggestion`、`TrainingRecommendation` candidate、`TrainingPriorityRanking`、`TrainingResultReview`、`SuggestionRef`、`WeaknessMergeSuggestion`、`WeaknessSeverityAssessment`、`WeaknessStatusUpdateSuggestion`、`AiTaskResultRef`、`LowConfidenceFlag`、`LlmValidationResult` | 承接 AI Task Contract 输出和用户确认流；不等同于正式业务对象或实际业务动作 |
 | API 协议承接对象 / API Handoff Object | `IdempotencyRecord`、`AiTask`、`AiTaskResult`、`ApiRequestTrace`、`ApiEndpointRef` | 承接 API 字段级 contract、异步任务协议、幂等持久化、trace / audit 和 F7 contract test 的逻辑落点；不等同于物理表或队列实现 |
+| AI Runtime 控制对象 / AI Runtime Control Object | `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall`、`LlmCallPayload` | 承接 PR3 / PR4 AI Runtime facade、runner、interrupt、timeline、checkpoint ref 和 persisted LLM call lifecycle；这些对象不是 Core Business truth source，不替代 `Question`、`Feedback`、`InterviewReport`、`Review`、`Weakness`、`Asset`、`TrainingRecommendation` 或 `TrainingTask` |
 | 引用对象 / Reference Object | `SourceRef`、`EvidenceRef`、`VersionRef`、`TraceRef`、`SnapshotRef`、`UserConfirmationRef`、`OwnerRef`、`RoleScope`、`PermissionBoundary` | 用于跨模块引用、证据追踪、版本追踪、归属、确认和最小权限边界 |
 | 延后对象 / Deferred Object | API request / response schema、API endpoint、Prompt 输入输出 schema、Prompt 模板、LLM 调用参数、安全隐私字段细则、retention / deletion 具体策略、物理数据库表、ORM model、DDL、索引、外键、migration | 不在 `DATA_MODEL.md` 展开，交给后续 `API_SPEC.md`、`PROMPT_SPEC.md`、`SECURITY_PRIVACY.md` 或 F5 实现 |
 
@@ -167,6 +168,12 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | `AiTask` | `api task entity` | API 可查询、可重试、可取消的异步任务逻辑对象；不等同于 provider task 或物理队列任务 |
 | `AiTaskResult` | `task result` / `handoff result` | 承接 result、candidate、suggestion、validation、low confidence、source availability、evidence 和 trace |
 | `ApiRequestTrace` | `trace` | 记录 API request id、trace id、actor、endpoint、resource refs、validation、audit 和日志脱敏边界 |
+| `AgentRun` | `ai runtime control entity` | AI Runtime 一次 graph / facade 执行的控制态；只保存 owner、task refs、graph descriptor refs、status、input refs、result refs、sanitized summaries 和 hashes，不是业务结果事实源 |
+| `AgentNodeRun` | `ai runtime node trace` | 记录 runtime node lifecycle、input / output digest、status、trace refs、validation refs 和 sanitized summary；不得保存完整 `AgentState`、Prompt、completion 或 provider payload |
+| `AgentInterrupt` | `ai runtime interrupt` | 记录 approval、edit、merge、request_more_evidence、low_confidence_review、provider_failure_retry 或 manual_stop 等中断；drawer payload 必须 sanitized，formal write 必须等 resume / Core command |
+| `AgentCheckpointRef` | `ai runtime recovery ref` | 只保存 namespace、thread_id、checkpoint_id、version、hashes、timestamps 和 metadata summary；checkpoint payload 不是业务事实源，不进入 API-visible summary |
+| `LlmCall` | `ai runtime llm call lifecycle` | 记录 planned / running / completed / failed provider call lifecycle、contract ids、model family、usage、validation、trace refs 和 sanitized result refs；provider call 前必须可先写入 planned / running trace |
+| `LlmCallPayload` | `restricted debug payload ref` | 默认只保存 sanitized summary refs；raw refs 默认关闭且不得进入 API-visible summary。若未来开启 raw debug refs，必须由 `SECURITY_PRIVACY.md` 要求的 feature flag、encryption、TTL、audit 和 owner access control 约束 |
 | `LlmRequestTrace` | `trace` | 记录 LLM 请求过程边界 |
 | `LlmResponseTrace` | `trace` | 记录 LLM 响应和结构化输出边界 |
 | `LlmValidationResult` | `trace` / `validation result` | 记录结构化校验和业务语义校验结果 |
@@ -296,6 +303,26 @@ AI Task Contract 的输出必须先落入以下一种或多种逻辑对象，不
 - async task result 与 formal object 的边界必须显式：`AiTaskResult` 可产生 candidate / suggestion / validation result；只有确认流或显式业务动作才能创建或更新 `Weakness`、`Asset`、`AssetVersion`、正式 `TrainingRecommendation` 或 `TrainingTask`。
 - validation failed、low confidence、source unavailable、generation failed、provider unavailable、task timeout 和 cancel 后的结果不得被报告读取、copy content 或前端视为高置信正式事实。
 - 持久化实现不得为了排障保存 provider payload、system prompt、completion 原文、隐藏评分规则或未脱敏正文；排障只使用 `ApiRequestTrace`、`TraceRef`、`LlmValidationResult`、`LlmFailureRecord`、`AuditEvent` 和安全摘要。
+
+#### 4.4.6 AI Runtime logical objects
+
+本节补齐 PR3 / PR4 Runtime Contracts 所需逻辑对象。AI Runtime objects 只记录运行时控制态、引用、状态、hash、sanitized summary、validation 和 audit，不是 Core Business truth source。正式业务事实仍由 `Question`、`Feedback`、`InterviewReport`、`MockInterviewReview` / `RealInterviewReview`、`Weakness`、`Asset`、`TrainingRecommendation`、`TrainingTask` 等 Core Business objects 承载。
+
+| 对象 | 必要字段组 | 边界 |
+|---|---|---|
+| `AgentRun` | `agent_run_id`、`owner_ref`、`actor_ref`、`ai_task_ref`、`graph_name`、`graph_version`、`capability`、`runtime_flag_key`、`status`、`input_refs`、`result_refs`、`current_node_ref`、`trace_refs`、`created_at`、`updated_at`、`completed_at` | 只表达一次 runtime run；不得保存 raw prompt、raw completion、provider payload、checkpoint payload、完整 `AgentState` 或 formal business object body |
+| `AgentNodeRun` | `agent_node_run_id`、`agent_run_ref`、`node_name`、`node_type`、`status`、`input_digest`、`output_digest`、`validation_result_ref`、`low_confidence_flags`、`trace_refs`、`started_at`、`finished_at` | node input/output 只能以 digest、refs 和 sanitized summary 表达；不得成为业务 read model |
+| `AgentInterrupt` | `interrupt_id`、`agent_run_ref`、`interrupt_type`、`resume_schema_id`、`candidate_refs`、`allowed_actions`、`base_version_ref`、`status`、`idempotency_ref`、`audit_event_ref`、`expires_at` | 中断用于用户确认、编辑、拒绝、补证据或取消；drawer payload 必须 sanitized，resume 前不得写 formal object |
+| `AgentCheckpointRef` | `checkpoint_ref_id`、`agent_run_ref`、`namespace`、`thread_id`、`checkpoint_id`、`checkpoint_version`、`state_hash`、`metadata_hash`、`created_at`、`expires_at` | checkpoint 只用于 resume / replay / runtime recovery；payload 不进入该对象，不作为业务事实源，不进入 API-visible timeline summary |
+| `LlmCall` | `llm_call_id`、`owner_ref`、`ai_task_ref`、`agent_run_ref`、`agent_node_run_ref`、`contract_ids`、`prompt_asset_ref`、`model_family`、`status`、`planned_at`、`started_at`、`finished_at`、`usage_ref`、`validation_result_ref`、`sanitized_result_ref`、`failure_category` | provider call lifecycle object；before-call trace write 失败时不得调用 provider；不保存 raw provider request / response |
+| `LlmCallPayload` | `llm_call_payload_id`、`llm_call_ref`、`sanitized_summary_ref`、`payload_policy`、`raw_payload_ref`、`raw_enabled`、`expires_at`、`audit_event_ref` | `raw_enabled` 默认 false；`raw_payload_ref` 默认 null，不能出现在 API-visible summary、timeline、copy content、普通 trace 或 checkpoint metadata 中 |
+
+AI Runtime handoff 规则：
+
+- `AgentRun.result_refs`、`AgentNodeRun.output_digest`、`LlmCall.sanitized_result_ref` 只能指向结构化结果、candidate、suggestion、validation 或 trace，不等于正式业务对象写入。
+- `side_effect_key` 只用于防重复和 late write block，不能绕过 Core command、用户确认或 owner / version 校验。
+- replay / debug replay 默认 read-only；不得从 checkpoint 或 `AgentState` 重放 formal write。
+- cancel、timeout、validation_failed、generation_failed、source_unavailable 后不得 late formal write。
 
 ## 5. 核心数据对象清单
 
@@ -511,6 +538,8 @@ Rubric / rule version 的最小维度如下：
 | `LlmRetentionPolicyRef` | trace、策略引用、适用对象、状态 | 只记录保留策略引用边界，具体保留、删除策略交给 `SECURITY_PRIVACY.md` |
 | `LlmRedactionRef` | trace、脱敏策略引用、字段范围、状态 | 只记录脱敏引用边界，具体脱敏细则交给 `SECURITY_PRIVACY.md` |
 | `LlmFailureRecord` | request trace、失败阶段、错误分类、可重试性、影响对象、时间 | 记录生成失败、校验失败、冲突、不完整和不可用状态 |
+| `LlmCall` | owner、AI task、Agent run / node、contract ids、prompt asset ref、provider / model family、status、usage、validation、sanitized result refs、failure category | AI Runtime provider call lifecycle；不保存 raw prompt、raw completion 或 provider payload |
+| `LlmCallPayload` | LLM call、sanitized summary ref、payload policy、raw debug ref、TTL、audit | raw debug ref 默认关闭；不能进入 API-visible summary、timeline、copy content 或普通 trace |
 
 前端不得直接消费 LLM 原始输出；业务对象只引用通过校验的结构化结果或人工确认后的结果。Prompt 模板、上下文裁剪、模型选择、调用参数和重试降级策略交给 `PROMPT_SPEC.md`。
 
@@ -720,6 +749,7 @@ Rubric / rule version 的最小维度如下：
 | 统一引用模型 | `SourceRef`、`EvidenceRef`、`VersionRef`、`TraceRef`、`SnapshotRef`、`UserConfirmationRef`、`OwnerRef` |
 | AI 输出交接 | `AiTaskResultRef`、`CandidateRef`、`SuggestionRef`、`LlmValidationResult`、`LowConfidenceFlag`、`AuditEvent` |
 | API 幂等、任务与请求追踪 | `IdempotencyRecord`、`AiTask`、`AiTaskResult`、`ApiRequestTrace`、`ApiEndpointRef` |
+| AI Runtime 控制态 | `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall`、`LlmCallPayload` |
 | 简历 | `Resume`、`ResumeVersion`、`ResumeMarkdownOutline (derived_non_persistent)` |
 | 岗位 | `Job`、`JobVersion`、`JobStatus`、`JobResumeBinding`、`JobBindingSummary (derived_read_model)` |
 | 匹配分析 | `JobMatchAnalysis`、`JobMatchSummary (derived_read_model)`、`MatchScore`、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`EvidenceSummary` |
@@ -776,6 +806,7 @@ Rubric / rule version 的最小维度如下：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-05-24 | 增加 PR3 / PR4 AI Runtime logical objects backfill | 新增 `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall`、`LlmCallPayload` 逻辑对象和 raw-off / checkpoint non-truth-source / handoff 边界；不写 ORM、DDL、migration 或代码 |
 | 2026-05-24 | 增加 Pressure Mode mode-level 数据承接 | 将 `PressureSessionDetail` 扩展为引用 `PressureTurn`、pace、end condition、session score、report input package 和 review handoff 的逻辑承接；不新增物理 schema，不进入 implementation |
 | 2026-05-17 | 增加 F5 persistence handoff 交接 | 明确本文仍是逻辑模型，物理模型、join / reference table、关系和 API schema 映射以 `PERSISTENCE_MODEL.md` 为 canonical；避免 F5 从逻辑对象自行推导物理关系 |
 | 2026-05-24 | 增加 Skill / Capability Model 交叉引用 | 将 Skill taxonomy、SkillEvidence、SkillAssessment、SkillGap、SkillProgress 作为逻辑对象登记，并明确 canonical 语义以 `SKILL_MODEL_SPEC.md` 为准；不进入物理 schema 或 implementation |

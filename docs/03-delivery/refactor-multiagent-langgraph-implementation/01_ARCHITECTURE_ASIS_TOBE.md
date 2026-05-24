@@ -775,6 +775,18 @@ flowchart LR
 | PR7 | Graph configuration frontend console | 添加 graph list、graph detail/config page、enable/disable form、policy refs display、placeholder graph view、sanitized health/status/audit view | UI 消费 PR6 config/status/audit API | existing UI behavior preserved | no raw fields、no Agent debug page for normal users、no backend graph logic、no provider secret/model key exposure |
 | PR8 | JobMatch / ResumeAnalysis / Pressure / Report / Review / Candidate / Skill / Training conditional migrations | 按授权迁移业务 graph，并补 report/review/candidate/skill/training confirmation closure | MultiAgent 覆盖 late MVP graphs | remaining direct paths either deprecated or documented fallback after parity | report/review/candidate/copy/privacy gates pass；no silent formal write；TrainingTask requires explicit user action |
 
+### PR3 / PR4 Runtime Contracts gate
+
+PR3 / PR4 只把 AI Runtime contract、facade、runner port、default-off fake runtime、checkpointer / serializer、timeline 和 interrupt/resume 接入到可验证边界。它们不授权 business graph migration、frontend UI、real provider default-on、migration、CI 或 PR5+ formal write implementation。
+
+| Concern | Required architecture decision |
+|---|---|
+| Active docs backfill | `DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`SECURITY_PRIVACY.md`、`APPLICATION_FLOW_SPEC.md`、`API_SPEC.md` 必须先承接 runtime objects、persistence rules、raw-off、facade flow 和 Agent Runtime API skeleton |
+| Handoff formal write | `AgentPersistenceHandoff` 在 PR3 / PR4 only contract / stub；`write_question_result`、`write_feedback_result`、`write_report_result`、`write_review_result`、`write_candidate_result`、`finalize_after_confirmation` 的真实 Core command path 是 PR5+ 或对应业务迁移 PR |
+| Checkpointer / serializer | PR4 fake runtime 只能验证 checkpoint ref / metadata；serializer 必须拒绝 raw prompt、raw completion、provider payload、system prompt、secret、hidden scoring rule 和 full source body |
+| Runtime API | status、timeline、interrupt detail、resume、cancel 只返回 sanitized refs / status / summary；不返回 AgentState、checkpoint payload、raw payload 或 debug raw refs |
+| PR3 start condition | PR3 implementation may start only after a fresh PR3 Scope Lock confirms allowed files, no dirty scope mismatch, and validation commands |
+
 ## 20. Legacy deprecation policy
 
 不能因为 graph 存在就删除 Legacy direct paths。只有在 graph parity 和 boundary tests 证明 graph path 至少同等安全、同等兼容后，才能按 feature deprecate。
@@ -804,7 +816,22 @@ flowchart LR
 
 ### Runtime feature flags
 
-PR2 不得新增或启用 runtime feature flags。以下 flags 是 PR4+ / feature migration 的 target contract，默认 off，且必须有 tests 证明 raw-off、owner scope、rollback 和 no response drift。
+PR2 不得新增或启用 runtime feature flags。以下 flags 是 PR4+ / feature migration 的 target contract，默认 off，且必须有 tests 证明 raw-off、owner scope、rollback 和 no response drift。PR3 可定义 `runtime_flags.py` contract，但所有 runtime / graph flags 仍默认 false。
+
+Flag resolution priority:
+
+1. test override。
+2. explicit environment / settings override。
+3. persisted graph config if authorized in PR6+。
+4. hardcoded default false。
+
+Flag 读取边界：
+
+- graph node 不直接读 flag。
+- 只允许 facade / registry / runner entry 读取和解释 flag。
+- enable decision 必须写 sanitized audit summary。
+- real provider gate 独立于 graph enablement，默认 false。
+- rollback disable 必须能让新请求回到 legacy direct path 或返回 sanitized disabled status，不能继续 provider call 或 late formal write。
 
 | Flag | Earliest PR | Purpose | Default |
 |---|---:|---|---|
@@ -816,6 +843,38 @@ PR2 不得新增或启用 runtime feature flags。以下 flags 是 PR4+ / featur
 | `AIFI_GRAPH_CONFIG_CONSOLE_ENABLED` | PR7 | Enable AI Runtime graph configuration console | false |
 | `AIFI_JOB_MATCH_GRAPH_ENABLED` | PR8 deferred / conditional | Route new JobMatch / ResumeAnalysis tasks through graph path after parity | false |
 | `AIFI_RUNTIME_RAW_PAYLOAD_DEBUG_ENABLED` | Not in PR2-PR8 unless separately authorized | Allow encrypted/TTL raw debug refs under admin-only flow | false |
+
+### GraphDescriptor DTO boundary
+
+`GraphDescriptor` 是 AI Control Plane / Graph Configuration Plane 的 project-owned DTO，不包含 LangGraph internals、compiled graph、AgentState、checkpoint payload、provider secret、model key、raw prompt、raw completion 或 provider payload。
+
+| Field | Rule |
+|---|---|
+| `graph_name` | stable graph id |
+| `graph_version` | descriptor compatibility version |
+| `capability` | registered capability |
+| `lifecycle_status` | active / disabled / planned / placeholder / deferred |
+| `runtime_flag_key` | resolved by facade / registry / runner entry only |
+| `default_enabled` | false unless later PR explicitly authorizes enablement |
+| `supported_entrypoints` | start / resume / replay / timeline |
+| `supported_outputs` | result refs、candidate refs、suggestion refs、interrupt refs |
+| `prompt_contract_ids` | canonical `P-*` contract ids |
+| `eval_suite_ids` | prompt / graph evaluation suite refs |
+| `resume_schema_ids` | interrupt resume schema refs |
+| `interrupt_types` | registered interrupt taxonomy |
+| `required_permissions` | owner/admin/user permissions |
+| `visibility` | owner_only / admin_config / hidden_placeholder |
+| `health_summary_refs` | sanitized refs only |
+| `config_schema_ref` | PR6 graph config schema ref |
+| `implementation_pr` | PR expected to implement/migrate |
+| `migration_status` | not_started / direct_path_retained / parity_testing / migrated / rolled_back |
+
+Current descriptor decisions:
+
+- JobMatch / ResumeAnalysis are PR8 deferred / placeholder before explicit migration authorization.
+- Polish may become active only after PR5 parity gates.
+- Pressure belongs in PR8 or a separate authorized Pressure PR, not PR3 / PR4.
+- PR3 / PR4 do not create `business_graphs` implementation.
 
 禁止的 deprecation shortcuts：
 
