@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext, GraphDisabledError
+from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext, GraphDisabledError, RuntimePolicyError
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
 from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
@@ -85,6 +85,20 @@ def test_pr4_fake_runtime_resume_does_not_bypass_runtime_gate() -> None:
 
     with pytest.raises(GraphDisabledError):
         disabled_runtime.resume(context, interrupt_ref=started.interrupt_refs[0], resume_payload={"decision": "approved"})
+
+
+def test_pr4_fake_runtime_start_rejects_command_mismatch() -> None:
+    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_flags())
+    context = _context()
+    mismatched_command = AgentCommandEnvelope(
+        entrypoint="start",
+        input_refs=("different_runtime_input_ref",),
+        requested_outputs=("candidate_refs",),
+        idempotency_key="different_idem_pr4",
+    )
+
+    with pytest.raises(RuntimePolicyError, match="command must match context command"):
+        runtime.start(context, mismatched_command)
 
 
 def _enabled_flags() -> RuntimeFlagResolver:

@@ -12,7 +12,8 @@ from app.infrastructure.db.repositories.ai_runtime import LlmCallRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 
 
-def test_pr4_provider_gate_defaults_false_and_fake_runtime_does_not_bypass_it() -> None:
+def test_pr4_provider_gate_defaults_false_and_fake_runtime_does_not_bypass_it(monkeypatch) -> None:
+    monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     resolver = RuntimeFlagResolver(
         test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True}
     )
@@ -26,7 +27,8 @@ def test_pr4_provider_gate_defaults_false_and_fake_runtime_does_not_bypass_it() 
     assert result.metadata["provider_calls"] == 0
 
 
-def test_pr4_persisted_transport_fails_closed_before_provider_invocation() -> None:
+def test_pr4_persisted_transport_fails_closed_before_provider_invocation(monkeypatch) -> None:
+    monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     session_factory = _session_factory()
     transport = FailClosedPersistedLlmTransport(
         session_factory=session_factory,

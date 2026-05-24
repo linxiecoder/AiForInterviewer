@@ -90,3 +90,26 @@ def test_pr4_checkpointer_blocks_business_metadata_and_is_rollback_safe() -> Non
         )
 
     assert checkpointer.snapshot() == initial
+
+
+def test_pr4_checkpointer_rejects_canonical_metadata_override() -> None:
+    checkpointer = RefsOnlyLangGraphCheckpointer()
+    initial = checkpointer.snapshot()
+
+    with pytest.raises(RuntimePolicyError, match="canonical keys"):
+        checkpointer.record_ref(
+            owner_id="owner_1",
+            actor_id="actor_1",
+            agent_run_id="arun_1",
+            agent_node_run_id=None,
+            graph_name="pr4_fake_runtime",
+            graph_version="pr4",
+            node_name="fake_node",
+            checkpoint_namespace="pr4_fake",
+            thread_id="thread_1",
+            checkpoint_id="checkpoint_1",
+            state_hash="sha256:state",
+            metadata={"state_hash": "sha256:fake"},
+        )
+
+    assert checkpointer.snapshot() == initial

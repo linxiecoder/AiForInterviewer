@@ -10,6 +10,19 @@ from app.application.ai_runtime.contracts import RuntimePolicyError, contains_se
 from app.application.ai_runtime.side_effect_guard import sanitize_checkpoint_metadata
 
 
+_RESERVED_CHECKPOINT_METADATA_KEYS = frozenset(
+    {
+        "checkpoint_namespace",
+        "thread_id",
+        "checkpoint_id",
+        "graph_name",
+        "graph_version",
+        "node_name",
+        "state_hash",
+    }
+)
+
+
 @dataclass(frozen=True)
 class RuntimeCheckpointRef:
     checkpoint_ref: str
@@ -76,6 +89,13 @@ class RefsOnlyLangGraphCheckpointer:
         if contains_sensitive_payload(metadata or {}):
             raise RuntimePolicyError("checkpoint metadata cannot carry sensitive payload")
 
+        incoming_metadata = dict(metadata or {})
+        reserved_overrides = sorted(set(incoming_metadata) & _RESERVED_CHECKPOINT_METADATA_KEYS)
+        if reserved_overrides:
+            raise RuntimePolicyError(
+                "checkpoint metadata cannot override canonical keys: "
+                + ", ".join(reserved_overrides)
+            )
         full_metadata = {
             "checkpoint_namespace": checkpoint_namespace,
             "thread_id": thread_id,
@@ -84,7 +104,7 @@ class RefsOnlyLangGraphCheckpointer:
             "graph_version": graph_version,
             "node_name": node_name,
             "state_hash": state_hash,
-        } | dict(metadata or {})
+        } | incoming_metadata
         sanitized_metadata = sanitize_checkpoint_metadata(full_metadata)
         key = (owner_id, checkpoint_namespace, thread_id, checkpoint_id)
         existing = self._refs.get(key)

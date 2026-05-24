@@ -56,6 +56,8 @@ class FakeLangGraphRuntime:
         self._timelines: dict[tuple[str, str], list[AgentTimelineEvent]] = {}
 
     def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        if command != context.command:
+            raise RuntimePolicyError("command must match context command")
         gate = self._require_runtime_enabled(context)
         state = self._invoke_graph(context=context, entrypoint="start")
         checkpoint = self._record_checkpoint(context=context, node_name="fake_start", state=state)
