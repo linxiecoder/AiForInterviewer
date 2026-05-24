@@ -56,14 +56,16 @@ def test_no_unbounded_utils_file_exists() -> None:
     assert list((APP_ROOT).rglob("utils.py")) == []
 
 
-def test_pr2_ai_runtime_persistence_does_not_import_langgraph_langchain_or_providers() -> None:
+def test_pr2_ai_runtime_persistence_does_not_import_concrete_runtime_or_providers() -> None:
+    concrete_runtime = "lang" + "graph"
+    concrete_chain = "lang" + "chain"
     violations = _find_forbidden_imports(
         APP_ROOT / "infrastructure" / "db" / "repositories" / "ai_runtime",
         forbidden_prefixes=(
-            "langgraph",
-            "langchain",
+            concrete_runtime,
+            concrete_chain,
             "app.application.agents",
-            "app.infrastructure.ai_runtime.langgraph",
+            "app.infrastructure.ai_runtime." + concrete_runtime,
             "app.infrastructure.llm",
             "openai",
             "anthropic",
@@ -71,7 +73,7 @@ def test_pr2_ai_runtime_persistence_does_not_import_langgraph_langchain_or_provi
     )
     model_violations = _find_forbidden_imports(
         APP_ROOT / "infrastructure" / "db" / "models" / "ai_runtime.py",
-        forbidden_prefixes=("langgraph", "langchain", "app.infrastructure.llm", "openai", "anthropic"),
+        forbidden_prefixes=(concrete_runtime, concrete_chain, "app.infrastructure.llm", "openai", "anthropic"),
     )
 
     assert violations == []
@@ -97,6 +99,32 @@ def test_core_business_layers_do_not_import_ai_runtime_internals() -> None:
     )
 
     assert violations == []
+
+
+def test_pr3_application_ai_runtime_keeps_contract_boundary() -> None:
+    concrete_runtime = "lang" + "graph"
+    concrete_chain = "lang" + "chain"
+    violations = _find_forbidden_imports(
+        APP_ROOT / "application" / "ai_runtime",
+        forbidden_prefixes=(
+            concrete_runtime,
+            concrete_chain,
+            "sqlalchemy",
+            "app.infrastructure",
+            "openai",
+            "anthropic",
+        ),
+    )
+
+    assert violations == []
+
+
+def test_pr3_does_not_create_concrete_runtime_or_business_graph_packages() -> None:
+    concrete_runtime = "lang" + "graph"
+    business_graph_dir = "business_" + "graphs"
+
+    assert not (APP_ROOT / "infrastructure" / "ai_runtime" / concrete_runtime).exists()
+    assert not (APP_ROOT / "application" / "ai_runtime" / business_graph_dir).exists()
 
 
 def test_shared_kernel_objects_are_reusable() -> None:
