@@ -25,6 +25,15 @@ class PolishRepository(Protocol):
 
     def add_question(self, question: PolishQuestion) -> None: ...
 
+    def add_question_once(
+        self,
+        *,
+        owner_id: str,
+        session_id: str,
+        graph_persistence_idempotency_key: str,
+        question: PolishQuestion,
+    ) -> tuple[PolishQuestion, bool]: ...
+
     def get_question(self, owner_id: str, question_id: str) -> PolishQuestion | None: ...
 
     def add_answer(self, answer: PolishAnswer) -> None: ...

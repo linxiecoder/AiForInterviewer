@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+from threading import Lock
 from typing import Any
 
 from sqlalchemy import func, select
@@ -32,6 +34,9 @@ from app.infrastructure.db.models.interview import (
 )
 from app.infrastructure.db.models.question import Question as QuestionModel
 from app.infrastructure.db.session import get_session_factory
+
+
+_QUESTION_IDEMPOTENCY_LOCK_STRIPES = tuple(Lock() for _ in range(64))
 
 
 class SqlAlchemyPolishRepository(PolishRepository):
@@ -112,6 +117,34 @@ class SqlAlchemyPolishRepository(PolishRepository):
         with self._session_factory() as db:
             db.add(_question_to_model(question))
             db.commit()
+
+    def add_question_once(
+        self,
+        *,
+        owner_id: str,
+        session_id: str,
+        graph_persistence_idempotency_key: str,
+        question: PolishQuestion,
+    ) -> tuple[PolishQuestion, bool]:
+        lock = _question_idempotency_lock(
+            owner_id=owner_id,
+            session_id=session_id,
+            graph_persistence_idempotency_key=graph_persistence_idempotency_key,
+        )
+        with lock:
+            with self._session_factory() as db:
+                existing = _find_question_model_by_graph_persistence_idempotency_key(
+                    db,
+                    owner_id=owner_id,
+                    session_id=session_id,
+                    graph_persistence_idempotency_key=graph_persistence_idempotency_key,
+                )
+                if existing is not None:
+                    return _question_to_entity(existing), False
+
+                db.add(_question_to_model(question))
+                db.commit()
+                return question, True
 
     def get_question(self, owner_id: str, question_id: str) -> PolishQuestion | None:
         with self._session_factory() as db:
@@ -221,6 +254,39 @@ def _payload_with_theme_metadata(payload: dict | None, theme: str | None) -> dic
     result["explicit_weight"] = strategy.explicit_weight
     result["implicit_weight"] = strategy.implicit_weight
     return result
+
+
+def _question_idempotency_lock(
+    *,
+    owner_id: str,
+    session_id: str,
+    graph_persistence_idempotency_key: str,
+) -> Lock:
+    lock_key = f"{owner_id}:{session_id}:{graph_persistence_idempotency_key}"
+    digest = sha256(lock_key.encode("utf-8")).digest()
+    return _QUESTION_IDEMPOTENCY_LOCK_STRIPES[digest[0] % len(_QUESTION_IDEMPOTENCY_LOCK_STRIPES)]
+
+
+def _find_question_model_by_graph_persistence_idempotency_key(
+    db: Session,
+    *,
+    owner_id: str,
+    session_id: str,
+    graph_persistence_idempotency_key: str,
+) -> QuestionModel | None:
+    rows = db.scalars(
+        select(QuestionModel)
+        .where(
+            QuestionModel.owner_id == owner_id,
+            QuestionModel.session_id == session_id,
+        )
+        .order_by(QuestionModel.created_at.asc(), QuestionModel.id.asc())
+    ).all()
+    for row in rows:
+        metadata = row.question_metadata_json if isinstance(row.question_metadata_json, dict) else {}
+        if metadata.get("graph_persistence_idempotency_key") == graph_persistence_idempotency_key:
+            return row
+    return None
 
 
 def _theme_from_detail(detail_model: PolishSessionDetailModel) -> str | None:
@@ -361,16 +427,31 @@ def _question_evidence_refs_to_entities(raw_refs: object) -> tuple[str, ...]:
 
 def _question_metadata_to_json(raw_metadata: object) -> dict[str, Any]:
     try:
-        return question_metadata_to_dict(raw_metadata)
+        return _with_graph_persistence_metadata(question_metadata_to_dict(raw_metadata), raw_metadata)
     except Exception:
         return empty_question_metadata().to_dict()
 
 
 def _question_metadata_to_entity(raw_metadata: object) -> dict[str, Any]:
     try:
-        return normalize_question_metadata(raw_metadata)
+        return _with_graph_persistence_metadata(normalize_question_metadata(raw_metadata), raw_metadata)
     except Exception:
         return empty_question_metadata().to_dict()
+
+
+def _with_graph_persistence_metadata(metadata: dict[str, Any], raw_metadata: object) -> dict[str, Any]:
+    if not isinstance(raw_metadata, dict):
+        return metadata
+    result = dict(metadata)
+    raw_key = raw_metadata.get("graph_persistence_idempotency_key")
+    if isinstance(raw_key, str):
+        key = raw_key.strip()
+        if key:
+            result["graph_persistence_idempotency_key"] = key
+    raw_sanitized = raw_metadata.get("sanitized")
+    if isinstance(raw_sanitized, bool):
+        result["sanitized"] = raw_sanitized
+    return result
 
 
 def _question_sources_to_json(sources: tuple[PolishQuestionSource, ...]) -> list[dict]:
