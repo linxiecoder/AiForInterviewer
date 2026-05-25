@@ -4,11 +4,13 @@ import inspect
 from dataclasses import fields, is_dataclass
 
 from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
     AgentCommandEnvelope,
     AgentGraphRunner,
     AgentRunContext,
     AgentRunResult,
     AgentRunStatus,
+    AgentTaskStatusRef,
     AgentRunTimelinePage,
     AgentTimelineEvent,
     GraphDisabledError,
@@ -44,8 +46,10 @@ def test_contract_dtos_are_project_owned_dataclasses_without_runtime_internals()
     dto_types = (
         AgentRunContext,
         AgentCommandEnvelope,
+        AgentCandidatePayload,
         AgentRunResult,
         AgentRunStatus,
+        AgentTaskStatusRef,
         AgentRunTimelinePage,
         AgentTimelineEvent,
     )
@@ -78,6 +82,60 @@ def test_runtime_errors_share_runtime_error_base() -> None:
         RuntimeUnavailableError,
     ):
         assert issubclass(error_type, RuntimeError)
+
+
+def test_agent_candidate_payload_rejects_raw_payload_and_keeps_sanitized_candidate() -> None:
+    payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_1",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload={"question_text": "请介绍支付链路一致性经验", "nested": {"safe": "ok"}},
+        trace_refs=("trace_1",),
+        validation_refs=("validation_1",),
+        low_confidence_flags=("limited_context",),
+    )
+
+    assert payload.status == "accepted"
+    assert payload.payload == {"question_text": "请介绍支付链路一致性经验", "nested": {"safe": "ok"}}
+    assert payload.trace_refs == ("trace_1",)
+    try:
+        AgentCandidatePayload(
+            candidate_ref="question_candidate_ref_2",
+            candidate_type="polish_question_candidate",
+            payload_schema_id="polish_question_candidate.v1",
+            payload={RAW_KEY: "hidden prompt"},
+        )
+    except RuntimePolicyError as exc:
+        assert "candidate payload contains sensitive content" in str(exc)
+    else:
+        raise AssertionError("raw candidate payload was accepted")
+
+
+def test_agent_run_result_and_task_status_ref_carry_candidate_payloads() -> None:
+    payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_1",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload={"question_text": "请介绍支付链路一致性经验"},
+    )
+
+    result = AgentRunResult(
+        run_id="arun_1",
+        status="succeeded",
+        output_refs=("question_candidate_ref_1",),
+        candidate_payloads=(payload,),
+    )
+    status_ref = AgentTaskStatusRef(
+        ai_task_id="aitask_1",
+        agent_run_id=result.run_id,
+        status=result.status,
+        candidate_refs=result.output_refs,
+        candidate_payloads=result.candidate_payloads,
+    )
+
+    assert result.candidate_payloads == (payload,)
+    assert status_ref.candidate_payloads == (payload,)
+    assert status_ref.candidate_refs == ("question_candidate_ref_1",)
 
 
 def test_registry_descriptors_are_default_off_and_reject_unsupported_outputs() -> None:
