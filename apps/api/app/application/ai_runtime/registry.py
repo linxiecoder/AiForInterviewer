@@ -52,28 +52,12 @@ class AgentGraphRegistry:
         from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
             build_polish_feedback_graph_descriptor,
         )
+        from app.application.ai_runtime.business_graphs.polish_question_graph import (
+            build_polish_question_graph_descriptor,
+        )
 
         descriptors = {
-            "polish_question_graph": GraphDescriptor(
-                graph_name="polish_question_graph",
-                graph_version="pr3-contract",
-                capability="polish_question",
-                lifecycle_status="placeholder",
-                runtime_flag_key="AIFI_GRAPH_POLISH_QUESTION_ENABLED",
-                default_enabled=False,
-                supported_entrypoints=("start", "resume", "replay", "timeline", "cancel"),
-                supported_outputs=("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs"),
-                prompt_contract_ids=("P-POLISH-QUESTION-001",),
-                eval_suite_ids=("EVAL-POLISH-QUESTION-001",),
-                resume_schema_ids={"user_confirmation": "agent.resume.user_confirmation.v1"},
-                interrupt_types=("user_confirmation",),
-                required_permissions=("owner",),
-                visibility="owner_only",
-                health_summary_refs=("health.polish_question.placeholder",),
-                config_schema_ref="graph_config.polish_question.v1",
-                implementation_pr="PR3",
-                migration_status="direct_path_retained",
-            ),
+            "polish_question_graph": build_polish_question_graph_descriptor(),
             "polish_feedback_graph": build_polish_feedback_graph_descriptor(),
             "job_match_graph": GraphDescriptor(
                 graph_name="job_match_graph",

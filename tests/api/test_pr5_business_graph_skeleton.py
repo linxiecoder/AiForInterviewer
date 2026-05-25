@@ -15,7 +15,7 @@ from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.serializer import LangGraphRuntimeSerializer
 
 
-def test_pr5_registers_exactly_one_default_off_polish_feedback_descriptor() -> None:
+def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
     from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
         POLISH_FEEDBACK_GRAPH_FLAG,
         POLISH_FEEDBACK_GRAPH_NAME,
@@ -23,26 +23,50 @@ def test_pr5_registers_exactly_one_default_off_polish_feedback_descriptor() -> N
         build_polish_feedback_graph_descriptor,
         run_polish_feedback_skeleton,
     )
-
-    registry = AgentGraphRegistry.default()
-    pr5_descriptors = tuple(
-        descriptor for descriptor in registry.list_graph_descriptors() if descriptor.implementation_pr == "PR5"
+    from app.application.ai_runtime.business_graphs.polish_question_graph import (
+        POLISH_QUESTION_GRAPH_FLAG,
+        POLISH_QUESTION_GRAPH_NAME,
+        POLISH_QUESTION_GRAPH_VERSION,
+        build_polish_question_graph_descriptor,
     )
 
-    assert len(pr5_descriptors) == 1
-    descriptor = pr5_descriptors[0]
-    assert descriptor == build_polish_feedback_graph_descriptor()
-    assert descriptor.graph_name == POLISH_FEEDBACK_GRAPH_NAME == "polish_feedback_graph"
-    assert descriptor.graph_version == POLISH_FEEDBACK_GRAPH_VERSION == "pr5-skeleton"
-    assert descriptor.runtime_flag_key == POLISH_FEEDBACK_GRAPH_FLAG == "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
-    assert descriptor.default_enabled is False
-    assert descriptor.provider_enabled is False
-    assert descriptor.formal_write_targets == ()
-    assert descriptor.db_business_write_targets == ()
-    assert descriptor.rollback_safe is True
-    assert descriptor.disabled_behavior == "legacy_direct_path_retained"
+    registry = AgentGraphRegistry.default()
+    pr5_descriptors = {
+        descriptor.graph_name: descriptor
+        for descriptor in registry.list_graph_descriptors()
+        if descriptor.implementation_pr == "PR5"
+    }
 
-    flag_decision = RuntimeFlagResolver().resolve_graph_flag(descriptor, actor_id="actor_1", caller="registry")
+    assert pr5_descriptors == {
+        POLISH_FEEDBACK_GRAPH_NAME: build_polish_feedback_graph_descriptor(),
+        POLISH_QUESTION_GRAPH_NAME: build_polish_question_graph_descriptor(),
+    }
+
+    feedback_descriptor = pr5_descriptors[POLISH_FEEDBACK_GRAPH_NAME]
+    assert feedback_descriptor.graph_name == POLISH_FEEDBACK_GRAPH_NAME == "polish_feedback_graph"
+    assert feedback_descriptor.graph_version == POLISH_FEEDBACK_GRAPH_VERSION == "pr5-skeleton"
+    assert (
+        feedback_descriptor.runtime_flag_key
+        == POLISH_FEEDBACK_GRAPH_FLAG
+        == "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
+    )
+    _assert_pr5_descriptor_is_default_off_refs_only(feedback_descriptor)
+
+    question_descriptor = pr5_descriptors[POLISH_QUESTION_GRAPH_NAME]
+    assert question_descriptor.graph_name == POLISH_QUESTION_GRAPH_NAME == "polish_question_graph"
+    assert question_descriptor.graph_version == POLISH_QUESTION_GRAPH_VERSION == "pr5-skeleton"
+    assert (
+        question_descriptor.runtime_flag_key
+        == POLISH_QUESTION_GRAPH_FLAG
+        == "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
+    )
+    _assert_pr5_descriptor_is_default_off_refs_only(question_descriptor)
+
+    flag_decision = RuntimeFlagResolver().resolve_graph_flag(
+        feedback_descriptor,
+        actor_id="actor_1",
+        caller="registry",
+    )
     assert flag_decision.enabled is False
     assert flag_decision.source == "hardcoded_default"
 
@@ -128,3 +152,12 @@ def _context(command: AgentCommandEnvelope | None = None) -> AgentRunContext:
         graph_version="pr5-skeleton",
         command=command,
     )
+
+
+def _assert_pr5_descriptor_is_default_off_refs_only(descriptor: object) -> None:
+    assert descriptor.default_enabled is False
+    assert descriptor.provider_enabled is False
+    assert descriptor.formal_write_targets == ()
+    assert descriptor.db_business_write_targets == ()
+    assert descriptor.rollback_safe is True
+    assert descriptor.disabled_behavior == "legacy_direct_path_retained"

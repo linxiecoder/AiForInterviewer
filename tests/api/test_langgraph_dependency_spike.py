@@ -12,6 +12,7 @@ ALLOWED_IMPORT_PATHS = {
     Path("tests/api/test_langgraph_dependency_spike.py"),
 }
 ALLOWED_IMPORT_PREFIX = Path("apps/api/app/infrastructure/ai_runtime/langgraph")
+ALLOWED_BUSINESS_GRAPH_ROOT = Path("apps/api/app/application/ai_runtime/business_graphs")
 FORBIDDEN_IMPORT_ROOTS = (
     APP_ROOT / "application",
     APP_ROOT / "core",
@@ -38,7 +39,8 @@ def test_pr4_lg_dep_spike_compiles_invokes_and_keeps_boundary() -> None:
     assert "openai" not in sys.modules
     assert "anthropic" not in sys.modules
     assert _requirements_keep_spike_dependencies_pinned_and_provider_free()
-    assert _business_graph_directories() == []
+    assert _business_graph_directories() == [str(ALLOWED_BUSINESS_GRAPH_ROOT)]
+    assert _business_graph_lang_import_violations() == []
     assert _concrete_lang_import_violations() == []
     assert _forbidden_layer_lang_imports() == []
 
@@ -82,6 +84,18 @@ def _business_graph_directories() -> list[str]:
         for path in sorted(APP_ROOT.rglob("business_graphs"))
         if path.is_dir()
     ]
+
+
+def _business_graph_lang_import_violations() -> list[str]:
+    business_graph_root = REPO_ROOT / ALLOWED_BUSINESS_GRAPH_ROOT
+    if not business_graph_root.exists():
+        return []
+    violations: list[str] = []
+    for path in _python_files(business_graph_root):
+        for module_name in _imported_modules(path):
+            if _is_langgraph_or_langchain(module_name):
+                violations.append(f"{path.relative_to(REPO_ROOT)}: {module_name}")
+    return violations
 
 
 def _concrete_lang_import_violations() -> list[str]:

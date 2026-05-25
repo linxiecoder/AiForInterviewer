@@ -9,11 +9,12 @@ APP_ROOT = REPO_ROOT / "apps" / "api" / "app"
 BUSINESS_GRAPH_ROOT = APP_ROOT / "application" / "ai_runtime" / "business_graphs"
 
 
-def test_pr5_adds_only_polish_feedback_business_graph_file() -> None:
+def test_pr5_adds_only_polish_business_graph_files() -> None:
     assert BUSINESS_GRAPH_ROOT.exists()
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
         "polish_feedback_graph.py",
+        "polish_question_graph.py",
     ]
 
 

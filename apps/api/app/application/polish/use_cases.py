@@ -9,6 +9,14 @@ from hashlib import sha256
 from typing import Any
 
 from app.application.common.result import ApplicationResult
+from app.application.ai_runtime.contracts import (
+    AgentTaskStatusRef,
+    GraphDisabledError,
+    RuntimeConflictError,
+    RuntimePolicyError,
+    RuntimeValidationError,
+)
+from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.job_match.entities import JobMatchAnalysis
 from app.application.job_match.ports import JobMatchRepository
 from app.application.polish.commands import (
@@ -161,6 +169,7 @@ class PolishUseCases:
         candidate_repository: PolishCandidateRepository | None = None,
         progress_tree_service: PolishProgressTreeLlmService | None = None,
         llm_transport: LlmTransport | None = None,
+        ai_orchestration_facade: AiOrchestrationFacade | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
@@ -172,6 +181,7 @@ class PolishUseCases:
         self._question_llm_service = PolishQuestionLlmService(llm_transport)
         self._feedback_llm_service = PolishFeedbackLlmService(llm_transport)
         self._candidate_llm_service = PolishCandidateLlmService(llm_transport)
+        self._ai_orchestration_facade = ai_orchestration_facade
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
@@ -345,14 +355,74 @@ class PolishUseCases:
             )
 
         now = utc_now()
-        task_id = generate_resource_id(ResourceIdPrefix.TASK)
-        question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
         requested_progress_node_ref = _question_generation_requested_ref(command)
         completed_focus_refs = _combined_completed_focus_refs(
             command.completed_focus_refs,
             detail.progress_tree_state,
             progress_node_ref=requested_progress_node_ref,
         )
+        if self._ai_orchestration_facade is not None:
+            stable_idempotency_key = _stable_polish_question_generation_idempotency_key(
+                owner_id=command.owner_id,
+                session_id=command.session_id,
+                requested_progress_node_ref=requested_progress_node_ref,
+                completed_focus_refs=completed_focus_refs,
+            )
+            try:
+                graph_status = self._ai_orchestration_facade.start_polish_question_generation(
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    session_ref=command.session_id,
+                    progress_node_refs=(requested_progress_node_ref,) if requested_progress_node_ref else (),
+                    completed_focus_refs=completed_focus_refs,
+                    idempotency_key=stable_idempotency_key,
+                )
+            except GraphDisabledError:
+                graph_status = None
+            except RuntimeValidationError:
+                return ApplicationResult(
+                    error=DomainError(
+                        code="validation_failed",
+                        message="Polish question graph request is invalid",
+                        details={"reason": "runtime_validation_failed"},
+                    )
+                )
+            except RuntimeConflictError:
+                return ApplicationResult(
+                    error=DomainError(
+                        code="validation_failed",
+                        message="Polish question graph request conflicts",
+                        details={"reason": "idempotency_conflict"},
+                    )
+                )
+            except RuntimePolicyError:
+                return ApplicationResult(
+                    error=DomainError(
+                        code="validation_failed",
+                        message="Polish question graph request blocked",
+                        details={"reason": "runtime_policy_blocked"},
+                    )
+                )
+            except Exception:
+                return ApplicationResult(
+                    error=DomainError(code="generation_failed", message="Polish question graph failed")
+                )
+            if graph_status is not None:
+                task = _polish_question_graph_task_status(
+                    graph_status,
+                    requested_progress_node_ref=requested_progress_node_ref,
+                    created_at=now,
+                )
+                self._polish_repository.add_task(
+                    task,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    target_ref_id=command.session_id,
+                )
+                return ApplicationResult(value=task)
+
+        task_id = generate_resource_id(ResourceIdPrefix.TASK)
+        question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
         progress_context = _progress_context_with_completed_focus_refs(
             detail.progress_context,
             completed_focus_refs,
@@ -1081,6 +1151,89 @@ def _progress_context_with_completed_focus_refs(
         **progress_context,
         "completed_focus_refs": list(completed_focus_refs),
     }
+
+
+def _stable_polish_question_generation_idempotency_key(
+    *,
+    owner_id: str,
+    session_id: str,
+    requested_progress_node_ref: str | None,
+    completed_focus_refs: tuple[str, ...],
+) -> str:
+    completed_focus_digest = sha256(
+        json.dumps(list(completed_focus_refs), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    request_digest = sha256(
+        json.dumps(
+            {
+                "owner_id": owner_id,
+                "session_id": session_id,
+                "progress_node_ref": requested_progress_node_ref or "current",
+                "completed_focus_refs_digest": completed_focus_digest,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return f"polish_question_generation:{request_digest}"
+
+
+def _polish_question_graph_task_status(
+    status_ref: AgentTaskStatusRef,
+    *,
+    requested_progress_node_ref: str | None,
+    created_at: Any,
+) -> PolishTaskStatus:
+    status = _graph_task_status_to_polish_status(status_ref.status)
+    return PolishTaskStatus(
+        ai_task_id=status_ref.ai_task_id,
+        task_type="polish_question_generation",
+        status=status,
+        contract_ids=QUESTION_CONTRACT_IDS,
+        retryable=False,
+        result_ref=TraceRef(trace_ref_id=status_ref.agent_run_id, trace_type="agent_run", created_at=created_at),
+        user_visible_status="题目生成中" if status == AiTaskStatus.RUNNING else "题目生成任务已启动",
+        candidate_refs=_polish_question_graph_candidate_refs(
+            status_ref,
+            requested_progress_node_ref=requested_progress_node_ref,
+        ),
+    )
+
+
+def _graph_task_status_to_polish_status(raw_status: str) -> AiTaskStatus:
+    normalized = str(raw_status or "").strip().lower()
+    if normalized in {"running", "in_progress", "started"}:
+        return AiTaskStatus.RUNNING
+    if normalized in {"cancelled", "canceled"}:
+        return AiTaskStatus.CANCELLED
+    if normalized in {"timed_out", "timeout"}:
+        return AiTaskStatus.TIMED_OUT
+    if normalized in {"validation_failed", "invalid"}:
+        return AiTaskStatus.VALIDATION_FAILED
+    if "failed" in normalized or normalized in {"error", "errored"}:
+        return AiTaskStatus.GENERATION_FAILED
+    return AiTaskStatus.QUEUED
+
+
+def _polish_question_graph_candidate_refs(
+    status_ref: AgentTaskStatusRef,
+    *,
+    requested_progress_node_ref: str | None,
+) -> tuple[ResourceRef, ...]:
+    refs: list[ResourceRef] = [ResourceRef(resource_type="agent_run", resource_id=status_ref.agent_run_id)]
+    refs.extend(ResourceRef(resource_type="trace", resource_id=trace_ref) for trace_ref in status_ref.trace_refs)
+    refs.extend(
+        ResourceRef(resource_type="question_candidate", resource_id=candidate_ref)
+        for candidate_ref in status_ref.candidate_refs
+    )
+    refs.extend(
+        ResourceRef(resource_type="agent_interrupt", resource_id=interrupt_ref)
+        for interrupt_ref in status_ref.interrupt_refs
+    )
+    if requested_progress_node_ref is not None:
+        refs.append(ResourceRef(resource_type="progress_node", resource_id=requested_progress_node_ref))
+    return tuple(refs)
 
 
 def _build_follow_up_question_draft(

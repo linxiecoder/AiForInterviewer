@@ -127,7 +127,7 @@ def test_pr5_business_graph_boundary_does_not_import_concrete_runtime() -> None:
     assert (APP_ROOT / "infrastructure" / "ai_runtime" / concrete_runtime).exists()
     assert sorted(
         path.name for path in (APP_ROOT / "application" / "ai_runtime" / business_graph_dir).glob("*.py")
-    ) == ["__init__.py", "polish_feedback_graph.py"]
+    ) == ["__init__.py", "polish_feedback_graph.py", "polish_question_graph.py"]
     assert _find_forbidden_imports(
         APP_ROOT / "application",
         forbidden_prefixes=(concrete_runtime, concrete_chain),
