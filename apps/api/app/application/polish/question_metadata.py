@@ -42,6 +42,11 @@ class QuestionMetadata:
     evidence_signal_refs: tuple[str, ...]
     anti_repeat_refs: tuple[str, ...]
     source_availability: str | None = None
+    primary_question_evidence: dict[str, Any] | None = None
+    primary_question_evidence_ref: str | None = None
+    claim_mode: str | None = None
+    grounding_gate_result: str | None = None
+    grounding_gate_issues: tuple[str, ...] = ()
     generated_at: str | None = None
     generation_mode: str | None = None
     request_source: str | None = None
@@ -87,6 +92,11 @@ class QuestionMetadata:
             "evidence_signal_refs": list(self.evidence_signal_refs),
             "anti_repeat_refs": list(self.anti_repeat_refs),
             "source_availability": self.source_availability,
+            "primary_question_evidence": self.primary_question_evidence,
+            "primary_question_evidence_ref": self.primary_question_evidence_ref,
+            "claim_mode": self.claim_mode,
+            "grounding_gate_result": self.grounding_gate_result,
+            "grounding_gate_issues": list(self.grounding_gate_issues),
             "generated_at": self.generated_at,
             "generation_mode": self.generation_mode,
             "request_source": self.request_source,
@@ -122,6 +132,9 @@ def build_question_metadata(
     anti_repeat_refs: tuple[str, ...] = (),
     additional_low_confidence_flags: tuple[str, ...] = (),
     source_availability: str | None = None,
+    primary_question_evidence: dict[str, Any] | None = None,
+    grounding_gate_result: str | None = None,
+    grounding_gate_issues: tuple[str, ...] = (),
     generated_at: str | None = None,
     focus_dimension: str | None = None,
     focus_key: str | None = None,
@@ -147,6 +160,7 @@ def build_question_metadata(
         if evidence_signals is not None and evidence_signals.confidence_level
         else getattr(scenario_constraint, "confidence_level", None)
     )
+    safe_primary_evidence = _safe_primary_question_evidence(primary_question_evidence)
     return QuestionMetadata(
         question_pattern=question_pattern,
         scenario_constraint_summary=_scenario_summary(scenario_constraint),
@@ -158,6 +172,11 @@ def build_question_metadata(
         evidence_signal_refs=signal_refs,
         anti_repeat_refs=anti_repeat_refs,
         source_availability=source_availability,
+        primary_question_evidence=safe_primary_evidence,
+        primary_question_evidence_ref=_string_or_none((safe_primary_evidence or {}).get("ref")),
+        claim_mode=_string_or_none((safe_primary_evidence or {}).get("claim_mode")),
+        grounding_gate_result=_string_or_none(grounding_gate_result, max_chars=80),
+        grounding_gate_issues=tuple(_string_list(grounding_gate_issues)),
         generated_at=generated_at,
         focus_dimension=focus_dimension,
         focus_key=focus_key,
@@ -207,6 +226,13 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "evidence_signal_refs": _string_list(payload.get("evidence_signal_refs")),
         "anti_repeat_refs": _string_list(payload.get("anti_repeat_refs")),
         "source_availability": _string_or_none(payload.get("source_availability")),
+        "primary_question_evidence": _safe_primary_question_evidence(payload.get("primary_question_evidence")),
+        "primary_question_evidence_ref": _string_or_none(
+            payload.get("primary_question_evidence_ref"), max_chars=120
+        ),
+        "claim_mode": _string_or_none(payload.get("claim_mode"), max_chars=80),
+        "grounding_gate_result": _string_or_none(payload.get("grounding_gate_result"), max_chars=80),
+        "grounding_gate_issues": _string_list(payload.get("grounding_gate_issues")),
         "generated_at": _string_or_none(payload.get("generated_at"), max_chars=80),
         "generation_mode": _string_or_none(payload.get("generation_mode"), max_chars=80),
         "request_source": _string_or_none(payload.get("request_source"), max_chars=120),
@@ -308,6 +334,22 @@ def _scenario_summary(scenario_constraint: Any) -> str | None:
     ]
     text = "；".join(str(part) for part in parts if part)
     return text[:500] if text else None
+
+
+def _safe_primary_question_evidence(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    allowed_refs = _string_list(value.get("allowed_source_refs"))
+    payload = {
+        "ref": _string_or_none(value.get("ref"), max_chars=120),
+        "source_type": _string_or_none(value.get("source_type"), max_chars=80),
+        "title": _string_or_none(value.get("title"), max_chars=180),
+        "summary": _string_or_none(value.get("summary"), max_chars=500),
+        "claim_mode": _string_or_none(value.get("claim_mode"), max_chars=80),
+        "allowed_source_refs": allowed_refs,
+        "confidence_level": _string_or_none(value.get("confidence_level"), max_chars=40),
+    }
+    return payload if payload["ref"] and payload["summary"] else None
 
 
 def _string_or_none(value: object, *, max_chars: int = 240) -> str | None:

@@ -15,8 +15,14 @@ from app.application.polish.question_prompts import (
     POLISH_QUESTION_GENERATION_SCHEMA_VERSION,
     POLISH_QUESTION_GENERATION_TASK_TYPE,
     build_polish_question_generation_prompt_bundle,
+    select_primary_question_evidence,
 )
-from app.application.polish.question_quality import repair_question_text, validate_question_quality
+from app.application.polish.question_quality import (
+    INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK,
+    PRIMARY_EVIDENCE_GROUNDING_ISSUE,
+    repair_question_text,
+    validate_question_quality,
+)
 from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportError,
@@ -132,6 +138,10 @@ class PolishQuestionLlmService:
         deterministic_build = deterministic_builder()
         deterministic_draft = deterministic_build.draft
         provider_summary = _provider_summary(self._transport)
+        primary_question_evidence = select_primary_question_evidence(
+            session=session,
+            deterministic_build=deterministic_build,
+        )
 
         if not should_enable_question_llm():
             LogUtil.polish_question_llm_fallback(
@@ -145,6 +155,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=(),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
         if not deterministic_build.question_context.evidence_refs:
             LogUtil.polish_question_llm_fallback(
@@ -158,6 +169,13 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_SEMANTIC_INVALID,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "prompt_input_insufficient", "message": "input evidence refs are empty"},),
+                metadata_overrides=_grounding_metadata_overrides(
+                    primary_question_evidence,
+                    (PRIMARY_EVIDENCE_GROUNDING_ISSUE,)
+                    if primary_question_evidence.get("source_type") == "insufficient"
+                    else (),
+                ),
+                use_grounding_fallback=primary_question_evidence.get("source_type") == "insufficient",
             )
         if self._transport is None:
             LogUtil.polish_question_llm_fallback(
@@ -171,6 +189,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_unavailable", "message": "llm transport is missing"},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
         if _provider_kind(self._transport) != "fake" and not should_allow_real_question_provider(self._transport):
             LogUtil.polish_question_llm_fallback(
@@ -184,6 +203,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "real_provider_disabled", "message": "question real provider flag is off"},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
 
         prompt_bundle = build_polish_question_generation_prompt_bundle(
@@ -215,6 +235,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_timeout", "message": "transport timed out"},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
         except LlmTransportConfigurationError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -228,6 +249,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "transport_configuration_error", "message": _safe_error(exc)},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
         except LlmTransportUnavailableError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -241,6 +263,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_unavailable", "message": _safe_error(exc)},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
         except LlmTransportResponseError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -254,6 +277,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_SCHEMA_INVALID,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_response_invalid", "message": _safe_error(exc)},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
         except LlmTransportError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -267,6 +291,7 @@ class PolishQuestionLlmService:
                 validation_status=LLM_VALIDATION_STATUS_NOT_REQUESTED,
                 provider_summary=provider_summary,
                 validation_errors=({"code": "transport_error", "message": _safe_error(exc)},),
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
 
         normalized = validate_llm_question_output(
@@ -285,6 +310,7 @@ class PolishQuestionLlmService:
                 validation_status=normalized.validation_status,
                 provider_summary=_provider_summary(self._transport, result=transport_result),
                 validation_errors=normalized.validation_errors,
+                metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
             )
 
         adapted = adapt_llm_output_to_question_draft(
@@ -306,6 +332,8 @@ class PolishQuestionLlmService:
                 provider_summary=_provider_summary(self._transport, result=transport_result),
                 validation_errors=adapted.validation_errors,
                 repair_attempted=adapted.repair_attempted,
+                metadata_overrides=adapted.metadata_overrides,
+                use_grounding_fallback=adapted.use_grounding_fallback,
             )
         return PolishQuestionLlmResult(
             draft=adapted.draft,
@@ -362,7 +390,14 @@ def validate_llm_question_output(raw_output: object, *, deterministic_build: Any
     if not isinstance(evidence_refs_raw, list):
         return _invalid(FALLBACK_SCHEMA_INVALID, LLM_VALIDATION_STATUS_SCHEMA_INVALID, "evidence_refs_not_list")
     evidence_refs = tuple(str(ref).strip() for ref in evidence_refs_raw if str(ref).strip())
-    allowed_refs = tuple(deterministic_build.question_context.evidence_refs)
+    primary_question_evidence = select_primary_question_evidence(
+        session=deterministic_build.session,
+        deterministic_build=deterministic_build,
+    )
+    allowed_refs = tuple(
+        primary_question_evidence.get("allowed_source_refs")
+        or deterministic_build.question_context.evidence_refs
+    )
     if not evidence_refs:
         return _invalid(
             FALLBACK_EVIDENCE_REFS_INVALID,
@@ -467,6 +502,11 @@ def adapt_llm_output_to_question_draft(
 ) -> Any:
     pattern = deterministic_build.question_pattern
     question_context = deterministic_build.question_context
+    primary_question_evidence = select_primary_question_evidence(
+        session=deterministic_build.session,
+        deterministic_build=deterministic_build,
+    )
+    grounding_metadata = {"primary_question_evidence": primary_question_evidence}
     quality = validate_question_quality(
         question_text=llm_output.question_text,
         selected_pattern=pattern,
@@ -477,6 +517,7 @@ def adapt_llm_output_to_question_draft(
         source_availability=llm_output.source_availability,
         confidence_level=llm_output.confidence_level,
         evidence_signals=deterministic_build.evidence_signals,
+        question_metadata=grounding_metadata,
     )
     repair_attempted = False
     question_text = llm_output.question_text
@@ -498,9 +539,11 @@ def adapt_llm_output_to_question_draft(
             source_availability=llm_output.source_availability,
             confidence_level=llm_output.confidence_level,
             evidence_signals=deterministic_build.evidence_signals,
+            question_metadata=grounding_metadata,
         )
     if not quality.allow_emit:
         fallback_reason = _quality_fallback_reason(quality)
+        grounding_issues = _grounding_gate_issues(quality)
         return _InvalidAdaptedQuestion(
             fallback_reason=fallback_reason,
             validation_errors=_quality_validation_errors(
@@ -510,8 +553,12 @@ def adapt_llm_output_to_question_draft(
                 fallback_reason=fallback_reason,
             ),
             repair_attempted=repair_attempted,
+            metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, grounding_issues),
+            use_grounding_fallback=bool(grounding_issues)
+            or primary_question_evidence.get("source_type") == "insufficient",
         )
 
+    grounding_issues = _grounding_gate_issues(quality)
     metadata_model = build_question_metadata(
         question_pattern=pattern.pattern_id,
         scenario_constraint=deterministic_build.scenario_constraint,
@@ -521,6 +568,9 @@ def adapt_llm_output_to_question_draft(
         anti_repeat_refs=tuple(deterministic_build.draft.question_metadata.get("anti_repeat_refs", ())),
         additional_low_confidence_flags=llm_output.low_confidence_flags,
         source_availability=llm_output.source_availability,
+        primary_question_evidence=primary_question_evidence,
+        grounding_gate_result="blocked" if grounding_issues else "passed",
+        grounding_gate_issues=grounding_issues,
     )
     metadata = metadata_model.to_dict()
     for metadata_key in (
@@ -585,6 +635,8 @@ class _InvalidAdaptedQuestion:
     fallback_reason: str
     validation_errors: tuple[dict[str, Any], ...]
     repair_attempted: bool
+    metadata_overrides: dict[str, Any]
+    use_grounding_fallback: bool = False
 
 
 def _fallback_result(
@@ -596,9 +648,15 @@ def _fallback_result(
     provider_summary: dict[str, Any],
     validation_errors: tuple[dict[str, Any], ...],
     repair_attempted: bool = False,
+    metadata_overrides: dict[str, Any] | None = None,
+    use_grounding_fallback: bool = False,
 ) -> PolishQuestionLlmResult:
+    draft_for_result = replace(draft, question_text=INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK) if use_grounding_fallback else draft
+    base_metadata = dict(draft.question_metadata)
+    if metadata_overrides:
+        base_metadata.update(metadata_overrides)
     metadata = _extend_llm_metadata(
-        dict(draft.question_metadata),
+        base_metadata,
         mode=mode,
         validation_status=validation_status,
         fallback_reason=fallback_reason,
@@ -608,7 +666,7 @@ def _fallback_result(
         repair_attempted=repair_attempted,
     )
     return PolishQuestionLlmResult(
-        draft=replace(draft, question_metadata=metadata),
+        draft=replace(draft_for_result, question_metadata=metadata),
         llm_output=None,
         llm_generation_mode=mode,
         llm_output_validation_status=validation_status,
@@ -817,6 +875,8 @@ def _safe_ref_id(ref: Any) -> str:
 
 def _quality_fallback_reason(quality: Any) -> str:
     issues = set(getattr(quality, "blocking_issues", ()))
+    if PRIMARY_EVIDENCE_GROUNDING_ISSUE in issues:
+        return FALLBACK_SEMANTIC_INVALID
     if "unsupported_entity_reference" in issues:
         return FALLBACK_FABRICATED_ENTITY
     if "answer_leak" in issues:
@@ -828,6 +888,27 @@ def _quality_fallback_reason(quality: Any) -> str:
     if issues:
         return FALLBACK_SEMANTIC_INVALID
     return FALLBACK_QUALITY_SCORE_TOO_LOW
+
+
+def _grounding_gate_issues(quality: Any) -> tuple[str, ...]:
+    return tuple(
+        issue
+        for issue in getattr(quality, "blocking_issues", ())
+        if issue == PRIMARY_EVIDENCE_GROUNDING_ISSUE
+    )
+
+
+def _grounding_metadata_overrides(
+    primary_question_evidence: dict[str, Any],
+    grounding_issues: tuple[str, ...],
+) -> dict[str, Any]:
+    return {
+        "primary_question_evidence": dict(primary_question_evidence),
+        "primary_question_evidence_ref": _string_or_none(primary_question_evidence.get("ref"), max_chars=120),
+        "claim_mode": _string_or_none(primary_question_evidence.get("claim_mode"), max_chars=80),
+        "grounding_gate_result": "blocked" if grounding_issues else "passed",
+        "grounding_gate_issues": list(grounding_issues),
+    }
 
 
 def _provider_kind(transport: LlmTransport | None) -> str:

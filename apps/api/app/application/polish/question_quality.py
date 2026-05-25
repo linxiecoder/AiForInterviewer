@@ -33,6 +33,82 @@ KNOWN_CONCRETE_ENTITIES = (
     "S3",
 )
 
+PRIMARY_EVIDENCE_GROUNDING_ISSUE = "primary_evidence_grounding_violation"
+INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK = (
+    "当前材料不足以支撑具体业务场景。请先补充一个你真实参与的项目链路，"
+    "包括业务入口、你的职责边界、一个失败案例和一个验证指标，再按技术深度和表达结构回答。"
+)
+_PRIMARY_GROUNDING_GENERIC_TERMS = {
+    "owner",
+    "业务",
+    "业务约束",
+    "约束",
+    "失败",
+    "失败路径",
+    "路径",
+    "性能",
+    "成本",
+    "性能或成本",
+    "性能或成本约束",
+    "验证",
+    "验证指标",
+    "指标",
+    "可观测",
+    "核心",
+    "视角",
+    "说明",
+    "围绕",
+    "技术",
+    "链路",
+    "系统",
+    "设计",
+    "项目",
+    "能力",
+    "经验",
+    "要求",
+    "简历",
+    "证据",
+    "当前",
+    "材料",
+    "需要",
+    "如何",
+    "一个",
+    "以及",
+    "后续",
+    "补充",
+    "补齐",
+    "计划",
+    "trade-off",
+    "业务约",
+    "务约",
+    "先限",
+    "限定",
+    "限定业务",
+    "失败路",
+    "败路",
+    "性能或",
+    "能或",
+    "或成",
+    "成本约",
+    "本约",
+    "证指",
+    "如果",
+    "状态",
+    "收敛",
+    "状态收敛",
+    "一致",
+    "一致性",
+    "致性",
+    "补偿",
+    "资源",
+    "可观",
+    "观测",
+    "对账",
+    "重复",
+    "消费",
+    "重复消费",
+}
+
 
 @dataclass(frozen=True)
 class QuestionQualityResult:
@@ -95,6 +171,13 @@ def validate_question_quality(
     unsupported_entities = _unsupported_entities(question_text, scenario_constraint, evidence_signals)
     if unsupported_entities:
         blocking.append("unsupported_entity_reference")
+    if _has_primary_evidence_grounding_violation(
+        question_text=question_text,
+        scenario_constraint=scenario_constraint,
+        evidence_refs=tuple(str(ref) for ref in evidence_refs if str(ref)),
+        question_metadata=question_metadata,
+    ):
+        blocking.append(PRIMARY_EVIDENCE_GROUNDING_ISSUE)
 
     if not evidence_refs or source_availability != "available":
         warnings.append("evidence_partially_available")
@@ -159,27 +242,7 @@ def fallback_question_text(
     selected_pattern: QuestionPattern,
     citations: str,
 ) -> str:
-    dimensions = "、".join(selected_pattern.expected_answer_dimensions[:6])
-    if selected_pattern.pattern_id == "star_communication_refactor":
-        return (
-            f"低置信度：围绕「{focus}」，当前材料不足以支撑更细的技术追问。"
-            "请用 STAR 结构回答，先做背景压缩，再明确个人职责边界，按逻辑顺序说明关键动作，"
-            "最后用复盘总结或口语化表达收束。"
-            f"回答重点：{dimensions}。{citations}"
-        )
-    if selected_pattern.pattern_id == "mixed_technical_expression":
-        return (
-            f"低置信度：本题仍按显性技术 / 隐性表达的权重比例观察。围绕「{focus}」，"
-            "请先限定业务约束，再说明一个失败路径下的技术深度、性能或成本约束、验证指标和核心 trade-off，"
-            "同时用清晰的表达结构组织答案。"
-            f"回答重点：{dimensions}。{citations}"
-        )
-    return (
-        f"低置信度：围绕「{focus}」，当前材料不足以支撑具体组件追问。"
-        "请先限定业务约束、补充项目链路、关键指标、失败案例和系统组件，再说明一个失败路径下的"
-        "性能或成本约束、验证指标、收敛口径和核心 trade-off。"
-        f"回答重点：{dimensions}。{citations}"
-    )
+    return INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
 
 
 def _is_legacy_template(question_text: str) -> bool:
@@ -249,6 +312,120 @@ def _unsupported_entities(question_text: str, scenario_constraint: Any, evidence
     return tuple(unsupported)
 
 
+def _has_primary_evidence_grounding_violation(
+    *,
+    question_text: str,
+    scenario_constraint: Any,
+    evidence_refs: tuple[str, ...],
+    question_metadata: Any | None,
+) -> bool:
+    primary = _primary_question_evidence(question_metadata)
+    if not primary:
+        return False
+
+    summary = str(primary.get("summary") or "").strip()
+    title = str(primary.get("title") or "").strip()
+    source_type = str(primary.get("source_type") or "").strip()
+    claim_mode = str(primary.get("claim_mode") or "").strip()
+    allowed_refs = tuple(str(ref).strip() for ref in primary.get("allowed_source_refs", ()) if str(ref).strip())
+
+    if allowed_refs and any(ref not in allowed_refs for ref in evidence_refs):
+        return True
+    if claim_mode == "job_gap_probe" and _has_any(
+        question_text, ("你负责过", "你实现过", "你做过", "你主导过", "你参与过")
+    ):
+        return True
+    if source_type == "insufficient" or claim_mode == "clarification_needed":
+        return _fabricates_specific_business_context(question_text)
+    if not summary:
+        return False
+
+    primary_terms = _grounding_terms(f"{title} {summary}")
+    if primary_terms and not any(_contains_grounding_term(question_text, term) for term in primary_terms):
+        return _has_specific_business_context(question_text)
+    if claim_mode == "job_gap_probe":
+        return False
+
+    scenario_terms = _scenario_specific_terms(scenario_constraint)
+    unsupported_scenario_terms = scenario_terms - primary_terms
+    hits = [term for term in unsupported_scenario_terms if _contains_grounding_term(question_text, term)]
+    return len(hits) >= 2 or any(_contains_digit_or_ascii(term) for term in hits)
+
+
+def _primary_question_evidence(question_metadata: Any | None) -> dict[str, Any] | None:
+    if isinstance(question_metadata, dict):
+        value = question_metadata.get("primary_question_evidence")
+        return value if isinstance(value, dict) else None
+    value = getattr(question_metadata, "primary_question_evidence", None)
+    return value if isinstance(value, dict) else None
+
+
+def _scenario_specific_terms(scenario_constraint: Any) -> set[str]:
+    terms: set[str] = set()
+    for value in (
+        *getattr(scenario_constraint, "system_components", ()),
+        *getattr(scenario_constraint, "technical_entities", ()),
+        *getattr(scenario_constraint, "metrics", ()),
+    ):
+        terms |= _grounding_terms(str(value))
+    for value in (
+        getattr(scenario_constraint, "business_constraint", None),
+        getattr(scenario_constraint, "failure_mode", None),
+        getattr(scenario_constraint, "scale_or_performance_constraint", None),
+        getattr(scenario_constraint, "consistency_constraint", None),
+    ):
+        text = str(value or "")
+        if re.search(r"[A-Za-z0-9]", text):
+            terms |= _grounding_terms(text)
+    return terms
+
+
+def _grounding_terms(text: str) -> set[str]:
+    terms: set[str] = set()
+    normalized = text.lower()
+    for match in re.findall(r"[a-z][a-z0-9+.#-]*|\d+(?:\.\d+)?%?", normalized):
+        _add_grounding_term(terms, match)
+    for segment in re.findall(r"[\u4e00-\u9fff]{2,}", text):
+        if len(segment) <= 12:
+            _add_grounding_term(terms, segment)
+        for size in (2, 3, 4):
+            if len(segment) < size:
+                continue
+            for index in range(0, len(segment) - size + 1):
+                _add_grounding_term(terms, segment[index : index + size])
+    return terms
+
+
+def _add_grounding_term(terms: set[str], term: str) -> None:
+    clean = term.strip().lower()
+    if len(clean) < 2 or clean in _PRIMARY_GROUNDING_GENERIC_TERMS:
+        return
+    if any(clean in generic or generic in clean for generic in _PRIMARY_GROUNDING_GENERIC_TERMS if len(generic) >= 2):
+        return
+    terms.add(clean)
+
+
+def _contains_grounding_term(question_text: str, term: str) -> bool:
+    if not term:
+        return False
+    return term.lower() in question_text.lower()
+
+
+def _contains_digit_or_ascii(term: str) -> bool:
+    return bool(re.search(r"[a-z0-9]", term))
+
+
+def _fabricates_specific_business_context(question_text: str) -> bool:
+    if _has_specific_business_context(question_text):
+        return True
+    clarification_terms = ("业务入口", "职责边界", "失败案例", "验证指标", "补充")
+    return not all(term in question_text for term in clarification_terms)
+
+
+def _has_specific_business_context(question_text: str) -> bool:
+    return any(_mentions_entity(question_text, entity) for entity in KNOWN_CONCRETE_ENTITIES)
+
+
 def _supported_aliases(supported: set[str]) -> set[str]:
     aliases: set[str] = set()
     if "Elasticsearch" in supported:
@@ -259,7 +436,7 @@ def _supported_aliases(supported: set[str]) -> set[str]:
 
 
 def _mentions_entity(question_text: str, entity: str) -> bool:
-    if entity in {"ES", "S3", "MQ"}:
+    if entity in {"ES", "S3", "MQ", "Redis"}:
         return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(entity)}(?![A-Za-z0-9])", question_text))
     return entity in question_text
 

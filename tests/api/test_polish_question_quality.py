@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,7 +17,7 @@ from app.application.polish.question_metadata import (
     question_metadata_to_dict,
 )
 from app.application.polish.question_patterns import QUESTION_PATTERNS, get_question_pattern
-from app.application.polish.question_quality import validate_question_quality
+from app.application.polish.question_quality import fallback_question_text, validate_question_quality
 from app.application.polish.scenario_constraints import build_scenario_constraints
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
 from app.domain.shared.clock import utc_now
@@ -28,6 +29,11 @@ LEGACY_TEMPLATE_PHRASES = (
     "你负责的技术改造或决策",
     "为什么这样取舍",
     "上线后如何验证效果",
+)
+
+INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK = (
+    "当前材料不足以支撑具体业务场景。请先补充一个你真实参与的项目链路，"
+    "包括业务入口、你的职责边界、一个失败案例和一个验证指标，再按技术深度和表达结构回答。"
 )
 
 
@@ -332,6 +338,158 @@ def test_quality_validator_blocks_fabricated_mq_from_signals() -> None:
 
     assert result.allow_emit is False
     assert "unsupported_entity_reference" in result.blocking_issues
+
+
+def test_primary_evidence_grounding_blocks_raw_dump_bad_question() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    scenario = SimpleNamespace(
+        business_constraint="1GB 日志上传、解析、切块、向量化、入库",
+        failure_mode="日志解析失败或入库失败会导致链路卡住",
+        scale_or_performance_constraint="1GB 日志从 15 秒优化到 3 秒",
+        consistency_constraint="切块、向量化和入库状态必须一致",
+        cost_constraint="向量化成本需要可控",
+        observability_constraint="解析耗时、入库成功率和错误率",
+        system_components=("日志上传", "解析", "切块", "向量化", "入库"),
+        technical_entities=("日志", "向量化"),
+        metrics=("1GB", "15 秒", "3 秒"),
+        confidence_level="high",
+        low_confidence_flags=(),
+        evidence_refs=("match_gap_001",),
+    )
+    primary_question_evidence = {
+        "ref": "resume_project_001",
+        "source_type": "resume_project",
+        "title": "物料库存处理工作流",
+        "summary": "物料库存处理工作流：Redisson 分布式锁 + RocketMQ 事务消息",
+        "claim_mode": "candidate_experience",
+        "allowed_source_refs": ["resume_project_001"],
+        "confidence_level": "high",
+    }
+
+    result = validate_question_quality(
+        question_text=(
+            "围绕「分布式锁与事务消息最终一致性设计」，业务约束是 1GB 日志上传、解析、切块、向量化、入库。"
+            "请从 Owner 视角说明库存扣减链路中 Redisson 分布式锁、RocketMQ 事务消息和日志向量化管道的失败路径、"
+            "性能或成本约束、验证指标、可观测指标和核心 trade-off。"
+        ),
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=("match_gap_001",),
+        recent_question_texts=[],
+        source_availability="available",
+        confidence_level="high",
+        question_metadata={"primary_question_evidence": primary_question_evidence},
+    )
+
+    assert result.allow_emit is False
+    assert "primary_evidence_grounding_violation" in result.blocking_issues
+
+
+def test_primary_evidence_grounding_accepts_candidate_project_experience() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    scenario = SimpleNamespace(
+        business_constraint="物料库存处理工作流需要在并发扣减下保持最终一致",
+        failure_mode="锁等待、事务消息投递失败或重复消费",
+        scale_or_performance_constraint="并发冲突率从23%降至2%",
+        consistency_constraint="库存扣减、事务消息和对账补偿需要状态收敛",
+        cost_constraint="锁粒度和消息重试成本需要权衡",
+        observability_constraint="并发冲突率、消息触达率和对账差异",
+        system_components=("物料库存", "Redisson", "RocketMQ", "对账"),
+        technical_entities=("Redisson", "RocketMQ", "分布式锁", "事务消息"),
+        metrics=("23%", "2%", "100%"),
+        confidence_level="high",
+        low_confidence_flags=(),
+        evidence_refs=("resume_project_001",),
+    )
+    primary_question_evidence = {
+        "ref": "resume_project_001",
+        "source_type": "resume_project",
+        "title": "物料库存处理工作流",
+        "summary": "物料库存处理工作流：Redisson 分布式锁 + RocketMQ 事务消息，并发冲突率从23%降至2%",
+        "claim_mode": "candidate_experience",
+        "allowed_source_refs": ["resume_project_001"],
+        "confidence_level": "high",
+    }
+
+    result = validate_question_quality(
+        question_text=(
+            "围绕物料库存处理工作流，业务约束是并发扣减下保持最终一致。"
+            "请从 Owner 视角说明 Redisson 分布式锁与 RocketMQ 事务消息最终一致性的实现、失败路径、"
+            "重复消费、补偿和对账，并覆盖性能或成本约束、验证指标和核心 trade-off。"
+        ),
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=("resume_project_001",),
+        recent_question_texts=[],
+        source_availability="available",
+        confidence_level="high",
+        question_metadata={"primary_question_evidence": primary_question_evidence},
+    )
+
+    assert "primary_evidence_grounding_violation" not in result.blocking_issues
+
+
+def test_primary_evidence_grounding_accepts_job_gap_probe_without_candidate_claim() -> None:
+    strategy = resolve_polish_theme_strategy("technical")
+    scenario = SimpleNamespace(
+        business_constraint="JD 要求分布式系统开发经验，但简历缺少明确证据",
+        failure_mode="缺少真实案例会影响能力判断",
+        scale_or_performance_constraint="需要给出验证指标和补齐计划",
+        consistency_constraint="需要说明可迁移经验和验证思路",
+        cost_constraint="补齐计划需要控制学习和实践成本",
+        observability_constraint="用项目指标或压测结果验证",
+        system_components=("分布式系统",),
+        technical_entities=("分布式系统",),
+        metrics=("验证指标",),
+        confidence_level="medium",
+        low_confidence_flags=(),
+        evidence_refs=("match_gap_001",),
+    )
+    primary_question_evidence = {
+        "ref": "match_gap_001",
+        "source_type": "match_gap",
+        "title": "分布式系统开发经验缺口",
+        "summary": "JD 要求分布式系统开发经验，但简历缺少明确证据",
+        "claim_mode": "job_gap_probe",
+        "allowed_source_refs": ["match_gap_001"],
+        "confidence_level": "medium",
+    }
+
+    result = validate_question_quality(
+        question_text=(
+            "围绕 JD 要求的分布式系统开发经验，业务约束是简历缺少明确证据。"
+            "请从 Owner 视角说明你如何理解该能力要求、有哪些可迁移经验、如何验证失败路径下的性能或成本约束、"
+            "验证指标和核心 trade-off，以及后续如何补齐。"
+        ),
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        theme_strategy=strategy,
+        scenario_constraint=scenario,
+        evidence_refs=("match_gap_001",),
+        recent_question_texts=[],
+        source_availability="available",
+        confidence_level="medium",
+        question_metadata={"primary_question_evidence": primary_question_evidence},
+    )
+
+    assert "primary_evidence_grounding_violation" not in result.blocking_issues
+
+
+def test_insufficient_primary_evidence_fallback_asks_for_project_chain_details() -> None:
+    text = fallback_question_text(
+        focus="系统设计能力",
+        selected_pattern=get_question_pattern("owner_tradeoff_system_design"),
+        citations="[1]",
+    )
+
+    assert text == INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    assert "业务入口" in text
+    assert "职责边界" in text
+    assert "失败案例" in text
+    assert "验证指标" in text
+    for fabricated_context in ("库存", "日志", "RAG", "向量化", "秒杀"):
+        assert fabricated_context not in text
 
 
 def test_quality_validator_blocks_missing_pattern_required_elements() -> None:

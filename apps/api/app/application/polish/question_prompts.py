@@ -53,10 +53,13 @@ def build_polish_question_generation_prompt_bundle(
             "Do not satisfy required_question_elements only in question_pattern, scenario_constraint_summary, or metadata.",
             "Do not paraphrase required element tokens; put Chinese or English phrases verbatim into question_text.",
             "Missing any required element in question_text triggers semantic validation fallback: missing_pattern_required_elements.",
-            "scenario_constraint.business_constraint is a hard semantic validation contract.",
-            "For technical / mixed themes, question_text must include the business constraint and marker 业务约束 or 新业务约束.",
-            "scenario_constraint_summary cannot replace question_text business constraint expression.",
-            "Missing business constraint in question_text triggers semantic validation fallback: missing_business_constraint.",
+            "请只围绕 primary_question_evidence 生成题目。",
+            "题干中的业务前提、技术链路、失败模式、指标和约束，必须来自 primary_question_evidence.summary。",
+            "For technical / mixed themes, question_text can include 业务约束, but the business constraint must come from primary_question_evidence.summary.",
+            "scenario_constraint 只是补充上下文，不能引入 primary_question_evidence 不支持的新业务场景。",
+            "recent_question_texts 只用于避免重复，不是事实来源，不得模仿其中的业务场景组合。",
+            "如果 claim_mode 是 job_gap_probe，只能询问理解、可迁移经验、验证思路或补齐计划，不得表述为“你负责过 / 你实现过”。",
+            "如果 claim_mode 是 clarification_needed，应要求候选人补充业务入口、职责边界、失败案例和验证指标，不得编造具体业务系统。",
             "不得输出完整参考答案、隐藏评分规则、raw prompt、completion 或 provider payload。",
             "不得编造未在 compact evidence 中出现的具体组件、系统或实体。",
         ],
@@ -85,6 +88,10 @@ def build_polish_question_generation_evidence_bundle(
     question_pattern = deterministic_build.question_pattern
     scenario = deterministic_build.scenario_constraint
     metadata = deterministic_build.draft.question_metadata
+    primary_question_evidence = select_primary_question_evidence(
+        session=session,
+        deterministic_build=deterministic_build,
+    )
 
     bundle = {
         "theme_strategy": _theme_strategy_summary(question_context.strategy),
@@ -97,11 +104,14 @@ def build_polish_question_generation_evidence_bundle(
             "quality_rules": list(question_pattern.quality_rules),
         },
         "scenario_constraint": _scenario_summary(scenario),
+        "scenario_constraint_role": "legacy_supplementary_context",
+        "primary_question_evidence": primary_question_evidence,
         "evidence_signal_summary": _evidence_signal_summary(evidence_signals),
         "question_metadata_summary": _question_metadata_summary(metadata),
         "progress_node_summary": _progress_node_summary(question_context.node),
         "selected_evidence_summaries": _selected_evidence_summaries(question_context.evidence_chunks),
         "recent_question_texts": _recent_question_texts(context.get("turns", [])),
+        "recent_question_usage": "anti_repeat_only",
         "custom_topic_text_summary": truncate_text(getattr(session, "custom_topic_text_summary", None), max_chars=160),
         "source_availability": question_context.source_availability,
         "low_confidence_flags": _dedupe_strings(
@@ -162,10 +172,12 @@ def _output_schema() -> dict[str, Any]:
                 "role": "semantic validation target",
                 "required_elements": "must include all selected pattern required elements from selected_question_pattern.required_question_elements",
                 "required_element_copy_rule": "copy/include each required element exactly; question_pattern or metadata do not satisfy this contract",
-                "business_constraint": "for technical / mixed themes, must include scenario_constraint.business_constraint and marker 业务约束 or 新业务约束",
+                "business_constraint": "for technical / mixed themes, any business constraint must be grounded in primary_question_evidence.summary",
+                "primary_grounding": "business premise, technical chain, failure mode, metrics and constraints must come from primary_question_evidence.summary",
                 "semantic_validation_failures": [
                     "missing_pattern_required_elements",
                     "missing_business_constraint",
+                    "primary_evidence_grounding_violation",
                 ],
             },
             "question_pattern": {
@@ -173,13 +185,13 @@ def _output_schema() -> dict[str, Any]:
                 "contract": "question_pattern does not satisfy required_question_elements; question_text must include all required tokens",
             },
             "scenario_constraint_summary": {
-                "role": "summary only",
-                "contract": "scenario_constraint_summary cannot replace question_text business constraint marker or expression",
+                "role": "legacy supplementary summary only",
+                "contract": "scenario_constraint_summary cannot introduce business facts not supported by primary_question_evidence.summary",
             },
             "evidence_refs": {
                 "type": "array<string>",
                 "min_items": 1,
-                "allowed_values": "copy exactly from input_evidence_refs strings",
+                "allowed_values": "copy exactly from primary_question_evidence.allowed_source_refs strings; prefer refs present in input_evidence_refs when available",
                 "forbidden_values": [
                     "source refs",
                     "progress refs",
@@ -191,6 +203,123 @@ def _output_schema() -> dict[str, Any]:
             },
         },
     }
+
+
+def select_primary_question_evidence(*, session: Any, deterministic_build: Any) -> dict[str, Any]:
+    question_context = deterministic_build.question_context
+    node = question_context.node
+    chunks = tuple(question_context.evidence_chunks)
+    allowed_refs = _dedupe_strings([*question_context.evidence_refs], limit=20)
+    related_resume_evidence = _safe_string_list(node.get("related_resume_evidence"), limit=6, max_chars=260)
+
+    if related_resume_evidence:
+        chunk = _first_chunk(
+            chunks,
+            ("resume_project", "resume_work_experience", "resume_summary", "resume_skill"),
+        )
+        ref = _safe_text(getattr(chunk, "chunk_id", None), max_chars=120) or _source_ref(
+            question_context.sources, "resume_evidence"
+        )
+        source_type = "work_experience" if getattr(chunk, "source_type", None) == "resume_work_experience" else "resume_project"
+        return _primary_evidence_payload(
+            ref=ref,
+            source_type=source_type,
+            title=_safe_text(getattr(chunk, "title", None), max_chars=160) or "简历项目经历",
+            summary=related_resume_evidence[0],
+            claim_mode="candidate_experience",
+            allowed_refs=allowed_refs,
+            confidence_level="high" if ref in allowed_refs else "medium",
+        )
+
+    resume_chunk = _first_chunk(chunks, ("resume_project", "resume_work_experience"))
+    if resume_chunk is not None:
+        source_type = "work_experience" if resume_chunk.source_type == "resume_work_experience" else "resume_project"
+        return _primary_evidence_payload(
+            ref=_safe_text(resume_chunk.chunk_id, max_chars=120),
+            source_type=source_type,
+            title=_safe_text(resume_chunk.title, max_chars=160),
+            summary=_safe_text(resume_chunk.text, max_chars=360),
+            claim_mode="candidate_experience",
+            allowed_refs=allowed_refs,
+            confidence_level="high",
+        )
+
+    job_chunk = _first_chunk(chunks, ("job_requirement", "job_responsibility"))
+    if job_chunk is not None:
+        return _primary_evidence_payload(
+            ref=_safe_text(job_chunk.chunk_id, max_chars=120),
+            source_type="job_requirement",
+            title=_safe_text(job_chunk.title, max_chars=160),
+            summary=_safe_text(job_chunk.text, max_chars=360),
+            claim_mode="job_gap_probe",
+            allowed_refs=allowed_refs,
+            confidence_level="medium",
+        )
+
+    match_chunk = _first_chunk(chunks, ("match_gap", "match_focus", "match_suggested_question"))
+    if match_chunk is not None:
+        return _primary_evidence_payload(
+            ref=_safe_text(match_chunk.chunk_id, max_chars=120),
+            source_type="match_gap",
+            title=_safe_text(match_chunk.title, max_chars=160),
+            summary=_safe_text(match_chunk.text, max_chars=360),
+            claim_mode="job_gap_probe",
+            allowed_refs=allowed_refs,
+            confidence_level="medium",
+        )
+
+    custom_topic = _safe_text(getattr(session, "custom_topic_text_summary", None), max_chars=260)
+    if custom_topic:
+        return _primary_evidence_payload(
+            ref="custom_topic",
+            source_type="custom_topic",
+            title="用户自定义主题",
+            summary=custom_topic,
+            claim_mode="clarification_needed",
+            allowed_refs=[*allowed_refs, "custom_topic"],
+            confidence_level="low",
+        )
+
+    return _primary_evidence_payload(
+        ref="insufficient",
+        source_type="insufficient",
+        title="输入信息不足",
+        summary="当前材料不足以支撑具体业务场景。",
+        claim_mode="clarification_needed",
+        allowed_refs=(),
+        confidence_level="low",
+    )
+
+
+def _primary_evidence_payload(
+    *,
+    ref: str | None,
+    source_type: str,
+    title: str | None,
+    summary: str | None,
+    claim_mode: str,
+    allowed_refs: list[str] | tuple[str, ...],
+    confidence_level: str,
+) -> dict[str, Any]:
+    primary_ref = ref or source_type
+    return {
+        "ref": primary_ref,
+        "source_type": source_type,
+        "title": title or source_type,
+        "summary": summary or "当前材料不足以支撑具体业务场景。",
+        "claim_mode": claim_mode,
+        "allowed_source_refs": _dedupe_strings([primary_ref, *allowed_refs], limit=20),
+        "confidence_level": confidence_level,
+    }
+
+
+def _first_chunk(chunks: tuple[Any, ...], source_types: tuple[str, ...]) -> Any | None:
+    return next((chunk for chunk in chunks if getattr(chunk, "source_type", None) in source_types), None)
+
+
+def _source_ref(sources: tuple[Any, ...], source_type: str) -> str | None:
+    source = next((item for item in sources if getattr(item, "source_type", None) == source_type), None)
+    return _safe_text(getattr(source, "ref_id", None), max_chars=120) if source is not None else None
 
 
 def _theme_strategy_summary(strategy: Any) -> dict[str, Any]:

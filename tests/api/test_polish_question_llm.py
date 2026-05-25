@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -14,6 +16,7 @@ from app.application.polish.question_llm import PolishQuestionLlmService
 from app.application.polish.question_prompts import (
     POLISH_QUESTION_GENERATION_TASK_TYPE,
     build_polish_question_generation_prompt_bundle,
+    select_primary_question_evidence,
 )
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
@@ -38,6 +41,10 @@ SENSITIVE_COMPLETION_SENTINEL = "SENSITIVE_COMPLETION_TEXT_SHOULD_NOT_APPEAR"
 SENSITIVE_SOURCE_EXCERPT_SENTINEL = "SENSITIVE_SOURCE_EXCERPT_TEXT_SHOULD_NOT_APPEAR"
 SENSITIVE_SECRET_SENTINEL = "SENSITIVE_API_KEY_TOKEN_SECRET_SHOULD_NOT_APPEAR"
 QUESTION_LLM_LOGGER = "app"
+INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK = (
+    "当前材料不足以支撑具体业务场景。请先补充一个你真实参与的项目链路，"
+    "包括业务入口、你的职责边界、一个失败案例和一个验证指标，再按技术深度和表达结构回答。"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -95,6 +102,30 @@ def test_prompt_input_evidence_refs_match_validator_allowed_chunk_refs() -> None
     assert input_source_refs
     assert source_ref_ids
     assert set(source_ref_ids).isdisjoint(input_evidence_refs)
+
+
+def test_prompt_bundle_contains_primary_question_evidence_and_anti_repeat_contract() -> None:
+    deterministic = _deterministic_build()
+
+    bundle = build_polish_question_generation_prompt_bundle(
+        session=deterministic.session,
+        context=deterministic.context,
+        plan=deterministic.plan,
+        state=deterministic.state,
+        requested_ref=deterministic.requested_ref,
+        deterministic_build=deterministic,
+    )
+
+    evidence_bundle = bundle["evidence_bundle"]
+    primary = evidence_bundle["primary_question_evidence"]
+
+    assert primary["ref"] == "resume_project_001"
+    assert primary["source_type"] == "resume_project"
+    assert primary["claim_mode"] == "candidate_experience"
+    assert "FastAPI 支付工作流" in primary["summary"]
+    assert primary["ref"] in primary["allowed_source_refs"]
+    assert set(primary["allowed_source_refs"]).issubset(set(evidence_bundle["input_evidence_refs"]))
+    assert evidence_bundle["recent_question_usage"] == "anti_repeat_only"
 
 
 def test_prompt_contract_describes_evidence_refs_allowed_and_forbidden_refs() -> None:
@@ -160,7 +191,7 @@ def test_prompt_contract_requires_pattern_required_elements_in_question_text() -
     assert "question_pattern" in schema_text
 
 
-def test_prompt_contract_requires_business_constraint_marker_in_question_text() -> None:
+def test_prompt_contract_grounds_business_constraint_on_primary_evidence() -> None:
     deterministic = _deterministic_build()
 
     bundle = build_polish_question_generation_prompt_bundle(
@@ -177,16 +208,22 @@ def test_prompt_contract_requires_business_constraint_marker_in_question_text() 
     schema_text = json.dumps(bundle["output_schema"], ensure_ascii=False, sort_keys=True)
     contract_text = f"{prompt_text}\n{schema_text}"
 
+    assert evidence_bundle["primary_question_evidence"]["summary"]
     assert evidence_bundle["scenario_constraint"]["business_constraint"]
-    assert "scenario_constraint.business_constraint" in contract_text
+    assert "请只围绕 primary_question_evidence 生成题目" in contract_text
+    assert "primary_question_evidence.summary" in contract_text
+    assert "scenario_constraint 只是补充上下文" in contract_text
+    assert "不能引入 primary_question_evidence 不支持的新业务场景" in contract_text
+    assert "recent_question_texts 只用于避免重复" in contract_text
+    assert "不得模仿其中的业务场景组合" in contract_text
+    assert "claim_mode 是 job_gap_probe" in contract_text
+    assert "claim_mode 是 clarification_needed" in contract_text
+    assert "must include scenario_constraint.business_constraint" not in contract_text
     assert "business_constraint" in contract_text
     assert "scenario_constraint_summary" in contract_text
     assert "question_text" in contract_text
     assert "technical / mixed" in contract_text
     assert "业务约束" in contract_text
-    assert "新业务约束" in contract_text
-    assert "scenario_constraint_summary cannot replace question_text" in contract_text
-    assert "missing_business_constraint" in contract_text
     assert "semantic validation" in contract_text
 
 
@@ -265,6 +302,11 @@ def test_valid_fake_llm_output_is_accepted_and_persistable_without_raw_payload()
     assert metadata["llm_generation_mode"] == "llm_accepted"
     assert metadata["llm_output_validation_status"] == "valid"
     assert metadata["fallback_reason"] is None
+    assert metadata["primary_question_evidence_ref"] == "resume_project_001"
+    assert metadata["claim_mode"] == "candidate_experience"
+    assert metadata["grounding_gate_result"] == "passed"
+    assert metadata["grounding_gate_issues"] == []
+    assert metadata["primary_question_evidence"]["ref"] == "resume_project_001"
     _assert_no_raw_llm_payload(metadata)
 
 
@@ -320,7 +362,12 @@ def test_fake_llm_fabricated_entity_evidence_ref_and_answer_leak_are_blocked() -
 
 def test_source_ref_returned_as_evidence_ref_is_rejected_with_redacted_diagnostics() -> None:
     deterministic = _deterministic_build()
-    allowed_refs = list(deterministic.question_context.evidence_refs)
+    allowed_refs = list(
+        select_primary_question_evidence(
+            session=deterministic.session,
+            deterministic_build=deterministic,
+        )["allowed_source_refs"]
+    )
     source_ref = next(
         source.ref_id for source in deterministic.question_context.sources if source.ref_id not in allowed_refs
     )
@@ -377,7 +424,12 @@ def test_object_ref_returned_as_evidence_ref_is_rejected_without_loose_conversio
 
 def test_empty_evidence_refs_are_rejected_with_redacted_diagnostics() -> None:
     deterministic = _deterministic_build()
-    allowed_refs = list(deterministic.question_context.evidence_refs)
+    allowed_refs = list(
+        select_primary_question_evidence(
+            session=deterministic.session,
+            deterministic_build=deterministic,
+        )["allowed_source_refs"]
+    )
     payload = _valid_llm_payload(evidence_refs=[])
 
     result = _generate_with_static_transport(deterministic, payload)
@@ -435,6 +487,48 @@ def test_semantic_invalid_includes_pattern_and_business_constraint_diagnostics()
     assert "question_text" not in required_error
     assert "question_text" not in business_error
     _assert_redacted_diagnostics(metadata)
+
+
+def test_llm_grounding_violation_falls_back_to_insufficient_primary_evidence_question() -> None:
+    deterministic = _deterministic_build()
+    deterministic = replace(
+        deterministic,
+        scenario_constraint=SimpleNamespace(
+            business_constraint="1GB 日志上传、解析、切块、向量化、入库",
+            failure_mode="日志解析失败或入库失败会导致链路卡住",
+            scale_or_performance_constraint="1GB 日志从 15 秒优化到 3 秒",
+            consistency_constraint="切块、向量化和入库状态必须一致",
+            cost_constraint="向量化成本需要可控",
+            observability_constraint="解析耗时、入库成功率和错误率",
+            system_components=("日志上传", "解析", "切块", "向量化", "入库"),
+            technical_entities=("日志", "向量化"),
+            metrics=("1GB", "15 秒", "3 秒"),
+            confidence_level="high",
+            low_confidence_flags=(),
+            evidence_refs=("match_gap_001",),
+        ),
+    )
+    evidence_refs = list(deterministic.question_context.evidence_refs)
+    payload = _valid_llm_payload(evidence_refs=evidence_refs)
+    payload["question_text"] = (
+        "围绕「分布式锁与事务消息最终一致性设计」，业务约束是 1GB 日志上传、解析、切块、向量化、入库。"
+        "请从 Owner 视角说明库存扣减链路中 Redisson 分布式锁、RocketMQ 事务消息和日志向量化管道的失败路径、"
+        "性能或成本约束、验证指标、可观测指标和核心 trade-off。"
+    )
+
+    result = _generate_with_static_transport(deterministic, payload)
+
+    assert result.llm_output is None
+    assert result.draft.question_text == INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    metadata = result.draft.question_metadata
+    assert metadata["llm_generation_mode"] == "llm_fallback"
+    assert metadata["llm_output_validation_status"] == "semantic_invalid"
+    assert metadata["fallback_reason"] == "semantic_invalid"
+    assert metadata["primary_question_evidence_ref"] == "resume_project_001"
+    assert metadata["claim_mode"] == "candidate_experience"
+    assert metadata["grounding_gate_result"] == "blocked"
+    assert "primary_evidence_grounding_violation" in metadata["grounding_gate_issues"]
+    assert any(error["code"] == "primary_evidence_grounding_violation" for error in metadata["validation_errors"])
 
 
 def test_fake_llm_provider_unavailable_and_timeout_fall_back_to_deterministic() -> None:
