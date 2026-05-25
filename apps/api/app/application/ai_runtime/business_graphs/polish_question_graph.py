@@ -16,6 +16,7 @@ from app.application.ai_runtime.contracts import (
     contains_sensitive_payload,
     sanitize_payload,
 )
+from app.application.ai_runtime.handoff import QuestionResultWritePlan, build_question_result_write_plan
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ _DEFAULT_ENTRYPOINTS = ("start", "replay")
 _SUPPORTED_OUTPUTS = ("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs")
 _LEGACY_PROMPT_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
 POLISH_QUESTION_READONLY_PARITY_VERSION = "pr5-q3-readonly-parity"
+POLISH_QUESTION_PERSISTENCE_VERSION = "pr5-q4-persistence-handoff"
 
 _FORBIDDEN_PAYLOAD_KEYS = frozenset(
     {
@@ -248,6 +250,8 @@ def build_polish_question_candidate_readonly(
     ai_task_id: str,
     session_ref: str,
     scenario: dict[str, Any],
+    progress_node_ref: str | None = None,
+    context_digest: str | None = None,
 ) -> dict[str, Any]:
     scenario_title = str(scenario.get("scenario_title") or "候选人项目表达场景")
     evidence_refs = tuple(str(ref) for ref in scenario.get("source_refs", ()) if str(ref).strip())
@@ -268,7 +272,11 @@ def build_polish_question_candidate_readonly(
         "scenario": scenario,
         "question_text": question_text,
         "question_pattern": "polish_structured_experience",
+        "question_sources": _question_sources_from_scenario(scenario, evidence_refs),
+        "progress_node_ref": progress_node_ref,
         "evidence_refs": evidence_refs,
+        "context_digest": context_digest
+        or _stable_id(session_ref, scenario_title, json.dumps(evidence_refs, sort_keys=True)),
         "source_availability": {
             "resume": bool(scenario.get("primary_resume_evidence")),
             "job_requirement": bool(scenario.get("primary_job_requirement")),
@@ -283,6 +291,30 @@ def build_polish_question_candidate_readonly(
     gate = question_candidate_quality_gate(candidate)
     candidate["quality_gate"] = gate
     return sanitize_payload(candidate)
+
+
+def build_polish_question_persistence_plan(
+    *,
+    owner_id: str,
+    actor_id: str,
+    session_id: str,
+    ai_task_id: str,
+    agent_run_id: str,
+    candidate: dict[str, Any],
+    progress_node_ref: str | None,
+    trace_refs: tuple[str, ...],
+) -> QuestionResultWritePlan:
+    return build_question_result_write_plan(
+        owner_id=owner_id,
+        actor_id=actor_id,
+        session_id=session_id,
+        ai_task_id=ai_task_id,
+        agent_run_id=agent_run_id,
+        candidate=candidate,
+        progress_node_ref=progress_node_ref,
+        trace_refs=trace_refs,
+        contract_ids=_LEGACY_PROMPT_CONTRACT_IDS,
+    )
 
 
 def question_candidate_quality_gate(candidate: dict[str, Any]) -> dict[str, Any]:
@@ -358,6 +390,8 @@ def run_polish_question_readonly_parity(
         ai_task_id=context.ai_task_id,
         session_ref=str(command.input_refs[0]),
         scenario=scenario,
+        progress_node_ref=_progress_node_ref_from_command(command),
+        context_digest=str(metadata.get("context_digest") or ""),
     )
     quality_gate = candidate["quality_gate"]
     output_refs = (candidate["candidate_ref"],) if quality_gate["passed"] else ()
@@ -365,6 +399,7 @@ def run_polish_question_readonly_parity(
         "graph_name": descriptor.graph_name,
         "graph_version": descriptor.graph_version,
         "readonly_parity_version": POLISH_QUESTION_READONLY_PARITY_VERSION,
+        "persistence_handoff_version": POLISH_QUESTION_PERSISTENCE_VERSION,
         "runtime_flag_key": descriptor.runtime_flag_key,
         "runtime_flag_source": decision.source,
         "readonly_parity": True,
@@ -440,6 +475,13 @@ def _build_output_refs(
         elif requested_output == "interrupt_refs":
             interrupt_refs.append("question_interrupt_ref_" + suffix)
     return tuple(output_refs), tuple(interrupt_refs)
+
+
+def _progress_node_ref_from_command(command: AgentCommandEnvelope) -> str | None:
+    if len(command.input_refs) < 2:
+        return None
+    value = str(command.input_refs[1]).strip()
+    return value or None
 
 
 def _coerce_evidence_items(items: tuple[object, ...] | list[object], *, source_type: str) -> tuple[dict[str, Any], ...]:
@@ -584,6 +626,24 @@ def _candidate_question_text(scenario: dict[str, Any]) -> str:
     return (
         f"请围绕「{scenario_title}」回答。先说明业务背景、你的职责边界和目标，再讲清核心链路、关键技术取舍、"
         "失败处理或风险兜底、验证指标。表达上按背景、约束、方案、结果、复盘组织。"
+    )
+
+
+def _question_sources_from_scenario(
+    scenario: dict[str, Any], evidence_refs: tuple[str, ...]
+) -> tuple[dict[str, Any], ...]:
+    source_types = tuple(str(value) for value in scenario.get("source_types", ()) if str(value).strip())
+    summary = str(scenario.get("scenario_summary") or "").strip()
+    return tuple(
+        {
+            "index": index,
+            "source_type": source_types[index - 1] if index <= len(source_types) else "evidence",
+            "title": str(scenario.get("scenario_title") or ref),
+            "excerpt": summary,
+            "ref_id": ref,
+            "availability": "available",
+        }
+        for index, ref in enumerate(evidence_refs, start=1)
     )
 
 

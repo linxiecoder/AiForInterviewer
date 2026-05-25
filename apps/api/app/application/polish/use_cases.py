@@ -17,6 +17,7 @@ from app.application.ai_runtime.contracts import (
     RuntimeValidationError,
 )
 from app.application.ai_runtime.facade import AiOrchestrationFacade
+from app.application.ai_runtime.handoff import AgentPersistenceHandoff, build_question_result_write_plan
 from app.application.job_match.entities import JobMatchAnalysis
 from app.application.job_match.ports import JobMatchRepository
 from app.application.polish.commands import (
@@ -408,6 +409,63 @@ class PolishUseCases:
                     error=DomainError(code="generation_failed", message="Polish question graph failed")
                 )
             if graph_status is not None:
+                candidate_payload = _graph_status_candidate_payload(graph_status)
+                if candidate_payload is not None:
+                    try:
+                        plan = build_question_result_write_plan(
+                            owner_id=command.owner_id,
+                            actor_id=command.actor_id,
+                            session_id=command.session_id,
+                            ai_task_id=graph_status.ai_task_id,
+                            agent_run_id=graph_status.agent_run_id,
+                            candidate=candidate_payload,
+                            progress_node_ref=requested_progress_node_ref,
+                            trace_refs=graph_status.trace_refs,
+                            contract_ids=QUESTION_CONTRACT_IDS,
+                        )
+                        write_result = AgentPersistenceHandoff().write_question_result(
+                            plan,
+                            question_repository=self._polish_repository,
+                            now=now,
+                        )
+                    except RuntimeValidationError:
+                        task = _polish_question_graph_validation_failed_task_status(
+                            graph_status,
+                            requested_progress_node_ref=requested_progress_node_ref,
+                            created_at=now,
+                        )
+                        self._polish_repository.add_task(
+                            task,
+                            owner_id=command.owner_id,
+                            actor_id=command.actor_id,
+                            target_ref_id=command.session_id,
+                        )
+                        return ApplicationResult(value=task)
+                    except RuntimePolicyError:
+                        return ApplicationResult(
+                            error=DomainError(
+                                code="validation_failed",
+                                message="Polish question graph persistence blocked",
+                                details={"reason": "runtime_policy_blocked"},
+                            )
+                        )
+                    except Exception:
+                        return ApplicationResult(
+                            error=DomainError(
+                                code="generation_failed",
+                                message="Polish question graph persistence failed",
+                            )
+                        )
+                    if write_result is not None:
+                        task = write_result.task_status
+                        self._polish_repository.add_task(
+                            task,
+                            owner_id=command.owner_id,
+                            actor_id=command.actor_id,
+                            target_ref_id=command.session_id,
+                        )
+                        return ApplicationResult(value=task)
+
                 task = _polish_question_graph_task_status(
                     graph_status,
                     requested_progress_node_ref=requested_progress_node_ref,
@@ -1194,6 +1252,35 @@ def _polish_question_graph_task_status(
         retryable=False,
         result_ref=TraceRef(trace_ref_id=status_ref.agent_run_id, trace_type="agent_run", created_at=created_at),
         user_visible_status="题目生成中" if status == AiTaskStatus.RUNNING else "题目生成任务已启动",
+        candidate_refs=_polish_question_graph_candidate_refs(
+            status_ref,
+            requested_progress_node_ref=requested_progress_node_ref,
+        ),
+    )
+
+
+def _graph_status_candidate_payload(status_ref: object) -> dict[str, Any] | None:
+    for attribute in ("accepted_candidate", "candidate", "candidate_payload", "question_candidate"):
+        candidate = getattr(status_ref, attribute, None)
+        if isinstance(candidate, dict):
+            return candidate
+    return None
+
+
+def _polish_question_graph_validation_failed_task_status(
+    status_ref: AgentTaskStatusRef,
+    *,
+    requested_progress_node_ref: str | None,
+    created_at: Any,
+) -> PolishTaskStatus:
+    return PolishTaskStatus(
+        ai_task_id=status_ref.ai_task_id,
+        task_type="polish_question_generation",
+        status=AiTaskStatus.VALIDATION_FAILED,
+        contract_ids=QUESTION_CONTRACT_IDS,
+        retryable=False,
+        result_ref=TraceRef(trace_ref_id=status_ref.agent_run_id, trace_type="agent_run", created_at=created_at),
+        user_visible_status="题目生成校验未通过",
         candidate_refs=_polish_question_graph_candidate_refs(
             status_ref,
             requested_progress_node_ref=requested_progress_node_ref,
