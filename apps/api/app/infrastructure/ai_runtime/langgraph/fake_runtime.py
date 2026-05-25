@@ -9,7 +9,6 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.application.ai_runtime.contracts import (
-    AgentCandidatePayload,
     AgentCommandEnvelope,
     AgentReplayResult,
     AgentRunContext,
@@ -36,7 +35,10 @@ from app.application.ai_runtime.business_graphs.polish_question_graph import (
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
-from app.infrastructure.ai_runtime.langgraph.serializer import LangGraphRuntimeSerializer
+from app.infrastructure.ai_runtime.langgraph.serializer import (
+    LangGraphRuntimeSerializer,
+    build_agent_candidate_payload_from_runtime_output,
+)
 
 
 class _FakeGraphState(TypedDict):
@@ -352,15 +354,17 @@ class FakeLangGraphRuntime:
         validation_refs = tuple(ref for ref in candidate_trace_refs if ref.startswith("validation_ref_"))
         result_ref = "question_result_ref_" + _stable_id(context.owner_id, context.run_id, candidate_ref)
         trace_refs = (checkpoint.checkpoint_ref, *validation_refs)
-        payload = AgentCandidatePayload(
-            candidate_ref=candidate_ref,
-            candidate_type="polish_question_candidate",
-            payload_schema_id="polish_question_candidate.v1",
-            payload=candidate,
-            status="accepted",
-            trace_refs=(checkpoint.checkpoint_ref, *candidate_trace_refs),
-            validation_refs=validation_refs,
-            low_confidence_flags=(),
+        payload = build_agent_candidate_payload_from_runtime_output(
+            {
+                "candidate_ref": candidate_ref,
+                "candidate_type": "polish_question_candidate",
+                "payload_schema_id": "polish_question_candidate.v1",
+                "payload": candidate,
+                "status": "accepted",
+                "trace_refs": (checkpoint.checkpoint_ref, *candidate_trace_refs),
+                "validation_refs": validation_refs,
+                "low_confidence_flags": (),
+            }
         )
         metadata = {
             "graph_name": POLISH_QUESTION_GRAPH_NAME,
