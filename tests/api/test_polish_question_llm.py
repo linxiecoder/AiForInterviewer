@@ -104,6 +104,170 @@ def test_prompt_input_evidence_refs_match_validator_allowed_chunk_refs() -> None
     assert set(source_ref_ids).isdisjoint(input_evidence_refs)
 
 
+def test_fallback_schema_invalid_constricts_evidence_refs_to_primary_resume() -> None:
+    session, context, plan, state, requested_ref = _question_inputs(fixture_marker="schema_invalid")
+    context = {
+        **context,
+        "match_context": {
+            "available": True,
+            "analysis_id": "ana_question_llm_fallback_only",
+            "missing_points": ["缺少分布式事务回查机制的具体实现。"],
+            "interview_focus": ["围绕技术实现细节解释失败场景。"],
+        },
+        "turns": [
+            {
+                "question_text": "请说明支付链路的一次幂等改造。", 
+                "answer_text": "已说明请求重放和幂等设计。",
+                "feedback_text": "可更具体一些并补充回退策略。",
+            }
+        ],
+    }
+    deterministic = build_deterministic_progress_node_question(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    )
+    chunk_source_by_ref = {
+        chunk.chunk_id: chunk.source_type for chunk in deterministic.question_context.evidence_chunks
+    }
+    expected_primary_refs = tuple(
+        ref
+        for ref, source_type in chunk_source_by_ref.items()
+        if source_type in {"resume_project", "resume_summary", "resume_skill", "resume_work_experience"}
+    )
+
+    result = _generate_with_fake_llm(deterministic)
+
+    metadata = result.draft.question_metadata
+    fallback_refs = tuple(result.draft.evidence_refs)
+    assert fallback_refs
+    assert fallback_refs == expected_primary_refs
+    assert metadata["fallback_reason"] == "schema_invalid"
+    assert metadata["llm_output_validation_status"] == "schema_invalid"
+    assert metadata["primary_question_evidence_ref"] == "resume_project_001"
+    assert metadata["claim_mode"] == "candidate_experience"
+    assert "match_gap_001" not in fallback_refs
+    assert "turn_feedback_001" not in fallback_refs
+    assert "turn_question_001" not in fallback_refs
+    assert "recent_question_001" not in fallback_refs
+
+
+def test_fallback_semantic_invalid_constricts_evidence_refs_to_primary_resume() -> None:
+    session, context, plan, state, requested_ref = _question_inputs(fixture_marker="semantic_invalid")
+    deterministic = build_deterministic_progress_node_question(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    )
+    chunk_source_by_ref = {
+        chunk.chunk_id: chunk.source_type for chunk in deterministic.question_context.evidence_chunks
+    }
+    expected_primary_refs = tuple(
+        ref
+        for ref, source_type in chunk_source_by_ref.items()
+        if source_type in {"resume_project", "resume_summary", "resume_skill", "resume_work_experience"}
+    )
+
+    result = _generate_with_fake_llm(deterministic)
+
+    metadata = result.draft.question_metadata
+    fallback_refs = tuple(result.draft.evidence_refs)
+    assert fallback_refs
+    assert fallback_refs == expected_primary_refs
+    assert metadata["fallback_reason"] == "semantic_invalid"
+    assert metadata["llm_output_validation_status"] == "semantic_invalid"
+    assert "match_gap_001" not in fallback_refs
+    assert "turn_feedback_001" not in fallback_refs
+    assert "turn_question_001" not in fallback_refs
+    assert "recent_question_001" not in fallback_refs
+
+
+def test_grounding_insufficient_keeps_insufficient_fallback_and_does_not_shorten_refs() -> None:
+    deterministic = _build_progress_node_with_insufficient_primary(fixture_marker="grounding_insufficient")
+
+    result = _generate_with_fake_llm(deterministic)
+
+    assert result.draft.question_text == INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    assert result.draft.evidence_refs == ()
+    metadata = result.draft.question_metadata
+    assert metadata["llm_generation_mode"] == "llm_fallback"
+    assert metadata["llm_output_validation_status"] == "semantic_invalid"
+    assert metadata["fallback_reason"] == "prompt_input_insufficient"
+    assert metadata["primary_question_evidence"]["source_type"] == "insufficient"
+    assert metadata["grounding_gate_result"] == "blocked"
+    assert "primary_evidence_grounding_violation" in metadata["grounding_gate_issues"]
+
+
+def test_primary_unavailable_does_not_force_primary_based_conservative_fallback() -> None:
+    deterministic = _build_progress_node_with_insufficient_primary(fixture_marker="schema_invalid")
+    result = _generate_with_fake_llm(deterministic)
+
+    assert result.draft.question_text == INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    assert tuple(result.draft.evidence_refs) == ()
+    metadata = result.draft.question_metadata
+    assert metadata["fallback_reason"] == "prompt_input_insufficient"
+    assert metadata["llm_output_validation_status"] == "semantic_invalid"
+
+
+def test_non_fallback_success_does_not_shorten_supporting_refs() -> None:
+    deterministic = _deterministic_build(fixture_marker="valid_high_quality")
+    evidence_refs = list(deterministic.question_context.evidence_refs)
+    payload = _valid_llm_payload(evidence_refs=evidence_refs)
+
+    result = _generate_with_static_transport(deterministic, payload)
+
+    assert result.draft.evidence_refs == tuple(evidence_refs)
+    metadata = result.draft.question_metadata
+    assert metadata["llm_generation_mode"] == "llm_accepted"
+    assert metadata["fallback_reason"] is None
+    assert metadata["llm_output_validation_status"] == "valid"
+
+
+def test_mixed_theme_schema_invalid_fallback_keeps_technical_core_and_adds_mixed_overlay() -> None:
+    session, context, plan, state, requested_ref = _question_inputs(fixture_marker="schema_invalid")
+    session = replace(session, polish_theme="mixed")
+    plan = {
+        **plan,
+        "nodes": [
+            {
+                **plan["nodes"][0],
+                "title": "支付链路一致性",
+                "expected_capability": "请说明分布式锁、RocketMQ 事务消息与最终一致性在支付链路中的实现。",
+                "related_job_requirements": [
+                    "要求接口幂等、事务消息回查和对账一致性。"
+                ],
+                "related_resume_evidence": [
+                    "参与过分布式锁与 RocketMQ 事务消息的支付一致性改造。"
+                ],
+            }
+        ],
+    }
+
+    deterministic = build_deterministic_progress_node_question(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    )
+    assert deterministic.question_context.strategy.theme == "mixed"
+    assert deterministic.question_pattern.pattern_id == "real_request_trace_deep_dive"
+
+    result = _generate_with_fake_llm(deterministic)
+
+    assert result.llm_output is None
+    assert result.draft.question_text != deterministic.draft.question_text
+    assert result.draft.question_pattern == "real_request_trace_deep_dive"
+    for token in deterministic.question_pattern.required_question_elements[:4]:
+        assert token in result.draft.question_text
+    for token in ("显性技术", "隐性表达", "权重比例", "技术深度", "表达结构"):
+        assert token in result.draft.question_text
+
+
 def test_prompt_bundle_contains_primary_question_evidence_and_anti_repeat_contract() -> None:
     deterministic = _deterministic_build()
 
@@ -335,7 +499,7 @@ def test_fake_llm_schema_invalid_output_falls_back_to_deterministic(caplog) -> N
         "llm_fallback",
     )
 
-    assert result.draft.question_text == deterministic.draft.question_text
+    _assert_primary_based_conservative_fallback(result, deterministic)
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "llm_fallback"
     assert metadata["llm_output_validation_status"] == "schema_invalid"
@@ -353,7 +517,7 @@ def test_fake_llm_fabricated_entity_evidence_ref_and_answer_leak_are_blocked() -
 
         result = _generate_with_fake_llm(deterministic)
 
-        assert result.draft.question_text == deterministic.draft.question_text
+        _assert_primary_based_conservative_fallback(result, deterministic)
         metadata = result.draft.question_metadata
         assert metadata["llm_generation_mode"] == "llm_fallback"
         assert metadata["fallback_reason"] == expected_reason
@@ -376,7 +540,7 @@ def test_source_ref_returned_as_evidence_ref_is_rejected_with_redacted_diagnosti
     result = _generate_with_static_transport(deterministic, payload)
 
     assert result.llm_output is None
-    assert result.draft.question_text == deterministic.draft.question_text
+    _assert_primary_based_conservative_fallback(result, deterministic)
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "llm_fallback"
     assert metadata["llm_output_validation_status"] == "semantic_invalid"
@@ -408,7 +572,7 @@ def test_object_ref_returned_as_evidence_ref_is_rejected_without_loose_conversio
     result = _generate_with_static_transport(deterministic, payload)
 
     assert result.llm_output is None
-    assert result.draft.question_text == deterministic.draft.question_text
+    _assert_primary_based_conservative_fallback(result, deterministic)
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "llm_fallback"
     assert metadata["llm_output_validation_status"] == "semantic_invalid"
@@ -435,7 +599,7 @@ def test_empty_evidence_refs_are_rejected_with_redacted_diagnostics() -> None:
     result = _generate_with_static_transport(deterministic, payload)
 
     assert result.llm_output is None
-    assert result.draft.question_text == deterministic.draft.question_text
+    _assert_primary_based_conservative_fallback(result, deterministic)
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "llm_fallback"
     assert metadata["llm_output_validation_status"] == "semantic_invalid"
@@ -459,7 +623,7 @@ def test_semantic_invalid_includes_pattern_and_business_constraint_diagnostics()
     result = _generate_with_static_transport(deterministic, payload)
 
     assert result.llm_output is None
-    assert result.draft.question_text == deterministic.draft.question_text
+    _assert_primary_based_conservative_fallback(result, deterministic)
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "llm_fallback"
     assert metadata["llm_output_validation_status"] == "semantic_invalid"
@@ -489,7 +653,7 @@ def test_semantic_invalid_includes_pattern_and_business_constraint_diagnostics()
     _assert_redacted_diagnostics(metadata)
 
 
-def test_llm_grounding_violation_falls_back_to_insufficient_primary_evidence_question() -> None:
+def test_llm_grounding_violation_keeps_primary_based_conservative_fallback_question() -> None:
     deterministic = _deterministic_build()
     deterministic = replace(
         deterministic,
@@ -519,7 +683,11 @@ def test_llm_grounding_violation_falls_back_to_insufficient_primary_evidence_que
     result = _generate_with_static_transport(deterministic, payload)
 
     assert result.llm_output is None
-    assert result.draft.question_text == INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    assert result.draft.question_text != INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    assert result.draft.question_text != deterministic.draft.question_text
+    assert "FastAPI 支付工作流" in result.draft.question_text
+    assert "支付" in result.draft.question_text
+    assert "当前材料不足" not in result.draft.question_text
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "llm_fallback"
     assert metadata["llm_output_validation_status"] == "semantic_invalid"
@@ -557,7 +725,7 @@ def test_fake_llm_semantic_invalid_and_repair_paths_are_deterministic() -> None:
 
         result = _generate_with_fake_llm(deterministic)
 
-        assert result.draft.question_text == deterministic.draft.question_text
+        _assert_primary_based_conservative_fallback(result, deterministic)
         metadata = result.draft.question_metadata
         assert metadata["llm_generation_mode"] == "llm_fallback"
         assert metadata["fallback_reason"] == expected_reason
@@ -601,7 +769,7 @@ def test_missing_required_and_unknown_fields_do_not_enter_metadata() -> None:
 
     missing_result = _generate_with_static_transport(deterministic, missing_required_payload)
 
-    assert missing_result.draft.question_text == deterministic.draft.question_text
+    _assert_primary_based_conservative_fallback(missing_result, deterministic)
     missing_metadata = missing_result.draft.question_metadata
     assert missing_metadata["llm_generation_mode"] == "llm_fallback"
     assert missing_metadata["fallback_reason"] == "schema_invalid"
@@ -823,6 +991,43 @@ def _question_inputs(*, fixture_marker: str | None = None):
     return session, context, plan, state, "node_payment_consistency"
 
 
+def _build_progress_node_with_insufficient_primary(*, fixture_marker: str | None = None):
+    session, context, plan, state, requested_ref = _question_inputs(fixture_marker=fixture_marker)
+    session = replace(session, custom_topic_text_summary="")
+    node = dict(plan["nodes"][0])
+    node["related_job_requirements"] = []
+    node["related_resume_evidence"] = []
+    node["missing_points"] = []
+    plan = {"status": plan["status"], "context_digest": plan["context_digest"], "nodes": [node]}
+    context = {
+        **context,
+        "match_context": {"available": False},
+        "resume_snapshot": {
+            "resume_id": "res_question_llm",
+            "resume_version_id": "res_ver_question_llm",
+            "summary": "",
+            "project_experiences": [],
+            "skills": [],
+            "work_experiences": [],
+        },
+        "job_snapshot": {
+            "job_id": "job_question_llm",
+            "job_version_id": "job_ver_question_llm",
+            "requirements": [],
+            "responsibilities": [],
+        },
+        "turns": [],
+        "resume_markdown": "",
+    }
+    return build_deterministic_progress_node_question(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=requested_ref,
+    )
+
+
 def _input_evidence_refs(request: LlmTransportRequest) -> list[str]:
     evidence_bundle = request.evidence_bundle.get("evidence_bundle", {})
     refs = evidence_bundle.get("input_evidence_refs", [])
@@ -867,6 +1072,13 @@ def _assert_no_raw_llm_payload(payload: object) -> None:
         RAW_JD_SENTINEL.strip(),
     )
     assert not any(item in serialized for item in forbidden), serialized
+
+
+def _assert_primary_based_conservative_fallback(result: Any, deterministic: Any) -> None:
+    assert result.draft.question_text != deterministic.draft.question_text
+    assert result.draft.question_text != INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK
+    assert "FastAPI 支付工作流" in result.draft.question_text
+    assert "当前材料不足" not in result.draft.question_text
 
 
 def _assert_redacted_diagnostics(payload: object) -> None:

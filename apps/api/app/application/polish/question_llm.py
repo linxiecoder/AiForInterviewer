@@ -74,6 +74,7 @@ _FORBIDDEN_OUTPUT_KEYS = {
     "hidden_rubric",
     "hidden_scoring_rules",
 }
+_PRIMARY_EVIDENCE_SOURCE_TYPES = {"resume_project", "resume_summary", "resume_work_experience", "resume_skill"}
 _REQUIRED_OUTPUT_FIELDS = (
     "schema_id",
     "schema_version",
@@ -156,6 +157,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=(),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
         if not deterministic_build.question_context.evidence_refs:
             LogUtil.polish_question_llm_fallback(
@@ -176,6 +178,7 @@ class PolishQuestionLlmService:
                     else (),
                 ),
                 use_grounding_fallback=primary_question_evidence.get("source_type") == "insufficient",
+                deterministic_build=deterministic_build,
             )
         if self._transport is None:
             LogUtil.polish_question_llm_fallback(
@@ -190,6 +193,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_unavailable", "message": "llm transport is missing"},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
         if _provider_kind(self._transport) != "fake" and not should_allow_real_question_provider(self._transport):
             LogUtil.polish_question_llm_fallback(
@@ -204,6 +208,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "real_provider_disabled", "message": "question real provider flag is off"},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
 
         prompt_bundle = build_polish_question_generation_prompt_bundle(
@@ -236,6 +241,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_timeout", "message": "transport timed out"},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
         except LlmTransportConfigurationError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -250,6 +256,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "transport_configuration_error", "message": _safe_error(exc)},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
         except LlmTransportUnavailableError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -264,6 +271,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_unavailable", "message": _safe_error(exc)},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
         except LlmTransportResponseError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -278,6 +286,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "provider_response_invalid", "message": _safe_error(exc)},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
         except LlmTransportError as exc:
             LogUtil.polish_question_llm_fallback(
@@ -292,6 +301,7 @@ class PolishQuestionLlmService:
                 provider_summary=provider_summary,
                 validation_errors=({"code": "transport_error", "message": _safe_error(exc)},),
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
 
         normalized = validate_llm_question_output(
@@ -311,6 +321,7 @@ class PolishQuestionLlmService:
                 provider_summary=_provider_summary(self._transport, result=transport_result),
                 validation_errors=normalized.validation_errors,
                 metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, ()),
+                deterministic_build=deterministic_build,
             )
 
         adapted = adapt_llm_output_to_question_draft(
@@ -334,6 +345,7 @@ class PolishQuestionLlmService:
                 repair_attempted=adapted.repair_attempted,
                 metadata_overrides=adapted.metadata_overrides,
                 use_grounding_fallback=adapted.use_grounding_fallback,
+                deterministic_build=deterministic_build,
             )
         return PolishQuestionLlmResult(
             draft=adapted.draft,
@@ -506,7 +518,10 @@ def adapt_llm_output_to_question_draft(
         session=deterministic_build.session,
         deterministic_build=deterministic_build,
     )
-    grounding_metadata = {"primary_question_evidence": primary_question_evidence}
+    grounding_metadata = {
+        "primary_question_evidence": primary_question_evidence,
+        "scenario_constraint_summary": llm_output.scenario_constraint_summary,
+    }
     quality = validate_question_quality(
         question_text=llm_output.question_text,
         selected_pattern=pattern,
@@ -554,8 +569,7 @@ def adapt_llm_output_to_question_draft(
             ),
             repair_attempted=repair_attempted,
             metadata_overrides=_grounding_metadata_overrides(primary_question_evidence, grounding_issues),
-            use_grounding_fallback=bool(grounding_issues)
-            or primary_question_evidence.get("source_type") == "insufficient",
+            use_grounding_fallback=_should_use_insufficient_primary_fallback(primary_question_evidence),
         )
 
     grounding_issues = _grounding_gate_issues(quality)
@@ -650,11 +664,47 @@ def _fallback_result(
     repair_attempted: bool = False,
     metadata_overrides: dict[str, Any] | None = None,
     use_grounding_fallback: bool = False,
+    deterministic_build: Any | None = None,
 ) -> PolishQuestionLlmResult:
+    applied_primary_based_conservative_fallback = False
     draft_for_result = replace(draft, question_text=INSUFFICIENT_PRIMARY_EVIDENCE_FALLBACK) if use_grounding_fallback else draft
     base_metadata = dict(draft.question_metadata)
     if metadata_overrides:
         base_metadata.update(metadata_overrides)
+    primary_question_evidence = base_metadata.get("primary_question_evidence")
+    if isinstance(primary_question_evidence, dict):
+        primary_summary = _primary_evidence_summary_for_metadata(primary_question_evidence)
+        if primary_summary:
+            base_metadata["scenario_constraint_summary"] = primary_summary
+        use_primary_based_conservative_fallback = _should_apply_primary_based_conservative_fallback(
+            primary_question_evidence=primary_question_evidence,
+            use_grounding_fallback=use_grounding_fallback,
+            validation_status=validation_status,
+        )
+        if use_primary_based_conservative_fallback:
+            conservative_question = _primary_based_conservative_question(
+                primary_question_evidence,
+                expected_answer_dimensions=draft.expected_answer_dimensions,
+                selected_pattern=getattr(deterministic_build, "question_pattern", None),
+                theme_strategy=getattr(getattr(deterministic_build, "question_context", None), "strategy", None),
+                mixed_overlay_enabled=_should_apply_mixed_overlay(
+                    primary_question_evidence=primary_question_evidence,
+                    deterministic_build=deterministic_build,
+                ),
+            )
+            if conservative_question:
+                applied_primary_based_conservative_fallback = True
+                draft_for_result = replace(draft, question_text=conservative_question)
+            if _should_apply_primary_fallback_refs(
+                fallback_reason=fallback_reason,
+                applied_primary_based_conservative_fallback=applied_primary_based_conservative_fallback,
+            ):
+                primary_refs = _primary_evidence_fallback_refs(
+                    deterministic_build=deterministic_build,
+                    primary_question_evidence=primary_question_evidence,
+                )
+                if primary_refs:
+                    draft_for_result = replace(draft_for_result, evidence_refs=primary_refs)
     metadata = _extend_llm_metadata(
         base_metadata,
         mode=mode,
@@ -703,6 +753,149 @@ def _extend_llm_metadata(
         }
     )
     return metadata
+
+
+def _should_use_insufficient_primary_fallback(primary_question_evidence: dict[str, Any]) -> bool:
+    source_type = _string_or_none(primary_question_evidence.get("source_type"), max_chars=80)
+    claim_mode = _string_or_none(primary_question_evidence.get("claim_mode"), max_chars=80)
+    summary = _string_or_none(primary_question_evidence.get("summary"), max_chars=500)
+    return source_type == "insufficient" or claim_mode == "clarification_needed" or not summary
+
+
+def _primary_evidence_summary_for_metadata(primary_question_evidence: dict[str, Any]) -> str | None:
+    if _should_use_insufficient_primary_fallback(primary_question_evidence):
+        return "当前材料不足以支撑具体业务场景。"
+    return _string_or_none(primary_question_evidence.get("summary"), max_chars=500)
+
+
+def _should_apply_primary_based_conservative_fallback(
+    *,
+    primary_question_evidence: dict[str, Any],
+    validation_status: str,
+    use_grounding_fallback: bool,
+) -> bool:
+    return (
+        not use_grounding_fallback
+        and validation_status in {LLM_VALIDATION_STATUS_SCHEMA_INVALID, LLM_VALIDATION_STATUS_SEMANTIC_INVALID}
+        and not _should_use_insufficient_primary_fallback(primary_question_evidence)
+    )
+
+
+def _should_apply_primary_fallback_refs(
+    *,
+    fallback_reason: str,
+    applied_primary_based_conservative_fallback: bool,
+) -> bool:
+    return applied_primary_based_conservative_fallback and fallback_reason in {
+        FALLBACK_SCHEMA_INVALID,
+        FALLBACK_SEMANTIC_INVALID,
+    }
+
+
+def _primary_based_conservative_question(
+    primary_question_evidence: dict[str, Any],
+    *,
+    expected_answer_dimensions: tuple[str, ...],
+    selected_pattern: Any | None = None,
+    theme_strategy: Any | None = None,
+    mixed_overlay_enabled: bool = False,
+) -> str | None:
+    if _should_use_insufficient_primary_fallback(primary_question_evidence):
+        return None
+    title = _string_or_none(primary_question_evidence.get("title"), max_chars=160) or "当前项目经历"
+    summary = _string_or_none(primary_question_evidence.get("summary"), max_chars=420)
+    if not summary:
+        return None
+    expected_dimensions = "、".join(expected_answer_dimensions[:6]) or "业务边界、失败路径、验证指标"
+    required_elements = tuple(str(value) for value in getattr(selected_pattern, "required_question_elements", ()) if str(value).strip())
+    if not required_elements:
+        required_elements = ("完整链路", "失败路径", "验证指标", "trade-off")
+    focus = "、".join(required_elements[:5])
+    question_text = (
+        f"请基于你简历中的「{title}」，围绕 primary evidence「{summary}」，从技术实现到异常处理完整展开，"
+        f"围绕以下核心要点说明：{focus}。"
+        f"请给出业务约束、完整链路、恢复机制、性能或成本约束、验证指标和核心 trade-off，"
+        f"回答重点：{expected_dimensions}。"
+    )
+    if mixed_overlay_enabled:
+        return _append_mixed_theme_overlay(
+            question_text=question_text,
+            theme_strategy=theme_strategy,
+        )
+    return question_text
+
+
+def _append_mixed_theme_overlay(
+    *,
+    question_text: str,
+    theme_strategy: Any | None,
+) -> str:
+    explicit_weight = getattr(theme_strategy, "explicit_weight", 60)
+    implicit_weight = getattr(theme_strategy, "implicit_weight", 40)
+    if all(
+        token in question_text
+        for token in ("显性技术", "隐性表达", "权重比例", "技术深度", "表达结构")
+    ):
+        return question_text
+    return (
+        f"{question_text}\n"
+        f"请按显性技术 {explicit_weight}% 与隐性表达 {implicit_weight}% 的权重比例作答，"
+        "优先体现技术深度，同时按清晰的表达结构给出背景、做法、指标、复盘与不足。"
+    )
+
+
+def _should_apply_mixed_overlay(
+    *,
+    primary_question_evidence: dict[str, Any],
+    deterministic_build: Any | None,
+) -> bool:
+    if not isinstance(primary_question_evidence, dict):
+        return False
+    if _should_use_insufficient_primary_fallback(primary_question_evidence):
+        return False
+    if deterministic_build is None:
+        return False
+    strategy = getattr(getattr(deterministic_build, "question_context", None), "strategy", None)
+    return getattr(strategy, "theme", None) == "mixed"
+
+
+def _primary_evidence_fallback_refs(
+    *,
+    deterministic_build: Any | None,
+    primary_question_evidence: dict[str, Any],
+) -> tuple[str, ...] | None:
+    if _should_use_insufficient_primary_fallback(primary_question_evidence):
+        return None
+    if deterministic_build is None:
+        return None
+    question_context = getattr(deterministic_build, "question_context", None)
+    if question_context is None:
+        return None
+    chunks = getattr(question_context, "evidence_chunks", ())
+    context_refs = tuple(getattr(question_context, "evidence_refs", ()))
+    chunk_source_by_ref = {
+        _string_or_none(getattr(chunk, "chunk_id"), max_chars=120): _string_or_none(
+            getattr(chunk, "source_type", None), max_chars=80
+        )
+        for chunk in chunks
+    }
+    allowed_refs = {
+        str(ref)
+        for ref in primary_question_evidence.get("allowed_source_refs", ())
+        if isinstance(ref, str)
+        and str(ref).strip()
+    }
+    if not allowed_refs:
+        allowed_refs = {str(ref) for ref in context_refs if str(ref).strip()}
+    primary_refs = [
+        ref
+        for ref in context_refs
+        if str(ref).strip() in allowed_refs
+        and chunk_source_by_ref.get(str(ref)) in _PRIMARY_EVIDENCE_SOURCE_TYPES
+    ]
+    if not primary_refs:
+        return None
+    return tuple(_dedupe([str(ref) for ref in primary_refs if str(ref).strip()]))
 
 
 def _invalid(
@@ -902,10 +1095,12 @@ def _grounding_metadata_overrides(
     primary_question_evidence: dict[str, Any],
     grounding_issues: tuple[str, ...],
 ) -> dict[str, Any]:
+    scenario_summary = _primary_evidence_summary_for_metadata(primary_question_evidence)
     return {
         "primary_question_evidence": dict(primary_question_evidence),
         "primary_question_evidence_ref": _string_or_none(primary_question_evidence.get("ref"), max_chars=120),
         "claim_mode": _string_or_none(primary_question_evidence.get("claim_mode"), max_chars=80),
+        "scenario_constraint_summary": scenario_summary,
         "grounding_gate_result": "blocked" if grounding_issues else "passed",
         "grounding_gate_issues": list(grounding_issues),
     }
