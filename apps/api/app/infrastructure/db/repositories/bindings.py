@@ -10,30 +10,34 @@ from app.domain.bindings.ports import BindingRepository
 from app.domain.shared.clock import utc_now
 from app.infrastructure.db.models.binding import ResumeJobBinding as BindingModel
 from app.infrastructure.db.models.resume import Resume as ResumeModel
+from app.infrastructure.db.repositories.base import SqlAlchemyRepository
 from app.infrastructure.db.session import get_session_factory
 
 
-class SqlAlchemyBindingRepository(BindingRepository):
-    def __init__(self, session_factory: sessionmaker[Session] | None = None) -> None:
-        self._session_factory = session_factory or get_session_factory()
+class SqlAlchemyBindingRepository(SqlAlchemyRepository, BindingRepository):
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session] | None = None,
+        *,
+        session: Session | None = None,
+    ) -> None:
+        super().__init__(session_factory, session=session)
 
     def get(self, binding_id: str) -> ResumeJobBinding | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             binding = session.get(BindingModel, binding_id)
             return _to_domain_binding(binding) if binding is not None else None
 
     def add(self, binding: ResumeJobBinding) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_binding_model(binding))
-            session.commit()
 
     def update(self, binding: ResumeJobBinding) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_binding_model(binding))
-            session.commit()
 
     def list_by_owner(self, owner_id: str) -> list[ResumeJobBinding]:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             rows = session.scalars(
                 select(BindingModel)
                 .where(BindingModel.owner_id == owner_id)
@@ -42,7 +46,7 @@ class SqlAlchemyBindingRepository(BindingRepository):
             return [_to_domain_binding(row) for row in rows]
 
     def list_by_job(self, owner_id: str, job_id: str) -> list[ResumeJobBinding]:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             rows = session.scalars(
                 select(BindingModel)
                 .where(BindingModel.owner_id == owner_id, BindingModel.job_id == job_id)
@@ -51,7 +55,7 @@ class SqlAlchemyBindingRepository(BindingRepository):
             return [_to_domain_binding(row) for row in rows]
 
     def find_active_binding(self, owner_id: str, resume_id: str, job_id: str) -> ResumeJobBinding | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             binding = session.scalar(
                 select(BindingModel)
                 .where(
@@ -67,7 +71,7 @@ class SqlAlchemyBindingRepository(BindingRepository):
         return None
 
     def register_resume(self, owner_id: str, resume_id: str, resume_version_id: str) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             resume = session.get(ResumeModel, resume_id)
             now = utc_now()
             if resume is None:
@@ -89,10 +93,9 @@ class SqlAlchemyBindingRepository(BindingRepository):
                 resume.current_version_id = resume_version_id
                 resume.updated_at = now
             session.merge(resume)
-            session.commit()
 
     def get_resume_current_version(self, owner_id: str, resume_id: str) -> str | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             resume = session.scalar(
                 select(ResumeModel).where(
                     ResumeModel.id == resume_id,

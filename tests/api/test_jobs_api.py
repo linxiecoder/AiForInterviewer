@@ -372,7 +372,7 @@ def _app_with_two_users():
         display_name="User B",
         password_hash=Pbkdf2PasswordHasher().hash_password(USER_B_PASSWORD),
     )
-    return create_app(auth_runtime=runtime)
+    return create_app(auth_runtime=runtime, initialize_schema=True)
 
 
 def _login_cookie(app, identifier: str, password: str) -> str:

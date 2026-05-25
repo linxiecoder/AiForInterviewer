@@ -28,6 +28,10 @@ if [ "$MODE" = "debug" ]; then
   export API_DEBUG=true
 fi
 
+if [ "${API_DB_AUTO_MIGRATE:-true}" != "false" ]; then
+  bash scripts/db/migrate.sh
+fi
+
 UVICORN_ARGS=(
   app.main:app
   --app-dir apps/api

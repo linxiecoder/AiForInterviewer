@@ -4,77 +4,12 @@ from dataclasses import dataclass
 from dataclasses import field
 from os import getenv
 
-from sqlalchemy import DateTime, create_engine, inspect, text
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
-from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.db.base import Base
-
-
-_KNOWN_SCHEMA_COLUMN_BACKFILLS: tuple[tuple[str, str, str], ...] = (
-    ("interview_sessions", "resume_id", "VARCHAR(80)"),
-    ("interview_sessions", "job_id", "VARCHAR(80)"),
-    ("polish_session_details", "custom_topic_text_summary", "VARCHAR(240)"),
-    ("polish_session_details", "progress_tree_status", "VARCHAR(40)"),
-    ("polish_session_details", "progress_percent", "INTEGER"),
-    ("polish_session_details", "progress_tree_plan_json", "JSON"),
-    ("polish_session_details", "progress_tree_state_json", "JSON"),
-    ("questions", "question_sources_json", "JSON"),
-    ("questions", "question_metadata_json", "JSON"),
-    ("questions", "progress_node_ref", "VARCHAR(120)"),
-    ("questions", "context_digest", "VARCHAR(120)"),
-    ("questions", "evidence_ref_ids", "JSON"),
-    ("weaknesses", "title", "VARCHAR(160)"),
-    ("weaknesses", "summary", "TEXT"),
-    ("weaknesses", "severity_hint", "VARCHAR(40)"),
-    ("weaknesses", "confidence_level", "VARCHAR(40)"),
-    ("weaknesses", "source_refs_json", "JSON"),
-    ("weaknesses", "session_refs_json", "JSON"),
-    ("weaknesses", "feedback_refs_json", "JSON"),
-    ("weaknesses", "question_refs_json", "JSON"),
-    ("weaknesses", "answer_refs_json", "JSON"),
-    ("weaknesses", "loss_point_refs_json", "JSON"),
-    ("weaknesses", "repeated_loss_point_refs_json", "JSON"),
-    ("weaknesses", "evidence_refs_json", "JSON"),
-    ("weaknesses", "trace_refs_json", "JSON"),
-    ("weaknesses", "user_confirmation_ref_json", "JSON"),
-    ("weaknesses", "occurrence_count", "INTEGER"),
-    ("weaknesses", "first_seen_at", "DATETIME"),
-    ("weaknesses", "last_seen_at", "DATETIME"),
-    ("weaknesses", "archived_at", "DATETIME"),
-    ("assets", "asset_type", "VARCHAR(64)"),
-    ("assets", "title", "VARCHAR(160)"),
-    ("assets", "summary", "TEXT"),
-    ("assets", "content", "TEXT"),
-    ("assets", "source_refs_json", "JSON"),
-    ("assets", "evidence_refs_json", "JSON"),
-    ("assets", "trace_refs_json", "JSON"),
-    ("assets", "resume_version_ref_json", "JSON"),
-    ("assets", "job_version_ref_json", "JSON"),
-    ("assets", "question_pattern", "VARCHAR(120)"),
-    ("assets", "created_from_candidate_id", "VARCHAR(80)"),
-    ("assets", "user_confirmation_ref_json", "JSON"),
-    ("assets", "fact_source", "VARCHAR(80)"),
-    ("asset_versions", "content", "TEXT"),
-    ("asset_versions", "edit_summary", "TEXT"),
-    ("asset_versions", "created_by_actor_id", "VARCHAR(80)"),
-    ("training_recommendations", "title", "VARCHAR(160)"),
-    ("training_recommendations", "summary", "TEXT"),
-    ("training_recommendations", "reason", "TEXT"),
-    ("training_recommendations", "confidence_level", "VARCHAR(40)"),
-    ("training_recommendations", "source_refs_json", "JSON"),
-    ("training_recommendations", "evidence_refs_json", "JSON"),
-    ("training_recommendations", "trace_refs_json", "JSON"),
-    ("training_recommendations", "candidate_ref_json", "JSON"),
-    ("training_recommendations", "target_weakness_refs_json", "JSON"),
-    ("training_recommendations", "question_pattern", "VARCHAR(120)"),
-    ("training_recommendations", "expected_answer_dimensions_json", "JSON"),
-    ("training_recommendations", "created_from_candidate_id", "VARCHAR(80)"),
-    ("training_recommendations", "user_confirmation_ref_json", "JSON"),
-    ("training_recommendations", "dismissed_at", "DATETIME"),
-)
 
 
 @dataclass(frozen=True)
@@ -94,7 +29,7 @@ def build_session_factory(settings: DbSettings | None = None) -> sessionmaker[Se
 def configure_session_factory(
     settings: DbSettings | None = None,
     *,
-    initialize: bool = True,
+    initialize: bool = False,
 ) -> sessionmaker[Session]:
     global _session_factory
     _session_factory = build_session_factory(settings)
@@ -106,7 +41,7 @@ def configure_session_factory(
 def get_session_factory() -> sessionmaker[Session]:
     global _session_factory
     if _session_factory is None:
-        _session_factory = configure_session_factory()
+        _session_factory = configure_session_factory(initialize=False)
     return _session_factory
 
 
@@ -115,11 +50,15 @@ def initialize_schema(
     *,
     session_factory: sessionmaker[Session] | None = None,
 ) -> None:
+    """Create current metadata tables for isolated tests only.
+
+    Dev and production startup must use Alembic migrations instead of this
+    helper so app import never mutates schema implicitly.
+    """
     _load_models()
     factory = session_factory or build_session_factory(settings)
     bind = factory.kw["bind"]
     Base.metadata.create_all(bind=bind)
-    _backfill_known_schema_columns(bind)
 
 
 def _build_engine(database_url: str) -> Engine:
@@ -149,26 +88,3 @@ def _default_database_url() -> str:
 
 def _load_models() -> None:
     import app.infrastructure.db.models  # noqa: F401
-
-
-def _column_sql_for_dialect(column_sql: str, dialect: Dialect) -> str:
-    if column_sql.upper() == "DATETIME":
-        return str(DateTime(timezone=True).compile(dialect=dialect))
-    return column_sql
-
-
-def _backfill_known_schema_columns(bind: Engine) -> None:
-    inspector = inspect(bind)
-    table_names = set(inspector.get_table_names())
-    if not table_names:
-        return
-
-    with bind.begin() as connection:
-        for table_name, column_name, column_sql in _KNOWN_SCHEMA_COLUMN_BACKFILLS:
-            if table_name not in table_names:
-                continue
-            columns = {column["name"] for column in inspector.get_columns(table_name)}
-            if column_name in columns:
-                continue
-            column_type_sql = _column_sql_for_dialect(column_sql, bind.dialect)
-            connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type_sql}"))

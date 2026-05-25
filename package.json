@@ -14,6 +14,8 @@
     "dev:kill": "bash scripts/dev/kill-ports.sh 8001 5173",
     "dev:api": "bash scripts/dev/kill-ports.sh 8001 && bash scripts/dev/start-api.sh",
     "dev:web": "bash scripts/dev/kill-ports.sh 5173 && npm --workspace apps/web run dev",
+    "db:migrate": "bash scripts/db/migrate.sh",
+    "db:revision": "bash scripts/db/revision.sh",
     "api:dev": "npm run dev:api",
     "web:dev": "npm run dev:web",
     "web:build": "npm --workspace apps/web run build",

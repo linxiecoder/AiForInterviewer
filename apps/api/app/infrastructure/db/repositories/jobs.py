@@ -10,15 +10,21 @@ from app.domain.jobs.ports import JobRepository
 from app.domain.shared.clock import utc_now
 from app.infrastructure.db.models.job import Job as JobModel
 from app.infrastructure.db.models.job import JobVersion as JobVersionModel
+from app.infrastructure.db.repositories.base import SqlAlchemyRepository
 from app.infrastructure.db.session import get_session_factory
 
 
-class SqlAlchemyJobRepository(JobRepository):
-    def __init__(self, session_factory: sessionmaker[Session] | None = None) -> None:
-        self._session_factory = session_factory or get_session_factory()
+class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session] | None = None,
+        *,
+        session: Session | None = None,
+    ) -> None:
+        super().__init__(session_factory, session=session)
 
     def list_by_owner(self, owner_id: str) -> list[Job]:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             rows = session.scalars(
                 select(JobModel)
                 .where(JobModel.owner_id == owner_id)
@@ -27,32 +33,28 @@ class SqlAlchemyJobRepository(JobRepository):
             return [_to_domain_job(row) for row in rows]
 
     def get(self, job_id: str) -> Job | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             found = session.get(JobModel, job_id)
             return _to_domain_job(found) if found is not None else None
 
     def create_job(self, job: Job) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_job_model(job))
-            session.commit()
 
     def update_job(self, job: Job) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_job_model(job))
-            session.commit()
 
     def create_job_version(self, version: JobVersion) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_job_version_model(version))
-            session.commit()
 
     def update_job_version(self, version: JobVersion) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_job_version_model(version))
-            session.commit()
 
     def get_job_version(self, job_version_id: str) -> JobVersion | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             found = session.get(JobVersionModel, job_version_id)
             return _to_domain_job_version(found) if found is not None else None
 

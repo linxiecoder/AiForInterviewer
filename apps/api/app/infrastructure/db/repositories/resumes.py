@@ -9,32 +9,38 @@ from app.domain.shared.clock import utc_now
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
 from app.infrastructure.db.models.resume import Resume as ResumeModel
 from app.infrastructure.db.models.resume import ResumeVersion as ResumeVersionModel
+from app.infrastructure.db.repositories.base import SqlAlchemyRepository
 from app.infrastructure.db.session import get_session_factory
 
 
-class SqlAlchemyResumeRepository(ResumeRepository):
-    def __init__(self, session_factory: sessionmaker[Session] | None = None) -> None:
-        self._session_factory = session_factory or get_session_factory()
+class SqlAlchemyResumeRepository(SqlAlchemyRepository, ResumeRepository):
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session] | None = None,
+        *,
+        session: Session | None = None,
+    ) -> None:
+        super().__init__(session_factory, session=session)
 
     def get(self, resume_id: str) -> Resume | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             found = session.get(ResumeModel, resume_id)
             return _to_domain_resume(found) if found is not None else None
 
     def get_version(self, resume_version_id: str) -> ResumeVersion | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             found = session.get(ResumeVersionModel, resume_version_id)
             return _to_domain_resume_version(found) if found is not None else None
 
     def get_ref(self, resume_id: str) -> ResourceRef | None:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             found = session.get(ResumeModel, resume_id)
         if found is None:
             return None
         return ResourceRef(resource_type="resume", resource_id=resume_id)
 
     def list_by_owner(self, owner_id: str) -> list[Resume]:
-        with self._session_factory() as session:
+        with self.session_scope() as session:
             rows = session.scalars(
                 select(ResumeModel)
                 .where(ResumeModel.owner_id == owner_id)
@@ -43,20 +49,17 @@ class SqlAlchemyResumeRepository(ResumeRepository):
             return [_to_domain_resume(row) for row in rows]
 
     def add(self, resume: Resume) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_resume_model(resume))
-            session.commit()
 
     def add_version(self, version: ResumeVersion) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_resume_version_model(version))
-            session.commit()
 
     def create_with_version(self, resume: Resume, version: ResumeVersion) -> None:
-        with self._session_factory() as session:
+        with self.session_scope(commit=True) as session:
             session.merge(_to_resume_model(resume))
             session.merge(_to_resume_version_model(version))
-            session.commit()
 
     @classmethod
     def clear_state(cls) -> None:

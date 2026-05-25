@@ -69,11 +69,11 @@ def get_settings() -> ApiSettings:
 def create_app(
     settings: ApiSettings | None = None,
     *,
-    initialize_schema: bool = True,
+    initialize_schema: bool = False,
     auth_runtime: AuthRuntime | None = None,
     db_settings: DbSettings | None = None,
 ) -> FastAPI:
-    """构建当前保留的 API app，并初始化当前 SQLAlchemy schema。"""
+    """构建当前保留的 API app；schema 迁移由启动脚本或测试显式触发。"""
     resolved_settings = settings or get_settings()
     LogUtil.configure(
         BackendLogSettings(level="DEBUG" if resolved_settings.debug else "INFO")

@@ -1,6 +1,9 @@
 import json
 import logging
 
+from sqlalchemy import inspect
+
+from app.infrastructure.db.session import DbSettings
 from app.main import ApiSettings, _log_runtime_ready, _startup_log_lines, create_app, get_settings
 from tests.api.asgi_client import call_json
 
@@ -19,6 +22,13 @@ def test_create_app_registers_auth_runtime() -> None:
 
     assert app.state.auth_runtime.cookie_policy.name == "aifi_session"
     assert app.state.auth_runtime.cookie_policy.path == "/api/v1"
+
+
+def test_create_app_does_not_initialize_schema_by_default() -> None:
+    app = create_app(db_settings=DbSettings(database_url="sqlite+pysqlite:///:memory:"))
+
+    engine = app.state.db_session_factory.kw["bind"]
+    assert inspect(engine).get_table_names() == []
 
 
 def test_api_debug_env_enables_fastapi_debug(monkeypatch) -> None:
