@@ -1,4 +1,15 @@
-"""Polish core HTTP adapters."""
+"""
+面试打磨（Polish）HTTP 路由适配器。
+
+职责：
+  - 将 HTTP 请求翻译成 Application 层的 Command / Query
+  - 将 Application 层的 Entity / Result 翻译成 JSON 响应
+  - 日志埋点、幂等键处理、安全过滤（敏感字段脱敏）
+  - 不包含业务逻辑，所有决策委派给 PolishUseCases
+
+端点概览：
+  主题 /sessions /questions /answers /feedback /progress-tree
+"""
 
 from __future__ import annotations
 
@@ -66,18 +77,25 @@ from app.schemas.refs import ResourceRef, TraceRefSchema
 
 router = APIRouter(tags=["polish"])
 
+# ── 常量区 ──────────────────────────────────────────────────────────
+# 以下常量控制：Legacy 兼容标题、默认反馈文案、推荐操作列表、响应脱敏规则
+
 LEGACY_TOPIC_TITLE_BY_ID = {
     "topic_project_depth": "经历真实性与贡献澄清",
     "topic_system_design": "能力深度与技术深挖",
     "topic_behavioral": "情景模拟与角色扮演",
 }
 LEGACY_PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
+
+# 仅作答（无反馈）时允许的推荐操作
 ANSWER_NEXT_RECOMMENDED_ACTIONS = (
     "answer_again",
     "continue_same_question",
     "generate_reference_answer",
     "generate_next_question",
 )
+
+# 反馈生成后允许的推荐操作（多了 explain/expand/next_round 等）
 FEEDBACK_NEXT_RECOMMENDED_ACTIONS = (
     "answer_again",
     "continue_same_question",
@@ -87,6 +105,8 @@ FEEDBACK_NEXT_RECOMMENDED_ACTIONS = (
     "generate_next_round_suggestion",
     "generate_next_question",
 )
+
+# 反馈 payload 中禁止暴露给前端的字段（LLM 原始输入/输出）
 FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
     {
         "prompt",
@@ -101,6 +121,8 @@ FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
     }
 )
 
+
+# ── 主题端点 ────────────────────────────────────────────────────────
 
 @router.get("/polish-topics")
 async def list_polish_topics(
@@ -124,6 +146,8 @@ async def list_polish_topics(
     )
 
 
+# ── 会话端点 ────────────────────────────────────────────────────────
+
 @router.get("/polish-sessions")
 async def list_polish_sessions(
     actor: CurrentActor = Depends(require_authenticated_actor),
@@ -142,6 +166,7 @@ async def list_polish_sessions(
 
 @router.post("/polish-sessions", status_code=201)
 async def create_polish_session(
+    # 创建新打磨会话：绑定简历-岗位关系，指定主题/子主题/自定义主题文本，同步初始化进度树
     payload: CreatePolishSessionRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
@@ -206,6 +231,7 @@ async def get_polish_session(
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
+    """获取单个打磨会话详情：包含所有轮次（turns）、题目、答案、反馈"""
     use_cases = _use_cases(session_factory, llm_transport)
     result = use_cases.get_session(GetPolishSessionQuery(owner_id=actor.owner_id, session_id=session_id))
     if not result.is_success:
@@ -216,6 +242,9 @@ async def get_polish_session(
     )
 
 
+# ── 出题/作答/反馈端点 ─────────────────────────────────────────────
+
+# 异步创建出题任务（LLM 异步生成），返回 ai_task 状态，前端轮询
 @router.post("/polish-sessions/{session_id}/questions", status_code=202)
 async def create_polish_question_task(
     session_id: str,
@@ -256,6 +285,7 @@ async def create_polish_question_task(
     )
 
 
+# 将题目标记为已完成，返回更新后的会话详情
 @router.post("/polish-sessions/{session_id}/questions/{question_id}/complete")
 async def complete_polish_question(
     session_id: str,
@@ -282,6 +312,7 @@ async def complete_polish_question(
     )
 
 
+# 结束打磨会话，标记为已完成
 @router.post("/polish-sessions/{session_id}/end")
 async def end_polish_session(
     session_id: str,
@@ -306,6 +337,7 @@ async def end_polish_session(
     )
 
 
+# 提交用户作答（同步），支持 Idempotency-Key 幂等重试
 @router.post("/polish-sessions/{session_id}/answers", status_code=201)
 async def create_polish_answer(
     session_id: str,
@@ -345,6 +377,7 @@ async def create_polish_answer(
     )
 
 
+# 异步创建反馈任务（LLM 分析回答），返回 ai_task + 会话中的最新反馈 payload
 @router.post("/polish-sessions/{session_id}/feedback", status_code=202)
 async def create_polish_feedback_task(
     session_id: str,
@@ -386,6 +419,8 @@ async def create_polish_feedback_task(
     )
 
 
+# ── 进度树刷新端点 ──────────────────────────────────────────────────
+# 刷新进度树状态：若已有 LLM 可刷新的 plan 则走 LLM，否则走规则刷新
 @router.post("/polish-sessions/{session_id}/progress-tree/state")
 async def refresh_polish_progress_tree_state(
     session_id: str,
@@ -440,6 +475,8 @@ async def refresh_polish_progress_tree_state(
     )
 
 
+# ── 辅助函数：获取 UseCases ─────────────────────────────────────────
+
 def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTransport) -> PolishUseCases:
     return PolishUseCases(
         polish_repository=SqlAlchemyPolishRepository(session_factory),
@@ -453,9 +490,13 @@ def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTranspo
     )
 
 
+# ── 辅助函数：进度树 LLM 刷新 ──────────────────────────────────────
+
 def _has_refreshable_progress_tree_plan(plan: dict[str, Any]) -> bool:
     return plan.get("status") == "ready" and bool(plan.get("nodes"))
 
+
+# ── 辅助函数：进度树上下文构建 ─────────────────────────────────────
 
 def _progress_context_with_turn_refs(detail: PolishSessionDetail) -> dict[str, Any]:
     context = {**detail.progress_context}
@@ -466,6 +507,7 @@ def _progress_context_with_turn_refs(detail: PolishSessionDetail) -> dict[str, A
     return context
 
 
+# 构建单个轮次的进度上下文（包含该轮所有答案和反馈的快照）
 def _turn_progress_context(*, turn_index: int, turn: Any) -> dict[str, Any]:
     latest_answer = turn.answers[-1] if turn.answers else None
     return {
@@ -500,6 +542,8 @@ def _turn_progress_context(*, turn_index: int, turn: Any) -> dict[str, Any]:
     }
 
 
+# ── 辅助函数：格式化 ────────────────────────────────────────────────
+
 def _to_iso_string(value: Any) -> str | None:
     if value is None:
         return None
@@ -508,9 +552,12 @@ def _to_iso_string(value: Any) -> str | None:
     return str(value)
 
 
+# 计算从 started_at 至今的毫秒数（用于日志埋点）
 def _elapsed_ms(started_at: float) -> float:
     return round((perf_counter() - started_at) * 1000, 3)
 
+
+# ── 响应构建函数：主题 ──────────────────────────────────────────────
 
 def _topic_response(topic: PolishTopic) -> PolishTopicResponse:
     return PolishTopicResponse(
@@ -531,6 +578,8 @@ def _topic_response(topic: PolishTopic) -> PolishTopicResponse:
         ],
     )
 
+
+# ── 响应构建函数：会话详情（含所有轮次、兼容 Legacy 字段） ──────────
 
 def _session_response(session: PolishSessionDetail) -> dict[str, object]:
     core = session.session
@@ -596,6 +645,8 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
     }
 
 
+# ── 响应构建函数：会话摘要 ───────────────────────────────────────────
+
 def _session_summary_response(session: PolishSessionDetail) -> PolishSessionSummaryResponse:
     core = session.session
     theme_strategy = _theme_strategy_for_session(core)
@@ -625,6 +676,7 @@ def _session_summary_response(session: PolishSessionDetail) -> PolishSessionSumm
     )
 
 
+# 根据 session.polish_theme 解析主题策略，兜底返回无主题策略
 def _theme_strategy_for_session(session: PolishSession) -> PolishThemeStrategy:
     try:
         return resolve_polish_theme_strategy(session.polish_theme)
@@ -632,6 +684,7 @@ def _theme_strategy_for_session(session: PolishSession) -> PolishThemeStrategy:
         return resolve_polish_theme_strategy(None)
 
 
+# 构建会话中所有轮次（turns）的 JSON payload
 def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, object]]:
     return [
         {
@@ -666,6 +719,8 @@ def _session_turn_payloads(session: PolishSessionDetail) -> list[dict[str, objec
     ]
 
 
+# ── 响应构建函数：答案 metadata、活跃节点引用 ───────────────────────
+
 def _question_metadata_payload(raw_metadata: object) -> dict[str, Any]:
     try:
         return normalize_question_metadata(raw_metadata)
@@ -673,6 +728,7 @@ def _question_metadata_payload(raw_metadata: object) -> dict[str, Any]:
         return empty_question_metadata().to_dict()
 
 
+# 从活跃轮次或进度树状态中提取当前进度节点引用
 def _active_progress_node_ref(
     active_turn: dict[str, object] | None,
     progress_tree_state: dict[str, Any],
@@ -688,6 +744,8 @@ def _active_progress_node_ref(
             return priority_ref
     return None
 
+
+# ── 响应构建函数：答案、反馈、任务 ──────────────────────────────────
 
 def _session_answer_payload(answer: object, *, session_id: str, question_id: str) -> dict[str, object]:
     feedback_payload = _answer_feedback_payload(answer, session_id=session_id, question_id=question_id)
@@ -762,6 +820,8 @@ def _feedback_response(
     return payload
 
 
+# ── 辅助函数：幂等键清理 ────────────────────────────────────────────
+
 def _clean_optional_header(value: str | None) -> str | None:
     if value is None:
         return None
@@ -769,6 +829,8 @@ def _clean_optional_header(value: str | None) -> str | None:
     return stripped or None
 
 
+# ── 核心：反馈 payload 构造（兼容 Legacy + 安全脱敏） ───────────────
+# 返回前端可见的反馈 JSON，包含评分、失分点、知识/技术建议、trace 等
 def _answer_feedback_payload(
     answer: object,
     *,
@@ -868,6 +930,8 @@ def _answer_feedback_payload(
     }
 
 
+# ── 安全脱敏 ────────────────────────────────────────────────────────
+
 REDACTED_SENSITIVE_FEEDBACK_DETAIL = "redacted_sensitive_detail"
 ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
     {
@@ -905,6 +969,9 @@ FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_ASSIGNMENT_PATTERNS = (
 )
 
 
+# ── 安全脱敏 ────────────────────────────────────────────────────────
+
+# 检查 dict key 是否属于禁止暴露的字段
 def _is_forbidden_feedback_payload_response_key(key: str) -> bool:
     normalized = key.strip().lower()
     return (
@@ -914,10 +981,12 @@ def _is_forbidden_feedback_payload_response_key(key: str) -> bool:
     )
 
 
+# 将字符串中的分隔符标准化为下划线（便于后续匹配标记）
 def _normalized_feedback_sensitive_marker_text(value: str) -> str:
     return re.sub(r"[\s-]+", "_", value.lower())
 
 
+# 递归脱敏：检查文本中是否包含敏感标记
 def _redact_forbidden_feedback_payload_response_text(value: str) -> str:
     normalized = _normalized_feedback_sensitive_marker_text(value)
     if any(marker in normalized for marker in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS):
@@ -926,6 +995,7 @@ def _redact_forbidden_feedback_payload_response_text(value: str) -> str:
         return REDACTED_SENSITIVE_FEEDBACK_DETAIL
     return value
 
+# 安全获取反馈 payload：先删除禁止字段，再脱敏文本值
 def _response_safe_feedback_payload(payload: dict[str, Any]) -> dict[str, object]:
     sanitized = _drop_forbidden_feedback_payload_response_keys(payload)
     if isinstance(sanitized, dict):
@@ -933,6 +1003,7 @@ def _response_safe_feedback_payload(payload: dict[str, Any]) -> dict[str, object
     return {}
 
 
+# 递归删除 payload 中所有禁止暴露的键，并脱敏字符串值中的敏感内容
 def _drop_forbidden_feedback_payload_response_keys(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -949,6 +1020,9 @@ def _drop_forbidden_feedback_payload_response_keys(value: Any) -> Any:
     return value
 
 
+# ── 反馈评分模拟 ────────────────────────────────────────────────────
+
+# 构造失分点列表（基于 score_value 模拟扣分分配）
 def _feedback_loss_points(*, feedback_id: str, answer_id: str, answer_text: str, score_value: int) -> list[dict[str, object]]:
     deducted_points = 100 - score_value
     return [
@@ -970,6 +1044,7 @@ def _feedback_loss_points(*, feedback_id: str, answer_id: str, answer_text: str,
     ]
 
 
+# 合并主操作和全部推荐操作，去重后返回
 def _feedback_next_actions(primary_action: str) -> list[str]:
     actions: list[str] = []
     for action in (primary_action, *FEEDBACK_NEXT_RECOMMENDED_ACTIONS):
@@ -978,6 +1053,7 @@ def _feedback_next_actions(primary_action: str) -> list[str]:
     return actions
 
 
+# 根据回答文本长度判断低置信度标记（18字阈值）
 def _feedback_low_confidence_flags(answer_text: str) -> list[dict[str, str]]:
     if len(answer_text.strip()) >= 18:
         return []
@@ -991,11 +1067,13 @@ def _feedback_low_confidence_flags(answer_text: str) -> list[dict[str, str]]:
     ]
 
 
+# 兼容 Legacy：feedback_text 为空时返回"本轮反馈尚未生成"
 def _legacy_feedback_text(value: object) -> str:
     text = str(value or "").strip()
     return text or LEGACY_PENDING_FEEDBACK_TEXT
 
 
+# 构造答案的 trace 引用
 def _answer_trace_refs(answer: object) -> list[dict[str, object]]:
     answer_created_at = getattr(answer, "answer_created_at", None) or getattr(answer, "created_at", None)
     return [
@@ -1008,6 +1086,7 @@ def _answer_trace_refs(answer: object) -> list[dict[str, object]]:
     ]
 
 
+# 构造反馈的 trace 引用（含答案 + feedback + score_result 三级）
 def _feedback_trace_refs(answer: object, *, score_result_id: str) -> list[dict[str, object]]:
     trace_refs = _answer_trace_refs(answer)
     feedback_id = getattr(answer, "feedback_id", None)
@@ -1032,6 +1111,7 @@ def _feedback_trace_refs(answer: object, *, score_result_id: str) -> list[dict[s
     return trace_refs
 
 
+# 在 session detail 中按 answer_id 查找对应的 (question_id, answer)
 def _find_session_answer_detail(session: PolishSessionDetail, answer_id: str) -> tuple[str, object] | None:
     for turn in session.turns:
         for answer in turn.answers:
@@ -1040,11 +1120,14 @@ def _find_session_answer_detail(session: PolishSessionDetail, answer_id: str) ->
     return None
 
 
+# 将 ResourceRef 转为前端可用的扁平 dict（用于兼容旧版响应）
 def _resource_ref_dump(ref: ResourceRef | None) -> dict[str, str] | None:
     if ref is None:
         return None
     return {"resource_type": ref.resource_type, "resource_id": ref.resource_id}
 
+
+# ── 响应构建函数：任务状态 ──────────────────────────────────────────
 
 def _task_response(task: PolishTaskStatus, *, contract_shape: dict[str, Any] | None = None) -> dict[str, object]:
     active_question_refs = [
@@ -1091,6 +1174,8 @@ def _task_response(task: PolishTaskStatus, *, contract_shape: dict[str, Any] | N
     return payload
 
 
+# ── 响应构建函数：题目契约形状 ──────────────────────────────────────
+
 def _question_task_contract_shape(task: PolishTaskStatus) -> dict[str, Any]:
     question_ref: dict[str, str] | None = None
     progress_node_ref: str | None = None
@@ -1122,6 +1207,8 @@ def _question_task_contract_shape(task: PolishTaskStatus) -> dict[str, Any]:
     }
 
 
+# ── 响应构建函数：主题/子主题/标题/TraceRef ────────────────────────
+
 def _topic_ref(topic_id: str | None) -> PolishTopicRefResponse | None:
 
     if topic_id is None:
@@ -1132,6 +1219,7 @@ def _topic_ref(topic_id: str | None) -> PolishTopicRefResponse | None:
 
 
 def _subtopic_ref(topic_id: str | None, subtopic_id: str | None) -> PolishSubtopicRefResponse | None:
+    """根据 topic_id 和 subtopic_id 查找子主题引用，兜底返回 None"""
     if topic_id is None or subtopic_id is None:
         return None
     topic = next((item for item in POLISH_TOPICS if item.topic_id == topic_id), None)
@@ -1145,6 +1233,7 @@ def _subtopic_ref(topic_id: str | None, subtopic_id: str | None) -> PolishSubtop
     )
 
 
+# 构造会话标题：优先取自定义主题文本，其次子主题标题，再取主题标题
 def _session_title(session: PolishSessionDetail) -> str:
     if session.session.custom_topic_text_summary:
         return session.session.custom_topic_text_summary
@@ -1158,6 +1247,7 @@ def _session_title(session: PolishSessionDetail) -> str:
     return "Polish session"
 
 
+# 将 TraceRef 转换为 TraceRefSchema（用于响应序列化）
 def _trace_ref(ref: TraceRef | None) -> TraceRefSchema | None:
     if ref is None:
         return None
@@ -1169,6 +1259,9 @@ def _trace_ref(ref: TraceRef | None) -> TraceRefSchema | None:
     )
 
 
+# ── 错误处理 ────────────────────────────────────────────────────────
+
+# 将 Domain Result 错误抛出为 API 异常
 def _raise_result_error(error) -> None:
     assert error is not None
     raise_api_error(
@@ -1181,6 +1274,7 @@ def _raise_result_error(error) -> None:
     )
 
 
+# 将 Domain error code 映射到 HTTP status code
 def _error_status(code: str) -> int:
     if code in {"stale_version_conflict", "idempotency_conflict"}:
         return 409

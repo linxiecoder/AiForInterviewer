@@ -162,15 +162,12 @@ def select_question_pattern(
         return get_question_pattern("star_communication_refactor")
 
     if evidence_signals is not None:
-        if theme == "mixed":
-            return get_question_pattern("mixed_technical_expression")
         signal_pattern = _pattern_from_evidence_signals(evidence_signals)
         if signal_pattern is not None:
             return get_question_pattern(signal_pattern)
+        if theme == "mixed":
+            return get_question_pattern("mixed_technical_expression")
         return get_question_pattern("owner_tradeoff_system_design")
-
-    if theme == "mixed":
-        return get_question_pattern("mixed_technical_expression")
 
     signal_text = _joined_signals(scenario_constraint, progress_node_title)
     if _has_any(signal_text, ("minio", "mq", "部分成功", "部分失败")):
@@ -185,6 +182,8 @@ def select_question_pattern(
         return get_question_pattern("constraint_change_refactor")
     if _has_any(signal_text, ("双层库存", "状态机", "对账")):
         return get_question_pattern("state_machine_and_reconciliation")
+    if theme == "mixed":
+        return get_question_pattern("mixed_technical_expression")
     return get_question_pattern("owner_tradeoff_system_design")
 
 
