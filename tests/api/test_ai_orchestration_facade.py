@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
     AgentCommandEnvelope,
     AgentReplayResult,
     AgentRunContext,
@@ -159,6 +160,38 @@ def test_facade_different_idempotency_key_creates_separate_request() -> None:
     assert len(runner.started) == 2
 
 
+def test_facade_propagates_candidate_payloads_from_runner_to_status_ref() -> None:
+    payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_1",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload={"question_text": "请介绍支付链路一致性经验"},
+        trace_refs=("trace_1",),
+    )
+    runner = _RecordingRunner()
+    runner.candidate_payloads = (payload,)
+    facade = AiOrchestrationFacade(
+        runner=runner,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=RuntimeFlagResolver(
+            test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, "AIFI_GRAPH_POLISH_QUESTION_ENABLED": True}
+        ),
+    )
+
+    status_ref = facade.start_polish_question_generation(
+        owner_id="owner_1",
+        actor_id="actor_1",
+        session_ref="session_1",
+        progress_node_refs=(),
+        completed_focus_refs=(),
+        idempotency_key="idem_payload",
+    )
+
+    assert status_ref.candidate_refs == ("candidate_ref_1",)
+    assert status_ref.candidate_payloads == (payload,)
+    assert status_ref.formal_refs == ()
+
+
 def test_facade_fails_closed_when_graph_is_disabled() -> None:
     runner = _RecordingRunner()
     facade = AiOrchestrationFacade(
@@ -213,6 +246,7 @@ class _RecordingRunner:
     def __init__(self) -> None:
         self.started: list[AgentRunContext] = []
         self.timeline = AgentRunTimelinePage(run_id="arun_1", events=(), next_cursor=None)
+        self.candidate_payloads: tuple[AgentCandidatePayload, ...] = ()
 
     def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
         self.started.append(context)
@@ -222,6 +256,7 @@ class _RecordingRunner:
             output_refs=("candidate_ref_1",),
             trace_refs=("trace_1",),
             formal_refs=(),
+            candidate_payloads=self.candidate_payloads,
         )
 
     def resume(

@@ -114,6 +114,47 @@ class AgentRunContext:
 
 
 @dataclass(frozen=True)
+class AgentCandidatePayload:
+    candidate_ref: str
+    candidate_type: str
+    payload_schema_id: str
+    payload: dict[str, Any]
+    status: str = "accepted"
+    trace_refs: tuple[str, ...] = field(default_factory=tuple)
+    validation_refs: tuple[str, ...] = field(default_factory=tuple)
+    low_confidence_flags: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        if not str(self.candidate_ref).strip():
+            raise RuntimeValidationError("candidate_ref is required")
+        if not str(self.candidate_type).strip():
+            raise RuntimeValidationError("candidate_type is required")
+        if not str(self.payload_schema_id).strip():
+            raise RuntimeValidationError("payload_schema_id is required")
+        if not str(self.status).strip():
+            raise RuntimeValidationError("status is required")
+        if not isinstance(self.payload, dict):
+            raise RuntimeValidationError("candidate payload must be a dict")
+        if contains_sensitive_payload(self.payload):
+            raise RuntimePolicyError("candidate payload contains sensitive content")
+        object.__setattr__(self, "candidate_ref", str(self.candidate_ref).strip())
+        object.__setattr__(self, "candidate_type", str(self.candidate_type).strip())
+        object.__setattr__(self, "payload_schema_id", str(self.payload_schema_id).strip())
+        object.__setattr__(self, "status", str(self.status).strip())
+        object.__setattr__(self, "payload", sanitize_payload(self.payload))
+        object.__setattr__(self, "trace_refs", tuple(self.trace_refs))
+        object.__setattr__(self, "validation_refs", tuple(self.validation_refs))
+        object.__setattr__(self, "low_confidence_flags", tuple(self.low_confidence_flags))
+
+
+def _candidate_payload_tuple(payloads: tuple[AgentCandidatePayload, ...]) -> tuple[AgentCandidatePayload, ...]:
+    candidate_payloads = tuple(payloads)
+    if any(not isinstance(payload, AgentCandidatePayload) for payload in candidate_payloads):
+        raise RuntimeValidationError("candidate_payloads must contain AgentCandidatePayload")
+    return candidate_payloads
+
+
+@dataclass(frozen=True)
 class AgentRunResult:
     run_id: str
     status: str
@@ -121,9 +162,11 @@ class AgentRunResult:
     trace_refs: tuple[str, ...] = field(default_factory=tuple)
     interrupt_refs: tuple[str, ...] = field(default_factory=tuple)
     formal_refs: tuple[str, ...] = field(default_factory=tuple)
+    candidate_payloads: tuple[AgentCandidatePayload, ...] = field(default_factory=tuple)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "candidate_payloads", _candidate_payload_tuple(self.candidate_payloads))
         object.__setattr__(self, "metadata", sanitize_payload(self.metadata))
 
 
@@ -182,6 +225,10 @@ class AgentTaskStatusRef:
     candidate_refs: tuple[str, ...] = field(default_factory=tuple)
     interrupt_refs: tuple[str, ...] = field(default_factory=tuple)
     formal_refs: tuple[str, ...] = field(default_factory=tuple)
+    candidate_payloads: tuple[AgentCandidatePayload, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "candidate_payloads", _candidate_payload_tuple(self.candidate_payloads))
 
 
 @dataclass(frozen=True)
@@ -217,4 +264,3 @@ class AgentGraphRunner(Protocol):
     ) -> AgentRunTimelinePage: ...
 
     def cancel(self, run_id: str, owner_id: str, reason: str, actor_id: str) -> AgentRunStatus: ...
-

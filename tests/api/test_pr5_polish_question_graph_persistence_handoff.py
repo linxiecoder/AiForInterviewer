@@ -12,7 +12,13 @@ import pytest
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     build_polish_question_persistence_plan,
 )
-from app.application.ai_runtime.contracts import GraphDisabledError, RuntimePolicyError, RuntimeValidationError
+from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
+    AgentTaskStatusRef,
+    GraphDisabledError,
+    RuntimePolicyError,
+    RuntimeValidationError,
+)
 from app.application.ai_runtime.handoff import AgentPersistenceHandoff
 from app.application.polish.commands import CreatePolishQuestionTaskCommand
 from app.application.polish.entities import (
@@ -232,6 +238,127 @@ def test_graph_enabled_path_persists_question_without_legacy_llm() -> None:
     assert blocker.calls == 0
 
 
+def test_graph_enabled_path_persists_formal_candidate_payload_without_legacy_llm() -> None:
+    accepted_payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_q4",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload=_accepted_candidate(),
+        trace_refs=("trace_q4_graph",),
+        validation_refs=("validation_ref_q4",),
+    )
+    facade = _FakeQuestionFacade(
+        status_ref=AgentTaskStatusRef(
+            ai_task_id="aitask_q4_graph",
+            agent_run_id="arun_q4_graph",
+            status="succeeded",
+            trace_refs=("trace_q4_graph",),
+            candidate_refs=("question_candidate_ref_q4",),
+            candidate_payloads=(accepted_payload,),
+        )
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    blocker = _LegacyQuestionLlmBlocker()
+    use_cases._question_llm_service = blocker
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 1
+    assert repository.questions[0].question_text == _accepted_candidate()["question_text"]
+    assert blocker.calls == 0
+
+
+def test_formal_candidate_payload_rejects_raw_content_before_persistence() -> None:
+    with pytest.raises(RuntimePolicyError):
+        AgentCandidatePayload(
+            candidate_ref="question_candidate_ref_q4",
+            candidate_type="polish_question_candidate",
+            payload_schema_id="polish_question_candidate.v1",
+            payload=_accepted_candidate(raw_prompt="hidden prompt"),
+        )
+
+
+def test_graph_enabled_path_uses_only_accepted_polish_question_candidate_payload() -> None:
+    feedback_payload = AgentCandidatePayload(
+        candidate_ref="feedback_candidate_ref_q4",
+        candidate_type="polish_feedback_candidate",
+        payload_schema_id="polish_feedback_candidate.v1",
+        payload={"candidate_ref": "feedback_candidate_ref_q4"},
+        status="accepted",
+    )
+    pending_question_payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_pending",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload=_accepted_candidate(candidate_ref="question_candidate_ref_pending", question_text="不应被持久化"),
+        status="candidate",
+    )
+    accepted_question_payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_q4",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload=_accepted_candidate(),
+        status="passed",
+    )
+    facade = _FakeQuestionFacade(
+        status_ref=AgentTaskStatusRef(
+            ai_task_id="aitask_q4_graph",
+            agent_run_id="arun_q4_graph",
+            status="succeeded",
+            trace_refs=("trace_q4_graph",),
+            candidate_refs=(
+                "feedback_candidate_ref_q4",
+                "question_candidate_ref_pending",
+                "question_candidate_ref_q4",
+            ),
+            candidate_payloads=(feedback_payload, pending_question_payload, accepted_question_payload),
+        )
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    blocker = _LegacyQuestionLlmBlocker()
+    use_cases._question_llm_service = blocker
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 1
+    assert repository.questions[0].question_text == _accepted_candidate()["question_text"]
+    assert blocker.calls == 0
+
+
+def test_graph_status_does_not_fallback_to_dynamic_candidate_when_formal_payloads_are_present() -> None:
+    pending_question_payload = AgentCandidatePayload(
+        candidate_ref="question_candidate_ref_pending",
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload=_accepted_candidate(candidate_ref="question_candidate_ref_pending", question_text="不应被持久化"),
+        status="candidate",
+    )
+    facade = _FakeQuestionFacade(
+        status_ref=_GraphStatus(
+            candidate=_accepted_candidate(),
+            status="succeeded",
+            candidate_payloads=(pending_question_payload,),
+        )
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    blocker = _LegacyQuestionLlmBlocker()
+    use_cases._question_llm_service = blocker
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.QUEUED
+    assert repository.questions == []
+    assert blocker.calls == 0
+
+
 def test_graph_quality_block_does_not_fallback_to_legacy() -> None:
     facade = _FakeQuestionFacade(
         status_ref=_GraphStatus(candidate=_accepted_candidate(quality_gate={"status": "blocked", "passed": False}))
@@ -338,6 +465,7 @@ class _GraphStatus:
     candidate_refs: tuple[str, ...] = ("question_candidate_ref_q4",)
     interrupt_refs: tuple[str, ...] = ()
     formal_refs: tuple[str, ...] = ()
+    candidate_payloads: tuple[AgentCandidatePayload, ...] = ()
 
 
 class _FakeQuestionFacade:

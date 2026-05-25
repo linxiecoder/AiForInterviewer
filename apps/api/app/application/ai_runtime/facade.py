@@ -282,6 +282,7 @@ class AiOrchestrationFacade:
             candidate_refs=result.output_refs,
             interrupt_refs=result.interrupt_refs,
             formal_refs=(),
+            candidate_payloads=result.candidate_payloads,
         )
 
 

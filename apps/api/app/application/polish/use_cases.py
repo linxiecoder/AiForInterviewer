@@ -10,6 +10,7 @@ from typing import Any
 
 from app.application.common.result import ApplicationResult
 from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
     AgentTaskStatusRef,
     GraphDisabledError,
     RuntimeConflictError,
@@ -97,6 +98,17 @@ QUESTION_GENERATION_MODE_FOLLOW_UP = "follow_up"
 QUESTION_GENERATION_MODES = {QUESTION_GENERATION_MODE_NEW, QUESTION_GENERATION_MODE_FOLLOW_UP}
 
 QUESTION_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
+_POLISH_QUESTION_CANDIDATE_STATUSES = frozenset({"accepted", "passed"})
+_POLISH_QUESTION_CANDIDATE_TYPES = frozenset(
+    {"polish_question", "question_candidate", "polish_question_candidate"}
+)
+_POLISH_QUESTION_CANDIDATE_PAYLOAD_SCHEMA_IDS = frozenset(
+    {
+        "polish_question_candidate.v1",
+        "polish_question_candidate_v1",
+        "polish_question_generation_output_v1",
+    }
+)
 FEEDBACK_CONTRACT_IDS = (
     "P-POLISH-003",
     "P-POLISH-004",
@@ -1260,11 +1272,32 @@ def _polish_question_graph_task_status(
 
 
 def _graph_status_candidate_payload(status_ref: object) -> dict[str, Any] | None:
+    candidate_payloads = getattr(status_ref, "candidate_payloads", ()) or ()
+    if candidate_payloads:
+        for candidate_payload in candidate_payloads:
+            if _is_accepted_polish_question_candidate_payload(candidate_payload):
+                return candidate_payload.payload
+        return None
     for attribute in ("accepted_candidate", "candidate", "candidate_payload", "question_candidate"):
         candidate = getattr(status_ref, attribute, None)
         if isinstance(candidate, dict):
             return candidate
     return None
+
+
+def _is_accepted_polish_question_candidate_payload(candidate_payload: object) -> bool:
+    if not isinstance(candidate_payload, AgentCandidatePayload):
+        return False
+    if candidate_payload.status.strip().lower() not in _POLISH_QUESTION_CANDIDATE_STATUSES:
+        return False
+    if candidate_payload.candidate_type.strip().lower() not in _POLISH_QUESTION_CANDIDATE_TYPES:
+        return False
+    if (
+        candidate_payload.payload_schema_id.strip().lower()
+        not in _POLISH_QUESTION_CANDIDATE_PAYLOAD_SCHEMA_IDS
+    ):
+        return False
+    return isinstance(candidate_payload.payload, dict)
 
 
 def _polish_question_graph_validation_failed_task_status(
