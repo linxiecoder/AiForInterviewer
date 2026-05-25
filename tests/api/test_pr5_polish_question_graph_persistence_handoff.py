@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ast
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Barrier, Lock
 from typing import Any
 
 import pytest
@@ -27,6 +29,9 @@ from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
+from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
+from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
+from tools.testing.temp_artifacts import ManagedTempArtifacts
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -125,6 +130,89 @@ def test_persistence_is_idempotent_for_same_candidate() -> None:
     assert second.created is False
 
 
+def test_concurrent_persistence_is_idempotent_for_same_accepted_candidate() -> None:
+    worker_count = 8
+    repository = _PolishRepository(_session(), list_questions_barrier=Barrier(worker_count))
+    handoff = AgentPersistenceHandoff()
+    plan = build_polish_question_persistence_plan(
+        owner_id=OWNER_ID,
+        actor_id=ACTOR_ID,
+        session_id=SESSION_ID,
+        ai_task_id="aitask_q4_graph",
+        agent_run_id="arun_q4_graph",
+        candidate=_accepted_candidate(),
+        progress_node_ref=NODE_REF,
+        trace_refs=("trace_q4_graph",),
+    )
+
+    def persist() -> Any:
+        return handoff.write_question_result(plan, question_repository=repository, now=utc_now())
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        results = tuple(executor.map(lambda _: persist(), range(worker_count)))
+
+    question_ids = {result.question.question_id for result in results}
+    question_ref_ids = {result.question_ref.resource_id for result in results}
+    metadata = repository.questions[0].question_metadata
+
+    assert len(repository.questions) == 1
+    assert question_ids == {repository.questions[0].question_id}
+    assert question_ref_ids == {repository.questions[0].question_id}
+    assert sum(1 for result in results if result.created) == 1
+    assert repository.add_question_calls == 1
+    assert repository.add_question_once_calls == worker_count
+    assert metadata["graph_persistence_idempotency_key"] == plan.side_effect_key
+    assert "raw_prompt" not in metadata
+    assert "raw_completion" not in metadata
+    assert "provider_payload" not in metadata
+
+
+def test_sqlalchemy_repository_add_question_once_reuses_existing_graph_question_under_threads() -> None:
+    worker_count = 8
+    temp_artifacts = ManagedTempArtifacts(test_id="api-pr5-polish-question-idempotency")
+    workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    try:
+        settings = DbSettings(database_url=f"sqlite+pysqlite:///{(workspace / 'questions.sqlite').as_posix()}")
+        initialize_schema(settings)
+        repository = SqlAlchemyPolishRepository(build_session_factory(settings))
+        barrier = Barrier(worker_count)
+        plan = build_polish_question_persistence_plan(
+            owner_id=OWNER_ID,
+            actor_id=ACTOR_ID,
+            session_id=SESSION_ID,
+            ai_task_id="aitask_q4_graph",
+            agent_run_id="arun_q4_graph",
+            candidate=_accepted_candidate(),
+            progress_node_ref=NODE_REF,
+            trace_refs=("trace_q4_graph",),
+        )
+
+        def add_once(index: int) -> tuple[PolishQuestion, bool]:
+            barrier.wait(timeout=5)
+            return repository.add_question_once(
+                owner_id=OWNER_ID,
+                session_id=SESSION_ID,
+                graph_persistence_idempotency_key=plan.side_effect_key,
+                question=_question_for_plan(f"q_sql_graph_{index}", plan),
+            )
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            results = tuple(executor.map(add_once, range(worker_count)))
+
+        stored_questions = repository.list_questions_for_session(OWNER_ID, SESSION_ID)
+        result_question_ids = {question.question_id for question, _ in results}
+
+        assert len(stored_questions) == 1
+        assert result_question_ids == {stored_questions[0].question_id}
+        assert sum(1 for _, created in results if created) == 1
+        assert stored_questions[0].question_metadata["graph_persistence_idempotency_key"] == plan.side_effect_key
+        assert "raw_prompt" not in stored_questions[0].question_metadata
+        assert "raw_completion" not in stored_questions[0].question_metadata
+        assert "provider_payload" not in stored_questions[0].question_metadata
+    finally:
+        temp_artifacts.cleanup()
+
+
 def test_graph_enabled_path_persists_question_without_legacy_llm() -> None:
     facade = _FakeQuestionFacade(status_ref=_GraphStatus(candidate=_accepted_candidate()))
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
@@ -217,6 +305,29 @@ def _accepted_candidate(**overrides: Any) -> dict[str, Any]:
     return candidate
 
 
+def _question_for_plan(question_id: str, plan: Any) -> PolishQuestion:
+    now = utc_now()
+    return PolishQuestion(
+        question_id=question_id,
+        owner_id=plan.owner_id,
+        actor_id=plan.actor_id,
+        session_id=plan.session_id,
+        ai_task_id=plan.ai_task_id,
+        question_text=plan.question_text,
+        question_sources=(),
+        progress_node_ref=plan.progress_node_ref,
+        evidence_refs=plan.evidence_refs,
+        context_digest=plan.context_digest,
+        question_metadata={
+            "graph_persistence_idempotency_key": plan.side_effect_key,
+            "sanitized": True,
+        },
+        status="generated",
+        created_at=now,
+        updated_at=now,
+    )
+
+
 @dataclass(frozen=True)
 class _GraphStatus:
     candidate: dict[str, Any]
@@ -270,12 +381,15 @@ class _LegacyQuestionLlmBlocker:
 
 
 class _PolishRepository:
-    def __init__(self, session: PolishSession) -> None:
+    def __init__(self, session: PolishSession, *, list_questions_barrier: Barrier | None = None) -> None:
         self.session = session
         self.questions: list[PolishQuestion] = []
         self.tasks: list[PolishTaskStatus] = []
         self.task_targets: list[str] = []
         self.add_question_calls = 0
+        self.add_question_once_calls = 0
+        self._list_questions_barrier = list_questions_barrier
+        self._lock = Lock()
 
     def add_session(self, session: PolishSession) -> None:
         self.session = session
@@ -292,15 +406,60 @@ class _PolishRepository:
         return None
 
     def list_questions_for_session(self, owner_id: str, session_id: str) -> tuple[PolishQuestion, ...]:
-        return tuple(
-            question
-            for question in self.questions
-            if question.owner_id == owner_id and question.session_id == session_id
-        )
+        with self._lock:
+            questions = tuple(
+                question
+                for question in self.questions
+                if question.owner_id == owner_id and question.session_id == session_id
+            )
+        if self._list_questions_barrier is not None:
+            self._list_questions_barrier.wait(timeout=5)
+        return questions
 
     def add_question(self, question: PolishQuestion) -> None:
-        self.add_question_calls += 1
-        self.questions.append(question)
+        with self._lock:
+            self.add_question_calls += 1
+            self.questions.append(question)
+
+    def add_question_once(
+        self,
+        *,
+        owner_id: str,
+        session_id: str,
+        graph_persistence_idempotency_key: str,
+        question: PolishQuestion,
+    ) -> tuple[PolishQuestion, bool]:
+        with self._lock:
+            self.add_question_once_calls += 1
+            existing = self._find_question_by_idempotency_key(
+                owner_id=owner_id,
+                session_id=session_id,
+                graph_persistence_idempotency_key=graph_persistence_idempotency_key,
+            )
+            if existing is not None:
+                return existing, False
+            self.add_question_calls += 1
+            self.questions.append(question)
+            return question, True
+
+    def _find_question_by_idempotency_key(
+        self,
+        *,
+        owner_id: str,
+        session_id: str,
+        graph_persistence_idempotency_key: str,
+    ) -> PolishQuestion | None:
+        return next(
+            (
+                question
+                for question in self.questions
+                if question.owner_id == owner_id
+                and question.session_id == session_id
+                and question.question_metadata.get("graph_persistence_idempotency_key")
+                == graph_persistence_idempotency_key
+            ),
+            None,
+        )
 
     def get_question(self, owner_id: str, question_id: str) -> PolishQuestion | None:
         return next(

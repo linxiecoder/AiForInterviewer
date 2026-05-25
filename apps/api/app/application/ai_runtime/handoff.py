@@ -74,6 +74,15 @@ class QuestionRepositoryForHandoff(Protocol):
 
     def add_question(self, question: PolishQuestion) -> None: ...
 
+    def add_question_once(
+        self,
+        *,
+        owner_id: str,
+        session_id: str,
+        graph_persistence_idempotency_key: str,
+        question: PolishQuestion,
+    ) -> tuple[PolishQuestion, bool]: ...
+
 
 class AgentPersistenceHandoff:
     def prepare_handoff(self, request: HandoffRequest) -> HandoffPlan:
@@ -111,10 +120,6 @@ class AgentPersistenceHandoff:
         _assert_safe_question_write_plan(plan)
 
         timestamp = now or utc_now()
-        existing = _find_existing_question(question_repository, plan)
-        if existing is not None:
-            return _question_write_result(question=existing, plan=plan, created=False, timestamp=timestamp)
-
         question_id = (
             question_id_factory()
             if question_id_factory is not None
@@ -136,6 +141,29 @@ class AgentPersistenceHandoff:
             created_at=timestamp,
             updated_at=timestamp,
         )
+
+        add_question_once = getattr(question_repository, "add_question_once", None)
+        if callable(add_question_once):
+            persisted_question, created = add_question_once(
+                owner_id=plan.owner_id,
+                session_id=plan.session_id,
+                graph_persistence_idempotency_key=plan.side_effect_key,
+                question=question,
+            )
+            return _question_write_result(
+                question=persisted_question,
+                plan=plan,
+                created=created,
+                timestamp=timestamp,
+            )
+
+        # Backward compatibility for legacy/fake repositories that predate
+        # repository-level idempotent writes. Production Polish persistence
+        # should implement add_question_once to avoid naked read-then-write races.
+        existing = _find_existing_question(question_repository, plan)
+        if existing is not None:
+            return _question_write_result(question=existing, plan=plan, created=False, timestamp=timestamp)
+
         question_repository.add_question(question)
         return _question_write_result(question=question, plan=plan, created=True, timestamp=timestamp)
 
