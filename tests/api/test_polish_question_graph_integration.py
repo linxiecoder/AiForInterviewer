@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 from typing import Any
 
+from app.application.ai_runtime.business_graphs.polish_question_graph import POLISH_QUESTION_GRAPH_FLAG
 from app.application.ai_runtime.contracts import (
     AgentTaskStatusRef,
     GraphDisabledError,
@@ -11,6 +12,9 @@ from app.application.ai_runtime.contracts import (
     RuntimePolicyError,
     RuntimeValidationError,
 )
+from app.application.ai_runtime.facade import AiOrchestrationFacade
+from app.application.ai_runtime.registry import AgentGraphRegistry
+from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.application.polish.commands import CreatePolishQuestionTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback, PolishQuestion, PolishSession, PolishTaskStatus
 from app.application.polish.use_cases import PolishUseCases
@@ -20,6 +24,7 @@ from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
+from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -88,6 +93,37 @@ def test_create_question_task_starts_graph_when_facade_enabled() -> None:
     assert repository.tasks == [result.value]
     assert repository.task_targets == [SESSION_ID]
     assert blocker.calls == 0
+
+
+def test_create_question_task_persists_fake_runtime_agent_candidate_payload() -> None:
+    flags = _enabled_question_graph_flags()
+    runtime = FakeLangGraphRuntime(flag_resolver=flags)
+    facade = AiOrchestrationFacade(
+        runner=runtime,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=flags,
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    blocker = _LegacyQuestionLlmBlocker()
+    use_cases._question_llm_service = blocker
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert result.value.result_ref.trace_type == "question"
+    assert len(repository.questions) == 1
+    assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
+    assert repository.questions[0].ai_task_id == result.value.ai_task_id
+    assert repository.questions[0].question_metadata["llm_generation_mode"] == "graph_candidate_handoff"
+    assert blocker.calls == 0
+
+    agent_run_ref = next(ref for ref in result.value.candidate_refs if ref.resource_type == "agent_run")
+    status = runtime.get_status(agent_run_ref.resource_id, OWNER_ID)
+    assert status.status == "fake_runtime_succeeded"
+    assert status.metadata["accepted_candidate_payload"] is True
+    assert any(ref.startswith("question_candidate_ref_") for ref in status.output_refs)
 
 
 def test_create_question_task_does_not_fallback_on_runtime_conflict() -> None:
@@ -460,6 +496,16 @@ def _use_cases(
         ai_orchestration_facade=ai_orchestration_facade,
     )
     return use_cases, polish_repository
+
+
+def _enabled_question_graph_flags() -> RuntimeFlagResolver:
+    return RuntimeFlagResolver(
+        test_overrides={
+            "AIFI_AI_RUNTIME_ENABLED": True,
+            "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True,
+            POLISH_QUESTION_GRAPH_FLAG: True,
+        }
+    )
 
 
 def _command(**overrides: Any) -> CreatePolishQuestionTaskCommand:
