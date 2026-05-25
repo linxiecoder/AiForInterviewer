@@ -402,7 +402,6 @@ export interface PolishTaskStatus {
   score_type?: "polish_answer" | string | null;
   candidate_refs: Array<{ resource_type: string; resource_id: string }>;
   suggestion_refs: Array<{ resource_type: string; resource_id: string }>;
-  contract_shaped_fake?: Record<string, unknown> | PolishFeedbackPayload | null;
   feedback_id?: string | null;
   feedback_status?: string;
   session_id?: string;

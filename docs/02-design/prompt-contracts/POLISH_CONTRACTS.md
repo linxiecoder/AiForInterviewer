@@ -118,469 +118,75 @@ Contract-shaped fake JSON 示例：
 ```
 
 
-#### Step 1D Feedback 闭环运行时契约
+#### Step 1D Feedback reserved placeholder 运行时契约
 
-Step 1D 在不新增 contract ID、不改变 `P-POLISH-003`、`P-POLISH-004`、`P-POLISH-005` 和 `P-POLISH-009` 语义的前提下，补齐 answer 后的 feedback 闭环。运行时目标是让 `POST /polish-sessions/{session_id}/feedback` 直接返回可消费的完整 feedback DTO，同时让 session detail 中 `turns[*].answers[*].feedback_payload` 与对应 answer 多轮对齐。
+Phase 2B 后，`POST /polish-sessions/{session_id}/feedback` 只保留 answer 后的 feedback AI task 形状，并返回 reserved placeholder。当前 runtime 不生成 LLM feedback、不生成候选项、不生成参考答案、不生成 score result；`P-POLISH-004`、`P-POLISH-005` 和 `P-POLISH-009` 的完整反馈链路语义保留为后续重新授权范围。
 
-Feedback 生成规则：
+Feedback reserved 规则：
 
-- `POST /polish-sessions/{session_id}/feedback` 以 `answer_id` 为输入，只给该 answer 生成一条新 feedback；同一 answer 多次生成时，session detail 使用最新 feedback，历史 feedback 保留为记录。
-- `feedback_payload` 必须是 contract-shaped JSON，至少包含 `contract_id`、`status`、`loss_points`、`reference_answer`、`knowledge_points`、`technical_principles`、`next_recommended_actions`、`candidate_refs`、`validation_result_ref`、`trace_refs` 和 `low_confidence_flags`。
-- `score_result` 使用 `P-POLISH-004` 的 `polish_answer` 0-100 产品刻度，当前 Step 1D fake 输出只提供 deterministic runtime score，不引入长期评分算法或真实校准。
-- `next_recommended_actions` 必须来自本节统一枚举；当前 feedback fake 使用 `answer_again`、`continue_same_question`、`generate_reference_answer`、`explain_knowledge_point`、`expand_technical_principle`、`generate_next_round_suggestion`、`generate_next_question`，证据不足时可把 `provide_more_answer_detail` 放在首位。
-- `low_confidence_flags` 必须是可展示、可追踪对象；当回答文本过短或证据不足时，至少返回 `flag_id`、`reason`、`impact_scope` 和 `recommended_action`。
+- `POST /polish-sessions/{session_id}/feedback` 以 `answer_id` 为输入，只为该 answer 写入一条 reserved feedback 记录和 succeeded AI task。
+- `feedback_payload.schema_id` 固定为 `polish_feedback_reserved_v1`，`schema_version` 固定为 `1.0`，`status` 固定为 `reserved`。
+- `contract_ids` 当前只包含 `P-POLISH-003`，表示回答诊断入口被保留；评分、参考回答、考点解析、候选回流不在当前 runtime 中执行。
+- `score_type`、`score_result`、`score_result_ref`、`reference_answer`、`validation_result_ref` 均为 `null`；`loss_points`、`knowledge_points`、`technical_principles`、`candidate_refs`、`trace_refs` 和 `low_confidence_flags` 均为空数组。
+- `feedback_metadata` 必须显式包含 `reserved=true`、`llm_called=false`、`candidate_extraction_called=false`、`reference_answer_generated=false` 和 `score_result_generated=false`。
 - 保留 legacy `feedback_text` 字段；旧消费方可以继续读取 `feedback_text`，新消费方读取 `feedback_payload`。
-- 当前 Step 1D 不扩大 DB / schema / repository 文件修改范围；运行时先生成并校验 JSON payload，再通过现有 feedback 持久化通道承载。后续若允许 schema 扩展，应把该 payload 迁入专用 `feedback_payload_json` 字段，并保持 `feedback_text` 兼容输出。
+- 当前 Step 1D 不扩大 DB / schema / repository 文件修改范围；后续若重新启用完整 feedback generation，必须重新补齐 contract、validator、fake/real provider gate、candidate/formal boundary 和测试证据。
 
-`POST /polish-sessions/{session_id}/feedback` 返回 data 必须保留既有 ai_task 兼容字段，同时直接带完整 feedback DTO：
+当前 `POST /polish-sessions/{session_id}/feedback` 返回 data 示例：
 
 ```json
 {
   "ai_task_id": "task_...",
   "task_type": "polish_feedback_generation",
   "status": "succeeded",
-  "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005", "P-POLISH-009"],
+  "contract_ids": ["P-POLISH-003"],
   "result_ref": {"trace_ref_id": "trace_feedback_002", "trace_type": "feedback"},
-  "score_type": "polish_answer",
+  "user_visible_status": "反馈能力已预留",
+  "score_type": null,
+  "candidate_refs": [],
+  "suggestion_refs": [],
   "feedback_id": "trace_feedback_002",
-  "feedback_status": "generated",
+  "feedback_status": "reserved",
   "session_id": "sess_001",
   "question_id": "q_001",
   "answer_id": "ans_002",
   "answer_round": 2,
-  "feedback_text": "polish_answer 评分 72/100：回答已保存，主要失分在结构化举证、技术取舍说明和结果量化。",
-  "score_result_id": "score_002",
-  "next_recommended_actions": ["continue_same_question", "answer_again", "generate_reference_answer", "explain_knowledge_point", "expand_technical_principle", "generate_next_round_suggestion", "generate_next_question"],
+  "feedback_text": "本阶段反馈能力已预留，暂不生成 LLM 反馈、候选项、参考答案或评分。",
+  "score_result_id": null,
+  "next_recommended_actions": [],
   "low_confidence_flags": [],
-  "trace_refs": [
-    {"trace_ref_id": "ans_002", "trace_type": "answer", "redaction_boundary": "none"},
-    {"trace_ref_id": "trace_feedback_002", "trace_type": "feedback", "redaction_boundary": "none"}
-  ],
+  "trace_refs": [],
   "feedback_payload": {
-    "schema_id": "polish_feedback_payload_v1",
+    "schema_id": "polish_feedback_reserved_v1",
     "schema_version": "1.0",
-    "contract_id": "P-POLISH-005",
-    "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005", "P-POLISH-009"],
-    "status": "generated",
-    "answer_ref": {"resource_type": "answer", "resource_id": "ans_002"},
-    "score_result": {"score_type": "polish_answer", "score_value": 72, "contract_id": "P-POLISH-004"},
-    "loss_points": [{"title": "结构化举证不足", "deducted_points": 16}],
-    "reference_answer": {"summary": "先交代业务背景和目标，再说明本人负责的关键模块、技术取舍、异常处理和最终指标。"},
-    "knowledge_points": [{"title": "STAR + 技术决策链路"}],
-    "technical_principles": [{"title": "可观测结果优先"}],
-    "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "trace_feedback_002_weakness_001"}],
-    "validation_result_ref": {"resource_type": "validation_result", "resource_id": "trace_feedback_002_validation"},
-    "trace_refs": [{"trace_ref_id": "trace_feedback_002", "trace_type": "feedback"}],
-    "low_confidence_flags": []
-  }
-}
-```
-
-Session detail 多轮示例：
-
-```json
-{
-  "turns": [
-    {
-      "question_id": "q_001",
-      "answers": [
-        {
-          "answer_id": "ans_001",
-          "answer_round": 1,
-          "feedback_id": "trace_feedback_001",
-          "feedback_text": "polish_answer 评分 58/100：回答已保存，主要失分在结构化举证、技术取舍说明和结果量化。",
-          "feedback_payload": {"contract_id": "P-POLISH-005", "status": "generated", "low_confidence_flags": [{"flag_id": "answer_detail_insufficient"}]},
-          "next_recommended_actions": ["provide_more_answer_detail", "answer_again", "continue_same_question"]
-        },
-        {
-          "answer_id": "ans_002",
-          "answer_round": 2,
-          "feedback_id": "trace_feedback_002",
-          "feedback_text": "polish_answer 评分 72/100：回答已保存，主要失分在结构化举证、技术取舍说明和结果量化。",
-          "feedback_payload": {"contract_id": "P-POLISH-005", "status": "generated", "score_result": {"score_value": 72}},
-          "next_recommended_actions": ["continue_same_question", "answer_again", "generate_reference_answer"]
-        }
-      ]
-    }
-  ]
-}
-```
-
-
-### 12.1 Polish 第一组公共字段与边界
-
-#### 模式边界
-
-- Polish 是打磨模式，不是压力面模式；允许用户围绕同一题多轮改进。
-- Polish 第一组可以给出诊断、评分、改进方向和后续建议，但不生成最终面试报告。
-- Polish 第一组不生成正式薄弱项、正式资产或正式训练计划。
-- Polish 第一组不负责连续压力追问、整场压力评分或压力面节奏控制。
-- 同题打磨结束建议阈值属于下一轮题目策略问题，按 LATER / SHOULD 后续收敛；不得影响 `P-POLISH-004` 已冻结的评分、证据、版本、置信度、校验和低置信度降级口径。
-- 四个 contract 都必须引用 Shared Contracts，默认按 `P-SHARED-002`、`P-SHARED-005` Input Evidence Selection、`P-SHARED-001`、业务生成、`P-SHARED-005` Output Evidence Binding、`P-SHARED-003`、`P-SHARED-004`、`P-SHARED-006` 和持久化 / 用户确认链路交接。
-
-#### 上游输入边界
-
-Polish 第一组可以条件消费 `JobMatchAnalysis`、`ScoreResult` canonical score、`MatchPoint`、`MismatchPoint`、`ImprovementPoint`、`Weakness` candidate refs、`JobVersion`、`ResumeVersion`、derived `ResumeMarkdownOutline` / Markdown 位置范围、`PolishTopicRef`、`PolishSubtopicRef`、`AssetVersion`、`Weakness`、`SessionSummary`、最近若干轮 Polish turns、当前题目、当前用户回答、RAG evidence 和公共参考材料。
-
-这些输入不得默认全部进入上下文：不得默认塞入全部简历、全部岗位、全部历史会话、全部资产或全部知识库材料。`JobVersion` 和 `ResumeVersion` 是核心输入，不是 RAG；Job Match 结果是结构化上游，不是 RAG。
-
-`PolishTopicRef` / `PolishSubtopicRef` 来自 API 受控选项，只用于上下文装配、题目生成和 trace；它们不是正式业务对象，也不产生独立 CRUD。`custom_topic_text` 是用户输入标签，必须经过长度限制、敏感信息裁剪和 prompt injection 防护；不得把其中的命令式文本当作系统指令。
-
-#### 检索边界
-
-- 默认基础流程只要求岗位、简历、当前打磨会话和必要 session summary。
-- 资产库、薄弱项、历史 Polish turns、Job Match 结果、历史报告 / 复盘摘要和知识库都是条件检索来源。
-- RAG / 知识库可用于考点、技术原理或参考依据增强，但不是 Polish 第一组 MVP 的硬依赖。
-- 互联网检索不是 MVP 默认强依赖，不得默认启用。
-- 条件检索必须经过 `P-SHARED-002`，并沿用 owner / source availability / evidence / trace 过滤规则。
-- 无 RAG、无资产、无历史报告、无历史复盘时不得阻断基础 Polish 流程；需要时应输出低置信度或资料不足状态。
-
-#### Polish 第一组输出 Schema（Output Schema）公共字段
-
-四个 Polish 第一组 contract 的 Output Schema 都必须包含以下公共字段；各 contract 可增加专属字段，但不得删除公共字段或改变字段语义。
-
-| 字段 | 必填 | 类型 / 枚举 | 说明 |
-|---|---|---|---|
-| `status` | 是 | `success` / `partial` / `low_confidence` / `validation_failed` / `generation_failed` | 子任务结果状态 |
-| `contract_id` | 是 | string | 当前 contract id |
-| `polish_session_ref` | 是 | ref | 打磨会话引用 |
-| `job_version_ref` | 是 | ref | 生成时岗位版本或快照引用 |
-| `resume_version_ref` | 是 | ref | 生成时简历版本或快照引用 |
-| `job_match_refs` | 否 | ref[] | 被消费的岗位匹配结果引用 |
-| `turn_refs` | 否 | ref[] | 被消费的打磨轮次引用 |
-| `source_refs` | 是 | ref[] | 被消费的来源引用 |
-| `source_availability` | 是 | `available` / `partial` / `unavailable` / `mixed` | 来源可用性聚合状态；底层来源状态仍沿用 §6.1 的 `source_*` 枚举 |
-| `evidence_refs` | 是 | ref[] | 支撑关键结论的 `EvidenceRef` |
-| `displayable_evidence_summary` | 否 | object[] | 可展示证据摘要，不等于原始敏感正文 |
-| `low_confidence_flags` | 是 | object[] | 低置信度标记，必须可追溯到 `P-SHARED-004` |
-| `validation_result_ref` | 是 | ref | `P-SHARED-003` 校验结果引用 |
-| `trace_refs` | 是 | ref[] | 检索、上下文装配、模型调用、校验和持久化交接过程 `TraceRef` |
-| `session_summary_update_ref` | 否 | ref | `P-SHARED-006` 产出的摘要更新引用 |
-| `next_recommended_actions` | 否 | enum[] | 非写入动作建议，允许值见本节下方 |
-| `user_confirmation_required` | 是 | boolean | 是否需要用户确认后才能回流正式对象 |
-
-`next_recommended_actions` 只表达建议动作，不直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。允许值至少包括 `answer_again`、`generate_reference_answer`、`explain_knowledge_point`、`expand_technical_principle`、`continue_same_question`、`switch_topic`、`generate_next_question`、`mark_weakness_candidate`、`mark_asset_candidate`、`enter_pressure_mode`、`generate_review_later`、`provide_more_answer_detail`、`provide_more_resume_evidence` 和 `skip_current_question`。其中需要用户确认的动作必须进入用户确认流，并形成 `UserConfirmationRef` 或等价记录。
-
-#### 输出和持久化边界
-
-Polish 第一组输出可以保存为题目规划候选、打磨题目、回答诊断、每轮得分、validation result、low confidence flag、evidence refs、trace refs 和 session summary update 输入。
-
-Polish 第一组不得直接写入正式 `Weakness`、正式 `Asset`、正式 `TrainingRecommendation`、最终面试报告或压力面整场评分。如需要产生弱项、资产、失分点、参考答案、知识点解析、技术原理扩展或训练方向，只能输出候选引用、后续 contract 入口建议或用户确认入口。
-
-### 12.2 `P-POLISH-001` 主题规划（Topic Planning）
-
-- Contract ID： `P-POLISH-001`
-- 名称（Name）： Topic Planning
-- 模式（Mode）： `polish`
-- 触发条件（Trigger）：
-  - 用户进入打磨模式。
-  - 用户选择岗位、简历或 Job Match 结果后开始打磨。
-  - 用户完成一轮打磨后请求下一主题。
-  - `SessionSummary` 显示当前主题已完成、需要切换或存在未完成主题。
-  - 用户手动选择关注方向。
-- 目标（Goal）： 规划当前或下一组打磨主题，决定本轮应围绕哪些岗位要求、简历 Markdown 片段 / derived outline、匹配缺口、薄弱项候选或用户目标展开；不生成正式训练计划；同题打磨结束建议的长期调参仅为 LATER / SHOULD，不在本 contract 冻结为自动关闭条件。
-- 必需输入（Required Inputs）：
-  - `OwnerRef`
-  - `polish_session_ref`
-  - `JobVersion`
-  - `ResumeVersion`
-  - 当前 `contract_id`
-  - 目标输出 schema
-  - `P-SHARED-001` Context Assembly 结果
-  - `P-SHARED-002` Retrieval Planning 结果
-  - `P-SHARED-003` Output Validation 要求
-  - `P-SHARED-004` Low Confidence Classification 要求
-  - `P-SHARED-005` Evidence Binding 要求
-  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
-- 可选输入（Optional Inputs）：
-  - `JobMatchAnalysis`
-  - `ScoreResult` canonical score
-  - `MatchPoint`
-  - `MismatchPoint`
-  - `ImprovementPoint`
-  - 已确认 `AssetVersion`
-  - 既有 `Weakness`
-  - `Weakness` candidate refs
-  - 最近若干轮 Polish turns
-  - 历史报告 / 复盘摘要
-  - 公共参考材料
-  - 知识库 / RAG evidence
-- 检索来源（Retrieval Sources）：
-  - 默认使用 `JobVersion`、`ResumeVersion` 和当前 `SessionSummary`。
-  - 条件检索 Job Match 结果、资产、薄弱项、历史打磨轮次、报告、复盘和知识库。
-  - Job Match 结果是结构化上游，不是 RAG；`JobVersion` 和 `ResumeVersion` 是核心输入，不是 RAG。
-  - 知识库 / RAG 只作为考点或背景依据增强，不作为基础主题规划的硬依赖。
-  - 互联网检索不默认启用。
-  - 无 Job Match 结果时可以基于岗位与简历直接规划主题，但必须标记输入较弱、`job_match_refs` 为空或触发低置信度。
-- 上下文装配（Context Assembly）：
-  - 必须继承 `P-SHARED-001` 的 owner 校验、来源可用性、裁剪、omitted refs 和 trace 规则。
-  - 上下文至少包含岗位摘要、简历摘要、当前打磨目标、session summary、已问主题、禁止重复主题、Job Match 相关 refs 和输出 schema。
-  - 不得默认塞入全部历史会话、全部资产、全部复盘或全部知识库材料。
-  - 上下文过长时优先保留当前目标、未完成主题、mismatch / improvement points、用户显式选择方向、禁止重复列表和输出 schema。
-- 排除输入（Excluded Inputs）：
-  - owner 不一致、source deleted / disabled / unavailable 的正文。
-  - 未经用户确认的资产候选、薄弱项候选或训练建议作为已确认事实。
-  - 全量无关历史会话、全量资产库、无关知识库材料、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
-  - 默认互联网检索结果和无法形成 `EvidenceRef` 的材料。
-- 输出 Schema（Output Schema）：
-  - 公共字段：必须完整包含 §12.1 的 Polish 第一组公共字段。
-  - `topic_plan_id_candidate`
-  - `topic_candidates`
-  - 每个 topic 的 `topic_id_candidate`
-  - 每个 topic 的 `title`
-  - 每个 topic 的 `focus_area`
-  - 每个 topic 的 `source_type`
-  - 每个 topic 的 `source_refs`
-  - 每个 topic 的 `evidence_refs`
-  - 每个 topic 的 `priority`
-  - 每个 topic 的 `difficulty_hint`
-  - 每个 topic 的 `reason`
-  - 每个 topic 的 `related_job_requirements`
-  - 每个 topic 的 `related_resume_outline_refs`
-  - 每个 topic 的 `related_match_or_mismatch_refs`
-  - `selected_topic_ref`，可包含 `PolishTopicRef`、`PolishSubtopicRef` 和安全处理后的 `custom_topic_text_summary`
-  - `forbidden_repeat_topics`
-  - `topic_ordering`
-  - `max_topics_hint`
-- 校验规则（Validation Rules）：
-  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
-  - 每个 topic 必须绑定岗位要求、简历 Markdown 片段 / derived outline 或 Job Match evidence。
-  - 主题不得完全脱离岗位与简历。
-  - 主题不得重复最近已完成主题，除非明确是同题继续打磨或用户手动选择重复。
-  - `difficulty_hint` 只能是建议，不冻结题目难度算法。
-  - `max_topics_hint` 是展示和成本控制提示，不冻结最终算法。
-  - 不得把 topic candidate 直接写成正式训练计划、正式薄弱项或正式资产。
-- 低置信度规则（Low Confidence Rules）：
-  - 无 Job Match 结果。
-  - 岗位要求过短或模糊。
-  - 简历 Markdown 片段或 derived outline 不足。
-  - session summary 缺失。
-  - evidence 不足。
-  - 已问主题无法确认。
-  - 用户目标过泛。
-  - 上下文高风险裁剪。
-  - 低置信度分类必须交给 `P-SHARED-004` 消费 validation、retrieval、context 和 evidence failure signals，不在本 contract 重复定义公共分类枚举。
-- 证据要求（Evidence Requirements）： 每个 topic 的来源、优先级原因、岗位要求、简历 Markdown 片段 / derived outline 和 Job Match 引用必须绑定 `EvidenceRef`、`SourceRef`、`VersionRef` / `SnapshotRef`；证据不足时必须输出 `evidence_missing` 或等价低置信度标记。
-- Trace 要求（Trace Requirements）： 必须记录 `TraceRef`，覆盖 Retrieval Planning、Input Evidence Selection、Context Assembly、主题生成或选择、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
-- 持久化目标（Persistence Targets）：
-  - `PolishSession` topic plan candidate 或等价会话内结果。
-  - `selected_topic_ref` / `PolishTopicRef` / `PolishSubtopicRef` 会话内引用；不得写成正式业务对象。
-  - `LlmValidationResult`
-  - `LowConfidenceFlag`
-  - `TraceRef`
-  - `SessionSummary` update 输入
-  - `AuditEvent`
-- 用户确认要求（User Confirmation Requirement）：
-  - 用户可以接受、切换、跳过或手动选择 topic。
-  - topic plan 不直接创建正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
-  - 如果后续根据 topic 派生弱项或资产，必须进入对应候选 / 确认链路。
-- 重试 / 兜底（Retry / Fallback）：
-  - 必需版本缺失、owner mismatch 或 session 不可访问时停止正常生成，返回失败或补充材料路径。
-  - Job Match 不存在、历史主题不可确认或 RAG 为空时可保存低置信度主题候选，不阻断基础打磨。
-  - 重试不得扩大输入范围、默认启用互联网检索或记录原始 Prompt / completion。
-- API 状态映射（API State Mapping）： 只定义状态语义，包括 `topic_plan_available`、`topic_plan_partial`、`topic_plan_low_confidence`、`topic_plan_validation_failed`、`insufficient_input`、`anti_repeat_unknown` 和 `source_unavailable`；endpoint 与 request / response schema 以 `API_SPEC.md` 的 `GET /api/v1/polish-topics` 和 `CreatePolishSessionRequest` 为准。
-- 安全说明（Security Notes）： 所有输入必须通过 owner / scope 校验和最小必要裁剪；`custom_topic_text` 必须进行 prompt injection 防护和指令中和；前端只可见结构化主题候选、状态、可展示证据摘要和必要 trace id，不暴露原始 Prompt、completion、provider payload 或无权限来源正文。
-- 测试策略（Test Strategy）： 使用确定性 fixture 覆盖有 Job Match、无 Job Match、岗位模糊、简历 Markdown 片段不足、session summary 缺失、重复主题、用户手动选择方向、invalid topic/subtopic、cross-owner binding、custom topic injection 文本、RAG 为空、上下文高风险裁剪和不得写入正式训练计划。
-- 开放问题（Open Questions）： 主题排序算法、主题数量上限、同题打磨结束建议阈值和 topic 与后续训练计划的映射仍待后续 contract / API / UX 收敛，为 deferred_non_blocking。进展树初始生成和状态刷新已按 `polish_progress_tree_plan` / `polish_progress_tree_state` runtime task_type 登记，后续只保留节点推荐策略细化为 deferred_non_blocking。
-
-### 12.3 `P-POLISH-002` 题目生成（Question Generation）
-
-- Contract ID： `P-POLISH-002`
-- 名称（Name）： Question Generation
-- 模式（Mode）： `polish`
-- 触发条件（Trigger）：
-  - `P-POLISH-001` 选定 topic 后。
-  - 用户请求生成题目。
-  - 用户跳过当前题目并请求新题。
-  - 用户要求继续同一主题但换题。
-  - `SessionSummary` 显示需要补充某类题目。
-- 目标（Goal）： 基于选定主题、岗位、简历、Job Match 结果、session summary 和必要证据生成或选择打磨题目；不生成完整参考答案，不冻结题目推荐算法。
-- 必需输入（Required Inputs）：
-  - `OwnerRef`
-  - `polish_session_ref`
-  - `selected_topic_ref` 或等价 topic context；可包含 `PolishTopicRef`、`PolishSubtopicRef` 和安全处理后的 `custom_topic_text_summary`
-  - `JobVersion`
-  - `ResumeVersion`
-  - 当前 `contract_id`
-  - 目标输出 schema
-  - `P-SHARED-001` Context Assembly 结果
-  - `P-SHARED-002` Retrieval Planning 结果
-  - `P-SHARED-003` Output Validation 要求
-  - `P-SHARED-004` Low Confidence Classification 要求
-  - `P-SHARED-005` Evidence Binding 要求
-  - `P-SHARED-006` Session Summary Update 要求或现有 session summary
-- 可选输入（Optional Inputs）：
-  - `JobMatchAnalysis`
-  - `MismatchPoint`
-  - `ImprovementPoint`
-  - `MatchPoint`
-  - 既有 `Weakness`
-  - 已确认 `AssetVersion`
-  - 最近若干轮 Polish turns
-  - 已问问题列表
-  - 禁止重复问题列表
-  - 公共参考材料
-  - 知识库 / RAG evidence
-- 检索来源（Retrieval Sources）：
-  - 默认使用 selected topic、`JobVersion`、`ResumeVersion` 和 `SessionSummary`。
-  - 条件检索 Job Match points、资产、薄弱项、历史题目和知识库。
-  - 知识库 / RAG 可用于考点覆盖或题目素材增强，不是必需输入。
-  - 互联网检索不默认启用。
-  - 无 RAG 时仍必须可以生成基础题目；如技术原理题缺少知识证据，应传递低置信度或资料不足状态。
-- 上下文装配（Context Assembly）：
-  - 必须继承 `P-SHARED-001` 的最小必要上下文、裁剪、omitted refs 和 trace 规则。
-  - 上下文至少包含 selected topic、岗位要求、简历 Markdown 相关片段 / derived outline、已问问题、禁止重复列表、当前打磨目标和输出 schema。
-  - 不得默认塞入全部知识库材料、全部历史会话、全部资产或全部弱项。
-  - 上下文过长时优先保留 selected topic、禁止重复问题、相关岗位要求、简历 Markdown 片段 / derived outline、evidence refs 和输出 schema。
-- 排除输入（Excluded Inputs）：
-  - owner 不一致、source deleted / disabled / unavailable 的正文。
-  - 完整参考答案、未校验知识库原文、无 evidence ref 的题目素材。
-  - 无关历史问答全文、全量资产库、原始 Prompt、completion、provider payload、密钥、token、cookie、日志正文和原始 embedding 向量。
-  - 默认互联网检索结果、违法或隐私侵入材料。
-- 输出 Schema（Output Schema）：
-  - 公共字段：必须完整包含 §12.1 的 Polish 第一组公共字段。
-  - `question_id_candidate`
-  - `topic_ref`
-  - `question_text`
-  - `question_type`
-  - `difficulty_hint`
-  - `expected_focus_points`
-  - `related_job_requirements`
-  - `related_resume_outline_refs`
-  - `source_refs`
-  - `evidence_refs`
-  - `anti_repeat_refs`
-  - `answer_guidance_visibility`
-  - `time_box_hint`
-  - `follow_up_allowed`
-  - `same_question_polish_allowed`
-- 校验规则（Validation Rules）：
-  - 必须引用 `P-SHARED-003`，并把结构化校验和业务语义校验结果写入 validation trace。
-  - 题目必须与 selected topic、岗位要求或简历 Markdown 片段 / derived outline 有关。
-  - 题目不得重复最近已问问题；无法判断重复时必须触发低置信度。
-  - 题目不得直接泄露完整参考答案。
-  - `difficulty_hint` 只是建议，不冻结题目推荐算法。
-  - `question_type` 必须使用稳定枚举，例如 `experience` / `project_deep_dive` / `technical_principle` / `scenario` / `behavioral` / `system_design` / `coding_discussion` 或后续等价枚举。
-  - `answer_guidance_visibility` 必须区分用户答题前是否展示提示。
-  - 不得生成违法、隐私侵入或与岗位无关题目。
-- 低置信度规则（Low Confidence Rules）：
-  - selected topic 缺失。
-  - 岗位或简历证据不足。
-  - 禁止重复列表缺失。
-  - 题目与岗位 / 简历关联弱。
-  - RAG evidence 不可用但题目需要知识补充。
-  - 输出题目过泛。
-  - 无法判断是否重复。
-  - 上下文高风险裁剪。
-- 证据要求（Evidence Requirements）： 题目、预期考察点、岗位要求、简历 Markdown 片段 / derived outline 和去重依据必须绑定 `EvidenceRef` 或 `anti_repeat_refs`；缺少证据时不得伪装成高置信题目。
-- Trace 要求（Trace Requirements）： 必须记录 `TraceRef`，覆盖 Retrieval Planning、Input Evidence Selection、Context Assembly、题目生成或选择、去重检查、Output Evidence Binding、Output Validation、Low Confidence Classification、Session Summary Update handoff、Persistence handoff 和 AuditEvent。
-- 持久化目标（Persistence Targets）：
-  - `PolishQuestion` candidate 或等价会话内题目对象。
-  - `PolishTurn` 初始化输入。
-  - `LlmValidationResult`
-  - `LowConfidenceFlag`
-  - `TraceRef`
-  - `SessionSummary` update 输入
-  - `AuditEvent`
-- 用户确认要求（User Confirmation Requirement）：
-  - 生成题目可以直接进入答题流程。
-  - 用户可跳过、换题、继续同主题或切换主题。
-  - 题目生成不得直接写入正式 `Weakness`、`Asset` 或 `TrainingRecommendation`。
-- 重试 / 兜底（Retry / Fallback）：
-  - selected topic 缺失、owner mismatch 或必需版本缺失时停止正常生成，返回失败或补充材料路径。
-  - RAG 为空、历史题目不可确认或题目过泛时可重试、降级为基础题目或要求用户补充方向。
-  - 重试不得默认启用互联网检索、扩大到全量历史会话或泄露完整参考答案。
-- API 状态映射（API State Mapping）： 只定义状态语义，包括 `question_available`、`question_partial`、`question_low_confidence`、`question_validation_failed`、`duplicate_risk`、`topic_missing` 和 `source_unavailable`；不定义 endpoint 或 schema。
-- 安全说明（Security Notes）： 题目生成只使用当前 owner 的必要岗位、简历、topic、session summary 和已授权增强材料；日志不记录原始 Prompt、completion、provider payload 或隐私正文。
-- 测试策略（Test Strategy）： 使用 fixture 覆盖有 topic、无 topic、禁止重复列表缺失、重复题、无 RAG、技术题缺证据、过泛题、答题前提示可见性、违法 / 隐私题拒绝和题目不转正式弱项 / 资产 / 训练建议。
-- 开放问题（Open Questions）： 题目推荐算法、难度排序、题目数量控制、time box 默认值和后续题目 API 字段仍待后续 contract / API / UX 收敛，为 deferred_non_blocking。进展树 plan/state prompt contract 已登记，题目如何利用 `current_priority.progress_node_ref` 深挖仍按后续策略细化处理。
-
-### 12.3.1 Step 1B API 闭环字段补齐说明
-
-- 在本步中保持 `P-POLISH-002` 合同输出语义不变的前提下，补齐 session / question API 的可消费字段：
-  - `POST /polish-sessions/{session_id}/questions` 在 `ai_task` 响应中返回：
-    - `active_question_refs`
-    - `active_question_progress_node_ref`
-    - `active_question_evidence_refs`
-    - `active_question_context_digest`
-  - `GET /polish-sessions/{session_id}` 及 session detail 响应中的 `turns` 返回：
-    - `progress_node_ref`
-    - `evidence_refs`
-    - `context_digest`
-  - `feedback_text` 保持在 `turns[*].answers[*].feedback_text` 兼容旧版消费方。
-
-#### POST /polish-sessions/{session_id}/questions 返回示例
-
-```json
-{
-  "ai_task_id": "task_polish_...",
-  "task_type": "polish_question_generation",
-  "status": "succeeded",
-  "contract_ids": ["P-POLISH-002", "P-SHARED-001", "P-SHARED-003"],
-  "retryable": false,
-  "result_ref": {
-    "trace_ref_id": "trace_...",
-    "trace_type": "trace",
-    "created_at": "2026-05-21T00:00:00+08:00",
-    "redaction_boundary": "none"
-  },
-  "user_visible_status": "题目已生成",
-  "score_type": null,
-  "active_question_refs": [{"resource_type": "question", "resource_id": "q_..."}],
-  "active_question_progress_node_ref": "pn_...",
-  "active_question_evidence_refs": [{"resource_type": "evidence", "resource_id": "ev_..."}],
-  "active_question_context_digest": null,
-  "candidate_refs": [
-    {"resource_type": "question", "resource_id": "q_..."},
-    {"resource_type": "progress_node", "resource_id": "pn_..."},
-    {"resource_type": "evidence", "resource_id": "ev_..."}
-  ],
-  "suggestion_refs": [],
-  "contract_shaped_fake": {
-    "contract_id": "P-POLISH-002",
-    "status": "succeeded",
-    "source_refs": [
-      {"resource_type": "question", "resource_id": "q_..."},
-      {"resource_type": "progress_node", "resource_id": "pn_..."},
-      {"resource_type": "evidence", "resource_id": "ev_..."}
-    ],
-    "source_availability": "available",
-    "question_ref": {"resource_type": "question", "resource_id": "q_..."},
-    "progress_node_ref": "pn_...",
-    "evidence_refs": [{"resource_type": "evidence", "resource_id": "ev_..."}],
-    "context_digest": null,
-    "low_confidence_flags": [],
+    "contract_id": "P-POLISH-003",
+    "contract_ids": ["P-POLISH-003"],
+    "status": "reserved",
+    "score_result": null,
+    "loss_points": [],
+    "reference_answer": null,
+    "knowledge_points": [],
+    "technical_principles": [],
+    "candidate_refs": [],
     "validation_result_ref": null,
     "trace_refs": [],
-    "session_summary_update_ref": null,
-    "next_recommended_actions": ["continue_same_question"],
-    "user_confirmation_required": false
+    "low_confidence_flags": [],
+    "legacy_compatibility": {
+      "feedback_text": "本阶段反馈能力已预留，暂不生成 LLM 反馈、候选项、参考答案或评分。"
+    },
+    "feedback_metadata": {
+      "reserved": true,
+      "phase": "phase_2b",
+      "llm_called": false,
+      "candidate_extraction_called": false,
+      "reference_answer_generated": false,
+      "score_result_generated": false
+    }
   }
 }
 ```
 
-#### session detail 返回示例（包含新闭环字段）
-
-```json
-{
-  "turns": [
-    {
-      "question_id": "q_...",
-      "question_text": "...",
-      "question_created_at": "2026-05-21T00:00:00+08:00",
-      "progress_node_ref": "pn_...",
-      "evidence_refs": ["ev_..."],
-      "context_digest": "digest_...",
-      "answers": []
-    }
-  ],
-  "active_question_refs": [{"resource_type": "question", "resource_id": "q_..."}],
-  "active_question_progress_node_ref": "pn_...",
-  "active_question_evidence_refs": ["ev_..."],
-  "active_question_context_digest": "digest_..."
-}
-```
-
+Session detail 中 `turns[*].answers[*].feedback_payload` 必须与以上 reserved payload 同形；同一 answer 多次请求 feedback 时，session detail 使用最新 feedback，历史 feedback 保留为记录。当前 Step 1D 的测试重点是 reserved shape、legacy `feedback_text` 兼容、no score、no candidates、no raw fields、no implicit feedback on answer save。
 
 ### 12.4 `P-POLISH-003` 回答诊断（Answer Diagnosis）
 

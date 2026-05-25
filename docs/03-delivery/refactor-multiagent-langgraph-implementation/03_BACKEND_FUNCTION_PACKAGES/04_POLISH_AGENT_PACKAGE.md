@@ -19,9 +19,9 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 | Boundary | Rule |
 |---|---|
 | answer save | `PolishUseCases.create_answer` remains Core Business synchronous write; it does not call LLM and does not start graph |
-| feedback generation | independent AI task; answer save cannot implicitly generate feedback |
-| candidate | feedback graph may produce candidate refs; it cannot create formal Weakness / Asset / Training object |
-| candidate enhancement | LLM-based candidate enhancement and formal closure are PR8 scope, not PR5 |
+| feedback generation | independent AI task; answer save cannot implicitly generate feedback；Phase 2B runtime currently returns reserved placeholder only |
+| candidate | Phase 2B feedback returns empty candidate refs；future graph must not create formal Weakness / Asset / Training object without confirmation |
+| candidate generation | deferred until explicit authorization；not PR5 scope |
 | raw-off | no raw prompt/completion/provider payload in checkpoint/log/API/timeline |
 | Core dependency | Core Polish use case cannot import LangGraph or graph node |
 
@@ -31,7 +31,7 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 |---|---|---|---:|
 | `polish_progress_tree_graph` | generate or refresh session progress tree | progress tree/state, AI task result, trace/evidence | PR5 |
 | `polish_question_graph` | generate question from progress node and context | questions, AI task result, trace/evidence, low confidence flags | PR5 |
-| `polish_feedback_graph` | generate feedback / score / candidate refs for saved answer | feedback, score results, candidate refs, trace/evidence | PR5；candidate enhancement / formal closure PR8 |
+| `polish_feedback_graph` | target graph for future feedback generation；Phase 2B keeps reserved placeholder | reserved feedback today；future feedback / score / candidate refs require re-authorization | Deferred after Phase 2B |
 
 ## 4. `polish_question_graph` node plan
 
@@ -39,13 +39,12 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 |---|---|---|---|---|---|---|
 | `load_polish_session_context` | owner, session id | session detail refs, progress refs | read only | `polish_question:{owner_id}:{session_id}:load` | `not_found_or_inaccessible` / `source_unavailable` | owner/session status |
 | `validate_question_request` | command, session detail | request metadata and generation mode | none | `polish_question:{session_id}:{request_digest}:validate` | `validation_failed` | invalid topic/node/mode |
-| `validate_progress_tree_ready` | progress status/plan | ready flag | none | `polish_question:{session_id}:tree-ready:{plan_digest}` | `validation_failed` / `low_confidence` | insufficient context |
-| `build_progress_context` | detail context, completed refs | compact context, anti-repeat refs | none | `polish_question:{session_id}:{progress_node_ref}:context:{completed_focus_hash}` | `validation_failed` | completed focus / anti-repeat |
-| `refresh_progress_tree_if_needed` | context, plan, state | refreshed plan/state refs | update progress tree only through repository | `polish_tree:{owner_id}:{session_id}:{context_digest}` | `partial` / `low_confidence` | refresh keeps existing refs |
-| `select_progress_node` | plan/state/requested ref | resolved progress node | none | `polish_question:{session_id}:{requested_ref}:select-node` | `validation_failed` | requested node / current priority |
-| `generate_question_candidate` | session, compact context, plan/state, node | question draft candidate | LLM via transport wrapper | `polish_question:{session_id}:{progress_node_id}:{context_digest}:llm` | `generation_failed` / `low_confidence` | feature disabled, fake accepted |
-| `question_quality_gate` | candidate, pattern, evidence refs, recent questions | accepted or repaired candidate | none | `polish_question:{session_id}:{candidate_digest}:quality` | `validation_failed` / `low_confidence` | duplicate, answer leak, unsupported entity |
-| `persist_question` | accepted candidate, metadata | question ref | write `questions` | `question:{owner_id}:{session_id}:{progress_node_id}:{candidate_digest}` | `generation_failed` | API readback, no raw metadata |
+| `resolve_progress_node` | progress plan/state/requested ref | resolved progress node | none | `polish_question:{session_id}:{requested_ref}:resolve-node` | `validation_failed` | requested node / current priority |
+| `build_evidence_scope` | progress context, plan/state, resolved node, completed refs | `EvidenceScope`, evidence refs, question sources | none | `polish_question:{session_id}:{progress_node_ref}:scope:{completed_focus_hash}` | `validation_failed` / `low_confidence` | evidence selection and anti-repeat context |
+| `build_question_blueprint` | `EvidenceScope` | `QuestionBlueprint` | none | `polish_question:{session_id}:{progress_node_ref}:blueprint:{scope_digest}` | `validation_failed` / `low_confidence` | blueprint kind, claim mode, expected dimensions |
+| `render_surface_question` | `QuestionBlueprint`, `EvidenceScope` | surface question text and prompt metadata | none | `polish_question:{session_id}:{progress_node_ref}:surface:{blueprint_digest}` | `generation_failed` / `low_confidence` | no raw provider payload |
+| `validate_question_grounding` | surface question, `QuestionBlueprint`, primary source type | grounding result | none | `polish_question:{session_id}:{progress_node_ref}:grounding:{question_digest}` | `validation_failed` | grounding failure does not repair, generate or persist question |
+| `persist_question` | grounded question draft, metadata | question ref | write `questions` | `question:{owner_id}:{session_id}:{progress_node_ref}:{question_digest}` | `generation_failed` | API readback, no raw metadata |
 | `complete_ai_task` | state and question ref | terminal task result | write task status | `ai_task:{ai_task_id}:complete` | terminal status | task contract shape |
 
 ## 5. `polish_progress_tree_graph` node plan
@@ -82,27 +81,26 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 
 | Existing symbol | Target | Strategy |
 |---|---|---|
-| `PolishUseCases.create_question_task` | `polish_question_graph` facade entry | split |
-| `PolishQuestionLlmService.generate_with_llm_or_fallback` | `generate_question_candidate` | wrap |
-| `build_deterministic_progress_node_question` | deterministic fallback | keep |
-| `validate_question_quality` | `question_quality_gate` | keep |
+| `PolishUseCases.create_question_task` | `QuestionGenerationService.generate` / future `polish_question_graph` facade entry | keep facade boundary |
+| `question_generation_service.py` | resolve progress node -> `EvidenceScope` -> `QuestionBlueprint` -> surface question -> grounding | keep as Phase 2A source of truth |
+| `question_blueprint.py` | blueprint node | keep |
+| `question_grounding.py` | grounding gate | keep |
 | `PolishUseCases.refresh_progress_tree_state` | `polish_progress_tree_graph` entry | split |
 | `PolishUseCases.create_answer` | Core answer save | keep |
-| `PolishUseCases.create_feedback_task` | `polish_feedback_graph` entry | split |
-| `PolishFeedbackLlmService.generate_with_llm_or_fallback` | `generate_feedback_candidate` | wrap |
-| `validate_feedback_consistency` | `feedback_consistency_gate` | keep |
-| `extract_feedback_candidates` | `extract_weakness_asset_candidates` | wrap |
+| `PolishUseCases.create_feedback_task` | `feedback_reserved.py` reserved placeholder / future `polish_feedback_graph` entry | keep reserved path until feedback generation is re-authorized |
+| `build_reserved_feedback_artifacts` | reserved feedback node | keep as Phase 2B source of truth |
+| `build_reserved_feedback_payload` | reserved payload shape | keep |
 | `SqlAlchemyPolishRepository.add_question/add_feedback/update_progress_tree/add_task` | persistence nodes | keep / wrap |
 
 ## 8. PR5 tests
 
 | Test area | Assertions |
 |---|---|
-| question graph | existing question API shape preserved; owner scope; no raw LLM fields |
+| question graph | existing question API shape preserved; owner scope; grounding failure returns validation_failed and writes no question; no raw LLM fields |
 | progress tree | refresh keeps node refs; low confidence path does not wipe valid previous tree |
 | answer save | answer save does not call LLM or start graph |
-| feedback graph | independent AI task; feedback / score / candidates persisted with redaction |
-| candidate boundary | candidate refs only; formal object not created before confirmation；candidate enhancement is deferred to PR8 |
+| feedback graph | independent AI task shape preserved; Phase 2B returns reserved feedback only, with no score or candidates |
+| candidate boundary | Phase 2B candidate refs are empty; future candidate refs cannot create formal objects before confirmation |
 
 ## 9. Non-goals
 
@@ -111,4 +109,4 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 - No vector database.
 - No hidden raw provider fields in API responses.
 - No automatic formal candidate promotion.
-- No candidate enhancement or formal closure before PR8.
+- No candidate generation or formal closure without explicit authorization.

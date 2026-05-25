@@ -51,37 +51,3 @@ class PolishRepository(Protocol):
     def add_task(self, task: PolishTaskStatus, *, owner_id: str, actor_id: str, target_ref_id: str) -> None: ...
 
     def get_ref(self, session_id: str) -> ResourceRef | None: ...
-
-
-class PolishCandidateRepository(Protocol):
-    def upsert_from_feedback_payload(self, owner_id: str, feedback_payload: dict) -> tuple[dict, ...]: ...
-
-    def list_candidates(
-        self,
-        *,
-        owner_id: str,
-        status: str | None = None,
-        candidate_type: str | None = None,
-        session_id: str | None = None,
-        source_type: str | None = None,
-        confidence_level: str | None = None,
-        limit: int = 20,
-        offset: int = 0,
-    ) -> tuple[dict, ...]: ...
-
-    def get_candidate(self, *, owner_id: str, candidate_id: str) -> dict | None: ...
-
-    def confirm_candidate(self, *, owner_id: str, actor_id: str, candidate_id: str) -> dict: ...
-
-    def dismiss_candidate(self, *, owner_id: str, actor_id: str, candidate_id: str) -> dict: ...
-
-    def merge_candidate(
-        self,
-        *,
-        owner_id: str,
-        actor_id: str,
-        candidate_id: str,
-        target_candidate_id: str,
-    ) -> dict: ...
-
-    def archive_candidate(self, *, owner_id: str, actor_id: str, candidate_id: str) -> dict: ...

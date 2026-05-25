@@ -337,7 +337,7 @@ class PolishTaskStatusResponse(BaseModel):
     active_question_progress_node_ref: str | None = None
     active_question_evidence_refs: list[ResourceRef] = Field(default_factory=list)
     active_question_context_digest: str | None = None
-    contract_shaped_fake: dict[str, Any] | None = None
+    validation_errors: list[str] = Field(default_factory=list)
     feedback_id: str | None = None
     feedback_status: str | None = None
     session_id: str | None = None

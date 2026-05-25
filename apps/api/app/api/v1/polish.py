@@ -41,6 +41,11 @@ from app.application.polish.entities import (
     PolishTaskStatus,
     PolishTopic,
 )
+from app.application.polish.feedback_reserved import (
+    RESERVED_FEEDBACK_SCHEMA_ID,
+    RESERVED_FEEDBACK_SCHEMA_VERSION,
+    RESERVED_FEEDBACK_TEXT,
+)
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
@@ -55,7 +60,6 @@ from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingReposit
 from app.infrastructure.db.repositories.job_match import SqlAlchemyJobMatchAnalysisRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
-from app.infrastructure.db.repositories.polish_candidates import SqlAlchemyPolishCandidateRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.application.llm.ports import LlmTransport
 from app.infrastructure.observability.logging import LogUtil
@@ -91,18 +95,6 @@ LEGACY_PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
 ANSWER_NEXT_RECOMMENDED_ACTIONS = (
     "answer_again",
     "continue_same_question",
-    "generate_reference_answer",
-    "generate_next_question",
-)
-
-# 反馈生成后允许的推荐操作（多了 explain/expand/next_round 等）
-FEEDBACK_NEXT_RECOMMENDED_ACTIONS = (
-    "answer_again",
-    "continue_same_question",
-    "generate_reference_answer",
-    "explain_knowledge_point",
-    "expand_technical_principle",
-    "generate_next_round_suggestion",
     "generate_next_question",
 )
 
@@ -484,9 +476,7 @@ def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTranspo
         resume_repository=SqlAlchemyResumeRepository(session_factory),
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
-        candidate_repository=SqlAlchemyPolishCandidateRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
-        llm_transport=llm_transport,
     )
 
 
@@ -829,8 +819,7 @@ def _clean_optional_header(value: str | None) -> str | None:
     return stripped or None
 
 
-# ── 核心：反馈 payload 构造（兼容 Legacy + 安全脱敏） ───────────────
-# 返回前端可见的反馈 JSON，包含评分、失分点、知识/技术建议、trace 等
+# ── 核心：反馈 payload 构造（pending / reserved / stored payload） ─────
 def _answer_feedback_payload(
     answer: object,
     *,
@@ -844,7 +833,6 @@ def _answer_feedback_payload(
     stored_payload = getattr(answer, "feedback_payload", None)
     if isinstance(stored_payload, dict) and feedback_id:
         return _response_safe_feedback_payload(stored_payload)
-    feedback_text = _legacy_feedback_text(getattr(answer, "feedback_text", None))
     if not feedback_id:
         return {
             "contract_id": "P-POLISH-003",
@@ -870,63 +858,38 @@ def _answer_feedback_payload(
             "legacy_compatibility": {"feedback_text": LEGACY_PENDING_FEEDBACK_TEXT},
         }
 
-    score_result_id = getattr(answer, "score_result_id", None) or f"{feedback_id}_score"
-    answer_text = str(getattr(answer, "answer_text", ""))
-    low_confidence_flags = _feedback_low_confidence_flags(answer_text)
-    score_value = 58 if low_confidence_flags else 72
-    trace_refs = _feedback_trace_refs(answer, score_result_id=score_result_id)
     return {
-        "schema_id": "polish_feedback_payload_v1",
-        "schema_version": "1.0",
-        "contract_id": "P-POLISH-005",
-        "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005", "P-POLISH-009"],
-        "status": "generated",
+        "schema_id": RESERVED_FEEDBACK_SCHEMA_ID,
+        "schema_version": RESERVED_FEEDBACK_SCHEMA_VERSION,
+        "contract_id": "P-POLISH-003",
+        "contract_ids": ["P-POLISH-003"],
+        "status": "reserved",
         "feedback_id": feedback_id,
         "polish_session_ref": {"resource_type": "polish_session", "resource_id": answer_session_id},
         "question_ref": {"resource_type": "question", "resource_id": answer_question_id},
         "answer_ref": {"resource_type": "answer", "resource_id": answer_id},
-        "feedback_text": feedback_text,
-        "feedback_summary": feedback_text,
-        "score_result": {
-            "score_result_id": score_result_id,
-            "score_type": "polish_answer",
-            "score_value": score_value,
-            "score_version": "polish_answer.runtime_fake.v1",
-            "rubric_version": "polish_round_score.v1",
-            "contract_id": "P-POLISH-004",
-            "confidence_level": "low" if low_confidence_flags else "medium",
-        },
-        "score_result_ref": {"resource_type": "score_result", "resource_id": score_result_id},
-        "loss_points": _feedback_loss_points(feedback_id=str(feedback_id), answer_id=answer_id, answer_text=answer_text, score_value=score_value),
-        "reference_answer": {
-            "contract_id": "P-POLISH-006",
-            "summary": "先交代业务背景和目标，再说明本人负责的关键模块、技术取舍、异常处理和最终指标。",
-            "outline": ["背景与约束", "本人负责范围", "关键技术方案与取舍", "验证结果与复盘"],
-        },
-        "knowledge_points": [
-            {
-                "title": "STAR + 技术决策链路",
-                "explanation": "回答项目经历时需要同时覆盖场景、任务、行动、结果和技术取舍。",
-            }
-        ],
-        "technical_principles": [
-            {
-                "title": "可观测结果优先",
-                "explanation": "技术方案表达应绑定指标、日志、告警、压测或线上结果，避免停留在名词罗列。",
-            }
-        ],
-        "next_recommended_actions": _feedback_next_actions(
-            "provide_more_answer_detail" if low_confidence_flags else "continue_same_question"
-        ),
-        "candidate_refs": [
-            {"resource_type": "weakness_candidate", "resource_id": f"{feedback_id}_weakness_001"},
-            {"resource_type": "asset_candidate", "resource_id": f"{feedback_id}_asset_001"},
-        ],
-        "validation_result_ref": {"resource_type": "validation_result", "resource_id": f"{feedback_id}_validation"},
-        "trace_refs": trace_refs,
-        "low_confidence_flags": low_confidence_flags,
+        "feedback_text": RESERVED_FEEDBACK_TEXT,
+        "feedback_summary": RESERVED_FEEDBACK_TEXT,
+        "score_result": None,
+        "score_result_ref": None,
+        "loss_points": [],
+        "reference_answer": None,
+        "knowledge_points": [],
+        "technical_principles": [],
+        "next_recommended_actions": [],
+        "candidate_refs": [],
+        "validation_result_ref": None,
+        "trace_refs": _answer_trace_refs(answer),
+        "low_confidence_flags": [],
         "user_confirmation_required": False,
-        "legacy_compatibility": {"feedback_text": feedback_text},
+        "legacy_compatibility": {"feedback_text": RESERVED_FEEDBACK_TEXT},
+        "feedback_metadata": {
+            "reserved": True,
+            "llm_called": False,
+            "candidate_extraction_called": False,
+            "reference_answer_generated": False,
+            "score_result_generated": False,
+        },
     }
 
 
@@ -1020,59 +983,6 @@ def _drop_forbidden_feedback_payload_response_keys(value: Any) -> Any:
     return value
 
 
-# ── 反馈评分模拟 ────────────────────────────────────────────────────
-
-# 构造失分点列表（基于 score_value 模拟扣分分配）
-def _feedback_loss_points(*, feedback_id: str, answer_id: str, answer_text: str, score_value: int) -> list[dict[str, object]]:
-    deducted_points = 100 - score_value
-    return [
-        {
-            "loss_point_id": f"{feedback_id}_loss_001",
-            "title": "结构化举证不足",
-            "deducted_points": min(16, deducted_points),
-            "reason": "回答需要补充场景、个人职责、关键约束和可验证结果之间的因果链路。",
-            "answer_excerpt": answer_text[:160],
-            "related_answer_ref": {"resource_type": "answer", "resource_id": answer_id},
-        },
-        {
-            "loss_point_id": f"{feedback_id}_loss_002",
-            "title": "技术取舍与边界说明不足",
-            "deducted_points": max(deducted_points - 16, 0),
-            "reason": "建议说明替代方案、失败路径、指标或风险处理，而不是只陈述做了什么。",
-            "related_answer_ref": {"resource_type": "answer", "resource_id": answer_id},
-        },
-    ]
-
-
-# 合并主操作和全部推荐操作，去重后返回
-def _feedback_next_actions(primary_action: str) -> list[str]:
-    actions: list[str] = []
-    for action in (primary_action, *FEEDBACK_NEXT_RECOMMENDED_ACTIONS):
-        if action not in actions:
-            actions.append(action)
-    return actions
-
-
-# 根据回答文本长度判断低置信度标记（18字阈值）
-def _feedback_low_confidence_flags(answer_text: str) -> list[dict[str, str]]:
-    if len(answer_text.strip()) >= 18:
-        return []
-    return [
-        {
-            "flag_id": "answer_detail_insufficient",
-            "reason": "answer_too_short_for_full_scoring",
-            "impact_scope": "score_result, loss_points, reference_answer",
-            "recommended_action": "provide_more_answer_detail",
-        }
-    ]
-
-
-# 兼容 Legacy：feedback_text 为空时返回"本轮反馈尚未生成"
-def _legacy_feedback_text(value: object) -> str:
-    text = str(value or "").strip()
-    return text or LEGACY_PENDING_FEEDBACK_TEXT
-
-
 # 构造答案的 trace 引用
 def _answer_trace_refs(answer: object) -> list[dict[str, object]]:
     answer_created_at = getattr(answer, "answer_created_at", None) or getattr(answer, "created_at", None)
@@ -1084,31 +994,6 @@ def _answer_trace_refs(answer: object) -> list[dict[str, object]]:
             "redaction_boundary": "none",
         }
     ]
-
-
-# 构造反馈的 trace 引用（含答案 + feedback + score_result 三级）
-def _feedback_trace_refs(answer: object, *, score_result_id: str) -> list[dict[str, object]]:
-    trace_refs = _answer_trace_refs(answer)
-    feedback_id = getattr(answer, "feedback_id", None)
-    if feedback_id:
-        feedback_created_at = getattr(answer, "feedback_created_at", None)
-        trace_refs.extend(
-            [
-                {
-                    "trace_ref_id": feedback_id,
-                    "trace_type": "feedback",
-                    "created_at": feedback_created_at,
-                    "redaction_boundary": "none",
-                },
-                {
-                    "trace_ref_id": score_result_id,
-                    "trace_type": "score_result",
-                    "created_at": feedback_created_at,
-                    "redaction_boundary": "none",
-                },
-            ]
-        )
-    return trace_refs
 
 
 # 在 session detail 中按 answer_id 查找对应的 (question_id, answer)
@@ -1168,9 +1053,8 @@ def _task_response(task: PolishTaskStatus, *, contract_shape: dict[str, Any] | N
             {"resource_type": ref.resource_type, "resource_id": ref.resource_id}
             for ref in task.suggestion_refs
         ],
+        "validation_errors": list(getattr(task, "validation_errors", ())),
     }
-    if contract_shape is not None:
-        payload["contract_shaped_fake"] = contract_shape
     return payload
 
 

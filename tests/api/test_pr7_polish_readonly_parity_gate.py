@@ -105,8 +105,12 @@ def test_pr7_readonly_parity_does_not_import_polish_application_or_db_repositori
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
         "polish_feedback_graph.py",
+        "polish_question_graph.py",
     ]
-    assert _find_forbidden_imports(GRAPH_FILE) == []
+    violations: list[str] = []
+    for graph_file in BUSINESS_GRAPH_ROOT.glob("*.py"):
+        violations.extend(_find_forbidden_imports(graph_file))
+    assert violations == []
 
 
 def test_pr7_readonly_parity_rollback_is_flag_only() -> None:

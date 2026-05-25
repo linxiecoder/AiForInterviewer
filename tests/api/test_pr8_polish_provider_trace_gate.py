@@ -164,8 +164,12 @@ def test_pr8_no_application_polish_imports() -> None:
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
         "polish_feedback_graph.py",
+        "polish_question_graph.py",
     ]
-    assert _find_forbidden_imports(GRAPH_FILE) == []
+    violations: list[str] = []
+    for graph_file in BUSINESS_GRAPH_ROOT.glob("*.py"):
+        violations.extend(_find_forbidden_imports(graph_file))
+    assert violations == []
 
 
 def test_pr8_rollback_leaves_no_business_facts(monkeypatch) -> None:

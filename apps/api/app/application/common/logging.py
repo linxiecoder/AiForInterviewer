@@ -205,15 +205,6 @@ class LogUtil:
         )
 
     @classmethod
-    def polish_question_llm_fallback(cls, *, fallback_reason: str, mode: str) -> None:
-        cls._emit(
-            APP_LOGGER_NAME,
-            logging.INFO,
-            "polish_question_llm_fallback",
-            {"fallback_reason": fallback_reason, "mode": mode},
-        )
-
-    @classmethod
     def api_runtime_ready(cls, *, message: str) -> None:
         cls._emit(APP_LOGGER_NAME, logging.INFO, "api_runtime_ready", {"message": message})
 

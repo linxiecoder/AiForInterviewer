@@ -1101,7 +1101,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
           dimension_id: "answer_structure",
           trace_id: "trace_should_not_render",
           internal_notes: "internal_should_not_render",
-          contract_shaped_fake: "fake_should_not_render",
+          internal_debug_marker: "fake_should_not_render",
         },
         {
           raw_prompt: "raw_prompt_should_not_render",

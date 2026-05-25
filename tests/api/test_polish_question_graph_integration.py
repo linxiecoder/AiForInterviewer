@@ -35,7 +35,7 @@ SESSION_ID = "ses_pr5_q2"
 NODE_REF = "progress_node_payment_consistency"
 
 
-def test_create_question_task_uses_legacy_path_when_facade_absent() -> None:
+def test_create_question_task_uses_direct_service_when_facade_absent() -> None:
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
 
     result = use_cases.create_question_task(_command())
@@ -48,7 +48,7 @@ def test_create_question_task_uses_legacy_path_when_facade_absent() -> None:
     assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
 
 
-def test_create_question_task_falls_back_to_legacy_when_graph_disabled() -> None:
+def test_create_question_task_uses_direct_service_when_graph_disabled() -> None:
     facade = _FakeQuestionFacade(error=GraphDisabledError("disabled"))
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
 
@@ -74,8 +74,8 @@ def test_create_question_task_starts_graph_when_facade_enabled() -> None:
         )
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -104,8 +104,8 @@ def test_create_question_task_persists_fake_runtime_agent_candidate_payload() ->
         flag_resolver=flags,
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -234,13 +234,13 @@ class _FakeQuestionFacade:
         return self.status_ref
 
 
-class _LegacyQuestionLlmBlocker:
+class _DirectQuestionGenerationBlocker:
     def __init__(self) -> None:
         self.calls = 0
 
-    def generate_with_llm_or_fallback(self, **_: Any) -> object:
+    def generate(self, **_: Any) -> object:
         self.calls += 1
-        raise AssertionError("legacy question LLM must not run when graph path starts")
+        raise AssertionError("direct question generation service must not run when graph path starts")
 
 
 class _PolishRepository:

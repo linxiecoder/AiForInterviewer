@@ -4,30 +4,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
-
-from app.application.polish.evidence_signals import EvidenceSignalSet, SIGNAL_VERSION
 
 
 QUESTION_METADATA_SCHEMA_ID = "polish_question_metadata"
 QUESTION_METADATA_SCHEMA_VERSION = "1"
 BUILDER_VERSION = "evidence-aware-question-builder-v1"
 VALIDATOR_VERSION = "question-quality-validator-v2"
-
-
-class QuestionBuilderVersion(str, Enum):
-    EVIDENCE_AWARE_V1 = BUILDER_VERSION
-
-
-class QuestionMetadataLowConfidenceFlag(str, Enum):
-    SOURCE_UNAVAILABLE = "source_unavailable"
-    EVIDENCE_MISSING = "evidence_missing"
-    ABSTRACT_NODE_ONLY = "abstract_node_only"
-    WEAK_METRIC_EVIDENCE = "weak_metric_evidence"
-    WEAK_FAILURE_EVIDENCE = "weak_failure_evidence"
-    VALIDATOR_REPAIRED = "validator_repaired"
-    PATTERN_FALLBACK = "pattern_fallback"
+SIGNAL_VERSION = "evidence-signals-v1"
 
 
 @dataclass(frozen=True)
@@ -120,73 +104,6 @@ class QuestionMetadata:
             "follow_up_reason": self.follow_up_reason,
             "follow_up_target_dimension": self.follow_up_target_dimension,
         }
-
-
-def build_question_metadata(
-    *,
-    question_pattern: str | None,
-    scenario_constraint: Any,
-    expected_answer_dimensions: tuple[str, ...],
-    quality_result: Any,
-    evidence_signals: EvidenceSignalSet | None,
-    anti_repeat_refs: tuple[str, ...] = (),
-    additional_low_confidence_flags: tuple[str, ...] = (),
-    source_availability: str | None = None,
-    primary_question_evidence: dict[str, Any] | None = None,
-    grounding_gate_result: str | None = None,
-    grounding_gate_issues: tuple[str, ...] = (),
-    generated_at: str | None = None,
-    focus_dimension: str | None = None,
-    focus_key: str | None = None,
-    template_signature: str | None = None,
-    blueprint_signature: str | None = None,
-    duplicate_gate_result: str | None = None,
-    similarity_checked: bool = False,
-    max_similarity_in_same_category: float | None = None,
-    mastery_exception_used: bool = False,
-) -> QuestionMetadata:
-    signal_refs = evidence_signals.evidence_refs if evidence_signals is not None else ()
-    quality_flags = tuple(getattr(quality_result, "low_confidence_flags", ()))
-    low_flags = _dedupe(
-        [
-            *tuple(getattr(scenario_constraint, "low_confidence_flags", ())),
-            *(evidence_signals.low_confidence_flags if evidence_signals is not None else ()),
-            *quality_flags,
-            *additional_low_confidence_flags,
-        ]
-    )
-    confidence_level = (
-        evidence_signals.confidence_level
-        if evidence_signals is not None and evidence_signals.confidence_level
-        else getattr(scenario_constraint, "confidence_level", None)
-    )
-    safe_primary_evidence = _safe_primary_question_evidence(primary_question_evidence)
-    return QuestionMetadata(
-        question_pattern=question_pattern,
-        scenario_constraint_summary=_scenario_summary(scenario_constraint),
-        expected_answer_dimensions=tuple(expected_answer_dimensions),
-        quality_score=getattr(quality_result, "quality_score", None),
-        quality_warnings=tuple(getattr(quality_result, "warnings", ())),
-        confidence_level=confidence_level,
-        low_confidence_flags=low_flags,
-        evidence_signal_refs=signal_refs,
-        anti_repeat_refs=anti_repeat_refs,
-        source_availability=source_availability,
-        primary_question_evidence=safe_primary_evidence,
-        primary_question_evidence_ref=_string_or_none((safe_primary_evidence or {}).get("ref")),
-        claim_mode=_string_or_none((safe_primary_evidence or {}).get("claim_mode")),
-        grounding_gate_result=_string_or_none(grounding_gate_result, max_chars=80),
-        grounding_gate_issues=tuple(_string_list(grounding_gate_issues)),
-        generated_at=generated_at,
-        focus_dimension=focus_dimension,
-        focus_key=focus_key,
-        template_signature=template_signature,
-        blueprint_signature=blueprint_signature,
-        duplicate_gate_result=duplicate_gate_result,
-        similarity_checked=similarity_checked,
-        max_similarity_in_same_category=max_similarity_in_same_category,
-        mastery_exception_used=mastery_exception_used,
-    )
 
 
 def empty_question_metadata() -> QuestionMetadata:
@@ -323,17 +240,6 @@ def _metadata_payload(raw: object) -> dict[str, Any]:
             return {}
         return loaded if isinstance(loaded, dict) else {}
     return {}
-
-
-def _scenario_summary(scenario_constraint: Any) -> str | None:
-    parts = [
-        getattr(scenario_constraint, "business_constraint", None),
-        getattr(scenario_constraint, "failure_mode", None),
-        getattr(scenario_constraint, "scale_or_performance_constraint", None),
-        getattr(scenario_constraint, "consistency_constraint", None),
-    ]
-    text = "；".join(str(part) for part in parts if part)
-    return text[:500] if text else None
 
 
 def _safe_primary_question_evidence(value: object) -> dict[str, Any] | None:

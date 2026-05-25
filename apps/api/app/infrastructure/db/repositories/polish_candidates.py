@@ -5,16 +5,12 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from datetime import UTC, datetime
+import re
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.application.polish.candidates import (
-    CandidateStatus,
-    CandidateType,
-    normalize_candidate_payload,
-)
 from app.domain.shared.clock import utc_now
 from app.infrastructure.db.models.asset import Asset, AssetVersion
 from app.infrastructure.db.models.polish_candidate import PolishCandidateRecord
@@ -24,19 +20,54 @@ from app.infrastructure.db.models.weakness import Weakness
 from app.infrastructure.db.session import get_session_factory
 
 
-CANDIDATE_PAYLOAD_FIELDS = (
-    "weakness_candidates",
-    "asset_candidates",
-    "training_suggestion_candidates",
-    "oral_script_candidates",
-    "polished_answer_candidates",
-)
-SUPPORTED_CANDIDATE_TYPES = {item.value for item in CandidateType}
-ASSET_CANDIDATE_TYPES = {
-    CandidateType.ASSET.value,
-    CandidateType.ORAL_SCRIPT.value,
-    CandidateType.POLISHED_ANSWER.value,
+STATUS_CANDIDATE = "candidate"
+STATUS_CONFIRMED = "confirmed"
+STATUS_DISMISSED = "dismissed"
+STATUS_MERGED = "merged"
+STATUS_ARCHIVED = "archived"
+CANDIDATE_TYPE_WEAKNESS = "weakness_candidate"
+CANDIDATE_TYPE_ASSET = "asset_candidate"
+CANDIDATE_TYPE_TRAINING_SUGGESTION = "training_suggestion_candidate"
+CANDIDATE_TYPE_ORAL_SCRIPT = "oral_script_candidate"
+CANDIDATE_TYPE_POLISHED_ANSWER = "polished_answer_candidate"
+SUPPORTED_CANDIDATE_TYPES = {
+    CANDIDATE_TYPE_WEAKNESS,
+    CANDIDATE_TYPE_ASSET,
+    CANDIDATE_TYPE_TRAINING_SUGGESTION,
+    CANDIDATE_TYPE_ORAL_SCRIPT,
+    CANDIDATE_TYPE_POLISHED_ANSWER,
 }
+ASSET_CANDIDATE_TYPES = {
+    CANDIDATE_TYPE_ASSET,
+    CANDIDATE_TYPE_ORAL_SCRIPT,
+    CANDIDATE_TYPE_POLISHED_ANSWER,
+}
+FORBIDDEN_CANDIDATE_PAYLOAD_KEYS = {
+    "prompt",
+    "raw_prompt",
+    "system_prompt",
+    "completion",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "provider_response",
+    "raw_provider_response",
+    "hidden_rubric",
+    "full_evidence_text",
+    "full_resume",
+    "full_jd",
+    "token",
+    "api_key",
+    "cookie",
+    "secret",
+}
+FORBIDDEN_CANDIDATE_VALUE_MARKERS = tuple(FORBIDDEN_CANDIDATE_PAYLOAD_KEYS)
+FORBIDDEN_CANDIDATE_ASSIGNMENT_PATTERNS = (
+    re.compile(r"api[_-]?key\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"cookie\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"token\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"secret\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+)
 
 
 class PolishCandidateActionError(Exception):
@@ -49,39 +80,6 @@ class PolishCandidateActionError(Exception):
 class SqlAlchemyPolishCandidateRepository:
     def __init__(self, session_factory: sessionmaker[Session] | None = None) -> None:
         self._session_factory = session_factory or get_session_factory()
-
-    def upsert_from_feedback_payload(
-        self,
-        owner_id: str,
-        feedback_payload: dict[str, Any],
-    ) -> tuple[dict[str, Any], ...]:
-        candidates = list(candidate_payloads_from_feedback_payload(feedback_payload))
-        if not candidates:
-            return ()
-
-        persisted: list[dict[str, Any]] = []
-        seen_merge_keys: set[str] = set()
-        with self._session_factory() as session:
-            for candidate in candidates:
-                candidate_model = _candidate_dict_to_model(owner_id, candidate)
-                if candidate_model is None:
-                    continue
-                if candidate_model.merge_key in seen_merge_keys:
-                    continue
-                seen_merge_keys.add(candidate_model.merge_key)
-                existing = session.scalar(
-                    select(PolishCandidateRecord).where(
-                        PolishCandidateRecord.owner_id == owner_id,
-                        PolishCandidateRecord.merge_key == candidate_model.merge_key,
-                    )
-                )
-                if existing is not None:
-                    persisted.append(_model_to_candidate_dict(existing))
-                    continue
-                session.add(candidate_model)
-                persisted.append(_model_to_candidate_dict(candidate_model))
-            session.commit()
-        return tuple(persisted)
 
     def list_candidates(
         self,
@@ -132,14 +130,14 @@ class SqlAlchemyPolishCandidateRepository:
                 candidate = _get_candidate_record(session, owner_id=owner_id, candidate_id=candidate_id)
                 if candidate is None:
                     raise PolishCandidateActionError("not_found_or_inaccessible", "Polish candidate not found")
-                if candidate.status != CandidateStatus.CANDIDATE.value:
+                if candidate.status != STATUS_CANDIDATE:
                     raise PolishCandidateActionError(
                         "candidate_not_confirmable",
                         "Only candidate status can be confirmed",
                     )
                 now = utc_now()
                 previous_status = candidate.status
-                candidate.status = CandidateStatus.CONFIRMED.value
+                candidate.status = STATUS_CONFIRMED
                 candidate.confirmed_at = now
                 candidate.updated_at = now
                 candidate.user_confirmation_required = False
@@ -152,7 +150,7 @@ class SqlAlchemyPolishCandidateRepository:
                     before_summary=previous_status,
                 )
                 asset_version_ref: dict[str, str] | None = None
-                if candidate.candidate_type == CandidateType.WEAKNESS.value:
+                if candidate.candidate_type == CANDIDATE_TYPE_WEAKNESS:
                     formal_ref = _create_formal_weakness_from_candidate(
                         session=session,
                         candidate=candidate,
@@ -167,7 +165,7 @@ class SqlAlchemyPolishCandidateRepository:
                         actor_id=actor_id,
                         confirmation_ref=confirmation_ref,
                     )
-                elif candidate.candidate_type == CandidateType.TRAINING_SUGGESTION.value:
+                elif candidate.candidate_type == CANDIDATE_TYPE_TRAINING_SUGGESTION:
                     formal_ref = _create_formal_training_recommendation_from_candidate(
                         session=session,
                         candidate=candidate,
@@ -205,7 +203,7 @@ class SqlAlchemyPolishCandidateRepository:
                 )
                 now = utc_now()
                 previous_status = candidate.status
-                candidate.status = CandidateStatus.DISMISSED.value
+                candidate.status = STATUS_DISMISSED
                 candidate.dismissed_at = now
                 candidate.updated_at = now
                 candidate.user_confirmation_required = False
@@ -243,12 +241,12 @@ class SqlAlchemyPolishCandidateRepository:
                 target = _get_candidate_record(session, owner_id=owner_id, candidate_id=target_candidate_id)
                 if target is None or target.candidate_id == candidate.candidate_id:
                     raise PolishCandidateActionError("invalid_merge_target", "Merge target is invalid")
-                if target.status in {CandidateStatus.DISMISSED.value, CandidateStatus.MERGED.value}:
+                if target.status in {STATUS_DISMISSED, STATUS_MERGED}:
                     raise PolishCandidateActionError("invalid_merge_target", "Merge target is not active")
 
                 now = utc_now()
                 previous_status = candidate.status
-                candidate.status = CandidateStatus.MERGED.value
+                candidate.status = STATUS_MERGED
                 candidate.merge_target_candidate_id = target.candidate_id
                 candidate.updated_at = now
                 candidate.user_confirmation_required = False
@@ -279,7 +277,7 @@ class SqlAlchemyPolishCandidateRepository:
                 )
                 now = utc_now()
                 previous_status = candidate.status
-                candidate.status = CandidateStatus.ARCHIVED.value
+                candidate.status = STATUS_ARCHIVED
                 candidate.archived_at = now
                 candidate.updated_at = now
                 candidate.user_confirmation_required = False
@@ -323,7 +321,7 @@ def _get_confirmable_state_candidate(
     candidate = _get_candidate_record(session, owner_id=owner_id, candidate_id=candidate_id)
     if candidate is None:
         raise PolishCandidateActionError("not_found_or_inaccessible", "Polish candidate not found")
-    if candidate.status != CandidateStatus.CANDIDATE.value:
+    if candidate.status != STATUS_CANDIDATE:
         raise PolishCandidateActionError(error_code, message)
     return candidate
 
@@ -534,60 +532,8 @@ def _create_formal_training_recommendation_from_candidate(
     return {"resource_type": "training_recommendation", "resource_id": recommendation_id}
 
 
-def candidate_payloads_from_feedback_payload(feedback_payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
-    candidates: list[dict[str, Any]] = []
-    for field_name in CANDIDATE_PAYLOAD_FIELDS:
-        value = feedback_payload.get(field_name)
-        if not isinstance(value, list):
-            continue
-        candidates.extend(item for item in value if isinstance(item, dict))
-    return tuple(candidates)
-
-
-def _candidate_dict_to_model(owner_id: str, candidate: dict[str, Any]) -> PolishCandidateRecord | None:
-    candidate_id = _required_text(candidate.get("candidate_id"))
-    candidate_type = _required_text(candidate.get("candidate_type"))
-    merge_key = _required_text(candidate.get("merge_key"))
-    if candidate_id is None or merge_key is None or candidate_type not in SUPPORTED_CANDIDATE_TYPES:
-        return None
-
-    status = _required_text(candidate.get("status")) or CandidateStatus.CANDIDATE.value
-    if status != CandidateStatus.CANDIDATE.value:
-        return None
-
-    return PolishCandidateRecord(
-        candidate_id=candidate_id,
-        owner_id=owner_id,
-        candidate_type=candidate_type,
-        status=status,
-        source_type=_required_text(candidate.get("source_type")) or "structured_feedback",
-        source_refs_json=_safe_ref_list(candidate.get("source_refs")),
-        evidence_refs_json=_safe_ref_list(candidate.get("evidence_refs")),
-        trace_refs_json=_safe_ref_list(candidate.get("trace_refs")),
-        session_id=_required_text(candidate.get("session_id")) or "",
-        question_id=_required_text(candidate.get("question_id")) or "",
-        answer_id=_required_text(candidate.get("answer_id")) or "",
-        feedback_id=_required_text(candidate.get("feedback_id")) or "",
-        title=_required_text(candidate.get("title")) or "候选对象",
-        summary=_required_text(candidate.get("summary")) or "",
-        evidence_excerpt=_required_text(candidate.get("evidence_excerpt")) or "",
-        reason=_required_text(candidate.get("reason")) or "",
-        confidence_level=_required_text(candidate.get("confidence_level")) or "medium",
-        merge_key=merge_key,
-        merge_target_candidate_id=_optional_text(candidate.get("merge_target_candidate_id")),
-        target_formal_ref_json=_safe_dict(candidate.get("target_formal_ref")),
-        candidate_payload_json=_safe_dict(candidate.get("candidate_payload")) or {},
-        user_confirmation_required=bool(candidate.get("user_confirmation_required", True)),
-        created_at=_parse_datetime(candidate.get("created_at")),
-        updated_at=_parse_datetime(candidate.get("updated_at")),
-        dismissed_at=_parse_optional_datetime(candidate.get("dismissed_at")),
-        confirmed_at=_parse_optional_datetime(candidate.get("confirmed_at")),
-        archived_at=_parse_optional_datetime(candidate.get("archived_at")),
-    )
-
-
 def _model_to_candidate_dict(model: PolishCandidateRecord) -> dict[str, Any]:
-    return normalize_candidate_payload(
+    return _safe_candidate_value(
         {
             "candidate_id": model.candidate_id,
             "owner_id": model.owner_id,
@@ -624,7 +570,7 @@ def _safe_ref_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, Iterable) or isinstance(value, (str, bytes, dict)):
         return []
     return [
-        normalize_candidate_payload(dict(item))
+        _safe_candidate_value(dict(item))
         for item in value
         if isinstance(item, dict)
     ]
@@ -633,7 +579,38 @@ def _safe_ref_list(value: Any) -> list[dict[str, Any]]:
 def _safe_dict(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
-    return normalize_candidate_payload(dict(value))
+    safe = _safe_candidate_value(dict(value))
+    return safe if isinstance(safe, dict) else None
+
+
+def _safe_candidate_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _safe_candidate_value(item)
+            for key, item in value.items()
+            if not _is_forbidden_candidate_key(str(key))
+        }
+    if isinstance(value, list):
+        return [_safe_candidate_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_safe_candidate_value(item) for item in value]
+    if isinstance(value, str):
+        return _safe_candidate_text(value)
+    return value
+
+
+def _is_forbidden_candidate_key(key: str) -> bool:
+    normalized = key.strip().lower()
+    return normalized in FORBIDDEN_CANDIDATE_PAYLOAD_KEYS or "prompt" in normalized
+
+
+def _safe_candidate_text(value: str) -> str:
+    normalized = re.sub(r"[\s-]+", "_", value.lower())
+    if any(marker in normalized for marker in FORBIDDEN_CANDIDATE_VALUE_MARKERS):
+        return "redacted_sensitive_detail"
+    if any(pattern.search(value) for pattern in FORBIDDEN_CANDIDATE_ASSIGNMENT_PATTERNS):
+        return "redacted_sensitive_detail"
+    return value
 
 
 def _required_text(value: Any) -> str | None:
@@ -715,9 +692,9 @@ def _first_ref(refs: Iterable[dict[str, Any]], resource_types: set[str]) -> dict
 
 
 def _formal_asset_type(candidate_type: str) -> str:
-    if candidate_type == CandidateType.ORAL_SCRIPT.value:
+    if candidate_type == CANDIDATE_TYPE_ORAL_SCRIPT:
         return "oral_script"
-    if candidate_type == CandidateType.POLISHED_ANSWER.value:
+    if candidate_type == CANDIDATE_TYPE_POLISHED_ANSWER:
         return "polished_answer"
     return "asset"
 
@@ -726,6 +703,6 @@ def _asset_fact_source(candidate_type: str, candidate_payload: dict[str, Any]) -
     fact_source = _optional_text(candidate_payload.get("fact_source"))
     if fact_source:
         return fact_source
-    if candidate_type in {CandidateType.ORAL_SCRIPT.value, CandidateType.POLISHED_ANSWER.value}:
+    if candidate_type in {CANDIDATE_TYPE_ORAL_SCRIPT, CANDIDATE_TYPE_POLISHED_ANSWER}:
         return "model_suggested_phrasing"
     return "user_fact"

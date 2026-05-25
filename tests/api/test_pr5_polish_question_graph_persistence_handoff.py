@@ -219,11 +219,11 @@ def test_sqlalchemy_repository_add_question_once_reuses_existing_graph_question_
         temp_artifacts.cleanup()
 
 
-def test_graph_enabled_path_persists_question_without_legacy_llm() -> None:
+def test_graph_enabled_path_persists_question_without_direct_service() -> None:
     facade = _FakeQuestionFacade(status_ref=_GraphStatus(candidate=_accepted_candidate()))
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -238,7 +238,7 @@ def test_graph_enabled_path_persists_question_without_legacy_llm() -> None:
     assert blocker.calls == 0
 
 
-def test_graph_enabled_path_persists_formal_candidate_payload_without_legacy_llm() -> None:
+def test_graph_enabled_path_persists_formal_candidate_payload_without_direct_service() -> None:
     accepted_payload = AgentCandidatePayload(
         candidate_ref="question_candidate_ref_q4",
         candidate_type="polish_question_candidate",
@@ -258,8 +258,8 @@ def test_graph_enabled_path_persists_formal_candidate_payload_without_legacy_llm
         )
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -318,8 +318,8 @@ def test_graph_enabled_path_uses_only_accepted_polish_question_candidate_payload
         )
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -347,8 +347,8 @@ def test_graph_status_does_not_fallback_to_dynamic_candidate_when_formal_payload
         )
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -359,13 +359,13 @@ def test_graph_status_does_not_fallback_to_dynamic_candidate_when_formal_payload
     assert blocker.calls == 0
 
 
-def test_graph_quality_block_does_not_fallback_to_legacy() -> None:
+def test_graph_quality_block_does_not_fallback_to_direct_service() -> None:
     facade = _FakeQuestionFacade(
         status_ref=_GraphStatus(candidate=_accepted_candidate(quality_gate={"status": "blocked", "passed": False}))
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
-    blocker = _LegacyQuestionLlmBlocker()
-    use_cases._question_llm_service = blocker
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
 
     result = use_cases.create_question_task(_command())
 
@@ -377,7 +377,7 @@ def test_graph_quality_block_does_not_fallback_to_legacy() -> None:
     assert blocker.calls == 0
 
 
-def test_graph_disabled_still_uses_legacy() -> None:
+def test_graph_disabled_still_uses_direct_service() -> None:
     facade = _FakeQuestionFacade(error=GraphDisabledError("disabled"))
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
 
@@ -499,13 +499,13 @@ class _FakeQuestionFacade:
         return self.status_ref
 
 
-class _LegacyQuestionLlmBlocker:
+class _DirectQuestionGenerationBlocker:
     def __init__(self) -> None:
         self.calls = 0
 
-    def generate_with_llm_or_fallback(self, **_: Any) -> object:
+    def generate(self, **_: Any) -> object:
         self.calls += 1
-        raise AssertionError("legacy question LLM must not run when graph accepted candidate is persisted")
+        raise AssertionError("direct question generation service must not run when graph accepted candidate is persisted")
 
 
 class _PolishRepository:
