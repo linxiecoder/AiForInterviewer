@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import sha256
 import json
 import os
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 from urllib.parse import urlparse
@@ -21,7 +24,7 @@ from app.application.llm.errors import (
 )
 from app.infrastructure.llm.job_match import JOB_MATCH_PROMPT_VERSION
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
-from app.infrastructure.observability.logging import LogUtil
+from app.infrastructure.observability.logging import LogUtil, get_request_trace_context
 
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -34,6 +37,11 @@ LLM_OPENAI_BASE_URL_ENV = "LLM_OPENAI_BASE_URL"
 LLM_OPENAI_MODEL_ENV = "LLM_OPENAI_MODEL"
 LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
+LOCAL_LLM_RAW_IO_ENABLED_ENV = "AIFI_LOCAL_LLM_RAW_IO_ENABLED"
+LOCAL_LLM_RAW_IO_DIR_ENV = "AIFI_LOCAL_LLM_RAW_IO_DIR"
+LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV = "AIFI_LOCAL_LLM_RAW_IO_INCLUDE_HEADERS"
+DEFAULT_LOCAL_LLM_RAW_IO_DIR = ".local/llm-raw"
+
 
 @dataclass(frozen=True)
 class OpenAICompatibleLlmSettings:
@@ -113,76 +121,219 @@ class OpenAICompatibleLlmTransport:
     ) -> LlmTransportResult:
         """使用指定 httpx 客户端向 /chat/completions 发送请求并解析响应。"""
         started_at = perf_counter()
+        started_at_wall = datetime.now(timezone.utc)
+        chat_payload = _chat_completion_payload(self._settings, request)
+        request_headers = {
+            "Authorization": f"Bearer {self._settings.api_key}",
+            "Content-Type": "application/json",
+        }
         self._log_request_start(request)
         try:
             response = client.post(
                 f"{self._settings.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self._settings.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=_chat_completion_payload(self._settings, request),
+                headers=request_headers,
+                json=chat_payload,
                 timeout=self._settings.timeout_seconds,
             )
         except httpx.TimeoutException as exc:
             self._log_request_failed(request, started_at=started_at, error_type="timeout")
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=None,
+                response_body=None,
+                response_text=None,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type="timeout",
+                error_message="LLM provider 请求超时。",
+            )
             raise LlmTransportUnavailableError("LLM provider 请求超时。") from exc
         except httpx.HTTPError as exc:
-            self._log_request_failed(request, started_at=started_at, error_type=type(exc).__name__)
+            error_type = type(exc).__name__
+            self._log_request_failed(request, started_at=started_at, error_type=error_type)
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=None,
+                response_body=None,
+                response_text=None,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type=error_type,
+                error_message="LLM provider 请求失败。",
+            )
             raise LlmTransportUnavailableError("LLM provider 请求失败。") from exc
 
         if response.status_code in {401, 403}:
+            response_body, response_text = _response_body_for_dump(response)
             self._log_request_failed(
                 request,
                 started_at=started_at,
                 error_type="authentication_failed",
                 status_code=response.status_code,
             )
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=response.status_code,
+                response_body=response_body,
+                response_text=response_text,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type="authentication_failed",
+                error_message="LLM provider 鉴权失败，请检查 .env 中的模型密钥。",
+            )
             raise LlmTransportConfigurationError("LLM provider 鉴权失败，请检查 .env 中的模型密钥。")
         if response.status_code == 429:
+            response_body, response_text = _response_body_for_dump(response)
             self._log_request_failed(
                 request,
                 started_at=started_at,
                 error_type="rate_limited",
                 status_code=response.status_code,
             )
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=response.status_code,
+                response_body=response_body,
+                response_text=response_text,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type="rate_limited",
+                error_message="LLM provider 当前限流，请稍后重试。",
+            )
             raise LlmTransportUnavailableError("LLM provider 当前限流，请稍后重试。")
         if response.status_code >= 500:
+            response_body, response_text = _response_body_for_dump(response)
             self._log_request_failed(
                 request,
                 started_at=started_at,
                 error_type="provider_unavailable",
                 status_code=response.status_code,
             )
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=response.status_code,
+                response_body=response_body,
+                response_text=response_text,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type="provider_unavailable",
+                error_message="LLM provider 暂时不可用。",
+            )
             raise LlmTransportUnavailableError("LLM provider 暂时不可用。")
         if response.status_code >= 400:
+            response_body, response_text = _response_body_for_dump(response)
             self._log_request_failed(
                 request,
                 started_at=started_at,
                 error_type="provider_http_error",
                 status_code=response.status_code,
             )
-            raise LlmTransportUnavailableError(f"LLM provider 返回 HTTP {response.status_code}。")
+            error_message = f"LLM provider 返回 HTTP {response.status_code}。"
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=response.status_code,
+                response_body=response_body,
+                response_text=response_text,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type="provider_http_error",
+                error_message=error_message,
+            )
+            raise LlmTransportUnavailableError(error_message)
 
-        response_json = _response_json(response)
-        result = _parse_json_result(response_json)
+        try:
+            response_json = _response_json(response)
+            result = _parse_json_result(response_json)
+        except LlmTransportResponseError as exc:
+            response_body, response_text = _response_body_for_dump(response)
+            _maybe_dump_local_raw_llm_io(
+                request=request,
+                settings=self._settings,
+                started_at=started_at,
+                started_at_wall=started_at_wall,
+                chat_payload=chat_payload,
+                request_headers=request_headers,
+                response_status_code=response.status_code,
+                response_body=response_body,
+                response_text=response_text,
+                parsed_result=None,
+                trace_refs=(),
+                evidence_refs=(),
+                error_type="provider_response_error",
+                error_message=str(exc),
+            )
+            raise
         result.setdefault("prompt_version", _request_prompt_version(request))
         # model_name 用于审计和落库，只能来自 provider 外层响应或本地配置；
         # 不能信任模型正文里自报的 model_name，否则会出现"实际调用 deepseek，记录成 gpt-4"的偏差。
         result["model_name"] = _provider_model_name(response_json, self._settings.model)
+        trace_ref = _trace_ref(request, response_json)
+        evidence_ref = _evidence_ref(request)
         self._log_request_success(
             request,
             started_at=started_at,
             status_code=response.status_code,
             provider_model=result["model_name"],
         )
+        _maybe_dump_local_raw_llm_io(
+            request=request,
+            settings=self._settings,
+            started_at=started_at,
+            started_at_wall=started_at_wall,
+            chat_payload=chat_payload,
+            request_headers=request_headers,
+            response_status_code=response.status_code,
+            response_body=response_json,
+            response_text=None,
+            parsed_result=result,
+            trace_refs=(trace_ref,),
+            evidence_refs=(evidence_ref,),
+            error_type=None,
+            error_message=None,
+        )
         return LlmTransportResult(
             result=result,
             validation_status=ValidationStatus.VALID,
             confidence_level=_confidence_level(result),
             low_confidence_flags=_low_confidence_flags(result),
-            trace_refs=(_trace_ref(request, response_json),),
-            evidence_refs=(_evidence_ref(request),),
+            trace_refs=(trace_ref,),
+            evidence_refs=(evidence_ref,),
         )
 
     def _log_request_start(self, request: LlmTransportRequest) -> None:
@@ -271,6 +422,200 @@ def _base_url_host(base_url: str) -> str:
     """从 base_url 中提取主机名（用于日志脱敏）。"""
     parsed = urlparse(base_url)
     return parsed.netloc or parsed.path or "unknown"
+
+
+def _local_raw_io_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    """仅在本地显式开关打开时启用 raw LLM I/O dump。"""
+    values = os.environ if environ is None else environ
+    return values.get(LOCAL_LLM_RAW_IO_ENABLED_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _local_raw_io_dir(environ: Mapping[str, str] | None = None) -> Path:
+    """返回 raw LLM I/O dump 目录；默认位于 .local/llm-raw。"""
+    values = os.environ if environ is None else environ
+    configured = values.get(LOCAL_LLM_RAW_IO_DIR_ENV, "").strip()
+    return Path(configured or DEFAULT_LOCAL_LLM_RAW_IO_DIR)
+
+
+def _maybe_dump_local_raw_llm_io(
+    *,
+    request: LlmTransportRequest,
+    settings: OpenAICompatibleLlmSettings,
+    started_at: float,
+    started_at_wall: datetime,
+    chat_payload: dict[str, Any],
+    request_headers: Mapping[str, str],
+    response_status_code: int | None,
+    response_body: Any,
+    response_text: str | None,
+    parsed_result: dict[str, Any] | None,
+    trace_refs: tuple[str, ...],
+    evidence_refs: tuple[str, ...],
+    error_type: str | None,
+    error_message: str | None,
+) -> None:
+    """把 raw LLM I/O 直接写入本地 JSON 文件；写入失败不得影响主流程。"""
+    if not _local_raw_io_enabled():
+        return
+
+    try:
+        dump_dir = _local_raw_io_dir()
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        completed_at_wall = datetime.now(timezone.utc)
+        trace_context = get_request_trace_context()
+        request_id = trace_context.request_id if trace_context else None
+        trace_id = trace_context.trace_id if trace_context else None
+        response: dict[str, Any] = {
+            "status_code": response_status_code,
+            "body": response_body,
+        }
+        if response_body is None and response_text is not None:
+            response["text"] = response_text
+
+        dump_request: dict[str, Any] = {"chat_completion_payload": chat_payload}
+        safe_headers = _local_raw_io_headers(request_headers)
+        if safe_headers:
+            dump_request["headers"] = safe_headers
+
+        dump_payload = {
+            "schema_version": "local_llm_raw_io.v1",
+            "request_id": request_id,
+            "trace_id": trace_id,
+            "task_type": request.task_type,
+            "contract_ids": list(request.contract_ids),
+            "input_refs": list(request.input_refs),
+            "graph_name": request.graph_name,
+            "node_name": request.node_name,
+            "schema_id": request.schema_id,
+            "prompt_version": request.prompt_version or _request_prompt_version(request),
+            "model": settings.model,
+            "base_url": settings.base_url,
+            "provider_base_host": _base_url_host(settings.base_url),
+            "timeout_seconds": settings.timeout_seconds,
+            "temperature": settings.temperature,
+            "started_at": _format_raw_io_timestamp(started_at_wall),
+            "completed_at": _format_raw_io_timestamp(completed_at_wall),
+            "duration_ms": _duration_ms(started_at),
+            "request": dump_request,
+            "response": response,
+            "parsed_result": parsed_result,
+            "trace_refs": list(trace_refs),
+            "evidence_refs": list(evidence_refs),
+            "error": (
+                None
+                if error_type is None
+                else {
+                    "type": error_type,
+                    "message": error_message or "",
+                }
+            ),
+        }
+        dump_path = dump_dir / _local_raw_io_file_name(
+            completed_at_wall=completed_at_wall,
+            task_type=request.task_type,
+            request_id=request_id,
+            trace_id=trace_id,
+            trace_refs=trace_refs,
+            chat_payload=chat_payload,
+            response_status_code=response_status_code,
+            error_type=error_type,
+        )
+        dump_path.write_text(
+            json.dumps(dump_payload, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        return
+
+
+def _response_body_for_dump(response: httpx.Response) -> tuple[Any, str | None]:
+    """返回 provider 响应用于 raw dump；JSON 可解析时保留 JSON，否则保留文本。"""
+    try:
+        return response.json(), None
+    except ValueError:
+        return None, response.text
+
+
+def _local_raw_io_headers(headers: Mapping[str, str]) -> dict[str, str]:
+    """只在显式要求时输出非敏感请求头。"""
+    if not _local_raw_io_include_headers():
+        return {}
+    safe_headers: dict[str, str] = {}
+    for key, value in headers.items():
+        if key.lower() in {"content-type", "accept"}:
+            safe_headers[key] = value
+    return safe_headers
+
+
+def _local_raw_io_include_headers(environ: Mapping[str, str] | None = None) -> bool:
+    values = os.environ if environ is None else environ
+    return values.get(LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _local_raw_io_file_name(
+    *,
+    completed_at_wall: datetime,
+    task_type: str,
+    request_id: str | None,
+    trace_id: str | None,
+    trace_refs: tuple[str, ...],
+    chat_payload: dict[str, Any],
+    response_status_code: int | None,
+    error_type: str | None,
+) -> str:
+    digest = _local_raw_io_digest(
+        chat_payload=chat_payload,
+        response_status_code=response_status_code,
+        error_type=error_type,
+    )
+    locator = trace_id or request_id or (trace_refs[0] if trace_refs else None)
+    if locator:
+        locator_slug = f"{_filename_component(locator)}-{digest[:8]}"
+    else:
+        locator_slug = f"no-trace-{digest[:8]}"
+    timestamp = completed_at_wall.strftime("%Y%m%d-%H%M%S-%f")
+    return f"{timestamp}-{_filename_component(task_type)}-{locator_slug}.json"
+
+
+def _local_raw_io_digest(
+    *,
+    chat_payload: dict[str, Any],
+    response_status_code: int | None,
+    error_type: str | None,
+) -> str:
+    seed = json.dumps(
+        {
+            "chat_payload": chat_payload,
+            "error_type": error_type,
+            "response_status_code": response_status_code,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    return sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _filename_component(value: str) -> str:
+    cleaned = "".join(
+        char if char.isascii() and (char.isalnum() or char in {"-", "_", "."}) else "_"
+        for char in value
+    ).strip("._-")
+    return cleaned[:96] or "unknown"
+
+
+def _format_raw_io_timestamp(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _system_prompt(task_type: str) -> str:
