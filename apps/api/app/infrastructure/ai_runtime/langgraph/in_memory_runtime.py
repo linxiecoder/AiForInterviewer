@@ -1,4 +1,4 @@
-"""Deterministic PR4 fake LangGraph runtime."""
+"""In-memory LangGraph runtime shell with deterministic fallback paths."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ from app.infrastructure.ai_runtime.langgraph.serializer import (
 )
 
 
-class _FakeGraphState(TypedDict):
+class _InMemoryGraphState(TypedDict):
     owner_id: str
     run_id: str
     entrypoint: str
@@ -78,8 +78,8 @@ class _PolishQuestionGraphTransport:
         )
 
 
-class FakeLangGraphRuntime:
-    """PR4 runtime shell with deterministic fallback and provider-ready question graph path."""
+class InMemoryLangGraphRuntime:
+    """In-memory runtime shell with deterministic fallback and provider-ready question graph path."""
 
     _checkpoint_namespace = "pr4_fake_runtime"
     _polish_feedback_checkpoint_namespace = "pr6_polish_feedback_fake_runtime"
@@ -115,9 +115,9 @@ class FakeLangGraphRuntime:
         events = self._timeline_for(context)
         events.extend(
             (
-                _event("run_started", "fake runtime run started", refs=(context.ai_task_id,)),
+                _event("run_started", "in-memory runtime run started", refs=(context.ai_task_id,)),
                 _event("checkpoint_recorded", "checkpoint ref recorded", refs=(checkpoint.checkpoint_ref,)),
-                _event("interrupt_opened", "fake runtime interrupt opened", refs=(interrupt_ref,)),
+                _event("interrupt_opened", "in-memory runtime interrupt opened", refs=(interrupt_ref,)),
             )
         )
         result = AgentRunResult(
@@ -154,9 +154,9 @@ class FakeLangGraphRuntime:
         events = self._timeline_for(context)
         events.extend(
             (
-                _event("run_resumed", "fake runtime resumed from sanitized payload", refs=(interrupt_ref,), metadata={"resume": sanitized_resume}),
+                _event("run_resumed", "in-memory runtime resumed from sanitized payload", refs=(interrupt_ref,), metadata={"resume": sanitized_resume}),
                 _event("checkpoint_recorded", "checkpoint ref recorded", refs=(checkpoint.checkpoint_ref,)),
-                _event("run_succeeded", "fake runtime run succeeded", refs=(output_ref,)),
+                _event("run_succeeded", "in-memory runtime run succeeded", refs=(output_ref,)),
             )
         )
         trace_refs = tuple(ref.checkpoint_ref for ref in self._checkpointer.list_refs(context.owner_id, context.run_id))
@@ -225,13 +225,13 @@ class FakeLangGraphRuntime:
         return status
 
     def _compile_graph(self):
-        graph = StateGraph(_FakeGraphState)
-        graph.add_node("fake_runtime_node", _fake_runtime_node)
-        graph.add_edge(START, "fake_runtime_node")
-        graph.add_edge("fake_runtime_node", END)
+        graph = StateGraph(_InMemoryGraphState)
+        graph.add_node("in_memory_runtime_node", _in_memory_runtime_node)
+        graph.add_edge(START, "in_memory_runtime_node")
+        graph.add_edge("in_memory_runtime_node", END)
         return graph.compile()
 
-    def _invoke_graph(self, *, context: AgentRunContext, entrypoint: str) -> _FakeGraphState:
+    def _invoke_graph(self, *, context: AgentRunContext, entrypoint: str) -> _InMemoryGraphState:
         return self._compiled_graph.invoke(
             {
                 "owner_id": context.owner_id,
@@ -245,7 +245,7 @@ class FakeLangGraphRuntime:
         )
 
     def _record_checkpoint(
-        self, *, context: AgentRunContext, node_name: str, state: _FakeGraphState
+        self, *, context: AgentRunContext, node_name: str, state: _InMemoryGraphState
     ):
         state_hash = _hash_payload(state)
         return self._checkpointer.record_ref(
@@ -288,10 +288,10 @@ class FakeLangGraphRuntime:
         events = self._timeline_for(context)
         events.extend(
             (
-                _event("run_started", "polish feedback fake runtime started", refs=(context.ai_task_id,)),
+                _event("run_started", "polish feedback in-memory runtime started", refs=(context.ai_task_id,)),
                 _event("checkpoint_recorded", "checkpoint ref recorded", refs=checkpoint_refs),
                 _event("validation_recorded", "validation ref recorded", refs=validation_refs),
-                _event("run_succeeded", "polish feedback fake runtime succeeded", refs=(*result_ref, *candidate_ref)),
+                _event("run_succeeded", "polish feedback in-memory runtime succeeded", refs=(*result_ref, *candidate_ref)),
             )
         )
         result = AgentRunResult(
@@ -328,7 +328,7 @@ class FakeLangGraphRuntime:
             raise GraphDisabledError(f"graph disabled: {descriptor.graph_name}")
         if context.graph_version != descriptor.graph_version:
             raise RuntimePolicyError(
-                "context graph version does not match polish question fake runtime"
+                "context graph version does not match polish question in-memory runtime"
             )
 
         state = self._invoke_graph(context=context, entrypoint="polish_question_fake_start")
@@ -501,7 +501,7 @@ class FakeLangGraphRuntime:
         }
 
     def _record_polish_feedback_checkpoint(
-        self, *, context: AgentRunContext, state: _FakeGraphState
+        self, *, context: AgentRunContext, state: _InMemoryGraphState
     ):
         state_hash = _hash_payload(state)
         return self._checkpointer.record_ref(
@@ -521,7 +521,7 @@ class FakeLangGraphRuntime:
         )
 
     def _record_polish_question_checkpoint(
-        self, *, context: AgentRunContext, state: _FakeGraphState
+        self, *, context: AgentRunContext, state: _InMemoryGraphState
     ):
         state_hash = _hash_payload(state)
         return self._checkpointer.record_ref(
@@ -548,7 +548,7 @@ class FakeLangGraphRuntime:
             "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED", actor_id=context.actor_id
         )
         if not runtime_decision.enabled or not langgraph_decision.enabled:
-            raise GraphDisabledError("PR4 fake runtime is disabled")
+            raise GraphDisabledError("in-memory LangGraph runtime is disabled")
         provider_decision = self._flag_resolver.is_real_provider_enabled(actor_id=context.actor_id)
         return {
             "runtime_enabled": runtime_decision.enabled,
@@ -569,12 +569,12 @@ class FakeLangGraphRuntime:
 
 def _question_session_ref(command: AgentCommandEnvelope) -> str:
     if not command.input_refs:
-        raise RuntimePolicyError("polish question fake runtime requires a session ref")
+        raise RuntimePolicyError("polish question in-memory runtime requires a session ref")
     session_ref = str(command.input_refs[0]).strip()
     if not session_ref or any(char.isspace() for char in session_ref):
-        raise RuntimePolicyError("polish question fake runtime accepts refs only")
+        raise RuntimePolicyError("polish question in-memory runtime accepts refs only")
     if contains_sensitive_payload((session_ref,)):
-        raise RuntimePolicyError("polish question fake runtime rejects sensitive input refs")
+        raise RuntimePolicyError("polish question in-memory runtime rejects sensitive input refs")
     return session_ref
 
 
@@ -585,18 +585,18 @@ def _question_progress_node_ref(command: AgentCommandEnvelope) -> str | None:
     if not progress_node_ref:
         return None
     if any(char.isspace() for char in progress_node_ref) or contains_sensitive_payload((progress_node_ref,)):
-        raise RuntimePolicyError("polish question fake runtime accepts progress refs only")
+        raise RuntimePolicyError("polish question in-memory runtime accepts progress refs only")
     return progress_node_ref
 
 
 def _question_completed_focus_refs(command: AgentCommandEnvelope) -> tuple[str, ...]:
     refs = tuple(str(ref).strip() for ref in command.input_refs[2:] if str(ref).strip())
     if any(any(char.isspace() for char in ref) for ref in refs) or contains_sensitive_payload(refs):
-        raise RuntimePolicyError("polish question fake runtime accepts focus refs only")
+        raise RuntimePolicyError("polish question in-memory runtime accepts focus refs only")
     return refs
 
 
-def _question_fake_scenario_summary(
+def _question_fallback_scenario_summary(
     command: AgentCommandEnvelope, *, progress_node_ref: str | None
 ) -> str:
     summary = str(command.metadata.get("selected_progress_node_summary") or "").strip()
@@ -607,7 +607,7 @@ def _question_fake_scenario_summary(
     return "证据不足的打磨题场景"
 
 
-def _fake_runtime_node(state: _FakeGraphState) -> _FakeGraphState:
+def _in_memory_runtime_node(state: _InMemoryGraphState) -> _InMemoryGraphState:
     return {
         "owner_id": state["owner_id"],
         "run_id": state["run_id"],
@@ -619,7 +619,7 @@ def _fake_runtime_node(state: _FakeGraphState) -> _FakeGraphState:
     }
 
 
-def _runtime_metadata(state: _FakeGraphState, gate: dict[str, bool]) -> dict[str, Any]:
+def _runtime_metadata(state: _InMemoryGraphState, gate: dict[str, bool]) -> dict[str, Any]:
     return {
         "runtime_enabled": gate["runtime_enabled"],
         "langgraph_enabled": gate["langgraph_enabled"],

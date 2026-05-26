@@ -6,18 +6,18 @@ from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunC
 from app.application.ai_runtime.llm_trace import LlmTraceContext
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.application.llm.types import LlmTransportRequest
-from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 from app.infrastructure.ai_runtime.llm_trace.persisted_transport import FailClosedPersistedLlmTransport
 from app.infrastructure.db.repositories.ai_runtime import LlmCallRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 
 
-def test_pr4_provider_gate_defaults_false_and_fake_runtime_does_not_bypass_it(monkeypatch) -> None:
+def test_pr4_provider_gate_defaults_false_and_in_memory_runtime_does_not_bypass_it(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     resolver = RuntimeFlagResolver(
         test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True}
     )
-    runtime = FakeLangGraphRuntime(flag_resolver=resolver)
+    runtime = InMemoryLangGraphRuntime(flag_resolver=resolver)
     context = _context()
 
     result = runtime.start(context, context.command)

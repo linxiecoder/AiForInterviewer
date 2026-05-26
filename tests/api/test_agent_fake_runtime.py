@@ -28,7 +28,7 @@ from app.application.ai_runtime.contracts import (
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
-from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 
 
 RAW_PROMPT_KEY = "raw" + "_prompt"
@@ -56,8 +56,8 @@ FORBIDDEN_MARKERS = (
 )
 
 
-def test_fake_runtime_polish_question_emits_agent_candidate_payload() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+def test_in_memory_runtime_polish_question_emits_agent_candidate_payload() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     context = _context()
 
     result = runtime.start(context, context.command)
@@ -78,8 +78,8 @@ def test_fake_runtime_polish_question_emits_agent_candidate_payload() -> None:
     assert result.metadata["accepted_candidate_payload"] is True
 
 
-def test_fake_runtime_polish_question_executes_phase_tool_chain_with_provider_off_fallback() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+def test_in_memory_runtime_polish_question_executes_phase_tool_chain_with_provider_off_fallback() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     context = _context()
 
     result = runtime.start(context, context.command)
@@ -110,9 +110,9 @@ def test_fake_runtime_polish_question_executes_phase_tool_chain_with_provider_of
     assert candidate_metadata["validator_result"]["passed"] is True
 
 
-def test_fake_runtime_polish_question_emits_structured_agent_logs(caplog) -> None:
+def test_in_memory_runtime_polish_question_emits_structured_agent_logs(caplog) -> None:
     LogUtil.configure(BackendLogSettings(console_enabled=True, file_enabled=False))
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     context = _context()
 
     with caplog.at_level(logging.INFO, logger="app.agent.runtime"):
@@ -275,8 +275,8 @@ def test_execute_polish_question_agent_repairs_validation_failure_with_bounded_t
     assert execution.candidate["question_metadata"]["repair_strategy"] == "safe_grounding_transform"
 
 
-def test_fake_runtime_polish_question_candidate_payload_is_sanitized() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+def test_in_memory_runtime_polish_question_candidate_payload_is_sanitized() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     command = _command(
         metadata={
             "request_digest": "digest_ref_1",
@@ -305,8 +305,8 @@ def test_fake_runtime_polish_question_candidate_payload_is_sanitized() -> None:
         assert marker not in serialized
 
 
-def test_fake_runtime_polish_question_timeline_is_sanitized() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+def test_in_memory_runtime_polish_question_timeline_is_sanitized() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     context = _context()
 
     runtime.start(context, context.command)
@@ -325,8 +325,8 @@ def test_fake_runtime_polish_question_timeline_is_sanitized() -> None:
         assert marker not in serialized
 
 
-def test_fake_runtime_polish_question_status_has_refs_only() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+def test_in_memory_runtime_polish_question_status_has_refs_only() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     context = _context()
 
     result = runtime.start(context, context.command)

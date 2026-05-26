@@ -5,24 +5,24 @@ import pytest
 from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext, GraphDisabledError, RuntimePolicyError
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
-from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 
 
 RAW_KEY = "raw" + "_prompt"
 PROVIDER_KEY = "provider_" + "payload"
 
 
-def test_pr4_fake_runtime_fails_closed_when_runtime_flags_default_false() -> None:
-    runtime = FakeLangGraphRuntime()
+def test_pr4_in_memory_runtime_fails_closed_when_runtime_flags_default_false() -> None:
+    runtime = InMemoryLangGraphRuntime()
     context = _context()
 
     with pytest.raises(GraphDisabledError):
         runtime.start(context, context.command)
 
 
-def test_pr4_fake_runtime_start_resume_and_timeline_are_sanitized() -> None:
+def test_pr4_in_memory_runtime_start_resume_and_timeline_are_sanitized() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
 
     started = runtime.start(context, context.command)
@@ -52,9 +52,9 @@ def test_pr4_fake_runtime_start_resume_and_timeline_are_sanitized() -> None:
         assert forbidden not in serialized
 
 
-def test_pr4_fake_runtime_replay_is_read_only_and_does_not_mutate_checkpoints() -> None:
+def test_pr4_in_memory_runtime_replay_is_read_only_and_does_not_mutate_checkpoints() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
     runtime.start(context, context.command)
     latest = checkpointer.latest(context.owner_id, "pr4_fake_runtime", context.run_id)
@@ -71,12 +71,12 @@ def test_pr4_fake_runtime_replay_is_read_only_and_does_not_mutate_checkpoints() 
     assert runtime.get_timeline(context.run_id, context.owner_id) == timeline_before
 
 
-def test_pr4_fake_runtime_resume_does_not_bypass_runtime_gate() -> None:
+def test_pr4_in_memory_runtime_resume_does_not_bypass_runtime_gate() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
-    enabled_runtime = FakeLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
+    enabled_runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
     started = enabled_runtime.start(context, context.command)
-    disabled_runtime = FakeLangGraphRuntime(
+    disabled_runtime = InMemoryLangGraphRuntime(
         flag_resolver=RuntimeFlagResolver(
             test_overrides={"AIFI_AI_RUNTIME_ENABLED": False, "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True}
         ),
@@ -87,8 +87,8 @@ def test_pr4_fake_runtime_resume_does_not_bypass_runtime_gate() -> None:
         disabled_runtime.resume(context, interrupt_ref=started.interrupt_refs[0], resume_payload={"decision": "approved"})
 
 
-def test_pr4_fake_runtime_start_rejects_command_mismatch() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_flags())
+def test_pr4_in_memory_runtime_start_rejects_command_mismatch() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     context = _context()
     mismatched_command = AgentCommandEnvelope(
         entrypoint="start",

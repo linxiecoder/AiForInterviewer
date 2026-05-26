@@ -30,7 +30,7 @@ from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
-from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 
 
@@ -112,9 +112,9 @@ def test_create_question_task_starts_graph_when_facade_enabled() -> None:
     assert context_snapshot["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == NODE_REF
 
 
-def test_create_question_task_persists_fake_runtime_agent_candidate_payload() -> None:
+def test_create_question_task_persists_in_memory_runtime_agent_candidate_payload() -> None:
     flags = _enabled_question_graph_flags()
-    runtime = FakeLangGraphRuntime(flag_resolver=flags)
+    runtime = InMemoryLangGraphRuntime(flag_resolver=flags)
     facade = AiOrchestrationFacade(
         runner=runtime,
         registry=AgentGraphRegistry.default(),
@@ -149,7 +149,7 @@ def test_create_question_task_persists_fake_runtime_agent_candidate_payload() ->
 def test_create_question_task_provider_enabled_graph_uses_transport_and_repository_context() -> None:
     flags = _enabled_question_graph_flags(provider_enabled=True)
     transport = _RecordingQuestionProviderTransport()
-    runtime = FakeLangGraphRuntime(flag_resolver=flags, polish_question_llm_transport=transport)
+    runtime = InMemoryLangGraphRuntime(flag_resolver=flags, polish_question_llm_transport=transport)
     facade = AiOrchestrationFacade(
         runner=runtime,
         registry=AgentGraphRegistry.default(),
@@ -189,7 +189,7 @@ def test_create_question_task_provider_enabled_graph_uses_transport_and_reposito
 
 def test_create_question_task_provider_failure_does_not_create_success_question() -> None:
     flags = _enabled_question_graph_flags(provider_enabled=True)
-    runtime = FakeLangGraphRuntime(
+    runtime = InMemoryLangGraphRuntime(
         flag_resolver=flags,
         polish_question_llm_transport=_FailingQuestionProviderTransport(),
     )
@@ -212,7 +212,7 @@ def test_create_question_task_provider_failure_does_not_create_success_question(
 
 def test_create_question_task_provider_enabled_rejects_fake_transport_as_provider() -> None:
     flags = _enabled_question_graph_flags(provider_enabled=True)
-    runtime = FakeLangGraphRuntime(
+    runtime = InMemoryLangGraphRuntime(
         flag_resolver=flags,
         polish_question_llm_transport=FakeLlmTransport(),
     )

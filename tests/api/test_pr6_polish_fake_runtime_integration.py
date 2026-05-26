@@ -20,7 +20,7 @@ from app.application.ai_runtime.contracts import (
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
-from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 from app.infrastructure.ai_runtime.langgraph.serializer import LangGraphRuntimeSerializer
 
 
@@ -33,9 +33,9 @@ QUESTION_TEXT_KEY = "question" + "_text"
 ANSWER_TEXT_KEY = "answer" + "_text"
 
 
-def test_pr6_graph_flag_default_false_blocks_fake_execution_and_retains_legacy_path() -> None:
+def test_pr6_graph_flag_default_false_blocks_in_memory_execution_and_retains_legacy_path() -> None:
     descriptor = build_polish_feedback_graph_descriptor()
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_without_graph_flag())
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_without_graph_flag())
     context = _context()
 
     assert descriptor.graph_name == POLISH_FEEDBACK_GRAPH_NAME == "polish_feedback_graph"
@@ -51,8 +51,8 @@ def test_pr6_graph_flag_default_false_blocks_fake_execution_and_retains_legacy_p
         runtime.start(context, context.command)
 
 
-def test_pr6_enabled_fake_integration_returns_refs_only_sanitized_schema() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
+def test_pr6_enabled_in_memory_integration_returns_refs_only_sanitized_schema() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     context = _context(
         command=AgentCommandEnvelope(
             entrypoint="start",
@@ -113,7 +113,7 @@ def test_pr6_enabled_fake_integration_returns_refs_only_sanitized_schema() -> No
 
 def test_pr6_replay_is_read_only_and_does_not_mutate_checkpoint_or_timeline_refs() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag(), checkpointer=checkpointer)
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag(), checkpointer=checkpointer)
     context = _context()
     started = runtime.start(context, context.command)
     before_snapshot = checkpointer.snapshot()
@@ -137,7 +137,7 @@ def test_pr6_replay_is_read_only_and_does_not_mutate_checkpoint_or_timeline_refs
 
 def test_pr6_checkpoint_refs_are_runtime_refs_and_rollback_is_flag_only() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
-    enabled_runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag(), checkpointer=checkpointer)
+    enabled_runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag(), checkpointer=checkpointer)
     context = _context()
     started = enabled_runtime.start(context, context.command)
     checkpoint_snapshot = checkpointer.snapshot()
@@ -148,7 +148,7 @@ def test_pr6_checkpoint_refs_are_runtime_refs_and_rollback_is_flag_only() -> Non
     assert all(item["checkpoint_ref"] in started.metadata["trace_refs"]["checkpoint_refs"] for item in checkpoint_snapshot)
     assert started.metadata["rollback"]["checkpoint_refs_are_business_facts"] is False
 
-    disabled_runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_without_graph_flag(), checkpointer=checkpointer)
+    disabled_runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_without_graph_flag(), checkpointer=checkpointer)
     with pytest.raises(GraphDisabledError):
         disabled_runtime.start(context, context.command)
 
@@ -156,7 +156,7 @@ def test_pr6_checkpoint_refs_are_runtime_refs_and_rollback_is_flag_only() -> Non
 
 
 def test_pr6_rejects_raw_text_inputs_and_exposes_no_private_runtime_markers() -> None:
-    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
 
     with pytest.raises(RuntimeValidationError):
         runtime.start(

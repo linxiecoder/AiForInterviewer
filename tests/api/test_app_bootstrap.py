@@ -3,6 +3,7 @@ import logging
 
 from sqlalchemy import inspect
 
+from app.infrastructure.ai_runtime.langgraph import InMemoryLangGraphRuntime
 from app.infrastructure.db.session import DbSettings
 from app.main import ApiSettings, _log_runtime_ready, _startup_log_lines, create_app, get_settings
 from tests.api.asgi_client import call_json
@@ -22,6 +23,13 @@ def test_create_app_registers_auth_runtime() -> None:
 
     assert app.state.auth_runtime.cookie_policy.name == "aifi_session"
     assert app.state.auth_runtime.cookie_policy.path == "/api/v1"
+
+
+def test_create_app_wires_in_memory_langgraph_runtime() -> None:
+    app = create_app()
+
+    facade = app.state.ai_orchestration_facade
+    assert isinstance(facade._runner, InMemoryLangGraphRuntime)
 
 
 def test_create_app_does_not_initialize_schema_by_default() -> None:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
-from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -48,7 +48,7 @@ def test_pr4_concrete_langgraph_imports_do_not_leak_outside_infra_runtime_root()
 def test_pr4_pr5_boundary_allows_only_authorized_skeleton_and_no_formal_write_bypass() -> None:
     assert _business_graph_skeleton_boundary_violations() == []
 
-    runtime = FakeLangGraphRuntime(
+    runtime = InMemoryLangGraphRuntime(
         flag_resolver=RuntimeFlagResolver(
             test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True}
         )
