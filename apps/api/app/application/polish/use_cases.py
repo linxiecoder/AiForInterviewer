@@ -146,6 +146,7 @@ class PolishUseCases:
         job_match_repository: JobMatchRepository | None = None,
         progress_tree_service: PolishProgressTreeLlmService | None = None,
         ai_orchestration_facade: AiOrchestrationFacade | None = None,
+        question_generation_service: QuestionGenerationService | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
@@ -153,7 +154,7 @@ class PolishUseCases:
         self._job_repository = job_repository
         self._job_match_repository = job_match_repository
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
-        self._question_generation_service = QuestionGenerationService()
+        self._question_generation_service = question_generation_service or QuestionGenerationService()
         self._ai_orchestration_facade = ai_orchestration_facade
 
     def bootstrap(self) -> ApplicationResult[str]:

@@ -6,10 +6,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
-from app.application.polish.question_blueprint import EvidenceScope, QuestionBlueprint, build_question_blueprint
+from app.application.polish.question_blueprint import (
+    CLAIM_MODE_CLARIFICATION_NEEDED,
+    EvidenceScope,
+    QuestionBlueprint,
+    build_question_blueprint,
+)
 from app.application.polish.question_generation_prompts import (
+    QUESTION_PROMPT_ASSET_VERSION,
+    QUESTION_PROMPT_CONTRACT_IDS,
+    QUESTION_PROMPT_SCHEMA_ID,
+    QUESTION_PROMPT_TASK_TYPE,
     build_question_prompt_asset,
     build_question_prompt_metadata,
     render_blueprint_question,
@@ -35,8 +46,10 @@ class QuestionGenerationService:
     def __init__(
         self,
         *,
+        llm_transport: LlmTransport | None = None,
         surface_question_builder: Callable[[QuestionBlueprint, EvidenceScope], str] | None = None,
     ) -> None:
+        self._llm_transport = llm_transport
         self._surface_question_builder = surface_question_builder or render_blueprint_question
 
     def generate(
@@ -61,7 +74,50 @@ class QuestionGenerationService:
         blueprint = build_question_blueprint(scope)
         prompt_asset = build_question_prompt_asset(blueprint, scope)
         prompt_metadata = build_question_prompt_metadata(prompt_asset)
-        question_text = self._surface_question_builder(blueprint, scope)
+        llm_payload: dict[str, Any] | None = None
+        llm_result: LlmTransportResult | None = None
+        generation_metadata: dict[str, Any]
+        if self._llm_transport is not None:
+            llm_result = _generate_llm_question(
+                transport=self._llm_transport,
+                prompt_asset=prompt_asset,
+                blueprint=blueprint,
+                scope=scope,
+            )
+            if isinstance(llm_result, QuestionGenerationResult):
+                return llm_result
+            llm_payload, validation_errors = _parse_llm_question_payload(
+                llm_result.result,
+                blueprint=blueprint,
+            )
+            if validation_errors:
+                return QuestionGenerationResult(
+                    succeeded=False,
+                    draft=None,
+                    blueprint=blueprint,
+                    grounding_result=GroundingResult(False, validation_errors),
+                    validation_errors=validation_errors,
+                    progress_node_ref=scope.progress_node_ref,
+                    evidence_refs=blueprint.evidence_refs,
+                )
+            question_text = str(llm_payload["question_text"]).strip()
+            generation_metadata = {
+                "llm_task_type": QUESTION_PROMPT_TASK_TYPE,
+                "prompt_version": QUESTION_PROMPT_ASSET_VERSION,
+                "llm_output_validation_status": "valid",
+                "llm_generation_mode": "provider_structured_json",
+                "fallback_visible": False,
+                "provider_status": "called",
+                "llm_trace_refs": list(llm_result.trace_refs),
+                "llm_evidence_refs": list(llm_result.evidence_refs),
+            }
+        else:
+            question_text = self._surface_question_builder(blueprint, scope)
+            generation_metadata = {
+                "llm_generation_mode": "deterministic_fallback",
+                "fallback_reason": "local_blueprint_renderer",
+                "fallback_visible": True,
+            }
         grounding_result = validate_question_grounding(
             blueprint=blueprint,
             question_text=question_text,
@@ -102,11 +158,14 @@ class QuestionGenerationService:
                 "generation_service": QUESTION_GENERATION_SERVICE_VERSION,
                 "blueprint_version": blueprint.metadata.get("blueprint_version"),
                 **prompt_metadata,
-                "llm_generation_mode": "deterministic_fallback",
-                "fallback_reason": "local_blueprint_renderer",
-                "fallback_visible": True,
+                **generation_metadata,
                 "question_kind": blueprint.question_kind,
                 "claim_mode": blueprint.claim_mode,
+                "llm_difficulty": llm_payload.get("difficulty") if llm_payload else None,
+                "llm_skill_dimension": llm_payload.get("skill_dimension") if llm_payload else None,
+                "llm_expected_signal": llm_payload.get("expected_signal") if llm_payload else None,
+                "llm_missing_context": list(llm_payload.get("missing_context", ())) if llm_payload else [],
+                "llm_clarification_needed": bool(llm_payload.get("clarification_needed")) if llm_payload else None,
                 "primary_evidence_ref": blueprint.primary_evidence_ref,
                 "primary_source_type": scope.primary_source_type,
                 "grounding_status": "passed",
@@ -124,6 +183,125 @@ class QuestionGenerationService:
             progress_node_ref=scope.progress_node_ref,
             evidence_refs=blueprint.evidence_refs,
         )
+
+
+def _generate_llm_question(
+    *,
+    transport: LlmTransport,
+    prompt_asset: dict[str, Any],
+    blueprint: QuestionBlueprint,
+    scope: EvidenceScope,
+) -> LlmTransportResult | QuestionGenerationResult:
+    request = LlmTransportRequest(
+        contract_ids=QUESTION_PROMPT_CONTRACT_IDS,
+        task_type=QUESTION_PROMPT_TASK_TYPE,
+        input_refs=(scope.progress_node_ref, *blueprint.evidence_refs),
+        evidence_bundle=prompt_asset,
+        prompt_version=QUESTION_PROMPT_ASSET_VERSION,
+        schema_id=QUESTION_PROMPT_SCHEMA_ID,
+    )
+    try:
+        return transport.generate(request)
+    except Exception:
+        validation_errors = ("llm_transport_generation_failed",)
+        return QuestionGenerationResult(
+            succeeded=False,
+            draft=None,
+            blueprint=blueprint,
+            grounding_result=GroundingResult(False, validation_errors),
+            validation_errors=validation_errors,
+            progress_node_ref=scope.progress_node_ref,
+            evidence_refs=blueprint.evidence_refs,
+        )
+
+
+def _parse_llm_question_payload(
+    payload: dict[str, Any],
+    *,
+    blueprint: QuestionBlueprint,
+) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    errors: list[str] = []
+    question_text = _clean(payload.get("question_text"))
+    if not question_text:
+        errors.append("llm_question_text_required")
+
+    question_kind = _clean(payload.get("question_kind"))
+    if question_kind and question_kind != blueprint.question_kind:
+        errors.append("llm_question_kind_mismatch")
+    if not question_kind:
+        question_kind = blueprint.question_kind
+
+    focus_dimension = _clean(payload.get("focus_dimension")) or blueprint.question_kind
+    difficulty = _clean(payload.get("difficulty"))
+    if difficulty not in {"easy", "medium", "hard", "clarification"}:
+        errors.append("llm_difficulty_invalid")
+
+    skill_dimension = _clean(payload.get("skill_dimension")) or _clean(blueprint.expected_capability)
+    if not skill_dimension:
+        errors.append("llm_skill_dimension_required")
+
+    expected_signal = _clean(payload.get("expected_signal"))
+    if not expected_signal:
+        errors.append("llm_expected_signal_required")
+
+    follow_ups = _string_list(payload.get("follow_ups"), max_items=3)
+    if not follow_ups:
+        errors.append("llm_follow_ups_required")
+
+    scoring_rubric = _scoring_rubric(payload.get("scoring_rubric"))
+    if not scoring_rubric:
+        errors.append("llm_scoring_rubric_required")
+
+    missing_context = _string_list(payload.get("missing_context"), max_items=8)
+    confidence = _clean(payload.get("confidence"))
+    if confidence not in {"high", "medium", "low"}:
+        errors.append("llm_confidence_invalid")
+
+    clarification_needed = payload.get("clarification_needed")
+    if not isinstance(clarification_needed, bool):
+        errors.append("llm_clarification_needed_required")
+
+    evidence_refs = _string_list(payload.get("evidence_refs"), max_items=8)
+    allowed_refs = set(blueprint.evidence_refs)
+    unknown_refs = [ref for ref in evidence_refs if ref not in allowed_refs]
+    if unknown_refs:
+        errors.append("llm_evidence_ref_unknown")
+    if blueprint.claim_mode != CLAIM_MODE_CLARIFICATION_NEEDED and not evidence_refs:
+        errors.append("llm_evidence_refs_required")
+
+    if errors:
+        return None, tuple(dict.fromkeys(errors))
+    return (
+        {
+            "question_text": question_text,
+            "question_kind": question_kind,
+            "focus_dimension": focus_dimension,
+            "difficulty": difficulty,
+            "skill_dimension": skill_dimension,
+            "expected_signal": expected_signal,
+            "follow_ups": follow_ups,
+            "scoring_rubric": scoring_rubric,
+            "missing_context": missing_context,
+            "evidence_refs": evidence_refs,
+            "confidence": confidence,
+            "clarification_needed": clarification_needed,
+        },
+        (),
+    )
+
+
+def _scoring_rubric(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for raw_item in value[:4]:
+        if not isinstance(raw_item, dict):
+            continue
+        dimension = _clean(raw_item.get("dimension"))
+        signals = _string_list(raw_item.get("signals"), max_items=4)
+        if dimension and signals:
+            items.append({"dimension": dimension, "signals": signals})
+    return items
 
 
 def _validation_failed(reason: str, *, progress_node_ref: str | None = None) -> QuestionGenerationResult:
@@ -255,10 +433,13 @@ def _expected_answer_dimensions(blueprint: QuestionBlueprint) -> tuple[str, ...]
     return ("业务背景", "关键技术链路", "异常处理或取舍", "验证指标")
 
 
-def _string_list(value: object) -> list[str]:
+def _string_list(value: object, *, max_items: int | None = None) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [_clean(item) for item in value if _clean(item)]
+    cleaned = [_clean(item) for item in value if _clean(item)]
+    if max_items is None:
+        return cleaned
+    return cleaned[:max_items]
 
 
 def _first_text(*values: object) -> str:

@@ -33,6 +33,7 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE,
 )
+from app.application.polish.question_generation_prompts import QUESTION_PROMPT_TASK_TYPE
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.shared.ids import stable_resource_id
 from app.schemas.job_match import (
@@ -56,6 +57,8 @@ class FakeLlmTransport:
         """根据 request.task_type 分发到对应的 fake 生成函数；未知 task_type 返回骨架结果。"""
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
+        if request.task_type == QUESTION_PROMPT_TASK_TYPE:
+            return _generate_fake_polish_question(request)
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
             return _generate_fake_progress_quality_first_menu(request)
         if request.task_type == POLISH_PROGRESS_GLOBAL_UNDERSTANDING_TASK_TYPE:
@@ -100,6 +103,103 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    input_data = bundle.get("input_data") if isinstance(bundle.get("input_data"), dict) else {}
+    progress_node = input_data.get("progress_node") if isinstance(input_data.get("progress_node"), dict) else {}
+    policy = input_data.get("generation_policy") if isinstance(input_data.get("generation_policy"), dict) else {}
+    evidence_refs = tuple(ref for ref in input_data.get("evidence_refs", []) if isinstance(ref, str) and ref.strip())
+    summaries = input_data.get("evidence_summaries") if isinstance(input_data.get("evidence_summaries"), list) else []
+    summary_excerpts = [
+        _fake_question_excerpt(item.get("excerpt"), limit=80)
+        for item in summaries
+        if isinstance(item, dict) and item.get("excerpt")
+    ]
+    title = _fake_question_excerpt(progress_node.get("title") or "当前训练节点", limit=48)
+    capability = _fake_question_excerpt(
+        input_data.get("skill_dimension") or progress_node.get("expected_capability") or "说明关键链路、取舍和验证方式",
+        limit=80,
+    )
+    excerpt = _fake_question_excerpt("；".join(summary_excerpts) or capability, limit=180)
+    claim_mode = str(policy.get("claim_mode") or "")
+    if not evidence_refs or claim_mode == "clarification_needed":
+        question_text = (
+            f"围绕「{title}」，当前材料不足以支撑具体题干。请先补充一个真实项目材料，"
+            "必须包含业务入口、职责边界、失败案例和验证指标。"
+        )
+        difficulty = "clarification"
+        missing_context = input_data.get("missing_context") if isinstance(input_data.get("missing_context"), list) else []
+        confidence = "low"
+        clarification_needed = True
+    elif claim_mode == "job_gap_probe":
+        question_text = (
+            f"围绕「{title}」，岗位侧需要验证「{capability}」。"
+            f"请基于证据摘要「{excerpt}」，说明你会如何补齐相关能力、设计验证路径并在面试中证明该能力。"
+        )
+        difficulty = "medium"
+        missing_context = []
+        confidence = "medium"
+        clarification_needed = False
+    else:
+        question_text = (
+            f"围绕「{title}」，请只基于证据摘要「{excerpt}」展开："
+            f"先说明业务背景和关键技术链路，再说明异常处理或关键取舍，最后用验证指标证明你具备「{capability}」。"
+        )
+        difficulty = "hard"
+        missing_context = []
+        confidence = "high"
+        clarification_needed = False
+    seed = dumps(
+        {
+            "contract_ids": sorted(request.contract_ids),
+            "task_type": request.task_type,
+            "input_refs": sorted(request.input_refs),
+            "evidence_refs": sorted(evidence_refs),
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    trace_ref = stable_resource_id("trace", f"fake-polish-question-trace:{seed}")
+    return LlmTransportResult(
+        result={
+            "question_text": question_text,
+            "question_kind": policy.get("question_kind") or "technical_chain_deep_dive",
+            "focus_dimension": policy.get("focus_dimension") or policy.get("question_kind") or "technical_chain_deep_dive",
+            "difficulty": difficulty,
+            "skill_dimension": capability,
+            "expected_signal": "回答应引用证据，说明边界、取舍、失败处理、验证指标和复盘信号。",
+            "follow_ups": ["关键失败场景是什么？", "如何证明方案有效？"],
+            "scoring_rubric": [
+                {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+                {"dimension": "reasoning", "signals": ["说明边界", "说明验证指标"]},
+            ],
+            "missing_context": missing_context,
+            "evidence_refs": list(evidence_refs),
+            "confidence": confidence,
+            "clarification_needed": clarification_needed,
+            "prompt_version": request.prompt_version,
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=(
+            ConfidenceLevel.HIGH
+            if confidence == "high"
+            else ConfidenceLevel.LOW
+            if confidence == "low"
+            else ConfidenceLevel.MEDIUM
+        ),
+        low_confidence_flags=tuple(missing_context) if clarification_needed else (),
+        trace_refs=(trace_ref,),
+        evidence_refs=evidence_refs,
+    )
+
+
+def _fake_question_excerpt(value: object, *, limit: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}..."
 
 
 def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> LlmTransportResult:

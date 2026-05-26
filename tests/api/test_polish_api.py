@@ -469,9 +469,9 @@ def test_create_app_question_path_registers_facade_and_records_graph_fallback_me
     assert metadata["graph_fallback_reason"] == "graph_disabled"
     assert metadata["fallback_reason"] == "graph_disabled"
     assert metadata["graph_status"] == "disabled_fallback"
-    assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v2"
-    assert metadata["prompt_schema_id"] == "polish_question_generation_output_v1"
-    assert metadata["prompt_schema_version"] == "v1"
+    assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v3"
+    assert metadata["prompt_schema_id"] == "polish_question_generation_output_v2"
+    assert metadata["prompt_schema_version"] == "v2"
     assert metadata["prompt_input_digest"].startswith("sha256:")
     assert metadata["prompt_evidence_refs"]
     assert metadata["prompt_safety_summary"]["input_data_untrusted"] is True

@@ -54,6 +54,7 @@ from app.application.polish.feedback_reserved import (
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
+from app.application.polish.question_generation_service import QuestionGenerationService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
@@ -489,6 +490,7 @@ def _use_cases(
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
+        question_generation_service=QuestionGenerationService(llm_transport=llm_transport),
         ai_orchestration_facade=ai_orchestration_facade,
     )
 
