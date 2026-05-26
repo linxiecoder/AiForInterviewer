@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
+import pytest
+
+from app.application.llm.errors import LlmTransportUnavailableError
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.entities import PolishAnswer
@@ -11,6 +15,7 @@ from app.application.polish.question_generation_service import QuestionGeneratio
 from app.application.polish.question_metadata import normalize_question_metadata
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
+from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 
 from tests.api.test_polish_question_graph_integration import (
@@ -328,6 +333,102 @@ def test_question_service_rejects_llm_output_that_does_not_match_schema() -> Non
     assert "llm_question_text_required" in result.validation_errors
 
 
+def test_question_service_retries_transient_llm_failure_with_structured_logs(
+    caplog,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    LogUtil.configure(BackendLogSettings(console_enabled=True, file_enabled=False))
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "app.application.polish.question_generation_service.sleep",
+        lambda seconds: sleeps.append(seconds),
+        raising=False,
+    )
+    policy = QuestionGenerationRuntimePolicy(llm_max_retries=1, llm_retry_backoff_seconds=0.01)
+    transport = _FlakyQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport, runtime_policy=policy)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。"
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.agent.runtime"):
+        result = service.generate(
+            session=session,
+            context=context,
+            plan=plan,
+            state=state,
+            requested_ref=NODE_REF,
+        )
+
+    assert result.succeeded
+    assert transport.calls == 2
+    assert sleeps == [0.01]
+    records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.name == "app.agent.runtime"
+    ]
+    assert any(
+        record["event"] == "agent_runtime_step"
+        and record["phase"] == "llm_call"
+        and record["status"] == "retry_scheduled"
+        and record["retry_delay_seconds"] == 0.01
+        and record["attempt"] == 1
+        for record in records
+    )
+
+
+def test_question_task_persists_validation_failed_task_for_invalid_llm_output() -> None:
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_InvalidQuestionTransport()
+    )
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert "llm_question_text_required" in result.value.validation_errors
+    assert repository.questions == []
+    assert len(repository.tasks) == 1
+
+
+def test_question_service_logs_llm_parse_failure_without_raw_output(caplog) -> None:
+    LogUtil.configure(BackendLogSettings(console_enabled=True, file_enabled=False))
+    service = QuestionGenerationService(llm_transport=_InvalidQuestionTransport())
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。"
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.agent.runtime"):
+        result = service.generate(
+            session=session,
+            context=context,
+            plan=plan,
+            state=state,
+            requested_ref=NODE_REF,
+        )
+
+    assert not result.succeeded
+    records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.name == "app.agent.runtime"
+    ]
+    parse_record = next(
+        record
+        for record in records
+        if record["event"] == "agent_runtime_step" and record["phase"] == "parse_output"
+    )
+    assert parse_record["status"] == "failed"
+    assert "llm_question_text_required" in parse_record["error_type"]
+    serialized = json.dumps(records, ensure_ascii=False)
+    assert "unknown_ref" not in serialized
+    assert "raw_prompt" not in serialized
+    assert "raw_completion" not in serialized
+
+
 def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -> None:
     normalized = normalize_question_metadata(
         {
@@ -600,3 +701,15 @@ class _InvalidQuestionTransport:
             trace_refs=("trace_invalid_question_prompt_v3",),
             evidence_refs=(),
         )
+
+
+class _FlakyQuestionTransport(_RecordingQuestionTransport):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.calls += 1
+        if self.calls == 1:
+            raise LlmTransportUnavailableError("temporary provider outage")
+        return super().generate(request)

@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any
 
+from app.application.common.logging import LogUtil
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
     AgentCommandEnvelope,
@@ -691,8 +693,26 @@ def _execute_agent_tool(
     last_error: str | None = None
     while attempts <= config.max_retries:
         attempts += 1
+        input_ref = _stable_id(phase, input_payload)
+        LogUtil.agent_runtime_step(
+            task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+            graph_name=POLISH_QUESTION_GRAPH_NAME,
+            phase=phase,
+            tool_name=tool_name,
+            status="started",
+            attempt=attempts,
+            max_attempts=config.max_retries + 1,
+            max_agent_steps=config.max_agent_steps,
+            timeout_seconds=config.timeout_seconds,
+            input_ref=input_ref,
+        )
         try:
-            output = operation()
+            output = _run_operation_with_timeout(
+                operation,
+                tool_name=tool_name,
+                deadline_at=deadline_at,
+                timeout_seconds=float(schema.timeout_seconds),
+            )
             if not isinstance(output, dict):
                 raise RuntimeValidationError(f"{tool_name} returned invalid output")
             output_ref = str(output.get("output_ref") or f"{tool_name}_ref_{attempts}")
@@ -702,7 +722,7 @@ def _execute_agent_tool(
                 "status": "succeeded",
                 "input_schema_id": schema.input_schema_id,
                 "output_schema_id": schema.output_schema_id,
-                "input_ref": _stable_id(phase, input_payload),
+                "input_ref": input_ref,
                 "output_ref": output_ref,
                 "attempts": attempts,
                 "latency_ms": latency_ms,
@@ -713,47 +733,163 @@ def _execute_agent_tool(
                     "phase": phase,
                     "status": "succeeded",
                     "tool_name": tool_name,
-                    "input_ref": tool_result["input_ref"],
+                    "input_ref": input_ref,
                     "output_ref": output_ref,
                     "attempts": attempts,
                     "latency_ms": latency_ms,
                     "error": None,
                 }
             )
+            LogUtil.agent_runtime_step(
+                task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+                graph_name=POLISH_QUESTION_GRAPH_NAME,
+                phase=phase,
+                tool_name=tool_name,
+                status="succeeded",
+                attempt=attempts,
+                max_attempts=config.max_retries + 1,
+                max_agent_steps=config.max_agent_steps,
+                timeout_seconds=config.timeout_seconds,
+                duration_ms=latency_ms,
+                input_ref=input_ref,
+                output_ref=output_ref,
+            )
             return output
         except Exception as exc:
             last_error = exc.__class__.__name__
-            if attempts > config.max_retries or perf_counter() >= deadline_at:
-                latency_ms = round((perf_counter() - started_at) * 1000, 3)
-                tool_results.append(
-                    {
-                        "tool_name": tool_name,
-                        "status": "failed",
-                        "input_schema_id": schema.input_schema_id,
-                        "output_schema_id": schema.output_schema_id,
-                        "input_ref": _stable_id(phase, input_payload),
-                        "output_ref": None,
-                        "attempts": attempts,
-                        "latency_ms": latency_ms,
-                        "error": last_error,
-                    }
-                )
-                phase_results.append(
-                    {
-                        "phase": phase,
-                        "status": "failed",
-                        "tool_name": tool_name,
-                        "input_ref": _stable_id(phase, input_payload),
-                        "output_ref": None,
-                        "attempts": attempts,
-                        "latency_ms": latency_ms,
-                        "retry_delay_seconds": config.backoff_seconds,
-                        "error": last_error,
-                    }
+            if isinstance(exc, RuntimePolicyError):
+                _record_tool_failure(
+                    phase=phase,
+                    tool_name=tool_name,
+                    schema=schema,
+                    input_ref=input_ref,
+                    attempts=attempts,
+                    started_at=started_at,
+                    error_type=last_error,
+                    phase_results=phase_results,
+                    tool_results=tool_results,
+                    config=config,
                 )
                 raise
+            if attempts > config.max_retries or perf_counter() >= deadline_at:
+                latency_ms = round((perf_counter() - started_at) * 1000, 3)
+                _record_tool_failure(
+                    phase=phase,
+                    tool_name=tool_name,
+                    schema=schema,
+                    input_ref=input_ref,
+                    attempts=attempts,
+                    started_at=started_at,
+                    error_type=last_error,
+                    phase_results=phase_results,
+                    tool_results=tool_results,
+                    config=config,
+                    latency_ms=latency_ms,
+                )
+                if last_error == "TimeoutError":
+                    raise RuntimeValidationError(f"{tool_name} timed out") from exc
+                raise RuntimeValidationError(f"{tool_name} failed after {attempts} attempt(s): {last_error}") from exc
+            LogUtil.agent_runtime_step(
+                task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+                graph_name=POLISH_QUESTION_GRAPH_NAME,
+                phase=phase,
+                tool_name=tool_name,
+                status="retry_scheduled",
+                attempt=attempts,
+                max_attempts=config.max_retries + 1,
+                max_agent_steps=config.max_agent_steps,
+                timeout_seconds=config.timeout_seconds,
+                retry_delay_seconds=config.backoff_seconds,
+                duration_ms=round((perf_counter() - started_at) * 1000, 3),
+                input_ref=input_ref,
+                error_type=last_error,
+            )
+            sleep(config.backoff_seconds)
 
     raise RuntimeValidationError(f"{tool_name} exhausted retry attempts")
+
+
+def _run_operation_with_timeout(
+    operation: Any,
+    *,
+    tool_name: str,
+    deadline_at: float,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    remaining_seconds = min(timeout_seconds, max(0.0, deadline_at - perf_counter()))
+    if remaining_seconds <= 0:
+        raise TimeoutError(f"{tool_name} timed out")
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(operation)
+    try:
+        result = future.result(timeout=remaining_seconds)
+    except FutureTimeoutError as exc:
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise TimeoutError(f"{tool_name} timed out") from exc
+    except BaseException:
+        executor.shutdown(wait=True, cancel_futures=False)
+        raise
+    else:
+        executor.shutdown(wait=True, cancel_futures=False)
+        return result
+
+
+def _record_tool_failure(
+    *,
+    phase: str,
+    tool_name: str,
+    schema: PolishQuestionToolSchema,
+    input_ref: str,
+    attempts: int,
+    started_at: float,
+    error_type: str,
+    phase_results: list[dict[str, Any]],
+    tool_results: list[dict[str, Any]],
+    config: PolishQuestionAgentConfig,
+    latency_ms: float | None = None,
+) -> None:
+    duration_ms = latency_ms if latency_ms is not None else round((perf_counter() - started_at) * 1000, 3)
+    tool_results.append(
+        {
+            "tool_name": tool_name,
+            "status": "failed",
+            "input_schema_id": schema.input_schema_id,
+            "output_schema_id": schema.output_schema_id,
+            "input_ref": input_ref,
+            "output_ref": None,
+            "attempts": attempts,
+            "latency_ms": duration_ms,
+            "error": error_type,
+        }
+    )
+    phase_results.append(
+        {
+            "phase": phase,
+            "status": "failed",
+            "tool_name": tool_name,
+            "input_ref": input_ref,
+            "output_ref": None,
+            "attempts": attempts,
+            "latency_ms": duration_ms,
+            "retry_delay_seconds": config.backoff_seconds,
+            "error": error_type,
+        }
+    )
+    LogUtil.agent_runtime_step(
+        task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+        graph_name=POLISH_QUESTION_GRAPH_NAME,
+        phase=phase,
+        tool_name=tool_name,
+        status="failed",
+        attempt=attempts,
+        max_attempts=config.max_retries + 1,
+        max_agent_steps=config.max_agent_steps,
+        timeout_seconds=config.timeout_seconds,
+        duration_ms=duration_ms,
+        input_ref=input_ref,
+        error_type=error_type,
+    )
 
 
 def _execute_repair_or_retry_phase(
@@ -781,6 +917,20 @@ def _execute_repair_or_retry_phase(
             "error": None if status == "skipped" else "validator_blocked_candidate",
         }
     )
+    LogUtil.agent_runtime_step(
+        task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+        graph_name=POLISH_QUESTION_GRAPH_NAME,
+        phase="repair_or_retry",
+        status=status,
+        attempt=0,
+        max_attempts=config.max_retries + 1,
+        max_agent_steps=config.max_agent_steps,
+        timeout_seconds=config.timeout_seconds,
+        retry_delay_seconds=config.backoff_seconds,
+        input_ref=str(validation.get("output_ref") or ""),
+        output_ref=output_ref,
+        error_type=None if status == "skipped" else "validator_blocked_candidate",
+    )
     if status == "failed":
         raise RuntimeValidationError("polish question candidate failed grounding validation")
     return {"candidate": candidate, "output_ref": output_ref}
@@ -806,6 +956,18 @@ def _execute_finalize_phase(
             "latency_ms": 0.0,
             "error": None,
         }
+    )
+    LogUtil.agent_runtime_step(
+        task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+        graph_name=POLISH_QUESTION_GRAPH_NAME,
+        phase="finalize",
+        status="succeeded",
+        attempt=1,
+        max_attempts=config.max_retries + 1,
+        max_agent_steps=config.max_agent_steps,
+        timeout_seconds=config.timeout_seconds,
+        input_ref=str(candidate.get("candidate_ref") or ""),
+        output_ref=finalize_ref,
     )
     return {"candidate": candidate, "finalize_ref": finalize_ref}
 

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import asdict
 
+import pytest
+
+import app.application.ai_runtime.business_graphs.polish_question_graph as question_graph
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     MAX_AGENT_STEPS,
     MAX_RETRIES,
@@ -12,13 +17,17 @@ from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_NAME,
     POLISH_QUESTION_GRAPH_VERSION,
     TOOL_SCHEMAS,
+    PolishQuestionAgentConfig,
+    execute_polish_question_agent,
 )
 from app.application.ai_runtime.contracts import (
     AgentCommandEnvelope,
     AgentRunContext,
+    RuntimeValidationError,
     contains_sensitive_payload,
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
 from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
 
 
@@ -99,6 +108,134 @@ def test_fake_runtime_polish_question_executes_phase_tool_chain_with_provider_of
         schema.tool_name for schema in TOOL_SCHEMAS
     }
     assert candidate_metadata["validator_result"]["passed"] is True
+
+
+def test_fake_runtime_polish_question_emits_structured_agent_logs(caplog) -> None:
+    LogUtil.configure(BackendLogSettings(console_enabled=True, file_enabled=False))
+    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+    context = _context()
+
+    with caplog.at_level(logging.INFO, logger="app.agent.runtime"):
+        runtime.start(context, context.command)
+
+    records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.name == "app.agent.runtime"
+    ]
+    assert records
+    assert any(
+        record["event"] == "agent_runtime_step"
+        and record["task_type"] == "polish_question_generation"
+        and record["graph_name"] == POLISH_QUESTION_GRAPH_NAME
+        and record["phase"] == "plan_task"
+        and record["tool_name"] == "context_retrieval"
+        and record["status"] == "succeeded"
+        for record in records
+    )
+    serialized = json.dumps(records, ensure_ascii=False)
+    for marker in FORBIDDEN_MARKERS:
+        assert marker not in serialized
+
+
+def test_execute_polish_question_agent_retries_tool_failure_with_bounded_backoff(
+    monkeypatch: pytest.MonkeyPatch, caplog
+) -> None:
+    LogUtil.configure(BackendLogSettings(console_enabled=True, file_enabled=False))
+    sleeps: list[float] = []
+    calls = 0
+    original = question_graph._tool_evidence_selection
+
+    def flaky_evidence_selection(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeValidationError("temporary evidence selection failure")
+        return original(**kwargs)
+
+    monkeypatch.setattr(question_graph, "_tool_evidence_selection", flaky_evidence_selection)
+    monkeypatch.setattr(question_graph, "sleep", lambda seconds: sleeps.append(seconds), raising=False)
+
+    with caplog.at_level(logging.INFO, logger="app.agent.runtime"):
+        execution = execute_polish_question_agent(
+            context=_context(),
+            command=_command(),
+            runtime_flag_source="test_override",
+            provider_enabled=False,
+            provider_flag_source="test_override",
+            config=PolishQuestionAgentConfig(max_retries=1, backoff_seconds=0.01),
+        )
+
+    assert execution.status == "agent_orchestration_succeeded"
+    assert calls == 2
+    assert sleeps == [0.01]
+    evidence_tool = next(
+        item for item in execution.metadata["tool_results"] if item["tool_name"] == "evidence_selection"
+    )
+    assert evidence_tool["attempts"] == 2
+    records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.name == "app.agent.runtime"
+    ]
+    assert any(
+        record["event"] == "agent_runtime_step"
+        and record["phase"] == "retrieve_context"
+        and record["tool_name"] == "evidence_selection"
+        and record["status"] == "retry_scheduled"
+        and record["retry_delay_seconds"] == 0.01
+        for record in records
+    )
+
+
+def test_execute_polish_question_agent_times_out_slow_tool_without_false_success(
+    monkeypatch: pytest.MonkeyPatch, caplog
+) -> None:
+    LogUtil.configure(BackendLogSettings(console_enabled=True, file_enabled=False))
+    original = question_graph._tool_context_retrieval
+
+    def slow_context_retrieval(command):
+        question_graph.sleep(0.03)
+        return original(command)
+
+    monkeypatch.setattr(question_graph, "_tool_context_retrieval", slow_context_retrieval)
+
+    with caplog.at_level(logging.INFO, logger="app.agent.runtime"):
+        with pytest.raises(RuntimeValidationError, match="context_retrieval timed out"):
+            execute_polish_question_agent(
+                context=_context(),
+                command=_command(),
+                runtime_flag_source="test_override",
+                provider_enabled=False,
+                provider_flag_source="test_override",
+                config=PolishQuestionAgentConfig(max_retries=0, timeout_seconds=0.01),
+            )
+
+    records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.name == "app.agent.runtime"
+    ]
+    assert any(
+        record["event"] == "agent_runtime_step"
+        and record["phase"] == "plan_task"
+        and record["tool_name"] == "context_retrieval"
+        and record["status"] == "failed"
+        and record["error_type"] == "TimeoutError"
+        for record in records
+    )
+
+
+def test_execute_polish_question_agent_fails_when_max_steps_exhausted() -> None:
+    with pytest.raises(RuntimeValidationError, match="exceeded max_agent_steps"):
+        execute_polish_question_agent(
+            context=_context(),
+            command=_command(),
+            runtime_flag_source="test_override",
+            provider_enabled=False,
+            provider_flag_source="test_override",
+            config=PolishQuestionAgentConfig(max_agent_steps=1, max_retries=0),
+        )
 
 
 def test_fake_runtime_polish_question_candidate_payload_is_sanitized() -> None:

@@ -18,6 +18,7 @@ APP_LOGGER_NAME = "app"
 HTTP_ACCESS_LOGGER_NAME = "app.http.access"
 LLM_TRANSPORT_LOGGER_NAME = "app.llm.transport"
 SECURITY_AUTH_LOGGER_NAME = "app.security.auth"
+AGENT_RUNTIME_LOGGER_NAME = "app.agent.runtime"
 BEIJING_TIMEZONE = ZoneInfo("Asia/Shanghai")
 REDACTED_VALUE = "***"
 SENSITIVE_FIELD_MARKERS = (
@@ -88,6 +89,7 @@ class LogUtil:
             HTTP_ACCESS_LOGGER_NAME,
             LLM_TRANSPORT_LOGGER_NAME,
             SECURITY_AUTH_LOGGER_NAME,
+            AGENT_RUNTIME_LOGGER_NAME,
         ):
             cls._configured_logger(logger_name)
 
@@ -190,6 +192,50 @@ class LogUtil:
         if status_code is not None:
             fields["status_code"] = status_code
         cls._emit(LLM_TRANSPORT_LOGGER_NAME, logging.INFO, "llm_transport_request_failed", fields)
+
+    @classmethod
+    def agent_runtime_step(
+        cls,
+        *,
+        task_type: str,
+        phase: str,
+        status: str,
+        graph_name: str | None = None,
+        run_id: str | None = None,
+        ai_task_id: str | None = None,
+        tool_name: str | None = None,
+        attempt: int | None = None,
+        max_attempts: int | None = None,
+        max_agent_steps: int | None = None,
+        timeout_seconds: float | None = None,
+        retry_delay_seconds: float | None = None,
+        duration_ms: float | None = None,
+        input_ref: str | None = None,
+        output_ref: str | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        fields: dict[str, Any] = {
+            "task_type": task_type,
+            "phase": phase,
+            "status": status,
+        }
+        optional_fields: dict[str, Any | None] = {
+            "graph_name": graph_name,
+            "run_id": run_id,
+            "ai_task_id": ai_task_id,
+            "tool_name": tool_name,
+            "attempt": attempt,
+            "max_attempts": max_attempts,
+            "max_agent_steps": max_agent_steps,
+            "timeout_seconds": timeout_seconds,
+            "retry_delay_seconds": retry_delay_seconds,
+            "duration_ms": duration_ms,
+            "input_ref": input_ref,
+            "output_ref": output_ref,
+            "error_type": error_type,
+        }
+        fields.update({key: value for key, value in optional_fields.items() if value is not None})
+        cls._emit(AGENT_RUNTIME_LOGGER_NAME, logging.INFO, "agent_runtime_step", fields)
 
     @classmethod
     def llm_provider_resolved(cls, *, provider: str) -> None:

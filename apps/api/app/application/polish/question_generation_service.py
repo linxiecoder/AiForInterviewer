@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from time import perf_counter, sleep
 from typing import Any
 
+from app.application.common.logging import LogUtil
+from app.application.llm.errors import (
+    LlmTransportConfigurationError,
+    LlmTransportResponseError,
+    LlmTransportUnavailableError,
+)
 from app.application.llm.ports import LlmTransport
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
@@ -98,6 +105,13 @@ class QuestionGenerationService:
                 blueprint=blueprint,
             )
             if validation_errors:
+                LogUtil.agent_runtime_step(
+                    task_type=self._runtime_policy.task_type,
+                    phase="parse_output",
+                    status="failed",
+                    input_ref=scope.progress_node_ref,
+                    error_type=",".join(validation_errors),
+                )
                 return QuestionGenerationResult(
                     succeeded=False,
                     draft=None,
@@ -107,6 +121,13 @@ class QuestionGenerationService:
                     progress_node_ref=scope.progress_node_ref,
                     evidence_refs=blueprint.evidence_refs,
                 )
+            LogUtil.agent_runtime_step(
+                task_type=self._runtime_policy.task_type,
+                phase="parse_output",
+                status="succeeded",
+                input_ref=scope.progress_node_ref,
+                output_ref=_clean(llm_result.result.get("trace_ref")) or None,
+            )
             question_text = str(llm_payload["question_text"]).strip()
             transport_kind = _clean(llm_result.result.get("transport"))
             is_fake_transport = transport_kind == "fake"
@@ -126,6 +147,13 @@ class QuestionGenerationService:
                 generation_metadata["fallback_reason"] = "fake_transport_configured"
         else:
             question_text = self._surface_question_builder(blueprint, scope)
+            LogUtil.agent_runtime_step(
+                task_type=self._runtime_policy.task_type,
+                phase="llm_call",
+                status="skipped",
+                input_ref=scope.progress_node_ref,
+                error_type="llm_transport_unavailable",
+            )
             generation_metadata = {
                 "llm_generation_mode": "deterministic_degraded_generation",
                 "fallback_reason": "llm_transport_unavailable",
@@ -214,19 +242,122 @@ def _generate_llm_question(
         prompt_version=runtime_policy.prompt_version,
         schema_id=runtime_policy.prompt_schema_id,
     )
-    try:
-        return transport.generate(request)
-    except Exception:
-        validation_errors = ("llm_transport_generation_failed",)
-        return QuestionGenerationResult(
-            succeeded=False,
-            draft=None,
-            blueprint=blueprint,
-            grounding_result=GroundingResult(False, validation_errors),
-            validation_errors=validation_errors,
-            progress_node_ref=scope.progress_node_ref,
-            evidence_refs=blueprint.evidence_refs,
+    max_retries = max(0, int(runtime_policy.llm_max_retries))
+    max_attempts = max_retries + 1
+    for attempt in range(1, max_attempts + 1):
+        started_at = perf_counter()
+        LogUtil.agent_runtime_step(
+            task_type=runtime_policy.task_type,
+            phase="llm_call",
+            status="started",
+            attempt=attempt,
+            max_attempts=max_attempts,
+            input_ref=scope.progress_node_ref,
         )
+        try:
+            result = transport.generate(request)
+        except LlmTransportConfigurationError:
+            return _llm_generation_failed(
+                blueprint=blueprint,
+                scope=scope,
+                validation_error="llm_transport_configuration_failed",
+                runtime_policy=runtime_policy,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                started_at=started_at,
+            )
+        except (LlmTransportUnavailableError, LlmTransportResponseError, TimeoutError) as exc:
+            error_type = exc.__class__.__name__
+            if attempt <= max_retries:
+                LogUtil.agent_runtime_step(
+                    task_type=runtime_policy.task_type,
+                    phase="llm_call",
+                    status="retry_scheduled",
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_delay_seconds=runtime_policy.llm_retry_backoff_seconds,
+                    duration_ms=round((perf_counter() - started_at) * 1000, 3),
+                    input_ref=scope.progress_node_ref,
+                    error_type=error_type,
+                )
+                sleep(runtime_policy.llm_retry_backoff_seconds)
+                continue
+            return _llm_generation_failed(
+                blueprint=blueprint,
+                scope=scope,
+                validation_error="llm_transport_generation_failed",
+                runtime_policy=runtime_policy,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                started_at=started_at,
+                error_type=error_type,
+            )
+        except Exception as exc:
+            return _llm_generation_failed(
+                blueprint=blueprint,
+                scope=scope,
+                validation_error="llm_transport_generation_failed",
+                runtime_policy=runtime_policy,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                started_at=started_at,
+                error_type=exc.__class__.__name__,
+            )
+        LogUtil.agent_runtime_step(
+            task_type=runtime_policy.task_type,
+            phase="llm_call",
+            status="succeeded",
+            attempt=attempt,
+            max_attempts=max_attempts,
+            duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            input_ref=scope.progress_node_ref,
+            output_ref=(result.trace_refs[0] if result.trace_refs else None),
+        )
+        return result
+
+    validation_errors = ("llm_transport_generation_failed",)
+    return QuestionGenerationResult(
+        succeeded=False,
+        draft=None,
+        blueprint=blueprint,
+        grounding_result=GroundingResult(False, validation_errors),
+        validation_errors=validation_errors,
+        progress_node_ref=scope.progress_node_ref,
+        evidence_refs=blueprint.evidence_refs,
+    )
+
+
+def _llm_generation_failed(
+    *,
+    blueprint: QuestionBlueprint,
+    scope: EvidenceScope,
+    validation_error: str,
+    runtime_policy: QuestionGenerationRuntimePolicy,
+    attempt: int,
+    max_attempts: int,
+    started_at: float,
+    error_type: str | None = None,
+) -> QuestionGenerationResult:
+    LogUtil.agent_runtime_step(
+        task_type=runtime_policy.task_type,
+        phase="llm_call",
+        status="failed",
+        attempt=attempt,
+        max_attempts=max_attempts,
+        duration_ms=round((perf_counter() - started_at) * 1000, 3),
+        input_ref=scope.progress_node_ref,
+        error_type=error_type or validation_error,
+    )
+    validation_errors = (validation_error,)
+    return QuestionGenerationResult(
+        succeeded=False,
+        draft=None,
+        blueprint=blueprint,
+        grounding_result=GroundingResult(False, validation_errors),
+        validation_errors=validation_errors,
+        progress_node_ref=scope.progress_node_ref,
+        evidence_refs=blueprint.evidence_refs,
+    )
 
 
 def _parse_llm_question_payload(

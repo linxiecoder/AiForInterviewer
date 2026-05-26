@@ -16,6 +16,8 @@ class QuestionGenerationRuntimePolicy:
     prompt_schema_version: str = "v2"
     task_type: str = "polish_question_generation"
     contract_ids: tuple[str, ...] = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
+    llm_max_retries: int = 2
+    llm_retry_backoff_seconds: float = 0.25
     candidate_statuses: frozenset[str] = field(default_factory=lambda: frozenset({"accepted", "passed"}))
     candidate_types: frozenset[str] = field(
         default_factory=lambda: frozenset(

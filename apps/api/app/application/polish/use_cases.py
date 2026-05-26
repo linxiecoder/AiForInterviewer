@@ -8,6 +8,7 @@ from dataclasses import replace
 from hashlib import sha256
 from typing import Any
 
+from app.application.common.logging import LogUtil
 from app.application.common.result import ApplicationResult
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
@@ -350,6 +351,12 @@ class PolishUseCases:
                 completed_focus_refs=completed_focus_refs,
             )
             try:
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="started",
+                    input_ref=requested_progress_node_ref,
+                )
                 graph_status = self._ai_orchestration_facade.start_polish_question_generation(
                     owner_id=command.owner_id,
                     actor_id=command.actor_id,
@@ -360,8 +367,22 @@ class PolishUseCases:
                 )
             except GraphDisabledError:
                 graph_fallback_reason = "graph_disabled"
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="fallback",
+                    input_ref=requested_progress_node_ref,
+                    error_type="GraphDisabledError",
+                )
                 graph_status = None
             except RuntimeValidationError:
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="failed",
+                    input_ref=requested_progress_node_ref,
+                    error_type="RuntimeValidationError",
+                )
                 return ApplicationResult(
                     error=DomainError(
                         code="validation_failed",
@@ -370,6 +391,13 @@ class PolishUseCases:
                     )
                 )
             except RuntimeConflictError:
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="failed",
+                    input_ref=requested_progress_node_ref,
+                    error_type="RuntimeConflictError",
+                )
                 return ApplicationResult(
                     error=DomainError(
                         code="validation_failed",
@@ -378,6 +406,13 @@ class PolishUseCases:
                     )
                 )
             except RuntimePolicyError:
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="failed",
+                    input_ref=requested_progress_node_ref,
+                    error_type="RuntimePolicyError",
+                )
                 return ApplicationResult(
                     error=DomainError(
                         code="validation_failed",
@@ -385,11 +420,25 @@ class PolishUseCases:
                         details={"reason": "runtime_policy_blocked"},
                     )
                 )
-            except Exception:
+            except Exception as exc:
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="failed",
+                    input_ref=requested_progress_node_ref,
+                    error_type=exc.__class__.__name__,
+                )
                 return ApplicationResult(
                     error=DomainError(code="generation_failed", message="Polish question graph failed")
                 )
             if graph_status is not None:
+                LogUtil.agent_runtime_step(
+                    task_type=self._question_generation_policy.task_type,
+                    phase="graph_start",
+                    status="succeeded",
+                    input_ref=requested_progress_node_ref,
+                    output_ref=graph_status.agent_run_id,
+                )
                 candidate_payload = _graph_status_candidate_payload(
                     graph_status,
                     runtime_policy=self._question_generation_policy,
