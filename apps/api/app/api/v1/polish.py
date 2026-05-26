@@ -27,6 +27,7 @@ from app.api.deps import (
     get_db_session_factory,
     get_llm_transport,
     get_question_generation_runtime_policy,
+    get_question_generation_runtime_policy_resolver,
     require_authenticated_actor,
 )
 from app.api.envelope import success_envelope
@@ -55,7 +56,10 @@ from app.application.polish.feedback_reserved import (
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
-from app.application.polish.question_generation_policy import QuestionGenerationRuntimePolicy
+from app.application.polish.question_generation_policy import (
+    QuestionGenerationRuntimePolicy,
+    QuestionGenerationRuntimePolicyResolver,
+)
 from app.application.polish.question_generation_service import QuestionGenerationService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
@@ -255,12 +259,16 @@ async def create_polish_question_task(
     llm_transport: LlmTransport = Depends(get_llm_transport),
     ai_orchestration_facade: AiOrchestrationFacade | None = Depends(get_ai_orchestration_facade),
     question_generation_policy: QuestionGenerationRuntimePolicy = Depends(get_question_generation_runtime_policy),
+    question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver = Depends(
+        get_question_generation_runtime_policy_resolver
+    ),
 ) -> Any:
     use_cases = _use_cases(
         session_factory,
         llm_transport,
         ai_orchestration_facade=ai_orchestration_facade,
         question_generation_policy=question_generation_policy,
+        question_generation_policy_resolver=question_generation_policy_resolver,
     )
     result = await run_in_threadpool(
         use_cases.create_question_task,
@@ -491,6 +499,7 @@ def _use_cases(
     *,
     ai_orchestration_facade: AiOrchestrationFacade | None = None,
     question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
+    question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver | None = None,
 ) -> PolishUseCases:
     return PolishUseCases(
         polish_repository=SqlAlchemyPolishRepository(session_factory),
@@ -504,6 +513,7 @@ def _use_cases(
             runtime_policy=question_generation_policy,
         ),
         question_generation_policy=question_generation_policy,
+        question_generation_policy_resolver=question_generation_policy_resolver,
         ai_orchestration_facade=ai_orchestration_facade,
     )
 

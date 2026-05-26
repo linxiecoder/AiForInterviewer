@@ -183,6 +183,12 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "prompt_schema_version",
         "prompt_policy_version",
         "prompt_policy_source",
+        "prompt_policy_source_type",
+        "prompt_policy_source_version",
+        "prompt_policy_source_chain",
+        "prompt_policy_fallback",
+        "prompt_policy_resolution_context",
+        "prompt_policy_item_sources",
         "prompt_input_digest",
         "prompt_evidence_refs",
         "prompt_safety_summary",
@@ -195,6 +201,22 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
                 "prompt_schema_version": _string_or_none(payload.get("prompt_schema_version"), max_chars=80),
                 "prompt_policy_version": _string_or_none(payload.get("prompt_policy_version"), max_chars=120),
                 "prompt_policy_source": _string_or_none(payload.get("prompt_policy_source"), max_chars=120),
+                "prompt_policy_source_type": _string_or_none(
+                    payload.get("prompt_policy_source_type"), max_chars=120
+                ),
+                "prompt_policy_source_version": _string_or_none(
+                    payload.get("prompt_policy_source_version"), max_chars=120
+                ),
+                "prompt_policy_source_chain": _string_list(
+                    payload.get("prompt_policy_source_chain"), max_item_chars=160
+                ),
+                "prompt_policy_fallback": _bool_or_false(payload.get("prompt_policy_fallback")),
+                "prompt_policy_resolution_context": _safe_string_map(
+                    payload.get("prompt_policy_resolution_context")
+                ),
+                "prompt_policy_item_sources": _safe_nested_string_map(
+                    payload.get("prompt_policy_item_sources")
+                ),
                 "prompt_input_digest": _string_or_none(payload.get("prompt_input_digest"), max_chars=160),
                 "prompt_evidence_refs": _string_list(payload.get("prompt_evidence_refs"), max_item_chars=160),
                 "prompt_safety_summary": _safe_prompt_safety_summary(payload.get("prompt_safety_summary")),
@@ -258,6 +280,40 @@ def question_metadata_to_dict(raw: object) -> dict[str, Any]:
         except Exception:
             return empty_question_metadata().to_dict()
     return normalize_question_metadata(raw)
+
+
+def _safe_string_map(
+    raw: object,
+    *,
+    max_items: int = 24,
+    max_key_chars: int = 80,
+    max_value_chars: int = 160,
+) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    safe: dict[str, str] = {}
+    for key, value in raw.items():
+        if len(safe) >= max_items:
+            break
+        safe_key = _string_or_none(key, max_chars=max_key_chars)
+        safe_value = _string_or_none(value, max_chars=max_value_chars)
+        if safe_key and safe_value:
+            safe[safe_key] = safe_value
+    return safe
+
+
+def _safe_nested_string_map(raw: object) -> dict[str, dict[str, str]]:
+    if not isinstance(raw, dict):
+        return {}
+    safe: dict[str, dict[str, str]] = {}
+    for key, value in raw.items():
+        if len(safe) >= 24:
+            break
+        safe_key = _string_or_none(key, max_chars=80)
+        if not safe_key or not isinstance(value, dict):
+            continue
+        safe[safe_key] = _safe_string_map(value, max_items=8, max_key_chars=80, max_value_chars=160)
+    return safe
 
 
 def _metadata_payload(raw: object) -> dict[str, Any]:

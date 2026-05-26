@@ -17,7 +17,10 @@ from app.application.ai_runtime.registry import AgentGraphRegistry
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.application.polish.commands import CreatePolishQuestionTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback, PolishQuestion, PolishSession, PolishTaskStatus
-from app.application.polish.question_generation_policy import QuestionGenerationRuntimePolicy
+from app.application.polish.question_generation_policy import (
+    QuestionGenerationRuntimePolicy,
+    QuestionGenerationRuntimePolicyResolver,
+)
 from app.application.polish.use_cases import PolishUseCases
 from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.jobs.entities import Job, JobVersion
@@ -409,6 +412,7 @@ def _use_cases(
     ai_orchestration_facade: object | None,
     progress_tree_state: dict[str, Any] | None = None,
     question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
+    question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver | None = None,
 ) -> tuple[PolishUseCases, _PolishRepository]:
     now = utc_now()
     resume_id = "res_pr5_q2"
@@ -500,6 +504,7 @@ def _use_cases(
         job_repository=_JobRepository(job, job_version),
         ai_orchestration_facade=ai_orchestration_facade,
         question_generation_policy=question_generation_policy,
+        question_generation_policy_resolver=question_generation_policy_resolver,
     )
     return use_cases, polish_repository
 

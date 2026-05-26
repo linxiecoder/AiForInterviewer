@@ -49,7 +49,11 @@ from app.application.polish.feedback_reserved import build_reserved_feedback_art
 from app.application.polish.ports import PolishRepository
 from app.application.polish.question_generation_policy import (
     DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+    QuestionGenerationPolicyResolutionContext,
     QuestionGenerationRuntimePolicy,
+    QuestionGenerationRuntimePolicyResolver,
+    resolve_question_generation_runtime_policy,
+    with_question_generation_policy_resolution,
 )
 from app.application.polish.question_generation_service import QuestionGenerationResult, QuestionGenerationService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
@@ -141,6 +145,7 @@ class PolishUseCases:
         ai_orchestration_facade: AiOrchestrationFacade | None = None,
         question_generation_service: QuestionGenerationService | None = None,
         question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
+        question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
@@ -154,7 +159,35 @@ class PolishUseCases:
         self._question_generation_service = question_generation_service or QuestionGenerationService(
             runtime_policy=self._question_generation_policy
         )
+        self._question_generation_policy_resolver = (
+            question_generation_policy_resolver or resolve_question_generation_runtime_policy
+        )
         self._ai_orchestration_facade = ai_orchestration_facade
+
+    def _resolve_question_generation_policy(
+        self,
+        *,
+        command: CreatePolishQuestionTaskCommand,
+        session: PolishSession,
+        requested_progress_node_ref: str | None,
+    ) -> QuestionGenerationRuntimePolicy:
+        context = QuestionGenerationPolicyResolutionContext(
+            owner_id=command.owner_id,
+            actor_id=command.actor_id,
+            tenant_id=command.owner_id,
+            session_id=command.session_id,
+            job_id=session.job_id,
+            job_version_id=session.job_version_id,
+            generation_mode=_question_generation_mode(command),
+            requested_progress_node_ref=requested_progress_node_ref,
+            selected_progress_node_ref=command.selected_progress_node_ref,
+        )
+        resolved = self._question_generation_policy_resolver(context, self._question_generation_policy)
+        if not isinstance(resolved, QuestionGenerationRuntimePolicy):
+            raise RuntimePolicyError("question generation policy resolver returned invalid policy")
+        if not resolved.resolution_context:
+            resolved = with_question_generation_policy_resolution(resolved, context)
+        return resolved
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
@@ -337,6 +370,20 @@ class PolishUseCases:
                     details={"field": "progress_node_ref"},
                 )
             )
+        try:
+            runtime_policy = self._resolve_question_generation_policy(
+                command=command,
+                session=session,
+                requested_progress_node_ref=requested_progress_node_ref,
+            )
+        except RuntimePolicyError:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Polish question runtime policy resolution failed",
+                    details={"reason": "runtime_policy_resolution_failed"},
+                )
+            )
         completed_focus_refs = _combined_completed_focus_refs(
             command.completed_focus_refs,
             detail.progress_tree_state,
@@ -352,7 +399,7 @@ class PolishUseCases:
             )
             try:
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="started",
                     input_ref=requested_progress_node_ref,
@@ -368,7 +415,7 @@ class PolishUseCases:
             except GraphDisabledError:
                 graph_fallback_reason = "graph_disabled"
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="fallback",
                     input_ref=requested_progress_node_ref,
@@ -377,7 +424,7 @@ class PolishUseCases:
                 graph_status = None
             except RuntimeValidationError:
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="failed",
                     input_ref=requested_progress_node_ref,
@@ -392,7 +439,7 @@ class PolishUseCases:
                 )
             except RuntimeConflictError:
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="failed",
                     input_ref=requested_progress_node_ref,
@@ -407,7 +454,7 @@ class PolishUseCases:
                 )
             except RuntimePolicyError:
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="failed",
                     input_ref=requested_progress_node_ref,
@@ -422,7 +469,7 @@ class PolishUseCases:
                 )
             except Exception as exc:
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="failed",
                     input_ref=requested_progress_node_ref,
@@ -433,7 +480,7 @@ class PolishUseCases:
                 )
             if graph_status is not None:
                 LogUtil.agent_runtime_step(
-                    task_type=self._question_generation_policy.task_type,
+                    task_type=runtime_policy.task_type,
                     phase="graph_start",
                     status="succeeded",
                     input_ref=requested_progress_node_ref,
@@ -441,7 +488,7 @@ class PolishUseCases:
                 )
                 candidate_payload = _graph_status_candidate_payload(
                     graph_status,
-                    runtime_policy=self._question_generation_policy,
+                    runtime_policy=runtime_policy,
                 )
                 if candidate_payload is not None:
                     try:
@@ -454,7 +501,7 @@ class PolishUseCases:
                             candidate=candidate_payload,
                             progress_node_ref=requested_progress_node_ref,
                             trace_refs=graph_status.trace_refs,
-                            contract_ids=self._question_generation_policy.contract_ids,
+                            contract_ids=runtime_policy.contract_ids,
                         )
                         write_result = AgentPersistenceHandoff().write_question_result(
                             plan,
@@ -466,7 +513,7 @@ class PolishUseCases:
                             graph_status,
                             requested_progress_node_ref=requested_progress_node_ref,
                             created_at=now,
-                            runtime_policy=self._question_generation_policy,
+                            runtime_policy=runtime_policy,
                         )
                         self._polish_repository.add_task(
                             task,
@@ -504,7 +551,7 @@ class PolishUseCases:
                     graph_status,
                     requested_progress_node_ref=requested_progress_node_ref,
                     created_at=now,
-                    runtime_policy=self._question_generation_policy,
+                    runtime_policy=runtime_policy,
                 )
                 self._polish_repository.add_task(
                     task,
@@ -533,6 +580,7 @@ class PolishUseCases:
             state=detail.progress_tree_state,
             requested_ref=requested_progress_node_ref,
             follow_up_context=follow_up_context,
+            runtime_policy=runtime_policy,
         )
         if not question_generation_result.succeeded or question_generation_result.draft is None:
             task = _polish_question_generation_validation_failed_task_status(
@@ -540,7 +588,7 @@ class PolishUseCases:
                 result=question_generation_result,
                 requested_progress_node_ref=requested_progress_node_ref,
                 created_at=now,
-                runtime_policy=self._question_generation_policy,
+                runtime_policy=runtime_policy,
             )
             self._polish_repository.add_task(
                 task,
@@ -612,9 +660,9 @@ class PolishUseCases:
         )
         task = PolishTaskStatus(
             ai_task_id=task_id,
-            task_type=self._question_generation_policy.task_type,
+            task_type=runtime_policy.task_type,
             status=AiTaskStatus.SUCCEEDED,
-            contract_ids=self._question_generation_policy.contract_ids,
+            contract_ids=runtime_policy.contract_ids,
             retryable=False,
             result_ref=TraceRef(trace_ref_id=question_id, trace_type="question", created_at=now),
             user_visible_status="题目已生成",

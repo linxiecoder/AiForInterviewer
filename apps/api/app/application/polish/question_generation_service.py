@@ -72,7 +72,9 @@ class QuestionGenerationService:
         state: dict[str, Any],
         requested_ref: str,
         follow_up_context: dict[str, Any] | None = None,
+        runtime_policy: QuestionGenerationRuntimePolicy | None = None,
     ) -> QuestionGenerationResult:
+        policy = runtime_policy or self._runtime_policy
         node = _resolve_progress_node(plan=plan, state=state, requested_ref=requested_ref)
         if node is None:
             return _validation_failed("progress_node_not_found", progress_node_ref=requested_ref)
@@ -82,11 +84,11 @@ class QuestionGenerationService:
             state=state,
             node=node,
             requested_ref=requested_ref,
-            source_priority_policy=self._runtime_policy.source_priority_by_purpose,
+            source_priority_policy=policy.source_priority_by_purpose,
         )
         blueprint = build_question_blueprint(
             scope,
-            question_kind_taxonomy=self._runtime_policy.question_kind_taxonomy,
+            question_kind_taxonomy=policy.question_kind_taxonomy,
         )
         is_follow_up = isinstance(follow_up_context, dict)
         prompt_asset = (
@@ -94,13 +96,13 @@ class QuestionGenerationService:
                 blueprint,
                 scope,
                 follow_up_context=follow_up_context or {},
-                runtime_policy=self._runtime_policy,
+                runtime_policy=policy,
             )
             if is_follow_up
-            else build_question_prompt_asset(blueprint, scope, runtime_policy=self._runtime_policy)
+            else build_question_prompt_asset(blueprint, scope, runtime_policy=policy)
         )
-        prompt_metadata = build_question_prompt_metadata(prompt_asset, runtime_policy=self._runtime_policy)
-        prompt_task_type = _clean(prompt_asset.get("task_type")) or self._runtime_policy.task_type
+        prompt_metadata = build_question_prompt_metadata(prompt_asset, runtime_policy=policy)
+        prompt_task_type = _clean(prompt_asset.get("task_type")) or policy.task_type
         question_pattern = "follow_up_targeted" if is_follow_up else blueprint.question_kind
         follow_up_metadata = _follow_up_generation_metadata(follow_up_context, prompt_asset) if is_follow_up else {}
         llm_payload: dict[str, Any] | None = None
@@ -112,7 +114,7 @@ class QuestionGenerationService:
                 prompt_asset=prompt_asset,
                 blueprint=blueprint,
                 scope=scope,
-                runtime_policy=self._runtime_policy,
+                runtime_policy=policy,
             )
             if isinstance(llm_result, QuestionGenerationResult):
                 return llm_result
@@ -122,7 +124,7 @@ class QuestionGenerationService:
             )
             if validation_errors:
                 LogUtil.agent_runtime_step(
-                    task_type=self._runtime_policy.task_type,
+                    task_type=policy.task_type,
                     phase="parse_output",
                     status="failed",
                     input_ref=scope.progress_node_ref,
@@ -138,7 +140,7 @@ class QuestionGenerationService:
                     evidence_refs=blueprint.evidence_refs,
                 )
             LogUtil.agent_runtime_step(
-                task_type=self._runtime_policy.task_type,
+                task_type=policy.task_type,
                 phase="parse_output",
                 status="succeeded",
                 input_ref=scope.progress_node_ref,
@@ -149,7 +151,7 @@ class QuestionGenerationService:
             is_fake_transport = transport_kind == "fake"
             generation_metadata = {
                 "llm_task_type": prompt_task_type,
-                "prompt_version": self._runtime_policy.prompt_version,
+                "prompt_version": policy.prompt_version,
                 "llm_output_validation_status": "valid",
                 "llm_generation_mode": (
                     "deterministic_fake_transport" if is_fake_transport else "provider_structured_json"
@@ -168,7 +170,7 @@ class QuestionGenerationService:
                 else self._surface_question_builder(blueprint, scope)
             )
             LogUtil.agent_runtime_step(
-                task_type=self._runtime_policy.task_type,
+                task_type=policy.task_type,
                 phase="llm_call",
                 status="skipped",
                 input_ref=scope.progress_node_ref,

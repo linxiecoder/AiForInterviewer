@@ -11,7 +11,10 @@ from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback
 from app.application.polish.question_generation_prompts import QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE
-from app.application.polish.question_generation_policy import QuestionGenerationRuntimePolicy
+from app.application.polish.question_generation_policy import (
+    QuestionGenerationPolicyResolutionContext,
+    QuestionGenerationRuntimePolicy,
+)
 from app.application.polish.question_generation_service import QuestionGenerationService
 from app.application.polish.question_metadata import normalize_question_metadata
 from app.domain.shared.clock import utc_now
@@ -666,6 +669,81 @@ def test_question_task_metadata_uses_business_state_not_prototype_markers() -> N
     assert "local_blueprint_renderer" not in serialized_metadata
 
 
+def test_question_task_default_policy_marks_fallback_source_and_resolution_context() -> None:
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert repository.questions
+    metadata = repository.questions[0].question_metadata
+    assert metadata["prompt_policy_source"] == "fallback_default"
+    assert metadata["prompt_policy_source_type"] == "fallback_default"
+    assert metadata["prompt_policy_fallback"] is True
+    context = metadata["prompt_policy_resolution_context"]
+    assert context["owner_id"] == OWNER_ID
+    assert context["actor_id"] == ACTOR_ID
+    assert context["tenant_id"] == OWNER_ID
+    assert context["session_id"] == SESSION_ID
+    assert context["job_id"] == "job_pr5_q2"
+    assert context["job_version_id"] == "jobver_pr5_q2"
+    assert context["generation_mode"] == "new_question"
+    assert context["requested_progress_node_ref"] == NODE_REF
+    item_sources = metadata["prompt_policy_item_sources"]
+    assert item_sources["contract_ids"] == {
+        "source": "python_default",
+        "version": "polish_question_generation_policy.v1",
+        "override": "none",
+    }
+    assert item_sources["prompt_schema_id"]["source"] == "python_default"
+    assert item_sources["source_priority_by_purpose"]["override"] == "none"
+
+
+def test_question_task_uses_custom_policy_resolver_for_new_question() -> None:
+    seen_contexts: list[QuestionGenerationPolicyResolutionContext] = []
+
+    def resolver(
+        context: QuestionGenerationPolicyResolutionContext,
+        base_policy: QuestionGenerationRuntimePolicy | None,
+    ) -> QuestionGenerationRuntimePolicy:
+        seen_contexts.append(context)
+        assert base_policy is not None
+        return QuestionGenerationRuntimePolicy(
+            policy_version="tenant-job-policy.v2",
+            prompt_asset_id="tenant_job_question_generation",
+            prompt_version="tenant_job_question_prompt.v2",
+            prompt_schema_id="tenant_job_question_output_v2",
+            prompt_schema_version="v2",
+            task_type="tenant_job_question_generation",
+            contract_ids=("P-TENANT-JOB-QUESTION", "P-TENANT-SHARED"),
+            source="tenant_job_policy_resolver",
+            source_type="tenant_job_resolver",
+            source_version="tenant-policy-registry.v2",
+            source_chain=("app_state.question_generation_runtime_policy_resolver",),
+            fallback=False,
+        )
+
+    use_cases, repository = _use_cases(
+        ai_orchestration_facade=None,
+        question_generation_policy_resolver=resolver,
+    )
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert seen_contexts
+    assert seen_contexts[0].job_id == "job_pr5_q2"
+    assert seen_contexts[0].job_version_id == "jobver_pr5_q2"
+    assert result.value.contract_ids == ("P-TENANT-JOB-QUESTION", "P-TENANT-SHARED")
+    metadata = repository.questions[0].question_metadata
+    assert metadata["prompt_asset_version"] == "tenant_job_question_prompt.v2"
+    assert metadata["prompt_schema_id"] == "tenant_job_question_output_v2"
+    assert metadata["prompt_policy_source"] == "tenant_job_policy_resolver"
+    assert metadata["prompt_policy_source_type"] == "tenant_job_resolver"
+    assert metadata["prompt_policy_fallback"] is False
+    assert metadata["prompt_policy_resolution_context"]["job_id"] == "job_pr5_q2"
+
+
 def test_question_task_status_uses_injected_runtime_policy_contract_ids() -> None:
     policy = QuestionGenerationRuntimePolicy(
         policy_version="tenant-test-policy.v9",
@@ -686,6 +764,62 @@ def test_question_task_status_uses_injected_runtime_policy_contract_ids() -> Non
     assert result.value.contract_ids == ("P-TENANT-POLISH-QUESTION", "P-TENANT-SHARED")
     assert repository.questions
     assert repository.questions[0].question_metadata["prompt_policy_version"] == "tenant-test-policy.v9"
+
+
+def test_follow_up_question_task_uses_custom_policy_resolver() -> None:
+    def resolver(
+        context: QuestionGenerationPolicyResolutionContext,
+        base_policy: QuestionGenerationRuntimePolicy | None,
+    ) -> QuestionGenerationRuntimePolicy:
+        assert context.generation_mode in {"new_question", "follow_up"}
+        return QuestionGenerationRuntimePolicy(
+            policy_version="tenant-follow-policy.v3",
+            prompt_asset_id="tenant_follow_question_generation",
+            prompt_version="tenant_follow_question_prompt.v3",
+            prompt_schema_id="tenant_follow_question_output_v3",
+            prompt_schema_version="v3",
+            task_type="tenant_follow_question_generation",
+            contract_ids=("P-TENANT-FOLLOW-QUESTION", "P-TENANT-SHARED"),
+            source="tenant_follow_policy_resolver",
+            source_type="tenant_job_resolver",
+            source_version="tenant-policy-registry.v3",
+            source_chain=("app_state.question_generation_runtime_policy_resolver",),
+            fallback=False,
+        )
+
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(
+        ai_orchestration_facade=None,
+        question_generation_policy_resolver=resolver,
+    )
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(repository, parent_question.question_id)
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value.contract_ids == ("P-TENANT-FOLLOW-QUESTION", "P-TENANT-SHARED")
+    request = transport.requests[0]
+    assert request.contract_ids == ("P-TENANT-FOLLOW-QUESTION", "P-TENANT-SHARED")
+    assert request.task_type == "tenant_follow_question_generation.follow_up"
+    assert request.prompt_version == "tenant_follow_question_prompt.v3.follow_up"
+    assert request.schema_id == "tenant_follow_question_output_v3.follow_up"
+    metadata = repository.questions[-1].question_metadata
+    assert metadata["generation_mode"] == "follow_up"
+    assert metadata["prompt_policy_source"] == "tenant_follow_policy_resolver"
+    assert metadata["prompt_policy_resolution_context"]["generation_mode"] == "follow_up"
 
 
 def test_phase1_grounding_failure_persists_failed_task_without_question() -> None:

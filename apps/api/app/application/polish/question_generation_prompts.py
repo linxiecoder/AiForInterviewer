@@ -23,7 +23,6 @@ QUESTION_PROMPT_ASSET_VERSION = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.promp
 QUESTION_PROMPT_SCHEMA_ID = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.prompt_schema_id
 QUESTION_PROMPT_SCHEMA_VERSION = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.prompt_schema_version
 QUESTION_PROMPT_TASK_TYPE = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.task_type
-QUESTION_PROMPT_CONTRACT_IDS = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.contract_ids
 QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE = "polish_question_follow_up_generation"
 QUESTION_FOLLOW_UP_PROMPT_VERSION = "polish_question_follow_up_prompt.v1"
 QUESTION_FOLLOW_UP_PROMPT_SCHEMA_ID = "polish_question_follow_up_generation_output_v1"
@@ -82,6 +81,10 @@ def build_question_prompt_asset(
             "claim_mode": blueprint.claim_mode,
             "focus_dimension": blueprint.question_kind,
             "clarification_materials": list(blueprint.required_answer_materials),
+            "policy_version": policy.policy_version,
+            "policy_source": policy.source,
+            "policy_source_type": policy.source_type,
+            "policy_fallback": policy.fallback,
         },
         "evidence_refs": list(blueprint.evidence_refs),
         "evidence_summaries": evidence_summaries,
@@ -96,6 +99,9 @@ def build_question_prompt_asset(
         "task_type": policy.task_type,
         "policy_version": policy.policy_version,
         "policy_source": policy.source,
+        "policy_source_type": policy.source_type,
+        "policy_source_version": policy.source_version,
+        "policy_fallback": policy.fallback,
         "prompt": "\n".join(
             [
                 "[role]",
@@ -317,6 +323,20 @@ def build_question_prompt_metadata(
         "prompt_schema_version": str(prompt_asset.get("schema_version") or policy.prompt_schema_version),
         "prompt_policy_version": str(prompt_asset.get("policy_version") or policy.policy_version),
         "prompt_policy_source": str(prompt_asset.get("policy_source") or policy.source),
+        "prompt_policy_source_type": str(prompt_asset.get("policy_source_type") or policy.source_type),
+        "prompt_policy_source_version": str(prompt_asset.get("policy_source_version") or policy.source_version),
+        "prompt_policy_source_chain": list(policy.source_chain),
+        "prompt_policy_fallback": bool(prompt_asset.get("policy_fallback", policy.fallback)),
+        "prompt_policy_resolution_context": dict(policy.resolution_context),
+        "prompt_policy_item_sources": {
+            str(key): {
+                "source": str(value.get("source") or ""),
+                "version": str(value.get("version") or ""),
+                "override": str(value.get("override") or ""),
+            }
+            for key, value in policy.policy_item_sources.items()
+            if isinstance(value, dict)
+        },
         "prompt_input_digest": f"sha256:{digest}",
         "prompt_evidence_refs": list(evidence_refs) if isinstance(evidence_refs, list) else [],
         "prompt_safety_summary": {

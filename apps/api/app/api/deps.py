@@ -11,6 +11,9 @@ from app.application.job_match.ports import JobMatchAnalyzer
 from app.application.polish.question_generation_policy import (
     DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
     QuestionGenerationRuntimePolicy,
+    QuestionGenerationRuntimePolicyResolver,
+    mark_question_generation_runtime_policy_source,
+    resolve_question_generation_runtime_policy,
 )
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
@@ -68,8 +71,34 @@ async def get_ai_orchestration_facade(request: Request) -> AiOrchestrationFacade
 async def get_question_generation_runtime_policy(request: Request) -> QuestionGenerationRuntimePolicy:
     policy = getattr(request.app.state, "question_generation_runtime_policy", None)
     if isinstance(policy, QuestionGenerationRuntimePolicy):
-        return policy
-    return DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY
+        return mark_question_generation_runtime_policy_source(
+            policy,
+            source=policy.source or "app_state.question_generation_runtime_policy",
+            source_type="app_state",
+            fallback=False,
+            source_chain=("api_dependency:app_state.question_generation_runtime_policy",),
+            source_version=policy.policy_version,
+        )
+    return mark_question_generation_runtime_policy_source(
+        DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+        source="fallback_default",
+        source_type="fallback_default",
+        fallback=True,
+        source_chain=(
+            "api_dependency:default_question_generation_runtime_policy",
+            "python_default:QuestionGenerationRuntimePolicy",
+        ),
+        source_version=DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.policy_version,
+    )
+
+
+async def get_question_generation_runtime_policy_resolver(
+    request: Request,
+) -> QuestionGenerationRuntimePolicyResolver:
+    resolver = getattr(request.app.state, "question_generation_runtime_policy_resolver", None)
+    if callable(resolver):
+        return resolver
+    return resolve_question_generation_runtime_policy
 
 
 def get_current_actor(request: Request) -> CurrentActor | None:
