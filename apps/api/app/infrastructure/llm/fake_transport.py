@@ -139,7 +139,7 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
         clarification_needed = False
     elif not evidence_refs or claim_mode == "clarification_needed":
         question_text = (
-            f"围绕「{title}」，当前材料不足以支撑具体题干。请先补充一个真实项目材料，"
+            f"围绕「{title}」，当前材料不足以形成有效题干。请提供真实材料，"
             "必须包含业务入口、职责边界、失败案例和验证指标。"
         )
         difficulty = "clarification"

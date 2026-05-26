@@ -385,6 +385,124 @@ def test_question_service_anchors_skill_dimension_to_progress_node_title_not_exp
     assert validate_question_prompt_anchor_contract(prompt_asset) == ()
 
 
+def test_question_prompt_weak_resume_evidence_prefers_migration_design_not_project_clarification() -> None:
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _distributed_lock_weak_evidence_inputs()
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert len(transport.requests) == 1
+    prompt_asset = transport.requests[0].evidence_bundle
+    serialized_policy = json.dumps(
+        {
+            "prompt": prompt_asset["prompt"],
+            "developer_constraints": prompt_asset["developer_constraints"],
+            "input_contract": prompt_asset["input_contract"],
+            "refusal_and_low_confidence_policy": prompt_asset["refusal_and_low_confidence_policy"],
+            "examples": prompt_asset["examples"],
+        },
+        ensure_ascii=False,
+    )
+    assert "不要默认生成补充项目经历题" in serialized_policy
+    assert "弱证据时生成迁移设计题、改造题或机制理解题" in serialized_policy
+    assert "如果要在该项目中引入或改造该能力，你会如何设计" in serialized_policy
+
+    examples_by_name = {item["name"]: item for item in prompt_asset["examples"]}
+    low_evidence_pattern = json.dumps(examples_by_name["low_evidence_pattern"], ensure_ascii=False)
+    for forbidden_default in ("请补充一个相关项目经历", "请分享一个您亲自负责的相关场景", "请先补充背景"):
+        assert forbidden_default not in low_evidence_pattern
+
+    forbidden_patterns = prompt_asset["refusal_and_low_confidence_policy"]["forbidden_question_text_patterns"]
+    assert "请补充一个相关项目经历" in forbidden_patterns
+    assert "请分享一个您亲自负责的相关场景" in forbidden_patterns
+    assert "请先补充背景" in forbidden_patterns
+    assert "您能否补充一个需要用到某技术的项目案例" in forbidden_patterns
+
+    evidence_summaries = prompt_asset["input_data"]["evidence_summaries"]
+    assert any(
+        item["ref"] == "resume_project_004"
+        and "大文件异步处理管道" in item["excerpt"]
+        and "Redis" in item["excerpt"]
+        and "RocketMQ" in item["excerpt"]
+        for item in evidence_summaries
+    )
+    assert "Redis" in prompt_asset["evidence_selection_policy"]["engineering_mechanism_terms"]
+    assert "RocketMQ" in prompt_asset["evidence_selection_policy"]["engineering_mechanism_terms"]
+
+
+def test_question_prompt_clarification_is_limited_to_missing_resume_and_evidence_refs() -> None:
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _distributed_lock_weak_evidence_inputs()
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    prompt_asset = transport.requests[0].evidence_bundle
+    serialized_policy = json.dumps(
+        {
+            "prompt": prompt_asset["prompt"],
+            "developer_constraints": prompt_asset["developer_constraints"],
+            "input_contract": prompt_asset["input_contract"],
+            "refusal_and_low_confidence_policy": prompt_asset["refusal_and_low_confidence_policy"],
+            "examples": prompt_asset["examples"],
+        },
+        ensure_ascii=False,
+    )
+    assert "缺失岗位、简历、能力维度或证据时，必须在 missing_context 中标记，并生成澄清题" not in serialized_policy
+    assert "低证据时输出 clarification_needed" not in serialized_policy
+    clarification_policy = prompt_asset["refusal_and_low_confidence_policy"]["clarification_needed"]
+    assert "resume 和 evidence_refs 都不可用" in clarification_policy
+    assert "已有简历 evidence" in clarification_policy
+
+
+def test_question_service_rewrites_project_clarification_to_resume_based_migration_design() -> None:
+    transport = _ProjectClarificationQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _distributed_lock_weak_evidence_inputs()
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    question_text = result.draft.question_text
+    for forbidden in ("补充一个", "请分享一个您亲自负责", "请先补充", "未涉及分布式锁与事务消息"):
+        assert forbidden not in question_text
+    for fabricated_claim in ("你在项目中实现了分布式锁", "你主导过事务消息", "你已经落地了最终一致性"):
+        assert fabricated_claim not in question_text
+    assert "大文件异步处理管道" in question_text
+    assert "分布式锁与事务消息最终一致性设计" in question_text
+    assert "Redis" in question_text or "RocketMQ" in question_text
+    assert "你会如何设计" in question_text
+    assert "改造" in question_text or "引入" in question_text
+
+    metadata = result.draft.question_metadata
+    assert metadata["question_text_rewritten_from_clarification"] is True
+    assert metadata["question_text_rewrite_source_ref"] == "resume_project_004"
+    assert metadata["manual_review_required"] is True
+    assert metadata["llm_clarification_needed"] is True
+
+
 def test_follow_up_question_service_sends_follow_up_prompt_to_llm_transport() -> None:
     transport = _RecordingQuestionTransport()
     service = QuestionGenerationService(llm_transport=transport)
@@ -1184,6 +1302,29 @@ def _question_generation_inputs(
     return repository.session, context, plan, state
 
 
+def _distributed_lock_weak_evidence_inputs() -> tuple[Any, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="硬件测试 AI 平台：完成测试流程自动化和报告生成。",
+        node_title="分布式锁与事务消息最终一致性设计",
+        expected_capability=(
+            "高阶深度目标：考察候选人面对高并发库存扣减时的方案选型、异常处理与数据恢复能力"
+        ),
+    )
+    context["resume_snapshot"]["project_experiences"] = [
+        "硬件测试 AI 平台：完成测试流程自动化和报告生成。",
+        "设备数据看板：负责采集链路、指标聚合和异常告警。",
+        "混合检索：结合关键词和向量召回提升知识库问答命中率。",
+        "大文件异步处理管道：Redis记录分片状态，MinIO存储分片与完整文件，RocketMQ解耦后续解析与向量化流程。",
+    ]
+    context["job_snapshot"] = {
+        "job_id": "job_phase1_distributed_lock",
+        "job_version_id": "jobver_phase1_distributed_lock",
+        "requirements": [],
+        "responsibilities": [],
+    }
+    return session, context, plan, state
+
+
 def _follow_up_context() -> dict[str, Any]:
     return {
         "parent_question_id": "que_parent",
@@ -1324,6 +1465,43 @@ class _SoftGroundingWarningTransport:
             low_confidence_flags=("clarification_needed",),
             trace_refs=("trace_soft_grounding_warning",),
             evidence_refs=(),
+        )
+
+
+class _ProjectClarificationQuestionTransport(_SoftGroundingWarningTransport):
+    QUESTION_TEXT = (
+        "我看到您的简历中完成过硬件测试AI平台等项目，但未涉及分布式锁与事务消息。"
+        "您能否补充一个项目案例？"
+    )
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.requests.append(request)
+        input_data = request.evidence_bundle["input_data"]
+        generation_policy = input_data["generation_policy"]
+        evidence_refs = tuple(input_data["evidence_refs"])
+        return LlmTransportResult(
+            result={
+                "question_text": self.QUESTION_TEXT,
+                "question_kind": generation_policy["question_kind"],
+                "focus_dimension": generation_policy["focus_dimension"],
+                "difficulty": "clarification",
+                "skill_dimension": input_data["skill_dimension"],
+                "expected_signal": "能说明迁移设计、并发控制、事务消息和失败恢复策略。",
+                "follow_ups": ["锁超时如何处理？", "重复消费如何保证幂等？"],
+                "scoring_rubric": [
+                    {"dimension": "design", "signals": ["说明并发控制", "说明消息确认"]},
+                    {"dimension": "recovery", "signals": ["说明失败补偿", "说明状态回查"]},
+                ],
+                "missing_context": ["缺少直接分布式锁项目经历"],
+                "evidence_refs": list(evidence_refs),
+                "confidence": "low",
+                "clarification_needed": True,
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.LOW,
+            low_confidence_flags=("clarification_needed",),
+            trace_refs=("trace_project_clarification_question",),
+            evidence_refs=evidence_refs,
         )
 
 

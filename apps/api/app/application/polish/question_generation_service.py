@@ -47,6 +47,26 @@ UNSAFE_QUESTION_TEXT_MARKERS = (
     "token=",
     "secret=",
 )
+PROJECT_CLARIFICATION_MARKERS = (
+    "补充一个",
+    "请分享一个您亲自负责",
+    "请先补充",
+    "你是否有另一个项目",
+)
+ENGINEERING_EVIDENCE_TERMS = (
+    "Redis",
+    "RocketMQ",
+    "MQ",
+    "异步",
+    "分片",
+    "状态",
+    "MinIO",
+    "大文件",
+    "失败",
+    "重试",
+    "幂等",
+    "恢复",
+)
 
 
 @dataclass(frozen=True)
@@ -141,6 +161,7 @@ class QuestionGenerationService:
         llm_payload: dict[str, Any] | None = None
         llm_result: LlmTransportResult | None = None
         generation_metadata: dict[str, Any]
+        rewrite_metadata: dict[str, Any] = {}
         if self._llm_transport is not None:
             llm_result = _generate_llm_question(
                 transport=self._llm_transport,
@@ -217,6 +238,11 @@ class QuestionGenerationService:
                 "provider_status": "not_configured",
             }
         question_text = str(question_text).strip()
+        question_text, rewrite_metadata = _rewrite_project_clarification_question(
+            question_text,
+            scope=scope,
+            blueprint=blueprint,
+        )
         if not question_text:
             return _validation_failed("question_text_required", progress_node_ref=scope.progress_node_ref)
         if _contains_unsafe_question_text_marker(question_text):
@@ -278,6 +304,7 @@ class QuestionGenerationService:
                 **prompt_metadata,
                 **follow_up_metadata,
                 **generation_metadata,
+                **rewrite_metadata,
                 "question_kind": blueprint.question_kind,
                 "claim_mode": blueprint.claim_mode,
                 "llm_difficulty": llm_payload.get("difficulty") if llm_payload else None,
@@ -414,6 +441,88 @@ def _generate_llm_question(
         progress_node_ref=scope.progress_node_ref,
         evidence_refs=blueprint.evidence_refs,
     )
+
+
+def _rewrite_project_clarification_question(
+    question_text: str,
+    *,
+    scope: EvidenceScope,
+    blueprint: QuestionBlueprint,
+) -> tuple[str, dict[str, Any]]:
+    if not _looks_like_project_clarification_question(question_text):
+        return question_text, {}
+    source = _preferred_engineering_resume_source(scope.question_sources)
+    if source is None:
+        return question_text, {}
+
+    title = _clean(blueprint.node_title) or "当前能力点"
+    background = _project_background(source)
+    terms = _matched_engineering_terms(f"{source.title} {source.excerpt}")
+    mechanism_clause = (
+        f"使用{'、'.join(terms[:4])}等机制"
+        if terms
+        else "处理关键工程链路"
+    )
+    rewritten = (
+        f"基于你在{background}中{mechanism_clause}的经历，如果要围绕「{title}」做可靠性改造，"
+        "你会如何设计并发控制、消息确认、重复消费幂等和失败补偿？"
+        "请重点说明锁超时、消费者故障和状态回查时的恢复策略。"
+    )
+    return (
+        rewritten,
+        {
+            "question_text_rewritten_from_clarification": True,
+            "question_text_rewrite_reason": "project_clarification_to_migration_design",
+            "question_text_rewrite_source_ref": source.ref_id,
+        },
+    )
+
+
+def _looks_like_project_clarification_question(question_text: str) -> bool:
+    text = _clean(question_text)
+    if any(marker in text for marker in PROJECT_CLARIFICATION_MARKERS):
+        return True
+    return "未涉及" in text and "能否补充" in text
+
+
+def _preferred_engineering_resume_source(
+    sources: tuple[PolishQuestionSource, ...],
+) -> PolishQuestionSource | None:
+    candidates = [
+        source
+        for source in sources
+        if source.source_type == "resume_project" and (_clean(source.title) or _clean(source.excerpt))
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=_engineering_source_score)
+
+
+def _engineering_source_score(source: PolishQuestionSource) -> int:
+    text = f"{source.title} {source.excerpt}".lower()
+    return sum(1 for term in ENGINEERING_EVIDENCE_TERMS if term.lower() in text)
+
+
+def _matched_engineering_terms(text: str) -> list[str]:
+    normalized = text.lower()
+    matched: list[str] = []
+    for term in ENGINEERING_EVIDENCE_TERMS:
+        if term.lower() not in normalized:
+            continue
+        if term == "MQ" and any(item.endswith("MQ") for item in matched):
+            continue
+        matched.append(term)
+    return matched
+
+
+def _project_background(source: PolishQuestionSource) -> str:
+    raw = _clean(source.title) or _clean(source.excerpt) or "已有项目"
+    for separator in ("：", ":", "。", "；", ";", "\n"):
+        candidate = raw.split(separator, 1)[0].strip()
+        if candidate:
+            raw = candidate
+            break
+    return _compact_text(raw, limit=60)
 
 
 def _llm_generation_failed(
