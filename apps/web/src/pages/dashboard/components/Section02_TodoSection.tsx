@@ -27,7 +27,6 @@ const TODO_PRIORITY_META: Record<TodoItem["priority"], PriorityVisual> = {
     tagBg: "#fff1f0",
     tagText: "#a8071a",
     tagBorder: "#ffa39e",
-    // TODO: 与 design-evidence/组件库.png 对齐后，可按设计 token 替换具体色值
   },
   important: {
     label: DASHBOARD_PAGE_COPY.labels.important,
@@ -36,7 +35,6 @@ const TODO_PRIORITY_META: Record<TodoItem["priority"], PriorityVisual> = {
     tagBg: "#fff7e6",
     tagText: "#ad4e00",
     tagBorder: "#ffd591",
-    // TODO: 与 design-evidence/组件库.png 对齐后，可按设计 token 替换具体色值
   },
   normal: {
     label: DASHBOARD_PAGE_COPY.labels.normal,
@@ -45,7 +43,6 @@ const TODO_PRIORITY_META: Record<TodoItem["priority"], PriorityVisual> = {
     tagBg: "#e6f4ff",
     tagText: "#0958d9",
     tagBorder: "#91caff",
-    // TODO: 与 design-evidence/组件库.png 对齐后，可按设计 token 替换具体色值
   },
 };
 
