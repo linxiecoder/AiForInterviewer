@@ -102,7 +102,9 @@ def create_app(
     application.state.db_session_factory = db_session_factory
     application.state.llm_transport = build_llm_transport_from_env()
     application.state.job_match_analyzer = LlmJobMatchAnalyzer(application.state.llm_transport)
-    application.state.ai_orchestration_facade = _build_ai_orchestration_facade()
+    application.state.ai_orchestration_facade = _build_ai_orchestration_facade(
+        polish_question_llm_transport=application.state.llm_transport
+    )
     application.state.auth_runtime = auth_runtime or build_auth_runtime_from_env(
         cookie_path=resolved_settings.api_prefix
     )
@@ -113,10 +115,13 @@ def create_app(
     return application
 
 
-def _build_ai_orchestration_facade() -> AiOrchestrationFacade:
+def _build_ai_orchestration_facade(*, polish_question_llm_transport=None) -> AiOrchestrationFacade:
     flag_resolver = RuntimeFlagResolver()
     return AiOrchestrationFacade(
-        runner=FakeLangGraphRuntime(flag_resolver=flag_resolver),
+        runner=FakeLangGraphRuntime(
+            flag_resolver=flag_resolver,
+            polish_question_llm_transport=polish_question_llm_transport,
+        ),
         registry=AgentGraphRegistry.default(),
         flag_resolver=flag_resolver,
     )

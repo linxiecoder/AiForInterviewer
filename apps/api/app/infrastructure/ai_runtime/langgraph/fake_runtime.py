@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -29,10 +30,13 @@ from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
 )
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_NAME,
+    build_polish_question_candidate_from_draft,
     build_polish_question_graph_descriptor,
     execute_polish_question_agent,
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.llm.ports import LlmTransport
+from app.application.polish.question_generation_service import QuestionGenerationService
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
 from app.infrastructure.ai_runtime.langgraph.serializer import (
     LangGraphRuntimeSerializer,
@@ -50,8 +54,32 @@ class _FakeGraphState(TypedDict):
     formal_business_writes: int
 
 
+class _PolishQuestionGraphTransport:
+    def __init__(self, transport: LlmTransport, *, source_context: dict[str, Any]) -> None:
+        self._transport = transport
+        self._source_context = source_context
+
+    def generate(self, request):
+        evidence_bundle = request.evidence_bundle
+        if isinstance(evidence_bundle, dict):
+            input_data = evidence_bundle.get("input_data")
+            if isinstance(input_data, dict):
+                evidence_bundle = {
+                    **evidence_bundle,
+                    "input_data": {**input_data, "source_context": self._source_context},
+                }
+        return self._transport.generate(
+            replace(
+                request,
+                evidence_bundle=evidence_bundle,
+                graph_name=POLISH_QUESTION_GRAPH_NAME,
+                node_name="question_drafting",
+            )
+        )
+
+
 class FakeLangGraphRuntime:
-    """A provider-free, deterministic runtime implementing the PR3 runner port."""
+    """PR4 runtime shell with deterministic fallback and provider-ready question graph path."""
 
     _checkpoint_namespace = "pr4_fake_runtime"
     _polish_feedback_checkpoint_namespace = "pr6_polish_feedback_fake_runtime"
@@ -63,10 +91,12 @@ class FakeLangGraphRuntime:
         flag_resolver: RuntimeFlagResolver | None = None,
         checkpointer: RefsOnlyLangGraphCheckpointer | None = None,
         serializer: LangGraphRuntimeSerializer | None = None,
+        polish_question_llm_transport: LlmTransport | None = None,
     ) -> None:
         self._flag_resolver = flag_resolver or RuntimeFlagResolver()
         self._checkpointer = checkpointer or RefsOnlyLangGraphCheckpointer()
         self._serializer = serializer or LangGraphRuntimeSerializer()
+        self._polish_question_llm_transport = polish_question_llm_transport
         self._compiled_graph = self._compile_graph()
         self._statuses: dict[tuple[str, str], AgentRunStatus] = {}
         self._timelines: dict[tuple[str, str], list[AgentTimelineEvent]] = {}
@@ -309,6 +339,11 @@ class FakeLangGraphRuntime:
             runtime_flag_source=graph_decision.source,
             provider_enabled=runtime_gate["provider_gate_enabled"],
             provider_flag_source=str(runtime_gate["provider_gate_source"]),
+            provider_draft_operation=(
+                self._polish_question_provider_draft
+                if runtime_gate["provider_gate_enabled"]
+                else None
+            ),
         )
         candidate = execution.candidate
         candidate_ref = execution.candidate_ref
@@ -383,6 +418,87 @@ class FakeLangGraphRuntime:
         )
         self._serializer.serialize_run_result(result)
         return result
+
+    def _polish_question_provider_draft(
+        self,
+        *,
+        context: AgentRunContext,
+        command: AgentCommandEnvelope,
+        retrieved_context: dict[str, Any],
+        scenario: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self._polish_question_llm_transport is None:
+            raise RuntimePolicyError("polish question provider path requires an LLM transport")
+        snapshot = command.metadata.get("polish_question_context_snapshot")
+        if not isinstance(snapshot, dict):
+            raise RuntimePolicyError("polish question provider path requires a context snapshot")
+        progress_context = snapshot.get("progress_context")
+        progress_tree_plan = snapshot.get("progress_tree_plan")
+        progress_tree_state = snapshot.get("progress_tree_state")
+        if (
+            not isinstance(progress_context, dict)
+            or not isinstance(progress_tree_plan, dict)
+            or not isinstance(progress_tree_state, dict)
+        ):
+            raise RuntimePolicyError("polish question provider context snapshot is incomplete")
+        service = QuestionGenerationService(
+            llm_transport=_PolishQuestionGraphTransport(
+                self._polish_question_llm_transport,
+                source_context={
+                    "context_source": retrieved_context.get("context_source"),
+                    "context_source_version": retrieved_context.get("context_source_version"),
+                    **(
+                        retrieved_context.get("source_refs")
+                        if isinstance(retrieved_context.get("source_refs"), dict)
+                        else {}
+                    ),
+                },
+            )
+        )
+        result = service.generate(
+            session=None,
+            context=progress_context,
+            plan=progress_tree_plan,
+            state=progress_tree_state,
+            requested_ref=str(
+                snapshot.get("requested_progress_node_ref")
+                or retrieved_context.get("progress_node_ref")
+                or ""
+            ),
+            follow_up_context=(
+                snapshot.get("follow_up_context")
+                if isinstance(snapshot.get("follow_up_context"), dict)
+                and snapshot.get("follow_up_context")
+                else None
+            ),
+        )
+        if not result.succeeded or result.draft is None:
+            raise RuntimePolicyError(
+                "polish question provider generation failed: "
+                + ",".join(result.validation_errors or ("unknown",))
+            )
+        draft_metadata = result.draft.question_metadata
+        if (
+            draft_metadata.get("provider_status") == "fake_transport"
+            or str(draft_metadata.get("llm_generation_mode") or "").startswith("deterministic")
+        ):
+            raise RuntimePolicyError("polish question provider path requires a non-fake provider transport")
+        trace_refs = tuple(
+            str(ref)
+            for ref in draft_metadata.get("llm_trace_refs", ())
+            if str(ref).strip()
+        )
+        return {
+            "candidate": build_polish_question_candidate_from_draft(
+                owner_id=context.owner_id,
+                run_id=context.run_id,
+                ai_task_id=context.ai_task_id,
+                session_ref=str(retrieved_context.get("session_ref") or ""),
+                draft=result.draft,
+                scenario=scenario,
+                provider_trace_refs=trace_refs,
+            )
+        }
 
     def _record_polish_feedback_checkpoint(
         self, *, context: AgentRunContext, state: _FakeGraphState

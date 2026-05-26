@@ -483,6 +483,7 @@ class _FakeQuestionFacade:
         progress_node_refs: tuple[str, ...],
         completed_focus_refs: tuple[str, ...],
         idempotency_key: str,
+        context_snapshot: dict[str, Any] | None = None,
     ) -> _GraphStatus:
         self.calls.append(
             {
@@ -492,6 +493,7 @@ class _FakeQuestionFacade:
                 "progress_node_refs": progress_node_refs,
                 "completed_focus_refs": completed_focus_refs,
                 "idempotency_key": idempotency_key,
+                "context_snapshot": context_snapshot,
             }
         )
         if self.error is not None:

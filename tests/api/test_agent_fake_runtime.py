@@ -238,6 +238,43 @@ def test_execute_polish_question_agent_fails_when_max_steps_exhausted() -> None:
         )
 
 
+def test_execute_polish_question_agent_repairs_validation_failure_with_bounded_transform(
+    monkeypatch,
+) -> None:
+    original_drafting = question_graph._tool_question_drafting
+
+    def contaminated_drafting(**kwargs):
+        output = original_drafting(**kwargs)
+        candidate = dict(output["candidate"])
+        scenario = dict(candidate["scenario"])
+        scenario["forbidden_entities"] = ("硬件测试知识库",)
+        candidate["scenario"] = scenario
+        candidate["question_text"] = f"{candidate['question_text']} 请结合硬件测试知识库展开。"
+        candidate["quality_gate"] = question_graph.question_candidate_quality_gate(candidate)
+        return {**output, "candidate": candidate}
+
+    monkeypatch.setattr(question_graph, "_tool_question_drafting", contaminated_drafting)
+
+    execution = execute_polish_question_agent(
+        context=_context(),
+        command=_command(),
+        runtime_flag_source="test_override",
+        provider_enabled=False,
+        provider_flag_source="test_override",
+        config=PolishQuestionAgentConfig(max_retries=1),
+    )
+
+    repair_phase = next(
+        phase for phase in execution.metadata["phase_results"] if phase["phase"] == "repair_or_retry"
+    )
+    assert execution.status == "agent_orchestration_succeeded"
+    assert repair_phase["status"] == "repaired"
+    assert repair_phase["attempts"] == 1
+    assert execution.metadata["validator_result"]["passed"] is True
+    assert "硬件测试知识库" not in execution.candidate["question_text"]
+    assert execution.candidate["question_metadata"]["repair_strategy"] == "safe_grounding_transform"
+
+
 def test_fake_runtime_polish_question_candidate_payload_is_sanitized() -> None:
     runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     command = _command(

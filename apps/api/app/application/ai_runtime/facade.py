@@ -66,6 +66,7 @@ class AiOrchestrationFacade:
         progress_node_refs: tuple[str, ...],
         completed_focus_refs: tuple[str, ...],
         idempotency_key: str,
+        context_snapshot: dict[str, object] | None = None,
     ) -> AgentTaskStatusRef:
         return self._start_run(
             task_type="polish_question_generation",
@@ -74,6 +75,14 @@ class AiOrchestrationFacade:
             input_refs=(session_ref, *progress_node_refs, *completed_focus_refs),
             requested_outputs=("candidate_refs",),
             idempotency_key=idempotency_key,
+            command_metadata={
+                "polish_question_context_snapshot": context_snapshot,
+                "context_source": (context_snapshot or {}).get("context_source")
+                if isinstance(context_snapshot, dict)
+                else None,
+            }
+            if context_snapshot is not None
+            else None,
         )
 
     def start_polish_feedback_generation(
@@ -217,6 +226,7 @@ class AiOrchestrationFacade:
         input_refs: tuple[str, ...],
         requested_outputs: tuple[str, ...],
         idempotency_key: str,
+        command_metadata: dict[str, object] | None = None,
     ) -> AgentTaskStatusRef:
         descriptor = self._registry.get_graph_descriptor(task_type)
         self._registry.validate_requested_outputs(task_type, requested_outputs)
@@ -257,6 +267,7 @@ class AiOrchestrationFacade:
                 "graph_version": descriptor.graph_version,
                 "request_digest": request_digest,
                 "idempotency_key_hash": idempotency_key_hash,
+                **(command_metadata or {}),
             },
         )
         context = AgentRunContext(

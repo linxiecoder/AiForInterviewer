@@ -59,6 +59,7 @@ from app.application.polish.question_generation_service import QuestionGeneratio
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
+from app.application.polish.progress_evidence import select_progress_tree_evidence_chunks
 from app.application.polish.progress_prompts import (
     INITIAL_PROGRESS_TREE_PROMPT_CONTRACT,
     PROGRESS_TREE_STATE_REFRESH_PROMPT_CONTRACT,
@@ -389,6 +390,16 @@ class PolishUseCases:
             detail.progress_tree_state,
             progress_node_ref=requested_progress_node_ref,
         )
+        progress_context = _progress_context_with_completed_focus_refs(
+            detail.progress_context,
+            completed_focus_refs,
+        )
+        follow_up_context: dict[str, Any] | None = None
+        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
+            resolved_follow_up_context = _build_follow_up_generation_context(command=command, detail=detail)
+            if isinstance(resolved_follow_up_context, DomainError):
+                return ApplicationResult(error=resolved_follow_up_context)
+            follow_up_context = resolved_follow_up_context
         graph_fallback_reason: str | None = None
         if self._ai_orchestration_facade is not None:
             stable_idempotency_key = _stable_polish_question_generation_idempotency_key(
@@ -411,6 +422,15 @@ class PolishUseCases:
                     progress_node_refs=(requested_progress_node_ref,) if requested_progress_node_ref else (),
                     completed_focus_refs=completed_focus_refs,
                     idempotency_key=stable_idempotency_key,
+                    context_snapshot=_polish_question_graph_context_snapshot(
+                        command=command,
+                        detail=detail,
+                        progress_context=progress_context,
+                        requested_progress_node_ref=requested_progress_node_ref,
+                        completed_focus_refs=completed_focus_refs,
+                        follow_up_context=follow_up_context,
+                        runtime_policy=runtime_policy,
+                    ),
                 )
             except GraphDisabledError:
                 graph_fallback_reason = "graph_disabled"
@@ -563,16 +583,6 @@ class PolishUseCases:
 
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
-        progress_context = _progress_context_with_completed_focus_refs(
-            detail.progress_context,
-            completed_focus_refs,
-        )
-        follow_up_context: dict[str, Any] | None = None
-        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
-            resolved_follow_up_context = _build_follow_up_generation_context(command=command, detail=detail)
-            if isinstance(resolved_follow_up_context, DomainError):
-                return ApplicationResult(error=resolved_follow_up_context)
-            follow_up_context = resolved_follow_up_context
         question_generation_result = self._question_generation_service.generate(
             session=session,
             context=progress_context,
@@ -1221,6 +1231,110 @@ def _progress_context_with_completed_focus_refs(
         **progress_context,
         "completed_focus_refs": list(completed_focus_refs),
     }
+
+
+def _polish_question_graph_context_snapshot(
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    detail: PolishSessionDetail,
+    progress_context: dict[str, Any],
+    requested_progress_node_ref: str,
+    completed_focus_refs: tuple[str, ...],
+    follow_up_context: dict[str, Any] | None,
+    runtime_policy: QuestionGenerationRuntimePolicy,
+) -> dict[str, Any]:
+    session = detail.session
+    return {
+        "context_source": "use_case_repository_snapshot",
+        "context_source_version": "polish_question_graph_context.v1",
+        "session": {
+            "session_id": session.session_id,
+            "owner_id": session.owner_id,
+            "actor_id": session.actor_id,
+            "status": session.status,
+            "resume_id": session.resume_id,
+            "resume_version_id": session.resume_version_id,
+            "job_id": session.job_id,
+            "job_version_id": session.job_version_id,
+            "topic_id": session.topic_id,
+            "subtopic_id": session.subtopic_id,
+            "polish_theme": session.polish_theme,
+        },
+        "requested_progress_node_ref": requested_progress_node_ref,
+        "completed_focus_refs": list(completed_focus_refs),
+        "generation_mode": _question_generation_mode(command),
+        "request_refs": {
+            "progress_node_ref": _clean_question_request_text(command.progress_node_ref),
+            "selected_progress_node_ref": _clean_question_request_text(
+                command.selected_progress_node_ref
+            ),
+            "selected_primary_category_ref": _clean_question_request_text(
+                command.selected_primary_category_ref
+            ),
+            "selected_secondary_category_ref": _clean_question_request_text(
+                command.selected_secondary_category_ref
+            ),
+            "parent_question_id": _clean_question_request_text(command.parent_question_id),
+            "parent_answer_id": _clean_question_request_text(command.parent_answer_id),
+            "parent_feedback_id": _clean_question_request_text(command.parent_feedback_id),
+        },
+        "selected_category_path": list(_clean_question_request_list(command.selected_category_path)),
+        "exclude_question_refs": list(_clean_question_request_list(command.exclude_question_refs)),
+        "follow_up_context": follow_up_context or {},
+        "selected_evidence_summaries": _polish_question_graph_selected_evidence_summaries(
+            progress_context=progress_context,
+            progress_tree_plan=detail.progress_tree_plan,
+            progress_tree_state=detail.progress_tree_state,
+            requested_progress_node_ref=requested_progress_node_ref,
+            runtime_policy=runtime_policy,
+        ),
+        "progress_context": progress_context,
+        "progress_tree_plan": detail.progress_tree_plan,
+        "progress_tree_state": detail.progress_tree_state,
+        "context_digest": str(
+            detail.progress_tree_plan.get("context_digest")
+            or progress_context.get("content_digest")
+            or ""
+        ),
+        "runtime_policy": {
+            "task_type": runtime_policy.task_type,
+            "prompt_version": runtime_policy.prompt_version,
+            "prompt_schema_id": runtime_policy.prompt_schema_id,
+            "policy_version": runtime_policy.policy_version,
+            "source": runtime_policy.source,
+            "source_type": runtime_policy.source_type,
+            "source_chain": list(runtime_policy.source_chain),
+            "fallback": runtime_policy.fallback,
+        },
+    }
+
+
+def _polish_question_graph_selected_evidence_summaries(
+    *,
+    progress_context: dict[str, Any],
+    progress_tree_plan: dict[str, Any],
+    progress_tree_state: dict[str, Any],
+    requested_progress_node_ref: str,
+    runtime_policy: QuestionGenerationRuntimePolicy,
+) -> list[dict[str, Any]]:
+    selection = select_progress_tree_evidence_chunks(
+        progress_context,
+        purpose="next_question",
+        max_chunks=4,
+        max_chars=1800,
+        existing_plan=progress_tree_plan,
+        existing_state=progress_tree_state,
+        progress_node_ref=requested_progress_node_ref,
+        source_priority_policy=runtime_policy.source_priority_by_purpose,
+    )
+    return [
+        {
+            "ref": chunk.chunk_id,
+            "summary": chunk.text[:360],
+            "source_type": chunk.source_type,
+        }
+        for chunk in selection.selected_chunks
+    ]
 
 
 def _stable_polish_question_generation_idempotency_key(

@@ -15,6 +15,8 @@ from app.application.ai_runtime.contracts import (
 from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.ai_runtime.registry import AgentGraphRegistry
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.llm.errors import LlmTransportUnavailableError
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishQuestionTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback, PolishQuestion, PolishSession, PolishTaskStatus
 from app.application.polish.question_generation_policy import (
@@ -26,9 +28,10 @@ from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.jobs.entities import Job, JobVersion
 from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
-from app.domain.shared.enums import AiTaskStatus
+from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
 from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
+from app.infrastructure.llm.fake_transport import FakeLlmTransport
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -97,6 +100,16 @@ def test_create_question_task_starts_graph_when_facade_enabled() -> None:
     assert repository.tasks == [result.value]
     assert repository.task_targets == [SESSION_ID]
     assert blocker.calls == 0
+    call = facade.calls[0]
+    context_snapshot = call["context_snapshot"]
+    assert context_snapshot["context_source"] == "use_case_repository_snapshot"
+    assert context_snapshot["session"]["session_id"] == SESSION_ID
+    assert context_snapshot["session"]["resume_version_id"] == "resver_pr5_q2"
+    assert context_snapshot["session"]["job_version_id"] == "jobver_pr5_q2"
+    assert context_snapshot["requested_progress_node_ref"] == NODE_REF
+    assert context_snapshot["progress_context"]["resume_snapshot"]["resume_version_id"] == "resver_pr5_q2"
+    assert context_snapshot["progress_context"]["job_snapshot"]["job_version_id"] == "jobver_pr5_q2"
+    assert context_snapshot["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == NODE_REF
 
 
 def test_create_question_task_persists_fake_runtime_agent_candidate_payload() -> None:
@@ -131,6 +144,93 @@ def test_create_question_task_persists_fake_runtime_agent_candidate_payload() ->
     assert status.status == "agent_orchestration_succeeded"
     assert status.metadata["accepted_candidate_payload"] is True
     assert any(ref.startswith("question_candidate_ref_") for ref in status.output_refs)
+
+
+def test_create_question_task_provider_enabled_graph_uses_transport_and_repository_context() -> None:
+    flags = _enabled_question_graph_flags(provider_enabled=True)
+    transport = _RecordingQuestionProviderTransport()
+    runtime = FakeLangGraphRuntime(flag_resolver=flags, polish_question_llm_transport=transport)
+    facade = AiOrchestrationFacade(
+        runner=runtime,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=flags,
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 1
+    assert blocker.calls == 0
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    input_data = request.evidence_bundle["input_data"]
+    assert request.graph_name == "polish_question_graph"
+    assert request.node_name == "question_drafting"
+    assert input_data["progress_node"]["ref"] == NODE_REF
+    assert input_data["evidence_refs"]
+    assert input_data["source_context"]["context_source"] == "use_case_repository_snapshot"
+    assert input_data["source_context"]["session_ref"] == SESSION_ID
+    assert input_data["source_context"]["resume_version_id"] == "resver_pr5_q2"
+    assert input_data["source_context"]["job_version_id"] == "jobver_pr5_q2"
+
+    metadata = repository.questions[0].question_metadata
+    assert metadata["llm_generation_mode"] == "agent_provider_path"
+    assert metadata["provider_status"] == "enabled"
+    assert metadata["fallback_reason"] is None
+    assert metadata["context_source"] == "use_case_repository_snapshot"
+    assert metadata["provider_calls"] == 1
+    assert "deterministic" not in metadata["llm_generation_mode"]
+
+
+def test_create_question_task_provider_failure_does_not_create_success_question() -> None:
+    flags = _enabled_question_graph_flags(provider_enabled=True)
+    runtime = FakeLangGraphRuntime(
+        flag_resolver=flags,
+        polish_question_llm_transport=_FailingQuestionProviderTransport(),
+    )
+    facade = AiOrchestrationFacade(
+        runner=runtime,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=flags,
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    use_cases._question_generation_service = _DirectQuestionGenerationBlocker()
+
+    result = use_cases.create_question_task(_command())
+
+    assert not result.is_success
+    assert result.error is not None
+    assert result.error.code == "validation_failed"
+    assert repository.questions == []
+    assert repository.tasks == []
+
+
+def test_create_question_task_provider_enabled_rejects_fake_transport_as_provider() -> None:
+    flags = _enabled_question_graph_flags(provider_enabled=True)
+    runtime = FakeLangGraphRuntime(
+        flag_resolver=flags,
+        polish_question_llm_transport=FakeLlmTransport(),
+    )
+    facade = AiOrchestrationFacade(
+        runner=runtime,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=flags,
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    use_cases._question_generation_service = _DirectQuestionGenerationBlocker()
+
+    result = use_cases.create_question_task(_command())
+
+    assert not result.is_success
+    assert result.error is not None
+    assert result.error.code == "validation_failed"
+    assert repository.questions == []
+    assert repository.tasks == []
 
 
 def test_create_question_task_does_not_fallback_on_runtime_conflict() -> None:
@@ -225,6 +325,7 @@ class _FakeQuestionFacade:
         progress_node_refs: tuple[str, ...],
         completed_focus_refs: tuple[str, ...],
         idempotency_key: str,
+        context_snapshot: dict[str, Any] | None = None,
     ) -> AgentTaskStatusRef:
         self.calls.append(
             {
@@ -234,11 +335,59 @@ class _FakeQuestionFacade:
                 "progress_node_refs": progress_node_refs,
                 "completed_focus_refs": completed_focus_refs,
                 "idempotency_key": idempotency_key,
+                "context_snapshot": context_snapshot,
             }
         )
         if self.error is not None:
             raise self.error
         return self.status_ref
+
+
+class _RecordingQuestionProviderTransport:
+    def __init__(self) -> None:
+        self.requests: list[LlmTransportRequest] = []
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.requests.append(request)
+        input_data = request.evidence_bundle["input_data"]
+        policy = input_data["generation_policy"]
+        evidence_refs = tuple(input_data["evidence_refs"])
+        primary = input_data["evidence_summaries"][0]
+        question_text = (
+            f"围绕「{input_data['progress_node']['title']}」，请基于主要证据「{primary['excerpt']}」展开："
+            "说明 FastAPI 后端工作流的一致性边界、失败补偿、验证指标和复盘信号。"
+        )
+        return LlmTransportResult(
+            result={
+                "transport": "recording_provider",
+                "question_text": question_text,
+                "question_kind": policy["question_kind"],
+                "focus_dimension": policy["question_kind"],
+                "difficulty": "hard",
+                "skill_dimension": input_data["progress_node"]["expected_capability"],
+                "expected_signal": "回答应围绕 FastAPI 后端工作流说明边界、取舍、失败处理和验证指标。",
+                "follow_ups": ["失败补偿如何验证？", "一致性边界如何证明？"],
+                "scoring_rubric": [
+                    {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+                    {"dimension": "reasoning", "signals": ["说明边界", "说明验证指标"]},
+                ],
+                "missing_context": [],
+                "evidence_refs": list(evidence_refs),
+                "confidence": "high",
+                "clarification_needed": False,
+                "trace_ref": "trace_recording_provider_question",
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.HIGH,
+            low_confidence_flags=(),
+            trace_refs=("trace_recording_provider_question",),
+            evidence_refs=evidence_refs,
+        )
+
+
+class _FailingQuestionProviderTransport:
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        raise LlmTransportUnavailableError("provider unavailable")
 
 
 class _DirectQuestionGenerationBlocker:
@@ -509,12 +658,13 @@ def _use_cases(
     return use_cases, polish_repository
 
 
-def _enabled_question_graph_flags() -> RuntimeFlagResolver:
+def _enabled_question_graph_flags(*, provider_enabled: bool = False) -> RuntimeFlagResolver:
     return RuntimeFlagResolver(
         test_overrides={
             "AIFI_AI_RUNTIME_ENABLED": True,
             "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True,
             POLISH_QUESTION_GRAPH_FLAG: True,
+            "AIFI_REAL_PROVIDER_ENABLED": provider_enabled,
         }
     )
 

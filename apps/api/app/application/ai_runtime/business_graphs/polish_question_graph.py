@@ -6,11 +6,10 @@ import hashlib
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any
 
-from app.application.common.logging import LogUtil
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
     AgentCommandEnvelope,
@@ -24,6 +23,7 @@ from app.application.ai_runtime.contracts import (
 )
 from app.application.ai_runtime.handoff import QuestionResultWritePlan, build_question_result_write_plan
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.common.logging import LogUtil
 
 if TYPE_CHECKING:
     from app.application.ai_runtime.registry import GraphDescriptor
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 POLISH_QUESTION_GRAPH_NAME = "polish_question_graph"
 POLISH_QUESTION_GRAPH_VERSION = "pr9-agent-orchestration"
 POLISH_QUESTION_GRAPH_FLAG = "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
+POLISH_QUESTION_PROVIDER_FLAG = "AIFI_REAL_PROVIDER_ENABLED"
 POLISH_QUESTION_TRACE_TASK_TYPE = "polish_question_generation"
 POLISH_QUESTION_RUNTIME_DEFAULT = False
 POLISH_QUESTION_PROVIDER_GATE = False
@@ -256,6 +257,7 @@ def execute_polish_question_agent(
     provider_enabled: bool,
     provider_flag_source: str,
     config: PolishQuestionAgentConfig | None = None,
+    provider_draft_operation: Any | None = None,
 ) -> PolishQuestionAgentExecution:
     resolved_config = config or PolishQuestionAgentConfig()
     started_at = perf_counter()
@@ -295,10 +297,14 @@ def execute_polish_question_agent(
         input_payload={"scenario_ref": selected_evidence["scenario_ref"]},
         operation=lambda: _tool_question_drafting(
             context=context,
+            command=command,
             session_ref=str(retrieved_context["session_ref"]),
             progress_node_ref=_optional_text(retrieved_context.get("progress_node_ref")),
             context_digest=_optional_text(retrieved_context.get("context_digest")),
             scenario=selected_evidence["scenario"],
+            retrieved_context=retrieved_context,
+            provider_enabled=provider_enabled,
+            provider_draft_operation=provider_draft_operation,
         ),
         config=resolved_config,
         deadline_at=deadline_at,
@@ -322,6 +328,7 @@ def execute_polish_question_agent(
         deadline_at=deadline_at,
         phase_results=phase_results,
     )
+    validation = repaired["validation"]
     persisted_candidate = _execute_agent_tool(
         phase="persist_candidate",
         tool_name="candidate_persistence",
@@ -374,6 +381,7 @@ def execute_polish_question_agent(
         "status": status,
         "runtime_flag_key": POLISH_QUESTION_GRAPH_FLAG,
         "runtime_flag_source": runtime_flag_source,
+        "provider_flag_key": POLISH_QUESTION_PROVIDER_FLAG,
         "provider_status": provider_status,
         "provider_flag_source": provider_flag_source,
         "provider_calls": 0 if not provider_enabled else 1,
@@ -531,6 +539,63 @@ def build_polish_question_candidate_readonly(
     }
     gate = question_candidate_quality_gate(candidate)
     candidate["quality_gate"] = gate
+    return sanitize_payload(candidate)
+
+
+def build_polish_question_candidate_from_draft(
+    *,
+    owner_id: str,
+    run_id: str,
+    ai_task_id: str,
+    session_ref: str,
+    draft: Any,
+    scenario: dict[str, Any],
+    provider_trace_refs: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    evidence_refs = tuple(str(ref) for ref in draft.evidence_refs if str(ref).strip())
+    scenario_payload = {
+        **scenario,
+        "source_refs": evidence_refs or tuple(scenario.get("source_refs", ())),
+    }
+    candidate_ref = "question_candidate_ref_" + _stable_id(
+        owner_id,
+        run_id,
+        ai_task_id,
+        session_ref,
+        draft.progress_node_ref,
+        draft.context_digest,
+        draft.question_text,
+        evidence_refs,
+    )
+    validation_ref = "validation_ref_" + _stable_id(candidate_ref, evidence_refs)
+    question_metadata = dict(draft.question_metadata)
+    question_metadata.update(
+        {
+            "provider_path": "graph_question_generation_service",
+            "context_source": scenario.get("context_source"),
+            "context_source_version": scenario.get("context_source_version"),
+            "repository_backed_context": bool(scenario.get("repository_backed_context")),
+            "provider_calls": 1,
+        }
+    )
+    candidate = {
+        "candidate_ref": candidate_ref,
+        "scenario": scenario_payload,
+        "question_text": draft.question_text,
+        "question_pattern": draft.question_pattern or "provider_structured_json",
+        "question_sources": tuple(_source_payload(source) for source in draft.question_sources),
+        "progress_node_ref": draft.progress_node_ref,
+        "evidence_refs": evidence_refs,
+        "context_digest": draft.context_digest
+        or _stable_id(session_ref, draft.progress_node_ref, evidence_refs),
+        "source_availability": question_metadata.get("source_availability"),
+        "confidence_level": draft.confidence_level or question_metadata.get("confidence_level") or "medium",
+        "low_confidence_flags": tuple(draft.low_confidence_flags),
+        "trace_refs": tuple(_unique((*provider_trace_refs, candidate_ref, validation_ref))),
+        "question_metadata": question_metadata,
+        "sanitized": True,
+    }
+    candidate["quality_gate"] = question_candidate_quality_gate(candidate)
     return sanitize_payload(candidate)
 
 
@@ -902,7 +967,98 @@ def _execute_repair_or_retry_phase(
 ) -> dict[str, Any]:
     _ensure_agent_can_continue(phase_results, config=config, deadline_at=deadline_at)
     validator_result = validation["validator_result"]
-    status = "skipped" if validator_result.get("passed") is True else "failed"
+    if validator_result.get("passed") is True:
+        status = "skipped"
+        output_ref = "repair_ref_" + _stable_id(candidate.get("candidate_ref"), validator_result)
+        phase_results.append(
+            {
+                "phase": "repair_or_retry",
+                "status": status,
+                "tool_name": None,
+                "input_ref": str(validation.get("output_ref") or ""),
+                "output_ref": output_ref,
+                "attempts": 0,
+                "latency_ms": 0.0,
+                "retry_delay_seconds": config.backoff_seconds,
+                "error": None,
+            }
+        )
+        LogUtil.agent_runtime_step(
+            task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+            graph_name=POLISH_QUESTION_GRAPH_NAME,
+            phase="repair_or_retry",
+            status=status,
+            attempt=0,
+            max_attempts=config.max_retries + 1,
+            max_agent_steps=config.max_agent_steps,
+            timeout_seconds=config.timeout_seconds,
+            retry_delay_seconds=config.backoff_seconds,
+            input_ref=str(validation.get("output_ref") or ""),
+            output_ref=output_ref,
+            error_type=None,
+        )
+        return {"candidate": candidate, "validation": validation, "output_ref": output_ref}
+
+    started_at = perf_counter()
+    repaired_candidate = candidate
+    repaired_validation = validation
+    last_validator_result = validator_result
+    max_attempts = max(0, config.max_retries)
+    for attempt in range(1, max_attempts + 1):
+        _ensure_agent_can_continue(phase_results, config=config, deadline_at=deadline_at)
+        repaired_candidate = _repair_question_candidate(
+            repaired_candidate,
+            validator_result=last_validator_result,
+            attempt=attempt,
+        )
+        last_validator_result = question_candidate_quality_gate(repaired_candidate)
+        repaired_candidate["quality_gate"] = last_validator_result
+        repaired_validation = {
+            "output_ref": "validation_ref_"
+            + _stable_id(repaired_candidate.get("candidate_ref"), last_validator_result),
+            "validator_result": last_validator_result,
+        }
+        if last_validator_result.get("passed") is True:
+            output_ref = "repair_ref_" + _stable_id(
+                candidate.get("candidate_ref"), repaired_candidate.get("candidate_ref"), attempt
+            )
+            latency_ms = round((perf_counter() - started_at) * 1000, 3)
+            phase_results.append(
+                {
+                    "phase": "repair_or_retry",
+                    "status": "repaired",
+                    "tool_name": None,
+                    "input_ref": str(validation.get("output_ref") or ""),
+                    "output_ref": output_ref,
+                    "attempts": attempt,
+                    "latency_ms": latency_ms,
+                    "retry_delay_seconds": config.backoff_seconds,
+                    "error": None,
+                    "repair_strategy": "safe_grounding_transform",
+                }
+            )
+            LogUtil.agent_runtime_step(
+                task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
+                graph_name=POLISH_QUESTION_GRAPH_NAME,
+                phase="repair_or_retry",
+                status="repaired",
+                attempt=attempt,
+                max_attempts=config.max_retries + 1,
+                max_agent_steps=config.max_agent_steps,
+                timeout_seconds=config.timeout_seconds,
+                retry_delay_seconds=config.backoff_seconds,
+                duration_ms=latency_ms,
+                input_ref=str(validation.get("output_ref") or ""),
+                output_ref=output_ref,
+            )
+            return {
+                "candidate": sanitize_payload(repaired_candidate),
+                "validation": repaired_validation,
+                "output_ref": output_ref,
+            }
+        sleep(config.backoff_seconds)
+
+    status = "failed"
     output_ref = "repair_ref_" + _stable_id(candidate.get("candidate_ref"), validator_result)
     phase_results.append(
         {
@@ -914,7 +1070,8 @@ def _execute_repair_or_retry_phase(
             "attempts": 0,
             "latency_ms": 0.0,
             "retry_delay_seconds": config.backoff_seconds,
-            "error": None if status == "skipped" else "validator_blocked_candidate",
+            "error": "validator_blocked_candidate",
+            "blocking_reasons": tuple(last_validator_result.get("blocking_reasons", ())),
         }
     )
     LogUtil.agent_runtime_step(
@@ -929,11 +1086,9 @@ def _execute_repair_or_retry_phase(
         retry_delay_seconds=config.backoff_seconds,
         input_ref=str(validation.get("output_ref") or ""),
         output_ref=output_ref,
-        error_type=None if status == "skipped" else "validator_blocked_candidate",
+        error_type="validator_blocked_candidate",
     )
-    if status == "failed":
-        raise RuntimeValidationError("polish question candidate failed grounding validation")
-    return {"candidate": candidate, "output_ref": output_ref}
+    raise RuntimeValidationError("polish question candidate failed grounding validation after repair attempts")
 
 
 def _execute_finalize_phase(
@@ -973,6 +1128,10 @@ def _execute_finalize_phase(
 
 
 def _tool_context_retrieval(command: AgentCommandEnvelope) -> dict[str, Any]:
+    snapshot = command.metadata.get("polish_question_context_snapshot")
+    if isinstance(snapshot, dict):
+        return _tool_context_retrieval_from_snapshot(command, snapshot)
+
     session_ref = str(command.input_refs[0]).strip()
     progress_node_ref = _progress_node_ref_from_command(command)
     completed_focus_refs = tuple(str(ref).strip() for ref in command.input_refs[2:] if str(ref).strip())
@@ -998,6 +1157,77 @@ def _tool_context_retrieval(command: AgentCommandEnvelope) -> dict[str, Any]:
         "match_gap_summaries": _metadata_tuple(metadata.get("match_gap_summaries")),
         "history_feedback_summaries": _metadata_tuple(metadata.get("history_feedback_summaries")),
         "context_digest": context_digest,
+    }
+
+
+def _tool_context_retrieval_from_snapshot(
+    command: AgentCommandEnvelope,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    session_ref = str(command.input_refs[0]).strip()
+    session_payload = snapshot.get("session") if isinstance(snapshot.get("session"), dict) else {}
+    if session_payload and str(session_payload.get("session_id") or "").strip() != session_ref:
+        raise RuntimeValidationError("polish question context snapshot session mismatch")
+    progress_node_ref = (
+        str(snapshot.get("requested_progress_node_ref") or "").strip()
+        or _progress_node_ref_from_command(command)
+    )
+    progress_context = snapshot.get("progress_context") if isinstance(snapshot.get("progress_context"), dict) else {}
+    progress_tree_plan = (
+        snapshot.get("progress_tree_plan") if isinstance(snapshot.get("progress_tree_plan"), dict) else {}
+    )
+    progress_tree_state = (
+        snapshot.get("progress_tree_state") if isinstance(snapshot.get("progress_tree_state"), dict) else {}
+    )
+    selected_summary = _snapshot_progress_node_summary(progress_tree_plan, progress_tree_state, progress_node_ref)
+    evidence_summaries = tuple(
+        item
+        for item in snapshot.get("selected_evidence_summaries", ())
+        if isinstance(item, dict) and str(item.get("ref") or "").strip()
+    )
+    selected_refs = tuple(str(item.get("ref")) for item in evidence_summaries)
+    output_ref = "context_ref_" + _stable_id(
+        session_ref,
+        progress_node_ref,
+        snapshot.get("context_digest"),
+        selected_refs,
+        snapshot.get("context_source"),
+    )
+    return {
+        "output_ref": output_ref,
+        "session_ref": session_ref,
+        "progress_node_ref": progress_node_ref,
+        "completed_focus_refs": tuple(
+            str(ref).strip() for ref in snapshot.get("completed_focus_refs", ()) if str(ref).strip()
+        ),
+        "selected_progress_node_summary": selected_summary,
+        "selected_evidence_refs": selected_refs,
+        "resume_evidence_summaries": tuple(
+            item for item in evidence_summaries if str(item.get("source_type") or "").startswith("resume")
+        ),
+        "job_requirement_summaries": tuple(
+            item for item in evidence_summaries if item.get("source_type") == "job_requirement"
+        ),
+        "match_gap_summaries": tuple(
+            item for item in evidence_summaries if item.get("source_type") in {"match_gap", "match_focus"}
+        ),
+        "history_feedback_summaries": tuple(
+            item for item in evidence_summaries if item.get("source_type") in {"history_feedback", "turn_feedback"}
+        ),
+        "context_digest": str(
+            snapshot.get("context_digest")
+            or progress_tree_plan.get("context_digest")
+            or progress_context.get("content_digest")
+            or ""
+        ),
+        "context_source": str(snapshot.get("context_source") or "use_case_repository_snapshot"),
+        "context_source_version": str(snapshot.get("context_source_version") or ""),
+        "repository_backed": True,
+        "source_refs": {
+            "session_ref": session_ref,
+            "resume_version_id": str(session_payload.get("resume_version_id") or ""),
+            "job_version_id": str(session_payload.get("job_version_id") or ""),
+        },
     }
 
 
@@ -1027,6 +1257,14 @@ def _tool_evidence_selection(*, session_ref: str, context_payload: dict[str, Any
         history_feedback_summaries=tuple(context_payload.get("history_feedback_summaries") or ()),
         completed_focus_refs=tuple(context_payload.get("completed_focus_refs") or ()),
     )
+    if context_payload.get("context_source"):
+        scenario = {
+            **scenario,
+            "context_source": context_payload.get("context_source"),
+            "context_source_version": context_payload.get("context_source_version"),
+            "repository_backed_context": bool(context_payload.get("repository_backed")),
+            "source_refs": context_payload.get("source_refs") or {},
+        }
     return {
         "output_ref": "scenario_ref_" + _stable_id(session_ref, progress_node_ref, selected_refs),
         "scenario_ref": "scenario_ref_" + _stable_id(session_ref, progress_node_ref, scenario.get("scenario_title")),
@@ -1037,11 +1275,35 @@ def _tool_evidence_selection(*, session_ref: str, context_payload: dict[str, Any
 def _tool_question_drafting(
     *,
     context: AgentRunContext,
+    command: AgentCommandEnvelope,
     session_ref: str,
     progress_node_ref: str | None,
     context_digest: str | None,
     scenario: dict[str, Any],
+    retrieved_context: dict[str, Any],
+    provider_enabled: bool,
+    provider_draft_operation: Any | None = None,
 ) -> dict[str, Any]:
+    if provider_enabled:
+        if provider_draft_operation is None:
+            raise RuntimeValidationError("polish question provider path is enabled but no provider is configured")
+        provider_output = provider_draft_operation(
+            context=context,
+            command=command,
+            retrieved_context=retrieved_context,
+            scenario=scenario,
+        )
+        if not isinstance(provider_output, dict):
+            raise RuntimeValidationError("polish question provider returned invalid candidate")
+        candidate = dict(provider_output.get("candidate") or provider_output)
+        if not isinstance(candidate, dict) or not str(candidate.get("candidate_ref") or "").strip():
+            raise RuntimeValidationError("polish question provider candidate_ref is required")
+        candidate["quality_gate"] = question_candidate_quality_gate(candidate)
+        return {
+            "output_ref": str(candidate["candidate_ref"]),
+            "candidate": sanitize_payload(candidate),
+        }
+
     candidate = build_polish_question_candidate_readonly(
         owner_id=context.owner_id,
         run_id=context.run_id,
@@ -1076,6 +1338,50 @@ def _tool_candidate_persistence(candidate: dict[str, Any], validator_result: dic
     }
 
 
+def _repair_question_candidate(
+    candidate: dict[str, Any],
+    *,
+    validator_result: dict[str, Any],
+    attempt: int,
+) -> dict[str, Any]:
+    scenario = dict(candidate.get("scenario") if isinstance(candidate.get("scenario"), dict) else {})
+    repaired = sanitize_payload(dict(candidate))
+    repaired["scenario"] = scenario
+    source_refs = tuple(str(ref) for ref in scenario.get("source_refs", ()) if str(ref).strip())
+    if not repaired.get("evidence_refs") and source_refs:
+        repaired["evidence_refs"] = source_refs
+    blocking_reasons = set(str(reason) for reason in validator_result.get("blocking_reasons", ()))
+    if blocking_reasons & {
+        "cross_evidence_scenario_mixing",
+        "unsupported_business_entity",
+        "job_gap_claimed_as_project_experience",
+        "raw_payload_leak",
+    }:
+        repaired["question_text"] = _candidate_question_text(scenario)
+    repaired["candidate_ref"] = "question_candidate_ref_" + _stable_id(
+        candidate.get("candidate_ref"),
+        "repair",
+        attempt,
+        repaired.get("question_text"),
+        repaired.get("evidence_refs"),
+    )
+    trace_refs = tuple(str(ref) for ref in repaired.get("trace_refs", ()) if str(ref).strip())
+    repaired["trace_refs"] = _unique((*trace_refs, "repair_ref_" + _stable_id(repaired["candidate_ref"], attempt)))
+    metadata = dict(
+        repaired.get("question_metadata") if isinstance(repaired.get("question_metadata"), dict) else {}
+    )
+    metadata.update(
+        {
+            "repair_strategy": "safe_grounding_transform",
+            "repair_attempts": attempt,
+            "repaired_from_candidate_ref": str(candidate.get("candidate_ref") or ""),
+            "repair_blocking_reasons": tuple(blocking_reasons),
+        }
+    )
+    repaired["question_metadata"] = metadata
+    return sanitize_payload(repaired)
+
+
 def _ensure_agent_can_continue(
     phase_results: list[dict[str, Any]],
     *,
@@ -1101,6 +1407,53 @@ def _metadata_tuple(value: object) -> tuple[Any, ...]:
     if isinstance(value, list):
         return tuple(value)
     return ()
+
+
+def _snapshot_progress_node_summary(
+    progress_tree_plan: dict[str, Any],
+    progress_tree_state: dict[str, Any],
+    progress_node_ref: str | None,
+) -> str:
+    node = _find_snapshot_progress_node(progress_tree_plan.get("nodes"), progress_node_ref)
+    if node is None:
+        priority = progress_tree_state.get("current_priority")
+        node = priority if isinstance(priority, dict) else {}
+    return _safe_agent_summary(
+        "；".join(
+            str(part)
+            for part in (
+                node.get("display_title"),
+                node.get("title"),
+                node.get("exam_point"),
+                node.get("expected_capability"),
+            )
+            if str(part or "").strip()
+        ),
+        fallback="证据不足的打磨题场景",
+    )
+
+
+def _find_snapshot_progress_node(nodes: object, progress_node_ref: str | None) -> dict[str, Any] | None:
+    if not isinstance(nodes, list):
+        return None
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if progress_node_ref and str(node.get("progress_node_ref") or "").strip() == progress_node_ref:
+            return node
+        child = _find_snapshot_progress_node(node.get("children"), progress_node_ref)
+        if child is not None:
+            return child
+    return None
+
+
+def _source_payload(source: Any) -> dict[str, Any]:
+    if isinstance(source, dict):
+        return source
+    try:
+        return asdict(source)
+    except TypeError:
+        return {}
 
 
 def _safe_agent_summary(value: object, *, fallback: str) -> str:
