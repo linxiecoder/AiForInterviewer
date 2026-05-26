@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.errors import raise_api_error
 from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.job_match.ports import JobMatchAnalyzer
+from app.application.polish.question_generation_policy import (
+    DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+    QuestionGenerationRuntimePolicy,
+)
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
 from app.application.llm.ports import LlmTransport
@@ -59,6 +63,13 @@ async def get_llm_transport(request: Request) -> LlmTransport:
 
 async def get_ai_orchestration_facade(request: Request) -> AiOrchestrationFacade | None:
     return getattr(request.app.state, "ai_orchestration_facade", None)
+
+
+async def get_question_generation_runtime_policy(request: Request) -> QuestionGenerationRuntimePolicy:
+    policy = getattr(request.app.state, "question_generation_runtime_policy", None)
+    if isinstance(policy, QuestionGenerationRuntimePolicy):
+        return policy
+    return DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY
 
 
 def get_current_actor(request: Request) -> CurrentActor | None:

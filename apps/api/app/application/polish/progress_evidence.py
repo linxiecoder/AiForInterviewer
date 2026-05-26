@@ -120,6 +120,7 @@ def select_progress_tree_evidence_chunks(
     existing_plan: dict[str, Any] | None = None,
     existing_state: dict[str, Any] | None = None,
     progress_node_ref: str | None = None,
+    source_priority_policy: dict[str, dict[str, int]] | None = None,
 ) -> ProgressEvidenceSelection:
     chunks = build_progress_evidence_chunks(context)
     default_max_chunks, default_max_chars = DEFAULT_SELECTION_LIMITS[purpose]
@@ -130,7 +131,7 @@ def select_progress_tree_evidence_chunks(
         existing_state=existing_state,
         progress_node_ref=progress_node_ref,
     )
-    order = ORDER_BY_PURPOSE[purpose]
+    order = (source_priority_policy or ORDER_BY_PURPOSE).get(purpose, ORDER_BY_PURPOSE[purpose])
     ranked_chunks = sorted(
         chunks,
         key=lambda chunk: (
@@ -205,6 +206,7 @@ def build_progress_prompt_context(
     progress_node_ref: str | None = None,
     max_chunks: int | None = None,
     max_chars: int | None = None,
+    source_priority_policy: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     selection = select_progress_tree_evidence_chunks(
         context,
@@ -214,6 +216,7 @@ def build_progress_prompt_context(
         existing_plan=existing_plan,
         existing_state=existing_state,
         progress_node_ref=progress_node_ref,
+        source_priority_policy=source_priority_policy,
     )
     return {
         "context_metadata": _context_metadata(context),

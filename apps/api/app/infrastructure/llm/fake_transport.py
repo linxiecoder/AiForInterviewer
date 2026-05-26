@@ -112,18 +112,14 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
     policy = input_data.get("generation_policy") if isinstance(input_data.get("generation_policy"), dict) else {}
     evidence_refs = tuple(ref for ref in input_data.get("evidence_refs", []) if isinstance(ref, str) and ref.strip())
     summaries = input_data.get("evidence_summaries") if isinstance(input_data.get("evidence_summaries"), list) else []
-    summary_excerpts = [
-        _fake_question_excerpt(item.get("excerpt"), limit=80)
-        for item in summaries
-        if isinstance(item, dict) and item.get("excerpt")
-    ]
+    summary_items = [item for item in summaries if isinstance(item, dict) and item.get("excerpt")]
     title = _fake_question_excerpt(progress_node.get("title") or "当前训练节点", limit=48)
     capability = _fake_question_excerpt(
         input_data.get("skill_dimension") or progress_node.get("expected_capability") or "说明关键链路、取舍和验证方式",
         limit=80,
     )
-    excerpt = _fake_question_excerpt("；".join(summary_excerpts) or capability, limit=180)
     claim_mode = str(policy.get("claim_mode") or "")
+    excerpt = _fake_question_primary_excerpt(summary_items, claim_mode=claim_mode, fallback=capability)
     if not evidence_refs or claim_mode == "clarification_needed":
         question_text = (
             f"围绕「{title}」，当前材料不足以支撑具体题干。请先补充一个真实项目材料，"
@@ -136,7 +132,7 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
     elif claim_mode == "job_gap_probe":
         question_text = (
             f"围绕「{title}」，岗位侧需要验证「{capability}」。"
-            f"请基于证据摘要「{excerpt}」，说明你会如何补齐相关能力、设计验证路径并在面试中证明该能力。"
+            f"请基于主要证据「{excerpt}」，说明你会如何补齐相关能力、设计验证路径并在面试中证明该能力。"
         )
         difficulty = "medium"
         missing_context = []
@@ -144,7 +140,7 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
         clarification_needed = False
     else:
         question_text = (
-            f"围绕「{title}」，请只基于证据摘要「{excerpt}」展开："
+            f"围绕「{title}」，请只基于主要证据「{excerpt}」展开："
             f"先说明业务背景和关键技术链路，再说明异常处理或关键取舍，最后用验证指标证明你具备「{capability}」。"
         )
         difficulty = "hard"
@@ -164,6 +160,8 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
     trace_ref = stable_resource_id("trace", f"fake-polish-question-trace:{seed}")
     return LlmTransportResult(
         result={
+            "transport": "fake",
+            "model_name": "fake_llm_polish_question_v1",
             "question_text": question_text,
             "question_kind": policy.get("question_kind") or "technical_chain_deep_dive",
             "focus_dimension": policy.get("focus_dimension") or policy.get("question_kind") or "technical_chain_deep_dive",
@@ -202,47 +200,57 @@ def _fake_question_excerpt(value: object, *, limit: int) -> str:
     return f"{text[:limit].rstrip()}..."
 
 
+def _fake_question_primary_excerpt(items: list[dict[str, Any]], *, claim_mode: str, fallback: str) -> str:
+    preferred_prefixes = ("job_", "match_") if claim_mode == "job_gap_probe" else ("resume_", "match_", "job_")
+    for prefix in preferred_prefixes:
+        for item in items:
+            source_type = str(item.get("source_type") or "").lower()
+            if source_type.startswith(prefix):
+                excerpt = _fake_question_excerpt(item.get("excerpt"), limit=120)
+                if excerpt:
+                    return excerpt
+    return _fake_question_excerpt(fallback, limit=120)
+
+
 def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> LlmTransportResult:
     """生成 fake 质量优先初始训练菜单（含深度打磨类和补齐学习类节点）。"""
     context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
-    context_text = dumps(context, ensure_ascii=False, sort_keys=True) if isinstance(context, dict) else ""
-    hardware_mode = "硬件测试" in context_text
-    resume_signal = _first_text(
-        context.get("resume_markdown") if isinstance(context, dict) else None,
-        "候选人具备可深挖的后端与 AI 工程项目经历。",
-    )[:480]
+    resume_text = str(context.get("resume_markdown") or "") if isinstance(context, dict) else ""
+    resume_signal = _first_text(resume_text, "候选人具备可深挖的工程项目经历。")[:480]
     job_payload = context.get("job_payload", {}) if isinstance(context, dict) else {}
-    job_basis = _first_text(
-        *((job_payload.get("requirements") or []) if isinstance(job_payload, dict) else []),
-        *((job_payload.get("responsibilities") or []) if isinstance(job_payload, dict) else []),
-        "岗位要求后端服务治理、AI Agent、RAG 和工程落地能力。",
-    )[:480]
-    if hardware_mode:
-        resume_titles = [
-            "硬件测试智能辅助平台的服务端架构设计",
-            "专业术语场景下的混合检索与召回优化",
-            "硬件测试知识库的切片与索引设计",
-            "RAG 问答准确率评估与阈值控制",
-            "检索失败时的澄清、降级与兜底策略",
-            "企业内部 AI 平台的权限、审计与可观测性",
-        ]
-    else:
-        resume_titles = [
-            "面试训练工作台的 FastAPI 接口编排",
-            "面试训练工作台的任务状态一致性设计",
-            "搜索问答助手的混合检索与模型降级",
-            "交易通知系统的消息一致性与失败补偿",
-            "PostgreSQL 数据模型与后台任务管道治理",
-            "Prompt 结构化输出与多模型调用策略",
-        ]
-    jd_titles = [
-        "AI Agent 任务规划与工具调用机制",
-        "Agent 记忆管理与知识库协同",
-        "Java 服务端高可用架构设计",
-        "高并发接口限流、降级与压测方案",
-        "Elasticsearch / 向量检索底层原理",
-        "模型评测、灰度与成本控制",
-    ]
+    job_text = "\n".join(
+        str(item)
+        for item in (
+            *((job_payload.get("requirements") or []) if isinstance(job_payload, dict) else []),
+            *((job_payload.get("responsibilities") or []) if isinstance(job_payload, dict) else []),
+        )
+        if str(item).strip()
+    )
+    job_basis = _first_text(job_text, "岗位要求服务治理、系统可靠性和工程落地能力。")[:480]
+    resume_titles = _quality_first_fake_titles(
+        _fake_menu_text_candidates(resume_text or resume_signal),
+        category="resume_deep_dive",
+        fallback_titles=(
+            "项目架构与职责边界",
+            "关键技术链路与方案取舍",
+            "失败处理与恢复策略",
+            "验证指标与上线复盘",
+            "协作边界与风险沟通",
+            "持续改进与经验沉淀",
+        ),
+    )
+    jd_titles = _quality_first_fake_titles(
+        _fake_menu_text_candidates(job_text or job_basis),
+        category="jd_gap_learning",
+        fallback_titles=(
+            "岗位能力拆解",
+            "服务治理与可靠性方案",
+            "性能瓶颈定位与优化",
+            "数据模型与持久化边界",
+            "质量评估与灰度策略",
+            "工程协作与风险复盘",
+        ),
+    )
     categories = [
         {
             "category": "resume_deep_dive",
@@ -302,6 +310,28 @@ def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> 
         trace_refs=(trace_ref,),
         evidence_refs=(evidence_ref,),
     )
+
+
+def _quality_first_fake_titles(
+    candidates: list[str],
+    *,
+    category: str,
+    fallback_titles: tuple[str, ...],
+    target_count: int = 6,
+) -> list[str]:
+    titles: list[str] = []
+    for candidate in candidates:
+        title = _fake_menu_title(candidate, category=category)
+        if title and title not in titles:
+            titles.append(title)
+        if len(titles) >= target_count:
+            return titles
+    for fallback in fallback_titles:
+        if fallback not in titles:
+            titles.append(fallback)
+        if len(titles) >= target_count:
+            return titles
+    return titles
 
 
 def _quality_first_fake_node(
@@ -819,8 +849,6 @@ def _fake_menu_text_candidates(value: str) -> list[str]:
 def _fake_menu_title(value: str, *, category: str) -> str:
     """根据文本关键词匹配生成固定菜单标题（关键词匹配失败时从文本提取）。"""
     compact = _fake_compact_text(value)
-    if "硬件测试" in compact and ("智能辅助平台" in compact or "辅助平台" in compact or "平台" in compact):
-        return "硬件测试智能辅助平台的服务端架构设计"
     if (
         "专业术语" in compact
         or "单一检索" in compact
@@ -847,6 +875,10 @@ def _fake_menu_title(value: str, *, category: str) -> str:
     if "prompt" in compact or "多模型" in compact or "结构化输出" in compact:
         return "Prompt 结构化输出与模型降级机制"
     title = _fake_clean_exam_point_phrase(value)
+    if "智能辅助平台" in title:
+        return "智能辅助平台架构与质量治理"
+    if "设备日志" in title:
+        return "设备日志采集与质量复盘"
     if title:
         return title[:32]
     return "岗位能力补齐与验证计划" if category == "jd_gap_learning" else "项目经历深挖与贡献边界验证"

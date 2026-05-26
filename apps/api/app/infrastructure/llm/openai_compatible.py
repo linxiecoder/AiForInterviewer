@@ -401,7 +401,6 @@ def _chat_completion_payload(
                 "content": json.dumps(
                     {
                         "task_type": request.task_type,
-                        "contract_ids": list(request.contract_ids),
                         "input_refs": list(request.input_refs),
                         "evidence_bundle": request.evidence_bundle,
                     },

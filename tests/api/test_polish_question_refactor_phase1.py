@@ -6,10 +6,12 @@ from typing import Any
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.entities import PolishAnswer
+from app.application.polish.question_generation_policy import QuestionGenerationRuntimePolicy
 from app.application.polish.question_generation_service import QuestionGenerationService
 from app.application.polish.question_metadata import normalize_question_metadata
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
+from app.infrastructure.llm.fake_transport import FakeLlmTransport
 
 from tests.api.test_polish_question_graph_integration import (
     ACTOR_ID,
@@ -190,6 +192,123 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v3"
 
 
+def test_question_service_uses_injected_runtime_policy_for_prompt_contract_ids() -> None:
+    policy = QuestionGenerationRuntimePolicy(
+        policy_version="tenant-test-policy.v9",
+        prompt_asset_id="tenant_polish_question_generation",
+        prompt_version="tenant_polish_question_prompt.v9",
+        prompt_schema_id="tenant_polish_question_output_v9",
+        prompt_schema_version="v9",
+        task_type="tenant_polish_question_generation",
+        contract_ids=("P-TENANT-POLISH-QUESTION", "P-TENANT-SHARED"),
+        source="test_dependency_injection",
+    )
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport, runtime_policy=policy)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    assert request.contract_ids == ("P-TENANT-POLISH-QUESTION", "P-TENANT-SHARED")
+    assert request.task_type == "tenant_polish_question_generation"
+    assert request.prompt_version == "tenant_polish_question_prompt.v9"
+    assert request.schema_id == "tenant_polish_question_output_v9"
+    assert "contract_ids" not in request.evidence_bundle
+    assert request.evidence_bundle["policy_version"] == "tenant-test-policy.v9"
+    metadata = result.draft.question_metadata
+    assert metadata["prompt_asset_version"] == "tenant_polish_question_prompt.v9"
+    assert metadata["prompt_schema_id"] == "tenant_polish_question_output_v9"
+    assert metadata["prompt_policy_version"] == "tenant-test-policy.v9"
+    assert metadata["prompt_policy_source"] == "test_dependency_injection"
+
+
+def test_question_service_uses_injected_policy_for_source_priority_and_taxonomy() -> None:
+    policy = QuestionGenerationRuntimePolicy(
+        policy_version="tenant-source-taxonomy.v1",
+        source_priority_by_purpose={
+            "next_question": {"job_requirement": 1, "resume_project": 50},
+        },
+        question_kind_taxonomy={
+            "project_deep_dive": {"schema_value": "project_deep_dive", "signals": ()},
+            "technical_chain_deep_dive": {"schema_value": "technical_chain_deep_dive", "signals": ()},
+            "failure_recovery_deep_dive": {
+                "schema_value": "failure_recovery_deep_dive",
+                "signals": ("支付可靠性追问",),
+            },
+            "tradeoff_design": {"schema_value": "tradeoff_design", "signals": ()},
+            "clarification_needed": {"schema_value": "clarification_needed", "signals": ()},
+        },
+        source="test_dependency_injection",
+    )
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport, runtime_policy=policy)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="候选人简历中只有宽泛的接口开发经历。",
+        node_title="支付可靠性追问",
+        expected_capability="解释支付可靠性建设路径。",
+    )
+    context["job_snapshot"] = {
+        "job_id": "job_policy_priority",
+        "job_version_id": "jobver_policy_priority",
+        "requirements": ["支付链路需要覆盖幂等、失败补偿和上线验证指标。"],
+        "responsibilities": [],
+    }
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    request = transport.requests[0]
+    generation_policy = request.evidence_bundle["input_data"]["generation_policy"]
+    assert generation_policy["claim_mode"] == "job_gap_probe"
+    assert generation_policy["question_kind"] == "failure_recovery_deep_dive"
+    assert result.draft.question_metadata["primary_source_type"] == "job_requirement"
+    assert result.draft.question_metadata["prompt_policy_version"] == "tenant-source-taxonomy.v1"
+
+
+def test_question_service_marks_fake_transport_as_deterministic_fake() -> None:
+    service = QuestionGenerationService(llm_transport=FakeLlmTransport())
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    assert metadata["llm_generation_mode"] == "deterministic_fake_transport"
+    assert metadata["provider_status"] == "fake_transport"
+    assert metadata["fallback_reason"] == "fake_transport_configured"
+    assert metadata["fallback_visible"] is True
+
+
 def test_question_service_rejects_llm_output_that_does_not_match_schema() -> None:
     service = QuestionGenerationService(llm_transport=_InvalidQuestionTransport())
     session, context, plan, state = _question_generation_inputs(
@@ -260,6 +379,45 @@ def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -
         "raw_completion",
     ):
         assert forbidden_key not in normalized
+
+
+def test_question_task_metadata_uses_business_state_not_prototype_markers() -> None:
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert repository.questions
+    metadata = repository.questions[0].question_metadata
+    serialized_metadata = json.dumps(metadata, ensure_ascii=False)
+    assert metadata["llm_generation_mode"] == "deterministic_degraded_generation"
+    assert metadata["fallback_reason"] == "llm_transport_unavailable"
+    assert metadata["focus_dimension"] != "phase1_blueprint"
+    assert not metadata["template_signature"].startswith("tpl:phase1_blueprint:")
+    assert "phase1" not in serialized_metadata
+    assert "local_blueprint_renderer" not in serialized_metadata
+
+
+def test_question_task_status_uses_injected_runtime_policy_contract_ids() -> None:
+    policy = QuestionGenerationRuntimePolicy(
+        policy_version="tenant-test-policy.v9",
+        prompt_asset_id="tenant_polish_question_generation",
+        prompt_version="tenant_polish_question_prompt.v9",
+        prompt_schema_id="tenant_polish_question_output_v9",
+        prompt_schema_version="v9",
+        task_type="tenant_polish_question_generation",
+        contract_ids=("P-TENANT-POLISH-QUESTION", "P-TENANT-SHARED"),
+        source="test_dependency_injection",
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=None, question_generation_policy=policy)
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.contract_ids == ("P-TENANT-POLISH-QUESTION", "P-TENANT-SHARED")
+    assert repository.questions
+    assert repository.questions[0].question_metadata["prompt_policy_version"] == "tenant-test-policy.v9"
 
 
 def test_phase1_grounding_failure_persists_failed_task_without_question() -> None:

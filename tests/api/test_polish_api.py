@@ -871,7 +871,8 @@ def test_progress_tree_v2_rewrites_evidence_snippets_into_exam_points() -> None:
     labels = _progress_tree_page_labels(session_data)
     _assert_progress_tree_is_interview_menu(session_data)
     _assert_labels_are_exam_points_not_source_sentences(session_data, _SOURCE_SNIPPET_SENTENCES)
-    assert "硬件测试智能辅助平台的服务端架构设计" in labels
+    assert "硬件测试智能辅助平台的服务端架构设计" not in labels
+    assert "智能辅助平台架构与质量治理" in labels
     assert "专业术语场景下的混合检索与召回优化" in labels
     assert "AI Agent 任务规划与工具调用机制" in labels
     assert "Java 服务端高可用架构设计" in labels
@@ -1058,8 +1059,10 @@ def test_progress_tree_quality_first_matches_golden_menu_shape() -> None:
     assert metadata["input_context_mode"] == "full_resume_full_job"
     assert len(leaves) >= 10
     assert {node["category"] for node in leaves} >= {"resume_deep_dive", "jd_gap_learning"}
+    assert "硬件测试智能辅助平台的服务端架构设计" not in labels
+    assert "硬件测试知识库的切片与索引设计" not in labels
+    assert "智能辅助平台架构与质量治理" in labels
     for expected_title in (
-        "硬件测试智能辅助平台的服务端架构设计",
         "专业术语场景下的混合检索与召回优化",
         "AI Agent 任务规划与工具调用机制",
         "Java 服务端高可用架构设计",

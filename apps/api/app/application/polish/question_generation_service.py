@@ -17,18 +17,18 @@ from app.application.polish.question_blueprint import (
     build_question_blueprint,
 )
 from app.application.polish.question_generation_prompts import (
-    QUESTION_PROMPT_ASSET_VERSION,
-    QUESTION_PROMPT_CONTRACT_IDS,
-    QUESTION_PROMPT_SCHEMA_ID,
-    QUESTION_PROMPT_TASK_TYPE,
     build_question_prompt_asset,
     build_question_prompt_metadata,
     render_blueprint_question,
 )
+from app.application.polish.question_generation_policy import (
+    DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+    QuestionGenerationRuntimePolicy,
+)
 from app.application.polish.question_grounding import GroundingResult, validate_question_grounding
 
 
-QUESTION_GENERATION_SERVICE_VERSION = "polish_question_generation.phase1"
+QUESTION_GENERATION_SERVICE_VERSION = "polish_question_generation.v1"
 
 
 @dataclass(frozen=True)
@@ -48,9 +48,11 @@ class QuestionGenerationService:
         *,
         llm_transport: LlmTransport | None = None,
         surface_question_builder: Callable[[QuestionBlueprint, EvidenceScope], str] | None = None,
+        runtime_policy: QuestionGenerationRuntimePolicy | None = None,
     ) -> None:
         self._llm_transport = llm_transport
         self._surface_question_builder = surface_question_builder or render_blueprint_question
+        self._runtime_policy = runtime_policy or DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY
 
     def generate(
         self,
@@ -70,10 +72,14 @@ class QuestionGenerationService:
             state=state,
             node=node,
             requested_ref=requested_ref,
+            source_priority_policy=self._runtime_policy.source_priority_by_purpose,
         )
-        blueprint = build_question_blueprint(scope)
-        prompt_asset = build_question_prompt_asset(blueprint, scope)
-        prompt_metadata = build_question_prompt_metadata(prompt_asset)
+        blueprint = build_question_blueprint(
+            scope,
+            question_kind_taxonomy=self._runtime_policy.question_kind_taxonomy,
+        )
+        prompt_asset = build_question_prompt_asset(blueprint, scope, runtime_policy=self._runtime_policy)
+        prompt_metadata = build_question_prompt_metadata(prompt_asset, runtime_policy=self._runtime_policy)
         llm_payload: dict[str, Any] | None = None
         llm_result: LlmTransportResult | None = None
         generation_metadata: dict[str, Any]
@@ -83,6 +89,7 @@ class QuestionGenerationService:
                 prompt_asset=prompt_asset,
                 blueprint=blueprint,
                 scope=scope,
+                runtime_policy=self._runtime_policy,
             )
             if isinstance(llm_result, QuestionGenerationResult):
                 return llm_result
@@ -101,21 +108,27 @@ class QuestionGenerationService:
                     evidence_refs=blueprint.evidence_refs,
                 )
             question_text = str(llm_payload["question_text"]).strip()
+            transport_kind = _clean(llm_result.result.get("transport"))
+            is_fake_transport = transport_kind == "fake"
             generation_metadata = {
-                "llm_task_type": QUESTION_PROMPT_TASK_TYPE,
-                "prompt_version": QUESTION_PROMPT_ASSET_VERSION,
+                "llm_task_type": self._runtime_policy.task_type,
+                "prompt_version": self._runtime_policy.prompt_version,
                 "llm_output_validation_status": "valid",
-                "llm_generation_mode": "provider_structured_json",
-                "fallback_visible": False,
-                "provider_status": "called",
+                "llm_generation_mode": (
+                    "deterministic_fake_transport" if is_fake_transport else "provider_structured_json"
+                ),
+                "fallback_visible": is_fake_transport,
+                "provider_status": "fake_transport" if is_fake_transport else "called",
                 "llm_trace_refs": list(llm_result.trace_refs),
                 "llm_evidence_refs": list(llm_result.evidence_refs),
             }
+            if is_fake_transport:
+                generation_metadata["fallback_reason"] = "fake_transport_configured"
         else:
             question_text = self._surface_question_builder(blueprint, scope)
             generation_metadata = {
-                "llm_generation_mode": "deterministic_fallback",
-                "fallback_reason": "local_blueprint_renderer",
+                "llm_generation_mode": "deterministic_degraded_generation",
+                "fallback_reason": "llm_transport_unavailable",
                 "fallback_visible": True,
             }
         grounding_result = validate_question_grounding(
@@ -152,8 +165,8 @@ class QuestionGenerationService:
                 "low_confidence_flags": [] if blueprint.evidence_refs else ["clarification_needed"],
                 "expected_answer_dimensions": list(_expected_answer_dimensions(blueprint)),
                 "builder_version": QUESTION_GENERATION_SERVICE_VERSION,
-                "validator_version": "polish_question_grounding.phase1",
-                "signal_version": "phase1_blueprint_only",
+                "validator_version": "polish_question_grounding.v1",
+                "signal_version": "evidence_grounded_blueprint.v1",
                 "source_availability": "available" if blueprint.evidence_refs else "partial",
                 "generation_service": QUESTION_GENERATION_SERVICE_VERSION,
                 "blueprint_version": blueprint.metadata.get("blueprint_version"),
@@ -172,7 +185,7 @@ class QuestionGenerationService:
                 "validation_errors": [],
             },
             builder_version=QUESTION_GENERATION_SERVICE_VERSION,
-            validator_version="polish_question_grounding.phase1",
+            validator_version="polish_question_grounding.v1",
         )
         return QuestionGenerationResult(
             succeeded=True,
@@ -191,14 +204,15 @@ def _generate_llm_question(
     prompt_asset: dict[str, Any],
     blueprint: QuestionBlueprint,
     scope: EvidenceScope,
+    runtime_policy: QuestionGenerationRuntimePolicy,
 ) -> LlmTransportResult | QuestionGenerationResult:
     request = LlmTransportRequest(
-        contract_ids=QUESTION_PROMPT_CONTRACT_IDS,
-        task_type=QUESTION_PROMPT_TASK_TYPE,
+        contract_ids=runtime_policy.contract_ids,
+        task_type=runtime_policy.task_type,
         input_refs=(scope.progress_node_ref, *blueprint.evidence_refs),
         evidence_bundle=prompt_asset,
-        prompt_version=QUESTION_PROMPT_ASSET_VERSION,
-        schema_id=QUESTION_PROMPT_SCHEMA_ID,
+        prompt_version=runtime_policy.prompt_version,
+        schema_id=runtime_policy.prompt_schema_id,
     )
     try:
         return transport.generate(request)
@@ -324,6 +338,7 @@ def _build_evidence_scope(
     state: dict[str, Any],
     node: dict[str, Any],
     requested_ref: str,
+    source_priority_policy: dict[str, dict[str, int]],
 ) -> EvidenceScope:
     selection = select_progress_tree_evidence_chunks(
         context,
@@ -333,9 +348,10 @@ def _build_evidence_scope(
         existing_plan=plan,
         existing_state=state,
         progress_node_ref=requested_ref,
+        source_priority_policy=source_priority_policy,
     )
     chunks = tuple(chunk for chunk in selection.selected_chunks if _clean(chunk.text))
-    primary = _primary_chunk(chunks)
+    primary = _primary_chunk(chunks, source_priority_policy=source_priority_policy)
     evidence_refs = tuple(chunk.chunk_id for chunk in chunks)
     sources = tuple(_question_source(index=index, chunk=chunk) for index, chunk in enumerate(chunks, start=1))
     node_title = _first_text(node.get("display_title"), node.get("title"), node.get("exam_point"), requested_ref)
@@ -401,19 +417,15 @@ def _flatten_leaf_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return leaves
 
 
-def _primary_chunk(chunks: tuple[ProgressEvidenceChunk, ...]) -> ProgressEvidenceChunk | None:
-    for source_type in (
-        "resume_project",
-        "resume_work_experience",
-        "resume_skill",
-        "job_requirement",
-        "match_gap",
-        "match_focus",
-    ):
-        for chunk in chunks:
-            if chunk.source_type == source_type:
-                return chunk
-    return chunks[0] if chunks else None
+def _primary_chunk(
+    chunks: tuple[ProgressEvidenceChunk, ...],
+    *,
+    source_priority_policy: dict[str, dict[str, int]],
+) -> ProgressEvidenceChunk | None:
+    if not chunks:
+        return None
+    order = source_priority_policy.get("next_question", {})
+    return min(chunks, key=lambda chunk: (order.get(chunk.source_type, 99), chunk.sequence))
 
 
 def _question_source(*, index: int, chunk: ProgressEvidenceChunk) -> PolishQuestionSource:

@@ -12,19 +12,29 @@ from app.application.polish.question_blueprint import (
     EvidenceScope,
     QuestionBlueprint,
 )
+from app.application.polish.question_generation_policy import (
+    DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+    QuestionGenerationRuntimePolicy,
+)
 
 
-QUESTION_SURFACE_PROMPT_VERSION = "polish_question_surface.phase1"
-QUESTION_PROMPT_ASSET_VERSION = "polish_question_generation_prompt.v3"
-QUESTION_PROMPT_SCHEMA_ID = "polish_question_generation_output_v2"
-QUESTION_PROMPT_SCHEMA_VERSION = "v2"
-QUESTION_PROMPT_TASK_TYPE = "polish_question_generation"
-QUESTION_PROMPT_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
+QUESTION_SURFACE_PROMPT_VERSION = "polish_question_surface.v1"
+QUESTION_PROMPT_ASSET_VERSION = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.prompt_version
+QUESTION_PROMPT_SCHEMA_ID = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.prompt_schema_id
+QUESTION_PROMPT_SCHEMA_VERSION = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.prompt_schema_version
+QUESTION_PROMPT_TASK_TYPE = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.task_type
+QUESTION_PROMPT_CONTRACT_IDS = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY.contract_ids
 
 
-def build_question_prompt_asset(blueprint: QuestionBlueprint, scope: EvidenceScope) -> dict[str, Any]:
+def build_question_prompt_asset(
+    blueprint: QuestionBlueprint,
+    scope: EvidenceScope,
+    *,
+    runtime_policy: QuestionGenerationRuntimePolicy | None = None,
+) -> dict[str, Any]:
     """Build a structured prompt asset; callers must persist only its safe metadata."""
 
+    policy = _runtime_policy(runtime_policy)
     evidence_summaries = [
         {
             "ref": source.ref_id,
@@ -75,12 +85,13 @@ def build_question_prompt_asset(blueprint: QuestionBlueprint, scope: EvidenceSco
         "dropped_context_summary": scope.dropped_context_summary,
     }
     return {
-        "asset_id": "polish_question_generation",
-        "prompt_version": QUESTION_PROMPT_ASSET_VERSION,
-        "schema_id": QUESTION_PROMPT_SCHEMA_ID,
-        "schema_version": QUESTION_PROMPT_SCHEMA_VERSION,
-        "task_type": QUESTION_PROMPT_TASK_TYPE,
-        "contract_ids": list(QUESTION_PROMPT_CONTRACT_IDS),
+        "asset_id": policy.prompt_asset_id,
+        "prompt_version": policy.prompt_version,
+        "schema_id": policy.prompt_schema_id,
+        "schema_version": policy.prompt_schema_version,
+        "task_type": policy.task_type,
+        "policy_version": policy.policy_version,
+        "policy_source": policy.source,
         "prompt": "\n".join(
             [
                 "[role]",
@@ -198,7 +209,12 @@ def build_question_prompt_asset(blueprint: QuestionBlueprint, scope: EvidenceSco
     }
 
 
-def build_question_prompt_metadata(prompt_asset: dict[str, Any]) -> dict[str, Any]:
+def build_question_prompt_metadata(
+    prompt_asset: dict[str, Any],
+    *,
+    runtime_policy: QuestionGenerationRuntimePolicy | None = None,
+) -> dict[str, Any]:
+    policy = _runtime_policy(runtime_policy)
     input_data = prompt_asset.get("input_data") if isinstance(prompt_asset.get("input_data"), dict) else {}
     evidence_refs = input_data.get("evidence_refs") if isinstance(input_data, dict) else []
     digest_payload = {
@@ -210,9 +226,11 @@ def build_question_prompt_metadata(prompt_asset: dict[str, Any]) -> dict[str, An
     }
     digest = hashlib.sha256(json.dumps(digest_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     return {
-        "prompt_asset_version": QUESTION_PROMPT_ASSET_VERSION,
-        "prompt_schema_id": QUESTION_PROMPT_SCHEMA_ID,
-        "prompt_schema_version": QUESTION_PROMPT_SCHEMA_VERSION,
+        "prompt_asset_version": str(prompt_asset.get("prompt_version") or policy.prompt_version),
+        "prompt_schema_id": str(prompt_asset.get("schema_id") or policy.prompt_schema_id),
+        "prompt_schema_version": str(prompt_asset.get("schema_version") or policy.prompt_schema_version),
+        "prompt_policy_version": str(prompt_asset.get("policy_version") or policy.policy_version),
+        "prompt_policy_source": str(prompt_asset.get("policy_source") or policy.source),
         "prompt_input_digest": f"sha256:{digest}",
         "prompt_evidence_refs": list(evidence_refs) if isinstance(evidence_refs, list) else [],
         "prompt_safety_summary": {
@@ -224,8 +242,13 @@ def build_question_prompt_metadata(prompt_asset: dict[str, Any]) -> dict[str, An
     }
 
 
-def build_question_surface_prompt(blueprint: QuestionBlueprint, scope: EvidenceScope) -> dict[str, Any]:
-    prompt_asset = build_question_prompt_asset(blueprint, scope)
+def build_question_surface_prompt(
+    blueprint: QuestionBlueprint,
+    scope: EvidenceScope,
+    *,
+    runtime_policy: QuestionGenerationRuntimePolicy | None = None,
+) -> dict[str, Any]:
+    prompt_asset = build_question_prompt_asset(blueprint, scope, runtime_policy=runtime_policy)
     return {
         "prompt_version": QUESTION_SURFACE_PROMPT_VERSION,
         "prompt_asset_version": prompt_asset["prompt_version"],
@@ -239,6 +262,10 @@ def build_question_surface_prompt(blueprint: QuestionBlueprint, scope: EvidenceS
         "required_answer_materials": list(blueprint.required_answer_materials),
         "source_count": len(scope.question_sources),
     }
+
+
+def _runtime_policy(runtime_policy: QuestionGenerationRuntimePolicy | None) -> QuestionGenerationRuntimePolicy:
+    return runtime_policy or DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY
 
 
 def render_blueprint_question(blueprint: QuestionBlueprint, scope: EvidenceScope) -> str:

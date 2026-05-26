@@ -90,6 +90,9 @@ def test_openai_compatible_transport_calls_chat_completions_with_json_contract()
     assert payload["temperature"] == 0.0
     assert payload["response_format"] == {"type": "json_object"}
     assert "必须使用中文输出" in payload["messages"][0]["content"]
+    user_payload = json.loads(payload["messages"][1]["content"])
+    assert "contract_ids" not in user_payload
+    assert user_payload["input_refs"] == ["resume_version:res_ver_1", "job_version:job_ver_1"]
     assert result.validation_status is ValidationStatus.VALID
     assert result.confidence_level is ConfidenceLevel.MEDIUM
     assert result.result["job_match_result_payload"]["summary"].startswith("基于模型分析")

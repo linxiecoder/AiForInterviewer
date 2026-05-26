@@ -9,7 +9,7 @@ from app.application.polish.entities import PolishQuestionSource
 from app.application.polish.question_generation_policy import QUESTION_KIND_TAXONOMY
 
 
-QUESTION_BLUEPRINT_VERSION = "polish_question_blueprint.phase1"
+QUESTION_BLUEPRINT_VERSION = "polish_question_blueprint.v1"
 
 QUESTION_KIND_PROJECT_DEEP_DIVE = "project_deep_dive"
 QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE = "technical_chain_deep_dive"
@@ -55,9 +55,14 @@ class QuestionBlueprint:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def build_question_blueprint(scope: EvidenceScope) -> QuestionBlueprint:
+def build_question_blueprint(
+    scope: EvidenceScope,
+    *,
+    question_kind_taxonomy: dict[str, dict[str, object]] | None = None,
+) -> QuestionBlueprint:
+    taxonomy = question_kind_taxonomy or QUESTION_KIND_TAXONOMY
     claim_mode = _claim_mode(scope)
-    question_kind = _question_kind(scope, claim_mode=claim_mode)
+    question_kind = _question_kind(scope, claim_mode=claim_mode, taxonomy=taxonomy)
     required_materials = (
         ("业务入口", "职责边界", "失败案例", "验证指标")
         if claim_mode == CLAIM_MODE_CLARIFICATION_NEEDED
@@ -93,21 +98,39 @@ def _claim_mode(scope: EvidenceScope) -> str:
     return CLAIM_MODE_EVIDENCE_GROUNDED
 
 
-def _question_kind(scope: EvidenceScope, *, claim_mode: str) -> str:
+def _question_kind(
+    scope: EvidenceScope,
+    *,
+    claim_mode: str,
+    taxonomy: dict[str, dict[str, object]],
+) -> str:
     if claim_mode == CLAIM_MODE_CLARIFICATION_NEEDED:
-        return QUESTION_KIND_CLARIFICATION_NEEDED
+        return _taxonomy_schema_value(taxonomy, QUESTION_KIND_CLARIFICATION_NEEDED)
     text = " ".join(
         item
         for item in (scope.node_title, scope.expected_capability, " ".join(scope.missing_points))
         if item
     ).lower()
-    if any(term in text for term in QUESTION_KIND_TAXONOMY[QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE]["signals"]):
-        return QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE
-    if any(term in text for term in QUESTION_KIND_TAXONOMY[QUESTION_KIND_TRADEOFF_DESIGN]["signals"]):
-        return QUESTION_KIND_TRADEOFF_DESIGN
-    if any(term in text for term in QUESTION_KIND_TAXONOMY[QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE]["signals"]):
-        return QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE
-    return QUESTION_KIND_PROJECT_DEEP_DIVE
+    if any(term in text for term in _taxonomy_signals(taxonomy, QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE)):
+        return _taxonomy_schema_value(taxonomy, QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE)
+    if any(term in text for term in _taxonomy_signals(taxonomy, QUESTION_KIND_TRADEOFF_DESIGN)):
+        return _taxonomy_schema_value(taxonomy, QUESTION_KIND_TRADEOFF_DESIGN)
+    if any(term in text for term in _taxonomy_signals(taxonomy, QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE)):
+        return _taxonomy_schema_value(taxonomy, QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE)
+    return _taxonomy_schema_value(taxonomy, QUESTION_KIND_PROJECT_DEEP_DIVE)
+
+
+def _taxonomy_signals(taxonomy: dict[str, dict[str, object]], question_kind: str) -> tuple[str, ...]:
+    item = taxonomy.get(question_kind) or {}
+    signals = item.get("signals")
+    if isinstance(signals, (list, tuple, set)):
+        return tuple(str(signal).lower() for signal in signals if str(signal).strip())
+    return ()
+
+
+def _taxonomy_schema_value(taxonomy: dict[str, dict[str, object]], question_kind: str) -> str:
+    item = taxonomy.get(question_kind) or {}
+    return str(item.get("schema_value") or question_kind)
 
 
 def _clean_text(value: object) -> str:

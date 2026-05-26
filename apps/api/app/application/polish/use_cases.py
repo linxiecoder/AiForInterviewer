@@ -46,6 +46,10 @@ from app.application.polish.entities import (
 )
 from app.application.polish.feedback_reserved import build_reserved_feedback_artifacts
 from app.application.polish.ports import PolishRepository
+from app.application.polish.question_generation_policy import (
+    DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+    QuestionGenerationRuntimePolicy,
+)
 from app.application.polish.question_generation_service import QuestionGenerationResult, QuestionGenerationService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
@@ -82,18 +86,6 @@ QUESTION_GENERATION_MODE_NEW = "new_question"
 QUESTION_GENERATION_MODE_FOLLOW_UP = "follow_up"
 QUESTION_GENERATION_MODES = {QUESTION_GENERATION_MODE_NEW, QUESTION_GENERATION_MODE_FOLLOW_UP}
 
-QUESTION_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
-_POLISH_QUESTION_CANDIDATE_STATUSES = frozenset({"accepted", "passed"})
-_POLISH_QUESTION_CANDIDATE_TYPES = frozenset(
-    {"polish_question", "question_candidate", "polish_question_candidate"}
-)
-_POLISH_QUESTION_CANDIDATE_PAYLOAD_SCHEMA_IDS = frozenset(
-    {
-        "polish_question_candidate.v1",
-        "polish_question_candidate_v1",
-        "polish_question_generation_output_v1",
-    }
-)
 ANSWER_TEXT_MIN_LENGTH = 2
 ANSWER_TEXT_MAX_LENGTH = 8000
 ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH = 128
@@ -147,6 +139,7 @@ class PolishUseCases:
         progress_tree_service: PolishProgressTreeLlmService | None = None,
         ai_orchestration_facade: AiOrchestrationFacade | None = None,
         question_generation_service: QuestionGenerationService | None = None,
+        question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
@@ -154,7 +147,12 @@ class PolishUseCases:
         self._job_repository = job_repository
         self._job_match_repository = job_match_repository
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
-        self._question_generation_service = question_generation_service or QuestionGenerationService()
+        self._question_generation_policy = (
+            question_generation_policy or DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY
+        )
+        self._question_generation_service = question_generation_service or QuestionGenerationService(
+            runtime_policy=self._question_generation_policy
+        )
         self._ai_orchestration_facade = ai_orchestration_facade
 
     def bootstrap(self) -> ApplicationResult[str]:
@@ -392,7 +390,10 @@ class PolishUseCases:
                     error=DomainError(code="generation_failed", message="Polish question graph failed")
                 )
             if graph_status is not None:
-                candidate_payload = _graph_status_candidate_payload(graph_status)
+                candidate_payload = _graph_status_candidate_payload(
+                    graph_status,
+                    runtime_policy=self._question_generation_policy,
+                )
                 if candidate_payload is not None:
                     try:
                         plan = build_question_result_write_plan(
@@ -404,7 +405,7 @@ class PolishUseCases:
                             candidate=candidate_payload,
                             progress_node_ref=requested_progress_node_ref,
                             trace_refs=graph_status.trace_refs,
-                            contract_ids=QUESTION_CONTRACT_IDS,
+                            contract_ids=self._question_generation_policy.contract_ids,
                         )
                         write_result = AgentPersistenceHandoff().write_question_result(
                             plan,
@@ -416,6 +417,7 @@ class PolishUseCases:
                             graph_status,
                             requested_progress_node_ref=requested_progress_node_ref,
                             created_at=now,
+                            runtime_policy=self._question_generation_policy,
                         )
                         self._polish_repository.add_task(
                             task,
@@ -453,6 +455,7 @@ class PolishUseCases:
                     graph_status,
                     requested_progress_node_ref=requested_progress_node_ref,
                     created_at=now,
+                    runtime_policy=self._question_generation_policy,
                 )
                 self._polish_repository.add_task(
                     task,
@@ -487,6 +490,7 @@ class PolishUseCases:
                     result=question_generation_result,
                     requested_progress_node_ref=requested_progress_node_ref,
                     created_at=now,
+                    runtime_policy=self._question_generation_policy,
                 )
                 self._polish_repository.add_task(
                     task,
@@ -528,16 +532,16 @@ class PolishUseCases:
         if not question_metadata.get("focus_key"):
             question_metadata["focus_key"] = focus_key
         if not question_metadata.get("focus_dimension"):
-            question_metadata["focus_dimension"] = question_draft.question_pattern or "phase1_blueprint"
+            question_metadata["focus_dimension"] = question_draft.question_pattern or "evidence_grounded_question"
         if not question_metadata.get("template_signature"):
-            question_metadata["template_signature"] = f"tpl:phase1_blueprint:{focus_key}"
+            question_metadata["template_signature"] = f"tpl:evidence_grounded_question:{focus_key}"
         if not question_metadata.get("blueprint_signature"):
             question_metadata["blueprint_signature"] = f"bp:{sha256(focus_seed.encode('utf-8')).hexdigest()[:16]}"
         question_metadata["similarity_checked"] = True
         question_metadata["max_similarity_in_same_category"] = 0.0
         if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
             if not question_metadata.get("follow_up_reason"):
-                question_metadata["follow_up_reason"] = "phase1_reserved_follow_up"
+                question_metadata["follow_up_reason"] = "business_follow_up_request"
             if not question_metadata.get("follow_up_target_dimension"):
                 question_metadata["follow_up_target_dimension"] = question_metadata["focus_dimension"]
         question = PolishQuestion(
@@ -558,9 +562,9 @@ class PolishUseCases:
         )
         task = PolishTaskStatus(
             ai_task_id=task_id,
-            task_type="polish_question_generation",
+            task_type=self._question_generation_policy.task_type,
             status=AiTaskStatus.SUCCEEDED,
-            contract_ids=QUESTION_CONTRACT_IDS,
+            contract_ids=self._question_generation_policy.contract_ids,
             retryable=False,
             result_ref=TraceRef(trace_ref_id=question_id, trace_type="question", created_at=now),
             user_visible_status="题目已生成",
@@ -1152,13 +1156,14 @@ def _polish_question_graph_task_status(
     *,
     requested_progress_node_ref: str | None,
     created_at: Any,
+    runtime_policy: QuestionGenerationRuntimePolicy,
 ) -> PolishTaskStatus:
     status = _graph_task_status_to_polish_status(status_ref.status)
     return PolishTaskStatus(
         ai_task_id=status_ref.ai_task_id,
-        task_type="polish_question_generation",
+        task_type=runtime_policy.task_type,
         status=status,
-        contract_ids=QUESTION_CONTRACT_IDS,
+        contract_ids=runtime_policy.contract_ids,
         retryable=False,
         result_ref=TraceRef(trace_ref_id=status_ref.agent_run_id, trace_type="agent_run", created_at=created_at),
         user_visible_status="题目生成中" if status == AiTaskStatus.RUNNING else "题目生成任务已启动",
@@ -1169,11 +1174,18 @@ def _polish_question_graph_task_status(
     )
 
 
-def _graph_status_candidate_payload(status_ref: object) -> dict[str, Any] | None:
+def _graph_status_candidate_payload(
+    status_ref: object,
+    *,
+    runtime_policy: QuestionGenerationRuntimePolicy,
+) -> dict[str, Any] | None:
     candidate_payloads = getattr(status_ref, "candidate_payloads", ()) or ()
     if candidate_payloads:
         for candidate_payload in candidate_payloads:
-            if _is_accepted_polish_question_candidate_payload(candidate_payload):
+            if _is_accepted_polish_question_candidate_payload(
+                candidate_payload,
+                runtime_policy=runtime_policy,
+            ):
                 return candidate_payload.payload
         return None
     for attribute in ("accepted_candidate", "candidate", "candidate_payload", "question_candidate"):
@@ -1183,16 +1195,20 @@ def _graph_status_candidate_payload(status_ref: object) -> dict[str, Any] | None
     return None
 
 
-def _is_accepted_polish_question_candidate_payload(candidate_payload: object) -> bool:
+def _is_accepted_polish_question_candidate_payload(
+    candidate_payload: object,
+    *,
+    runtime_policy: QuestionGenerationRuntimePolicy = DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
+) -> bool:
     if not isinstance(candidate_payload, AgentCandidatePayload):
         return False
-    if candidate_payload.status.strip().lower() not in _POLISH_QUESTION_CANDIDATE_STATUSES:
+    if candidate_payload.status.strip().lower() not in runtime_policy.candidate_statuses:
         return False
-    if candidate_payload.candidate_type.strip().lower() not in _POLISH_QUESTION_CANDIDATE_TYPES:
+    if candidate_payload.candidate_type.strip().lower() not in runtime_policy.candidate_types:
         return False
     if (
         candidate_payload.payload_schema_id.strip().lower()
-        not in _POLISH_QUESTION_CANDIDATE_PAYLOAD_SCHEMA_IDS
+        not in runtime_policy.candidate_payload_schema_ids
     ):
         return False
     return isinstance(candidate_payload.payload, dict)
@@ -1203,12 +1219,13 @@ def _polish_question_graph_validation_failed_task_status(
     *,
     requested_progress_node_ref: str | None,
     created_at: Any,
+    runtime_policy: QuestionGenerationRuntimePolicy,
 ) -> PolishTaskStatus:
     return PolishTaskStatus(
         ai_task_id=status_ref.ai_task_id,
-        task_type="polish_question_generation",
+        task_type=runtime_policy.task_type,
         status=AiTaskStatus.VALIDATION_FAILED,
-        contract_ids=QUESTION_CONTRACT_IDS,
+        contract_ids=runtime_policy.contract_ids,
         retryable=False,
         result_ref=TraceRef(trace_ref_id=status_ref.agent_run_id, trace_type="agent_run", created_at=created_at),
         user_visible_status="题目生成校验未通过",
@@ -1225,6 +1242,7 @@ def _polish_question_generation_validation_failed_task_status(
     result: QuestionGenerationResult,
     requested_progress_node_ref: str | None,
     created_at: Any,
+    runtime_policy: QuestionGenerationRuntimePolicy,
 ) -> PolishTaskStatus:
     progress_node_ref = result.progress_node_ref or requested_progress_node_ref
     candidate_refs = []
@@ -1233,9 +1251,9 @@ def _polish_question_generation_validation_failed_task_status(
     candidate_refs.extend(ResourceRef(resource_type="evidence", resource_id=ref) for ref in result.evidence_refs)
     return PolishTaskStatus(
         ai_task_id=task_id,
-        task_type="polish_question_generation",
+        task_type=runtime_policy.task_type,
         status=AiTaskStatus.VALIDATION_FAILED,
-        contract_ids=QUESTION_CONTRACT_IDS,
+        contract_ids=runtime_policy.contract_ids,
         retryable=False,
         result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=created_at),
         user_visible_status="题目 grounding 校验未通过",
