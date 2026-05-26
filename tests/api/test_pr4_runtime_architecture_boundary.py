@@ -4,8 +4,13 @@ import ast
 from pathlib import Path
 
 from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext
+from app.application.ai_runtime.business_graphs.polish_question_graph import (
+    POLISH_QUESTION_GRAPH_NAME,
+    POLISH_QUESTION_GRAPH_VERSION,
+)
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.polish_question_runtime import PolishQuestionGraphRuntime
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -75,6 +80,44 @@ def test_pr4_pr5_boundary_allows_only_authorized_skeleton_and_no_formal_write_by
     assert result.metadata["db_business_writes"] == 0
 
 
+def test_polish_question_provider_draft_boundary_lives_in_dedicated_runtime() -> None:
+    assert not hasattr(InMemoryLangGraphRuntime, "_polish_question_provider_draft")
+    assert hasattr(PolishQuestionGraphRuntime, "_polish_question_provider_draft")
+
+
+def test_in_memory_runtime_delegates_polish_question_start_to_dedicated_runtime() -> None:
+    delegate = _RecordingPolishQuestionRuntime()
+    runtime = InMemoryLangGraphRuntime(
+        flag_resolver=RuntimeFlagResolver(
+            test_overrides={
+                "AIFI_AI_RUNTIME_ENABLED": True,
+                "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True,
+            }
+        ),
+        polish_question_runtime=delegate,
+    )
+    command = AgentCommandEnvelope(
+        entrypoint="start",
+        input_refs=("session_ref_1", "progress_node_ref_1"),
+        requested_outputs=("candidate_refs",),
+        idempotency_key="idem_polish_question_delegate",
+    )
+    context = AgentRunContext(
+        owner_id="owner_1",
+        actor_id="actor_1",
+        run_id="arun_polish_question_delegate",
+        ai_task_id="aitask_polish_question_delegate",
+        graph_name=POLISH_QUESTION_GRAPH_NAME,
+        graph_version=POLISH_QUESTION_GRAPH_VERSION,
+        command=command,
+    )
+
+    result = runtime.start(context, command)
+
+    assert result.run_id == context.run_id
+    assert delegate.calls == [(context, command)]
+
+
 def _business_graph_skeleton_boundary_violations() -> list[str]:
     if not BUSINESS_GRAPH_ROOT.exists():
         return []
@@ -142,3 +185,14 @@ def _is_langgraph_or_langchain(module_name: str) -> bool:
 
 def _is_under(path: Path, parent: Path) -> bool:
     return path == parent or parent in path.parents
+
+
+class _RecordingPolishQuestionRuntime:
+    def __init__(self) -> None:
+        self.calls: list[tuple[AgentRunContext, AgentCommandEnvelope]] = []
+
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope):
+        from app.application.ai_runtime.contracts import AgentRunResult
+
+        self.calls.append((context, command))
+        return AgentRunResult(run_id=context.run_id, status="delegated")

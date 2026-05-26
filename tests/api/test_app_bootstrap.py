@@ -4,6 +4,7 @@ import logging
 from sqlalchemy import inspect
 
 from app.infrastructure.ai_runtime.langgraph import InMemoryLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.polish_question_runtime import PolishQuestionGraphRuntime
 from app.infrastructure.db.session import DbSettings
 from app.main import ApiSettings, _log_runtime_ready, _startup_log_lines, create_app, get_settings
 from tests.api.asgi_client import call_json
@@ -30,6 +31,7 @@ def test_create_app_wires_in_memory_langgraph_runtime() -> None:
 
     facade = app.state.ai_orchestration_facade
     assert isinstance(facade._runner, InMemoryLangGraphRuntime)
+    assert isinstance(facade._runner._polish_question_runtime, PolishQuestionGraphRuntime)
 
 
 def test_create_app_does_not_initialize_schema_by_default() -> None:

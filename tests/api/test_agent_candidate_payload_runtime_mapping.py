@@ -17,7 +17,7 @@ from app.application.ai_runtime.contracts import (
     RuntimeValidationError,
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
-from app.infrastructure.ai_runtime.langgraph import in_memory_runtime as in_memory_runtime_module
+from app.infrastructure.ai_runtime.langgraph import polish_question_runtime as polish_question_runtime_module
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 from app.infrastructure.ai_runtime.langgraph.serializer import (
     build_agent_candidate_payload_from_runtime_output,
@@ -76,14 +76,14 @@ def test_runtime_candidate_output_requires_schema_and_candidate_ref() -> None:
 
 def test_in_memory_runtime_uses_runtime_candidate_payload_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
-    real_builder = in_memory_runtime_module.build_agent_candidate_payload_from_runtime_output
+    real_builder = polish_question_runtime_module.build_agent_candidate_payload_from_runtime_output
 
     def recording_builder(output: dict[str, object]) -> AgentCandidatePayload:
         calls.append(output)
         return real_builder(output)
 
     monkeypatch.setattr(
-        in_memory_runtime_module,
+        polish_question_runtime_module,
         "build_agent_candidate_payload_from_runtime_output",
         recording_builder,
     )

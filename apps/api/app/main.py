@@ -15,6 +15,7 @@ from app.application.ai_runtime.registry import AgentGraphRegistry
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.db.session import DbSettings, configure_session_factory
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.polish_question_runtime import PolishQuestionGraphRuntime
 from app.infrastructure.llm.job_match import LlmJobMatchAnalyzer
 from app.infrastructure.llm.runtime import build_llm_transport_from_env
 from app.infrastructure.observability.http_logging import HttpAccessLogMiddleware
@@ -117,10 +118,14 @@ def create_app(
 
 def _build_ai_orchestration_facade(*, polish_question_llm_transport=None) -> AiOrchestrationFacade:
     flag_resolver = RuntimeFlagResolver()
+    polish_question_runtime = PolishQuestionGraphRuntime(
+        flag_resolver=flag_resolver,
+        polish_question_llm_transport=polish_question_llm_transport,
+    )
     return AiOrchestrationFacade(
         runner=InMemoryLangGraphRuntime(
             flag_resolver=flag_resolver,
-            polish_question_llm_transport=polish_question_llm_transport,
+            polish_question_runtime=polish_question_runtime,
         ),
         registry=AgentGraphRegistry.default(),
         flag_resolver=flag_resolver,
