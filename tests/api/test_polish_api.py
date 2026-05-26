@@ -28,6 +28,11 @@ from app.application.polish.progress_prompts import (
     build_progress_tree_state_refresh_prompt,
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion
+from app.application.polish.next_question_agent import (
+    NEXT_QUESTION_AGENT_PROMPT_VERSION,
+    NEXT_QUESTION_AGENT_SCHEMA_ID,
+    NEXT_QUESTION_AGENT_SCHEMA_VERSION,
+)
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
@@ -471,9 +476,9 @@ def test_create_app_question_path_registers_facade_and_records_graph_fallback_me
     assert metadata["graph_fallback_reason"] == "graph_disabled"
     assert metadata["fallback_reason"] == "graph_disabled"
     assert metadata["graph_status"] == "disabled_fallback"
-    assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v3"
-    assert metadata["prompt_schema_id"] == "polish_question_generation_output_v2"
-    assert metadata["prompt_schema_version"] == "v2"
+    assert metadata["prompt_asset_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
+    assert metadata["prompt_schema_id"] == NEXT_QUESTION_AGENT_SCHEMA_ID
+    assert metadata["prompt_schema_version"] == NEXT_QUESTION_AGENT_SCHEMA_VERSION
     assert metadata["prompt_input_digest"].startswith("sha256:")
     assert metadata["prompt_evidence_refs"]
     assert metadata["prompt_safety_summary"]["input_data_untrusted"] is True

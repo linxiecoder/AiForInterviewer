@@ -10,6 +10,10 @@ from app.application.llm.errors import LlmTransportUnavailableError
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback
+from app.application.polish.next_question_agent import (
+    NEXT_QUESTION_AGENT_PROMPT_VERSION,
+    NEXT_QUESTION_AGENT_SCHEMA_ID,
+)
 from app.application.polish.queries import GetPolishSessionQuery
 from app.application.polish.question_generation_prompts import (
     QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE,
@@ -124,8 +128,8 @@ def test_phase1_question_metadata_records_prompt_asset_digest_without_prompt_bod
     assert result.succeeded
     assert result.draft is not None
     metadata = result.draft.question_metadata
-    assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v3"
-    assert metadata["prompt_schema_id"] == "polish_question_generation_output_v2"
+    assert metadata["prompt_asset_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
+    assert metadata["prompt_schema_id"] == NEXT_QUESTION_AGENT_SCHEMA_ID
     assert metadata["prompt_input_digest"].startswith("sha256:")
     assert metadata["prompt_evidence_refs"] == list(result.draft.evidence_refs)
     for forbidden_key in (
@@ -165,11 +169,11 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     request = transport.requests[0]
     assert request.task_type == "polish_question_generation"
     assert request.contract_ids == ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
-    assert request.prompt_version == "polish_question_generation_prompt.v3"
-    assert request.schema_id == "polish_question_generation_output_v2"
+    assert request.prompt_version == NEXT_QUESTION_AGENT_PROMPT_VERSION
+    assert request.schema_id == NEXT_QUESTION_AGENT_SCHEMA_ID
     prompt_asset = request.evidence_bundle
-    assert prompt_asset["prompt_version"] == "polish_question_generation_prompt.v3"
-    assert prompt_asset["schema_id"] == "polish_question_generation_output_v2"
+    assert prompt_asset["prompt_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
+    assert prompt_asset["schema_id"] == NEXT_QUESTION_AGENT_SCHEMA_ID
     assert validate_question_prompt_anchor_contract(prompt_asset) == ()
     assert prompt_asset["input_data"]["selected_node_title"] == "支付可靠性追问"
     assert prompt_asset["input_data"]["progress_node"]["title"] == "支付可靠性追问"
@@ -200,15 +204,29 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert output_schema["type"] == "object"
     assert output_schema["additionalProperties"] is False
     assert {
+        "schema_id",
+        "prompt_version",
+        "decision",
+        "question",
+        "persistence_hints",
+        "missing_context",
+        "evidence_refs",
+        "post_check_hints",
+    }.issubset(set(output_schema["required"]))
+    assert {"turn_intent", "evidence_support_level", "main_question_style", "allowed_extension_depth"}.issubset(
+        set(output_schema["properties"]["decision"]["required"])
+    )
+    assert {
         "question_text",
+        "question_kind",
         "difficulty",
         "skill_dimension",
         "expected_signal",
         "follow_ups",
         "scoring_rubric",
-        "missing_context",
-        "evidence_refs",
-    }.issubset(set(output_schema["required"]))
+    }.issubset(set(output_schema["properties"]["question"]["required"]))
+    assert prompt_asset["evidence_selection_policy"]["not_a_decision_policy"] is True
+    assert prompt_asset["evidence_retrieval_hints"]["role"] == "retrieval_hints_only"
     assert len(prompt_asset["examples"]) >= 3
     serialized_examples = json.dumps(prompt_asset["examples"], ensure_ascii=False)
     for forbidden in ("test_user", "test123", "固定候选人", "审计样本"):
@@ -216,7 +234,7 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     metadata = result.draft.question_metadata
     assert metadata["llm_generation_mode"] == "provider_structured_json"
     assert metadata["fallback_visible"] is False
-    assert metadata["llm_trace_refs"] == ["trace_question_prompt_v3"]
+    assert metadata["llm_trace_refs"] == ["trace_next_question_agent_prompt_v1"]
     assert metadata["grounding_status"] == "passed"
     assert metadata["grounding_validation_errors"] == []
     assert metadata["manual_review_required"] is False
@@ -346,7 +364,7 @@ def test_question_service_keeps_grounding_failure_as_soft_warning() -> None:
         "clarification_needed",
         "source_contamination_or_ungrounded_question",
     }.issubset(set(result.draft.low_confidence_flags))
-    assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v3"
+    assert metadata["prompt_asset_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
 
 
 def test_question_service_anchors_skill_dimension_to_progress_node_title_not_expected_capability() -> None:
@@ -385,7 +403,7 @@ def test_question_service_anchors_skill_dimension_to_progress_node_title_not_exp
     assert validate_question_prompt_anchor_contract(prompt_asset) == ()
 
 
-def test_question_prompt_weak_resume_evidence_prefers_migration_design_not_project_clarification() -> None:
+def test_question_prompt_weak_resume_evidence_prefers_real_implementation_before_extension() -> None:
     transport = _RecordingQuestionTransport()
     service = QuestionGenerationService(llm_transport=transport)
     session, context, plan, state = _distributed_lock_weak_evidence_inputs()
@@ -412,11 +430,14 @@ def test_question_prompt_weak_resume_evidence_prefers_migration_design_not_proje
         ensure_ascii=False,
     )
     assert "不要默认生成补充项目经历题" in serialized_policy
-    assert "弱证据时生成迁移设计题、改造题或机制理解题" in serialized_policy
-    assert "如果要在该项目中引入或改造该能力，你会如何设计" in serialized_policy
+    assert "真实面试节奏优先" in serialized_policy
+    assert "主问题必须优先问已证实项目的实现链路" in serialized_policy
+    assert "未证实目标能力只放入 follow_ups" in serialized_policy
 
     examples_by_name = {item["name"]: item for item in prompt_asset["examples"]}
     low_evidence_pattern = json.dumps(examples_by_name["low_evidence_pattern"], ensure_ascii=False)
+    assert "adjacent_implemented" in low_evidence_pattern
+    assert "follow_up_only" in low_evidence_pattern
     for forbidden_default in ("请补充一个相关项目经历", "请分享一个您亲自负责的相关场景", "请先补充背景"):
         assert forbidden_default not in low_evidence_pattern
 
@@ -425,6 +446,7 @@ def test_question_prompt_weak_resume_evidence_prefers_migration_design_not_proje
     assert "请分享一个您亲自负责的相关场景" in forbidden_patterns
     assert "请先补充背景" in forbidden_patterns
     assert "您能否补充一个需要用到某技术的项目案例" in forbidden_patterns
+    assert prompt_asset["evidence_selection_policy"]["not_a_decision_policy"] is True
 
     evidence_summaries = prompt_asset["input_data"]["evidence_summaries"]
     assert any(
@@ -470,7 +492,7 @@ def test_question_prompt_clarification_is_limited_to_missing_resume_and_evidence
     assert "已有简历 evidence" in clarification_policy
 
 
-def test_question_service_rewrites_project_clarification_to_resume_based_migration_design() -> None:
+def test_question_service_rewrites_project_clarification_to_resume_implementation_deep_dive() -> None:
     transport = _ProjectClarificationQuestionTransport()
     service = QuestionGenerationService(llm_transport=transport)
     session, context, plan, state = _distributed_lock_weak_evidence_inputs()
@@ -491,16 +513,200 @@ def test_question_service_rewrites_project_clarification_to_resume_based_migrati
     for fabricated_claim in ("你在项目中实现了分布式锁", "你主导过事务消息", "你已经落地了最终一致性"):
         assert fabricated_claim not in question_text
     assert "大文件异步处理管道" in question_text
-    assert "分布式锁与事务消息最终一致性设计" in question_text
     assert "Redis" in question_text or "RocketMQ" in question_text
-    assert "你会如何设计" in question_text
-    assert "改造" in question_text or "引入" in question_text
+    assert "实际链路" in question_text
+    assert "状态记录" in question_text
+    assert "效果验证" in question_text
+    for unsupported_main_fact in ("分布式锁", "事务消息", "半消息回查", "状态回查"):
+        assert unsupported_main_fact not in question_text
 
     metadata = result.draft.question_metadata
     assert metadata["question_text_rewritten_from_clarification"] is True
+    assert metadata["question_text_rewrite_reason"] == "project_clarification_to_implementation_deep_dive"
     assert metadata["question_text_rewrite_source_ref"] == "resume_project_004"
     assert metadata["manual_review_required"] is True
     assert metadata["llm_clarification_needed"] is True
+
+
+def test_next_question_agent_direct_implemented_decision_can_anchor_main_question() -> None:
+    transport = _NextQuestionDecisionTransport(
+        turn_intent="project_implementation_deep_dive",
+        evidence_support_level="direct_implemented",
+        main_question_style="ask_how_implemented",
+        allowed_extension_depth="main_question_allowed",
+        question_kind="implementation_deep_dive",
+        question_text="你在库存扣减链路中是怎么实现分布式锁和事务消息一致性的？请说明关键链路、失败处理和验证方式。",
+        unsupported_capability_claims=(),
+    )
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="库存扣减链路使用分布式锁、RocketMQ 事务消息和本地事务保证一致性。",
+        node_title="分布式锁与事务消息最终一致性设计",
+        expected_capability="能说明分布式锁、事务消息、最终一致性和异常恢复。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    decision = metadata["next_question_decision"]
+    assert decision["evidence_support_level"] == "direct_implemented"
+    assert decision["main_question_style"] == "ask_how_implemented"
+    assert decision["unsupported_capability_claims"] == []
+    assert "分布式锁" in result.draft.question_text
+    assert metadata["next_question_question"]["question_kind"] == "implementation_deep_dive"
+
+
+def test_next_question_agent_adjacent_implementation_keeps_extension_in_follow_ups() -> None:
+    transport = _NextQuestionDecisionTransport(
+        turn_intent="project_implementation_deep_dive",
+        evidence_support_level="adjacent_implemented",
+        main_question_style="ask_how_implemented",
+        allowed_extension_depth="follow_up_only",
+        question_kind="implementation_deep_dive",
+        question_text=(
+            "在你做的大文件异步处理管道中，分片上传、Redis 状态记录、MinIO 存储和 "
+            "RocketMQ 后续处理是怎么串起来的？请按入口、状态更新、消息触发和异常恢复说明。"
+        ),
+        unsupported_capability_claims=("分布式锁", "RocketMQ 事务消息", "半消息回查", "最终一致性状态机"),
+        follow_ups=(
+            "如果要避免重复合并，你会不会引入分布式锁，锁粒度怎么选？",
+            "如果要把上传、解析、向量化做成最终一致状态机，你会如何设计幂等和补偿？",
+        ),
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(_command(selected_progress_node_ref=NODE_REF))
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 1
+    question = repository.questions[0]
+    question_text = question.question_text
+    assert "大文件异步处理管道" in question_text
+    assert "Redis 状态记录" in question_text
+    assert "MinIO 存储" in question_text
+    assert "RocketMQ 后续处理" in question_text
+    for unsupported_fact in ("分布式锁", "RocketMQ 事务消息", "半消息回查", "最终一致性状态机"):
+        assert unsupported_fact not in question_text
+    metadata = question.question_metadata
+    decision = metadata["next_question_decision"]
+    assert decision["evidence_support_level"] == "adjacent_implemented"
+    assert decision["turn_intent"] in {"project_implementation_deep_dive", "architecture_tradeoff_deep_dive"}
+    assert decision["main_question_style"] == "ask_how_implemented"
+    assert decision["allowed_extension_depth"] == "follow_up_only"
+    follow_ups = metadata["next_question_question"]["follow_ups"]
+    assert any("分布式锁" in item and "如果" in item for item in follow_ups)
+    assert any("最终一致状态机" in item and "如果" in item for item in follow_ups)
+    assert metadata["next_question_persistence_hints"]["should_persist_decision"] is True
+
+
+def test_next_question_agent_unsupported_role_requirement_uses_gap_probe() -> None:
+    transport = _NextQuestionDecisionTransport(
+        turn_intent="gap_compensation_design",
+        evidence_support_level="unsupported",
+        main_question_style="ask_hypothetical_design",
+        allowed_extension_depth="main_question_allowed",
+        question_kind="gap_compensation_design",
+        question_text="假设你需要为一个上传解析链路补齐分布式一致性能力，你会如何设计幂等、补偿和验证指标？",
+        unsupported_capability_claims=("分布式锁", "事务消息"),
+        evidence_refs=(),
+        confidence="low",
+        missing_context=("resume",),
+    )
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="岗位要求能设计分布式一致性、幂等和补偿机制。",
+        primary_source_type="job_requirement",
+        node_title="分布式锁与事务消息最终一致性设计",
+        expected_capability="验证岗位要求中的分布式一致性设计能力。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    assert result.draft.question_metadata["next_question_decision"]["turn_intent"] == "gap_compensation_design"
+    assert result.draft.question_metadata["next_question_decision"]["evidence_support_level"] == "unsupported"
+    assert "假设" in result.draft.question_text
+    for forbidden in ("你在项目中", "你当时实现", "你负责的项目"):
+        assert forbidden not in result.draft.question_text
+
+
+def test_next_question_agent_clarifies_when_materials_missing() -> None:
+    transport = _NextQuestionDecisionTransport(
+        turn_intent="clarification",
+        evidence_support_level="unsupported",
+        main_question_style="ask_clarification",
+        allowed_extension_depth="none",
+        question_kind="clarification",
+        question_text="请先补充本轮要追问的简历项目、岗位要求、当前进度节点和可引用 evidence 后，我再继续出题。",
+        unsupported_capability_claims=(),
+        evidence_refs=(),
+        confidence="low",
+        missing_context=("resume", "job", "progress_node", "evidence_refs"),
+        clarification_needed=True,
+    )
+    service = QuestionGenerationService(llm_transport=transport)
+    session, _context, plan, state = _question_generation_inputs(primary_text="")
+    context = {"content_digest": "ctx_phase1_empty", "turns": []}
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    assert metadata["next_question_clarification_needed"] is True
+    assert metadata["next_question_question"]["question_kind"] == "clarification"
+    assert metadata["next_question_decision"]["turn_intent"] == "clarification"
+    assert "请先补充" in result.draft.question_text
+
+
+def test_next_question_agent_post_check_blocks_adjacent_unsupported_claim_as_fact() -> None:
+    transport = _NextQuestionDecisionTransport(
+        turn_intent="project_implementation_deep_dive",
+        evidence_support_level="adjacent_implemented",
+        main_question_style="ask_how_implemented",
+        allowed_extension_depth="follow_up_only",
+        question_kind="implementation_deep_dive",
+        question_text="你设计了分布式锁和 RocketMQ 事务消息来保证最终一致性，当时半消息回查是怎么做的？",
+        unsupported_capability_claims=("分布式锁", "RocketMQ 事务消息", "半消息回查", "最终一致性状态机"),
+    )
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _distributed_lock_weak_evidence_inputs()
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert not result.succeeded
+    assert result.draft is None
+    assert "next_question_post_check_unsupported_claim_in_main_question" in result.validation_errors
 
 
 def test_follow_up_question_service_sends_follow_up_prompt_to_llm_transport() -> None:
@@ -905,8 +1111,8 @@ def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -
     normalized = normalize_question_metadata(
         {
             "question_pattern": "technical_chain_deep_dive",
-            "prompt_asset_version": "polish_question_generation_prompt.v3",
-            "prompt_schema_id": "polish_question_generation_output_v2",
+            "prompt_asset_version": NEXT_QUESTION_AGENT_PROMPT_VERSION,
+            "prompt_schema_id": NEXT_QUESTION_AGENT_SCHEMA_ID,
             "prompt_schema_version": "v2",
             "prompt_input_digest": "sha256:abc123",
             "prompt_evidence_refs": ["evidence_ref_1", "evidence_ref_2"],
@@ -929,8 +1135,8 @@ def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -
         }
     )
 
-    assert normalized["prompt_asset_version"] == "polish_question_generation_prompt.v3"
-    assert normalized["prompt_schema_id"] == "polish_question_generation_output_v2"
+    assert normalized["prompt_asset_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
+    assert normalized["prompt_schema_id"] == NEXT_QUESTION_AGENT_SCHEMA_ID
     assert normalized["prompt_schema_version"] == "v2"
     assert normalized["prompt_input_digest"] == "sha256:abc123"
     assert normalized["prompt_evidence_refs"] == ["evidence_ref_1", "evidence_ref_2"]
@@ -1427,7 +1633,7 @@ class _RecordingQuestionTransport:
             validation_status=ValidationStatus.VALID,
             confidence_level=ConfidenceLevel.HIGH,
             low_confidence_flags=(),
-            trace_refs=("trace_question_prompt_v3",),
+            trace_refs=("trace_next_question_agent_prompt_v1",),
             evidence_refs=evidence_refs,
         )
 
@@ -1501,6 +1707,101 @@ class _ProjectClarificationQuestionTransport(_SoftGroundingWarningTransport):
             confidence_level=ConfidenceLevel.LOW,
             low_confidence_flags=("clarification_needed",),
             trace_refs=("trace_project_clarification_question",),
+            evidence_refs=evidence_refs,
+        )
+
+
+class _NextQuestionDecisionTransport:
+    def __init__(
+        self,
+        *,
+        turn_intent: str,
+        evidence_support_level: str,
+        main_question_style: str,
+        allowed_extension_depth: str,
+        question_kind: str,
+        question_text: str,
+        unsupported_capability_claims: tuple[str, ...],
+        follow_ups: tuple[str, ...] = ("这个链路如何验证效果？", "遇到失败时你怎么恢复？"),
+        evidence_refs: tuple[str, ...] | None = None,
+        confidence: str = "medium",
+        missing_context: tuple[str, ...] = (),
+        clarification_needed: bool = False,
+        question_style_check: str = "pass",
+        evidence_grounding_check: str = "pass",
+    ) -> None:
+        self.requests: list[LlmTransportRequest] = []
+        self._turn_intent = turn_intent
+        self._evidence_support_level = evidence_support_level
+        self._main_question_style = main_question_style
+        self._allowed_extension_depth = allowed_extension_depth
+        self._question_kind = question_kind
+        self._question_text = question_text
+        self._unsupported_capability_claims = unsupported_capability_claims
+        self._follow_ups = follow_ups
+        self._evidence_refs = evidence_refs
+        self._confidence = confidence
+        self._missing_context = missing_context
+        self._clarification_needed = clarification_needed
+        self._question_style_check = question_style_check
+        self._evidence_grounding_check = evidence_grounding_check
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.requests.append(request)
+        input_data = request.evidence_bundle["input_data"]
+        allowed_refs = tuple(input_data["evidence_refs"])
+        evidence_refs = allowed_refs if self._evidence_refs is None else self._evidence_refs
+        primary_ref = evidence_refs[0] if evidence_refs else None
+        return LlmTransportResult(
+            result={
+                "schema_id": "polish_next_question_agent_decision_v1",
+                "prompt_version": request.prompt_version,
+                "clarification_needed": self._clarification_needed,
+                "confidence": self._confidence,
+                "missing_context": list(self._missing_context),
+                "decision": {
+                    "turn_intent": self._turn_intent,
+                    "intent_reason": "根据当前证据和进度选择本轮追问意图。",
+                    "evidence_support_level": self._evidence_support_level,
+                    "evidence_support_reason": "证据与目标能力的直接性由本轮 Agent 判断。",
+                    "main_question_style": self._main_question_style,
+                    "allowed_extension_depth": self._allowed_extension_depth,
+                    "primary_evidence_refs": [primary_ref] if primary_ref else [],
+                    "secondary_evidence_refs": list(evidence_refs[1:]),
+                    "unsupported_capability_claims": list(self._unsupported_capability_claims),
+                    "risk_flags": [],
+                    "avoid_patterns_applied": ["unsupported_capability_as_fact"],
+                },
+                "question": {
+                    "question_text": self._question_text,
+                    "question_kind": self._question_kind,
+                    "difficulty": "clarification" if self._clarification_needed else "medium",
+                    "skill_dimension": input_data["skill_dimension"],
+                    "expected_signal": "能说明真实实现链路、设计原因、异常处理和验证效果。",
+                    "follow_ups": list(self._follow_ups),
+                    "scoring_rubric": [
+                        {"dimension": "grounding", "signals": ["引用证据", "不伪造经历"]},
+                        {"dimension": "reasoning", "signals": ["说明链路", "说明取舍和验证"]},
+                    ],
+                },
+                "persistence_hints": {
+                    "should_persist_decision": True,
+                    "should_update_progress": True,
+                    "next_focus_candidates": [input_data["progress_node"]["ref"]],
+                    "trace_tags": ["next_question_agent", self._evidence_support_level],
+                },
+                "evidence_refs": list(evidence_refs),
+                "post_check_hints": {
+                    "claims_to_verify": list(self._unsupported_capability_claims),
+                    "unsupported_terms_in_question": [],
+                    "question_style_check": self._question_style_check,
+                    "evidence_grounding_check": self._evidence_grounding_check,
+                },
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.LOW if self._confidence == "low" else ConfidenceLevel.MEDIUM,
+            low_confidence_flags=tuple(self._missing_context),
+            trace_refs=("trace_next_question_decision",),
             evidence_refs=evidence_refs,
         )
 

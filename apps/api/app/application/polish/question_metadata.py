@@ -12,6 +12,17 @@ QUESTION_METADATA_SCHEMA_VERSION = "1"
 BUILDER_VERSION = "evidence-aware-question-builder-v1"
 VALIDATOR_VERSION = "question-quality-validator-v2"
 SIGNAL_VERSION = "evidence-signals-v1"
+FORBIDDEN_NESTED_METADATA_KEYS = {
+    "raw_prompt",
+    "system_prompt",
+    "developer_prompt",
+    "user_prompt",
+    "provider_payload",
+    "raw_completion",
+    "full_resume",
+    "full_jd",
+    "primary_evidence_text",
+}
 
 
 @dataclass(frozen=True)
@@ -298,6 +309,67 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
                 ),
             }
         )
+    next_question_keys = {
+        "next_question_schema_id",
+        "next_question_schema_version",
+        "next_question_prompt_version",
+        "next_question_clarification_needed",
+        "next_question_confidence",
+        "next_question_missing_context",
+        "next_question_decision",
+        "next_question_question",
+        "next_question_persistence_hints",
+        "next_question_evidence_refs",
+        "next_question_post_check_hints",
+        "turn_intent",
+        "evidence_support_level",
+        "main_question_style",
+        "allowed_extension_depth",
+        "unsupported_capability_claims",
+    }
+    if any(key in payload for key in next_question_keys):
+        normalized.update(
+            {
+                "next_question_schema_id": _string_or_none(payload.get("next_question_schema_id"), max_chars=120),
+                "next_question_schema_version": _string_or_none(
+                    payload.get("next_question_schema_version"), max_chars=80
+                ),
+                "next_question_prompt_version": _string_or_none(
+                    payload.get("next_question_prompt_version"), max_chars=120
+                ),
+                "next_question_clarification_needed": (
+                    bool(payload.get("next_question_clarification_needed"))
+                    if isinstance(payload.get("next_question_clarification_needed"), bool)
+                    else None
+                ),
+                "next_question_confidence": _string_or_none(payload.get("next_question_confidence"), max_chars=80),
+                "next_question_missing_context": _string_list(
+                    payload.get("next_question_missing_context"), max_item_chars=160
+                ),
+                "next_question_decision": _safe_json_dict(payload.get("next_question_decision")),
+                "next_question_question": _safe_json_dict(payload.get("next_question_question")),
+                "next_question_persistence_hints": _safe_json_dict(
+                    payload.get("next_question_persistence_hints")
+                ),
+                "next_question_evidence_refs": _string_list(
+                    payload.get("next_question_evidence_refs"), max_item_chars=160
+                ),
+                "next_question_post_check_hints": _safe_json_dict(
+                    payload.get("next_question_post_check_hints")
+                ),
+                "turn_intent": _string_or_none(payload.get("turn_intent"), max_chars=120),
+                "evidence_support_level": _string_or_none(
+                    payload.get("evidence_support_level"), max_chars=120
+                ),
+                "main_question_style": _string_or_none(payload.get("main_question_style"), max_chars=120),
+                "allowed_extension_depth": _string_or_none(
+                    payload.get("allowed_extension_depth"), max_chars=120
+                ),
+                "unsupported_capability_claims": _string_list(
+                    payload.get("unsupported_capability_claims"), max_item_chars=160
+                ),
+            }
+        )
     return normalized
 
 
@@ -345,6 +417,42 @@ def _safe_nested_string_map(raw: object) -> dict[str, dict[str, str]]:
             continue
         safe[safe_key] = _safe_string_map(value, max_items=8, max_key_chars=80, max_value_chars=160)
     return safe
+
+
+def _safe_json_dict(raw: object, *, max_items: int = 32, max_depth: int = 4) -> dict[str, Any]:
+    value = _safe_json_value(raw, max_items=max_items, max_depth=max_depth)
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_json_value(raw: object, *, max_items: int, max_depth: int) -> Any:
+    if max_depth <= 0:
+        return None
+    if raw is None or isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return raw
+    if isinstance(raw, str):
+        return _string_or_none(raw, max_chars=600)
+    if isinstance(raw, (list, tuple)):
+        values: list[Any] = []
+        for item in raw[:max_items]:
+            safe_item = _safe_json_value(item, max_items=max_items, max_depth=max_depth - 1)
+            if safe_item is not None:
+                values.append(safe_item)
+        return values
+    if isinstance(raw, dict):
+        values: dict[str, Any] = {}
+        for key, value in raw.items():
+            if len(values) >= max_items:
+                break
+            safe_key = _string_or_none(key, max_chars=120)
+            if not safe_key or safe_key in FORBIDDEN_NESTED_METADATA_KEYS:
+                continue
+            safe_value = _safe_json_value(value, max_items=max_items, max_depth=max_depth - 1)
+            if safe_value is not None:
+                values[safe_key] = safe_value
+        return values
+    return _string_or_none(raw, max_chars=600)
 
 
 def _metadata_payload(raw: object) -> dict[str, Any]:

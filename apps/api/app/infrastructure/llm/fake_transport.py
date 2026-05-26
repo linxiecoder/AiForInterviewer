@@ -175,27 +175,83 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
         sort_keys=True,
     )
     trace_ref = stable_resource_id("trace", f"fake-polish-question-trace:{seed}")
-    return LlmTransportResult(
-        result={
+    result_payload = {
+        "transport": "fake",
+        "model_name": "fake_llm_polish_question_v1",
+        "question_text": question_text,
+        "question_kind": policy.get("question_kind") or "technical_chain_deep_dive",
+        "focus_dimension": policy.get("focus_dimension") or policy.get("question_kind") or "technical_chain_deep_dive",
+        "difficulty": difficulty,
+        "skill_dimension": capability,
+        "expected_signal": "回答应引用证据，说明边界、取舍、失败处理、验证指标和复盘信号。",
+        "follow_ups": ["关键失败场景是什么？", "如何证明方案有效？"],
+        "scoring_rubric": [
+            {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+            {"dimension": "reasoning", "signals": ["说明边界", "说明验证指标"]},
+        ],
+        "missing_context": missing_context,
+        "evidence_refs": list(evidence_refs),
+        "confidence": confidence,
+        "clarification_needed": clarification_needed,
+        "prompt_version": request.prompt_version,
+    }
+    if not is_follow_up:
+        support_level = "unsupported" if claim_mode == "job_gap_probe" else "direct_implemented"
+        turn_intent = "gap_compensation_design" if claim_mode == "job_gap_probe" else "project_implementation_deep_dive"
+        question_kind = "gap_compensation_design" if claim_mode == "job_gap_probe" else "implementation_deep_dive"
+        if clarification_needed:
+            support_level = "unsupported"
+            turn_intent = "clarification"
+            question_kind = "clarification"
+        result_payload = {
             "transport": "fake",
             "model_name": "fake_llm_polish_question_v1",
-            "question_text": question_text,
-            "question_kind": policy.get("question_kind") or "technical_chain_deep_dive",
-            "focus_dimension": policy.get("focus_dimension") or policy.get("question_kind") or "technical_chain_deep_dive",
-            "difficulty": difficulty,
-            "skill_dimension": capability,
-            "expected_signal": "回答应引用证据，说明边界、取舍、失败处理、验证指标和复盘信号。",
-            "follow_ups": ["关键失败场景是什么？", "如何证明方案有效？"],
-            "scoring_rubric": [
-                {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
-                {"dimension": "reasoning", "signals": ["说明边界", "说明验证指标"]},
-            ],
-            "missing_context": missing_context,
-            "evidence_refs": list(evidence_refs),
-            "confidence": confidence,
-            "clarification_needed": clarification_needed,
+            "schema_id": request.schema_id,
             "prompt_version": request.prompt_version,
-        },
+            "clarification_needed": clarification_needed,
+            "confidence": confidence,
+            "missing_context": missing_context,
+            "decision": {
+                "turn_intent": turn_intent,
+                "intent_reason": "fake transport deterministic next question intent",
+                "evidence_support_level": support_level,
+                "evidence_support_reason": "fake transport uses selected prompt evidence only",
+                "main_question_style": "ask_clarification" if clarification_needed else "ask_how_implemented",
+                "allowed_extension_depth": "none" if clarification_needed else "main_question_allowed",
+                "primary_evidence_refs": [evidence_refs[0]] if evidence_refs else [],
+                "secondary_evidence_refs": list(evidence_refs[1:]),
+                "unsupported_capability_claims": [],
+                "risk_flags": [],
+                "avoid_patterns_applied": ["unsupported_capability_as_fact"],
+            },
+            "question": {
+                "question_text": question_text,
+                "question_kind": question_kind,
+                "difficulty": difficulty,
+                "skill_dimension": capability,
+                "expected_signal": "回答应引用证据，说明边界、取舍、失败处理、验证指标和复盘信号。",
+                "follow_ups": ["关键失败场景是什么？", "如何证明方案有效？"],
+                "scoring_rubric": [
+                    {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+                    {"dimension": "reasoning", "signals": ["说明边界", "说明验证指标"]},
+                ],
+            },
+            "persistence_hints": {
+                "should_persist_decision": True,
+                "should_update_progress": True,
+                "next_focus_candidates": [str(progress_node.get("ref") or "")],
+                "trace_tags": ["fake_transport", support_level],
+            },
+            "evidence_refs": list(evidence_refs),
+            "post_check_hints": {
+                "claims_to_verify": [],
+                "unsupported_terms_in_question": [],
+                "question_style_check": "pass",
+                "evidence_grounding_check": "pass",
+            },
+        }
+    return LlmTransportResult(
+        result=result_payload,
         validation_status=ValidationStatus.VALID,
         confidence_level=(
             ConfidenceLevel.HIGH

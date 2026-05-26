@@ -17,6 +17,7 @@ from app.application.llm.errors import (
 from app.application.llm.ports import LlmTransport
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
+from app.application.polish.next_question_agent import validate_next_question_agent_output
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
 from app.application.polish.question_blueprint import (
     CLAIM_MODE_CLARIFICATION_NEEDED,
@@ -200,6 +201,8 @@ class QuestionGenerationService:
                 input_ref=scope.progress_node_ref,
                 output_ref=_clean(llm_result.result.get("trace_ref")) or None,
             )
+            if llm_payload.get("next_question_agent"):
+                question_pattern = _clean(llm_payload.get("question_kind")) or question_pattern
             question_text = str(llm_payload["question_text"]).strip()
             transport_kind = _clean(llm_result.result.get("transport"))
             is_fake_transport = transport_kind == "fake"
@@ -238,11 +241,12 @@ class QuestionGenerationService:
                 "provider_status": "not_configured",
             }
         question_text = str(question_text).strip()
-        question_text, rewrite_metadata = _rewrite_project_clarification_question(
-            question_text,
-            scope=scope,
-            blueprint=blueprint,
-        )
+        if not llm_payload or not llm_payload.get("next_question_agent"):
+            question_text, rewrite_metadata = _rewrite_project_clarification_question(
+                question_text,
+                scope=scope,
+                blueprint=blueprint,
+            )
         if not question_text:
             return _validation_failed("question_text_required", progress_node_ref=scope.progress_node_ref)
         if _contains_unsafe_question_text_marker(question_text):
@@ -277,6 +281,7 @@ class QuestionGenerationService:
             if grounding_failed
             else ("available" if draft_evidence_refs else "partial")
         )
+        next_question_metadata = _next_question_agent_metadata(llm_payload)
         draft = PolishQuestionDraft(
             question_text=question_text,
             question_sources=scope.question_sources,
@@ -305,7 +310,8 @@ class QuestionGenerationService:
                 **follow_up_metadata,
                 **generation_metadata,
                 **rewrite_metadata,
-                "question_kind": blueprint.question_kind,
+                **next_question_metadata,
+                "question_kind": question_pattern,
                 "claim_mode": blueprint.claim_mode,
                 "llm_difficulty": llm_payload.get("difficulty") if llm_payload else None,
                 "llm_skill_dimension": llm_payload.get("skill_dimension") if llm_payload else None,
@@ -464,16 +470,16 @@ def _rewrite_project_clarification_question(
         else "处理关键工程链路"
     )
     rewritten = (
-        f"基于你在{background}中{mechanism_clause}的经历，如果要围绕「{title}」做可靠性改造，"
-        "你会如何设计并发控制、消息确认、重复消费幂等和失败补偿？"
-        "请重点说明锁超时、消费者故障和状态回查时的恢复策略。"
+        f"基于你在{background}中{mechanism_clause}的经历，这条实际链路当时是怎么串起来的？"
+        "请按业务入口、状态记录、存储或消息处理、异常处理和效果验证来说明。"
     )
     return (
         rewritten,
         {
             "question_text_rewritten_from_clarification": True,
-            "question_text_rewrite_reason": "project_clarification_to_migration_design",
+            "question_text_rewrite_reason": "project_clarification_to_implementation_deep_dive",
             "question_text_rewrite_source_ref": source.ref_id,
+            "question_text_rewrite_target_capability": title,
         },
     )
 
@@ -563,6 +569,33 @@ def _parse_llm_question_payload(
     *,
     blueprint: QuestionBlueprint,
 ) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    if isinstance(payload.get("decision"), dict) or isinstance(payload.get("question"), dict):
+        agent_payload, agent_errors = validate_next_question_agent_output(
+            payload,
+            allowed_evidence_refs=blueprint.evidence_refs,
+        )
+        if agent_errors or agent_payload is None:
+            return None, agent_errors
+        question = agent_payload["question"]
+        return (
+            {
+                "question_text": question["question_text"],
+                "question_kind": question["question_kind"],
+                "focus_dimension": question["question_kind"],
+                "difficulty": question["difficulty"],
+                "skill_dimension": question["skill_dimension"],
+                "expected_signal": question["expected_signal"],
+                "follow_ups": list(question["follow_ups"]),
+                "scoring_rubric": list(question["scoring_rubric"]),
+                "missing_context": list(agent_payload["missing_context"]),
+                "evidence_refs": list(agent_payload["evidence_refs"]),
+                "confidence": agent_payload["confidence"],
+                "clarification_needed": agent_payload["clarification_needed"],
+                "next_question_agent": agent_payload,
+            },
+            (),
+        )
+
     errors: list[str] = []
     question_text = _clean(payload.get("question_text"))
     if not question_text:
@@ -629,6 +662,40 @@ def _parse_llm_question_payload(
         },
         (),
     )
+
+
+def _next_question_agent_metadata(llm_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(llm_payload, dict):
+        return {}
+    agent = llm_payload.get("next_question_agent")
+    if not isinstance(agent, dict):
+        return {}
+    decision = agent.get("decision") if isinstance(agent.get("decision"), dict) else {}
+    question = agent.get("question") if isinstance(agent.get("question"), dict) else {}
+    persistence_hints = (
+        agent.get("persistence_hints") if isinstance(agent.get("persistence_hints"), dict) else {}
+    )
+    post_check_hints = (
+        agent.get("post_check_hints") if isinstance(agent.get("post_check_hints"), dict) else {}
+    )
+    return {
+        "next_question_schema_id": agent.get("schema_id"),
+        "next_question_schema_version": agent.get("schema_version"),
+        "next_question_prompt_version": agent.get("prompt_version"),
+        "next_question_clarification_needed": bool(agent.get("clarification_needed")),
+        "next_question_confidence": agent.get("confidence"),
+        "next_question_missing_context": list(agent.get("missing_context") or []),
+        "next_question_decision": dict(decision),
+        "next_question_question": dict(question),
+        "next_question_persistence_hints": dict(persistence_hints),
+        "next_question_evidence_refs": list(agent.get("evidence_refs") or []),
+        "next_question_post_check_hints": dict(post_check_hints),
+        "turn_intent": decision.get("turn_intent"),
+        "evidence_support_level": decision.get("evidence_support_level"),
+        "main_question_style": decision.get("main_question_style"),
+        "allowed_extension_depth": decision.get("allowed_extension_depth"),
+        "unsupported_capability_claims": list(decision.get("unsupported_capability_claims") or []),
+    }
 
 
 def _scoring_rubric(value: object) -> list[dict[str, Any]]:

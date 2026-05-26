@@ -47,9 +47,9 @@ class QuestionGenerationPolicyResolutionContext:
 class QuestionGenerationRuntimePolicy:
     policy_version: str = QUESTION_GENERATION_POLICY_VERSION
     prompt_asset_id: str = "polish_question_generation"
-    prompt_version: str = "polish_question_generation_prompt.v3"
-    prompt_schema_id: str = "polish_question_generation_output_v2"
-    prompt_schema_version: str = "v2"
+    prompt_version: str = "polish_next_question_agent_prompt.v1"
+    prompt_schema_id: str = "polish_next_question_agent_decision_v1"
+    prompt_schema_version: str = "v1"
     task_type: str = "polish_question_generation"
     contract_ids: tuple[str, ...] = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
     llm_max_retries: int = 2
