@@ -15,6 +15,7 @@ BUSINESS_GRAPH_ROOT = APP_ROOT / "application" / "ai_runtime" / "business_graphs
 ALLOWED_PR5_BUSINESS_GRAPH_FILES = {
     BUSINESS_GRAPH_ROOT / "__init__.py",
     BUSINESS_GRAPH_ROOT / "polish_feedback_graph.py",
+    BUSINESS_GRAPH_ROOT / "polish_question_graph.py",
 }
 ALLOWED_TEST_IMPORTS = {
     Path("tests/api/test_langgraph_dependency_spike.py"),

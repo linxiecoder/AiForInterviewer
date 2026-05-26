@@ -32,11 +32,12 @@ def test_descriptor_is_default_off_and_pr5_owned() -> None:
     descriptor = build_polish_question_graph_descriptor()
 
     assert descriptor.graph_name == POLISH_QUESTION_GRAPH_NAME == "polish_question_graph"
-    assert descriptor.graph_version == POLISH_QUESTION_GRAPH_VERSION == "pr5-skeleton"
+    assert descriptor.graph_version == POLISH_QUESTION_GRAPH_VERSION == "pr9-agent-orchestration"
     assert descriptor.runtime_flag_key == POLISH_QUESTION_GRAPH_FLAG == "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
     assert descriptor.default_enabled is False
-    assert descriptor.migration_status == "skeleton_default_off_direct_path_retained"
-    assert descriptor.implementation_pr == "PR5"
+    assert descriptor.migration_status == "agent_orchestration_with_deterministic_fallback"
+    assert descriptor.implementation_pr == "Goal0526"
+    assert descriptor.lifecycle_status == "active"
     assert descriptor.provider_enabled is False
     assert descriptor.formal_write_targets == ()
     assert descriptor.db_business_write_targets == ()
@@ -53,8 +54,8 @@ def test_registry_uses_polish_question_descriptor_builder() -> None:
 
     assert descriptor == build_polish_question_graph_descriptor()
     assert descriptor.graph_name == "polish_question_graph"
-    assert descriptor.graph_version == "pr5-skeleton"
-    assert descriptor.implementation_pr == "PR5"
+    assert descriptor.graph_version == "pr9-agent-orchestration"
+    assert descriptor.implementation_pr == "Goal0526"
     assert descriptor.prompt_contract_ids != ("P-POLISH-QUESTION-001",)
     assert registry.get_graph_descriptor("polish_question_graph") == descriptor
 
@@ -134,7 +135,7 @@ def _context(command: AgentCommandEnvelope | None = None) -> AgentRunContext:
         run_id="arun_pr5_question",
         ai_task_id="aitask_pr5_question",
         graph_name="polish_question_graph",
-        graph_version="pr5-skeleton",
+        graph_version="pr9-agent-orchestration",
         command=command,
     )
 

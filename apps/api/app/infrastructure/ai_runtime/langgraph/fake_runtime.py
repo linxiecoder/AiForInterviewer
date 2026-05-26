@@ -29,9 +29,8 @@ from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
 )
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_NAME,
-    build_polish_question_candidate_readonly,
     build_polish_question_graph_descriptor,
-    derive_question_scenario,
+    execute_polish_question_agent,
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
@@ -290,7 +289,7 @@ class FakeLangGraphRuntime:
     def _start_polish_question_fake(
         self, *, context: AgentRunContext, command: AgentCommandEnvelope
     ) -> AgentRunResult:
-        self._require_runtime_enabled(context)
+        runtime_gate = self._require_runtime_enabled(context)
         descriptor = build_polish_question_graph_descriptor()
         graph_decision = self._flag_resolver.resolve_graph_flag(
             descriptor, actor_id=context.actor_id, caller="runner_entry"
@@ -304,56 +303,19 @@ class FakeLangGraphRuntime:
 
         state = self._invoke_graph(context=context, entrypoint="polish_question_fake_start")
         checkpoint = self._record_polish_question_checkpoint(context=context, state=state)
-        session_ref = _question_session_ref(command)
-        progress_node_ref = _question_progress_node_ref(command)
-        completed_focus_refs = _question_completed_focus_refs(command)
-        context_digest = str(
-            command.metadata.get("context_digest")
-            or command.metadata.get("request_digest")
-            or ""
+        execution = execute_polish_question_agent(
+            context=context,
+            command=command,
+            runtime_flag_source=graph_decision.source,
+            provider_enabled=runtime_gate["provider_gate_enabled"],
+            provider_flag_source=str(runtime_gate["provider_gate_source"]),
         )
-        scenario_summary = _question_fake_scenario_summary(command, progress_node_ref=progress_node_ref)
-        evidence_ref = progress_node_ref or "question_evidence_ref_" + _stable_id(session_ref, context.run_id)
-        scenario = derive_question_scenario(
-            session_ref=session_ref,
-            selected_progress_node_summary=scenario_summary,
-            selected_evidence_refs=(evidence_ref,),
-            resume_evidence_summaries=(
-                {
-                    "ref": evidence_ref,
-                    "summary": scenario_summary,
-                    "source_type": "resume_project",
-                },
-            ),
-            completed_focus_refs=completed_focus_refs,
-        )
-        candidate = build_polish_question_candidate_readonly(
-            owner_id=context.owner_id,
-            run_id=context.run_id,
-            ai_task_id=context.ai_task_id,
-            session_ref=session_ref,
-            scenario=scenario,
-            progress_node_ref=progress_node_ref,
-            context_digest=context_digest,
-        )
-        quality_gate = dict(candidate["quality_gate"])
-        quality_gate.setdefault(
-            "status", "accepted" if quality_gate.get("passed") is True else "blocked"
-        )
-        candidate = sanitize_payload(
-            {
-                **candidate,
-                "quality_gate": quality_gate,
-                "question_metadata": {"llm_generation_mode": "graph_candidate_handoff"},
-            }
-        )
-        candidate_ref = str(candidate["candidate_ref"])
-        candidate_trace_refs = tuple(
-            str(ref) for ref in candidate.get("trace_refs", ()) if str(ref).strip()
-        )
+        candidate = execution.candidate
+        candidate_ref = execution.candidate_ref
+        candidate_trace_refs = tuple(str(ref) for ref in execution.trace_refs if str(ref).strip())
         validation_refs = tuple(ref for ref in candidate_trace_refs if ref.startswith("validation_ref_"))
-        result_ref = "question_result_ref_" + _stable_id(context.owner_id, context.run_id, candidate_ref)
-        trace_refs = (checkpoint.checkpoint_ref, *validation_refs)
+        result_ref = execution.result_ref
+        trace_refs = (checkpoint.checkpoint_ref, *candidate_trace_refs)
         payload = build_agent_candidate_payload_from_runtime_output(
             {
                 "candidate_ref": candidate_ref,
@@ -366,43 +328,20 @@ class FakeLangGraphRuntime:
                 "low_confidence_flags": (),
             }
         )
-        metadata = {
-            "graph_name": POLISH_QUESTION_GRAPH_NAME,
-            "graph_version": "pr5-c2-fake-runtime",
-            "descriptor_graph_version": descriptor.graph_version,
-            "status": "fake_runtime_succeeded",
-            "runtime_flag_key": descriptor.runtime_flag_key,
-            "runtime_flag_source": graph_decision.source,
-            "input_refs": {
-                "session_ref": session_ref,
-                "progress_node_ref": progress_node_ref,
-                "completed_focus_refs": list(completed_focus_refs),
-            },
-            "output_refs": {
-                "result_refs": [result_ref],
-                "candidate_refs": [candidate_ref],
-                "formal_refs": [],
-            },
-            "trace_refs": {
-                "checkpoint_refs": [checkpoint.checkpoint_ref],
-                "validation_refs": list(validation_refs),
-            },
-            "provider_calls": 0,
-            "db_business_writes": 0,
-            "formal_business_writes": 0,
-            "counters": {
-                "provider_calls": 0,
-                "db_business_writes": 0,
-                "formal_business_writes": 0,
-            },
-            "checkpoint_refs_are_business_facts": False,
-            "sanitized": True,
-            "accepted_candidate_payload": True,
-        }
+        metadata = sanitize_payload(
+            {
+                **execution.metadata,
+                "descriptor_graph_version": descriptor.graph_version,
+                "trace_refs": {
+                    "checkpoint_refs": [checkpoint.checkpoint_ref],
+                    "validation_refs": list(validation_refs),
+                },
+            }
+        )
         events = self._timeline_for(context)
         events.extend(
             (
-                _event("run_started", "polish question fake runtime started", refs=(context.ai_task_id,)),
+                _event("run_started", "polish question agent runtime started", refs=(context.ai_task_id,)),
                 _event("checkpoint_recorded", "checkpoint ref recorded", refs=(checkpoint.checkpoint_ref,)),
                 _event("validation_recorded", "validation ref recorded", refs=validation_refs),
                 _event(
@@ -417,14 +356,14 @@ class FakeLangGraphRuntime:
                 ),
                 _event(
                     "run_succeeded",
-                    "polish question fake runtime succeeded",
+                    "polish question agent runtime succeeded",
                     refs=(result_ref, candidate_ref),
                 ),
             )
         )
         result = AgentRunResult(
             run_id=context.run_id,
-            status="fake_runtime_succeeded",
+            status=execution.status,
             output_refs=(result_ref, candidate_ref),
             trace_refs=trace_refs,
             interrupt_refs=(),
@@ -499,6 +438,7 @@ class FakeLangGraphRuntime:
             "runtime_enabled": runtime_decision.enabled,
             "langgraph_enabled": langgraph_decision.enabled,
             "provider_gate_enabled": provider_decision.enabled,
+            "provider_gate_source": provider_decision.source,
         }
 
     def _require_status(self, owner_id: str, run_id: str) -> AgentRunStatus:

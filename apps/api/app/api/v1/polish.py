@@ -22,7 +22,12 @@ from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from app.api.deps import get_db_session_factory, get_llm_transport, require_authenticated_actor
+from app.api.deps import (
+    get_ai_orchestration_facade,
+    get_db_session_factory,
+    get_llm_transport,
+    require_authenticated_actor,
+)
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.application.polish.commands import (
@@ -34,6 +39,7 @@ from app.application.polish.commands import (
     EndPolishSessionCommand,
     RefreshPolishProgressTreeStateCommand,
 )
+from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.polish.entities import (
     PolishAnswer,
     PolishSession,
@@ -102,12 +108,12 @@ ANSWER_NEXT_RECOMMENDED_ACTIONS = (
 FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
     {
         "prompt",
-        "raw_prompt",
-        "system_prompt",
+        "raw_prompt",  # sensitive response denylist marker
+        "system_prompt",  # sensitive response denylist marker
         "completion",
         "raw_completion",
-        "provider_payload",
-        "raw_provider_payload",
+        "provider_payload",  # sensitive response denylist marker
+        "raw_provider_payload",  # sensitive response denylist marker
         "provider_response",
         "raw_provider_response",
     }
@@ -244,8 +250,9 @@ async def create_polish_question_task(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
     llm_transport: LlmTransport = Depends(get_llm_transport),
+    ai_orchestration_facade: AiOrchestrationFacade | None = Depends(get_ai_orchestration_facade),
 ) -> Any:
-    use_cases = _use_cases(session_factory, llm_transport)
+    use_cases = _use_cases(session_factory, llm_transport, ai_orchestration_facade=ai_orchestration_facade)
     result = await run_in_threadpool(
         use_cases.create_question_task,
         CreatePolishQuestionTaskCommand(
@@ -469,7 +476,12 @@ async def refresh_polish_progress_tree_state(
 
 # ── 辅助函数：获取 UseCases ─────────────────────────────────────────
 
-def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTransport) -> PolishUseCases:
+def _use_cases(
+    session_factory: sessionmaker[Session],
+    llm_transport: LlmTransport,
+    *,
+    ai_orchestration_facade: AiOrchestrationFacade | None = None,
+) -> PolishUseCases:
     return PolishUseCases(
         polish_repository=SqlAlchemyPolishRepository(session_factory),
         binding_repository=SqlAlchemyBindingRepository(session_factory),
@@ -477,6 +489,7 @@ def _use_cases(session_factory: sessionmaker[Session], llm_transport: LlmTranspo
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
+        ai_orchestration_facade=ai_orchestration_facade,
     )
 
 
@@ -909,12 +922,12 @@ ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
     }
 )
 FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS = (
-    "raw_prompt",
-    "system_prompt",
+    "raw_prompt",  # sensitive response denylist marker
+    "system_prompt",  # sensitive response denylist marker
     "raw_completion",
     "completion",
-    "provider_payload",
-    "raw_provider_payload",
+    "provider_payload",  # sensitive response denylist marker
+    "raw_provider_payload",  # sensitive response denylist marker
     "provider_response",
     "raw_provider_response",
     "hidden_rubric",

@@ -10,8 +10,8 @@ from app.application.polish.entities import PolishQuestionDraft, PolishQuestionS
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
 from app.application.polish.question_blueprint import EvidenceScope, QuestionBlueprint, build_question_blueprint
 from app.application.polish.question_generation_prompts import (
-    QUESTION_SURFACE_PROMPT_VERSION,
-    build_question_surface_prompt,
+    build_question_prompt_asset,
+    build_question_prompt_metadata,
     render_blueprint_question,
 )
 from app.application.polish.question_grounding import GroundingResult, validate_question_grounding
@@ -59,7 +59,8 @@ class QuestionGenerationService:
             requested_ref=requested_ref,
         )
         blueprint = build_question_blueprint(scope)
-        surface_prompt = build_question_surface_prompt(blueprint, scope)
+        prompt_asset = build_question_prompt_asset(blueprint, scope)
+        prompt_metadata = build_question_prompt_metadata(prompt_asset)
         question_text = self._surface_question_builder(blueprint, scope)
         grounding_result = validate_question_grounding(
             blueprint=blueprint,
@@ -100,8 +101,10 @@ class QuestionGenerationService:
                 "source_availability": "available" if blueprint.evidence_refs else "partial",
                 "generation_service": QUESTION_GENERATION_SERVICE_VERSION,
                 "blueprint_version": blueprint.metadata.get("blueprint_version"),
-                "surface_prompt_version": QUESTION_SURFACE_PROMPT_VERSION,
-                "surface_prompt": surface_prompt,
+                **prompt_metadata,
+                "llm_generation_mode": "deterministic_fallback",
+                "fallback_reason": "local_blueprint_renderer",
+                "fallback_visible": True,
                 "question_kind": blueprint.question_kind,
                 "claim_mode": blueprint.claim_mode,
                 "primary_evidence_ref": blueprint.primary_evidence_ref,

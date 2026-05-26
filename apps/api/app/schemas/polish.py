@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.schemas.refs import LowConfidenceFlagSchema, ResourceRef, TraceRefSchema, VersionRef
@@ -188,18 +189,70 @@ class PolishSessionSummaryResponse(BaseModel):
     updated_at: datetime
 
 
+QUESTION_REF_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_:\-.]{0,127}$"
+_QUESTION_REF_RE = re.compile(QUESTION_REF_PATTERN)
+QUESTION_GENERATION_MODES = {"new_question", "follow_up"}
+QUESTION_REQUEST_INJECTION_MARKERS = (
+    "ignore previous",
+    "ignore all previous",
+    "system_prompt",
+    "developer_prompt",
+    "raw_prompt",
+    "provider_payload",
+    "prompt injection",
+    "reveal prompt",
+    "泄露",
+    "忽略以上",
+)
+
+
 class CreateQuestionTaskRequest(BaseModel):
-    progress_node_ref: str | None = Field(default=None, min_length=1)
-    generation_mode: str | None = Field(default=None, min_length=1)
-    selected_primary_category_ref: str | None = Field(default=None, min_length=1)
-    selected_secondary_category_ref: str | None = Field(default=None, min_length=1)
-    selected_progress_node_ref: str | None = Field(default=None, min_length=1)
-    selected_category_path: list[str] = Field(default_factory=list)
-    parent_question_id: str | None = Field(default=None, min_length=1)
-    parent_answer_id: str | None = Field(default=None, min_length=1)
-    parent_feedback_id: str | None = Field(default=None, min_length=1)
-    exclude_question_refs: list[str] = Field(default_factory=list)
-    completed_focus_refs: list[str] = Field(default_factory=list)
+    progress_node_ref: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    generation_mode: str | None = Field(default=None, min_length=1, max_length=32)
+    selected_primary_category_ref: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    selected_secondary_category_ref: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    selected_progress_node_ref: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    selected_category_path: list[str] = Field(default_factory=list, max_length=6)
+    parent_question_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    parent_answer_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    parent_feedback_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
+    exclude_question_refs: list[str] = Field(default_factory=list, max_length=20)
+    completed_focus_refs: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("selected_category_path")
+    @classmethod
+    def _validate_selected_category_path(cls, value: list[str]) -> list[str]:
+        for item in value:
+            if not isinstance(item, str) or not item.strip() or len(item.strip()) > 80:
+                raise ValueError("selected_category_path entries must be non-empty and at most 80 chars")
+            if _contains_question_request_injection_marker(item):
+                raise ValueError("selected_category_path entries must not contain prompt injection markers")
+        return value
+
+    @field_validator("exclude_question_refs", "completed_focus_refs")
+    @classmethod
+    def _validate_ref_list(cls, value: list[str]) -> list[str]:
+        for item in value:
+            if not isinstance(item, str) or not _QUESTION_REF_RE.fullmatch(item.strip()):
+                raise ValueError("ref entries must match the allowed ref pattern")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_generation_mode_combinations(self) -> "CreateQuestionTaskRequest":
+        if self.generation_mode is not None and self.generation_mode not in QUESTION_GENERATION_MODES:
+            raise ValueError("generation_mode must be new_question or follow_up")
+        if self.generation_mode == "new_question" and (
+            self.parent_question_id is not None
+            or self.parent_answer_id is not None
+            or self.parent_feedback_id is not None
+        ):
+            raise ValueError("new_question mode must not include follow_up parent refs")
+        return self
+
+
+def _contains_question_request_injection_marker(value: str) -> bool:
+    normalized = value.strip().lower()
+    return any(marker in normalized for marker in QUESTION_REQUEST_INJECTION_MARKERS)
 
 
 class CreateAnswerRequest(BaseModel):

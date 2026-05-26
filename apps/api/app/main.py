@@ -10,7 +10,11 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1 import build_api_v1_router
+from app.application.ai_runtime.facade import AiOrchestrationFacade
+from app.application.ai_runtime.registry import AgentGraphRegistry
+from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.db.session import DbSettings, configure_session_factory
+from app.infrastructure.ai_runtime.langgraph.fake_runtime import FakeLangGraphRuntime
 from app.infrastructure.llm.job_match import LlmJobMatchAnalyzer
 from app.infrastructure.llm.runtime import build_llm_transport_from_env
 from app.infrastructure.observability.http_logging import HttpAccessLogMiddleware
@@ -98,6 +102,7 @@ def create_app(
     application.state.db_session_factory = db_session_factory
     application.state.llm_transport = build_llm_transport_from_env()
     application.state.job_match_analyzer = LlmJobMatchAnalyzer(application.state.llm_transport)
+    application.state.ai_orchestration_facade = _build_ai_orchestration_facade()
     application.state.auth_runtime = auth_runtime or build_auth_runtime_from_env(
         cookie_path=resolved_settings.api_prefix
     )
@@ -106,6 +111,15 @@ def create_app(
     application.add_exception_handler(ApiHttpError, api_http_error_handler)
     application.include_router(build_api_v1_router(resolved_settings.api_prefix))
     return application
+
+
+def _build_ai_orchestration_facade() -> AiOrchestrationFacade:
+    flag_resolver = RuntimeFlagResolver()
+    return AiOrchestrationFacade(
+        runner=FakeLangGraphRuntime(flag_resolver=flag_resolver),
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=flag_resolver,
+    )
 
 
 def _log_runtime_ready(settings: ApiSettings) -> None:

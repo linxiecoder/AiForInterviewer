@@ -177,6 +177,25 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "follow_up_reason": _string_or_none(payload.get("follow_up_reason"), max_chars=240),
         "follow_up_target_dimension": _string_or_none(payload.get("follow_up_target_dimension"), max_chars=240),
     }
+    prompt_keys = {
+        "prompt_asset_version",
+        "prompt_schema_id",
+        "prompt_schema_version",
+        "prompt_input_digest",
+        "prompt_evidence_refs",
+        "prompt_safety_summary",
+    }
+    if any(key in payload for key in prompt_keys):
+        normalized.update(
+            {
+                "prompt_asset_version": _string_or_none(payload.get("prompt_asset_version"), max_chars=120),
+                "prompt_schema_id": _string_or_none(payload.get("prompt_schema_id"), max_chars=120),
+                "prompt_schema_version": _string_or_none(payload.get("prompt_schema_version"), max_chars=80),
+                "prompt_input_digest": _string_or_none(payload.get("prompt_input_digest"), max_chars=160),
+                "prompt_evidence_refs": _string_list(payload.get("prompt_evidence_refs"), max_item_chars=160),
+                "prompt_safety_summary": _safe_prompt_safety_summary(payload.get("prompt_safety_summary")),
+            }
+        )
     llm_keys = {
         "llm_task_type",
         "prompt_version",
@@ -184,6 +203,13 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "llm_output_validation_status",
         "llm_generation_mode",
         "fallback_reason",
+        "fallback_visible",
+        "graph_fallback_reason",
+        "graph_status",
+        "provider_status",
+        "phase_results",
+        "tool_results",
+        "validator_result",
         "repair_attempted",
         "provider_summary",
         "model_summary",
@@ -201,6 +227,13 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
                 ),
                 "llm_generation_mode": _string_or_none(payload.get("llm_generation_mode"), max_chars=80),
                 "fallback_reason": _string_or_none(payload.get("fallback_reason"), max_chars=120),
+                "fallback_visible": _bool_or_false(payload.get("fallback_visible")),
+                "graph_fallback_reason": _string_or_none(payload.get("graph_fallback_reason"), max_chars=120),
+                "graph_status": _string_or_none(payload.get("graph_status"), max_chars=120),
+                "provider_status": _string_or_none(payload.get("provider_status"), max_chars=120),
+                "phase_results": _safe_phase_results(payload.get("phase_results")),
+                "tool_results": _safe_tool_results(payload.get("tool_results")),
+                "validator_result": _safe_validator_result(payload.get("validator_result")),
                 "repair_attempted": _bool_or_false(payload.get("repair_attempted")),
                 "provider_summary": _safe_summary_dict(payload.get("provider_summary")),
                 "model_summary": _safe_summary_dict(payload.get("model_summary")),
@@ -325,6 +358,105 @@ def _safe_summary_dict(value: object) -> dict[str, Any]:
             text = _string_or_none(raw, max_chars=120)
             if text:
                 result[key] = text
+    return result
+
+
+def _safe_prompt_safety_summary(value: object) -> dict[str, bool]:
+    if not isinstance(value, dict):
+        return {}
+    allowed = {
+        "input_data_untrusted",
+        "raw_prompt_persisted",
+        "raw_completion_persisted",
+        "provider_payload_persisted",
+        "full_evidence_persisted",
+    }
+    return {key: bool(value[key]) for key in allowed if isinstance(value.get(key), bool)}
+
+
+def _safe_phase_results(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value[:12]:
+        if not isinstance(item, dict):
+            continue
+        phase = _string_or_none(item.get("phase"), max_chars=80)
+        status = _string_or_none(item.get("status"), max_chars=80)
+        if not phase or not status:
+            continue
+        safe_item: dict[str, Any] = {"phase": phase, "status": status}
+        tool_name = _string_or_none(item.get("tool_name"), max_chars=120)
+        if tool_name:
+            safe_item["tool_name"] = tool_name
+        output_ref = _string_or_none(item.get("output_ref"), max_chars=160)
+        if output_ref:
+            safe_item["output_ref"] = output_ref
+        attempts = _int_or_none(item.get("attempts"))
+        if attempts is not None:
+            safe_item["attempts"] = attempts
+        latency_ms = _float_or_none(item.get("latency_ms"))
+        if latency_ms is not None:
+            safe_item["latency_ms"] = latency_ms
+        retry_delay_seconds = _float_or_none(item.get("retry_delay_seconds"))
+        if retry_delay_seconds is not None:
+            safe_item["retry_delay_seconds"] = retry_delay_seconds
+        error = _string_or_none(item.get("error"), max_chars=160)
+        if error:
+            safe_item["error"] = error
+        result.append(safe_item)
+    return result
+
+
+def _safe_tool_results(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value[:12]:
+        if not isinstance(item, dict):
+            continue
+        tool_name = _string_or_none(item.get("tool_name"), max_chars=120)
+        status = _string_or_none(item.get("status"), max_chars=80)
+        if not tool_name or not status:
+            continue
+        safe_item: dict[str, Any] = {"tool_name": tool_name, "status": status}
+        input_schema_id = _string_or_none(item.get("input_schema_id"), max_chars=160)
+        output_schema_id = _string_or_none(item.get("output_schema_id"), max_chars=160)
+        output_ref = _string_or_none(item.get("output_ref"), max_chars=160)
+        if input_schema_id:
+            safe_item["input_schema_id"] = input_schema_id
+        if output_schema_id:
+            safe_item["output_schema_id"] = output_schema_id
+        if output_ref:
+            safe_item["output_ref"] = output_ref
+        attempts = _int_or_none(item.get("attempts"))
+        if attempts is not None:
+            safe_item["attempts"] = attempts
+        latency_ms = _float_or_none(item.get("latency_ms"))
+        if latency_ms is not None:
+            safe_item["latency_ms"] = latency_ms
+        error = _string_or_none(item.get("error"), max_chars=160)
+        if error:
+            safe_item["error"] = error
+        result.append(safe_item)
+    return result
+
+
+def _safe_validator_result(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    if isinstance(value.get("passed"), bool):
+        result["passed"] = value["passed"]
+    blocking_reasons = _string_list(value.get("blocking_reasons"), max_item_chars=120)
+    low_confidence_reasons = _string_list(value.get("low_confidence_reasons"), max_item_chars=120)
+    checked_rules = _string_list(value.get("checked_rules"), max_item_chars=120)
+    if blocking_reasons:
+        result["blocking_reasons"] = blocking_reasons
+    if low_confidence_reasons:
+        result["low_confidence_reasons"] = low_confidence_reasons
+    if checked_rules:
+        result["checked_rules"] = checked_rules
     return result
 
 

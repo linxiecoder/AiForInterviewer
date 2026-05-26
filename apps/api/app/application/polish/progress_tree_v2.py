@@ -1897,8 +1897,8 @@ def _derive_exam_point_from_text(value: object, *, category: str) -> str:
     compact = _normalize_label_for_compare(text)
     if not compact:
         return ""
-    if "硬件测试" in compact and ("智能辅助平台" in compact or "辅助平台" in compact or "平台" in compact):
-        return "硬件测试智能辅助平台的服务端架构设计"
+    if "平台" in compact and ("服务端" in compact or "架构" in compact or "辅助" in compact):
+        return "项目平台服务端架构设计"
     if (
         "专业术语" in compact
         or "单一检索" in compact
@@ -1906,7 +1906,7 @@ def _derive_exam_point_from_text(value: object, *, category: str) -> str:
         or "混合检索" in compact
         or "召回" in compact
     ):
-        return "专业术语场景下的混合检索与召回优化"
+        return "领域术语检索与召回优化"
     if "a i agent".replace(" ", "") in compact or "aiagent" in compact:
         if "任务规划" in compact or "工具调用" in compact:
             return "AI Agent 任务规划与工具调用机制"
@@ -1917,7 +1917,7 @@ def _derive_exam_point_from_text(value: object, *, category: str) -> str:
     if "高可用" in compact:
         return "服务端高可用架构设计"
     if "rag" in compact:
-        return "RAG 检索增强生成架构设计"
+        return "检索增强生成架构设计"
     if "rocketmq" in compact or "kafka" in compact or "消息" in compact:
         return "消息一致性与失败补偿机制"
     if "redis" in compact or "分布式锁" in compact:

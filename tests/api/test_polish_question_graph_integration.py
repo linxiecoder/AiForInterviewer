@@ -116,12 +116,15 @@ def test_create_question_task_persists_fake_runtime_agent_candidate_payload() ->
     assert len(repository.questions) == 1
     assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
     assert repository.questions[0].ai_task_id == result.value.ai_task_id
-    assert repository.questions[0].question_metadata["llm_generation_mode"] == "graph_candidate_handoff"
+    assert repository.questions[0].question_metadata["llm_generation_mode"] == "deterministic_agent_fallback"
+    assert repository.questions[0].question_metadata["fallback_reason"] == "provider_disabled_deterministic_drafting_tool"
+    assert repository.questions[0].question_metadata["phase_results"]
+    assert repository.questions[0].question_metadata["tool_results"]
     assert blocker.calls == 0
 
     agent_run_ref = next(ref for ref in result.value.candidate_refs if ref.resource_type == "agent_run")
     status = runtime.get_status(agent_run_ref.resource_id, OWNER_ID)
-    assert status.status == "fake_runtime_succeeded"
+    assert status.status == "agent_orchestration_succeeded"
     assert status.metadata["accepted_candidate_payload"] is True
     assert any(ref.startswith("question_candidate_ref_") for ref in status.output_refs)
 

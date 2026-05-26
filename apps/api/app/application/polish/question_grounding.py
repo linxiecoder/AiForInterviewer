@@ -13,16 +13,7 @@ from app.application.polish.question_blueprint import (
 
 FORBIDDEN_JOB_GAP_CLAIM_PHRASES = ("你负责过", "你实现过", "你主导过", "你参与过")
 CLARIFICATION_REQUIRED_MATERIALS = ("业务入口", "职责边界", "失败案例", "验证指标")
-UNSUPPORTED_INVENTORY_PIPELINE_TERMS = (
-    "1GB 日志",
-    "上传入口",
-    "解析",
-    "切块",
-    "向量化",
-    "入库",
-    "15 秒到 3 秒",
-)
-INVENTORY_EVIDENCE_TERMS = ("库存", "分布式锁", "事务消息")
+MIN_GROUNDED_TERM_OVERLAP = 1
 HISTORY_SOURCE_TYPES = {"history_feedback", "previous_answer", "previous_question", "turn_answer", "turn_feedback"}
 
 
@@ -57,9 +48,19 @@ def validate_question_grounding(
         for required in CLARIFICATION_REQUIRED_MATERIALS:
             if required not in normalized_question:
                 errors.append(f"clarification_missing_material:{required}")
-    primary_text = blueprint.primary_evidence_text or ""
-    if any(term in primary_text for term in INVENTORY_EVIDENCE_TERMS):
-        for unsupported in UNSUPPORTED_INVENTORY_PIPELINE_TERMS:
-            if unsupported in normalized_question:
-                errors.append(f"unsupported_inventory_pipeline_term:{unsupported}")
+    if blueprint.claim_mode != CLAIM_MODE_CLARIFICATION_NEEDED and blueprint.primary_evidence_text:
+        overlap = _grounded_term_overlap(blueprint.primary_evidence_text, normalized_question)
+        if overlap < MIN_GROUNDED_TERM_OVERLAP:
+            errors.append("source_contamination_or_ungrounded_question")
     return GroundingResult(passed=not errors, validation_errors=tuple(errors))
+
+
+def _grounded_term_overlap(source_text: object, question_text: str) -> int:
+    source_terms = _grounding_terms(source_text)
+    question_terms = _grounding_terms(question_text)
+    return len(source_terms & question_terms)
+
+
+def _grounding_terms(value: object) -> set[str]:
+    normalized = "".join(ch if ch.isalnum() or "\u4e00" <= ch <= "\u9fff" else " " for ch in str(value).lower())
+    return {term for term in normalized.split() if len(term) >= 2}

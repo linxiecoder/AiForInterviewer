@@ -3,9 +3,15 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
+    MAX_AGENT_STEPS,
+    MAX_RETRIES,
+    POLISH_QUESTION_AGENT_PHASES,
+    QUESTION_AGENT_BACKOFF_SECONDS,
+    QUESTION_AGENT_TIMEOUT_SECONDS,
     POLISH_QUESTION_GRAPH_FLAG,
     POLISH_QUESTION_GRAPH_NAME,
     POLISH_QUESTION_GRAPH_VERSION,
+    TOOL_SCHEMAS,
 )
 from app.application.ai_runtime.contracts import (
     AgentCommandEnvelope,
@@ -47,7 +53,7 @@ def test_fake_runtime_polish_question_emits_agent_candidate_payload() -> None:
 
     result = runtime.start(context, context.command)
 
-    assert result.status == "fake_runtime_succeeded"
+    assert result.status == "agent_orchestration_succeeded"
     assert len(result.candidate_payloads) == 1
     candidate_payload = result.candidate_payloads[0]
     assert candidate_payload.candidate_type == "polish_question_candidate"
@@ -61,6 +67,38 @@ def test_fake_runtime_polish_question_emits_agent_candidate_payload() -> None:
     assert result.metadata["db_business_writes"] == 0
     assert result.metadata["formal_business_writes"] == 0
     assert result.metadata["accepted_candidate_payload"] is True
+
+
+def test_fake_runtime_polish_question_executes_phase_tool_chain_with_provider_off_fallback() -> None:
+    runtime = FakeLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+    context = _context()
+
+    result = runtime.start(context, context.command)
+
+    metadata = result.metadata
+    assert metadata["provider_status"] == "disabled"
+    assert metadata["fallback_reason"] == "provider_disabled_deterministic_drafting_tool"
+    assert metadata["max_agent_steps"] == MAX_AGENT_STEPS
+    assert metadata["max_retries"] == MAX_RETRIES
+    assert metadata["timeout_seconds"] == QUESTION_AGENT_TIMEOUT_SECONDS
+    assert metadata["backoff_seconds"] == QUESTION_AGENT_BACKOFF_SECONDS
+    assert [item["phase"] for item in metadata["phase_results"]] == list(POLISH_QUESTION_AGENT_PHASES)
+    assert {item["tool_name"] for item in metadata["tool_results"]} == {
+        schema.tool_name for schema in TOOL_SCHEMAS
+    }
+    assert metadata["validator_result"]["passed"] is True
+    assert all(item["status"] in {"succeeded", "skipped"} for item in metadata["phase_results"])
+    assert any(item.get("retry_delay_seconds") == QUESTION_AGENT_BACKOFF_SECONDS for item in metadata["phase_results"])
+    assert contains_sensitive_payload(metadata) is False
+
+    candidate_metadata = result.candidate_payloads[0].payload["question_metadata"]
+    assert candidate_metadata["provider_status"] == "disabled"
+    assert candidate_metadata["fallback_reason"] == "provider_disabled_deterministic_drafting_tool"
+    assert [item["phase"] for item in candidate_metadata["phase_results"]] == list(POLISH_QUESTION_AGENT_PHASES)
+    assert {item["tool_name"] for item in candidate_metadata["tool_results"]} == {
+        schema.tool_name for schema in TOOL_SCHEMAS
+    }
+    assert candidate_metadata["validator_result"]["passed"] is True
 
 
 def test_fake_runtime_polish_question_candidate_payload_is_sanitized() -> None:
@@ -120,7 +158,7 @@ def test_fake_runtime_polish_question_status_has_refs_only() -> None:
     result = runtime.start(context, context.command)
     status = runtime.get_status(context.run_id, context.owner_id)
 
-    assert status.status == "fake_runtime_succeeded"
+    assert status.status == "agent_orchestration_succeeded"
     assert status.output_refs == result.output_refs
     assert result.candidate_payloads[0].candidate_ref in status.output_refs
     assert status.trace_refs == result.trace_refs

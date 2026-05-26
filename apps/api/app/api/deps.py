@@ -6,6 +6,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.errors import raise_api_error
+from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.job_match.ports import JobMatchAnalyzer
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
@@ -54,6 +55,10 @@ async def get_llm_transport(request: Request) -> LlmTransport:
             message="LLM transport is not available.",
         )
     return transport
+
+
+async def get_ai_orchestration_facade(request: Request) -> AiOrchestrationFacade | None:
+    return getattr(request.app.state, "ai_orchestration_facade", None)
 
 
 def get_current_actor(request: Request) -> CurrentActor | None:

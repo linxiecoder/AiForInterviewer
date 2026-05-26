@@ -39,7 +39,6 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
 
     assert pr5_descriptors == {
         POLISH_FEEDBACK_GRAPH_NAME: build_polish_feedback_graph_descriptor(),
-        POLISH_QUESTION_GRAPH_NAME: build_polish_question_graph_descriptor(),
     }
 
     feedback_descriptor = pr5_descriptors[POLISH_FEEDBACK_GRAPH_NAME]
@@ -52,15 +51,18 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
     )
     _assert_pr5_descriptor_is_default_off_refs_only(feedback_descriptor)
 
-    question_descriptor = pr5_descriptors[POLISH_QUESTION_GRAPH_NAME]
+    question_descriptor = registry.get_graph_descriptor(POLISH_QUESTION_GRAPH_NAME)
     assert question_descriptor.graph_name == POLISH_QUESTION_GRAPH_NAME == "polish_question_graph"
-    assert question_descriptor.graph_version == POLISH_QUESTION_GRAPH_VERSION == "pr5-skeleton"
+    assert question_descriptor.graph_version == POLISH_QUESTION_GRAPH_VERSION == "pr9-agent-orchestration"
     assert (
         question_descriptor.runtime_flag_key
         == POLISH_QUESTION_GRAPH_FLAG
         == "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
     )
-    _assert_pr5_descriptor_is_default_off_refs_only(question_descriptor)
+    assert question_descriptor == build_polish_question_graph_descriptor()
+    assert question_descriptor.default_enabled is False
+    assert question_descriptor.provider_enabled is False
+    assert question_descriptor.disabled_behavior == "deterministic_fallback_with_reason"
 
     flag_decision = RuntimeFlagResolver().resolve_graph_flag(
         feedback_descriptor,

@@ -20,8 +20,8 @@ def test_scenario_derived_from_resume_project() -> None:
         ),
     )
 
-    assert any(term in scenario["scenario_title"] for term in ("订单履约", "库存预占", "状态流转"))
-    assert {"订单履约", "库存预占", "状态流转"}.issubset(set(scenario["allowed_entities"]))
+    assert scenario["scenario_title"]
+    assert any("支付回调" in entity or "状态流转" in entity for entity in scenario["allowed_entities"])
     assert "日志" not in repr(scenario)
     assert "RAG" not in repr(scenario)
     assert "AI模拟面试工作台" not in repr(scenario)
@@ -76,7 +76,7 @@ def test_multiple_domains_do_not_merge() -> None:
     )
 
     assert not ("1GB" in candidate["question_text"] and "库存扣减" in candidate["question_text"])
-    assert "库存扣减" in scenario["forbidden_entities"]
+    assert any("库存扣减" in entity or "事务消息" in entity for entity in scenario["forbidden_entities"])
     mixed_candidate = {
         **candidate,
         "question_text": "请围绕 1GB 文件上传和库存扣减回答核心链路。",

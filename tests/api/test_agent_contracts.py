@@ -145,7 +145,7 @@ def test_registry_descriptors_are_default_off_and_reject_unsupported_outputs() -
     resume = registry.get_graph_descriptor("resume_analysis")
 
     assert polish.default_enabled is False
-    assert polish.lifecycle_status == "placeholder"
+    assert polish.lifecycle_status == "active"
     assert job_match.lifecycle_status == "deferred"
     assert resume.lifecycle_status == "deferred"
     assert registry.validate_requested_outputs("polish_question_generation", ("candidate_refs",)) == (

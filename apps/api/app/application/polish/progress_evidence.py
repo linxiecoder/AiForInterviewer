@@ -7,6 +7,12 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from app.application.polish.question_generation_policy import (
+    SEMANTIC_JOB_SOURCE_TYPES,
+    SEMANTIC_RESUME_SOURCE_TYPES,
+    SOURCE_PRIORITY_POLICY_BY_PURPOSE,
+)
+
 
 ProgressEvidencePurpose = Literal["initial_plan", "state_refresh", "next_question"]
 
@@ -17,67 +23,7 @@ DEFAULT_SELECTION_LIMITS: dict[ProgressEvidencePurpose, tuple[int, int]] = {
     "next_question": (8, 5000),
 }
 
-INITIAL_PLAN_ORDER = {
-    "job_requirement": 1,
-    "match_gap": 2,
-    "match_focus": 3,
-    "resume_project": 4,
-    "resume_skill": 5,
-    "job_responsibility": 6,
-    "resume_work_experience": 7,
-    "match_suggested_question": 8,
-    "job_other_note": 9,
-    "resume_summary": 10,
-    "resume_education": 11,
-    "turn_feedback": 12,
-    "turn_question": 13,
-    "turn_answer": 14,
-    "asset_summary": 15,
-    "weakness": 16,
-}
-
-STATE_REFRESH_ORDER = {
-    "turn_feedback": 1,
-    "match_gap": 2,
-    "match_focus": 3,
-    "resume_project": 4,
-    "job_requirement": 5,
-    "turn_question": 6,
-    "turn_answer": 7,
-    "resume_skill": 8,
-    "job_responsibility": 9,
-    "resume_work_experience": 10,
-    "match_suggested_question": 11,
-    "job_other_note": 12,
-    "resume_summary": 13,
-    "asset_summary": 14,
-    "weakness": 15,
-}
-
-NEXT_QUESTION_ORDER = {
-    "match_gap": 1,
-    "turn_feedback": 2,
-    "job_requirement": 3,
-    "resume_project": 4,
-    "resume_skill": 5,
-    "job_responsibility": 6,
-    "turn_question": 7,
-    "turn_answer": 8,
-    "match_focus": 9,
-    "match_suggested_question": 10,
-    "resume_work_experience": 11,
-    "job_other_note": 12,
-    "resume_summary": 13,
-}
-
-ORDER_BY_PURPOSE = {
-    "initial_plan": INITIAL_PLAN_ORDER,
-    "state_refresh": STATE_REFRESH_ORDER,
-    "next_question": NEXT_QUESTION_ORDER,
-}
-
-SEMANTIC_JOB_SOURCE_TYPES = {"job_requirement", "job_responsibility"}
-SEMANTIC_RESUME_SOURCE_TYPES = {"resume_project", "resume_skill", "resume_work_experience"}
+ORDER_BY_PURPOSE = SOURCE_PRIORITY_POLICY_BY_PURPOSE
 
 
 @dataclass(frozen=True)

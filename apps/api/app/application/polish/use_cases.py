@@ -342,6 +342,7 @@ class PolishUseCases:
             detail.progress_tree_state,
             progress_node_ref=requested_progress_node_ref,
         )
+        graph_fallback_reason: str | None = None
         if self._ai_orchestration_facade is not None:
             stable_idempotency_key = _stable_polish_question_generation_idempotency_key(
                 owner_id=command.owner_id,
@@ -359,6 +360,7 @@ class PolishUseCases:
                     idempotency_key=stable_idempotency_key,
                 )
             except GraphDisabledError:
+                graph_fallback_reason = "graph_disabled"
                 graph_status = None
             except RuntimeValidationError:
                 return ApplicationResult(
@@ -465,28 +467,34 @@ class PolishUseCases:
             detail.progress_context,
             completed_focus_refs,
         )
-        question_generation_result = self._question_generation_service.generate(
-            session=session,
-            context=progress_context,
-            plan=detail.progress_tree_plan,
-            state=detail.progress_tree_state,
-            requested_ref=requested_progress_node_ref,
-        )
-        if not question_generation_result.succeeded or question_generation_result.draft is None:
-            task = _polish_question_generation_validation_failed_task_status(
-                task_id=task_id,
-                result=question_generation_result,
-                requested_progress_node_ref=requested_progress_node_ref,
-                created_at=now,
+        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
+            follow_up_draft = _build_follow_up_question_draft(command=command, detail=detail)
+            if isinstance(follow_up_draft, DomainError):
+                return ApplicationResult(error=follow_up_draft)
+            question_draft = follow_up_draft
+        else:
+            question_generation_result = self._question_generation_service.generate(
+                session=session,
+                context=progress_context,
+                plan=detail.progress_tree_plan,
+                state=detail.progress_tree_state,
+                requested_ref=requested_progress_node_ref,
             )
-            self._polish_repository.add_task(
-                task,
-                owner_id=command.owner_id,
-                actor_id=command.actor_id,
-                target_ref_id=command.session_id,
-            )
-            return ApplicationResult(value=task)
-        question_draft = question_generation_result.draft
+            if not question_generation_result.succeeded or question_generation_result.draft is None:
+                task = _polish_question_generation_validation_failed_task_status(
+                    task_id=task_id,
+                    result=question_generation_result,
+                    requested_progress_node_ref=requested_progress_node_ref,
+                    created_at=now,
+                )
+                self._polish_repository.add_task(
+                    task,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    target_ref_id=command.session_id,
+                )
+                return ApplicationResult(value=task)
+            question_draft = question_generation_result.draft
         question_metadata = _metadata_for_new_question(
             getattr(question_draft, "question_metadata", None),
             generated_at=now.isoformat(),
@@ -499,6 +507,10 @@ class PolishUseCases:
             )
         )
         question_metadata["completed_focus_refs"] = list(completed_focus_refs)
+        if graph_fallback_reason is not None:
+            question_metadata["graph_fallback_reason"] = graph_fallback_reason
+            question_metadata["fallback_reason"] = graph_fallback_reason
+            question_metadata["graph_status"] = "disabled_fallback"
         focus_seed = "|".join(
             (
                 _question_generation_mode(command),
@@ -1432,6 +1444,16 @@ def _validate_question_generation_request(command: CreatePolishQuestionTaskComma
                 code="validation_failed",
                 message="new_question requires a selected progress node",
                 details={"field": "selected_progress_node_ref"},
+            )
+        if (
+            _clean_question_request_text(command.parent_question_id) is not None
+            or _clean_question_request_text(command.parent_answer_id) is not None
+            or _clean_question_request_text(command.parent_feedback_id) is not None
+        ):
+            return DomainError(
+                code="validation_failed",
+                message="new_question must not include follow_up parent refs",
+                details={"field": "generation_mode"},
             )
     if mode == QUESTION_GENERATION_MODE_FOLLOW_UP:
         if _clean_question_request_text(command.parent_question_id) is None:

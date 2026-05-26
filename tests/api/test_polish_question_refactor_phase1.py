@@ -6,6 +6,7 @@ from typing import Any
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.entities import PolishAnswer
 from app.application.polish.question_generation_service import QuestionGenerationService
+from app.application.polish.question_metadata import normalize_question_metadata
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 
@@ -88,6 +89,93 @@ def test_phase1_question_service_clarification_question_requires_four_materials(
     assert result.draft is not None
     for required in ("业务入口", "职责边界", "失败案例", "验证指标"):
         assert required in result.draft.question_text
+
+
+def test_phase1_question_metadata_records_prompt_asset_digest_without_prompt_body() -> None:
+    service = QuestionGenerationService()
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。"
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v2"
+    assert metadata["prompt_schema_id"] == "polish_question_generation_output_v1"
+    assert metadata["prompt_input_digest"].startswith("sha256:")
+    assert metadata["prompt_evidence_refs"] == list(result.draft.evidence_refs)
+    for forbidden_key in (
+        "surface_prompt",
+        "input_data",
+        "system_role",
+        "developer_constraints",
+        "user_task",
+        "output_schema",
+        "primary_evidence_text",
+    ):
+        assert forbidden_key not in metadata
+    assert "支付链路需要覆盖幂等" not in json.dumps(metadata, ensure_ascii=False)
+
+
+def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -> None:
+    normalized = normalize_question_metadata(
+        {
+            "question_pattern": "technical_chain_deep_dive",
+            "prompt_asset_version": "polish_question_generation_prompt.v2",
+            "prompt_schema_id": "polish_question_generation_output_v1",
+            "prompt_schema_version": "v1",
+            "prompt_input_digest": "sha256:abc123",
+            "prompt_evidence_refs": ["evidence_ref_1", "evidence_ref_2"],
+            "prompt_safety_summary": {
+                "input_data_untrusted": True,
+                "raw_prompt_persisted": False,
+                "provider_payload_persisted": False,
+                "note": "safe summary",
+            },
+            "surface_prompt": "must be dropped",
+            "raw_prompt": "must be dropped",
+            "system_prompt": "must be dropped",
+            "developer_prompt": "must be dropped",
+            "user_prompt": "must be dropped",
+            "primary_evidence_text": "full evidence must be dropped",
+            "full_resume": "full resume must be dropped",
+            "full_jd": "full jd must be dropped",
+            "provider_payload": {"secret": "must be dropped"},
+            "raw_completion": "must be dropped",
+        }
+    )
+
+    assert normalized["prompt_asset_version"] == "polish_question_generation_prompt.v2"
+    assert normalized["prompt_schema_id"] == "polish_question_generation_output_v1"
+    assert normalized["prompt_schema_version"] == "v1"
+    assert normalized["prompt_input_digest"] == "sha256:abc123"
+    assert normalized["prompt_evidence_refs"] == ["evidence_ref_1", "evidence_ref_2"]
+    assert normalized["prompt_safety_summary"] == {
+        "input_data_untrusted": True,
+        "raw_prompt_persisted": False,
+        "provider_payload_persisted": False,
+    }
+    for forbidden_key in (
+        "surface_prompt",
+        "raw_prompt",
+        "system_prompt",
+        "developer_prompt",
+        "user_prompt",
+        "primary_evidence_text",
+        "full_resume",
+        "full_jd",
+        "provider_payload",
+        "raw_completion",
+    ):
+        assert forbidden_key not in normalized
 
 
 def test_phase1_grounding_failure_persists_failed_task_without_question() -> None:

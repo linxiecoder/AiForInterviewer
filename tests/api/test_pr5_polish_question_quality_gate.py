@@ -5,29 +5,36 @@ from app.application.ai_runtime.business_graphs.polish_question_graph import que
 
 def test_unsupported_inventory_entity_blocked() -> None:
     gate = question_candidate_quality_gate(
-        _candidate("请围绕库存扣减、仓库物料和超卖兜底回答。", allowed_entities=("支付回调",))
+        _candidate(
+            "请围绕支付回调和搜索排序链路回答。",
+            allowed_entities=("支付回调",),
+            forbidden_entities=("搜索排序",),
+        )
     )
 
     assert gate["passed"] is False
-    assert "unsupported_business_entity" in gate["blocking_reasons"]
+    assert "cross_evidence_scenario_mixing" in gate["blocking_reasons"]
 
 
 def test_unsupported_1gb_log_entity_blocked() -> None:
     gate = question_candidate_quality_gate(
-        _candidate("请说明你如何处理 1GB 日志解析和检索链路。", allowed_entities=("高并发接口设计",))
+        _candidate(
+            "请说明你如何同时处理网关限流和客户端渲染性能。",
+            allowed_entities=("网关限流",),
+            forbidden_entities=("客户端渲染性能",),
+        )
     )
 
     assert gate["passed"] is False
-    assert "unsupported_business_entity" in gate["blocking_reasons"]
-    assert "fixed_template_domain_leak" in gate["blocking_reasons"]
+    assert "cross_evidence_scenario_mixing" in gate["blocking_reasons"]
 
 
 def test_cross_evidence_mixing_blocked() -> None:
     gate = question_candidate_quality_gate(
         _candidate(
-            "请围绕 1GB 文件上传和库存扣减讲清事务一致性。",
-            allowed_entities=("1GB 文件上传", "异步解析"),
-            forbidden_entities=("库存扣减", "事务消息"),
+            "请围绕结算对账和搜索排序讲清一致性。",
+            allowed_entities=("结算对账",),
+            forbidden_entities=("搜索排序",),
         )
     )
 

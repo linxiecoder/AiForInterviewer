@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_FLAG,
+    POLISH_QUESTION_GRAPH_VERSION,
     run_polish_question_readonly_parity,
 )
 from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext, contains_sensitive_payload
@@ -69,6 +70,6 @@ def _context() -> AgentRunContext:
         run_id="arun_pr5_q3",
         ai_task_id="aitask_pr5_q3",
         graph_name="polish_question_graph",
-        graph_version="pr5-skeleton",
+        graph_version=POLISH_QUESTION_GRAPH_VERSION,
         command=command,
     )

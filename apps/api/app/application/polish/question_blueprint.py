@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.application.polish.entities import PolishQuestionSource
+from app.application.polish.question_generation_policy import QUESTION_KIND_TAXONOMY
 
 
 QUESTION_BLUEPRINT_VERSION = "polish_question_blueprint.phase1"
@@ -17,13 +18,7 @@ QUESTION_KIND_TRADEOFF_DESIGN = "tradeoff_design"
 QUESTION_KIND_CLARIFICATION_NEEDED = "clarification_needed"
 
 ALLOWED_QUESTION_KINDS = frozenset(
-    {
-        QUESTION_KIND_PROJECT_DEEP_DIVE,
-        QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE,
-        QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE,
-        QUESTION_KIND_TRADEOFF_DESIGN,
-        QUESTION_KIND_CLARIFICATION_NEEDED,
-    }
+    item["schema_value"] for item in QUESTION_KIND_TAXONOMY.values()
 )
 
 CLAIM_MODE_EVIDENCE_GROUNDED = "evidence_grounded"
@@ -106,11 +101,11 @@ def _question_kind(scope: EvidenceScope, *, claim_mode: str) -> str:
         for item in (scope.node_title, scope.expected_capability, " ".join(scope.missing_points))
         if item
     ).lower()
-    if any(term in text for term in ("失败", "异常", "补偿", "降级", "恢复", "回滚")):
+    if any(term in text for term in QUESTION_KIND_TAXONOMY[QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE]["signals"]):
         return QUESTION_KIND_FAILURE_RECOVERY_DEEP_DIVE
-    if any(term in text for term in ("取舍", "设计", "方案", "架构", "权衡")):
+    if any(term in text for term in QUESTION_KIND_TAXONOMY[QUESTION_KIND_TRADEOFF_DESIGN]["signals"]):
         return QUESTION_KIND_TRADEOFF_DESIGN
-    if any(term in text for term in ("链路", "状态", "一致性", "事务", "锁", "技术")):
+    if any(term in text for term in QUESTION_KIND_TAXONOMY[QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE]["signals"]):
         return QUESTION_KIND_TECHNICAL_CHAIN_DEEP_DIVE
     return QUESTION_KIND_PROJECT_DEEP_DIVE
 

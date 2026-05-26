@@ -1,12 +1,16 @@
-"""Default-off PR5 Polish question business graph skeleton."""
+"""Polish question business graph orchestration contract."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
+from dataclasses import dataclass
+from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
     AgentCommandEnvelope,
     AgentRunContext,
     AgentRunResult,
@@ -24,81 +28,102 @@ if TYPE_CHECKING:
 
 
 POLISH_QUESTION_GRAPH_NAME = "polish_question_graph"
-POLISH_QUESTION_GRAPH_VERSION = "pr5-skeleton"
+POLISH_QUESTION_GRAPH_VERSION = "pr9-agent-orchestration"
 POLISH_QUESTION_GRAPH_FLAG = "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
 POLISH_QUESTION_TRACE_TASK_TYPE = "polish_question_generation"
+POLISH_QUESTION_RUNTIME_DEFAULT = False
+POLISH_QUESTION_PROVIDER_GATE = False
+MAX_AGENT_STEPS = 7
+MAX_RETRIES = 2
+QUESTION_AGENT_TIMEOUT_SECONDS = 20
+QUESTION_AGENT_BACKOFF_SECONDS = 0.25
 
 _DEFAULT_ENTRYPOINTS = ("start", "replay")
 _SUPPORTED_OUTPUTS = ("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs")
 _LEGACY_PROMPT_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
 POLISH_QUESTION_READONLY_PARITY_VERSION = "pr5-q3-readonly-parity"
 POLISH_QUESTION_PERSISTENCE_VERSION = "pr5-q4-persistence-handoff"
+POLISH_QUESTION_AGENT_PHASES = (
+    "plan_task",
+    "retrieve_context",
+    "draft_question",
+    "validate_grounding",
+    "repair_or_retry",
+    "persist_candidate",
+    "finalize",
+)
 
 _FORBIDDEN_PAYLOAD_KEYS = frozenset(
     {
-        "raw" + "_prompt",
-        "raw" + "_completion",
-        "raw" + "_provider" + "_payload",
-        "provider" + "_payload",
-        "checkpoint" + "_payload",
-        "full" + "_resume",
-        "full" + "_jd",
-        "full" + "_answer",
-        "hidden" + "_rubric",
-        "system" + "_prompt",
+        "raw_prompt",  # sensitive payload denylist marker
+        "raw_completion",
+        "raw_provider_payload",  # sensitive payload denylist marker
+        "provider_payload",  # sensitive payload denylist marker
+        "checkpoint_payload",
+        "full_resume",
+        "full_jd",
+        "full_answer",
+        "hidden_rubric",
+        "system_prompt",  # sensitive payload denylist marker
     }
 )
-_ENTITY_PATTERNS = (
-    ("订单履约", ("订单履约", "履约系统")),
-    ("库存预占", ("库存预占",)),
-    ("支付回调", ("支付回调",)),
-    ("超时取消", ("超时取消",)),
-    ("状态流转", ("状态流转", "状态机")),
-    ("库存扣减", ("库存扣减", "扣减库存")),
-    ("事务消息", ("事务消息",)),
-    ("仓库", ("仓库",)),
-    ("物料", ("物料",)),
-    ("超卖", ("超卖",)),
-    ("1GB 文件上传", ("1GB 文件上传", "1GB文件上传", "文件上传")),
-    ("1GB", ("1GB",)),
-    ("异步解析", ("异步解析",)),
-    ("日志", ("日志", "log")),
-    ("高并发接口设计", ("高并发接口设计", "高并发接口", "高并发")),
-    ("限流降级", ("限流降级", "限流", "降级")),
-    ("压测", ("压测", "压力测试")),
-    ("可观测性", ("可观测性", "观测性")),
-    ("RAG", ("RAG", "检索增强")),
-    ("LLM", ("LLM", "大模型")),
-    ("Agent", ("Agent", "智能体")),
-    ("AI模拟面试工作台", ("AI模拟面试工作台", "AI 模拟面试工作台")),
+_GENERIC_TERM_STOPWORDS = frozenset(
+    {
+        "项目",
+        "系统",
+        "平台",
+        "经验",
+        "要求",
+        "候选人",
+        "说明",
+        "回答",
+        "场景",
+        "能力",
+        "业务",
+        "技术",
+        "方案",
+        "问题",
+        "风险",
+        "指标",
+    }
 )
-_ENTITY_GROUPS = {
-    "订单履约": "order_fulfillment",
-    "库存预占": "order_fulfillment",
-    "支付回调": "order_fulfillment",
-    "超时取消": "order_fulfillment",
-    "状态流转": "order_fulfillment",
-    "库存扣减": "inventory_consistency",
-    "事务消息": "inventory_consistency",
-    "仓库": "inventory_consistency",
-    "物料": "inventory_consistency",
-    "超卖": "inventory_consistency",
-    "1GB 文件上传": "file_upload",
-    "1GB": "file_upload",
-    "异步解析": "file_upload",
-    "日志": "log_processing",
-    "高并发接口设计": "job_high_concurrency",
-    "限流降级": "job_high_concurrency",
-    "压测": "job_high_concurrency",
-    "可观测性": "job_high_concurrency",
-    "RAG": "fixed_template_ai",
-    "LLM": "fixed_template_ai",
-    "Agent": "fixed_template_ai",
-    "AI模拟面试工作台": "fixed_template_ai",
-}
-_INVENTORY_ENTITIES = frozenset({"库存预占", "库存扣减", "仓库", "物料", "超卖"})
-_FIXED_TEMPLATE_DOMAIN_ENTITIES = frozenset({"日志", "RAG", "LLM", "Agent", "AI模拟面试工作台"})
 _JOB_GAP_CLAIM_PHRASES = ("你负责过", "你做过", "你在项目中", "你曾经负责", "你落地过")
+
+
+@dataclass(frozen=True)
+class PolishQuestionToolSchema:
+    tool_name: str
+    input_schema_id: str
+    output_schema_id: str
+    max_retries: int = MAX_RETRIES
+    timeout_seconds: int = QUESTION_AGENT_TIMEOUT_SECONDS
+
+
+TOOL_SCHEMAS = (
+    PolishQuestionToolSchema("context_retrieval", "polish_question.context_retrieval.input.v1", "polish_question.context_retrieval.output.v1"),
+    PolishQuestionToolSchema("evidence_selection", "polish_question.evidence_selection.input.v1", "polish_question.evidence_selection.output.v1"),
+    PolishQuestionToolSchema("question_drafting", "polish_question.question_drafting.input.v1", "polish_question.question_drafting.output.v1"),
+    PolishQuestionToolSchema("grounding_validation", "polish_question.grounding_validation.input.v1", "polish_question.grounding_validation.output.v1"),
+    PolishQuestionToolSchema("candidate_persistence", "polish_question.candidate_persistence.input.v1", "polish_question.candidate_persistence.output.v1"),
+)
+
+
+@dataclass(frozen=True)
+class PolishQuestionAgentConfig:
+    max_agent_steps: int = MAX_AGENT_STEPS
+    max_retries: int = MAX_RETRIES
+    timeout_seconds: float = QUESTION_AGENT_TIMEOUT_SECONDS
+    backoff_seconds: float = QUESTION_AGENT_BACKOFF_SECONDS
+
+
+@dataclass(frozen=True)
+class PolishQuestionAgentExecution:
+    status: str
+    candidate: dict[str, Any]
+    result_ref: str
+    candidate_ref: str
+    trace_refs: tuple[str, ...]
+    metadata: dict[str, Any]
 
 
 def build_polish_question_graph_descriptor() -> "GraphDescriptor":
@@ -108,9 +133,9 @@ def build_polish_question_graph_descriptor() -> "GraphDescriptor":
         graph_name=POLISH_QUESTION_GRAPH_NAME,
         graph_version=POLISH_QUESTION_GRAPH_VERSION,
         capability="polish_question",
-        lifecycle_status="placeholder",
+        lifecycle_status="active",
         runtime_flag_key=POLISH_QUESTION_GRAPH_FLAG,
-        default_enabled=False,
+        default_enabled=POLISH_QUESTION_RUNTIME_DEFAULT,
         supported_entrypoints=_DEFAULT_ENTRYPOINTS,
         supported_outputs=_SUPPORTED_OUTPUTS,
         prompt_contract_ids=_LEGACY_PROMPT_CONTRACT_IDS,
@@ -119,15 +144,15 @@ def build_polish_question_graph_descriptor() -> "GraphDescriptor":
         interrupt_types=(),
         required_permissions=("owner",),
         visibility="owner_only",
-        health_summary_refs=("health.polish_question.pr5_skeleton",),
-        config_schema_ref="graph_config.polish_question.pr5_skeleton",
-        implementation_pr="PR5",
-        migration_status="skeleton_default_off_direct_path_retained",
-        provider_enabled=False,
+        health_summary_refs=("health.polish_question.agent_orchestration",),
+        config_schema_ref="graph_config.polish_question.agent_orchestration",
+        implementation_pr="Goal0526",
+        migration_status="agent_orchestration_with_deterministic_fallback",
+        provider_enabled=POLISH_QUESTION_PROVIDER_GATE,
         formal_write_targets=(),
         db_business_write_targets=(),
         rollback_safe=True,
-        disabled_behavior="legacy_direct_path_retained",
+        disabled_behavior="deterministic_fallback_with_reason",
     )
 
 
@@ -148,9 +173,16 @@ def run_polish_question_skeleton(
     metadata = {
         "graph_name": descriptor.graph_name,
         "graph_version": descriptor.graph_version,
+        "agent_phases": POLISH_QUESTION_AGENT_PHASES,
+        "tool_schema_refs": tuple(schema.input_schema_id for schema in TOOL_SCHEMAS),
+        "max_agent_steps": MAX_AGENT_STEPS,
+        "max_retries": MAX_RETRIES,
+        "timeout_seconds": QUESTION_AGENT_TIMEOUT_SECONDS,
+        "backoff_seconds": QUESTION_AGENT_BACKOFF_SECONDS,
         "runtime_flag_key": descriptor.runtime_flag_key,
         "runtime_flag_source": decision.source,
         "provider_calls": 0,
+        "provider_status": "not_invoked",
         "formal_business_writes": 0,
         "db_business_writes": 0,
         "checkpoint_refs_only": True,
@@ -160,6 +192,7 @@ def run_polish_question_skeleton(
         "sanitized": True,
         "input_refs": command.input_refs,
         "requested_outputs": command.requested_outputs,
+        "request_digest": _stable_id(context.owner_id, context.run_id, context.ai_task_id, command.input_refs),
     }
     return AgentRunResult(
         run_id=context.run_id,
@@ -168,6 +201,212 @@ def run_polish_question_skeleton(
         trace_refs=(checkpoint_ref,),
         interrupt_refs=interrupt_refs,
         formal_refs=(),
+        metadata=sanitize_payload(metadata),
+    )
+
+
+def run_polish_question_agent(
+    context: AgentRunContext,
+    command: AgentCommandEnvelope,
+    flag_resolver: RuntimeFlagResolver | None = None,
+) -> AgentRunResult:
+    descriptor = build_polish_question_graph_descriptor()
+    _validate_context(context, command, descriptor)
+    resolver = flag_resolver or RuntimeFlagResolver()
+    graph_decision = resolver.resolve_graph_flag(descriptor, actor_id=context.actor_id, caller="runner_entry")
+    if not graph_decision.enabled:
+        raise GraphDisabledError(f"graph disabled: {descriptor.graph_name}")
+    provider_decision = resolver.is_real_provider_enabled(actor_id=context.actor_id)
+    execution = execute_polish_question_agent(
+        context=context,
+        command=command,
+        runtime_flag_source=graph_decision.source,
+        provider_enabled=provider_decision.enabled,
+        provider_flag_source=provider_decision.source,
+    )
+    payload = AgentCandidatePayload(
+        candidate_ref=execution.candidate_ref,
+        candidate_type="polish_question_candidate",
+        payload_schema_id="polish_question_candidate.v1",
+        payload=execution.candidate,
+        status="accepted" if execution.metadata["validator_result"]["passed"] is True else "blocked",
+        trace_refs=execution.trace_refs,
+        validation_refs=tuple(ref for ref in execution.trace_refs if ref.startswith("validation_ref_")),
+        low_confidence_flags=tuple(execution.candidate.get("low_confidence_flags", ())),
+    )
+    return AgentRunResult(
+        run_id=context.run_id,
+        status=execution.status,
+        output_refs=(execution.result_ref, execution.candidate_ref),
+        trace_refs=execution.trace_refs,
+        interrupt_refs=(),
+        formal_refs=(),
+        candidate_payloads=(payload,),
+        metadata=execution.metadata,
+    )
+
+
+def execute_polish_question_agent(
+    *,
+    context: AgentRunContext,
+    command: AgentCommandEnvelope,
+    runtime_flag_source: str,
+    provider_enabled: bool,
+    provider_flag_source: str,
+    config: PolishQuestionAgentConfig | None = None,
+) -> PolishQuestionAgentExecution:
+    resolved_config = config or PolishQuestionAgentConfig()
+    started_at = perf_counter()
+    deadline_at = started_at + resolved_config.timeout_seconds
+    phase_results: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
+    request_digest = _stable_id(context.owner_id, context.run_id, context.ai_task_id, command.input_refs)
+    provider_status = "enabled" if provider_enabled else "disabled"
+    fallback_reason = None if provider_enabled else "provider_disabled_deterministic_drafting_tool"
+
+    retrieved_context = _execute_agent_tool(
+        phase="plan_task",
+        tool_name="context_retrieval",
+        input_payload={"request_digest": request_digest, "input_ref_count": len(command.input_refs)},
+        operation=lambda: _tool_context_retrieval(command),
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+        tool_results=tool_results,
+    )
+    selected_evidence = _execute_agent_tool(
+        phase="retrieve_context",
+        tool_name="evidence_selection",
+        input_payload={"context_ref": retrieved_context["output_ref"]},
+        operation=lambda: _tool_evidence_selection(
+            session_ref=str(retrieved_context["session_ref"]),
+            context_payload=retrieved_context,
+        ),
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+        tool_results=tool_results,
+    )
+    drafted_question = _execute_agent_tool(
+        phase="draft_question",
+        tool_name="question_drafting",
+        input_payload={"scenario_ref": selected_evidence["scenario_ref"]},
+        operation=lambda: _tool_question_drafting(
+            context=context,
+            session_ref=str(retrieved_context["session_ref"]),
+            progress_node_ref=_optional_text(retrieved_context.get("progress_node_ref")),
+            context_digest=_optional_text(retrieved_context.get("context_digest")),
+            scenario=selected_evidence["scenario"],
+        ),
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+        tool_results=tool_results,
+    )
+    validation = _execute_agent_tool(
+        phase="validate_grounding",
+        tool_name="grounding_validation",
+        input_payload={"candidate_ref": drafted_question["candidate"]["candidate_ref"]},
+        operation=lambda: _tool_grounding_validation(drafted_question["candidate"]),
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+        tool_results=tool_results,
+    )
+    repaired = _execute_repair_or_retry_phase(
+        validation=validation,
+        candidate=drafted_question["candidate"],
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+    )
+    persisted_candidate = _execute_agent_tool(
+        phase="persist_candidate",
+        tool_name="candidate_persistence",
+        input_payload={"candidate_ref": repaired["candidate"]["candidate_ref"]},
+        operation=lambda: _tool_candidate_persistence(repaired["candidate"], validation["validator_result"]),
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+        tool_results=tool_results,
+    )
+    finalized = _execute_finalize_phase(
+        candidate=persisted_candidate["candidate"],
+        config=resolved_config,
+        deadline_at=deadline_at,
+        phase_results=phase_results,
+    )
+
+    validator_result = validation["validator_result"]
+    candidate = dict(finalized["candidate"])
+    question_metadata = dict(candidate.get("question_metadata") if isinstance(candidate.get("question_metadata"), dict) else {})
+    question_metadata.update(
+        {
+            "llm_generation_mode": "deterministic_agent_fallback" if not provider_enabled else "agent_provider_path",
+            "fallback_reason": fallback_reason,
+            "fallback_visible": fallback_reason is not None,
+            "provider_status": provider_status,
+            "phase_results": phase_results,
+            "tool_results": tool_results,
+            "validator_result": validator_result,
+            "max_agent_steps": resolved_config.max_agent_steps,
+            "max_retries": resolved_config.max_retries,
+            "timeout_seconds": resolved_config.timeout_seconds,
+            "backoff_seconds": resolved_config.backoff_seconds,
+        }
+    )
+    candidate["question_metadata"] = sanitize_payload(question_metadata)
+    trace_refs = tuple(
+        _unique(
+            [
+                *[str(ref) for ref in candidate.get("trace_refs", ()) if str(ref).strip()],
+                finalized["finalize_ref"],
+            ]
+        )
+    )
+    result_ref = "question_result_ref_" + _stable_id(context.owner_id, context.run_id, candidate["candidate_ref"])
+    status = "agent_orchestration_succeeded" if validator_result.get("passed") is True else "agent_orchestration_blocked"
+    metadata = {
+        "graph_name": POLISH_QUESTION_GRAPH_NAME,
+        "graph_version": POLISH_QUESTION_GRAPH_VERSION,
+        "status": status,
+        "runtime_flag_key": POLISH_QUESTION_GRAPH_FLAG,
+        "runtime_flag_source": runtime_flag_source,
+        "provider_status": provider_status,
+        "provider_flag_source": provider_flag_source,
+        "provider_calls": 0 if not provider_enabled else 1,
+        "fallback_reason": fallback_reason,
+        "fallback_visible": fallback_reason is not None,
+        "request_digest": request_digest,
+        "agent_phases": POLISH_QUESTION_AGENT_PHASES,
+        "tool_schema_refs": tuple(schema.input_schema_id for schema in TOOL_SCHEMAS),
+        "phase_results": phase_results,
+        "tool_results": tool_results,
+        "validator_result": validator_result,
+        "max_agent_steps": resolved_config.max_agent_steps,
+        "max_retries": resolved_config.max_retries,
+        "timeout_seconds": resolved_config.timeout_seconds,
+        "backoff_seconds": resolved_config.backoff_seconds,
+        "latency_ms": round((perf_counter() - started_at) * 1000, 3),
+        "output_refs": {"result_refs": [result_ref], "candidate_refs": [candidate["candidate_ref"]], "formal_refs": []},
+        "trace_refs": {"validation_refs": [ref for ref in trace_refs if ref.startswith("validation_ref_")]},
+        "db_business_writes": 0,
+        "formal_business_writes": 0,
+        "counters": {
+            "provider_calls": 0 if not provider_enabled else 1,
+            "db_business_writes": 0,
+            "formal_business_writes": 0,
+        },
+        "checkpoint_refs_are_business_facts": False,
+        "sanitized": True,
+        "accepted_candidate_payload": validator_result.get("passed") is True,
+    }
+    return PolishQuestionAgentExecution(
+        status=status,
+        candidate=sanitize_payload(candidate),
+        result_ref=result_ref,
+        candidate_ref=str(candidate["candidate_ref"]),
+        trace_refs=trace_refs,
         metadata=sanitize_payload(metadata),
     )
 
@@ -325,7 +564,9 @@ def question_candidate_quality_gate(candidate: dict[str, Any]) -> dict[str, Any]
     evidence_refs = tuple(candidate.get("evidence_refs", ()))
     allowed_entities = tuple(str(entity) for entity in scenario.get("allowed_entities", ()) if str(entity).strip())
     forbidden_entities = tuple(str(entity) for entity in scenario.get("forbidden_entities", ()) if str(entity).strip())
-    detected_entities = _extract_entities(question_text)
+    detected_entities = tuple(
+        entity for entity in (*allowed_entities, *forbidden_entities) if _contains_entity(question_text, entity)
+    )
 
     if not evidence_refs:
         blocking_reasons.append("missing_evidence_refs")
@@ -335,8 +576,6 @@ def question_candidate_quality_gate(candidate: dict[str, Any]) -> dict[str, Any]
         blocking_reasons.append("cross_evidence_scenario_mixing")
     if _has_unsupported_business_entity(detected_entities, allowed_entities):
         blocking_reasons.append("unsupported_business_entity")
-    if _has_fixed_template_domain_leak(detected_entities, allowed_entities):
-        blocking_reasons.append("fixed_template_domain_leak")
     if str(scenario.get("scenario_mode", "")) in {"job_gap", "learning_gap"} and any(
         phrase in question_text for phrase in _JOB_GAP_CLAIM_PHRASES
     ):
@@ -353,7 +592,7 @@ def question_candidate_quality_gate(candidate: dict[str, Any]) -> dict[str, Any]
         "checked_rules": (
             "cross_evidence_scenario_mixing",
             "unsupported_business_entity",
-            "fixed_template_domain_leak",
+            "source_contamination",
             "job_gap_claimed_as_project_experience",
             "missing_evidence_refs",
             "raw_payload_leak",
@@ -402,11 +641,20 @@ def run_polish_question_readonly_parity(
         "persistence_handoff_version": POLISH_QUESTION_PERSISTENCE_VERSION,
         "runtime_flag_key": descriptor.runtime_flag_key,
         "runtime_flag_source": decision.source,
+        "agent_phases": POLISH_QUESTION_AGENT_PHASES,
+        "tool_schema_refs": tuple(schema.input_schema_id for schema in TOOL_SCHEMAS),
+        "max_agent_steps": MAX_AGENT_STEPS,
+        "max_retries": MAX_RETRIES,
+        "timeout_seconds": QUESTION_AGENT_TIMEOUT_SECONDS,
+        "backoff_seconds": QUESTION_AGENT_BACKOFF_SECONDS,
         "readonly_parity": True,
         "provider_calls": 0,
+        "provider_status": "not_invoked",
         "db_business_writes": 0,
         "formal_business_writes": 0,
         "scenario_derivation": "dynamic_evidence_based",
+        "request_digest": _stable_id(context.owner_id, context.run_id, context.ai_task_id, command.input_refs),
+        "validator_result": quality_gate,
         "checkpoint_refs_are_business_facts": False,
         "candidate_ref": candidate["candidate_ref"],
         "scenario": scenario,
@@ -425,6 +673,286 @@ def run_polish_question_readonly_parity(
     )
 
 
+def _execute_agent_tool(
+    *,
+    phase: str,
+    tool_name: str,
+    input_payload: dict[str, Any],
+    operation: Any,
+    config: PolishQuestionAgentConfig,
+    deadline_at: float,
+    phase_results: list[dict[str, Any]],
+    tool_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    _ensure_agent_can_continue(phase_results, config=config, deadline_at=deadline_at)
+    schema = _tool_schema(tool_name)
+    started_at = perf_counter()
+    attempts = 0
+    last_error: str | None = None
+    while attempts <= config.max_retries:
+        attempts += 1
+        try:
+            output = operation()
+            if not isinstance(output, dict):
+                raise RuntimeValidationError(f"{tool_name} returned invalid output")
+            output_ref = str(output.get("output_ref") or f"{tool_name}_ref_{attempts}")
+            latency_ms = round((perf_counter() - started_at) * 1000, 3)
+            tool_result = {
+                "tool_name": tool_name,
+                "status": "succeeded",
+                "input_schema_id": schema.input_schema_id,
+                "output_schema_id": schema.output_schema_id,
+                "input_ref": _stable_id(phase, input_payload),
+                "output_ref": output_ref,
+                "attempts": attempts,
+                "latency_ms": latency_ms,
+            }
+            tool_results.append(tool_result)
+            phase_results.append(
+                {
+                    "phase": phase,
+                    "status": "succeeded",
+                    "tool_name": tool_name,
+                    "input_ref": tool_result["input_ref"],
+                    "output_ref": output_ref,
+                    "attempts": attempts,
+                    "latency_ms": latency_ms,
+                    "error": None,
+                }
+            )
+            return output
+        except Exception as exc:
+            last_error = exc.__class__.__name__
+            if attempts > config.max_retries or perf_counter() >= deadline_at:
+                latency_ms = round((perf_counter() - started_at) * 1000, 3)
+                tool_results.append(
+                    {
+                        "tool_name": tool_name,
+                        "status": "failed",
+                        "input_schema_id": schema.input_schema_id,
+                        "output_schema_id": schema.output_schema_id,
+                        "input_ref": _stable_id(phase, input_payload),
+                        "output_ref": None,
+                        "attempts": attempts,
+                        "latency_ms": latency_ms,
+                        "error": last_error,
+                    }
+                )
+                phase_results.append(
+                    {
+                        "phase": phase,
+                        "status": "failed",
+                        "tool_name": tool_name,
+                        "input_ref": _stable_id(phase, input_payload),
+                        "output_ref": None,
+                        "attempts": attempts,
+                        "latency_ms": latency_ms,
+                        "retry_delay_seconds": config.backoff_seconds,
+                        "error": last_error,
+                    }
+                )
+                raise
+
+    raise RuntimeValidationError(f"{tool_name} exhausted retry attempts")
+
+
+def _execute_repair_or_retry_phase(
+    *,
+    validation: dict[str, Any],
+    candidate: dict[str, Any],
+    config: PolishQuestionAgentConfig,
+    deadline_at: float,
+    phase_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    _ensure_agent_can_continue(phase_results, config=config, deadline_at=deadline_at)
+    validator_result = validation["validator_result"]
+    status = "skipped" if validator_result.get("passed") is True else "failed"
+    output_ref = "repair_ref_" + _stable_id(candidate.get("candidate_ref"), validator_result)
+    phase_results.append(
+        {
+            "phase": "repair_or_retry",
+            "status": status,
+            "tool_name": None,
+            "input_ref": str(validation.get("output_ref") or ""),
+            "output_ref": output_ref,
+            "attempts": 0,
+            "latency_ms": 0.0,
+            "retry_delay_seconds": config.backoff_seconds,
+            "error": None if status == "skipped" else "validator_blocked_candidate",
+        }
+    )
+    if status == "failed":
+        raise RuntimeValidationError("polish question candidate failed grounding validation")
+    return {"candidate": candidate, "output_ref": output_ref}
+
+
+def _execute_finalize_phase(
+    *,
+    candidate: dict[str, Any],
+    config: PolishQuestionAgentConfig,
+    deadline_at: float,
+    phase_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    _ensure_agent_can_continue(phase_results, config=config, deadline_at=deadline_at)
+    finalize_ref = "finalize_ref_" + _stable_id(candidate.get("candidate_ref"), candidate.get("context_digest"))
+    phase_results.append(
+        {
+            "phase": "finalize",
+            "status": "succeeded",
+            "tool_name": None,
+            "input_ref": str(candidate.get("candidate_ref") or ""),
+            "output_ref": finalize_ref,
+            "attempts": 1,
+            "latency_ms": 0.0,
+            "error": None,
+        }
+    )
+    return {"candidate": candidate, "finalize_ref": finalize_ref}
+
+
+def _tool_context_retrieval(command: AgentCommandEnvelope) -> dict[str, Any]:
+    session_ref = str(command.input_refs[0]).strip()
+    progress_node_ref = _progress_node_ref_from_command(command)
+    completed_focus_refs = tuple(str(ref).strip() for ref in command.input_refs[2:] if str(ref).strip())
+    metadata = command.metadata
+    context_digest = str(metadata.get("context_digest") or metadata.get("request_digest") or "").strip()
+    selected_summary = _safe_agent_summary(
+        metadata.get("selected_progress_node_summary"),
+        fallback="候选人项目表达场景" if progress_node_ref else "证据不足的打磨题场景",
+    )
+    selected_refs = _metadata_tuple(metadata.get("selected_evidence_refs"))
+    if not selected_refs and progress_node_ref:
+        selected_refs = (progress_node_ref,)
+    output_ref = "context_ref_" + _stable_id(session_ref, progress_node_ref, context_digest, selected_refs)
+    return {
+        "output_ref": output_ref,
+        "session_ref": session_ref,
+        "progress_node_ref": progress_node_ref,
+        "completed_focus_refs": completed_focus_refs,
+        "selected_progress_node_summary": selected_summary,
+        "selected_evidence_refs": selected_refs,
+        "resume_evidence_summaries": _metadata_tuple(metadata.get("resume_evidence_summaries")),
+        "job_requirement_summaries": _metadata_tuple(metadata.get("job_requirement_summaries")),
+        "match_gap_summaries": _metadata_tuple(metadata.get("match_gap_summaries")),
+        "history_feedback_summaries": _metadata_tuple(metadata.get("history_feedback_summaries")),
+        "context_digest": context_digest,
+    }
+
+
+def _tool_evidence_selection(*, session_ref: str, context_payload: dict[str, Any]) -> dict[str, Any]:
+    progress_node_ref = _optional_text(context_payload.get("progress_node_ref"))
+    selected_refs = tuple(context_payload.get("selected_evidence_refs") or ())
+    selected_summary = _safe_agent_summary(
+        context_payload.get("selected_progress_node_summary"),
+        fallback="候选人项目表达场景",
+    )
+    resume_summaries = tuple(context_payload.get("resume_evidence_summaries") or ())
+    if not resume_summaries and selected_refs:
+        resume_summaries = (
+            {
+                "ref": selected_refs[0],
+                "summary": selected_summary,
+                "source_type": "resume_project",
+            },
+        )
+    scenario = derive_question_scenario(
+        session_ref=session_ref,
+        selected_progress_node_summary=selected_summary,
+        selected_evidence_refs=selected_refs,
+        resume_evidence_summaries=resume_summaries,
+        job_requirement_summaries=tuple(context_payload.get("job_requirement_summaries") or ()),
+        match_gap_summaries=tuple(context_payload.get("match_gap_summaries") or ()),
+        history_feedback_summaries=tuple(context_payload.get("history_feedback_summaries") or ()),
+        completed_focus_refs=tuple(context_payload.get("completed_focus_refs") or ()),
+    )
+    return {
+        "output_ref": "scenario_ref_" + _stable_id(session_ref, progress_node_ref, selected_refs),
+        "scenario_ref": "scenario_ref_" + _stable_id(session_ref, progress_node_ref, scenario.get("scenario_title")),
+        "scenario": scenario,
+    }
+
+
+def _tool_question_drafting(
+    *,
+    context: AgentRunContext,
+    session_ref: str,
+    progress_node_ref: str | None,
+    context_digest: str | None,
+    scenario: dict[str, Any],
+) -> dict[str, Any]:
+    candidate = build_polish_question_candidate_readonly(
+        owner_id=context.owner_id,
+        run_id=context.run_id,
+        ai_task_id=context.ai_task_id,
+        session_ref=session_ref,
+        scenario=scenario,
+        progress_node_ref=progress_node_ref,
+        context_digest=context_digest or "",
+    )
+    return {
+        "output_ref": str(candidate["candidate_ref"]),
+        "candidate": candidate,
+    }
+
+
+def _tool_grounding_validation(candidate: dict[str, Any]) -> dict[str, Any]:
+    validator_result = question_candidate_quality_gate(candidate)
+    candidate["quality_gate"] = validator_result
+    return {
+        "output_ref": "validation_ref_" + _stable_id(candidate.get("candidate_ref"), validator_result),
+        "validator_result": validator_result,
+    }
+
+
+def _tool_candidate_persistence(candidate: dict[str, Any], validator_result: dict[str, Any]) -> dict[str, Any]:
+    quality_gate = dict(validator_result)
+    quality_gate.setdefault("status", "accepted" if validator_result.get("passed") is True else "blocked")
+    persisted_candidate = sanitize_payload({**candidate, "quality_gate": quality_gate})
+    return {
+        "output_ref": "candidate_persistence_ref_" + _stable_id(candidate.get("candidate_ref"), quality_gate),
+        "candidate": persisted_candidate,
+    }
+
+
+def _ensure_agent_can_continue(
+    phase_results: list[dict[str, Any]],
+    *,
+    config: PolishQuestionAgentConfig,
+    deadline_at: float,
+) -> None:
+    if len(phase_results) >= config.max_agent_steps:
+        raise RuntimeValidationError("polish question agent exceeded max_agent_steps")
+    if perf_counter() > deadline_at:
+        raise RuntimeValidationError("polish question agent deadline exceeded")
+
+
+def _tool_schema(tool_name: str) -> PolishQuestionToolSchema:
+    for schema in TOOL_SCHEMAS:
+        if schema.tool_name == tool_name:
+            return schema
+    raise RuntimeValidationError(f"unknown polish question tool: {tool_name}")
+
+
+def _metadata_tuple(value: object) -> tuple[Any, ...]:
+    if isinstance(value, tuple):
+        return value
+    if isinstance(value, list):
+        return tuple(value)
+    return ()
+
+
+def _safe_agent_summary(value: object, *, fallback: str) -> str:
+    text = str(value or "").strip()
+    if not text or contains_sensitive_payload(text):
+        return fallback
+    return text[:240]
+
+
+def _optional_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
 def _validate_context(
     context: AgentRunContext,
     command: AgentCommandEnvelope,
@@ -433,18 +961,18 @@ def _validate_context(
     if command != context.command:
         raise RuntimePolicyError("command must match context command")
     if context.graph_name != descriptor.graph_name:
-        raise RuntimePolicyError("context graph does not match polish question skeleton")
+        raise RuntimePolicyError("context graph does not match polish question agent")
     if context.graph_version != descriptor.graph_version:
-        raise RuntimePolicyError("context graph version does not match polish question skeleton")
+        raise RuntimePolicyError("context graph version does not match polish question agent")
     if command.entrypoint not in descriptor.supported_entrypoints:
         raise RuntimeValidationError(f"unsupported entrypoint: {command.entrypoint}")
     if not command.input_refs:
-        raise RuntimeValidationError("polish question skeleton requires a session ref")
+        raise RuntimeValidationError("polish question agent requires a session ref")
     session_ref = str(command.input_refs[0]).strip()
     if not session_ref.startswith("session_"):
-        raise RuntimeValidationError("polish question skeleton accepts refs only")
+        raise RuntimeValidationError("polish question agent accepts refs only")
     if contains_sensitive_payload(command.input_refs) or contains_sensitive_payload(command.metadata):
-        raise RuntimeValidationError("polish question skeleton accepts refs and sanitized metadata only")
+        raise RuntimeValidationError("polish question agent accepts refs and sanitized metadata only")
 
     unsupported = tuple(output for output in command.requested_outputs if output not in descriptor.supported_outputs)
     if unsupported:
@@ -587,6 +1115,8 @@ def _forbidden_entities(
     for item in evidence_items:
         if item["ref"] == primary_ref:
             continue
+        if str(item.get("source_type", "")).startswith(("history", "turn_")):
+            continue
         if item["group"] and item["group"] != primary_group:
             forbidden.extend(str(entity) for entity in item["entities"])
     return tuple(_unique(forbidden))
@@ -650,34 +1180,42 @@ def _question_sources_from_scenario(
 def _extract_entities(text: object) -> tuple[str, ...]:
     value = str(text)
     found: list[str] = []
-    for entity, aliases in _ENTITY_PATTERNS:
-        if any(_contains_entity(value, alias) for alias in aliases):
-            found.append(entity)
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9_+.-]{1,}|[\u4e00-\u9fff]{2,18}", value):
+        for normalized in _candidate_entity_terms(token):
+            if normalized in _GENERIC_TERM_STOPWORDS:
+                continue
+            found.append(normalized)
+            if len(found) >= 8:
+                break
+        if len(found) >= 8:
+            break
     return tuple(_unique(found))
 
 
+def _candidate_entity_terms(token: str) -> tuple[str, ...]:
+    normalized = token.strip()
+    normalized = re.sub(r"^(我|本人|我们)?(负责|参与|主导|做过|实现|落地|要求|具备|需要|覆盖)", "", normalized)
+    normalized = normalized.replace("系统中的", "、").replace("项目中的", "、").replace("场景下的", "、")
+    parts = re.split(r"[、和与及/，。；,;]+", normalized)
+    result: list[str] = []
+    for part in parts:
+        clean = part.strip()
+        if len(clean) < 2:
+            continue
+        result.append(clean[:18])
+    return tuple(result)
+
+
 def _primary_group(entities: tuple[str, ...]) -> str:
-    for entity in entities:
-        group = _ENTITY_GROUPS.get(entity)
-        if group:
-            return group
-    return ""
+    return _normalize_entity(entities[0]) if entities else ""
 
 
 def _has_unsupported_business_entity(detected_entities: tuple[str, ...], allowed_entities: tuple[str, ...]) -> bool:
-    allowed_groups = {_ENTITY_GROUPS.get(entity, "") for entity in allowed_entities}
+    allowed = {_normalize_entity(entity) for entity in allowed_entities}
     for entity in detected_entities:
-        if entity in allowed_entities:
+        if _normalize_entity(entity) in allowed:
             continue
-        group = _ENTITY_GROUPS.get(entity, "")
-        if entity in _INVENTORY_ENTITIES or entity == "日志" or group not in allowed_groups:
-            return True
-    return False
-
-
-def _has_fixed_template_domain_leak(detected_entities: tuple[str, ...], allowed_entities: tuple[str, ...]) -> bool:
-    for entity in detected_entities:
-        if entity in _FIXED_TEMPLATE_DOMAIN_ENTITIES and entity not in allowed_entities:
+        if len(entity.strip()) >= 2:
             return True
     return False
 
@@ -701,6 +1239,10 @@ def _contains_entity(text: object, term: str) -> bool:
     value = str(text).lower()
     target = term.lower()
     return target in value or target.replace(" ", "") in value.replace(" ", "")
+
+
+def _normalize_entity(value: object) -> str:
+    return re.sub(r"\s+", "", str(value).strip().lower())
 
 
 def _unique(values: list[str] | tuple[str, ...]) -> list[str]:
