@@ -18,17 +18,23 @@ from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_VERSION,
     TOOL_SCHEMAS,
     PolishQuestionAgentConfig,
+    build_polish_question_candidate_readonly,
     execute_polish_question_agent,
+    run_polish_question_agent,
 )
 from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
     AgentCommandEnvelope,
     AgentRunContext,
+    AgentRunResult,
     RuntimeValidationError,
     contains_sensitive_payload,
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
+from app.infrastructure.ai_runtime.langgraph.polish_question_runtime import PolishQuestionGraphRuntime
+from app.infrastructure.ai_runtime.langgraph import polish_question_runtime as polish_question_runtime_module
 
 
 RAW_PROMPT_KEY = "raw" + "_prompt"
@@ -108,6 +114,142 @@ def test_in_memory_runtime_polish_question_executes_phase_tool_chain_with_provid
         schema.tool_name for schema in TOOL_SCHEMAS
     }
     assert candidate_metadata["validator_result"]["passed"] is True
+
+
+def test_run_polish_question_agent_accepts_provider_draft_operation_when_provider_enabled() -> None:
+    calls: list[dict[str, object]] = []
+
+    def provider_draft_operation(**kwargs):
+        calls.append(kwargs)
+        context = kwargs["context"]
+        retrieved_context = kwargs["retrieved_context"]
+        scenario = kwargs["scenario"]
+        candidate = build_polish_question_candidate_readonly(
+            owner_id=context.owner_id,
+            run_id=context.run_id,
+            ai_task_id=context.ai_task_id,
+            session_ref=str(retrieved_context["session_ref"]),
+            scenario=scenario,
+            progress_node_ref=str(retrieved_context.get("progress_node_ref") or ""),
+            context_digest=str(retrieved_context.get("context_digest") or ""),
+        )
+        candidate["question_metadata"] = {
+            "provider_marker": "injected_provider_operation",
+            "provider_status": "enabled",
+        }
+        return {"candidate": candidate}
+
+    resolver = RuntimeFlagResolver(
+        test_overrides={
+            POLISH_QUESTION_GRAPH_FLAG: True,
+            "AIFI_REAL_PROVIDER_ENABLED": True,
+        }
+    )
+
+    result = run_polish_question_agent(
+        context=_context(),
+        command=_command(),
+        flag_resolver=resolver,
+        provider_draft_operation=provider_draft_operation,
+    )
+
+    assert len(calls) == 1
+    assert result.status == "agent_orchestration_succeeded"
+    assert result.metadata["provider_status"] == "enabled"
+    assert result.metadata["provider_calls"] == 1
+    assert result.candidate_payloads[0].payload["question_metadata"]["provider_marker"] == (
+        "injected_provider_operation"
+    )
+
+
+def test_polish_question_runtime_uses_public_agent_runner_with_provider_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flags = RuntimeFlagResolver(
+        test_overrides={
+            "AIFI_AI_RUNTIME_ENABLED": True,
+            "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True,
+            POLISH_QUESTION_GRAPH_FLAG: True,
+            "AIFI_REAL_PROVIDER_ENABLED": True,
+        }
+    )
+    calls: list[dict[str, object]] = []
+
+    def fail_direct_executor(**_: object) -> None:
+        pytest.fail("PolishQuestionGraphRuntime must call run_polish_question_agent")
+
+    def recording_runner(
+        context: AgentRunContext,
+        command: AgentCommandEnvelope,
+        flag_resolver: RuntimeFlagResolver | None = None,
+        provider_draft_operation: object | None = None,
+    ) -> AgentRunResult:
+        calls.append(
+            {
+                "context": context,
+                "command": command,
+                "flag_resolver": flag_resolver,
+                "provider_draft_operation": provider_draft_operation,
+            }
+        )
+        candidate_ref = "question_candidate_ref_public_runner"
+        payload = AgentCandidatePayload(
+            candidate_ref=candidate_ref,
+            candidate_type="polish_question_candidate",
+            payload_schema_id="polish_question_candidate.v1",
+            payload={
+                "candidate_ref": candidate_ref,
+                "question_text": "请说明一次支付链路一致性治理的边界、补偿和验证指标。",
+                "quality_gate": {"passed": True, "status": "accepted"},
+                "low_confidence_flags": (),
+                "sanitized": True,
+            },
+            trace_refs=("validation_ref_public_runner",),
+            validation_refs=("validation_ref_public_runner",),
+        )
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="agent_orchestration_succeeded",
+            output_refs=("question_result_ref_public_runner", candidate_ref),
+            trace_refs=("validation_ref_public_runner",),
+            interrupt_refs=(),
+            formal_refs=(),
+            candidate_payloads=(payload,),
+            metadata={
+                "graph_name": POLISH_QUESTION_GRAPH_NAME,
+                "graph_version": POLISH_QUESTION_GRAPH_VERSION,
+                "provider_status": "enabled",
+                "provider_calls": 1,
+                "validator_result": {"passed": True},
+                "accepted_candidate_payload": True,
+                "sanitized": True,
+            },
+        )
+
+    monkeypatch.setattr(
+        polish_question_runtime_module,
+        "execute_polish_question_agent",
+        fail_direct_executor,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        polish_question_runtime_module,
+        "run_polish_question_agent",
+        recording_runner,
+        raising=False,
+    )
+    runtime = PolishQuestionGraphRuntime(flag_resolver=flags)
+    context = _context()
+
+    result = runtime.start(context, context.command)
+
+    assert result.status == "agent_orchestration_succeeded"
+    assert len(calls) == 1
+    assert calls[0]["context"] == context
+    assert calls[0]["command"] == context.command
+    assert calls[0]["flag_resolver"] is flags
+    assert calls[0]["provider_draft_operation"] is not None
+    assert callable(calls[0]["provider_draft_operation"])
 
 
 def test_in_memory_runtime_polish_question_emits_structured_agent_logs(caplog) -> None:

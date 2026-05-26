@@ -212,7 +212,10 @@ def run_polish_question_agent(
     context: AgentRunContext,
     command: AgentCommandEnvelope,
     flag_resolver: RuntimeFlagResolver | None = None,
+    provider_draft_operation: Any | None = None,
 ) -> AgentRunResult:
+    """Run the graph-level Polish question Agent entrypoint."""
+
     descriptor = build_polish_question_graph_descriptor()
     _validate_context(context, command, descriptor)
     resolver = flag_resolver or RuntimeFlagResolver()
@@ -226,6 +229,7 @@ def run_polish_question_agent(
         runtime_flag_source=graph_decision.source,
         provider_enabled=provider_decision.enabled,
         provider_flag_source=provider_decision.source,
+        provider_draft_operation=provider_draft_operation if provider_decision.enabled else None,
     )
     payload = AgentCandidatePayload(
         candidate_ref=execution.candidate_ref,
@@ -259,6 +263,8 @@ def execute_polish_question_agent(
     config: PolishQuestionAgentConfig | None = None,
     provider_draft_operation: Any | None = None,
 ) -> PolishQuestionAgentExecution:
+    """Internal phase executor; production runtimes should use run_polish_question_agent."""
+
     resolved_config = config or PolishQuestionAgentConfig()
     started_at = perf_counter()
     deadline_at = started_at + resolved_config.timeout_seconds
@@ -1484,7 +1490,7 @@ def _validate_context(
     if not command.input_refs:
         raise RuntimeValidationError("polish question agent requires a session ref")
     session_ref = str(command.input_refs[0]).strip()
-    if not session_ref.startswith("session_"):
+    if not session_ref.startswith(("session_", "ses_")):
         raise RuntimeValidationError("polish question agent accepts refs only")
     if contains_sensitive_payload(command.input_refs) or contains_sensitive_payload(command.metadata):
         raise RuntimeValidationError("polish question agent accepts refs and sanitized metadata only")

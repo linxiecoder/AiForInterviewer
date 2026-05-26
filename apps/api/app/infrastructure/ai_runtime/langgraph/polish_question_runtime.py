@@ -13,7 +13,7 @@ from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_NAME,
     build_polish_question_candidate_from_draft,
     build_polish_question_graph_descriptor,
-    execute_polish_question_agent,
+    run_polish_question_agent,
 )
 from app.application.ai_runtime.contracts import (
     AgentCommandEnvelope,
@@ -112,31 +112,31 @@ class PolishQuestionGraphRuntime:
 
         state = self._invoke_graph(context=context, entrypoint="polish_question_fake_start")
         checkpoint = self._record_checkpoint(context=context, state=state)
-        execution = execute_polish_question_agent(
-            context=context,
-            command=command,
-            runtime_flag_source=graph_decision.source,
-            provider_enabled=runtime_gate["provider_gate_enabled"],
-            provider_flag_source=str(runtime_gate["provider_gate_source"]),
+        agent_result = run_polish_question_agent(
+            context,
+            command,
+            flag_resolver=self._flag_resolver,
             provider_draft_operation=(
-                self._polish_question_provider_draft
-                if runtime_gate["provider_gate_enabled"]
-                else None
+                self._polish_question_provider_draft if runtime_gate["provider_gate_enabled"] else None
             ),
         )
-        candidate = execution.candidate
-        candidate_ref = execution.candidate_ref
-        candidate_trace_refs = tuple(str(ref) for ref in execution.trace_refs if str(ref).strip())
+        agent_payload = agent_result.candidate_payloads[0]
+        candidate = agent_payload.payload
+        candidate_ref = agent_payload.candidate_ref
+        candidate_trace_refs = tuple(str(ref) for ref in agent_result.trace_refs if str(ref).strip())
         validation_refs = tuple(ref for ref in candidate_trace_refs if ref.startswith("validation_ref_"))
-        result_ref = execution.result_ref
+        result_ref = next(
+            (ref for ref in agent_result.output_refs if ref != candidate_ref),
+            agent_result.output_refs[0],
+        )
         trace_refs = (checkpoint.checkpoint_ref, *candidate_trace_refs)
         payload = build_agent_candidate_payload_from_runtime_output(
             {
                 "candidate_ref": candidate_ref,
-                "candidate_type": "polish_question_candidate",
-                "payload_schema_id": "polish_question_candidate.v1",
+                "candidate_type": agent_payload.candidate_type,
+                "payload_schema_id": agent_payload.payload_schema_id,
                 "payload": candidate,
-                "status": "accepted",
+                "status": agent_payload.status,
                 "trace_refs": (checkpoint.checkpoint_ref, *candidate_trace_refs),
                 "validation_refs": validation_refs,
                 "low_confidence_flags": (),
@@ -144,7 +144,7 @@ class PolishQuestionGraphRuntime:
         )
         metadata = sanitize_payload(
             {
-                **execution.metadata,
+                **agent_result.metadata,
                 "descriptor_graph_version": descriptor.graph_version,
                 "trace_refs": {
                     "checkpoint_refs": [checkpoint.checkpoint_ref],
@@ -177,7 +177,7 @@ class PolishQuestionGraphRuntime:
         )
         result = AgentRunResult(
             run_id=context.run_id,
-            status=execution.status,
+            status=agent_result.status,
             output_refs=(result_ref, candidate_ref),
             trace_refs=trace_refs,
             interrupt_refs=(),
