@@ -29,6 +29,7 @@ from app.application.polish.question_generation_prompts import (
     build_question_prompt_asset,
     build_question_prompt_metadata,
     render_blueprint_question,
+    validate_question_prompt_anchor_contract,
 )
 from app.application.polish.question_generation_policy import (
     DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
@@ -38,6 +39,14 @@ from app.application.polish.question_grounding import GroundingResult, validate_
 
 
 QUESTION_GENERATION_SERVICE_VERSION = "polish_question_generation.v1"
+UNSAFE_QUESTION_TEXT_MARKERS = (
+    "raw_prompt",
+    "system_prompt",
+    "provider_payload",
+    "api_key",
+    "token=",
+    "secret=",
+)
 
 
 @dataclass(frozen=True)
@@ -100,6 +109,30 @@ class QuestionGenerationService:
             )
             if is_follow_up
             else build_question_prompt_asset(blueprint, scope, runtime_policy=policy)
+        )
+        prompt_contract_errors = validate_question_prompt_anchor_contract(prompt_asset)
+        if prompt_contract_errors:
+            LogUtil.agent_runtime_step(
+                task_type=policy.task_type,
+                phase="prompt_contract_validation",
+                status="failed",
+                input_ref=scope.progress_node_ref,
+                error_type=",".join(prompt_contract_errors),
+            )
+            return QuestionGenerationResult(
+                succeeded=False,
+                draft=None,
+                blueprint=blueprint,
+                grounding_result=GroundingResult(False, prompt_contract_errors),
+                validation_errors=prompt_contract_errors,
+                progress_node_ref=scope.progress_node_ref,
+                evidence_refs=blueprint.evidence_refs,
+            )
+        LogUtil.agent_runtime_step(
+            task_type=policy.task_type,
+            phase="prompt_contract_validation",
+            status="succeeded",
+            input_ref=scope.progress_node_ref,
         )
         prompt_metadata = build_question_prompt_metadata(prompt_asset, runtime_policy=policy)
         prompt_task_type = _clean(prompt_asset.get("task_type")) or policy.task_type
@@ -183,43 +216,63 @@ class QuestionGenerationService:
                 "fallback_visible": True,
                 "provider_status": "not_configured",
             }
+        question_text = str(question_text).strip()
+        if not question_text:
+            return _validation_failed("question_text_required", progress_node_ref=scope.progress_node_ref)
+        if _contains_unsafe_question_text_marker(question_text):
+            return _validation_failed("question_text_unsafe_leakage", progress_node_ref=scope.progress_node_ref)
         grounding_result = validate_question_grounding(
             blueprint=blueprint,
             question_text=question_text,
             primary_source_type=scope.primary_source_type,
         )
-        if not grounding_result.passed:
-            return QuestionGenerationResult(
-                succeeded=False,
-                draft=None,
-                blueprint=blueprint,
-                grounding_result=grounding_result,
-                validation_errors=grounding_result.validation_errors,
-                progress_node_ref=scope.progress_node_ref,
-                evidence_refs=blueprint.evidence_refs,
-            )
+        grounding_errors = tuple(grounding_result.validation_errors)
+        grounding_failed = not grounding_result.passed
+        llm_evidence_refs = tuple(llm_payload.get("evidence_refs") or ()) if llm_payload else ()
+        draft_evidence_refs = llm_evidence_refs or blueprint.evidence_refs
+        llm_clarification_needed = bool(llm_payload.get("clarification_needed")) if llm_payload else False
+        low_confidence_flags: list[str] = []
+        if not draft_evidence_refs or llm_clarification_needed:
+            low_confidence_flags.append("clarification_needed")
+        if grounding_failed:
+            low_confidence_flags.extend(("grounding_failed", "manual_review_required", *grounding_errors))
+        low_confidence_flags = list(dict.fromkeys(low_confidence_flags))
+        quality_warnings = list(grounding_errors) if grounding_failed else []
+        manual_review_required = grounding_failed or llm_clarification_needed
+        manual_review_reason = (
+            "grounding_failed_soft_warning"
+            if grounding_failed
+            else ("clarification_needed" if llm_clarification_needed else None)
+        )
+        grounding_status = "failed_warning" if grounding_failed else "passed"
+        confidence_level = "low" if low_confidence_flags else ("medium" if draft_evidence_refs else "low")
+        source_availability = (
+            "weak"
+            if grounding_failed
+            else ("available" if draft_evidence_refs else "partial")
+        )
         draft = PolishQuestionDraft(
-            question_text=question_text.strip(),
+            question_text=question_text,
             question_sources=scope.question_sources,
             progress_node_ref=scope.progress_node_ref,
-            evidence_refs=blueprint.evidence_refs,
+            evidence_refs=draft_evidence_refs,
             context_digest=scope.context_digest,
             question_pattern=question_pattern,
             quality_score=None,
-            confidence_level="medium" if blueprint.evidence_refs else "low",
-            low_confidence_flags=() if blueprint.evidence_refs else ("clarification_needed",),
+            confidence_level=confidence_level,
+            low_confidence_flags=tuple(low_confidence_flags),
             expected_answer_dimensions=_expected_answer_dimensions(blueprint, follow_up_context),
             question_metadata={
                 "question_pattern": question_pattern,
                 "quality_score": None,
-                "quality_warnings": [],
-                "confidence_level": "medium" if blueprint.evidence_refs else "low",
-                "low_confidence_flags": [] if blueprint.evidence_refs else ["clarification_needed"],
+                "quality_warnings": quality_warnings,
+                "confidence_level": confidence_level,
+                "low_confidence_flags": low_confidence_flags,
                 "expected_answer_dimensions": list(_expected_answer_dimensions(blueprint, follow_up_context)),
                 "builder_version": QUESTION_GENERATION_SERVICE_VERSION,
                 "validator_version": "polish_question_grounding.v1",
                 "signal_version": "evidence_grounded_blueprint.v1",
-                "source_availability": "available" if blueprint.evidence_refs else "partial",
+                "source_availability": source_availability,
                 "generation_service": QUESTION_GENERATION_SERVICE_VERSION,
                 "blueprint_version": blueprint.metadata.get("blueprint_version"),
                 **prompt_metadata,
@@ -230,11 +283,19 @@ class QuestionGenerationService:
                 "llm_difficulty": llm_payload.get("difficulty") if llm_payload else None,
                 "llm_skill_dimension": llm_payload.get("skill_dimension") if llm_payload else None,
                 "llm_expected_signal": llm_payload.get("expected_signal") if llm_payload else None,
+                "llm_confidence": llm_payload.get("confidence") if llm_payload else None,
                 "llm_missing_context": list(llm_payload.get("missing_context", ())) if llm_payload else [],
-                "llm_clarification_needed": bool(llm_payload.get("clarification_needed")) if llm_payload else None,
+                "llm_clarification_needed": llm_clarification_needed if llm_payload else None,
                 "primary_evidence_ref": blueprint.primary_evidence_ref,
+                "primary_question_evidence_ref": blueprint.primary_evidence_ref,
                 "primary_source_type": scope.primary_source_type,
-                "grounding_status": "passed",
+                "grounding_status": grounding_status,
+                "grounding_validation_errors": list(grounding_errors),
+                "grounding_blocking_bypassed": grounding_failed,
+                "manual_review_required": manual_review_required,
+                "manual_review_reason": manual_review_reason,
+                "grounding_gate_result": grounding_status,
+                "grounding_gate_issues": list(grounding_errors),
                 "validation_errors": [],
             },
             builder_version=QUESTION_GENERATION_SERVICE_VERSION,
@@ -247,7 +308,7 @@ class QuestionGenerationService:
             grounding_result=grounding_result,
             validation_errors=(),
             progress_node_ref=scope.progress_node_ref,
-            evidence_refs=blueprint.evidence_refs,
+            evidence_refs=draft_evidence_refs,
         )
 
 
@@ -397,6 +458,8 @@ def _parse_llm_question_payload(
     question_text = _clean(payload.get("question_text"))
     if not question_text:
         errors.append("llm_question_text_required")
+    elif _contains_unsafe_question_text_marker(question_text):
+        errors.append("llm_question_text_unsafe_leakage")
 
     question_kind = _clean(payload.get("question_kind"))
     if question_kind and question_kind != blueprint.question_kind:
@@ -434,13 +497,9 @@ def _parse_llm_question_payload(
     if not isinstance(clarification_needed, bool):
         errors.append("llm_clarification_needed_required")
 
-    evidence_refs = _string_list(payload.get("evidence_refs"), max_items=8)
-    allowed_refs = set(blueprint.evidence_refs)
-    unknown_refs = [ref for ref in evidence_refs if ref not in allowed_refs]
-    if unknown_refs:
-        errors.append("llm_evidence_ref_unknown")
-    if blueprint.claim_mode != CLAIM_MODE_CLARIFICATION_NEEDED and not evidence_refs:
+    if "evidence_refs" not in payload:
         errors.append("llm_evidence_refs_required")
+    evidence_refs = _string_list(payload.get("evidence_refs"), max_items=8)
 
     if errors:
         return None, tuple(dict.fromkeys(errors))
@@ -488,6 +547,11 @@ def _validation_failed(reason: str, *, progress_node_ref: str | None = None) -> 
         progress_node_ref=progress_node_ref,
         evidence_refs=(),
     )
+
+
+def _contains_unsafe_question_text_marker(question_text: str) -> bool:
+    normalized = question_text.lower()
+    return any(marker in normalized for marker in UNSAFE_QUESTION_TEXT_MARKERS)
 
 
 def _build_evidence_scope(

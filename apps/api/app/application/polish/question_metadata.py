@@ -31,6 +31,11 @@ class QuestionMetadata:
     claim_mode: str | None = None
     grounding_gate_result: str | None = None
     grounding_gate_issues: tuple[str, ...] = ()
+    grounding_status: str | None = None
+    grounding_validation_errors: tuple[str, ...] = ()
+    grounding_blocking_bypassed: bool = False
+    manual_review_required: bool = False
+    manual_review_reason: str | None = None
     generated_at: str | None = None
     generation_mode: str | None = None
     request_source: str | None = None
@@ -81,6 +86,11 @@ class QuestionMetadata:
             "claim_mode": self.claim_mode,
             "grounding_gate_result": self.grounding_gate_result,
             "grounding_gate_issues": list(self.grounding_gate_issues),
+            "grounding_status": self.grounding_status,
+            "grounding_validation_errors": list(self.grounding_validation_errors),
+            "grounding_blocking_bypassed": self.grounding_blocking_bypassed,
+            "manual_review_required": self.manual_review_required,
+            "manual_review_reason": self.manual_review_reason,
             "generated_at": self.generated_at,
             "generation_mode": self.generation_mode,
             "request_source": self.request_source,
@@ -150,6 +160,11 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "claim_mode": _string_or_none(payload.get("claim_mode"), max_chars=80),
         "grounding_gate_result": _string_or_none(payload.get("grounding_gate_result"), max_chars=80),
         "grounding_gate_issues": _string_list(payload.get("grounding_gate_issues")),
+        "grounding_status": _string_or_none(payload.get("grounding_status"), max_chars=80),
+        "grounding_validation_errors": _string_list(payload.get("grounding_validation_errors")),
+        "grounding_blocking_bypassed": _bool_or_false(payload.get("grounding_blocking_bypassed")),
+        "manual_review_required": _bool_or_false(payload.get("manual_review_required")),
+        "manual_review_reason": _string_or_none(payload.get("manual_review_reason"), max_chars=160),
         "generated_at": _string_or_none(payload.get("generated_at"), max_chars=80),
         "generation_mode": _string_or_none(payload.get("generation_mode"), max_chars=80),
         "request_source": _string_or_none(payload.get("request_source"), max_chars=120),
@@ -241,6 +256,12 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "model_summary",
         "validation_errors",
         "redaction_boundary",
+        "llm_difficulty",
+        "llm_skill_dimension",
+        "llm_expected_signal",
+        "llm_confidence",
+        "llm_missing_context",
+        "llm_clarification_needed",
     }
     if any(key in payload for key in llm_keys):
         normalized.update(
@@ -265,6 +286,16 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
                 "model_summary": _safe_summary_dict(payload.get("model_summary")),
                 "validation_errors": _validation_errors(payload.get("validation_errors")),
                 "redaction_boundary": _string_or_none(payload.get("redaction_boundary"), max_chars=160),
+                "llm_difficulty": _string_or_none(payload.get("llm_difficulty"), max_chars=80),
+                "llm_skill_dimension": _string_or_none(payload.get("llm_skill_dimension"), max_chars=160),
+                "llm_expected_signal": _string_or_none(payload.get("llm_expected_signal"), max_chars=300),
+                "llm_confidence": _string_or_none(payload.get("llm_confidence"), max_chars=80),
+                "llm_missing_context": _string_list(payload.get("llm_missing_context"), max_item_chars=240),
+                "llm_clarification_needed": (
+                    bool(payload.get("llm_clarification_needed"))
+                    if isinstance(payload.get("llm_clarification_needed"), bool)
+                    else None
+                ),
             }
         )
     return normalized

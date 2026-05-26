@@ -1461,6 +1461,11 @@ def _polish_question_generation_validation_failed_task_status(
     if progress_node_ref:
         candidate_refs.append(ResourceRef(resource_type="progress_node", resource_id=progress_node_ref))
     candidate_refs.extend(ResourceRef(resource_type="evidence", resource_id=ref) for ref in result.evidence_refs)
+    user_visible_status = (
+        "题目生成配置未生效，请重启后端服务或检查 prompt contract。"
+        if any(error.startswith("prompt_contract_") for error in result.validation_errors)
+        else "题目生成校验未通过"
+    )
     return PolishTaskStatus(
         ai_task_id=task_id,
         task_type=runtime_policy.task_type,
@@ -1468,7 +1473,7 @@ def _polish_question_generation_validation_failed_task_status(
         contract_ids=runtime_policy.contract_ids,
         retryable=False,
         result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=created_at),
-        user_visible_status="题目 grounding 校验未通过",
+        user_visible_status=user_visible_status,
         candidate_refs=tuple(candidate_refs),
         validation_errors=result.validation_errors,
     )

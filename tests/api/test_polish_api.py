@@ -48,11 +48,13 @@ from app.application.polish.progress_evidence import (
     build_progress_prompt_context,
     select_progress_tree_evidence_chunks,
 )
+from app.application.llm.types import LlmTransportResult
 from app.domain.auth.entities import CurrentActor
 from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.jobs.entities import Job, JobVersion
 from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
+from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.shared.refs import OwnerRef, VersionRef
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
@@ -1715,6 +1717,117 @@ def test_get_polish_session_does_not_regenerate_progress_tree() -> None:
     assert transport.calls == []
 
 
+def test_polish_question_grounding_failure_returns_succeeded_task_with_manual_review_metadata() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QuestionGroundingSoftWarningTransport())
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 202
+    data = question_body["data"]
+    assert data["status"] == "succeeded"
+    assert data["user_visible_status"] == "题目已生成"
+    assert data["validation_errors"] == []
+    assert data["active_question_refs"]
+    assert any(ref["resource_type"] == "question" for ref in data["candidate_refs"])
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    turns = detail_body["data"]["turns"]
+    assert len(turns) == 1
+    latest_turn = turns[-1]
+    assert latest_turn["question_text"] == _QuestionGroundingSoftWarningTransport.QUESTION_TEXT
+    metadata = latest_turn["question_metadata"]
+    assert metadata["manual_review_required"] is True
+    assert metadata["grounding_status"] == "failed_warning"
+    assert metadata["validation_errors"] == []
+    assert "source_contamination_or_ungrounded_question" in metadata["grounding_validation_errors"]
+
+
+def test_polish_question_prompt_contract_failure_returns_restart_status(monkeypatch) -> None:
+    def legacy_prompt_asset(*args, **kwargs):
+        return {
+            "prompt_version": "legacy",
+            "schema_id": "legacy",
+            "task_type": "polish_question_generation",
+            "input_contract": {
+                "field_sources": {
+                    "skill_dimension": "progress node expected_capability",
+                }
+            },
+            "input_data": {
+                "progress_node": {
+                    "ref": "capability.inventory",
+                    "title": "分布式锁与事务消息最终一致性设计",
+                    "expected_capability": (
+                        "高阶深度目标：考察候选人面对高并发库存扣减时的方案选型、异常处理与数据恢复能力"
+                    ),
+                },
+                "skill_dimension": (
+                    "高阶深度目标：考察候选人面对高并发库存扣减时的方案选型、异常处理与数据恢复能力"
+                ),
+                "evidence_refs": ["resume_project_001"],
+            },
+        }
+
+    monkeypatch.setattr(
+        "app.application.polish.question_generation_service.build_question_prompt_asset",
+        legacy_prompt_asset,
+    )
+    transport = _RecordingPolishProgressTransport()
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    transport.calls.clear()
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 202
+    data = question_body["data"]
+    assert data["status"] == "validation_failed"
+    assert data["user_visible_status"] == "题目生成配置未生效，请重启后端服务或检查 prompt contract。"
+    assert "prompt_contract_anchor_policy_missing" in data["validation_errors"]
+    assert "prompt_contract_field_source_legacy_expected_capability" in data["validation_errors"]
+    assert data["active_question_refs"] == []
+    assert all(request.task_type != "polish_question_generation" for request in transport.calls)
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    assert detail_body["data"]["turns"] == []
+
+
 def test_polish_question_answer_and_feedback_task_core() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -3115,6 +3228,40 @@ class _RecordingPolishProgressTransport(FakeLlmTransport):
     def generate(self, request):
         self.calls.append(request)
         return super().generate(request)
+
+
+class _QuestionGroundingSoftWarningTransport(FakeLlmTransport):
+    QUESTION_TEXT = "请提供一个您亲身参与的项目，该项目涉及分布式锁与事务消息的最终一致性设计，并说明故障恢复策略。"
+
+    def generate(self, request):
+        if request.task_type != "polish_question_generation":
+            return super().generate(request)
+        input_data = request.evidence_bundle["input_data"]
+        generation_policy = input_data["generation_policy"]
+        return LlmTransportResult(
+            result={
+                "question_text": self.QUESTION_TEXT,
+                "question_kind": generation_policy["question_kind"],
+                "focus_dimension": generation_policy["focus_dimension"],
+                "difficulty": "clarification",
+                "skill_dimension": "分布式一致性",
+                "expected_signal": "能说明亲身项目、分布式锁、事务消息、最终一致性和故障恢复策略。",
+                "follow_ups": ["故障恢复如何验证？", "最终一致性边界是什么？"],
+                "scoring_rubric": [
+                    {"dimension": "experience", "signals": ["说明亲身参与项目"]},
+                    {"dimension": "recovery", "signals": ["说明故障恢复策略"]},
+                ],
+                "missing_context": ["缺少可锚定的候选人项目证据"],
+                "evidence_refs": [],
+                "confidence": "low",
+                "clarification_needed": True,
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.LOW,
+            low_confidence_flags=("clarification_needed",),
+            trace_refs=("trace_api_soft_grounding_warning",),
+            evidence_refs=(),
+        )
 
 
 class _QualityFirstSchemaInvalidTransport(FakeLlmTransport):
