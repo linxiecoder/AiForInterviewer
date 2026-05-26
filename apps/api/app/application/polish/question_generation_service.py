@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from hashlib import sha256
 from time import perf_counter, sleep
 from typing import Any
 
@@ -24,6 +25,7 @@ from app.application.polish.question_blueprint import (
     build_question_blueprint,
 )
 from app.application.polish.question_generation_prompts import (
+    build_follow_up_question_prompt_asset,
     build_question_prompt_asset,
     build_question_prompt_metadata,
     render_blueprint_question,
@@ -69,6 +71,7 @@ class QuestionGenerationService:
         plan: dict[str, Any],
         state: dict[str, Any],
         requested_ref: str,
+        follow_up_context: dict[str, Any] | None = None,
     ) -> QuestionGenerationResult:
         node = _resolve_progress_node(plan=plan, state=state, requested_ref=requested_ref)
         if node is None:
@@ -85,8 +88,21 @@ class QuestionGenerationService:
             scope,
             question_kind_taxonomy=self._runtime_policy.question_kind_taxonomy,
         )
-        prompt_asset = build_question_prompt_asset(blueprint, scope, runtime_policy=self._runtime_policy)
+        is_follow_up = isinstance(follow_up_context, dict)
+        prompt_asset = (
+            build_follow_up_question_prompt_asset(
+                blueprint,
+                scope,
+                follow_up_context=follow_up_context or {},
+                runtime_policy=self._runtime_policy,
+            )
+            if is_follow_up
+            else build_question_prompt_asset(blueprint, scope, runtime_policy=self._runtime_policy)
+        )
         prompt_metadata = build_question_prompt_metadata(prompt_asset, runtime_policy=self._runtime_policy)
+        prompt_task_type = _clean(prompt_asset.get("task_type")) or self._runtime_policy.task_type
+        question_pattern = "follow_up_targeted" if is_follow_up else blueprint.question_kind
+        follow_up_metadata = _follow_up_generation_metadata(follow_up_context, prompt_asset) if is_follow_up else {}
         llm_payload: dict[str, Any] | None = None
         llm_result: LlmTransportResult | None = None
         generation_metadata: dict[str, Any]
@@ -132,7 +148,7 @@ class QuestionGenerationService:
             transport_kind = _clean(llm_result.result.get("transport"))
             is_fake_transport = transport_kind == "fake"
             generation_metadata = {
-                "llm_task_type": self._runtime_policy.task_type,
+                "llm_task_type": prompt_task_type,
                 "prompt_version": self._runtime_policy.prompt_version,
                 "llm_output_validation_status": "valid",
                 "llm_generation_mode": (
@@ -146,7 +162,11 @@ class QuestionGenerationService:
             if is_fake_transport:
                 generation_metadata["fallback_reason"] = "fake_transport_configured"
         else:
-            question_text = self._surface_question_builder(blueprint, scope)
+            question_text = (
+                _render_follow_up_degraded_question(blueprint, scope, follow_up_context or {})
+                if is_follow_up
+                else self._surface_question_builder(blueprint, scope)
+            )
             LogUtil.agent_runtime_step(
                 task_type=self._runtime_policy.task_type,
                 phase="llm_call",
@@ -155,9 +175,11 @@ class QuestionGenerationService:
                 error_type="llm_transport_unavailable",
             )
             generation_metadata = {
+                "llm_task_type": prompt_task_type,
                 "llm_generation_mode": "deterministic_degraded_generation",
                 "fallback_reason": "llm_transport_unavailable",
                 "fallback_visible": True,
+                "provider_status": "not_configured",
             }
         grounding_result = validate_question_grounding(
             blueprint=blueprint,
@@ -180,18 +202,18 @@ class QuestionGenerationService:
             progress_node_ref=scope.progress_node_ref,
             evidence_refs=blueprint.evidence_refs,
             context_digest=scope.context_digest,
-            question_pattern=blueprint.question_kind,
+            question_pattern=question_pattern,
             quality_score=None,
             confidence_level="medium" if blueprint.evidence_refs else "low",
             low_confidence_flags=() if blueprint.evidence_refs else ("clarification_needed",),
-            expected_answer_dimensions=_expected_answer_dimensions(blueprint),
+            expected_answer_dimensions=_expected_answer_dimensions(blueprint, follow_up_context),
             question_metadata={
-                "question_pattern": blueprint.question_kind,
+                "question_pattern": question_pattern,
                 "quality_score": None,
                 "quality_warnings": [],
                 "confidence_level": "medium" if blueprint.evidence_refs else "low",
                 "low_confidence_flags": [] if blueprint.evidence_refs else ["clarification_needed"],
-                "expected_answer_dimensions": list(_expected_answer_dimensions(blueprint)),
+                "expected_answer_dimensions": list(_expected_answer_dimensions(blueprint, follow_up_context)),
                 "builder_version": QUESTION_GENERATION_SERVICE_VERSION,
                 "validator_version": "polish_question_grounding.v1",
                 "signal_version": "evidence_grounded_blueprint.v1",
@@ -199,6 +221,7 @@ class QuestionGenerationService:
                 "generation_service": QUESTION_GENERATION_SERVICE_VERSION,
                 "blueprint_version": blueprint.metadata.get("blueprint_version"),
                 **prompt_metadata,
+                **follow_up_metadata,
                 **generation_metadata,
                 "question_kind": blueprint.question_kind,
                 "claim_mode": blueprint.claim_mode,
@@ -234,13 +257,16 @@ def _generate_llm_question(
     scope: EvidenceScope,
     runtime_policy: QuestionGenerationRuntimePolicy,
 ) -> LlmTransportResult | QuestionGenerationResult:
+    task_type = _clean(prompt_asset.get("task_type")) or runtime_policy.task_type
+    prompt_version = _clean(prompt_asset.get("prompt_version")) or runtime_policy.prompt_version
+    schema_id = _clean(prompt_asset.get("schema_id")) or runtime_policy.prompt_schema_id
     request = LlmTransportRequest(
         contract_ids=runtime_policy.contract_ids,
-        task_type=runtime_policy.task_type,
+        task_type=task_type,
         input_refs=(scope.progress_node_ref, *blueprint.evidence_refs),
         evidence_bundle=prompt_asset,
-        prompt_version=runtime_policy.prompt_version,
-        schema_id=runtime_policy.prompt_schema_id,
+        prompt_version=prompt_version,
+        schema_id=schema_id,
     )
     max_retries = max(0, int(runtime_policy.llm_max_retries))
     max_attempts = max_retries + 1
@@ -570,7 +596,14 @@ def _question_source(*, index: int, chunk: ProgressEvidenceChunk) -> PolishQuest
     )
 
 
-def _expected_answer_dimensions(blueprint: QuestionBlueprint) -> tuple[str, ...]:
+def _expected_answer_dimensions(
+    blueprint: QuestionBlueprint,
+    follow_up_context: dict[str, Any] | None = None,
+) -> tuple[str, ...]:
+    if follow_up_context:
+        target_dimension = _clean(follow_up_context.get("target_dimension"))
+        if target_dimension:
+            return (target_dimension, "失败路径、边界和验证指标")
     if blueprint.required_answer_materials:
         return blueprint.required_answer_materials
     return ("业务背景", "关键技术链路", "异常处理或取舍", "验证指标")
@@ -595,3 +628,60 @@ def _first_text(*values: object) -> str:
 
 def _clean(value: object) -> str:
     return str(value or "").strip()
+
+
+def _follow_up_generation_metadata(
+    follow_up_context: dict[str, Any] | None,
+    prompt_asset: dict[str, Any],
+) -> dict[str, Any]:
+    context = follow_up_context if isinstance(follow_up_context, dict) else {}
+    input_refs = [
+        _clean(context.get("parent_question_id")),
+        _clean(context.get("parent_answer_id")),
+        _clean(context.get("parent_feedback_id")),
+    ]
+    focus_seed = "|".join(ref for ref in input_refs if ref) or _clean(context.get("target_dimension")) or "follow_up"
+    focus_digest = sha256(focus_seed.encode("utf-8")).hexdigest()[:12]
+    return {
+        "follow_up_reason": _clean(context.get("follow_up_reason")) or "business_follow_up_request",
+        "follow_up_target_dimension": _clean(context.get("target_dimension")) or "未覆盖追问点",
+        "follow_up_prompt_task_type": _clean(prompt_asset.get("task_type")),
+        "follow_up_prompt_version": _clean(prompt_asset.get("prompt_version")),
+        "follow_up_input_refs": [ref for ref in input_refs if ref],
+        "focus_dimension": _clean(context.get("target_dimension")) or "follow_up_targeted",
+        "focus_key": f"focus_follow_up_{focus_digest}",
+        "template_signature": f"llm:follow_up_prompt:{focus_digest}",
+        "blueprint_signature": f"bp:follow_up_context:{focus_digest}",
+        "duplicate_gate_result": "follow_up_parent_bound",
+    }
+
+
+def _render_follow_up_degraded_question(
+    blueprint: QuestionBlueprint,
+    scope: EvidenceScope,
+    follow_up_context: dict[str, Any],
+) -> str:
+    target_dimension = _compact_text(
+        _clean(follow_up_context.get("target_dimension")) or blueprint.expected_capability or "未覆盖追问点",
+        limit=96,
+    )
+    answer_excerpt = _compact_text(
+        _clean(follow_up_context.get("parent_answer_excerpt")) or "上一轮回答",
+        limit=96,
+    )
+    evidence_excerpt = _compact_text(
+        _clean(blueprint.primary_evidence_text) or _clean(scope.node_title) or "当前岗位与简历证据",
+        limit=120,
+    )
+    return (
+        f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
+        f"请结合上一题背景和当前岗位/简历证据「{evidence_excerpt}」，说明你的具体判断、边界、"
+        "失败处理、验证指标和关键取舍。"
+    )
+
+
+def _compact_text(value: str, *, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}..."

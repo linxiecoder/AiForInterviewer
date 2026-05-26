@@ -520,35 +520,36 @@ class PolishUseCases:
             detail.progress_context,
             completed_focus_refs,
         )
+        follow_up_context: dict[str, Any] | None = None
         if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
-            follow_up_draft = _build_follow_up_question_draft(command=command, detail=detail)
-            if isinstance(follow_up_draft, DomainError):
-                return ApplicationResult(error=follow_up_draft)
-            question_draft = follow_up_draft
-        else:
-            question_generation_result = self._question_generation_service.generate(
-                session=session,
-                context=progress_context,
-                plan=detail.progress_tree_plan,
-                state=detail.progress_tree_state,
-                requested_ref=requested_progress_node_ref,
+            resolved_follow_up_context = _build_follow_up_generation_context(command=command, detail=detail)
+            if isinstance(resolved_follow_up_context, DomainError):
+                return ApplicationResult(error=resolved_follow_up_context)
+            follow_up_context = resolved_follow_up_context
+        question_generation_result = self._question_generation_service.generate(
+            session=session,
+            context=progress_context,
+            plan=detail.progress_tree_plan,
+            state=detail.progress_tree_state,
+            requested_ref=requested_progress_node_ref,
+            follow_up_context=follow_up_context,
+        )
+        if not question_generation_result.succeeded or question_generation_result.draft is None:
+            task = _polish_question_generation_validation_failed_task_status(
+                task_id=task_id,
+                result=question_generation_result,
+                requested_progress_node_ref=requested_progress_node_ref,
+                created_at=now,
+                runtime_policy=self._question_generation_policy,
             )
-            if not question_generation_result.succeeded or question_generation_result.draft is None:
-                task = _polish_question_generation_validation_failed_task_status(
-                    task_id=task_id,
-                    result=question_generation_result,
-                    requested_progress_node_ref=requested_progress_node_ref,
-                    created_at=now,
-                    runtime_policy=self._question_generation_policy,
-                )
-                self._polish_repository.add_task(
-                    task,
-                    owner_id=command.owner_id,
-                    actor_id=command.actor_id,
-                    target_ref_id=command.session_id,
-                )
-                return ApplicationResult(value=task)
-            question_draft = question_generation_result.draft
+            self._polish_repository.add_task(
+                task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.session_id,
+            )
+            return ApplicationResult(value=task)
+        question_draft = question_generation_result.draft
         question_metadata = _metadata_for_new_question(
             getattr(question_draft, "question_metadata", None),
             generated_at=now.isoformat(),
@@ -1346,11 +1347,11 @@ def _polish_question_graph_candidate_refs(
     return tuple(refs)
 
 
-def _build_follow_up_question_draft(
+def _build_follow_up_generation_context(
     *,
     command: CreatePolishQuestionTaskCommand,
     detail: PolishSessionDetail,
-) -> PolishQuestionDraft | DomainError:
+) -> dict[str, Any] | DomainError:
     parent_turn = _find_turn(detail.turns, command.parent_question_id)
     if parent_turn is None:
         return DomainError(
@@ -1373,60 +1374,19 @@ def _build_follow_up_question_draft(
         )
 
     target_dimension, follow_up_reason = _select_follow_up_target(parent_turn, parent_answer)
-    answer_excerpt = _follow_up_excerpt(parent_answer.answer_text)
-    focus_key = _question_request_focus_key(target_dimension)
     progress_node_ref = _clean_question_request_text(command.selected_progress_node_ref) or parent_turn.progress_node_ref
-    question_text = (
-        f"你上一轮回答中提到「{answer_excerpt}」，但还没有讲清楚「{target_dimension}」。"
-        "现在只聚焦这个点：请结合上一题背景，说明你的具体判断、边界、失败处理、验证指标和关键取舍。"
-    )
-    metadata = empty_question_metadata().to_dict()
-    metadata.update(
-        {
-            "question_pattern": "follow_up_targeted",
-            "expected_answer_dimensions": [target_dimension],
-            "quality_score": 90,
-            "quality_warnings": [],
-            "confidence_level": "medium",
-            "low_confidence_flags": [],
-            "source_availability": "available",
-            "focus_dimension": target_dimension,
-            "focus_key": focus_key,
-            "template_signature": f"tpl:follow_up_targeted:{focus_key}",
-            "blueprint_signature": _follow_up_blueprint_signature(
-                parent_turn.question_id,
-                parent_answer.answer_id,
-                focus_key,
-            ),
-            "duplicate_gate_result": "follow_up_parent_bound",
-            "similarity_checked": True,
-            "max_similarity_in_same_category": 0.0,
-            "mastery_exception_used": True,
-            "follow_up_reason": follow_up_reason,
-            "follow_up_target_dimension": target_dimension,
-        }
-    )
-    return PolishQuestionDraft(
-        question_text=question_text,
-        question_sources=(
-            PolishQuestionSource(
-                index=1,
-                source_type="history_feedback",
-                title="上一轮回答与反馈",
-                excerpt=_follow_up_source_excerpt(parent_answer),
-                ref_id=parent_answer.feedback_id or parent_answer.answer_id,
-                availability="available",
-            ),
-        ),
-        progress_node_ref=progress_node_ref,
-        evidence_refs=parent_turn.evidence_refs,
-        context_digest=parent_turn.context_digest or detail.progress_context.get("content_digest"),
-        question_pattern="follow_up_targeted",
-        quality_score=90,
-        confidence_level="medium",
-        expected_answer_dimensions=(target_dimension,),
-        question_metadata=metadata,
-    )
+    return {
+        "parent_question_id": parent_turn.question_id,
+        "parent_question_excerpt": _clean_question_request_text(parent_turn.question_text, max_chars=240),
+        "parent_answer_id": parent_answer.answer_id,
+        "parent_answer_excerpt": _follow_up_excerpt(parent_answer.answer_text),
+        "parent_feedback_id": parent_answer.feedback_id,
+        "parent_feedback_excerpt": _clean_question_request_text(parent_answer.feedback_text, max_chars=240),
+        "target_dimension": target_dimension,
+        "follow_up_reason": follow_up_reason,
+        "progress_node_ref": progress_node_ref,
+        "parent_evidence_refs": list(parent_turn.evidence_refs),
+    }
 
 
 def _find_turn(turns: tuple[PolishSessionTurn, ...], question_id: str | None) -> PolishSessionTurn | None:

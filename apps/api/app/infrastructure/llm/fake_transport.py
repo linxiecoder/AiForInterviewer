@@ -33,7 +33,10 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE,
 )
-from app.application.polish.question_generation_prompts import QUESTION_PROMPT_TASK_TYPE
+from app.application.polish.question_generation_prompts import (
+    QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE,
+    QUESTION_PROMPT_TASK_TYPE,
+)
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.domain.shared.ids import stable_resource_id
 from app.schemas.job_match import (
@@ -57,7 +60,7 @@ class FakeLlmTransport:
         """根据 request.task_type 分发到对应的 fake 生成函数；未知 task_type 返回骨架结果。"""
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
-        if request.task_type == QUESTION_PROMPT_TASK_TYPE:
+        if request.task_type in {QUESTION_PROMPT_TASK_TYPE, QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE}:
             return _generate_fake_polish_question(request)
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
             return _generate_fake_progress_quality_first_menu(request)
@@ -110,6 +113,8 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
     input_data = bundle.get("input_data") if isinstance(bundle.get("input_data"), dict) else {}
     progress_node = input_data.get("progress_node") if isinstance(input_data.get("progress_node"), dict) else {}
     policy = input_data.get("generation_policy") if isinstance(input_data.get("generation_policy"), dict) else {}
+    follow_up = input_data.get("follow_up") if isinstance(input_data.get("follow_up"), dict) else {}
+    is_follow_up = request.task_type == QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE or input_data.get("generation_mode") == "follow_up"
     evidence_refs = tuple(ref for ref in input_data.get("evidence_refs", []) if isinstance(ref, str) and ref.strip())
     summaries = input_data.get("evidence_summaries") if isinstance(input_data.get("evidence_summaries"), list) else []
     summary_items = [item for item in summaries if isinstance(item, dict) and item.get("excerpt")]
@@ -120,7 +125,19 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
     )
     claim_mode = str(policy.get("claim_mode") or "")
     excerpt = _fake_question_primary_excerpt(summary_items, claim_mode=claim_mode, fallback=capability)
-    if not evidence_refs or claim_mode == "clarification_needed":
+    if is_follow_up:
+        target_dimension = _fake_question_excerpt(follow_up.get("target_dimension") or capability, limit=80)
+        answer_excerpt = _fake_question_excerpt(follow_up.get("previous_answer") or "上一轮回答", limit=80)
+        question_text = (
+            f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
+            f"请结合上一题背景和岗位/简历证据「{excerpt}」，说明你的具体判断、边界、"
+            "失败处理、验证指标和关键取舍。"
+        )
+        difficulty = "hard"
+        missing_context = []
+        confidence = "medium"
+        clarification_needed = False
+    elif not evidence_refs or claim_mode == "clarification_needed":
         question_text = (
             f"围绕「{title}」，当前材料不足以支撑具体题干。请先补充一个真实项目材料，"
             "必须包含业务入口、职责边界、失败案例和验证指标。"

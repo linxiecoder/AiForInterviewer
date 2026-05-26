@@ -9,7 +9,8 @@ import pytest
 from app.application.llm.errors import LlmTransportUnavailableError
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
-from app.application.polish.entities import PolishAnswer
+from app.application.polish.entities import PolishAnswer, PolishFeedback
+from app.application.polish.question_generation_prompts import QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE
 from app.application.polish.question_generation_policy import QuestionGenerationRuntimePolicy
 from app.application.polish.question_generation_service import QuestionGenerationService
 from app.application.polish.question_metadata import normalize_question_metadata
@@ -197,6 +198,52 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert metadata["prompt_asset_version"] == "polish_question_generation_prompt.v3"
 
 
+def test_follow_up_question_service_sends_follow_up_prompt_to_llm_transport() -> None:
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+        follow_up_context=_follow_up_context(),
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    assert request.task_type == QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE
+    assert request.prompt_version == "polish_question_follow_up_prompt.v1"
+    assert request.schema_id == "polish_question_follow_up_generation_output_v1"
+    prompt_asset = request.evidence_bundle
+    assert prompt_asset["task_type"] == QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE
+    assert prompt_asset["input_data"]["generation_mode"] == "follow_up"
+    assert prompt_asset["input_data"]["follow_up"]["parent_question_id"] == "que_parent"
+    assert prompt_asset["input_data"]["follow_up"]["parent_answer_id"] == "ans_parent"
+    assert prompt_asset["input_data"]["follow_up"]["parent_feedback_id"] == "fb_parent"
+    assert prompt_asset["input_data"]["follow_up"]["target_dimension"] == "失败处理和验证指标"
+    assert "资深技术面试追问设计专家" in prompt_asset["prompt"]
+    assert "角色：助手" not in prompt_asset["prompt"]
+    assert len(prompt_asset["examples"]) >= 3
+    serialized_examples = json.dumps(prompt_asset["examples"], ensure_ascii=False)
+    for forbidden in ("test_user", "test123", "固定候选人", "审计样本"):
+        assert forbidden not in serialized_examples
+    metadata = result.draft.question_metadata
+    assert metadata["question_pattern"] == "follow_up_targeted"
+    assert metadata["follow_up_reason"] == "missing_answer_dimension"
+    assert metadata["follow_up_target_dimension"] == "失败处理和验证指标"
+    assert metadata["llm_generation_mode"] == "provider_structured_json"
+    assert metadata["fallback_visible"] is False
+
+
 def test_question_service_uses_injected_runtime_policy_for_prompt_contract_ids() -> None:
     policy = QuestionGenerationRuntimePolicy(
         policy_version="tenant-test-policy.v9",
@@ -314,6 +361,60 @@ def test_question_service_marks_fake_transport_as_deterministic_fake() -> None:
     assert metadata["fallback_visible"] is True
 
 
+def test_follow_up_question_service_marks_fake_transport_as_fake_fallback() -> None:
+    service = QuestionGenerationService(llm_transport=FakeLlmTransport())
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+        follow_up_context=_follow_up_context(),
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    assert metadata["question_pattern"] == "follow_up_targeted"
+    assert metadata["llm_generation_mode"] == "deterministic_fake_transport"
+    assert metadata["provider_status"] == "fake_transport"
+    assert metadata["fallback_reason"] == "fake_transport_configured"
+    assert metadata["fallback_visible"] is True
+
+
+def test_follow_up_question_service_marks_missing_transport_as_degraded_fallback() -> None:
+    service = QuestionGenerationService()
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+        follow_up_context=_follow_up_context(),
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    assert metadata["question_pattern"] == "follow_up_targeted"
+    assert metadata["llm_generation_mode"] == "deterministic_degraded_generation"
+    assert metadata["fallback_reason"] == "llm_transport_unavailable"
+    assert metadata["fallback_visible"] is True
+    assert metadata["provider_status"] != "called"
+
+
 def test_question_service_rejects_llm_output_that_does_not_match_schema() -> None:
     service = QuestionGenerationService(llm_transport=_InvalidQuestionTransport())
     session, context, plan, state = _question_generation_inputs(
@@ -392,6 +493,72 @@ def test_question_task_persists_validation_failed_task_for_invalid_llm_output() 
     assert "llm_question_text_required" in result.value.validation_errors
     assert repository.questions == []
     assert len(repository.tasks) == 1
+
+
+def test_follow_up_question_task_uses_llm_transport_request() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(repository, parent_question.question_id)
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+    transport.requests.clear()
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(transport.requests) == 1
+    assert transport.requests[0].task_type == QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE
+    assert len(repository.questions) == 2
+    follow_up_question = repository.questions[-1]
+    metadata = follow_up_question.question_metadata
+    assert metadata["generation_mode"] == "follow_up"
+    assert metadata["question_pattern"] == "follow_up_targeted"
+    assert metadata["llm_generation_mode"] == "provider_structured_json"
+    assert metadata["follow_up_reason"] == "missing_answer_dimension"
+    assert metadata["follow_up_target_dimension"] == "失败处理和验证指标"
+    assert str(metadata["template_signature"]).startswith("llm:follow_up_prompt:")
+    assert "上一轮回答" in follow_up_question.question_text
+
+
+def test_follow_up_question_task_parse_failure_persists_failed_task_without_question() -> None:
+    valid_transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(repository, parent_question.question_id)
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=_InvalidQuestionTransport())
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert "llm_question_text_required" in result.value.validation_errors
+    assert len(repository.questions) == 1
+    assert len(repository.tasks) == 2
 
 
 def test_question_service_logs_llm_parse_failure_without_raw_output(caplog) -> None:
@@ -651,6 +818,59 @@ def _question_generation_inputs(
     return repository.session, context, plan, state
 
 
+def _follow_up_context() -> dict[str, Any]:
+    return {
+        "parent_question_id": "que_parent",
+        "parent_question_excerpt": "请说明支付链路的一致性方案。",
+        "parent_answer_id": "ans_parent",
+        "parent_answer_excerpt": "我主要做了接口串联，但没有展开失败兜底和指标验证。",
+        "parent_feedback_id": "fb_parent",
+        "parent_feedback_excerpt": "缺少失败处理和验证指标。",
+        "target_dimension": "失败处理和验证指标",
+        "follow_up_reason": "missing_answer_dimension",
+        "parent_evidence_refs": ["resume_project_001"],
+    }
+
+
+def _attach_parent_answer_and_feedback(repository: Any, question_id: str) -> None:
+    now = utc_now()
+    answer = PolishAnswer(
+        answer_id="ans_follow_parent",
+        owner_id=OWNER_ID,
+        actor_id=ACTOR_ID,
+        session_id=SESSION_ID,
+        question_id=question_id,
+        answer_round=1,
+        answer_text="我主要做了接口串联，但没有展开失败兜底和指标验证。",
+        status="saved",
+        created_at=now,
+        updated_at=now,
+    )
+    feedback = PolishFeedback(
+        feedback_id="fb_follow_parent",
+        owner_id=OWNER_ID,
+        actor_id=ACTOR_ID,
+        session_id=SESSION_ID,
+        answer_id=answer.answer_id,
+        ai_task_id="aitask_follow_feedback",
+        score_result_id=None,
+        feedback_summary=json.dumps(
+            {
+                "feedback_text": "缺少失败处理和验证指标。",
+                "missing_answer_dimensions": [{"title": "失败处理和验证指标"}],
+            },
+            ensure_ascii=False,
+        ),
+        status="generated",
+        created_at=now,
+        updated_at=now,
+    )
+    repository.answers = [answer]
+    repository.feedbacks = [feedback]
+    repository.list_answers_for_session = lambda owner_id, session_id: tuple(repository.answers)
+    repository.list_feedbacks_for_session = lambda owner_id, session_id: tuple(repository.feedbacks)
+
+
 class _RecordingQuestionTransport:
     QUESTION_TEXT = "请围绕「支付链路需要覆盖幂等、失败补偿和上线验证指标」设计一次可评分追问，说明边界、取舍和复盘信号。"
 
@@ -661,10 +881,27 @@ class _RecordingQuestionTransport:
         self.requests.append(request)
         input_data = request.evidence_bundle["input_data"]
         generation_policy = input_data["generation_policy"]
+        follow_up = input_data.get("follow_up") if isinstance(input_data.get("follow_up"), dict) else {}
         evidence_refs = tuple(input_data["evidence_refs"])
+        evidence_summaries = input_data.get("evidence_summaries") if isinstance(input_data.get("evidence_summaries"), list) else []
+        evidence_excerpt = next(
+            (
+                str(item.get("excerpt"))
+                for item in evidence_summaries
+                if isinstance(item, dict) and item.get("excerpt")
+            ),
+            "支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        )
+        question_text = self.QUESTION_TEXT
+        if input_data.get("generation_mode") == "follow_up":
+            question_text = (
+                f"你上一轮回答中提到「{follow_up.get('previous_answer', '上一轮回答')}」，"
+                f"现在围绕「{follow_up.get('target_dimension', '追问目标')}」继续追问："
+                f"请结合上一题背景、岗位/简历证据「{evidence_excerpt}」和反馈缺口，说明你的具体判断、边界、失败处理、验证指标和关键取舍。"
+            )
         return LlmTransportResult(
             result={
-                "question_text": self.QUESTION_TEXT,
+                "question_text": question_text,
                 "question_kind": generation_policy["question_kind"],
                 "focus_dimension": generation_policy["focus_dimension"],
                 "difficulty": "medium",
