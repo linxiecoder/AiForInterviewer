@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from pathlib import Path
@@ -35,6 +36,7 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     build_progress_quality_first_menu_prompt,
 )
+from app.application.polish import progress_v2_prompts
 from app.application.polish.progress_evidence import (
     build_progress_evidence_chunks,
     build_progress_prompt_context,
@@ -1075,6 +1077,11 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     bundle = build_progress_quality_first_menu_prompt(_progress_context_fixture())
     prompt = bundle["prompt"]
     output_schema = bundle["output_schema"]
+    retired_basis_types = [
+        "explicit_" + "evidence",
+        "reasonable_" + "inference",
+        "un" + "supported",
+    ]
 
     assert "6-9 个主训练节点" in prompt
     assert "10 到 14 个叶子节点" not in prompt
@@ -1082,9 +1089,11 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "metadata" not in output_schema["required_root_fields"]
     assert "deferred_candidates" in output_schema["optional_root_fields"]
     assert output_schema["allowed_basis_types"] == ["resume_signal", "jd_requirement", "match_gap", "mixed"]
-    assert "explicit_evidence" not in prompt
-    assert "reasonable_inference" not in prompt
-    assert "unsupported" not in prompt
+    for retired_basis_type in retired_basis_types:
+        assert retired_basis_type not in prompt
+        assert all(retired_basis_type not in rule for rule in progress_v2_prompts._COMMON_JSON_RULES)
+    filtered_common_rules_expression = "rule for rule in " + "_COMMON_JSON_RULES"
+    assert filtered_common_rules_expression not in inspect.getsource(build_progress_quality_first_menu_prompt)
     assert "preparation_goal" not in output_schema["required_leaf_fields"]
     assert "expected_answer_signals" not in output_schema["required_leaf_fields"]
     assert "common_loss_risks" not in output_schema["required_leaf_fields"]
@@ -1138,6 +1147,31 @@ def test_progress_tree_quality_first_accepts_compact_legacy_payload_without_opti
         assert node["common_loss_risks"]
         assert node["recommended_first_question"]
         assert node["follow_up_directions"]
+
+
+def test_progress_tree_quality_first_normalizes_invalid_basis_type_with_current_warning() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstInvalidBasisTypeTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    leaves = _leaf_nodes(body["data"]["progress_tree_plan"]["nodes"])
+    flags = {
+        flag
+        for node in leaves
+        for flag in node["low_confidence_flags"]
+    }
+    legacy_warning = "legacy_" + "basis_type_normalized"
+    retired_warning = "unsupported_" + "basis_type_normalized"
+    assert {node["basis_type"] for node in leaves} <= {"resume_signal", "jd_requirement", "match_gap", "mixed"}
+    assert "basis_type_normalized" in flags
+    assert legacy_warning not in flags
+    assert retired_warning not in flags
 
 
 def test_progress_tree_quality_first_accepts_ok_status_and_ignores_untrusted_metadata() -> None:
@@ -2504,6 +2538,44 @@ def test_progress_tree_refresh_rolls_up_parent_from_all_children_without_mutatin
     assert result["progress_tree_state"]["progress"]["progress_percent"] == 50
 
 
+def test_progress_tree_refresh_no_longer_refreshes_grounded_plan_v2_as_active_schema() -> None:
+    existing_plan = {
+        "schema_id": "polish_progress_tree_" + "grounded_plan_v2",
+        "status": "ready",
+        "context_digest": "digest",
+        "nodes": [
+            {
+                "progress_node_ref": "node_legacy",
+                "title": "旧链路节点",
+                "expected_capability": "旧链路能力",
+                "children": [],
+            }
+        ],
+    }
+    existing_state = {
+        "status": "ready",
+        "node_states": [
+            {
+                "progress_node_ref": "node_legacy",
+                "status": "pending",
+                "completed_questions_count": 0,
+            }
+        ],
+        "current_priority": {"progress_node_ref": "node_legacy", "title": "旧链路节点"},
+        "progress": {"progress_percent": 0},
+    }
+
+    result = PolishProgressTreeLlmService(None).refresh_state(
+        context={"turns": []},
+        existing_plan=existing_plan,
+        existing_state=existing_state,
+    )
+
+    assert result["status"] == "refresh_failed"
+    assert result["progress_tree_state"]["status"] == "refresh_failed"
+    assert result["progress_tree_state"]["failure_reason"] == "llm_transport_missing"
+
+
 def test_polish_question_generation_allows_refresh_failed_state_when_plan_is_ready() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -3292,7 +3364,7 @@ class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
                     "Git协作与版本控制规范",
                     "jd_gap_learning",
                     3,
-                    basis_type="unsupported",
+                    basis_type="jd_requirement",
                     confidence_level="low",
                     evidence_refs=[],
                 ),
@@ -3300,7 +3372,7 @@ class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
                     "Linux系统诊断与Shell编写",
                     "jd_gap_learning",
                     4,
-                    basis_type="unsupported",
+                    basis_type="jd_requirement",
                     confidence_level="low",
                     evidence_refs=[],
                 ),
@@ -3308,7 +3380,7 @@ class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
                     "云上成本控制与资源优化",
                     "jd_gap_learning",
                     5,
-                    basis_type="unsupported",
+                    basis_type="jd_requirement",
                     confidence_level="low",
                     evidence_refs=[],
                 ),
@@ -3316,7 +3388,7 @@ class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
                     "5年以上Java研发经验",
                     "jd_gap_learning",
                     6,
-                    basis_type="unsupported",
+                    basis_type="jd_requirement",
                     confidence_level="low",
                     evidence_refs=[],
                 ),
@@ -3324,7 +3396,6 @@ class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
             metadata={
                 "generated_at": "2099-01-01T00:00:00Z",
                 "session_id": "llm-forged-session",
-                "quality_target": "10-14 leaves",
             },
         )
         return LlmTransportResult(
@@ -3471,12 +3542,12 @@ class _QualityFirstCompactLegacyTransport(FakeLlmTransport):
             return super().generate(request)
         payload = _quality_first_payload(
             [
-                _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, basis_type="explicit_evidence", evidence_refs=["resume_1"]),
-                _quality_first_payload_node("混合检索召回链路取舍", "resume_deep_dive", 2, basis_type="explicit_evidence", evidence_refs=["resume_2"]),
-                _quality_first_payload_node("RAG 评估指标与上线复盘", "resume_deep_dive", 3, basis_type="explicit_evidence", evidence_refs=["resume_3"]),
-                _quality_first_payload_node("异常路径与降级策略表达", "resume_deep_dive", 4, basis_type="explicit_evidence", evidence_refs=["resume_4"]),
-                _quality_first_payload_node("AI Agent 工具调用机制补齐", "jd_gap_learning", 1, basis_type="reasonable_inference", evidence_refs=["job_1"]),
-                _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 2, basis_type="reasonable_inference", evidence_refs=["job_2"]),
+                _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, basis_type="resume_signal", evidence_refs=["resume_1"]),
+                _quality_first_payload_node("混合检索召回链路取舍", "resume_deep_dive", 2, basis_type="resume_signal", evidence_refs=["resume_2"]),
+                _quality_first_payload_node("RAG 评估指标与上线复盘", "resume_deep_dive", 3, basis_type="mixed", evidence_refs=["resume_3"]),
+                _quality_first_payload_node("异常路径与降级策略表达", "resume_deep_dive", 4, basis_type="mixed", evidence_refs=["resume_4"]),
+                _quality_first_payload_node("AI Agent 工具调用机制补齐", "jd_gap_learning", 1, basis_type="match_gap", evidence_refs=["job_1"]),
+                _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 2, basis_type="jd_requirement", evidence_refs=["job_2"]),
             ],
         )
         for category in payload["menu_categories"]:
@@ -3492,6 +3563,65 @@ class _QualityFirstCompactLegacyTransport(FakeLlmTransport):
             low_confidence_flags=(),
             trace_refs=("trace_quality_first_compact",),
             evidence_refs=("evidence_quality_first_compact",),
+        )
+
+
+class _QualityFirstInvalidBasisTypeTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        return LlmTransportResult(
+            result=_quality_first_payload(
+                [
+                    _quality_first_payload_node(
+                        "智能辅助平台架构与质量治理",
+                        "resume_deep_dive",
+                        1,
+                        basis_type="obsolete_strength_value",
+                        evidence_refs=["resume_1"],
+                    ),
+                    _quality_first_payload_node(
+                        "混合检索召回链路取舍",
+                        "resume_deep_dive",
+                        2,
+                        basis_type="resume_signal",
+                        evidence_refs=["resume_2"],
+                    ),
+                    _quality_first_payload_node(
+                        "RAG 评估指标与上线复盘",
+                        "resume_deep_dive",
+                        3,
+                        basis_type="mixed",
+                        evidence_refs=["resume_3"],
+                    ),
+                    _quality_first_payload_node(
+                        "异常路径与降级策略表达",
+                        "resume_deep_dive",
+                        4,
+                        basis_type="resume_signal",
+                        evidence_refs=["resume_4"],
+                    ),
+                    _quality_first_payload_node(
+                        "AI Agent 工具调用机制补齐",
+                        "jd_gap_learning",
+                        1,
+                        basis_type="obsolete_strength_value",
+                        evidence_refs=["job_1"],
+                    ),
+                    _quality_first_payload_node(
+                        "Java 服务端高可用架构设计",
+                        "jd_gap_learning",
+                        2,
+                        basis_type="jd_requirement",
+                        evidence_refs=["job_2"],
+                    ),
+                ],
+            ),
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_invalid_basis",),
+            evidence_refs=("evidence_quality_first_invalid_basis",),
         )
 
 

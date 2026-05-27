@@ -15,7 +15,7 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
-    POLISH_PROGRESS_TREE_V2_CONTRACT_IDS,
+    POLISH_PROGRESS_TREE_CONTRACT_IDS,
     build_progress_quality_first_menu_prompt,
 )
 from app.application.llm.structured_output import (
@@ -130,7 +130,7 @@ class PolishProgressTreeQualityFirstPlanner:
         try:
             result = self._transport.generate(
                 LlmTransportRequest(
-                    contract_ids=POLISH_PROGRESS_TREE_V2_CONTRACT_IDS,
+                    contract_ids=POLISH_PROGRESS_TREE_CONTRACT_IDS,
                     task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
                     input_refs=_input_refs(context),
                     evidence_bundle=build_progress_quality_first_menu_prompt(context),
@@ -415,13 +415,7 @@ def _quality_first_basis_type(value: object, *, category: str) -> tuple[str, lis
     text = truncate_text(value, max_chars=80)
     if text in _ALLOWED_BASIS_TYPES:
         return text, []
-    if text == "explicit_evidence":
-        return fallback, ["legacy_basis_type_normalized"]
-    if text == "reasonable_inference":
-        return ("match_gap" if category == _JD_GAP_LEARNING else "mixed"), ["legacy_basis_type_normalized"]
-    if text == "unsupported":
-        return fallback, ["unsupported_basis_type_normalized"]
-    return fallback, []
+    return fallback, ["basis_type_normalized"]
 
 
 def _quality_first_apply_quality_gates(
@@ -469,9 +463,6 @@ def _quality_first_defer_reason(node: dict[str, Any], *, context: dict[str, Any]
         return "该节点更像低证据 JD checklist，适合作为补充核验项。", "quality_first_checklist_deferred"
     if _quality_first_looks_generic_node(node) and _quality_first_node_low_support(node):
         return "节点标题或考点过于泛化，缺少主训练路径价值。", "quality_first_generic_node_deferred"
-    if "unsupported_basis_type_normalized" in _string_list(node.get("low_confidence_flags"), limit=8):
-        if _quality_first_node_low_support(node):
-            return "模型将节点标成 unsupported 且缺少证据，延后作为候选项。", "quality_first_unsupported_node_deferred"
     return None, ""
 
 

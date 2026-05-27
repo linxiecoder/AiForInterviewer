@@ -277,6 +277,7 @@ def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> 
     resume_titles = _quality_first_fake_titles(
         _fake_menu_text_candidates(resume_text or resume_signal),
         category="resume_deep_dive",
+        target_count=5,
         fallback_titles=(
             "项目架构与职责边界",
             "关键技术链路与方案取舍",
@@ -289,6 +290,7 @@ def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> 
     jd_titles = _quality_first_fake_titles(
         _fake_menu_text_candidates(job_text or job_basis),
         category="jd_gap_learning",
+        target_count=3,
         fallback_titles=(
             "岗位能力拆解",
             "服务治理与可靠性方案",
@@ -345,10 +347,6 @@ def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> 
             "status": "success",
             "planner_summary": "已按完整简历、完整 JD 和匹配分析生成初始训练菜单。",
             "menu_categories": categories,
-            "metadata": {
-                "quality_target": "10-14 leaves",
-                "input_context_mode": "full_resume_full_job",
-            },
             "low_confidence_flags": [],
         },
         validation_status=ValidationStatus.VALID,
@@ -364,7 +362,7 @@ def _quality_first_fake_titles(
     *,
     category: str,
     fallback_titles: tuple[str, ...],
-    target_count: int = 6,
+    target_count: int,
 ) -> list[str]:
     titles: list[str] = []
     for candidate in candidates:

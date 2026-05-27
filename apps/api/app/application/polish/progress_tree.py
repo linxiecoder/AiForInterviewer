@@ -62,10 +62,7 @@ class PolishProgressTreeLlmService:
                 "progress_tree_state": existing_state,
                 "progress_percent": _progress_percent(existing_state),
             }
-        if existing_plan.get("schema_id") in {
-            "polish_progress_tree_grounded_plan_v2",
-            "polish_progress_quality_first_menu_v1",
-        }:
+        if existing_plan.get("schema_id") == POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID:
             if _state_matches_plan(existing_state, existing_plan):
                 state = {
                     **existing_state,
