@@ -20,6 +20,7 @@ from app.application.polish.progress_v2_prompts import (
     build_progress_quality_first_menu_prompt,
 )
 from app.application.polish.progress_evidence import build_progress_prompt_context
+from app.application.llm.agent_io import AgentOutputEnvelope
 from app.application.llm.structured_output import (
     filter_untrusted_structured_metadata,
     normalize_structured_status,
@@ -219,12 +220,40 @@ def _normalize_quality_first_menu_payload(
     *,
     context: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], list[dict[str, Any]], dict[str, Any]] | None:
+    envelope = _quality_first_menu_payload_envelope(payload, context=context)
+    if not envelope.succeeded:
+        return None
+    normalized = envelope.payload
+    return (
+        normalized["nodes"],
+        normalized["low_confidence_flags"],
+        normalized["quality_summary"],
+        normalized["deferred_candidates"],
+        normalized["evidence_ref_validation"],
+    )
+
+
+def _quality_first_menu_payload_envelope(
+    payload: dict[str, Any],
+    *,
+    context: dict[str, Any],
+) -> AgentOutputEnvelope:
+    def failed(*validation_errors: str) -> AgentOutputEnvelope:
+        return AgentOutputEnvelope(
+            task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
+            schema_id=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+            schema_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+            prompt_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+            status=PROGRESS_TREE_STATUS_FAILED,
+            validation_errors=validation_errors or ("quality_first_payload_invalid",),
+        )
+
     canonical_status, status_warnings, status_errors = normalize_structured_status(payload.get("status"))
     if status_errors or canonical_status not in {"success", "partial"}:
-        return None
+        return failed(*(f"{error.field}_{error.code}" for error in status_errors))
     categories = payload.get("menu_categories")
     if not isinstance(categories, list):
-        return None
+        return failed("menu_categories_invalid")
 
     nodes: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
@@ -279,7 +308,7 @@ def _normalize_quality_first_menu_payload(
             nodes.append(node)
 
     if not valid_category_seen:
-        return None
+        return failed("menu_categories_no_valid_category")
     if raw_node_count >= 10:
         low_confidence_flags.append("quota_filling_risk")
 
@@ -315,7 +344,30 @@ def _normalize_quality_first_menu_payload(
         "validation": "quality_gate",
     }
     evidence_ref_validation = _quality_first_evidence_ref_validation_summary(nodes, allowed_evidence_refs)
-    return nodes, low_confidence_flags, quality_summary, deferred_candidates, evidence_ref_validation
+    return AgentOutputEnvelope(
+        task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
+        schema_id=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        schema_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+        prompt_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+        status=quality_summary["status"],
+        payload={
+            "nodes": nodes,
+            "low_confidence_flags": low_confidence_flags,
+            "quality_summary": quality_summary,
+            "deferred_candidates": deferred_candidates,
+            "evidence_ref_validation": evidence_ref_validation,
+        },
+        evidence_refs=tuple(
+            _dedupe_strings(
+                [
+                    evidence_ref
+                    for node in nodes
+                    for evidence_ref in _quality_first_evidence_chunk_ids(node)
+                ],
+                limit=50,
+            )
+        ),
+    )
 
 
 def _normalize_quality_first_node(

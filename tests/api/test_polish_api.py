@@ -1260,6 +1260,37 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "evidence_notes" not in output_schema["required_leaf_fields"]
 
 
+def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_shape() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.polish.progress_tree_v2 import (
+        _normalize_quality_first_menu_payload,
+        _quality_first_menu_payload_envelope,
+    )
+
+    context = _progress_context_fixture()
+    payload = _quality_first_payload(_quality_first_standard_nodes())
+
+    envelope = _quality_first_menu_payload_envelope(payload, context=context)
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert isinstance(envelope, AgentOutputEnvelope)
+    assert envelope.succeeded
+    assert normalized is not None
+    nodes, low_confidence_flags, quality_summary, deferred_candidates, evidence_ref_validation = normalized
+    assert normalized == (
+        envelope.payload["nodes"],
+        envelope.payload["low_confidence_flags"],
+        envelope.payload["quality_summary"],
+        envelope.payload["deferred_candidates"],
+        envelope.payload["evidence_ref_validation"],
+    )
+    assert isinstance(nodes, list)
+    assert isinstance(low_confidence_flags, list)
+    assert isinstance(quality_summary, dict)
+    assert isinstance(deferred_candidates, list)
+    assert isinstance(evidence_ref_validation, dict)
+
+
 def test_progress_tree_quality_first_defers_low_value_nodes_and_ignores_llm_metadata() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
