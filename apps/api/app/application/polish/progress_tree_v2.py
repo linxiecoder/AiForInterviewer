@@ -8,7 +8,6 @@ from typing import Any
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_evidence import build_progress_prompt_context
 from app.application.polish.progress_prompts import (
-    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
@@ -59,6 +58,34 @@ _DISPLAY_CATEGORY_TITLES = {
 }
 _ALLOWED_CATEGORIES = set(_DISPLAY_CATEGORY_TITLES)
 _ALLOWED_BASIS_TYPES = {"resume_signal", "jd_requirement", "match_gap", "mixed"}
+_UNTRUSTED_LLM_METADATA_KEYS = {"generated_at", "model_name", "session_id", "job_id", "resume_id"}
+_QUALITY_FIRST_MAX_PRIMARY_NODES = 9
+_QUALITY_FIRST_LOW_NODE_COUNT = 4
+_QUALITY_FIRST_TARGET_MIN_PRIMARY_NODES = 6
+_QUALITY_FIRST_CHECKLIST_TERMS = (
+    "Linux",
+    "Shell",
+    "Git",
+    "版本控制",
+    "年限",
+    "研发经验",
+    "工作经验",
+    "基础工具",
+    "工具熟练",
+    "通用工具",
+)
+_QUALITY_FIRST_GENERIC_TERMS = (
+    "岗位能力拆解",
+    "缺口补齐路径",
+    "工程实践边界",
+    "通用软技能",
+    "综合能力",
+    "基础能力",
+    "工具熟练度",
+    "技术栈熟悉度",
+    "岗位匹配度",
+)
+_QUALITY_FIRST_COST_TERMS = ("成本", "资源优化", "资源利用率", "FinOps", "预算")
 _DEEP_DIVE_SOURCE_TYPES = {
     "resume_project",
     "resume_skill",
@@ -288,7 +315,7 @@ class PolishProgressTreeQualityFirstPlanner:
                 reason=reason,
                 validation_errors=_quality_first_validation_errors(payload, reason=reason),
             )
-        nodes, low_confidence_flags, quality_summary = normalized
+        nodes, low_confidence_flags, quality_summary, deferred_candidates = normalized
         if not nodes:
             return _quality_first_failed_artifacts(
                 context,
@@ -312,6 +339,7 @@ class PolishProgressTreeQualityFirstPlanner:
             "low_confidence_flags": _dedupe_strings(low_confidence_flags, limit=20),
             "failure_reason": None,
             "quality_summary": quality_summary,
+            "deferred_candidates": deferred_candidates,
         }
         plan = {
             "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
@@ -331,7 +359,7 @@ class PolishProgressTreeQualityFirstPlanner:
 
 
 class PolishProgressTreeV2Pipeline:
-    """Run the four-task Progress Tree v2 initial generation chain."""
+    """Deprecated four-task v2 chain kept temporarily for explicit test-only cleanup."""
 
     def __init__(self, transport: LlmTransport | None) -> None:
         self._transport = transport
@@ -808,7 +836,7 @@ def _normalize_quality_first_menu_payload(
     payload: dict[str, Any],
     *,
     context: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]] | None:
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], list[dict[str, Any]]] | None:
     status = str(payload.get("status") or "").strip().lower()
     if status not in {"ready", "success", "partial"}:
         return None
@@ -819,7 +847,15 @@ def _normalize_quality_first_menu_payload(
     nodes: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
     low_confidence_flags = _sanitize_string_list(payload.get("low_confidence_flags"), limit=20)
-    category_counts = {_RESUME_DEEP_DIVE: 0, _JD_GAP_LEARNING: 0}
+    deferred_candidates = _normalize_quality_first_deferred_candidates(
+        payload.get("deferred_candidates"),
+        context_digest=context["content_digest"],
+    )
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict) and _UNTRUSTED_LLM_METADATA_KEYS.intersection(metadata):
+        low_confidence_flags.append("llm_metadata_ignored")
+    raw_node_count = 0
+    valid_category_seen = False
     for category_index, category_payload in enumerate(categories, start=1):
         if not isinstance(category_payload, dict):
             low_confidence_flags.append("quality_first_category_invalid")
@@ -828,6 +864,7 @@ def _normalize_quality_first_menu_payload(
         if category not in _ALLOWED_CATEGORIES:
             low_confidence_flags.append("quality_first_category_unknown")
             continue
+        valid_category_seen = True
         display_category_title = _sanitize_display_text(
             category_payload.get("display_category_title") or _DISPLAY_CATEGORY_TITLES[category],
             max_chars=80,
@@ -837,6 +874,7 @@ def _normalize_quality_first_menu_payload(
             low_confidence_flags.append(f"quality_first_{category}_nodes_missing")
             continue
         for node_index, item in enumerate(raw_nodes, start=1):
+            raw_node_count += 1
             node = _normalize_quality_first_node(
                 item,
                 category=category,
@@ -853,27 +891,45 @@ def _normalize_quality_first_menu_payload(
                 low_confidence_flags.append("quality_first_duplicate_leaf_removed")
                 continue
             seen_titles.add(normalized_title)
-            category_counts[category] += 1
             nodes.append(node)
 
-    if category_counts[_RESUME_DEEP_DIVE] == 0 or category_counts[_JD_GAP_LEARNING] == 0:
+    if not valid_category_seen:
         return None
-    if len(nodes) < 8:
-        low_confidence_flags.append("quality_first_low_leaf_count")
-    if category_counts[_RESUME_DEEP_DIVE] < 5:
-        low_confidence_flags.append("quality_first_resume_deep_dive_under_target")
-    if category_counts[_JD_GAP_LEARNING] < 5:
-        low_confidence_flags.append("quality_first_jd_gap_learning_under_target")
+    if raw_node_count >= 10:
+        low_confidence_flags.append("quota_filling_risk")
+
+    nodes, gate_deferred_candidates, gate_flags = _quality_first_apply_quality_gates(nodes, context=context)
+    deferred_candidates.extend(gate_deferred_candidates)
+    low_confidence_flags.extend(gate_flags)
+    nodes = sorted(nodes, key=lambda node: _quality_first_node_sort_key(node, context=context))
+
+    category_counts = {
+        _RESUME_DEEP_DIVE: sum(1 for node in nodes if node.get("category") == _RESUME_DEEP_DIVE),
+        _JD_GAP_LEARNING: sum(1 for node in nodes if node.get("category") == _JD_GAP_LEARNING),
+    }
+    if nodes and len(nodes) < _QUALITY_FIRST_LOW_NODE_COUNT:
+        low_confidence_flags.append("quality_first_low_primary_node_count")
+    elif nodes and len(nodes) < _QUALITY_FIRST_TARGET_MIN_PRIMARY_NODES:
+        low_confidence_flags.append("quality_first_primary_nodes_below_target")
+    if nodes and category_counts[_RESUME_DEEP_DIVE] == 0:
+        low_confidence_flags.append("quality_first_resume_deep_dive_missing")
+    if nodes and category_counts[_JD_GAP_LEARNING] == 0:
+        low_confidence_flags.append("quality_first_jd_gap_learning_missing")
+    deferred_candidates = _dedupe_quality_first_deferred_candidates(
+        deferred_candidates,
+        main_titles={_normalize_label_for_compare(node["display_title"]) for node in nodes},
+    )
 
     planner_summary = _sanitize_display_text(payload.get("planner_summary"), max_chars=800)
     quality_summary = {
         "status": "ready",
         "planner_summary": planner_summary,
         "leaf_count": len(nodes),
+        "deferred_count": len(deferred_candidates),
         "category_counts": category_counts,
-        "validation": "light",
+        "validation": "quality_gate",
     }
-    return nodes, low_confidence_flags, quality_summary
+    return nodes, low_confidence_flags, quality_summary, deferred_candidates
 
 
 def _normalize_quality_first_node(
@@ -894,12 +950,11 @@ def _normalize_quality_first_node(
     exam_point = _sanitize_display_text(item.get("exam_point") or display_title, max_chars=160) or display_title
     if _looks_bad_quality_first_title(display_title) or _looks_bad_quality_first_title(exam_point):
         return None
-    basis_type_default = "resume_signal" if category == _RESUME_DEEP_DIVE else "jd_requirement"
-    basis_type = _enum_value(item.get("basis_type"), _ALLOWED_BASIS_TYPES, basis_type_default)
-    resume_signal = _sanitize_optional_text(item.get("resume_signal"), max_chars=600)
-    jd_basis = _sanitize_optional_text(item.get("jd_basis"), max_chars=600)
+    basis_type, basis_flags = _quality_first_basis_type(item.get("basis_type"), category=category)
+    resume_signal = _sanitize_optional_text(item.get("resume_signal"), max_chars=240)
+    jd_basis = _sanitize_optional_text(item.get("jd_basis"), max_chars=240)
     depth_goal = (
-        _sanitize_display_text(item.get("depth_goal"), max_chars=600)
+        _sanitize_display_text(item.get("depth_goal"), max_chars=120)
         or "补充该方向的关键原理、设计取舍和落地细节"
     )
     preparation_goal = (
@@ -907,21 +962,22 @@ def _normalize_quality_first_node(
         or _default_preparation_goal(category, exam_point)
     )
     first_question = (
-        _sanitize_display_text(item.get("first_question"), max_chars=600)
+        _sanitize_display_text(item.get("first_question"), max_chars=120)
         or "请结合你的经历说明这个方向的设计思路和关键取舍。"
     )
-    follow_up_focus = _sanitize_string_list(item.get("follow_up_focus"), limit=8)
+    follow_up_focus = _sanitize_string_list(item.get("follow_up_focus"), limit=4)
     if not follow_up_focus:
         follow_up_focus = _default_follow_up_focus(category, exam_point)
-    expected_answer_signals = _sanitize_string_list(item.get("expected_answer_signals"), limit=8)
+    expected_answer_signals = _sanitize_string_list(item.get("expected_answer_signals"), limit=5)
     if not expected_answer_signals:
         expected_answer_signals = _default_expected_answer_signals(category)
-    common_loss_risks = _sanitize_string_list(item.get("common_loss_risks"), limit=8)
+    common_loss_risks = _sanitize_string_list(item.get("common_loss_risks"), limit=5)
     if not common_loss_risks:
         common_loss_risks = _default_common_loss_risks(category)
     evidence_refs = _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8)
     evidence_notes = _sanitize_string_list(item.get("evidence_notes"), limit=8)
     low_confidence_flags = _sanitize_string_list(item.get("low_confidence_flags"), limit=8)
+    low_confidence_flags.extend(basis_flags)
     node_code = _sanitize_display_text(item.get("node_code"), max_chars=20) or _default_node_code(
         category,
         category_node_index,
@@ -959,7 +1015,7 @@ def _normalize_quality_first_node(
         "attack_style": "technical_deep_dive" if category == _RESUME_DEEP_DIVE else "learning_plan",
         "difficulty_level": "advanced" if confidence_level == "high" else "intermediate",
         "priority": _bounded_int(item.get("priority"), lower=1, upper=999, fallback=index),
-        "priority_reason": _sanitize_display_text(item.get("priority_reason"), max_chars=600)
+        "priority_reason": _sanitize_display_text(item.get("priority_reason"), max_chars=240)
         or "该节点具备岗位贴合和面试追问价值。",
         "related_job_requirements": _dedupe_strings([jd_basis], limit=3),
         "related_resume_evidence": _dedupe_strings([resume_signal], limit=3),
@@ -973,6 +1029,234 @@ def _normalize_quality_first_node(
         "grounding_status": "partially_grounded" if evidence_refs else "weakly_grounded",
     }
     return _sanitize_node_display_fields(node)
+
+
+def _quality_first_basis_type(value: object, *, category: str) -> tuple[str, list[str]]:
+    fallback = "resume_signal" if category == _RESUME_DEEP_DIVE else "jd_requirement"
+    text = truncate_text(value, max_chars=80)
+    if text in _ALLOWED_BASIS_TYPES:
+        return text, []
+    if text == "explicit_evidence":
+        return fallback, ["legacy_basis_type_normalized"]
+    if text == "reasonable_inference":
+        return ("match_gap" if category == _JD_GAP_LEARNING else "mixed"), ["legacy_basis_type_normalized"]
+    if text == "unsupported":
+        return fallback, ["unsupported_basis_type_normalized"]
+    return fallback, []
+
+
+def _quality_first_apply_quality_gates(
+    nodes: list[dict[str, Any]],
+    *,
+    context: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    kept: list[dict[str, Any]] = []
+    deferred_candidates: list[dict[str, Any]] = []
+    flags: list[str] = []
+    low_evidence_jd_nodes = 0
+
+    for node in nodes:
+        defer_reason, defer_flag = _quality_first_defer_reason(node, context=context)
+        if not defer_reason and _quality_first_is_low_evidence_jd_gap(node):
+            low_evidence_jd_nodes += 1
+            if low_evidence_jd_nodes > 2:
+                defer_reason = "低证据 JD gap 节点已超过主树保留上限，延后作为补充核验项。"
+                defer_flag = "quality_first_jd_low_evidence_deferred"
+        if defer_reason:
+            deferred_candidates.append(_quality_first_deferred_candidate_from_node(node, reason=defer_reason))
+            flags.append(defer_flag)
+            continue
+        kept.append(node)
+
+    if len(kept) > _QUALITY_FIRST_MAX_PRIMARY_NODES:
+        flags.extend(["quota_filling_risk", "quality_first_primary_nodes_trimmed"])
+        ordered = sorted(kept, key=lambda item: _quality_first_node_sort_key(item, context=context))
+        kept = ordered[:_QUALITY_FIRST_MAX_PRIMARY_NODES]
+        for node in ordered[_QUALITY_FIRST_MAX_PRIMARY_NODES:]:
+            deferred_candidates.append(
+                _quality_first_deferred_candidate_from_node(
+                    node,
+                    reason="主树超过 9 个节点，按优先级、证据和连续追问价值延后。",
+                )
+            )
+
+    return kept, deferred_candidates, _dedupe_strings(flags, limit=20)
+
+
+def _quality_first_defer_reason(node: dict[str, Any], *, context: dict[str, Any]) -> tuple[str | None, str]:
+    if _quality_first_cost_without_context(node, context=context):
+        return "材料中缺少明确成本或资源优化证据，不进入主训练路径。", "quality_first_cost_control_deferred"
+    if _quality_first_looks_checklist_node(node) and _quality_first_node_low_support(node):
+        return "该节点更像低证据 JD checklist，适合作为补充核验项。", "quality_first_checklist_deferred"
+    if _quality_first_looks_generic_node(node) and _quality_first_node_low_support(node):
+        return "节点标题或考点过于泛化，缺少主训练路径价值。", "quality_first_generic_node_deferred"
+    if "unsupported_basis_type_normalized" in _string_list(node.get("low_confidence_flags"), limit=8):
+        if _quality_first_node_low_support(node):
+            return "模型将节点标成 unsupported 且缺少证据，延后作为候选项。", "quality_first_unsupported_node_deferred"
+    return None, ""
+
+
+def _quality_first_is_low_evidence_jd_gap(node: dict[str, Any]) -> bool:
+    return (
+        node.get("category") == _JD_GAP_LEARNING
+        and node.get("confidence_level") == "low"
+        and not _quality_first_evidence_refs(node)
+    )
+
+
+def _quality_first_node_low_support(node: dict[str, Any]) -> bool:
+    return node.get("confidence_level") == "low" or not _quality_first_evidence_refs(node)
+
+
+def _quality_first_looks_checklist_node(node: dict[str, Any]) -> bool:
+    text = _quality_first_node_text(node)
+    return any(_quality_first_contains(text, term) for term in _QUALITY_FIRST_CHECKLIST_TERMS)
+
+
+def _quality_first_looks_generic_node(node: dict[str, Any]) -> bool:
+    text = _quality_first_node_text(node)
+    if any(term in text for term in _QUALITY_FIRST_GENERIC_TERMS):
+        return True
+    title = str(node.get("display_title") or node.get("title") or "")
+    exam_point = str(node.get("exam_point") or "")
+    return len(title) <= 4 or len(exam_point) <= 4
+
+
+def _quality_first_cost_without_context(node: dict[str, Any], *, context: dict[str, Any]) -> bool:
+    node_text = _quality_first_node_text(node)
+    if not any(_quality_first_contains(node_text, term) for term in _QUALITY_FIRST_COST_TERMS):
+        return False
+    context_text = _quality_first_context_text(context)
+    return not any(_quality_first_contains(context_text, term) for term in _QUALITY_FIRST_COST_TERMS)
+
+
+def _quality_first_node_sort_key(node: dict[str, Any], *, context: dict[str, Any]) -> tuple[int, int, int, int, int]:
+    text = _quality_first_node_text(node)
+    keywords = _quality_first_priority_keywords(context)
+    matches_focus = any(keyword and keyword in text for keyword in keywords)
+    evidence_count = len(_quality_first_evidence_refs(node))
+    confidence_rank = {"high": 0, "medium": 1, "low": 2}.get(str(node.get("confidence_level") or ""), 2)
+    category = node.get("category")
+    basis_type = node.get("basis_type")
+    if category == _RESUME_DEEP_DIVE and evidence_count and confidence_rank == 0:
+        category_rank = 0
+    elif category == _RESUME_DEEP_DIVE and evidence_count:
+        category_rank = 1
+    elif category == _JD_GAP_LEARNING and basis_type in {"match_gap", "mixed"}:
+        category_rank = 2
+    elif category == _JD_GAP_LEARNING and evidence_count:
+        category_rank = 3
+    else:
+        category_rank = 4
+    return (
+        category_rank,
+        0 if matches_focus else 1,
+        confidence_rank,
+        0 if evidence_count else 1,
+        _bounded_int(node.get("priority"), lower=1, upper=999, fallback=999),
+    )
+
+
+def _quality_first_deferred_candidate_from_node(node: dict[str, Any], *, reason: str) -> dict[str, Any]:
+    return {
+        "display_title": _sanitize_display_text(node.get("display_title") or node.get("title"), max_chars=120)
+        or "待补充候选项",
+        "category": _category_value(node),
+        "reason": _sanitize_display_text(reason, max_chars=240) or "低优先级候选项，暂不进入主训练路径。",
+        "basis_type": _enum_value(node.get("basis_type"), _ALLOWED_BASIS_TYPES, "jd_requirement"),
+        "evidence_refs": _quality_first_evidence_refs(node),
+        "confidence_level": _enum_value(node.get("confidence_level"), _ALLOWED_CONFIDENCE_LEVELS, "low"),
+        "suggested_trigger": "主路径完成后，或用户主动要求补充核验该方向时再启用。",
+    }
+
+
+def _normalize_quality_first_deferred_candidates(
+    value: object,
+    *,
+    context_digest: str,
+) -> list[dict[str, Any]]:
+    del context_digest
+    if not isinstance(value, list):
+        return []
+    candidates: list[dict[str, Any]] = []
+    for item in value[:20]:
+        if not isinstance(item, dict):
+            continue
+        title = _sanitize_display_text(item.get("display_title") or item.get("title"), max_chars=120)
+        if not title:
+            continue
+        category = truncate_text(item.get("category"), max_chars=80)
+        if category not in _ALLOWED_CATEGORIES:
+            category = _JD_GAP_LEARNING
+        basis_type, _flags = _quality_first_basis_type(item.get("basis_type"), category=category)
+        candidates.append(
+            {
+                "display_title": title,
+                "category": category,
+                "reason": _sanitize_display_text(item.get("reason"), max_chars=240)
+                or "低优先级候选项，暂不进入主训练路径。",
+                "basis_type": basis_type,
+                "evidence_refs": _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8),
+                "confidence_level": _enum_value(item.get("confidence_level"), _ALLOWED_CONFIDENCE_LEVELS, "low"),
+                "suggested_trigger": _sanitize_display_text(item.get("suggested_trigger"), max_chars=160)
+                or "主路径完成后，或用户主动要求补充核验该方向时再启用。",
+            }
+        )
+    return candidates
+
+
+def _dedupe_quality_first_deferred_candidates(
+    candidates: list[dict[str, Any]],
+    *,
+    main_titles: set[str],
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        title_key = _normalize_label_for_compare(candidate.get("display_title"))
+        if not title_key or title_key in seen or title_key in main_titles:
+            continue
+        seen.add(title_key)
+        result.append(candidate)
+        if len(result) >= 20:
+            break
+    return result
+
+
+def _quality_first_node_text(node: dict[str, Any]) -> str:
+    return " ".join(
+        str(node.get(field) or "")
+        for field in (
+            "display_title",
+            "title",
+            "exam_point",
+            "resume_signal",
+            "jd_basis",
+            "depth_goal",
+            "priority_reason",
+        )
+    )
+
+
+def _quality_first_context_text(value: object) -> str:
+    if isinstance(value, dict):
+        return " ".join(_quality_first_context_text(item) for item in value.values())
+    if isinstance(value, list):
+        return " ".join(_quality_first_context_text(item) for item in value)
+    return str(value or "")
+
+
+def _quality_first_evidence_refs(node: dict[str, Any]) -> list[str]:
+    return _dedupe_strings(
+        _string_list(node.get("evidence_refs"), limit=8) + _string_list(node.get("evidence_chunk_ids"), limit=8),
+        limit=8,
+    )
+
+
+def _quality_first_contains(text: str, term: str) -> bool:
+    if term.isascii():
+        return term.lower() in text.lower()
+    return term in text
 
 
 def _quality_first_initial_state_from_nodes(
@@ -994,7 +1278,7 @@ def _quality_first_initial_state_from_nodes(
     return {
         "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
         "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-        "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
         "status": PROGRESS_TREE_STATUS_READY if flat_nodes and current_priority else PROGRESS_TREE_STATUS_FAILED,
         "node_states": node_states,
         "current_priority": current_priority,
@@ -1010,24 +1294,7 @@ def _quality_first_priority(
 ) -> dict[str, Any] | None:
     if not flat_nodes:
         return None
-    keywords = _quality_first_priority_keywords(context)
-
-    def sort_key(node: dict[str, Any]) -> tuple[int, int, int, int]:
-        node_text = " ".join(
-            str(node.get(field) or "")
-            for field in ("title", "exam_point", "resume_signal", "jd_basis", "depth_goal")
-        )
-        is_resume_high = node.get("category") == _RESUME_DEEP_DIVE and node.get("confidence_level") == "high"
-        is_resume = node.get("category") == _RESUME_DEEP_DIVE
-        matches_focus = any(keyword and keyword in node_text for keyword in keywords)
-        return (
-            0 if is_resume_high else 1 if is_resume else 2,
-            0 if matches_focus else 1,
-            0 if node.get("confidence_level") == "high" else 1,
-            _bounded_int(node.get("priority"), lower=1, upper=999, fallback=999),
-        )
-
-    node = sorted(flat_nodes, key=sort_key)[0]
+    node = sorted(flat_nodes, key=lambda item: _quality_first_node_sort_key(item, context=context))[0]
     return {
         "progress_node_ref": node["progress_node_ref"],
         "title": _sanitize_display_text(node["title"], max_chars=120) or "待补充考点",
@@ -1534,7 +1801,7 @@ def _initial_state_from_nodes(
     state = {
         "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
         "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-        "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
         "status": PROGRESS_TREE_STATUS_READY if flat_nodes and current_priority else PROGRESS_TREE_STATUS_FAILED,
         "node_states": node_states,
         "current_priority": current_priority,
@@ -1648,7 +1915,7 @@ def _empty_state(status: str) -> dict[str, Any]:
     return {
         "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
         "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-        "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
         "status": status,
         "node_states": [],
         "current_priority": None,
