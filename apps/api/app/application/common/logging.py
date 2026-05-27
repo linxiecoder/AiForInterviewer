@@ -13,7 +13,6 @@ import sys
 from typing import Any
 from zoneinfo import ZoneInfo
 
-
 APP_LOGGER_NAME = "app"
 HTTP_ACCESS_LOGGER_NAME = "app.http.access"
 LLM_TRANSPORT_LOGGER_NAME = "app.llm.transport"
@@ -334,28 +333,39 @@ class LogUtil:
             },
         )
 
+    def _debug_payload_to_text(value: object, *, max_chars: int = 12000) -> str:
+        try:
+            if isinstance(value, str):
+                text = value
+            else:
+                text = repr(value)
+        except Exception:
+            text = "<unrepresentable_debug_payload>"
+
+        if len(text) > max_chars:
+            return f"{text[:max_chars]}...<truncated len={len(text)}>"
+        return text
+
     @classmethod
     def _log_resume_evidence_debug(
-            cls,
-            *,
             context: dict[str, Any],
+            *,
             stage: str,
             value: object,
     ) -> None:
-        session = context.get("session", {}) if isinstance(context.get("session"), dict) else {}
-        resume = context.get("resume_snapshot", {}) if isinstance(context.get("resume_snapshot"), dict) else {}
+        try:
+            session = context.get("session", {}) if isinstance(context.get("session"), dict) else {}
+            resume = context.get("resume_snapshot", {}) if isinstance(context.get("resume_snapshot"), dict) else {}
 
-        cls._emit(
-            APP_LOGGER_NAME,
-            logging.INFO,
-            "progress_evidence_debug stage",
-            {
-                "stage": stage,
-                "session_id": session.get("session_id"),
-                "resume_version_id": resume.get("resume_version_id"),
-                "payload": value,
-            },
-        )
+            logger.info(
+                "progress_evidence_debug stage=%s session_id=%s resume_version_id=%s payload=%s",
+                stage,
+                session.get("session_id"),
+                resume.get("resume_version_id"),
+                value,
+            )
+        except Exception:
+            return
 
     @classmethod
     def _emit(

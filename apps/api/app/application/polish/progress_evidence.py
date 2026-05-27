@@ -18,8 +18,9 @@ from app.application.polish.question_generation_policy import (
     SEMANTIC_RESUME_SOURCE_TYPES,
     SOURCE_PRIORITY_POLICY_BY_PURPOSE,
 )
-from app.infrastructure.observability.logging import LogUtil
+import logging
 
+logger = logging.getLogger(__name__)
 
 
 ProgressEvidencePurpose = Literal["initial_plan", "state_refresh", "next_question"]
@@ -326,7 +327,10 @@ def build_progress_prompt_context(
         "match_context_summary": _match_context_summary(context.get("match_context", {})),
         "turns_summary": _turns_summary(context.get("turns", [])),
     }
-    LogUtil._log_resume_evidence_debug("allowed_evidence_refs", allowed_evidence_refs)
+    logger.info(
+        "progress_evidence_debug allowed_evidence_refs=%s",
+        allowed_evidence_refs,
+    )
     return result
 
 
@@ -424,7 +428,10 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
 
     if markdown_text:
         sections = _split_markdown_sections(markdown_text)
-        LogUtil._log_resume_evidence_debug(context, stage="raw_markdown", value=markdown_text)
+        logger.info(
+            "progress_evidence_debug raw_markdown=%s",
+            markdown_text,
+        )
         for section in sections:
             source_type = _infer_resume_section_type(section)
             if source_type == "section_header":
@@ -462,8 +469,10 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
                     debug_project_chunks.append(_debug_resume_chunk(created_chunk, section=section))
                 elif debug_enabled and item.source_type == "resume_project_contribution":
                     debug_contribution_chunks.append(_debug_resume_chunk(created_chunk, section=section))
-    elif debug_enabled:
-        LogUtil._log_resume_evidence_debug(context, stage="raw_markdown", value=_debug_flatten_markdown(raw_markdown or ""))
+    logger.info(
+        "progress_evidence_debug raw_markdown=%s",
+        _debug_flatten_markdown(raw_markdown or ""),
+    )
 
     fallback_fields = (
         ("resume_project", "project_experiences"),
@@ -491,8 +500,14 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
                 debug_project_chunks.append(_debug_resume_chunk(created_chunk, section=None))
 
     if debug_enabled:
-        LogUtil._log_resume_evidence_debug(context, stage="project_chunks", value=debug_project_chunks)
-        LogUtil._log_resume_evidence_debug(context, stage="contribution_chunks", value=debug_contribution_chunks)
+        logger.info(
+            "progress_evidence_debug project_chunks=%s",
+            debug_project_chunks,
+        )
+        logger.info(
+            "progress_evidence_debug contribution_chunks=%s",
+            debug_contribution_chunks,
+        )
 
 
 def _add_match_chunks(context: dict[str, Any], add_chunk) -> None:
@@ -1472,3 +1487,44 @@ def _keywords(text: str) -> tuple[str, ...]:
         if len(result) >= 12:
             break
     return tuple(result)
+
+
+
+def _is_resume_evidence_debug_enabled(context: dict[str, Any]) -> bool:
+    return bool(context.get("debug_progress_evidence") or context.get("debug_resume_chunks"))
+
+
+def _debug_payload_to_text(value: object, *, max_chars: int = 12000) -> str:
+    try:
+        text = value if isinstance(value, str) else repr(value)
+    except Exception:
+        text = "<unrepresentable_debug_payload>"
+
+    if len(text) > max_chars:
+        return f"{text[:max_chars]}...<truncated len={len(text)}>"
+    return text
+
+
+def _log_resume_evidence_debug(
+    context: dict[str, Any],
+    *,
+    stage: str,
+    value: object,
+) -> None:
+    if not _is_resume_evidence_debug_enabled(context):
+        return
+
+    try:
+        session = context.get("session", {}) if isinstance(context.get("session"), dict) else {}
+        resume = context.get("resume_snapshot", {}) if isinstance(context.get("resume_snapshot"), dict) else {}
+
+        logger.info(
+            "progress_evidence_debug stage=%s session_id=%s resume_version_id=%s payload=%s",
+            stage,
+            session.get("session_id"),
+            resume.get("resume_version_id"),
+            _debug_payload_to_text(value),
+        )
+    except Exception:
+        # debug 日志不能影响进展树生成主流程
+        return
