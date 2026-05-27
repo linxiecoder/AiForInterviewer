@@ -39,6 +39,7 @@ from app.application.polish.commands import (
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
     EndPolishSessionCommand,
+    GenerateInitialPolishProgressTreeCommand,
     RefreshPolishProgressTreeStateCommand,
 )
 from app.application.ai_runtime.facade import AiOrchestrationFacade
@@ -171,7 +172,7 @@ async def list_polish_sessions(
 
 @router.post("/polish-sessions", status_code=201)
 async def create_polish_session(
-    # 创建新打磨会话：绑定简历-岗位关系，指定主题/子主题/自定义主题文本，同步初始化进度树
+    # 创建新打磨会话：绑定简历-岗位关系，指定主题/子主题/自定义主题文本，进度树初始为待生成
     payload: CreatePolishSessionRequest,
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
@@ -478,6 +479,30 @@ async def refresh_polish_progress_tree_state(
     result = await run_in_threadpool(
         use_cases.refresh_progress_tree_state,
         RefreshPolishProgressTreeStateCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+        ),
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        resource_type="polish_session",
+        data=_session_response(result.value),
+    )
+
+
+@router.post("/polish-sessions/{session_id}/progress-tree/generate")
+async def generate_initial_polish_progress_tree(
+    session_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+) -> Any:
+    use_cases = _use_cases(session_factory, llm_transport)
+    result = await run_in_threadpool(
+        use_cases.generate_initial_progress_tree,
+        GenerateInitialPolishProgressTreeCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
             session_id=session_id,

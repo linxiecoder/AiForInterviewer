@@ -19,6 +19,7 @@ export const POLISH_API_PATHS = {
   questionTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions` as `/polish-sessions/${string}/questions`,
   completeQuestion: (sessionId: string, questionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/complete` as `/polish-sessions/${string}/questions/${string}/complete`,
   endSession: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/end` as `/polish-sessions/${string}/end`,
+  progressTreeGenerate: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/progress-tree/generate` as `/polish-sessions/${string}/progress-tree/generate`,
   progressTreeState: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/progress-tree/state` as `/polish-sessions/${string}/progress-tree/state`,
   answers: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/answers` as `/polish-sessions/${string}/answers`,
   feedbackTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/feedback` as `/polish-sessions/${string}/feedback`,
@@ -160,6 +161,17 @@ export async function refreshPolishProgressTreeState(sessionId: string): Promise
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("进展树刷新返回为空");
+  }
+  return data;
+}
+
+export async function generateInitialPolishProgressTree(sessionId: string): Promise<PolishSessionDetail> {
+  const response = await request<PolishSessionDetail>(POLISH_API_PATHS.progressTreeGenerate(sessionId), {
+    method: "POST",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("进展树生成返回为空");
   }
   return data;
 }

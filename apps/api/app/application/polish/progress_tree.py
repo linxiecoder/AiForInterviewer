@@ -3,25 +3,21 @@
 from __future__ import annotations
 
 from hashlib import sha256
-import os
 from typing import Any
 
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_prompts import (
-    POLISH_PROGRESS_TREE_PLAN_CONTRACT_IDS,
-    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_STATE_CONTRACT_IDS,
     POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-    build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
-from app.application.polish.progress_tree_v2 import (
-    PolishProgressTreeQualityFirstPlanner,
-    PolishProgressTreeV2Pipeline,
+from app.application.polish.progress_tree_v2 import PolishProgressTreeQualityFirstPlanner
+from app.application.polish.progress_v2_prompts import (
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
 )
 from app.application.llm.errors import (
     LlmTransportConfigurationError,
@@ -36,10 +32,8 @@ PROGRESS_TREE_STATUS_READY = "ready"
 PROGRESS_TREE_STATUS_FAILED = "failed"
 PROGRESS_TREE_STATUS_REFRESH_FAILED = "refresh_failed"
 PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT = "insufficient_context"
-PROGRESS_TREE_PLANNER_ENV = "AIFI_PROGRESS_TREE_PLANNER"
-DEFAULT_PROGRESS_TREE_PLANNER = "quality_first"
-PROGRESS_TREE_PLANNER_QUALITY_FIRST = "quality_first"
-PROGRESS_TREE_PLANNER_V2_PIPELINE = "v2_pipeline"
+PROGRESS_TREE_STATUS_PENDING = "pending"
+PROGRESS_TREE_STATUS_GENERATING = "generating"
 PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
 
 
@@ -50,30 +44,7 @@ class PolishProgressTreeLlmService:
         self._transport = transport
 
     def generate_initial(self, context: dict[str, Any]) -> dict[str, Any]:
-        planner = _progress_tree_planner()
-        if planner == PROGRESS_TREE_PLANNER_QUALITY_FIRST:
-            return PolishProgressTreeQualityFirstPlanner(self._transport).generate_initial(context)
-        if planner == PROGRESS_TREE_PLANNER_V2_PIPELINE:
-            return PolishProgressTreeV2Pipeline(self._transport).generate_initial(context)
-
-        if not has_sufficient_progress_context(context):
-            return _insufficient_artifacts(context)
-        if self._transport is None:
-            return _failed_artifacts(context, reason="llm_transport_missing")
-
-        try:
-            result = self._transport.generate(
-                LlmTransportRequest(
-                    contract_ids=POLISH_PROGRESS_TREE_PLAN_CONTRACT_IDS,
-                    task_type="polish_progress_tree_plan",
-                    input_refs=_input_refs(context),
-                    evidence_bundle=build_initial_progress_tree_prompt(context),
-                )
-            )
-        except (LlmTransportConfigurationError, LlmTransportUnavailableError, LlmTransportResponseError):
-            return _failed_artifacts(context, reason="llm_transport_failed")
-
-        return _normalize_initial_artifacts(result.result, context)
+        return PolishProgressTreeQualityFirstPlanner(self._transport).generate_initial(context)
 
     def refresh_state(
         self,
@@ -192,15 +163,6 @@ class PolishProgressTreeLlmService:
         }
 
 
-def _progress_tree_planner() -> str:
-    value = os.getenv(PROGRESS_TREE_PLANNER_ENV, DEFAULT_PROGRESS_TREE_PLANNER).strip().lower()
-    if value in {PROGRESS_TREE_PLANNER_QUALITY_FIRST, PROGRESS_TREE_PLANNER_V2_PIPELINE}:
-        return value
-    return DEFAULT_PROGRESS_TREE_PLANNER
-
-
-
-
 def resolve_progress_node(
     *,
     plan: dict[str, Any],
@@ -222,168 +184,6 @@ def resolve_progress_node(
             return priority
     leaves = _flatten_leaf_nodes(nodes)
     return leaves[0] if leaves else None
-
-
-def _normalize_initial_artifacts(result: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    plan_payload = result.get("progress_tree_plan") or result.get("plan")
-    state_payload = result.get("progress_tree_state") or result.get("state")
-    if not isinstance(plan_payload, dict):
-        return _failed_artifacts(context, reason="llm_plan_missing")
-
-    plan = _normalize_plan(
-        plan_payload,
-        context_digest=context["content_digest"],
-        prompt_version=_metadata_value(
-            result,
-            plan_payload,
-            "prompt_version",
-            POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-        ),
-        schema_id=_metadata_value(result, plan_payload, "schema_id", POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID),
-        schema_version=_metadata_value(
-            result,
-            plan_payload,
-            "schema_version",
-            POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
-        ),
-    )
-    if plan["status"] != PROGRESS_TREE_STATUS_READY:
-        return {
-            "status": plan["status"],
-            "progress_tree_plan": plan,
-            "progress_tree_state": _empty_state(
-                plan["status"],
-                prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-            ),
-            "progress_percent": 0,
-        }
-    if not isinstance(state_payload, dict):
-        state = _initial_state_fallback(
-            plan,
-            prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-            failure_reason="llm_state_invalid_state_fallback",
-        )
-        return {
-            "status": PROGRESS_TREE_STATUS_READY,
-            "progress_tree_plan": plan,
-            "progress_tree_state": state,
-            "progress_percent": _progress_percent(state),
-        }
-
-    state = _normalize_state(
-        state_payload,
-        existing_plan=plan,
-        allow_refresh_failed=False,
-        prompt_version=_metadata_value(
-            result,
-            state_payload,
-            "prompt_version",
-            POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-        ),
-        schema_id=_metadata_value(result, state_payload, "schema_id", POLISH_PROGRESS_TREE_STATE_SCHEMA_ID),
-        schema_version=_metadata_value(
-            result,
-            state_payload,
-            "schema_version",
-            POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-        ),
-    )
-    if state["status"] != PROGRESS_TREE_STATUS_READY:
-        state = _initial_state_fallback(
-            plan,
-            prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-            failure_reason="llm_state_invalid_state_fallback",
-        )
-    return {
-        "status": PROGRESS_TREE_STATUS_READY,
-        "progress_tree_plan": plan,
-        "progress_tree_state": state,
-        "progress_percent": _progress_percent(state),
-    }
-
-
-def _normalize_plan(
-    plan_payload: dict[str, Any],
-    *,
-    context_digest: str,
-    prompt_version: str,
-    schema_id: str,
-    schema_version: str,
-) -> dict[str, Any]:
-    raw_status = plan_payload.get("status")
-    if raw_status == PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT:
-        return {
-            "schema_id": schema_id,
-            "schema_version": schema_version,
-            "prompt_version": prompt_version,
-            "status": PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
-            "context_digest": context_digest,
-            "nodes": [],
-        }
-    nodes = [
-        node
-        for index, item in enumerate(plan_payload.get("nodes", []), start=1)
-        if (node := _normalize_node(item, index=index, context_digest=context_digest)) is not None
-    ]
-    if not nodes:
-        return {
-            "schema_id": schema_id,
-            "schema_version": schema_version,
-            "prompt_version": prompt_version,
-            "status": PROGRESS_TREE_STATUS_FAILED,
-            "context_digest": context_digest,
-            "nodes": [],
-        }
-    return {
-        "schema_id": schema_id,
-        "schema_version": schema_version,
-        "prompt_version": prompt_version,
-        "status": PROGRESS_TREE_STATUS_READY,
-        "context_digest": context_digest,
-        "nodes": nodes[:10],
-    }
-
-
-def _normalize_node(item: object, *, index: int, context_digest: str) -> dict[str, Any] | None:
-    if not isinstance(item, dict):
-        return None
-    title = truncate_text(item.get("title"), max_chars=120)
-    expected_capability = truncate_text(item.get("expected_capability"), max_chars=480)
-    if not title or not expected_capability:
-        return None
-    node_ref = truncate_text(item.get("progress_node_ref") or item.get("node_ref"), max_chars=120)
-    children = [
-        child
-        for child_index, child_item in enumerate(item.get("children", []), start=1)
-        if (
-            child := _normalize_node(
-                child_item,
-                index=(index * 100) + child_index,
-                context_digest=context_digest,
-            )
-        )
-        is not None
-    ]
-    return {
-        "progress_node_ref": node_ref or _node_ref(context_digest, f"{index}:{title}"),
-        "title": title,
-        "expected_capability": expected_capability,
-        "related_job_requirements": _string_list(item.get("related_job_requirements"), limit=5),
-        "related_resume_evidence": _string_list(item.get("related_resume_evidence"), limit=5),
-        "missing_points": _string_list(item.get("missing_points"), limit=5),
-        "evidence_chunk_ids": _node_evidence_chunk_ids(item),
-        "children": children[:10],
-    }
-
-
-def _node_evidence_chunk_ids(item: dict[str, Any]) -> list[str]:
-    evidence_chunk_ids = _string_list(item.get("evidence_chunk_ids"), limit=20)
-    if evidence_chunk_ids:
-        return evidence_chunk_ids
-    evidence = item.get("evidence")
-    if isinstance(evidence, dict):
-        return _string_list(evidence.get("evidence_chunk_ids"), limit=20)
-    return []
 
 
 def _normalize_state(
@@ -473,9 +273,9 @@ def _first_non_completed_priority(
 
 def _insufficient_artifacts(context: dict[str, Any]) -> dict[str, Any]:
     plan = {
-        "schema_id": POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-        "schema_version": POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
-        "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+        "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
+        "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
         "status": PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
         "context_digest": context["content_digest"],
         "nodes": [],
@@ -485,28 +285,7 @@ def _insufficient_artifacts(context: dict[str, Any]) -> dict[str, Any]:
         "progress_tree_plan": plan,
         "progress_tree_state": _empty_state(
             PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
-            prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-        ),
-        "progress_percent": 0,
-    }
-
-
-def _failed_artifacts(context: dict[str, Any], *, reason: str) -> dict[str, Any]:
-    plan = {
-        "schema_id": POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-        "schema_version": POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
-        "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-        "status": PROGRESS_TREE_STATUS_FAILED,
-        "context_digest": context["content_digest"],
-        "nodes": [],
-        "failure_reason": reason,
-    }
-    return {
-        "status": PROGRESS_TREE_STATUS_FAILED,
-        "progress_tree_plan": plan,
-        "progress_tree_state": _empty_state(
-            PROGRESS_TREE_STATUS_FAILED,
-            prompt_version=POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
+            prompt_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
         ),
         "progress_percent": 0,
     }

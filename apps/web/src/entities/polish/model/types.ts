@@ -1,5 +1,13 @@
 export type PolishSessionMode = "polish";
 export type PolishTheme = "technical" | "communication" | "mixed";
+export type PolishProgressTreeStatus =
+  | "pending"
+  | "generating"
+  | "ready"
+  | "failed"
+  | "refresh_failed"
+  | "insufficient_context"
+  | string;
 
 export interface PolishSessionSummary {
   id: string;
@@ -243,7 +251,7 @@ export interface PolishProgressTreeNode {
 }
 
 export interface PolishProgressTreePlan {
-  status: "ready" | "insufficient_context" | string;
+  status: PolishProgressTreeStatus;
   context_digest: string;
   nodes: PolishProgressTreeNode[];
   failure_reason?: string | null;
@@ -367,7 +375,7 @@ export interface PolishSessionDetail {
   active_question_progress_node_ref?: string | null;
   active_question_evidence_refs?: Array<PolishResourceRef | string>;
   active_question_context_digest?: string | null;
-  progress_tree_status: "ready" | "insufficient_context" | string;
+  progress_tree_status: PolishProgressTreeStatus;
   progress_percent: number;
   progress_tree_plan: PolishProgressTreePlan;
   progress_tree_state: PolishProgressTreeState;

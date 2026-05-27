@@ -29,6 +29,7 @@ import {
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
+  generateInitialPolishProgressTree,
   refreshPolishProgressTreeState,
 } from "../../entities/polish/api/polishApi";
 import type {
@@ -871,6 +872,22 @@ export function canAutoCreateQuestionFromProgressNode(params: {
       !params.submittingAnswer &&
       !params.feedbackGenerating,
   );
+}
+
+export function isProgressTreePendingGeneration(status: string | null | undefined): boolean {
+  return status === "pending" || status === "generating";
+}
+
+export function resolveProgressTreeRecoveryAction(
+  status: string | null | undefined,
+): "generate" | "refresh" | "none" {
+  if (status === "pending" || status === "failed") {
+    return "generate";
+  }
+  if (status === "refresh_failed") {
+    return "refresh";
+  }
+  return "none";
 }
 
 function isPolishSessionEnded(session: PolishSessionDetail | null): boolean {
@@ -2468,6 +2485,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
   const isProgressTreeReady = session?.progress_tree_status === "ready";
   const isProgressTreeRefreshFailed = session?.progress_tree_status === "refresh_failed";
+  const isProgressTreePending = isProgressTreePendingGeneration(session?.progress_tree_status);
+  const isProgressTreeFailed = session?.progress_tree_status === "failed";
   const hasProgressTreeNodes = progressNodes.length > 0;
   const canShowProgressTree = hasProgressTreeNodes && (isProgressTreeReady || isProgressTreeRefreshFailed);
   const canRequestNewQuestion =
@@ -2496,6 +2515,31 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   });
   const workbenchMachineCopy = WORKBENCH_MACHINE_STATE_COPY[workbenchMachineState];
   const [refreshingProgressTree, setRefreshingProgressTree] = useState<boolean>(false);
+  const [generatingProgressTree, setGeneratingProgressTree] = useState<boolean>(false);
+  const progressTreeActionLoading = refreshingProgressTree || generatingProgressTree;
+  const generateProgressTree = async () => {
+    if (session === null || generatingProgressTree) {
+      return;
+    }
+    setGeneratingProgressTree(true);
+    setWorkbenchFailureState(null);
+    try {
+      const generated = await generateInitialPolishProgressTree(sessionId);
+      setSession(generated);
+      await loadCandidateRecords();
+      if (generated.progress_tree_status === "failed") {
+        message.warning("进展树生成失败，可稍后重试。");
+      } else if (generated.progress_tree_status === "insufficient_context") {
+        message.warning("岗位或简历内容不足，暂不能生成进展树。");
+      } else if (generated.progress_tree_status === "ready") {
+        message.success("进展树已生成。");
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "生成进展树失败，请稍后重试。");
+    } finally {
+      setGeneratingProgressTree(false);
+    }
+  };
   const refreshProgressTree = async () => {
     if (session === null || refreshingProgressTree) {
       return;
@@ -2975,6 +3019,34 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                       message="岗位或简历内容不足，暂不能生成进展树。"
                       description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
                     />
+                  ) : isProgressTreePending || isProgressTreeFailed ? (
+                    <Alert
+                      type={isProgressTreeFailed ? "warning" : "info"}
+                      showIcon
+                      message={
+                        isProgressTreeFailed
+                          ? "进展树生成失败，可重试。"
+                          : session?.progress_tree_status === "generating"
+                            ? "进展树生成中。"
+                            : "进展树尚未生成。"
+                      }
+                      description={
+                        isProgressTreeFailed
+                          ? "会话已创建成功，进展树失败不会影响模拟面试记录，可点击重试生成。"
+                          : "会话已创建成功，生成进展树后即可开始出题。"
+                      }
+                      action={
+                        session?.progress_tree_status === "generating" ? undefined : (
+                          <Button
+                            size="small"
+                            loading={generatingProgressTree}
+                            onClick={generateProgressTree}
+                          >
+                            {isProgressTreeFailed ? "重试生成" : "生成进展树"}
+                          </Button>
+                        )
+                      }
+                    />
                   ) : !canShowProgressTree ? (
                     <Alert
                       type="warning"
@@ -2988,7 +3060,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                       action={
                         <Button
                           size="small"
-                          loading={refreshingProgressTree}
+                          loading={progressTreeActionLoading}
                           onClick={refreshProgressTree}
                         >
                           刷新进展树
@@ -3004,7 +3076,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                           message="进度刷新失败，可重试。"
                           description="已保留当前进展树结构，本次只影响节点状态刷新。"
                           action={
-                            <Button size="small" loading={refreshingProgressTree} onClick={refreshProgressTree}>
+                            <Button size="small" loading={progressTreeActionLoading} onClick={refreshProgressTree}>
                               重试刷新
                             </Button>
                           }

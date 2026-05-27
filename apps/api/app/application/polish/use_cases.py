@@ -29,6 +29,7 @@ from app.application.polish.commands import (
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
     EndPolishSessionCommand,
+    GenerateInitialPolishProgressTreeCommand,
     RefreshPolishProgressTreeStateCommand,
 )
 from app.application.polish.entities import (
@@ -60,13 +61,12 @@ from app.application.polish.question_metadata import empty_question_metadata, no
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
 from app.application.polish.progress_evidence import select_progress_tree_evidence_chunks
-from app.application.polish.progress_prompts import (
-    INITIAL_PROGRESS_TREE_PROMPT_CONTRACT,
-    PROGRESS_TREE_STATE_REFRESH_PROMPT_CONTRACT,
-)
+from app.application.polish.progress_prompts import PROGRESS_TREE_STATE_REFRESH_PROMPT_CONTRACT
 from app.application.polish.progress_tree import (
     PROGRESS_TREE_STATUS_FAILED,
+    PROGRESS_TREE_STATUS_GENERATING,
     PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT,
+    PROGRESS_TREE_STATUS_PENDING,
     PROGRESS_TREE_STATUS_READY,
     PROGRESS_TREE_STATUS_REFRESH_FAILED,
     PolishProgressTreeLlmService,
@@ -274,31 +274,7 @@ class PolishUseCases:
             updated_at=now,
             polish_theme=theme_strategy.theme,
         )
-        job = self._resolve_job(owner_id=command.owner_id, job_id=binding.job_id)
-        resume = self._resolve_resume(owner_id=command.owner_id, resume_id=binding.resume_id)
-        job_title, job_company = self._job_labels_from_job(job)
-        resume_title = self._resume_title_from_resume(resume)
-        progress_context = build_polish_progress_context(
-            PolishSessionDetail(
-                session=session,
-                job_title=job_title,
-                job_company=job_company,
-                resume_title=resume_title,
-                binding_label=self._build_binding_label(job_title=job_title, resume_title=resume_title),
-                turns=(),
-            ),
-            job=job,
-            job_version=job_version,
-            resume=resume,
-            resume_version=resume_version,
-            match_analysis=self._resolve_match_analysis(owner_id=command.owner_id, session=session),
-            weaknesses=None,
-            assets=None,
-        )
-        progress_artifacts = _progress_artifacts_with_theme(
-            self._progress_tree_service.generate_initial(progress_context),
-            theme_strategy,
-        )
+        progress_artifacts = _pending_progress_artifacts(session.session_id, theme_strategy)
         session = replace(
             session,
             progress_tree_status=progress_artifacts["status"],
@@ -308,6 +284,55 @@ class PolishUseCases:
         )
         self._polish_repository.add_session(session)
         return ApplicationResult(value=session)
+
+    def generate_initial_progress_tree(
+        self,
+        command: GenerateInitialPolishProgressTreeCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        session = self._polish_repository.get_session(command.owner_id, command.session_id)
+        if session is None:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+
+        detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+        if detail.progress_tree_status == PROGRESS_TREE_STATUS_READY and _has_valid_progress_tree_plan(
+            detail.progress_tree_plan
+        ):
+            return ApplicationResult(value=detail)
+        if detail.progress_tree_status == PROGRESS_TREE_STATUS_GENERATING:
+            return ApplicationResult(value=detail)
+
+        theme_strategy = _session_theme_strategy(session)
+        generating_artifacts = _generating_progress_artifacts(detail, theme_strategy)
+        generating_session = replace(
+            session,
+            updated_at=utc_now(),
+            progress_tree_status=generating_artifacts["status"],
+            progress_percent=generating_artifacts["progress_percent"],
+            progress_tree_plan=generating_artifacts["progress_tree_plan"],
+            progress_tree_state=generating_artifacts["progress_tree_state"],
+        )
+        self._polish_repository.update_progress_tree(generating_session)
+
+        try:
+            progress_artifacts = self._progress_tree_service.generate_initial(detail.progress_context)
+        except Exception:
+            progress_artifacts = _failed_initial_generation_artifacts(
+                detail,
+                reason="progress_tree_generation_failed",
+            )
+        progress_artifacts = _progress_artifacts_with_theme(progress_artifacts, theme_strategy)
+        updated_session = replace(
+            session,
+            updated_at=utc_now(),
+            progress_tree_status=progress_artifacts["status"],
+            progress_percent=progress_artifacts["progress_percent"],
+            progress_tree_plan=progress_artifacts["progress_tree_plan"],
+            progress_tree_state=progress_artifacts["progress_tree_state"],
+        )
+        self._polish_repository.update_progress_tree(updated_session)
+        return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
 
     def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSessionDetail]:
         session = self._polish_repository.get_session(query.owner_id, query.session_id)
@@ -1875,6 +1900,92 @@ def _progress_artifacts_with_theme(
         **artifacts,
         "progress_tree_plan": _progress_payload_with_theme(artifacts.get("progress_tree_plan"), strategy),
         "progress_tree_state": _progress_payload_with_theme(artifacts.get("progress_tree_state"), strategy),
+    }
+
+
+def _pending_progress_artifacts(session_id: str, strategy: PolishThemeStrategy) -> dict[str, Any]:
+    return _progress_artifacts_with_theme(
+        {
+            "status": PROGRESS_TREE_STATUS_PENDING,
+            "progress_percent": 0,
+            "progress_tree_plan": {
+                "status": PROGRESS_TREE_STATUS_PENDING,
+                "context_digest": f"pending:{session_id}",
+                "nodes": [],
+            },
+            "progress_tree_state": {
+                "status": PROGRESS_TREE_STATUS_PENDING,
+                "node_states": [],
+                "current_priority": None,
+                "updated_from_turns_count": 0,
+                "progress": {"progress_percent": 0},
+                "summary": "进展树尚未生成",
+            },
+        },
+        strategy,
+    )
+
+
+def _generating_progress_artifacts(
+    detail: PolishSessionDetail,
+    strategy: PolishThemeStrategy,
+) -> dict[str, Any]:
+    context_digest = detail.progress_context.get("content_digest") or f"generating:{detail.session.session_id}"
+    plan = {
+        **(detail.progress_tree_plan or {}),
+        "status": PROGRESS_TREE_STATUS_GENERATING,
+        "context_digest": context_digest,
+        "nodes": detail.progress_tree_plan.get("nodes", []) if isinstance(detail.progress_tree_plan, dict) else [],
+    }
+    state = {
+        **(detail.progress_tree_state or {}),
+        "status": PROGRESS_TREE_STATUS_GENERATING,
+        "node_states": detail.progress_tree_state.get("node_states", [])
+        if isinstance(detail.progress_tree_state, dict)
+        else [],
+        "current_priority": detail.progress_tree_state.get("current_priority")
+        if isinstance(detail.progress_tree_state, dict)
+        else None,
+        "updated_from_turns_count": detail.progress_tree_state.get("updated_from_turns_count", 0)
+        if isinstance(detail.progress_tree_state, dict)
+        else 0,
+        "progress": {"progress_percent": detail.progress_percent},
+        "summary": "进展树正在生成",
+    }
+    return _progress_artifacts_with_theme(
+        {
+            "status": PROGRESS_TREE_STATUS_GENERATING,
+            "progress_percent": detail.progress_percent,
+            "progress_tree_plan": plan,
+            "progress_tree_state": state,
+        },
+        strategy,
+    )
+
+
+def _failed_initial_generation_artifacts(
+    detail: PolishSessionDetail,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    context_digest = detail.progress_context.get("content_digest") or f"failed:{detail.session.session_id}"
+    return {
+        "status": PROGRESS_TREE_STATUS_FAILED,
+        "progress_percent": 0,
+        "progress_tree_plan": {
+            "status": PROGRESS_TREE_STATUS_FAILED,
+            "context_digest": context_digest,
+            "nodes": [],
+            "failure_reason": reason,
+        },
+        "progress_tree_state": {
+            "status": PROGRESS_TREE_STATUS_FAILED,
+            "node_states": [],
+            "current_priority": None,
+            "updated_from_turns_count": 0,
+            "progress": {"progress_percent": 0},
+            "failure_reason": reason,
+        },
     }
 
 

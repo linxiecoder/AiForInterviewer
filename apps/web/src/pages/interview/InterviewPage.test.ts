@@ -62,6 +62,8 @@ import {
   getWorkbenchProgressNodeStatusLightTone,
   normalizeInterviewTopicTitle,
   normalizeProgressTreeDetailCopy,
+  resolveProgressTreeRecoveryAction,
+  isProgressTreePendingGeneration,
   resolveCurrentQuestionId,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
@@ -83,6 +85,7 @@ import {
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
+  generateInitialPolishProgressTree,
 } from "../../entities/polish/api/polishApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import type {
@@ -317,6 +320,9 @@ type WorkbenchStateRegionsAreStable = Expect<
 
 type CreateApiReturnsSessionDetail = Expect<
   Equal<Awaited<ReturnType<typeof createPolishSession>>, PolishSessionDetail>
+>;
+type GenerateInitialProgressTreeApiReturnsSessionDetail = Expect<
+  Equal<Awaited<ReturnType<typeof generateInitialPolishProgressTree>>, PolishSessionDetail>
 >;
 type DetailApiReturnsSessionDetail = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishSession>>, PolishSessionDetail>
@@ -848,6 +854,16 @@ function test_progress_tree_node_status_uses_row_trailing_lights(): void {
   assertContract(activeMeta.statusLightTone === "blue", "进行中节点应使用蓝色点灯");
   assertContract(getWorkbenchProgressNodeStatusLightTone("completed") === "green", "已完成节点应使用绿色点灯");
   assertContract(getWorkbenchProgressNodeStatusLightTone("pending") === "orange", "未开始节点应使用橙色点灯");
+}
+
+function test_progress_tree_pending_and_failed_states_use_generation_action(): void {
+  assertContract(isProgressTreePendingGeneration("pending"), "pending 状态应识别为初始进展树待生成");
+  assertContract(isProgressTreePendingGeneration("generating"), "generating 状态应识别为初始进展树生成中");
+  assertContract(!isProgressTreePendingGeneration("ready"), "ready 状态不应识别为待生成");
+  assertContract(resolveProgressTreeRecoveryAction("pending") === "generate", "pending 状态应调用初始生成入口");
+  assertContract(resolveProgressTreeRecoveryAction("failed") === "generate", "failed 状态应允许重试初始生成");
+  assertContract(resolveProgressTreeRecoveryAction("refresh_failed") === "refresh", "refresh_failed 状态应继续刷新现有进展树状态");
+  assertContract(resolveProgressTreeRecoveryAction("ready") === "none", "ready 状态不应展示恢复操作");
 }
 
 function test_progress_node_context_banner_supports_expand_toggle_for_depth(): void {
@@ -1664,6 +1680,7 @@ test_progress_node_context_banner_supports_expand_toggle_for_depth();
 test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
 test_workbench_ctrl_enter_submits_answer();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
+test_progress_tree_pending_and_failed_states_use_generation_action();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();

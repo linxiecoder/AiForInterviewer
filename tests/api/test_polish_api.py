@@ -1,6 +1,5 @@
 ﻿from __future__ import annotations
 
-from contextlib import contextmanager
 import json
 import logging
 from pathlib import Path
@@ -17,14 +16,9 @@ from app.api.deps import get_db_session_factory, get_llm_transport, require_auth
 from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1.polish import router as polish_router
 from app.application.polish.progress_prompts import (
-    INITIAL_PROGRESS_TREE_PROMPT_CONTRACT,
-    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-    build_initial_progress_tree_prompt,
     build_progress_tree_state_refresh_prompt,
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion
@@ -40,13 +34,7 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
-    POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION,
-    build_progress_global_understanding_prompt,
     build_progress_quality_first_menu_prompt,
-    build_progress_tree_critic_refiner_prompt,
-    build_progress_tree_draft_plan_prompt,
-    build_progress_tree_grounding_prompt,
 )
 from app.application.polish.progress_evidence import (
     build_progress_evidence_chunks,
@@ -459,7 +447,8 @@ def test_create_app_question_path_registers_facade_and_records_graph_fallback_me
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     status_code, question_body = call_json(
         app,
@@ -594,31 +583,50 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     assert session_data["topic_ref"]["topic_id"] == "topic_authenticity_contribution"
     assert session_data["subtopic_ref"] is None
     assert session_data["custom_topic_text_summary"] == "请重点打磨支付系统项目的表达"
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID
-    assert session_data["progress_tree_plan"]["prompt_version"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION
-    assert session_data["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
-    assert session_data["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
-    assert session_data["progress_tree_state"]["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
-    assert session_data["progress_tree_plan"]["nodes"]
-    assert len(_leaf_nodes(session_data["progress_tree_plan"]["nodes"])) >= 10
-    _assert_progress_tree_is_interview_menu(session_data)
-    _assert_no_forbidden_display_terms(session_data)
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "success"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["generation_mode"] == "quality_first"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["input_context_mode"] == "full_resume_full_job"
-    assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    assert session_data["progress_tree_status"] == "pending"
+    assert session_data["progress_tree_plan"]["status"] == "pending"
+    assert session_data["progress_tree_plan"]["nodes"] == []
+    assert session_data["progress_tree_state"]["status"] == "pending"
+    assert session_data["progress_tree_state"]["current_priority"] is None
     assert session_data["progress_tree_state"]["progress"]["progress_percent"] == 0
-    progress_text = _progress_tree_text(session_data)
+    assert "provider_payload" not in _collect_keys(session_data)
+    assert "prompt" not in _collect_keys(session_data)
+    assert transport.calls == []
+
+    session_id = session_data["session_id"]
+    status_code, generate_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/generate",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    generated_data = generate_body["data"]
+    assert generated_data["progress_tree_status"] == "ready"
+    assert generated_data["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID
+    assert generated_data["progress_tree_plan"]["prompt_version"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION
+    assert generated_data["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
+    assert generated_data["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
+    assert generated_data["progress_tree_state"]["prompt_version"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION
+    assert generated_data["progress_tree_plan"]["nodes"]
+    generated_leaves = _leaf_nodes(generated_data["progress_tree_plan"]["nodes"])
+    assert 6 <= len(generated_leaves) <= 9
+    _assert_progress_tree_is_interview_menu(generated_data)
+    _assert_no_forbidden_display_terms(generated_data)
+    assert generated_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "success"
+    assert generated_data["progress_tree_plan"]["v2_metadata"]["generation_mode"] == "quality_first"
+    assert generated_data["progress_tree_plan"]["v2_metadata"]["input_context_mode"] == "full_resume_full_job"
+    assert generated_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    assert generated_data["progress_tree_state"]["progress"]["progress_percent"] == 0
+    progress_text = _progress_tree_text(generated_data)
     assert "FastAPI 接口编排" in progress_text
     assert "AI Agent" in progress_text
     assert "面试训练工作台" in progress_text
     assert "项目经历真实性核验" not in progress_text
     assert "高并发设计" not in progress_text
-    assert "岗位版本内容和简历版本内容" in INITIAL_PROGRESS_TREE_PROMPT_CONTRACT
-    assert "岗位名、简历名只能作为展示信息" in INITIAL_PROGRESS_TREE_PROMPT_CONTRACT
-    assert "provider_payload" not in _collect_keys(session_data)
-    assert "prompt" not in _collect_keys(session_data)
+    assert "provider_payload" not in _collect_keys(generated_data)
+    assert "prompt" not in _collect_keys(generated_data)
     assert [call.task_type for call in transport.calls] == [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE]
     prompt_context = transport.calls[0].evidence_bundle["context"]
     assert "建设 AI 面试训练工作台" in prompt_context["job_payload"]["responsibilities"][0]
@@ -627,7 +635,6 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     assert prompt_context["resume_version_ref"]["resume_version_id"].startswith("res_ver_polish_")
     assert prompt_context["job_version_ref"]["job_version_id"].startswith("job_ver_polish_")
 
-    session_id = session_data["session_id"]
     status_code, body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
 
     assert status_code == 200
@@ -661,6 +668,113 @@ def test_create_polish_session_logs_start_and_completion(caplog) -> None:
     assert '"session_id": "***"' in log_text
 
 
+def test_generate_initial_progress_tree_failure_keeps_session_and_allows_retry() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
+    failing_transport = _QualityFirstProviderFailureTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=failing_transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_authenticity_contribution",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+
+    status_code, failed_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/generate",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    assert failed_body["data"]["session_id"] == session_id
+    assert failed_body["data"]["progress_tree_status"] == "failed"
+    assert failed_body["data"]["progress_tree_plan"]["failure_reason"] == "provider_response_invalid"
+
+    status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
+    assert detail_body["data"]["progress_tree_status"] == "failed"
+
+    retry_transport = _RecordingPolishProgressTransport()
+    app.state.llm_transport = retry_transport
+    status_code, retry_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/generate",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    assert retry_body["data"]["progress_tree_status"] == "ready"
+    assert retry_body["data"]["progress_tree_plan"]["nodes"]
+    assert [call.task_type for call in retry_transport.calls] == [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE]
+
+
+def test_generate_initial_progress_tree_skips_ready_plan_without_llm_call() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    _, first_generate_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/generate",
+        "POST",
+        json_body={},
+    )
+    ready_plan = first_generate_body["data"]["progress_tree_plan"]
+    transport.calls.clear()
+
+    status_code, second_generate_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/generate",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    assert second_generate_body["data"]["progress_tree_status"] == "ready"
+    assert second_generate_body["data"]["progress_tree_plan"] == ready_plan
+    assert transport.calls == []
+
+
+def test_create_question_rejects_pending_progress_tree_without_treating_session_as_missing() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": "pending_node"},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["message"] == "Progress tree is not ready"
+    assert body["error"]["details"]["progress_tree_status"] == "pending"
+
+
 def test_polish_progress_tree_returns_insufficient_context_without_job_or_resume_content() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(
@@ -685,6 +799,9 @@ def test_polish_progress_tree_returns_insufficient_context_without_job_or_resume
     )
 
     assert status_code == 201
+    status_code, body = _generate_initial_progress_tree(app, body["data"]["session_id"])
+
+    assert status_code == 200
     session_data = body["data"]
     assert session_data["progress_tree_status"] == "insufficient_context"
     assert session_data["progress_percent"] == 0
@@ -762,7 +879,7 @@ def test_progress_evidence_selection_prioritizes_match_gaps_and_reports_dropped_
     assert "job_responsibility" in selection.dropped_context_summary["dropped_source_types"]
 
 
-def test_progress_tree_prompts_use_selected_evidence_chunks_instead_of_raw_long_text() -> None:
+def test_progress_tree_state_refresh_prompt_uses_selected_evidence_chunks_instead_of_raw_long_text() -> None:
     context = _progress_context_fixture(
         requirements=["Python FastAPI 后端深度", "Kafka 消息一致性"],
         resume_markdown=(
@@ -770,15 +887,6 @@ def test_progress_tree_prompts_use_selected_evidence_chunks_instead_of_raw_long_
             "## 技能栈\nPython / FastAPI / Kafka"
         ),
     )
-
-    initial_prompt = build_initial_progress_tree_prompt(context)
-
-    assert initial_prompt["context"]["selected_evidence_chunks"]
-    assert initial_prompt["selected_evidence_chunks"] == initial_prompt["context"]["selected_evidence_chunks"]
-    assert "job_snapshot" not in initial_prompt["context"]
-    assert "resume_snapshot" not in initial_prompt["context"]
-    assert "evidence_chunk_ids" in initial_prompt["prompt"]
-    assert "不要编造 selected_evidence_chunks 中不存在的项目、技术栈、业务经验或岗位要求" in initial_prompt["prompt"]
 
     state_prompt = build_progress_tree_state_refresh_prompt(
         context=context,
@@ -806,51 +914,20 @@ def test_progress_tree_prompts_use_selected_evidence_chunks_instead_of_raw_long_
     assert "不得删除或重命名 existing plan.nodes" in state_prompt["prompt"]
 
 
-def test_progress_tree_v2_draft_failure_falls_back_to_local_nodes() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_InvalidProgressTreeTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["nodes"]
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "partial"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["failure_reason"] == "draft_plan_failed"
-    _assert_progress_tree_is_interview_menu(session_data)
-    _assert_no_forbidden_display_terms(session_data)
-    assert "prompt" not in _collect_keys(session_data)
-    assert "provider_payload" not in _collect_keys(session_data)
-    assert "raw_completion" not in _collect_keys(session_data)
-
-
 def test_progress_tree_v2_returns_interview_menu_not_abstract_tree() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={
+        {
             "resume_job_binding_id": binding_id,
             "topic_id": "topic_technical_depth",
         },
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     assert session_data["progress_tree_status"] == "ready"
     assert session_data["progress_tree_plan"]["nodes"]
@@ -862,17 +939,15 @@ def test_progress_tree_v2_rewrites_evidence_snippets_into_exam_points() -> None:
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={
+        {
             "resume_job_binding_id": binding_id,
             "topic_id": "topic_technical_depth",
         },
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     assert session_data["progress_tree_status"] == "ready"
     labels = _progress_tree_page_labels(session_data)
@@ -890,14 +965,12 @@ def test_progress_tree_v2_rewrites_middle_source_snippet_without_prefix() -> Non
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_MiddleSourceSnippetProgressTreeTransport())
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     labels = _progress_tree_page_labels(session_data)
     assert "硬件测试领域专业术语多" not in labels
@@ -905,38 +978,17 @@ def test_progress_tree_v2_rewrites_middle_source_snippet_without_prefix() -> Non
     _assert_labels_are_exam_points_not_source_sentences(session_data, ("硬件测试领域专业术语多",))
 
 
-def test_progress_tree_v2_allows_legitimate_exam_point_labels_with_marker_words() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_LegitimateExamPointProgressTreeTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={"resume_job_binding_id": binding_id},
-        )
-
-    assert status_code == 201
-    labels = _progress_tree_page_labels(body["data"])
-    assert "面向对象设计模式" in labels
-    assert "问题定位与根因分析" in labels
-
-
 def test_progress_tree_v2_leaf_titles_are_exam_points_not_sentences() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     for node in _leaf_nodes(session_data["progress_tree_plan"]["nodes"]):
         for field in ("display_title", "exam_point"):
@@ -953,44 +1005,17 @@ def test_progress_tree_v2_leaf_titles_are_exam_points_not_sentences() -> None:
             assert node[field], f"{field} missing in {node}"
 
 
-def test_progress_tree_v2_local_fallback_derives_exam_points_from_evidence() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_InvalidProgressTreeTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={"resume_job_binding_id": binding_id},
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "partial"
-    assert "draft_plan_fallback" in session_data["progress_tree_plan"]["v2_metadata"]["low_confidence_flags"]
-    _assert_labels_are_exam_points_not_source_sentences(session_data, _SOURCE_SNIPPET_SENTENCES)
-    assert "项目平台服务端架构设计" in _progress_tree_page_labels(session_data)
-    assert "Java 服务端高可用架构设计" in _progress_tree_page_labels(session_data)
-    for node in _leaf_nodes(session_data["progress_tree_plan"]["nodes"]):
-        assert node["evidence_chunk_ids"] or node["evidence_bindings"]
-
-
 def test_progress_tree_v2_page_labels_hide_source_sentence_markers() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     labels = _progress_tree_page_labels(session_data)
     for label in labels:
@@ -998,7 +1023,7 @@ def test_progress_tree_v2_page_labels_hide_source_sentence_markers() -> None:
             assert term not in label
 
 
-def test_progress_tree_v2_prompts_forbid_source_sentence_labels() -> None:
+def test_progress_tree_quality_first_prompt_forbids_source_sentence_labels() -> None:
     context = _progress_context_fixture(
         requirements=["5年以上Java服务端或者AI Agent研发经验", "熟悉 AI Agent 任务规划与工具调用机制。"],
         responsibilities=["面向硬件测试部门构建智能辅助平台"],
@@ -1008,21 +1033,12 @@ def test_progress_tree_v2_prompts_forbid_source_sentence_labels() -> None:
             "- 针对硬件测试领域专业术语多、单一检索准确率不足60%问题，设计混合检索召回优化方案。"
         ),
     )
-    global_understanding = {"status": "ready"}
-    draft_plan = {"status": "ready", "nodes": []}
-    prompts = [
-        build_progress_quality_first_menu_prompt(context)["prompt"],
-        build_progress_global_understanding_prompt(context)["prompt"],
-        build_progress_tree_draft_plan_prompt(context, global_understanding)["prompt"],
-        build_progress_tree_critic_refiner_prompt(context, global_understanding, draft_plan)["prompt"],
-        build_progress_tree_grounding_prompt(context, global_understanding, draft_plan)["prompt"],
-    ]
+    prompt = build_progress_quality_first_menu_prompt(context)["prompt"]
 
-    for prompt in prompts:
-        assert "display_title" in prompt
-        assert "exam_point" in prompt
-        assert "不得直接复制 selected_evidence_chunks" in prompt or "不要把 evidence 原句" in prompt
-        assert "项目背景、业务问题、JD 年限或任职要求" in prompt
+    assert "display_title" in prompt
+    assert "exam_point" in prompt
+    assert "不要把 evidence 原句" in prompt
+    assert "项目背景、业务问题、JD 年限或任职要求" in prompt
 
 
 def test_progress_tree_v2_display_fields_hide_internal_pressure_terms() -> None:
@@ -1030,14 +1046,12 @@ def test_progress_tree_v2_display_fields_hide_internal_pressure_terms() -> None:
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     _assert_no_forbidden_display_terms(body["data"])
 
 
@@ -1046,14 +1060,12 @@ def test_progress_tree_quality_first_matches_golden_menu_shape() -> None:
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
+        {"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     plan = session_data["progress_tree_plan"]
     metadata = plan["v2_metadata"]
@@ -1064,7 +1076,7 @@ def test_progress_tree_quality_first_matches_golden_menu_shape() -> None:
     assert metadata["planner_schema_id"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID
     assert metadata["generation_mode"] == "quality_first"
     assert metadata["input_context_mode"] == "full_resume_full_job"
-    assert len(leaves) >= 10
+    assert 6 <= len(leaves) <= 9
     assert {node["category"] for node in leaves} >= {"resume_deep_dive", "jd_gap_learning"}
     assert "硬件测试智能辅助平台的服务端架构设计" not in labels
     assert "硬件测试知识库的切片与索引设计" not in labels
@@ -1078,19 +1090,86 @@ def test_progress_tree_quality_first_matches_golden_menu_shape() -> None:
     _assert_quality_first_plan_score_at_least(session_data, minimum=80)
 
 
+def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_quota() -> None:
+    bundle = build_progress_quality_first_menu_prompt(_progress_context_fixture())
+    prompt = bundle["prompt"]
+    output_schema = bundle["output_schema"]
+
+    assert "6-9 个主训练节点" in prompt
+    assert "10 到 14 个叶子节点" not in prompt
+    assert "每类建议 5 到 7 个节点" not in prompt
+    assert "metadata" not in output_schema["required_root_fields"]
+    assert "deferred_candidates" in output_schema["optional_root_fields"]
+    assert output_schema["allowed_basis_types"] == ["resume_signal", "jd_requirement", "match_gap", "mixed"]
+    assert "explicit_evidence" not in prompt
+    assert "reasonable_inference" not in prompt
+    assert "unsupported" not in prompt
+    assert "preparation_goal" not in output_schema["required_leaf_fields"]
+    assert "expected_answer_signals" not in output_schema["required_leaf_fields"]
+    assert "common_loss_risks" not in output_schema["required_leaf_fields"]
+    assert "evidence_notes" not in output_schema["required_leaf_fields"]
+
+
+def test_progress_tree_quality_first_defers_low_value_nodes_and_ignores_llm_metadata() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstDeferredCandidatesTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    plan = body["data"]["progress_tree_plan"]
+    metadata = plan["v2_metadata"]
+    leaves = _leaf_nodes(plan["nodes"])
+    titles = {node["display_title"] for node in leaves}
+    deferred_titles = {item["display_title"] for item in metadata["deferred_candidates"]}
+
+    assert 6 <= len(leaves) <= 9
+    assert {"Git协作与版本控制规范", "Linux系统诊断与Shell编写", "云上成本控制与资源优化", "5年以上Java研发经验"}.isdisjoint(titles)
+    assert {"Git协作与版本控制规范", "Linux系统诊断与Shell编写", "云上成本控制与资源优化", "5年以上Java研发经验"} <= deferred_titles
+    assert "llm_metadata_ignored" in metadata["low_confidence_flags"]
+    assert "quota_filling_risk" in metadata["low_confidence_flags"]
+    assert "generated_at" not in metadata
+    assert "session_id" not in metadata
+    assert all(node["basis_type"] in {"resume_signal", "jd_requirement", "match_gap", "mixed"} for node in leaves)
+
+
+def test_progress_tree_quality_first_accepts_compact_legacy_payload_without_optional_leaf_form_fields() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstCompactLegacyTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    leaves = _leaf_nodes(body["data"]["progress_tree_plan"]["nodes"])
+    assert len(leaves) == 6
+    for node in leaves:
+        assert node["basis_type"] in {"resume_signal", "jd_requirement", "match_gap", "mixed"}
+        assert node["preparation_goal"]
+        assert node["expected_answer_signals"]
+        assert node["common_loss_risks"]
+        assert node["recommended_first_question"]
+        assert node["follow_up_directions"]
+
+
 def test_progress_tree_quality_first_avoids_template_fallback_nodes() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     titles = [node["display_title"] for node in _leaf_nodes(body["data"]["progress_tree_plan"]["nodes"])]
     forbidden_titles = {
         "1能力补齐",
@@ -1109,14 +1188,12 @@ def test_progress_tree_quality_first_uses_full_resume_and_job_context() -> None:
     transport = _RecordingPolishProgressTransport()
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
+        {"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     assert body["data"]["progress_tree_status"] == "ready"
     assert [call.task_type for call in transport.calls] == [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE]
     evidence_bundle = transport.calls[0].evidence_bundle
@@ -1135,14 +1212,12 @@ def test_progress_tree_quality_first_keeps_display_safe_terms() -> None:
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstUnsafeTermsTransport())
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     _assert_no_forbidden_display_terms(body["data"])
 
 
@@ -1151,14 +1226,12 @@ def test_progress_tree_quality_first_no_prompt_leak() -> None:
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     response_keys = _collect_keys(body)
     for forbidden_key in ("prompt", "provider_payload", "raw_completion", "system_prompt", "secret", "token"):
         assert forbidden_key not in response_keys
@@ -1173,14 +1246,12 @@ def test_progress_tree_quality_first_schema_invalid_returns_failed_without_fallb
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstSchemaInvalidTransport())
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     _assert_quality_first_failed_without_fallback(session_data, reason="quality_first_schema_invalid")
 
@@ -1190,14 +1261,12 @@ def test_progress_tree_quality_first_provider_failure_returns_failed_without_fal
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstProviderFailureTransport())
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     _assert_quality_first_failed_without_fallback(session_data, reason="provider_response_invalid")
 
@@ -1212,64 +1281,33 @@ def test_progress_tree_quality_first_transport_missing_returns_failed_without_fa
 
     app.dependency_overrides[get_llm_transport] = _missing_transport_override
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     _assert_quality_first_failed_without_fallback(session_data, reason="llm_transport_missing")
 
 
-def test_progress_tree_v2_pipeline_still_available_behind_flag() -> None:
+def test_progress_tree_planner_env_is_ignored_and_quality_first_remains_canonical() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
     transport = _RecordingPolishProgressTransport()
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
 
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
+    with patch.dict("os.environ", {"AIFI_PROGRESS_TREE_PLANNER": "v2_pipeline"}):
+        status_code, body = _create_ready_polish_session(
             app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
+            {"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
         )
 
-    assert status_code == 201
+    assert status_code == 200
     assert body["data"]["progress_tree_status"] == "ready"
-    assert body["data"]["progress_tree_plan"]["prompt_version"] == "polish_progress_tree_v2_pipeline"
-    assert [call.task_type for call in transport.calls] == [
-        "polish_progress_global_understanding",
-        "polish_progress_tree_draft_plan",
-        "polish_progress_tree_critic_refiner",
-        "polish_progress_tree_evidence_grounding",
-    ]
-
-
-def test_progress_tree_v2_fallback_generates_menu_nodes() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_InvalidProgressTreeTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={"resume_job_binding_id": binding_id},
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "partial"
-    assert session_data["progress_tree_plan"]["nodes"]
-    _assert_progress_tree_is_interview_menu(session_data)
-    assert len(_leaf_nodes(session_data["progress_tree_plan"]["nodes"])) >= 6
-    _assert_no_forbidden_display_terms(session_data)
+    assert body["data"]["progress_tree_plan"]["prompt_version"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION
+    assert body["data"]["progress_tree_plan"]["v2_metadata"]["generation_mode"] == "quality_first"
+    assert [call.task_type for call in transport.calls] == [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE]
 
 
 def test_progress_tree_v2_rejects_or_rewrites_abstract_tree() -> None:
@@ -1277,126 +1315,18 @@ def test_progress_tree_v2_rejects_or_rewrites_abstract_tree() -> None:
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_AbstractProgressTreeTransport())
 
-    status_code, body = call_json(
+    status_code, body = _create_ready_polish_session(
         app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
+        {"resume_job_binding_id": binding_id},
     )
 
-    assert status_code == 201
+    assert status_code == 200
     session_data = body["data"]
     assert session_data["progress_tree_status"] == "ready"
     titles = {node.get("display_title") or node.get("title") for node in _leaf_nodes(session_data["progress_tree_plan"]["nodes"])}
     assert titles != {"项目真实性与个人贡献边界", "岗位匹配缺口与技术深度防御"}
     assert "项自" not in str(session_data["progress_tree_plan"]["nodes"])
     assert "责献" not in str(session_data["progress_tree_plan"]["nodes"])
-    _assert_progress_tree_is_interview_menu(session_data)
-    _assert_no_forbidden_display_terms(session_data)
-
-
-def test_progress_tree_v2_global_failure_falls_back_to_local_summary() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_V2GlobalFailureTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["nodes"]
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "partial"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["failure_reason"] == "global_understanding_failed"
-
-
-def test_progress_tree_v2_pipeline_generates_grounded_high_quality_nodes() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A)
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_authenticity_contribution",
-            },
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_ID
-    assert session_data["progress_tree_plan"]["schema_version"] == POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION
-    assert session_data["progress_tree_plan"]["nodes"]
-    _assert_progress_tree_is_interview_menu(session_data)
-    _assert_no_forbidden_display_terms(session_data)
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "success"
-    assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
-    assert session_data["progress_tree_state"]["progress"]["progress_percent"] == 0
-
-
-def test_progress_tree_v2_critic_failure_falls_back_to_draft_plan() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_V2CriticFailureTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["nodes"]
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "partial"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["failure_reason"] == "critic_refiner_failed"
-    _assert_progress_tree_is_interview_menu(session_data)
-
-
-def test_progress_tree_v2_grounding_failure_marks_weak_grounding() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_V2GroundingFailureTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["nodes"]
-    node = session_data["progress_tree_plan"]["nodes"][0]
-    assert node["grounding_status"] in {"weakly_grounded", "partially_grounded"}
-    assert session_data["progress_tree_plan"]["v2_metadata"]["pipeline_status"] == "partial"
-    assert session_data["progress_tree_plan"]["v2_metadata"]["failure_reason"] == "grounding_failed"
     _assert_progress_tree_is_interview_menu(session_data)
     _assert_no_forbidden_display_terms(session_data)
 
@@ -1427,52 +1357,68 @@ def test_progress_tree_v2_response_does_not_expose_prompt_or_provider_payload() 
         assert all(normalized_forbidden not in _compact_prompt_leak_text(value) for value in response_values)
 
 
-def test_polish_progress_tree_missing_schema_metadata_is_safely_completed() -> None:
+def test_polish_session_detail_reads_legacy_v1_progress_tree_plan() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_MissingSchemaProgressTreeTransport())
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
 
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
+    legacy_plan = {
+        "schema_id": "llm_progress_tree_plan_v1",
+        "schema_version": "v1",
+        "prompt_version": "polish_progress_tree_plan_prompt_v1",
+        "status": "ready",
+        "nodes": [
+            {
+                "progress_node_ref": "legacy.backend_api",
+                "title": "旧版后端接口编排",
+                "expected_capability": "能解释旧版进展树节点。",
+                "children": [],
+            }
+        ],
+    }
+    legacy_state = {
+        "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+        "prompt_version": "polish_progress_tree_plan_prompt_v1",
+        "status": "ready",
+        "node_states": [
+            {
+                "progress_node_ref": "legacy.backend_api",
+                "status": "pending",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            }
+        ],
+        "current_priority": {
+            "progress_node_ref": "legacy.backend_api",
+            "title": "旧版后端接口编排",
+            "expected_capability": "能解释旧版进展树节点。",
+        },
+        "progress": {"progress_percent": 0},
+    }
+    with session_factory() as db:
+        detail = db.get(PolishSessionDetailModel, f"{session_id}_detail")
+        detail.progress_tree_status = "ready"
+        detail.progress_tree_plan_json = legacy_plan
+        detail.progress_tree_state_json = legacy_state
+        detail.progress_percent = 0
+        db.commit()
 
-    assert status_code == 201
+    status_code, body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert status_code == 200
     session_data = body["data"]
     assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_ID
-    assert session_data["progress_tree_plan"]["schema_version"] == POLISH_PROGRESS_TREE_GROUNDED_SCHEMA_VERSION
-    assert session_data["progress_tree_plan"]["prompt_version"] == "polish_progress_tree_v2_pipeline"
-    assert session_data["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
-    assert session_data["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
-    assert session_data["progress_tree_state"]["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
-
-
-def test_progress_tree_parser_backfills_missing_evidence_chunk_ids() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_polish_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_MissingEvidenceChunkIdsTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
-
-    assert status_code == 201
-    node = body["data"]["progress_tree_plan"]["nodes"][0]
-    assert node["evidence_chunk_ids"] == []
+    assert session_data["progress_tree_plan"]["schema_id"] == "llm_progress_tree_plan_v1"
+    assert session_data["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == "legacy.backend_api"
+    assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"] == "legacy.backend_api"
 
 
 def test_polish_progress_tree_requires_semantic_evidence_not_titles_only() -> None:
@@ -1499,6 +1445,9 @@ def test_polish_progress_tree_requires_semantic_evidence_not_titles_only() -> No
     )
 
     assert status_code == 201
+    status_code, body = _generate_initial_progress_tree(app, body["data"]["session_id"])
+
+    assert status_code == 200
     assert body["data"]["progress_tree_status"] == "insufficient_context"
     assert body["data"]["progress_tree_plan"]["nodes"] == []
     assert transport.calls == []
@@ -1636,34 +1585,6 @@ def test_progress_tree_refresh_keeps_insufficient_context_without_calling_llm() 
     assert transport.calls == []
 
 
-def test_initial_progress_tree_keeps_valid_plan_when_initial_state_is_invalid() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_polish_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_InvalidInitialStateProgressTreeTransport())
-
-    with _progress_tree_planner("v2_pipeline"):
-        status_code, body = call_json(
-            app,
-            "/api/v1/polish-sessions",
-            "POST",
-            json_body={
-                "resume_job_binding_id": binding_id,
-                "topic_id": "topic_technical_depth",
-            },
-        )
-
-    assert status_code == 201
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["nodes"]
-    assert session_data["progress_tree_plan"].get("failure_reason") is None
-    assert session_data["progress_tree_state"]["status"] == "ready"
-    assert session_data["progress_tree_state"]["node_states"]
-    assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
-    assert session_data["progress_tree_state"]["progress"]["progress_percent"] == 0
-    assert session_data["progress_tree_state"]["failure_reason"] == "llm_state_invalid_state_fallback"
-
-
 def test_progress_tree_refresh_invalid_state_keeps_plan_and_returns_refresh_failed() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -1679,7 +1600,8 @@ def test_progress_tree_refresh_invalid_state_keeps_plan_and_returns_refresh_fail
         },
     )
     session_id = create_body["data"]["session_id"]
-    original_nodes = create_body["data"]["progress_tree_plan"]["nodes"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    original_nodes = generate_body["data"]["progress_tree_plan"]["nodes"]
 
     status_code, refresh_body = call_json(
         app,
@@ -1736,7 +1658,8 @@ def test_polish_question_grounding_failure_returns_succeeded_task_with_manual_re
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     status_code, question_body = call_json(
         app,
@@ -1808,7 +1731,8 @@ def test_polish_question_prompt_contract_failure_returns_restart_status(monkeypa
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     transport.calls.clear()
 
     status_code, question_body = call_json(
@@ -1847,8 +1771,9 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
-    original_plan_nodes = create_body["data"]["progress_tree_plan"]["nodes"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    original_plan_nodes = generate_body["data"]["progress_tree_plan"]["nodes"]
 
     status_code, question_body = call_json(
         app,
@@ -2097,7 +2022,8 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -2158,7 +2084,8 @@ def test_polish_feedback_falls_back_when_question_metadata_missing() -> None:
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -2210,7 +2137,8 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -2330,7 +2258,8 @@ def test_polish_feedback_reserved_does_not_extract_candidates() -> None:
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -2604,7 +2533,8 @@ def test_polish_question_generation_allows_refresh_failed_state_when_plan_is_rea
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     with session_factory() as db:
         detail = db.get(PolishSessionDetailModel, f"{session_id}_detail")
@@ -2634,7 +2564,8 @@ def test_polish_question_generation_records_selected_category_context() -> None:
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     status_code, question_body = call_json(
         app,
@@ -2728,7 +2659,8 @@ def test_polish_question_generation_rejects_invalid_request_payloads(payload_bui
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     status_code, _body = call_json(
         app,
@@ -2751,7 +2683,8 @@ def test_polish_follow_up_question_uses_parent_answer_and_feedback_target() -> N
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -2820,7 +2753,8 @@ def test_polish_question_generation_rejects_ended_session() -> None:
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     with session_factory() as db:
         db.execute(text("UPDATE interview_sessions SET status = 'ended' WHERE id = :session_id"), {"session_id": session_id})
         db.commit()
@@ -2848,7 +2782,8 @@ def test_polish_question_generation_marks_legacy_progress_node_request() -> None
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     status_code, question_body = call_json(
         app,
@@ -2885,7 +2820,8 @@ def test_polish_question_generation_rotates_signature_in_same_session_category()
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     _, first_body = call_json(
         app,
@@ -2938,7 +2874,8 @@ def test_polish_question_generation_keeps_nine_same_category_questions_distinct(
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     question_ids: list[str] = []
 
     for _ in range(9):
@@ -2987,7 +2924,8 @@ def test_polish_question_completion_records_focus_and_next_question_avoids_it() 
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     _, first_body = call_json(
         app,
@@ -3037,7 +2975,8 @@ def test_polish_end_session_rejects_generation_and_answer_submission() -> None:
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -3091,7 +3030,8 @@ def test_polish_next_question_uses_progress_node_evidence_chunks() -> None:
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     status_code, question_body = call_json(
         app,
@@ -3135,7 +3075,8 @@ def test_polish_session_returns_latest_feedback_when_multiple_feedback_records_e
         },
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
 
     _, question_body = call_json(
         app,
@@ -3190,7 +3131,8 @@ def test_polish_answer_rejects_blank_text_with_error_envelope() -> None:
         json_body={"resume_job_binding_id": binding_id},
     )
     session_id = create_body["data"]["session_id"]
-    progress_node_ref = create_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
     _, question_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
@@ -3222,7 +3164,7 @@ def test_polish_progress_tree_prompt_governance_is_documented_and_not_in_provide
     for text in (prompt_spec, polish_contracts):
         assert "polish_progress_tree_plan" in text
         assert "polish_progress_tree_state" in text
-        assert POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID in text
+        assert "llm_progress_tree_plan_v1" in text
         assert POLISH_PROGRESS_TREE_STATE_SCHEMA_ID in text
 
 
@@ -3309,6 +3251,150 @@ class _QualityFirstUnsafeTermsTransport(FakeLlmTransport):
                 node["depth_goal"] = "准备压力追问下的防御策略"
                 node["common_loss_risks"] = ["必挂风险", "杀招准备不足"]
         return result
+
+
+class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(
+            [
+                _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, evidence_refs=["resume_1"], confidence_level="high"),
+                _quality_first_payload_node("专业术语场景下的混合检索与召回优化", "resume_deep_dive", 2, evidence_refs=["resume_2"], confidence_level="high"),
+                _quality_first_payload_node("RAG 问答准确率评估与阈值复盘", "resume_deep_dive", 3, evidence_refs=["resume_3"], confidence_level="medium"),
+                _quality_first_payload_node("服务端接口编排与异常恢复", "resume_deep_dive", 4, evidence_refs=["resume_4"], confidence_level="medium"),
+                _quality_first_payload_node("个人贡献边界与上线验证", "resume_deep_dive", 5, evidence_refs=["resume_5"], confidence_level="medium"),
+                _quality_first_payload_node("AI Agent 任务规划与工具调用机制", "jd_gap_learning", 1, evidence_refs=["job_1"], confidence_level="medium"),
+                _quality_first_payload_node("服务治理与高可用降级策略", "jd_gap_learning", 2, evidence_refs=["job_2"], confidence_level="medium"),
+                _quality_first_payload_node(
+                    "Git协作与版本控制规范",
+                    "jd_gap_learning",
+                    3,
+                    basis_type="unsupported",
+                    confidence_level="low",
+                    evidence_refs=[],
+                ),
+                _quality_first_payload_node(
+                    "Linux系统诊断与Shell编写",
+                    "jd_gap_learning",
+                    4,
+                    basis_type="unsupported",
+                    confidence_level="low",
+                    evidence_refs=[],
+                ),
+                _quality_first_payload_node(
+                    "云上成本控制与资源优化",
+                    "jd_gap_learning",
+                    5,
+                    basis_type="unsupported",
+                    confidence_level="low",
+                    evidence_refs=[],
+                ),
+                _quality_first_payload_node(
+                    "5年以上Java研发经验",
+                    "jd_gap_learning",
+                    6,
+                    basis_type="unsupported",
+                    confidence_level="low",
+                    evidence_refs=[],
+                ),
+            ],
+            metadata={
+                "generated_at": "2099-01-01T00:00:00Z",
+                "session_id": "llm-forged-session",
+                "quality_target": "10-14 leaves",
+            },
+        )
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_deferred",),
+            evidence_refs=("evidence_quality_first_deferred",),
+        )
+
+
+class _QualityFirstCompactLegacyTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(
+            [
+                _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, basis_type="explicit_evidence", evidence_refs=["resume_1"]),
+                _quality_first_payload_node("混合检索召回链路取舍", "resume_deep_dive", 2, basis_type="explicit_evidence", evidence_refs=["resume_2"]),
+                _quality_first_payload_node("RAG 评估指标与上线复盘", "resume_deep_dive", 3, basis_type="explicit_evidence", evidence_refs=["resume_3"]),
+                _quality_first_payload_node("异常路径与降级策略表达", "resume_deep_dive", 4, basis_type="explicit_evidence", evidence_refs=["resume_4"]),
+                _quality_first_payload_node("AI Agent 工具调用机制补齐", "jd_gap_learning", 1, basis_type="reasonable_inference", evidence_refs=["job_1"]),
+                _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 2, basis_type="reasonable_inference", evidence_refs=["job_2"]),
+            ],
+        )
+        for category in payload["menu_categories"]:
+            for node in category["nodes"]:
+                node.pop("preparation_goal", None)
+                node.pop("expected_answer_signals", None)
+                node.pop("common_loss_risks", None)
+                node.pop("evidence_notes", None)
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_compact",),
+            evidence_refs=("evidence_quality_first_compact",),
+        )
+
+
+def _quality_first_payload(nodes: list[dict], *, metadata: dict | None = None) -> dict:
+    categories = []
+    for category, display_category_title in (
+        ("resume_deep_dive", "深度打磨类"),
+        ("jd_gap_learning", "补齐学习类"),
+    ):
+        categories.append(
+            {
+                "category": category,
+                "display_category_title": display_category_title,
+                "nodes": [node for node in nodes if node["category"] == category],
+            }
+        )
+    return {
+        "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+        "status": "ready",
+        "planner_summary": "优先保留高价值训练主路径，低价值 checklist 延后。",
+        "menu_categories": categories,
+        "metadata": metadata or {},
+        "low_confidence_flags": [],
+    }
+
+
+def _quality_first_payload_node(
+    title: str,
+    category: str,
+    index: int,
+    *,
+    basis_type: str | None = None,
+    confidence_level: str = "medium",
+    evidence_refs: list[str] | None = None,
+) -> dict:
+    prefix = "D" if category == "resume_deep_dive" else "A"
+    return {
+        "node_code": f"{prefix}{index}",
+        "category": category,
+        "display_category_title": "深度打磨类" if category == "resume_deep_dive" else "补齐学习类",
+        "display_title": title,
+        "exam_point": title,
+        "basis_type": basis_type or ("resume_signal" if category == "resume_deep_dive" else "jd_requirement"),
+        "resume_signal": "简历中有 AI 面试训练工作台、RAG 检索和服务端工程经历。",
+        "jd_basis": "JD 要求 Java 服务端、AI Agent、系统可靠性和工程落地能力。",
+        "priority_reason": "该节点与岗位主线和连续追问价值相关。",
+        "depth_goal": f"围绕「{title}」讲清场景、方案、取舍和验证方式。",
+        "first_question": f"请结合经历说明「{title}」的关键设计和落地结果。",
+        "follow_up_focus": ["方案取舍", "异常路径", "验证指标"],
+        "evidence_refs": evidence_refs if evidence_refs is not None else [f"evidence_{prefix.lower()}_{index}"],
+        "confidence_level": confidence_level,
+        "low_confidence_flags": [] if confidence_level != "low" else ["low_evidence"],
+    }
 
 
 class _InvalidProgressTreeTransport:
@@ -3496,12 +3582,6 @@ def _session_factory():
     return session_factory
 
 
-@contextmanager
-def _progress_tree_planner(value: str):
-    with patch.dict("os.environ", {"AIFI_PROGRESS_TREE_PLANNER": value}):
-        yield
-
-
 def _isolated_polish_app(
     session_factory,
     actor: CurrentActor,
@@ -3522,6 +3602,26 @@ def _isolated_polish_app(
     app.dependency_overrides[require_authenticated_actor] = _actor_override
     app.dependency_overrides[get_db_session_factory] = _session_factory_override
     return app
+
+
+def _generate_initial_progress_tree(app: FastAPI, session_id: str) -> tuple[int, dict]:
+    return call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/generate",
+        "POST",
+        json_body={},
+    )
+
+
+def _create_ready_polish_session(app: FastAPI, json_body: dict[str, object]) -> tuple[int, dict]:
+    status_code, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body=json_body,
+    )
+    assert status_code == 201
+    return _generate_initial_progress_tree(app, create_body["data"]["session_id"])
 
 
 def _seed_polish_sources(
@@ -3950,11 +4050,11 @@ def _quality_first_plan_score(session_data: dict) -> int:
     titles = [node.get("display_title") or node.get("title") or "" for node in leaves]
     categories = [node.get("category") for node in leaves]
     score = 0
-    if len(leaves) >= 10:
+    if 6 <= len(leaves) <= 9:
         score += 20
     if {"resume_deep_dive", "jd_gap_learning"}.issubset(set(categories)):
         score += 15
-    if categories.count("resume_deep_dive") >= 5 and categories.count("jd_gap_learning") >= 5:
+    if categories.count("resume_deep_dive") >= 4 and 2 <= categories.count("jd_gap_learning") <= 4:
         score += 15
     if _quality_first_domain_count(titles) >= 5:
         score += 20

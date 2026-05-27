@@ -17,6 +17,13 @@ class CreatePolishSessionCommand:
 
 
 @dataclass(frozen=True)
+class GenerateInitialPolishProgressTreeCommand:
+    owner_id: str
+    actor_id: str
+    session_id: str
+
+
+@dataclass(frozen=True)
 class CreatePolishQuestionTaskCommand:
     owner_id: str
     actor_id: str
