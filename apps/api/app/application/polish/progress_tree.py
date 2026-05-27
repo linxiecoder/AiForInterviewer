@@ -5,6 +5,14 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import Any
 
+from app.application.llm.agent_io import AgentOutputEnvelope
+from app.application.llm.errors import (
+    LlmTransportConfigurationError,
+    LlmTransportResponseError,
+    LlmTransportUnavailableError,
+)
+from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_CONTRACT_IDS,
@@ -19,13 +27,6 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
 )
-from app.application.llm.errors import (
-    LlmTransportConfigurationError,
-    LlmTransportResponseError,
-    LlmTransportUnavailableError,
-)
-from app.application.llm.ports import LlmTransport
-from app.application.llm.types import LlmTransportRequest
 
 
 PROGRESS_TREE_STATUS_READY = "ready"
@@ -192,12 +193,47 @@ def _normalize_state(
     schema_id: str,
     schema_version: str,
 ) -> dict[str, Any]:
+    envelope = _progress_tree_state_payload_envelope(
+        state_payload,
+        existing_plan=existing_plan,
+        allow_refresh_failed=allow_refresh_failed,
+        prompt_version=prompt_version,
+        schema_id=schema_id,
+        schema_version=schema_version,
+    )
+    normalized_state = envelope.payload.get("progress_tree_state")
+    if isinstance(normalized_state, dict):
+        return normalized_state
+    return _empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version)
+
+
+def _progress_tree_state_payload_envelope(
+    state_payload: dict[str, Any],
+    *,
+    existing_plan: dict[str, Any],
+    allow_refresh_failed: bool,
+    prompt_version: str,
+    schema_id: str,
+    schema_version: str,
+) -> AgentOutputEnvelope:
+    def enveloped(state: dict[str, Any]) -> AgentOutputEnvelope:
+        return AgentOutputEnvelope(
+            task_type="polish_progress_tree_state",
+            schema_id=schema_id,
+            schema_version=schema_version,
+            prompt_version=prompt_version,
+            status=state.get("status"),
+            payload={"progress_tree_state": state},
+        )
+
     if state_payload.get("status") == PROGRESS_TREE_STATUS_REFRESH_FAILED and allow_refresh_failed:
-        return _empty_state(PROGRESS_TREE_STATUS_REFRESH_FAILED, prompt_version=prompt_version)
+        return enveloped(
+            _empty_state(PROGRESS_TREE_STATUS_REFRESH_FAILED, prompt_version=prompt_version)
+        )
 
     plan_nodes = _flatten_progress_nodes(existing_plan.get("nodes", []))
     if not plan_nodes:
-        return _empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version)
+        return enveloped(_empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version))
     plan_by_ref = {node["progress_node_ref"]: node for node in plan_nodes}
     node_states = _complete_node_states_for_plan(
         existing_plan.get("nodes", []),
@@ -212,9 +248,9 @@ def _normalize_state(
             _flatten_leaf_nodes(existing_plan.get("nodes", [])) or plan_nodes,
         )
     if current_priority is None:
-        return _empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version)
+        return enveloped(_empty_state(PROGRESS_TREE_STATUS_FAILED, prompt_version=prompt_version))
 
-    return {
+    return enveloped({
         "schema_id": schema_id,
         "schema_version": schema_version,
         "prompt_version": prompt_version,
@@ -228,7 +264,7 @@ def _normalize_state(
                 node_states,
             )
         },
-    }
+    })
 
 
 def _normalize_priority(value: object, plan_by_ref: dict[str, dict[str, Any]]) -> dict[str, Any] | None:

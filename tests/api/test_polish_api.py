@@ -1291,6 +1291,166 @@ def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_sha
     assert isinstance(evidence_ref_validation, dict)
 
 
+def test_progress_tree_state_refresh_output_envelope_preserves_state_shape() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.polish.progress_tree import (
+        _normalize_state,
+        _progress_tree_state_payload_envelope,
+    )
+
+    def node(progress_node_ref: str, title: str) -> dict[str, object]:
+        return {
+            "progress_node_ref": progress_node_ref,
+            "title": title,
+            "expected_capability": f"{title} 能力",
+            "related_job_requirements": [],
+            "related_resume_evidence": [],
+            "missing_points": [],
+            "children": [],
+        }
+
+    child_a = node("node_child_a", "FastAPI 接口编排")
+    child_b = node("node_child_b", "异步任务补偿")
+    existing_plan = {
+        "status": "ready",
+        "nodes": [
+            {
+                **node("node_parent", "服务端工程治理"),
+                "children": [child_a, child_b],
+            }
+        ],
+    }
+    state_payload = {
+        "status": "ready",
+        "node_states": [
+            {
+                "progress_node_ref": "node_parent",
+                "status": "completed",
+                "completed_questions_count": 1,
+                "latest_feedback_summary": "父节点不应被直接信任为完成",
+            },
+            {
+                "progress_node_ref": "node_child_a",
+                "status": "completed",
+                "completed_questions_count": 1,
+                "latest_feedback_summary": "第一个子节点已完成",
+            },
+            {
+                "progress_node_ref": "node_child_b",
+                "status": "pending",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            },
+        ],
+        "current_priority": {
+            "progress_node_ref": "node_parent",
+            "title": "服务端工程治理",
+            "expected_capability": "服务端工程治理 能力",
+        },
+        "updated_from_turns_count": 2,
+        "progress": {"progress_percent": 80},
+    }
+
+    envelope = _progress_tree_state_payload_envelope(
+        state_payload,
+        existing_plan=existing_plan,
+        allow_refresh_failed=True,
+        prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        schema_id=POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        schema_version=POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    )
+    normalized = _normalize_state(
+        state_payload,
+        existing_plan=existing_plan,
+        allow_refresh_failed=True,
+        prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        schema_id=POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        schema_version=POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    )
+
+    assert isinstance(envelope, AgentOutputEnvelope)
+    assert envelope.succeeded
+    assert "AgentOutputEnvelope(" in inspect.getsource(_progress_tree_state_payload_envelope)
+    assert envelope.payload["progress_tree_state"] == normalized
+    assert normalized["status"] == "ready"
+    assert normalized["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
+    assert normalized["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
+    assert normalized["prompt_version"] == POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION
+    assert normalized["updated_from_turns_count"] == 2
+    assert normalized["current_priority"]["progress_node_ref"] == "node_parent"
+    assert normalized["progress"]["progress_percent"] == 50
+    state_by_ref = {item["progress_node_ref"]: item for item in normalized["node_states"]}
+    assert state_by_ref["node_parent"]["status"] == "in_progress"
+    assert state_by_ref["node_child_a"]["status"] == "completed"
+    assert state_by_ref["node_child_b"]["status"] == "pending"
+
+
+def test_progress_tree_state_refresh_output_envelope_preserves_failure_states() -> None:
+    from app.application.polish.progress_tree import (
+        _normalize_state,
+        _progress_tree_state_payload_envelope,
+    )
+
+    existing_plan = {
+        "status": "ready",
+        "nodes": [
+            {
+                "progress_node_ref": "node_leaf",
+                "title": "服务端工程治理",
+                "expected_capability": "服务端工程治理 能力",
+                "children": [],
+            }
+        ],
+    }
+    refresh_failed_envelope = _progress_tree_state_payload_envelope(
+        {"status": "refresh_failed"},
+        existing_plan=existing_plan,
+        allow_refresh_failed=True,
+        prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        schema_id=POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        schema_version=POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    )
+    refresh_failed_state = _normalize_state(
+        {"status": "refresh_failed"},
+        existing_plan=existing_plan,
+        allow_refresh_failed=True,
+        prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        schema_id=POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        schema_version=POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    )
+
+    assert refresh_failed_envelope.succeeded
+    assert refresh_failed_envelope.payload["progress_tree_state"] == refresh_failed_state
+    assert refresh_failed_state == {
+        "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+        "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        "status": "refresh_failed",
+        "node_states": [],
+        "current_priority": None,
+        "updated_from_turns_count": 0,
+        "progress": {"progress_percent": 0},
+    }
+
+    invalid_plan_state = _normalize_state(
+        {
+            "status": "ready",
+            "node_states": [],
+            "current_priority": None,
+        },
+        existing_plan={"status": "ready", "nodes": []},
+        allow_refresh_failed=True,
+        prompt_version=POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        schema_id=POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        schema_version=POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    )
+
+    assert invalid_plan_state["status"] == "failed"
+    assert invalid_plan_state["node_states"] == []
+    assert invalid_plan_state["current_priority"] is None
+    assert invalid_plan_state["progress"] == {"progress_percent": 0}
+
+
 def test_progress_tree_quality_first_defers_low_value_nodes_and_ignores_llm_metadata() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
