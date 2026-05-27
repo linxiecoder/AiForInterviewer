@@ -144,7 +144,6 @@ def test_agent_io_module_has_no_reverse_business_or_transport_dependencies() -> 
     assert "app.domain" not in source
     assert "app.infrastructure" not in source
     assert "FakeLlmTransport" not in source
-    assert "AgentSafetyPolicy" not in source
 
 
 def test_shared_agent_io_types_are_exported() -> None:
@@ -153,18 +152,23 @@ def test_shared_agent_io_types_are_exported() -> None:
         "AgentFocusTarget",
         "AgentPromptBundle",
         "AgentOutputEnvelope",
+        "AgentSafetyPolicy",
     ):
         assert hasattr(agent_io, type_name)
         assert inspect.isclass(getattr(agent_io, type_name))
+    assert hasattr(agent_io, "DEFAULT_AGENT_SAFETY_POLICY")
+    assert isinstance(agent_io.DEFAULT_AGENT_SAFETY_POLICY, agent_io.AgentSafetyPolicy)
 
 
-def test_prompt_builders_use_agent_prompt_bundle_source_contract() -> None:
+def test_prompt_builders_use_agent_prompt_bundle_and_safety_policy_source_contract() -> None:
     for builder in (
         build_question_prompt_asset,
         build_progress_quality_first_menu_prompt,
         build_progress_tree_state_refresh_prompt,
     ):
-        assert "AgentPromptBundle(" in inspect.getsource(builder)
+        source = inspect.getsource(builder)
+        assert "AgentPromptBundle(" in source
+        assert "AgentSafetyPolicy(" in source or "DEFAULT_AGENT_SAFETY_POLICY" in source
 
 
 def test_question_prompt_keeps_input_data_top_level_contract() -> None:
@@ -336,16 +340,34 @@ def test_legacy_parser_return_shapes_stay_stable() -> None:
     assert isinstance(normalized_state, dict)
 
 
-def test_agent_safety_policy_is_not_started_in_this_phase() -> None:
-    target_files = (
+def test_agent_safety_policy_is_limited_to_prompt_builders_in_this_phase() -> None:
+    prompt_builder_files = (
         "apps/api/app/application/llm/agent_io.py",
         "apps/api/app/application/polish/question_generation_prompts.py",
         "apps/api/app/application/polish/progress_v2_prompts.py",
         "apps/api/app/application/polish/progress_prompts.py",
+    )
+    parser_files = (
         "apps/api/app/application/polish/question_generation_service.py",
         "apps/api/app/application/polish/progress_tree_v2.py",
         "apps/api/app/application/polish/progress_tree.py",
     )
 
-    for relative_path in target_files:
+    for relative_path in prompt_builder_files:
+        assert "AgentSafetyPolicy" in _read_source(relative_path)
+    for relative_path in parser_files:
         assert "AgentSafetyPolicy" not in _read_source(relative_path)
+
+
+def test_no_unplanned_agent_abstractions_are_started() -> None:
+    source = _read_source("apps/api/app/application/llm/agent_io.py")
+
+    for type_name in (
+        "AgentRuntime",
+        "AgentToolCall",
+        "AgentParser",
+        "AgentGraph",
+        "AgentOrchestrator",
+        "AgentTransport",
+    ):
+        assert f"class {type_name}" not in source
