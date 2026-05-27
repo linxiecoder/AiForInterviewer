@@ -31,6 +31,31 @@ DEFAULT_SELECTION_LIMITS: dict[ProgressEvidencePurpose, tuple[int, int]] = {
 
 ORDER_BY_PURPOSE = SOURCE_PRIORITY_POLICY_BY_PURPOSE
 _MARKDOWN_PARSER = MarkdownIt("commonmark", {"html": False})
+_RESUME_CORE_CONTRIBUTION_HEADINGS = {
+    "核心贡献",
+    "主要贡献",
+    "关键贡献",
+    "项目贡献",
+    "核心工作",
+    "主要工作",
+}
+_RESUME_STRUCTURE_FIELD_HEADINGS = {
+    "项目背景",
+    "项目简介",
+    "项目描述",
+    "项目职责",
+    "职责",
+    "工作职责",
+    "工作业绩",
+    "工作内容",
+    *_RESUME_CORE_CONTRIBUTION_HEADINGS,
+}
+_RESUME_CORE_CONTRIBUTION_HEADING_RE = "|".join(
+    re.escape(label) for label in sorted(_RESUME_CORE_CONTRIBUTION_HEADINGS, key=len, reverse=True)
+)
+_RESUME_STRUCTURE_FIELD_HEADING_RE = "|".join(
+    re.escape(label) for label in sorted(_RESUME_STRUCTURE_FIELD_HEADINGS, key=len, reverse=True)
+)
 
 
 @dataclass(frozen=True)
@@ -513,7 +538,31 @@ def _add_collection_chunks(context: dict[str, Any], add_chunk, *, key: str, sour
 
 
 def _normalize_resume_markdown(markdown_text: str) -> str:
+    markdown_text = _rehydrate_flattened_resume_markdown(markdown_text)
     return _normalize_resume_project_containers(markdown_text)
+
+
+def _rehydrate_flattened_resume_markdown(markdown_text: str) -> str:
+    text = markdown_text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"([^\n])\s+(?=#{1,6}\s+\S)", r"\1\n", text)
+    text = re.sub(r"([^\n])\s+(?=:{3,}\s*start\b)", r"\1\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"(:{3,}\s*end\s*:*)\s+(?=\S)", r"\1\n", text, flags=re.IGNORECASE)
+    text = re.sub(
+        rf"([^\n])\s+(?=\*\*(?:{_RESUME_STRUCTURE_FIELD_HEADING_RE})\*\*\s*[：:])",
+        r"\1\n",
+        text,
+    )
+    text = re.sub(
+        rf"(\*\*(?:{_RESUME_CORE_CONTRIBUTION_HEADING_RE})\*\*\s*[：:]?)\s+(?=-\s+\S)",
+        r"\1\n",
+        text,
+    )
+    text = re.sub(
+        r"([^\n])\s+(?=-\s+\*\*[^*\n]{1,80}\*\*\s*[：:])",
+        r"\1\n",
+        text,
+    )
+    return text
 
 
 def _normalize_resume_project_containers(markdown_text: str) -> str:
@@ -1025,29 +1074,14 @@ def _clean_project_contribution_text(value: str) -> str:
 def _is_core_contribution_heading(value: str) -> bool:
     text = _strip_markdown_title_markup(value)
     text = re.sub(r"[：:]\s*$", "", text).strip()
-    return text in {"核心贡献", "主要贡献", "关键贡献", "项目贡献", "核心工作", "主要工作"}
+    return text in _RESUME_CORE_CONTRIBUTION_HEADINGS
 
 
 def _is_resume_structure_field_heading(value: object) -> bool:
     text = _strip_markdown_title_markup(str(value or ""))
     text = re.sub(r"[：:]\s*.*$", "", text).strip().lower()
     text = re.sub(r"\s+", "", text)
-    return text in {
-        "项目背景",
-        "项目简介",
-        "项目描述",
-        "项目职责",
-        "职责",
-        "工作职责",
-        "工作业绩",
-        "工作内容",
-        "核心贡献",
-        "主要贡献",
-        "关键贡献",
-        "项目贡献",
-        "核心工作",
-        "主要工作",
-    }
+    return text in _RESUME_STRUCTURE_FIELD_HEADINGS
 
 
 def _is_project_structure_title(value: object) -> bool:

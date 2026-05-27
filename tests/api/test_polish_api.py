@@ -998,6 +998,32 @@ def test_custom_container_normalization_matches_standard_markdown() -> None:
     assert container_chunks == standard_chunks
 
 
+def test_progress_evidence_chunks_rehydrate_flattened_resume_markdown() -> None:
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "# 简历 ## 基本信息 候选人摘要。 "
+            "## 项目经历 ::: start **项目甲** ::: **公司甲** ::: end "
+            "**项目背景**：背景文本甲。 "
+            "**核心贡献**： - **贡献项一**：贡献内容一。 - **贡献项二**：贡献内容二。"
+        ),
+    )
+
+    chunks = build_progress_evidence_chunks(context)
+    project_chunks = [chunk for chunk in chunks if chunk.source_type == "resume_project"]
+    contribution_chunks = [
+        chunk
+        for chunk in chunks
+        if chunk.source_type == "resume_project_contribution"
+    ]
+
+    assert [chunk.title for chunk in project_chunks] == ["项目甲"]
+    assert project_chunks[0].source_ref["company"] == "公司甲"
+    assert [chunk.title for chunk in contribution_chunks] == ["贡献项一", "贡献项二"]
+    assert "公司甲" not in [chunk.title for chunk in project_chunks]
+    assert "贡献项一" not in [chunk.title for chunk in project_chunks]
+    assert "贡献项二" not in [chunk.title for chunk in project_chunks]
+
+
 def test_same_contribution_title_in_different_projects_not_deduped() -> None:
     context = _progress_context_fixture(
         resume_markdown=(
