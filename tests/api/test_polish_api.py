@@ -1186,6 +1186,67 @@ def test_progress_tree_quality_first_accepts_compact_legacy_payload_without_opti
         assert node["follow_up_directions"]
 
 
+def test_progress_tree_quality_first_normalizes_string_list_fields_without_template_fallback() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstStringListFieldsTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    leaves = _leaf_nodes(body["data"]["progress_tree_plan"]["nodes"])
+    string_node = next(node for node in leaves if node["display_title"] == "混合检索召回链路取舍")
+    list_node = next(node for node in leaves if node["display_title"] == "RAG 评估指标与上线复盘")
+
+    assert string_node["follow_up_focus"] == [
+        "权重调整策略",
+        "准确率指标定义",
+        "对比过的其他检索方案",
+        "效果上限分析",
+    ]
+    assert string_node["follow_up_directions"] == string_node["follow_up_focus"]
+    assert all(not item.startswith("继续追问") for item in string_node["follow_up_focus"])
+    assert string_node["expected_answer_signals"] == ["指标口径", "AB 对照", "风险解释", "兜底方案"]
+    assert string_node["common_loss_risks"] == ["只说概念", "缺少指标", "无法解释回退"]
+    assert string_node["evidence_notes"] == ["简历证据", "JD 证据"]
+    assert string_node["low_confidence_flags"] == ["needs_metric", "needs_grounding"]
+    assert string_node["related_match_gaps"] == ["指标口径缺口", "召回策略缺口"]
+    assert list_node["follow_up_focus"] == ["方案取舍", "异常路径", "验证指标"]
+    assert list_node["follow_up_directions"] == list_node["follow_up_focus"]
+
+
+def test_progress_tree_quality_first_empty_or_missing_follow_up_focus_still_uses_default_template() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstBlankFollowUpFocusTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    leaves = _leaf_nodes(body["data"]["progress_tree_plan"]["nodes"])
+    blank_node = next(node for node in leaves if node["display_title"] == "混合检索召回链路取舍")
+    missing_node = next(node for node in leaves if node["display_title"] == "AI Agent 工具调用机制补齐")
+
+    assert blank_node["follow_up_focus"] == [
+        "继续追问「混合检索召回链路取舍」的个人负责范围",
+        "继续追问关键取舍和替代方案",
+        "继续追问结果验证和异常处理",
+    ]
+    assert blank_node["follow_up_directions"] == blank_node["follow_up_focus"]
+    assert missing_node["follow_up_focus"] == [
+        "继续追问「AI Agent 工具调用机制补齐」的核心原理",
+        "继续追问与既有项目的可迁移经验",
+        "继续追问学习补齐和验证计划",
+    ]
+    assert missing_node["follow_up_directions"] == missing_node["follow_up_focus"]
+
+
 def test_progress_tree_quality_first_normalizes_invalid_basis_type_with_current_warning() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
@@ -3603,6 +3664,45 @@ class _QualityFirstCompactLegacyTransport(FakeLlmTransport):
         )
 
 
+class _QualityFirstStringListFieldsTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(_quality_first_standard_nodes())
+        string_node = payload["menu_categories"][0]["nodes"][1]
+        string_node["follow_up_focus"] = "权重调整策略；准确率指标定义；对比过的其他检索方案；效果上限分析；超出限制项"
+        string_node["expected_answer_signals"] = "指标口径，AB 对照\n风险解释|兜底方案"
+        string_node["common_loss_risks"] = "只说概念、缺少指标；缺少指标；无法解释回退"
+        string_node["evidence_notes"] = "简历证据；JD 证据"
+        string_node["low_confidence_flags"] = "needs_metric；needs_metric;needs_grounding"
+        string_node["related_match_gaps"] = "指标口径缺口；召回策略缺口"
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_string_lists",),
+            evidence_refs=("evidence_quality_first_string_lists",),
+        )
+
+
+class _QualityFirstBlankFollowUpFocusTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(_quality_first_standard_nodes())
+        payload["menu_categories"][0]["nodes"][1]["follow_up_focus"] = ""
+        payload["menu_categories"][1]["nodes"][0].pop("follow_up_focus", None)
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_blank_follow_up",),
+            evidence_refs=("evidence_quality_first_blank_follow_up",),
+        )
+
+
 class _QualityFirstInvalidBasisTypeTransport(FakeLlmTransport):
     def generate(self, request):
         if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
@@ -3660,6 +3760,17 @@ class _QualityFirstInvalidBasisTypeTransport(FakeLlmTransport):
             trace_refs=("trace_quality_first_invalid_basis",),
             evidence_refs=("evidence_quality_first_invalid_basis",),
         )
+
+
+def _quality_first_standard_nodes() -> list[dict]:
+    return [
+        _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, evidence_refs=["resume_1"]),
+        _quality_first_payload_node("混合检索召回链路取舍", "resume_deep_dive", 2, evidence_refs=["resume_2"]),
+        _quality_first_payload_node("RAG 评估指标与上线复盘", "resume_deep_dive", 3, evidence_refs=["resume_3"]),
+        _quality_first_payload_node("异常路径与降级策略表达", "resume_deep_dive", 4, evidence_refs=["resume_4"]),
+        _quality_first_payload_node("AI Agent 工具调用机制补齐", "jd_gap_learning", 1, evidence_refs=["job_1"]),
+        _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 2, evidence_refs=["job_2"]),
+    ]
 
 
 def _quality_first_payload(nodes: list[dict], *, status: str = "success", metadata: dict | None = None) -> dict:

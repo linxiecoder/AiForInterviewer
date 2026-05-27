@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from hashlib import sha256
 from typing import Any
 
@@ -103,6 +104,7 @@ _FORBIDDEN_DISPLAY_REPLACEMENTS = (
     ("责献", "贡献"),
 )
 _FORBIDDEN_DISPLAY_TERMS = tuple(term for term, _ in _FORBIDDEN_DISPLAY_REPLACEMENTS)
+_TEXT_LIST_SEPARATOR_RE = re.compile(r"[；;，,、\n|]+")
 
 
 class PolishProgressTreeQualityFirstPlanner:
@@ -224,7 +226,7 @@ def _normalize_quality_first_menu_payload(
 
     nodes: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
-    low_confidence_flags = _sanitize_string_list(payload.get("low_confidence_flags"), limit=20)
+    low_confidence_flags = _normalize_text_list(payload.get("low_confidence_flags"), limit=20)
     low_confidence_flags.extend(status_warnings)
     deferred_candidates = _normalize_quality_first_deferred_candidates(
         payload.get("deferred_candidates"),
@@ -344,18 +346,18 @@ def _normalize_quality_first_node(
         _sanitize_display_text(item.get("first_question"), max_chars=120)
         or "请结合你的经历说明这个方向的设计思路和关键取舍。"
     )
-    follow_up_focus = _sanitize_string_list(item.get("follow_up_focus"), limit=4)
+    follow_up_focus = _normalize_text_list(item.get("follow_up_focus"), limit=4)
     if not follow_up_focus:
         follow_up_focus = _default_follow_up_focus(category, exam_point)
-    expected_answer_signals = _sanitize_string_list(item.get("expected_answer_signals"), limit=5)
+    expected_answer_signals = _normalize_text_list(item.get("expected_answer_signals"), limit=5)
     if not expected_answer_signals:
         expected_answer_signals = _default_expected_answer_signals(category)
-    common_loss_risks = _sanitize_string_list(item.get("common_loss_risks"), limit=5)
+    common_loss_risks = _normalize_text_list(item.get("common_loss_risks"), limit=5)
     if not common_loss_risks:
         common_loss_risks = _default_common_loss_risks(category)
     evidence_refs = _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8)
-    evidence_notes = _sanitize_string_list(item.get("evidence_notes"), limit=8)
-    low_confidence_flags = _sanitize_string_list(item.get("low_confidence_flags"), limit=8)
+    evidence_notes = _normalize_text_list(item.get("evidence_notes"), limit=8)
+    low_confidence_flags = _normalize_text_list(item.get("low_confidence_flags"), limit=8)
     low_confidence_flags.extend(basis_flags)
     node_code = _sanitize_display_text(item.get("node_code"), max_chars=20) or _default_node_code(
         category,
@@ -363,7 +365,7 @@ def _normalize_quality_first_node(
     )
     confidence_level = _enum_value(item.get("confidence_level"), _ALLOWED_CONFIDENCE_LEVELS, "medium")
     node_ref = truncate_text(item.get("progress_node_ref") or item.get("node_ref"), max_chars=120)
-    related_match_gaps = _sanitize_string_list(item.get("related_match_gaps"), limit=6)
+    related_match_gaps = _normalize_text_list(item.get("related_match_gaps"), limit=6)
     node = {
         "progress_node_ref": node_ref or _node_ref(context_digest, f"quality:{category}:{node_code}:{display_title}"),
         "node_code": node_code,
@@ -1042,6 +1044,24 @@ def _sanitize_display_text(value: object, *, max_chars: int) -> str:
 def _sanitize_string_list(value: object, *, limit: int) -> list[str]:
     result: list[str] = []
     for item in _string_list(value, limit=limit * 2):
+        text = _sanitize_display_text(item, max_chars=480)
+        if text and text not in result:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _normalize_text_list(value: object, *, limit: int) -> list[str]:
+    if isinstance(value, str):
+        raw_items = _TEXT_LIST_SEPARATOR_RE.split(value)
+    elif isinstance(value, list):
+        raw_items = _string_list(value, limit=limit * 2)
+    else:
+        return []
+
+    result: list[str] = []
+    for item in raw_items:
         text = _sanitize_display_text(item, max_chars=480)
         if text and text not in result:
             result.append(text)
