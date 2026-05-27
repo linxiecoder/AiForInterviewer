@@ -1225,6 +1225,98 @@ def test_progress_tree_quality_first_normalizes_string_list_fields_without_templ
     assert list_node["follow_up_directions"] == list_node["follow_up_focus"]
 
 
+def test_progress_tree_quality_first_keeps_allowed_evidence_refs_as_chunk_ids() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_QualityFirstEvidenceRefsTransport("allowed"),
+    )
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    plan = body["data"]["progress_tree_plan"]
+    metadata = plan["v2_metadata"]
+    target_node = next(
+        node for node in _leaf_nodes(plan["nodes"]) if node["display_title"] == "混合检索召回链路取舍"
+    )
+
+    assert body["data"]["progress_tree_status"] == "ready"
+    assert target_node["evidence_refs"] == ["resume_project_001"]
+    assert target_node["evidence_chunk_ids"] == ["resume_project_001"]
+    assert "quality_first_evidence_ref_not_allowed" not in target_node["low_confidence_flags"]
+    assert metadata["evidence_ref_validation"]["invalid_ref_count"] == 0
+    assert metadata["evidence_ref_validation"]["invalid_ref_samples"] == []
+
+
+def test_progress_tree_quality_first_keeps_invalid_evidence_refs_as_source_hints_only() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_QualityFirstEvidenceRefsTransport("invalid"),
+    )
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    plan = body["data"]["progress_tree_plan"]
+    metadata = plan["v2_metadata"]
+    target_node = next(
+        node for node in _leaf_nodes(plan["nodes"]) if node["display_title"] == "混合检索召回链路取舍"
+    )
+
+    assert body["data"]["progress_tree_status"] == "ready"
+    assert target_node["evidence_refs"] == ["resume:section_硬件测试设计平台_混合检索策略优化"]
+    assert target_node["evidence_chunk_ids"] == []
+    assert "resume:section_硬件测试设计平台_混合检索策略优化" in target_node["evidence_notes"]
+    assert "quality_first_evidence_ref_not_allowed" in target_node["low_confidence_flags"]
+    assert metadata["evidence_ref_validation"]["invalid_ref_count"] >= 1
+    assert "resume:section_硬件测试设计平台_混合检索策略优化" in metadata["evidence_ref_validation"]["invalid_ref_samples"]
+    assert metadata["evidence_ref_validation"]["nodes_with_invalid_refs_count"] >= 1
+    assert metadata["deferred_candidates"]
+
+
+def test_progress_tree_quality_first_splits_mixed_stable_refs_and_source_hints() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_QualityFirstEvidenceRefsTransport("mixed"),
+    )
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    plan = body["data"]["progress_tree_plan"]
+    metadata = plan["v2_metadata"]
+    target_node = next(
+        node for node in _leaf_nodes(plan["nodes"]) if node["display_title"] == "混合检索召回链路取舍"
+    )
+
+    assert body["data"]["progress_tree_status"] == "ready"
+    assert target_node["evidence_refs"] == ["resume_project_001", "match_context:missing_points"]
+    assert target_node["evidence_chunk_ids"] == ["resume_project_001"]
+    assert "match_context:missing_points" in target_node["evidence_notes"]
+    assert "quality_first_evidence_ref_not_allowed" in target_node["low_confidence_flags"]
+    assert metadata["evidence_ref_validation"]["invalid_ref_count"] >= 1
+    assert "match_context:missing_points" in metadata["evidence_ref_validation"]["invalid_ref_samples"]
+    assert metadata["deferred_candidates"]
+
+
 def test_progress_tree_quality_first_empty_or_missing_follow_up_focus_still_uses_default_template() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
@@ -3681,6 +3773,7 @@ class _QualityFirstStringListFieldsTransport(FakeLlmTransport):
         string_node["expected_answer_signals"] = "指标口径，AB 对照\n风险解释|兜底方案"
         string_node["common_loss_risks"] = "只说概念、缺少指标；缺少指标；无法解释回退"
         string_node["evidence_notes"] = "简历证据；JD 证据"
+        string_node["evidence_refs"] = ["resume_project_001"]
         string_node["low_confidence_flags"] = "needs_metric；needs_metric;needs_grounding"
         string_node["related_match_gaps"] = "指标口径缺口；召回策略缺口"
         return LlmTransportResult(
@@ -3690,6 +3783,58 @@ class _QualityFirstStringListFieldsTransport(FakeLlmTransport):
             low_confidence_flags=(),
             trace_refs=("trace_quality_first_string_lists",),
             evidence_refs=("evidence_quality_first_string_lists",),
+        )
+
+
+class _QualityFirstEvidenceRefsTransport(FakeLlmTransport):
+    def __init__(self, mode: str) -> None:
+        self._mode = mode
+
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(
+            _quality_first_standard_nodes(),
+            metadata={"generated_at": "2099-01-01T00:00:00Z"},
+        )
+        stable_refs = {
+            "resume_deep_dive": [
+                "resume_project_001",
+                "resume_skill_001",
+                "resume_project_001",
+                "resume_skill_001",
+            ],
+            "jd_gap_learning": ["job_requirement_001", "job_requirement_002"],
+        }
+        for category in payload["menu_categories"]:
+            refs = stable_refs[category["category"]]
+            for index, node in enumerate(category["nodes"]):
+                node["evidence_refs"] = [refs[index % len(refs)]]
+        target_node = payload["menu_categories"][0]["nodes"][1]
+        if self._mode == "allowed":
+            target_node["evidence_refs"] = ["resume_project_001"]
+        elif self._mode == "invalid":
+            target_node["evidence_refs"] = ["resume:section_硬件测试设计平台_混合检索策略优化"]
+        elif self._mode == "mixed":
+            target_node["evidence_refs"] = ["resume_project_001", "match_context:missing_points"]
+        payload["deferred_candidates"] = [
+            {
+                "display_title": "候选补充核验",
+                "category": "jd_gap_learning",
+                "reason": "保留 provider 返回的延后候选项。",
+                "basis_type": "match_gap",
+                "evidence_refs": ["job:requirement:004"],
+                "confidence_level": "low",
+                "suggested_trigger": "主路径完成后再核验。",
+            }
+        ]
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=(f"trace_quality_first_evidence_refs_{self._mode}",),
+            evidence_refs=(f"evidence_quality_first_evidence_refs_{self._mode}",),
         )
 
 
@@ -4296,7 +4441,7 @@ def _assert_progress_tree_is_interview_menu(session_data: dict) -> None:
             "ungrounded",
         }
         assert node["confidence_level"] in {"high", "medium", "low"}
-        assert node["evidence_chunk_ids"] or node["evidence_bindings"]
+        assert node["evidence_refs"] or node["evidence_chunk_ids"] or node["evidence_bindings"]
 
 
 def _assert_no_forbidden_display_terms(session_data: dict) -> None:

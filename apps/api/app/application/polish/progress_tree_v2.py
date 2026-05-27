@@ -19,6 +19,7 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_TREE_CONTRACT_IDS,
     build_progress_quality_first_menu_prompt,
 )
+from app.application.polish.progress_evidence import build_progress_prompt_context
 from app.application.llm.structured_output import (
     filter_untrusted_structured_metadata,
     normalize_structured_status,
@@ -166,7 +167,7 @@ class PolishProgressTreeQualityFirstPlanner:
                 reason=reason,
                 validation_errors=_quality_first_validation_errors(payload, reason=reason),
             )
-        nodes, low_confidence_flags, quality_summary, deferred_candidates = normalized
+        nodes, low_confidence_flags, quality_summary, deferred_candidates, evidence_ref_validation = normalized
         if not nodes:
             reason = "quality_first_all_nodes_deferred" if deferred_candidates else "quality_first_no_usable_nodes"
             return _quality_first_failed_artifacts(
@@ -194,6 +195,7 @@ class PolishProgressTreeQualityFirstPlanner:
             "failure_reason": None,
             "quality_summary": quality_summary,
             "deferred_candidates": deferred_candidates,
+            "evidence_ref_validation": evidence_ref_validation,
         }
         plan = {
             "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
@@ -216,7 +218,7 @@ def _normalize_quality_first_menu_payload(
     payload: dict[str, Any],
     *,
     context: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], list[dict[str, Any]]] | None:
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], list[dict[str, Any]], dict[str, Any]] | None:
     canonical_status, status_warnings, status_errors = normalize_structured_status(payload.get("status"))
     if status_errors or canonical_status not in {"success", "partial"}:
         return None
@@ -226,6 +228,7 @@ def _normalize_quality_first_menu_payload(
 
     nodes: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
+    allowed_evidence_refs = _quality_first_allowed_evidence_refs(context)
     low_confidence_flags = _normalize_text_list(payload.get("low_confidence_flags"), limit=20)
     low_confidence_flags.extend(status_warnings)
     deferred_candidates = _normalize_quality_first_deferred_candidates(
@@ -263,6 +266,7 @@ def _normalize_quality_first_menu_payload(
                 index=(category_index * 100) + node_index,
                 category_node_index=node_index,
                 context_digest=context["content_digest"],
+                allowed_evidence_refs=allowed_evidence_refs,
             )
             if node is None:
                 low_confidence_flags.append("quality_first_bad_leaf_removed")
@@ -310,7 +314,8 @@ def _normalize_quality_first_menu_payload(
         "category_counts": category_counts,
         "validation": "quality_gate",
     }
-    return nodes, low_confidence_flags, quality_summary, deferred_candidates
+    evidence_ref_validation = _quality_first_evidence_ref_validation_summary(nodes, allowed_evidence_refs)
+    return nodes, low_confidence_flags, quality_summary, deferred_candidates, evidence_ref_validation
 
 
 def _normalize_quality_first_node(
@@ -321,6 +326,7 @@ def _normalize_quality_first_node(
     index: int,
     category_node_index: int,
     context_digest: str,
+    allowed_evidence_refs: set[str],
 ) -> dict[str, Any] | None:
     if not isinstance(item, dict):
         return None
@@ -356,9 +362,15 @@ def _normalize_quality_first_node(
     if not common_loss_risks:
         common_loss_risks = _default_common_loss_risks(category)
     evidence_refs = _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8)
+    stable_evidence_refs = [ref for ref in evidence_refs if ref in allowed_evidence_refs]
+    source_hints = [ref for ref in evidence_refs if ref not in allowed_evidence_refs]
     evidence_notes = _normalize_text_list(item.get("evidence_notes"), limit=8)
+    evidence_notes = _dedupe_strings(evidence_notes + source_hints, limit=8)
     low_confidence_flags = _normalize_text_list(item.get("low_confidence_flags"), limit=8)
     low_confidence_flags.extend(basis_flags)
+    if source_hints:
+        low_confidence_flags.append("quality_first_evidence_ref_not_allowed")
+    low_confidence_flags = _dedupe_strings(low_confidence_flags, limit=8)
     node_code = _sanitize_display_text(item.get("node_code"), max_chars=20) or _default_node_code(
         category,
         category_node_index,
@@ -405,7 +417,7 @@ def _normalize_quality_first_node(
         "recommended_first_question": first_question,
         "follow_up_directions": follow_up_focus,
         "red_flags": common_loss_risks,
-        "evidence_chunk_ids": evidence_refs,
+        "evidence_chunk_ids": stable_evidence_refs,
         "evidence_bindings": [],
         "grounding_status": "partially_grounded" if evidence_refs else "weakly_grounded",
     }
@@ -618,11 +630,57 @@ def _quality_first_context_text(value: object) -> str:
     return str(value or "")
 
 
+def _quality_first_allowed_evidence_refs(context: dict[str, Any]) -> set[str]:
+    prompt_context = context.get("prompt_context")
+    selected_chunks = []
+    if isinstance(prompt_context, dict):
+        prompt_chunks = prompt_context.get("selected_evidence_chunks")
+        if isinstance(prompt_chunks, list):
+            selected_chunks = prompt_chunks
+    if not selected_chunks:
+        selected_chunks = build_progress_prompt_context(context, purpose="initial_plan").get(
+            "selected_evidence_chunks",
+            [],
+        )
+
+    refs: set[str] = set()
+    for chunk in selected_chunks:
+        if not isinstance(chunk, dict):
+            continue
+        ref = chunk.get("ref") or chunk.get("chunk_id")
+        if isinstance(ref, str) and ref.strip():
+            refs.add(ref.strip())
+    return refs
+
+
+def _quality_first_evidence_ref_validation_summary(
+    nodes: list[dict[str, Any]],
+    allowed_evidence_refs: set[str],
+) -> dict[str, Any]:
+    invalid_ref_count = 0
+    invalid_ref_samples: list[str] = []
+    nodes_with_invalid_refs_count = 0
+    for node in nodes:
+        invalid_refs = [ref for ref in _quality_first_evidence_refs(node) if ref not in allowed_evidence_refs]
+        if not invalid_refs:
+            continue
+        nodes_with_invalid_refs_count += 1
+        invalid_ref_count += len(invalid_refs)
+        invalid_ref_samples.extend(invalid_refs)
+    return {
+        "allowed_ref_count": len(allowed_evidence_refs),
+        "invalid_ref_count": invalid_ref_count,
+        "invalid_ref_samples": _dedupe_strings(invalid_ref_samples, limit=5),
+        "nodes_with_invalid_refs_count": nodes_with_invalid_refs_count,
+    }
+
+
 def _quality_first_evidence_refs(node: dict[str, Any]) -> list[str]:
-    return _dedupe_strings(
-        _string_list(node.get("evidence_refs"), limit=8) + _string_list(node.get("evidence_chunk_ids"), limit=8),
-        limit=8,
-    )
+    return _dedupe_strings(_string_list(node.get("evidence_refs"), limit=8), limit=8)
+
+
+def _quality_first_evidence_chunk_ids(node: dict[str, Any]) -> list[str]:
+    return _dedupe_strings(_string_list(node.get("evidence_chunk_ids"), limit=8), limit=8)
 
 
 def _quality_first_contains(text: str, term: str) -> bool:
