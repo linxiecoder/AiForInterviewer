@@ -253,7 +253,7 @@ def test_progress_state_refresh_prompt_keeps_context_and_compatibility_fields() 
 
 
 def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
-    from app.application.polish import progress_tree, progress_tree_v2
+    from app.application.polish import progress_tree, progress_tree
     from app.application.polish import question_generation_service
 
     assert "_question_payload_envelope" in _read_source(
@@ -267,13 +267,13 @@ def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
     )
 
     assert "_quality_first_menu_payload_envelope" in _read_source(
-        "apps/api/app/application/polish/progress_tree_v2.py"
+        "apps/api/app/application/polish/progress_tree.py"
     )
     assert "_quality_first_menu_payload_envelope(" in inspect.getsource(
-        progress_tree_v2._normalize_quality_first_menu_payload
+        progress_tree._normalize_quality_first_menu_payload
     )
     assert "AgentOutputEnvelope(" in inspect.getsource(
-        progress_tree_v2._quality_first_menu_payload_envelope
+        progress_tree._quality_first_menu_payload_envelope
     )
 
     assert "_progress_tree_state_payload_envelope" in _read_source(
@@ -289,7 +289,7 @@ def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
 
 def test_legacy_parser_return_shapes_stay_stable() -> None:
     from app.application.polish.progress_tree import _normalize_state
-    from app.application.polish.progress_tree_v2 import _normalize_quality_first_menu_payload
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
 
     question_payload = {
         "question_text": "How did you implement payment retry and compensation?",
@@ -349,7 +349,7 @@ def test_agent_safety_policy_is_limited_to_prompt_builders_in_this_phase() -> No
     )
     parser_files = (
         "apps/api/app/application/polish/question_generation_service.py",
-        "apps/api/app/application/polish/progress_tree_v2.py",
+        "apps/api/app/application/polish/progress_tree.py",
         "apps/api/app/application/polish/progress_tree.py",
     )
 

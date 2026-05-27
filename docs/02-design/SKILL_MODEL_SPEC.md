@@ -20,7 +20,7 @@ permalink: ai-for-interviewer/docs/02-design/skill-model-spec
 | 来源 | 读取结论 |
 |---|---|
 | `SCORING_SPEC.md` / `models/scoring.py` | `ScoreDimension` 只属于 `ScoreRuleVersion`，保存评分维度、权重和解释，不表达长期能力 taxonomy、等级、证据累积或训练路径。 |
-| `PROMPT_SPEC.md` / `POLISH_CONTRACTS.md` / `progress_tree_v2.py` | `ProgressTree` 是会话内 topic / node / status / current position 规划，节点可引用 evidence chunks，但不是跨模式能力本体。 |
+| `PROMPT_SPEC.md` / `POLISH_CONTRACTS.md` / `progress_tree.py` | `ProgressTree` 是会话内 topic / node / status / current position 规划，节点可引用 evidence chunks，但不是跨模式能力本体。 |
 | `DATA_MODEL.md` / `models/weakness.py` | `Weakness` / `WeaknessCandidate` 表达已确认或待确认的问题、风险和缺口，不能覆盖正向能力、已掌握能力或成长趋势。 |
 | `DATA_MODEL.md` / `models/asset.py` | `Asset` / `AssetVersion` 是可复用表达素材和来源版本，可作为能力证据或训练材料，但不是 Skill。 |
 | `DATA_MODEL.md` / `models/training.py` | `TrainingRecommendation` / `TrainingTask` 是训练建议和显式训练动作，作用于能力缺口，但不能替代能力分类体系。 |

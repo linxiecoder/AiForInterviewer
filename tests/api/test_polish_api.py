@@ -1262,7 +1262,7 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
 
 def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_shape() -> None:
     from app.application.llm.agent_io import AgentOutputEnvelope
-    from app.application.polish.progress_tree_v2 import (
+    from app.application.polish.progress_tree import (
         _normalize_quality_first_menu_payload,
         _quality_first_menu_payload_envelope,
     )
@@ -3742,7 +3742,7 @@ def test_polish_progress_tree_prompt_governance_is_documented_and_not_in_provide
 def test_progress_tree_retired_initial_generation_symbols_are_absent() -> None:
     source_paths = [
         Path("apps/api/app/application/polish/progress_tree.py"),
-        Path("apps/api/app/application/polish/progress_tree_v2.py"),
+        Path("apps/api/app/application/polish/progress_tree.py"),
         Path("apps/api/app/application/polish/progress_prompts.py"),
         Path("apps/api/app/application/polish/progress_v2_prompts.py"),
         Path("apps/api/app/infrastructure/llm/fake_transport.py"),
