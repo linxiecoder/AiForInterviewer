@@ -7,17 +7,15 @@ from typing import Any
 from app.application.llm import agent_io
 from app.application.polish.entities import PolishQuestionSource
 from app.application.polish.progress_prompts import (
-    POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
-    POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-    build_progress_tree_state_refresh_prompt,
-)
-from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
+    POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
     build_progress_quality_first_menu_prompt,
+    build_progress_tree_state_refresh_prompt,
 )
 from app.application.polish.question_blueprint import EvidenceScope, QuestionBlueprint
 from app.application.polish.question_generation_prompts import build_question_prompt_asset
@@ -343,12 +341,10 @@ def test_agent_safety_policy_is_limited_to_prompt_builders_in_this_phase() -> No
     prompt_builder_files = (
         "apps/api/app/application/llm/agent_io.py",
         "apps/api/app/application/polish/question_generation_prompts.py",
-        "apps/api/app/application/polish/progress_v2_prompts.py",
         "apps/api/app/application/polish/progress_prompts.py",
     )
     parser_files = (
         "apps/api/app/application/polish/question_generation_service.py",
-        "apps/api/app/application/polish/progress_tree.py",
         "apps/api/app/application/polish/progress_tree.py",
     )
 

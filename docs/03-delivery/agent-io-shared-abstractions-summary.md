@@ -66,8 +66,7 @@ permalink: ai-for-interviewer/docs/03-delivery/agent-io-shared-abstractions-summ
 | Shared definitions | `apps/api/app/application/llm/agent_io.py` | 定义 | 定义 | 定义 | 定义 | 定义 `DEFAULT_AGENT_SAFETY_POLICY` |
 | Question prompt builder | `apps/api/app/application/polish/question_generation_prompts.py` | 是，生成 `evidence_summaries` | 否 | 是，内部标准包后转回 `input_data` shape | 否 | 是，生成 prompt safety rules |
 | Question parser / scope adapter | `apps/api/app/application/polish/question_generation_service.py` | 否 | 是，Progress node 到 `EvidenceScope` 中间层 | 否 | 是，`_question_payload_envelope(...)` | 否 |
-| Progress initial prompt builder | `apps/api/app/application/polish/progress_v2_prompts.py` | 否 | 否 | 是，内部标准包后转回 `context` shape | 否 | 是，生成 prompt safety rules |
-| Progress state prompt builder | `apps/api/app/application/polish/progress_prompts.py` | 否 | 否 | 是，内部标准包后转回 `context` shape | 否 | 是，生成 prompt safety rules |
+| Progress prompt builder | `apps/api/app/application/polish/progress_prompts.py` | 否 | 否 | 是，内部标准包后转回 `context` shape | 否 | 是，生成 prompt safety rules |
 | Progress initial parser | `apps/api/app/application/polish/progress_tree.py` | 否 | 否 | 否 | 是，`_quality_first_menu_payload_envelope(...)` | 否 |
 | Progress state parser | `apps/api/app/application/polish/progress_tree.py` | 否 | 否 | 否 | 是，`_progress_tree_state_payload_envelope(...)` | 否 |
 | Progress evidence adapter | `apps/api/app/application/polish/progress_evidence.py` | 是，`ProgressEvidenceChunk.to_agent_evidence_item()` | 否 | 否 | 否 | 否 |

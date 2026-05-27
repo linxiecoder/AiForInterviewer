@@ -1,9 +1,9 @@
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.application.polish.progress_prompts import (
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
-from app.application.polish.progress_v2_prompts import POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE
 from app.infrastructure.llm.contracts import SUPPORTED_FAKE_TASK_TYPES
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from app.infrastructure.llm.types import LlmTransportRequest
