@@ -1,8 +1,5 @@
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.application.polish.progress_prompts import (
-    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
@@ -93,49 +90,3 @@ def test_fake_quality_first_menu_does_not_branch_on_audit_hardware_sample() -> N
     assert "硬件测试智能辅助平台的服务端架构设计" not in labels
     assert "硬件测试知识库的切片与索引设计" not in labels
     assert any("硬件测试部门构建智能辅助平台" in label or "设备日志采集" in label for label in labels)
-
-
-def test_fake_llm_transport_generates_polish_progress_tree_json() -> None:
-    result = FakeLlmTransport().generate(
-        LlmTransportRequest(
-            contract_ids=("P-POLISH-001", "P-SHARED-001", "P-SHARED-003"),
-            task_type="polish_progress_tree_plan",
-            input_refs=("sess_1", "job_ver_1", "res_ver_1"),
-            evidence_bundle={
-                "source_digest": "sha256:test",
-                "context": {
-                    "selected_evidence_chunks": [
-                        {
-                            "chunk_id": "job_requirement_001",
-                            "source_type": "job_requirement",
-                            "title": "Python and FastAPI experience.",
-                            "text": "Python and FastAPI experience.",
-                            "reason": "岗位要求",
-                        },
-                        {
-                            "chunk_id": "resume_project_001",
-                            "source_type": "resume_project",
-                            "title": "Backend workflow automation",
-                            "text": "Built backend workflow automation.",
-                            "reason": "简历项目经历",
-                        },
-                    ],
-                },
-            },
-        )
-    )
-
-    assert result.validation_status is ValidationStatus.VALID
-    assert result.result["prompt_version"] == POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION
-    assert result.result["schema_id"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID
-    assert result.result["schema_version"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION
-    assert result.result["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID
-    assert result.result["progress_tree_plan"]["schema_version"] == POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION
-    assert result.result["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
-    assert result.result["progress_tree_state"]["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
-    assert result.result["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == "fake_llm_progress_backend_api"
-    assert result.result["progress_tree_plan"]["nodes"][0]["evidence_chunk_ids"] == [
-        "job_requirement_001",
-        "resume_project_001",
-    ]
-    assert result.result["progress_tree_state"]["current_priority"]["progress_node_ref"] == "fake_llm_progress_backend_api_fastapi"

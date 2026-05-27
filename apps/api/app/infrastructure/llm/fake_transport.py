@@ -7,9 +7,6 @@ from json import dumps
 from typing import Any
 
 from app.application.polish.progress_prompts import (
-    POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
     POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
@@ -72,8 +69,6 @@ class FakeLlmTransport:
             return _generate_fake_progress_tree_critic_refiner(request)
         if request.task_type == POLISH_PROGRESS_TREE_GROUNDING_TASK_TYPE:
             return _generate_fake_progress_tree_grounding(request)
-        if request.task_type == "polish_progress_tree_plan":
-            return _generate_fake_progress_tree_plan(request)
         if request.task_type == "polish_progress_tree_state":
             return _generate_fake_progress_tree_state(request)
         seed = dumps(
@@ -1040,129 +1035,6 @@ def _binding(chunk_id: str, source_type: str, reason: str) -> dict[str, str]:
         "binding_reason": reason,
         "supports_field": "interview_intent",
     }
-
-
-def _generate_fake_progress_tree_plan(request: LlmTransportRequest) -> LlmTransportResult:
-    """生成 fake v1 进度树计划（含根节点和子节点，以及初始状态）。"""
-    context = request.evidence_bundle.get("context") if isinstance(request.evidence_bundle, dict) else {}
-    selected_chunks = _selected_evidence_chunks(request.evidence_bundle)
-    job_requirement = _chunk_text(
-        selected_chunks,
-        "job_requirement",
-        fallback=_legacy_context_text(context, "job_snapshot", "requirements"),
-    )
-    job_responsibility = _chunk_text(
-        selected_chunks,
-        "job_responsibility",
-        fallback=_legacy_context_text(context, "job_snapshot", "responsibilities"),
-    )
-    resume_evidence = _chunk_text(
-        selected_chunks,
-        "resume_project",
-        "resume_skill",
-        "resume_work_experience",
-        fallback=_legacy_context_text(
-            context,
-            "resume_snapshot",
-            "project_experiences",
-            "summary",
-            "markdown_text",
-        ),
-    )
-    evidence_chunk_ids = _chunk_ids(
-        selected_chunks,
-        "job_requirement",
-        "resume_project",
-        "resume_skill",
-        "resume_work_experience",
-    )
-    seed = dumps(
-        {
-            "contract_ids": sorted(request.contract_ids),
-            "task_type": request.task_type,
-            "input_refs": sorted(request.input_refs),
-            "source_digest": request.evidence_bundle.get("source_digest"),
-        },
-        ensure_ascii=True,
-        sort_keys=True,
-    )
-    trace_ref = stable_resource_id("trace", f"fake-polish-progress-plan-trace:{seed}")
-    evidence_ref = stable_resource_id("trace", f"fake-polish-progress-plan-evidence:{seed}")
-    node_ref = "fake_llm_progress_backend_api"
-    child_ref = "fake_llm_progress_backend_api_fastapi"
-    return LlmTransportResult(
-        result={
-            "transport": "fake",
-            "task_type": request.task_type,
-            "contract_ids": list(request.contract_ids),
-            "result_ref": stable_resource_id("task", f"fake-polish-progress-plan-result:{seed}"),
-            "model_name": "fake_llm_polish_progress_v1",
-            "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-            "schema_id": POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-            "schema_version": POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
-            "progress_tree_plan": {
-                "schema_id": POLISH_PROGRESS_TREE_PLAN_SCHEMA_ID,
-                "schema_version": POLISH_PROGRESS_TREE_PLAN_SCHEMA_VERSION,
-                "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-                "status": "ready",
-                "nodes": [
-                    {
-                        "progress_node_ref": node_ref,
-                        "title": "Fake LLM 节点：岗位后端能力验证",
-                        "expected_capability": f"围绕岗位要求验证候选人的后端落地能力：{job_requirement}",
-                        "related_job_requirements": [job_requirement, job_responsibility],
-                        "related_resume_evidence": [resume_evidence],
-                        "missing_points": ["Fake LLM 缺口：需要继续证明真实贡献边界"],
-                        "evidence_chunk_ids": evidence_chunk_ids,
-                        "children": [
-                            {
-                                "progress_node_ref": child_ref,
-                                "title": "Fake LLM 子节点：FastAPI 项目证据",
-                                "expected_capability": f"用简历证据说明项目中的技术取舍：{resume_evidence}",
-                                "related_job_requirements": [job_requirement, job_responsibility],
-                                "related_resume_evidence": [resume_evidence],
-                                "missing_points": ["Fake LLM 缺口：需要补充指标和风险处理"],
-                                "evidence_chunk_ids": evidence_chunk_ids,
-                                "children": [],
-                            }
-                        ],
-                    }
-                ],
-            },
-            "progress_tree_state": {
-                "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
-                "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-                "prompt_version": POLISH_PROGRESS_TREE_PLAN_PROMPT_VERSION,
-                "status": "ready",
-                "node_states": [
-                    {
-                        "progress_node_ref": node_ref,
-                        "status": "in_progress",
-                        "completed_questions_count": 0,
-                        "latest_feedback_summary": None,
-                    },
-                    {
-                        "progress_node_ref": child_ref,
-                        "status": "in_progress",
-                        "completed_questions_count": 0,
-                        "latest_feedback_summary": None,
-                    },
-                ],
-                "current_priority": {
-                    "progress_node_ref": child_ref,
-                    "title": "Fake LLM 子节点：FastAPI 项目证据",
-                    "expected_capability": f"用简历证据说明项目中的技术取舍：{resume_evidence}",
-                },
-                "updated_from_turns_count": 0,
-                "progress": {"progress_percent": 0},
-            },
-        },
-        validation_status=ValidationStatus.VALID,
-        confidence_level=ConfidenceLevel.MEDIUM,
-        low_confidence_flags=(),
-        trace_refs=(trace_ref,),
-        evidence_refs=(evidence_ref,),
-    )
 
 
 def _generate_fake_progress_tree_state(request: LlmTransportRequest) -> LlmTransportResult:
