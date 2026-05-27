@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+from app.application.llm.agent_io import AgentEvidenceItem
+from app.application.polish.entities import PolishQuestionSource
+from app.application.polish.progress_evidence import ProgressEvidenceChunk
+from app.application.polish.question_blueprint import EvidenceScope, QuestionBlueprint
+from app.application.polish.question_generation_prompts import build_question_prompt_asset
+
+
+def test_agent_evidence_item_prompt_dict_omits_empty_optional_fields() -> None:
+    item = AgentEvidenceItem(
+        ref="resume_project_001",
+        source_type="resume_project",
+        title="支付系统",
+        excerpt="使用事务消息和幂等处理支付一致性。",
+    )
+
+    assert item.to_prompt_dict() == {
+        "ref": "resume_project_001",
+        "source_type": "resume_project",
+        "title": "支付系统",
+        "excerpt": "使用事务消息和幂等处理支付一致性。",
+    }
+
+
+def test_agent_evidence_item_prompt_dict_includes_non_empty_optional_fields() -> None:
+    item = AgentEvidenceItem(
+        ref="match_gap_001",
+        source_type="match_gap",
+        title="岗位缺口",
+        excerpt="岗位要求高并发一致性治理经验。",
+        source_ref={
+            "resource_type": "job_match_analysis",
+            "resource_id": "match_001",
+        },
+        availability="available",
+        priority=20,
+        reason="matches_progress_node",
+        keywords=("一致性", "高并发"),
+    )
+
+    assert item.to_prompt_dict() == {
+        "ref": "match_gap_001",
+        "source_type": "match_gap",
+        "title": "岗位缺口",
+        "excerpt": "岗位要求高并发一致性治理经验。",
+        "availability": "available",
+        "source_ref": {
+            "resource_type": "job_match_analysis",
+            "resource_id": "match_001",
+        },
+        "priority": 20,
+        "reason": "matches_progress_node",
+        "keywords": ["一致性", "高并发"],
+    }
+
+
+def test_progress_evidence_chunk_maps_to_agent_evidence_item() -> None:
+    chunk = ProgressEvidenceChunk(
+        chunk_id="resume_project_001",
+        source_type="resume_project",
+        source_ref={"resource_type": "resume", "resource_id": "res_001"},
+        title="支付系统",
+        text="使用 Redis、RocketMQ 和本地事务保障一致性。",
+        keywords=("Redis", "RocketMQ"),
+        priority=30,
+        reason="primary_resume_signal",
+        sequence=1,
+    )
+
+    item = chunk.to_agent_evidence_item()
+
+    assert item.ref == "resume_project_001"
+    assert item.source_type == "resume_project"
+    assert item.title == "支付系统"
+    assert item.excerpt == "使用 Redis、RocketMQ 和本地事务保障一致性。"
+    assert item.source_ref == {"resource_type": "resume", "resource_id": "res_001"}
+    assert item.availability is None
+    assert item.priority == 30
+    assert item.reason == "primary_resume_signal"
+    assert item.keywords == ("Redis", "RocketMQ")
+
+
+def test_question_prompt_evidence_summaries_keep_external_shape_and_schema_enums() -> None:
+    blueprint = QuestionBlueprint(
+        question_kind="project_deep_dive",
+        claim_mode="evidence_grounded",
+        progress_node_ref="node_payment",
+        node_title="支付一致性",
+        expected_capability="说明支付链路一致性与失败补偿。",
+        primary_evidence_ref="resume_project_001",
+        primary_evidence_text="使用 Redis、RocketMQ 和本地事务保障一致性。",
+        evidence_refs=("resume_project_001",),
+    )
+    scope = EvidenceScope(
+        progress_node_ref="node_payment",
+        node_title="支付一致性",
+        expected_capability="说明支付链路一致性与失败补偿。",
+        question_sources=(
+            PolishQuestionSource(
+                index=1,
+                source_type="resume_project",
+                title="支付系统",
+                excerpt="使用 Redis、RocketMQ 和本地事务保障一致性。",
+                ref_id="resume_project_001",
+                availability="available",
+            ),
+        ),
+    )
+
+    prompt_asset = build_question_prompt_asset(blueprint, scope)
+
+    evidence_summaries = prompt_asset["input_data"]["evidence_summaries"]
+    assert evidence_summaries == [
+        {
+            "ref": "resume_project_001",
+            "source_type": "resume_project",
+            "title": "支付系统",
+            "excerpt": "使用 Redis、RocketMQ 和本地事务保障一致性。",
+            "availability": "available",
+        }
+    ]
+    assert "chunk_id" not in evidence_summaries[0]
+    assert "text" not in evidence_summaries[0]
+    decision_schema = prompt_asset["output_schema"]["properties"]["decision"]["properties"]
+    assert decision_schema["primary_evidence_refs"]["items"]["enum"] == ["resume_project_001"]
+    assert decision_schema["secondary_evidence_refs"]["items"]["enum"] == ["resume_project_001"]
+    root_evidence_refs = prompt_asset["output_schema"]["properties"]["evidence_refs"]
+    assert root_evidence_refs["items"]["enum"] == ["resume_project_001"]

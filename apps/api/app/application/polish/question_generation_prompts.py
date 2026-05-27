@@ -6,6 +6,7 @@ import hashlib
 import json
 from typing import Any
 
+from app.application.llm.agent_io import AgentEvidenceItem
 from app.application.polish.question_blueprint import (
     CLAIM_MODE_CLARIFICATION_NEEDED,
     CLAIM_MODE_JOB_GAP_PROBE,
@@ -77,13 +78,13 @@ def build_question_prompt_asset(
 
     policy = _runtime_policy(runtime_policy)
     evidence_summaries = [
-        {
-            "ref": source.ref_id,
-            "source_type": source.source_type,
-            "title": _compact(_clean(source.title), limit=80),
-            "excerpt": _compact(_clean(source.excerpt), limit=180),
-            "availability": source.availability,
-        }
+        AgentEvidenceItem(
+            ref=source.ref_id,
+            source_type=source.source_type,
+            title=_compact(_clean(source.title), limit=80),
+            excerpt=_compact(_clean(source.excerpt), limit=180),
+            availability=source.availability,
+        ).to_prompt_dict()
         for source in scope.question_sources
         if source.ref_id in blueprint.evidence_refs
     ]

@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from app.application.llm.agent_io import AgentEvidenceItem
 from app.application.polish.question_generation_policy import (
     SEMANTIC_JOB_SOURCE_TYPES,
     SEMANTIC_RESUME_SOURCE_TYPES,
@@ -37,6 +38,18 @@ class ProgressEvidenceChunk:
     priority: int
     reason: str
     sequence: int
+
+    def to_agent_evidence_item(self) -> AgentEvidenceItem:
+        return AgentEvidenceItem(
+            ref=self.chunk_id,
+            source_type=self.source_type,
+            title=self.title,
+            excerpt=self.text,
+            source_ref=self.source_ref,
+            priority=self.priority,
+            reason=self.reason,
+            keywords=self.keywords,
+        )
 
     def to_prompt_dict(self) -> dict[str, Any]:
         return {
