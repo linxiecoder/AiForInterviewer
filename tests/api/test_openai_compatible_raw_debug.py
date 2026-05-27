@@ -50,6 +50,7 @@ def test_local_raw_llm_io_dump_writes_full_request_and_response(
     assert dump["provider_base_host"] == "api.deepseek.com"
     assert dump["timeout_seconds"] == 90.0
     assert dump["temperature"] == 0.0
+    assert dump["request"]["chat_completion_payload"]["max_tokens"] == 8000
     messages = dump["request"]["chat_completion_payload"]["messages"]
     assert messages[0]["role"] == "system"
     user_payload = json.loads(messages[1]["content"])

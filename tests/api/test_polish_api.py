@@ -1084,11 +1084,22 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     ]
 
     assert "6-9 个主训练节点" in prompt
+    assert "resume_deep_dive 4-6" in prompt
+    assert "jd_gap_learning 2-4" in prompt
+    assert "canonical Progress Tree initial generation contract" in prompt
+    assert "status 只能是 success 或 partial" in prompt
+    assert "deferred_candidates" in prompt
+    assert "你必须像资深面试官一样先完整阅读" not in prompt
+    assert "根对象必须包含 schema_id" not in prompt
+    assert "leaf node 必须包含 node_code" not in prompt
     assert "10 到 14 个叶子节点" not in prompt
     assert "每类建议 5 到 7 个节点" not in prompt
     assert "metadata" not in output_schema["required_root_fields"]
     assert "deferred_candidates" in output_schema["optional_root_fields"]
     assert output_schema["allowed_basis_types"] == ["resume_signal", "jd_requirement", "match_gap", "mixed"]
+    assert "status" in output_schema["required_root_fields"]
+    assert "display_title" in output_schema["required_leaf_fields"]
+    assert "follow_up_focus" in output_schema["required_leaf_fields"]
     for retired_basis_type in retired_basis_types:
         assert retired_basis_type not in prompt
         assert all(retired_basis_type not in rule for rule in progress_v2_prompts._COMMON_JSON_RULES)

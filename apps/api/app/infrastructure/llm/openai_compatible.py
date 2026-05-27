@@ -31,12 +31,14 @@ DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_TIMEOUT_SECONDS = 45.0
 DEFAULT_TEMPERATURE = 0.0
+DEFAULT_MAX_TOKENS = 8000
 LLM_PROVIDER_ENV = "LLM_PROVIDER"
 LLM_OPENAI_API_KEY_ENV = "LLM_OPENAI_API_KEY"
 LLM_OPENAI_BASE_URL_ENV = "LLM_OPENAI_BASE_URL"
 LLM_OPENAI_MODEL_ENV = "LLM_OPENAI_MODEL"
 LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
+LLM_OPENAI_MAX_TOKENS_ENV = "LLM_OPENAI_MAX_TOKENS"
 LOCAL_LLM_RAW_IO_ENABLED_ENV = "AIFI_LOCAL_LLM_RAW_IO_ENABLED"
 LOCAL_LLM_RAW_IO_DIR_ENV = "AIFI_LOCAL_LLM_RAW_IO_DIR"
 LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV = "AIFI_LOCAL_LLM_RAW_IO_INCLUDE_HEADERS"
@@ -52,6 +54,7 @@ class OpenAICompatibleLlmSettings:
     base_url: str = DEFAULT_OPENAI_BASE_URL
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     temperature: float = DEFAULT_TEMPERATURE
+    max_tokens: int = DEFAULT_MAX_TOKENS
 
     @classmethod
     def from_env(
@@ -59,7 +62,7 @@ class OpenAICompatibleLlmSettings:
         environ: Mapping[str, str] | None = None,
     ) -> "OpenAICompatibleLlmSettings":
         """从环境变量（或传入字典）读取 LLM 配置。API 密钥只从环境变量读取，不进入前端响应或日志。"""
-        values = environ or os.environ
+        values = os.environ if environ is None else environ
         return cls(
             api_key=_env_optional(values, LLM_OPENAI_API_KEY_ENV)
             or _env_optional(values, "OPENAI_API_KEY")
@@ -81,6 +84,11 @@ class OpenAICompatibleLlmSettings:
                 values,
                 LLM_OPENAI_TEMPERATURE_ENV,
                 DEFAULT_TEMPERATURE,
+            ),
+            max_tokens=_env_int(
+                values,
+                LLM_OPENAI_MAX_TOKENS_ENV,
+                DEFAULT_MAX_TOKENS,
             ),
         )
 
@@ -390,6 +398,7 @@ def _chat_completion_payload(
     return {
         "model": settings.model,
         "temperature": settings.temperature,
+        "max_tokens": settings.max_tokens,
         "response_format": {"type": "json_object"},
         "messages": [
             {
@@ -769,6 +778,18 @@ def _env_float(values: Mapping[str, str], name: str, default: float) -> float:
         return float(value)
     except ValueError:
         return default
+
+
+def _env_int(values: Mapping[str, str], name: str, default: int) -> int:
+    """从环境变量字典中读取正整数；解析失败或小于等于 0 时返回默认值。"""
+    value = _env_optional(values, name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
 
 
 def _normalize_base_url(raw: str) -> str:
