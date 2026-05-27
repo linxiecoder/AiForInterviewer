@@ -39,6 +39,7 @@ from app.application.polish.progress_evidence import (
     build_progress_evidence_chunks,
     build_progress_prompt_context,
     select_progress_tree_evidence_chunks,
+    _normalize_resume_project_containers,
 )
 from app.application.llm.types import LlmTransportResult
 from app.domain.auth.entities import CurrentActor
@@ -851,6 +852,156 @@ def test_progress_evidence_chunks_split_long_sources_and_keep_stable_ids() -> No
     assert not any(chunk.text == context["resume_snapshot"]["markdown_text"] for chunk in chunks)
 
 
+def test_progress_evidence_normalizes_custom_project_containers_to_markdown_headings() -> None:
+    markdown_text = (
+        "## 项目经历\n"
+        "::: start **项目甲** ::: **公司甲** ::: end\n"
+        "**项目背景**：背景文本甲。\n"
+        "**核心贡献**：\n"
+        "- **贡献项一**：贡献内容一。\n"
+        "- **贡献项二**：贡献内容二。\n\n"
+        "::: start **项目乙** ::: **公司乙** ::: end\n"
+        "**项目背景**：背景文本乙。\n"
+        "**核心贡献**\n"
+        "- **贡献项三**：贡献内容三。\n"
+        "- **贡献项四**：贡献内容四。\n"
+    )
+
+    normalized = _normalize_resume_project_containers(markdown_text)
+
+    assert "### 项目甲 @ 公司甲" in normalized
+    assert "### 项目乙 @ 公司乙" in normalized
+    assert "::: start" not in normalized
+    assert "::: end" not in normalized
+
+
+def test_progress_evidence_chunks_split_abstract_projects_and_contributions() -> None:
+    context = _progress_context_fixture(
+        requirements=["需要能解释项目中的设计取舍。"],
+        responsibilities=["负责识别候选人的项目贡献。"],
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**项目背景**：背景文本甲。\n"
+            "**核心贡献**：\n"
+            "- **贡献项一**：贡献内容一。\n"
+            "- **贡献项二**：贡献内容二。\n\n"
+            "::: start **项目乙** ::: **公司乙** ::: end\n"
+            "**项目背景**：背景文本乙。\n"
+            "**核心贡献**\n"
+            "- **贡献项三**：贡献内容三。\n"
+            "- **贡献项四**：贡献内容四。\n"
+        ),
+    )
+
+    chunks = build_progress_evidence_chunks(context)
+    project_chunks = [chunk for chunk in chunks if chunk.source_type == "resume_project"]
+    contribution_chunks = [
+        chunk
+        for chunk in chunks
+        if chunk.source_type == "resume_project_contribution"
+    ]
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+    allowed_refs = {item["ref"] for item in prompt_context["allowed_evidence_refs"]}
+
+    assert [chunk.title for chunk in project_chunks] == ["项目甲", "项目乙"]
+    assert all(chunk.source_ref.get("company") in {"公司甲", "公司乙"} for chunk in project_chunks)
+    assert "公司甲" not in [chunk.title for chunk in project_chunks]
+    assert "公司乙" not in [chunk.title for chunk in project_chunks]
+    assert "项目背景" not in [chunk.title for chunk in project_chunks]
+    assert "核心贡献" not in [chunk.title for chunk in project_chunks]
+    assert any(chunk.title == "项目甲" and "贡献项一" in chunk.text and "贡献项二" in chunk.text for chunk in project_chunks)
+    assert any(chunk.title == "项目乙" and "贡献项三" in chunk.text and "贡献项四" in chunk.text for chunk in project_chunks)
+    assert [chunk.title for chunk in contribution_chunks] == [
+        "贡献项一",
+        "贡献项二",
+        "贡献项三",
+        "贡献项四",
+    ]
+    assert all(chunk.source_ref.get("project_title") in {"项目甲", "项目乙"} for chunk in contribution_chunks)
+    assert all(chunk.source_ref.get("project_sequence") in {1, 2} for chunk in contribution_chunks)
+    assert any(chunk.text == "贡献项一：贡献内容一。" for chunk in contribution_chunks)
+    assert {chunk.chunk_id for chunk in project_chunks}.issubset(allowed_refs)
+    assert {chunk.chunk_id for chunk in contribution_chunks}.issubset(allowed_refs)
+
+
+def test_progress_evidence_chunks_support_project_container_without_company() -> None:
+    context = _progress_context_fixture(
+        requirements=["需要能解释项目中的设计取舍。"],
+        responsibilities=["负责识别候选人的项目贡献。"],
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: end\n"
+            "**核心贡献**：\n"
+            "- **贡献项一**：贡献内容一。\n"
+        ),
+    )
+
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+    project_refs = [
+        item for item in prompt_context["allowed_evidence_refs"] if item["source_type"] == "resume_project"
+    ]
+    project_titles = [item["title"] for item in project_refs]
+    contribution_refs = [
+        item
+        for item in prompt_context["allowed_evidence_refs"]
+        if item["source_type"] == "resume_project_contribution"
+    ]
+
+    assert project_titles == ["项目甲"]
+    assert any(item["title"] == "项目甲" and "贡献项一" in item["excerpt"] for item in project_refs)
+    assert [item["title"] for item in contribution_refs] == ["贡献项一"]
+
+
+def test_progress_evidence_selection_keeps_multiple_projects_and_contributions_over_job_quota() -> None:
+    context = _progress_context_fixture(
+        requirements=[f"岗位要求{index}" for index in range(1, 13)],
+        responsibilities=[f"岗位职责{index}" for index in range(1, 5)],
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**核心贡献**：\n"
+            "- **贡献项甲一**：完成模块甲方案设计。\n"
+            "- **贡献项甲二**：完成模块甲验证闭环。\n\n"
+            "::: start **项目乙** ::: **公司乙** ::: end\n"
+            "**核心贡献**：\n"
+            "- **贡献项乙一**：完成链路乙异常处理。\n"
+            "- **贡献项乙二**：完成链路乙效果评估。\n\n"
+            "::: start **项目丙** ::: **公司丙** ::: end\n"
+            "**核心贡献**：\n"
+            "- **贡献项丙一**：完成模块丙方案落地。\n"
+            "- **贡献项丙二**：完成模块丙指标验证。\n"
+        ),
+        match_context={
+            "available": True,
+            "overall_score": 66,
+            "summary": "存在多个抽象缺口。",
+            "matched_points": [],
+            "missing_points": [f"匹配缺口{index}" for index in range(1, 9)],
+            "improvement_points": [],
+            "interview_focus": [f"面试重点{index}" for index in range(1, 6)],
+            "suggested_questions": [],
+        },
+    )
+
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+    allowed_refs = prompt_context["allowed_evidence_refs"]
+    project_refs = [item for item in allowed_refs if item["source_type"] == "resume_project"]
+    contribution_refs = [item for item in allowed_refs if item["source_type"] == "resume_project_contribution"]
+
+    assert [item["title"] for item in project_refs[:3]] == ["项目甲", "项目乙", "项目丙"]
+    assert len(project_refs) >= 3
+    for project_title, contribution_title in {
+        "项目甲": "贡献项甲一",
+        "项目乙": "贡献项乙一",
+        "项目丙": "贡献项丙一",
+    }.items():
+        assert any(item["title"] == project_title for item in project_refs)
+        assert any(item["title"] == contribution_title for item in contribution_refs)
+    assert any(item["source_type"] == "job_requirement" for item in allowed_refs)
+    assert any(item["source_type"] == "match_gap" for item in allowed_refs)
+
+
 def test_progress_evidence_selection_prioritizes_match_gaps_and_reports_dropped_chunks() -> None:
     context = _progress_context_fixture(
         requirements=[f"Requirement {index}" for index in range(1, 8)],
@@ -1245,6 +1396,12 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "evidence_refs 只能逐字复制 allowed_evidence_refs.ref" in prompt
     assert "不得自造 resume:section_xxx、job:requirement:xxx、match_context:xxx" in prompt
     assert "人类可读来源说明写入 evidence_notes，不要写入 evidence_refs" in prompt
+    assert "多个有明确贡献项的项目" in prompt
+    assert "不要把多个项目全部压缩到一个泛化节点" in prompt
+    assert "children" in prompt
+    assert "coverage_points" in prompt
+    assert "sub_points" in prompt
+    assert "progress_v2_prompts.py" not in prompt
     assert "你必须像资深面试官一样先完整阅读" not in prompt
     assert "根对象必须包含 schema_id" not in prompt
     assert "leaf node 必须包含 node_code" not in prompt
@@ -1272,6 +1429,9 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "expected_answer_signals" not in output_schema["required_leaf_fields"]
     assert "common_loss_risks" not in output_schema["required_leaf_fields"]
     assert "evidence_notes" not in output_schema["required_leaf_fields"]
+    assert "children" in output_schema["optional_leaf_fields"]
+    assert "coverage_points" in output_schema["optional_leaf_fields"]
+    assert "sub_points" in output_schema["optional_leaf_fields"]
 
 
 def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_shape() -> None:
@@ -1303,6 +1463,255 @@ def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_sha
     assert isinstance(quality_summary, dict)
     assert isinstance(deferred_candidates, list)
     assert isinstance(evidence_ref_validation, dict)
+
+
+def test_progress_tree_quality_first_preserves_child_and_coverage_fields() -> None:
+    from app.application.polish.progress_tree import _quality_first_initial_state_from_nodes
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "项目甲：贡献项一和贡献项二均可作为追问材料。\n"
+        ),
+    )
+    parent = _quality_first_payload_node("项目甲设计取舍", "resume_deep_dive", 1, evidence_refs=["resume_project_001"])
+    parent["children"] = [
+        {
+            **_quality_first_payload_node("贡献项一边界说明", "resume_deep_dive", 11, evidence_refs=["resume_project_001"]),
+            "progress_node_ref": "node_child_one",
+            "coverage_points": ["贡献项一拆解"],
+            "sub_points": ["模块甲方案"],
+        }
+    ]
+    parent["coverage_points"] = ["贡献项一", "贡献项二"]
+    parent["sub_points"] = ["方案设计", "验证闭环"]
+    payload = _quality_first_payload([parent])
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    nodes = normalized[0]
+    target = next(node for node in nodes if node["display_title"] == "项目甲设计取舍")
+    child = target["children"][0]
+    state = _quality_first_initial_state_from_nodes(nodes, context=context)
+
+    assert target["coverage_points"] == ["贡献项一", "贡献项二"]
+    assert target["sub_points"] == ["方案设计", "验证闭环"]
+    assert child["progress_node_ref"] == "node_child_one"
+    assert child["display_title"] == "贡献项一边界说明"
+    assert child["coverage_points"] == ["贡献项一拆解"]
+    assert child["sub_points"] == ["模块甲方案"]
+    assert "node_child_one" in {item["progress_node_ref"] for item in state["node_states"]}
+
+
+def test_progress_tree_quality_first_cost_gate_ignores_priority_reason_balance_text() -> None:
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "项目甲：完成微服务治理与多级存储架构设计，覆盖链路治理和存储分层。\n"
+        ),
+    )
+    architecture_node = _quality_first_payload_node(
+        "微服务治理与多级存储架构",
+        "resume_deep_dive",
+        1,
+        evidence_refs=["resume_project_001"],
+    )
+    architecture_node["priority_reason"] = "该节点能考察性能与成本平衡下的架构取舍，但不是成本控制专项。"
+    cost_node = _quality_first_payload_node(
+        "成本控制与资源优化",
+        "resume_deep_dive",
+        2,
+        evidence_refs=["resume_project_001"],
+    )
+    payload = _quality_first_payload([architecture_node, cost_node])
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    nodes, low_confidence_flags, _quality_summary, deferred_candidates, _evidence_ref_validation = normalized
+    assert "微服务治理与多级存储架构" in {node["display_title"] for node in nodes}
+    assert "成本控制与资源优化" not in {node["display_title"] for node in nodes}
+    assert any(candidate["display_title"] == "成本控制与资源优化" for candidate in deferred_candidates)
+    assert "quality_first_cost_control_deferred" in low_confidence_flags
+
+
+def test_progress_tree_quality_first_fills_coverage_points_from_project_contribution_evidence() -> None:
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**核心贡献**：\n"
+            "- 贡献项一：完成模块甲的方案设计。\n"
+            "- 贡献项二：完成模块乙的验证闭环。\n"
+        ),
+    )
+    parent = _quality_first_payload_node(
+        "项目甲设计取舍",
+        "resume_deep_dive",
+        1,
+        evidence_refs=["resume_project_001"],
+    )
+    payload = _quality_first_payload([parent])
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    target = next(node for node in normalized[0] if node["display_title"] == "项目甲设计取舍")
+    assert target["children"] == []
+    assert target["sub_points"] == []
+    assert any("贡献项一" in point for point in target["coverage_points"])
+    assert any("贡献项二" in point for point in target["coverage_points"])
+
+
+def test_progress_tree_quality_first_filters_project_titles_from_coverage_points() -> None:
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**核心贡献**：\n"
+            "- 贡献项一：完成模块甲的方案设计。\n"
+            "- 贡献项二：完成模块乙的验证闭环。\n"
+        ),
+    )
+    parent = _quality_first_payload_node(
+        "项目甲设计取舍",
+        "resume_deep_dive",
+        1,
+        evidence_refs=["resume_project_001"],
+    )
+    parent["coverage_points"] = ["项目甲", "**项目甲**", "贡献项一"]
+    payload = _quality_first_payload([parent])
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    target = next(node for node in normalized[0] if node["display_title"] == "项目甲设计取舍")
+    assert "项目甲" not in target["coverage_points"]
+    assert "**项目甲**" not in target["coverage_points"]
+    assert target["coverage_points"].count("贡献项一") == 1
+
+
+def test_progress_tree_quality_first_coverage_points_fallback_to_follow_up_without_contributions() -> None:
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**项目背景**：背景文本甲。\n"
+        ),
+    )
+    parent = _quality_first_payload_node(
+        "项目甲设计取舍",
+        "resume_deep_dive",
+        1,
+        evidence_refs=["resume_project_001"],
+    )
+    parent["coverage_points"] = ["项目甲", "**项目甲**"]
+    parent["follow_up_focus"] = ["贡献边界", "方案验证"]
+    payload = _quality_first_payload([parent])
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    target = next(node for node in normalized[0] if node["display_title"] == "项目甲设计取舍")
+    assert target["coverage_points"] == ["贡献边界", "方案验证"]
+
+
+def test_progress_tree_quality_first_augments_resume_contribution_ref_from_resume_signal() -> None:
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        requirements=["岗位要求能解释异常处理方案。"],
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**核心贡献**：\n"
+            "- 贡献项甲一：完成模块甲方案设计。\n"
+            "\n"
+            "::: start **项目乙** ::: **公司乙** ::: end\n"
+            "**核心贡献**：\n"
+            "- 贡献项乙一：完成链路乙异常处理。\n"
+            "- 贡献项乙二：完成链路乙效果评估。\n"
+        ),
+    )
+    node = _quality_first_payload_node(
+        "链路乙异常处理追问",
+        "resume_deep_dive",
+        1,
+        evidence_refs=["job_requirement_001"],
+    )
+    node["resume_signal"] = "简历中提到贡献项乙一，完成链路乙异常处理。"
+    node["follow_up_focus"] = ["链路乙异常处理", "效果评估"]
+    payload = _quality_first_payload([node])
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    target = next(node for node in normalized[0] if node["display_title"] == "链路乙异常处理追问")
+    assert "job_requirement_001" in target["evidence_chunk_ids"]
+    assert any(ref.startswith("resume_project_contribution_") for ref in target["evidence_chunk_ids"])
+    assert any(binding["ref"].startswith("resume_project_contribution_") for binding in target["evidence_bindings"])
+
+
+def test_progress_tree_quality_first_defers_checklist_without_cost_gate_misdefer() -> None:
+    context = _progress_context_fixture(
+        requirements=["需要解释服务端稳定性、接口治理和系统设计取舍。"],
+        responsibilities=["负责识别候选人可连续追问的项目经验。"],
+        resume_markdown=(
+            "## 项目经历\n"
+            "项目甲：完成接口编排、异常处理和可观测性建设。\n"
+            "\n"
+            "项目乙：完成微服务治理与多级存储架构设计。\n"
+        ),
+    )
+
+    class _SixNodeOneChecklistTransport(FakeLlmTransport):
+        def generate(self, request):
+            nodes = [
+                _quality_first_payload_node("项目甲接口编排设计", "resume_deep_dive", 1, evidence_refs=["resume_project_001"]),
+                _quality_first_payload_node("项目甲异常处理闭环", "resume_deep_dive", 2, evidence_refs=["resume_project_001"]),
+                _quality_first_payload_node("项目乙存储分层架构", "resume_deep_dive", 3, evidence_refs=["resume_project_002"]),
+                _quality_first_payload_node("微服务治理与多级存储架构", "resume_deep_dive", 4, evidence_refs=["resume_project_002"]),
+                _quality_first_payload_node("Linux Git Shell 基础工具", "jd_gap_learning", 1, confidence_level="low", evidence_refs=[]),
+                _quality_first_payload_node("接口稳定性与可观测性补齐", "jd_gap_learning", 2, evidence_refs=["job_requirement_001"]),
+            ]
+            nodes[3]["priority_reason"] = "该节点体现性能与成本平衡下的架构取舍，但不属于成本控制节点。"
+            return LlmTransportResult(
+                result=_quality_first_payload(nodes),
+                validation_status=ValidationStatus.VALID,
+                confidence_level=ConfidenceLevel.MEDIUM,
+                low_confidence_flags=(),
+                trace_refs=("trace_quality_first_six_nodes",),
+                evidence_refs=(),
+            )
+
+    artifacts = PolishProgressTreeLlmService(_SixNodeOneChecklistTransport()).generate_initial(context)
+    plan = artifacts["progress_tree_plan"]
+    leaves = _leaf_nodes(plan["nodes"])
+    labels = {node["display_title"] for node in leaves}
+    metadata = plan["v2_metadata"]
+
+    assert artifacts["status"] == "ready"
+    assert len(leaves) == 5
+    assert len(leaves) != 4
+    assert "微服务治理与多级存储架构" in labels
+    assert "Linux Git Shell 基础工具" not in labels
+    assert "quality_first_cost_control_deferred" not in metadata["low_confidence_flags"]
+    assert "quality_first_checklist_deferred" in metadata["low_confidence_flags"]
+    assert "primary_node_count_after_defer_below_target" in metadata["low_confidence_flags"]
+    assert "deferred_main_quota_candidate_count" in metadata["low_confidence_flags"]
+    assert metadata["quality_summary"]["status"] == "partial"
+    assert metadata["quality_summary"]["leaf_count"] == 5
+    assert metadata["quality_summary"]["deferred_main_quota_candidate_count"] >= 1
 
 
 def test_progress_tree_state_refresh_output_envelope_preserves_state_shape() -> None:

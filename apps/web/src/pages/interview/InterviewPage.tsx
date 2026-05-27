@@ -252,9 +252,11 @@ type ProgressTreeDisplayNode = PolishProgressTreeNode & {
   category?: string | null;
   common_loss_risks?: string[] | string | null;
   confidence_level?: string | null;
+  coverage_points?: string[] | string | null;
   depth_goal?: string | null;
   display_category_title?: string | null;
   display_title?: string | null;
+  exam_point?: string | null;
   expected_answer_signals?: string[] | string | null;
   first_question?: string | null;
   follow_up_directions?: string[] | string | null;
@@ -268,6 +270,7 @@ type ProgressTreeDisplayNode = PolishProgressTreeNode & {
   red_flags?: string[] | string | null;
   related_match_gaps?: string[] | string | null;
   resume_signal?: string[] | string | null;
+  sub_points?: string[] | string | null;
 };
 
 export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
@@ -305,6 +308,7 @@ export type ProgressTreeNodeDetailViewModel = {
   followUpDirections: string[];
   answerSignals: string[];
   lossRisks: string[];
+  technicalCoverage: string[];
   resumeEvidence: string[];
   jobEvidence: string[];
   hasAnyDetail: boolean;
@@ -316,11 +320,13 @@ export type ProgressTreeContextBannerContent = {
   depthRequirement: string | null;
   followUpDirections: string[];
   lossRisks: string[];
+  technicalCoverage: string[];
   emptyDescription?: string;
 };
 
 type ProgressTreeContextBannerSectionKey =
   | "depth_requirement"
+  | "technical_coverage"
   | "follow_up_directions"
   | "loss_risks";
 
@@ -1087,6 +1093,29 @@ function resolveProgressNodeTitle(node: PolishProgressTreeNode): string {
   return displayTitle || toSafeProgressTreeText(node.title) || node.progress_node_ref;
 }
 
+function buildProgressNodeTechnicalCoverage(node: PolishProgressTreeNode): string[] {
+  const childCoverage = node.children
+    .map((childNode) =>
+      firstSafeProgressTreeText(
+        (childNode as ProgressTreeDisplayNode).display_title,
+        (childNode as ProgressTreeDisplayNode).exam_point,
+        childNode.title,
+      ),
+    )
+    .filter((item): item is string => item !== null);
+  if (childCoverage.length > 0) {
+    return childCoverage.slice(0, 8);
+  }
+
+  const displayNode = node as ProgressTreeDisplayNode;
+  const coveragePoints = firstSafeProgressTreeTextList(displayNode.coverage_points, displayNode.sub_points);
+  if (coveragePoints.length > 0) {
+    return coveragePoints.slice(0, 8);
+  }
+
+  return firstSafeProgressTreeTextList(displayNode.follow_up_focus, displayNode.follow_up_directions).slice(0, 5);
+}
+
 export function resolveProgressTreeDetailNodeRef(
   session: PolishSessionDetail,
   selectedProgressNodeRef: string | null,
@@ -1129,6 +1158,7 @@ export function buildProgressTreeNodeDetailViewModel(
   ).slice(0, 5);
   const answerSignals = toSafeProgressTreeTextList(detailNode.expected_answer_signals);
   const lossRisks = firstSafeProgressTreeTextList(detailNode.common_loss_risks, detailNode.red_flags);
+  const technicalCoverage = buildProgressNodeTechnicalCoverage(node);
   const resumeSignal = toSafeProgressTreeTextList(detailNode.resume_signal);
   const resumeEvidence = resumeSignal.length > 0 ? resumeSignal : toSafeProgressTreeTextList(node.related_resume_evidence, 2);
   const jdBasis = toSafeProgressTreeTextList(detailNode.jd_basis);
@@ -1139,6 +1169,7 @@ export function buildProgressTreeNodeDetailViewModel(
       followUpDirections.length > 0 ||
       answerSignals.length > 0 ||
       lossRisks.length > 0 ||
+      technicalCoverage.length > 0 ||
       resumeEvidence.length > 0 ||
       jobEvidence.length > 0,
   );
@@ -1155,6 +1186,7 @@ export function buildProgressTreeNodeDetailViewModel(
     followUpDirections,
     answerSignals,
     lossRisks,
+    technicalCoverage,
     resumeEvidence,
     jobEvidence,
     hasAnyDetail,
@@ -1173,6 +1205,7 @@ export function buildProgressTreeContextBannerContent(
       depthRequirement: null,
       followUpDirections: [],
       lossRisks: [],
+      technicalCoverage: [],
       emptyDescription: INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
     };
   }
@@ -1195,12 +1228,14 @@ export function buildProgressTreeContextBannerContent(
     displayNode.follow_up_directions,
   ).slice(0, 5);
   const lossRisks = firstSafeProgressTreeTextList(displayNode.common_loss_risks, displayNode.red_flags);
+  const technicalCoverage = buildProgressNodeTechnicalCoverage(node);
 
   return {
     title,
     depthRequirement,
     followUpDirections,
     lossRisks,
+    technicalCoverage,
   };
 }
 
@@ -1225,6 +1260,7 @@ export function buildProgressTreeContextBannerExpandedSections(
       "深度要求",
       content.depthRequirement ? [content.depthRequirement] : [],
     ),
+    ...buildProgressTreeContextBannerListSection("technical_coverage", "技术点覆盖", content.technicalCoverage),
     ...buildProgressTreeContextBannerListSection("follow_up_directions", "连续追问方向", content.followUpDirections),
     ...buildProgressTreeContextBannerListSection("loss_risks", "常见失分风险", content.lossRisks),
   ];

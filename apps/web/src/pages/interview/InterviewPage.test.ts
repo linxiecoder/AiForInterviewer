@@ -455,9 +455,11 @@ type TestProgressTreeNode = PolishProgressTreeNode & {
   category?: string | null;
   common_loss_risks?: string[] | null;
   confidence_level?: string | null;
+  coverage_points?: string[] | string | null;
   depth_goal?: string | null;
   display_category_title?: string | null;
   display_title?: string | null;
+  exam_point?: string | null;
   expected_answer_signals?: string[] | null;
   first_question?: string | null;
   follow_up_directions?: string[] | null;
@@ -470,6 +472,7 @@ type TestProgressTreeNode = PolishProgressTreeNode & {
   red_flags?: string[] | null;
   related_match_gaps?: string[] | null;
   resume_signal?: string | null;
+  sub_points?: string[] | string | null;
 };
 
 function buildTestProgressNode(
@@ -641,6 +644,48 @@ function test_progress_node_context_renders_as_compact_banner(): void {
   assertContract(bannerContent.title === "混合检索策略设计与优化", "公告条应显示当前节点名称");
   assertContract(bannerContent.depthRequirement === "能解释召回、排序、重排和评估指标之间的取舍。", "公告条应显示深度要求");
   assertContract(!visibleCopy.includes("展开更多准备要点"), "公告条不应出现展开更多准备要点");
+}
+
+function test_progress_tree_context_banner_shows_technical_coverage_from_children(): void {
+  const parentNode = buildTestProgressNode("node_project_parent", "项目甲设计取舍", "resume_deep_dive", "深度打磨类");
+  parentNode.children = [
+    {
+      ...buildTestProgressNode("node_project_child_one", "贡献项一边界说明", "resume_deep_dive", "深度打磨类"),
+      display_title: "贡献项一边界说明",
+      exam_point: "贡献项一拆解",
+    } as TestProgressTreeNode,
+    {
+      ...buildTestProgressNode("node_project_child_two", "贡献项二验证闭环", "resume_deep_dive", "深度打磨类"),
+      display_title: "贡献项二验证闭环",
+      exam_point: "贡献项二拆解",
+    } as TestProgressTreeNode,
+  ];
+  const session = buildTestSession([parentNode], "node_project_parent");
+
+  const detail = buildProgressTreeNodeDetailViewModel(session, "node_project_parent");
+  const bannerContent = buildProgressTreeContextBannerContent(session, "node_project_parent");
+  const expandedSections = buildProgressTreeContextBannerExpandedSections(bannerContent);
+
+  assertContract(detail?.technicalCoverage.join(",") === "贡献项一边界说明,贡献项二验证闭环", "详情应优先从 children 展示技术点覆盖");
+  assertContract(bannerContent.technicalCoverage.join(",") === "贡献项一边界说明,贡献项二验证闭环", "公告条应保留 children 技术点覆盖");
+  assertContract(expandedSections.some((section) => section.key === "technical_coverage"), "展开区应包含技术点覆盖");
+  assertContract(expandedSections.some((section) => section.title === "技术点覆盖"), "展开区应展示技术点覆盖标题");
+}
+
+function test_progress_tree_context_banner_shows_technical_coverage_points_without_children(): void {
+  const session = buildTestSession([
+    {
+      ...buildTestProgressNode("node_project_points", "项目乙设计取舍", "resume_deep_dive", "深度打磨类"),
+      coverage_points: ["贡献项一", "贡献项二"],
+      sub_points: ["方案设计"],
+    },
+  ], "node_project_points");
+
+  const bannerContent = buildProgressTreeContextBannerContent(session, "node_project_points");
+  const expandedSections = buildProgressTreeContextBannerExpandedSections(bannerContent);
+
+  assertContract(bannerContent.technicalCoverage.join(",") === "贡献项一,贡献项二", "无 children 时应使用 coverage_points 展示技术点覆盖");
+  assertContract(expandedSections.some((section) => section.key === "technical_coverage"), "coverage_points 应进入展开区");
 }
 
 function test_progress_tree_left_list_stays_compact(): void {
@@ -889,8 +934,9 @@ function test_progress_node_context_banner_supports_expand_toggle_for_depth(): v
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT === "label_and_node_title_same_row", "公告条标题和节点名称应固定在同一行");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand === "展开", "公告条展开按钮文案应为展开");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse === "收起", "公告条收起按钮文案应为收起");
-  assertContract(expandedSections.map((section) => section.key).join(",") === "depth_requirement,follow_up_directions,loss_risks", "展开后应只显示深度要求、连续追问方向、常见失分风险");
+  assertContract(expandedSections.map((section) => section.key).join(",") === "depth_requirement,technical_coverage,follow_up_directions,loss_risks", "展开后应显示深度要求、技术点覆盖、连续追问方向、常见失分风险");
   assertContract(expandedCopy.includes("深度要求"), "展开后应展示深度要求标题");
+  assertContract(expandedCopy.includes("技术点覆盖"), "展开后应展示技术点覆盖标题");
   assertContract(expandedCopy.includes("连续追问方向"), "展开后应展示连续追问方向标题");
   assertContract(expandedCopy.includes("常见失分风险"), "展开后应展示常见失分风险标题");
   assertContract(expandedCopy.includes("如何验证融合排序收益"), "展开后应展示追问方向内容");
@@ -1667,6 +1713,8 @@ test_progress_tree_group_headers_default_expanded_for_collapse_control();
 test_progress_tree_uses_progress_node_ref_as_key_and_priority_match();
 test_interview_topic_title_neutralizes_interrogation_copy();
 test_progress_node_context_renders_as_compact_banner();
+test_progress_tree_context_banner_shows_technical_coverage_from_children();
+test_progress_tree_context_banner_shows_technical_coverage_points_without_children();
 test_progress_tree_left_list_stays_compact();
 test_progress_tree_detail_defaults_to_current_priority();
 test_progress_tree_group_header_does_not_show_node_detail();

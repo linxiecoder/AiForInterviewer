@@ -79,6 +79,18 @@ _QUALITY_FIRST_GENERIC_TERMS = (
     "岗位匹配度",
 )
 _QUALITY_FIRST_COST_TERMS = ("成本", "资源优化", "资源利用率", "FinOps", "预算")
+_QUALITY_FIRST_COST_NODE_TERMS = (
+    "成本控制",
+    "成本优化",
+    "成本治理",
+    "降本",
+    "资源优化",
+    "资源利用率",
+    "预算控制",
+    "预算优化",
+    "预算治理",
+    "FinOps",
+)
 
 _ALLOWED_CONFIDENCE_LEVELS = {"high", "medium", "low"}
 _ABSTRACT_TITLE_FRAGMENTS = {
@@ -381,7 +393,8 @@ def _quality_first_menu_payload_envelope(
 
     nodes: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
-    allowed_evidence_refs = _quality_first_allowed_evidence_refs(context)
+    evidence_chunks_by_ref = _quality_first_evidence_chunks_by_ref(context)
+    allowed_evidence_refs = set(evidence_chunks_by_ref)
     low_confidence_flags = _normalize_text_list(payload.get("low_confidence_flags"), limit=20)
     low_confidence_flags.extend(status_warnings)
     deferred_candidates = _normalize_quality_first_deferred_candidates(
@@ -420,6 +433,7 @@ def _quality_first_menu_payload_envelope(
                 category_node_index=node_index,
                 context_digest=context["content_digest"],
                 allowed_evidence_refs=allowed_evidence_refs,
+                evidence_chunks_by_ref=evidence_chunks_by_ref,
             )
             if node is None:
                 low_confidence_flags.append("quality_first_bad_leaf_removed")
@@ -437,8 +451,11 @@ def _quality_first_menu_payload_envelope(
         low_confidence_flags.append("quota_filling_risk")
 
     nodes, gate_deferred_candidates, gate_flags = _quality_first_apply_quality_gates(nodes, context=context)
+    gate_deferred_count = len(gate_deferred_candidates)
     deferred_candidates.extend(gate_deferred_candidates)
     low_confidence_flags.extend(gate_flags)
+    if gate_deferred_count:
+        low_confidence_flags.append("deferred_main_quota_candidate_count")
     nodes = sorted(nodes, key=lambda node: _quality_first_node_sort_key(node, context=context))
 
     category_counts = {
@@ -447,8 +464,10 @@ def _quality_first_menu_payload_envelope(
     }
     if nodes and len(nodes) < _QUALITY_FIRST_LOW_NODE_COUNT:
         low_confidence_flags.append("quality_first_low_primary_node_count")
+        low_confidence_flags.append("primary_node_count_after_defer_below_target")
     elif nodes and len(nodes) < _QUALITY_FIRST_TARGET_MIN_PRIMARY_NODES:
         low_confidence_flags.append("quality_first_primary_nodes_below_target")
+        low_confidence_flags.append("primary_node_count_after_defer_below_target")
     if nodes and category_counts[_RESUME_DEEP_DIVE] == 0:
         low_confidence_flags.append("quality_first_resume_deep_dive_missing")
     if nodes and category_counts[_JD_GAP_LEARNING] == 0:
@@ -459,11 +478,15 @@ def _quality_first_menu_payload_envelope(
     )
 
     planner_summary = _sanitize_display_text(payload.get("planner_summary"), max_chars=120)
+    below_target_after_defer = bool(nodes and len(nodes) < _QUALITY_FIRST_TARGET_MIN_PRIMARY_NODES)
     quality_summary = {
-        "status": "ready" if canonical_status == "success" else "partial",
+        "status": "partial" if canonical_status == "partial" or below_target_after_defer else "ready",
         "planner_summary": planner_summary,
         "leaf_count": len(nodes),
         "deferred_count": len(deferred_candidates),
+        "primary_node_count_after_defer": len(nodes),
+        "target_primary_node_count_min": _QUALITY_FIRST_TARGET_MIN_PRIMARY_NODES,
+        "deferred_main_quota_candidate_count": gate_deferred_count,
         "category_counts": category_counts,
         "validation": "quality_gate",
     }
@@ -485,7 +508,7 @@ def _quality_first_menu_payload_envelope(
             _dedupe_strings(
                 [
                     evidence_ref
-                    for node in nodes
+                    for node in _flatten_progress_nodes(nodes)
                     for evidence_ref in _quality_first_evidence_chunk_ids(node)
                 ],
                 limit=50,
@@ -503,6 +526,8 @@ def _normalize_quality_first_node(
     category_node_index: int,
     context_digest: str,
     allowed_evidence_refs: set[str],
+    evidence_chunks_by_ref: dict[str, dict[str, Any]],
+    depth: int = 0,
 ) -> dict[str, Any] | None:
     if not isinstance(item, dict):
         return None
@@ -539,6 +564,17 @@ def _normalize_quality_first_node(
         common_loss_risks = _default_common_loss_risks(category)
     evidence_refs = _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8)
     stable_evidence_refs = [ref for ref in evidence_refs if ref in allowed_evidence_refs]
+    augmented_evidence_refs, evidence_bindings = _quality_first_resume_evidence_augmentations(
+        item,
+        category=category,
+        display_title=display_title,
+        exam_point=exam_point,
+        resume_signal=resume_signal,
+        follow_up_focus=follow_up_focus,
+        stable_evidence_refs=stable_evidence_refs,
+        evidence_chunks_by_ref=evidence_chunks_by_ref,
+    )
+    stable_evidence_refs = _dedupe_strings(stable_evidence_refs + augmented_evidence_refs, limit=8)
     source_hints = [ref for ref in evidence_refs if ref not in allowed_evidence_refs]
     evidence_notes = _normalize_text_list(item.get("evidence_notes"), limit=8)
     evidence_notes = _dedupe_strings(evidence_notes + source_hints, limit=8)
@@ -554,12 +590,36 @@ def _normalize_quality_first_node(
     confidence_level = _enum_value(item.get("confidence_level"), _ALLOWED_CONFIDENCE_LEVELS, "medium")
     node_ref = truncate_text(item.get("progress_node_ref") or item.get("node_ref"), max_chars=120)
     related_match_gaps = _normalize_text_list(item.get("related_match_gaps"), limit=6)
+    progress_node_ref = node_ref or _node_ref(
+        context_digest,
+        f"quality:{category}:{node_code}:{display_title}",
+        prefix="progress_v2",
+    )
+    children = _normalize_quality_first_children(
+        item.get("children"),
+        category=category,
+        display_category_title=display_category_title,
+        parent_node_ref=progress_node_ref,
+        parent_index=index,
+        context_digest=context_digest,
+        allowed_evidence_refs=allowed_evidence_refs,
+        evidence_chunks_by_ref=evidence_chunks_by_ref,
+        depth=depth,
+    )
+    coverage_points = _quality_first_normalize_coverage_points(
+        _normalize_text_list(item.get("coverage_points"), limit=8),
+        evidence_refs=stable_evidence_refs,
+        evidence_chunks_by_ref=evidence_chunks_by_ref,
+        follow_up_focus=follow_up_focus,
+    )
+    sub_points = _normalize_text_list(item.get("sub_points"), limit=8)
+    if not children and not coverage_points and not sub_points:
+        coverage_points = _quality_first_coverage_points_from_evidence(
+            stable_evidence_refs,
+            evidence_chunks_by_ref=evidence_chunks_by_ref,
+        )
     node = {
-        "progress_node_ref": node_ref or _node_ref(
-            context_digest,
-            f"quality:{category}:{node_code}:{display_title}",
-            prefix="progress_v2",
-        ),
+        "progress_node_ref": progress_node_ref,
         "node_code": node_code,
         "category": category,
         "display_category_title": display_category_title,
@@ -578,9 +638,11 @@ def _normalize_quality_first_node(
         "evidence_notes": evidence_notes,
         "confidence_level": confidence_level,
         "low_confidence_flags": low_confidence_flags,
+        "coverage_points": coverage_points,
+        "sub_points": sub_points,
         "title": display_title,
         "expected_capability": depth_goal,
-        "children": [],
+        "children": children,
         "node_type": "project_deep_dive" if category == _RESUME_DEEP_DIVE else "job_gap",
         "interview_intent": preparation_goal,
         "interview_method": "technical_deep_dive" if category == _RESUME_DEEP_DIVE else "learning_plan",
@@ -598,10 +660,323 @@ def _normalize_quality_first_node(
         "follow_up_directions": follow_up_focus,
         "red_flags": common_loss_risks,
         "evidence_chunk_ids": stable_evidence_refs,
-        "evidence_bindings": [],
+        "evidence_bindings": evidence_bindings,
         "grounding_status": "partially_grounded" if evidence_refs else "weakly_grounded",
     }
     return _sanitize_node_display_fields(node)
+
+
+def _normalize_quality_first_children(
+    raw_children: object,
+    *,
+    category: str,
+    display_category_title: str,
+    parent_node_ref: str,
+    parent_index: int,
+    context_digest: str,
+    allowed_evidence_refs: set[str],
+    evidence_chunks_by_ref: dict[str, dict[str, Any]],
+    depth: int,
+) -> list[dict[str, Any]]:
+    if depth >= 2 or not isinstance(raw_children, list):
+        return []
+
+    children: list[dict[str, Any]] = []
+    seen_refs = {parent_node_ref}
+    seen_titles: set[str] = set()
+    for child_index, child_item in enumerate(raw_children, start=1):
+        child = _normalize_quality_first_node(
+            child_item,
+            category=category,
+            display_category_title=display_category_title,
+            index=(parent_index * 100) + child_index,
+            category_node_index=child_index,
+            context_digest=context_digest,
+            allowed_evidence_refs=allowed_evidence_refs,
+            evidence_chunks_by_ref=evidence_chunks_by_ref,
+            depth=depth + 1,
+        )
+        if child is None:
+            continue
+        if child["progress_node_ref"] in seen_refs:
+            child = {
+                **child,
+                "progress_node_ref": _node_ref(
+                    context_digest,
+                    f"quality:{category}:child:{parent_node_ref}:{child_index}:{child['display_title']}",
+                    prefix="progress_v2",
+                ),
+            }
+        normalized_title = _normalize_label_for_compare(child["display_title"])
+        if normalized_title in seen_titles:
+            continue
+        seen_refs.add(child["progress_node_ref"])
+        seen_titles.add(normalized_title)
+        children.append(child)
+    return children
+
+
+def _quality_first_coverage_points_from_evidence(
+    evidence_refs: list[str],
+    *,
+    evidence_chunks_by_ref: dict[str, dict[str, Any]],
+) -> list[str]:
+    points: list[str] = []
+    for evidence_ref in evidence_refs:
+        chunk = evidence_chunks_by_ref.get(evidence_ref)
+        if not isinstance(chunk, dict):
+            continue
+        source_type = chunk.get("source_type")
+        if source_type not in {"resume_project", "resume_project_contribution"}:
+            continue
+        title = _quality_first_clean_coverage_point(chunk.get("title"))
+        if source_type == "resume_project_contribution" and title:
+            points.append(title)
+            continue
+        text = str(chunk.get("text") or chunk.get("excerpt") or "")
+        if source_type == "resume_project":
+            points.extend(_quality_first_project_contribution_points(text))
+    return _dedupe_strings(
+        [_sanitize_display_text(point, max_chars=80) for point in points if point],
+        limit=8,
+    )
+
+
+def _quality_first_normalize_coverage_points(
+    raw_points: list[str],
+    *,
+    evidence_refs: list[str],
+    evidence_chunks_by_ref: dict[str, dict[str, Any]],
+    follow_up_focus: list[str],
+) -> list[str]:
+    project_titles = _quality_first_project_titles(evidence_chunks_by_ref)
+    evidence_points = _quality_first_filter_coverage_points(
+        _quality_first_coverage_points_from_evidence(
+            evidence_refs,
+            evidence_chunks_by_ref=evidence_chunks_by_ref,
+        ),
+        project_titles=project_titles,
+    )
+    cleaned_points = _quality_first_filter_coverage_points(
+        raw_points,
+        project_titles=project_titles,
+    )
+    if evidence_points:
+        return _dedupe_by_label(evidence_points + cleaned_points, limit=8)
+    if cleaned_points:
+        return _dedupe_by_label(cleaned_points, limit=8)
+    focus_points = _quality_first_filter_coverage_points(
+        follow_up_focus,
+        project_titles=project_titles,
+    )
+    if focus_points:
+        return _dedupe_by_label(focus_points, limit=8)
+    return []
+
+
+def _quality_first_filter_coverage_points(
+    points: list[str],
+    *,
+    project_titles: set[str],
+) -> list[str]:
+    result: list[str] = []
+    project_title_keys = {_normalize_label_for_compare(title) for title in project_titles if title}
+    for point in points:
+        cleaned = _quality_first_clean_coverage_point(point)
+        if not cleaned:
+            continue
+        normalized = _normalize_label_for_compare(cleaned)
+        if not normalized or normalized in project_title_keys:
+            continue
+        if _quality_first_looks_non_technical_coverage_point(cleaned):
+            continue
+        result.append(cleaned)
+    return _dedupe_by_label(result, limit=8)
+
+
+def _quality_first_clean_coverage_point(value: object) -> str:
+    text = _sanitize_display_text(value, max_chars=80).strip()
+    text = re.sub(r"^(?:[-*+]|\d+[.)]|[（(]?\d+[）)])\s+", "", text)
+    text = re.sub(r"^(?:\*\*|__)(.+?)(?:\*\*|__)\s*([：:|｜].*)$", r"\1\2", text).strip()
+    text = re.sub(r"^(?:\*\*|__)(.+?)(?:\*\*|__)$", r"\1", text).strip()
+    text = text.strip("*_`# ")
+    delimiter_match = re.match(r"^(.{2,80}?)[：:|｜]\s*(.+)$", text)
+    if delimiter_match and len(delimiter_match.group(1).strip()) <= 40:
+        text = delimiter_match.group(1).strip("*_` ")
+    return text
+
+
+def _quality_first_project_titles(evidence_chunks_by_ref: dict[str, dict[str, Any]]) -> set[str]:
+    titles: set[str] = set()
+    for chunk in evidence_chunks_by_ref.values():
+        if not isinstance(chunk, dict):
+            continue
+        source_ref = chunk.get("source_ref")
+        if isinstance(source_ref, dict):
+            project_title = _quality_first_clean_coverage_point(source_ref.get("project_title"))
+            if project_title:
+                titles.add(project_title)
+        if chunk.get("source_type") == "resume_project":
+            title = _quality_first_clean_coverage_point(chunk.get("title"))
+            if title:
+                titles.add(title)
+    return titles
+
+
+def _quality_first_looks_non_technical_coverage_point(text: str) -> bool:
+    if re.search(r"\d{4}\s*[./年-]\s*\d{1,2}|\d{4}\s*[./年-]\s*(?:至今|present)", text, flags=re.IGNORECASE):
+        return True
+    if any(marker in text for marker in ("有限公司", "公司", "部门", "岗位", "职位", "工程师")) and not any(
+        signal in text for signal in ("设计", "实现", "优化", "架构", "治理", "一致性", "检索", "管道", "模型", "API")
+    ):
+        return True
+    return False
+
+
+def _dedupe_by_label(values: list[object], *, limit: int) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = truncate_text(value, max_chars=480)
+        label = _normalize_label_for_compare(text)
+        if text and label and label not in seen:
+            result.append(text)
+            seen.add(label)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _quality_first_project_contribution_points(text: str) -> list[str]:
+    if not text:
+        return []
+    result: list[str] = []
+    bullet_pattern = re.compile(
+        r"(?:^|\s)(?:[-*+]|\d+[.)]|[（(]?\d+[）)])\s+(.+?)"
+        r"(?=(?:\s(?:[-*+]|\d+[.)]|[（(]?\d+[）)])\s+)|$)"
+    )
+    for match in bullet_pattern.finditer(text):
+        item = _quality_first_clean_coverage_point(match.group(1))
+        if item and not _quality_first_looks_project_level_coverage_text(item):
+            result.append(item)
+    return _dedupe_strings(result, limit=8)
+
+
+def _quality_first_looks_project_level_coverage_text(text: str) -> bool:
+    normalized = text.strip()
+    return bool(
+        re.match(r"^.{0,40}(?:项目|project).{0,40}[：:|｜]", normalized, flags=re.IGNORECASE)
+    )
+
+
+def _quality_first_looks_project_contribution(text: str) -> bool:
+    normalized = text.strip()
+    if not normalized or normalized.startswith(":::"):
+        return False
+    return any(
+        marker in normalized
+        for marker in ("贡献", "负责", "完成", "实现", "设计", "优化", "验证", "落地")
+    )
+
+
+def _quality_first_resume_evidence_augmentations(
+    item: dict[str, Any],
+    *,
+    category: str,
+    display_title: str,
+    exam_point: str,
+    resume_signal: str | None,
+    follow_up_focus: list[str],
+    stable_evidence_refs: list[str],
+    evidence_chunks_by_ref: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[dict[str, Any]]]:
+    if category != _RESUME_DEEP_DIVE:
+        return [], []
+
+    existing_refs = set(stable_evidence_refs)
+    if not existing_refs:
+        return [], []
+    if any(
+        _quality_first_chunk_source_type(evidence_chunks_by_ref.get(ref))
+        in {"resume_project", "resume_project_contribution"}
+        for ref in existing_refs
+    ):
+        return [], []
+
+    query = " ".join(
+        [
+            display_title,
+            exam_point,
+            resume_signal or "",
+            " ".join(follow_up_focus),
+            _sanitize_display_text(item.get("depth_goal"), max_chars=160),
+        ]
+    )
+    candidates: list[tuple[int, int, str, dict[str, Any]]] = []
+    for ref, chunk in evidence_chunks_by_ref.items():
+        if ref in existing_refs or not isinstance(chunk, dict):
+            continue
+        source_type = _quality_first_chunk_source_type(chunk)
+        if source_type not in {"resume_project_contribution", "resume_project"}:
+            continue
+        score = _quality_first_resume_evidence_match_score(query, chunk)
+        if score < 4:
+            continue
+        source_rank = 0 if source_type == "resume_project_contribution" else 1
+        candidates.append((-score, source_rank, ref, chunk))
+
+    candidates.sort()
+    refs: list[str] = []
+    bindings: list[dict[str, Any]] = []
+    for _score, _source_rank, ref, chunk in candidates[:2]:
+        source_type = _quality_first_chunk_source_type(chunk)
+        refs.append(ref)
+        bindings.append(
+            {
+                "ref": ref,
+                "source_type": source_type,
+                "binding_type": "resume_signal_match",
+                "title": _sanitize_display_text(chunk.get("title"), max_chars=120),
+            }
+        )
+    return refs, bindings
+
+
+def _quality_first_chunk_source_type(chunk: object) -> str:
+    if not isinstance(chunk, dict):
+        return ""
+    return str(chunk.get("source_type") or "")
+
+
+def _quality_first_resume_evidence_match_score(query: str, chunk: dict[str, Any]) -> int:
+    query_key = _normalize_label_for_compare(query)
+    chunk_text = " ".join(
+        str(chunk.get(field) or "")
+        for field in ("title", "text", "excerpt")
+    )
+    source_ref = chunk.get("source_ref")
+    if isinstance(source_ref, dict):
+        chunk_text = f"{source_ref.get('project_title') or ''} {chunk_text}"
+    chunk_key = _normalize_label_for_compare(chunk_text)
+    if not query_key or not chunk_key:
+        return 0
+
+    score = 0
+    title_key = _normalize_label_for_compare(chunk.get("title"))
+    if title_key and title_key in query_key:
+        score += 8
+    if len(query_key) >= 6 and query_key in chunk_key:
+        score += 10
+    if len(title_key) >= 4 and title_key in chunk_key and title_key in query_key:
+        score += 6
+    score += len(_quality_first_bigrams(query_key) & _quality_first_bigrams(chunk_key))
+    return score
+
+
+def _quality_first_bigrams(text: str) -> set[str]:
+    if len(text) < 2:
+        return set()
+    return {text[index : index + 2] for index in range(len(text) - 1)}
 
 
 def _quality_first_basis_type(value: object, *, category: str) -> tuple[str, list[str]]:
@@ -687,8 +1062,8 @@ def _quality_first_looks_generic_node(node: dict[str, Any]) -> bool:
 
 
 def _quality_first_cost_without_context(node: dict[str, Any], *, context: dict[str, Any]) -> bool:
-    node_text = _quality_first_node_text(node)
-    if not any(_quality_first_contains(node_text, term) for term in _QUALITY_FIRST_COST_TERMS):
+    node_text = _quality_first_cost_gate_text(node)
+    if not any(_quality_first_contains(node_text, term) for term in _QUALITY_FIRST_COST_NODE_TERMS):
         return False
     context_text = _quality_first_context_text(context)
     return not any(_quality_first_contains(context_text, term) for term in _QUALITY_FIRST_COST_TERMS)
@@ -802,6 +1177,10 @@ def _quality_first_node_text(node: dict[str, Any]) -> str:
     )
 
 
+def _quality_first_cost_gate_text(node: dict[str, Any]) -> str:
+    return " ".join(str(node.get(field) or "") for field in ("display_title", "title", "exam_point"))
+
+
 def _quality_first_context_text(value: object) -> str:
     if isinstance(value, dict):
         return " ".join(_quality_first_context_text(item) for item in value.values())
@@ -811,6 +1190,10 @@ def _quality_first_context_text(value: object) -> str:
 
 
 def _quality_first_allowed_evidence_refs(context: dict[str, Any]) -> set[str]:
+    return set(_quality_first_evidence_chunks_by_ref(context))
+
+
+def _quality_first_evidence_chunks_by_ref(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
     prompt_context = context.get("prompt_context")
     selected_chunks = []
     if isinstance(prompt_context, dict):
@@ -823,14 +1206,14 @@ def _quality_first_allowed_evidence_refs(context: dict[str, Any]) -> set[str]:
             [],
         )
 
-    refs: set[str] = set()
+    chunks_by_ref: dict[str, dict[str, Any]] = {}
     for chunk in selected_chunks:
         if not isinstance(chunk, dict):
             continue
         ref = chunk.get("ref") or chunk.get("chunk_id")
         if isinstance(ref, str) and ref.strip():
-            refs.add(ref.strip())
-    return refs
+            chunks_by_ref[ref.strip()] = chunk
+    return chunks_by_ref
 
 
 def _quality_first_evidence_ref_validation_summary(
@@ -840,7 +1223,7 @@ def _quality_first_evidence_ref_validation_summary(
     invalid_ref_count = 0
     invalid_ref_samples: list[str] = []
     nodes_with_invalid_refs_count = 0
-    for node in nodes:
+    for node in _flatten_progress_nodes(nodes):
         invalid_refs = [ref for ref in _quality_first_evidence_refs(node) if ref not in allowed_evidence_refs]
         if not invalid_refs:
             continue
@@ -1229,10 +1612,12 @@ _DISPLAY_FIELDS_TO_SANITIZE = (
     "follow_up_focus",
     "expected_answer_signals",
     "common_loss_risks",
+    "coverage_points",
     "related_job_requirements",
     "related_resume_evidence",
     "related_match_gaps",
     "missing_points",
+    "sub_points",
     "red_flags",
     "recommended_first_question",
     "follow_up_directions",
