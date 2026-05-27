@@ -1119,6 +1119,22 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
         "deferred_candidate_policy",
     }
 
+    assert set(bundle) == {
+        "source_digest",
+        "task_type",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "prompt",
+        "context",
+        "output_schema",
+    }
+    assert "input_data" not in bundle
+    assert bundle["source_digest"] == "context-digest"
+    assert bundle["task_type"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE
+    assert bundle["prompt_version"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION
+    assert bundle["schema_id"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID
+    assert "AgentPromptBundle(" in inspect.getsource(build_progress_quality_first_menu_prompt)
     assert set(prompt_context) == {
         "context_metadata",
         "resume_version_ref",
