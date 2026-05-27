@@ -909,13 +909,84 @@ def test_progress_tree_state_refresh_prompt_uses_selected_evidence_chunks_instea
             "current_priority": {"progress_node_ref": "capability.kafka"},
         },
     )
+    assert set(state_prompt) == {
+        "source_digest",
+        "task_type",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "prompt",
+        "context",
+        "selected_evidence_chunks",
+        "dropped_context_summary",
+        "match_context_summary",
+        "turns_summary",
+        "existing_progress_tree_plan",
+        "existing_progress_tree_state",
+        "output_schema",
+    }
+    assert "input_data" not in state_prompt
+    assert state_prompt["source_digest"] == "context-digest"
+    assert state_prompt["task_type"] == "polish_progress_tree_state"
+    assert state_prompt["prompt_version"] == POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION
+    assert state_prompt["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
+    assert state_prompt["schema_version"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION
+    assert "AgentPromptBundle(" in inspect.getsource(build_progress_tree_state_refresh_prompt)
+    assert set(state_prompt["context"]) == {
+        "context_metadata",
+        "selected_evidence_chunks",
+        "allowed_evidence_refs",
+        "dropped_context_summary",
+        "match_context_summary",
+        "turns_summary",
+    }
+    assert state_prompt["context"]["context_metadata"]["content_digest"] == "context-digest"
     assert state_prompt["context"]["selected_evidence_chunks"]
     selected_chunk = state_prompt["context"]["selected_evidence_chunks"][0]
     assert selected_chunk["ref"] == selected_chunk["chunk_id"]
     assert selected_chunk["excerpt"] == selected_chunk["text"]
+    assert state_prompt["selected_evidence_chunks"] == state_prompt["context"]["selected_evidence_chunks"]
+    assert state_prompt["dropped_context_summary"] == state_prompt["context"]["dropped_context_summary"]
+    assert state_prompt["match_context_summary"] == state_prompt["context"]["match_context_summary"]
+    assert state_prompt["turns_summary"] == state_prompt["context"]["turns_summary"]
+    assert state_prompt["existing_progress_tree_plan"]["nodes"][0]["progress_node_ref"] == "capability.kafka"
+    assert state_prompt["existing_progress_tree_state"]["current_priority"]["progress_node_ref"] == "capability.kafka"
     assert state_prompt["context"]["turns_summary"]
     assert "selected_evidence_chunks" in state_prompt["prompt"]
     assert "不得删除或重命名 existing plan.nodes" in state_prompt["prompt"]
+    assert "不得修改、删除或重排 existing_progress_tree_plan.nodes" in state_prompt["prompt"]
+    assert "只输出合法 JSON" in state_prompt["prompt"]
+    assert state_prompt["output_schema"] == {
+        "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+        "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+        "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+        "required_root_fields": [
+            "schema_id",
+            "schema_version",
+            "prompt_version",
+            "progress_tree_state",
+        ],
+        "progress_tree_state": {
+            "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+            "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+            "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+            "status": "ready | refresh_failed",
+            "node_states": [
+                {
+                    "progress_node_ref": "必须来自 existing_progress_tree_plan.nodes",
+                    "status": "completed | in_progress | pending",
+                    "completed_questions_count": 0,
+                    "latest_feedback_summary": "string | null",
+                }
+            ],
+            "current_priority": {
+                "progress_node_ref": "必须来自 existing_progress_tree_plan.nodes",
+                "title": "string",
+                "expected_capability": "string",
+            },
+            "progress": {"progress_percent": 0},
+        },
+    }
 
 
 def test_progress_prompt_context_adds_allowed_evidence_refs_index() -> None:

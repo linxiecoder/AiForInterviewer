@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.llm.agent_io import AgentPromptBundle
 from app.application.polish.progress_evidence import build_progress_prompt_context
 
 
@@ -32,7 +33,7 @@ def build_progress_tree_state_refresh_prompt(
         existing_plan=existing_plan,
         existing_state=existing_state,
     )
-    return {
+    prompt_asset = {
         "source_digest": context["content_digest"],
         "task_type": "polish_progress_tree_state",
         "prompt_version": POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
@@ -93,4 +94,30 @@ def build_progress_tree_state_refresh_prompt(
                 "progress": {"progress_percent": 0},
             }
         },
+    }
+    bundle_payload = AgentPromptBundle(
+        task_type=prompt_asset["task_type"],
+        prompt_version=prompt_asset["prompt_version"],
+        schema_id=prompt_asset["schema_id"],
+        schema_version=prompt_asset["schema_version"],
+        prompt=prompt_asset["prompt"],
+        input_data=prompt_asset["context"],
+        output_schema=prompt_asset["output_schema"],
+    ).to_prompt_asset_dict()
+    bundle_context = bundle_payload.pop("input_data")
+    return {
+        "source_digest": prompt_asset["source_digest"],
+        "task_type": bundle_payload["task_type"],
+        "prompt_version": bundle_payload["prompt_version"],
+        "schema_id": bundle_payload["schema_id"],
+        "schema_version": bundle_payload["schema_version"],
+        "prompt": bundle_payload["prompt"],
+        "context": bundle_context,
+        "selected_evidence_chunks": prompt_asset["selected_evidence_chunks"],
+        "dropped_context_summary": prompt_asset["dropped_context_summary"],
+        "match_context_summary": prompt_asset["match_context_summary"],
+        "turns_summary": prompt_asset["turns_summary"],
+        "existing_progress_tree_plan": prompt_asset["existing_progress_tree_plan"],
+        "existing_progress_tree_state": prompt_asset["existing_progress_tree_state"],
+        "output_schema": bundle_payload["output_schema"],
     }
