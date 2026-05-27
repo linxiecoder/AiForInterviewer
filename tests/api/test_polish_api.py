@@ -1140,6 +1140,99 @@ def test_progress_tree_quality_first_accepts_compact_legacy_payload_without_opti
         assert node["follow_up_directions"]
 
 
+def test_progress_tree_quality_first_accepts_ok_status_and_ignores_untrusted_metadata() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstOkStatusTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    plan = body["data"]["progress_tree_plan"]
+    metadata = plan["v2_metadata"]
+    assert body["data"]["progress_tree_status"] == "ready"
+    assert "status_ok_normalized" in metadata["low_confidence_flags"]
+    assert "llm_metadata_ignored" in metadata["low_confidence_flags"]
+    assert "generated_at" not in metadata
+    assert "model_name" not in metadata
+    assert "session_id" not in metadata
+    assert "job_id" not in metadata
+    assert "resume_id" not in metadata
+
+
+def test_progress_tree_quality_first_accepts_missing_status_with_warning() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstMissingStatusTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    metadata = body["data"]["progress_tree_plan"]["v2_metadata"]
+    assert body["data"]["progress_tree_status"] == "ready"
+    assert "status_missing_normalized" in metadata["low_confidence_flags"]
+
+
+def test_progress_tree_quality_first_status_failed_points_validation_error_to_status() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstFailedStatusTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    session_data = body["data"]
+    _assert_quality_first_failed_without_fallback(session_data, reason="quality_first_status_failed")
+    validation_errors = session_data["progress_tree_plan"]["v2_metadata"]["validation_errors"]
+    assert validation_errors[0]["field"] == "status"
+    assert validation_errors[0]["code"] == "failed"
+
+
+def test_progress_tree_quality_first_unknown_status_points_validation_error_to_status() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstUnknownStatusTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    session_data = body["data"]
+    _assert_quality_first_failed_without_fallback(session_data, reason="quality_first_status_invalid")
+    validation_errors = session_data["progress_tree_plan"]["v2_metadata"]["validation_errors"]
+    assert validation_errors[0]["field"] == "status"
+    assert validation_errors[0]["code"] == "unsupported"
+
+
+def test_progress_tree_quality_first_all_nodes_deferred_uses_specific_failure_reason() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstAllNodesDeferredTransport())
+
+    status_code, body = _create_ready_polish_session(
+        app,
+        {"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    session_data = body["data"]
+    _assert_quality_first_failed_without_fallback(session_data, reason="quality_first_all_nodes_deferred")
+    validation_errors = session_data["progress_tree_plan"]["v2_metadata"]["validation_errors"]
+    assert validation_errors[0]["field"] == "menu_categories.nodes"
+    assert validation_errors[0]["code"] == "all_deferred"
+
+
 def test_progress_tree_quality_first_avoids_template_fallback_nodes() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_snippet_sources(session_factory, OWNER_A)
@@ -1311,70 +1404,6 @@ def test_progress_tree_quality_first_response_does_not_expose_prompt_or_provider
     ):
         normalized_forbidden = _compact_prompt_leak_text(forbidden_text)
         assert all(normalized_forbidden not in _compact_prompt_leak_text(value) for value in response_values)
-
-
-def test_polish_session_detail_reads_legacy_v1_progress_tree_plan() -> None:
-    session_factory = _session_factory()
-    binding_id = _seed_polish_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A)
-    _, create_body = call_json(
-        app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={"resume_job_binding_id": binding_id},
-    )
-    session_id = create_body["data"]["session_id"]
-
-    legacy_plan = {
-        "schema_id": "llm_progress_tree_plan_v1",
-        "schema_version": "v1",
-        "prompt_version": "polish_progress_tree_plan_prompt_v1",
-        "status": "ready",
-        "nodes": [
-            {
-                "progress_node_ref": "legacy.backend_api",
-                "title": "旧版后端接口编排",
-                "expected_capability": "能解释旧版进展树节点。",
-                "children": [],
-            }
-        ],
-    }
-    legacy_state = {
-        "schema_id": POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
-        "schema_version": POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-        "prompt_version": "polish_progress_tree_plan_prompt_v1",
-        "status": "ready",
-        "node_states": [
-            {
-                "progress_node_ref": "legacy.backend_api",
-                "status": "pending",
-                "completed_questions_count": 0,
-                "latest_feedback_summary": None,
-            }
-        ],
-        "current_priority": {
-            "progress_node_ref": "legacy.backend_api",
-            "title": "旧版后端接口编排",
-            "expected_capability": "能解释旧版进展树节点。",
-        },
-        "progress": {"progress_percent": 0},
-    }
-    with session_factory() as db:
-        detail = db.get(PolishSessionDetailModel, f"{session_id}_detail")
-        detail.progress_tree_status = "ready"
-        detail.progress_tree_plan_json = legacy_plan
-        detail.progress_tree_state_json = legacy_state
-        detail.progress_percent = 0
-        db.commit()
-
-    status_code, body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
-
-    assert status_code == 200
-    session_data = body["data"]
-    assert session_data["progress_tree_status"] == "ready"
-    assert session_data["progress_tree_plan"]["schema_id"] == "llm_progress_tree_plan_v1"
-    assert session_data["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == "legacy.backend_api"
-    assert session_data["progress_tree_state"]["current_priority"]["progress_node_ref"] == "legacy.backend_api"
 
 
 def test_polish_progress_tree_requires_semantic_evidence_not_titles_only() -> None:
@@ -3117,15 +3146,48 @@ def test_polish_progress_tree_prompt_governance_is_documented_and_not_in_provide
 
     prompt_spec = Path("docs/02-design/PROMPT_SPEC.md").read_text(encoding="utf-8")
     polish_contracts = Path("docs/02-design/prompt-contracts/POLISH_CONTRACTS.md").read_text(encoding="utf-8")
+    retired_terms = (
+        "polish_progress_tree_" + "plan",
+        "llm_progress_tree_" + "plan_v1",
+        "v2_" + "pipeline",
+    )
     for text in (prompt_spec, polish_contracts):
         assert "polish_progress_quality_first_menu" in text
-        assert "polish_progress_tree_plan" in text
         assert "polish_progress_tree_state" in text
-        assert "llm_progress_tree_plan_v1" in text
-        assert "仅作为历史 session detail 读取兼容" in text
-        assert "四阶段" in text
-        assert "已删除" in text
+        assert "canonical Progress Tree generator" in text
+        assert "status" in text
+        assert "success" in text
+        assert "partial" in text
+        for term in retired_terms:
+            assert term not in text
         assert POLISH_PROGRESS_TREE_STATE_SCHEMA_ID in text
+
+
+def test_progress_tree_retired_initial_generation_symbols_are_absent() -> None:
+    source_paths = [
+        Path("apps/api/app/application/polish/progress_tree.py"),
+        Path("apps/api/app/application/polish/progress_tree_v2.py"),
+        Path("apps/api/app/application/polish/progress_prompts.py"),
+        Path("apps/api/app/application/polish/progress_v2_prompts.py"),
+        Path("apps/api/app/infrastructure/llm/fake_transport.py"),
+        Path("apps/api/app/infrastructure/llm/contracts.py"),
+    ]
+    source_text = "\n".join(path.read_text(encoding="utf-8") for path in source_paths)
+    retired_symbols = (
+        "llm_progress_tree_" + "plan_v1",
+        "POLISH_PROGRESS_TREE_" + "PLAN_SCHEMA_ID",
+        "POLISH_PROGRESS_TREE_" + "PLAN_PROMPT_VERSION",
+        "POLISH_PROGRESS_TREE_" + "PLAN_CONTRACT_IDS",
+        "build_initial_progress_tree_" + "prompt",
+        "INITIAL_PROGRESS_TREE_" + "PROMPT_CONTRACT",
+        "PolishProgressTree" + "V2Pipeline",
+        "AIFI_PROGRESS_TREE_" + "PLANNER",
+        "POLISH_PROGRESS_TREE_" + "DRAFT",
+        "build_progress_tree_" + "draft_plan_prompt",
+    )
+
+    for symbol in retired_symbols:
+        assert symbol not in source_text
 
 
 class _RecordingPolishProgressTransport(FakeLlmTransport):
@@ -3275,6 +3337,134 @@ class _QualityFirstDeferredCandidatesTransport(FakeLlmTransport):
         )
 
 
+class _QualityFirstOkStatusTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(
+            [
+                _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, evidence_refs=["resume_1"]),
+                _quality_first_payload_node("混合检索召回链路取舍", "resume_deep_dive", 2, evidence_refs=["resume_2"]),
+                _quality_first_payload_node("RAG 评估指标与上线复盘", "resume_deep_dive", 3, evidence_refs=["resume_3"]),
+                _quality_first_payload_node("异常路径与降级策略表达", "resume_deep_dive", 4, evidence_refs=["resume_4"]),
+                _quality_first_payload_node("AI Agent 工具调用机制补齐", "jd_gap_learning", 1, evidence_refs=["job_1"]),
+                _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 2, evidence_refs=["job_2"]),
+            ],
+            status="ok",
+            metadata={
+                "generated_at": "2099-01-01T00:00:00Z",
+                "model_name": "forged-model",
+                "session_id": "forged-session",
+                "job_id": "forged-job",
+                "resume_id": "forged-resume",
+            },
+        )
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_ok_status",),
+            evidence_refs=("evidence_quality_first_ok_status",),
+        )
+
+
+class _QualityFirstMissingStatusTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(
+            [
+                _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, evidence_refs=["resume_1"]),
+                _quality_first_payload_node("混合检索召回链路取舍", "resume_deep_dive", 2, evidence_refs=["resume_2"]),
+                _quality_first_payload_node("RAG 评估指标与上线复盘", "resume_deep_dive", 3, evidence_refs=["resume_3"]),
+                _quality_first_payload_node("异常路径与降级策略表达", "resume_deep_dive", 4, evidence_refs=["resume_4"]),
+                _quality_first_payload_node("AI Agent 工具调用机制补齐", "jd_gap_learning", 1, evidence_refs=["job_1"]),
+                _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 2, evidence_refs=["job_2"]),
+            ],
+        )
+        payload.pop("status", None)
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_missing_status",),
+            evidence_refs=("evidence_quality_first_missing_status",),
+        )
+
+
+class _QualityFirstFailedStatusTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        return LlmTransportResult(
+            result=_quality_first_payload(
+                [
+                    _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, evidence_refs=["resume_1"]),
+                    _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 1, evidence_refs=["job_1"]),
+                ],
+                status="failed",
+            ),
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_failed_status",),
+            evidence_refs=("evidence_quality_first_failed_status",),
+        )
+
+
+class _QualityFirstUnknownStatusTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        return LlmTransportResult(
+            result=_quality_first_payload(
+                [
+                    _quality_first_payload_node("智能辅助平台架构与质量治理", "resume_deep_dive", 1, evidence_refs=["resume_1"]),
+                    _quality_first_payload_node("Java 服务端高可用架构设计", "jd_gap_learning", 1, evidence_refs=["job_1"]),
+                ],
+                status="maybe",
+            ),
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_unknown_status",),
+            evidence_refs=("evidence_quality_first_unknown_status",),
+        )
+
+
+class _QualityFirstAllNodesDeferredTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        return LlmTransportResult(
+            result=_quality_first_payload(
+                [
+                    _quality_first_payload_node(
+                        "Git协作与版本控制规范",
+                        "resume_deep_dive",
+                        1,
+                        confidence_level="low",
+                        evidence_refs=[],
+                    ),
+                    _quality_first_payload_node(
+                        "Linux系统诊断与Shell编写",
+                        "jd_gap_learning",
+                        1,
+                        confidence_level="low",
+                        evidence_refs=[],
+                    ),
+                ],
+            ),
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_all_deferred",),
+            evidence_refs=("evidence_quality_first_all_deferred",),
+        )
+
+
 class _QualityFirstCompactLegacyTransport(FakeLlmTransport):
     def generate(self, request):
         if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
@@ -3305,7 +3495,7 @@ class _QualityFirstCompactLegacyTransport(FakeLlmTransport):
         )
 
 
-def _quality_first_payload(nodes: list[dict], *, metadata: dict | None = None) -> dict:
+def _quality_first_payload(nodes: list[dict], *, status: str = "success", metadata: dict | None = None) -> dict:
     categories = []
     for category, display_category_title in (
         ("resume_deep_dive", "深度打磨类"),
@@ -3320,7 +3510,7 @@ def _quality_first_payload(nodes: list[dict], *, metadata: dict | None = None) -
         )
     return {
         "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
-        "status": "ready",
+        "status": status,
         "planner_summary": "优先保留高价值训练主路径，低价值 checklist 延后。",
         "menu_categories": categories,
         "metadata": metadata or {},

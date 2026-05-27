@@ -42,14 +42,14 @@ Polish 001-004、005-008、009-011 分别处于不同生命周期阶段，公共
 
 #### 打磨进展树运行时 LLM task_type
 
-进展树生成属于 `P-POLISH-001` 主题规划链路的运行时拆分，不新增新的 `P-POLISH-*` contract ID。当前 active initial Progress Tree generator 只保留 quality-first 单路径；历史 V1 plan schema 仅用于已存在 session 的 read-only 读取兼容。
+进展树生成属于 `P-POLISH-001` 主题规划链路的运行时拆分，不新增新的 `P-POLISH-*` contract ID。`polish_progress_quality_first_menu` 是 canonical Progress Tree generator，也是唯一 active initial Progress Tree 生成链路。
 
 | task_type | prompt version | schema id | 输入上下文 | 输出 | 失败状态 |
 |---|---|---|---|---|---|
-| `polish_progress_quality_first_menu` | `polish_progress_quality_first_menu_prompt_v1` | `polish_progress_quality_first_menu_v1` | 完整简历 Markdown、完整 JD payload、match context、topic / subtopic、quality rules | quality-first initial `ProgressTreePlan`、initial `ProgressTreeState`、`deferred_candidates` metadata | `insufficient_context`、`failed` |
+| `polish_progress_quality_first_menu` | `polish_progress_quality_first_menu_prompt_v1` | `polish_progress_quality_first_menu_v1` | 完整简历 Markdown、完整 JD payload、match context、topic / subtopic、quality rules | canonical quality-first initial `ProgressTreePlan`、initial `ProgressTreeState`、`deferred_candidates` metadata；LLM `status` 只能输出 `success` 或 `partial` | `insufficient_context`、`failed` |
 | `polish_progress_tree_state` | `polish_progress_tree_state_prompt_v1` | `llm_progress_tree_state_v1` | existing plan、existing state、`selected_evidence_chunks`、`dropped_context_summary`、`match_context_summary`、`turns_summary` | refreshed `ProgressTreeState`，状态更新引用 evidence / question / answer / score / missing point | `refresh_failed` |
 
-进展树初始生成必须基于完整岗位版本内容、完整简历版本内容、岗位匹配分析和 quality rules，由 `polish_progress_quality_first_menu` 一次性输出主训练菜单；岗位名、公司名、简历名、binding label 只作为 `context_metadata` 或展示信息，不能作为主要语义依据。四阶段 `v2_pipeline` 已删除，不再是可选 runtime path。`polish_progress_tree_plan` / `llm_progress_tree_plan_v1` 仅作为历史 session detail 读取兼容，不再用于新生成。`polish_progress_tree_state` 只刷新状态，不重建 plan nodes，不删除已有 `node_ref`，`current_priority` 必须引用 existing plan 中存在的节点。provider adapter 只承载通用 JSON transport、provider request / response parse 和错误处理，不维护进展树业务 prompt 正文。
+进展树初始生成必须基于完整岗位版本内容、完整简历版本内容、岗位匹配分析和 quality rules，由 `polish_progress_quality_first_menu` 一次性输出主训练菜单；岗位名、公司名、简历名、binding label 只作为 `context_metadata` 或展示信息，不能作为主要语义依据。不得保留替代 initial generator path 或生成侧兼容分支。`polish_progress_tree_state` 只刷新状态，不重建 plan nodes，不删除已有 `node_ref`，`current_priority` 必须引用 existing plan 中存在的节点。provider adapter 只承载通用 JSON transport、provider request / response parse 和错误处理，不维护进展树业务 prompt 正文。LLM 输出中的 `metadata`、`generated_at`、`model_name`、`session_id`、`job_id`、`resume_id` 不进入可信业务 metadata。
 
 进展树上下文采用 RAG-lite / deterministic evidence chunking：从 `JobVersion` responsibilities / requirements / other_notes、`ResumeVersion` Markdown section、`JobMatchAnalysis` missing points / interview focus / suggested questions、最近 Polish turns feedback 和可用资产 / 薄弱项摘要中构造可追溯 chunks。该策略不是完整向量 RAG：当前不引入 embedding provider、不调用真实 embedding、不引入向量数据库、不持久化外部索引。后续可以在保持 `P-POLISH-001` contract ID 稳定的前提下升级为 chunk persistence、向量检索或 UI evidence drill-down。
 

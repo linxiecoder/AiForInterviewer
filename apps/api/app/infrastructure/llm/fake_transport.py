@@ -342,7 +342,7 @@ def _generate_fake_progress_quality_first_menu(request: LlmTransportRequest) -> 
             "schema_id": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
             "schema_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
             "prompt_version": POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
-            "status": "ready",
+            "status": "success",
             "planner_summary": "已按完整简历、完整 JD 和匹配分析生成初始训练菜单。",
             "menu_categories": categories,
             "metadata": {

@@ -18,6 +18,11 @@ from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_TREE_V2_CONTRACT_IDS,
     build_progress_quality_first_menu_prompt,
 )
+from app.application.llm.structured_output import (
+    filter_untrusted_structured_metadata,
+    normalize_structured_status,
+    structured_validation_errors_to_dicts,
+)
 from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
@@ -39,7 +44,6 @@ _DISPLAY_CATEGORY_TITLES = {
 }
 _ALLOWED_CATEGORIES = set(_DISPLAY_CATEGORY_TITLES)
 _ALLOWED_BASIS_TYPES = {"resume_signal", "jd_requirement", "match_gap", "mixed"}
-_UNTRUSTED_LLM_METADATA_KEYS = {"generated_at", "model_name", "session_id", "job_id", "resume_id"}
 _QUALITY_FIRST_MAX_PRIMARY_NODES = 9
 _QUALITY_FIRST_LOW_NODE_COUNT = 4
 _QUALITY_FIRST_TARGET_MIN_PRIMARY_NODES = 6
@@ -162,14 +166,17 @@ class PolishProgressTreeQualityFirstPlanner:
             )
         nodes, low_confidence_flags, quality_summary, deferred_candidates = normalized
         if not nodes:
+            reason = "quality_first_all_nodes_deferred" if deferred_candidates else "quality_first_no_usable_nodes"
             return _quality_first_failed_artifacts(
                 context,
-                reason="quality_first_no_usable_nodes",
+                reason=reason,
                 validation_errors=[
                     {
                         "field": "menu_categories.nodes",
-                        "code": "empty",
-                        "reason": "Quality-first planner returned no usable nodes.",
+                        "code": "all_deferred" if deferred_candidates else "empty",
+                        "reason": "All quality-first planner nodes were deferred."
+                        if deferred_candidates
+                        else "Quality-first planner returned no usable nodes.",
                     }
                 ],
             )
@@ -203,16 +210,13 @@ class PolishProgressTreeQualityFirstPlanner:
         }
 
 
-
-
-
 def _normalize_quality_first_menu_payload(
     payload: dict[str, Any],
     *,
     context: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], list[dict[str, Any]]] | None:
-    status = str(payload.get("status") or "").strip().lower()
-    if status not in {"ready", "success", "partial"}:
+    canonical_status, status_warnings, status_errors = normalize_structured_status(payload.get("status"))
+    if status_errors or canonical_status not in {"success", "partial"}:
         return None
     categories = payload.get("menu_categories")
     if not isinstance(categories, list):
@@ -221,12 +225,13 @@ def _normalize_quality_first_menu_payload(
     nodes: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
     low_confidence_flags = _sanitize_string_list(payload.get("low_confidence_flags"), limit=20)
+    low_confidence_flags.extend(status_warnings)
     deferred_candidates = _normalize_quality_first_deferred_candidates(
         payload.get("deferred_candidates"),
         context_digest=context["content_digest"],
     )
-    metadata = payload.get("metadata")
-    if isinstance(metadata, dict) and _UNTRUSTED_LLM_METADATA_KEYS.intersection(metadata):
+    _trusted_metadata, ignored_metadata_keys = filter_untrusted_structured_metadata(payload.get("metadata"))
+    if ignored_metadata_keys:
         low_confidence_flags.append("llm_metadata_ignored")
     raw_node_count = 0
     valid_category_seen = False
@@ -296,7 +301,7 @@ def _normalize_quality_first_menu_payload(
 
     planner_summary = _sanitize_display_text(payload.get("planner_summary"), max_chars=800)
     quality_summary = {
-        "status": "ready",
+        "status": "ready" if canonical_status == "success" else "partial",
         "planner_summary": planner_summary,
         "leaf_count": len(nodes),
         "deferred_count": len(deferred_candidates),
@@ -693,6 +698,12 @@ def _quality_first_priority_keywords(context: dict[str, Any]) -> list[str]:
 
 
 def _quality_first_payload_failure_reason(payload: dict[str, Any]) -> str:
+    _canonical_status, _status_warnings, status_errors = normalize_structured_status(payload.get("status"))
+    if status_errors:
+        if any(error.code == "failed" for error in status_errors):
+            return "quality_first_status_failed"
+        return "quality_first_status_invalid"
+
     categories = payload.get("menu_categories")
     if not isinstance(categories, list):
         return "quality_first_menu_categories_missing"
@@ -707,7 +718,7 @@ def _quality_first_payload_failure_reason(payload: dict[str, Any]) -> str:
 
     present_categories = {str(item.get("category") or "").strip() for item in valid_categories}
     if not {_RESUME_DEEP_DIVE, _JD_GAP_LEARNING}.issubset(present_categories):
-        return "quality_first_menu_categories_missing"
+        return "quality_first_category_missing"
 
     has_raw_nodes = any(isinstance(item.get("nodes"), list) and item.get("nodes") for item in valid_categories)
     if not has_raw_nodes:
@@ -716,6 +727,10 @@ def _quality_first_payload_failure_reason(payload: dict[str, Any]) -> str:
 
 
 def _quality_first_validation_errors(payload: dict[str, Any], *, reason: str) -> list[dict[str, str]]:
+    _canonical_status, _status_warnings, status_errors = normalize_structured_status(payload.get("status"))
+    if status_errors:
+        return structured_validation_errors_to_dicts(status_errors)
+
     categories = payload.get("menu_categories")
     if not isinstance(categories, list):
         return [
@@ -774,6 +789,14 @@ def _quality_first_validation_errors(payload: dict[str, Any], *, reason: str) ->
                 "field": "menu_categories.nodes",
                 "code": "no_usable_nodes",
                 "reason": "No usable menu nodes were returned.",
+            }
+        )
+    if reason == "quality_first_all_nodes_deferred":
+        errors.append(
+            {
+                "field": "menu_categories.nodes",
+                "code": "all_deferred",
+                "reason": "All returned menu nodes were deferred by quality policy.",
             }
         )
     if not errors:

@@ -4,6 +4,7 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
 from app.application.polish.progress_v2_prompts import POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE
+from app.infrastructure.llm.contracts import SUPPORTED_FAKE_TASK_TYPES
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from app.infrastructure.llm.types import LlmTransportRequest
 from app.schemas.job_match import JobRequirementChunk, ResumeChunk
@@ -90,3 +91,15 @@ def test_fake_quality_first_menu_does_not_branch_on_audit_hardware_sample() -> N
     assert "硬件测试智能辅助平台的服务端架构设计" not in labels
     assert "硬件测试知识库的切片与索引设计" not in labels
     assert any("硬件测试部门构建智能辅助平台" in label or "设备日志采集" in label for label in labels)
+
+
+def test_fake_transport_advertises_only_canonical_progress_tree_generation_task() -> None:
+    retired_progress_tasks = {
+        "polish_progress_" + "global_understanding",
+        "polish_progress_tree_" + "draft",
+        "polish_progress_tree_" + "critic",
+        "polish_progress_tree_" + "grounding",
+    }
+
+    assert POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE in SUPPORTED_FAKE_TASK_TYPES
+    assert retired_progress_tasks.isdisjoint(SUPPORTED_FAKE_TASK_TYPES)
