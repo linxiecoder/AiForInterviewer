@@ -54,10 +54,12 @@ class ProgressEvidenceChunk:
     def to_prompt_dict(self) -> dict[str, Any]:
         return {
             "chunk_id": self.chunk_id,
+            "ref": self.chunk_id,
             "source_type": self.source_type,
             "source_ref": self.source_ref,
             "title": self.title,
             "text": self.text,
+            "excerpt": self.text,
             "keywords": list(self.keywords),
             "priority": self.priority,
             "reason": self.reason,

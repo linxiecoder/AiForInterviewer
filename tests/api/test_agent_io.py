@@ -81,6 +81,31 @@ def test_progress_evidence_chunk_maps_to_agent_evidence_item() -> None:
     assert item.keywords == ("Redis", "RocketMQ")
 
 
+def test_progress_evidence_chunk_prompt_dict_keeps_legacy_and_agent_shapes() -> None:
+    chunk = ProgressEvidenceChunk(
+        chunk_id="resume_project_001",
+        source_type="resume_project",
+        source_ref={"resource_type": "resume", "resource_id": "res_001"},
+        title="支付系统",
+        text="使用 Redis、RocketMQ 和本地事务保障一致性。",
+        keywords=("Redis", "RocketMQ"),
+        priority=30,
+        reason="primary_resume_signal",
+        sequence=1,
+    )
+
+    payload = chunk.to_prompt_dict()
+
+    assert payload["chunk_id"] == "resume_project_001"
+    assert payload["ref"] == payload["chunk_id"]
+    assert payload["text"] == "使用 Redis、RocketMQ 和本地事务保障一致性。"
+    assert payload["excerpt"] == payload["text"]
+    assert payload["source_ref"] == {"resource_type": "resume", "resource_id": "res_001"}
+    assert payload["keywords"] == ["Redis", "RocketMQ"]
+    assert payload["priority"] == 30
+    assert payload["reason"] == "primary_resume_signal"
+
+
 def test_question_prompt_evidence_summaries_keep_external_shape_and_schema_enums() -> None:
     blueprint = QuestionBlueprint(
         question_kind="project_deep_dive",

@@ -910,6 +910,9 @@ def test_progress_tree_state_refresh_prompt_uses_selected_evidence_chunks_instea
         },
     )
     assert state_prompt["context"]["selected_evidence_chunks"]
+    selected_chunk = state_prompt["context"]["selected_evidence_chunks"][0]
+    assert selected_chunk["ref"] == selected_chunk["chunk_id"]
+    assert selected_chunk["excerpt"] == selected_chunk["text"]
     assert state_prompt["context"]["turns_summary"]
     assert "selected_evidence_chunks" in state_prompt["prompt"]
     assert "不得删除或重命名 existing plan.nodes" in state_prompt["prompt"]
@@ -1109,6 +1112,10 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "output_schema.allowed_status" in prompt
     assert "output_schema.allowed_basis_types" in prompt
     assert "deferred_candidates" in prompt
+    assert "evidence_refs 优先引用 selected_evidence_chunks.ref" in prompt
+    assert "selected_evidence_chunks.chunk_id 仅为旧兼容字段" in prompt
+    assert "不得自造 resume:section_xxx、job:requirement:xxx" in prompt
+    assert "人类可读来源说明写入 evidence_notes，不要写入 evidence_refs" in prompt
     assert "你必须像资深面试官一样先完整阅读" not in prompt
     assert "根对象必须包含 schema_id" not in prompt
     assert "leaf node 必须包含 node_code" not in prompt
