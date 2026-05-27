@@ -7,6 +7,7 @@ import pytest
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.llm.errors import (
     LlmTransportConfigurationError,
+    LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
 from app.infrastructure.llm.job_match import JOB_MATCH_PROMPT_VERSION
@@ -137,6 +138,88 @@ def test_openai_compatible_transport_uses_configured_max_tokens_from_env() -> No
     assert settings.timeout_seconds == 90.0
 
 
+def test_openai_compatible_transport_uses_progress_tree_token_budget_and_json_mode() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["payload"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_progress_tree",
+                "model": "deepseek-v4-pro",
+                "choices": [{"finish_reason": "stop", "message": {"content": '{"status":"success"}'}}],
+            },
+        )
+
+    settings = OpenAICompatibleLlmSettings(
+        api_key="test-key",
+        model="deepseek-v4-pro",
+        base_url="https://llm.example/v1",
+        max_tokens=8000,
+    )
+    transport = OpenAICompatibleLlmTransport(
+        settings,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-PROGRESS-QUALITY-FIRST-MENU",),
+            task_type="polish_progress_quality_first_menu",
+        )
+    )
+
+    payload = observed["payload"]
+    assert isinstance(payload, dict)
+    assert payload["max_tokens"] == 12000
+    assert payload["response_format"] == {"type": "json_object"}
+    assert "stream" not in payload
+    system_prompt = payload["messages"][0]["content"]
+    assert "用最精简的步骤完成思考" in system_prompt
+    assert "最终输出必须是一个合法、完整的 JSON 对象" in system_prompt
+
+
+def test_openai_compatible_transport_uses_progress_tree_max_tokens_env_override() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["payload"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_progress_tree",
+                "model": "deepseek-v4-pro",
+                "choices": [{"finish_reason": "stop", "message": {"content": '{"status":"success"}'}}],
+            },
+        )
+
+    settings = OpenAICompatibleLlmSettings.from_env(
+        {
+            "LLM_OPENAI_API_KEY": "test-key",
+            "LLM_OPENAI_BASE_URL": "https://llm.example/v1",
+            "LLM_OPENAI_MODEL": "deepseek-v4-pro",
+            "LLM_OPENAI_MAX_TOKENS": "7000",
+            "LLM_PROGRESS_TREE_MAX_TOKENS": "11000",
+        }
+    )
+    transport = OpenAICompatibleLlmTransport(
+        settings,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-PROGRESS-QUALITY-FIRST-MENU",),
+            task_type="polish_progress_quality_first_menu",
+        )
+    )
+
+    payload = observed["payload"]
+    assert isinstance(payload, dict)
+    assert payload["max_tokens"] == 11000
+
+
 @pytest.mark.parametrize("raw_value", ["", "not-an-int", "0", "-1"])
 def test_openai_compatible_settings_fallbacks_invalid_max_tokens(raw_value: str) -> None:
     settings = OpenAICompatibleLlmSettings.from_env(
@@ -147,6 +230,78 @@ def test_openai_compatible_settings_fallbacks_invalid_max_tokens(raw_value: str)
     )
 
     assert settings.max_tokens == 8000
+
+
+def test_openai_compatible_transport_raises_truncated_error_for_length_finish_reason() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_truncated",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"content": '{"status":"success"'},
+                    }
+                ],
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(LlmTransportResponseError, match="输出被截断") as exc_info:
+        transport.generate(
+            LlmTransportRequest(
+                contract_ids=("P-POLISH-PROGRESS-QUALITY-FIRST-MENU",),
+                task_type="polish_progress_quality_first_menu",
+            )
+        )
+
+    assert getattr(exc_info.value, "error_type") == "provider_output_truncated"
+
+
+def test_openai_compatible_transport_keeps_invalid_json_error_for_non_length_finish_reason() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_invalid_json",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": '{"status":"success"'},
+                    }
+                ],
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(LlmTransportResponseError, match="不是合法 JSON") as exc_info:
+        transport.generate(
+            LlmTransportRequest(
+                contract_ids=("P-POLISH-PROGRESS-QUALITY-FIRST-MENU",),
+                task_type="polish_progress_quality_first_menu",
+            )
+        )
+
+    assert getattr(exc_info.value, "error_type", None) != "provider_output_truncated"
 
 
 def test_openai_compatible_transport_requires_env_api_key() -> None:

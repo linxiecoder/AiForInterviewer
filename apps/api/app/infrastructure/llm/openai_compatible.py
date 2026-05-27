@@ -32,6 +32,9 @@ DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_TIMEOUT_SECONDS = 45.0
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_MAX_TOKENS = 8000
+DEFAULT_PROGRESS_TREE_MAX_TOKENS = 12000
+PROGRESS_TREE_QUALITY_FIRST_TASK_TYPE = "polish_progress_quality_first_menu"
+PROVIDER_OUTPUT_TRUNCATED_ERROR_TYPE = "provider_output_truncated"
 LLM_PROVIDER_ENV = "LLM_PROVIDER"
 LLM_OPENAI_API_KEY_ENV = "LLM_OPENAI_API_KEY"
 LLM_OPENAI_BASE_URL_ENV = "LLM_OPENAI_BASE_URL"
@@ -39,10 +42,16 @@ LLM_OPENAI_MODEL_ENV = "LLM_OPENAI_MODEL"
 LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
 LLM_OPENAI_MAX_TOKENS_ENV = "LLM_OPENAI_MAX_TOKENS"
+LLM_PROGRESS_TREE_MAX_TOKENS_ENV = "LLM_PROGRESS_TREE_MAX_TOKENS"
 LOCAL_LLM_RAW_IO_ENABLED_ENV = "AIFI_LOCAL_LLM_RAW_IO_ENABLED"
 LOCAL_LLM_RAW_IO_DIR_ENV = "AIFI_LOCAL_LLM_RAW_IO_DIR"
 LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV = "AIFI_LOCAL_LLM_RAW_IO_INCLUDE_HEADERS"
 DEFAULT_LOCAL_LLM_RAW_IO_DIR = ".local/llm-raw"
+COMPACT_JSON_REASONING_CONSTRAINT = (
+    "请在保证推理准确的前提下，用最精简的步骤完成思考，"
+    "避免不必要的分点展开和重复验证。最终输出必须是一个合法、完整的 JSON 对象，"
+    "不要包含任何额外说明。"
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +64,7 @@ class OpenAICompatibleLlmSettings:
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     temperature: float = DEFAULT_TEMPERATURE
     max_tokens: int = DEFAULT_MAX_TOKENS
+    progress_tree_max_tokens: int = DEFAULT_PROGRESS_TREE_MAX_TOKENS
 
     @classmethod
     def from_env(
@@ -89,6 +99,11 @@ class OpenAICompatibleLlmSettings:
                 values,
                 LLM_OPENAI_MAX_TOKENS_ENV,
                 DEFAULT_MAX_TOKENS,
+            ),
+            progress_tree_max_tokens=_env_int(
+                values,
+                LLM_PROGRESS_TREE_MAX_TOKENS_ENV,
+                DEFAULT_PROGRESS_TREE_MAX_TOKENS,
             ),
         )
 
@@ -290,6 +305,13 @@ class OpenAICompatibleLlmTransport:
             result = _parse_json_result(response_json)
         except LlmTransportResponseError as exc:
             response_body, response_text = _response_body_for_dump(response)
+            error_type = _llm_response_error_type(exc)
+            self._log_request_failed(
+                request,
+                started_at=started_at,
+                error_type=error_type,
+                status_code=response.status_code,
+            )
             _maybe_dump_local_raw_llm_io(
                 request=request,
                 settings=self._settings,
@@ -303,7 +325,7 @@ class OpenAICompatibleLlmTransport:
                 parsed_result=None,
                 trace_refs=(),
                 evidence_refs=(),
-                error_type="provider_response_error",
+                error_type=error_type,
                 error_message=str(exc),
             )
             raise
@@ -395,10 +417,12 @@ def _chat_completion_payload(
     request: LlmTransportRequest,
 ) -> dict[str, Any]:
     """构造 OpenAI Chat Completions 请求体，含 system prompt 和 evidence bundle。"""
+    # Structured JSON tasks must wait for complete content before json.loads;
+    # frontend streaming needs SSE/task state.
     return {
         "model": settings.model,
         "temperature": settings.temperature,
-        "max_tokens": settings.max_tokens,
+        "max_tokens": _max_tokens_for_request(settings, request),
         "response_format": {"type": "json_object"},
         "messages": [
             {
@@ -419,6 +443,15 @@ def _chat_completion_payload(
             },
         ],
     }
+
+
+def _max_tokens_for_request(
+    settings: OpenAICompatibleLlmSettings,
+    request: LlmTransportRequest,
+) -> int:
+    if request.task_type == PROGRESS_TREE_QUALITY_FIRST_TASK_TYPE:
+        return settings.progress_tree_max_tokens
+    return settings.max_tokens
 
 
 def _duration_ms(started_at: float) -> float:
@@ -647,6 +680,18 @@ def _system_prompt(task_type: str) -> str:
                 f"prompt_version 固定为 {JOB_MATCH_PROMPT_VERSION}。",
             ]
         )
+    if task_type == PROGRESS_TREE_QUALITY_FIRST_TASK_TYPE:
+        return "\n".join(
+            [
+                "你是 AiForInterviewer 的 Progress Tree 结构化 JSON 任务执行器。",
+                "必须使用中文输出，不要返回英文说明。",
+                "只返回合法 JSON，不要 Markdown 包裹。",
+                COMPACT_JSON_REASONING_CONSTRAINT,
+                "不要输出思考过程、分析过程、推理过程或额外说明。",
+                "必须严格遵守 user message 中 evidence_bundle.prompt、output_schema、schema_id 和 prompt_version。",
+                "不得暴露 provider payload、secret、token 或原始 completion。",
+            ]
+        )
     return "\n".join(
         [
             "你是 AiForInterviewer 的结构化 JSON 任务执行器。",
@@ -688,6 +733,11 @@ def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
     first_choice = choices[0]
     if not isinstance(first_choice, dict):
         raise LlmTransportResponseError("LLM provider choices[0] 不是对象。")
+    if first_choice.get("finish_reason") == "length":
+        raise _llm_response_error(
+            "LLM provider 输出被截断，JSON 不完整。",
+            error_type=PROVIDER_OUTPUT_TRUNCATED_ERROR_TYPE,
+        )
     message = first_choice.get("message")
     if not isinstance(message, dict):
         raise LlmTransportResponseError("LLM provider 响应缺少 message。")
@@ -701,6 +751,19 @@ def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise LlmTransportResponseError("LLM provider 文本 JSON 根节点不是对象。")
     return parsed
+
+
+def _llm_response_error(message: str, *, error_type: str) -> LlmTransportResponseError:
+    error = LlmTransportResponseError(message)
+    setattr(error, "error_type", error_type)
+    return error
+
+
+def _llm_response_error_type(exc: LlmTransportResponseError) -> str:
+    error_type = getattr(exc, "error_type", None)
+    if isinstance(error_type, str) and error_type.strip():
+        return error_type.strip()
+    return "provider_response_error"
 
 
 def _provider_model_name(response_json: dict[str, Any], configured_model: str) -> str:

@@ -22,6 +22,11 @@ from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.ai_runtime.handoff import AgentPersistenceHandoff, build_question_result_write_plan
 from app.application.job_match.entities import JobMatchAnalysis
 from app.application.job_match.ports import JobMatchRepository
+from app.application.llm.errors import (
+    LlmTransportConfigurationError,
+    LlmTransportResponseError,
+    LlmTransportUnavailableError,
+)
 from app.application.polish.commands import (
     CompletePolishQuestionCommand,
     CreatePolishAnswerCommand,
@@ -317,10 +322,10 @@ class PolishUseCases:
 
         try:
             progress_artifacts = self._progress_tree_service.generate_initial(detail.progress_context)
-        except Exception:
+        except Exception as exc:
             progress_artifacts = _failed_initial_generation_artifacts(
                 detail,
-                reason="progress_tree_generation_failed",
+                reason=_initial_progress_generation_exception_reason(exc),
             )
         progress_artifacts = _progress_artifacts_with_theme(progress_artifacts, theme_strategy)
         updated_session = replace(
@@ -1987,6 +1992,27 @@ def _failed_initial_generation_artifacts(
             "failure_reason": reason,
         },
     }
+
+
+def _initial_progress_generation_exception_reason(exc: Exception) -> str:
+    if isinstance(exc, TimeoutError):
+        return "provider_timeout"
+    if isinstance(exc, LlmTransportConfigurationError):
+        return "provider_unavailable"
+    if isinstance(exc, LlmTransportUnavailableError):
+        message = str(exc).lower()
+        if "timeout" in message or "超时" in message:
+            return "provider_timeout"
+        return "provider_unavailable"
+    if isinstance(exc, LlmTransportResponseError):
+        error_type = getattr(exc, "error_type", None)
+        if error_type == "provider_output_truncated":
+            return "provider_output_truncated"
+        message = str(exc)
+        if "输出被截断" in message or "JSON 不完整" in message:
+            return "provider_output_truncated"
+        return "provider_response_invalid"
+    return "progress_tree_generation_failed"
 
 
 def _progress_payload_with_theme(payload: object, strategy: PolishThemeStrategy) -> dict[str, Any]:

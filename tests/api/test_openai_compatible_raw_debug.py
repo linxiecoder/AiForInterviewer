@@ -4,7 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.infrastructure.llm.errors import LlmTransportUnavailableError
+from app.infrastructure.llm.errors import LlmTransportResponseError, LlmTransportUnavailableError
 from app.infrastructure.llm.openai_compatible import (
     LOCAL_LLM_RAW_IO_DIR_ENV,
     LOCAL_LLM_RAW_IO_ENABLED_ENV,
@@ -108,6 +108,26 @@ def test_local_raw_llm_io_dump_writes_failed_provider_response(
     assert dump["parsed_result"] is None
 
 
+def test_local_raw_llm_io_dump_marks_length_finish_reason_as_truncated(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dump_dir = tmp_path / "raw-dump"
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_ENABLED_ENV, "true")
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_DIR_ENV, str(dump_dir))
+    transport = _transport_with_response(_truncated_provider_response())
+
+    with pytest.raises(LlmTransportResponseError, match="输出被截断"):
+        transport.generate(_raw_debug_request())
+
+    dump = _single_dump_json(dump_dir)
+    assert dump["response"]["status_code"] == 200
+    assert dump["response"]["body"]["choices"][0]["finish_reason"] == "length"
+    assert dump["error"]["type"] == "provider_output_truncated"
+    assert "JSON 不完整" in dump["error"]["message"]
+    assert dump["parsed_result"] is None
+
+
 def test_local_raw_llm_io_dump_failure_does_not_break_transport(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -178,6 +198,19 @@ def _successful_provider_response() -> dict[str, object]:
                         ensure_ascii=False,
                     )
                 }
+            }
+        ],
+    }
+
+
+def _truncated_provider_response() -> dict[str, object]:
+    return {
+        "id": "chatcmpl_raw_debug_truncated",
+        "model": "deepseek-v4-pro",
+        "choices": [
+            {
+                "finish_reason": "length",
+                "message": {"content": '{"question_text":"请结合 FastAPI 项目说明'},
             }
         ],
     }

@@ -22,19 +22,17 @@ from app.application.llm.types import LlmTransportRequest
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_evidence import build_progress_prompt_context
 from app.application.polish.progress_prompts import (
-    POLISH_PROGRESS_TREE_STATE_CONTRACT_IDS,
-    POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
-    POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
-    POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
-    build_progress_tree_state_refresh_prompt,
-)
-from app.application.polish.progress_v2_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
     POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     POLISH_PROGRESS_TREE_CONTRACT_IDS,
+    POLISH_PROGRESS_TREE_STATE_CONTRACT_IDS,
+    POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
+    POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
     build_progress_quality_first_menu_prompt,
+    build_progress_tree_state_refresh_prompt,
 )
 
 
@@ -149,10 +147,12 @@ class PolishProgressTreeLlmService:
             )
         except TimeoutError:
             return _quality_first_failed_artifacts(context, reason="provider_timeout")
-        except (LlmTransportConfigurationError, LlmTransportUnavailableError):
+        except LlmTransportConfigurationError:
             return _quality_first_failed_artifacts(context, reason="provider_unavailable")
-        except LlmTransportResponseError:
-            return _quality_first_failed_artifacts(context, reason="provider_response_invalid")
+        except LlmTransportUnavailableError as exc:
+            return _quality_first_failed_artifacts(context, reason=_provider_unavailable_failure_reason(exc))
+        except LlmTransportResponseError as exc:
+            return _quality_first_failed_artifacts(context, reason=_provider_response_failure_reason(exc))
 
         payload = result.result
         if not isinstance(payload, dict):
@@ -458,7 +458,7 @@ def _quality_first_menu_payload_envelope(
         main_titles={_normalize_label_for_compare(node["display_title"]) for node in nodes},
     )
 
-    planner_summary = _sanitize_display_text(payload.get("planner_summary"), max_chars=800)
+    planner_summary = _sanitize_display_text(payload.get("planner_summary"), max_chars=120)
     quality_summary = {
         "status": "ready" if canonical_status == "success" else "partial",
         "planner_summary": planner_summary,
@@ -528,7 +528,7 @@ def _normalize_quality_first_node(
         _sanitize_display_text(item.get("first_question"), max_chars=120)
         or "请结合你的经历说明这个方向的设计思路和关键取舍。"
     )
-    follow_up_focus = _normalize_text_list(item.get("follow_up_focus"), limit=4)
+    follow_up_focus = _normalize_text_list(item.get("follow_up_focus"), limit=3)
     if not follow_up_focus:
         follow_up_focus = _default_follow_up_focus(category, exam_point)
     expected_answer_signals = _normalize_text_list(item.get("expected_answer_signals"), limit=5)
@@ -588,7 +588,7 @@ def _normalize_quality_first_node(
         "attack_style": "technical_deep_dive" if category == _RESUME_DEEP_DIVE else "learning_plan",
         "difficulty_level": "advanced" if confidence_level == "high" else "intermediate",
         "priority": _bounded_int(item.get("priority"), lower=1, upper=999, fallback=index),
-        "priority_reason": _sanitize_display_text(item.get("priority_reason"), max_chars=240)
+        "priority_reason": _sanitize_display_text(item.get("priority_reason"), max_chars=120)
         or "该节点具备岗位贴合和面试追问价值。",
         "related_job_requirements": _dedupe_strings([jd_basis], limit=3),
         "related_resume_evidence": _dedupe_strings([resume_signal], limit=3),
@@ -743,7 +743,7 @@ def _normalize_quality_first_deferred_candidates(
     if not isinstance(value, list):
         return []
     candidates: list[dict[str, Any]] = []
-    for item in value[:20]:
+    for item in value[:5]:
         if not isinstance(item, dict):
             continue
         title = _sanitize_display_text(item.get("display_title") or item.get("title"), max_chars=120)
@@ -757,12 +757,12 @@ def _normalize_quality_first_deferred_candidates(
             {
                 "display_title": title,
                 "category": category,
-                "reason": _sanitize_display_text(item.get("reason"), max_chars=240)
+                "reason": _sanitize_display_text(item.get("reason"), max_chars=120)
                 or "低优先级候选项，暂不进入主训练路径。",
                 "basis_type": basis_type,
                 "evidence_refs": _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8),
                 "confidence_level": _enum_value(item.get("confidence_level"), _ALLOWED_CONFIDENCE_LEVELS, "low"),
-                "suggested_trigger": _sanitize_display_text(item.get("suggested_trigger"), max_chars=160)
+                "suggested_trigger": _sanitize_display_text(item.get("suggested_trigger"), max_chars=120)
                 or "主路径完成后，或用户主动要求补充核验该方向时再启用。",
             }
         )
@@ -782,7 +782,7 @@ def _dedupe_quality_first_deferred_candidates(
             continue
         seen.add(title_key)
         result.append(candidate)
-        if len(result) >= 20:
+        if len(result) >= 5:
             break
     return result
 
@@ -955,6 +955,23 @@ def _quality_first_payload_failure_reason(payload: dict[str, Any]) -> str:
     if not has_raw_nodes:
         return "quality_first_no_usable_nodes"
     return "quality_first_schema_invalid"
+
+
+def _provider_response_failure_reason(exc: LlmTransportResponseError) -> str:
+    error_type = getattr(exc, "error_type", None)
+    if error_type == "provider_output_truncated":
+        return "provider_output_truncated"
+    message = str(exc)
+    if "输出被截断" in message or "JSON 不完整" in message:
+        return "provider_output_truncated"
+    return "provider_response_invalid"
+
+
+def _provider_unavailable_failure_reason(exc: LlmTransportUnavailableError) -> str:
+    message = str(exc).lower()
+    if "timeout" in message or "超时" in message:
+        return "provider_timeout"
+    return "provider_unavailable"
 
 
 def _quality_first_validation_errors(payload: dict[str, Any], *, reason: str) -> list[dict[str, str]]:
@@ -1278,6 +1295,17 @@ def _normalize_text_list(value: object, *, limit: int) -> list[str]:
     result: list[str] = []
     for item in raw_items:
         text = _sanitize_display_text(item, max_chars=480)
+        if text and text not in result:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _dedupe_strings(values: list[object], *, limit: int) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        text = truncate_text(value, max_chars=480)
         if text and text not in result:
             result.append(text)
         if len(result) >= limit:

@@ -16,9 +16,13 @@ from app.api.deps import get_db_session_factory, get_llm_transport, require_auth
 from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1.polish import router as polish_router
 from app.application.polish.progress_prompts import (
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
+    POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     POLISH_PROGRESS_TREE_STATE_PROMPT_VERSION,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
+    build_progress_quality_first_menu_prompt,
     build_progress_tree_state_refresh_prompt,
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion
@@ -30,13 +34,7 @@ from app.application.polish.next_question_agent import (
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
-from app.application.polish.progress_v2_prompts import (
-    POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
-    POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
-    POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
-    build_progress_quality_first_menu_prompt,
-)
-from app.application.polish import progress_v2_prompts
+from app.application.polish import progress_prompts
 from app.application.polish.progress_evidence import (
     build_progress_evidence_chunks,
     build_progress_prompt_context,
@@ -717,6 +715,16 @@ def test_generate_initial_progress_tree_failure_keeps_session_and_allows_retry()
     assert [call.task_type for call in retry_transport.calls] == [POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE]
 
 
+def test_progress_tree_service_maps_truncated_provider_response_to_failure_reason() -> None:
+    service = PolishProgressTreeLlmService(_QualityFirstProviderTruncatedTransport())
+
+    artifacts = service.generate_initial(_progress_context_fixture())
+
+    assert artifacts["status"] == "failed"
+    assert artifacts["progress_tree_plan"]["failure_reason"] == "provider_output_truncated"
+    assert artifacts["progress_tree_plan"]["v2_metadata"]["failure_reason"] == "provider_output_truncated"
+
+
 def test_generate_initial_progress_tree_skips_ready_plan_without_llm_call() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
@@ -1221,9 +1229,15 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert prompt_context["allowed_evidence_refs"]
     assert set(prompt_context["allowed_evidence_refs"][0]) == {"ref", "source_type", "title", "excerpt"}
     assert rule_context_fields.isdisjoint(prompt_context)
-    assert "6-9 个主训练节点" in prompt
-    assert "resume_deep_dive 4-6" in prompt
-    assert "jd_gap_learning 2-4" in prompt
+    assert "优先 6-7 个主训练节点，最多 9 个" in prompt
+    assert "resume_deep_dive 优先 4-5 个" in prompt
+    assert "jd_gap_learning 优先 2 个" in prompt
+    assert "planner_summary 控制在 120 字以内" in prompt
+    assert "follow_up_focus 最多 3 项" in prompt
+    assert "low_confidence_flags 使用短 code 风格" in prompt
+    assert "deferred_candidates 最多 5 个" in prompt
+    assert "不要输出解释性长段落、分析过程或推理过程" in prompt
+    assert "用最精简的步骤完成思考" in prompt
     assert "canonical Progress Tree initial generation contract" in prompt
     assert "output_schema.allowed_status" in prompt
     assert "output_schema.allowed_basis_types" in prompt
@@ -1251,7 +1265,7 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "follow_up_focus" in output_schema["required_leaf_fields"]
     for retired_basis_type in retired_basis_types:
         assert retired_basis_type not in prompt
-        assert all(retired_basis_type not in rule for rule in progress_v2_prompts._COMMON_JSON_RULES)
+        assert all(retired_basis_type not in rule for rule in progress_prompts._COMMON_JSON_RULES)
     filtered_common_rules_expression = "rule for rule in " + "_COMMON_JSON_RULES"
     assert filtered_common_rules_expression not in inspect.getsource(build_progress_quality_first_menu_prompt)
     assert "preparation_goal" not in output_schema["required_leaf_fields"]
@@ -1519,7 +1533,6 @@ def test_progress_tree_quality_first_normalizes_string_list_fields_without_templ
         "权重调整策略",
         "准确率指标定义",
         "对比过的其他检索方案",
-        "效果上限分析",
     ]
     assert string_node["follow_up_directions"] == string_node["follow_up_focus"]
     assert all(not item.startswith("继续追问") for item in string_node["follow_up_focus"])
@@ -3742,9 +3755,7 @@ def test_polish_progress_tree_prompt_governance_is_documented_and_not_in_provide
 def test_progress_tree_retired_initial_generation_symbols_are_absent() -> None:
     source_paths = [
         Path("apps/api/app/application/polish/progress_tree.py"),
-        Path("apps/api/app/application/polish/progress_tree.py"),
         Path("apps/api/app/application/polish/progress_prompts.py"),
-        Path("apps/api/app/application/polish/progress_v2_prompts.py"),
         Path("apps/api/app/infrastructure/llm/fake_transport.py"),
         Path("apps/api/app/infrastructure/llm/contracts.py"),
     ]
@@ -3834,6 +3845,15 @@ class _QualityFirstProviderFailureTransport(FakeLlmTransport):
     def generate(self, request):
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
             raise LlmTransportResponseError("quality first provider response invalid")
+        return super().generate(request)
+
+
+class _QualityFirstProviderTruncatedTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            error = LlmTransportResponseError("LLM provider 输出被截断，JSON 不完整。")
+            setattr(error, "error_type", "provider_output_truncated")
+            raise error
         return super().generate(request)
 
 
