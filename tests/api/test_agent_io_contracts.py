@@ -23,7 +23,6 @@ from app.application.polish.question_blueprint import EvidenceScope, QuestionBlu
 from app.application.polish.question_generation_prompts import build_question_prompt_asset
 from app.application.polish.question_generation_service import _parse_llm_question_payload
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -253,7 +252,7 @@ def test_progress_state_refresh_prompt_keeps_context_and_compatibility_fields() 
 
 
 def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
-    from app.application.polish import progress_tree, progress_tree
+    from app.application.polish import progress_tree
     from app.application.polish import question_generation_service
 
     assert "_question_payload_envelope" in _read_source(
