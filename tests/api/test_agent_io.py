@@ -152,3 +152,50 @@ def test_question_prompt_evidence_summaries_keep_external_shape_and_schema_enums
     assert decision_schema["secondary_evidence_refs"]["items"]["enum"] == ["resume_project_001"]
     root_evidence_refs = prompt_asset["output_schema"]["properties"]["evidence_refs"]
     assert root_evidence_refs["items"]["enum"] == ["resume_project_001"]
+
+
+def test_agent_output_envelope_succeeded_when_validation_errors_empty() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+
+    envelope = AgentOutputEnvelope(task_type="polish_question_generation")
+
+    assert envelope.succeeded is True
+    assert envelope.to_payload_dict() == {"task_type": "polish_question_generation"}
+
+
+def test_agent_output_envelope_not_succeeded_when_validation_errors_present() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+
+    envelope = AgentOutputEnvelope(
+        task_type="polish_question_generation",
+        validation_errors=("llm_question_text_required",),
+    )
+
+    assert envelope.succeeded is False
+    assert envelope.to_payload_dict() == {
+        "task_type": "polish_question_generation",
+        "validation_errors": ["llm_question_text_required"],
+    }
+
+
+def test_agent_output_envelope_to_payload_dict_filters_unsafe_metadata() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+
+    envelope = AgentOutputEnvelope(
+        task_type="polish_question_generation",
+        metadata={
+            "source": "unit_test",
+            "attempt": 1,
+            "provider_payload": "must_not_leak",
+            "raw_completion": "must_not_leak",
+            "system_prompt": "must_not_leak",
+            "token": "must_not_leak",
+            "secret": "must_not_leak",
+            "nested": {"raw": "must_not_leak"},
+        },
+    )
+
+    assert envelope.to_payload_dict() == {
+        "task_type": "polish_question_generation",
+        "metadata": {"source": "unit_test", "attempt": 1},
+    }

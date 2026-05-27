@@ -14,7 +14,7 @@ from app.application.llm.errors import (
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
-from app.application.llm.agent_io import AgentFocusTarget
+from app.application.llm.agent_io import AgentFocusTarget, AgentOutputEnvelope
 from app.application.llm.ports import LlmTransport
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
@@ -41,6 +41,7 @@ from app.application.polish.question_grounding import GroundingResult, validate_
 
 
 QUESTION_GENERATION_SERVICE_VERSION = "polish_question_generation.v1"
+_QUESTION_OUTPUT_TASK_TYPE = "polish_question_generation"
 UNSAFE_QUESTION_TEXT_MARKERS = (
     "raw_prompt",
     "system_prompt",
@@ -565,36 +566,46 @@ def _llm_generation_failed(
     )
 
 
-def _parse_llm_question_payload(
+def _question_payload_envelope(
     payload: dict[str, Any],
     *,
     blueprint: QuestionBlueprint,
-) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+) -> AgentOutputEnvelope:
     if isinstance(payload.get("decision"), dict) or isinstance(payload.get("question"), dict):
         agent_payload, agent_errors = validate_next_question_agent_output(
             payload,
             allowed_evidence_refs=blueprint.evidence_refs,
         )
         if agent_errors or agent_payload is None:
-            return None, agent_errors
+            return AgentOutputEnvelope(
+                task_type=_QUESTION_OUTPUT_TASK_TYPE,
+                schema_id=_clean(payload.get("schema_id")) or None,
+                prompt_version=_clean(payload.get("prompt_version")) or None,
+                validation_errors=agent_errors,
+            )
         question = agent_payload["question"]
-        return (
-            {
-                "question_text": question["question_text"],
-                "question_kind": question["question_kind"],
-                "focus_dimension": question["question_kind"],
-                "difficulty": question["difficulty"],
-                "skill_dimension": question["skill_dimension"],
-                "expected_signal": question["expected_signal"],
-                "follow_ups": list(question["follow_ups"]),
-                "scoring_rubric": list(question["scoring_rubric"]),
-                "missing_context": list(agent_payload["missing_context"]),
-                "evidence_refs": list(agent_payload["evidence_refs"]),
-                "confidence": agent_payload["confidence"],
-                "clarification_needed": agent_payload["clarification_needed"],
-                "next_question_agent": agent_payload,
-            },
-            (),
+        normalized_payload = {
+            "question_text": question["question_text"],
+            "question_kind": question["question_kind"],
+            "focus_dimension": question["question_kind"],
+            "difficulty": question["difficulty"],
+            "skill_dimension": question["skill_dimension"],
+            "expected_signal": question["expected_signal"],
+            "follow_ups": list(question["follow_ups"]),
+            "scoring_rubric": list(question["scoring_rubric"]),
+            "missing_context": list(agent_payload["missing_context"]),
+            "evidence_refs": list(agent_payload["evidence_refs"]),
+            "confidence": agent_payload["confidence"],
+            "clarification_needed": agent_payload["clarification_needed"],
+            "next_question_agent": agent_payload,
+        }
+        return AgentOutputEnvelope(
+            task_type=_QUESTION_OUTPUT_TASK_TYPE,
+            schema_id=_clean(agent_payload.get("schema_id")) or None,
+            schema_version=_clean(agent_payload.get("schema_version")) or None,
+            prompt_version=_clean(agent_payload.get("prompt_version")) or None,
+            payload=normalized_payload,
+            evidence_refs=tuple(agent_payload["evidence_refs"]),
         )
 
     errors: list[str] = []
@@ -645,9 +656,13 @@ def _parse_llm_question_payload(
     evidence_refs = _string_list(payload.get("evidence_refs"), max_items=8)
 
     if errors:
-        return None, tuple(dict.fromkeys(errors))
-    return (
-        {
+        return AgentOutputEnvelope(
+            task_type=_QUESTION_OUTPUT_TASK_TYPE,
+            validation_errors=tuple(dict.fromkeys(errors)),
+        )
+    return AgentOutputEnvelope(
+        task_type=_QUESTION_OUTPUT_TASK_TYPE,
+        payload={
             "question_text": question_text,
             "question_kind": question_kind,
             "focus_dimension": focus_dimension,
@@ -661,8 +676,19 @@ def _parse_llm_question_payload(
             "confidence": confidence,
             "clarification_needed": clarification_needed,
         },
-        (),
+        evidence_refs=tuple(evidence_refs),
     )
+
+
+def _parse_llm_question_payload(
+    payload: dict[str, Any],
+    *,
+    blueprint: QuestionBlueprint,
+) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    envelope = _question_payload_envelope(payload, blueprint=blueprint)
+    if not envelope.succeeded:
+        return None, envelope.validation_errors
+    return envelope.payload, ()
 
 
 def _next_question_agent_metadata(llm_payload: dict[str, Any] | None) -> dict[str, Any]:

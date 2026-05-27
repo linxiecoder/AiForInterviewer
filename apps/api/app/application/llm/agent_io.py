@@ -35,6 +35,15 @@ _AGENT_PROMPT_BUNDLE_STANDARD_FIELD_KEYS = frozenset(
         "input_contract",
     }
 )
+_AGENT_OUTPUT_ENVELOPE_UNSAFE_METADATA_KEYS = frozenset(
+    {
+        "provider_payload",
+        "raw_completion",
+        "system_prompt",
+        "token",
+        "secret",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -145,6 +154,47 @@ class AgentPromptBundle:
         return payload
 
 
+@dataclass(frozen=True)
+class AgentOutputEnvelope:
+    task_type: str
+    schema_id: str | None = None
+    schema_version: str | None = None
+    prompt_version: str | None = None
+    status: str | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
+    validation_errors: tuple[str, ...] = ()
+    low_confidence_flags: tuple[str, ...] = ()
+    evidence_refs: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def succeeded(self) -> bool:
+        return not self.validation_errors
+
+    def to_payload_dict(self) -> dict[str, Any]:
+        output: dict[str, Any] = {"task_type": self.task_type}
+        if self.schema_id:
+            output["schema_id"] = self.schema_id
+        if self.schema_version:
+            output["schema_version"] = self.schema_version
+        if self.prompt_version:
+            output["prompt_version"] = self.prompt_version
+        if self.status:
+            output["status"] = self.status
+        if self.payload:
+            output["payload"] = dict(self.payload)
+        if self.validation_errors:
+            output["validation_errors"] = list(self.validation_errors)
+        if self.low_confidence_flags:
+            output["low_confidence_flags"] = list(self.low_confidence_flags)
+        if self.evidence_refs:
+            output["evidence_refs"] = list(self.evidence_refs)
+        metadata = _safe_output_metadata(self.metadata)
+        if metadata:
+            output["metadata"] = metadata
+        return output
+
+
 def _add_extra_field(payload: dict[str, Any], extra_fields: dict[str, Any], key: str) -> None:
     if (
         key in _AGENT_PROMPT_BUNDLE_EXTRA_FIELD_KEYS
@@ -162,3 +212,12 @@ def _safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, (str, int, float, bool)) or value is None:
             safe[key] = value
     return safe
+
+
+def _safe_output_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    safe = _safe_metadata(metadata)
+    return {
+        key: value
+        for key, value in safe.items()
+        if key.lower() not in _AGENT_OUTPUT_ENVELOPE_UNSAFE_METADATA_KEYS
+    }

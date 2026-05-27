@@ -16,6 +16,7 @@ from app.application.polish.question_blueprint import EvidenceScope, QuestionBlu
 from app.application.polish.next_question_agent import (
     NEXT_QUESTION_AGENT_PROMPT_VERSION,
     NEXT_QUESTION_AGENT_SCHEMA_ID,
+    NEXT_QUESTION_AGENT_SCHEMA_VERSION,
 )
 from app.application.polish.queries import GetPolishSessionQuery
 from app.application.polish.question_generation_prompts import (
@@ -30,6 +31,7 @@ from app.application.polish.question_generation_policy import (
 from app.application.polish.question_generation_service import (
     QuestionGenerationService,
     _focus_target_from_progress_node,
+    _parse_llm_question_payload,
 )
 from app.application.polish.question_metadata import normalize_question_metadata
 from app.domain.shared.clock import utc_now
@@ -72,6 +74,87 @@ QUESTION_PROMPT_ASSET_TOP_LEVEL_KEYS = {
     "refusal_and_low_confidence_policy",
     "conflict_check",
 }
+
+
+def _question_output_blueprint() -> QuestionBlueprint:
+    return QuestionBlueprint(
+        question_kind="project_deep_dive",
+        claim_mode="evidence_grounded",
+        progress_node_ref=NODE_REF,
+        node_title="支付链路一致性",
+        expected_capability="说明支付链路一致性与失败补偿。",
+        primary_evidence_ref="resume_project_001",
+        primary_evidence_text="使用 Redis、RocketMQ 和本地事务保障一致性。",
+        evidence_refs=("resume_project_001",),
+    )
+
+
+def _legacy_flat_question_payload() -> dict[str, Any]:
+    return {
+        "question_text": "请说明支付链路中幂等、失败补偿和上线验证指标是如何设计的。",
+        "question_kind": "project_deep_dive",
+        "focus_dimension": "project_deep_dive",
+        "difficulty": "medium",
+        "skill_dimension": "支付可靠性",
+        "expected_signal": "能说明幂等、补偿和验证指标。",
+        "follow_ups": ["失败补偿如何触发？", "如何证明方案有效？"],
+        "scoring_rubric": [
+            {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+            {"dimension": "tradeoff", "signals": ["说明取舍", "说明边界"]},
+        ],
+        "missing_context": [],
+        "evidence_refs": ["resume_project_001"],
+        "confidence": "high",
+        "clarification_needed": False,
+    }
+
+
+def _next_question_agent_output_payload() -> dict[str, Any]:
+    return {
+        "schema_id": NEXT_QUESTION_AGENT_SCHEMA_ID,
+        "prompt_version": NEXT_QUESTION_AGENT_PROMPT_VERSION,
+        "clarification_needed": False,
+        "confidence": "medium",
+        "missing_context": [],
+        "decision": {
+            "turn_intent": "project_implementation_deep_dive",
+            "intent_reason": "根据当前证据选择实现追问。",
+            "evidence_support_level": "direct_implemented",
+            "evidence_support_reason": "简历项目直接支撑支付链路追问。",
+            "main_question_style": "ask_how_implemented",
+            "allowed_extension_depth": "main_question_allowed",
+            "primary_evidence_refs": ["resume_project_001"],
+            "secondary_evidence_refs": [],
+            "unsupported_capability_claims": [],
+            "risk_flags": [],
+            "avoid_patterns_applied": ["unsupported_capability_as_fact"],
+        },
+        "question": {
+            "question_text": "你在支付链路里如何实现幂等、失败补偿和上线验证？",
+            "question_kind": "implementation_deep_dive",
+            "difficulty": "medium",
+            "skill_dimension": "支付链路一致性",
+            "expected_signal": "能说明真实实现链路、异常处理和验证效果。",
+            "follow_ups": ["失败补偿如何触发？", "如何证明方案有效？"],
+            "scoring_rubric": [
+                {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+                {"dimension": "reasoning", "signals": ["说明链路", "说明取舍"]},
+            ],
+        },
+        "persistence_hints": {
+            "should_persist_decision": True,
+            "should_update_progress": True,
+            "next_focus_candidates": [NODE_REF],
+            "trace_tags": ["next_question_agent", "direct_implemented"],
+        },
+        "evidence_refs": ["resume_project_001"],
+        "post_check_hints": {
+            "claims_to_verify": [],
+            "unsupported_terms_in_question": [],
+            "question_style_check": "pass",
+            "evidence_grounding_check": "pass",
+        },
+    }
 
 
 def test_agent_prompt_bundle_to_prompt_asset_dict_outputs_standard_prompt_asset() -> None:
@@ -143,6 +226,153 @@ def test_agent_prompt_bundle_omits_empty_optional_fields_and_unknown_extra_field
     assert "developer_constraints" not in prompt_asset
     assert "user_task" not in prompt_asset
     assert "input_contract" not in prompt_asset
+
+
+def test_question_payload_envelope_keeps_nested_next_question_agent_output_shape() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.polish.question_generation_service import _question_payload_envelope
+
+    blueprint = _question_output_blueprint()
+    raw_payload = _next_question_agent_output_payload()
+
+    envelope = _question_payload_envelope(raw_payload, blueprint=blueprint)
+    parsed_payload, parse_errors = _parse_llm_question_payload(raw_payload, blueprint=blueprint)
+
+    assert isinstance(envelope, AgentOutputEnvelope)
+    assert envelope.succeeded is True
+    assert envelope.task_type == "polish_question_generation"
+    assert envelope.schema_id == NEXT_QUESTION_AGENT_SCHEMA_ID
+    assert envelope.schema_version == NEXT_QUESTION_AGENT_SCHEMA_VERSION
+    assert envelope.prompt_version == NEXT_QUESTION_AGENT_PROMPT_VERSION
+    assert envelope.evidence_refs == ("resume_project_001",)
+    assert parse_errors == ()
+    assert parsed_payload == envelope.payload
+    assert parsed_payload == {
+        "question_text": "你在支付链路里如何实现幂等、失败补偿和上线验证？",
+        "question_kind": "implementation_deep_dive",
+        "focus_dimension": "implementation_deep_dive",
+        "difficulty": "medium",
+        "skill_dimension": "支付链路一致性",
+        "expected_signal": "能说明真实实现链路、异常处理和验证效果。",
+        "follow_ups": ["失败补偿如何触发？", "如何证明方案有效？"],
+        "scoring_rubric": [
+            {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+            {"dimension": "reasoning", "signals": ["说明链路", "说明取舍"]},
+        ],
+        "missing_context": [],
+        "evidence_refs": ["resume_project_001"],
+        "confidence": "medium",
+        "clarification_needed": False,
+        "next_question_agent": {
+            "schema_id": NEXT_QUESTION_AGENT_SCHEMA_ID,
+            "schema_version": NEXT_QUESTION_AGENT_SCHEMA_VERSION,
+            "prompt_version": NEXT_QUESTION_AGENT_PROMPT_VERSION,
+            "clarification_needed": False,
+            "confidence": "medium",
+            "missing_context": [],
+            "decision": {
+                "turn_intent": "project_implementation_deep_dive",
+                "intent_reason": "根据当前证据选择实现追问。",
+                "evidence_support_level": "direct_implemented",
+                "evidence_support_reason": "简历项目直接支撑支付链路追问。",
+                "main_question_style": "ask_how_implemented",
+                "allowed_extension_depth": "main_question_allowed",
+                "primary_evidence_refs": ["resume_project_001"],
+                "secondary_evidence_refs": [],
+                "unsupported_capability_claims": [],
+                "risk_flags": [],
+                "avoid_patterns_applied": ["unsupported_capability_as_fact"],
+            },
+            "question": {
+                "question_text": "你在支付链路里如何实现幂等、失败补偿和上线验证？",
+                "question_kind": "implementation_deep_dive",
+                "difficulty": "medium",
+                "skill_dimension": "支付链路一致性",
+                "expected_signal": "能说明真实实现链路、异常处理和验证效果。",
+                "follow_ups": ["失败补偿如何触发？", "如何证明方案有效？"],
+                "scoring_rubric": [
+                    {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+                    {"dimension": "reasoning", "signals": ["说明链路", "说明取舍"]},
+                ],
+            },
+            "persistence_hints": {
+                "should_persist_decision": True,
+                "should_update_progress": True,
+                "next_focus_candidates": [NODE_REF],
+                "trace_tags": ["next_question_agent", "direct_implemented"],
+            },
+            "evidence_refs": ["resume_project_001"],
+            "post_check_hints": {
+                "claims_to_verify": [],
+                "unsupported_terms_in_question": [],
+                "question_style_check": "pass",
+                "evidence_grounding_check": "pass",
+            },
+        },
+    }
+
+
+def test_question_payload_envelope_keeps_legacy_flat_payload_shape() -> None:
+    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.polish.question_generation_service import _question_payload_envelope
+
+    blueprint = _question_output_blueprint()
+    raw_payload = _legacy_flat_question_payload()
+
+    envelope = _question_payload_envelope(raw_payload, blueprint=blueprint)
+    parsed_payload, parse_errors = _parse_llm_question_payload(raw_payload, blueprint=blueprint)
+
+    assert isinstance(envelope, AgentOutputEnvelope)
+    assert envelope.succeeded is True
+    assert envelope.task_type == "polish_question_generation"
+    assert envelope.evidence_refs == ("resume_project_001",)
+    assert parse_errors == ()
+    assert parsed_payload == envelope.payload
+    assert parsed_payload == raw_payload
+    assert set(parsed_payload) == {
+        "question_text",
+        "question_kind",
+        "focus_dimension",
+        "difficulty",
+        "skill_dimension",
+        "expected_signal",
+        "follow_ups",
+        "scoring_rubric",
+        "missing_context",
+        "evidence_refs",
+        "confidence",
+        "clarification_needed",
+    }
+
+
+def test_question_payload_envelope_keeps_invalid_payload_error_codes() -> None:
+    from app.application.polish.question_generation_service import _question_payload_envelope
+
+    blueprint = _question_output_blueprint()
+    raw_payload = {
+        "question_text": "",
+        "difficulty": "extreme",
+        "confidence": "certain",
+        "clarification_needed": "no",
+    }
+
+    envelope = _question_payload_envelope(raw_payload, blueprint=blueprint)
+    parsed_payload, parse_errors = _parse_llm_question_payload(raw_payload, blueprint=blueprint)
+
+    expected_errors = (
+        "llm_question_text_required",
+        "llm_difficulty_invalid",
+        "llm_expected_signal_required",
+        "llm_follow_ups_required",
+        "llm_scoring_rubric_required",
+        "llm_confidence_invalid",
+        "llm_clarification_needed_required",
+        "llm_evidence_refs_required",
+    )
+    assert envelope.succeeded is False
+    assert envelope.validation_errors == expected_errors
+    assert parsed_payload is None
+    assert parse_errors == expected_errors
 
 
 def test_build_question_prompt_asset_top_level_shape_stays_stable() -> None:
@@ -437,6 +667,23 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert metadata["llm_generation_mode"] == "provider_structured_json"
     assert metadata["fallback_visible"] is False
     assert metadata["llm_trace_refs"] == ["trace_next_question_agent_prompt_v1"]
+    assert metadata["llm_difficulty"] == "medium"
+    assert metadata["llm_skill_dimension"] == "支付可靠性"
+    assert metadata["llm_expected_signal"] == "能说明幂等、补偿、验证指标和复盘证据。"
+    assert metadata["llm_confidence"] == "high"
+    assert metadata["llm_missing_context"] == []
+    assert metadata["llm_clarification_needed"] is False
+    for envelope_key in (
+        "agent_output_envelope",
+        "output_envelope",
+        "validation_errors",
+        "provider_payload",
+        "raw_completion",
+    ):
+        if envelope_key == "validation_errors":
+            assert metadata[envelope_key] == []
+        else:
+            assert envelope_key not in metadata
     assert metadata["grounding_status"] == "passed"
     assert metadata["grounding_validation_errors"] == []
     assert metadata["manual_review_required"] is False
