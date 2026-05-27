@@ -1076,26 +1076,52 @@ def test_progress_tree_quality_first_matches_golden_menu_shape() -> None:
 def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_quota() -> None:
     bundle = build_progress_quality_first_menu_prompt(_progress_context_fixture())
     prompt = bundle["prompt"]
+    prompt_context = bundle["context"]
     output_schema = bundle["output_schema"]
     retired_basis_types = [
         "explicit_" + "evidence",
         "reasonable_" + "inference",
         "un" + "supported",
     ]
+    rule_context_fields = {
+        "quality_rules",
+        "menu_shape_policy",
+        "bad_shape_patterns",
+        "deferred_candidate_policy",
+    }
 
+    assert set(prompt_context) == {
+        "context_metadata",
+        "resume_version_ref",
+        "resume_markdown",
+        "job_version_ref",
+        "job_payload",
+        "match_context",
+        "topic",
+        "subtopic",
+        "custom_topic",
+    }
+    assert rule_context_fields.isdisjoint(prompt_context)
     assert "6-9 个主训练节点" in prompt
     assert "resume_deep_dive 4-6" in prompt
     assert "jd_gap_learning 2-4" in prompt
     assert "canonical Progress Tree initial generation contract" in prompt
-    assert "status 只能是 success 或 partial" in prompt
+    assert "output_schema.allowed_status" in prompt
+    assert "output_schema.allowed_basis_types" in prompt
     assert "deferred_candidates" in prompt
     assert "你必须像资深面试官一样先完整阅读" not in prompt
     assert "根对象必须包含 schema_id" not in prompt
     assert "leaf node 必须包含 node_code" not in prompt
+    assert "category 必须包含 category" not in prompt
     assert "10 到 14 个叶子节点" not in prompt
     assert "每类建议 5 到 7 个节点" not in prompt
+    assert "required_root_fields" in output_schema
+    assert "required_leaf_fields" in output_schema
+    assert "allowed_status" in output_schema
+    assert "allowed_basis_types" in output_schema
     assert "metadata" not in output_schema["required_root_fields"]
     assert "deferred_candidates" in output_schema["optional_root_fields"]
+    assert output_schema["allowed_status"] == ["success", "partial"]
     assert output_schema["allowed_basis_types"] == ["resume_signal", "jd_requirement", "match_gap", "mixed"]
     assert "status" in output_schema["required_root_fields"]
     assert "display_title" in output_schema["required_leaf_fields"]
