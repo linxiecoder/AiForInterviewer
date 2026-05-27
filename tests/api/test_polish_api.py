@@ -1024,6 +1024,63 @@ def test_progress_evidence_chunks_rehydrate_flattened_resume_markdown() -> None:
     assert "贡献项二" not in [chunk.title for chunk in project_chunks]
 
 
+def test_progress_evidence_debug_prints_resume_chunk_pipeline(capsys) -> None:
+    context = _progress_context_fixture(
+        requirements=["抽象岗位要求甲"],
+        responsibilities=["抽象岗位职责甲"],
+        resume_markdown=(
+            "# 简历 "
+            "## 工作经历 "
+            "### 2024-2025 @ 公司甲 @ 角色甲 "
+            "负责抽象协作与流程推进。 "
+            "## 项目经历 "
+            "::: start **项目甲** ::: **公司甲** ::: **角色甲** ::: end "
+            "**项目背景**：背景文本甲。 "
+            "**核心贡献**： - **贡献项一**：贡献内容一。 - **贡献项二**：贡献内容二。 "
+            "::: start **项目乙** ::: **公司乙** ::: **角色乙** ::: end "
+            "**项目背景**：背景文本乙。 "
+            "**核心贡献**： - **贡献项三**：贡献内容三。 "
+            "## 技能栈 抽象技能甲 / 抽象技能乙"
+        ),
+    )
+    context["debug_progress_evidence"] = True
+
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+
+    output = capsys.readouterr().out
+    markers = [
+        "=== raw_markdown ===",
+        "=== rehydrated_markdown ===",
+        "=== normalized_markdown ===",
+        "=== normalized_sections ===",
+        "=== project_chunks ===",
+        "=== contribution_chunks ===",
+        "=== allowed_evidence_refs ===",
+    ]
+    positions = [output.index(marker) for marker in markers]
+    assert positions == sorted(positions)
+    assert "# 简历 ## 工作经历 ### 2024-2025 @ 公司甲 @ 角色甲" in output
+    assert "### 项目甲 @ 公司甲 @ 角色甲" in output
+    assert '"title": "项目甲"' in output
+    assert '"title": "项目乙"' in output
+    assert '"title": "贡献项一"' in output
+    assert '"title": "贡献项二"' in output
+    assert '"title": "贡献项三"' in output
+    assert '"company": "公司甲"' in output
+    assert '"role": "角色甲"' in output
+    assert '"source_type": "resume_project"' in output
+    assert '"source_type": "resume_project_contribution"' in output
+    assert '"ref": "resume_project_001"' in output
+    assert '"ref": "resume_project_contribution_001"' in output
+    assert "项目甲 @ 公司甲" not in [
+        item["title"]
+        for item in prompt_context["allowed_evidence_refs"]
+        if item["source_type"] == "resume_project"
+    ]
+    assert "物料库存" not in output
+    assert "硬件测试" not in output
+
+
 def test_same_contribution_title_in_different_projects_not_deduped() -> None:
     context = _progress_context_fixture(
         resume_markdown=(

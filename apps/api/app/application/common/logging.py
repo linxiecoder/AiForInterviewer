@@ -335,6 +335,29 @@ class LogUtil:
         )
 
     @classmethod
+    def _log_resume_evidence_debug(
+            cls,
+            *,
+            context: dict[str, Any],
+            stage: str,
+            value: object,
+    ) -> None:
+        session = context.get("session", {}) if isinstance(context.get("session"), dict) else {}
+        resume = context.get("resume_snapshot", {}) if isinstance(context.get("resume_snapshot"), dict) else {}
+
+        cls._emit(
+            APP_LOGGER_NAME,
+            logging.INFO,
+            "progress_evidence_debug stage",
+            {
+                "stage": stage,
+                "session_id": session.get("session_id"),
+                "resume_version_id": resume.get("resume_version_id"),
+                "payload": value,
+            },
+        )
+
+    @classmethod
     def _emit(
         cls,
         logger_name: str,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from app.application.polish.question_generation_policy import (
     SEMANTIC_RESUME_SOURCE_TYPES,
     SOURCE_PRIORITY_POLICY_BY_PURPOSE,
 )
+from app.infrastructure.observability.logging import LogUtil
+
 
 
 ProgressEvidencePurpose = Literal["initial_plan", "state_refresh", "next_question"]
@@ -133,25 +136,25 @@ def build_progress_evidence_chunks(context: dict[str, Any]) -> list[ProgressEvid
         text: object | None,
         priority: int,
         reason: str,
-    ) -> None:
+    ) -> ProgressEvidenceChunk | None:
         clean_text = _clean_text(text, max_chars=MAX_CHUNK_TEXT_CHARS)
         if not clean_text:
-            return
+            return None
         clean_title = _clean_text(title, max_chars=120) or _summarize_title(clean_text)
         counters[source_type] += 1
-        chunks.append(
-            ProgressEvidenceChunk(
-                chunk_id=f"{source_type}_{counters[source_type]:03d}",
-                source_type=source_type,
-                source_ref={key: value for key, value in source_ref.items() if value is not None},
-                title=clean_title,
-                text=clean_text,
-                keywords=_keywords(f"{clean_title} {clean_text}"),
-                priority=priority,
-                reason=reason,
-                sequence=len(chunks),
-            )
+        chunk = ProgressEvidenceChunk(
+            chunk_id=f"{source_type}_{counters[source_type]:03d}",
+            source_type=source_type,
+            source_ref={key: value for key, value in source_ref.items() if value is not None},
+            title=clean_title,
+            text=clean_text,
+            keywords=_keywords(f"{clean_title} {clean_text}"),
+            priority=priority,
+            reason=reason,
+            sequence=len(chunks),
         )
+        chunks.append(chunk)
+        return chunk
 
     _add_job_chunks(context, add_chunk)
     _add_resume_chunks(context, add_chunk)
@@ -314,14 +317,17 @@ def build_progress_prompt_context(
         progress_node_ref=progress_node_ref,
         source_priority_policy=source_priority_policy,
     )
-    return {
+    allowed_evidence_refs = _allowed_evidence_refs_for_prompt(selection.selected_chunks)
+    result = {
         "context_metadata": _context_metadata(context),
         "selected_evidence_chunks": [chunk.to_prompt_dict() for chunk in selection.selected_chunks],
-        "allowed_evidence_refs": _allowed_evidence_refs_for_prompt(selection.selected_chunks),
+        "allowed_evidence_refs": allowed_evidence_refs,
         "dropped_context_summary": selection.dropped_context_summary,
         "match_context_summary": _match_context_summary(context.get("match_context", {})),
         "turns_summary": _turns_summary(context.get("turns", [])),
     }
+    LogUtil._log_resume_evidence_debug("allowed_evidence_refs", allowed_evidence_refs)
+    return result
 
 
 def _allowed_evidence_refs_for_prompt(chunks: tuple[ProgressEvidenceChunk, ...]) -> list[dict[str, str]]:
@@ -337,6 +343,32 @@ def _allowed_evidence_refs_for_prompt(chunks: tuple[ProgressEvidenceChunk, ...])
             }
         )
     return allowed_refs
+
+
+def _debug_progress_evidence_enabled(context: dict[str, Any]) -> bool:
+    return bool(context.get("debug_progress_evidence") or context.get("debug_resume_chunks"))
+
+
+def _debug_flatten_markdown(markdown_text: str) -> str:
+    return " ".join(markdown_text.replace("\r\n", "\n").replace("\r", "\n").split())
+
+
+def _debug_resume_chunk(
+    chunk: ProgressEvidenceChunk | None,
+    *,
+    section: _MarkdownSection | None,
+) -> dict[str, Any]:
+    if chunk is None:
+        return {}
+    return {
+        "ref": chunk.chunk_id,
+        "source_type": chunk.source_type,
+        "title": chunk.title,
+        "excerpt": chunk.text,
+        "source_ref": chunk.source_ref,
+        "section_title": section.title if section else None,
+        "line_range": section.line_range if section else None,
+    }
 
 
 def _add_job_chunks(context: dict[str, Any], add_chunk) -> None:
@@ -380,14 +412,20 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
         "resume_id": resume.get("resume_id"),
         "resume_version_id": resume.get("resume_version_id"),
     }
-    markdown_text = _clean_text(resume.get("markdown_text"), max_chars=None, preserve_lines=True)
-    markdown_text = _normalize_resume_markdown(markdown_text) if markdown_text else None
+    raw_markdown = _clean_text(resume.get("markdown_text"), max_chars=None, preserve_lines=True)
+    rehydrated_text = _rehydrate_flattened_resume_markdown(raw_markdown) if raw_markdown else None
+    markdown_text = _normalize_resume_project_containers(rehydrated_text) if rehydrated_text else None
     emitted: set[tuple[str, str, str, str, str]] = set()
     markdown_source_types: set[str] = set()
     project_sequence = 0
+    debug_enabled = _debug_progress_evidence_enabled(context)
+    debug_project_chunks: list[dict[str, Any]] = []
+    debug_contribution_chunks: list[dict[str, Any]] = []
 
     if markdown_text:
-        for section in _split_markdown_sections(markdown_text):
+        sections = _split_markdown_sections(markdown_text)
+        LogUtil._log_resume_evidence_debug(context, stage="raw_markdown", value=markdown_text)
+        for section in sections:
             source_type = _infer_resume_section_type(section)
             if source_type == "section_header":
                 continue
@@ -412,7 +450,7 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
                     continue
                 emitted.add(key)
                 markdown_source_types.add(item.source_type)
-                add_chunk(
+                created_chunk = add_chunk(
                     item.source_type,
                     source_ref={**source_ref, **item.source_ref},
                     title=item.title,
@@ -420,6 +458,12 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
                     priority=_resume_priority(item.source_type),
                     reason=_resume_reason(item.source_type),
                 )
+                if debug_enabled and item.source_type == "resume_project":
+                    debug_project_chunks.append(_debug_resume_chunk(created_chunk, section=section))
+                elif debug_enabled and item.source_type == "resume_project_contribution":
+                    debug_contribution_chunks.append(_debug_resume_chunk(created_chunk, section=section))
+    elif debug_enabled:
+        LogUtil._log_resume_evidence_debug(context, stage="raw_markdown", value=_debug_flatten_markdown(raw_markdown or ""))
 
     fallback_fields = (
         ("resume_project", "project_experiences"),
@@ -435,7 +479,7 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
             if key in emitted:
                 continue
             emitted.add(key)
-            add_chunk(
+            created_chunk = add_chunk(
                 source_type,
                 source_ref=source_ref,
                 title=item,
@@ -443,6 +487,12 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
                 priority=_resume_priority(source_type),
                 reason=_resume_reason(source_type),
             )
+            if debug_enabled and source_type == "resume_project":
+                debug_project_chunks.append(_debug_resume_chunk(created_chunk, section=None))
+
+    if debug_enabled:
+        LogUtil._log_resume_evidence_debug(context, stage="project_chunks", value=debug_project_chunks)
+        LogUtil._log_resume_evidence_debug(context, stage="contribution_chunks", value=debug_contribution_chunks)
 
 
 def _add_match_chunks(context: dict[str, Any], add_chunk) -> None:
@@ -725,13 +775,15 @@ def _chunk_project_section(section: _MarkdownSection, *, project_sequence: int) 
             return block_items
         return _chunk_legacy_project_paragraphs(section, first_project_sequence=project_sequence)
 
-    project_title, company = heading_parts
+    project_title, company, role = heading_parts
     source_ref: dict[str, Any] = {
         "project_title": project_title,
         "project_sequence": project_sequence,
     }
     if company:
         source_ref["company"] = company
+    if role:
+        source_ref["role"] = role
     items = [
         _ResumeSectionItem(
             source_type="resume_project",
@@ -786,8 +838,8 @@ def _chunk_summary_section(section: _MarkdownSection) -> list[_ResumeSectionItem
     return [_ResumeSectionItem(source_type="resume_summary", title=section.title, text=section.text, source_ref={})]
 
 
-def _resume_project_heading_parts(section: _MarkdownSection) -> tuple[str, str | None] | None:
-    project_title, company, _role = _resume_heading_parts(section.title)
+def _resume_project_heading_parts(section: _MarkdownSection) -> tuple[str, str | None, str | None] | None:
+    project_title, company, role = _resume_heading_parts(section.title)
     if (
         not project_title
         or _is_project_structure_title(project_title)
@@ -795,7 +847,7 @@ def _resume_project_heading_parts(section: _MarkdownSection) -> tuple[str, str |
         or _looks_like_contribution_title(project_title)
     ):
         return None
-    return project_title, company
+    return project_title, company, role
 
 
 def _resume_heading_parts(title: str) -> tuple[str, str | None, str | None]:
