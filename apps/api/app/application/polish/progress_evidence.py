@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Literal
+
+from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from app.application.llm.agent_io import AgentEvidenceItem
 from app.application.polish.question_generation_policy import (
@@ -26,6 +30,7 @@ DEFAULT_SELECTION_LIMITS: dict[ProgressEvidencePurpose, tuple[int, int]] = {
 }
 
 ORDER_BY_PURPOSE = SOURCE_PRIORITY_POLICY_BY_PURPOSE
+_MARKDOWN_PARSER = MarkdownIt("commonmark", {"html": False})
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,8 @@ class _MarkdownSection:
     text: str
     level: int = 0
     parent_title: str | None = None
+    breadcrumb: tuple[str, ...] = ()
+    line_range: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -349,32 +356,40 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
         "resume_version_id": resume.get("resume_version_id"),
     }
     markdown_text = _clean_text(resume.get("markdown_text"), max_chars=None, preserve_lines=True)
-    markdown_text = _normalize_resume_project_containers(markdown_text) if markdown_text else None
-    emitted: set[tuple[str, str]] = set()
+    markdown_text = _normalize_resume_markdown(markdown_text) if markdown_text else None
+    emitted: set[tuple[str, str, str, str, str]] = set()
+    markdown_source_types: set[str] = set()
     project_sequence = 0
-    project_sequences: dict[str, int] = {}
 
     if markdown_text:
         for section in _split_markdown_sections(markdown_text):
-            source_type = _resume_source_type(section.title, parent_title=section.parent_title)
-            for item in _resume_section_items(section, source_type):
-                key = (item.source_type, item.text)
+            source_type = _infer_resume_section_type(section)
+            if source_type == "section_header":
+                continue
+            if source_type == "resume_project":
+                section_items = _chunk_project_section(section, project_sequence=project_sequence + 1)
+                if not section_items:
+                    continue
+                project_sequence = max(
+                    project_sequence,
+                    *(
+                        int(item.source_ref["project_sequence"])
+                        for item in section_items
+                        if isinstance(item.source_ref.get("project_sequence"), int)
+                    ),
+                )
+            else:
+                section_items = _chunk_resume_section(section, source_type)
+
+            for item in section_items:
+                key = _resume_dedupe_key(section, item)
                 if key in emitted:
                     continue
                 emitted.add(key)
-                item_source_ref = dict(item.source_ref)
-                project_title = str(item_source_ref.get("project_title") or item.title or "")
-                if item.source_type == "resume_project":
-                    project_sequence += 1
-                    item_source_ref["project_sequence"] = project_sequence
-                    if project_title:
-                        project_sequences[project_title] = project_sequence
-                elif item.source_type == "resume_project_contribution":
-                    if project_title in project_sequences:
-                        item_source_ref["project_sequence"] = project_sequences[project_title]
+                markdown_source_types.add(item.source_type)
                 add_chunk(
                     item.source_type,
-                    source_ref={**source_ref, **item_source_ref},
+                    source_ref={**source_ref, **item.source_ref},
                     title=item.title,
                     text=item.text,
                     priority=_resume_priority(item.source_type),
@@ -388,8 +403,10 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
         ("resume_summary", "summary"),
     )
     for source_type, field_name in fallback_fields:
+        if source_type in markdown_source_types:
+            continue
         for item in _string_list(resume.get(field_name)):
-            key = (source_type, item)
+            key = (source_type, "fallback", "", "", _stable_text_hash(item))
             if key in emitted:
                 continue
             emitted.add(key)
@@ -495,153 +512,175 @@ def _add_collection_chunks(context: dict[str, Any], add_chunk, *, key: str, sour
         )
 
 
+def _normalize_resume_markdown(markdown_text: str) -> str:
+    return _normalize_resume_project_containers(markdown_text)
+
+
 def _normalize_resume_project_containers(markdown_text: str) -> str:
     lines: list[str] = []
     for raw_line in markdown_text.splitlines():
         parsed_header = _parse_resume_project_container_header(raw_line)
         if parsed_header is not None:
-            project_title, company = parsed_header
-            heading = f"### {project_title}"
-            if company:
-                heading = f"{heading} @ {company}"
-            lines.append(heading)
+            title, company, role = parsed_header
+            heading_parts = [part for part in (title, company, role) if part]
+            lines.append(f"### {' @ '.join(heading_parts)}")
             continue
-        if re.fullmatch(r"\s*:{3,}\s*(?:end|stop)\s*:*\s*", raw_line, flags=re.IGNORECASE):
+        if re.fullmatch(r"\s*:{3,}\s*(?:end|stop)?\s*:*\s*", raw_line, flags=re.IGNORECASE):
             continue
-        lines.append(raw_line)
+        lines.append(raw_line.rstrip())
     return "\n".join(lines)
 
 
-def _parse_resume_project_container_header(raw_line: str) -> tuple[str, str | None] | None:
+def _parse_resume_project_container_header(raw_line: str) -> tuple[str, str | None, str | None] | None:
     match = re.match(
-        r"^\s*:{3,}\s*start\s+\*\*(?P<title>.+?)\*\*\s*:{3,}\s*"
-        r"(?:(?:\*\*(?P<company>.+?)\*\*)\s*:{3,}\s*)?end\s*:*\s*$",
+        r"^\s*:{3,}\s*start\b(?P<body>.*?)\s*:{3,}\s*end\s*:*\s*$",
         raw_line,
         flags=re.IGNORECASE,
     )
     if not match:
         return None
-    project_title = _clean_text(match.group("title"), max_chars=120)
-    if not project_title:
+    raw_parts = [part.strip() for part in re.split(r"\s*:{3,}\s*", match.group("body")) if part.strip()]
+    parts = [_clean_resume_container_part(part) for part in raw_parts]
+    parts = [part for part in parts if part]
+    if not parts:
         return None
-    company = _clean_text(match.group("company"), max_chars=120)
-    return project_title, company
+    title = parts[0]
+    company = parts[1] if len(parts) >= 2 else None
+    role = parts[2] if len(parts) >= 3 else None
+    return title, company, role
+
+
+def _clean_resume_container_part(value: str) -> str:
+    return _clean_text(_strip_markdown_title_markup(value), max_chars=120) or ""
 
 
 def _split_markdown_sections(markdown_text: str) -> list[_MarkdownSection]:
-    sections: list[_MarkdownSection] = []
-    current_title = "summary"
-    current_level = 0
-    current_parent_title: str | None = None
-    current_lines: list[str] = []
-    heading_stack: dict[int, str] = {}
-    for line in markdown_text.splitlines():
-        heading_match = re.match(r"^(#{1,6})\s*(.+)$", line.strip())
-        if heading_match:
-            _append_section(
-                sections,
-                current_title,
-                current_lines,
-                level=current_level,
-                parent_title=current_parent_title,
+    source_lines = markdown_text.splitlines()
+    heading_events = _markdown_heading_events(_MARKDOWN_PARSER.parse(markdown_text))
+    if not heading_events:
+        summary_text = "\n".join(line.rstrip() for line in source_lines).strip()
+        return [
+            _MarkdownSection(
+                title="summary",
+                text=summary_text,
+                level=0,
+                parent_title=None,
+                breadcrumb=("summary",),
+                line_range=(0, len(source_lines)),
             )
-            current_level = len(heading_match.group(1))
-            current_title = heading_match.group(2).strip()
-            current_parent_title = _nearest_parent_title(heading_stack, current_level)
-            for level in list(heading_stack):
-                if level >= current_level:
-                    del heading_stack[level]
-            heading_stack[current_level] = current_title
-            current_lines = []
-            continue
-        current_lines.append(line)
-    _append_section(
-        sections,
-        current_title,
-        current_lines,
-        level=current_level,
-        parent_title=current_parent_title,
-    )
+        ] if summary_text else []
+
+    sections: list[_MarkdownSection] = []
+    preamble_text = "\n".join(source_lines[: heading_events[0]["start_line"]]).strip()
+    if preamble_text:
+        sections.append(
+            _MarkdownSection(
+                title="summary",
+                text=preamble_text,
+                level=0,
+                parent_title=None,
+                breadcrumb=("summary",),
+                line_range=(0, heading_events[0]["start_line"]),
+            )
+        )
+
+    heading_stack: list[tuple[int, str]] = []
+    for index, event in enumerate(heading_events):
+        level = event["level"]
+        while heading_stack and heading_stack[-1][0] >= level:
+            heading_stack.pop()
+        parent_title = heading_stack[-1][1] if heading_stack else None
+        breadcrumb = tuple(title for _, title in heading_stack) + (event["title"],)
+        section_end = len(source_lines)
+        for next_event in heading_events[index + 1 :]:
+            if next_event["level"] <= level:
+                section_end = next_event["start_line"]
+                break
+        section_text = "\n".join(line.rstrip() for line in source_lines[event["end_line"] : section_end]).strip()
+        sections.append(
+            _MarkdownSection(
+                title=event["title"],
+                text=section_text,
+                level=level,
+                parent_title=parent_title,
+                breadcrumb=breadcrumb,
+                line_range=(event["end_line"], section_end),
+            )
+        )
+        heading_stack.append((level, event["title"]))
     return sections
 
 
-def _nearest_parent_title(heading_stack: dict[int, str], level: int) -> str | None:
-    for candidate_level in range(level - 1, 0, -1):
-        parent_title = heading_stack.get(candidate_level)
-        if parent_title:
-            return parent_title
-    return None
+def _markdown_heading_events(tokens: list[Token]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for index, token in enumerate(tokens):
+        if token.type != "heading_open":
+            continue
+        inline = tokens[index + 1] if index + 1 < len(tokens) and tokens[index + 1].type == "inline" else None
+        line_map = token.map or (inline.map if inline else None)
+        if not line_map:
+            continue
+        title = _clean_text(inline.content if inline else "", max_chars=160) or ""
+        if not title:
+            continue
+        events.append(
+            {
+                "level": int(token.tag[1]),
+                "title": title,
+                "start_line": int(line_map[0]),
+                "end_line": int(line_map[1]),
+            }
+        )
+    return events
 
 
-def _append_section(
-    sections: list[_MarkdownSection],
-    title: str,
-    lines: list[str],
-    *,
-    level: int = 0,
-    parent_title: str | None = None,
-) -> None:
-    text = "\n".join(line.rstrip() for line in lines).strip()
-    if text:
-        sections.append(_MarkdownSection(title=title, text=text, level=level, parent_title=parent_title))
+def _infer_resume_section_type(section: _MarkdownSection) -> str:
+    if _is_project_item_section(section):
+        return "resume_project"
+    if _is_work_experience_item_section(section):
+        return "resume_work_experience"
+    if _is_project_detail_subsection(section):
+        return "section_header"
+    if _is_project_collection_title(section.title):
+        return "section_header" if _section_has_child_heading(section) or not section.text else "resume_project"
+    if _is_work_collection_title(section.title):
+        return "section_header" if _section_has_child_heading(section) or not section.text else "resume_work_experience"
+    if _section_has_child_heading(section) and section.level <= 2:
+        return "section_header"
+    if _breadcrumb_contains(section.breadcrumb, ("技能", "技术栈", "skills", "skill", "stack")):
+        return "resume_skill"
+    if _breadcrumb_contains(section.breadcrumb, ("教育", "education", "学历")):
+        return "resume_education"
+    return "resume_summary"
 
 
-def _resume_section_items(section: _MarkdownSection, source_type: str) -> list[_ResumeSectionItem]:
-    if source_type == "resume_project":
-        heading_parts = _resume_project_heading_parts(section)
-        if heading_parts is not None:
-            return _resume_project_section_items(section, heading_parts)
-        project_items = _resume_project_block_items(section.text, source_type=source_type)
-        if project_items:
-            return project_items
-        paragraphs = _split_paragraphs(section.text)
-        if len(paragraphs) > 1:
-            return [
-                _ResumeSectionItem(
-                    source_type=source_type,
-                    title=_summarize_title(paragraph),
-                    text=paragraph,
-                    source_ref={},
-                )
-                for paragraph in paragraphs
-            ]
+def _chunk_resume_section(section: _MarkdownSection, source_type: str) -> list[_ResumeSectionItem]:
+    if not section.text:
+        return []
     if source_type == "resume_work_experience":
-        paragraphs = _split_paragraphs(section.text)
-        if len(paragraphs) > 1:
-            return [
-                _ResumeSectionItem(
-                    source_type=source_type,
-                    title=_summarize_title(paragraph),
-                    text=paragraph,
-                    source_ref={},
-                )
-                for paragraph in paragraphs
-            ]
-    return [_ResumeSectionItem(source_type=source_type, title=section.title, text=section.text, source_ref={})]
+        return _chunk_work_experience_section(section)
+    if source_type == "resume_skill":
+        return _chunk_skill_section(section)
+    if source_type == "resume_summary":
+        return _chunk_summary_section(section)
+    if source_type == "resume_education":
+        return [_ResumeSectionItem(source_type=source_type, title=section.title, text=section.text, source_ref={})]
+    return []
 
 
-def _resume_project_heading_parts(section: _MarkdownSection) -> tuple[str, str | None] | None:
-    title = _clean_text(section.title, max_chars=160) or ""
-    if _is_project_structure_title(title):
-        return None
-    company: str | None = None
-    if " @ " in title:
-        project_title, company = title.split(" @ ", 1)
-    else:
-        project_title = title
-    project_title = _clean_text(_strip_markdown_title_markup(project_title), max_chars=120)
-    company = _clean_text(_strip_markdown_title_markup(company), max_chars=120) if company else None
-    if not project_title or _is_project_structure_title(project_title):
-        return None
-    return project_title, company
+def _chunk_project_section(section: _MarkdownSection, *, project_sequence: int) -> list[_ResumeSectionItem]:
+    heading_parts = _resume_project_heading_parts(section)
+    if heading_parts is None:
+        block_items = _resume_project_block_items(section.text, first_project_sequence=project_sequence)
+        if block_items:
+            return block_items
+        return _chunk_legacy_project_paragraphs(section, first_project_sequence=project_sequence)
 
-
-def _resume_project_section_items(
-    section: _MarkdownSection,
-    heading_parts: tuple[str, str | None],
-) -> list[_ResumeSectionItem]:
     project_title, company = heading_parts
-    source_ref: dict[str, Any] = {"project_title": project_title}
+    source_ref: dict[str, Any] = {
+        "project_title": project_title,
+        "project_sequence": project_sequence,
+    }
     if company:
         source_ref["company"] = company
     items = [
@@ -652,51 +691,132 @@ def _resume_project_section_items(
             source_ref=source_ref,
         )
     ]
-    for contribution in _project_contributions(section.text):
+    for contribution_sequence, (contribution_title, contribution_text) in enumerate(
+        _extract_project_contributions(section.text),
+        start=1,
+    ):
         items.append(
             _ResumeSectionItem(
                 source_type="resume_project_contribution",
-                title=_project_contribution_title(contribution),
-                text=contribution,
-                source_ref=source_ref,
+                title=contribution_title,
+                text=contribution_text,
+                source_ref={
+                    **source_ref,
+                    "contribution_sequence": contribution_sequence,
+                },
             )
         )
     return items
 
 
-def _resume_project_block_items(text: str, *, source_type: str) -> list[_ResumeSectionItem]:
+def _chunk_work_experience_section(section: _MarkdownSection) -> list[_ResumeSectionItem]:
+    title, company, role = _resume_heading_parts(section.title)
+    source_ref: dict[str, Any] = {}
+    if company:
+        source_ref["company"] = company
+    if role:
+        source_ref["role"] = role
+    if title and _looks_like_duration(title):
+        source_ref["duration"] = title
+    chunk_title = " @ ".join(part for part in (company, role) if part) or section.title
+    return [
+        _ResumeSectionItem(
+            source_type="resume_work_experience",
+            title=chunk_title,
+            text=section.text,
+            source_ref=source_ref,
+        )
+    ]
+
+
+def _chunk_skill_section(section: _MarkdownSection) -> list[_ResumeSectionItem]:
+    return [_ResumeSectionItem(source_type="resume_skill", title=section.title, text=section.text, source_ref={})]
+
+
+def _chunk_summary_section(section: _MarkdownSection) -> list[_ResumeSectionItem]:
+    return [_ResumeSectionItem(source_type="resume_summary", title=section.title, text=section.text, source_ref={})]
+
+
+def _resume_project_heading_parts(section: _MarkdownSection) -> tuple[str, str | None] | None:
+    project_title, company, _role = _resume_heading_parts(section.title)
+    if (
+        not project_title
+        or _is_project_structure_title(project_title)
+        or _looks_like_company_only(project_title)
+        or _looks_like_contribution_title(project_title)
+    ):
+        return None
+    return project_title, company
+
+
+def _resume_heading_parts(title: str) -> tuple[str, str | None, str | None]:
+    raw_parts = [part.strip() for part in title.split(" @ ")]
+    parts = [_clean_text(_strip_markdown_title_markup(part), max_chars=120) or "" for part in raw_parts]
+    parts = [part for part in parts if part]
+    if not parts:
+        return "", None, None
+    return parts[0], parts[1] if len(parts) >= 2 else None, parts[2] if len(parts) >= 3 else None
+
+
+def _resume_project_block_items(text: str, *, first_project_sequence: int = 1) -> list[_ResumeSectionItem]:
     blocks = _split_project_blocks(text)
     if not blocks:
         return []
 
     items: list[_ResumeSectionItem] = []
     seen: set[tuple[str, str, str]] = set()
-    for project_sequence, (title, block_text) in enumerate(blocks, start=1):
+    for project_sequence, (title, block_text) in enumerate(blocks, start=first_project_sequence):
         project_ref = {"project_title": title, "project_sequence": project_sequence}
         candidates = [
             _ResumeSectionItem(
-                source_type=source_type,
+                source_type="resume_project",
                 title=title,
                 text=block_text,
                 source_ref=project_ref,
             )
         ]
-        if source_type == "resume_project":
-            candidates.extend(
-                _ResumeSectionItem(
-                    source_type="resume_project_contribution",
-                    title=_project_contribution_title(contribution),
-                    text=contribution,
-                    source_ref=project_ref,
-                )
-                for contribution in _project_contributions(block_text)
+        candidates.extend(
+            _ResumeSectionItem(
+                source_type="resume_project_contribution",
+                title=contribution_title,
+                text=contribution_text,
+                source_ref={**project_ref, "contribution_sequence": contribution_sequence},
             )
+            for contribution_sequence, (contribution_title, contribution_text) in enumerate(
+                _extract_project_contributions(block_text),
+                start=1,
+            )
+        )
         for candidate in candidates:
             key = (candidate.source_type, candidate.title, candidate.text)
             if key in seen:
                 continue
             seen.add(key)
             items.append(candidate)
+    return items
+
+
+def _chunk_legacy_project_paragraphs(
+    section: _MarkdownSection,
+    *,
+    first_project_sequence: int,
+) -> list[_ResumeSectionItem]:
+    if not _is_project_collection_title(section.title):
+        return []
+    items: list[_ResumeSectionItem] = []
+    for offset, paragraph in enumerate(_split_paragraphs(section.text)):
+        project_sequence = first_project_sequence + offset
+        items.append(
+            _ResumeSectionItem(
+                source_type="resume_project",
+                title=_summarize_title(paragraph),
+                text=paragraph,
+                source_ref={
+                    "project_title": _summarize_title(paragraph),
+                    "project_sequence": project_sequence,
+                },
+            )
+        )
     return items
 
 
@@ -743,34 +863,68 @@ def _split_project_blocks(text: str) -> list[tuple[str, str]]:
     return blocks
 
 
-def _project_contributions(block_text: str) -> list[str]:
-    result: list[str] = []
-    saw_contribution_section = False
-    in_contribution_section = False
-    for raw_line in block_text.splitlines():
-        line = raw_line.strip()
-        item = _list_item_text(line)
-        if not item and _is_core_contribution_heading(line):
-            saw_contribution_section = True
-            in_contribution_section = True
-            continue
-        if (
-            saw_contribution_section
-            and in_contribution_section
-            and not item
-            and _is_project_structure_title(line)
-            and not _is_core_contribution_heading(line)
-        ):
-            in_contribution_section = False
-            continue
-        if saw_contribution_section and not in_contribution_section:
-            continue
-        if not item:
+def _extract_project_contributions(block_text: str) -> list[tuple[str, str]]:
+    result: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in _extract_list_items_after_heading(block_text):
+        if not (_has_markdown_bold_prefix(item) or _has_leading_title_delimiter(item)):
             continue
         cleaned = _clean_project_contribution_text(item)
-        if cleaned and cleaned not in result:
-            result.append(cleaned)
+        if not cleaned:
+            continue
+        title = _project_contribution_title(item)
+        key = (_normalized_key_text(title), _normalized_key_text(cleaned))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append((title, cleaned))
     return result
+
+
+def _extract_list_items_after_heading(block_text: str) -> list[str]:
+    result: list[str] = []
+    active = False
+    current_parts: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_parts
+        if current_parts:
+            result.append(" ".join(part.strip() for part in current_parts if part.strip()).strip())
+        current_parts = []
+
+    for raw_line in block_text.splitlines():
+        line = raw_line.strip()
+        if _is_core_contribution_heading(line):
+            flush()
+            active = True
+            continue
+        if not active:
+            continue
+        if re.match(r"^#{1,6}\s+", line) or _is_resume_structure_field_heading(line):
+            flush()
+            active = False
+            continue
+        item = _top_level_list_item_text(raw_line)
+        if item:
+            flush()
+            current_parts = [item]
+            continue
+        if current_parts and raw_line[:1].isspace() and line:
+            current_parts.append(line)
+            continue
+        if not line:
+            continue
+        flush()
+    flush()
+    return [item for item in result if item]
+
+
+def _project_contributions(block_text: str) -> list[str]:
+    return [text for _title, text in _extract_project_contributions(block_text)]
+
+
+def _has_leading_title_delimiter(value: str) -> bool:
+    return bool(re.match(r"^.{2,80}?[：:|｜\-—–]+\s*.+$", _strip_markdown_title_markup(value)))
 
 
 def _project_contribution_title(text: str) -> str:
@@ -832,7 +986,11 @@ def _project_title_from_line(line: str) -> str | None:
 
 
 def _list_item_text(line: str) -> str | None:
-    match = re.match(r"^(?:[-*+]|\d+[.)]|[（(]?\d+[）)])\s+(.+)$", line.strip())
+    return _top_level_list_item_text(line)
+
+
+def _top_level_list_item_text(line: str) -> str | None:
+    match = re.match(r"^\s{0,3}(?:[-*+]|\d+[.)]|[（(]?\d+[）)])\s+(.+)$", line)
     if not match:
         return None
     return match.group(1).strip()
@@ -867,7 +1025,29 @@ def _clean_project_contribution_text(value: str) -> str:
 def _is_core_contribution_heading(value: str) -> bool:
     text = _strip_markdown_title_markup(value)
     text = re.sub(r"[：:]\s*$", "", text).strip()
-    return text in {"核心贡献", "主要贡献", "关键贡献", "项目贡献", "贡献项", "核心工作", "主要工作"}
+    return text in {"核心贡献", "主要贡献", "关键贡献", "项目贡献", "核心工作", "主要工作"}
+
+
+def _is_resume_structure_field_heading(value: object) -> bool:
+    text = _strip_markdown_title_markup(str(value or ""))
+    text = re.sub(r"[：:]\s*.*$", "", text).strip().lower()
+    text = re.sub(r"\s+", "", text)
+    return text in {
+        "项目背景",
+        "项目简介",
+        "项目描述",
+        "项目职责",
+        "职责",
+        "工作职责",
+        "工作业绩",
+        "工作内容",
+        "核心贡献",
+        "主要贡献",
+        "关键贡献",
+        "项目贡献",
+        "核心工作",
+        "主要工作",
+    }
 
 
 def _is_project_structure_title(value: object) -> bool:
@@ -884,7 +1064,6 @@ def _is_project_structure_title(value: object) -> bool:
         "主要贡献",
         "关键贡献",
         "项目贡献",
-        "贡献项",
         "核心工作",
         "主要工作",
         "职责",
@@ -893,29 +1072,139 @@ def _is_project_structure_title(value: object) -> bool:
 
 
 def _resume_source_type(title: str, *, parent_title: str | None = None) -> str:
-    normalized = title.lower()
-    parent_normalized = (parent_title or "").lower()
-    if _is_project_structure_title(title) and any(
-        keyword in normalized for keyword in ("背景", "贡献", "职责", "描述", "简介")
-    ):
-        return "resume_summary"
-    if " @ " in title and not _is_project_structure_title(title):
-        return "resume_project"
-    if (
-        parent_title
-        and any(keyword in parent_normalized for keyword in ("项目", "project", "作品", "开源", "竞赛"))
-        and not _is_project_structure_title(title)
-    ):
-        return "resume_project"
-    if any(keyword in normalized for keyword in ("项目", "project", "作品", "开源", "竞赛")):
-        return "resume_project"
-    if any(keyword in normalized for keyword in ("技能", "技术栈", "skills", "skill", "stack")):
-        return "resume_skill"
-    if any(keyword in normalized for keyword in ("工作", "实习", "经历", "experience", "employment")):
-        return "resume_work_experience"
-    if any(keyword in normalized for keyword in ("教育", "education", "学历")):
-        return "resume_education"
-    return "resume_summary"
+    breadcrumb = tuple(part for part in (parent_title, title) if part)
+    return _infer_resume_section_type(
+        _MarkdownSection(title=title, text="", parent_title=parent_title, breadcrumb=breadcrumb)
+    )
+
+
+def _is_project_item_section(section: _MarkdownSection) -> bool:
+    if section.level < 3 or not _is_direct_child_of_project_collection(section):
+        return False
+    project_title, _company, _role = _resume_heading_parts(section.title)
+    if not project_title:
+        return False
+    if _is_project_structure_title(project_title):
+        return False
+    if _looks_like_company_only(project_title):
+        return False
+    if _looks_like_contribution_title(project_title):
+        return False
+    return True
+
+
+def _is_work_experience_item_section(section: _MarkdownSection) -> bool:
+    return section.level >= 3 and _is_direct_child_of_work_collection(section)
+
+
+def _is_project_detail_subsection(section: _MarkdownSection) -> bool:
+    collection_index = _collection_index(section.breadcrumb, _is_project_collection_title)
+    if collection_index is None:
+        return False
+    ancestors_after_collection = section.breadcrumb[collection_index + 1 : -1]
+    return any(
+        ancestor
+        and not _is_project_structure_title(ancestor)
+        and not _is_project_collection_title(ancestor)
+        for ancestor in ancestors_after_collection
+    )
+
+
+def _is_direct_child_of_project_collection(section: _MarkdownSection) -> bool:
+    return bool(section.parent_title and _is_project_collection_title(section.parent_title))
+
+
+def _is_direct_child_of_work_collection(section: _MarkdownSection) -> bool:
+    return bool(section.parent_title and _is_work_collection_title(section.parent_title))
+
+
+def _is_project_collection_title(value: object) -> bool:
+    normalized = _normalized_key_text(value)
+    return normalized in {"项目经历", "项目经验", "projects", "projectexperience", "projectexperiences"}
+
+
+def _is_work_collection_title(value: object) -> bool:
+    normalized = _normalized_key_text(value)
+    return normalized in {
+        "工作经历",
+        "工作经验",
+        "实习经历",
+        "experience",
+        "experiences",
+        "employment",
+        "workexperience",
+        "workexperiences",
+    }
+
+
+def _breadcrumb_contains(breadcrumb: tuple[str, ...], keywords: tuple[str, ...]) -> bool:
+    normalized_keywords = tuple(keyword.lower() for keyword in keywords)
+    for title in breadcrumb:
+        normalized = _normalized_key_text(title)
+        if any(keyword.lower() in normalized for keyword in normalized_keywords):
+            return True
+    return False
+
+
+def _collection_index(breadcrumb: tuple[str, ...], predicate) -> int | None:
+    for index, title in enumerate(breadcrumb):
+        if predicate(title):
+            return index
+    return None
+
+
+def _section_has_child_heading(section: _MarkdownSection) -> bool:
+    for line in section.text.splitlines():
+        match = re.match(r"^(#{1,6})\s+", line.strip())
+        if match and len(match.group(1)) > section.level:
+            return True
+    return False
+
+
+def _looks_like_company_only(value: object) -> bool:
+    compact = _normalized_key_text(value)
+    if not compact:
+        return False
+    product_markers = ("项目", "project", "平台", "系统", "工具", "服务", "应用", "工作流", "引擎", "库")
+    if any(marker in compact for marker in product_markers):
+        return False
+    company_markers = ("公司", "有限公司", "集团", "企业", "事业部", "inc", "ltd", "llc", "corp", "company")
+    return any(marker in compact for marker in company_markers)
+
+
+def _looks_like_contribution_title(value: object) -> bool:
+    compact = _normalized_key_text(value)
+    return compact.startswith("贡献项") or compact in {"核心贡献", "主要贡献", "关键贡献", "项目贡献"}
+
+
+def _looks_like_duration(value: object) -> bool:
+    text = _clean_text(value, max_chars=120) or ""
+    return bool(re.search(r"\d{4}|\d{2}\.\d{2}|至今|present|now", text, flags=re.IGNORECASE))
+
+
+def _resume_dedupe_key(section: _MarkdownSection, item: _ResumeSectionItem) -> tuple[str, str, str, str, str]:
+    return (
+        item.source_type,
+        _resume_section_context(section),
+        _normalized_key_text(item.source_ref.get("project_title")),
+        _normalized_key_text(item.source_ref.get("company")),
+        _stable_text_hash(item.text),
+    )
+
+
+def _resume_section_context(section: _MarkdownSection) -> str:
+    return " > ".join(section.breadcrumb or (section.title,))
+
+
+def _stable_text_hash(value: object) -> str:
+    normalized = _normalized_key_text(value)
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+
+
+def _normalized_key_text(value: object) -> str:
+    text = _strip_markdown_title_markup(str(value or ""))
+    text = re.sub(r"[：:]\s*$", "", text).strip().lower()
+    return re.sub(r"\s+", "", text)
 
 
 def _resume_priority(source_type: str) -> int:

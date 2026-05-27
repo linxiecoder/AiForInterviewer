@@ -40,6 +40,7 @@ from app.application.polish.progress_evidence import (
     build_progress_prompt_context,
     select_progress_tree_evidence_chunks,
     _normalize_resume_project_containers,
+    _split_markdown_sections,
 )
 from app.application.llm.types import LlmTransportResult
 from app.domain.auth.entities import CurrentActor
@@ -873,6 +874,213 @@ def test_progress_evidence_normalizes_custom_project_containers_to_markdown_head
     assert "### 项目乙 @ 公司乙" in normalized
     assert "::: start" not in normalized
     assert "::: end" not in normalized
+
+
+def test_markdown_it_sections_split_project_siblings() -> None:
+    markdown_text = (
+        "## 项目经历\n"
+        "### 项目甲 @ 公司甲\n"
+        "**项目背景**：背景甲。\n"
+        "**核心贡献**：\n"
+        "- **贡献项一**：内容一。\n\n"
+        "### 项目乙 @ 公司乙\n"
+        "**项目背景**：背景乙。\n"
+        "**核心贡献**：\n"
+        "- **贡献项二**：内容二。\n"
+    )
+
+    sections = _split_markdown_sections(markdown_text)
+    sections_by_title = {section.title: section for section in sections}
+
+    assert "项目甲 @ 公司甲" in sections_by_title
+    assert "项目乙 @ 公司乙" in sections_by_title
+    assert "项目乙" not in sections_by_title["项目甲 @ 公司甲"].text
+    assert "项目甲" not in sections_by_title["项目乙 @ 公司乙"].text
+    assert sections_by_title["项目甲 @ 公司甲"].line_range is not None
+    assert sections_by_title["项目乙 @ 公司乙"].parent_title == "项目经历"
+
+
+def test_resume_project_only_from_project_heading() -> None:
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "### 项目甲 @ 公司甲\n"
+            "**项目背景**：背景甲。\n"
+            "**核心贡献**：\n"
+            "- **贡献项一**：内容一。\n\n"
+            "### 项目乙 @ 公司乙\n"
+            "**项目背景**：背景乙。\n"
+            "**核心贡献**：\n"
+            "- **贡献项二**：内容二。\n"
+        ),
+    )
+
+    project_titles = [
+        chunk.title
+        for chunk in build_progress_evidence_chunks(context)
+        if chunk.source_type == "resume_project"
+    ]
+
+    assert project_titles == ["项目甲", "项目乙"]
+    assert "公司甲" not in project_titles
+    assert "公司乙" not in project_titles
+    assert "项目背景" not in project_titles
+    assert "核心贡献" not in project_titles
+    assert "贡献项一" not in project_titles
+    assert "贡献项二" not in project_titles
+
+
+def test_resume_project_contribution_from_core_contribution_list() -> None:
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "### 项目甲 @ 公司甲\n"
+            "**项目背景**：背景甲。\n"
+            "**核心贡献**：\n"
+            "- **贡献项一**：内容一。\n\n"
+            "### 项目乙 @ 公司乙\n"
+            "**项目背景**：背景乙。\n"
+            "**核心贡献**：\n"
+            "- **贡献项二**：内容二。\n"
+        ),
+    )
+
+    contribution_chunks = [
+        chunk
+        for chunk in build_progress_evidence_chunks(context)
+        if chunk.source_type == "resume_project_contribution"
+    ]
+
+    assert [chunk.title for chunk in contribution_chunks] == ["贡献项一", "贡献项二"]
+    for expected_sequence, chunk in enumerate(contribution_chunks, start=1):
+        assert chunk.source_ref["project_title"] in {"项目甲", "项目乙"}
+        assert chunk.source_ref["company"] in {"公司甲", "公司乙"}
+        assert chunk.source_ref["project_sequence"] == expected_sequence
+        assert chunk.source_ref["contribution_sequence"] == 1
+
+
+def test_custom_container_normalization_matches_standard_markdown() -> None:
+    standard_markdown = (
+        "## 项目经历\n"
+        "### 项目甲 @ 公司甲\n"
+        "**项目背景**：背景甲。\n"
+        "**核心贡献**：\n"
+        "- **贡献项一**：内容一。\n\n"
+        "### 项目乙 @ 公司乙\n"
+        "**项目背景**：背景乙。\n"
+        "**核心贡献**：\n"
+        "- **贡献项二**：内容二。\n"
+    )
+    container_markdown = (
+        "## 项目经历\n"
+        "::: start **项目甲** ::: **公司甲** ::: end\n"
+        "**项目背景**：背景甲。\n"
+        "**核心贡献**：\n"
+        "- **贡献项一**：内容一。\n\n"
+        "::: start **项目乙** ::: **公司乙** ::: end\n"
+        "**项目背景**：背景乙。\n"
+        "**核心贡献**：\n"
+        "- **贡献项二**：内容二。\n"
+    )
+
+    standard_chunks = [
+        (chunk.source_type, chunk.title, chunk.text, chunk.source_ref)
+        for chunk in build_progress_evidence_chunks(_progress_context_fixture(resume_markdown=standard_markdown))
+        if chunk.source_type in {"resume_project", "resume_project_contribution"}
+    ]
+    container_chunks = [
+        (chunk.source_type, chunk.title, chunk.text, chunk.source_ref)
+        for chunk in build_progress_evidence_chunks(_progress_context_fixture(resume_markdown=container_markdown))
+        if chunk.source_type in {"resume_project", "resume_project_contribution"}
+    ]
+
+    assert _normalize_resume_project_containers(container_markdown) == standard_markdown.rstrip()
+    assert container_chunks == standard_chunks
+
+
+def test_same_contribution_title_in_different_projects_not_deduped() -> None:
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "### 项目甲 @ 公司甲\n"
+            "**核心贡献**：\n"
+            "- **性能优化**：相同内容。\n\n"
+            "### 项目乙 @ 公司乙\n"
+            "**核心贡献**：\n"
+            "- **性能优化**：相同内容。\n"
+        ),
+    )
+
+    contribution_chunks = [
+        chunk
+        for chunk in build_progress_evidence_chunks(context)
+        if chunk.source_type == "resume_project_contribution"
+    ]
+
+    assert [chunk.title for chunk in contribution_chunks] == ["性能优化", "性能优化"]
+    assert [chunk.source_ref["project_title"] for chunk in contribution_chunks] == ["项目甲", "项目乙"]
+
+
+def test_initial_plan_allowed_refs_include_projects_and_contributions() -> None:
+    context = _progress_context_fixture(
+        requirements=[f"岗位要求{index}" for index in range(1, 10)],
+        resume_markdown=(
+            "## 项目经历\n"
+            "### 项目甲 @ 公司甲\n"
+            "**项目背景**：背景甲。\n"
+            "**核心贡献**：\n"
+            "- **贡献项一**：内容一。\n\n"
+            "### 项目乙 @ 公司乙\n"
+            "**项目背景**：背景乙。\n"
+            "**核心贡献**：\n"
+            "- **贡献项二**：内容二。\n"
+        ),
+    )
+
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+    project_titles = [
+        item["title"] for item in prompt_context["allowed_evidence_refs"] if item["source_type"] == "resume_project"
+    ]
+    contribution_titles = [
+        item["title"]
+        for item in prompt_context["allowed_evidence_refs"]
+        if item["source_type"] == "resume_project_contribution"
+    ]
+
+    assert project_titles[:2] == ["项目甲", "项目乙"]
+    assert "贡献项一" in contribution_titles
+    assert "贡献项二" in contribution_titles
+    assert "公司甲" not in project_titles
+    assert "项目背景" not in project_titles
+    assert "贡献项一" not in project_titles
+
+
+def test_work_experience_container_does_not_pollute_project_chunks() -> None:
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 工作经历\n"
+            "::: start **2022.03 - 至今** ::: **公司甲** ::: **高级工程师** ::: end\n"
+            "**工作职责**\n"
+            "- **职责一**：内容一。\n\n"
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**项目背景**：背景甲。\n"
+            "**核心贡献**：\n"
+            "- **贡献项一**：内容一。\n"
+        ),
+    )
+
+    chunks = build_progress_evidence_chunks(context)
+    work_chunks = [chunk for chunk in chunks if chunk.source_type == "resume_work_experience"]
+    project_titles = [chunk.title for chunk in chunks if chunk.source_type == "resume_project"]
+
+    assert len(work_chunks) == 1
+    assert work_chunks[0].source_ref["duration"] == "2022.03 - 至今"
+    assert work_chunks[0].source_ref["company"] == "公司甲"
+    assert work_chunks[0].source_ref["role"] == "高级工程师"
+    assert project_titles == ["项目甲"]
+    assert "公司甲" not in project_titles
+    assert "职责一" not in project_titles
 
 
 def test_progress_evidence_chunks_split_abstract_projects_and_contributions() -> None:
