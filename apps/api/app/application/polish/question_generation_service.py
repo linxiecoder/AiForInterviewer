@@ -14,6 +14,7 @@ from app.application.llm.errors import (
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
+from app.application.llm.agent_io import AgentFocusTarget
 from app.application.llm.ports import LlmTransport
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
@@ -739,6 +740,7 @@ def _build_evidence_scope(
     requested_ref: str,
     source_priority_policy: dict[str, dict[str, int]],
 ) -> EvidenceScope:
+    focus_target = _focus_target_from_progress_node(node, requested_ref)
     selection = select_progress_tree_evidence_chunks(
         context,
         purpose="next_question",
@@ -753,13 +755,11 @@ def _build_evidence_scope(
     primary = _primary_chunk(chunks, source_priority_policy=source_priority_policy)
     evidence_refs = tuple(chunk.chunk_id for chunk in chunks)
     sources = tuple(_question_source(index=index, chunk=chunk) for index, chunk in enumerate(chunks, start=1))
-    node_title = _first_text(node.get("display_title"), node.get("title"), node.get("exam_point"), requested_ref)
-    expected_capability = _first_text(node.get("expected_capability"), node.get("description"), node_title)
     return EvidenceScope(
-        progress_node_ref=requested_ref,
-        node_title=node_title,
-        expected_capability=expected_capability,
-        missing_points=tuple(_string_list(node.get("missing_points"))),
+        progress_node_ref=focus_target.ref,
+        node_title=focus_target.title,
+        expected_capability=focus_target.expected_capability,
+        missing_points=focus_target.missing_points,
         primary_evidence_ref=primary.chunk_id if primary is not None else None,
         primary_evidence_text=primary.text if primary is not None else None,
         primary_source_type=primary.source_type if primary is not None else None,
@@ -767,6 +767,23 @@ def _build_evidence_scope(
         question_sources=sources,
         context_digest=_first_text(plan.get("context_digest"), context.get("content_digest"), None),
         dropped_context_summary=selection.dropped_context_summary,
+    )
+
+
+def _focus_target_from_progress_node(node: dict[str, Any], requested_ref: str) -> AgentFocusTarget:
+    title = _first_text(node.get("display_title"), node.get("title"), node.get("exam_point"), requested_ref)
+    expected_capability = _first_text(node.get("expected_capability"), node.get("description"), node.get("title"))
+    metadata = {
+        key: text
+        for key in ("category", "node_type", "exam_point", "confidence_level", "basis_type")
+        if (text := _clean(node.get(key)))
+    }
+    return AgentFocusTarget(
+        ref=_first_text(node.get("progress_node_ref"), requested_ref),
+        title=title,
+        expected_capability=expected_capability,
+        missing_points=tuple(_string_list(node.get("missing_points"))),
+        metadata=metadata,
     )
 
 
