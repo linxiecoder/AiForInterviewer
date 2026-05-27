@@ -6,7 +6,7 @@ import hashlib
 import json
 from typing import Any
 
-from app.application.llm.agent_io import AgentEvidenceItem
+from app.application.llm.agent_io import AgentEvidenceItem, AgentPromptBundle
 from app.application.polish.question_blueprint import (
     CLAIM_MODE_CLARIFICATION_NEEDED,
     CLAIM_MODE_JOB_GAP_PROBE,
@@ -66,6 +66,21 @@ QUESTION_FORBIDDEN_PROJECT_CLARIFICATION_PATTERNS = (
     "你是否有另一个项目可以说明",
 )
 LEGACY_EXPECTED_CAPABILITY_FIELD_SOURCE = "progress node expected_capability"
+_AGENT_PROMPT_BUNDLE_STANDARD_FIELD_KEYS = frozenset(
+    {
+        "task_type",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "prompt",
+        "input_data",
+        "output_schema",
+        "system_role",
+        "developer_constraints",
+        "user_task",
+        "input_contract",
+    }
+)
 
 
 def build_question_prompt_asset(
@@ -134,7 +149,7 @@ def build_question_prompt_asset(
         "missing_context": missing_context,
         "dropped_context_summary": scope.dropped_context_summary,
     }
-    return {
+    prompt_asset = {
         "asset_id": policy.prompt_asset_id,
         "prompt_version": policy.prompt_version,
         "schema_id": policy.prompt_schema_id,
@@ -392,6 +407,24 @@ def build_question_prompt_asset(
             "schema_takes_precedence_over_examples": True,
         },
     }
+    return AgentPromptBundle(
+        task_type=policy.task_type,
+        prompt_version=policy.prompt_version,
+        schema_id=policy.prompt_schema_id,
+        schema_version=policy.prompt_schema_version,
+        prompt=prompt_asset["prompt"],
+        input_data=input_data,
+        output_schema=prompt_asset["output_schema"],
+        system_role=prompt_asset["system_role"],
+        developer_constraints=tuple(prompt_asset["developer_constraints"]),
+        user_task=prompt_asset["user_task"],
+        input_contract=prompt_asset["input_contract"],
+        extra_fields={
+            key: value
+            for key, value in prompt_asset.items()
+            if key not in _AGENT_PROMPT_BUNDLE_STANDARD_FIELD_KEYS
+        },
+    ).to_prompt_asset_dict()
 
 
 def build_follow_up_question_prompt_asset(

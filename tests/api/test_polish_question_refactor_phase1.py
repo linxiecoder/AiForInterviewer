@@ -6,10 +6,13 @@ from typing import Any
 
 import pytest
 
+import app.application.llm.agent_io as agent_io
 from app.application.llm.errors import LlmTransportUnavailableError
+from app.application.llm.agent_io import AgentFocusTarget
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback
+from app.application.polish.question_blueprint import EvidenceScope, QuestionBlueprint
 from app.application.polish.next_question_agent import (
     NEXT_QUESTION_AGENT_PROMPT_VERSION,
     NEXT_QUESTION_AGENT_SCHEMA_ID,
@@ -17,13 +20,17 @@ from app.application.polish.next_question_agent import (
 from app.application.polish.queries import GetPolishSessionQuery
 from app.application.polish.question_generation_prompts import (
     QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE,
+    build_question_prompt_asset,
     validate_question_prompt_anchor_contract,
 )
 from app.application.polish.question_generation_policy import (
     QuestionGenerationPolicyResolutionContext,
     QuestionGenerationRuntimePolicy,
 )
-from app.application.polish.question_generation_service import QuestionGenerationService
+from app.application.polish.question_generation_service import (
+    QuestionGenerationService,
+    _focus_target_from_progress_node,
+)
 from app.application.polish.question_metadata import normalize_question_metadata
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
@@ -38,6 +45,192 @@ from tests.api.test_polish_question_graph_integration import (
     _command,
     _use_cases,
 )
+
+
+QUESTION_PROMPT_ASSET_TOP_LEVEL_KEYS = {
+    "asset_id",
+    "prompt_version",
+    "schema_id",
+    "schema_version",
+    "task_type",
+    "policy_version",
+    "policy_source",
+    "policy_source_type",
+    "policy_source_version",
+    "policy_fallback",
+    "prompt",
+    "system_role",
+    "developer_constraints",
+    "user_task",
+    "input_contract",
+    "input_data",
+    "evidence_retrieval_hints",
+    "evidence_selection_policy",
+    "output_schema",
+    "examples",
+    "citation_rules",
+    "refusal_and_low_confidence_policy",
+    "conflict_check",
+}
+
+
+def test_agent_prompt_bundle_to_prompt_asset_dict_outputs_standard_prompt_asset() -> None:
+    assert hasattr(agent_io, "AgentPromptBundle")
+    bundle = agent_io.AgentPromptBundle(
+        task_type="polish_question_generation",
+        prompt_version="polish_next_question_agent_prompt.v1",
+        schema_id="polish_next_question_agent_decision_v1",
+        schema_version="v1",
+        prompt="只输出 JSON。",
+        input_data={"selected_node_title": "支付链路一致性"},
+        output_schema={"type": "object"},
+        system_role="你是一名技术面试题设计专家。",
+        developer_constraints=("不得编造 evidence_refs 未支撑的事实。",),
+        user_task="生成一个面试打磨问题。",
+        input_contract={"required_context_fields": ["selected_node_title"]},
+        extra_fields={
+            "asset_id": "polish_question_generation",
+            "policy_version": "polish_question_generation_policy.v1",
+            "task_type": "should_not_override_standard_field",
+        },
+    )
+
+    prompt_asset = bundle.to_prompt_asset_dict()
+
+    assert prompt_asset["task_type"] == "polish_question_generation"
+    assert prompt_asset["prompt_version"] == "polish_next_question_agent_prompt.v1"
+    assert prompt_asset["schema_id"] == "polish_next_question_agent_decision_v1"
+    assert prompt_asset["schema_version"] == "v1"
+    assert prompt_asset["prompt"] == "只输出 JSON。"
+    assert prompt_asset["input_data"] == {"selected_node_title": "支付链路一致性"}
+    assert prompt_asset["output_schema"] == {"type": "object"}
+    assert prompt_asset["system_role"] == "你是一名技术面试题设计专家。"
+    assert prompt_asset["developer_constraints"] == ["不得编造 evidence_refs 未支撑的事实。"]
+    assert prompt_asset["user_task"] == "生成一个面试打磨问题。"
+    assert prompt_asset["input_contract"] == {"required_context_fields": ["selected_node_title"]}
+    assert prompt_asset["asset_id"] == "polish_question_generation"
+    assert prompt_asset["policy_version"] == "polish_question_generation_policy.v1"
+
+
+def test_agent_prompt_bundle_omits_empty_optional_fields_and_unknown_extra_fields() -> None:
+    assert hasattr(agent_io, "AgentPromptBundle")
+    bundle = agent_io.AgentPromptBundle(
+        task_type="polish_question_generation",
+        prompt_version="polish_next_question_agent_prompt.v1",
+        schema_id="polish_next_question_agent_decision_v1",
+        schema_version="v1",
+        prompt="只输出 JSON。",
+        extra_fields={
+            "asset_id": "polish_question_generation",
+            "provider_payload": {"raw": "must_not_be_added"},
+        },
+    )
+
+    prompt_asset = bundle.to_prompt_asset_dict()
+
+    assert set(prompt_asset) == {
+        "asset_id",
+        "task_type",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "prompt",
+        "input_data",
+        "output_schema",
+    }
+    assert "provider_payload" not in prompt_asset
+    assert "system_role" not in prompt_asset
+    assert "developer_constraints" not in prompt_asset
+    assert "user_task" not in prompt_asset
+    assert "input_contract" not in prompt_asset
+
+
+def test_build_question_prompt_asset_top_level_shape_stays_stable() -> None:
+    blueprint = QuestionBlueprint(
+        question_kind="project_deep_dive",
+        claim_mode="evidence_grounded",
+        progress_node_ref=NODE_REF,
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+        primary_evidence_ref="resume_project_001",
+        primary_evidence_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        evidence_refs=("resume_project_001",),
+    )
+    scope = EvidenceScope(
+        progress_node_ref=NODE_REF,
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+        primary_evidence_ref="resume_project_001",
+        primary_evidence_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        primary_source_type="resume_project",
+        evidence_refs=("resume_project_001",),
+    )
+
+    prompt_asset = build_question_prompt_asset(blueprint, scope)
+
+    assert set(prompt_asset) == QUESTION_PROMPT_ASSET_TOP_LEVEL_KEYS
+
+
+def test_agent_focus_target_from_progress_node_uses_title_and_safe_metadata() -> None:
+    focus_target = _focus_target_from_progress_node(
+        {
+            "progress_node_ref": NODE_REF,
+            "title": "支付链路一致性",
+            "expected_capability": "能说明幂等、失败补偿和上线验证。",
+            "missing_points": ["缺少故障恢复指标。", "", None],
+            "category": "backend",
+            "node_type": "leaf",
+            "exam_point": "支付可靠性",
+            "confidence_level": "medium",
+            "basis_type": "mixed",
+            "evidence_refs": ["resume_project_001"],
+            "full_resume": "不应进入 focus metadata",
+        },
+        requested_ref="fallback_node_ref",
+    )
+
+    assert isinstance(focus_target, AgentFocusTarget)
+    assert focus_target.ref == NODE_REF
+    assert focus_target.title == "支付链路一致性"
+    assert focus_target.expected_capability == "能说明幂等、失败补偿和上线验证。"
+    assert focus_target.missing_points == ("缺少故障恢复指标。",)
+    assert focus_target.metadata == {
+        "category": "backend",
+        "node_type": "leaf",
+        "exam_point": "支付可靠性",
+        "confidence_level": "medium",
+        "basis_type": "mixed",
+    }
+    assert focus_target.to_prompt_dict() == {
+        "ref": NODE_REF,
+        "title": "支付链路一致性",
+        "expected_capability": "能说明幂等、失败补偿和上线验证。",
+        "missing_points": ["缺少故障恢复指标。"],
+        "metadata": focus_target.metadata,
+    }
+
+
+def test_agent_focus_target_title_priority_keeps_display_title_before_title_and_exam_point() -> None:
+    node = {
+        "progress_node_ref": NODE_REF,
+        "display_title": "展示标题优先",
+        "title": "普通标题",
+        "exam_point": "考点标题",
+        "description": "描述兜底能力",
+    }
+
+    focus_target = _focus_target_from_progress_node(node, requested_ref="fallback_node_ref")
+
+    assert focus_target.title == "展示标题优先"
+    assert focus_target.expected_capability == "描述兜底能力"
+    assert _focus_target_from_progress_node(
+        {"progress_node_ref": NODE_REF, "title": "普通标题", "exam_point": "考点标题"},
+        requested_ref="fallback_node_ref",
+    ).title == "普通标题"
+    assert _focus_target_from_progress_node(
+        {"progress_node_ref": NODE_REF, "exam_point": "考点标题"},
+        requested_ref="fallback_node_ref",
+    ).title == "考点标题"
 
 
 def test_phase1_question_service_blocks_inventory_evidence_from_log_vector_pipeline() -> None:
@@ -172,6 +365,8 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert request.prompt_version == NEXT_QUESTION_AGENT_PROMPT_VERSION
     assert request.schema_id == NEXT_QUESTION_AGENT_SCHEMA_ID
     prompt_asset = request.evidence_bundle
+    assert set(prompt_asset) == QUESTION_PROMPT_ASSET_TOP_LEVEL_KEYS
+    assert prompt_asset["task_type"] == "polish_question_generation"
     assert prompt_asset["prompt_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
     assert prompt_asset["schema_id"] == NEXT_QUESTION_AGENT_SCHEMA_ID
     assert validate_question_prompt_anchor_contract(prompt_asset) == ()
@@ -203,6 +398,13 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     output_schema = prompt_asset["output_schema"]
     assert output_schema["type"] == "object"
     assert output_schema["additionalProperties"] is False
+    assert {
+        "decision",
+        "question",
+        "persistence_hints",
+        "evidence_refs",
+        "post_check_hints",
+    }.issubset(output_schema["properties"])
     assert {
         "schema_id",
         "prompt_version",
