@@ -33,8 +33,9 @@ def build_progress_quality_first_menu_prompt(context: dict[str, Any]) -> dict[st
     job = context.get("job_snapshot", {})
     resume = context.get("resume_snapshot", {})
     session = context.get("session", {})
+    progress_prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
     prompt_context = {
-        "context_metadata": _context_metadata(context),
+        "context_metadata": progress_prompt_context["context_metadata"],
         "resume_version_ref": {
             "resume_id": resume.get("resume_id"),
             "resume_version_id": resume.get("resume_version_id"),
@@ -46,6 +47,7 @@ def build_progress_quality_first_menu_prompt(context: dict[str, Any]) -> dict[st
         },
         "job_payload": _quality_first_job_payload(job),
         "match_context": _quality_first_match_context(context.get("match_context", {})),
+        "allowed_evidence_refs": progress_prompt_context.get("allowed_evidence_refs", []),
         "topic": session.get("topic"),
         "subtopic": session.get("subtopic"),
         "custom_topic": truncate_text(session.get("custom_topic"), max_chars=1200),
@@ -73,9 +75,8 @@ def build_progress_quality_first_menu_prompt(context: dict[str, Any]) -> dict[st
                 "basis_type 按 output_schema.allowed_basis_types。",
                 "confidence_level 表示证据强弱，不表示面试已验证。",
                 "status 按 output_schema.allowed_status。",
-                "evidence_refs 优先引用 selected_evidence_chunks.ref。",
-                "selected_evidence_chunks.chunk_id 仅为旧兼容字段。",
-                "不得自造 resume:section_xxx、job:requirement:xxx 等未出现在 selected_evidence_chunks.ref 中的证据 ID。",
+                "evidence_refs 只能逐字复制 allowed_evidence_refs.ref。",
+                "不得自造 resume:section_xxx、job:requirement:xxx、match_context:xxx 等未出现在 allowed_evidence_refs.ref 中的证据 ID。",
                 "人类可读来源说明写入 evidence_notes，不要写入 evidence_refs。",
                 "不输出可信 metadata：generated_at、model_name、session_id、job_id、resume_id。",
                 "字段、枚举、必填项和可选项按 output_schema 返回。",
@@ -102,6 +103,7 @@ def build_progress_quality_first_menu_prompt(context: dict[str, Any]) -> dict[st
             "allowed_status": ["success", "partial"],
             "required_category_fields": ["category", "display_category_title", "nodes"],
             "allowed_basis_types": ["resume_signal", "jd_requirement", "match_gap", "mixed"],
+            "allowed_evidence_ref_source": "allowed_evidence_refs.ref",
             "required_leaf_fields": [
                 "node_code",
                 "category",

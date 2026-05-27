@@ -918,6 +918,32 @@ def test_progress_tree_state_refresh_prompt_uses_selected_evidence_chunks_instea
     assert "不得删除或重命名 existing plan.nodes" in state_prompt["prompt"]
 
 
+def test_progress_prompt_context_adds_allowed_evidence_refs_index() -> None:
+    context = _progress_context_fixture(
+        requirements=["Python FastAPI 后端深度", "Kafka 消息一致性"],
+        resume_markdown=(
+            "## 项目经历\n支付系统重构：FastAPI + Kafka + PostgreSQL，"
+            "负责接口编排、消息一致性、失败补偿和灰度发布验证。\n"
+            "## 技能栈\nPython / FastAPI / Kafka"
+        ),
+    )
+
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+
+    selected_chunks = prompt_context["selected_evidence_chunks"]
+    allowed_refs = prompt_context["allowed_evidence_refs"]
+    assert selected_chunks
+    assert [item["ref"] for item in allowed_refs] == [chunk["ref"] for chunk in selected_chunks]
+    for allowed_ref, selected_chunk in zip(allowed_refs, selected_chunks, strict=True):
+        assert set(allowed_ref) == {"ref", "source_type", "title", "excerpt"}
+        assert allowed_ref["ref"] == selected_chunk["ref"]
+        assert allowed_ref["source_type"] == selected_chunk["source_type"]
+        assert allowed_ref["title"] == selected_chunk["title"]
+        assert allowed_ref["excerpt"] == selected_chunk["excerpt"][:200]
+        for forbidden_key in ("chunk_id", "text", "source_ref", "priority", "reason", "keywords"):
+            assert forbidden_key not in allowed_ref
+
+
 def test_progress_tree_quality_first_returns_interview_menu_not_abstract_tree() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
@@ -1100,10 +1126,13 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
         "job_version_ref",
         "job_payload",
         "match_context",
+        "allowed_evidence_refs",
         "topic",
         "subtopic",
         "custom_topic",
     }
+    assert prompt_context["allowed_evidence_refs"]
+    assert set(prompt_context["allowed_evidence_refs"][0]) == {"ref", "source_type", "title", "excerpt"}
     assert rule_context_fields.isdisjoint(prompt_context)
     assert "6-9 个主训练节点" in prompt
     assert "resume_deep_dive 4-6" in prompt
@@ -1112,9 +1141,8 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "output_schema.allowed_status" in prompt
     assert "output_schema.allowed_basis_types" in prompt
     assert "deferred_candidates" in prompt
-    assert "evidence_refs 优先引用 selected_evidence_chunks.ref" in prompt
-    assert "selected_evidence_chunks.chunk_id 仅为旧兼容字段" in prompt
-    assert "不得自造 resume:section_xxx、job:requirement:xxx" in prompt
+    assert "evidence_refs 只能逐字复制 allowed_evidence_refs.ref" in prompt
+    assert "不得自造 resume:section_xxx、job:requirement:xxx、match_context:xxx" in prompt
     assert "人类可读来源说明写入 evidence_notes，不要写入 evidence_refs" in prompt
     assert "你必须像资深面试官一样先完整阅读" not in prompt
     assert "根对象必须包含 schema_id" not in prompt
@@ -1126,6 +1154,7 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "required_leaf_fields" in output_schema
     assert "allowed_status" in output_schema
     assert "allowed_basis_types" in output_schema
+    assert output_schema["allowed_evidence_ref_source"] == "allowed_evidence_refs.ref"
     assert "metadata" not in output_schema["required_root_fields"]
     assert "deferred_candidates" in output_schema["optional_root_fields"]
     assert output_schema["allowed_status"] == ["success", "partial"]

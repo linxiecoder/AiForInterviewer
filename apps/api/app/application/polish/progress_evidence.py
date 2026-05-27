@@ -18,6 +18,7 @@ from app.application.polish.question_generation_policy import (
 ProgressEvidencePurpose = Literal["initial_plan", "state_refresh", "next_question"]
 
 MAX_CHUNK_TEXT_CHARS = 1200
+ALLOWED_EVIDENCE_REF_EXCERPT_CHARS = 200
 DEFAULT_SELECTION_LIMITS: dict[ProgressEvidencePurpose, tuple[int, int]] = {
     "initial_plan": (18, 9000),
     "state_refresh": (12, 7000),
@@ -236,10 +237,26 @@ def build_progress_prompt_context(
     return {
         "context_metadata": _context_metadata(context),
         "selected_evidence_chunks": [chunk.to_prompt_dict() for chunk in selection.selected_chunks],
+        "allowed_evidence_refs": _allowed_evidence_refs_for_prompt(selection.selected_chunks),
         "dropped_context_summary": selection.dropped_context_summary,
         "match_context_summary": _match_context_summary(context.get("match_context", {})),
         "turns_summary": _turns_summary(context.get("turns", [])),
     }
+
+
+def _allowed_evidence_refs_for_prompt(chunks: tuple[ProgressEvidenceChunk, ...]) -> list[dict[str, str]]:
+    allowed_refs: list[dict[str, str]] = []
+    for chunk in chunks:
+        item = chunk.to_agent_evidence_item()
+        allowed_refs.append(
+            {
+                "ref": item.ref,
+                "source_type": item.source_type,
+                "title": _clean_text(item.title, max_chars=120) or "",
+                "excerpt": _clean_text(item.excerpt, max_chars=ALLOWED_EVIDENCE_REF_EXCERPT_CHARS) or "",
+            }
+        )
+    return allowed_refs
 
 
 def _add_job_chunks(context: dict[str, Any], add_chunk) -> None:
