@@ -56,10 +56,12 @@ import {
   buildWorkbenchProgressNodes,
   canAutoCreateQuestionFromProgressNode,
   collectDefaultExpandedProgressNodeKeys,
+  deriveWorkbenchQuestionActionState,
   deriveWorkbenchMachineState,
   getInterviewCreateAvailability,
   getWorkbenchProgressNodeQuestionTargetRef,
   getWorkbenchProgressNodeStatusLightTone,
+  isQuestionNode,
   normalizeInterviewTopicTitle,
   normalizeProgressTreeDetailCopy,
   resolveProgressTreeRecoveryAction,
@@ -1016,6 +1018,120 @@ function test_progress_tree_click_auto_generates_only_for_nodes_without_question
   assertContract(resolveCurrentQuestionId(sessionWithTurn, "node_with_question") === "q_existing", "当前题目应可按选中节点解析");
 }
 
+function test_workbench_question_actions_follow_current_question_status(): void {
+  const session = buildTestSession(
+    [
+      buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+      buildTestProgressNode("node_without_question", "待生成节点", "jd_gap_learning", "补齐学习类"),
+    ],
+    "node_with_question",
+  );
+  const sessionWithQuestion: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const completedSession: PolishSessionDetail = {
+    ...sessionWithQuestion,
+    progress_tree_state: {
+      ...sessionWithQuestion.progress_tree_state,
+      node_states: sessionWithQuestion.progress_tree_state.node_states.map((nodeState) =>
+        nodeState.progress_node_ref === "node_with_question"
+          ? { ...nodeState, status: "completed", completed_questions_count: 1 }
+          : nodeState,
+      ),
+      completed_focus_refs: [
+        {
+          question_id: "q_existing",
+          progress_node_ref: "node_with_question",
+          focus_key: "focus_existing",
+          source: "manual_question_complete",
+        },
+      ],
+    },
+  };
+
+  const noQuestionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    progressNodeRef: "node_without_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const inProgressQuestionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const completedQuestionState = deriveWorkbenchQuestionActionState({
+    session: completedSession,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+
+  assertContract(noQuestionState.hasCurrentQuestion === false, "无题目节点应识别为无当前题目");
+  assertContract(noQuestionState.canSendAnswer === false, "无题目节点不允许提交回答");
+  assertContract(noQuestionState.canGenerateQuestion === true, "无题目节点应允许生成题目");
+  assertContract(noQuestionState.canMarkQuestionCompleted === false, "无题目节点不允许标记完成");
+  assertContract(inProgressQuestionState.hasCurrentQuestion === true, "已有未完成题目应识别为当前题目");
+  assertContract(inProgressQuestionState.currentQuestionStatus === "in_progress", "已有未完成题目状态应为 in_progress");
+  assertContract(inProgressQuestionState.canSendAnswer === true, "已有未完成题目应允许提交回答");
+  assertContract(inProgressQuestionState.canGenerateQuestion === false, "已有未完成题目不允许重复生成题目");
+  assertContract(inProgressQuestionState.canMarkQuestionCompleted === true, "已有未完成题目应允许标记完成");
+  assertContract(completedQuestionState.currentQuestionStatus === "completed", "已完成题目状态应为 completed");
+  assertContract(completedQuestionState.canGenerateQuestion === true, "已有已完成题目应允许生成题目");
+  assertContract(completedQuestionState.canMarkQuestionCompleted === false, "已有已完成题目不允许重复标记完成");
+}
+
+function test_progress_tree_question_entry_is_selectable_by_node_type(): void {
+  const session = buildTestSession([
+    buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+  ]);
+  const sessionWithQuestion: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const questionNode = buildWorkbenchProgressNodes(sessionWithQuestion)[0]?.children?.[0]?.children?.[0];
+  const selectedRef = resolveProgressTreeSelectedNodeRefAfterClick(questionNode, null);
+
+  assertContract(isQuestionNode(questionNode), "题目 entry 应通过 node.kind 识别为题目节点");
+  assertContract(selectedRef === "node_with_question", "点击题目节点应选中其 progress_node_ref");
+}
+
 function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata(): void {
   const smokeSessionSummary = buildTestSessionSummary({
     id: "ses_auth_smoke",
@@ -1730,6 +1846,8 @@ test_workbench_ctrl_enter_submits_answer();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_progress_tree_pending_and_failed_states_use_generation_action();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
+test_workbench_question_actions_follow_current_question_status();
+test_progress_tree_question_entry_is_selectable_by_node_type();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
 test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only();

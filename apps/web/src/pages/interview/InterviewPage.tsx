@@ -234,8 +234,9 @@ export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES = {
   pending: "orange",
 } as const;
 export const INTERVIEW_PROGRESS_TREE_NODE_STATUS_PLACEMENT = "node_row_trailing_status_light" as const;
-type WorkbenchProgressNodeStatus = keyof typeof WORKBENCH_PROGRESS_NODE_STATUS_TEXT;
-type WorkbenchProgressNodeKind = "group" | "node" | "question";
+export type WorkbenchProgressNodeStatus = keyof typeof WORKBENCH_PROGRESS_NODE_STATUS_TEXT;
+export type WorkbenchProgressNodeKind = "group" | "node" | "question";
+export type WorkbenchQuestionStatus = "in_progress" | "completed";
 export type WorkbenchProgressNode = {
   key: string;
   kind: WorkbenchProgressNodeKind;
@@ -244,7 +245,24 @@ export type WorkbenchProgressNode = {
   detail?: string;
   nodeCode?: string | null;
   questionTargetRef?: string;
+  questionId?: string;
   children?: WorkbenchProgressNode[];
+};
+
+export type WorkbenchCurrentQuestionState = {
+  questionId: string;
+  progressNodeRef: string | null;
+  status: WorkbenchQuestionStatus;
+};
+
+export type WorkbenchQuestionActionState = {
+  currentQuestionId: string | null;
+  currentQuestionStatus: WorkbenchQuestionStatus | null;
+  hasCurrentQuestion: boolean;
+  isCurrentQuestionCompleted: boolean;
+  canSendAnswer: boolean;
+  canGenerateQuestion: boolean;
+  canMarkQuestionCompleted: boolean;
 };
 
 type ProgressTreeDisplayNode = PolishProgressTreeNode & {
@@ -838,10 +856,24 @@ export function resolveCurrentQuestionId(
   session: PolishSessionDetail,
   progressNodeRef: string | null = null,
 ): string | null {
-  if (progressNodeRef !== null) {
-    return getLatestTurnForProgressNode(session, progressNodeRef)?.question_id || null;
+  return resolveCurrentQuestionState(session, progressNodeRef)?.questionId ?? null;
+}
+
+export function resolveCurrentQuestionState(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null = null,
+): WorkbenchCurrentQuestionState | null {
+  const turn = progressNodeRef !== null
+    ? getLatestTurnForProgressNode(session, progressNodeRef)
+    : getLatestTurn(session);
+  if (turn === null) {
+    return null;
   }
-  return getLatestTurn(session)?.question_id || null;
+  return {
+    questionId: turn.question_id,
+    progressNodeRef: turn.progress_node_ref ?? null,
+    status: resolveQuestionTurnStatus(session, turn),
+  };
 }
 
 function getLatestTurn(session: PolishSessionDetail) {
@@ -851,6 +883,76 @@ function getLatestTurn(session: PolishSessionDetail) {
 function getLatestTurnForProgressNode(session: PolishSessionDetail, progressNodeRef: string) {
   const matchingTurns = session.turns.filter((turn) => turn.progress_node_ref === progressNodeRef);
   return matchingTurns.length > 0 ? matchingTurns[matchingTurns.length - 1] : null;
+}
+
+function resolveQuestionTurnStatus(
+  session: PolishSessionDetail,
+  turn: PolishSessionDetail["turns"][number],
+): WorkbenchQuestionStatus {
+  return isQuestionCompleted(session, turn) ? "completed" : "in_progress";
+}
+
+function isQuestionCompleted(
+  session: PolishSessionDetail,
+  turn: PolishSessionDetail["turns"][number],
+): boolean {
+  const completedFocusRefs = session.progress_tree_state.completed_focus_refs ?? [];
+  if (completedFocusRefs.some((item) => item.question_id === turn.question_id)) {
+    return true;
+  }
+  if (completedFocusRefs.some((item) => item.progress_node_ref === turn.progress_node_ref)) {
+    return false;
+  }
+  if (!turn.progress_node_ref || completedFocusRefs.length > 0) {
+    return false;
+  }
+  const nodeState = session.progress_tree_state.node_states.find(
+    (item) => item.progress_node_ref === turn.progress_node_ref,
+  );
+  return nodeState?.status === "completed" && nodeState.completed_questions_count > 0;
+}
+
+export function isQuestionNode(
+  node: WorkbenchProgressNode | null | undefined,
+): node is WorkbenchProgressNode & { kind: "question"; questionId: string } {
+  return node?.kind === "question" && typeof node.questionId === "string" && node.questionId.length > 0;
+}
+
+export function deriveWorkbenchQuestionActionState(params: {
+  session: PolishSessionDetail | null;
+  progressNodeRef: string | null;
+  canShowProgressTree: boolean;
+  creatingQuestion: boolean;
+  submittingAnswer: boolean;
+  feedbackGenerating: boolean;
+  completingQuestion: boolean;
+  endingSession: boolean;
+}): WorkbenchQuestionActionState {
+  const currentQuestionState = params.session === null
+    ? null
+    : resolveCurrentQuestionState(params.session, params.progressNodeRef);
+  const hasCurrentQuestion = currentQuestionState !== null;
+  const isCurrentQuestionCompleted = currentQuestionState?.status === "completed";
+  const isBusy =
+    params.creatingQuestion ||
+    params.submittingAnswer ||
+    params.feedbackGenerating ||
+    params.completingQuestion ||
+    params.endingSession;
+  const canUseSession = params.session !== null && !isPolishSessionEnded(params.session) && !isBusy;
+
+  return {
+    currentQuestionId: currentQuestionState?.questionId ?? null,
+    currentQuestionStatus: currentQuestionState?.status ?? null,
+    hasCurrentQuestion,
+    isCurrentQuestionCompleted,
+    canSendAnswer: canUseSession && hasCurrentQuestion,
+    canGenerateQuestion:
+      canUseSession &&
+      params.canShowProgressTree &&
+      !(hasCurrentQuestion && !isCurrentQuestionCompleted),
+    canMarkQuestionCompleted: canUseSession && hasCurrentQuestion && !isCurrentQuestionCompleted,
+  };
 }
 
 export function shouldAutoCreateQuestionForProgressNode(
@@ -1035,8 +1137,10 @@ function buildQuestionProgressNodesByRef(session: PolishSessionDetail): Map<stri
       key: `question:${turn.question_id}`,
       kind: "question",
       title: `题目 ${turnIndex + 1}`,
-      status: turn.answers.length > 0 ? "completed" : "in_progress",
+      status: resolveQuestionTurnStatus(session, turn),
       detail: shortQuestion,
+      questionId: turn.question_id,
+      questionTargetRef: turn.progress_node_ref ?? undefined,
     };
     questionNodesByRef.set(turn.progress_node_ref, [
       ...(questionNodesByRef.get(turn.progress_node_ref) ?? []),
@@ -1295,14 +1399,26 @@ function toWorkbenchProgressNode(params: {
 }
 
 export function getWorkbenchProgressNodeQuestionTargetRef(node: WorkbenchProgressNode | null | undefined): string | null {
-  return node?.kind === "node" ? node.questionTargetRef ?? node.key : null;
+  if (node?.kind === "node") {
+    return node.questionTargetRef ?? node.key;
+  }
+  if (isQuestionNode(node)) {
+    return node.questionTargetRef ?? null;
+  }
+  return null;
 }
 
 export function resolveProgressTreeSelectedNodeRefAfterClick(
   node: WorkbenchProgressNode | null | undefined,
   currentSelectedProgressNodeRef: string | null,
 ): string | null {
-  return node?.kind === "node" ? node.key : currentSelectedProgressNodeRef;
+  if (node?.kind === "node") {
+    return node.key;
+  }
+  if (isQuestionNode(node)) {
+    return node.questionTargetRef ?? currentSelectedProgressNodeRef;
+  }
+  return currentSelectedProgressNodeRef;
 }
 
 function normalizeProgressNodeStatus(status: string): WorkbenchProgressNodeStatus {
@@ -2400,11 +2516,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   };
 
   const sendAnswer = async () => {
-    const trimmedAnswer = answerText.trim();
-    if (!trimmedAnswer) {
-      setAnswerError("请先输入回答内容。");
-      return;
-    }
     if (session === null) {
       setAnswerError("会话尚未加载完成，请稍后重试。");
       return;
@@ -2413,9 +2524,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("模拟面试已结束，不能继续提交回答。");
       return;
     }
-    const questionId = resolveCurrentQuestionId(session, selectedProgressNodeDetailRef);
-    if (!questionId) {
-      setAnswerError("请先生成题目后再提交回答。");
+    const currentQuestionState = resolveCurrentQuestionState(session, selectedProgressNodeDetailRef);
+    if (currentQuestionState === null) {
+      setAnswerError("请先选择左侧已有题目的节点后再提交回答。");
+      return;
+    }
+    const trimmedAnswer = answerText.trim();
+    if (!trimmedAnswer) {
+      setAnswerError("请先输入回答内容。");
       return;
     }
 
@@ -2424,7 +2540,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setSubmittingAnswer(true);
     try {
       const answer = await createPolishAnswer(sessionId, {
-        question_id: questionId,
+        question_id: currentQuestionState.questionId,
         answer_text: trimmedAnswer,
       });
       setFeedbackGenerating(true);
@@ -2513,7 +2629,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   const selectedProgressNodeDetailRef =
     session === null ? null : resolveProgressTreeDetailNodeRef(session, selectedProgressNodeRef);
-  const currentQuestionId = session === null ? null : resolveCurrentQuestionId(session, selectedProgressNodeDetailRef);
   const selectedProgressNodeBanner =
     session === null ? null : buildProgressTreeContextBannerContent(session, selectedProgressNodeDetailRef);
   const isSessionEnded = isPolishSessionEnded(session);
@@ -2525,24 +2640,21 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const isProgressTreeFailed = session?.progress_tree_status === "failed";
   const hasProgressTreeNodes = progressNodes.length > 0;
   const canShowProgressTree = hasProgressTreeNodes && (isProgressTreeReady || isProgressTreeRefreshFailed);
-  const canRequestNewQuestion =
-    session !== null &&
-    !isSessionEnded &&
-    canShowProgressTree &&
-    !creatingQuestion &&
-    !submittingAnswer &&
-    !feedbackGenerating &&
-    !completingQuestion &&
-    !endingSession;
-  const canMarkCurrentQuestionCompleted =
-    session !== null &&
-    currentQuestionId !== null &&
-    !isSessionEnded &&
-    !creatingQuestion &&
-    !submittingAnswer &&
-    !feedbackGenerating &&
-    !completingQuestion &&
-    !endingSession;
+  const questionActionState = deriveWorkbenchQuestionActionState({
+    session,
+    progressNodeRef: selectedProgressNodeDetailRef,
+    canShowProgressTree,
+    creatingQuestion,
+    submittingAnswer,
+    feedbackGenerating,
+    completingQuestion,
+    endingSession,
+  });
+  const currentQuestionId = questionActionState.currentQuestionId;
+  const hasCurrentQuestion = questionActionState.hasCurrentQuestion;
+  const canSendAnswer = questionActionState.canSendAnswer;
+  const canGenerateQuestion = questionActionState.canGenerateQuestion;
+  const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
   const workbenchMachineState = deriveWorkbenchMachineState({
     session,
     creatingQuestion,
@@ -2601,7 +2713,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   };
 
   const completeCurrentQuestion = async () => {
-    if (session === null || currentQuestionId === null) {
+    if (session === null) {
       setAnswerError("请先选择当前问题。");
       return;
     }
@@ -2609,10 +2721,19 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("模拟面试已结束，不能继续标记问题。");
       return;
     }
+    const currentQuestionState = resolveCurrentQuestionState(session, selectedProgressNodeDetailRef);
+    if (currentQuestionState === null) {
+      setAnswerError("请先选择当前问题。");
+      return;
+    }
+    if (currentQuestionState.status === "completed") {
+      setAnswerError("当前问题已完成，无需重复标记。");
+      return;
+    }
     setCompletingQuestion(true);
     setAnswerError(null);
     try {
-      const updatedSession = await completePolishQuestion(sessionId, currentQuestionId);
+      const updatedSession = await completePolishQuestion(sessionId, currentQuestionState.questionId);
       setSession(updatedSession);
       await loadCandidateRecords();
       message.success("当前问题已标记为完成。");
@@ -2789,9 +2910,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   };
 
   const renderCurrentQuestionComposer = () => {
-    if (currentQuestionId === null) {
-      return null;
-    }
     return (
       <div
         className={styles.currentQuestionComposer}
@@ -2815,32 +2933,16 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               sendAnswer();
             }
           }}
-          placeholder="请输入当前题目的回答"
+          placeholder={hasCurrentQuestion ? "请输入当前题目的回答" : "请选择左侧已有题目的节点后作答"}
           maxLength={2000}
-          disabled={
-            submittingAnswer ||
-            feedbackGenerating ||
-            creatingQuestion ||
-            completingQuestion ||
-            endingSession ||
-            isSessionEnded ||
-            currentQuestionId === null
-          }
+          disabled={!canSendAnswer}
         />
         <div className={styles.currentQuestionComposerActions}>
           <Button
             type="primary"
             icon={<SendOutlined />}
             loading={submittingAnswer || feedbackGenerating}
-            disabled={
-              submittingAnswer ||
-              feedbackGenerating ||
-              creatingQuestion ||
-              completingQuestion ||
-              endingSession ||
-              isSessionEnded ||
-              currentQuestionId === null
-            }
+            disabled={!canSendAnswer}
             onClick={() => {
               sendAnswer();
             }}
@@ -2882,8 +2984,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       );
     }
 
-    const canSelectNode = node.kind === "node";
-    const isActive = canSelectNode && node.key === selectedProgressNodeDetailRef;
+    const canSelectNode = node.kind === "node" || isQuestionNode(node);
+    const isActive =
+      (node.kind === "node" && node.key === selectedProgressNodeDetailRef) ||
+      (isQuestionNode(node) &&
+        node.questionTargetRef === selectedProgressNodeDetailRef &&
+        node.questionId === currentQuestionId);
     const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
     const isExpandable = Boolean(node.children && node.children.length > 0);
     const isExpanded = expandedProgressNodeKeys.has(node.key);
@@ -3143,14 +3249,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                       void createQuestion();
                     }}
                     loading={creatingQuestion}
-                    disabled={!canRequestNewQuestion}
+                    disabled={!canGenerateQuestion}
                   >
                     新生成题目
                   </Button>
                   <Button
                     icon={<CheckCircleOutlined />}
                     loading={completingQuestion}
-                    disabled={!canMarkCurrentQuestionCompleted}
+                    disabled={!canMarkQuestionCompleted}
                     onClick={() => {
                       void completeCurrentQuestion();
                     }}
@@ -3174,7 +3280,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
                 {renderProgressTreeContextBanner()}
                 {isSessionEnded ? <Alert type="info" showIcon message="模拟面试已结束" /> : null}
-                {answerError !== null && currentQuestionId === null ? <Alert type="error" showIcon message={answerError} /> : null}
                 {candidateLoadError !== null ? (
                   <Alert
                     type="warning"
