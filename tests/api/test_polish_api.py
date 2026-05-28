@@ -1689,6 +1689,10 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "人类可读来源说明写入 evidence_notes，不要写入 evidence_refs" in prompt
     assert "多个有明确贡献项的项目" in prompt
     assert "不要把多个项目全部压缩到一个泛化节点" in prompt
+    assert "resume_deep_dive 顶层节点必须优先代表具体项目或项目内核心方向" in prompt
+    assert "如果 selected_evidence_chunks 中存在 resume_project_contribution，必须生成 children" in prompt
+    assert "coverage_points/sub_points 只能补充 children，不能替代 children" in prompt
+    assert "禁止把多个项目贡献压缩成一个无 children 的泛化节点" in prompt
     assert "children" in prompt
     assert "coverage_points" in prompt
     assert "sub_points" in prompt
@@ -1846,18 +1850,66 @@ def test_progress_tree_quality_first_fills_coverage_points_from_project_contribu
         "项目甲设计取舍",
         "resume_deep_dive",
         1,
-        evidence_refs=["resume_project_001"],
+        evidence_refs=[],
     )
+    parent["evidence_chunk_ids"] = ["resume_project_001"]
     payload = _quality_first_payload([parent])
 
     normalized = _normalize_quality_first_menu_payload(payload, context=context)
 
     assert normalized is not None
     target = next(node for node in normalized[0] if node["display_title"] == "项目甲设计取舍")
-    assert target["children"] == []
+    assert target["children"]
     assert target["sub_points"] == []
     assert any("贡献项一" in point for point in target["coverage_points"])
     assert any("贡献项二" in point for point in target["coverage_points"])
+
+
+def test_progress_tree_quality_first_repairs_resume_project_children_from_contribution_evidence() -> None:
+    from app.application.polish.progress_tree import _normalize_quality_first_menu_payload
+
+    context = _progress_context_fixture(
+        resume_markdown=(
+            "## 项目经历\n"
+            "::: start **项目甲** ::: **公司甲** ::: end\n"
+            "**核心贡献**：\n"
+            "- 贡献项一：完成模块甲的方案设计。\n"
+            "- 贡献项二：完成模块乙的验证闭环。\n"
+        ),
+    )
+    parent = _quality_first_payload_node(
+        "项目甲设计取舍",
+        "resume_deep_dive",
+        1,
+        evidence_refs=["resume_project_001"],
+    )
+    payload = _quality_first_payload([parent])
+    payload["menu_categories"][0]["display_category_title"] = "LLM 自定义分类"
+
+    normalized = _normalize_quality_first_menu_payload(payload, context=context)
+
+    assert normalized is not None
+    target = next(node for node in normalized[0] if node["display_title"] == "项目甲设计取舍")
+    assert target["display_category_title"] == "深度打磨类"
+    assert len(target["children"]) > 0
+    assert any(
+        node["category"] == "resume_deep_dive" and len(node["children"]) > 0
+        for node in normalized[0]
+    )
+    child_titles = {child["display_title"] for child in target["children"]}
+    assert {"贡献项一", "贡献项二"}.issubset(child_titles)
+    for child_node in target["children"]:
+        assert child_node["evidence_chunk_ids"]
+        assert all(
+            ref.startswith("resume_project_contribution_")
+            for ref in child_node["evidence_chunk_ids"]
+        )
+    child = target["children"][0]
+    assert child["category"] == target["category"]
+    assert child["display_category_title"] == "深度打磨类"
+    assert child["display_title"] == "贡献项一"
+    assert child["evidence_chunk_ids"] == ["resume_project_contribution_001"]
+    assert child["progress_node_ref"].startswith("progress_v2_")
 
 
 def test_progress_tree_quality_first_filters_project_titles_from_coverage_points() -> None:

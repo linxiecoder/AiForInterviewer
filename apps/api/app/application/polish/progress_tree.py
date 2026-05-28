@@ -415,10 +415,7 @@ def _quality_first_menu_payload_envelope(
             low_confidence_flags.append("quality_first_category_unknown")
             continue
         valid_category_seen = True
-        display_category_title = _sanitize_display_text(
-            category_payload.get("display_category_title") or _DISPLAY_CATEGORY_TITLES[category],
-            max_chars=80,
-        ) or _DISPLAY_CATEGORY_TITLES[category]
+        display_category_title = _DISPLAY_CATEGORY_TITLES[category]
         raw_nodes = category_payload.get("nodes")
         if not isinstance(raw_nodes, list):
             low_confidence_flags.append(f"quality_first_{category}_nodes_missing")
@@ -562,7 +559,11 @@ def _normalize_quality_first_node(
     common_loss_risks = _normalize_text_list(item.get("common_loss_risks"), limit=5)
     if not common_loss_risks:
         common_loss_risks = _default_common_loss_risks(category)
-    evidence_refs = _sanitize_string_list(item.get("evidence_refs") or item.get("evidence_chunk_ids"), limit=8)
+    evidence_refs = _dedupe_strings(
+        _sanitize_string_list(item.get("evidence_refs"), limit=8)
+        + _sanitize_string_list(item.get("evidence_chunk_ids"), limit=8),
+        limit=8,
+    )
     stable_evidence_refs = [ref for ref in evidence_refs if ref in allowed_evidence_refs]
     augmented_evidence_refs, evidence_bindings = _quality_first_resume_evidence_augmentations(
         item,
@@ -606,6 +607,21 @@ def _normalize_quality_first_node(
         evidence_chunks_by_ref=evidence_chunks_by_ref,
         depth=depth,
     )
+    if not children:
+        children = _quality_first_repair_resume_deep_dive_children(
+            category=category,
+            display_category_title=display_category_title,
+            parent_node_ref=progress_node_ref,
+            parent_node_code=node_code,
+            parent_index=index,
+            parent_display_title=display_title,
+            parent_confidence_level=confidence_level,
+            parent_evidence_refs=stable_evidence_refs + evidence_refs,
+            context_digest=context_digest,
+            allowed_evidence_refs=allowed_evidence_refs,
+            evidence_chunks_by_ref=evidence_chunks_by_ref,
+            depth=depth,
+        )
     coverage_points = _quality_first_normalize_coverage_points(
         _normalize_text_list(item.get("coverage_points"), limit=8),
         evidence_refs=stable_evidence_refs,
@@ -714,6 +730,108 @@ def _normalize_quality_first_children(
         seen_titles.add(normalized_title)
         children.append(child)
     return children
+
+
+def _quality_first_repair_resume_deep_dive_children(
+    *,
+    category: str,
+    display_category_title: str,
+    parent_node_ref: str,
+    parent_node_code: str,
+    parent_index: int,
+    parent_display_title: str,
+    parent_confidence_level: str,
+    parent_evidence_refs: list[str],
+    context_digest: str,
+    allowed_evidence_refs: set[str],
+    evidence_chunks_by_ref: dict[str, dict[str, Any]],
+    depth: int,
+) -> list[dict[str, Any]]:
+    if category != _RESUME_DEEP_DIVE or depth >= 1:
+        return []
+
+    project_keys = {
+        _quality_first_project_key(chunk)
+        for ref in _dedupe_strings(parent_evidence_refs, limit=12)
+        if (chunk := evidence_chunks_by_ref.get(ref))
+        and _quality_first_chunk_source_type(chunk) == "resume_project"
+    }
+    project_keys.discard(("", ""))
+    if not project_keys:
+        return []
+
+    children: list[dict[str, Any]] = []
+    seen_titles: set[str] = set()
+    for contribution_ref, contribution_chunk in evidence_chunks_by_ref.items():
+        if contribution_ref not in allowed_evidence_refs:
+            continue
+        if _quality_first_chunk_source_type(contribution_chunk) != "resume_project_contribution":
+            continue
+        if _quality_first_project_key(contribution_chunk) not in project_keys:
+            continue
+        contribution_title = _sanitize_display_text(contribution_chunk.get("title"), max_chars=120)
+        if not contribution_title:
+            contribution_title = _sanitize_display_text(
+                contribution_chunk.get("text") or contribution_chunk.get("excerpt"),
+                max_chars=80,
+            )
+        if not contribution_title:
+            continue
+        normalized_title = _normalize_label_for_compare(contribution_title)
+        if normalized_title in seen_titles:
+            continue
+        seen_titles.add(normalized_title)
+        child_index = len(children) + 1
+        contribution_text = _sanitize_display_text(
+            contribution_chunk.get("text") or contribution_chunk.get("excerpt"),
+            max_chars=240,
+        )
+        child = _normalize_quality_first_node(
+            {
+                "progress_node_ref": _node_ref(
+                    context_digest,
+                    f"quality:{category}:repaired-child:{parent_node_ref}:{contribution_ref}",
+                    prefix="progress_v2",
+                ),
+                "node_code": f"{parent_node_code}.{child_index}",
+                "category": category,
+                "display_category_title": display_category_title,
+                "display_title": contribution_title,
+                "exam_point": contribution_title,
+                "basis_type": "resume_signal",
+                "resume_signal": contribution_text,
+                "jd_basis": None,
+                "priority_reason": "该贡献项来自同项目简历证据，可支撑项目内连续追问。",
+                "depth_goal": f"围绕「{contribution_title}」讲清个人贡献、技术方案和验证结果。",
+                "first_question": (
+                    f"请结合「{parent_display_title}」说明「{contribution_title}」的具体做法、取舍和结果。"
+                ),
+                "follow_up_focus": ["个人贡献边界", "技术方案取舍", "验证结果"],
+                "evidence_refs": [contribution_ref],
+                "confidence_level": parent_confidence_level,
+                "low_confidence_flags": [],
+            },
+            category=category,
+            display_category_title=display_category_title,
+            index=(parent_index * 100) + child_index,
+            category_node_index=child_index,
+            context_digest=context_digest,
+            allowed_evidence_refs=allowed_evidence_refs,
+            evidence_chunks_by_ref=evidence_chunks_by_ref,
+            depth=depth + 1,
+        )
+        if child is not None:
+            children.append(child)
+        if len(children) >= 4:
+            break
+    return children
+
+
+def _quality_first_project_key(chunk: dict[str, Any]) -> tuple[str, str]:
+    source_ref = chunk.get("source_ref") if isinstance(chunk.get("source_ref"), dict) else {}
+    project_title = str(source_ref.get("project_title") or chunk.get("title") or "").strip()
+    project_sequence = str(source_ref.get("project_sequence") or "").strip()
+    return (project_sequence, project_title)
 
 
 def _quality_first_coverage_points_from_evidence(
