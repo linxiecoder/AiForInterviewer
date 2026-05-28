@@ -227,6 +227,17 @@ export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
   user_answer: "right",
   user_answer_placeholder: "right",
 } as const;
+export const INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS = [
+  "progress_context",
+  "system_question",
+  "feedback",
+] as const;
+export const INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY = {
+  conversationPanel: "fills_available_grid_column",
+  chatScroll: "full_width_message_list",
+  leftDetailContent: "full_width_left_content",
+  userAnswerContent: "right_aligned_capped_content",
+} as const;
 export const INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS = {
   send_answer: "Ctrl+Enter",
 } as const;
@@ -844,45 +855,285 @@ function renderQuestionTextWithSources(
   });
 }
 
+type PolishSessionTurnForClipboard = PolishSessionDetail["turns"][number];
+
+type ProgressTreePathInfo = {
+  categoryTitle: string | null;
+  nodeTitle: string | null;
+  pathLabel: string;
+};
+
+const WORKBENCH_PROGRESS_NODE_KIND_LABELS: Record<WorkbenchProgressNodeKind, string> = {
+  group: "分类",
+  node: "能力节点",
+  question: "题目",
+};
+
 export function buildPolishSessionClipboardMarkdown(session: PolishSessionDetail): string {
+  const progressPercent = getSessionProgressPercent(session);
   const rows: string[] = [
-    "# 模拟面试内容",
+    "# 模拟面试基本信息",
     "",
-    `岗位：${session.job_title || FALLBACK_JOB_TITLE}`,
-    `简历：${session.resume_title || FALLBACK_RESUME_TITLE}`,
-    `能力主题：${toPolishThemeLabel(session)}`,
-    `打磨主题：${toTopicLabel(session)}`,
-    `创建时间：${toDisplayDate(session.created_at)}`,
-    `更新时间：${toDisplayDate(session.updated_at)}`,
+    `- 岗位信息：${toDisplayJobTitle(session)}`,
+    `- 简历信息：${toDisplayResumeTitle(session)}`,
+    `- 当前节点：${toCurrentNodeLabel(session)}`,
+    `- 能力主题：${toPolishThemeLabel(session)}`,
+    `- 打磨主题：${toTopicLabel(session)}`,
+    `- 当前进度：${progressPercent}%`,
+    `- 当前节点表现：${WORKBENCH_NODE_SCORE_PLACEHOLDER}`,
+    `- 当前模拟面试状态：${toSessionStatusLabel(session.session_status)}`,
+    `- 创建时间：${toDisplayDate(session.created_at)}`,
+    `- 更新时间：${toDisplayDate(session.updated_at)}`,
+    `- 复制时间：${toDisplayDate(new Date().toISOString())}`,
+    "",
+    "# 进展树",
+    "",
+    ...buildProgressTreeClipboardRows(session),
+    "",
+    "# 题目信息",
     "",
   ];
 
   if (session.turns.length === 0) {
-    rows.push("## 题目与反馈");
-    rows.push("- 尚未生成题目记录");
+    rows.push("暂无题目。");
     return rows.join("\n");
   }
 
-  rows.push("## 题目与反馈");
   session.turns.forEach((turn, turnIndex) => {
-    const questionText = turn.question_text || FALLBACK_QUESTION_TEXT;
-    rows.push(`### 第${turnIndex + 1}轮`);
-    rows.push(`- 题干：${questionText}`);
-    if (turn.answers.length === 0) {
-      rows.push(`- 回答：${FALLBACK_ANSWER_TEXT}`);
-      rows.push(`- 反馈：${FALLBACK_FEEDBACK_TEXT}`);
-      return;
+    const pathInfo = resolveProgressTreePathInfo(session, turn.progress_node_ref);
+    const questionTitle = pathInfo.nodeTitle ?? `题目 ${turnIndex + 1}`;
+    rows.push(`## 题目 ${turnIndex + 1}：${questionTitle}`);
+    rows.push("");
+    rows.push(`- 所属分类：${pathInfo.categoryTitle ?? "未关联分类"}`);
+    rows.push(`- 所属节点：${pathInfo.pathLabel}`);
+    rows.push(`- 状态：${progressNodeStatusLabel(resolveQuestionTurnStatus(session, turn))}`);
+    rows.push(`- 创建时间：${toDisplayDate(turn.question_created_at)}`);
+    appendQuestionDetailMarkdown(rows, turn, "###");
+    if (turnIndex < session.turns.length - 1) {
+      rows.push("");
     }
-
-    turn.answers.forEach((answer, answerIndex) => {
-      const answerText = answer.answer_text || FALLBACK_ANSWER_TEXT;
-      const feedbackText = answer.feedback_text || FALLBACK_FEEDBACK_TEXT;
-      rows.push(`- 回答 ${answerIndex + 1}：${answerText}`);
-      rows.push(`- 反馈 ${answerIndex + 1}：${feedbackText}`);
-    });
   });
 
   return rows.join("\n");
+}
+
+export function buildProgressTreeNodeClipboardMarkdown(
+  session: PolishSessionDetail,
+  node: WorkbenchProgressNode | null | undefined,
+): string {
+  if (!node) {
+    return ["# 节点信息", "", "节点标题：未选中节点", "节点类型：未知", "状态：未知"].join("\n");
+  }
+
+  if (isQuestionNode(node)) {
+    const turn = session.turns.find((item) => item.question_id === node.questionId) ?? null;
+    const pathInfo = resolveProgressTreePathInfo(session, turn?.progress_node_ref ?? node.questionTargetRef);
+    const rows = [
+      "# 节点信息",
+      "",
+      `节点标题：${node.title}`,
+      `节点类型：${WORKBENCH_PROGRESS_NODE_KIND_LABELS[node.kind]}`,
+      `题目状态：${progressNodeStatusLabel(node.status)}`,
+      `能力主题：${toPolishThemeLabel(session)}`,
+      `所属节点：${pathInfo.pathLabel}`,
+    ];
+
+    if (turn === null) {
+      rows.push("", "## 题目正文", "", node.detail || FALLBACK_QUESTION_TEXT);
+      rows.push("", "## 用户回答", "", FALLBACK_ANSWER_TEXT);
+      rows.push("", "## 本轮反馈", "", FALLBACK_FEEDBACK_TEXT);
+      return rows.join("\n");
+    }
+
+    appendQuestionDetailMarkdown(rows, turn, "##");
+    return rows.join("\n");
+  }
+
+  const pathInfo = node.kind === "node"
+    ? resolveProgressTreePathInfo(session, node.questionTargetRef ?? node.key)
+    : null;
+  const questionNodes = collectQuestionNodes(node);
+  const rows = [
+    "# 节点信息",
+    "",
+    `节点标题：${node.title}`,
+    `节点类型：${WORKBENCH_PROGRESS_NODE_KIND_LABELS[node.kind]}`,
+    `状态：${progressNodeStatusLabel(node.status)}`,
+    `所属节点：${pathInfo?.pathLabel ?? node.title}`,
+  ];
+  if (node.detail) {
+    rows.push(`说明：${node.detail}`);
+  }
+
+  rows.push("", "## 下属题目");
+  if (questionNodes.length === 0) {
+    rows.push("- 暂无题目");
+  } else {
+    questionNodes.forEach((questionNode) => {
+      rows.push(
+        `- ${questionNode.title} · ${progressNodeStatusLabel(questionNode.status)}${
+          questionNode.detail ? ` · ${questionNode.detail}` : ""
+        }`,
+      );
+    });
+  }
+
+  return rows.join("\n");
+}
+
+function appendQuestionDetailMarkdown(
+  rows: string[],
+  turn: PolishSessionTurnForClipboard,
+  headingPrefix: "##" | "###",
+): void {
+  rows.push("");
+  rows.push(`${headingPrefix} 题目正文`);
+  rows.push("");
+  rows.push(toClipboardText(turn.question_text, FALLBACK_QUESTION_TEXT));
+  rows.push("");
+  rows.push(`${headingPrefix} 用户回答`);
+  rows.push("");
+  if (turn.answers.length === 0) {
+    rows.push(FALLBACK_ANSWER_TEXT);
+  } else {
+    turn.answers.forEach((answer) => {
+      rows.push(`#### 回答 ${answer.answer_round}`);
+      rows.push("");
+      rows.push(toClipboardText(answer.answer_text, FALLBACK_ANSWER_TEXT));
+      rows.push("");
+    });
+    trimTrailingEmptyRows(rows);
+  }
+
+  rows.push("");
+  rows.push(`${headingPrefix} 本轮反馈`);
+  rows.push("");
+  if (turn.answers.length === 0) {
+    rows.push(FALLBACK_FEEDBACK_TEXT);
+    return;
+  }
+  turn.answers.forEach((answer) => {
+    rows.push(`#### 反馈 ${answer.answer_round}`);
+    rows.push("");
+    rows.push(toClipboardText(answer.feedback_text || answer.feedback_payload?.feedback_text, FALLBACK_FEEDBACK_TEXT));
+    rows.push("");
+  });
+  trimTrailingEmptyRows(rows);
+}
+
+function buildProgressTreeClipboardRows(session: PolishSessionDetail): string[] {
+  const progressNodes = buildWorkbenchProgressNodes(session);
+  if (progressNodes.length === 0) {
+    return ["- 进展树暂未生成"];
+  }
+
+  const currentPriorityRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
+  const rows: string[] = [];
+  const appendNode = (node: WorkbenchProgressNode, depth: number) => {
+    const indent = "  ".repeat(depth);
+    const isCurrentPriority = node.kind === "node" && node.questionTargetRef === currentPriorityRef;
+    rows.push(
+      `${indent}- ${node.title} · ${progressNodeStatusLabel(node.status)}${
+        isCurrentPriority ? " · 当前优先" : ""
+      }`,
+    );
+    node.children?.forEach((child) => appendNode(child, depth + 1));
+  };
+
+  progressNodes.forEach((node) => appendNode(node, 0));
+  return rows;
+}
+
+function collectQuestionNodes(node: WorkbenchProgressNode): WorkbenchProgressNode[] {
+  const children = node.children ?? [];
+  return [
+    ...(isQuestionNode(node) ? [node] : []),
+    ...children.flatMap((child) => collectQuestionNodes(child)),
+  ];
+}
+
+function resolveProgressTreePathInfo(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null | undefined,
+): ProgressTreePathInfo {
+  const path = findProgressTreeNodePathByRef(session.progress_tree_plan.nodes, progressNodeRef);
+  if (path === null || path.length === 0) {
+    return {
+      categoryTitle: null,
+      nodeTitle: null,
+      pathLabel: "未关联节点",
+    };
+  }
+
+  const categoryTitle = resolveProgressTreePathCategoryTitle(path);
+  const pathTitles = path.map((item) => resolveProgressNodeTitle(item));
+  return {
+    categoryTitle,
+    nodeTitle: pathTitles[pathTitles.length - 1] ?? null,
+    pathLabel: [categoryTitle, ...pathTitles].filter(Boolean).join(" / "),
+  };
+}
+
+function findProgressTreeNodePathByRef(
+  nodes: readonly PolishProgressTreeNode[],
+  progressNodeRef: string | null | undefined,
+  ancestors: readonly PolishProgressTreeNode[] = [],
+): PolishProgressTreeNode[] | null {
+  if (!progressNodeRef) {
+    return null;
+  }
+
+  for (const node of nodes) {
+    const nextPath = [...ancestors, node];
+    if (node.progress_node_ref === progressNodeRef) {
+      return nextPath;
+    }
+    const childPath = findProgressTreeNodePathByRef(node.children ?? [], progressNodeRef, nextPath);
+    if (childPath !== null) {
+      return childPath;
+    }
+  }
+
+  return null;
+}
+
+function resolveProgressTreePathCategoryTitle(path: readonly PolishProgressTreeNode[]): string {
+  for (const node of path) {
+    const displayNode = node as ProgressTreeDisplayNode;
+    const displayCategoryTitle = toSafeProgressTreeText(displayNode.display_category_title);
+    if (displayCategoryTitle) {
+      return displayCategoryTitle;
+    }
+    if (displayNode.category === "resume_deep_dive" || displayNode.category === "jd_gap_learning") {
+      return INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY[displayNode.category];
+    }
+  }
+  return INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE;
+}
+
+function getSessionProgressPercent(session: PolishSessionDetail): number {
+  return Math.max(0, Math.min(100, session.progress_tree_state.progress?.progress_percent ?? session.progress_percent ?? 0));
+}
+
+function toSessionStatusLabel(status: string | null | undefined): string {
+  if (status === "ended" || status === "completed") {
+    return "已结束";
+  }
+  if (status === "active" || status === "running" || status === "in_progress") {
+    return "进行中";
+  }
+  return status?.trim() || "未知";
+}
+
+function toClipboardText(value: string | null | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : fallback;
+}
+
+function trimTrailingEmptyRows(rows: string[]): void {
+  while (rows[rows.length - 1] === "") {
+    rows.pop();
+  }
 }
 
 type PolishSessionReadableHeader = PolishSessionDetail | PolishSessionSummary;
@@ -3079,14 +3330,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       message.error("当前环境不支持剪贴板复制。");
       return;
     }
-    const nodeInfo = [
-      `标题：${node.title}`,
-      `类型：${node.kind}`,
-      `状态：${progressNodeStatusLabel(node.status)}`,
-      node.detail ? `说明：${node.detail}` : null,
-    ].filter((line): line is string => line !== null).join("\n");
+    if (session === null) {
+      message.error("当前会话详情为空，无法复制节点信息。");
+      return;
+    }
     try {
-      await window.navigator.clipboard.writeText(nodeInfo);
+      await window.navigator.clipboard.writeText(buildProgressTreeNodeClipboardMarkdown(session, node));
       message.success("节点信息已复制。");
     } catch (copyError) {
       message.error(copyError instanceof Error ? copyError.message : "复制失败，请稍后重试。");

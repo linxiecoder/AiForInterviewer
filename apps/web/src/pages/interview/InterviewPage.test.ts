@@ -20,8 +20,10 @@ import {
   INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY,
   INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT,
   INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS,
+  INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY,
   INTERVIEW_WORKBENCH_LAYOUT_AREAS,
   INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
+  INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS,
   INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY,
   INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
@@ -52,6 +54,7 @@ import {
   buildInterviewCreatePendingDescription,
   buildCandidateReviewViewModel,
   buildFeedbackCardViewModel,
+  buildProgressTreeNodeClipboardMarkdown,
   buildProgressTreeContextMenuItems,
   filterPolishSessionsBySearch,
   buildProgressTreeContextBannerContent,
@@ -207,6 +210,9 @@ type WorkbenchLayoutTestIdsAreStable = Expect<
 >;
 type WorkbenchScrollRegionsAreStable = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_SCROLL_REGIONS, readonly ["progress_node_list", "chat_scroll"]>
+>;
+type WorkbenchLeftDetailUsesFullWidth = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS, readonly ["progress_context", "system_question", "feedback"]>
 >;
 type WorkbenchHeroActionsStayOnSummaryRowEnd = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT, "summary_row_end">
@@ -967,6 +973,10 @@ function test_progress_node_context_banner_supports_expand_toggle_for_depth(): v
 }
 
 function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right(): void {
+  assertContract(INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY.conversationPanel === "fills_available_grid_column", "右侧对话详情 section 应占满剩余 grid 宽度");
+  assertContract(INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY.chatScroll === "full_width_message_list", "消息列表容器不应复用回答卡 max-width");
+  assertContract(INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY.leftDetailContent === "full_width_left_content", "系统题目、上下文、反馈应在完整详情区内靠左铺开");
+  assertContract(INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY.userAnswerContent === "right_aligned_capped_content", "用户回答仍应右对齐并保留宽度上限");
   assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.system_question === "left", "系统题目应位于聊天区左侧");
   assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer === "right", "用户回答及暂无回答占位应位于聊天区右侧");
   assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.progress_context === "left", "当前节点上下文应位于聊天区左侧");
@@ -977,6 +987,74 @@ function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right()
   assertContract(getWorkbenchChatMessageAlignmentClassName("feedback") === "messageRowLeft", "反馈卡应使用左对齐行容器");
   assertContract(getWorkbenchChatMessageAlignmentClassName("user_answer") === "messageRowRight", "用户回答应使用右对齐行容器");
   assertContract(getWorkbenchChatMessageAlignmentClassName("user_answer_placeholder") === "messageRowRight", "暂无回答应使用右对齐行容器");
+}
+
+function test_question_node_clipboard_includes_full_question_answer_and_feedback(): void {
+  const session: PolishSessionDetail = {
+    ...buildTestSession([
+      buildTestProgressNode("node_clipboard_question", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+    ], "node_clipboard_question"),
+    turns: [
+      {
+        question_id: "q_clipboard_question",
+        question_text: "请完整说明你会如何设计混合检索策略，包括召回、重排、降级和效果验证。",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_clipboard_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [
+          {
+            answer_id: "ans_clipboard_question",
+            answer_round: 1,
+            answer_text: "我会先用 BM25 和向量召回，再用交叉编码器重排，并用无结果兜底保证可用性。",
+            answer_created_at: "2026-05-21T10:01:00Z",
+            feedback_text: "回答覆盖主链路，但需要补充线上指标和回滚策略。",
+            feedback_id: "fb_clipboard_question",
+            score_result_id: null,
+            feedback_created_at: "2026-05-21T10:02:00Z",
+          },
+        ],
+      },
+    ],
+  };
+  const questionNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0]?.children?.[0];
+  const markdown = buildProgressTreeNodeClipboardMarkdown(session, questionNode);
+
+  assertContract(isQuestionNode(questionNode), "测试目标必须是题目节点");
+  assertContract(markdown.includes("# 节点信息"), "右键复制仍应输出节点信息标题");
+  assertContract(markdown.includes("节点标题：题目 1"), "题目节点复制应保留节点标题");
+  assertContract(markdown.includes("所属节点：深度打磨类 / 混合检索策略设计"), "题目节点复制应包含所属节点路径");
+  assertContract(markdown.includes("请完整说明你会如何设计混合检索策略，包括召回、重排、降级和效果验证。"), "题目节点复制应包含完整题目正文");
+  assertContract(markdown.includes("我会先用 BM25 和向量召回，再用交叉编码器重排，并用无结果兜底保证可用性。"), "题目节点复制应包含完整回答");
+  assertContract(markdown.includes("回答覆盖主链路，但需要补充线上指标和回滚策略。"), "题目节点复制应包含完整反馈");
+  assertContract(!markdown.includes("说明：请完整说明你会如何设计混合检索策略"), "题目节点复制不应只输出短摘要说明");
+}
+
+function test_question_node_clipboard_uses_answer_and_feedback_placeholders(): void {
+  const session: PolishSessionDetail = {
+    ...buildTestSession([
+      buildTestProgressNode("node_clipboard_empty_question", "Prompt 工程与幻觉控制", "resume_deep_dive", "深度打磨类"),
+    ], "node_clipboard_empty_question"),
+    turns: [
+      {
+        question_id: "q_clipboard_empty_question",
+        question_text: "请说明你如何降低大模型回答中的幻觉风险。",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_clipboard_empty_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const questionNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0]?.children?.[0];
+  const markdown = buildProgressTreeNodeClipboardMarkdown(session, questionNode);
+
+  assertContract(markdown.includes("请说明你如何降低大模型回答中的幻觉风险。"), "无回答题目也应复制完整题干");
+  assertContract(markdown.includes("暂无回答"), "无回答时应输出稳定占位");
+  assertContract(markdown.includes("本轮反馈尚未生成"), "无反馈时应输出稳定占位");
 }
 
 function test_progress_tree_click_auto_generates_only_for_nodes_without_question(): void {
@@ -1797,10 +1875,107 @@ function test_clipboard_markdown_stays_compatible_with_structured_feedback_paylo
 
   const markdown = buildPolishSessionClipboardMarkdown(session);
 
-  assertContract(markdown.includes("- 题干：请说明结构化反馈如何复制。"), "clipboard markdown 应继续包含题干");
-  assertContract(markdown.includes("- 回答 1：我会保持用户可见反馈文本兼容。"), "clipboard markdown 应继续包含回答文本");
-  assertContract(markdown.includes("- 反馈 1：结构化反馈用户可见文本。"), "clipboard markdown 应继续使用 feedback_text");
+  assertContract(markdown.includes("### 题目正文"), "clipboard markdown 应继续包含题干分区");
+  assertContract(markdown.includes("请说明结构化反馈如何复制。"), "clipboard markdown 应继续包含题干");
+  assertContract(markdown.includes("我会保持用户可见反馈文本兼容。"), "clipboard markdown 应继续包含回答文本");
+  assertContract(markdown.includes("结构化反馈用户可见文本。"), "clipboard markdown 应继续使用 feedback_text");
   assertContract(!markdown.includes("positive_evidence_points"), "clipboard markdown 不应泄漏结构化字段名");
+}
+
+function test_session_clipboard_markdown_includes_full_context_tree_and_all_questions(): void {
+  const parentNode: TestProgressTreeNode = {
+    ...buildTestProgressNode("node_parent_clipboard", "混合检索与幻觉控制", "resume_deep_dive", "深度打磨类"),
+    children: [
+      buildTestProgressNode("node_question_one", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+      buildTestProgressNode("node_question_two", "Prompt工程与幻觉控制", "resume_deep_dive", "深度打磨类"),
+    ],
+  };
+  const session: PolishSessionDetail = {
+    ...buildTestSession([parentNode], "node_question_one"),
+    session_status: "active",
+    progress_percent: 50,
+    progress_tree_state: {
+      ...buildTestSession([parentNode], "node_question_one").progress_tree_state,
+      node_states: [
+        {
+          progress_node_ref: "node_parent_clipboard",
+          status: "in_progress",
+          completed_questions_count: 0,
+          latest_feedback_summary: null,
+        },
+        {
+          progress_node_ref: "node_question_one",
+          status: "in_progress",
+          completed_questions_count: 0,
+          latest_feedback_summary: null,
+        },
+        {
+          progress_node_ref: "node_question_two",
+          status: "pending",
+          completed_questions_count: 0,
+          latest_feedback_summary: null,
+        },
+      ],
+      current_priority: {
+        progress_node_ref: "node_question_one",
+        title: "混合检索策略设计",
+        expected_capability: "混合检索策略设计能力",
+      },
+      progress: { progress_percent: 50 },
+    },
+    turns: [
+      {
+        question_id: "q_one",
+        question_text: "请完整说明混合检索策略如何设计。",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_question_one",
+        evidence_refs: [],
+        context_digest: "digest-one",
+        answers: [
+          {
+            answer_id: "ans_one",
+            answer_round: 1,
+            answer_text: "先多路召回，再重排，并按指标监控。",
+            answer_created_at: "2026-05-21T10:01:00Z",
+            feedback_text: "需要补充失败兜底。",
+            feedback_id: "fb_one",
+            score_result_id: null,
+            feedback_created_at: "2026-05-21T10:02:00Z",
+          },
+        ],
+      },
+      {
+        question_id: "q_two",
+        question_text: "请完整说明 Prompt 幻觉控制方案。",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:03:00Z",
+        progress_node_ref: "node_question_two",
+        evidence_refs: [],
+        context_digest: "digest-two",
+        answers: [],
+      },
+    ],
+  };
+  const markdown = buildPolishSessionClipboardMarkdown(session);
+
+  assertContract(markdown.includes("# 模拟面试基本信息"), "顶部复制应包含模拟面试基本信息");
+  assertContract(markdown.includes("# 进展树"), "顶部复制应包含进展树");
+  assertContract(markdown.includes("# 题目信息"), "顶部复制应包含题目信息");
+  assertContract(markdown.includes("当前模拟面试状态：进行中"), "基本信息应包含模拟面试状态");
+  assertContract(markdown.includes("复制时间："), "基本信息应包含复制时间");
+  assertContract(markdown.includes("- 深度打磨类 · 进行中"), "进展树应包含分类节点和状态");
+  assertContract(markdown.includes("  - 混合检索与幻觉控制 · 进行中"), "进展树应保留层级关系");
+  assertContract(markdown.includes("    - 混合检索策略设计 · 进行中 · 当前优先"), "进展树应标记当前优先节点");
+  assertContract(markdown.includes("      - 题目 1 · 进行中"), "进展树应包含题目节点");
+  assertContract(markdown.includes("    - Prompt工程与幻觉控制 · 未开始"), "进展树不应丢失折叠状态下的数据节点");
+  assertContract(markdown.includes("## 题目 1：混合检索策略设计"), "题目信息应包含第一题");
+  assertContract(markdown.includes("## 题目 2：Prompt工程与幻觉控制"), "题目信息应包含第二题而不是只复制当前题");
+  assertContract(markdown.includes("请完整说明混合检索策略如何设计。"), "题目信息应包含第一题完整正文");
+  assertContract(markdown.includes("请完整说明 Prompt 幻觉控制方案。"), "题目信息应包含第二题完整正文");
+  assertContract(markdown.includes("先多路召回，再重排，并按指标监控。"), "题目信息应包含已有回答");
+  assertContract(markdown.includes("本轮反馈尚未生成"), "题目信息应包含无反馈占位");
+  assertContract(!markdown.startsWith("# 模拟面试内容\n\n岗位："), "顶部复制不应保留旧短格式作为主结构");
 }
 
 function test_progress_node_context_banner_ignores_group_header_click(): void {
@@ -1987,6 +2162,8 @@ test_workbench_hero_actions_are_icon_only_and_copy_session_content();
 test_progress_tree_node_status_uses_row_trailing_lights();
 test_progress_node_context_banner_supports_expand_toggle_for_depth();
 test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
+test_question_node_clipboard_includes_full_question_answer_and_feedback();
+test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_progress_tree_pending_and_failed_states_use_generation_action();
@@ -2002,6 +2179,7 @@ test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();
 test_clipboard_markdown_stays_compatible_with_structured_feedback_payload();
+test_session_clipboard_markdown_includes_full_context_tree_and_all_questions();
 test_progress_node_context_banner_ignores_group_header_click();
 test_progress_node_context_banner_uses_safe_copy();
 test_progress_tree_detail_uses_display_safe_copy();
