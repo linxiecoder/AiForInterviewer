@@ -4,6 +4,8 @@ import {
   CopyOutlined,
   DownOutlined,
   CheckCircleOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   PlusOutlined,
   ReloadOutlined,
   RightOutlined,
@@ -13,6 +15,7 @@ import {
 import { Alert, Button, Card, Drawer, Form, Input, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
@@ -126,8 +129,9 @@ export const INTERVIEW_PROGRESS_TREE_SCROLL_CLASS = "progressTreeScroll" as cons
 export const INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT = "summary_row_end" as const;
 export const INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY = "icon_only_with_tooltip" as const;
 export const INTERVIEW_WORKBENCH_HERO_ACTION_COPY = [
-  "返回模拟面试列表",
   "复制模拟面试内容",
+  "结束模拟面试",
+  "返回模拟面试列表",
 ] as const;
 export const INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY = ["模拟面试进度"] as const;
 export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
@@ -258,12 +262,17 @@ export type WorkbenchCurrentQuestionState = {
 export type WorkbenchQuestionActionState = {
   currentQuestionId: string | null;
   currentQuestionStatus: WorkbenchQuestionStatus | null;
+  isQuestionNode: boolean;
   hasCurrentQuestion: boolean;
   isCurrentQuestionCompleted: boolean;
   canSendAnswer: boolean;
   canGenerateQuestion: boolean;
   canMarkQuestionCompleted: boolean;
 };
+
+const PROGRESS_PANEL_DEFAULT_WIDTH = 360;
+const PROGRESS_PANEL_MIN_WIDTH = 260;
+const PROGRESS_PANEL_MAX_WIDTH = 520;
 
 type ProgressTreeDisplayNode = PolishProgressTreeNode & {
   basis_type?: string | null;
@@ -918,8 +927,27 @@ export function isQuestionNode(
   return node?.kind === "question" && typeof node.questionId === "string" && node.questionId.length > 0;
 }
 
+export function resolveQuestionNodeState(
+  session: PolishSessionDetail,
+  node: WorkbenchProgressNode | null | undefined,
+): WorkbenchCurrentQuestionState | null {
+  if (!isQuestionNode(node)) {
+    return null;
+  }
+  const turn = session.turns.find((item) => item.question_id === node.questionId) ?? null;
+  if (turn === null) {
+    return null;
+  }
+  return {
+    questionId: turn.question_id,
+    progressNodeRef: turn.progress_node_ref ?? node.questionTargetRef ?? null,
+    status: resolveQuestionTurnStatus(session, turn),
+  };
+}
+
 export function deriveWorkbenchQuestionActionState(params: {
   session: PolishSessionDetail | null;
+  selectedProgressNode: WorkbenchProgressNode | null;
   progressNodeRef: string | null;
   canShowProgressTree: boolean;
   creatingQuestion: boolean;
@@ -928,9 +956,13 @@ export function deriveWorkbenchQuestionActionState(params: {
   completingQuestion: boolean;
   endingSession: boolean;
 }): WorkbenchQuestionActionState {
+  const selectedQuestionState = params.session === null
+    ? null
+    : resolveQuestionNodeState(params.session, params.selectedProgressNode);
   const currentQuestionState = params.session === null
     ? null
-    : resolveCurrentQuestionState(params.session, params.progressNodeRef);
+    : selectedQuestionState ?? resolveCurrentQuestionState(params.session, params.progressNodeRef);
+  const isSelectedQuestionNode = selectedQuestionState !== null;
   const hasCurrentQuestion = currentQuestionState !== null;
   const isCurrentQuestionCompleted = currentQuestionState?.status === "completed";
   const isBusy =
@@ -944,9 +976,10 @@ export function deriveWorkbenchQuestionActionState(params: {
   return {
     currentQuestionId: currentQuestionState?.questionId ?? null,
     currentQuestionStatus: currentQuestionState?.status ?? null,
+    isQuestionNode: isSelectedQuestionNode,
     hasCurrentQuestion,
     isCurrentQuestionCompleted,
-    canSendAnswer: canUseSession && hasCurrentQuestion,
+    canSendAnswer: canUseSession && isSelectedQuestionNode,
     canGenerateQuestion:
       canUseSession &&
       params.canShowProgressTree &&
@@ -1445,6 +1478,16 @@ function flattenWorkbenchProgressNodes(
     node,
     ...(node.children ? flattenWorkbenchProgressNodes(node.children) : []),
   ]);
+}
+
+export function findWorkbenchProgressNodeByKey(
+  nodes: readonly WorkbenchProgressNode[],
+  nodeKey: string | null,
+): WorkbenchProgressNode | null {
+  if (nodeKey === null) {
+    return null;
+  }
+  return flattenWorkbenchProgressNodes(nodes).find((node) => node.key === nodeKey) ?? null;
 }
 
 function progressNodeStatusLabel(status: WorkbenchProgressNodeStatus): string {
@@ -2423,6 +2466,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [copyingSession, setCopyingSession] = useState<boolean>(false);
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
+  const [selectedProgressNodeKey, setSelectedProgressNodeKey] = useState<string | null>(null);
+  const [isProgressPanelCollapsed, setProgressPanelCollapsed] = useState<boolean>(false);
+  const [progressPanelWidth, setProgressPanelWidth] = useState<number>(PROGRESS_PANEL_DEFAULT_WIDTH);
   const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
   const [candidates, setCandidates] = useState<PolishCandidate[]>([]);
   const [candidateLoadError, setCandidateLoadError] = useState<string | null>(null);
@@ -2467,6 +2513,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setAnswerError(null);
     setWorkbenchFailureState(null);
     setSelectedProgressNodeRef(null);
+    setSelectedProgressNodeKey(null);
     setCandidates([]);
     setCandidateLoadError(null);
     setCandidateActionKey(null);
@@ -2524,7 +2571,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("模拟面试已结束，不能继续提交回答。");
       return;
     }
-    const currentQuestionState = resolveCurrentQuestionState(session, selectedProgressNodeDetailRef);
+    const currentQuestionState = resolveQuestionNodeState(session, selectedProgressNode);
     if (currentQuestionState === null) {
       setAnswerError("请先选择左侧已有题目的节点后再提交回答。");
       return;
@@ -2620,6 +2667,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   const hasQuestion = session !== null && session.turns.length > 0;
   const progressNodes = session === null ? [] : buildWorkbenchProgressNodes(session);
+  const selectedProgressNode = findWorkbenchProgressNodeByKey(progressNodes, selectedProgressNodeKey);
   const progressPercent =
     session === null ? 0 : Math.max(0, Math.min(100, session.progress_tree_state?.progress?.progress_percent ?? 0));
   const currentProgressNodeKey =
@@ -2642,6 +2690,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const canShowProgressTree = hasProgressTreeNodes && (isProgressTreeReady || isProgressTreeRefreshFailed);
   const questionActionState = deriveWorkbenchQuestionActionState({
     session,
+    selectedProgressNode,
     progressNodeRef: selectedProgressNodeDetailRef,
     canShowProgressTree,
     creatingQuestion,
@@ -2650,8 +2699,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     completingQuestion,
     endingSession,
   });
-  const currentQuestionId = questionActionState.currentQuestionId;
-  const hasCurrentQuestion = questionActionState.hasCurrentQuestion;
   const canSendAnswer = questionActionState.canSendAnswer;
   const canGenerateQuestion = questionActionState.canGenerateQuestion;
   const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
@@ -2790,6 +2837,38 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       }
       return nextKeys;
     });
+  };
+
+  const startProgressPanelResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (isProgressPanelCollapsed) {
+      return;
+    }
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = progressPanelWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const stopResize = () => {
+      window.removeEventListener("pointermove", resizeProgressPanel);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+
+    const resizeProgressPanel = (moveEvent: PointerEvent) => {
+      const nextWidth = startWidth + moveEvent.clientX - startX;
+      setProgressPanelWidth(
+        Math.max(PROGRESS_PANEL_MIN_WIDTH, Math.min(PROGRESS_PANEL_MAX_WIDTH, Math.round(nextWidth))),
+      );
+    };
+
+    window.addEventListener("pointermove", resizeProgressPanel);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
   };
 
   const handleNextRecommendedAction = (action: PolishRecommendedAction, progressNodeRef?: string | null) => {
@@ -2933,11 +3012,33 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               sendAnswer();
             }
           }}
-          placeholder={hasCurrentQuestion ? "请输入当前题目的回答" : "请选择左侧已有题目的节点后作答"}
+          placeholder={canSendAnswer ? "请输入当前题目的回答" : "请选择左侧已有题目的节点后作答"}
           maxLength={2000}
           disabled={!canSendAnswer}
         />
         <div className={styles.currentQuestionComposerActions}>
+          <div className={styles.currentQuestionComposerLeftActions}>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => {
+                void createQuestion();
+              }}
+              loading={creatingQuestion}
+              disabled={!canGenerateQuestion}
+            >
+              生成题目
+            </Button>
+            <Button
+              icon={<CheckCircleOutlined />}
+              loading={completingQuestion}
+              disabled={!canMarkQuestionCompleted}
+              onClick={() => {
+                void completeCurrentQuestion();
+              }}
+            >
+              标记为已完成
+            </Button>
+          </div>
           <Button
             type="primary"
             icon={<SendOutlined />}
@@ -2986,10 +3087,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
     const canSelectNode = node.kind === "node" || isQuestionNode(node);
     const isActive =
-      (node.kind === "node" && node.key === selectedProgressNodeDetailRef) ||
-      (isQuestionNode(node) &&
-        node.questionTargetRef === selectedProgressNodeDetailRef &&
-        node.questionId === currentQuestionId);
+      selectedProgressNodeKey !== null
+        ? node.key === selectedProgressNodeKey
+        : node.kind === "node" && node.key === selectedProgressNodeDetailRef;
     const isCurrentPriority = canSelectNode && node.key === currentProgressNodeKey;
     const isExpandable = Boolean(node.children && node.children.length > 0);
     const isExpanded = expandedProgressNodeKeys.has(node.key);
@@ -3018,6 +3118,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               ? () => {
                   const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
                   setSelectedProgressNodeRef(nextSelectedRef);
+                  setSelectedProgressNodeKey(node.key);
                   if (isExpandable) {
                     toggleProgressNode(node.key);
                   }
@@ -3074,6 +3175,18 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   };
 
+  const workspaceGridClassName = [
+    styles.workspaceGrid,
+    isProgressPanelCollapsed ? styles.workspaceGridCollapsed : "",
+  ].filter(Boolean).join(" ");
+  const progressPanelClassName = [
+    styles.progressPanel,
+    isProgressPanelCollapsed ? styles.progressPanelCollapsed : "",
+  ].filter(Boolean).join(" ");
+  const workspaceGridStyle = {
+    "--progress-panel-width": `${progressPanelWidth}px`,
+  } as CSSProperties;
+
   return (
     <AppShell>
       {loading ? (
@@ -3118,163 +3231,175 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               <div className={styles.heroActions}>
                 <Tooltip title={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0]}>
                   <Button
-                    type="primary"
                     shape="circle"
-                    icon={<ArrowLeftOutlined />}
+                    icon={<CopyOutlined />}
                     aria-label={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0]}
-                    onClick={() => navigate("/interview")}
+                    loading={copyingSession}
+                    onClick={() => void copySessionContent()}
                   />
                 </Tooltip>
                 <Tooltip title={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1]}>
                   <Button
                     shape="circle"
-                    icon={<CopyOutlined />}
+                    danger
+                    icon={<CloseCircleOutlined />}
                     aria-label={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1]}
-                    loading={copyingSession}
-                    onClick={() => void copySessionContent()}
+                    loading={endingSession}
+                    disabled={isSessionEnded || endingSession}
+                    onClick={() => {
+                      void endCurrentSession();
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip title={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[2]}>
+                  <Button
+                    type="primary"
+                    shape="circle"
+                    icon={<ArrowLeftOutlined />}
+                    aria-label={INTERVIEW_WORKBENCH_HERO_ACTION_COPY[2]}
+                    onClick={() => navigate("/interview")}
                   />
                 </Tooltip>
               </div>
             </div>
           </section>
 
-          <section className={styles.workspaceGrid}>
-            <aside className={styles.progressPanel} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressPanel}>
-              <div className={styles.progressPanelHeader}>
-                <div className={styles.panelHeader}>
-                  <Typography.Title level={4} className={styles.panelTitle}>
-                    模拟面试进度
-                  </Typography.Title>
-                </div>
-                <Progress percent={progressPercent} showInfo={false} strokeColor="#2563eb" trailColor="#e4ecf7" />
-              </div>
-
-              <div className={styles.progressTreeBody}>
-                <div
-                  className={`${styles.nodeList} ${styles[INTERVIEW_PROGRESS_TREE_SCROLL_CLASS]}`}
-                  data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressNodeList}
-                >
-                  {isProgressTreeInsufficient ? (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      message="岗位或简历内容不足，暂不能生成进展树。"
-                      description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
-                    />
-                  ) : isProgressTreePending || isProgressTreeFailed ? (
-                    <Alert
-                      type={isProgressTreeFailed ? "warning" : "info"}
-                      showIcon
-                      message={
-                        isProgressTreeFailed
-                          ? "进展树生成失败，可重试。"
-                          : session?.progress_tree_status === "generating"
-                            ? "进展树生成中。"
-                            : "进展树尚未生成。"
-                      }
-                      description={
-                        isProgressTreeFailed
-                          ? "会话已创建成功，进展树失败不会影响模拟面试记录，可点击重试生成。"
-                          : "会话已创建成功，生成进展树后即可开始出题。"
-                      }
-                      action={
-                        session?.progress_tree_status === "generating" ? undefined : (
-                          <Button
-                            size="small"
-                            loading={generatingProgressTree}
-                            onClick={generateProgressTree}
-                          >
-                            {isProgressTreeFailed ? "重试生成" : "生成进展树"}
-                          </Button>
-                        )
-                      }
-                    />
-                  ) : !canShowProgressTree ? (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      message={hasProgressTreeNodes ? "进展树状态异常" : "进展树暂未生成"}
-                      description={
-                        isProgressTreeReady
-                          ? "当前会话尚无可展示进展节点，建议刷新后重试，或稍后再次访问。"
-                          : "进展树暂未就绪，建议点击刷新重新生成。"
-                      }
-                      action={
+          <section className={workspaceGridClassName} style={workspaceGridStyle}>
+            <aside className={progressPanelClassName} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressPanel}>
+              {isProgressPanelCollapsed ? (
+                <Tooltip title="展开模拟面试进度">
+                  <Button
+                    className={styles.progressPanelCollapsedButton}
+                    shape="circle"
+                    icon={<MenuUnfoldOutlined />}
+                    aria-label="展开模拟面试进度"
+                    onClick={() => setProgressPanelCollapsed(false)}
+                  />
+                </Tooltip>
+              ) : (
+                <>
+                  <div className={styles.progressPanelHeader}>
+                    <div className={styles.panelHeader}>
+                      <Typography.Title level={5} className={styles.panelTitle}>
+                        模拟面试进度
+                      </Typography.Title>
+                      <Tooltip title="收起模拟面试进度">
                         <Button
+                          className={styles.progressPanelHeaderButton}
+                          type="text"
+                          shape="circle"
                           size="small"
-                          loading={progressTreeActionLoading}
-                          onClick={refreshProgressTree}
-                        >
-                          刷新进展树
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <>
-                      {isProgressTreeRefreshFailed ? (
+                          icon={<MenuFoldOutlined />}
+                          aria-label="收起模拟面试进度"
+                          onClick={() => setProgressPanelCollapsed(true)}
+                        />
+                      </Tooltip>
+                    </div>
+                    <Progress percent={progressPercent} showInfo={false} strokeColor="#2563eb" trailColor="#e4ecf7" />
+                  </div>
+
+                  <div className={styles.progressTreeBody}>
+                    <div
+                      className={`${styles.nodeList} ${styles[INTERVIEW_PROGRESS_TREE_SCROLL_CLASS]}`}
+                      data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressNodeList}
+                    >
+                      {isProgressTreeInsufficient ? (
                         <Alert
                           type="warning"
                           showIcon
-                          message="进度刷新失败，可重试。"
-                          description="已保留当前进展树结构，本次只影响节点状态刷新。"
+                          message="岗位或简历内容不足，暂不能生成进展树。"
+                          description="请补充当前绑定的岗位职责、岗位要求和简历正文后重新发起模拟面试。"
+                        />
+                      ) : isProgressTreePending || isProgressTreeFailed ? (
+                        <Alert
+                          type={isProgressTreeFailed ? "warning" : "info"}
+                          showIcon
+                          message={
+                            isProgressTreeFailed
+                              ? "进展树生成失败，可重试。"
+                              : session?.progress_tree_status === "generating"
+                                ? "进展树生成中。"
+                                : "进展树尚未生成。"
+                          }
+                          description={
+                            isProgressTreeFailed
+                              ? "会话已创建成功，进展树失败不会影响模拟面试记录，可点击重试生成。"
+                              : "会话已创建成功，生成进展树后即可开始出题。"
+                          }
                           action={
-                            <Button size="small" loading={progressTreeActionLoading} onClick={refreshProgressTree}>
-                              重试刷新
+                            session?.progress_tree_status === "generating" ? undefined : (
+                              <Button
+                                size="small"
+                                loading={generatingProgressTree}
+                                onClick={generateProgressTree}
+                              >
+                                {isProgressTreeFailed ? "重试生成" : "生成进展树"}
+                              </Button>
+                            )
+                          }
+                        />
+                      ) : !canShowProgressTree ? (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          message={hasProgressTreeNodes ? "进展树状态异常" : "进展树暂未生成"}
+                          description={
+                            isProgressTreeReady
+                              ? "当前会话尚无可展示进展节点，建议刷新后重试，或稍后再次访问。"
+                              : "进展树暂未就绪，建议点击刷新重新生成。"
+                          }
+                          action={
+                            <Button
+                              size="small"
+                              loading={progressTreeActionLoading}
+                              onClick={refreshProgressTree}
+                            >
+                              刷新进展树
                             </Button>
                           }
                         />
-                      ) : null}
-                      {progressNodes.map((node) => renderProgressNode(node))}
-                    </>
-                  )}
-                </div>
-              </div>
+                      ) : (
+                        <>
+                          {isProgressTreeRefreshFailed ? (
+                            <Alert
+                              type="warning"
+                              showIcon
+                              message="进度刷新失败，可重试。"
+                              description="已保留当前进展树结构，本次只影响节点状态刷新。"
+                              action={
+                                <Button size="small" loading={progressTreeActionLoading} onClick={refreshProgressTree}>
+                                  重试刷新
+                                </Button>
+                              }
+                            />
+                          ) : null}
+                          {progressNodes.map((node) => renderProgressNode(node))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </aside>
+            {isProgressPanelCollapsed ? null : (
+              <button
+                className={styles.progressPanelResizeHandle}
+                type="button"
+                aria-label="拖拽调整模拟面试进度宽度"
+                onPointerDown={startProgressPanelResize}
+              />
+            )}
 
             <main className={styles.conversationPanel} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.conversationPanel}>
               <div className={styles.conversationHeader}>
                 <div className={styles.conversationHeaderTitle}>
-                  <Typography.Title level={4} className={styles.panelTitle}>
+                  <Typography.Title level={5} className={styles.panelTitle}>
                     对话与反馈
                   </Typography.Title>
                   <Tag color={workbenchMachineCopy.color} className={styles.workbenchStateTag}>
                     {workbenchMachineCopy.label}
                   </Tag>
                 </div>
-                <Space wrap size={8}>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => {
-                      void createQuestion();
-                    }}
-                    loading={creatingQuestion}
-                    disabled={!canGenerateQuestion}
-                  >
-                    新生成题目
-                  </Button>
-                  <Button
-                    icon={<CheckCircleOutlined />}
-                    loading={completingQuestion}
-                    disabled={!canMarkQuestionCompleted}
-                    onClick={() => {
-                      void completeCurrentQuestion();
-                    }}
-                  >
-                    将该问题标记为已完成
-                  </Button>
-                  <Button
-                    danger
-                    icon={<CloseCircleOutlined />}
-                    loading={endingSession}
-                    disabled={isSessionEnded || endingSession}
-                    onClick={() => {
-                      void endCurrentSession();
-                    }}
-                  >
-                    结束模拟面试
-                  </Button>
-                </Space>
               </div>
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
@@ -3293,7 +3418,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     compact
                     title="暂无题目"
                     description="请先生成题目后再开始作答。"
-                    reason="点击上方“生成题目”按钮，系统将基于当前主题生成题干。"
+                    reason="点击底部“生成题目”按钮，系统将基于当前主题生成题干。"
                   />
                 )}
                 {session.turns.map((turn, turnIndex) => (

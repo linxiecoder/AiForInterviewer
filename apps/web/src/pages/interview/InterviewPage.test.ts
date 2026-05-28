@@ -209,7 +209,7 @@ type WorkbenchHeroActionsUseIconTooltipButtons = Expect<
 type WorkbenchHeroActionCopyMatchesActualBehavior = Expect<
   Equal<
     typeof INTERVIEW_WORKBENCH_HERO_ACTION_COPY,
-    readonly ["返回模拟面试列表", "复制模拟面试内容"]
+    readonly ["复制模拟面试内容", "结束模拟面试", "返回模拟面试列表"]
   >
 >;
 type WorkbenchProgressHeaderCopyOmitsPercentText = Expect<
@@ -878,8 +878,9 @@ function test_progress_node_context_banner_hides_question_and_detail_lists(): vo
 function test_workbench_hero_actions_are_icon_only_and_copy_session_content(): void {
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT === "summary_row_end", "顶部按钮组应位于状态摘要行右侧");
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY === "icon_only_with_tooltip", "顶部按钮应只展示图标，文字通过 Tooltip 和 aria-label 提供");
-  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0] === "返回模拟面试列表", "返回按钮文案应稳定");
-  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1] === "复制模拟面试内容", "复制按钮文案应匹配实际复制内容");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0] === "复制模拟面试内容", "顶部第一个按钮应为复制");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1] === "结束模拟面试", "顶部第二个按钮应为结束模拟面试");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[2] === "返回模拟面试列表", "顶部第三个按钮应为返回");
 }
 
 function test_progress_tree_node_status_uses_row_trailing_lights(): void {
@@ -1061,9 +1062,26 @@ function test_workbench_question_actions_follow_current_question_status(): void 
     },
   };
 
+  const progressNodes = buildWorkbenchProgressNodes(sessionWithQuestion);
+  const parentNodeWithQuestion = progressNodes[0]?.children?.[0] ?? null;
+  const questionNode = parentNodeWithQuestion?.children?.[0] ?? null;
+  const noQuestionNode = progressNodes[0]?.children?.[1] ?? null;
+
   const noQuestionState = deriveWorkbenchQuestionActionState({
     session: sessionWithQuestion,
+    selectedProgressNode: noQuestionNode,
     progressNodeRef: "node_without_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const parentNodeQuestionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: parentNodeWithQuestion,
+    progressNodeRef: "node_with_question",
     canShowProgressTree: true,
     creatingQuestion: false,
     submittingAnswer: false,
@@ -1073,6 +1091,7 @@ function test_workbench_question_actions_follow_current_question_status(): void 
   });
   const inProgressQuestionState = deriveWorkbenchQuestionActionState({
     session: sessionWithQuestion,
+    selectedProgressNode: questionNode,
     progressNodeRef: "node_with_question",
     canShowProgressTree: true,
     creatingQuestion: false,
@@ -1083,6 +1102,7 @@ function test_workbench_question_actions_follow_current_question_status(): void 
   });
   const completedQuestionState = deriveWorkbenchQuestionActionState({
     session: completedSession,
+    selectedProgressNode: questionNode,
     progressNodeRef: "node_with_question",
     canShowProgressTree: true,
     creatingQuestion: false,
@@ -1093,9 +1113,16 @@ function test_workbench_question_actions_follow_current_question_status(): void 
   });
 
   assertContract(noQuestionState.hasCurrentQuestion === false, "无题目节点应识别为无当前题目");
+  assertContract(noQuestionState.isQuestionNode === false, "无题目节点不应被识别为题目节点");
   assertContract(noQuestionState.canSendAnswer === false, "无题目节点不允许提交回答");
   assertContract(noQuestionState.canGenerateQuestion === true, "无题目节点应允许生成题目");
   assertContract(noQuestionState.canMarkQuestionCompleted === false, "无题目节点不允许标记完成");
+  assertContract(parentNodeQuestionState.hasCurrentQuestion === true, "父节点已有题目时应识别为当前节点有题");
+  assertContract(parentNodeQuestionState.isQuestionNode === false, "父节点有题也不应被当作题目节点");
+  assertContract(parentNodeQuestionState.canSendAnswer === false, "父节点有题但未选中题目 entry 时不允许提交回答");
+  assertContract(parentNodeQuestionState.canGenerateQuestion === false, "父节点已有未完成题目时不允许重复生成题目");
+  assertContract(parentNodeQuestionState.canMarkQuestionCompleted === true, "父节点已有未完成题目时允许标记完成");
+  assertContract(inProgressQuestionState.isQuestionNode === true, "选中题目 entry 时应识别为题目节点");
   assertContract(inProgressQuestionState.hasCurrentQuestion === true, "已有未完成题目应识别为当前题目");
   assertContract(inProgressQuestionState.currentQuestionStatus === "in_progress", "已有未完成题目状态应为 in_progress");
   assertContract(inProgressQuestionState.canSendAnswer === true, "已有未完成题目应允许提交回答");
