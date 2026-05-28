@@ -125,6 +125,24 @@ class _ResumeSectionItem:
     source_ref: dict[str, Any]
 
 
+@dataclass
+class ParsedProjectContribution:
+    title: str
+    text: str
+    sequence: int
+
+
+@dataclass
+class ParsedResumeProject:
+    title: str
+    company: str | None
+    role: str | None
+    background: str | None
+    text: str
+    sequence: int
+    contributions: list[ParsedProjectContribution]
+
+
 def build_progress_evidence_chunks(context: dict[str, Any]) -> list[ProgressEvidenceChunk]:
     counters: Counter[str] = Counter()
     chunks: list[ProgressEvidenceChunk] = []
@@ -235,10 +253,23 @@ def select_progress_tree_evidence_chunks(
             if add_candidate(project):
                 selected_projects.append(project)
 
-        for project in selected_projects:
+        for project in selected_projects[:3]:
             associated_contributions = contributions_by_project.get(_project_key(project), [])
             for contribution in associated_contributions[:1]:
                 add_candidate(contribution)
+
+        for project in selected_projects[:2]:
+            associated_contributions = contributions_by_project.get(_project_key(project), [])
+            selected_contribution_count = sum(
+                1
+                for contribution in associated_contributions
+                if contribution.chunk_id in selected_ids
+            )
+            for contribution in associated_contributions:
+                if selected_contribution_count >= 2:
+                    break
+                if add_candidate(contribution):
+                    selected_contribution_count += 1
 
         for source_type in (
             "job_requirement",
@@ -258,7 +289,7 @@ def select_progress_tree_evidence_chunks(
                 continue
             add_candidate(candidate)
 
-        for project in selected_projects:
+        for project in selected_projects[:2]:
             associated_contributions = contributions_by_project.get(_project_key(project), [])
             selected_contribution_count = sum(
                 1
@@ -267,6 +298,19 @@ def select_progress_tree_evidence_chunks(
             )
             for contribution in associated_contributions:
                 if selected_contribution_count >= 4:
+                    break
+                if add_candidate(contribution):
+                    selected_contribution_count += 1
+
+        for project in selected_projects[2:3]:
+            associated_contributions = contributions_by_project.get(_project_key(project), [])
+            selected_contribution_count = sum(
+                1
+                for contribution in associated_contributions
+                if contribution.chunk_id in selected_ids
+            )
+            for contribution in associated_contributions:
+                if selected_contribution_count >= 2:
                     break
                 if add_candidate(contribution):
                     selected_contribution_count += 1
@@ -331,6 +375,9 @@ def build_progress_prompt_context(
         "progress_evidence_debug allowed_evidence_refs=%s",
         allowed_evidence_refs,
     )
+    if _debug_progress_evidence_enabled(context):
+        print("=== allowed_evidence_refs ===")
+        print(json.dumps(allowed_evidence_refs, ensure_ascii=False, indent=2))
     return result
 
 
@@ -426,8 +473,33 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
     debug_project_chunks: list[dict[str, Any]] = []
     debug_contribution_chunks: list[dict[str, Any]] = []
 
+    if debug_enabled:
+        print("=== raw_markdown ===")
+        print(raw_markdown or "")
+        print("=== rehydrated_markdown ===")
+        print(rehydrated_text or "")
+        print("=== normalized_markdown ===")
+        print(markdown_text or "")
+
     if markdown_text:
         sections = _split_markdown_sections(markdown_text)
+        if debug_enabled:
+            print("=== normalized_sections ===")
+            print(
+                json.dumps(
+                    [
+                        {
+                            "title": section.title,
+                            "parent_title": section.parent_title,
+                            "breadcrumb": list(section.breadcrumb),
+                            "line_range": section.line_range,
+                        }
+                        for section in sections
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         logger.info(
             "progress_evidence_debug raw_markdown=%s",
             markdown_text,
@@ -500,6 +572,10 @@ def _add_resume_chunks(context: dict[str, Any], add_chunk) -> None:
                 debug_project_chunks.append(_debug_resume_chunk(created_chunk, section=None))
 
     if debug_enabled:
+        print("=== project_chunks ===")
+        print(json.dumps(debug_project_chunks, ensure_ascii=False, indent=2))
+        print("=== contribution_chunks ===")
+        print(json.dumps(debug_contribution_chunks, ensure_ascii=False, indent=2))
         logger.info(
             "progress_evidence_debug project_chunks=%s",
             debug_project_chunks,
@@ -875,6 +951,10 @@ def _resume_heading_parts(title: str) -> tuple[str, str | None, str | None]:
 
 
 def _resume_project_block_items(text: str, *, first_project_sequence: int = 1) -> list[_ResumeSectionItem]:
+    parsed_projects = _parse_project_collection(text, first_project_sequence=first_project_sequence)
+    if parsed_projects:
+        return _resume_items_from_parsed_projects(parsed_projects)
+
     blocks = _split_project_blocks(text)
     if not blocks:
         return []
@@ -910,6 +990,245 @@ def _resume_project_block_items(text: str, *, first_project_sequence: int = 1) -
             seen.add(key)
             items.append(candidate)
     return items
+
+
+def _resume_items_from_parsed_projects(projects: list[ParsedResumeProject]) -> list[_ResumeSectionItem]:
+    items: list[_ResumeSectionItem] = []
+    for project in projects:
+        project_ref: dict[str, Any] = {
+            "project_title": project.title,
+            "project_sequence": project.sequence,
+        }
+        if project.company:
+            project_ref["company"] = project.company
+        if project.role:
+            project_ref["role"] = project.role
+        items.append(
+            _ResumeSectionItem(
+                source_type="resume_project",
+                title=project.title,
+                text=project.text,
+                source_ref=project_ref,
+            )
+        )
+        for contribution in project.contributions:
+            items.append(
+                _ResumeSectionItem(
+                    source_type="resume_project_contribution",
+                    title=contribution.title,
+                    text=contribution.text,
+                    source_ref={
+                        **project_ref,
+                        "contribution_sequence": contribution.sequence,
+                    },
+                )
+            )
+    return items
+
+
+def _parse_project_collection(text: str, *, first_project_sequence: int = 1) -> list[ParsedResumeProject]:
+    clean_text = _clean_text(text, max_chars=None, preserve_lines=True)
+    if not clean_text:
+        return []
+
+    projects: list[ParsedResumeProject] = []
+    current: ParsedResumeProject | None = None
+    mode = "outside_project"
+
+    def has_project_content(project: ParsedResumeProject | None) -> bool:
+        if project is None:
+            return False
+        body_without_title = [
+            line
+            for line in project.text.splitlines()
+            if line.strip() and _strip_markdown_title_markup(line.strip()) != project.title
+        ]
+        return bool(project.background or project.contributions or project.company or body_without_title)
+
+    def flush() -> None:
+        nonlocal current, mode
+        if has_project_content(current):
+            projects.append(current)
+        current = None
+        mode = "outside_project"
+
+    def ensure_project() -> ParsedResumeProject | None:
+        return current
+
+    def append_project_text(line: str) -> None:
+        if current is None:
+            return
+        current.text = "\n".join(part for part in (current.text, line) if part).strip()
+
+    def append_background(value: str) -> None:
+        if current is None or not value:
+            return
+        current.background = " ".join(part for part in (current.background, value) if part).strip()
+
+    def append_contribution_continuation(value: str) -> None:
+        if current is None or not current.contributions or not value:
+            return
+        contribution = current.contributions[-1]
+        contribution.text = _clean_text(f"{contribution.text} {value}", max_chars=MAX_CHUNK_TEXT_CHARS) or contribution.text
+
+    lines = clean_text.splitlines()
+    for index, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if not line:
+            continue
+        following_lines = [candidate.strip() for candidate in lines[index + 1 : index + 8] if candidate.strip()]
+        fence_title_text = _project_fence_title_text(line)
+        if fence_title_text is not None:
+            if fence_title_text:
+                title = _project_title_from_line(fence_title_text)
+                if title:
+                    flush()
+                    current = ParsedResumeProject(
+                        title=title,
+                        company=None,
+                        role=None,
+                        background=None,
+                        text=line,
+                        sequence=first_project_sequence + len(projects),
+                        contributions=[],
+                    )
+                    mode = "inside_project"
+            elif re.search(r"\bend\b|\bstop\b", line, flags=re.IGNORECASE):
+                flush()
+            continue
+        if re.fullmatch(r"[-*_]{3,}", line):
+            if has_project_content(current):
+                flush()
+            continue
+
+        structure_heading = _resume_structure_heading_parts(line)
+        if structure_heading:
+            heading, value = structure_heading
+            if heading in _RESUME_CORE_CONTRIBUTION_HEADINGS:
+                if ensure_project() is not None:
+                    append_project_text(line)
+                    mode = "inside_core_contribution"
+                continue
+            if ensure_project() is not None:
+                append_project_text(line)
+                if heading in {"项目背景", "项目简介", "项目描述"}:
+                    append_background(value)
+                    mode = "inside_background"
+                else:
+                    mode = "inside_project"
+            continue
+
+        contribution_item = _top_level_list_item_text(raw_line)
+        if mode == "inside_core_contribution" and current is not None and contribution_item:
+            if _has_markdown_bold_prefix(contribution_item) or _has_leading_title_delimiter(contribution_item):
+                contribution_text = _clean_project_contribution_text(contribution_item)
+                contribution_title = _project_contribution_title(contribution_item)
+                if contribution_text and contribution_title:
+                    current.contributions.append(
+                        ParsedProjectContribution(
+                            title=contribution_title,
+                            text=contribution_text,
+                            sequence=len(current.contributions) + 1,
+                        )
+                    )
+                    append_project_text(line)
+                    continue
+
+        cleaned_line = _clean_text(_strip_markdown_title_markup(line), max_chars=160) or ""
+        if _looks_like_company_only(cleaned_line):
+            if current is not None:
+                current.company = current.company or cleaned_line
+                append_project_text(line)
+                mode = "inside_project"
+            continue
+        if _looks_like_duration(cleaned_line):
+            if current is not None:
+                current.role = current.role or cleaned_line
+                append_project_text(line)
+                mode = "inside_project"
+            continue
+
+        project_title = _project_title_from_line_with_context(line, following_lines=following_lines)
+        if project_title:
+            flush()
+            current = ParsedResumeProject(
+                title=project_title,
+                company=None,
+                role=None,
+                background=None,
+                text=line,
+                sequence=first_project_sequence + len(projects),
+                contributions=[],
+            )
+            mode = "inside_project"
+            continue
+
+        if mode == "inside_core_contribution" and current is not None and current.contributions:
+            append_contribution_continuation(line)
+            append_project_text(line)
+            continue
+
+        if current is not None:
+            append_project_text(line)
+            if mode == "inside_background":
+                append_background(line)
+        else:
+            mode = "outside_project"
+
+    flush()
+    return _repair_parsed_project_collection(projects, first_project_sequence=first_project_sequence)
+
+
+def _repair_parsed_project_collection(
+    projects: list[ParsedResumeProject],
+    *,
+    first_project_sequence: int,
+) -> list[ParsedResumeProject]:
+    repaired: list[ParsedResumeProject] = []
+    for project in projects:
+        if _looks_like_company_only(project.title):
+            if repaired and not repaired[-1].company:
+                repaired[-1].company = project.title
+                repaired[-1].text = "\n".join(part for part in (repaired[-1].text, project.text) if part).strip()
+            continue
+        if _looks_like_contribution_title(project.title):
+            if repaired:
+                repaired[-1].contributions.append(
+                    ParsedProjectContribution(
+                        title=project.title,
+                        text=project.text,
+                        sequence=len(repaired[-1].contributions) + 1,
+                    )
+                )
+                repaired[-1].text = "\n".join(part for part in (repaired[-1].text, project.text) if part).strip()
+            continue
+        if repaired and repaired[-1].title == project.title:
+            target = repaired[-1]
+            target.company = target.company or project.company
+            target.role = target.role or project.role
+            target.background = target.background or project.background
+            target.text = "\n".join(part for part in (target.text, project.text) if part).strip()
+            for contribution in project.contributions:
+                contribution.sequence = len(target.contributions) + 1
+                target.contributions.append(contribution)
+            continue
+        repaired.append(project)
+
+    for sequence, project in enumerate(repaired, start=first_project_sequence):
+        project.sequence = sequence
+        for contribution_sequence, contribution in enumerate(project.contributions, start=1):
+            contribution.sequence = contribution_sequence
+    return repaired
+
+
+def _resume_structure_heading_parts(line: str) -> tuple[str, str] | None:
+    text = _strip_markdown_title_markup(line)
+    match = re.match(rf"^({_RESUME_STRUCTURE_FIELD_HEADING_RE})\s*[：:]?\s*(.*)$", text)
+    if not match:
+        return None
+    heading = re.sub(r"\s+", "", match.group(1).strip())
+    value = _clean_text(match.group(2), max_chars=MAX_CHUNK_TEXT_CHARS) or ""
+    return heading, value
 
 
 def _chunk_legacy_project_paragraphs(
@@ -1073,6 +1392,33 @@ def _project_title_from_lines(lines: list[str]) -> str | None:
     return None
 
 
+def _project_title_from_line_with_context(line: str, *, following_lines: list[str]) -> str | None:
+    title = _project_title_from_line(line)
+    if title:
+        return title
+    if not _following_project_context_has_structure(following_lines):
+        return None
+    list_item = _list_item_text(line)
+    raw_title_text = list_item or line
+    if not _has_markdown_bold_prefix(raw_title_text):
+        return None
+    cleaned = _strip_markdown_title_markup(raw_title_text)
+    delimiter_match = re.match(r"^(.{2,80}?)[：:|｜\-—–]+\s*(.+)$", cleaned)
+    title_candidate = delimiter_match.group(1).strip() if delimiter_match else cleaned
+    if len(title_candidate) > 80:
+        return None
+    if (
+        _is_project_structure_title(title_candidate)
+        or _is_resume_structure_field_heading(title_candidate)
+        or _looks_like_company_only(title_candidate)
+        or _looks_like_contribution_title(title_candidate)
+        or _looks_like_duration(title_candidate)
+        or not _has_semantic_title_text(title_candidate)
+    ):
+        return None
+    return _clean_text(title_candidate, max_chars=120)
+
+
 def _project_title_from_line(line: str) -> str | None:
     list_item = _list_item_text(line)
     raw_title_text = list_item or line
@@ -1092,13 +1438,48 @@ def _project_title_from_line(line: str) -> str | None:
 
     if _is_project_structure_title(title_candidate):
         return None
+    if _is_resume_structure_field_heading(title_candidate):
+        return None
+    if _looks_like_company_only(title_candidate):
+        return None
     if not _has_semantic_title_text(title_candidate):
         return None
+    if _looks_like_contribution_title(title_candidate):
+        return None
     normalized = title_candidate.lower()
-    has_project_marker = any(marker in normalized for marker in ("项目", "project", "作品", "开源", "竞赛"))
-    if not (has_project_marker or has_bold_title or (has_delimiter and list_item is None)):
+    has_project_marker = any(marker in normalized for marker in _project_title_markers())
+    if not (has_project_marker or (has_delimiter and list_item is None and not has_bold_title)):
         return None
     return _clean_text(title_candidate, max_chars=120)
+
+
+def _project_title_markers() -> tuple[str, ...]:
+    return (
+        "项目",
+        "project",
+        "平台",
+        "系统",
+        "工具",
+        "服务",
+        "应用",
+        "工作流",
+        "引擎",
+        "知识库",
+        "中台",
+        "作品",
+        "开源",
+        "竞赛",
+    )
+
+
+def _following_project_context_has_structure(lines: list[str]) -> bool:
+    for line in lines:
+        if _looks_like_company_only(_strip_markdown_title_markup(line)):
+            return True
+        heading = _resume_structure_heading_parts(line)
+        if heading and heading[0] in _RESUME_STRUCTURE_FIELD_HEADINGS:
+            return True
+    return False
 
 
 def _list_item_text(line: str) -> str | None:

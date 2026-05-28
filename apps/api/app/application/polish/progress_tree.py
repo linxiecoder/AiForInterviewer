@@ -537,7 +537,13 @@ def _normalize_quality_first_node(
         return None
     basis_type, basis_flags = _quality_first_basis_type(item.get("basis_type"), category=category)
     resume_signal = _sanitize_optional_text(item.get("resume_signal"), max_chars=240)
-    jd_basis = _sanitize_optional_text(item.get("jd_basis"), max_chars=240)
+    raw_jd_basis = item.get("jd_basis")
+    if isinstance(raw_jd_basis, list):
+        jd_basis_items = _sanitize_string_list(raw_jd_basis, limit=6)
+        jd_basis = _sanitize_display_text("；".join(jd_basis_items), max_chars=240) or None
+    else:
+        jd_basis = _sanitize_optional_text(raw_jd_basis, max_chars=240)
+        jd_basis_items = [jd_basis] if jd_basis else []
     depth_goal = (
         _sanitize_display_text(item.get("depth_goal"), max_chars=120)
         or "补充该方向的关键原理、设计取舍和落地细节"
@@ -668,7 +674,7 @@ def _normalize_quality_first_node(
         "priority": _bounded_int(item.get("priority"), lower=1, upper=999, fallback=index),
         "priority_reason": _sanitize_display_text(item.get("priority_reason"), max_chars=120)
         or "该节点具备岗位贴合和面试追问价值。",
-        "related_job_requirements": _dedupe_strings([jd_basis], limit=3),
+        "related_job_requirements": _dedupe_strings(jd_basis_items, limit=6),
         "related_resume_evidence": _dedupe_strings([resume_signal], limit=3),
         "related_match_gaps": related_match_gaps,
         "missing_points": related_match_gaps,

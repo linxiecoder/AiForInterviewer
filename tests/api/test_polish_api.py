@@ -900,6 +900,27 @@ def test_markdown_it_sections_split_project_siblings() -> None:
     assert sections_by_title["项目乙 @ 公司乙"].parent_title == "项目经历"
 
 
+def _canonical_project_tree_regression_markdown() -> str:
+    return (
+        "## 项目经历\n"
+        "**硬件测试设计平台&AI硬件测试知识库**\n"
+        "**华为技术有限公司**\n"
+        "**项目背景**：构建硬件测试知识库与问答能力。\n"
+        "**核心贡献**：\n"
+        "- **混合检索策略优化**：结合关键词和向量召回优化准确率。\n"
+        "- **大文件异步处理管道**：处理大文件解析、切片、入库。\n"
+        "- **Prompt工程与幻觉控制**：通过约束提示降低幻觉。\n"
+        "- **策略模式封装多模型API**：统一多模型调用。\n\n"
+        "**物料库存处理工作流**\n"
+        "**华为技术有限公司**\n"
+        "**项目背景**：处理物料库存流转。\n"
+        "**核心贡献**：\n"
+        "- **分布式锁与消息最终一致性**：保证并发和异步链路一致。\n"
+        "- **微服务治理（网关+鉴权+TTL）**：实现网关鉴权和缓存治理。\n"
+        "- **多级存储体系与冷热分离**：降低成本并提升查询效率。\n"
+    )
+
+
 def test_resume_project_only_from_project_heading() -> None:
     context = _progress_context_fixture(
         resume_markdown=(
@@ -930,6 +951,26 @@ def test_resume_project_only_from_project_heading() -> None:
     assert "贡献项二" not in project_titles
 
 
+def test_progress_evidence_canonical_project_tree_rejects_company_and_contribution_titles() -> None:
+    context = _progress_context_fixture(resume_markdown=_canonical_project_tree_regression_markdown())
+
+    project_chunks = [
+        chunk
+        for chunk in build_progress_evidence_chunks(context)
+        if chunk.source_type == "resume_project"
+    ]
+
+    assert [chunk.title for chunk in project_chunks] == [
+        "硬件测试设计平台&AI硬件测试知识库",
+        "物料库存处理工作流",
+    ]
+    assert all(chunk.source_ref.get("company") == "华为技术有限公司" for chunk in project_chunks)
+    project_titles = {chunk.title for chunk in project_chunks}
+    assert "华为技术有限公司" not in project_titles
+    assert "混合检索策略优化" not in project_titles
+    assert "分布式锁与消息最终一致性" not in project_titles
+
+
 def test_resume_project_contribution_from_core_contribution_list() -> None:
     context = _progress_context_fixture(
         resume_markdown=(
@@ -957,6 +998,42 @@ def test_resume_project_contribution_from_core_contribution_list() -> None:
         assert chunk.source_ref["company"] in {"公司甲", "公司乙"}
         assert chunk.source_ref["project_sequence"] == expected_sequence
         assert chunk.source_ref["contribution_sequence"] == 1
+
+
+def test_progress_evidence_canonical_project_tree_emits_contributions_for_multiple_projects() -> None:
+    context = _progress_context_fixture(resume_markdown=_canonical_project_tree_regression_markdown())
+
+    contribution_chunks = [
+        chunk
+        for chunk in build_progress_evidence_chunks(context)
+        if chunk.source_type == "resume_project_contribution"
+    ]
+
+    assert [chunk.title for chunk in contribution_chunks] == [
+        "混合检索策略优化",
+        "大文件异步处理管道",
+        "Prompt工程与幻觉控制",
+        "策略模式封装多模型API",
+        "分布式锁与消息最终一致性",
+        "微服务治理（网关+鉴权+TTL）",
+        "多级存储体系与冷热分离",
+    ]
+    assert all(
+        chunk.title not in {"华为技术有限公司", "硬件测试设计平台&AI硬件测试知识库", "物料库存处理工作流"}
+        for chunk in contribution_chunks
+    )
+    first_project_contributions = contribution_chunks[:4]
+    second_project_contributions = contribution_chunks[4:]
+    assert all(
+        chunk.source_ref["project_title"] == "硬件测试设计平台&AI硬件测试知识库"
+        for chunk in first_project_contributions
+    )
+    assert all(
+        chunk.source_ref["project_title"] == "物料库存处理工作流"
+        for chunk in second_project_contributions
+    )
+    assert [chunk.source_ref["contribution_sequence"] for chunk in first_project_contributions] == [1, 2, 3, 4]
+    assert [chunk.source_ref["contribution_sequence"] for chunk in second_project_contributions] == [1, 2, 3]
 
 
 def test_custom_container_normalization_matches_standard_markdown() -> None:
@@ -1291,6 +1368,42 @@ def test_progress_evidence_selection_keeps_multiple_projects_and_contributions_o
         assert any(item["title"] == contribution_title for item in contribution_refs)
     assert any(item["source_type"] == "job_requirement" for item in allowed_refs)
     assert any(item["source_type"] == "match_gap" for item in allowed_refs)
+
+
+def test_progress_evidence_selection_includes_canonical_project_contributions_with_many_match_gaps() -> None:
+    context = _progress_context_fixture(
+        requirements=[f"岗位要求{index}" for index in range(1, 10)],
+        resume_markdown=_canonical_project_tree_regression_markdown(),
+        match_context={
+            "available": True,
+            "overall_score": 66,
+            "summary": "存在多个匹配缺口。",
+            "matched_points": [],
+            "missing_points": [f"匹配缺口{index}" for index in range(1, 10)],
+            "improvement_points": [],
+            "interview_focus": [f"面试重点{index}" for index in range(1, 4)],
+            "suggested_questions": [],
+        },
+    )
+
+    prompt_context = build_progress_prompt_context(context, purpose="initial_plan")
+    selected_chunks = prompt_context["selected_evidence_chunks"]
+    allowed_refs = prompt_context["allowed_evidence_refs"]
+    selected_contributions = [
+        item for item in selected_chunks if item["source_type"] == "resume_project_contribution"
+    ]
+    selected_match_gaps = [item for item in selected_chunks if item["source_type"] == "match_gap"]
+
+    assert selected_contributions
+    assert {item["title"] for item in selected_contributions} >= {
+        "混合检索策略优化",
+        "大文件异步处理管道",
+        "分布式锁与消息最终一致性",
+        "微服务治理（网关+鉴权+TTL）",
+    }
+    assert all(item["ref"] in {ref["ref"] for ref in allowed_refs} for item in selected_contributions)
+    assert len(selected_match_gaps) <= len(selected_contributions) + 1
+    assert prompt_context["dropped_context_summary"]["truncated_reason"] in {"max_chunks", "max_chunks+max_chars"}
 
 
 def test_progress_evidence_selection_prioritizes_match_gaps_and_reports_dropped_chunks() -> None:
@@ -1691,6 +1804,9 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
     assert "不要把多个项目全部压缩到一个泛化节点" in prompt
     assert "resume_deep_dive 顶层节点必须优先代表具体项目或项目内核心方向" in prompt
     assert "如果 selected_evidence_chunks 中存在 resume_project_contribution，必须生成 children" in prompt
+    assert "children 必须是具体核心贡献项、关键技术点或可连续追问的子能力" in prompt
+    assert "至少 1 个 resume_deep_dive 节点应包含 children" in prompt
+    assert "children 的 evidence_refs 必须引用对应 resume_project_contribution_*" in prompt
     assert "coverage_points/sub_points 只能补充 children，不能替代 children" in prompt
     assert "禁止把多个项目贡献压缩成一个无 children 的泛化节点" in prompt
     assert "children" in prompt
@@ -1910,6 +2026,57 @@ def test_progress_tree_quality_first_repairs_resume_project_children_from_contri
     assert child["display_title"] == "贡献项一"
     assert child["evidence_chunk_ids"] == ["resume_project_contribution_001"]
     assert child["progress_node_ref"].startswith("progress_v2_")
+
+
+def test_progress_tree_quality_first_repairs_user_project_children_when_transport_flattens_nodes() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(
+        session_factory,
+        OWNER_A,
+        resume_markdown=_canonical_project_tree_regression_markdown(),
+        requirements=[
+            "熟悉 AI Agent、RAG、Prompt 工程和多模型调用实践。",
+            "熟悉 Java 服务端高可用架构设计。",
+        ],
+    )
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QualityFirstNoChildrenProjectTransport())
+
+    status_code, body = _create_ready_polish_session(app, {"resume_job_binding_id": binding_id})
+
+    assert status_code == 200
+    plan = body["data"]["progress_tree_plan"]
+    state = body["data"]["progress_tree_state"]
+    assert body["data"]["progress_tree_status"] == "ready"
+    project_node = next(
+        node for node in plan["nodes"] if node["display_title"] == "硬件测试知识库项目深挖"
+    )
+    assert project_node["children"]
+    child_titles = {child["display_title"] for child in project_node["children"]}
+    assert {"混合检索策略优化", "大文件异步处理管道"}.issubset(child_titles)
+    first_child = project_node["children"][0]
+    assert first_child["category"] == "resume_deep_dive"
+    assert first_child["display_category_title"] == "深度打磨类"
+    assert first_child["evidence_chunk_ids"] == ["resume_project_contribution_001"]
+    all_nodes = plan["nodes"] + [
+        child
+        for node in plan["nodes"]
+        for child in node.get("children", [])
+    ]
+    assert all(
+        node["display_category_title"] == "深度打磨类"
+        for node in all_nodes
+        if node["category"] == "resume_deep_dive"
+    )
+    assert all(
+        node["display_category_title"] == "补齐学习类"
+        for node in all_nodes
+        if node["category"] == "jd_gap_learning"
+    )
+    assert "简历深挖" not in str(plan["nodes"])
+    assert "岗位缺口核验" not in str(plan["nodes"])
+    state_refs = {item["progress_node_ref"] for item in state["node_states"]}
+    assert project_node["progress_node_ref"] in state_refs
+    assert first_child["progress_node_ref"] in state_refs
 
 
 def test_progress_tree_quality_first_filters_project_titles_from_coverage_points() -> None:
@@ -2293,6 +2460,12 @@ def test_progress_tree_quality_first_normalizes_string_list_fields_without_templ
     assert string_node["evidence_notes"] == ["简历证据", "JD 证据"]
     assert string_node["low_confidence_flags"] == ["needs_metric", "needs_grounding"]
     assert string_node["related_match_gaps"] == ["指标口径缺口", "召回策略缺口"]
+    assert string_node["jd_basis"] == "job_requirement_007；job_requirement_008"
+    assert string_node["related_job_requirements"] == [
+        "job_requirement_007",
+        "job_requirement_008",
+    ]
+    assert "['job_requirement_007'" not in string_node["jd_basis"]
     assert list_node["follow_up_focus"] == ["方案取舍", "异常路径", "验证指标"]
     assert list_node["follow_up_directions"] == list_node["follow_up_focus"]
 
@@ -4848,6 +5021,7 @@ class _QualityFirstStringListFieldsTransport(FakeLlmTransport):
             return super().generate(request)
         payload = _quality_first_payload(_quality_first_standard_nodes())
         string_node = payload["menu_categories"][0]["nodes"][1]
+        string_node["jd_basis"] = ["job_requirement_007", "job_requirement_008"]
         string_node["follow_up_focus"] = "权重调整策略；准确率指标定义；对比过的其他检索方案；效果上限分析；超出限制项"
         string_node["expected_answer_signals"] = "指标口径，AB 对照\n风险解释|兜底方案"
         string_node["common_loss_risks"] = "只说概念、缺少指标；缺少指标；无法解释回退"
@@ -4862,6 +5036,69 @@ class _QualityFirstStringListFieldsTransport(FakeLlmTransport):
             low_confidence_flags=(),
             trace_refs=("trace_quality_first_string_lists",),
             evidence_refs=("evidence_quality_first_string_lists",),
+        )
+
+
+class _QualityFirstNoChildrenProjectTransport(FakeLlmTransport):
+    def generate(self, request):
+        if request.task_type != POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
+            return super().generate(request)
+        payload = _quality_first_payload(
+            [
+                _quality_first_payload_node(
+                    "硬件测试知识库项目深挖",
+                    "resume_deep_dive",
+                    1,
+                    evidence_refs=["resume_project_001"],
+                    confidence_level="high",
+                ),
+                _quality_first_payload_node(
+                    "物料库存工作流一致性治理",
+                    "resume_deep_dive",
+                    2,
+                    evidence_refs=["resume_project_002"],
+                    confidence_level="high",
+                ),
+                _quality_first_payload_node(
+                    "Prompt 工程与幻觉控制",
+                    "resume_deep_dive",
+                    3,
+                    evidence_refs=["resume_project_contribution_003"],
+                ),
+                _quality_first_payload_node(
+                    "多模型 API 策略封装",
+                    "resume_deep_dive",
+                    4,
+                    evidence_refs=["resume_project_contribution_004"],
+                ),
+                _quality_first_payload_node(
+                    "AI Agent 工具调用机制补齐",
+                    "jd_gap_learning",
+                    1,
+                    evidence_refs=["job_requirement_001"],
+                ),
+                _quality_first_payload_node(
+                    "Java 服务端高可用架构设计",
+                    "jd_gap_learning",
+                    2,
+                    evidence_refs=["job_requirement_002"],
+                ),
+            ],
+        )
+        for category in payload["menu_categories"]:
+            category["display_category_title"] = (
+                "简历深挖" if category["category"] == "resume_deep_dive" else "岗位缺口核验"
+            )
+            for node in category["nodes"]:
+                node["display_category_title"] = category["display_category_title"]
+                node["children"] = []
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_quality_first_no_children_project",),
+            evidence_refs=("evidence_quality_first_no_children_project",),
         )
 
 
