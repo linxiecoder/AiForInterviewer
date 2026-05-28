@@ -28,6 +28,9 @@ import {
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY,
+  INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_CLOSE_TRIGGERS,
+  INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS,
+  INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT,
   INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS,
   INTERVIEW_PROGRESS_TREE_NODE_STATUS_LIGHT_TONES,
@@ -39,6 +42,7 @@ import {
   INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS,
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
+  INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
   INTERVIEW_WORKBENCH_STATE_MACHINE,
   buildPolishBindingOptions,
@@ -48,6 +52,7 @@ import {
   buildInterviewCreatePendingDescription,
   buildCandidateReviewViewModel,
   buildFeedbackCardViewModel,
+  buildProgressTreeContextMenuItems,
   filterPolishSessionsBySearch,
   buildProgressTreeContextBannerContent,
   buildProgressTreeContextBannerExpandedSections,
@@ -70,6 +75,9 @@ import {
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveProgressTreeSelectedNodeRefAfterClick,
+  canSubmitAnswerFromKeyboard,
+  getWorkbenchChatMessageAlignmentClassName,
+  shouldCloseProgressTreeContextMenuFromKeyboard,
   shouldSubmitAnswerFromKeyboard,
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
@@ -249,7 +257,16 @@ type ProgressTreeNodeStatusLightTonesAreStable = Expect<
   >
 >;
 type WorkbenchChatBubbleAlignmentIsStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT, { readonly system_question: "left"; readonly user_answer: "right" }>
+  Equal<
+    typeof INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT,
+    {
+      readonly progress_context: "left";
+      readonly system_question: "left";
+      readonly feedback: "left";
+      readonly user_answer: "right";
+      readonly user_answer_placeholder: "right";
+    }
+  >
 >;
 type WorkbenchKeyboardShortcutsAreStable = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS, { readonly send_answer: "Ctrl+Enter" }>
@@ -952,6 +969,14 @@ function test_progress_node_context_banner_supports_expand_toggle_for_depth(): v
 function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right(): void {
   assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.system_question === "left", "系统题目应位于聊天区左侧");
   assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer === "right", "用户回答及暂无回答占位应位于聊天区右侧");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.progress_context === "left", "当前节点上下文应位于聊天区左侧");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.feedback === "left", "反馈卡应位于聊天区左侧");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT.user_answer_placeholder === "right", "暂无回答占位应复用用户回答右对齐");
+  assertContract(getWorkbenchChatMessageAlignmentClassName("system_question") === "messageRowLeft", "系统题目应使用左对齐行容器");
+  assertContract(getWorkbenchChatMessageAlignmentClassName("progress_context") === "messageRowLeft", "当前节点上下文应使用左对齐行容器");
+  assertContract(getWorkbenchChatMessageAlignmentClassName("feedback") === "messageRowLeft", "反馈卡应使用左对齐行容器");
+  assertContract(getWorkbenchChatMessageAlignmentClassName("user_answer") === "messageRowRight", "用户回答应使用右对齐行容器");
+  assertContract(getWorkbenchChatMessageAlignmentClassName("user_answer_placeholder") === "messageRowRight", "暂无回答应使用右对齐行容器");
 }
 
 function test_progress_tree_click_auto_generates_only_for_nodes_without_question(): void {
@@ -1133,6 +1158,92 @@ function test_workbench_question_actions_follow_current_question_status(): void 
   assertContract(completedQuestionState.canMarkQuestionCompleted === false, "已有已完成题目不允许重复标记完成");
 }
 
+function test_progress_tree_context_menu_items_follow_question_action_state(): void {
+  const session = buildTestSession(
+    [
+      buildTestProgressNode("node_with_question", "混合检索与幻觉控制", "resume_deep_dive", "深度打磨类"),
+      buildTestProgressNode("node_without_question", "待生成节点", "jd_gap_learning", "补齐学习类"),
+    ],
+    "node_with_question",
+  );
+  const sessionWithQuestion: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const progressNodes = buildWorkbenchProgressNodes(sessionWithQuestion);
+  const parentNodeWithQuestion = progressNodes[0]?.children?.[0] ?? null;
+  const noQuestionNode = progressNodes[0]?.children?.[1] ?? null;
+  const questionNode = parentNodeWithQuestion?.children?.[0] ?? null;
+  const parentNodeQuestionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: parentNodeWithQuestion,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const noQuestionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: noQuestionNode,
+    progressNodeRef: "node_without_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const questionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: questionNode,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const parentMenuItems = buildProgressTreeContextMenuItems(parentNodeWithQuestion, parentNodeQuestionState);
+  const noQuestionMenuItems = buildProgressTreeContextMenuItems(noQuestionNode, noQuestionState);
+  const questionMenuItems = buildProgressTreeContextMenuItems(questionNode, questionState);
+
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_PLACEMENT === "fixed_at_pointer", "右键菜单应按鼠标位置 fixed 渲染");
+  assertContract(parentMenuItems.length >= 3, "右键父节点菜单内容不能为空");
+  assertContract(questionMenuItems.length >= 3, "右键题目节点菜单内容不能为空");
+  assertContract(parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.generateQuestion), "菜单应包含生成题目");
+  assertContract(parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.markQuestionCompleted), "菜单应包含标记完成");
+  assertContract(parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.copyNodeInfo), "菜单应包含复制节点信息");
+  assertContract(parentMenuItems.find((item) => item.key === "generate_question")?.disabled === !parentNodeQuestionState.canGenerateQuestion, "父节点生成题目禁用态应复用底部按钮规则");
+  assertContract(parentMenuItems.find((item) => item.key === "mark_question_completed")?.disabled === !parentNodeQuestionState.canMarkQuestionCompleted, "父节点标记完成禁用态应复用底部按钮规则");
+  assertContract(noQuestionMenuItems.find((item) => item.key === "generate_question")?.disabled === !noQuestionState.canGenerateQuestion, "无题节点生成题目禁用态应复用底部按钮规则");
+  assertContract(noQuestionMenuItems.find((item) => item.key === "mark_question_completed")?.disabled === !noQuestionState.canMarkQuestionCompleted, "无题节点标记完成禁用态应复用底部按钮规则");
+  assertContract(questionMenuItems.find((item) => item.key === "generate_question")?.disabled === !questionState.canGenerateQuestion, "题目节点生成题目禁用态应复用底部按钮规则");
+  assertContract(questionMenuItems.find((item) => item.key === "mark_question_completed")?.disabled === !questionState.canMarkQuestionCompleted, "题目节点标记完成禁用态应复用底部按钮规则");
+  assertContract(parentMenuItems.find((item) => item.key === "copy_node_info")?.disabled === false, "父节点复制信息应可用");
+  assertContract(questionMenuItems.find((item) => item.key === "copy_node_info")?.disabled === false, "题目节点复制信息应可用");
+}
+
+function test_progress_tree_context_menu_closes_on_escape_and_external_events(): void {
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_CLOSE_TRIGGERS.join(",") === "outside_pointer_down,escape,scroll,select", "右键菜单关闭触发器应覆盖外部点击、Escape、滚动和选择菜单项");
+  assertContract(shouldCloseProgressTreeContextMenuFromKeyboard({ key: "Escape" }), "Escape 应关闭进展树右键菜单");
+  assertContract(!shouldCloseProgressTreeContextMenuFromKeyboard({ key: "Enter" }), "Enter 不应作为右键菜单全局关闭快捷键");
+}
+
 function test_progress_tree_question_entry_is_selectable_by_node_type(): void {
   const session = buildTestSession([
     buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
@@ -1266,10 +1377,17 @@ function test_waiting_answer_bar_is_removed_from_workbench_contract(): void {
 
 function test_workbench_ctrl_enter_submits_answer(): void {
   assertContract(INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS.send_answer === "Ctrl+Enter", "发送快捷键应登记为 Ctrl+Enter");
+  assertContract(INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP === "发送，快捷键 Ctrl + Enter / ⌘ + Enter", "发送按钮 tooltip 应展示 Windows/macOS 快捷键");
   assertContract(shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true }), "Ctrl+Enter 应触发发送");
+  assertContract(shouldSubmitAnswerFromKeyboard({ key: "Enter", metaKey: true }), "⌘+Enter 应触发发送");
   assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: false }), "单独 Enter 不应触发发送");
   assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true, shiftKey: true }), "Ctrl+Shift+Enter 不应触发发送");
   assertContract(!shouldSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true, isComposing: true }), "输入法组合态不应触发发送");
+  assertContract(canSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true }, true), "允许发送时 Ctrl+Enter 应提交");
+  assertContract(canSubmitAnswerFromKeyboard({ key: "Enter", metaKey: true }, true), "允许发送时 ⌘+Enter 应提交");
+  assertContract(!canSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: true }, false), "禁用发送时 Ctrl+Enter 不应绕过 canSendAnswer");
+  assertContract(!canSubmitAnswerFromKeyboard({ key: "Enter", metaKey: true }, false), "禁用发送时 ⌘+Enter 不应绕过 canSendAnswer");
+  assertContract(!canSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: false }, true), "普通 Enter 应继续保留换行行为");
 }
 
 function test_feedback_card_view_model_uses_contract_payload_sections_and_actions(): void {
@@ -1874,6 +1992,8 @@ test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_progress_tree_pending_and_failed_states_use_generation_action();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
 test_workbench_question_actions_follow_current_question_status();
+test_progress_tree_context_menu_items_follow_question_action_state();
+test_progress_tree_context_menu_closes_on_escape_and_external_events();
 test_progress_tree_question_entry_is_selectable_by_node_type();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();

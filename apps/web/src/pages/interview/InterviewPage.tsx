@@ -15,7 +15,7 @@ import {
 import { Alert, Button, Card, Drawer, Form, Input, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
@@ -221,11 +221,27 @@ export const INTERVIEW_WORKBENCH_CURRENT_QUESTION_COMPOSER_PLACEMENT = "right_pa
 export const INTERVIEW_WORKBENCH_DISABLED_ACTIONS = [] as const;
 export const INTERVIEW_WORKBENCH_STATE_REGIONS = ["loading", "error", "not_found"] as const;
 export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
+  progress_context: "left",
   system_question: "left",
+  feedback: "left",
   user_answer: "right",
+  user_answer_placeholder: "right",
 } as const;
 export const INTERVIEW_WORKBENCH_KEYBOARD_SHORTCUTS = {
   send_answer: "Ctrl+Enter",
+} as const;
+export const INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP = "发送，快捷键 Ctrl + Enter / ⌘ + Enter" as const;
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_PLACEMENT = "fixed_at_pointer" as const;
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_CLOSE_TRIGGERS = [
+  "outside_pointer_down",
+  "escape",
+  "scroll",
+  "select",
+] as const;
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS = {
+  generateQuestion: "生成题目",
+  markQuestionCompleted: "标记为已完成",
+  copyNodeInfo: "复制节点信息",
 } as const;
 const WORKBENCH_PROGRESS_NODE_STATUS_TEXT = {
   completed: "已完成",
@@ -251,6 +267,18 @@ export type WorkbenchProgressNode = {
   questionTargetRef?: string;
   questionId?: string;
   children?: WorkbenchProgressNode[];
+};
+
+export type WorkbenchChatMessageKind = keyof typeof INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT;
+export type WorkbenchChatMessageAlignmentClassName = "messageRowLeft" | "messageRowRight";
+export type WorkbenchProgressTreeContextMenuItemKey =
+  | "generate_question"
+  | "mark_question_completed"
+  | "copy_node_info";
+export type WorkbenchProgressTreeContextMenuItem = {
+  key: WorkbenchProgressTreeContextMenuItemKey;
+  label: string;
+  disabled: boolean;
 };
 
 export type WorkbenchCurrentQuestionState = {
@@ -299,6 +327,12 @@ type ProgressTreeDisplayNode = PolishProgressTreeNode & {
   resume_signal?: string[] | string | null;
   sub_points?: string[] | string | null;
 };
+
+type ProgressTreeContextMenuState = {
+  nodeKey: string;
+  x: number;
+  y: number;
+} | null;
 
 export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
   resume_deep_dive: "深度打磨类",
@@ -1511,11 +1545,59 @@ export function buildWorkbenchProgressNodeTitleMeta(node: WorkbenchProgressNode)
 export function shouldSubmitAnswerFromKeyboard(event: {
   key: string;
   ctrlKey?: boolean;
+  metaKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
   isComposing?: boolean;
 }): boolean {
-  return event.key === "Enter" && Boolean(event.ctrlKey) && !event.shiftKey && !event.altKey && !event.isComposing;
+  return event.key === "Enter" && Boolean(event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !event.isComposing;
+}
+
+export function canSubmitAnswerFromKeyboard(
+  event: {
+    key: string;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    shiftKey?: boolean;
+    altKey?: boolean;
+    isComposing?: boolean;
+  },
+  canSendAnswer: boolean,
+): boolean {
+  return canSendAnswer && shouldSubmitAnswerFromKeyboard(event);
+}
+
+export function getWorkbenchChatMessageAlignmentClassName(
+  kind: WorkbenchChatMessageKind,
+): WorkbenchChatMessageAlignmentClassName {
+  return INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT[kind] === "right" ? "messageRowRight" : "messageRowLeft";
+}
+
+export function buildProgressTreeContextMenuItems(
+  node: WorkbenchProgressNode | null | undefined,
+  actionState: Pick<WorkbenchQuestionActionState, "canGenerateQuestion" | "canMarkQuestionCompleted">,
+): WorkbenchProgressTreeContextMenuItem[] {
+  return [
+    {
+      key: "generate_question",
+      label: INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.generateQuestion,
+      disabled: !actionState.canGenerateQuestion,
+    },
+    {
+      key: "mark_question_completed",
+      label: INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.markQuestionCompleted,
+      disabled: !actionState.canMarkQuestionCompleted,
+    },
+    {
+      key: "copy_node_info",
+      label: INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.copyNodeInfo,
+      disabled: node === null || node === undefined,
+    },
+  ];
+}
+
+export function shouldCloseProgressTreeContextMenuFromKeyboard(event: { key: string }): boolean {
+  return event.key === "Escape";
 }
 
 export function resolveCurrentWorkbenchProgressNodeKey(
@@ -2473,6 +2555,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [candidates, setCandidates] = useState<PolishCandidate[]>([]);
   const [candidateLoadError, setCandidateLoadError] = useState<string | null>(null);
   const [candidateActionKey, setCandidateActionKey] = useState<string | null>(null);
+  const [progressTreeContextMenu, setProgressTreeContextMenu] = useState<ProgressTreeContextMenuState>(null);
 
   const loadCandidateRecords = async () => {
     try {
@@ -2517,6 +2600,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setCandidates([]);
     setCandidateLoadError(null);
     setCandidateActionKey(null);
+    setProgressTreeContextMenu(null);
     setCompletingQuestion(false);
     setEndingSession(false);
     void loadSession();
@@ -2702,6 +2786,30 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const canSendAnswer = questionActionState.canSendAnswer;
   const canGenerateQuestion = questionActionState.canGenerateQuestion;
   const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
+  const progressTreeContextMenuNode =
+    progressTreeContextMenu === null ? null : findWorkbenchProgressNodeByKey(progressNodes, progressTreeContextMenu.nodeKey);
+  const progressTreeContextMenuDetailRef =
+    session === null
+      ? null
+      : resolveProgressTreeDetailNodeRef(
+          session,
+          getWorkbenchProgressNodeQuestionTargetRef(progressTreeContextMenuNode),
+        );
+  const progressTreeContextMenuActionState = deriveWorkbenchQuestionActionState({
+    session,
+    selectedProgressNode: progressTreeContextMenuNode,
+    progressNodeRef: progressTreeContextMenuDetailRef,
+    canShowProgressTree,
+    creatingQuestion,
+    submittingAnswer,
+    feedbackGenerating,
+    completingQuestion,
+    endingSession,
+  });
+  const progressTreeContextMenuItems = buildProgressTreeContextMenuItems(
+    progressTreeContextMenuNode,
+    progressTreeContextMenuActionState,
+  );
   const workbenchMachineState = deriveWorkbenchMachineState({
     session,
     creatingQuestion,
@@ -2759,7 +2867,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
   };
 
-  const completeCurrentQuestion = async () => {
+  const completeCurrentQuestion = async (progressNodeRefOverride?: string | null) => {
     if (session === null) {
       setAnswerError("请先选择当前问题。");
       return;
@@ -2768,7 +2876,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("模拟面试已结束，不能继续标记问题。");
       return;
     }
-    const currentQuestionState = resolveCurrentQuestionState(session, selectedProgressNodeDetailRef);
+    const targetProgressNodeRef = progressNodeRefOverride ?? selectedProgressNodeDetailRef;
+    const currentQuestionState = resolveCurrentQuestionState(session, targetProgressNodeRef);
     if (currentQuestionState === null) {
       setAnswerError("请先选择当前问题。");
       return;
@@ -2826,6 +2935,29 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     setProgressNodeContextExpanded(false);
   }, [selectedProgressNodeDetailRef]);
+
+  useEffect(() => {
+    if (progressTreeContextMenu === null) {
+      return undefined;
+    }
+
+    const closeContextMenu = () => setProgressTreeContextMenu(null);
+    const closeContextMenuFromKeyboard = (event: KeyboardEvent) => {
+      if (shouldCloseProgressTreeContextMenuFromKeyboard(event)) {
+        closeContextMenu();
+      }
+    };
+
+    window.addEventListener("pointerdown", closeContextMenu);
+    window.addEventListener("scroll", closeContextMenu, true);
+    window.addEventListener("keydown", closeContextMenuFromKeyboard);
+
+    return () => {
+      window.removeEventListener("pointerdown", closeContextMenu);
+      window.removeEventListener("scroll", closeContextMenu, true);
+      window.removeEventListener("keydown", closeContextMenuFromKeyboard);
+    };
+  }, [progressTreeContextMenu]);
 
   const toggleProgressNode = (nodeKey: string) => {
     setExpandedProgressNodeKeys((currentKeys) => {
@@ -2912,6 +3044,110 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setCandidateActionKey(null);
     }
   };
+
+  const closeProgressTreeContextMenu = () => {
+    setProgressTreeContextMenu(null);
+  };
+
+  const openProgressTreeContextMenu = (
+    event: ReactMouseEvent<HTMLElement>,
+    node: WorkbenchProgressNode,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
+    if ((node.kind === "node" || isQuestionNode(node)) && nextSelectedRef !== null) {
+      setSelectedProgressNodeRef(nextSelectedRef);
+      setSelectedProgressNodeKey(node.key);
+    }
+
+    const menuWidth = 224;
+    const menuHeight = 176;
+    const x = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8));
+    const y = Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8));
+
+    setProgressTreeContextMenu({
+      nodeKey: node.key,
+      x,
+      y,
+    });
+  };
+
+  const copyProgressTreeNodeInfo = async (node: WorkbenchProgressNode) => {
+    if (!window.navigator.clipboard?.writeText) {
+      message.error("当前环境不支持剪贴板复制。");
+      return;
+    }
+    const nodeInfo = [
+      `标题：${node.title}`,
+      `类型：${node.kind}`,
+      `状态：${progressNodeStatusLabel(node.status)}`,
+      node.detail ? `说明：${node.detail}` : null,
+    ].filter((line): line is string => line !== null).join("\n");
+    try {
+      await window.navigator.clipboard.writeText(nodeInfo);
+      message.success("节点信息已复制。");
+    } catch (copyError) {
+      message.error(copyError instanceof Error ? copyError.message : "复制失败，请稍后重试。");
+    }
+  };
+
+  const runProgressTreeContextMenuAction = async (item: WorkbenchProgressTreeContextMenuItem) => {
+    if (item.disabled || progressTreeContextMenuNode === null) {
+      return;
+    }
+    closeProgressTreeContextMenu();
+    if (item.key === "generate_question") {
+      await createQuestion(progressTreeContextMenuDetailRef);
+      return;
+    }
+    if (item.key === "mark_question_completed") {
+      await completeCurrentQuestion(progressTreeContextMenuDetailRef);
+      return;
+    }
+    await copyProgressTreeNodeInfo(progressTreeContextMenuNode);
+  };
+
+  const renderProgressTreeContextMenu = () => {
+    if (progressTreeContextMenu === null || progressTreeContextMenuNode === null) {
+      return null;
+    }
+
+    return (
+      <div
+        className={styles.progressTreeContextMenu}
+        role="menu"
+        aria-label={`进展树节点操作：${progressTreeContextMenuNode.title}`}
+        style={{ left: progressTreeContextMenu.x, top: progressTreeContextMenu.y }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <Typography.Text strong className={styles.progressTreeContextMenuTitle}>
+          {progressTreeContextMenuNode.title}
+        </Typography.Text>
+        <div className={styles.progressTreeContextMenuList}>
+          {progressTreeContextMenuItems.map((item) => (
+            <button
+              key={item.key}
+              className={styles.progressTreeContextMenuItem}
+              type="button"
+              role="menuitem"
+              disabled={item.disabled}
+              onClick={() => {
+                void runProgressTreeContextMenuAction(item);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const messageRowClassName = (kind: WorkbenchChatMessageKind) =>
+    [styles.messageRow, styles[getWorkbenchChatMessageAlignmentClassName(kind)]].join(" ");
 
   const renderProgressTreeContextBanner = () => {
     if (selectedProgressNodeBanner === null || selectedProgressNodeBanner.title === null) {
@@ -3001,15 +3237,16 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           value={answerText}
           onChange={(event) => setAnswerText(event.target.value)}
           onKeyDown={(event) => {
-            if (shouldSubmitAnswerFromKeyboard({
+            if (canSubmitAnswerFromKeyboard({
               key: event.key,
               ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
               shiftKey: event.shiftKey,
               altKey: event.altKey,
               isComposing: event.nativeEvent.isComposing,
-            })) {
+            }, canSendAnswer)) {
               event.preventDefault();
-              sendAnswer();
+              void sendAnswer();
             }
           }}
           placeholder={canSendAnswer ? "请输入当前题目的回答" : "请选择左侧已有题目的节点后作答"}
@@ -3039,17 +3276,26 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               标记为已完成
             </Button>
           </div>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            loading={submittingAnswer || feedbackGenerating}
-            disabled={!canSendAnswer}
-            onClick={() => {
-              sendAnswer();
-            }}
-          >
-            发送
-          </Button>
+          <Tooltip title={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}>
+            <span
+              className={styles.sendButtonTooltipAnchor}
+              tabIndex={0}
+              aria-label={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}
+            >
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                loading={submittingAnswer || feedbackGenerating}
+                disabled={!canSendAnswer}
+                aria-label={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}
+                onClick={() => {
+                  void sendAnswer();
+                }}
+              >
+                发送
+              </Button>
+            </span>
+          </Tooltip>
         </div>
       </div>
     );
@@ -3065,6 +3311,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             type="button"
             aria-expanded={isExpanded}
             onClick={() => toggleProgressNode(node.key)}
+            onContextMenu={(event) => openProgressTreeContextMenu(event, node)}
           >
             <span className={styles.nodeGroupTitleRow}>
               <span className={styles.nodeChevron}>{isExpanded ? <DownOutlined /> : <RightOutlined />}</span>
@@ -3113,6 +3360,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           type="button"
           disabled={!canSelectNode && !isExpandable}
           aria-expanded={isExpandable ? isExpanded : undefined}
+          onContextMenu={(event) => openProgressTreeContextMenu(event, node)}
           onClick={
             canSelectNode
               ? () => {
@@ -3403,7 +3651,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               </div>
 
               <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
-                {renderProgressTreeContextBanner()}
+                <div className={messageRowClassName("progress_context")} data-message-kind="progress_context">
+                  {renderProgressTreeContextBanner()}
+                </div>
                 {isSessionEnded ? <Alert type="info" showIcon message="模拟面试已结束" /> : null}
                 {candidateLoadError !== null ? (
                   <Alert
@@ -3422,27 +3672,33 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   />
                 )}
                 {session.turns.map((turn, turnIndex) => (
-                  <section key={turn.question_id} style={{ display: "grid", gap: 12 }}>
-                    <div className={styles.questionBubble}>
-                      <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>
-                      <Typography.Text className={styles.questionText}>
-                        {renderQuestionTextWithSources(
-                          turn.question_text || FALLBACK_QUESTION_TEXT,
-                          turn.question_sources ?? [],
-                        )}
-                      </Typography.Text>
+                  <section key={turn.question_id} className={styles.chatTurn}>
+                    <div className={messageRowClassName("system_question")} data-message-kind="system_question">
+                      <div className={styles.questionBubble}>
+                        <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>
+                        <Typography.Text className={styles.questionText}>
+                          {renderQuestionTextWithSources(
+                            turn.question_text || FALLBACK_QUESTION_TEXT,
+                            turn.question_sources ?? [],
+                          )}
+                        </Typography.Text>
+                      </div>
                     </div>
                     {turn.answers.length === 0 ? (
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <div className={styles.answerBubble}>
-                          <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
-                        </div>
-                        <section className={styles.feedbackAccordion} aria-label="反馈占位区域">
-                          <div className={styles.feedbackItem}>
-                            <Typography.Text type="secondary">{FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                      <>
+                        <div className={messageRowClassName("user_answer_placeholder")} data-message-kind="user_answer_placeholder">
+                          <div className={styles.answerBubble}>
+                            <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
                           </div>
-                        </section>
-                      </div>
+                        </div>
+                        <div className={messageRowClassName("feedback")} data-message-kind="feedback">
+                          <section className={styles.feedbackAccordion} aria-label="反馈占位区域">
+                            <div className={styles.feedbackItem}>
+                              <Typography.Text type="secondary">{FALLBACK_FEEDBACK_TEXT}</Typography.Text>
+                            </div>
+                          </section>
+                        </div>
+                      </>
                     ) : (
                       turn.answers.map((answer) => {
                         const feedbackCard = buildFeedbackCardViewModel(answer);
@@ -3451,146 +3707,150 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                           candidates.filter((candidate) => candidateBelongsToAnswer(candidate, answer)),
                         );
                         return (
-                          <section key={answer.answer_id} style={{ display: "grid", gap: 10 }}>
-                            <div className={styles.answerBubble}>
-                              <Typography.Text strong>{`第 ${answer.answer_round} 轮回答`}</Typography.Text>
-                              <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
+                          <section key={answer.answer_id} className={styles.chatAnswerGroup}>
+                            <div className={messageRowClassName("user_answer")} data-message-kind="user_answer">
+                              <div className={styles.answerBubble}>
+                                <Typography.Text strong>{`第 ${answer.answer_round} 轮回答`}</Typography.Text>
+                                <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
+                              </div>
                             </div>
-                            <section className={styles.feedbackAccordion} aria-label={`${feedbackCard.title}区域`}>
-                              <div className={styles.feedbackCardHeader}>
-                                <div className={styles.feedbackTextBlock}>
-                                  <Typography.Text strong>{feedbackCard.title}</Typography.Text>
-                                  <div className={styles.feedbackMetaRow}>
-                                    <Tag color={feedbackCard.status === "generated" ? "success" : "default"} className={styles.feedbackMetaTag}>
-                                      {feedbackCard.status}
-                                    </Tag>
-                                    {feedbackCard.contractId ? (
-                                      <Tag color="blue" className={styles.feedbackMetaTag}>{feedbackCard.contractId}</Tag>
-                                    ) : null}
-                                    {feedbackCard.contractIds.map((contractId) => (
-                                      contractId === feedbackCard.contractId ? null : (
-                                        <Tag key={contractId} className={styles.feedbackMetaTag}>{contractId}</Tag>
-                                      )
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className={styles.feedbackSectionList}>
-                                {feedbackCard.sections.map((section) => (
-                                  <details key={section.key} className={styles.feedbackSection} open={section.defaultOpen}>
-                                    <summary className={styles.feedbackSectionSummary}>{section.title}</summary>
-                                    <ul className={styles.feedbackSectionItems}>
-                                      {section.items.map((item) => (
-                                        <li key={`${section.key}:${item}`}>{item}</li>
+                            <div className={messageRowClassName("feedback")} data-message-kind="feedback">
+                              <section className={styles.feedbackAccordion} aria-label={`${feedbackCard.title}区域`}>
+                                <div className={styles.feedbackCardHeader}>
+                                  <div className={styles.feedbackTextBlock}>
+                                    <Typography.Text strong>{feedbackCard.title}</Typography.Text>
+                                    <div className={styles.feedbackMetaRow}>
+                                      <Tag color={feedbackCard.status === "generated" ? "success" : "default"} className={styles.feedbackMetaTag}>
+                                        {feedbackCard.status}
+                                      </Tag>
+                                      {feedbackCard.contractId ? (
+                                        <Tag color="blue" className={styles.feedbackMetaTag}>{feedbackCard.contractId}</Tag>
+                                      ) : null}
+                                      {feedbackCard.contractIds.map((contractId) => (
+                                        contractId === feedbackCard.contractId ? null : (
+                                          <Tag key={contractId} className={styles.feedbackMetaTag}>{contractId}</Tag>
+                                        )
                                       ))}
-                                    </ul>
-                                  </details>
-                                ))}
-                                {feedbackCard.traceItems.length > 0 ? (
-                                  <details className={styles.feedbackSection}>
-                                    <summary className={styles.feedbackSectionSummary}>引用与置信度</summary>
-                                    <ul className={styles.feedbackSectionItems}>
-                                      {feedbackCard.traceItems.map((item) => (
-                                        <li key={`trace:${item}`}>{item}</li>
-                                      ))}
-                                    </ul>
-                                  </details>
-                                ) : null}
-                              </div>
-                              {candidateReview.items.length > 0 ? (
-                                <section className={styles.candidateReviewPanel} aria-label="候选对象确认">
-                                  <div className={styles.candidateReviewHeader}>
-                                    <div className={styles.feedbackTextBlock}>
-                                      <Typography.Text strong>候选确认</Typography.Text>
-                                      <Typography.Text type="secondary" className={styles.candidateReviewSummary}>
-                                        {`待确认 ${candidateReview.pendingCount} 项，已处理 ${candidateReview.settledCount} 项`}
-                                      </Typography.Text>
                                     </div>
-                                    <Tag color={candidateReview.pendingCount > 0 ? "processing" : "default"} className={styles.feedbackMetaTag}>
-                                      内容沉淀
-                                    </Tag>
                                   </div>
-                                  {candidateReview.mergeHint ? (
-                                    <Alert type="info" showIcon message={candidateReview.mergeHint} />
+                                </div>
+                                <div className={styles.feedbackSectionList}>
+                                  {feedbackCard.sections.map((section) => (
+                                    <details key={section.key} className={styles.feedbackSection} open={section.defaultOpen}>
+                                      <summary className={styles.feedbackSectionSummary}>{section.title}</summary>
+                                      <ul className={styles.feedbackSectionItems}>
+                                        {section.items.map((item) => (
+                                          <li key={`${section.key}:${item}`}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </details>
+                                  ))}
+                                  {feedbackCard.traceItems.length > 0 ? (
+                                    <details className={styles.feedbackSection}>
+                                      <summary className={styles.feedbackSectionSummary}>引用与置信度</summary>
+                                      <ul className={styles.feedbackSectionItems}>
+                                        {feedbackCard.traceItems.map((item) => (
+                                          <li key={`trace:${item}`}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </details>
                                   ) : null}
-                                  <div className={styles.candidateReviewList}>
-                                    {candidateReview.items.map((item) => (
-                                      <article className={styles.candidateReviewItem} key={item.candidateId}>
-                                        <div className={styles.candidateReviewItemHeader}>
-                                          <Space size={[6, 6]} wrap>
-                                            <Tag color="blue" className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
-                                            <Tag color={item.statusColor} className={styles.feedbackMetaTag}>{item.statusLabel}</Tag>
-                                            {item.confidenceLabel ? (
-                                              <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag>
+                                </div>
+                                {candidateReview.items.length > 0 ? (
+                                  <section className={styles.candidateReviewPanel} aria-label="候选对象确认">
+                                    <div className={styles.candidateReviewHeader}>
+                                      <div className={styles.feedbackTextBlock}>
+                                        <Typography.Text strong>候选确认</Typography.Text>
+                                        <Typography.Text type="secondary" className={styles.candidateReviewSummary}>
+                                          {`待确认 ${candidateReview.pendingCount} 项，已处理 ${candidateReview.settledCount} 项`}
+                                        </Typography.Text>
+                                      </div>
+                                      <Tag color={candidateReview.pendingCount > 0 ? "processing" : "default"} className={styles.feedbackMetaTag}>
+                                        内容沉淀
+                                      </Tag>
+                                    </div>
+                                    {candidateReview.mergeHint ? (
+                                      <Alert type="info" showIcon message={candidateReview.mergeHint} />
+                                    ) : null}
+                                    <div className={styles.candidateReviewList}>
+                                      {candidateReview.items.map((item) => (
+                                        <article className={styles.candidateReviewItem} key={item.candidateId}>
+                                          <div className={styles.candidateReviewItemHeader}>
+                                            <Space size={[6, 6]} wrap>
+                                              <Tag color="blue" className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
+                                              <Tag color={item.statusColor} className={styles.feedbackMetaTag}>{item.statusLabel}</Tag>
+                                              {item.confidenceLabel ? (
+                                                <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag>
+                                              ) : null}
+                                            </Space>
+                                            <Space size={6} wrap>
+                                              {item.canConfirm ? (
+                                                <Tooltip title="确认并交给后端写入正式对象">
+                                                  <Button
+                                                    size="small"
+                                                    type="primary"
+                                                    icon={<CheckCircleOutlined />}
+                                                    loading={candidateActionKey === `${item.candidateId}:confirm`}
+                                                    disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`}
+                                                    onClick={() => {
+                                                      void runCandidateAction(item.candidateId, "confirm");
+                                                    }}
+                                                  >
+                                                    确认
+                                                  </Button>
+                                                </Tooltip>
+                                              ) : null}
+                                              {item.canDismiss ? (
+                                                <Tooltip title="忽略该候选对象">
+                                                  <Button
+                                                    size="small"
+                                                    danger
+                                                    icon={<CloseCircleOutlined />}
+                                                    loading={candidateActionKey === `${item.candidateId}:dismiss`}
+                                                    disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`}
+                                                    onClick={() => {
+                                                      void runCandidateAction(item.candidateId, "dismiss");
+                                                    }}
+                                                  >
+                                                    忽略
+                                                  </Button>
+                                                </Tooltip>
+                                              ) : null}
+                                            </Space>
+                                          </div>
+                                          <div className={styles.candidateReviewBody}>
+                                            <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
+                                            <Typography.Paragraph className={styles.candidateReviewText}>
+                                              {item.summary}
+                                            </Typography.Paragraph>
+                                            {item.evidenceExcerpt ? (
+                                              <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
+                                                {`证据片段：${item.evidenceExcerpt}`}
+                                              </Typography.Text>
                                             ) : null}
-                                          </Space>
-                                          <Space size={6} wrap>
-                                            {item.canConfirm ? (
-                                              <Tooltip title="确认并交给后端写入正式对象">
-                                                <Button
-                                                  size="small"
-                                                  type="primary"
-                                                  icon={<CheckCircleOutlined />}
-                                                  loading={candidateActionKey === `${item.candidateId}:confirm`}
-                                                  disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`}
-                                                  onClick={() => {
-                                                    void runCandidateAction(item.candidateId, "confirm");
-                                                  }}
-                                                >
-                                                  确认
-                                                </Button>
-                                              </Tooltip>
-                                            ) : null}
-                                            {item.canDismiss ? (
-                                              <Tooltip title="忽略该候选对象">
-                                                <Button
-                                                  size="small"
-                                                  danger
-                                                  icon={<CloseCircleOutlined />}
-                                                  loading={candidateActionKey === `${item.candidateId}:dismiss`}
-                                                  disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`}
-                                                  onClick={() => {
-                                                    void runCandidateAction(item.candidateId, "dismiss");
-                                                  }}
-                                                >
-                                                  忽略
-                                                </Button>
-                                              </Tooltip>
-                                            ) : null}
-                                          </Space>
-                                        </div>
-                                        <div className={styles.candidateReviewBody}>
-                                          <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
-                                          <Typography.Paragraph className={styles.candidateReviewText}>
-                                            {item.summary}
-                                          </Typography.Paragraph>
-                                          {item.evidenceExcerpt ? (
-                                            <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
-                                              {`证据片段：${item.evidenceExcerpt}`}
-                                            </Typography.Text>
-                                          ) : null}
-                                        </div>
-                                      </article>
+                                          </div>
+                                        </article>
+                                      ))}
+                                    </div>
+                                  </section>
+                                ) : null}
+                                {nextActions.length > 0 ? (
+                                  <div className={styles.nextActionBar} aria-label="下一步建议">
+                                    {nextActions.map((action) => (
+                                      <Button
+                                        key={`${answer.answer_id}:${action}`}
+                                        size="small"
+                                        disabled={creatingQuestion || submittingAnswer || feedbackGenerating}
+                                        loading={action === "generate_next_question" && creatingQuestion}
+                                        onClick={() => handleNextRecommendedAction(action, turn.progress_node_ref)}
+                                      >
+                                        {toNextRecommendedActionLabel(action)}
+                                      </Button>
                                     ))}
                                   </div>
-                                </section>
-                              ) : null}
-                              {nextActions.length > 0 ? (
-                                <div className={styles.nextActionBar} aria-label="下一步建议">
-                                  {nextActions.map((action) => (
-                                    <Button
-                                      key={`${answer.answer_id}:${action}`}
-                                      size="small"
-                                      disabled={creatingQuestion || submittingAnswer || feedbackGenerating}
-                                      loading={action === "generate_next_question" && creatingQuestion}
-                                      onClick={() => handleNextRecommendedAction(action, turn.progress_node_ref)}
-                                    >
-                                      {toNextRecommendedActionLabel(action)}
-                                    </Button>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </section>
+                                ) : null}
+                              </section>
+                            </div>
                           </section>
                         );
                       })
@@ -3601,6 +3861,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               {renderCurrentQuestionComposer()}
             </main>
           </section>
+          {renderProgressTreeContextMenu()}
         </div>
       )}
     </AppShell>
