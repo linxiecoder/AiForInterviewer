@@ -59,25 +59,27 @@ export const APP_SHELL_NAV_ITEMS = [
   },
   {
     key: "asset",
-    label: "学习资料",
+    label: "资产库",
     icon: "knowledge",
     path: "/asset",
-    disabled: true,
-    disabledReason: "占位：学习资料待联调",
+    disabled: false,
+    disabledReason: "资产库模块已开放",
   },
   {
-    key: "training",
-    label: "能力提升",
+    key: "weakness",
+    label: "薄弱项",
     icon: "growth",
-    path: "/training",
-    disabled: true,
-    disabledReason: "占位：能力提升待联调",
+    path: "/weakness",
+    disabled: false,
+    disabledReason: "薄弱项模块已开放",
   },
 ] as const satisfies readonly AppShellNavItem[];
 
 export function getActiveNavKey(path: "/interview" | `/interview/${string}`): "interview";
 export function getActiveNavKey(path: "/resume"): "resume";
 export function getActiveNavKey(path: "/job"): "job";
+export function getActiveNavKey(path: "/asset"): "asset";
+export function getActiveNavKey(path: "/weakness"): "weakness";
 export function getActiveNavKey(path: "/dashboard" | "/" | string): string;
 export function getActiveNavKey(path: string): string {
   const target = APP_SHELL_NAV_ITEMS.find(

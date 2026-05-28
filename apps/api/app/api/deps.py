@@ -17,6 +17,7 @@ from app.application.polish.question_generation_policy import (
 )
 from app.domain.auth.entities import CurrentActor
 from app.domain.auth.value_objects import OwnerScope
+from app.application.embeddings.ports import EmbeddingProvider
 from app.application.llm.ports import LlmTransport
 
 
@@ -62,6 +63,17 @@ async def get_llm_transport(request: Request) -> LlmTransport:
             message="LLM transport is not available.",
         )
     return transport
+
+
+async def get_embedding_provider(request: Request) -> EmbeddingProvider:
+    provider = getattr(request.app.state, "embedding_provider", None)
+    if provider is None:
+        raise_api_error(
+            status_code=500,
+            code="internal_error",
+            message="Embedding provider is not available.",
+        )
+    return provider
 
 
 async def get_ai_orchestration_facade(request: Request) -> AiOrchestrationFacade | None:

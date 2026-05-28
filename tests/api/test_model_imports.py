@@ -19,6 +19,7 @@ MODEL_MODULES = (
     "app.infrastructure.db.models.report",
     "app.infrastructure.db.models.review",
     "app.infrastructure.db.models.asset",
+    "app.infrastructure.db.models.rag",
     "app.infrastructure.db.models.weakness",
     "app.infrastructure.db.models.training",
     "app.infrastructure.db.models.reference",
@@ -64,6 +65,8 @@ def test_sqlalchemy_model_modules_import_without_side_effect_errors() -> None:
         "agent_checkpoint_refs",
         "llm_calls",
         "llm_call_payloads",
+        "rag_documents",
+        "rag_chunks",
     }.issubset(Base.metadata.tables)
 
 

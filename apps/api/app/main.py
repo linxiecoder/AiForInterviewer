@@ -14,6 +14,7 @@ from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.ai_runtime.registry import AgentGraphRegistry
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.db.session import DbSettings, configure_session_factory
+from app.infrastructure.embeddings.runtime import build_embedding_provider_from_env
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
 from app.infrastructure.ai_runtime.langgraph.polish_question_runtime import PolishQuestionGraphRuntime
 from app.infrastructure.llm.job_match import LlmJobMatchAnalyzer
@@ -102,6 +103,7 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.db_session_factory = db_session_factory
     application.state.llm_transport = build_llm_transport_from_env()
+    application.state.embedding_provider = build_embedding_provider_from_env()
     application.state.job_match_analyzer = LlmJobMatchAnalyzer(application.state.llm_transport)
     application.state.ai_orchestration_facade = _build_ai_orchestration_facade(
         polish_question_llm_transport=application.state.llm_transport

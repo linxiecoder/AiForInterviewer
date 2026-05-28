@@ -13,11 +13,13 @@ import { DashboardPage } from "../../pages/dashboard/DashboardPage";
 import { JobPage } from "../../pages/job/JobPage";
 import { ResumePage } from "../../pages/resume/ResumePage";
 import { InterviewPage, InterviewWorkbenchPage } from "../../pages/interview/InterviewPage";
+import { AssetPage } from "../../pages/asset/AssetPage";
+import { WeaknessPage } from "../../pages/weakness/WeaknessPage";
 import { ErrorState } from "../../shared/ui/ErrorState";
 import { LoadingState } from "../../shared/ui/LoadingState";
 
 export type InterviewSessionPath = `/interview/${string}`;
-export type RoutePath = "/login" | "/dashboard" | "/resume" | "/job" | "/interview" | InterviewSessionPath | "/";
+export type RoutePath = "/login" | "/dashboard" | "/resume" | "/job" | "/interview" | "/asset" | "/weakness" | InterviewSessionPath | "/";
 type RouteAction = (path: string, options?: { replace?: boolean }) => void;
 
 interface RouteContextValue {
@@ -37,6 +39,8 @@ function normalizePath(pathname: string): RoutePath {
     pathname === "/resume" ||
     pathname === "/job" ||
     pathname === "/interview" ||
+    pathname === "/asset" ||
+    pathname === "/weakness" ||
     pathname === "/login" ||
     pathname === "/"
   ) {
@@ -156,6 +160,14 @@ export function AppRouter() {
 
   if (path === "/interview") {
     return <InterviewPage />;
+  }
+
+  if (path === "/asset") {
+    return <AssetPage />;
+  }
+
+  if (path === "/weakness") {
+    return <WeaknessPage />;
   }
 
   const interviewSessionId = getInterviewSessionIdFromPath(path);
