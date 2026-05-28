@@ -158,6 +158,9 @@ class PolishSessionResponse(BaseModel):
     custom_topic_text_summary: str | None = None
     current_question_ref: ResourceRef | None = None
     progress_position_ref: ResourceRef | None = None
+    report_id: str | None = None
+    report_status: str | None = None
+    report_generated_at: datetime | None = None
     low_confidence_flags: list[LowConfidenceFlagSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -185,6 +188,9 @@ class PolishSessionSummaryResponse(BaseModel):
     topic_id: str | None = None
     subtopic_id: str | None = None
     custom_topic_text_summary: str | None = None
+    report_id: str | None = None
+    report_status: str | None = None
+    report_generated_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -39,8 +39,10 @@ from app.application.polish.commands import (
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
     EndPolishSessionCommand,
+    GeneratePolishSessionReportCommand,
     GenerateInitialPolishProgressTreeCommand,
     RefreshPolishProgressTreeStateCommand,
+    SoftDeletePolishSessionCommand,
 )
 from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.polish.entities import (
@@ -341,6 +343,54 @@ async def end_polish_session(
     result = await run_in_threadpool(
         use_cases.end_session,
         EndPolishSessionCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+        ),
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        resource_type="polish_session",
+        data=_session_response(result.value),
+    )
+
+
+@router.post("/polish-sessions/{session_id}/report")
+async def generate_polish_session_report(
+    session_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+) -> Any:
+    use_cases = _use_cases(session_factory, llm_transport)
+    result = await run_in_threadpool(
+        use_cases.generate_session_report,
+        GeneratePolishSessionReportCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+        ),
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        resource_type="polish_session_report",
+        data=_session_response(result.value),
+    )
+
+
+@router.post("/polish-sessions/{session_id}/delete")
+async def soft_delete_polish_session(
+    session_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+) -> Any:
+    use_cases = _use_cases(session_factory, llm_transport)
+    result = await run_in_threadpool(
+        use_cases.soft_delete_session,
+        SoftDeletePolishSessionCommand(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
             session_id=session_id,
@@ -674,6 +724,11 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
         "topic_ref": _topic_ref(core.topic_id),
         "subtopic_ref": _subtopic_ref(core.topic_id, core.subtopic_id),
         "custom_topic_text_summary": core.custom_topic_text_summary,
+        "report_id": core.report_summary.report_id if core.report_summary is not None else None,
+        "report_status": core.report_summary.report_status if core.report_summary is not None else None,
+        "report_generated_at": (
+            core.report_summary.report_generated_at if core.report_summary is not None else None
+        ),
         "current_question_ref": active_question_ref,
         "active_question_ref": active_question_ref,
         "progress_position_ref": current_node_ref,
@@ -724,6 +779,9 @@ def _session_summary_response(session: PolishSessionDetail) -> PolishSessionSumm
         topic_id=core.topic_id,
         subtopic_id=core.subtopic_id,
         custom_topic_text_summary=core.custom_topic_text_summary,
+        report_id=core.report_summary.report_id if core.report_summary is not None else None,
+        report_status=core.report_summary.report_status if core.report_summary is not None else None,
+        report_generated_at=core.report_summary.report_generated_at if core.report_summary is not None else None,
         created_at=core.created_at,
         updated_at=core.updated_at,
     )

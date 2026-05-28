@@ -57,6 +57,20 @@ class EndPolishSessionCommand:
 
 
 @dataclass(frozen=True)
+class GeneratePolishSessionReportCommand:
+    owner_id: str
+    actor_id: str
+    session_id: str
+
+
+@dataclass(frozen=True)
+class SoftDeletePolishSessionCommand:
+    owner_id: str
+    actor_id: str
+    session_id: str
+
+
+@dataclass(frozen=True)
 class CreatePolishAnswerCommand:
     owner_id: str
     actor_id: str

@@ -15,6 +15,7 @@ from app.application.polish.entities import (
     PolishQuestion,
     PolishQuestionSource,
     PolishSession,
+    PolishSessionReportSummary,
     PolishTaskStatus,
 )
 from app.application.polish.ports import PolishRepository
@@ -24,6 +25,7 @@ from app.application.polish.question_metadata import (
     question_metadata_to_dict,
 )
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
+from app.domain.shared.clock import utc_now
 from app.domain.shared.refs import ResourceRef
 from app.infrastructure.db.models.ai_task import AiTask
 from app.infrastructure.db.models.answer import Answer as AnswerModel
@@ -33,6 +35,7 @@ from app.infrastructure.db.models.interview import (
     PolishSessionDetail as PolishSessionDetailModel,
 )
 from app.infrastructure.db.models.question import Question as QuestionModel
+from app.infrastructure.db.models.report import InterviewReport as InterviewReportModel
 from app.infrastructure.db.session import get_session_factory
 
 
@@ -69,6 +72,66 @@ class SqlAlchemyPolishRepository(PolishRepository):
             session_model.updated_at = session.updated_at
             db.commit()
 
+    def save_session_status(self, session: PolishSession) -> None:
+        with self._session_factory() as db:
+            session_model = db.get(InterviewSessionModel, session.session_id)
+            if session_model is None or session_model.owner_id != session.owner_id:
+                return
+            detail = db.scalar(
+                select(PolishSessionDetailModel).where(
+                    PolishSessionDetailModel.owner_id == session.owner_id,
+                    PolishSessionDetailModel.session_id == session.session_id,
+                )
+            )
+            session_model.status = session.status
+            session_model.updated_at = session.updated_at
+            if detail is not None:
+                detail.status = session.status
+                detail.updated_at = session.updated_at
+            db.commit()
+
+    def create_session_report(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        session_id: str,
+        report_id: str,
+    ) -> PolishSession:
+        with self._session_factory() as db:
+            session_model = db.get(InterviewSessionModel, session_id)
+            if session_model is None or session_model.owner_id != owner_id or session_model.mode != "polish":
+                raise ValueError("Polish session not found")
+            detail_model = _get_session_detail_model(db, owner_id=owner_id, session_id=session_id)
+            if detail_model is None:
+                raise ValueError("Polish session detail not found")
+            existing_report = _latest_report_model(db, owner_id=owner_id, session_id=session_id)
+            now = utc_now()
+            if existing_report is None:
+                existing_report = InterviewReportModel(
+                    id=report_id,
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    record_version=1,
+                    status="available",
+                    trace_ref_ids=None,
+                    evidence_ref_ids=None,
+                    created_at=now,
+                    updated_at=now,
+                    session_id=session_id,
+                    ai_task_id=None,
+                    score_result_id=None,
+                    report_type="polish_summary",
+                    generated_at=now,
+                )
+                db.add(existing_report)
+            else:
+                existing_report.updated_at = now
+            session_model.updated_at = now
+            detail_model.updated_at = now
+            db.commit()
+            return _session_to_entity(session_model, detail_model, existing_report)
+
     def list_sessions(self, owner_id: str) -> tuple[PolishSession, ...]:
         with self._session_factory() as db:
             rows = db.execute(
@@ -80,26 +143,30 @@ class SqlAlchemyPolishRepository(PolishRepository):
                 .where(
                     InterviewSessionModel.owner_id == owner_id,
                     InterviewSessionModel.mode == "polish",
+                    InterviewSessionModel.status != "deleted",
                     PolishSessionDetailModel.owner_id == owner_id,
                 )
                 .order_by(InterviewSessionModel.updated_at.desc(), InterviewSessionModel.created_at.desc())
             ).all()
-            return tuple(_session_to_entity(session, detail) for session, detail in rows)
+            return tuple(
+                _session_to_entity(
+                    session,
+                    detail,
+                    _latest_report_model(db, owner_id=owner_id, session_id=session.id),
+                )
+                for session, detail in rows
+            )
 
     def get_session(self, owner_id: str, session_id: str) -> PolishSession | None:
         with self._session_factory() as db:
             session_model = db.get(InterviewSessionModel, session_id)
             if session_model is None or session_model.owner_id != owner_id or session_model.mode != "polish":
                 return None
-            detail_model = db.scalar(
-                select(PolishSessionDetailModel).where(
-                    PolishSessionDetailModel.owner_id == owner_id,
-                    PolishSessionDetailModel.session_id == session_id,
-                )
-            )
+            detail_model = _get_session_detail_model(db, owner_id=owner_id, session_id=session_id)
             if detail_model is None:
                 return None
-            return _session_to_entity(session_model, detail_model)
+            report_model = _latest_report_model(db, owner_id=owner_id, session_id=session_id)
+            return _session_to_entity(session_model, detail_model, report_model)
 
     def list_questions_for_session(self, owner_id: str, session_id: str) -> tuple[PolishQuestion, ...]:
         with self._session_factory() as db:
@@ -310,6 +377,36 @@ def _resolve_strategy_or_none(theme: str | None) -> PolishThemeStrategy | None:
         return None
 
 
+def _get_session_detail_model(
+    db: Session,
+    *,
+    owner_id: str,
+    session_id: str,
+) -> PolishSessionDetailModel | None:
+    return db.scalar(
+        select(PolishSessionDetailModel).where(
+            PolishSessionDetailModel.owner_id == owner_id,
+            PolishSessionDetailModel.session_id == session_id,
+        )
+    )
+
+
+def _latest_report_model(
+    db: Session,
+    *,
+    owner_id: str,
+    session_id: str,
+) -> InterviewReportModel | None:
+    return db.scalars(
+        select(InterviewReportModel)
+        .where(
+            InterviewReportModel.owner_id == owner_id,
+            InterviewReportModel.session_id == session_id,
+        )
+        .order_by(InterviewReportModel.generated_at.desc(), InterviewReportModel.created_at.desc())
+    ).first()
+
+
 def _session_to_model(session: PolishSession) -> InterviewSessionModel:
     return InterviewSessionModel(
         id=session.session_id,
@@ -355,6 +452,7 @@ def _detail_to_model(session: PolishSession) -> PolishSessionDetailModel:
 def _session_to_entity(
     session_model: InterviewSessionModel,
     detail_model: PolishSessionDetailModel,
+    report_model: InterviewReportModel | None = None,
 ) -> PolishSession:
     return PolishSession(
         session_id=session_model.id,
@@ -376,6 +474,17 @@ def _session_to_entity(
         progress_percent=detail_model.progress_percent or 0,
         progress_tree_plan=detail_model.progress_tree_plan_json or {},
         progress_tree_state=detail_model.progress_tree_state_json or {},
+        report_summary=_report_summary_to_entity(report_model),
+    )
+
+
+def _report_summary_to_entity(report_model: InterviewReportModel | None) -> PolishSessionReportSummary | None:
+    if report_model is None:
+        return None
+    return PolishSessionReportSummary(
+        report_id=report_model.id,
+        report_status=report_model.status,
+        report_generated_at=report_model.generated_at,
     )
 
 

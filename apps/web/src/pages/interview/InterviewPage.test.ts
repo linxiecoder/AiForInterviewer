@@ -8,13 +8,18 @@ import {
   INTERVIEW_CREATE_SUCCESS_ACTIONS,
   INTERVIEW_LIST_HEADER_CONTROL_ORDER,
   INTERVIEW_LIST_HEADER_TEXT_STATE,
+  INTERVIEW_LIST_ACTIONS,
+  INTERVIEW_LIST_ACTION_TOOLTIPS,
+  INTERVIEW_LIST_CONFIRM_COPY,
   INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY,
   INTERVIEW_LIST_TABLE_COLUMN_WIDTHS,
   INTERVIEW_LIST_TABLE_SCROLL_X,
   INTERVIEW_SEARCH_PLACEHOLDER,
   INTERVIEW_SESSION_WORKBENCH_FIELDS,
   INTERVIEW_SUPPORTED_MODES,
+  INTERVIEW_FORBIDDEN_NATIVE_DIALOG_APIS,
   INTERVIEW_WORKBENCH_DISABLED_ACTIONS,
+  INTERVIEW_WORKBENCH_END_CONFIRM_COPY,
   INTERVIEW_WORKBENCH_FEEDBACK_ITEMS,
   INTERVIEW_WORKBENCH_HERO_ACTION_COPY,
   INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY,
@@ -54,9 +59,13 @@ import {
   buildInterviewCreatePendingDescription,
   buildCandidateReviewViewModel,
   buildFeedbackCardViewModel,
+  buildPolishSessionReportDialogViewModel,
   buildProgressTreeNodeClipboardMarkdown,
   buildProgressTreeContextMenuItems,
+  canEndPolishSessionSummary,
+  filterVisiblePolishSessions,
   filterPolishSessionsBySearch,
+  hasPolishSessionReport,
   buildProgressTreeContextBannerContent,
   buildProgressTreeContextBannerExpandedSections,
   buildProgressTreeNodeDetailViewModel,
@@ -98,7 +107,9 @@ import {
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
+  generatePolishSessionReport,
   generateInitialPolishProgressTree,
+  softDeletePolishSession,
 } from "../../entities/polish/api/polishApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import type {
@@ -158,6 +169,37 @@ type InterviewListHeaderMatchesAssetPages = Expect<
   Equal<typeof INTERVIEW_LIST_HEADER_CONTROL_ORDER, readonly ["actions", "search"]>
 >;
 type InterviewListHeaderTextIsRemoved = Expect<Equal<typeof INTERVIEW_LIST_HEADER_TEXT_STATE, "removed">>;
+type InterviewListActionsAreComplete = Expect<
+  Equal<typeof INTERVIEW_LIST_ACTIONS, readonly ["enter", "generate_report", "view_report", "end", "delete"]>
+>;
+type InterviewListActionTooltipsAreStable = Expect<
+  Equal<
+    typeof INTERVIEW_LIST_ACTION_TOOLTIPS,
+    {
+      readonly enter: "进入模拟面试";
+      readonly generateReport: "生成面试报告";
+      readonly viewReport: "查看面试报告";
+      readonly viewReportUnavailable: "面试报告尚未生成";
+      readonly end: "结束模拟面试";
+      readonly delete: "删除模拟面试";
+      readonly ended: "模拟面试已结束";
+    }
+  >
+>;
+type InterviewListConfirmCopyIsStable = Expect<
+  Equal<
+    typeof INTERVIEW_LIST_CONFIRM_COPY,
+    {
+      readonly endTitle: "确认结束模拟面试";
+      readonly endContent: "结束后将停止当前模拟面试，已产生的题目、回答和反馈会保留。";
+      readonly deleteTitle: "确认删除模拟面试";
+      readonly deleteContent: "删除后该模拟面试将从列表中移除，已产生的数据仅标记为删除，不会被物理删除。";
+      readonly okEnd: "确认结束";
+      readonly okDelete: "确认删除";
+      readonly cancel: "取消";
+    }
+  >
+>;
 type InterviewListSearchPlaceholderIsStable = Expect<
   Equal<typeof INTERVIEW_SEARCH_PLACEHOLDER, "搜索模拟面试名称、岗位、简历、主题">
 >;
@@ -171,11 +213,11 @@ type InterviewListTableColumnWidthsAreStable = Expect<
       readonly binding_label: 280;
       readonly topic: 240;
       readonly updated_at: 168;
-      readonly actions: 88;
+      readonly actions: 188;
     }
   >
 >;
-type InterviewListTableScrollWidthIsStable = Expect<Equal<typeof INTERVIEW_LIST_TABLE_SCROLL_X, 1210>>;
+type InterviewListTableScrollWidthIsStable = Expect<Equal<typeof INTERVIEW_LIST_TABLE_SCROLL_X, 1310>>;
 type InterviewListTableCellTextPolicyIsStable = Expect<
   Equal<
     typeof INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY,
@@ -223,7 +265,24 @@ type WorkbenchHeroActionsUseIconTooltipButtons = Expect<
 type WorkbenchHeroActionCopyMatchesActualBehavior = Expect<
   Equal<
     typeof INTERVIEW_WORKBENCH_HERO_ACTION_COPY,
-    readonly ["复制模拟面试内容", "结束模拟面试", "返回模拟面试列表"]
+    readonly ["复制完整模拟面试上下文", "结束模拟面试", "返回模拟面试列表"]
+  >
+>;
+type WorkbenchEndConfirmCopyIsStable = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_END_CONFIRM_COPY,
+    {
+      readonly title: "确认结束模拟面试";
+      readonly content: "结束后将停止当前模拟面试，已产生的题目、回答和反馈会保留。";
+      readonly okText: "确认结束";
+      readonly cancelText: "取消";
+    }
+  >
+>;
+type NativeDialogApisAreForbidden = Expect<
+  Equal<
+    typeof INTERVIEW_FORBIDDEN_NATIVE_DIALOG_APIS,
+    readonly ["alert", "confirm", "prompt", "window.alert", "window.confirm", "window.prompt"]
   >
 >;
 type WorkbenchProgressHeaderCopyOmitsPercentText = Expect<
@@ -377,11 +436,23 @@ type PolishQuestionCompletePathIsStable = Expect<
 type PolishSessionEndPathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.endSession>, `/polish-sessions/${string}/end`>
 >;
+type PolishSessionReportTaskPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.sessionReport>, `/polish-sessions/${string}/report`>
+>;
+type PolishSessionSoftDeletePathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.softDeleteSession>, `/polish-sessions/${string}/delete`>
+>;
 type PolishQuestionCompleteReturnsSession = Expect<
   Equal<Awaited<ReturnType<typeof completePolishQuestion>>, PolishSessionDetail>
 >;
 type PolishSessionEndReturnsSession = Expect<
   Equal<Awaited<ReturnType<typeof endPolishSession>>, PolishSessionDetail>
+>;
+type PolishSessionReportTaskReturnsSession = Expect<
+  Equal<Awaited<ReturnType<typeof generatePolishSessionReport>>, PolishSessionDetail>
+>;
+type PolishSessionSoftDeleteReturnsSession = Expect<
+  Equal<Awaited<ReturnType<typeof softDeletePolishSession>>, PolishSessionDetail>
 >;
 type PolishCandidateListPathIsStable = Expect<Equal<typeof POLISH_API_PATHS.candidates, "/polish-candidates">>;
 type PolishCandidateDetailPathIsStable = Expect<
@@ -599,12 +670,48 @@ function test_interview_list_toolbar_uses_shared_actions_and_search(): void {
   assertContract(INTERVIEW_SEARCH_PLACEHOLDER === "搜索模拟面试名称、岗位、简历、主题", "模拟面试搜索框应使用稳定暗纹提示");
   assertContract(INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.binding_label === 280, "绑定关系列应加宽以减少换行");
   assertContract(INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.topic === 240, "主题列应保留足够宽度");
-  assertContract(INTERVIEW_LIST_TABLE_SCROLL_X === 1210, "模拟面试列表应使用稳定横向表格宽度");
+  assertContract(INTERVIEW_LIST_TABLE_SCROLL_X === 1310, "模拟面试列表应使用稳定横向表格宽度");
   assertContract(INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY.overflow === "single_line_ellipsis", "表格文本超出一行应省略");
   assertContract(INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY.hover === "tooltip", "表格文本 hover 应展示全文");
   assertContract(filterPolishSessionsBySearch(sessions, "缓存").map((session) => session.session_id).join(",") === "ses_summary_002", "模拟面试搜索应匹配名称、岗位、简历或主题");
   assertContract(filterPolishSessionsBySearch(sessions, "分布式系统").length === 1, "模拟面试搜索应匹配简历标题");
   assertContract(filterPolishSessionsBySearch(sessions, "").length === 2, "空搜索应保留全部模拟面试记录");
+}
+
+function test_interview_list_actions_cover_report_end_and_soft_delete(): void {
+  const runningWithoutReport = buildTestSessionSummary();
+  const endedSession = buildTestSessionSummary({
+    id: "ses_summary_ended",
+    session_id: "ses_summary_ended",
+    status: "ended",
+  });
+  const runningWithReport = buildTestSessionSummary({
+    id: "ses_summary_report",
+    session_id: "ses_summary_report",
+    report_id: "report_summary_001",
+    report_status: "available",
+    report_generated_at: "2026-05-20T11:00:00Z",
+  });
+  const deletedSession = buildTestSessionSummary({
+    id: "ses_summary_deleted",
+    session_id: "ses_summary_deleted",
+    status: "deleted",
+  });
+  const reportDialog = buildPolishSessionReportDialogViewModel(runningWithReport);
+
+  assertContract(INTERVIEW_LIST_ACTIONS.join(",") === "enter,generate_report,view_report,end,delete", "操作列应包含进入、生成报告、查看报告、结束、删除");
+  assertContract(INTERVIEW_LIST_ACTION_TOOLTIPS.generateReport === "生成面试报告", "生成报告按钮应有 hover 说明");
+  assertContract(INTERVIEW_LIST_ACTION_TOOLTIPS.viewReportUnavailable === "面试报告尚未生成", "无报告时查看报告应明确不可用原因");
+  assertContract(!hasPolishSessionReport(runningWithoutReport), "无 report_id 的会话不应允许误导式查看报告");
+  assertContract(hasPolishSessionReport(runningWithReport), "有 report_id 的会话应允许查看报告");
+  assertContract(canEndPolishSessionSummary(runningWithoutReport), "running 会话应允许结束");
+  assertContract(!canEndPolishSessionSummary(endedSession), "已结束会话不应继续展示可用结束操作");
+  assertContract(filterVisiblePolishSessions([runningWithoutReport, deletedSession]).length === 1, "软删除记录不应进入普通列表");
+  assertContract(reportDialog?.title === "面试报告", "查看报告应打开系统内报告弹窗视图模型");
+  assertContract(reportDialog?.reportId === "report_summary_001", "报告弹窗应使用真实 report_id，不臆造报告内容");
+  assertContract(Boolean(reportDialog?.emptyDescription.includes("尚未返回可展示分项")), "无报告分项时应说明未返回内容而不是伪造报告");
+  assertContract(POLISH_API_PATHS.sessionReport("ses_report") === "/polish-sessions/ses_report/report", "生成报告应命中会话报告生成接口");
+  assertContract(POLISH_API_PATHS.softDeleteSession("ses_report") === "/polish-sessions/ses_report/delete", "删除应命中软删除接口");
 }
 
 function test_progress_tree_groups_flat_nodes_by_display_category_title(): void {
@@ -901,9 +1008,12 @@ function test_progress_node_context_banner_hides_question_and_detail_lists(): vo
 function test_workbench_hero_actions_are_icon_only_and_copy_session_content(): void {
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT === "summary_row_end", "顶部按钮组应位于状态摘要行右侧");
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY === "icon_only_with_tooltip", "顶部按钮应只展示图标，文字通过 Tooltip 和 aria-label 提供");
-  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0] === "复制模拟面试内容", "顶部第一个按钮应为复制");
+  assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[0] === "复制完整模拟面试上下文", "顶部第一个按钮应为复制");
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[1] === "结束模拟面试", "顶部第二个按钮应为结束模拟面试");
   assertContract(INTERVIEW_WORKBENCH_HERO_ACTION_COPY[2] === "返回模拟面试列表", "顶部第三个按钮应为返回");
+  assertContract(INTERVIEW_WORKBENCH_END_CONFIRM_COPY.title === "确认结束模拟面试", "结束按钮应打开系统内确认弹窗");
+  assertContract(INTERVIEW_WORKBENCH_END_CONFIRM_COPY.okText === "确认结束", "系统弹窗主按钮应明确表达确认结束");
+  assertContract(INTERVIEW_FORBIDDEN_NATIVE_DIALOG_APIS.includes("window.confirm"), "禁止原生弹窗清单应覆盖 window.confirm");
 }
 
 function test_progress_tree_node_status_uses_row_trailing_lights(): void {
@@ -2143,6 +2253,7 @@ function test_interview_topic_title_neutralizes_interrogation_copy(): void {
 }
 
 test_interview_list_toolbar_uses_shared_actions_and_search();
+test_interview_list_actions_cover_report_end_and_soft_delete();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();
 test_progress_tree_group_headers_default_expanded_for_collapse_control();

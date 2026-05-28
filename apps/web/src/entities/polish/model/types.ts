@@ -31,6 +31,9 @@ export interface PolishSessionSummary {
   topic_id?: string | null;
   subtopic_id?: string | null;
   custom_topic_text_summary?: string | null;
+  report_id?: string | null;
+  report_status?: string | null;
+  report_generated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -389,6 +392,9 @@ export interface PolishSessionDetail {
     title?: string | null;
   } | null;
   custom_topic_text_summary?: string | null;
+  report_id?: string | null;
+  report_status?: string | null;
+  report_generated_at?: string | null;
   created_at: string;
   updated_at: string;
 }

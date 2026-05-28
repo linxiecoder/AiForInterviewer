@@ -30,6 +30,13 @@ class PolishTopic:
 
 
 @dataclass(frozen=True)
+class PolishSessionReportSummary:
+    report_id: str
+    report_status: str
+    report_generated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
 class PolishSession:
     session_id: str
     owner_id: str
@@ -50,6 +57,7 @@ class PolishSession:
     progress_percent: int = 0
     progress_tree_plan: dict[str, Any] = field(default_factory=dict)
     progress_tree_state: dict[str, Any] = field(default_factory=dict)
+    report_summary: PolishSessionReportSummary | None = None
 
 
 @dataclass(frozen=True)

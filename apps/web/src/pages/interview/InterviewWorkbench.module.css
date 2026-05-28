@@ -1017,3 +1017,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.tableActions {
+  width: 100%;
+  justify-content: flex-start;
+  white-space: nowrap;
+}

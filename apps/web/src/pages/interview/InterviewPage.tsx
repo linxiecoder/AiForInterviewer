@@ -2,7 +2,10 @@ import {
   ArrowLeftOutlined,
   CloseCircleOutlined,
   CopyOutlined,
+  DeleteOutlined,
   DownOutlined,
+  FileSearchOutlined,
+  FileTextOutlined,
   CheckCircleOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -11,8 +14,9 @@ import {
   RightOutlined,
   SearchOutlined,
   SendOutlined,
+  StopOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Drawer, Form, Input, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Alert, Button, Card, Drawer, Form, Input, Modal, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -32,8 +36,10 @@ import {
   fetchPolishSession,
   fetchPolishSessions,
   fetchPolishTopics,
+  generatePolishSessionReport,
   generateInitialPolishProgressTree,
   refreshPolishProgressTreeState,
+  softDeletePolishSession,
 } from "../../entities/polish/api/polishApi";
 import type {
   CreatePolishSessionRequest,
@@ -93,9 +99,34 @@ export const INTERVIEW_LIST_TABLE_COLUMN_WIDTHS = {
   binding_label: 280,
   topic: 240,
   updated_at: 168,
-  actions: 88,
+  actions: 188,
 } as const;
-export const INTERVIEW_LIST_TABLE_SCROLL_X = 1210 as const;
+export const INTERVIEW_LIST_TABLE_SCROLL_X = 1310 as const;
+export const INTERVIEW_LIST_ACTIONS = [
+  "enter",
+  "generate_report",
+  "view_report",
+  "end",
+  "delete",
+] as const;
+export const INTERVIEW_LIST_ACTION_TOOLTIPS = {
+  enter: "进入模拟面试",
+  generateReport: "生成面试报告",
+  viewReport: "查看面试报告",
+  viewReportUnavailable: "面试报告尚未生成",
+  end: "结束模拟面试",
+  delete: "删除模拟面试",
+  ended: "模拟面试已结束",
+} as const;
+export const INTERVIEW_LIST_CONFIRM_COPY = {
+  endTitle: "确认结束模拟面试",
+  endContent: "结束后将停止当前模拟面试，已产生的题目、回答和反馈会保留。",
+  deleteTitle: "确认删除模拟面试",
+  deleteContent: "删除后该模拟面试将从列表中移除，已产生的数据仅标记为删除，不会被物理删除。",
+  okEnd: "确认结束",
+  okDelete: "确认删除",
+  cancel: "取消",
+} as const;
 export const INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY = {
   overflow: "single_line_ellipsis",
   hover: "tooltip",
@@ -129,9 +160,23 @@ export const INTERVIEW_PROGRESS_TREE_SCROLL_CLASS = "progressTreeScroll" as cons
 export const INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT = "summary_row_end" as const;
 export const INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY = "icon_only_with_tooltip" as const;
 export const INTERVIEW_WORKBENCH_HERO_ACTION_COPY = [
-  "复制模拟面试内容",
+  "复制完整模拟面试上下文",
   "结束模拟面试",
   "返回模拟面试列表",
+] as const;
+export const INTERVIEW_WORKBENCH_END_CONFIRM_COPY = {
+  title: "确认结束模拟面试",
+  content: "结束后将停止当前模拟面试，已产生的题目、回答和反馈会保留。",
+  okText: "确认结束",
+  cancelText: "取消",
+} as const;
+export const INTERVIEW_FORBIDDEN_NATIVE_DIALOG_APIS = [
+  "alert",
+  "confirm",
+  "prompt",
+  "window.alert",
+  "window.confirm",
+  "window.prompt",
 ] as const;
 export const INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY = ["模拟面试进度"] as const;
 export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
@@ -595,6 +640,37 @@ export function filterPolishSessionsBySearch(
       session.session_id,
     ].some((value) => (value ?? "").toLowerCase().includes(keyword)),
   );
+}
+
+export function filterVisiblePolishSessions(sessions: readonly PolishSessionSummary[]): PolishSessionSummary[] {
+  return sessions.filter((session) => session.status !== "deleted");
+}
+
+export function hasPolishSessionReport(session: PolishSessionSummary): boolean {
+  return Boolean(session.report_id && session.report_status !== "failed");
+}
+
+export function canEndPolishSessionSummary(session: PolishSessionSummary): boolean {
+  return session.status === "running";
+}
+
+export function buildPolishSessionReportDialogViewModel(session: PolishSessionSummary): {
+  title: "面试报告";
+  reportId: string;
+  reportStatus: string;
+  generatedAt: string | null;
+  emptyDescription: string;
+} | null {
+  if (!hasPolishSessionReport(session) || !session.report_id) {
+    return null;
+  }
+  return {
+    title: "面试报告",
+    reportId: session.report_id,
+    reportStatus: session.report_status ?? "unknown",
+    generatedAt: session.report_generated_at ?? null,
+    emptyDescription: "当前报告尚未返回可展示分项，暂不臆造报告内容。",
+  };
 }
 
 function toDisplayDate(raw: string): string {
@@ -2338,6 +2414,14 @@ export function InterviewPage() {
   const [createStartedAt, setCreateStartedAt] = useState<number | null>(null);
   const [createElapsedSeconds, setCreateElapsedSeconds] = useState<number>(0);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [reportGeneratingSessionId, setReportGeneratingSessionId] = useState<string | null>(null);
+  const [endingListSessionId, setEndingListSessionId] = useState<string | null>(null);
+  const [deletingListSessionId, setDeletingListSessionId] = useState<string | null>(null);
+  const [listConfirmAction, setListConfirmAction] = useState<{
+    kind: "end" | "delete";
+    session: PolishSessionSummary;
+  } | null>(null);
+  const [reportDialogSession, setReportDialogSession] = useState<PolishSessionSummary | null>(null);
   const [createForm] = Form.useForm<InterviewCreateFormValues>();
 
   const loadSessions = async () => {
@@ -2345,7 +2429,7 @@ export function InterviewPage() {
     setError(null);
     try {
       const list = await fetchPolishSessions();
-      setSessions(list);
+      setSessions(filterVisiblePolishSessions(list));
     } catch (loadError) {
       setError(parseListError(loadError));
     } finally {
@@ -2473,6 +2557,55 @@ export function InterviewPage() {
     }
   };
 
+  const generateReportForSession = async (record: PolishSessionSummary) => {
+    if (reportGeneratingSessionId !== null) {
+      return;
+    }
+    setReportGeneratingSessionId(record.session_id);
+    try {
+      await generatePolishSessionReport(record.session_id);
+      message.success("面试报告已生成。");
+      await loadSessions();
+    } catch (reportError) {
+      message.error(reportError instanceof Error ? reportError.message : "面试报告生成失败，请稍后重试。");
+    } finally {
+      setReportGeneratingSessionId(null);
+    }
+  };
+
+  const confirmListAction = async () => {
+    if (listConfirmAction === null) {
+      return;
+    }
+    const target = listConfirmAction.session;
+    if (listConfirmAction.kind === "end") {
+      setEndingListSessionId(target.session_id);
+      try {
+        await endPolishSession(target.session_id);
+        message.success("模拟面试已结束。");
+        setListConfirmAction(null);
+        await loadSessions();
+      } catch (endError) {
+        message.error(endError instanceof Error ? endError.message : "结束模拟面试失败，请稍后重试。");
+      } finally {
+        setEndingListSessionId(null);
+      }
+      return;
+    }
+
+    setDeletingListSessionId(target.session_id);
+    try {
+      await softDeletePolishSession(target.session_id);
+      message.success("模拟面试已删除。");
+      setListConfirmAction(null);
+      setSessions((current) => filterVisiblePolishSessions(current.filter((item) => item.session_id !== target.session_id)));
+    } catch (deleteError) {
+      message.error(deleteError instanceof Error ? deleteError.message : "删除模拟面试失败，请稍后重试。");
+    } finally {
+      setDeletingListSessionId(null);
+    }
+  };
+
   const columns: ColumnsType<PolishSessionSummary> = useMemo(
     () => [
       {
@@ -2530,20 +2663,87 @@ export function InterviewPage() {
         key: "actions",
         width: INTERVIEW_LIST_TABLE_COLUMN_WIDTHS.actions,
         fixed: "right",
-        render: (_, record) => (
-          <Button
-            type="link"
-            size="small"
-            icon={<RightOutlined />}
-            onClick={() => navigate(buildPolishSessionPath(record.session_id))}
-          >
-            进入
-          </Button>
-        ),
+        render: (_, record) => {
+          const canViewReport = hasPolishSessionReport(record);
+          const canEnd = canEndPolishSessionSummary(record);
+          const reportDialog = buildPolishSessionReportDialogViewModel(record);
+          return (
+            <Space size={4} className={styles.tableActions}>
+              <Tooltip title={INTERVIEW_LIST_ACTION_TOOLTIPS.enter}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<RightOutlined />}
+                  aria-label={INTERVIEW_LIST_ACTION_TOOLTIPS.enter}
+                  onClick={() => navigate(buildPolishSessionPath(record.session_id))}
+                />
+              </Tooltip>
+              <Tooltip title={INTERVIEW_LIST_ACTION_TOOLTIPS.generateReport}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  aria-label={INTERVIEW_LIST_ACTION_TOOLTIPS.generateReport}
+                  loading={reportGeneratingSessionId === record.session_id}
+                  disabled={reportGeneratingSessionId !== null}
+                  onClick={() => void generateReportForSession(record)}
+                />
+              </Tooltip>
+              <Tooltip title={canViewReport ? INTERVIEW_LIST_ACTION_TOOLTIPS.viewReport : INTERVIEW_LIST_ACTION_TOOLTIPS.viewReportUnavailable}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<FileSearchOutlined />}
+                  aria-label={INTERVIEW_LIST_ACTION_TOOLTIPS.viewReport}
+                  disabled={!canViewReport}
+                  onClick={() => {
+                    if (reportDialog === null) {
+                      message.info(INTERVIEW_LIST_ACTION_TOOLTIPS.viewReportUnavailable);
+                      return;
+                    }
+                    setReportDialogSession(record);
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title={canEnd ? INTERVIEW_LIST_ACTION_TOOLTIPS.end : INTERVIEW_LIST_ACTION_TOOLTIPS.ended}>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<StopOutlined />}
+                  aria-label={INTERVIEW_LIST_ACTION_TOOLTIPS.end}
+                  loading={endingListSessionId === record.session_id}
+                  disabled={!canEnd || endingListSessionId !== null}
+                  onClick={() => setListConfirmAction({ kind: "end", session: record })}
+                />
+              </Tooltip>
+              <Tooltip title={INTERVIEW_LIST_ACTION_TOOLTIPS.delete}>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  aria-label={INTERVIEW_LIST_ACTION_TOOLTIPS.delete}
+                  loading={deletingListSessionId === record.session_id}
+                  disabled={deletingListSessionId !== null}
+                  onClick={() => setListConfirmAction({ kind: "delete", session: record })}
+                />
+              </Tooltip>
+            </Space>
+          );
+        },
       },
     ],
-    [navigate],
+    [deletingListSessionId, endingListSessionId, navigate, reportGeneratingSessionId],
   );
+  const listConfirmLoading =
+    listConfirmAction?.kind === "end"
+      ? endingListSessionId === listConfirmAction.session.session_id
+      : listConfirmAction?.kind === "delete"
+        ? deletingListSessionId === listConfirmAction.session.session_id
+        : false;
+  const reportDialogViewModel =
+    reportDialogSession === null ? null : buildPolishSessionReportDialogViewModel(reportDialogSession);
 
   return (
     <AppShell>
@@ -2778,6 +2978,62 @@ export function InterviewPage() {
             </Form>
           </Space>
         </Drawer>
+
+        <Modal
+          title={
+            listConfirmAction?.kind === "delete"
+              ? INTERVIEW_LIST_CONFIRM_COPY.deleteTitle
+              : INTERVIEW_LIST_CONFIRM_COPY.endTitle
+          }
+          open={listConfirmAction !== null}
+          okText={
+            listConfirmAction?.kind === "delete"
+              ? INTERVIEW_LIST_CONFIRM_COPY.okDelete
+              : INTERVIEW_LIST_CONFIRM_COPY.okEnd
+          }
+          cancelText={INTERVIEW_LIST_CONFIRM_COPY.cancel}
+          okButtonProps={{
+            danger: listConfirmAction?.kind === "delete",
+            loading: listConfirmLoading,
+            disabled: listConfirmLoading,
+          }}
+          cancelButtonProps={{ disabled: listConfirmLoading }}
+          closable={!listConfirmLoading}
+          keyboard={!listConfirmLoading}
+          maskClosable={!listConfirmLoading}
+          onCancel={() => {
+            if (!listConfirmLoading) {
+              setListConfirmAction(null);
+            }
+          }}
+          onOk={() => {
+            void confirmListAction();
+          }}
+        >
+          <Typography.Paragraph>
+            {listConfirmAction?.kind === "delete"
+              ? INTERVIEW_LIST_CONFIRM_COPY.deleteContent
+              : INTERVIEW_LIST_CONFIRM_COPY.endContent}
+          </Typography.Paragraph>
+        </Modal>
+
+        <Modal
+          title={reportDialogViewModel?.title ?? "面试报告"}
+          open={reportDialogViewModel !== null}
+          footer={null}
+          onCancel={() => setReportDialogSession(null)}
+        >
+          {reportDialogViewModel !== null ? (
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Typography.Text type="secondary">报告 ID：{reportDialogViewModel.reportId}</Typography.Text>
+              <Typography.Text type="secondary">报告状态：{reportDialogViewModel.reportStatus}</Typography.Text>
+              <Typography.Text type="secondary">
+                生成时间：{reportDialogViewModel.generatedAt ? toDisplayDate(reportDialogViewModel.generatedAt) : "-"}
+              </Typography.Text>
+              <Alert type="info" showIcon message={reportDialogViewModel.emptyDescription} />
+            </Space>
+          ) : null}
+        </Modal>
       </Space>
     </AppShell>
   );
@@ -2793,6 +3049,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [creatingQuestion, setCreatingQuestion] = useState<boolean>(false);
   const [completingQuestion, setCompletingQuestion] = useState<boolean>(false);
   const [endingSession, setEndingSession] = useState<boolean>(false);
+  const [endConfirmOpen, setEndConfirmOpen] = useState<boolean>(false);
   const [submittingAnswer, setSubmittingAnswer] = useState<boolean>(false);
   const [feedbackGenerating, setFeedbackGenerating] = useState<boolean>(false);
   const [workbenchFailureState, setWorkbenchFailureState] = useState<WorkbenchMachineState | null>(null);
@@ -2854,6 +3111,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setProgressTreeContextMenu(null);
     setCompletingQuestion(false);
     setEndingSession(false);
+    setEndConfirmOpen(false);
     void loadSession();
   }, [sessionId]);
 
@@ -3159,14 +3417,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     if (session === null || isSessionEnded) {
       return;
     }
-    if (!window.confirm("确认结束模拟面试？结束后不能继续生成题目或提交回答。")) {
-      return;
-    }
     setEndingSession(true);
     setAnswerError(null);
     try {
       const updatedSession = await endPolishSession(sessionId);
       setSession(updatedSession);
+      setEndConfirmOpen(false);
       message.success("模拟面试已结束。");
     } catch (endError) {
       setAnswerError(
@@ -3744,7 +4000,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     loading={endingSession}
                     disabled={isSessionEnded || endingSession}
                     onClick={() => {
-                      void endCurrentSession();
+                      setEndConfirmOpen(true);
                     }}
                   />
                 </Tooltip>
@@ -3760,6 +4016,28 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               </div>
             </div>
           </section>
+
+          <Modal
+            title={INTERVIEW_WORKBENCH_END_CONFIRM_COPY.title}
+            open={endConfirmOpen}
+            okText={INTERVIEW_WORKBENCH_END_CONFIRM_COPY.okText}
+            cancelText={INTERVIEW_WORKBENCH_END_CONFIRM_COPY.cancelText}
+            okButtonProps={{ danger: true, loading: endingSession, disabled: endingSession }}
+            cancelButtonProps={{ disabled: endingSession }}
+            closable={!endingSession}
+            keyboard={!endingSession}
+            maskClosable={!endingSession}
+            onCancel={() => {
+              if (!endingSession) {
+                setEndConfirmOpen(false);
+              }
+            }}
+            onOk={() => {
+              void endCurrentSession();
+            }}
+          >
+            <Typography.Paragraph>{INTERVIEW_WORKBENCH_END_CONFIRM_COPY.content}</Typography.Paragraph>
+          </Modal>
 
           <section className={workspaceGridClassName} style={workspaceGridStyle}>
             <aside className={progressPanelClassName} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressPanel}>

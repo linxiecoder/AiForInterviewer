@@ -34,8 +34,10 @@ from app.application.polish.commands import (
     CreatePolishQuestionTaskCommand,
     CreatePolishSessionCommand,
     EndPolishSessionCommand,
+    GeneratePolishSessionReportCommand,
     GenerateInitialPolishProgressTreeCommand,
     RefreshPolishProgressTreeStateCommand,
+    SoftDeletePolishSessionCommand,
 )
 from app.application.polish.entities import (
     PolishAnswer,
@@ -91,6 +93,7 @@ from app.domain.shared.refs import ResourceRef, TraceRef
 
 SESSION_STATUS_RUNNING = "running"
 SESSION_STATUS_ENDED = "ended"
+SESSION_STATUS_DELETED = "deleted"
 QUESTION_STATUS_GENERATED = "generated"
 ANSWER_STATUS_SAVED = "saved"
 QUESTION_GENERATION_MODE_NEW = "new_question"
@@ -341,7 +344,7 @@ class PolishUseCases:
 
     def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSessionDetail]:
         session = self._polish_repository.get_session(query.owner_id, query.session_id)
-        if session is None:
+        if session is None or session.status == SESSION_STATUS_DELETED:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
             )
@@ -756,7 +759,7 @@ class PolishUseCases:
 
     def end_session(self, command: EndPolishSessionCommand) -> ApplicationResult[PolishSessionDetail]:
         session = self._polish_repository.get_session(command.owner_id, command.session_id)
-        if session is None:
+        if session is None or session.status == SESSION_STATUS_DELETED:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
             )
@@ -934,6 +937,41 @@ class PolishUseCases:
         )
         self._polish_repository.update_progress_tree(updated_session)
         return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
+
+    def generate_session_report(
+        self,
+        command: GeneratePolishSessionReportCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        session = self._polish_repository.get_session(command.owner_id, command.session_id)
+        if session is None or session.status == SESSION_STATUS_DELETED:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+        session_with_report = self._polish_repository.create_session_report(
+            owner_id=command.owner_id,
+            actor_id=command.actor_id,
+            session_id=command.session_id,
+            report_id=generate_resource_id(ResourceIdPrefix.REPORT),
+        )
+        return ApplicationResult(
+            value=self._build_session_detail(owner_id=command.owner_id, session=session_with_report)
+        )
+
+    def soft_delete_session(
+        self,
+        command: SoftDeletePolishSessionCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        session = self._polish_repository.get_session(command.owner_id, command.session_id)
+        if session is None:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Polish session not found")
+            )
+        if session.status == SESSION_STATUS_DELETED:
+            return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=session))
+        now = utc_now()
+        deleted_session = replace(session, status=SESSION_STATUS_DELETED, updated_at=now)
+        self._polish_repository.save_session_status(deleted_session)
+        return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=deleted_session))
 
     def _build_session_detail(
         self, *, owner_id: str, session: PolishSession, include_turns: bool = True

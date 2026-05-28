@@ -17,6 +17,17 @@ class PolishRepository(Protocol):
 
     def update_progress_tree(self, session: PolishSession) -> None: ...
 
+    def save_session_status(self, session: PolishSession) -> None: ...
+
+    def create_session_report(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        session_id: str,
+        report_id: str,
+    ) -> PolishSession: ...
+
     def list_sessions(self, owner_id: str) -> tuple[PolishSession, ...]: ...
 
     def get_session(self, owner_id: str, session_id: str) -> PolishSession | None: ...

@@ -19,6 +19,8 @@ export const POLISH_API_PATHS = {
   questionTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions` as `/polish-sessions/${string}/questions`,
   completeQuestion: (sessionId: string, questionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/complete` as `/polish-sessions/${string}/questions/${string}/complete`,
   endSession: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/end` as `/polish-sessions/${string}/end`,
+  sessionReport: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/report` as `/polish-sessions/${string}/report`,
+  softDeleteSession: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/delete` as `/polish-sessions/${string}/delete`,
   progressTreeGenerate: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/progress-tree/generate` as `/polish-sessions/${string}/progress-tree/generate`,
   progressTreeState: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/progress-tree/state` as `/polish-sessions/${string}/progress-tree/state`,
   answers: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/answers` as `/polish-sessions/${string}/answers`,
@@ -138,6 +140,28 @@ export async function endPolishSession(sessionId: string): Promise<PolishSession
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("模拟面试结束状态返回为空");
+  }
+  return data;
+}
+
+export async function generatePolishSessionReport(sessionId: string): Promise<PolishSessionDetail> {
+  const response = await request<PolishSessionDetail>(POLISH_API_PATHS.sessionReport(sessionId), {
+    method: "POST",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("面试报告生成状态返回为空");
+  }
+  return data;
+}
+
+export async function softDeletePolishSession(sessionId: string): Promise<PolishSessionDetail> {
+  const response = await request<PolishSessionDetail>(POLISH_API_PATHS.softDeleteSession(sessionId), {
+    method: "POST",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("模拟面试删除状态返回为空");
   }
   return data;
 }

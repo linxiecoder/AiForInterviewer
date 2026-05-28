@@ -553,6 +553,57 @@ def test_polish_session_list_returns_owner_scoped_summaries() -> None:
     assert sessions[0]["updated_at"] is not None
 
 
+def test_polish_session_soft_delete_hides_session_without_physical_delete() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+
+    delete_status, delete_body = call_json(app, f"/api/v1/polish-sessions/{session_id}/delete", "POST")
+    list_status, list_body = call_json(app, "/api/v1/polish-sessions")
+
+    assert delete_status == 200
+    assert delete_body["data"]["session_status"] == "deleted"
+    assert list_status == 200
+    assert list_body["data"] == []
+    with session_factory() as db:
+        row = db.execute(
+            text("SELECT status FROM interview_sessions WHERE id = :session_id"),
+            {"session_id": session_id},
+        ).one()
+    assert row[0] == "deleted"
+
+
+def test_polish_session_report_generation_updates_summary_without_fake_sections() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+
+    report_status, report_body = call_json(app, f"/api/v1/polish-sessions/{session_id}/report", "POST")
+    list_status, list_body = call_json(app, "/api/v1/polish-sessions")
+
+    assert report_status == 200
+    assert report_body["data"]["report_id"].startswith("report_")
+    assert report_body["data"]["report_status"] == "available"
+    assert "sections" not in report_body["data"]
+    assert list_status == 200
+    assert list_body["data"][0]["report_id"] == report_body["data"]["report_id"]
+    assert list_body["data"][0]["report_status"] == "available"
+
+
 def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     session_factory = _session_factory()
     binding_id = _seed_progress_menu_sources(session_factory, OWNER_A)
