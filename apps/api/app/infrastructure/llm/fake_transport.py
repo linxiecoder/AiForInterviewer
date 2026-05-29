@@ -15,6 +15,13 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
+from app.application.polish.feedback_schema import (
+    POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_TASK_TYPE,
+)
 from app.application.polish.question_generation_prompts import (
     QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE,
     QUESTION_PROMPT_TASK_TYPE,
@@ -42,6 +49,8 @@ class FakeLlmTransport:
         """根据 request.task_type 分发到对应的 fake 生成函数；未知 task_type 返回骨架结果。"""
         if request.task_type == "job_match_analysis":
             return _generate_fake_job_match(request)
+        if request.task_type == POLISH_FEEDBACK_TASK_TYPE:
+            return _generate_fake_polish_feedback(request)
         if request.task_type in {QUESTION_PROMPT_TASK_TYPE, QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE}:
             return _generate_fake_polish_question(request)
         if request.task_type == POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE:
@@ -78,6 +87,126 @@ class FakeLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
         )
+
+
+def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransportResult:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    current_question = bundle.get("current_question") if isinstance(bundle.get("current_question"), dict) else {}
+    current_answer = bundle.get("current_answer") if isinstance(bundle.get("current_answer"), dict) else {}
+    project_assets = (
+        bundle.get("project_asset_summaries")
+        if isinstance(bundle.get("project_asset_summaries"), list)
+        else []
+    )
+    question_text = _fake_question_excerpt(current_question.get("question_text") or "当前题目", limit=100)
+    answer_text = _fake_question_excerpt(current_answer.get("answer_text") or "当前回答", limit=120)
+    asset_summary = _fake_question_excerpt(
+        project_assets[0].get("summary") if project_assets and isinstance(project_assets[0], dict) else "",
+        limit=120,
+    )
+    seed = dumps(
+        {
+            "task_type": request.task_type,
+            "input_refs": sorted(request.input_refs),
+            "question": question_text,
+            "answer": answer_text,
+            "assets": asset_summary,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+    trace_ref = stable_resource_id("trace", f"fake-polish-feedback-trace:{seed}")
+    evidence_ref = stable_resource_id("trace", f"fake-polish-feedback-evidence:{seed}")
+    result_ref = stable_resource_id("task", f"fake-polish-feedback-result:{seed}")
+    payload = {
+        "transport": "fake",
+        "model_name": "fake_polish_feedback_generation_v1",
+        "result_ref": result_ref,
+        "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+        "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        "status": "generated",
+        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+        "feedback_text": (
+            "回答已经覆盖异步解耦，但还需要把失败恢复边界、幂等处理和观测指标讲清楚。"
+        ),
+        "answer_summary": f"候选人回答摘要：{answer_text}",
+        "score_result": {
+            "score_type": "polish_answer",
+            "score_value": 82,
+        },
+        "explicit_score": 82,
+        "implicit_score": 80,
+        "scoring_dimensions": [
+            {"dimension": "architecture", "score": 42},
+            {"dimension": "reliability", "score": 40},
+        ],
+        "loss_points": [
+            {
+                "loss_point_id": "lp_recovery_boundary",
+                "severity": "major",
+                "deduction": 12,
+                "reason": "没有说明失败恢复的触发条件、终止条件和人工介入边界。",
+            },
+            {
+                "loss_point_id": "lp_observability",
+                "severity": "minor",
+                "deducted_points": 6,
+                "reason": "缺少消息堆积、失败率和恢复耗时等观测指标。",
+            },
+        ],
+        "reference_answer": {
+            "sections": [
+                {
+                    "section_id": "ref_recovery_boundary",
+                    "title": "失败恢复边界",
+                    "content": "说明重试、补偿、幂等键、死信队列、终止条件和人工介入边界。",
+                    "addresses_loss_point_ids": ["lp_recovery_boundary"],
+                },
+                {
+                    "section_id": "ref_observability",
+                    "title": "观测与告警",
+                    "content": "补充消息堆积、失败率、恢复耗时、告警阈值和回滚动作。",
+                    "addresses_loss_point_ids": ["lp_observability"],
+                },
+            ]
+        },
+        "knowledge_points": ["事务消息", "幂等设计", "失败补偿"],
+        "technical_principles": ["先定义失败恢复边界，再选择消息队列和补偿策略。"],
+        "same_question_effect": {
+            "improved_points": ["回答覆盖了异步解耦和失败重试"],
+            "repeated_loss_point_ids": ["lp_observability"],
+            "regressed_points": [],
+            "next_retry_focus": ["补齐恢复指标和终止条件"],
+            "score_delta": 6,
+        },
+        "project_asset_consistency_check": {"status": "consistent", "conflicts": []},
+        "session_similarity_check": {"status": "benign_reuse"},
+        "project_asset_update_candidates": [
+            {
+                "candidate_type": "project_asset_update_candidate",
+                "candidate_ref": stable_resource_id("asset", f"fake-feedback-asset:{seed}"),
+                "user_confirmation_required": True,
+                "target_asset_ref": {"resource_type": "asset", "resource_id": "asset_fake_payment"},
+                "summary": asset_summary or "补充项目中的失败恢复和观测指标表达素材。",
+            }
+        ],
+        "next_recommended_actions": ["围绕失败恢复终止条件再追问一轮"],
+        "low_confidence_flags": [],
+        "trace_refs": [{"resource_type": "llm_trace", "resource_id": trace_ref}],
+        "feedback_metadata": {
+            "prompt_version": POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+            "llm_called": True,
+            "question_excerpt": question_text,
+        },
+    }
+    return LlmTransportResult(
+        result=payload,
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.MEDIUM,
+        low_confidence_flags=(),
+        trace_refs=(trace_ref,),
+        evidence_refs=(evidence_ref,),
+    )
 
 
 def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:
