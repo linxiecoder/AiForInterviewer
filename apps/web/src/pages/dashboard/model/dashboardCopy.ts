@@ -1,7 +1,7 @@
 export const DASHBOARD_PAGE_COPY = {
   pageTitle: "工作台",
-  frameHint: "基于真实业务接口汇总，数据为空时展示空状态。",
-  searchPlaceholder: "搜索简历、岗位、面试记录...",
+  frameHint: "高密度任务工作台：先处理影响今天面试准备闭环的事项。",
+  searchPlaceholder: "搜索简历、岗位、模拟面试、薄弱项、资产",
   sections: {
     above: {
       title: "Section01_AboveTheFold",
@@ -59,6 +59,10 @@ export const DASHBOARD_PAGE_COPY = {
     "Section01_AboveTheFold",
     "Section02_TodoSection",
     "Section03_ActivitySection",
+    "DashboardReviewTrainingLoop",
+    "DashboardLifecycleStatus",
+    "DashboardRiskPanel",
+    "DashboardQuickActions",
   ],
   navigationHint: "导航与 shell 布局沿用当前工作台结构。",
   emptyStates: {

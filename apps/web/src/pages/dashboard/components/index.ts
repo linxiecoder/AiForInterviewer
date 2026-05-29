@@ -1,4 +1,11 @@
 export { DashboardFrame } from "./DashboardFrame";
+export { DashboardActivityFeed } from "./DashboardActivityFeed";
+export { DashboardKpiStrip } from "./DashboardKpiStrip";
+export { DashboardLifecycleStatus } from "./DashboardLifecycleStatus";
+export { DashboardPriorityQueue } from "./DashboardPriorityQueue";
+export { DashboardQuickActions } from "./DashboardQuickActions";
+export { DashboardReviewTrainingLoop } from "./DashboardReviewTrainingLoop";
+export { DashboardRiskPanel } from "./DashboardRiskPanel";
 export { Section01AboveTheFold } from "./Section01_AboveTheFold";
 export { Section02TodoSection } from "./Section02_TodoSection";
 export { Section03ActivitySection } from "./Section03_ActivitySection";

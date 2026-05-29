@@ -9,7 +9,11 @@ import {
   DASHBOARD_DATA_SOURCE_KEYS,
   DASHBOARD_METRIC_KEYS,
   type DashboardDataInput,
+  type DashboardLifecycleStep,
   type DashboardOverviewMetric,
+  type DashboardQuickAction,
+  type DashboardReviewTrainingLoopStage,
+  type DashboardRiskSignal,
   type DashboardTodoItem,
 } from "./dashboardData";
 
@@ -28,7 +32,7 @@ type DashboardDataSourcesAreRealApis = Expect<
   >
 >;
 type DashboardMetricKeysAreStable = Expect<
-  Equal<typeof DASHBOARD_METRIC_KEYS, readonly ["resume", "jobs", "progress", "mock"]>
+  Equal<typeof DASHBOARD_METRIC_KEYS, readonly ["resume", "jobs", "progress", "mock", "asset", "weakness"]>
 >;
 type DashboardActivitySourcesUseBusinessRecords = Expect<
   Equal<
@@ -37,7 +41,23 @@ type DashboardActivitySourcesUseBusinessRecords = Expect<
   >
 >;
 type DashboardMetricValuesAreNumeric = Expect<Equal<DashboardOverviewMetric["value"], number>>;
-type DashboardTodosHaveRouteTargets = Expect<Equal<DashboardTodoItem["href"], "/resume" | "/job" | "/interview">>;
+type DashboardTodosHaveRouteTargets = Expect<Equal<DashboardTodoItem["href"], "/resume" | "/job" | "/interview" | "/asset" | "/weakness">>;
+type DashboardReviewTrainingLoopUsesFixedStages = Expect<
+  Equal<
+    DashboardReviewTrainingLoopStage["key"],
+    "mock_interview" | "report_review" | "weakness" | "training" | "asset"
+  >
+>;
+type DashboardLifecycleIncludesReviewLoop = Expect<
+  Equal<
+    DashboardLifecycleStep["key"],
+    "resume" | "job" | "match" | "mock" | "review" | "weakness" | "training" | "asset"
+  >
+>;
+type DashboardRiskSignalsUseExistingRoutes = Expect<
+  Equal<DashboardRiskSignal["href"], "/resume" | "/job" | "/interview" | "/asset" | "/weakness">
+>;
+type DashboardQuickActionsCanBeDisabled = Expect<Equal<DashboardQuickAction["disabledReason"], string | undefined>>;
 
 const versionRef = {
   resource_type: "resume",
@@ -103,13 +123,54 @@ const sampleInput: DashboardDataInput = {
       updated_at: "2026-05-29T07:40:00.000Z",
     } satisfies PolishSessionSummary,
   ],
-  assets: [] satisfies AssetSummary[],
-  weaknesses: [] satisfies WeaknessSummary[],
+  assets: [
+    {
+      asset_id: "asset_1",
+      owner_id: "owner_1",
+      status: "asset_candidate_generated",
+      asset_type: "answer_pattern",
+      title: "限流降级回答框架",
+      summary: "来自模拟面试报告的候选资产",
+      current_version_id: null,
+      source_refs: [],
+      evidence_refs: [],
+      trace_refs: [],
+      created_at: "2026-05-29T07:45:00.000Z",
+      updated_at: "2026-05-29T07:45:00.000Z",
+    } satisfies AssetSummary,
+  ],
+  weaknesses: [
+    {
+      weakness_id: "weakness_1",
+      owner_id: "owner_1",
+      status: "weakness_detected",
+      title: "分布式一致性边界",
+      summary: "回答缺少故障边界和取舍说明",
+      severity: "high",
+      confidence_level: "medium",
+      dimension: "technical",
+      source_refs: [],
+      evidence_refs: [],
+      trace_refs: [],
+      occurrence_count: 2,
+      suggested_training_actions: ["专项追问训练"],
+      created_at: "2026-05-29T07:42:00.000Z",
+      updated_at: "2026-05-29T07:42:00.000Z",
+    } satisfies WeaknessSummary,
+  ],
 };
 
 const sampleDashboardData = buildDashboardData(sampleInput);
 const metricKeys: Array<DashboardOverviewMetric["key"]> = sampleDashboardData.overviewMetrics.map((item) => item.key);
 const todoTargets: Array<DashboardTodoItem["href"]> = sampleDashboardData.todoItems.map((item) => item.href);
+const reviewLoopStages: DashboardReviewTrainingLoopStage[] = sampleDashboardData.reviewTrainingLoop;
+const riskSignals: DashboardRiskSignal[] = sampleDashboardData.riskSignals;
+const lifecycleSteps: DashboardLifecycleStep[] = sampleDashboardData.lifecycleSteps;
+const quickActions: DashboardQuickAction[] = sampleDashboardData.quickActions;
 
 void metricKeys;
 void todoTargets;
+void reviewLoopStages;
+void riskSignals;
+void lifecycleSteps;
+void quickActions;
