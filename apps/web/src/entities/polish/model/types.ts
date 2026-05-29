@@ -227,7 +227,7 @@ export interface PolishProjectAssetUpdateCandidate extends Record<string, unknow
 export interface PolishFeedbackPayload extends Record<string, unknown> {
   contract_id?: string;
   contract_ids?: string[];
-  status?: "pending" | "generated" | "reserved" | string;
+  status?: "pending" | "generated" | "reserved" | "generation_failed" | string;
   feedback_id?: string | null;
   feedback_text?: string | null;
   feedback_summary?: string | null;
@@ -273,6 +273,14 @@ export interface PolishFeedbackPayload extends Record<string, unknown> {
   validation_result_ref?: PolishFeedbackResourceRef | null;
   trace_refs?: Array<Record<string, unknown>>;
   low_confidence_flags?: PolishLowConfidenceFlag[];
+  retryable?: boolean;
+  user_visible_status?: string | null;
+  validation_errors?: string[];
+  error?: {
+    code?: string | null;
+    message?: string | null;
+    metadata?: Record<string, unknown> | null;
+  } | null;
 }
 
 export interface PolishSessionAnswer {

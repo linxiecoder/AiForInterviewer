@@ -2115,6 +2115,60 @@ function test_feedback_card_view_model_handles_pending_payload(): void {
   assertContract(!titles.includes("下一轮重答重点"), "pending payload 不应展示空下一轮重答重点");
 }
 
+function test_feedback_card_view_model_handles_generation_failed_payload(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_failed",
+    answer_round: 1,
+    answer_text: "回答已保存，但真实 provider 超时。",
+    answer_created_at: "2026-05-30T10:00:00Z",
+    feedback_text: "反馈生成失败，可重试",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "generation_failed",
+      feedback_text: "反馈生成失败，可重试",
+      user_visible_status: "反馈生成失败，可重试",
+      retryable: true,
+      validation_errors: ["llm_transport_timeout"],
+      error: {
+        code: "llm_transport_timeout",
+        metadata: {
+          provider_payload: "provider_payload_should_not_render",
+          raw_prompt: "raw_prompt_should_not_render",
+        },
+      },
+      score_result: null,
+      loss_points: [],
+      reference_answer: null,
+      raw_provider_payload: "raw_provider_payload_should_not_render",
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const titles = card.sections.map((section) => section.title);
+  const visibleCopy = [
+    card.title,
+    card.status,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.nextActions.map(toNextRecommendedActionLabel),
+  ].join(" ");
+
+  assertContract(card.status === "generation_failed", "generation_failed payload 应保持失败态");
+  assertContract(card.title === "反馈生成失败", "失败反馈卡标题应明确展示反馈生成失败");
+  assertContract(titles.join(",") === "失败状态", "generation_failed 不应展开打分/失分点/参考回答等空 section");
+  assertContract(visibleCopy.includes("反馈生成超时或失败，可重试"), "失败态应展示可重试提示");
+  assertContract(visibleCopy.includes("错误码：llm_transport_timeout"), "失败态应展示简要 validation error");
+  assertContract(visibleCopy.includes("可重试：是"), "retryable=true 时应提示可重试");
+  assertContract(!visibleCopy.includes("本轮反馈尚未生成"), "generation_failed 不应展示 pending 空态");
+  assertContract(!visibleCopy.includes("暂无打分结果"), "generation_failed 不应展示空打分 section");
+  assertContract(!visibleCopy.includes("暂无明确失分点"), "generation_failed 不应展示空失分点 section");
+  assertContract(!visibleCopy.includes("暂无参考回答"), "generation_failed 不应展示空参考回答 section");
+  assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "失败态不应暴露 provider payload");
+  assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "失败态不应暴露 raw prompt");
+  assertContract(!visibleCopy.includes("raw_provider_payload_should_not_render"), "失败态不应暴露 raw provider payload");
+}
+
 function test_feedback_card_view_model_does_not_calculate_score_on_frontend(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_feedback_score_calc",
@@ -2495,6 +2549,7 @@ test_generated_feedback_card_view_model_handles_missing_phase6_fields();
 test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only();
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
+test_feedback_card_view_model_handles_generation_failed_payload();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();
 test_clipboard_markdown_stays_compatible_with_structured_feedback_payload();
 test_session_clipboard_markdown_includes_full_context_tree_and_all_questions();

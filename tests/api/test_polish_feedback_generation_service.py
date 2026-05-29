@@ -202,6 +202,16 @@ def test_service_metadata_includes_prompt_schema_llm_and_provider_status() -> No
     assert result.metadata["provider_status"] == "fake_transport"
 
 
+def test_feedback_request_uses_compact_output_budget() -> None:
+    transport = _PayloadTransport(_generated_payload())
+
+    result = _service(transport).generate(_context())
+
+    assert result.succeeded is True
+    assert transport.requests
+    assert getattr(transport.requests[-1], "max_tokens", 8000) < 8000
+
+
 def test_no_llm_transport_returns_failed_without_fake_feedback() -> None:
     result = _service(None).generate(_context())
 
@@ -250,9 +260,9 @@ def test_provider_exception_returns_failed() -> None:
 
     assert result.succeeded is False
     assert result.payload is None
-    assert result.validation_errors == ("llm_transport_generation_failed",)
+    assert result.validation_errors == ("llm_transport_timeout",)
     assert result.metadata["provider_status"] == "failed"
-    assert result.metadata["provider_error_type"] == "TimeoutError"
+    assert result.metadata["provider_error_type"] == "timeout"
 
 
 def test_provider_non_dict_payload_returns_failed() -> None:
@@ -279,7 +289,97 @@ def test_prompt_asset_includes_same_question_answers() -> None:
 
     asset = build_feedback_prompt_asset(_context())
 
-    assert asset["input_data"]["same_question_answers"] == _context()["same_question_answers"]
+    assert asset["input_data"]["same_question_answers"][0]["answer_id"] == "answer_prev"
+    assert asset["input_data"]["same_question_answers"][0]["answer_summary"] == "上一轮只说明了 MQ 解耦，缺少幂等和观测。"
+    assert asset["input_data"]["same_question_answers"][0]["loss_point_ids"] == ["lp_observability"]
+
+
+def test_prompt_asset_compacts_resume_job_and_evidence_context() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    context = _context()
+    context["job_snapshot"] = {
+        "job_id": "job_001",
+        "title": "后端工程师",
+        "full_jd": "FULL_JD_SHOULD_NOT_BE_INCLUDED",
+        "requirements": [f"岗位要求 {index}" for index in range(8)],
+        "responsibilities": [f"岗位职责 {index}" for index in range(8)],
+        "content_digest": "job_digest_001",
+    }
+    context["resume_snapshot"] = {
+        "resume_id": "resume_001",
+        "summary": "候选人有支付系统可靠性经验。",
+        "full_resume": "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
+        "markdown_text": "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED",
+        "projects": [f"项目全文 {index}" for index in range(8)],
+        "work_experiences": ["WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED"],
+        "content_digest": "resume_digest_001",
+    }
+    context["question_sources"] = [
+        {"source_type": "progress_node", "source_ref": f"node_{index}", "summary": f"节点摘要 {index}"}
+        for index in range(8)
+    ]
+    context["same_question_answers"] = [
+        {
+            "answer_id": f"answer_prev_{index}",
+            "answer_round": index,
+            "answer_text": f"PREVIOUS_FULL_ANSWER_{index}_SHOULD_NOT_BE_INCLUDED",
+            "answer_summary": f"上一轮摘要 {index}",
+            "feedback_summary": f"上一轮反馈摘要 {index}",
+            "loss_point_ids": [f"lp_{index}"],
+        }
+        for index in range(6)
+    ]
+    context["session_recent_turns"] = [
+        {
+            "question_id": f"question_recent_{index}",
+            "answer_id": f"answer_recent_{index}",
+            "answer_summary": f"最近回答摘要 {index}",
+            "feedback_summary": f"最近反馈摘要 {index}",
+        }
+        for index in range(6)
+    ]
+
+    asset = build_feedback_prompt_asset(context)
+    input_data = asset["input_data"]
+    serialized = repr(asset)
+
+    assert len(input_data["evidence_items"]) <= 12
+    assert len(input_data["session_recent_turns"]) <= 3
+    assert len(input_data["context_snapshots"]["job_snapshot"]["requirements"]) <= 5
+    assert len(input_data["context_snapshots"]["job_snapshot"]["responsibilities"]) <= 5
+    assert "full_jd" not in input_data["context_snapshots"]["job_snapshot"]
+    assert "full_resume" not in input_data["context_snapshots"]["resume_snapshot"]
+    assert "markdown_text" not in input_data["context_snapshots"]["resume_snapshot"]
+    assert "work_experiences" not in input_data["context_snapshots"]["resume_snapshot"]
+    assert "FULL_JD_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert "FULL_RESUME_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert "WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED" not in serialized
+
+
+def test_prompt_asset_same_question_answers_do_not_repeat_full_answer_text() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    context = _context()
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev_full",
+            "answer_round": 1,
+            "answer_text": "PREVIOUS_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED",
+            "answer_summary": "上一轮摘要：缺少观测指标。",
+            "feedback_summary": "上一轮反馈：补充失败率和恢复耗时。",
+            "loss_point_ids": ["lp_observability"],
+        }
+    ]
+
+    asset = build_feedback_prompt_asset(context)
+    previous_answer = asset["input_data"]["same_question_answers"][0]
+    serialized = repr(asset)
+
+    assert "answer_text" not in previous_answer
+    assert "PREVIOUS_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert previous_answer["answer_summary"] == "上一轮摘要：缺少观测指标。"
 
 
 def test_prompt_asset_includes_project_asset_summaries() -> None:
@@ -287,7 +387,8 @@ def test_prompt_asset_includes_project_asset_summaries() -> None:
 
     asset = build_feedback_prompt_asset(_context())
 
-    assert asset["input_data"]["project_asset_summaries"] == _context()["project_asset_summaries"]
+    assert asset["input_data"]["project_asset_summaries"][0]["asset_id"] == "asset_payment"
+    assert asset["input_data"]["project_asset_summaries"][0]["summary"] == "支付项目已有事务消息、幂等键和补偿任务素材。"
 
 
 def _contains_forbidden_key(value: object) -> bool:

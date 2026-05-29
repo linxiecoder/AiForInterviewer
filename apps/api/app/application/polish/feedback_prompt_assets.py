@@ -65,6 +65,11 @@ _UNSAFE_CONTEXT_KEYS = frozenset(
     }
 )
 _SOURCE_REF_KEYS = ("resource_type", "resource_id", "ref_type", "ref_id", "source_ref", "source_type")
+_EVIDENCE_ITEMS_LIMIT = 12
+_SESSION_RECENT_TURNS_LIMIT = 3
+_SAME_QUESTION_ANSWERS_LIMIT = 5
+_RELATED_CONTEXT_ITEMS_LIMIT = 5
+_PROJECT_ASSET_SUMMARIES_LIMIT = 5
 
 
 def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
@@ -75,25 +80,25 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
     input_data = {
         "current_question": {
             "question_id": _get_text(context, "question_id"),
-            "question_text": _get_text(context, "question_text", max_chars=12000),
+            "question_text": _get_text(context, "question_text", max_chars=3000),
             "polish_theme": _get_text(context, "polish_theme", max_chars=500),
             "progress_node_ref": _get_text(context, "progress_node_ref", max_chars=200),
-            "question_sources": _safe_value(_get_list(context, "question_sources")),
+            "question_sources": _compact_question_sources(_get_list(context, "question_sources")),
             "evidence_refs": _get_list(context, "evidence_refs"),
         },
         "current_answer": {
             "answer_id": _get_text(context, "answer_id"),
-            "answer_text": _get_text(context, "answer_text", max_chars=12000),
+            "answer_text": _get_text(context, "answer_text", max_chars=4000),
             "answer_round": _get(context, "answer_round"),
         },
-        "same_question_answers": _safe_value(_get_list(context, "same_question_answers")),
-        "same_project_turns": _safe_value(_get_list(context, "same_project_turns")),
-        "session_recent_turns": _safe_value(_get_list(context, "session_recent_turns")),
-        "project_asset_summaries": _safe_value(_get_list(context, "project_asset_summaries")),
+        "same_question_answers": _compact_same_question_answers(_get_list(context, "same_question_answers")),
+        "same_project_turns": _compact_recent_turns(_get_list(context, "same_project_turns")),
+        "session_recent_turns": _compact_recent_turns(_get_list(context, "session_recent_turns")),
+        "project_asset_summaries": _compact_project_asset_summaries(_get_list(context, "project_asset_summaries")),
         "context_snapshots": {
-            "job_snapshot": _safe_value(_get_dict(context, "job_snapshot")),
-            "resume_snapshot": _safe_value(_get_dict(context, "resume_snapshot")),
-            "progress_node_snapshot": _safe_value(_get_dict(context, "progress_node_snapshot")),
+            "job_snapshot": _compact_job_snapshot(_get_dict(context, "job_snapshot")),
+            "resume_snapshot": _compact_resume_snapshot(_get_dict(context, "resume_snapshot")),
+            "progress_node_snapshot": _compact_progress_node_snapshot(_get_dict(context, "progress_node_snapshot")),
         },
     }
     input_data["evidence_items"] = [item.to_prompt_dict() for item in _evidence_items(context)]
@@ -350,7 +355,125 @@ def _evidence_items(context: object) -> list[AgentEvidenceItem]:
             )
         )
 
-    return items
+    return _dedupe_and_limit_evidence_items(items)
+
+
+def _dedupe_and_limit_evidence_items(items: list[AgentEvidenceItem]) -> list[AgentEvidenceItem]:
+    deduped: dict[str, AgentEvidenceItem] = {}
+    for item in sorted(items, key=lambda candidate: candidate.priority, reverse=True):
+        if item.ref not in deduped:
+            deduped[item.ref] = item
+    return list(deduped.values())[:_EVIDENCE_ITEMS_LIMIT]
+
+
+def _compact_question_sources(values: list[Any]) -> list[dict[str, object]]:
+    sources: list[dict[str, object]] = []
+    for index, source in enumerate(values[:_RELATED_CONTEXT_ITEMS_LIMIT], start=1):
+        if not isinstance(source, dict):
+            continue
+        ref = _first_text(source.get("ref"), source.get("ref_id"), source.get("source_ref"), f"question_source_{index}")
+        sources.append(
+            {
+                "ref": ref,
+                "source_type": _first_text(source.get("source_type"), "question_source"),
+                "title": _first_text(source.get("title"), source.get("source_type"), "Question source"),
+                "summary": _first_text_limited(source.get("summary"), source.get("excerpt"), max_chars=600),
+            }
+        )
+    return sources
+
+
+def _compact_same_question_answers(values: list[Any]) -> list[dict[str, object]]:
+    answers: list[dict[str, object]] = []
+    for index, answer in enumerate(values[:_SAME_QUESTION_ANSWERS_LIMIT], start=1):
+        if not isinstance(answer, dict):
+            continue
+        answers.append(
+            {
+                "answer_id": _first_text(answer.get("answer_id"), answer.get("ref"), f"same_question_answer_{index}"),
+                "answer_round": _get_clean_text(answer.get("answer_round"), max_chars=20),
+                "answer_summary": _first_text_limited(answer.get("answer_summary"), answer.get("summary"), max_chars=700),
+                "feedback_summary": _first_text_limited(answer.get("feedback_summary"), max_chars=700),
+                "loss_point_ids": _string_list(answer.get("loss_point_ids"))[:10],
+            }
+        )
+    return answers
+
+
+def _compact_recent_turns(values: list[Any]) -> list[dict[str, object]]:
+    turns: list[dict[str, object]] = []
+    for index, turn in enumerate(values[-_SESSION_RECENT_TURNS_LIMIT:], start=1):
+        if not isinstance(turn, dict):
+            continue
+        turns.append(
+            {
+                "question_id": _first_text(turn.get("question_id"), turn.get("ref"), f"recent_turn_{index}"),
+                "answer_id": _first_text(turn.get("answer_id")),
+                "answer_round": _get_clean_text(turn.get("answer_round"), max_chars=20),
+                "progress_node_ref": _first_text(turn.get("progress_node_ref")),
+                "question_summary": _first_text_limited(turn.get("question_summary"), turn.get("question_text"), max_chars=500),
+                "answer_summary": _first_text_limited(turn.get("answer_summary"), max_chars=700),
+                "feedback_summary": _first_text_limited(turn.get("feedback_summary"), max_chars=700),
+            }
+        )
+    return turns
+
+
+def _compact_project_asset_summaries(values: list[Any]) -> list[dict[str, object]]:
+    assets: list[dict[str, object]] = []
+    for index, asset in enumerate(values[:_PROJECT_ASSET_SUMMARIES_LIMIT], start=1):
+        if not isinstance(asset, dict):
+            continue
+        assets.append(
+            {
+                "asset_id": _first_text(asset.get("asset_id"), asset.get("asset_ref"), asset.get("ref"), f"asset_{index}"),
+                "title": _first_text(asset.get("title"), "Project asset"),
+                "summary": _first_text_limited(asset.get("summary"), asset.get("excerpt"), max_chars=900),
+            }
+        )
+    return assets
+
+
+def _compact_job_snapshot(value: dict[str, Any]) -> dict[str, object]:
+    if not value:
+        return {}
+    return {
+        "job_id": _first_text(value.get("job_id")),
+        "job_version_id": _first_text(value.get("job_version_id")),
+        "title": _first_text_limited(value.get("title"), max_chars=200),
+        "company": _first_text_limited(value.get("company"), max_chars=200),
+        "requirements": _string_list(value.get("requirements"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "responsibilities": _string_list(value.get("responsibilities"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "content_digest": _first_text_limited(value.get("content_digest"), max_chars=200),
+    }
+
+
+def _compact_resume_snapshot(value: dict[str, Any]) -> dict[str, object]:
+    if not value:
+        return {}
+    return {
+        "resume_id": _first_text(value.get("resume_id")),
+        "resume_version_id": _first_text(value.get("resume_version_id")),
+        "title": _first_text_limited(value.get("title"), max_chars=200),
+        "summary": _first_text_limited(value.get("summary"), max_chars=900),
+        "projects": _string_list(value.get("projects"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "content_digest": _first_text_limited(value.get("content_digest"), max_chars=200),
+    }
+
+
+def _compact_progress_node_snapshot(value: dict[str, Any]) -> dict[str, object]:
+    if not value:
+        return {}
+    return {
+        "node_ref": _first_text(value.get("node_ref"), value.get("progress_node_ref")),
+        "progress_node_ref": _first_text(value.get("progress_node_ref"), value.get("node_ref")),
+        "title": _first_text_limited(value.get("title"), max_chars=300),
+        "question_title": _first_text_limited(value.get("question_title"), value.get("current_question_title"), max_chars=500),
+        "expected_capability": _first_text_limited(value.get("expected_capability"), value.get("description"), max_chars=900),
+        "missing_points": _string_list(value.get("missing_points"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "related_job_requirements": _string_list(value.get("related_job_requirements"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "related_resume_evidence": _string_list(value.get("related_resume_evidence"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+    }
 
 
 def _focus_target(context: object) -> AgentFocusTarget:
@@ -429,6 +552,10 @@ def _first_text(*values: object) -> str:
         if text:
             return text
     return ""
+
+
+def _first_text_limited(*values: object, max_chars: int) -> str:
+    return _get_clean_text(_first_text(*values), max_chars=max_chars)
 
 
 def _get_clean_text(value: object, *, max_chars: int = 240) -> str:

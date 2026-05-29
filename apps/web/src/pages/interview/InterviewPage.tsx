@@ -1996,6 +1996,7 @@ export function toNextRecommendedActionLabel(action: PolishRecommendedAction): s
 }
 
 type FeedbackSectionKey =
+  | "failed_status"
   | "feedback"
   | "score"
   | "positive_evidence_points"
@@ -2085,6 +2086,25 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
   const contractId = toOptionalText(payload?.contract_id) ?? null;
   const contractIds = Array.from(new Set([...(payload?.contract_ids ?? []), ...(contractId ? [contractId] : [])]));
   const status = toOptionalText(payload?.status) ?? (answer.feedback_id ? "generated" : "pending");
+  if (status === "generation_failed") {
+    return {
+      title: "反馈生成失败",
+      status,
+      contractId,
+      contractIds,
+      sections: [
+        {
+          key: "failed_status",
+          title: "失败状态",
+          items: buildFailedFeedbackItems(payload),
+          defaultOpen: true,
+          tone: "warning",
+        },
+      ],
+      nextActions: getAnswerNextRecommendedActions(answer),
+      traceItems: [],
+    };
+  }
   return {
     title: `第 ${answer.answer_round} 轮反馈`,
     status,
@@ -2153,6 +2173,32 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: buildFeedbackTraceItems(),
   };
+}
+
+function buildFailedFeedbackItems(payload: PolishFeedbackPayload | undefined): string[] {
+  const validationErrors = Array.isArray(payload?.validation_errors)
+    ? payload.validation_errors.map((item) => toOptionalText(item)).filter((item): item is string => item !== null)
+    : [];
+  const errorCode = toOptionalText(payload?.error?.code);
+  const codes = Array.from(new Set([...(errorCode ? [errorCode] : []), ...validationErrors]));
+  return dedupeTextItems([
+    "反馈生成超时或失败，可重试",
+    payload?.retryable === true ? "可重试：是" : null,
+    ...codes.map((code) => `错误码：${code}`),
+  ]);
+}
+
+function feedbackStatusTagColor(status: string): "success" | "warning" | "processing" | "default" {
+  if (status === "generated") {
+    return "success";
+  }
+  if (status === "generation_failed") {
+    return "warning";
+  }
+  if (status === "pending") {
+    return "processing";
+  }
+  return "default";
 }
 
 export function buildCandidateReviewViewModel(
@@ -4490,7 +4536,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                   <div className={styles.feedbackTextBlock}>
                                     <Typography.Text strong>{feedbackCard.title}</Typography.Text>
                                     <div className={styles.feedbackMetaRow}>
-                                      <Tag color={feedbackCard.status === "generated" ? "success" : "default"} className={styles.feedbackMetaTag}>
+                                      <Tag color={feedbackStatusTagColor(feedbackCard.status)} className={styles.feedbackMetaTag}>
                                         {feedbackCard.status}
                                       </Tag>
                                       {feedbackCard.contractId ? (

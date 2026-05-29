@@ -933,6 +933,14 @@ class PolishUseCases:
             )
             generation_result = self._feedback_generation_service.generate(generation_context)
             if not generation_result.succeeded or generation_result.payload is None:
+                failed_payload = _failed_feedback_payload_for_storage(
+                    session_id=session.session_id,
+                    question_id=question.question_id,
+                    answer_id=answer.answer_id,
+                    feedback_id=feedback_id,
+                    validation_errors=generation_result.validation_errors,
+                    metadata=generation_result.metadata,
+                )
                 task = PolishTaskStatus(
                     ai_task_id=task_id,
                     task_type=POLISH_FEEDBACK_TASK_TYPE,
@@ -943,6 +951,20 @@ class PolishUseCases:
                     user_visible_status="反馈生成失败，可重试",
                     validation_errors=generation_result.validation_errors,
                 )
+                feedback = PolishFeedback(
+                    feedback_id=feedback_id,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    session_id=session.session_id,
+                    answer_id=answer.answer_id,
+                    ai_task_id=task_id,
+                    score_result_id=None,
+                    feedback_summary=json.dumps(failed_payload, ensure_ascii=False, sort_keys=True),
+                    status=str(AiTaskStatus.GENERATION_FAILED),
+                    created_at=now,
+                    updated_at=now,
+                )
+                self._polish_repository.add_feedback(feedback)
                 self._polish_repository.add_task(
                     task,
                     owner_id=command.owner_id,
@@ -1777,7 +1799,7 @@ def _feedback_same_question_answers(
     current_answer_id: str,
 ) -> tuple[dict[str, Any], ...]:
     answers: list[dict[str, Any]] = []
-    for answer in turn.answers:
+    for answer in turn.answers[-5:]:
         if answer.answer_id == current_answer_id:
             continue
         feedback_payload = answer.feedback_payload if isinstance(answer.feedback_payload, dict) else {}
@@ -1793,8 +1815,8 @@ def _feedback_same_question_answers(
             {
                 "answer_id": answer.answer_id,
                 "answer_round": answer.answer_round,
-                "answer_summary": answer.answer_text,
-                "feedback_summary": answer.feedback_text,
+                "answer_summary": _feedback_context_excerpt(answer.answer_text, max_chars=700),
+                "feedback_summary": _feedback_context_excerpt(answer.feedback_text, max_chars=700),
                 "loss_point_ids": loss_point_ids,
             }
         )
@@ -1803,17 +1825,21 @@ def _feedback_same_question_answers(
 
 def _feedback_recent_turns(turns: tuple[PolishSessionTurn, ...]) -> tuple[dict[str, Any], ...]:
     recent_turns: list[dict[str, Any]] = []
-    for turn in turns[-5:]:
+    for turn in turns[-3:]:
         latest_answer = turn.answers[-1] if turn.answers else None
         recent_turns.append(
             {
                 "question_id": turn.question_id,
-                "question_text": turn.question_text,
+                "question_summary": _feedback_context_excerpt(turn.question_text, max_chars=500),
                 "progress_node_ref": turn.progress_node_ref,
                 "answer_id": latest_answer.answer_id if latest_answer is not None else None,
                 "answer_round": latest_answer.answer_round if latest_answer is not None else None,
-                "answer_summary": latest_answer.answer_text if latest_answer is not None else None,
-                "feedback_summary": latest_answer.feedback_text if latest_answer is not None else None,
+                "answer_summary": _feedback_context_excerpt(latest_answer.answer_text, max_chars=700)
+                if latest_answer is not None
+                else None,
+                "feedback_summary": _feedback_context_excerpt(latest_answer.feedback_text, max_chars=700)
+                if latest_answer is not None
+                else None,
             }
         )
     return tuple(recent_turns)
@@ -1827,10 +1853,8 @@ def _feedback_job_snapshot(value: Any) -> dict[str, Any]:
         "job_version_id": value.get("job_version_id"),
         "title": value.get("title"),
         "company": value.get("company"),
-        "department": value.get("department"),
-        "responsibilities": _clean_feedback_list(value.get("responsibilities")),
-        "requirements": _clean_feedback_list(value.get("requirements")),
-        "other_notes": value.get("other_notes"),
+        "responsibilities": _clean_feedback_list(value.get("responsibilities"))[:5],
+        "requirements": _clean_feedback_list(value.get("requirements"))[:5],
         "content_digest": value.get("content_digest"),
     }
 
@@ -1843,11 +1867,18 @@ def _feedback_resume_snapshot(value: Any) -> dict[str, Any]:
         "resume_version_id": value.get("resume_version_id"),
         "title": value.get("title"),
         "summary": value.get("summary"),
-        "skills": _clean_feedback_list(value.get("skills")),
-        "projects": _clean_feedback_list(value.get("project_experiences")),
-        "work_experiences": _clean_feedback_list(value.get("work_experiences")),
+        "projects": _clean_feedback_list(value.get("project_experiences"))[:5],
         "content_digest": value.get("content_digest"),
     }
+
+
+def _feedback_context_excerpt(value: Any, *, max_chars: int) -> str:
+    if value is None:
+        return ""
+    text = " ".join(str(value).split())
+    if len(text) > max_chars:
+        return text[:max_chars].rstrip()
+    return text
 
 
 def _feedback_progress_node_snapshot(
@@ -1915,6 +1946,51 @@ def _generated_feedback_payload_for_storage(
     metadata = stored.get("feedback_metadata")
     stored["feedback_metadata"] = (metadata if isinstance(metadata, dict) else {}) | {"llm_called": True}
     return stored
+
+
+def _failed_feedback_payload_for_storage(
+    *,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    feedback_id: str,
+    validation_errors: tuple[str, ...],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    error_code = validation_errors[0] if validation_errors else "llm_transport_generation_failed"
+    error_type = metadata.get("provider_error_type") if isinstance(metadata, dict) else None
+    return {
+        "contract_id": "P-POLISH-003",
+        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+        "status": str(AiTaskStatus.GENERATION_FAILED),
+        "feedback_id": feedback_id,
+        "polish_session_ref": {"resource_type": "polish_session", "resource_id": session_id},
+        "question_ref": {"resource_type": "question", "resource_id": question_id},
+        "answer_ref": {"resource_type": "answer", "resource_id": answer_id},
+        "feedback_text": "反馈生成失败，可重试",
+        "feedback_summary": "反馈生成超时或失败，可重试",
+        "user_visible_status": "反馈生成失败，可重试",
+        "retryable": True,
+        "error": {
+            "code": error_code,
+            "message": "反馈生成超时或失败，可重试",
+            "metadata": {"error_type": error_type} if error_type else {},
+        },
+        "validation_errors": list(validation_errors),
+        "score_result": None,
+        "score_result_ref": None,
+        "loss_points": [],
+        "reference_answer": None,
+        "knowledge_points": [],
+        "technical_principles": [],
+        "next_recommended_actions": ["retry_same_question", "continue_same_question", "generate_next_question"],
+        "candidate_refs": [],
+        "validation_result_ref": None,
+        "trace_refs": [],
+        "low_confidence_flags": [],
+        "user_confirmation_required": False,
+        "legacy_compatibility": {"feedback_text": "反馈生成失败，可重试"},
+    }
 
 
 def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:

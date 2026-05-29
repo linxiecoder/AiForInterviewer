@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import replace
 from typing import Any
 
 from app.application.llm.agent_io import AgentOutputEnvelope
@@ -12,6 +15,8 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+
+FEEDBACK_GENERATION_MAX_TOKENS = 3200
 
 
 class FeedbackGenerationAgent:
@@ -32,19 +37,22 @@ class FeedbackGenerationAgent:
             prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
             schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
         )
+        object.__setattr__(request, "max_tokens", FEEDBACK_GENERATION_MAX_TOKENS)
         try:
-            provider_result = self._transport.generate(request)
+            with _temporary_transport_max_tokens(self._transport, FEEDBACK_GENERATION_MAX_TOKENS):
+                provider_result = self._transport.generate(request)
         except Exception as exc:
+            validation_error = _transport_validation_error(exc)
             return AgentOutputEnvelope(
                 task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
                 schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
                 schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
                 prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
                 status="provider_failed",
-                validation_errors=("llm_transport_generation_failed",),
+                validation_errors=(validation_error,),
                 metadata={
                     "provider_status": "failed",
-                    "provider_error_type": exc.__class__.__name__,
+                    "provider_error_type": "timeout" if validation_error == "llm_transport_timeout" else exc.__class__.__name__,
                     "llm_called": True,
                 },
             )
@@ -142,6 +150,34 @@ def _provider_status(result: LlmTransportResult, payload: dict[str, Any] | None)
     if isinstance(result.result, dict) and result.result.get("transport") == "fake":
         return "fake_transport"
     return "called"
+
+
+@contextmanager
+def _temporary_transport_max_tokens(transport: LlmTransport, max_tokens: int) -> Iterator[None]:
+    settings = getattr(transport, "_settings", None)
+    original_settings = settings
+    changed = False
+    current_max_tokens = getattr(settings, "max_tokens", None)
+    if isinstance(current_max_tokens, int) and current_max_tokens > max_tokens:
+        try:
+            compact_settings = replace(settings, max_tokens=max_tokens)
+            setattr(transport, "_settings", compact_settings)
+            changed = True
+        except (TypeError, AttributeError, ValueError):
+            changed = False
+    try:
+        yield
+    finally:
+        if changed:
+            setattr(transport, "_settings", original_settings)
+
+
+def _transport_validation_error(exc: Exception) -> str:
+    error_type = exc.__class__.__name__.lower()
+    message = str(exc).lower()
+    if isinstance(exc, TimeoutError) or "timeout" in error_type or "timed out" in message or "超时" in message:
+        return "llm_transport_timeout"
+    return "llm_transport_generation_failed"
 
 
 def _contract_ids(prompt_asset: dict[str, Any]) -> tuple[str, ...]:
