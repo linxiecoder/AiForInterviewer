@@ -1,9 +1,11 @@
-import { Button, Form, Input, Space, Typography } from "antd";
+import { Button, Checkbox, Form, Input, Space, Typography } from "antd";
+import { useEffect } from "react";
 import { useAsyncAction } from "../../../shared/hooks/useAsyncAction";
 
 type LoginFormValues = {
   identifier: string;
   password: string;
+  rememberPassword?: boolean;
 };
 
 type LoginFormProps = {
@@ -14,6 +16,67 @@ type LoginFormProps = {
 };
 
 const defaultMessage = "邮箱或用户名";
+const REMEMBERED_LOGIN_STORAGE_KEY = "aifi:auth-login:remembered-credentials";
+
+type RememberedLoginCredentials = Pick<LoginFormValues, "identifier" | "password">;
+type LoginStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+function getBrowserLocalStorage(): Storage | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function readRememberedLoginCredentials(
+  storage: Pick<LoginStorage, "getItem"> | undefined = getBrowserLocalStorage(),
+): RememberedLoginCredentials | null {
+  try {
+    const rawValue = storage?.getItem(REMEMBERED_LOGIN_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as Partial<RememberedLoginCredentials>;
+    if (typeof parsed.identifier === "string" && typeof parsed.password === "string") {
+      return {
+        identifier: parsed.identifier,
+        password: parsed.password,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function persistRememberedLoginCredentials(
+  values: LoginFormValues,
+  storage: Pick<LoginStorage, "setItem" | "removeItem"> | undefined = getBrowserLocalStorage(),
+) {
+  try {
+    if (values.rememberPassword) {
+      storage?.setItem(
+        REMEMBERED_LOGIN_STORAGE_KEY,
+        JSON.stringify({
+          identifier: values.identifier,
+          password: values.password,
+        }),
+      );
+      return;
+    }
+
+    storage?.removeItem(REMEMBERED_LOGIN_STORAGE_KEY);
+  } catch {
+    // localStorage may be unavailable in constrained browser contexts.
+  }
+}
 
 export function LoginForm({ onSubmit, submitting = false, loadingText, errorMessage }: LoginFormProps) {
   const [form] = Form.useForm<LoginFormValues>();
@@ -21,13 +84,29 @@ export function LoginForm({ onSubmit, submitting = false, loadingText, errorMess
 
   const isBusy = submitting || loading;
 
+  useEffect(() => {
+    const rememberedCredentials = readRememberedLoginCredentials();
+    if (rememberedCredentials) {
+      form.setFieldsValue({
+        ...rememberedCredentials,
+        rememberPassword: true,
+      });
+    }
+  }, [form]);
+
   return (
     <Form<LoginFormValues>
       form={form}
       layout="vertical"
-      onFinish={(values) => {
+      initialValues={{ rememberPassword: false }}
+      onFinish={async (values) => {
         clearError();
-        void execute(values);
+        try {
+          await execute(values);
+          persistRememberedLoginCredentials(values);
+        } catch {
+          // useAsyncAction has already surfaced the login error to the form.
+        }
       }}
     >
       <Typography.Title level={3} style={{ marginBottom: 4 }}>
@@ -51,6 +130,10 @@ export function LoginForm({ onSubmit, submitting = false, loadingText, errorMess
         rules={[{ required: true, message: "请输入密码" }]}
       >
         <Input.Password placeholder="请输入密码" size="large" autoComplete="current-password" />
+      </Form.Item>
+
+      <Form.Item name="rememberPassword" valuePropName="checked">
+        <Checkbox disabled={isBusy}>记住密码</Checkbox>
       </Form.Item>
 
       <Form.Item>
