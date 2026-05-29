@@ -1,13 +1,20 @@
 import { AimOutlined, ArrowRightOutlined, ExclamationCircleOutlined, InfoCircleOutlined, WarningOutlined } from "@ant-design/icons";
 import { Badge, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { DASHBOARD_PAGE_COPY } from "../model/dashboardCopy";
-import { TODO_ITEMS, type TodoItem } from "../model/dashboardPlaceholderData";
+import type { DashboardRouteTarget, DashboardTodoItem } from "../model/dashboardData";
+import { EmptyState } from "../../../shared/ui/EmptyState";
+import { ErrorState } from "../../../shared/ui/ErrorState";
+import { LoadingState } from "../../../shared/ui/LoadingState";
 
 import styles from "./sectionStyles.module.css";
 
 type Section02TodoSectionProps = {
-  todoItems?: TodoItem[];
+  todoItems: DashboardTodoItem[];
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  onOpenTodo: (href: DashboardRouteTarget) => void;
 };
 
 type PriorityVisual = {
@@ -19,7 +26,7 @@ type PriorityVisual = {
   tagBorder: string;
 };
 
-const TODO_PRIORITY_META: Record<TodoItem["priority"], PriorityVisual> = {
+const TODO_PRIORITY_META: Record<DashboardTodoItem["priority"], PriorityVisual> = {
   urgent: {
     label: DASHBOARD_PAGE_COPY.labels.emergency,
     dotColor: "#ff4d4f",
@@ -46,7 +53,23 @@ const TODO_PRIORITY_META: Record<TodoItem["priority"], PriorityVisual> = {
   },
 };
 
-export function Section02TodoSection({ todoItems = TODO_ITEMS }: Section02TodoSectionProps) {
+export function Section02TodoSection({
+  todoItems,
+  loading = false,
+  error = null,
+  onRetry,
+  onOpenTodo,
+}: Section02TodoSectionProps) {
+  const totalCount = todoItems.reduce((sum, item) => sum + item.count, 0);
+
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>, href: DashboardRouteTarget) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    onOpenTodo(href);
+  };
+
   return (
     <Card
       className={styles.sectionCard}
@@ -59,14 +82,26 @@ export function Section02TodoSection({ todoItems = TODO_ITEMS }: Section02TodoSe
             </span>
             <Typography.Text strong>{DASHBOARD_PAGE_COPY.sections.todo.cardTitle}</Typography.Text>
           </Space>
-          <Typography.Text type="secondary">{DASHBOARD_PAGE_COPY.sections.todo.totalHint}</Typography.Text>
+          <Typography.Text type="secondary">{totalCount > 0 ? `共 ${totalCount} 项` : "暂无待办"}</Typography.Text>
         </div>
       }
     >
+      {loading ? <LoadingState compact message="加载待办事项" /> : null}
+      {!loading && error ? <ErrorState compact message="待办事项加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
+      {!loading && !error && todoItems.length === 0 ? <EmptyState compact description="暂无待办事项" /> : null}
+      {!loading && !error && todoItems.length > 0 ? (
       <Row gutter={[12, 12]}>
         {todoItems.map((item) => (
           <Col key={item.key} xs={24} md={12}>
-            <Card className={styles.todoCard} bordered={false}>
+            <Card
+              className={styles.todoCard}
+              bordered={false}
+              hoverable
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenTodo(item.href)}
+              onKeyDown={(event) => handleCardKeyDown(event, item.href)}
+            >
               <Space direction="vertical" size={8} style={{ width: "100%" }}>
                 <Space align="start" className={styles.todoTitleRow}>
                   <span
@@ -100,8 +135,11 @@ export function Section02TodoSection({ todoItems = TODO_ITEMS }: Section02TodoSe
                   type="link"
                   icon={<ArrowRightOutlined />}
                   size="small"
-                  disabled
                   style={{ width: "fit-content", padding: 0 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenTodo(item.href);
+                  }}
                 >
                   {item.actionLabel}
                 </Button>
@@ -110,6 +148,7 @@ export function Section02TodoSection({ todoItems = TODO_ITEMS }: Section02TodoSe
           </Col>
         ))}
       </Row>
+      ) : null}
     </Card>
   );
 }

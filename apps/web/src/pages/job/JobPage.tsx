@@ -21,11 +21,11 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CheckCircleOutlined, EditOutlined, EyeOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, EditOutlined, EyeOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { AppShell } from "../../widgets/app-shell/AppShell";
 import type { ResumeApiState } from "../../entities/resume/api/resumeApi";
 import { fetchResumeSummaries } from "../../entities/resume/api/resumeApi";
-import { fetchJob, fetchJobs, createJob, updateJob, createBinding, removeBinding } from "../../entities/job/api/jobApi";
+import { fetchJob, fetchJobs, createJob, updateJob, deleteJob, createBinding, removeBinding } from "../../entities/job/api/jobApi";
 import type {
   JobBindingSummary,
   JobCreateRequest,
@@ -76,6 +76,9 @@ type BindingMode = "idle" | "binding" | "unbinding";
 
 const DEFAULT_APPLICATION_STATUS = "draft";
 const TEXTAREA_ROWS = 4;
+export const JOB_HEADER_CONTROL_ORDER = ["actions", "search"] as const;
+export const JOB_ROW_ACTION_KEYS = ["view", "edit", "archive", "delete"] as const;
+export const JOB_SEARCH_WIDTH = 360 as const;
 
 function toDisplayDate(raw: string): string {
   const date = new Date(raw);
@@ -259,6 +262,7 @@ export function JobPage() {
   const [bindingResult, setBindingResult] = useState<JobResumeBinding | null>(null);
 
   const [archivingJobId, setArchivingJobId] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
 
   const openCreateForm = () => {
     setFormMode("create");
@@ -479,6 +483,33 @@ export function JobPage() {
     });
   };
 
+  const confirmDeleteJob = (job: JobSummary) => {
+    Modal.confirm({
+      title: `确认删除岗位「${job.title}」？`,
+      content: "删除后该岗位将从列表中移除，数据库记录仅标记为 deleted，不会被物理删除。",
+      okText: "删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDeletingJobId(job.job_id);
+        try {
+          await deleteJob(job.job_id);
+          message.success(`岗位「${job.title}」已删除。`);
+          await loadJobs();
+          if (detailOpen && selectedJob?.job_id === job.job_id) {
+            setDetailOpen(false);
+            setSelectedJob(null);
+          }
+        } catch (error) {
+          const parsed = parseApiError(error);
+          message.error(parsed.message);
+        } finally {
+          setDeletingJobId(null);
+        }
+      },
+    });
+  };
+
   const getResumeSelectItems = () =>
     resumeState.kind === "ready"
       ? resumeState.resumes.map((item) => ({
@@ -692,7 +723,7 @@ export function JobPage() {
       {
         title: "操作",
         key: "actions",
-        width: 160,
+        width: 188,
         fixed: "right",
         render: (_, record) => (
           <Space size="small">
@@ -728,11 +759,24 @@ export function JobPage() {
                 }}
               />
             </Tooltip>
+            <Tooltip title="删除">
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                loading={deletingJobId === record.job_id}
+                aria-label="删除"
+                onClick={() => {
+                  confirmDeleteJob(record);
+                }}
+              />
+            </Tooltip>
           </Space>
         ),
       },
     ],
-    [archivingJobId],
+    [archivingJobId, deletingJobId, detailOpen, selectedJob?.job_id],
   );
 
   const renderBindingPanel = (job: JobDetail | null) => {
@@ -899,7 +943,7 @@ export function JobPage() {
               onSearch={(value) => {
                 setJobSearchKeyword(value);
               }}
-              style={{ width: 360, maxWidth: "100%", marginLeft: "auto" }}
+              style={{ width: JOB_SEARCH_WIDTH, maxWidth: "100%", marginLeft: "auto" }}
             />
           </div>
         </Card>

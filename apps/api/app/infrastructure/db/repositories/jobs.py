@@ -27,7 +27,7 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
         with self.session_scope() as session:
             rows = session.scalars(
                 select(JobModel)
-                .where(JobModel.owner_id == owner_id)
+                .where(JobModel.owner_id == owner_id, JobModel.status != "deleted")
                 .order_by(JobModel.created_at, JobModel.id)
             ).all()
             return [_to_domain_job(row) for row in rows]

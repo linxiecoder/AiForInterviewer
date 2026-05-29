@@ -17,6 +17,7 @@ WEAKNESS_STATUSES = {
 }
 
 WEAKNESS_SEVERITIES = {"low", "medium", "high", "critical"}
+WEAKNESS_DELETED_STATUS = "deleted"
 
 
 class WeaknessUseCases:
@@ -73,6 +74,24 @@ class WeaknessUseCases:
                     actor_id=actor_id,
                     weakness_id=weakness_id,
                     status=status,
+                )
+            )
+        except WeaknessActionError as exc:
+            return ApplicationResult(error=DomainError(code=exc.code, message=exc.message))
+
+    def soft_delete_weakness(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        weakness_id: str,
+    ) -> ApplicationResult[dict[str, Any]]:
+        try:
+            return ApplicationResult(
+                value=self._repository.soft_delete(
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    weakness_id=weakness_id,
                 )
             )
         except WeaknessActionError as exc:

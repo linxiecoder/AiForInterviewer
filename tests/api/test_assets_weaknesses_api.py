@@ -280,6 +280,48 @@ def test_asset_archive_rejects_unsupported_status_transition() -> None:
     assert body["error"]["code"] == "validation_failed"
 
 
+def test_asset_delete_soft_deletes_without_physical_delete() -> None:
+    app = _app_with_two_users()
+    _reset_asset_weakness_tables()
+    owner_cookie = _login_cookie(app, "asset-user-a@example.com", USER_A_PASSWORD)
+    owner_id = _current_owner_id(app, owner_cookie)
+    _seed_asset(owner_id=owner_id, asset_id="asset_soft_delete_story")
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/assets/asset_soft_delete_story",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    assert body["data"]["status"] == "deleted"
+
+    list_status, list_body = call_json(app, "/api/v1/assets", headers={"cookie": owner_cookie})
+    assert list_status == 200
+    assert list_body["data"] == []
+
+    detail_status, detail_body = call_json(
+        app,
+        "/api/v1/assets/asset_soft_delete_story",
+        headers={"cookie": owner_cookie},
+    )
+    assert detail_status == 404
+    assert detail_body["error"]["code"] == "not_found_or_inaccessible"
+
+    assert _record_status("assets", "asset_soft_delete_story") == "deleted"
+    assert _record_count("assets", "asset_soft_delete_story") == 1
+    assert _record_count("asset_versions", "asset_soft_delete_story_ver_001") == 1
+
+    repeat_status, repeat_body = call_json(
+        app,
+        "/api/v1/assets/asset_soft_delete_story",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert repeat_status == 404
+    assert repeat_body["error"]["code"] == "not_found_or_inaccessible"
+
+
 def test_weakness_list_detail_status_and_owner_scope() -> None:
     app = _app_with_two_users()
     _reset_asset_weakness_tables()
@@ -339,6 +381,47 @@ def test_weakness_list_detail_status_and_owner_scope() -> None:
     )
     assert status_code == 404
     assert body["error"]["code"] == "not_found_or_inaccessible"
+
+
+def test_weakness_delete_soft_deletes_without_physical_delete() -> None:
+    app = _app_with_two_users()
+    _reset_asset_weakness_tables()
+    owner_cookie = _login_cookie(app, "asset-user-a@example.com", USER_A_PASSWORD)
+    owner_id = _current_owner_id(app, owner_cookie)
+    _seed_weakness(owner_id=owner_id, weakness_id="weak_soft_delete")
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/weaknesses/weak_soft_delete",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    assert body["data"]["status"] == "deleted"
+
+    list_status, list_body = call_json(app, "/api/v1/weaknesses", headers={"cookie": owner_cookie})
+    assert list_status == 200
+    assert list_body["data"] == []
+
+    detail_status, detail_body = call_json(
+        app,
+        "/api/v1/weaknesses/weak_soft_delete",
+        headers={"cookie": owner_cookie},
+    )
+    assert detail_status == 404
+    assert detail_body["error"]["code"] == "not_found_or_inaccessible"
+
+    assert _record_status("weaknesses", "weak_soft_delete") == "deleted"
+    assert _record_count("weaknesses", "weak_soft_delete") == 1
+
+    repeat_status, repeat_body = call_json(
+        app,
+        "/api/v1/weaknesses/weak_soft_delete",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert repeat_status == 404
+    assert repeat_body["error"]["code"] == "not_found_or_inaccessible"
 
 
 def test_weakness_search_matches_owned_title_summary_evidence_dimension_and_actions() -> None:
@@ -593,6 +676,26 @@ def _asset_count_by_title(title: str) -> int:
                 {"title": title},
             ).scalar_one()
         )
+
+
+def _record_count(table_name: str, record_id: str) -> int:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return int(
+            session.execute(
+                text(f"SELECT COUNT(*) FROM {table_name} WHERE id = :record_id"),
+                {"record_id": record_id},
+            ).scalar_one()
+        )
+
+
+def _record_status(table_name: str, record_id: str) -> str | None:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return session.execute(
+            text(f"SELECT status FROM {table_name} WHERE id = :record_id"),
+            {"record_id": record_id},
+        ).scalar_one_or_none()
 
 
 def _evidence_ref(label: str | None) -> dict[str, str]:

@@ -71,6 +71,22 @@ async def get_asset(
     return success_envelope(resource_type="asset_detail", data=result.value)
 
 
+@router.delete("/{asset_id}")
+async def delete_asset(
+    asset_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    result = _use_cases(session_factory).soft_delete_asset(
+        owner_id=actor.owner_id,
+        actor_id=actor.actor_id,
+        asset_id=asset_id,
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(resource_type="asset_detail", data=result.value)
+
+
 @router.post("/{asset_id}/archive")
 async def archive_asset(
     asset_id: str,

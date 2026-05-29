@@ -26,8 +26,18 @@ export type ResumeApiState =
       status: number;
     };
 
+export const RESUME_API_PATHS = {
+  list: "/resumes",
+  detail: "/resumes/:resume_id",
+  delete: "/resumes/:resume_id",
+} as const;
+
+function replaceResumeId(path: string, resumeId: string): string {
+  return path.replace(":resume_id", encodeURIComponent(resumeId));
+}
+
 export async function createResume(payload: CreateResumeRequest): Promise<ResumeSummary> {
-  const response = await request<ResumeSummary>("/resumes", {
+  const response = await request<ResumeSummary>(RESUME_API_PATHS.list, {
     method: "POST",
     body: payload,
   });
@@ -39,7 +49,7 @@ export async function createResume(payload: CreateResumeRequest): Promise<Resume
 }
 
 export async function fetchResumeDetail(resumeId: string): Promise<ResumeDetail> {
-  const response = await request<ResumeDetail>(`/resumes/${resumeId}`);
+  const response = await request<ResumeDetail>(replaceResumeId(RESUME_API_PATHS.detail, resumeId));
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("简历详情返回为空");
@@ -48,7 +58,7 @@ export async function fetchResumeDetail(resumeId: string): Promise<ResumeDetail>
 }
 
 export async function updateResume(resumeId: string, payload: UpdateResumeRequest): Promise<ResumeDetail> {
-  const response = await request<ResumeDetail>(`/resumes/${resumeId}`, {
+  const response = await request<ResumeDetail>(replaceResumeId(RESUME_API_PATHS.detail, resumeId), {
     method: "PATCH",
     body: payload,
   });
@@ -59,9 +69,20 @@ export async function updateResume(resumeId: string, payload: UpdateResumeReques
   return data;
 }
 
+export async function deleteResume(resumeId: string): Promise<ResumeDetail> {
+  const response = await request<ResumeDetail>(replaceResumeId(RESUME_API_PATHS.delete, resumeId), {
+    method: "DELETE",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("简历删除返回为空");
+  }
+  return data;
+}
+
 export async function fetchResumeSummaries(): Promise<ResumeApiState> {
   try {
-    const response = await request<ResumeSummary[] | ResumeSummary>("/resumes");
+    const response = await request<ResumeSummary[] | ResumeSummary>(RESUME_API_PATHS.list);
     const data = buildSuccessData(response);
 
     if (Array.isArray(data)) {

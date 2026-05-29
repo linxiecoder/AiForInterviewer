@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Descriptions, Drawer, Form, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Card, Descriptions, Drawer, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, StopOutlined, UndoOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, StopOutlined, UndoOutlined } from "@ant-design/icons";
 import { AppShell } from "../../widgets/app-shell/AppShell";
-import { archiveAsset, createAsset, fetchAsset, fetchAssets, unarchiveAsset } from "../../entities/asset/api/assetApi";
+import { archiveAsset, createAsset, deleteAsset, fetchAsset, fetchAssets, unarchiveAsset } from "../../entities/asset/api/assetApi";
 import type { AssetDetail, AssetRef, AssetSummary } from "../../entities/asset/model/types";
 import { isApiHttpError } from "../../shared/api/errors";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -14,9 +14,12 @@ export const ASSET_PAGE_TABLE_COLUMN_KEYS = ["title", "asset_type", "source", "s
 export const ASSET_PAGE_VIEW_STATES = ["loading", "empty", "error", "loaded"] as const;
 export const ASSET_STATUS_ACTIONS = ["archive", "unarchive"] as const;
 export const ASSET_DETAIL_ACTIONS = ["view_source", "archive", "unarchive"] as const;
-export const ASSET_TYPE_FILTER_KIND = "asset_type_and_source" as const;
-export const ASSET_PAGE_TOOLBAR_CONTROL_ORDER = ["primary_action", "filters", "refresh", "search"] as const;
+export const ASSET_LIST_ACTION_KEYS = ["view", "archive", "delete"] as const;
+export const ASSET_PAGE_LEFT_CONTROL_KEYS = ["primary_action", "refresh"] as const;
+export const ASSET_PAGE_SECONDARY_CONTROL_KEYS = ["search"] as const;
+export const ASSET_PAGE_TOOLBAR_CONTROL_ORDER = ["primary_action", "refresh", "search"] as const;
 export const ASSET_PAGE_SEARCH_PLACEHOLDER = "搜索资产" as const;
+export const ASSET_PAGE_SEARCH_WIDTH = 360 as const;
 
 const ASSET_STATUS_OPTIONS = [
   { value: "asset_confirmed", label: "已确认" },
@@ -83,8 +86,6 @@ export function AssetPage() {
   const [error, setError] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const [assetTypeFilter, setAssetTypeFilter] = useState<string | undefined>();
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -93,14 +94,13 @@ export function AssetPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<AssetDetail | null>(null);
   const [actionAssetId, setActionAssetId] = useState<string | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
 
   const loadAssets = async () => {
     setLoading(true);
     setError(null);
     try {
       const nextAssets = await fetchAssets({
-        status: statusFilter,
-        asset_type: assetTypeFilter,
         q: submittedKeyword,
       });
       setAssets(nextAssets);
@@ -113,7 +113,7 @@ export function AssetPage() {
 
   useEffect(() => {
     void loadAssets();
-  }, [statusFilter, assetTypeFilter, submittedKeyword]);
+  }, [submittedKeyword]);
 
   const openCreate = () => {
     createForm.resetFields();
@@ -178,6 +178,32 @@ export function AssetPage() {
     }
   };
 
+  const confirmDeleteAsset = (asset: AssetSummary | AssetDetail) => {
+    Modal.confirm({
+      title: `确认删除资产「${asset.title || asset.asset_id}」？`,
+      content: "删除后该资产将从列表中移除，数据库记录仅标记为 deleted，不会被物理删除。",
+      okText: "删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDeletingAssetId(asset.asset_id);
+        try {
+          await deleteAsset(asset.asset_id);
+          message.success("资产已删除");
+          if (selectedAsset?.asset_id === asset.asset_id) {
+            setDetailOpen(false);
+            setSelectedAsset(null);
+          }
+          await loadAssets();
+        } catch (deleteError) {
+          message.error(toErrorMessage(deleteError, "资产删除失败"));
+        } finally {
+          setDeletingAssetId(null);
+        }
+      },
+    });
+  };
+
   const columns: ColumnsType<AssetSummary> = [
     {
       title: "资产",
@@ -222,7 +248,7 @@ export function AssetPage() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 112,
+      width: 148,
       render: (_value, record) => (
         <Space size={4}>
           <Tooltip title="查看">
@@ -234,6 +260,16 @@ export function AssetPage() {
               icon={record.status === "asset_archived" ? <UndoOutlined /> : <StopOutlined />}
               loading={actionAssetId === record.asset_id}
               onClick={() => runStatusAction(record)}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              shape="circle"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletingAssetId === record.asset_id}
+              aria-label="删除"
+              onClick={() => confirmDeleteAsset(record)}
             />
           </Tooltip>
         </Space>
@@ -259,41 +295,27 @@ export function AssetPage() {
               <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
                 新增资产
               </Button>
-              <Select
-                allowClear
-                placeholder="资产类型"
-                options={[...ASSET_TYPE_OPTIONS]}
-                value={assetTypeFilter}
-                onChange={setAssetTypeFilter}
-                style={{ width: 180 }}
-              />
-              <Select
-                allowClear
-                placeholder="状态"
-                options={[...ASSET_STATUS_OPTIONS]}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                style={{ width: 160 }}
-              />
               <Tooltip title="刷新">
                 <Button icon={<ReloadOutlined />} onClick={loadAssets}>
                   刷新
                 </Button>
               </Tooltip>
             </Space>
-            <Input.Search
-              allowClear
-              enterButton={<SearchOutlined aria-label="搜索" />}
-              placeholder={ASSET_PAGE_SEARCH_PLACEHOLDER}
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              onSearch={(value) => {
-                const nextKeyword = value.trim();
-                setKeyword(nextKeyword);
-                setSubmittedKeyword(nextKeyword);
-              }}
-              style={{ width: 320, maxWidth: "100%", marginLeft: "auto" }}
-            />
+            <Space wrap style={{ marginLeft: "auto", justifyContent: "flex-end" }}>
+              <Input.Search
+                allowClear
+                enterButton={<SearchOutlined aria-label="搜索" />}
+                placeholder={ASSET_PAGE_SEARCH_PLACEHOLDER}
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                onSearch={(value) => {
+                  const nextKeyword = value.trim();
+                  setKeyword(nextKeyword);
+                  setSubmittedKeyword(nextKeyword);
+                }}
+                style={{ width: ASSET_PAGE_SEARCH_WIDTH, maxWidth: "100%" }}
+              />
+            </Space>
           </div>
         </Card>
 
@@ -301,7 +323,7 @@ export function AssetPage() {
           {loading ? <LoadingState compact message="加载资产" /> : null}
           {!loading && error ? <ErrorState compact message="资产列表加载失败" details={error} actionLabel="重试" onAction={loadAssets} /> : null}
           {!loading && !error && assets.length === 0 ? (
-            <EmptyState compact description={submittedKeyword || statusFilter || assetTypeFilter ? "无匹配资产" : "暂无资产"} />
+            <EmptyState compact description={submittedKeyword ? "无匹配资产" : "暂无资产"} />
           ) : null}
           {!loading && !error && assets.length > 0 ? (
             <Table

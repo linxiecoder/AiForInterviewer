@@ -86,7 +86,7 @@ class JobUseCases:
 
     def get(self, query: GetJobQuery) -> ApplicationResult[tuple[Job, JobVersion] | None]:
         job = self.repository.get(query.job_id)
-        if job is None or job.owner_id != query.owner_id:
+        if job is None or job.owner_id != query.owner_id or job.status == "deleted":
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Job not found")
             )
@@ -98,9 +98,32 @@ class JobUseCases:
             )
         return ApplicationResult(value=(job, version))
 
+    def delete(self, query: GetJobQuery) -> ApplicationResult[tuple[Job, JobVersion]]:
+        job = self.repository.get(query.job_id)
+        if job is None or job.owner_id != query.owner_id or job.status == "deleted":
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Job not found")
+            )
+
+        version = self.repository.get_job_version(job.current_version_id)
+        if version is None:
+            return ApplicationResult(
+                error=DomainError(code="internal_error", message="Job current version missing")
+            )
+
+        now = utc_now()
+        updated_job = replace(
+            job,
+            status="deleted",
+            record_version=job.record_version + 1,
+            updated_at=now,
+        )
+        self.repository.update_job(updated_job)
+        return ApplicationResult(value=(updated_job, version))
+
     def update(self, query: GetJobQuery, command: UpdateJobCommand) -> ApplicationResult[tuple[Job, JobVersion]]:
         job = self.repository.get(query.job_id)
-        if job is None:
+        if job is None or job.status == "deleted":
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Job not found")
             )

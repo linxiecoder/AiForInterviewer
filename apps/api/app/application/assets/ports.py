@@ -49,3 +49,11 @@ class AssetRepository(Protocol):
         status: str,
         action: str,
     ) -> dict[str, Any]: ...
+
+    def soft_delete(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        asset_id: str,
+    ) -> dict[str, Any]: ...

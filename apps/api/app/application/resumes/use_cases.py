@@ -66,7 +66,7 @@ class ResumeUseCases:
 
     def get_detail(self, owner_id: str, resume_id: str) -> ApplicationResult[tuple[Resume, ResumeVersion]]:
         resume = self._repository.get(resume_id)
-        if resume is None or resume.owner_ref.owner_id != owner_id:
+        if resume is None or resume.owner_ref.owner_id != owner_id or resume.status == "deleted":
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Resume not found")
             )
@@ -79,9 +79,26 @@ class ResumeUseCases:
 
         return ApplicationResult(value=(resume, version))
 
+    def delete(self, owner_id: str, resume_id: str) -> ApplicationResult[tuple[Resume, ResumeVersion]]:
+        resume = self._repository.get(resume_id)
+        if resume is None or resume.owner_ref.owner_id != owner_id or resume.status == "deleted":
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Resume not found")
+            )
+
+        version = self._repository.get_version(resume.current_version_ref.version_id)
+        if version is None:
+            return ApplicationResult(
+                error=DomainError(code="internal_error", message="Resume current version missing")
+            )
+
+        updated_resume = replace(resume, status="deleted", updated_at=utc_now())
+        self._repository.add(updated_resume)
+        return ApplicationResult(value=(updated_resume, version))
+
     def update(self, command: UpdateResumeCommand) -> ApplicationResult[tuple[Resume, ResumeVersion]]:
         resume = self._repository.get(command.resume_id)
-        if resume is None or resume.owner_ref.owner_id != command.owner_id:
+        if resume is None or resume.owner_ref.owner_id != command.owner_id or resume.status == "deleted":
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Resume not found")
             )

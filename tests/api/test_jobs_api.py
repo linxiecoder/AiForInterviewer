@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from sqlalchemy import text
+
 from app.application.bindings.commands import RegisterResumeVersionCommand
 from app.application.bindings.use_cases import BindingUseCases
 from app.domain.shared.ids import ResourceIdPrefix, stable_resource_id
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
+from app.infrastructure.db.session import get_session_factory
 from app.infrastructure.security.auth import AuthRuntimeSettings, build_auth_runtime
 from app.infrastructure.security.passwords import Pbkdf2PasswordHasher
 from app.main import create_app
@@ -280,6 +283,55 @@ def test_job_can_be_archived_with_patch_status() -> None:
     assert body["data"]["archived_at"] is not None
 
 
+def test_job_delete_soft_deletes_without_physical_delete() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/jobs",
+        "POST",
+        json_body={
+            "title": "Soft Delete Job",
+            "responsibilities": ["Build"],
+            "requirements": ["Python"],
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    job_id = body["data"]["job_id"]
+
+    delete_status, delete_body = call_json(
+        app,
+        f"/api/v1/jobs/{job_id}",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert delete_status == 200
+    assert delete_body["data"]["status"] == "deleted"
+
+    list_status, list_body = call_json(app, "/api/v1/jobs", headers={"cookie": owner_cookie})
+    assert list_status == 200
+    assert list_body["data"] == []
+
+    detail_status, detail_body = call_json(app, f"/api/v1/jobs/{job_id}", headers={"cookie": owner_cookie})
+    assert detail_status == 404
+    assert detail_body["error"]["code"] == "not_found_or_inaccessible"
+
+    assert _record_status("jobs", job_id) == "deleted"
+    assert _record_count("jobs", job_id) == 1
+
+    repeat_status, repeat_body = call_json(
+        app,
+        f"/api/v1/jobs/{job_id}",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert repeat_status == 404
+    assert repeat_body["error"]["code"] == "not_found_or_inaccessible"
+
+
 def test_job_owner_scope_for_get_and_update() -> None:
     app = _app_with_two_users()
     _reset_repositories()
@@ -414,3 +466,23 @@ def _register_resume_version(owner_id: str, resume_id: str, resume_version_id: s
 def _reset_repositories() -> None:
     SqlAlchemyJobRepository.clear_state()
     SqlAlchemyBindingRepository.clear_state()
+
+
+def _record_count(table_name: str, record_id: str) -> int:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return int(
+            session.execute(
+                text(f"SELECT COUNT(*) FROM {table_name} WHERE id = :record_id"),
+                {"record_id": record_id},
+            ).scalar_one()
+        )
+
+
+def _record_status(table_name: str, record_id: str) -> str | None:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return session.execute(
+            text(f"SELECT status FROM {table_name} WHERE id = :record_id"),
+            {"record_id": record_id},
+        ).scalar_one_or_none()

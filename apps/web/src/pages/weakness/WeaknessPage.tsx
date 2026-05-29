@@ -1,10 +1,10 @@
-import { type Key, useEffect, useMemo, useState } from "react";
-import { Button, Card, Descriptions, Drawer, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { type Key, useEffect, useState } from "react";
+import { Button, Card, Descriptions, Drawer, Input, Modal, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined, PlayCircleOutlined, ReloadOutlined, SearchOutlined, UndoOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined, SearchOutlined, UndoOutlined } from "@ant-design/icons";
 import { AppShell } from "../../widgets/app-shell/AppShell";
 import { useRouteController } from "../../app/routes/router";
-import { fetchWeakness, fetchWeaknesses, updateWeaknessStatus } from "../../entities/weakness/api/weaknessApi";
+import { deleteWeakness, fetchWeakness, fetchWeaknesses, updateWeaknessStatus } from "../../entities/weakness/api/weaknessApi";
 import type { WeaknessDetail, WeaknessRef, WeaknessSummary } from "../../entities/weakness/model/types";
 import { isApiHttpError } from "../../shared/api/errors";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -15,9 +15,13 @@ export const WEAKNESS_PAGE_TABLE_COLUMN_KEYS = ["selection", "title", "source", 
 export const WEAKNESS_PAGE_VIEW_STATES = ["loading", "empty", "error", "loaded"] as const;
 export const WEAKNESS_STATUS_ACTIONS = ["mark_low_priority", "mark_ignored", "mark_resolved", "reopen"] as const;
 export const WEAKNESS_DETAIL_SECTIONS = ["evidence", "training_actions", "related_records", "status_history_hint"] as const;
-export const WEAKNESS_SELECTED_ACTION_TARGET = "interview_entry_without_prefill" as const;
-export const WEAKNESS_PAGE_TOOLBAR_CONTROL_ORDER = ["primary_action", "filters", "refresh", "search"] as const;
+export const WEAKNESS_SELECTED_ACTION_TARGET = "interview_route" as const;
+export const WEAKNESS_LIST_ACTION_KEYS = ["view", "mark_resolved", "delete"] as const;
+export const WEAKNESS_PAGE_LEFT_CONTROL_KEYS = ["primary_action", "refresh"] as const;
+export const WEAKNESS_PAGE_SECONDARY_CONTROL_KEYS = ["search"] as const;
+export const WEAKNESS_PAGE_TOOLBAR_CONTROL_ORDER = ["primary_action", "refresh", "search"] as const;
 export const WEAKNESS_PAGE_SEARCH_PLACEHOLDER = "搜索薄弱项" as const;
+export const WEAKNESS_PAGE_SEARCH_WIDTH = 360 as const;
 
 const WEAKNESS_STATUS_OPTIONS = [
   { value: "weakness_confirmed", label: "已确认" },
@@ -121,28 +125,19 @@ export function WeaknessPage() {
   const [error, setError] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const [severityFilter, setSeverityFilter] = useState<string | undefined>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
-  const [polishModalOpen, setPolishModalOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedWeakness, setSelectedWeakness] = useState<WeaknessDetail | null>(null);
   const [actionWeaknessId, setActionWeaknessId] = useState<string | null>(null);
-
-  const selectedWeaknesses = useMemo(
-    () => weaknesses.filter((weakness) => selectedRowKeys.includes(weakness.weakness_id)),
-    [selectedRowKeys, weaknesses],
-  );
+  const [deletingWeaknessId, setDeletingWeaknessId] = useState<string | null>(null);
 
   const loadWeaknesses = async () => {
     setLoading(true);
     setError(null);
     try {
       const nextWeaknesses = await fetchWeaknesses({
-        status: statusFilter,
-        severity: severityFilter,
         q: submittedKeyword,
       });
       setWeaknesses(nextWeaknesses);
@@ -158,7 +153,7 @@ export function WeaknessPage() {
 
   useEffect(() => {
     void loadWeaknesses();
-  }, [statusFilter, severityFilter, submittedKeyword]);
+  }, [submittedKeyword]);
 
   const openDetail = async (weaknessId: string) => {
     setDetailOpen(true);
@@ -189,6 +184,33 @@ export function WeaknessPage() {
     } finally {
       setActionWeaknessId(null);
     }
+  };
+
+  const confirmDeleteWeakness = (weakness: WeaknessSummary | WeaknessDetail) => {
+    Modal.confirm({
+      title: `确认删除薄弱项「${weakness.title || weakness.weakness_id}」？`,
+      content: "删除后该薄弱项将从列表中移除，数据库记录仅标记为 deleted，不会被物理删除。",
+      okText: "删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDeletingWeaknessId(weakness.weakness_id);
+        try {
+          await deleteWeakness(weakness.weakness_id);
+          message.success("薄弱项已删除");
+          setSelectedRowKeys((keys) => keys.filter((key) => key !== weakness.weakness_id));
+          if (selectedWeakness?.weakness_id === weakness.weakness_id) {
+            setDetailOpen(false);
+            setSelectedWeakness(null);
+          }
+          await loadWeaknesses();
+        } catch (deleteError) {
+          message.error(toErrorMessage(deleteError, "薄弱项删除失败"));
+        } finally {
+          setDeletingWeaknessId(null);
+        }
+      },
+    });
   };
 
   const columns: ColumnsType<WeaknessSummary> = [
@@ -235,7 +257,7 @@ export function WeaknessPage() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 156,
+      width: 164,
       render: (_value, record) => (
         <Space size={4}>
           <Tooltip title="查看">
@@ -247,6 +269,16 @@ export function WeaknessPage() {
               icon={<UndoOutlined />}
               loading={actionWeaknessId === record.weakness_id}
               onClick={() => runStatusAction(record, "mark_resolved")}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              shape="circle"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletingWeaknessId === record.weakness_id}
+              aria-label="删除"
+              onClick={() => confirmDeleteWeakness(record)}
             />
           </Tooltip>
         </Space>
@@ -272,46 +304,31 @@ export function WeaknessPage() {
               <Button
                 type="primary"
                 icon={<PlayCircleOutlined />}
-                disabled={selectedRowKeys.length === 0}
-                onClick={() => setPolishModalOpen(true)}
+                onClick={() => navigate("/interview")}
               >
                 进入模拟面试
               </Button>
-              <Select
-                allowClear
-                placeholder="状态"
-                options={[...WEAKNESS_STATUS_OPTIONS]}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                style={{ width: 160 }}
-              />
-              <Select
-                allowClear
-                placeholder="严重程度"
-                options={[...WEAKNESS_SEVERITY_OPTIONS]}
-                value={severityFilter}
-                onChange={setSeverityFilter}
-                style={{ width: 160 }}
-              />
               <Tooltip title="刷新">
                 <Button icon={<ReloadOutlined />} onClick={loadWeaknesses}>
                   刷新
                 </Button>
               </Tooltip>
             </Space>
-            <Input.Search
-              allowClear
-              enterButton={<SearchOutlined aria-label="搜索" />}
-              placeholder={WEAKNESS_PAGE_SEARCH_PLACEHOLDER}
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              onSearch={(value) => {
-                const nextKeyword = value.trim();
-                setKeyword(nextKeyword);
-                setSubmittedKeyword(nextKeyword);
-              }}
-              style={{ width: 320, maxWidth: "100%", marginLeft: "auto" }}
-            />
+            <Space wrap style={{ marginLeft: "auto", justifyContent: "flex-end" }}>
+              <Input.Search
+                allowClear
+                enterButton={<SearchOutlined aria-label="搜索" />}
+                placeholder={WEAKNESS_PAGE_SEARCH_PLACEHOLDER}
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                onSearch={(value) => {
+                  const nextKeyword = value.trim();
+                  setKeyword(nextKeyword);
+                  setSubmittedKeyword(nextKeyword);
+                }}
+                style={{ width: WEAKNESS_PAGE_SEARCH_WIDTH, maxWidth: "100%" }}
+              />
+            </Space>
           </div>
         </Card>
 
@@ -319,7 +336,7 @@ export function WeaknessPage() {
           {loading ? <LoadingState compact message="加载薄弱项" /> : null}
           {!loading && error ? <ErrorState compact message="薄弱项列表加载失败" details={error} actionLabel="重试" onAction={loadWeaknesses} /> : null}
           {!loading && !error && weaknesses.length === 0 ? (
-            <EmptyState compact description={submittedKeyword || statusFilter || severityFilter ? "无匹配薄弱项" : "暂无薄弱项"} />
+            <EmptyState compact description={submittedKeyword ? "无匹配薄弱项" : "暂无薄弱项"} />
           ) : null}
           {!loading && !error && weaknesses.length > 0 ? (
             <Table
@@ -385,26 +402,6 @@ export function WeaknessPage() {
         ) : null}
       </Drawer>
 
-      <Modal
-        title="进入模拟面试"
-        open={polishModalOpen}
-        onCancel={() => setPolishModalOpen(false)}
-        okText="进入模拟面试"
-        cancelText="取消"
-        onOk={() => {
-          setPolishModalOpen(false);
-          navigate("/interview");
-        }}
-      >
-        <Typography.Paragraph type="secondary">
-          当前仅打开模拟面试入口，不自动携带已选薄弱项。
-        </Typography.Paragraph>
-        <Space size={[4, 4]} wrap>
-          {selectedWeaknesses.map((weakness) => (
-            <Tag key={weakness.weakness_id}>{weakness.title || weakness.weakness_id}</Tag>
-          ))}
-        </Space>
-      </Modal>
     </AppShell>
   );
 }

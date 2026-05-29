@@ -1,12 +1,13 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Descriptions, Drawer, Form, Input, Modal, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CheckCircleOutlined, EditOutlined, InboxOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, EditOutlined, InboxOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { AppShell } from "../../widgets/app-shell/AppShell";
 import { createBinding, fetchJobs, removeBinding } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import {
   createResume,
+  deleteResume,
   fetchResumeDetail,
   fetchResumeSummaries,
   type ResumeApiState,
@@ -36,9 +37,10 @@ export const RESUME_TABLE_COLUMN_KEYS = [
   "actions",
 ] as const;
 export const RESUME_SEARCH_FIELD_KEYS = ["title", "file_name", "resume_id", "status"] as const;
-export const RESUME_ROW_ACTION_KEYS = ["link_job", "edit_resume", "archive_resume"] as const;
+export const RESUME_ROW_ACTION_KEYS = ["link_job", "edit_resume", "archive_resume", "delete_resume"] as const;
 export const RESUME_HEADER_CONTROL_ORDER = ["actions", "search"] as const;
 export const RESUME_SEARCH_PLACEHOLDER = "搜索简历名称、状态";
+export const RESUME_SEARCH_WIDTH = 360 as const;
 export const RESUME_SEARCH_ENTER_BUTTON_KIND = "icon";
 export const RESUME_TITLE_ACTION_KEY = "open_detail";
 export const RESUME_DETAIL_FIELD_KEYS = [
@@ -339,6 +341,7 @@ export function ResumePage() {
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [formSubmitLoading, setFormSubmitLoading] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deletingResumeId, setDeletingResumeId] = useState<string | null>(null);
 
   const loadResumes = async () => {
     setIsLoading(true);
@@ -470,6 +473,37 @@ export function ResumePage() {
     } finally {
       setEditSubmitLoading(false);
     }
+  };
+
+  const confirmDeleteResume = (resume: ResumeSummary) => {
+    Modal.confirm({
+      title: `确认删除简历「${getResumeTitle(resume)}」？`,
+      content: "删除后该简历将从列表中移除，数据库记录仅标记为 deleted，不会被物理删除。",
+      okText: "删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDeletingResumeId(resume.resume_id);
+        try {
+          await deleteResume(resume.resume_id);
+          message.success(`简历「${getResumeTitle(resume)}」已删除。`);
+          if (detailResume?.resume_id === resume.resume_id) {
+            setDetailResume(null);
+          }
+          if (editingResume?.resume_id === resume.resume_id) {
+            setEditingResume(null);
+          }
+          if (linkingResume?.resume_id === resume.resume_id) {
+            setLinkingResume(null);
+          }
+          await loadResumes();
+        } catch (error) {
+          message.error(toResumePageErrorMessage(error, "简历删除失败"));
+        } finally {
+          setDeletingResumeId(null);
+        }
+      },
+    });
   };
 
   const saveLinkedJob = async () => {
@@ -605,7 +639,7 @@ export function ResumePage() {
     {
       title: "操作",
       key: "actions",
-      width: 132,
+      width: 168,
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title="关联岗位">
@@ -637,6 +671,19 @@ export function ResumePage() {
               icon={<InboxOutlined />}
               onClick={() => {
                 message.warning(`简历「${getResumeTitle(record)}」归档能力待接入。`);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除简历">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletingResumeId === record.resume_id}
+              aria-label="删除简历"
+              onClick={() => {
+                confirmDeleteResume(record);
               }}
             />
           </Tooltip>
@@ -724,7 +771,7 @@ export function ResumePage() {
                 setSearchKeyword(value);
               }}
               placeholder={RESUME_SEARCH_PLACEHOLDER}
-              style={{ width: 360, maxWidth: "100%", marginLeft: "auto" }}
+              style={{ width: RESUME_SEARCH_WIDTH, maxWidth: "100%", marginLeft: "auto" }}
             />
           </div>
         </Card>

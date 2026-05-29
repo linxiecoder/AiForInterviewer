@@ -8,12 +8,25 @@ import {
 } from "./components";
 import { DASHBOARD_PAGE_COPY } from "./model/dashboardCopy";
 import { DASHBOARD_SECTION_STATE_BY_FRAME, readDashboardFrameMode } from "./model/dashboardSections";
+import { useDashboardData } from "./model/useDashboardData";
+import type { DashboardRouteTarget } from "./model/dashboardData";
+import { useRouteController } from "../../app/routes/router";
 
 import styles from "./DashboardPage.module.css";
 
 export function DashboardPage() {
+  const { navigate } = useRouteController();
   const frameMode = readDashboardFrameMode();
   const sectionStates = DASHBOARD_SECTION_STATE_BY_FRAME[frameMode];
+  const dashboardState = useDashboardData();
+
+  const loading = dashboardState.status === "loading";
+  const error = dashboardState.status === "error" ? dashboardState.error : null;
+  const data = dashboardState.status === "ready" ? dashboardState.data : null;
+
+  const openTodo = (href: DashboardRouteTarget) => {
+    navigate(href);
+  };
 
   return (
     <AppShell>
@@ -32,7 +45,13 @@ export function DashboardPage() {
             frameMode={frameMode}
             disabledReason={DASHBOARD_PAGE_COPY.sections.above.disabledActionHint}
           >
-            <Section01AboveTheFold />
+            <Section01AboveTheFold
+              items={data?.overviewMetrics ?? []}
+              loading={loading}
+              error={error}
+              empty={data?.isSourceEmpty ?? false}
+              onRetry={dashboardState.reload}
+            />
           </DashboardFrame>
 
           <DashboardFrame
@@ -41,7 +60,13 @@ export function DashboardPage() {
             frameMode={frameMode}
             disabledReason={DASHBOARD_PAGE_COPY.sections.todo.disabledActionHint}
           >
-            <Section02TodoSection />
+            <Section02TodoSection
+              todoItems={data?.todoItems ?? []}
+              loading={loading}
+              error={error}
+              onRetry={dashboardState.reload}
+              onOpenTodo={openTodo}
+            />
           </DashboardFrame>
 
           <DashboardFrame
@@ -50,7 +75,12 @@ export function DashboardPage() {
             frameMode={frameMode}
             disabledReason={DASHBOARD_PAGE_COPY.sections.activity.headerActionDisabledHint}
           >
-            <Section03ActivitySection />
+            <Section03ActivitySection
+              activityItems={data?.activityItems ?? []}
+              loading={loading}
+              error={error}
+              onRetry={dashboardState.reload}
+            />
           </DashboardFrame>
         </Space>
       </div>

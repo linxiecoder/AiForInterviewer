@@ -1,12 +1,19 @@
 import { Card, Col, Row, Space, Tag, Typography } from "antd";
 import { FileTextOutlined, AimOutlined, CarryOutOutlined, MessageOutlined } from "@ant-design/icons";
 import { DASHBOARD_PAGE_COPY } from "../model/dashboardCopy";
-import { OVERVIEW_METRICS, type OverviewMetric } from "../model/dashboardPlaceholderData";
+import type { DashboardOverviewMetric } from "../model/dashboardData";
+import { EmptyState } from "../../../shared/ui/EmptyState";
+import { ErrorState } from "../../../shared/ui/ErrorState";
+import { LoadingState } from "../../../shared/ui/LoadingState";
 
 import styles from "./sectionStyles.module.css";
 
 type Section01AboveTheFoldProps = {
-  items?: OverviewMetric[];
+  items: DashboardOverviewMetric[];
+  loading?: boolean;
+  error?: string | null;
+  empty?: boolean;
+  onRetry?: () => void;
 };
 
 function resolveIcon(key: string) {
@@ -22,7 +29,29 @@ function resolveIcon(key: string) {
   return <MessageOutlined />;
 }
 
-export function Section01AboveTheFold({ items = OVERVIEW_METRICS }: Section01AboveTheFoldProps) {
+export function Section01AboveTheFold({
+  items,
+  loading = false,
+  error = null,
+  empty = false,
+  onRetry,
+}: Section01AboveTheFoldProps) {
+  if (loading) {
+    return (
+      <Card className={styles.sectionCard} size="small" title={DASHBOARD_PAGE_COPY.sections.above.cardsTitle}>
+        <LoadingState compact message="加载首页指标" />
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className={styles.sectionCard} size="small" title={DASHBOARD_PAGE_COPY.sections.above.cardsTitle}>
+        <ErrorState compact message="首页指标加载失败" details={error} actionLabel="重试" onAction={onRetry} />
+      </Card>
+    );
+  }
+
   return (
     <Card
       className={styles.sectionCard}
@@ -42,7 +71,7 @@ export function Section01AboveTheFold({ items = OVERVIEW_METRICS }: Section01Abo
                   <span className={styles.metricIcon}>{resolveIcon(item.key)}</span>
                   <Typography.Text>{item.title}</Typography.Text>
                   <Tag color="blue" style={{ marginLeft: "auto" }}>
-                    {item.trend}
+                    {item.sourceLabel}
                   </Tag>
                 </Space>
 
@@ -55,6 +84,7 @@ export function Section01AboveTheFold({ items = OVERVIEW_METRICS }: Section01Abo
           </Col>
         ))}
       </Row>
+      {empty ? <EmptyState compact description="暂无业务记录，指标按真实数据展示为 0。" /> : null}
     </Card>
   );
 }

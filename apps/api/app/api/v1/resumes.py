@@ -110,6 +110,25 @@ async def patch_resume(
     return success_envelope(resource_type="resume_detail", data=_to_resume_detail(*result.value))
 
 
+@router.delete("/{resume_id}")
+async def delete_resume(
+    resume_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    use_cases = ResumeUseCases(repository=SqlAlchemyResumeRepository(session_factory))
+    result = use_cases.delete(owner_id=actor.owner_id, resume_id=resume_id)
+    if not result.is_success:
+        error = result.error
+        raise_api_error(
+            status_code=_error_status(error.code),
+            code=error.code,
+            message=error.message,
+        )
+
+    return success_envelope(resource_type="resume_detail", data=_to_resume_detail(*result.value))
+
+
 def _to_resume_summary(resume) -> dict:
     current_version_ref = resume.current_version_ref
     current_version_ref_payload = None

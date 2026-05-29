@@ -6,6 +6,7 @@ export const ASSET_API_PATHS = {
   detail: "/assets/:asset_id",
   archive: "/assets/:asset_id/archive",
   unarchive: "/assets/:asset_id/unarchive",
+  delete: "/assets/:asset_id",
 } as const;
 
 export type FetchAssetsParams = {
@@ -86,6 +87,17 @@ export async function unarchiveAsset(assetId: string): Promise<AssetDetail> {
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("取消归档返回为空");
+  }
+  return data;
+}
+
+export async function deleteAsset(assetId: string): Promise<AssetDetail> {
+  const response = await request<AssetDetail>(replaceAssetId(ASSET_API_PATHS.delete, assetId), {
+    method: "DELETE",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("资产删除返回为空");
   }
   return data;
 }

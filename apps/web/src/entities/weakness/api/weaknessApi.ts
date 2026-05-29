@@ -5,6 +5,7 @@ export const WEAKNESS_API_PATHS = {
   list: "/weaknesses",
   detail: "/weaknesses/:weakness_id",
   updateStatus: "/weaknesses/:weakness_id/status",
+  delete: "/weaknesses/:weakness_id",
 } as const;
 
 export type FetchWeaknessesParams = {
@@ -57,6 +58,17 @@ export async function updateWeaknessStatus(
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("薄弱项状态更新返回为空");
+  }
+  return data;
+}
+
+export async function deleteWeakness(weaknessId: string): Promise<WeaknessDetail> {
+  const response = await request<WeaknessDetail>(replaceWeaknessId(WEAKNESS_API_PATHS.delete, weaknessId), {
+    method: "DELETE",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("薄弱项删除返回为空");
   }
   return data;
 }

@@ -56,7 +56,7 @@ export function DashboardFrame({
           window.history.replaceState({}, "", nextUrl);
           window.dispatchEvent(new PopStateEvent("popstate"));
         }}
-        description={<Typography.Text type="secondary">当前为占位态，仅表达状态语义，不影响真实数据。</Typography.Text>}
+        description={<Typography.Text type="secondary">当前为调试状态，仅用于验证页面状态分支。</Typography.Text>}
       />
     );
   }
@@ -66,7 +66,7 @@ export function DashboardFrame({
       <EmptyState
         compact
         title={`${title}：空态`}
-        description={`当前无可展示记录。${DASHBOARD_PAGE_COPY.states.placeholderButton} 为占位态。`}
+        description="当前无可展示业务记录。"
         reason={DASHBOARD_PAGE_COPY.states.emptyReason}
         action={
           <Button size="small" type="dashed" disabled>

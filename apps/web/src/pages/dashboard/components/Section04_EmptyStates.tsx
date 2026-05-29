@@ -1,12 +1,11 @@
 import { Alert, Button, Card, List, Typography } from "antd";
 import { DASHBOARD_PAGE_COPY } from "../model/dashboardCopy";
-import { EMPTY_STATE_SECTIONS } from "../model/dashboardPlaceholderData";
 
 type Section04EmptyStatesProps = {
   sections?: string[];
 };
 
-export function Section04EmptyStates({ sections = EMPTY_STATE_SECTIONS }: Section04EmptyStatesProps) {
+export function Section04EmptyStates({ sections = [] }: Section04EmptyStatesProps) {
   return (
     <Card size="small" title={DASHBOARD_PAGE_COPY.sections.empty.title}>
       <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>

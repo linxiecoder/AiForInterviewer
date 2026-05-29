@@ -34,3 +34,11 @@ class WeaknessRepository(Protocol):
         weakness_id: str,
         status: str,
     ) -> dict[str, Any]: ...
+
+    def soft_delete(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        weakness_id: str,
+    ) -> dict[str, Any]: ...

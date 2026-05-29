@@ -130,6 +130,25 @@ async def patch_job(
     return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id, session_factory))
 
 
+@router.delete("/{job_id}")
+async def delete_job(
+    job_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    jobs_use_case = JobUseCases(repository=SqlAlchemyJobRepository(session_factory))
+    result = jobs_use_case.delete(AppGetJobQuery(owner_id=actor.owner_id, job_id=job_id))
+    if not result.is_success:
+        error = result.error
+        raise_api_error(
+            status_code=_error_status(error.code),
+            code=error.code,
+            message=error.message,
+        )
+
+    return success_envelope(resource_type="job_detail", data=_to_job_detail(*result.value, actor.owner_id, session_factory))
+
+
 def _to_job_summary(job, jobs: list[object], binding_summary_builder) -> dict:
     binding_summary = binding_summary_builder(job)
     return JobSummary(

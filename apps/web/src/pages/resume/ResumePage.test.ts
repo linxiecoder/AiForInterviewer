@@ -9,6 +9,7 @@ import {
   RESUME_LINK_JOB_SELECTION_KIND,
   RESUME_HEADER_CONTROL_ORDER,
   RESUME_ROW_ACTION_KEYS,
+  RESUME_SEARCH_WIDTH,
   RESUME_SEARCH_ENTER_BUTTON_KIND,
   RESUME_SEARCH_FIELD_KEYS,
   RESUME_SEARCH_PLACEHOLDER,
@@ -17,6 +18,7 @@ import {
   filterResumesBySearch,
 } from "./ResumePage";
 import type { ResumeSummary } from "../../entities/resume/model/types";
+import { RESUME_API_PATHS } from "../../entities/resume/api/resumeApi";
 
 type Equal<Actual, Expected> =
   (<Value>() => Value extends Actual ? 1 : 2) extends
@@ -64,7 +66,20 @@ type ResumeHeaderPlacesActionsBeforeSearch = Expect<
 type ResumeRowActionKeys = typeof RESUME_ROW_ACTION_KEYS;
 
 type ResumeRowActionsCoverAcceptanceButtons = Expect<
-  Equal<ResumeRowActionKeys, readonly ["link_job", "edit_resume", "archive_resume"]>
+  Equal<ResumeRowActionKeys, readonly ["link_job", "edit_resume", "archive_resume", "delete_resume"]>
+>;
+
+type ResumeSearchWidthMatchesInterviewPage = Expect<Equal<typeof RESUME_SEARCH_WIDTH, 360>>;
+
+type ResumeApiPathsExposeRealDelete = Expect<
+  Equal<
+    typeof RESUME_API_PATHS,
+    {
+      readonly list: "/resumes";
+      readonly detail: "/resumes/:resume_id";
+      readonly delete: "/resumes/:resume_id";
+    }
+  >
 >;
 
 type ResumeTitleActionOpensDetail = Expect<

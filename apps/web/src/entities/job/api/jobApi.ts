@@ -18,14 +18,24 @@ export const JOB_MATCH_ANALYSIS_API_PATHS = {
   byId: "/job-match-analyses/:analysis_id",
 } as const;
 
+export const JOB_API_PATHS = {
+  list: "/jobs",
+  detail: "/jobs/:job_id",
+  delete: "/jobs/:job_id",
+} as const;
+
+function replaceJobId(path: string, jobId: string): string {
+  return path.replace(":job_id", encodeURIComponent(jobId));
+}
+
 export async function fetchJobs(): Promise<JobSummary[]> {
-  const response = await request<JobSummary[]>("/jobs");
+  const response = await request<JobSummary[]>(JOB_API_PATHS.list);
   const data = buildSuccessData(response);
   return data ?? [];
 }
 
 export async function fetchJob(jobId: string): Promise<JobDetail> {
-  const response = await request<JobDetail>(`/jobs/${jobId}`);
+  const response = await request<JobDetail>(replaceJobId(JOB_API_PATHS.detail, jobId));
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("岗位详情返回为空");
@@ -34,7 +44,7 @@ export async function fetchJob(jobId: string): Promise<JobDetail> {
 }
 
 export async function createJob(payload: JobCreateRequest): Promise<JobDetail> {
-  const response = await request<JobDetail>("/jobs", {
+  const response = await request<JobDetail>(JOB_API_PATHS.list, {
     method: "POST",
     body: payload,
   });
@@ -46,13 +56,24 @@ export async function createJob(payload: JobCreateRequest): Promise<JobDetail> {
 }
 
 export async function updateJob(jobId: string, payload: JobUpdateRequest): Promise<JobDetail> {
-  const response = await request<JobDetail>(`/jobs/${jobId}`, {
+  const response = await request<JobDetail>(replaceJobId(JOB_API_PATHS.detail, jobId), {
     method: "PATCH",
     body: payload,
   });
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("岗位更新返回为空");
+  }
+  return data;
+}
+
+export async function deleteJob(jobId: string): Promise<JobDetail> {
+  const response = await request<JobDetail>(replaceJobId(JOB_API_PATHS.delete, jobId), {
+    method: "DELETE",
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("岗位删除返回为空");
   }
   return data;
 }

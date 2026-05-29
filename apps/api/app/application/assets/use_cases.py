@@ -29,6 +29,8 @@ ASSET_TYPES = {
     "behavior_story",
 }
 
+ASSET_DELETED_STATUS = "deleted"
+
 
 class AssetUseCases:
     def __init__(self, repository: AssetRepository, *, embedding_provider: EmbeddingProvider | None = None) -> None:
@@ -160,6 +162,24 @@ class AssetUseCases:
             status="asset_confirmed",
             action="unarchive_asset",
         )
+
+    def soft_delete_asset(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        asset_id: str,
+    ) -> ApplicationResult[dict[str, Any]]:
+        try:
+            return ApplicationResult(
+                value=self._repository.soft_delete(
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    asset_id=asset_id,
+                )
+            )
+        except AssetActionError as exc:
+            return ApplicationResult(error=DomainError(code=exc.code, message=exc.message))
 
     def _update_status(
         self,

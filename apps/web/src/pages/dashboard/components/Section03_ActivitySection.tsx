@@ -1,15 +1,24 @@
-import { Button, Card, List, Space, Tag, Typography } from "antd";
+import { Card, List, Space, Tag, Typography } from "antd";
 import { DASHBOARD_PAGE_COPY } from "../model/dashboardCopy";
-import { ACTIVITY_ITEMS, type ActivityItem } from "../model/dashboardPlaceholderData";
+import type { DashboardActivityItem } from "../model/dashboardData";
+import { EmptyState } from "../../../shared/ui/EmptyState";
+import { ErrorState } from "../../../shared/ui/ErrorState";
+import { LoadingState } from "../../../shared/ui/LoadingState";
 
 import styles from "./sectionStyles.module.css";
 
 type Section03ActivitySectionProps = {
-  activityItems?: ActivityItem[];
+  activityItems: DashboardActivityItem[];
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 };
 
 export function Section03ActivitySection({
-  activityItems = ACTIVITY_ITEMS,
+  activityItems,
+  loading = false,
+  error = null,
+  onRetry,
 }: Section03ActivitySectionProps) {
   const activityTagColor = {
     default: "blue",
@@ -26,12 +35,13 @@ export function Section03ActivitySection({
       title={
         <div className={styles.activityHeader}>
           <Typography.Text strong>{DASHBOARD_PAGE_COPY.sections.activity.cardTitle}</Typography.Text>
-          <Button type="link" disabled size="small">
-            {DASHBOARD_PAGE_COPY.sections.activity.headerActionDisabledHint}
-          </Button>
         </div>
       }
     >
+      {loading ? <LoadingState compact message="加载最近活动" /> : null}
+      {!loading && error ? <ErrorState compact message="最近活动加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
+      {!loading && !error && activityItems.length === 0 ? <EmptyState compact description="暂无最近活动" /> : null}
+      {!loading && !error && activityItems.length > 0 ? (
       <List
         itemLayout="horizontal"
         dataSource={activityItems}
@@ -55,10 +65,7 @@ export function Section03ActivitySection({
           </List.Item>
         )}
       />
-
-      <Typography.Text type="secondary" style={{ display: "block" }}>
-        {DASHBOARD_PAGE_COPY.sections.activity.footer}
-      </Typography.Text>
+      ) : null}
     </Card>
   );
 }

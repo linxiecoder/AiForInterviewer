@@ -53,6 +53,22 @@ async def get_weakness(
     return success_envelope(resource_type="weakness_detail", data=result.value)
 
 
+@router.delete("/{weakness_id}")
+async def delete_weakness(
+    weakness_id: str,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+) -> Any:
+    result = _use_cases(session_factory).soft_delete_weakness(
+        owner_id=actor.owner_id,
+        actor_id=actor.actor_id,
+        weakness_id=weakness_id,
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(resource_type="weakness_detail", data=result.value)
+
+
 @router.post("/{weakness_id}/status")
 async def update_weakness_status(
     weakness_id: str,

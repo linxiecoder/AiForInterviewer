@@ -29,7 +29,7 @@ class SqlAlchemyWeaknessRepository(SqlAlchemyRepository, WeaknessRepository):
     def get_ref(self, weakness_id: str) -> ResourceRef | None:
         with self.session_scope() as session:
             found = session.get(Weakness, weakness_id)
-        if found is None:
+        if found is None or found.status == "deleted":
             return None
         return ResourceRef(resource_type="weakness", resource_id=weakness_id)
 
@@ -42,7 +42,7 @@ class SqlAlchemyWeaknessRepository(SqlAlchemyRepository, WeaknessRepository):
         q: str | None = None,
     ) -> tuple[dict[str, Any], ...]:
         with self.session_scope() as session:
-            query = select(Weakness).where(Weakness.owner_id == owner_id)
+            query = select(Weakness).where(Weakness.owner_id == owner_id, Weakness.status != "deleted")
             if status is not None:
                 query = query.where(Weakness.status == status)
             if severity is not None:
@@ -91,6 +91,40 @@ class SqlAlchemyWeaknessRepository(SqlAlchemyRepository, WeaknessRepository):
                 session.rollback()
                 raise
 
+    def soft_delete(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        weakness_id: str,
+    ) -> dict[str, Any]:
+        with self.session_scope() as session:
+            try:
+                weakness = _get_weakness(session, owner_id=owner_id, weakness_id=weakness_id)
+                if weakness is None:
+                    _not_found()
+                now = utc_now()
+                previous_status = weakness.status
+                weakness.status = "deleted"
+                weakness.updated_at = now
+                confirmation_ref = _create_confirmation(
+                    session=session,
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    target_ref_id=weakness.id,
+                    action="delete_weakness",
+                    before_summary=previous_status,
+                    after_summary="deleted",
+                    trace_ref_ids=weakness.trace_ref_ids,
+                    evidence_ref_ids=weakness.evidence_ref_ids,
+                )
+                weakness.user_confirmation_ref_json = confirmation_ref
+                session.commit()
+                return _weakness_response(weakness, include_detail=True)
+            except Exception:
+                session.rollback()
+                raise
+
     @classmethod
     def clear_state(cls) -> None:
         session_factory = get_session_factory()
@@ -100,7 +134,13 @@ class SqlAlchemyWeaknessRepository(SqlAlchemyRepository, WeaknessRepository):
 
 
 def _get_weakness(session: Session, *, owner_id: str, weakness_id: str) -> Weakness | None:
-    return session.scalar(select(Weakness).where(Weakness.owner_id == owner_id, Weakness.id == weakness_id))
+    return session.scalar(
+        select(Weakness).where(
+            Weakness.owner_id == owner_id,
+            Weakness.id == weakness_id,
+            Weakness.status != "deleted",
+        )
+    )
 
 
 def _weakness_response(weakness: Weakness, *, include_detail: bool = False) -> dict[str, Any]:

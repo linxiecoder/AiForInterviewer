@@ -31,7 +31,7 @@ class SqlAlchemyAssetRepository(SqlAlchemyRepository, AssetRepository):
     def get_ref(self, asset_id: str) -> ResourceRef | None:
         with self.session_scope() as session:
             found = session.get(Asset, asset_id)
-        if found is None:
+        if found is None or found.status == "deleted":
             return None
         return ResourceRef(resource_type="asset", resource_id=asset_id)
 
@@ -44,7 +44,7 @@ class SqlAlchemyAssetRepository(SqlAlchemyRepository, AssetRepository):
         q: str | None = None,
     ) -> tuple[dict[str, Any], ...]:
         with self.session_scope() as session:
-            query = select(Asset).where(Asset.owner_id == owner_id)
+            query = select(Asset).where(Asset.owner_id == owner_id, Asset.status != "deleted")
             if status is not None:
                 query = query.where(Asset.status == status)
             if asset_type is not None:
@@ -227,6 +227,40 @@ class SqlAlchemyAssetRepository(SqlAlchemyRepository, AssetRepository):
                 session.rollback()
                 raise
 
+    def soft_delete(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        asset_id: str,
+    ) -> dict[str, Any]:
+        with self.session_scope() as session:
+            try:
+                asset = _get_asset(session, owner_id=owner_id, asset_id=asset_id)
+                if asset is None:
+                    _not_found()
+                now = utc_now()
+                previous_status = asset.status
+                asset.status = "deleted"
+                asset.updated_at = now
+                confirmation_ref = _create_confirmation(
+                    session=session,
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    target_ref_id=asset.id,
+                    action="delete_asset",
+                    before_summary=previous_status,
+                    after_summary="deleted",
+                    trace_ref_ids=asset.trace_ref_ids,
+                    evidence_ref_ids=asset.evidence_ref_ids,
+                )
+                asset.user_confirmation_ref_json = confirmation_ref
+                session.commit()
+                return _asset_response(asset, versions=(), include_content=True)
+            except Exception:
+                session.rollback()
+                raise
+
     @classmethod
     def clear_state(cls) -> None:
         session_factory = get_session_factory()
@@ -239,7 +273,9 @@ class SqlAlchemyAssetRepository(SqlAlchemyRepository, AssetRepository):
 
 
 def _get_asset(session: Session, *, owner_id: str, asset_id: str) -> Asset | None:
-    return session.scalar(select(Asset).where(Asset.owner_id == owner_id, Asset.id == asset_id))
+    return session.scalar(
+        select(Asset).where(Asset.owner_id == owner_id, Asset.id == asset_id, Asset.status != "deleted")
+    )
 
 
 def _asset_response(

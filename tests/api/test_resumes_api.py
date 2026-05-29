@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import text
+
 from app.application.bindings.commands import RegisterResumeVersionCommand
 from app.application.bindings.use_cases import BindingUseCases
 from app.domain.resumes.entities import Resume
@@ -9,6 +11,7 @@ from app.domain.shared.refs import OwnerRef, VersionRef
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
+from app.infrastructure.db.session import get_session_factory
 from app.infrastructure.security.auth import AuthRuntimeSettings, build_auth_runtime
 from app.infrastructure.security.passwords import Pbkdf2PasswordHasher
 from app.main import create_app
@@ -191,6 +194,56 @@ def test_update_resume_creates_new_version_and_returns_detail() -> None:
     assert list_body["data"][0]["current_version_ref"]["version_id"] == updated["current_version_ref"]["version_id"]
 
 
+def test_resume_delete_soft_deletes_without_physical_delete() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resumes",
+        "POST",
+        json_body={
+            "title": "待删除简历",
+            "markdown_text": "# 待删除\n\n- Python",
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 201
+    resume_id = body["data"]["resume_id"]
+    version_id = body["data"]["current_version_ref"]["version_id"]
+
+    delete_status, delete_body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert delete_status == 200
+    assert delete_body["data"]["status"] == "deleted"
+
+    list_status, list_body = call_json(app, "/api/v1/resumes", headers={"cookie": owner_cookie})
+    assert list_status == 200
+    assert list_body["data"] == []
+
+    detail_status, detail_body = call_json(app, f"/api/v1/resumes/{resume_id}", headers={"cookie": owner_cookie})
+    assert detail_status == 404
+    assert detail_body["error"]["code"] == "not_found_or_inaccessible"
+
+    assert _record_status("resumes", resume_id) == "deleted"
+    assert _record_count("resumes", resume_id) == 1
+    assert _record_count("resume_versions", version_id) == 1
+
+    repeat_status, repeat_body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "DELETE",
+        headers={"cookie": owner_cookie},
+    )
+    assert repeat_status == 404
+    assert repeat_body["error"]["code"] == "not_found_or_inaccessible"
+
+
 def test_user_b_cannot_list_user_a_resumes() -> None:
     app = _app_with_two_users()
     _reset_repositories()
@@ -299,3 +352,23 @@ def _reset_repositories() -> None:
     SqlAlchemyJobRepository.clear_state()
     SqlAlchemyBindingRepository.clear_state()
     SqlAlchemyResumeRepository.clear_state()
+
+
+def _record_count(table_name: str, record_id: str) -> int:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return int(
+            session.execute(
+                text(f"SELECT COUNT(*) FROM {table_name} WHERE id = :record_id"),
+                {"record_id": record_id},
+            ).scalar_one()
+        )
+
+
+def _record_status(table_name: str, record_id: str) -> str | None:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return session.execute(
+            text(f"SELECT status FROM {table_name} WHERE id = :record_id"),
+            {"record_id": record_id},
+        ).scalar_one_or_none()

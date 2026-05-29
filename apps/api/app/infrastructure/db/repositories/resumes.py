@@ -35,7 +35,7 @@ class SqlAlchemyResumeRepository(SqlAlchemyRepository, ResumeRepository):
     def get_ref(self, resume_id: str) -> ResourceRef | None:
         with self.session_scope() as session:
             found = session.get(ResumeModel, resume_id)
-        if found is None:
+        if found is None or found.status == "deleted":
             return None
         return ResourceRef(resource_type="resume", resource_id=resume_id)
 
@@ -43,7 +43,7 @@ class SqlAlchemyResumeRepository(SqlAlchemyRepository, ResumeRepository):
         with self.session_scope() as session:
             rows = session.scalars(
                 select(ResumeModel)
-                .where(ResumeModel.owner_id == owner_id)
+                .where(ResumeModel.owner_id == owner_id, ResumeModel.status != "deleted")
                 .order_by(ResumeModel.created_at, ResumeModel.id)
             ).all()
             return [_to_domain_resume(row) for row in rows]

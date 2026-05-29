@@ -1,6 +1,10 @@
 import {
   WEAKNESS_DETAIL_SECTIONS,
+  WEAKNESS_LIST_ACTION_KEYS,
+  WEAKNESS_PAGE_LEFT_CONTROL_KEYS,
   WEAKNESS_PAGE_SEARCH_PLACEHOLDER,
+  WEAKNESS_PAGE_SEARCH_WIDTH,
+  WEAKNESS_PAGE_SECONDARY_CONTROL_KEYS,
   WEAKNESS_PAGE_TABLE_COLUMN_KEYS,
   WEAKNESS_PAGE_TOOLBAR_CONTROL_ORDER,
   WEAKNESS_PAGE_VIEW_STATES,
@@ -24,6 +28,7 @@ type WeaknessApiPathsAreStable = Expect<
       readonly list: "/weaknesses";
       readonly detail: "/weaknesses/:weakness_id";
       readonly updateStatus: "/weaknesses/:weakness_id/status";
+      readonly delete: "/weaknesses/:weakness_id";
     }
   >
 >;
@@ -39,6 +44,9 @@ type WeaknessPageStatesAreVisible = Expect<
 type WeaknessStatusActionsAreStable = Expect<
   Equal<typeof WEAKNESS_STATUS_ACTIONS, readonly ["mark_low_priority", "mark_ignored", "mark_resolved", "reopen"]>
 >;
+type WeaknessListActionsExposeSoftDelete = Expect<
+  Equal<typeof WEAKNESS_LIST_ACTION_KEYS, readonly ["view", "mark_resolved", "delete"]>
+>;
 type WeaknessDetailSectionsAreStable = Expect<
   Equal<
     typeof WEAKNESS_DETAIL_SECTIONS,
@@ -46,10 +54,15 @@ type WeaknessDetailSectionsAreStable = Expect<
   >
 >;
 type WeaknessSelectedActionTargetsPolish = Expect<
-  Equal<typeof WEAKNESS_SELECTED_ACTION_TARGET, "interview_entry_without_prefill">
+  Equal<typeof WEAKNESS_SELECTED_ACTION_TARGET, "interview_route">
 >;
-type WeaknessToolbarOrderMatchesInterviewPage = Expect<
-  Equal<typeof WEAKNESS_PAGE_TOOLBAR_CONTROL_ORDER, readonly ["primary_action", "filters", "refresh", "search"]>
+type WeaknessLeftControlsKeepPrimaryAndRefresh = Expect<Equal<typeof WEAKNESS_PAGE_LEFT_CONTROL_KEYS, readonly ["primary_action", "refresh"]>>;
+type WeaknessSecondaryControlsStayOnRight = Expect<
+  Equal<typeof WEAKNESS_PAGE_SECONDARY_CONTROL_KEYS, readonly ["search"]>
+>;
+type WeaknessToolbarOrderDropsMockFilters = Expect<
+  Equal<typeof WEAKNESS_PAGE_TOOLBAR_CONTROL_ORDER, readonly ["primary_action", "refresh", "search"]>
 >;
 type WeaknessSearchPlaceholderIsStable = Expect<Equal<typeof WEAKNESS_PAGE_SEARCH_PLACEHOLDER, "搜索薄弱项">>;
+type WeaknessSearchWidthMatchesInterviewPage = Expect<Equal<typeof WEAKNESS_PAGE_SEARCH_WIDTH, 360>>;
 type WeaknessSearchParamUsesQ = Expect<Equal<FetchWeaknessesParams["q"], string | undefined>>;
