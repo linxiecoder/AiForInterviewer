@@ -268,6 +268,31 @@ class SqlAlchemyPolishRepository(PolishRepository):
             db.add(_feedback_to_model(feedback))
             db.commit()
 
+    def get_latest_feedback_for_answer(
+        self,
+        *,
+        owner_id: str,
+        answer_id: str,
+        status: str | None = None,
+    ) -> PolishFeedback | None:
+        with self._session_factory() as db:
+            conditions = [
+                FeedbackModel.owner_id == owner_id,
+                FeedbackModel.answer_id == answer_id,
+            ]
+            if status is not None:
+                conditions.append(FeedbackModel.status == status)
+            model = db.scalars(
+                select(FeedbackModel)
+                .where(*conditions)
+                .order_by(
+                    FeedbackModel.created_at.desc(),
+                    FeedbackModel.id.desc(),
+                )
+                .limit(1)
+            ).first()
+            return _feedback_to_entity(model) if model is not None else None
+
     def list_feedbacks_for_session(self, owner_id: str, session_id: str) -> tuple[PolishFeedback, ...]:
         with self._session_factory() as db:
             rows = db.scalars(

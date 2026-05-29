@@ -91,13 +91,33 @@ class FakeLlmTransport:
 
 def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransportResult:
     bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
-    current_question = bundle.get("current_question") if isinstance(bundle.get("current_question"), dict) else {}
-    current_answer = bundle.get("current_answer") if isinstance(bundle.get("current_answer"), dict) else {}
-    project_assets = (
-        bundle.get("project_asset_summaries")
-        if isinstance(bundle.get("project_asset_summaries"), list)
-        else []
+    input_data = bundle.get("input_data") if isinstance(bundle.get("input_data"), dict) else {}
+    input_question = input_data.get("current_question")
+    fallback_question = bundle.get("current_question")
+    current_question = (
+        input_question
+        if isinstance(input_question, dict)
+        else fallback_question
+        if isinstance(fallback_question, dict)
+        else {}
     )
+    input_answer = input_data.get("current_answer")
+    fallback_answer = bundle.get("current_answer")
+    current_answer = (
+        input_answer
+        if isinstance(input_answer, dict)
+        else fallback_answer
+        if isinstance(fallback_answer, dict)
+        else {}
+    )
+    input_project_assets = input_data.get("project_asset_summaries")
+    fallback_project_assets = bundle.get("project_asset_summaries")
+    if isinstance(input_project_assets, list):
+        project_assets = input_project_assets
+    elif isinstance(fallback_project_assets, list):
+        project_assets = fallback_project_assets
+    else:
+        project_assets = []
     question_text = _fake_question_excerpt(current_question.get("question_text") or "当前题目", limit=100)
     answer_text = _fake_question_excerpt(current_answer.get("answer_text") or "当前回答", limit=120)
     asset_summary = _fake_question_excerpt(

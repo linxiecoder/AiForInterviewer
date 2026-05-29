@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 from sqlalchemy import text
 
 from app.api.v1 import polish as polish_api
-from app.application.llm.types import LlmTransportRequest
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from tests.api.asgi_client import call_json
@@ -38,12 +43,104 @@ class _FeedbackUnavailableTransport:
 class _RecordingFeedbackTransport:
     def __init__(self) -> None:
         self._fake = FakeLlmTransport()
-        self.feedback_request: LlmTransportRequest | None = None
+        self.feedback_requests: list[LlmTransportRequest] = []
 
     def generate(self, request: LlmTransportRequest):
         if request.task_type == "polish_feedback_generation":
-            self.feedback_request = request
+            self.feedback_requests.append(request)
         return self._fake.generate(request)
+
+    @property
+    def feedback_request(self) -> LlmTransportRequest | None:
+        return self.feedback_requests[-1] if self.feedback_requests else None
+
+
+class _BlockingFeedbackTransport:
+    def __init__(self) -> None:
+        self._fake = FakeLlmTransport()
+        self.feedback_calls = 0
+        self.first_feedback_entered = threading.Event()
+        self.release_feedback = threading.Event()
+        self._guard = threading.Lock()
+
+    def generate(self, request: LlmTransportRequest):
+        if request.task_type == "polish_feedback_generation":
+            with self._guard:
+                self.feedback_calls += 1
+            self.first_feedback_entered.set()
+            assert self.release_feedback.wait(timeout=2), "feedback generation was not released"
+        return self._fake.generate(request)
+
+
+class _FailOnceFeedbackTransport:
+    def __init__(self) -> None:
+        self._fake = FakeLlmTransport()
+        self.feedback_calls = 0
+
+    def generate(self, request: LlmTransportRequest):
+        if request.task_type == "polish_feedback_generation":
+            self.feedback_calls += 1
+            if self.feedback_calls == 1:
+                raise RuntimeError("first feedback provider failure")
+        return self._fake.generate(request)
+
+
+class _ValidatorFailedFeedbackTransport:
+    def __init__(self) -> None:
+        self._fake = FakeLlmTransport()
+        self.feedback_calls = 0
+
+    def generate(self, request: LlmTransportRequest):
+        if request.task_type != "polish_feedback_generation":
+            return self._fake.generate(request)
+        self.feedback_calls += 1
+        return LlmTransportResult(
+            result={
+                "schema_id": "polish_feedback_generated_v1",
+                "schema_version": "1.0",
+                "status": "generated",
+                "feedback_text": "validator should reject missing generated fields",
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_validator_failed_feedback",),
+            evidence_refs=("evidence_validator_failed_feedback",),
+        )
+
+
+def _create_answer_ready_for_feedback(app, session_factory) -> tuple[str, str]:
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": _seed_polish_sources(session_factory, OWNER_A),
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"][
+        "progress_node_ref"
+    ]
+    _, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"progress_node_ref": progress_node_ref},
+    )
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": "我会说明异步解耦、失败补偿、幂等键和观测指标。",
+        },
+    )
+    return session_id, answer_body["data"]["answer_id"]
 
 
 def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
@@ -164,6 +261,89 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
 
 
+def test_feedback_runtime_returns_existing_generated_feedback_without_second_llm_call() -> None:
+    session_factory = _session_factory()
+    llm_transport = _RecordingFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    first_status, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+    second_status, second_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+
+    assert first_status == 202
+    assert second_status == 202
+    assert first_body["data"]["feedback_status"] == "generated"
+    assert second_body["data"]["feedback_status"] == "generated"
+    assert second_body["data"]["feedback_payload"]["status"] == "generated"
+    assert second_body["data"]["feedback_id"] == first_body["data"]["feedback_id"]
+    assert second_body["data"]["feedback_payload"]["feedback_id"] == first_body["data"]["feedback_id"]
+    assert len(llm_transport.feedback_requests) == 1
+    repository = SqlAlchemyPolishRepository(session_factory)
+    generated_feedbacks = [
+        feedback
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+        if feedback.answer_id == answer_id and feedback.status == "generated"
+    ]
+    assert len(generated_feedbacks) == 1
+
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    detail_answer = next(
+        answer
+        for turn in detail_body["data"]["turns"]
+        for answer in turn["answers"]
+        if answer["answer_id"] == answer_id
+    )
+    assert detail_answer["feedback_id"] == first_body["data"]["feedback_id"]
+    assert detail_answer["feedback_payload"]["status"] == "generated"
+
+
+def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feedback() -> None:
+    session_factory = _session_factory()
+    llm_transport = _BlockingFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    def _request_feedback() -> tuple[int, dict]:
+        return call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/feedback",
+            "POST",
+            json_body={"answer_id": answer_id},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(_request_feedback)
+        assert llm_transport.first_feedback_entered.wait(timeout=2)
+        second_future = executor.submit(_request_feedback)
+        time.sleep(0.05)
+        llm_transport.release_feedback.set()
+        first_status, first_body = first_future.result(timeout=2)
+        second_status, second_body = second_future.result(timeout=2)
+
+    assert {first_status, second_status} == {202}
+    assert first_body["data"]["feedback_status"] == "generated"
+    assert second_body["data"]["feedback_status"] == "generated"
+    assert first_body["data"]["feedback_id"] == second_body["data"]["feedback_id"]
+    assert llm_transport.feedback_calls == 1
+    repository = SqlAlchemyPolishRepository(session_factory)
+    generated_feedbacks = [
+        feedback
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+        if feedback.answer_id == answer_id and feedback.status == "generated"
+    ]
+    assert len(generated_feedbacks) == 1
+
+
 def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -225,6 +405,79 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
 
     status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
     assert status_code == 200
+    detail_answer = next(
+        answer
+        for turn in detail_body["data"]["turns"]
+        for answer in turn["answers"]
+        if answer["answer_id"] == answer_id
+    )
+    assert detail_answer["feedback_payload"]["status"] == "pending"
+
+
+def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
+    session_factory = _session_factory()
+    llm_transport = _FailOnceFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    first_status, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+    assert first_status == 202
+    assert first_body["data"]["status"] == "generation_failed"
+    assert first_body["data"]["retryable"] is True
+    assert first_body["data"]["feedback_payload"]["status"] == "pending"
+    repository = SqlAlchemyPolishRepository(session_factory)
+    assert repository.list_feedbacks_for_session(OWNER_A, session_id) == ()
+
+    second_status, second_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+    assert second_status == 202
+    assert second_body["data"]["status"] == "succeeded"
+    assert second_body["data"]["feedback_status"] == "generated"
+    assert second_body["data"]["feedback_payload"]["status"] == "generated"
+    assert llm_transport.feedback_calls == 2
+    generated_feedbacks = [
+        feedback
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+        if feedback.answer_id == answer_id and feedback.status == "generated"
+    ]
+    assert len(generated_feedbacks) == 1
+
+
+def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_reserved() -> None:
+    session_factory = _session_factory()
+    llm_transport = _ValidatorFailedFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+
+    assert status_code == 202
+    data = feedback_body["data"]
+    assert data["status"] == "generation_failed"
+    assert data["retryable"] is True
+    assert data["feedback_id"] is None
+    assert data["feedback_status"] == "pending"
+    assert data["feedback_payload"]["status"] == "pending"
+    assert data["feedback_payload"]["status"] != "reserved"
+    assert data["feedback_payload"]["feedback_text"] == "本轮反馈尚未生成"
+    assert data["validation_errors"]
+    repository = SqlAlchemyPolishRepository(session_factory)
+    assert repository.list_feedbacks_for_session(OWNER_A, session_id) == ()
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
     detail_answer = next(
         answer
         for turn in detail_body["data"]["turns"]
