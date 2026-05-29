@@ -57,32 +57,31 @@ export function DashboardActivityFeed({
           <Typography.Title level={2} id="dashboard-activity-title" className={styles.panelTitle}>
             最近活动
           </Typography.Title>
-          <Typography.Text type="secondary" className={styles.panelHint}>
-            最近 8 条真实业务记录，按更新时间排序。
-          </Typography.Text>
         </div>
       </div>
 
-      {loading ? <LoadingState compact message="加载最近活动" /> : null}
-      {!loading && error ? <ErrorState compact message="最近活动加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
-      {!loading && !error && visibleItems.length === 0 ? (
-        <EmptyState compact description={searchText ? "当前搜索下暂无最近活动。" : "暂无最近活动。"} />
-      ) : null}
-      {!loading && !error && visibleItems.length > 0 ? (
-        <div className={styles.activityTable} role="list" aria-label="最近活动列表">
-          {visibleItems.map((item) => (
-            <div key={item.key} className={styles.activityRow} role="listitem">
-              <span className={styles.activitySource}>{SOURCE_LABEL[item.source]}</span>
-              <span className={styles.activityMain}>
-                <strong>{item.title}</strong>
-                <span>{item.description}</span>
-              </span>
-              <Tag className={`${styles.statusTag} ${TONE_CLASS[item.status.tone]}`}>{item.status.label}</Tag>
-              <span className={styles.activityTime}>{item.time}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <div className={visibleItems.length === 0 ? `${styles.panelBody} ${styles.panelBodyCenter}` : styles.panelBody}>
+        {loading ? <LoadingState compact message="加载最近活动" /> : null}
+        {!loading && error ? <ErrorState compact message="最近活动加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
+        {!loading && !error && visibleItems.length === 0 ? (
+          <EmptyState compact description={searchText ? "当前搜索下暂无最近活动。" : "暂无最近活动。"} />
+        ) : null}
+        {!loading && !error && visibleItems.length > 0 ? (
+          <div className={styles.activityTable} role="list" aria-label="最近活动列表">
+            {visibleItems.map((item) => (
+              <div key={item.key} className={styles.activityRow} role="listitem">
+                <span className={styles.activitySource}>{SOURCE_LABEL[item.source]}</span>
+                <span className={styles.activityMain}>
+                  <strong>{item.title}</strong>
+                  <span>{item.description}</span>
+                </span>
+                <Tag className={`${styles.statusTag} ${TONE_CLASS[item.status.tone]}`}>{item.status.label}</Tag>
+                <span className={styles.activityTime}>{item.time}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

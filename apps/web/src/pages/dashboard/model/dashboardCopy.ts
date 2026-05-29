@@ -1,6 +1,5 @@
 export const DASHBOARD_PAGE_COPY = {
   pageTitle: "工作台",
-  frameHint: "高密度任务工作台：先处理影响今天面试准备闭环的事项。",
   searchPlaceholder: "搜索简历、岗位、模拟面试、薄弱项、资产",
   sections: {
     above: {

@@ -54,44 +54,43 @@ export function DashboardRiskPanel({
           <Typography.Title level={2} id="dashboard-risk-title" className={styles.panelTitle}>
             风险与薄弱项
           </Typography.Title>
-          <Typography.Text type="secondary" className={styles.panelHint}>
-            只展示真实薄弱项、严重度和证据来源。
-          </Typography.Text>
         </div>
       </div>
 
-      {loading ? <LoadingState compact message="加载薄弱项" /> : null}
-      {!loading && error ? <ErrorState compact message="薄弱项加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
-      {!loading && !error && visibleSignals.length === 0 ? (
-        <EmptyState compact description={searchText ? "当前搜索下暂无薄弱项。" : "暂无薄弱项。"} />
-      ) : null}
-      {!loading && !error && visibleSignals.length > 0 ? (
-        <div className={styles.riskList}>
-          {visibleSignals.map((signal) => (
-            <button
-              key={signal.key}
-              type="button"
-              className={styles.riskItem}
-              onClick={() => onOpenRoute(signal.href)}
-            >
-              <span className={styles.riskItemHeader}>
-                <strong>{signal.title}</strong>
-                <Tag className={`${styles.statusTag} ${resolveSeverityClass(signal.severity)}`}>
-                  {signal.statusLabel}
-                </Tag>
-              </span>
-              <span className={styles.riskDescription}>{signal.description}</span>
-              <span className={styles.riskFooter}>
-                <span>{signal.sourceLabel}</span>
-                <span className={styles.inlineAction}>
-                  {signal.actionLabel}
-                  <ArrowRightOutlined aria-hidden />
+      <div className={visibleSignals.length === 0 ? `${styles.panelBody} ${styles.panelBodyCenter}` : styles.panelBody}>
+        {loading ? <LoadingState compact message="加载薄弱项" /> : null}
+        {!loading && error ? <ErrorState compact message="薄弱项加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
+        {!loading && !error && visibleSignals.length === 0 ? (
+          <EmptyState compact description={searchText ? "当前搜索下暂无薄弱项。" : "暂无薄弱项。"} />
+        ) : null}
+        {!loading && !error && visibleSignals.length > 0 ? (
+          <div className={styles.riskList}>
+            {visibleSignals.map((signal) => (
+              <button
+                key={signal.key}
+                type="button"
+                className={styles.riskItem}
+                onClick={() => onOpenRoute(signal.href)}
+              >
+                <span className={styles.riskItemHeader}>
+                  <strong>{signal.title}</strong>
+                  <Tag className={`${styles.statusTag} ${resolveSeverityClass(signal.severity)}`}>
+                    {signal.statusLabel}
+                  </Tag>
                 </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+                <span className={styles.riskDescription}>{signal.description}</span>
+                <span className={styles.riskFooter}>
+                  <span>{signal.sourceLabel}</span>
+                  <span className={styles.inlineAction}>
+                    {signal.actionLabel}
+                    <ArrowRightOutlined aria-hidden />
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

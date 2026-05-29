@@ -29,39 +29,38 @@ export function DashboardQuickActions({
           <Typography.Title level={2} id="dashboard-quick-actions-title" className={styles.panelTitle}>
             快捷入口
           </Typography.Title>
-          <Typography.Text type="secondary" className={styles.panelHint}>
-            只跳转到已存在的业务路由。
-          </Typography.Text>
         </div>
       </div>
 
-      {loading ? <LoadingState compact message="加载快捷入口" /> : null}
-      {!loading && error ? <ErrorState compact message="快捷入口加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
-      {!loading && !error && actions.length === 0 ? <EmptyState compact description="暂无快捷入口" /> : null}
-      {!loading && !error && actions.length > 0 ? (
-        <div className={styles.quickGrid}>
-          {actions.map((action) => (
-            <div key={action.key} className={styles.quickAction}>
-              <div className={styles.quickActionText}>
-                <strong>{action.title}</strong>
-                <span>{action.description}</span>
-                {action.disabledReason ? <small>{action.disabledReason}</small> : null}
+      <div className={actions.length === 0 ? `${styles.panelBody} ${styles.panelBodyCenter}` : styles.panelBody}>
+        {loading ? <LoadingState compact message="加载快捷入口" /> : null}
+        {!loading && error ? <ErrorState compact message="快捷入口加载失败" details={error} actionLabel="重试" onAction={onRetry} /> : null}
+        {!loading && !error && actions.length === 0 ? <EmptyState compact description="暂无快捷入口" /> : null}
+        {!loading && !error && actions.length > 0 ? (
+          <div className={styles.quickGrid}>
+            {actions.map((action) => (
+              <div key={action.key} className={styles.quickAction}>
+                <div className={styles.quickActionText}>
+                  <strong>{action.title}</strong>
+                  <span>{action.description}</span>
+                  {action.disabledReason ? <small>{action.disabledReason}</small> : null}
+                </div>
+                <Button
+                  type={action.primary ? "primary" : "default"}
+                  size="small"
+                  disabled={Boolean(action.disabledReason)}
+                  title={action.disabledReason}
+                  icon={<ArrowRightOutlined />}
+                  iconPosition="end"
+                  onClick={() => onOpenRoute(action.href)}
+                >
+                  {action.actionLabel}
+                </Button>
               </div>
-              <Button
-                type={action.primary ? "primary" : "default"}
-                size="small"
-                disabled={Boolean(action.disabledReason)}
-                title={action.disabledReason}
-                icon={<ArrowRightOutlined />}
-                iconPosition="end"
-                onClick={() => onOpenRoute(action.href)}
-              >
-                {action.actionLabel}
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : null}
+            ))}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

@@ -6,7 +6,7 @@ import {
   MessageOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Tag, Typography } from "antd";
+import { Typography } from "antd";
 import type { ReactNode } from "react";
 import { EmptyState } from "../../../shared/ui/EmptyState";
 import { ErrorState } from "../../../shared/ui/ErrorState";
@@ -65,17 +65,15 @@ export function DashboardKpiStrip({
           type="button"
           className={styles.kpiTile}
           onClick={() => onOpenRoute(KPI_META[item.key].href)}
-          aria-label={`${item.title}：${item.value}，${item.hint}`}
+          aria-label={`${item.title}：${item.value}`}
         >
           <span className={styles.kpiHeader}>
             <span className={styles.kpiIcon} aria-hidden>
               {KPI_META[item.key].icon}
             </span>
-            <Tag className={styles.sourceTag}>{item.sourceLabel}</Tag>
+            <Typography.Text className={styles.kpiLabel}>{item.title}</Typography.Text>
           </span>
-          <Typography.Text className={styles.kpiLabel}>{item.title}</Typography.Text>
           <strong className={styles.kpiValue}>{item.value}</strong>
-          <span className={styles.kpiHint}>{item.hint}</span>
         </button>
       ))}
       {empty ? (

@@ -37,9 +37,6 @@ export function DashboardReviewTrainingLoop({
           <Typography.Title level={2} id="dashboard-review-loop-title" className={styles.panelTitle}>
             复盘训练闭环
           </Typography.Title>
-          <Typography.Text type="secondary" className={styles.panelHint}>
-            模拟面试、报告、薄弱项、训练建议和资产沉淀都来自现有数据。
-          </Typography.Text>
         </div>
       </div>
 
