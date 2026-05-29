@@ -57,6 +57,7 @@ from app.application.polish.feedback_reserved import (
     RESERVED_FEEDBACK_SCHEMA_VERSION,
     RESERVED_FEEDBACK_TEXT,
 )
+from app.application.polish.feedback_generation_service import FeedbackGenerationService
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.question_generation_policy import (
@@ -587,6 +588,7 @@ def _use_cases(
             llm_transport=llm_transport,
             runtime_policy=question_generation_policy,
         ),
+        feedback_generation_service=FeedbackGenerationService(llm_transport=llm_transport),
         question_generation_policy=question_generation_policy,
         question_generation_policy_resolver=question_generation_policy_resolver,
         ai_orchestration_facade=ai_orchestration_facade,

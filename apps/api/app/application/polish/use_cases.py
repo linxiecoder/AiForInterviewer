@@ -53,7 +53,14 @@ from app.application.polish.entities import (
     PolishTaskStatus,
     PolishTopic,
 )
-from app.application.polish.feedback_reserved import build_reserved_feedback_artifacts
+from app.application.polish.feedback_generation_service import (
+    FeedbackGenerationContext,
+    FeedbackGenerationService,
+)
+from app.application.polish.feedback_schema import (
+    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+    POLISH_FEEDBACK_TASK_TYPE,
+)
 from app.application.polish.ports import PolishRepository
 from app.application.polish.question_generation_policy import (
     DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
@@ -155,6 +162,7 @@ class PolishUseCases:
         question_generation_service: QuestionGenerationService | None = None,
         question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
         question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver | None = None,
+        feedback_generation_service: FeedbackGenerationService | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
@@ -171,6 +179,7 @@ class PolishUseCases:
         self._question_generation_policy_resolver = (
             question_generation_policy_resolver or resolve_question_generation_runtime_policy
         )
+        self._feedback_generation_service = feedback_generation_service or FeedbackGenerationService()
         self._ai_orchestration_facade = ai_orchestration_facade
 
     def _resolve_question_generation_policy(
@@ -888,24 +897,77 @@ class PolishUseCases:
         now = utc_now()
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
-        artifacts = build_reserved_feedback_artifacts(
-            session=session,
-            question=question,
-            answer=answer,
+        detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+        turn = _find_turn(detail.turns, question.question_id)
+        answer_detail = _find_turn_answer(turn, answer.answer_id) if turn is not None else None
+        if turn is None or answer_detail is None:
+            return ApplicationResult(
+                error=DomainError(code="not_found_or_inaccessible", message="Answer turn not found")
+            )
+        generation_context = _build_feedback_generation_context(
+            detail=detail,
+            turn=turn,
+            answer=answer_detail,
             owner_id=command.owner_id,
             actor_id=command.actor_id,
-            task_id=task_id,
-            feedback_id=feedback_id,
-            created_at=now,
         )
-        self._polish_repository.add_feedback(artifacts.feedback)
+        generation_result = self._feedback_generation_service.generate(generation_context)
+        if not generation_result.succeeded or generation_result.payload is None:
+            task = PolishTaskStatus(
+                ai_task_id=task_id,
+                task_type=POLISH_FEEDBACK_TASK_TYPE,
+                status=AiTaskStatus.GENERATION_FAILED,
+                contract_ids=POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+                retryable=True,
+                result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
+                user_visible_status="反馈生成失败，可重试",
+                validation_errors=generation_result.validation_errors,
+            )
+            self._polish_repository.add_task(
+                task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.answer_id,
+            )
+            return ApplicationResult(value=task)
+
+        payload = _generated_feedback_payload_for_storage(
+            generation_result.payload,
+            session_id=session.session_id,
+            question_id=question.question_id,
+            answer_id=answer.answer_id,
+            feedback_id=feedback_id,
+        )
+        feedback = PolishFeedback(
+            feedback_id=feedback_id,
+            owner_id=command.owner_id,
+            actor_id=command.actor_id,
+            session_id=session.session_id,
+            answer_id=answer.answer_id,
+            ai_task_id=task_id,
+            score_result_id=None,
+            feedback_summary=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            status="generated",
+            created_at=now,
+            updated_at=now,
+        )
+        task = PolishTaskStatus(
+            ai_task_id=task_id,
+            task_type=POLISH_FEEDBACK_TASK_TYPE,
+            status=AiTaskStatus.SUCCEEDED,
+            contract_ids=POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+            retryable=False,
+            result_ref=TraceRef(trace_ref_id=feedback_id, trace_type="feedback", created_at=now),
+            user_visible_status="反馈已生成",
+        )
+        self._polish_repository.add_feedback(feedback)
         self._polish_repository.add_task(
-            artifacts.task,
+            task,
             owner_id=command.owner_id,
             actor_id=command.actor_id,
             target_ref_id=command.answer_id,
         )
-        return ApplicationResult(value=artifacts.task)
+        return ApplicationResult(value=task)
 
     def refresh_progress_tree_state(
         self,
@@ -1637,6 +1699,202 @@ def _find_turn_answer(
     if answer_id is None:
         return None
     return next((answer for answer in turn.answers if answer.answer_id == answer_id), None)
+
+
+def _build_feedback_generation_context(
+    *,
+    detail: PolishSessionDetail,
+    turn: PolishSessionTurn,
+    answer: PolishSessionAnswerDetail,
+    owner_id: str,
+    actor_id: str,
+) -> FeedbackGenerationContext:
+    progress_context = detail.progress_context if isinstance(detail.progress_context, dict) else {}
+    return FeedbackGenerationContext(
+        owner_id=owner_id,
+        actor_id=actor_id,
+        session_id=detail.session.session_id,
+        question_id=turn.question_id,
+        answer_id=answer.answer_id,
+        question_text=turn.question_text,
+        answer_text=answer.answer_text,
+        answer_round=answer.answer_round,
+        polish_theme=detail.session.polish_theme or detail.session.topic_id or "",
+        progress_node_ref=turn.progress_node_ref or "",
+        question_sources=_feedback_question_sources(turn.question_sources),
+        evidence_refs=tuple(ref for ref in turn.evidence_refs if isinstance(ref, str) and ref.strip()),
+        same_question_answers=_feedback_same_question_answers(turn=turn, current_answer_id=answer.answer_id),
+        same_project_turns=(),
+        session_recent_turns=_feedback_recent_turns(detail.turns),
+        project_asset_summaries=(),
+        job_snapshot=_feedback_job_snapshot(progress_context.get("job_snapshot")),
+        resume_snapshot=_feedback_resume_snapshot(progress_context.get("resume_snapshot")),
+        progress_node_snapshot=_feedback_progress_node_snapshot(
+            detail.progress_tree_plan,
+            progress_node_ref=turn.progress_node_ref,
+            question_text=turn.question_text,
+        ),
+    )
+
+
+def _feedback_question_sources(sources: tuple[PolishQuestionSource, ...]) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {
+            "index": source.index,
+            "source_type": source.source_type,
+            "title": source.title,
+            "excerpt": source.excerpt,
+            "ref_id": source.ref_id,
+            "availability": source.availability,
+        }
+        for source in sources
+    )
+
+
+def _feedback_same_question_answers(
+    *,
+    turn: PolishSessionTurn,
+    current_answer_id: str,
+) -> tuple[dict[str, Any], ...]:
+    answers: list[dict[str, Any]] = []
+    for answer in turn.answers:
+        if answer.answer_id == current_answer_id:
+            continue
+        feedback_payload = answer.feedback_payload if isinstance(answer.feedback_payload, dict) else {}
+        loss_point_ids = []
+        loss_points = feedback_payload.get("loss_points") if isinstance(feedback_payload, dict) else None
+        if isinstance(loss_points, list):
+            loss_point_ids = [
+                str(loss_point.get("loss_point_id"))
+                for loss_point in loss_points
+                if isinstance(loss_point, dict) and loss_point.get("loss_point_id")
+            ]
+        answers.append(
+            {
+                "answer_id": answer.answer_id,
+                "answer_round": answer.answer_round,
+                "answer_summary": answer.answer_text,
+                "feedback_summary": answer.feedback_text,
+                "loss_point_ids": loss_point_ids,
+            }
+        )
+    return tuple(answers)
+
+
+def _feedback_recent_turns(turns: tuple[PolishSessionTurn, ...]) -> tuple[dict[str, Any], ...]:
+    recent_turns: list[dict[str, Any]] = []
+    for turn in turns[-5:]:
+        latest_answer = turn.answers[-1] if turn.answers else None
+        recent_turns.append(
+            {
+                "question_id": turn.question_id,
+                "question_text": turn.question_text,
+                "progress_node_ref": turn.progress_node_ref,
+                "answer_id": latest_answer.answer_id if latest_answer is not None else None,
+                "answer_round": latest_answer.answer_round if latest_answer is not None else None,
+                "answer_summary": latest_answer.answer_text if latest_answer is not None else None,
+                "feedback_summary": latest_answer.feedback_text if latest_answer is not None else None,
+            }
+        )
+    return tuple(recent_turns)
+
+
+def _feedback_job_snapshot(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "job_id": value.get("job_id"),
+        "job_version_id": value.get("job_version_id"),
+        "title": value.get("title"),
+        "company": value.get("company"),
+        "department": value.get("department"),
+        "responsibilities": _clean_feedback_list(value.get("responsibilities")),
+        "requirements": _clean_feedback_list(value.get("requirements")),
+        "other_notes": value.get("other_notes"),
+        "content_digest": value.get("content_digest"),
+    }
+
+
+def _feedback_resume_snapshot(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "resume_id": value.get("resume_id"),
+        "resume_version_id": value.get("resume_version_id"),
+        "title": value.get("title"),
+        "summary": value.get("summary"),
+        "skills": _clean_feedback_list(value.get("skills")),
+        "projects": _clean_feedback_list(value.get("project_experiences")),
+        "work_experiences": _clean_feedback_list(value.get("work_experiences")),
+        "content_digest": value.get("content_digest"),
+    }
+
+
+def _feedback_progress_node_snapshot(
+    progress_tree_plan: dict[str, Any],
+    *,
+    progress_node_ref: str | None,
+    question_text: str,
+) -> dict[str, Any]:
+    if progress_node_ref:
+        for node in _iter_progress_nodes(progress_tree_plan.get("nodes")):
+            node_ref = _feedback_progress_node_ref(node)
+            if node_ref == progress_node_ref:
+                snapshot = dict(node)
+                snapshot.setdefault("node_ref", progress_node_ref)
+                snapshot.setdefault("question_title", question_text)
+                return snapshot
+    return {
+        "node_ref": progress_node_ref or "",
+        "question_title": question_text,
+        "title": question_text,
+    }
+
+
+def _iter_progress_nodes(value: Any):
+    if isinstance(value, dict):
+        yield value
+        for child_key in ("children", "items", "nodes", "deferred_candidates"):
+            yield from _iter_progress_nodes(value.get(child_key))
+    elif isinstance(value, list) or isinstance(value, tuple):
+        for item in value:
+            yield from _iter_progress_nodes(item)
+
+
+def _feedback_progress_node_ref(node: dict[str, Any]) -> str | None:
+    for key in ("progress_node_ref", "node_ref", "ref", "id"):
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _clean_feedback_list(value: Any) -> list[Any]:
+    if not isinstance(value, list) and not isinstance(value, tuple):
+        return []
+    return [item for item in value if item not in (None, "")]
+
+
+def _generated_feedback_payload_for_storage(
+    payload: dict[str, Any],
+    *,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    feedback_id: str,
+) -> dict[str, Any]:
+    stored = dict(payload)
+    feedback_text = str(stored.get("feedback_text") or "")
+    stored["feedback_id"] = feedback_id
+    stored["polish_session_ref"] = {"resource_type": "polish_session", "resource_id": session_id}
+    stored["question_ref"] = {"resource_type": "question", "resource_id": question_id}
+    stored["answer_ref"] = {"resource_type": "answer", "resource_id": answer_id}
+    stored.setdefault("feedback_summary", feedback_text)
+    stored.setdefault("candidate_refs", [])
+    stored.setdefault("legacy_compatibility", {"feedback_text": feedback_text})
+    metadata = stored.get("feedback_metadata")
+    stored["feedback_metadata"] = (metadata if isinstance(metadata, dict) else {}) | {"llm_called": True}
+    return stored
 
 
 def _select_follow_up_target(

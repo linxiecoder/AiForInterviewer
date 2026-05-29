@@ -26,6 +26,7 @@ from app.application.polish.progress_prompts import (
     build_progress_tree_state_refresh_prompt,
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion
+from app.application.polish.feedback_reserved import build_reserved_feedback_artifacts
 from app.application.polish.next_question_agent import (
     NEXT_QUESTION_AGENT_PROMPT_VERSION,
     NEXT_QUESTION_AGENT_SCHEMA_ID,
@@ -3354,15 +3355,14 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_body["data"]["status"] == "succeeded"
     assert feedback_body["data"]["score_type"] is None
     feedback_payload = feedback_body["data"]["feedback_payload"]
-    assert feedback_payload["schema_id"] == "polish_feedback_reserved_v1"
+    assert feedback_payload["schema_id"] == "polish_feedback_generated_v1"
     assert feedback_payload["schema_version"] == "1.0"
-    assert feedback_payload["status"] == "reserved"
-    assert feedback_payload["score_result"] is None
-    assert feedback_payload["reference_answer"] is None
+    assert feedback_payload["status"] == "generated"
+    assert feedback_payload["score_result"]["score_value"] == 82
+    assert feedback_payload["reference_answer"]["sections"]
+    assert feedback_payload["loss_points"]
     assert feedback_payload["candidate_refs"] == []
-    assert feedback_payload["feedback_metadata"]["reserved"] is True
-    assert feedback_payload["feedback_metadata"]["llm_called"] is False
-    assert feedback_payload["feedback_metadata"]["candidate_extraction_called"] is False
+    assert feedback_payload["feedback_metadata"]["llm_called"] is True
     assert "weaknesses" not in feedback_payload
     assert "assets" not in feedback_payload
     with session_factory() as db:
@@ -3380,12 +3380,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(feedback_body)
 
-    feedback_task_schema_payload = PolishTaskStatusResponse.model_validate(feedback_body["data"]).model_dump(mode="json")
-    assert feedback_task_schema_payload["feedback_payload"]["status"] == "reserved"
-    assert feedback_task_schema_payload["feedback_payload"]["score_result"] is None
-    assert feedback_task_schema_payload["feedback_payload"]["candidate_refs"] == []
-    assert "weaknesses" not in feedback_task_schema_payload["feedback_payload"]
-    assert "assets" not in feedback_task_schema_payload["feedback_payload"]
+    assert feedback_body["data"]["feedback_status"] == "generated"
+    assert feedback_body["data"]["feedback_payload"]["status"] == "generated"
+    assert "weaknesses" not in feedback_body["data"]["feedback_payload"]
+    assert "assets" not in feedback_body["data"]["feedback_payload"]
 
     status_code, structured_detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
     assert status_code == 200
@@ -3395,11 +3393,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
         for answer in turn["answers"]
         if answer["answer_id"] == first_answer_id
     )
-    structured_answer_schema_payload = PolishSessionAnswerResponse.model_validate(structured_answer).model_dump(mode="json")
-    structured_session_payload = structured_answer_schema_payload["feedback_payload"]
-    assert structured_session_payload["status"] == "reserved"
+    structured_session_payload = structured_answer["feedback_payload"]
+    assert structured_session_payload["status"] == "generated"
     assert structured_session_payload["candidate_refs"] == []
-    assert structured_session_payload["score_result"] is None
+    assert structured_session_payload["score_result"]["score_value"] == 82
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(structured_detail_body)
 
@@ -3429,12 +3426,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert second_feedback_body["data"]["answer_round"] == 2
     retry_payload = second_feedback_body["data"]["feedback_payload"]
     assert retry_payload["answer_ref"]["resource_id"] == second_answer_id
-    assert retry_payload["status"] == "reserved"
-    assert retry_payload["score_result"] is None
+    assert retry_payload["status"] == "generated"
+    assert retry_payload["score_result"]["score_value"] == 82
     assert retry_payload["candidate_refs"] == []
-    assert retry_payload["feedback_metadata"]["reserved"] is True
-    retry_task_schema_payload = PolishTaskStatusResponse.model_validate(second_feedback_body["data"]).model_dump(mode="json")
-    assert retry_task_schema_payload["feedback_payload"]["status"] == "reserved"
+    assert retry_payload["feedback_metadata"]["llm_called"] is True
     json.dumps(retry_payload, ensure_ascii=False)
     retry_payload_keys = _collect_keys(retry_payload)
     assert "previous_feedbacks" not in retry_payload_keys
@@ -3513,8 +3508,8 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert turn["answers"][1]["answer_text"] == second_answer_text
     assert turn["answers"][0]["feedback_text"] != "本轮反馈尚未生成"
     assert turn["answers"][1]["feedback_text"] != "本轮反馈尚未生成"
-    assert "反馈能力已预留" in turn["answers"][0]["feedback_text"]
-    assert "反馈能力已预留" in turn["answers"][1]["feedback_text"]
+    assert "回答已经覆盖异步解耦" in turn["answers"][0]["feedback_text"]
+    assert "回答已经覆盖异步解耦" in turn["answers"][1]["feedback_text"]
     assert detail_data["progress_tree_state"]["updated_from_turns_count"] == 1
     state_text = str(detail_data["progress_tree_state"])
     assert "v2_local_state_refresh" in state_text
@@ -3574,15 +3569,15 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     assert status_code == 202
     assert elapsed_seconds < 5.0
     payload = feedback_body["data"]["feedback_payload"]
-    assert payload["status"] == "reserved"
-    assert payload["score_result"] is None
+    assert payload["status"] == "generated"
+    assert payload["score_result"]["score_value"] == 82
     assert payload["candidate_refs"] == []
-    assert payload["feedback_metadata"]["reserved"] is True
-    assert payload["should_generate_next_question"] is False
-    assert payload.get("next_retry_focus") in (None, [])
+    assert payload["feedback_metadata"]["llm_called"] is True
+    assert payload["same_question_effect"]["repeated_loss_point_ids"]
+    assert payload["same_question_effect"]["next_retry_focus"]
 
 
-def test_polish_feedback_falls_back_when_question_metadata_missing() -> None:
+def test_polish_feedback_generates_when_question_metadata_missing() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
@@ -3630,9 +3625,8 @@ def test_polish_feedback_falls_back_when_question_metadata_missing() -> None:
     assert status_code == 202
     payload = feedback_body["data"]["feedback_payload"]
     assert payload["feedback_text"]
-    assert payload["status"] == "reserved"
-    assert payload["feedback_metadata"]["reserved"] is True
-    assert payload["feedback_metadata"]["llm_called"] is False
+    assert payload["status"] == "generated"
+    assert payload["feedback_metadata"]["llm_called"] is True
 
 
 def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
@@ -3758,6 +3752,7 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
 
 def test_polish_feedback_reserved_does_not_extract_candidates() -> None:
     session_factory = _session_factory()
+    repository = SqlAlchemyPolishRepository(session_factory)
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
     _, create_body = call_json(
@@ -3786,15 +3781,25 @@ def test_polish_feedback_reserved_does_not_extract_candidates() -> None:
         json_body={"question_id": question_id, "answer_text": "我会补充接口幂等和失败补偿。"},
     )
 
-    status_code, feedback_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/feedback",
-        "POST",
-        json_body={"answer_id": answer_body["data"]["answer_id"]},
+    session = repository.get_session(OWNER_A, session_id)
+    question = repository.get_question(OWNER_A, question_id)
+    answer = repository.get_answer(OWNER_A, answer_body["data"]["answer_id"])
+    assert session is not None
+    assert question is not None
+    assert answer is not None
+
+    artifacts = build_reserved_feedback_artifacts(
+        session=session,
+        question=question,
+        answer=answer,
+        owner_id=OWNER_A,
+        actor_id=OWNER_A,
+        task_id="task_reserved_helper",
+        feedback_id="trc_reserved_helper",
+        created_at=utc_now(),
     )
 
-    assert status_code == 202
-    payload = feedback_body["data"]["feedback_payload"]
+    payload = artifacts.payload
     assert payload["status"] == "reserved"
     assert payload["candidate_refs"] == []
     assert payload["feedback_metadata"]["candidate_extraction_called"] is False
