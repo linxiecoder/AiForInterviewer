@@ -269,8 +269,8 @@ def test_prompt_asset_contains_current_question_and_answer_without_private_field
     asset = build_feedback_prompt_asset(_context())
 
     assert asset["task_type"] == POLISH_FEEDBACK_TASK_TYPE
-    assert asset["current_question"]["question_text"] == _context()["question_text"]
-    assert asset["current_answer"]["answer_text"] == _context()["answer_text"]
+    assert asset["input_data"]["current_question"]["question_text"] == _context()["question_text"]
+    assert asset["input_data"]["current_answer"]["answer_text"] == _context()["answer_text"]
     assert not _contains_forbidden_key(asset)
 
 
@@ -279,7 +279,7 @@ def test_prompt_asset_includes_same_question_answers() -> None:
 
     asset = build_feedback_prompt_asset(_context())
 
-    assert asset["same_question_answers"] == _context()["same_question_answers"]
+    assert asset["input_data"]["same_question_answers"] == _context()["same_question_answers"]
 
 
 def test_prompt_asset_includes_project_asset_summaries() -> None:
@@ -287,7 +287,7 @@ def test_prompt_asset_includes_project_asset_summaries() -> None:
 
     asset = build_feedback_prompt_asset(_context())
 
-    assert asset["project_asset_summaries"] == _context()["project_asset_summaries"]
+    assert asset["input_data"]["project_asset_summaries"] == _context()["project_asset_summaries"]
 
 
 def _contains_forbidden_key(value: object) -> bool:

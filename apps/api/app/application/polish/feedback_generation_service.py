@@ -94,14 +94,13 @@ class FeedbackGenerationService:
             prompt_asset=prompt_asset,
             input_refs=_input_refs(normalized_context),
         )
-        agent_metadata = metadata | agent_result.metadata
+        agent_metadata = metadata | _agent_envelope_metadata(agent_result)
         if not agent_result.succeeded:
             return FeedbackGenerationResult(
                 succeeded=False,
                 payload=None,
                 validation_errors=agent_result.validation_errors,
                 low_confidence_flags=agent_result.low_confidence_flags,
-                trace_refs=agent_result.trace_refs,
                 metadata=agent_metadata,
             )
 
@@ -112,7 +111,6 @@ class FeedbackGenerationService:
                 payload=None,
                 validation_errors=validation_errors,
                 low_confidence_flags=agent_result.low_confidence_flags,
-                trace_refs=agent_result.trace_refs,
                 metadata=agent_metadata
                 | {
                     "llm_output_validation_status": "invalid",
@@ -129,7 +127,7 @@ class FeedbackGenerationService:
                 ]
             )
         )
-        trace_refs = agent_result.trace_refs or _string_tuple(normalized_payload.get("trace_refs"))
+        trace_refs = _string_tuple(normalized_payload.get("trace_refs"))
         return FeedbackGenerationResult(
             succeeded=True,
             payload=normalized_payload,
@@ -142,6 +140,16 @@ class FeedbackGenerationService:
                 "llm_called": True,
             },
         )
+
+
+def _agent_envelope_metadata(agent_result: object) -> dict[str, Any]:
+    if not hasattr(agent_result, "to_payload_dict"):
+        return {}
+    envelope_payload = agent_result.to_payload_dict()
+    metadata = envelope_payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    return metadata
 
 
 def _base_metadata() -> dict[str, Any]:
