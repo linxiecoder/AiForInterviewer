@@ -118,6 +118,14 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
         project_assets = fallback_project_assets
     else:
         project_assets = []
+    input_same_question_answers = input_data.get("same_question_answers")
+    fallback_same_question_answers = bundle.get("same_question_answers")
+    if isinstance(input_same_question_answers, list):
+        same_question_answers = input_same_question_answers
+    elif isinstance(fallback_same_question_answers, list):
+        same_question_answers = fallback_same_question_answers
+    else:
+        same_question_answers = []
     question_text = _fake_question_excerpt(current_question.get("question_text") or "当前题目", limit=100)
     answer_text = _fake_question_excerpt(current_answer.get("answer_text") or "当前回答", limit=120)
     asset_summary = _fake_question_excerpt(
@@ -131,6 +139,7 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
             "question": question_text,
             "answer": answer_text,
             "assets": asset_summary,
+            "same_question_answer_count": len(same_question_answers),
         },
         ensure_ascii=True,
         sort_keys=True,
@@ -164,14 +173,8 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
             {
                 "loss_point_id": "lp_recovery_boundary",
                 "severity": "major",
-                "deduction": 12,
+                "deduction": 18,
                 "reason": "没有说明失败恢复的触发条件、终止条件和人工介入边界。",
-            },
-            {
-                "loss_point_id": "lp_observability",
-                "severity": "minor",
-                "deducted_points": 6,
-                "reason": "缺少消息堆积、失败率和恢复耗时等观测指标。",
             },
         ],
         "reference_answer": {
@@ -182,34 +185,20 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
                     "content": "说明重试、补偿、幂等键、死信队列、终止条件和人工介入边界。",
                     "addresses_loss_point_ids": ["lp_recovery_boundary"],
                 },
-                {
-                    "section_id": "ref_observability",
-                    "title": "观测与告警",
-                    "content": "补充消息堆积、失败率、恢复耗时、告警阈值和回滚动作。",
-                    "addresses_loss_point_ids": ["lp_observability"],
-                },
             ]
         },
-        "knowledge_points": ["事务消息", "幂等设计", "失败补偿"],
-        "technical_principles": ["先定义失败恢复边界，再选择消息队列和补偿策略。"],
+        "knowledge_points": [],
+        "technical_principles": [],
         "same_question_effect": {
             "improved_points": ["回答覆盖了异步解耦和失败重试"],
-            "repeated_loss_point_ids": ["lp_observability"],
+            "repeated_loss_point_ids": ["lp_recovery_boundary"] if same_question_answers else [],
             "regressed_points": [],
             "next_retry_focus": ["补齐恢复指标和终止条件"],
             "score_delta": 6,
         },
-        "project_asset_consistency_check": {"status": "consistent", "conflicts": []},
-        "session_similarity_check": {"status": "benign_reuse"},
-        "project_asset_update_candidates": [
-            {
-                "candidate_type": "project_asset_update_candidate",
-                "candidate_ref": stable_resource_id("asset", f"fake-feedback-asset:{seed}"),
-                "user_confirmation_required": True,
-                "target_asset_ref": {"resource_type": "asset", "resource_id": "asset_fake_payment"},
-                "summary": asset_summary or "补充项目中的失败恢复和观测指标表达素材。",
-            }
-        ],
+        "project_asset_consistency_check": {"status": "not_applicable"},
+        "session_similarity_check": {"status": "not_applicable"},
+        "project_asset_update_candidates": [],
         "next_recommended_actions": ["围绕失败恢复终止条件再追问一轮"],
         "low_confidence_flags": [],
         "trace_refs": [{"resource_type": "llm_trace", "resource_id": trace_ref}],

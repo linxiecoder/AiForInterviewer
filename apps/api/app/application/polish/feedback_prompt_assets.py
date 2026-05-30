@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -16,6 +17,8 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_GENERATED_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
     POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_QUICK_MODE,
+    POLISH_FEEDBACK_QUICK_TASK,
     POLISH_FEEDBACK_TASK_TYPE,
 )
 
@@ -65,9 +68,15 @@ _UNSAFE_CONTEXT_KEYS = frozenset(
     }
 )
 _SOURCE_REF_KEYS = ("resource_type", "resource_id", "ref_type", "ref_id", "source_ref", "source_type")
-_EVIDENCE_ITEMS_LIMIT = 12
+_EVIDENCE_ITEMS_LIMIT = 5
+_PROVIDER_EVIDENCE_ITEMS_LIMIT = 5
+_PROVIDER_PROMPT_CHAR_LIMIT = 12000
+_PROVIDER_PROMPT_TARGET_CHARS = 8000
+_QUESTION_SOURCE_LIMIT = 2
+_JOB_REQUIREMENTS_LIMIT = 2
+_RESUME_PROJECTS_LIMIT = 2
 _SESSION_RECENT_TURNS_LIMIT = 3
-_SAME_QUESTION_ANSWERS_LIMIT = 5
+_SAME_QUESTION_ANSWERS_LIMIT = 1
 _RELATED_CONTEXT_ITEMS_LIMIT = 5
 _PROJECT_ASSET_SUMMARIES_LIMIT = 5
 
@@ -77,18 +86,24 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
 
     safety_policy = _feedback_safety_policy()
     validation_rules = _validation_rules()
+    evidence_refs = _string_list(_get_list(context, "evidence_refs"))
+    progress_node_ref = _get_text(context, "progress_node_ref", max_chars=200)
+    related_terms = _related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))
     input_data = {
         "current_question": {
             "question_id": _get_text(context, "question_id"),
-            "question_text": _get_text(context, "question_text", max_chars=3000),
+            "question_text": _get_text(context, "question_text", max_chars=600),
             "polish_theme": _get_text(context, "polish_theme", max_chars=500),
-            "progress_node_ref": _get_text(context, "progress_node_ref", max_chars=200),
-            "question_sources": _compact_question_sources(_get_list(context, "question_sources")),
-            "evidence_refs": _get_list(context, "evidence_refs"),
+            "progress_node_ref": progress_node_ref,
+            "question_sources": _compact_question_sources(
+                _get_list(context, "question_sources"),
+                evidence_refs=(*evidence_refs, progress_node_ref),
+            ),
+            "evidence_refs": evidence_refs,
         },
         "current_answer": {
             "answer_id": _get_text(context, "answer_id"),
-            "answer_text": _get_text(context, "answer_text", max_chars=4000),
+            "answer_text": _get_text(context, "answer_text", max_chars=1200),
             "answer_round": _get(context, "answer_round"),
         },
         "same_question_answers": _compact_same_question_answers(_get_list(context, "same_question_answers")),
@@ -97,14 +112,14 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         "project_asset_summaries": _compact_project_asset_summaries(_get_list(context, "project_asset_summaries")),
         "context_snapshots": {
             "job_snapshot": _compact_job_snapshot(_get_dict(context, "job_snapshot")),
-            "resume_snapshot": _compact_resume_snapshot(_get_dict(context, "resume_snapshot")),
+            "resume_snapshot": _compact_resume_snapshot(_get_dict(context, "resume_snapshot"), related_terms=related_terms),
             "progress_node_snapshot": _compact_progress_node_snapshot(_get_dict(context, "progress_node_snapshot")),
         },
     }
     input_data["evidence_items"] = [item.to_prompt_dict() for item in _evidence_items(context)]
     input_data["focus_target"] = _focus_target(context).to_prompt_dict()
 
-    return AgentPromptBundle(
+    prompt_asset = AgentPromptBundle(
         task_type=POLISH_FEEDBACK_TASK_TYPE,
         prompt_version=POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
         schema_id=POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
@@ -160,6 +175,9 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
             },
         },
     ).to_prompt_asset_dict()
+    prompt_asset["feedback_mode"] = POLISH_FEEDBACK_QUICK_MODE
+    prompt_asset["provider_prompt"] = _provider_compact_prompt(input_data)
+    return prompt_asset
 
 
 def _feedback_safety_policy() -> AgentSafetyPolicy:
@@ -199,27 +217,222 @@ def _validation_rules() -> tuple[str, ...]:
     return (
         "Output schema_id must be polish_feedback_generated_v1.",
         "Do not invent user experience or project facts.",
-        "If the answer conflicts with a project asset, ask for clarification instead of choosing for the user.",
         "Every major loss point must be covered by a reference answer section.",
-        "Asset updates must be project_asset_update_candidate only and require user confirmation.",
-        "Similar content in the same mock interview should be reported as repeated, covered, or conflicting instead of deducting without evidence.",
+        "Keep project asset and session similarity checks lightweight; use not_applicable when evidence is insufficient.",
+        "Do not generate project asset update candidates in quick mode.",
     )
+
+
+def _provider_compact_prompt(input_data: dict[str, Any]) -> dict[str, Any]:
+    current_question = _safe_dict(input_data.get("current_question"))
+    current_answer = _safe_dict(input_data.get("current_answer"))
+    question_sources = _limit_question_sources(_safe_list(current_question.get("question_sources")))
+    same_question_answers = _limit_same_question_answers(_safe_list(input_data.get("same_question_answers")))
+    context_snapshots = _safe_dict(input_data.get("context_snapshots"))
+    progress_node = _safe_dict(context_snapshots.get("progress_node_snapshot"))
+    job_snapshot = _safe_dict(context_snapshots.get("job_snapshot"))
+    resume_snapshot = _safe_dict(context_snapshots.get("resume_snapshot"))
+    evidence_items = _provider_evidence_items(_safe_list(input_data.get("evidence_items")))
+    provider_prompt: dict[str, Any] = {
+        "task": POLISH_FEEDBACK_QUICK_TASK,
+        "task_type": POLISH_FEEDBACK_TASK_TYPE,
+        "feedback_mode": POLISH_FEEDBACK_QUICK_MODE,
+        "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+        "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+        "input_contract": {
+            "raw_model_io_storage": False,
+            "context_mode": "quick_compact",
+        },
+        "required_json_schema": {
+            "required_fields": [
+                "schema_id",
+                "schema_version",
+                "status",
+                "contract_ids",
+                "feedback_text",
+                "answer_summary",
+                "score_result",
+                "explicit_score",
+                "implicit_score",
+                "loss_points",
+                "reference_answer.sections",
+                "same_question_effect",
+                "next_recommended_actions",
+                "low_confidence_flags",
+                "feedback_metadata",
+            ],
+            "default_empty_fields": [
+                "knowledge_points",
+                "technical_principles",
+                "project_asset_update_candidates",
+            ],
+            "not_applicable_fields": [
+                "project_asset_consistency_check",
+                "session_similarity_check",
+            ],
+        },
+        "current_question": {
+            "question_id": _get_clean_text(current_question.get("question_id"), max_chars=120),
+            "question_text": _get_clean_text(current_question.get("question_text"), max_chars=600),
+            "polish_theme": _get_clean_text(current_question.get("polish_theme"), max_chars=200),
+            "progress_node_ref": _get_clean_text(current_question.get("progress_node_ref"), max_chars=120),
+            "question_sources": question_sources,
+            "evidence_refs": _string_list(current_question.get("evidence_refs"), max_chars=120)[:5],
+        },
+        "current_answer": {
+            "answer_id": _get_clean_text(current_answer.get("answer_id"), max_chars=120),
+            "answer_text": _get_clean_text(current_answer.get("answer_text"), max_chars=1200),
+            "answer_round": current_answer.get("answer_round"),
+        },
+        "scoring_rules": {
+            "scale": "0-100",
+            "score_result.score_value": "explicit_score aligned score",
+            "major_loss_points": "must be mapped by reference_answer.sections.addresses_loss_point_ids",
+        },
+        "evidence": evidence_items,
+        "same_question_answers": same_question_answers,
+        "progress_node_snapshot": {
+            "node_ref": _get_clean_text(progress_node.get("node_ref"), max_chars=120),
+            "title": _get_clean_text(progress_node.get("title"), max_chars=200),
+            "expected_capability": _get_clean_text(progress_node.get("expected_capability"), max_chars=200),
+            "missing_points": _string_list(progress_node.get("missing_points"), max_chars=120)[:3],
+            "related_job_requirements": _string_list(progress_node.get("related_job_requirements"), max_chars=120)[:2],
+            "related_resume_evidence": _string_list(progress_node.get("related_resume_evidence"), max_chars=120)[:2],
+        },
+        "job_requirements": _string_list(job_snapshot.get("requirements"), max_chars=160)[:_JOB_REQUIREMENTS_LIMIT],
+        "resume_projects": _string_list(resume_snapshot.get("projects"), max_chars=240)[:_RESUME_PROJECTS_LIMIT],
+        "output_requirements": [
+            "Return JSON only.",
+            "First answer diagnosis, scoring, loss points, and short reference answer only.",
+            "Set knowledge_points, technical_principles, and project_asset_update_candidates to [] unless explicitly needed.",
+            "Set project_asset_consistency_check and session_similarity_check to {'status': 'not_applicable'} in quick mode.",
+            "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
+        ],
+        "feedback_metadata": {
+            "feedback_mode": POLISH_FEEDBACK_QUICK_MODE,
+            "context_compaction_applied": True,
+            "omitted_context_summary": [
+                "same project history",
+                "session recent turn history",
+                "project asset summaries",
+                "raw resume body",
+                "raw job description",
+                "work history details",
+                "resume markdown body",
+            ],
+            "prompt_char_count": 0,
+            "evidence_item_count": len(evidence_items),
+        },
+    }
+    _trim_provider_prompt(provider_prompt)
+    provider_prompt["feedback_metadata"]["evidence_item_count"] = len(provider_prompt["evidence"])
+    provider_prompt["feedback_metadata"]["prompt_char_count"] = _prompt_char_count(provider_prompt)
+    return provider_prompt
+
+
+def _provider_evidence_items(values: list[Any]) -> list[dict[str, object]]:
+    priority = {
+        "current_answer": 100,
+        "progress_node_summary": 90,
+        "question_source": 80,
+        "resume_project_evidence": 70,
+        "same_question_history": 60,
+        "job_requirement": 50,
+    }
+    items: list[dict[str, object]] = []
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        reason = _get_clean_text(value.get("reason"), max_chars=80)
+        if reason not in priority:
+            continue
+        items.append(
+            {
+                "ref": _get_clean_text(value.get("ref"), max_chars=120),
+                "source_type": _get_clean_text(value.get("source_type"), max_chars=80),
+                "title": _get_clean_text(value.get("title"), max_chars=120),
+                "excerpt": _get_clean_text(value.get("excerpt"), max_chars=300 if reason != "current_answer" else 1200),
+                "reason": reason,
+                "priority": priority[reason],
+            }
+        )
+    deduped: dict[str, dict[str, object]] = {}
+    for item in sorted(items, key=lambda candidate: int(candidate["priority"]), reverse=True):
+        ref = str(item.get("ref") or "")
+        if ref and ref not in deduped:
+            deduped[ref] = item
+    return list(deduped.values())[:_PROVIDER_EVIDENCE_ITEMS_LIMIT]
+
+
+def _limit_question_sources(values: list[Any]) -> list[dict[str, object]]:
+    sources: list[dict[str, object]] = []
+    for index, source in enumerate(values[:_QUESTION_SOURCE_LIMIT], start=1):
+        if not isinstance(source, dict):
+            continue
+        sources.append(
+            {
+                "ref": _get_clean_text(source.get("ref"), max_chars=120) or f"question_source_{index}",
+                "source_type": _get_clean_text(source.get("source_type"), max_chars=80),
+                "title": _get_clean_text(source.get("title"), max_chars=120),
+                "summary": _get_clean_text(source.get("summary"), max_chars=300),
+            }
+        )
+    return sources
+
+
+def _limit_same_question_answers(values: list[Any]) -> list[dict[str, object]]:
+    answers: list[dict[str, object]] = []
+    for index, answer in enumerate(values[:_SAME_QUESTION_ANSWERS_LIMIT], start=1):
+        if not isinstance(answer, dict):
+            continue
+        answers.append(
+            {
+                "answer_id": _get_clean_text(answer.get("answer_id"), max_chars=120) or f"same_question_answer_{index}",
+                "answer_round": _get_clean_text(answer.get("answer_round"), max_chars=20),
+                "answer_summary": _get_clean_text(answer.get("answer_summary"), max_chars=240),
+                "feedback_summary": _get_clean_text(answer.get("feedback_summary"), max_chars=240),
+                "loss_point_ids": _string_list(answer.get("loss_point_ids"), max_chars=120)[:5],
+            }
+        )
+    return answers
+
+
+def _trim_provider_prompt(provider_prompt: dict[str, Any]) -> None:
+    while _prompt_char_count(provider_prompt) > _PROVIDER_PROMPT_TARGET_CHARS and len(provider_prompt["evidence"]) > 1:
+        provider_prompt["evidence"].pop()
+    if _prompt_char_count(provider_prompt) <= _PROVIDER_PROMPT_CHAR_LIMIT:
+        return
+    provider_prompt["same_question_answers"] = []
+    provider_prompt["resume_projects"] = provider_prompt.get("resume_projects", [])[:1]
+    provider_prompt["job_requirements"] = provider_prompt.get("job_requirements", [])[:1]
+    while _prompt_char_count(provider_prompt) > _PROVIDER_PROMPT_CHAR_LIMIT and len(provider_prompt["evidence"]) > 1:
+        provider_prompt["evidence"].pop()
+
+
+def _prompt_char_count(provider_prompt: dict[str, Any]) -> int:
+    return len(json.dumps(provider_prompt, ensure_ascii=False, sort_keys=True))
 
 
 def _evidence_items(context: object) -> list[AgentEvidenceItem]:
     items: list[AgentEvidenceItem] = []
-    question_text = _get_text(context, "question_text", max_chars=800)
+    question_text = _get_text(context, "question_text", max_chars=600)
     answer_text = _get_text(context, "answer_text", max_chars=1200)
     question_id = _get_text(context, "question_id") or "current_question"
     answer_id = _get_text(context, "answer_id") or "current_answer"
+    evidence_refs = _string_list(_get_list(context, "evidence_refs"))
+    progress_node_ref = _get_text(context, "progress_node_ref", max_chars=200)
 
-    for index, source in enumerate(_get_list(context, "question_sources"), start=1):
+    for index, source in enumerate(
+        _matching_question_sources(_get_list(context, "question_sources"), evidence_refs=(*evidence_refs, progress_node_ref)),
+        start=1,
+    ):
         if not isinstance(source, dict):
             continue
         ref = _first_text(source.get("ref"), source.get("ref_id"), source.get("source_ref"), f"question_source_{index}")
         source_type = _first_text(source.get("source_type"), "question_source")
         title = _first_text(source.get("title"), source.get("source_type"), "Question source")
-        excerpt = _first_text(source.get("excerpt"), source.get("summary"), question_text)
+        excerpt = _first_text_limited(source.get("excerpt"), source.get("summary"), question_text, max_chars=300)
         items.append(
             AgentEvidenceItem(
                 ref=ref,
@@ -303,8 +516,8 @@ def _evidence_items(context: object) -> list[AgentEvidenceItem]:
     job_snapshot = _get_dict(context, "job_snapshot")
     requirements = job_snapshot.get("requirements") if isinstance(job_snapshot, dict) else None
     if isinstance(requirements, list):
-        for index, requirement in enumerate(requirements, start=1):
-            excerpt = _get_clean_text(requirement, max_chars=500)
+        for index, requirement in enumerate(requirements[:_JOB_REQUIREMENTS_LIMIT], start=1):
+            excerpt = _get_clean_text(requirement, max_chars=160)
             if excerpt:
                 items.append(
                     AgentEvidenceItem(
@@ -321,8 +534,11 @@ def _evidence_items(context: object) -> list[AgentEvidenceItem]:
     resume_snapshot = _get_dict(context, "resume_snapshot")
     projects = resume_snapshot.get("projects") if isinstance(resume_snapshot, dict) else None
     if isinstance(projects, list):
-        for index, project in enumerate(projects, start=1):
-            excerpt = _get_clean_text(project, max_chars=500)
+        for index, project in enumerate(
+            _related_resume_projects(projects, related_terms=_related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))),
+            start=1,
+        ):
+            excerpt = _get_clean_text(project, max_chars=300)
             if excerpt:
                 items.append(
                     AgentEvidenceItem(
@@ -366,9 +582,9 @@ def _dedupe_and_limit_evidence_items(items: list[AgentEvidenceItem]) -> list[Age
     return list(deduped.values())[:_EVIDENCE_ITEMS_LIMIT]
 
 
-def _compact_question_sources(values: list[Any]) -> list[dict[str, object]]:
+def _compact_question_sources(values: list[Any], *, evidence_refs: tuple[str, ...] = ()) -> list[dict[str, object]]:
     sources: list[dict[str, object]] = []
-    for index, source in enumerate(values[:_RELATED_CONTEXT_ITEMS_LIMIT], start=1):
+    for index, source in enumerate(_matching_question_sources(values, evidence_refs=evidence_refs), start=1):
         if not isinstance(source, dict):
             continue
         ref = _first_text(source.get("ref"), source.get("ref_id"), source.get("source_ref"), f"question_source_{index}")
@@ -377,10 +593,30 @@ def _compact_question_sources(values: list[Any]) -> list[dict[str, object]]:
                 "ref": ref,
                 "source_type": _first_text(source.get("source_type"), "question_source"),
                 "title": _first_text(source.get("title"), source.get("source_type"), "Question source"),
-                "summary": _first_text_limited(source.get("summary"), source.get("excerpt"), max_chars=600),
+                "summary": _first_text_limited(source.get("summary"), source.get("excerpt"), max_chars=300),
             }
         )
     return sources
+
+
+def _matching_question_sources(values: list[Any], *, evidence_refs: tuple[str, ...] = ()) -> list[Any]:
+    refs = {ref for ref in evidence_refs if ref}
+    if not refs:
+        return values[:_QUESTION_SOURCE_LIMIT]
+    matched: list[Any] = []
+    for source in values:
+        if not isinstance(source, dict):
+            continue
+        source_refs = {
+            _first_text(source.get("ref")),
+            _first_text(source.get("ref_id")),
+            _first_text(source.get("source_ref")),
+        }
+        if refs & {ref for ref in source_refs if ref}:
+            matched.append(source)
+        if len(matched) >= _QUESTION_SOURCE_LIMIT:
+            break
+    return matched
 
 
 def _compact_same_question_answers(values: list[Any]) -> list[dict[str, object]]:
@@ -392,9 +628,9 @@ def _compact_same_question_answers(values: list[Any]) -> list[dict[str, object]]
             {
                 "answer_id": _first_text(answer.get("answer_id"), answer.get("ref"), f"same_question_answer_{index}"),
                 "answer_round": _get_clean_text(answer.get("answer_round"), max_chars=20),
-                "answer_summary": _first_text_limited(answer.get("answer_summary"), answer.get("summary"), max_chars=700),
-                "feedback_summary": _first_text_limited(answer.get("feedback_summary"), max_chars=700),
-                "loss_point_ids": _string_list(answer.get("loss_point_ids"))[:10],
+                "answer_summary": _first_text_limited(answer.get("answer_summary"), answer.get("summary"), max_chars=240),
+                "feedback_summary": _first_text_limited(answer.get("feedback_summary"), max_chars=240),
+                "loss_point_ids": _string_list(answer.get("loss_point_ids"), max_chars=120)[:5],
             }
         )
     return answers
@@ -442,21 +678,21 @@ def _compact_job_snapshot(value: dict[str, Any]) -> dict[str, object]:
         "job_version_id": _first_text(value.get("job_version_id")),
         "title": _first_text_limited(value.get("title"), max_chars=200),
         "company": _first_text_limited(value.get("company"), max_chars=200),
-        "requirements": _string_list(value.get("requirements"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
-        "responsibilities": _string_list(value.get("responsibilities"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "requirements": _string_list(value.get("requirements"), max_chars=160)[:_JOB_REQUIREMENTS_LIMIT],
+        "responsibilities": _string_list(value.get("responsibilities"), max_chars=160)[:_JOB_REQUIREMENTS_LIMIT],
         "content_digest": _first_text_limited(value.get("content_digest"), max_chars=200),
     }
 
 
-def _compact_resume_snapshot(value: dict[str, Any]) -> dict[str, object]:
+def _compact_resume_snapshot(value: dict[str, Any], *, related_terms: tuple[str, ...] = ()) -> dict[str, object]:
     if not value:
         return {}
     return {
         "resume_id": _first_text(value.get("resume_id")),
         "resume_version_id": _first_text(value.get("resume_version_id")),
         "title": _first_text_limited(value.get("title"), max_chars=200),
-        "summary": _first_text_limited(value.get("summary"), max_chars=900),
-        "projects": _string_list(value.get("projects"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "summary": _first_text_limited(value.get("summary"), max_chars=300),
+        "projects": _related_resume_projects(_string_list(value.get("projects"), max_chars=300), related_terms=related_terms),
         "content_digest": _first_text_limited(value.get("content_digest"), max_chars=200),
     }
 
@@ -467,12 +703,12 @@ def _compact_progress_node_snapshot(value: dict[str, Any]) -> dict[str, object]:
     return {
         "node_ref": _first_text(value.get("node_ref"), value.get("progress_node_ref")),
         "progress_node_ref": _first_text(value.get("progress_node_ref"), value.get("node_ref")),
-        "title": _first_text_limited(value.get("title"), max_chars=300),
-        "question_title": _first_text_limited(value.get("question_title"), value.get("current_question_title"), max_chars=500),
-        "expected_capability": _first_text_limited(value.get("expected_capability"), value.get("description"), max_chars=900),
-        "missing_points": _string_list(value.get("missing_points"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
-        "related_job_requirements": _string_list(value.get("related_job_requirements"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
-        "related_resume_evidence": _string_list(value.get("related_resume_evidence"))[:_RELATED_CONTEXT_ITEMS_LIMIT],
+        "title": _first_text_limited(value.get("title"), max_chars=200),
+        "question_title": _first_text_limited(value.get("question_title"), value.get("current_question_title"), max_chars=200),
+        "expected_capability": _first_text_limited(value.get("expected_capability"), value.get("description"), max_chars=200),
+        "missing_points": _string_list(value.get("missing_points"), max_chars=120)[:3],
+        "related_job_requirements": _string_list(value.get("related_job_requirements"), max_chars=120)[:2],
+        "related_resume_evidence": _string_list(value.get("related_resume_evidence"), max_chars=120)[:2],
     }
 
 
@@ -499,6 +735,47 @@ def _focus_target(context: object) -> AgentFocusTarget:
             "polish_theme": _get_text(context, "polish_theme", max_chars=200),
         },
     )
+
+
+def _related_terms(context: object, *, evidence_refs: tuple[str, ...] = ()) -> tuple[str, ...]:
+    progress_node = _get_dict(context, "progress_node_snapshot")
+    question_sources = _get_list(context, "question_sources")
+    terms = [
+        _get_text(context, "polish_theme", max_chars=120),
+        _get_text(context, "progress_node_ref", max_chars=120),
+        _first_text(progress_node.get("title"), progress_node.get("question_title")),
+        _first_text(progress_node.get("expected_capability")),
+    ]
+    for source in _matching_question_sources(question_sources, evidence_refs=evidence_refs):
+        if not isinstance(source, dict):
+            continue
+        terms.append(_first_text(source.get("title"), source.get("summary"), source.get("excerpt")))
+    return tuple(dict.fromkeys(term for term in (_get_clean_text(value, max_chars=120) for value in terms) if term))
+
+
+def _related_resume_projects(projects: list[Any], *, related_terms: tuple[str, ...] = ()) -> list[str]:
+    project_texts = _string_list(projects, max_chars=300)
+    if not project_texts:
+        return []
+    normalized_terms = [term.casefold() for term in related_terms if len(term) >= 3]
+    matched = [
+        project
+        for project in project_texts
+        if any(term in project.casefold() or project.casefold() in term for term in normalized_terms)
+    ]
+    if matched:
+        return matched[:_RESUME_PROJECTS_LIMIT]
+    if normalized_terms:
+        return []
+    return project_texts[:1]
+
+
+def _safe_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_list(value: object) -> list[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _get(context: object, field_name: str) -> object:
@@ -540,10 +817,10 @@ def _source_ref(value: dict[str, Any]) -> dict[str, Any]:
     return ref
 
 
-def _string_list(value: object) -> list[str]:
+def _string_list(value: object, *, max_chars: int = 240) -> list[str]:
     if not isinstance(value, (list, tuple)):
         return []
-    return [text for item in value if (text := _get_clean_text(item))]
+    return [text for item in value if (text := _get_clean_text(item, max_chars=max_chars))]
 
 
 def _first_text(*values: object) -> str:

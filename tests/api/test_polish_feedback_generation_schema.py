@@ -163,6 +163,45 @@ def test_valid_generated_payload_passes_and_does_not_mutate_input() -> None:
     assert payload == original
 
 
+def test_quick_generated_payload_allows_empty_future_sections_and_not_applicable_checks() -> None:
+    payload = _valid_payload()
+    payload["score_result"]["score_value"] = 88
+    payload["explicit_score"] = 88
+    payload["implicit_score"] = 86
+    payload["loss_points"] = [
+        {
+            "loss_point_id": "lp_tradeoff",
+            "severity": "major",
+            "deduction": 12,
+            "reason": "混合检索的召回、重排和延迟取舍没有展开。",
+        }
+    ]
+    payload["reference_answer"] = {
+        "sections": [
+            {
+                "section_id": "ref_tradeoff",
+                "title": "混合检索取舍",
+                "content": "说明关键词召回、向量召回、rerank、离线指标和线上延迟预算。",
+                "addresses_loss_point_ids": ["lp_tradeoff"],
+            }
+        ]
+    }
+    payload["knowledge_points"] = []
+    payload["technical_principles"] = []
+    payload["project_asset_update_candidates"] = []
+    payload["project_asset_consistency_check"] = {"status": "not_applicable"}
+    payload["session_similarity_check"] = {"status": "not_applicable"}
+
+    normalized, errors = _validate(payload)
+
+    assert errors == ()
+    assert normalized is not None
+    assert normalized["knowledge_points"] == []
+    assert normalized["technical_principles"] == []
+    assert normalized["project_asset_consistency_check"] == {"status": "not_applicable"}
+    assert normalized["session_similarity_check"] == {"status": "not_applicable"}
+
+
 def test_schema_id_invalid_fails() -> None:
     normalized, errors = _validate(_with_change(schema_id="wrong_schema"))
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -209,7 +210,107 @@ def test_feedback_request_uses_compact_output_budget() -> None:
 
     assert result.succeeded is True
     assert transport.requests
-    assert getattr(transport.requests[-1], "max_tokens", 8000) < 8000
+    assert getattr(transport.requests[-1], "max_tokens", 8000) < 2500
+
+
+def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits() -> None:
+    transport = _PayloadTransport(_generated_payload())
+    context = _context()
+    context["question_text"] = "请深入说明混合检索策略优化如何在召回率、精排质量和延迟之间做取舍。"
+    context["answer_text"] = "我会先用关键词召回保证确定性，再用向量召回补语义覆盖，最后用重排模型统一打分。 " * 80
+    context["evidence_refs"] = ["resume_project_hybrid_search", "question_source_hybrid_search"]
+    context["question_sources"] = [
+        {
+            "ref": "question_source_hybrid_search",
+            "source_type": "resume_project_contribution",
+            "title": "混合检索策略优化",
+            "excerpt": "通过 BM25、向量召回和 rerank 做多路召回融合。",
+        },
+        {
+            "ref": "question_source_inventory",
+            "source_type": "resume_project_contribution",
+            "title": "物料库存处理工作流",
+            "excerpt": "物料库存处理工作流包含库存冻结、调拨和盘点。",
+        },
+        {
+            "ref": "question_source_large_file",
+            "source_type": "resume_project_contribution",
+            "title": "大文件异步处理管道",
+            "excerpt": "大文件异步处理管道包含分片上传、解析和入库。",
+        },
+    ]
+    context["same_question_answers"] = [
+        {
+            "answer_id": f"answer_prev_{index}",
+            "answer_text": f"PREVIOUS_FULL_ANSWER_{index}_SHOULD_NOT_BE_INCLUDED " * 40,
+            "answer_summary": f"上一轮摘要 {index}：缺少召回融合后的评估指标。" * 20,
+        }
+        for index in range(3)
+    ]
+    context["job_snapshot"] = {
+        "job_id": "job_001",
+        "requirements": [f"岗位要求 {index}" for index in range(6)],
+        "full_jd": "FULL_JD_SHOULD_NOT_BE_INCLUDED",
+    }
+    context["resume_snapshot"] = {
+        "resume_id": "resume_001",
+        "projects": [
+            "混合检索策略优化：负责 BM25、向量召回、rerank 和线上评估。",
+            "物料库存处理工作流：负责库存冻结、调拨和盘点。",
+            "大文件异步处理管道：负责分片上传、解析和入库。",
+        ],
+        "full_resume": "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
+        "markdown_text": "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED",
+        "work_experiences": ["WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED"],
+    }
+    context["progress_node_snapshot"] = {
+        "node_ref": "progress_node_hybrid_search",
+        "title": "混合检索策略优化",
+        "expected_capability": "说明多路召回、重排、评估指标和延迟取舍。" * 10,
+        "related_resume_evidence": ["混合检索策略优化"],
+    }
+
+    result = _service(transport).generate(context)
+
+    assert result.succeeded is True
+    request = transport.requests[-1]
+    provider_prompt = request.evidence_bundle
+    serialized_provider_user = json.dumps(
+        {
+            "task_type": request.task_type,
+            "input_refs": list(request.input_refs),
+            "evidence_bundle": provider_prompt,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    assert provider_prompt["feedback_mode"] == "quick"
+    assert provider_prompt["task"] == "polish_feedback_quick_v1"
+    assert "developer_constraints" not in provider_prompt
+    assert "refusal_and_low_confidence_policy" not in provider_prompt
+    assert len(serialized_provider_user) < 12000
+    assert len(provider_prompt["evidence"]) <= 5
+    assert len(provider_prompt["current_question"]["question_sources"]) <= 2
+    assert len(provider_prompt["same_question_answers"]) <= 1
+    assert "answer_text" not in provider_prompt["same_question_answers"][0]
+    assert "PREVIOUS_FULL_ANSWER_0_SHOULD_NOT_BE_INCLUDED" not in serialized_provider_user
+    for forbidden in (
+        "full_resume",
+        "full_jd",
+        "work_experiences",
+        "markdown_text",
+        "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
+        "FULL_JD_SHOULD_NOT_BE_INCLUDED",
+        "WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED",
+        "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED",
+        "物料库存处理工作流",
+        "大文件异步处理管道",
+    ):
+        assert forbidden not in serialized_provider_user
+    assert provider_prompt["feedback_metadata"]["prompt_char_count"] < 12000
+    assert provider_prompt["feedback_metadata"]["evidence_item_count"] <= 5
+    assert provider_prompt["feedback_metadata"]["context_compaction_applied"] is True
 
 
 def test_no_llm_transport_returns_failed_without_fake_feedback() -> None:

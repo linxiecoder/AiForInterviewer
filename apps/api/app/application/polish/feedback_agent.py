@@ -16,7 +16,7 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_TASK_TYPE,
 )
 
-FEEDBACK_GENERATION_MAX_TOKENS = 3200
+FEEDBACK_GENERATION_MAX_TOKENS = 1600
 
 
 class FeedbackGenerationAgent:
@@ -33,7 +33,7 @@ class FeedbackGenerationAgent:
             contract_ids=_contract_ids(prompt_asset),
             task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
             input_refs=input_refs,
-            evidence_bundle=prompt_asset,
+            evidence_bundle=_provider_prompt(prompt_asset),
             prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
             schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
         )
@@ -178,6 +178,13 @@ def _transport_validation_error(exc: Exception) -> str:
     if isinstance(exc, TimeoutError) or "timeout" in error_type or "timed out" in message or "超时" in message:
         return "llm_transport_timeout"
     return "llm_transport_generation_failed"
+
+
+def _provider_prompt(prompt_asset: dict[str, Any]) -> dict[str, Any]:
+    provider_prompt = prompt_asset.get("provider_prompt")
+    if isinstance(provider_prompt, dict):
+        return provider_prompt
+    return prompt_asset
 
 
 def _contract_ids(prompt_asset: dict[str, Any]) -> tuple[str, ...]:

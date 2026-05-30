@@ -227,25 +227,32 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
         first_loss_point_id in section.get("addresses_loss_point_ids", [])
         for section in payload["reference_answer"]["sections"]
     )
-    assert payload["knowledge_points"] == ["事务消息", "幂等设计", "失败补偿"]
-    assert payload["technical_principles"] == ["先定义失败恢复边界，再选择消息队列和补偿策略。"]
+    assert payload["knowledge_points"] == []
+    assert payload["technical_principles"] == []
+    assert payload["project_asset_update_candidates"] == []
+    assert payload["project_asset_consistency_check"] == {"status": "not_applicable"}
+    assert payload["session_similarity_check"] == {"status": "not_applicable"}
     assert payload["next_recommended_actions"] == ["围绕失败恢复终止条件再追问一轮"]
     assert llm_transport.feedback_request is not None
-    assert getattr(llm_transport.feedback_request, "max_tokens", 8000) < 8000
-    prompt_asset = llm_transport.feedback_request.evidence_bundle
-    assert prompt_asset["task_type"] == "polish_feedback_generation"
-    assert prompt_asset["input_contract"]["raw_model_io_storage"] is False
-    input_data = prompt_asset["input_data"]
-    assert input_data["current_question"]["question_id"] == question_id
-    assert input_data["current_answer"]["answer_id"] == answer_id
-    assert input_data["same_question_answers"] == []
-    assert input_data["same_project_turns"] == []
-    assert input_data["project_asset_summaries"] == []
-    assert input_data["session_recent_turns"]
-    assert input_data["context_snapshots"]["job_snapshot"]["job_id"]
-    assert input_data["context_snapshots"]["resume_snapshot"]["resume_id"]
-    assert "markdown_text" not in input_data["context_snapshots"]["resume_snapshot"]
-    assert input_data["context_snapshots"]["progress_node_snapshot"]["node_ref"]
+    assert getattr(llm_transport.feedback_request, "max_tokens", 8000) < 2500
+    provider_prompt = llm_transport.feedback_request.evidence_bundle
+    assert provider_prompt["task_type"] == "polish_feedback_generation"
+    assert provider_prompt["feedback_mode"] == "quick"
+    assert provider_prompt["task"] == "polish_feedback_quick_v1"
+    assert provider_prompt["input_contract"]["raw_model_io_storage"] is False
+    assert provider_prompt["current_question"]["question_id"] == question_id
+    assert provider_prompt["current_answer"]["answer_id"] == answer_id
+    assert provider_prompt["same_question_answers"] == []
+    assert "same_project_turns" not in provider_prompt
+    assert "project_asset_summaries" not in provider_prompt
+    assert "session_recent_turns" not in provider_prompt
+    assert provider_prompt["job_requirements"]
+    assert provider_prompt["resume_projects"]
+    assert "markdown_text" not in provider_prompt
+    assert provider_prompt["progress_node_snapshot"]["node_ref"]
+    assert len(provider_prompt["evidence"]) <= 5
+    assert provider_prompt["feedback_metadata"]["prompt_char_count"] < 12000
+    assert provider_prompt["feedback_metadata"]["evidence_item_count"] <= 5
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(feedback_body)
 
