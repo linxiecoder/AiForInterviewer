@@ -18,7 +18,7 @@ import {
 } from "@ant-design/icons";
 import { Alert, Button, Card, Drawer, Form, Input, Modal, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
@@ -1628,12 +1628,29 @@ export function resolveProgressTreeDetailNodeRef(
     return selectedProgressNodeRef;
   }
 
+  const currentSessionRef = resolveSessionCurrentProgressNodeRef(session);
+  if (currentSessionRef && planNodes.some((node) => node.progress_node_ref === currentSessionRef)) {
+    return currentSessionRef;
+  }
+
   const currentPriorityRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
   if (currentPriorityRef && planNodes.some((node) => node.progress_node_ref === currentPriorityRef)) {
     return currentPriorityRef;
   }
 
   return planNodes[0]?.progress_node_ref ?? null;
+}
+
+export function resolveWorkbenchQuestionFocusId(
+  session: PolishSessionDetail,
+  selectedProgressNode: WorkbenchProgressNode | null,
+  progressNodeRef: string | null,
+): string | null {
+  return (
+    resolveQuestionNodeState(session, selectedProgressNode)?.questionId ??
+    resolveCurrentQuestionState(session, progressNodeRef)?.questionId ??
+    null
+  );
 }
 
 export function buildProgressTreeNodeDetailViewModel(
@@ -3346,6 +3363,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
   const [selectedProgressNodeKey, setSelectedProgressNodeKey] = useState<string | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const [isProgressPanelCollapsed, setProgressPanelCollapsed] = useState<boolean>(false);
   const [progressPanelWidth, setProgressPanelWidth] = useState<number>(PROGRESS_PANEL_DEFAULT_WIDTH);
   const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
@@ -3584,6 +3602,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const canSendAnswer = questionActionState.canSendAnswer;
   const canGenerateQuestion = questionActionState.canGenerateQuestion;
   const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
+  const focusedQuestionId =
+    session === null ? null : resolveWorkbenchQuestionFocusId(session, selectedProgressNode, selectedProgressNodeDetailRef);
   const progressTreeContextMenuNode =
     progressTreeContextMenu === null ? null : findWorkbenchProgressNodeByKey(progressNodes, progressTreeContextMenu.nodeKey);
   const progressTreeContextMenuDetailRef =
@@ -3727,6 +3747,32 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
   }, [session]);
+
+  const scrollChatToQuestion = (questionId: string | null, behavior: ScrollBehavior = "smooth") => {
+    const container = chatScrollRef.current;
+    if (container === null) {
+      return;
+    }
+    if (questionId === null) {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+      return;
+    }
+    const target = Array.from(container.querySelectorAll<HTMLElement>("[data-workbench-question-id]"))
+      .find((element) => element.dataset.workbenchQuestionId === questionId);
+    if (target) {
+      target.scrollIntoView({ block: "start", behavior });
+      return;
+    }
+    container.scrollTo({ top: container.scrollHeight, behavior });
+  };
+
+  useEffect(() => {
+    if (!hasQuestion) {
+      return undefined;
+    }
+    const frameId = window.requestAnimationFrame(() => scrollChatToQuestion(focusedQuestionId, "auto"));
+    return () => window.cancelAnimationFrame(frameId);
+  }, [focusedQuestionId, hasQuestion, session?.turns.length]);
 
   useEffect(() => {
     setProgressNodeContextExpanded(false);
@@ -4159,8 +4205,13 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             canSelectNode
               ? () => {
                   const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
+                  const nextQuestionFocusId =
+                    session === null ? null : resolveWorkbenchQuestionFocusId(session, node, nextSelectedRef);
                   setSelectedProgressNodeRef(nextSelectedRef);
                   setSelectedProgressNodeKey(node.key);
+                  if (nextQuestionFocusId !== null) {
+                    window.requestAnimationFrame(() => scrollChatToQuestion(nextQuestionFocusId, "smooth"));
+                  }
                   if (isExpandable) {
                     toggleProgressNode(node.key);
                   }
@@ -4466,7 +4517,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 </div>
               </div>
 
-              <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
+              <div ref={chatScrollRef} className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
                 <div className={messageRowClassName("progress_context")} data-message-kind="progress_context">
                   {renderProgressTreeContextBanner()}
                 </div>
@@ -4488,7 +4539,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   />
                 )}
                 {session.turns.map((turn, turnIndex) => (
-                  <section key={turn.question_id} className={styles.chatTurn}>
+                  <section
+                    key={turn.question_id}
+                    className={styles.chatTurn}
+                    data-workbench-question-id={turn.question_id}
+                  >
                     <div className={messageRowClassName("system_question")} data-message-kind="system_question">
                       <div className={styles.questionBubble}>
                         <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>

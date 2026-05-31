@@ -86,6 +86,7 @@ import {
   resolveCurrentQuestionId,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
+  resolveWorkbenchQuestionFocusId,
   resolveProgressTreeSelectedNodeRefAfterClick,
   canSubmitAnswerFromKeyboard,
   getWorkbenchChatMessageAlignmentClassName,
@@ -859,12 +860,12 @@ function test_progress_tree_left_list_stays_compact(): void {
   assertContract(!bannerVisibleCopy.includes("你会如何验证混合检索效果？"), "公告条不应展示建议第一题");
 }
 
-function test_progress_tree_detail_defaults_to_current_priority(): void {
-  const session = buildTestSession(
+function test_progress_tree_detail_defaults_to_latest_turn_node(): void {
+  const baseSession = buildTestSession(
     [
       {
-        ...buildTestProgressNode("node_first", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
-        depth_goal: "第一节点目标",
+        ...buildTestProgressNode("node_latest", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "最新题目节点目标",
       },
       {
         ...buildTestProgressNode("node_priority", "AI Agent 任务规划与工具调用机制", "jd_gap_learning", "补齐学习类"),
@@ -873,13 +874,28 @@ function test_progress_tree_detail_defaults_to_current_priority(): void {
     ],
     "node_priority",
   );
+  const session: PolishSessionDetail = {
+    ...baseSession,
+    turns: [
+      {
+        question_id: "q_latest_detail",
+        question_text: "最新题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_latest",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
 
   const selectedRef = resolveProgressTreeDetailNodeRef(session, null);
   const detail = buildProgressTreeNodeDetailViewModel(session, selectedRef);
 
-  assertContract(selectedRef === "node_priority", "详情默认节点应优先使用 current_priority");
-  assertContract(detail?.title === "AI Agent 任务规划与工具调用机制", "详情应默认显示 current_priority 对应节点");
-  assertContract(detail?.depthRequirement === "当前优先节点目标", "详情应默认显示 current_priority 节点内容");
+  assertContract(selectedRef === "node_latest", "详情默认节点应优先使用最新题目所在节点");
+  assertContract(detail?.title === "大文件异步处理管道架构", "详情应默认显示最新题目对应节点");
+  assertContract(detail?.depthRequirement === "最新题目节点目标", "详情应默认显示最新题目节点内容");
 }
 
 function test_progress_tree_group_header_does_not_show_node_detail(): void {
@@ -919,12 +935,12 @@ function test_progress_tree_category_header_is_group_only(): void {
   assertContract(nextSelectedRef === "node_resume_1", "点击分类 header 不应设置为选中详情节点");
 }
 
-function test_progress_node_context_banner_defaults_to_current_priority(): void {
-  const session = buildTestSession(
+function test_progress_node_context_banner_defaults_to_latest_turn_node(): void {
+  const baseSession = buildTestSession(
     [
       {
-        ...buildTestProgressNode("node_first", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
-        depth_goal: "第一节点目标",
+        ...buildTestProgressNode("node_latest", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "最新题目节点目标",
       },
       {
         ...buildTestProgressNode("node_priority", "AI Agent 任务规划与工具调用机制", "jd_gap_learning", "补齐学习类"),
@@ -933,13 +949,28 @@ function test_progress_node_context_banner_defaults_to_current_priority(): void 
     ],
     "node_priority",
   );
+  const session: PolishSessionDetail = {
+    ...baseSession,
+    turns: [
+      {
+        question_id: "q_latest_banner",
+        question_text: "最新题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_latest",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
 
   const selectedRef = resolveProgressTreeDetailNodeRef(session, null);
   const bannerContent = buildProgressTreeContextBannerContent(session, selectedRef);
 
-  assertContract(selectedRef === "node_priority", "上下文公告条默认节点应优先使用 current_priority");
-  assertContract(bannerContent.title === "AI Agent 任务规划与工具调用机制", "上下文公告条应默认展示 current_priority 对应节点");
-  assertContract(bannerContent.depthRequirement === "当前优先节点目标", "上下文公告条应默认显示 current_priority 节点内容");
+  assertContract(selectedRef === "node_latest", "上下文公告条默认节点应优先使用最新题目所在节点");
+  assertContract(bannerContent.title === "大文件异步处理管道架构", "上下文公告条应默认展示最新题目对应节点");
+  assertContract(bannerContent.depthRequirement === "最新题目节点目标", "上下文公告条应默认显示最新题目节点内容");
 }
 
 function test_progress_node_context_banner_updates_when_node_selected(): void {
@@ -1460,6 +1491,42 @@ function test_progress_tree_question_entry_is_selectable_by_node_type(): void {
 
   assertContract(isQuestionNode(questionNode), "题目 entry 应通过 node.kind 识别为题目节点");
   assertContract(selectedRef === "node_with_question", "点击题目节点应选中其 progress_node_ref");
+}
+
+function test_progress_tree_click_focuses_latest_question_for_node(): void {
+  const baseSession = buildTestSession([
+    buildTestProgressNode("node_focus", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+  ]);
+  const session: PolishSessionDetail = {
+    ...baseSession,
+    turns: [
+      {
+        question_id: "q_focus_old",
+        question_text: "旧题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_focus",
+        evidence_refs: [],
+        context_digest: "digest-old",
+        answers: [],
+      },
+      {
+        question_id: "q_focus_latest",
+        question_text: "最新题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:05:00Z",
+        progress_node_ref: "node_focus",
+        evidence_refs: [],
+        context_digest: "digest-latest",
+        answers: [],
+      },
+    ],
+  };
+  const progressNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0] ?? null;
+  const oldQuestionNode = progressNode?.children?.find((node) => node.key === "question:q_focus_old") ?? null;
+
+  assertContract(resolveWorkbenchQuestionFocusId(session, progressNode, "node_focus") === "q_focus_latest", "点击进展节点应定位到该节点最新题目");
+  assertContract(resolveWorkbenchQuestionFocusId(session, oldQuestionNode, "node_focus") === "q_focus_old", "点击题目节点应定位到该题目");
 }
 
 function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata(): void {
@@ -2521,10 +2588,10 @@ test_progress_node_context_renders_as_compact_banner();
 test_progress_tree_context_banner_shows_technical_coverage_from_children();
 test_progress_tree_context_banner_shows_technical_coverage_points_without_children();
 test_progress_tree_left_list_stays_compact();
-test_progress_tree_detail_defaults_to_current_priority();
+test_progress_tree_detail_defaults_to_latest_turn_node();
 test_progress_tree_group_header_does_not_show_node_detail();
 test_progress_tree_category_header_is_group_only();
-test_progress_node_context_banner_defaults_to_current_priority();
+test_progress_node_context_banner_defaults_to_latest_turn_node();
 test_progress_node_context_banner_updates_when_node_selected();
 test_progress_node_context_banner_hides_question_and_detail_lists();
 test_workbench_hero_actions_are_icon_only_and_copy_session_content();
@@ -2541,6 +2608,7 @@ test_workbench_question_actions_follow_current_question_status();
 test_progress_tree_context_menu_items_follow_question_action_state();
 test_progress_tree_context_menu_closes_on_escape_and_external_events();
 test_progress_tree_question_entry_is_selectable_by_node_type();
+test_progress_tree_click_focuses_latest_question_for_node();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
 test_generated_feedback_card_view_model_shows_phase6_payload_sections();
