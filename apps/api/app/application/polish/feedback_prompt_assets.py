@@ -176,7 +176,12 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         },
     ).to_prompt_asset_dict()
     prompt_asset["feedback_mode"] = POLISH_FEEDBACK_QUICK_MODE
-    prompt_asset["provider_prompt"] = _provider_compact_prompt(input_data)
+    prompt_asset["provider_prompt"] = _provider_compact_prompt(
+        input_data,
+        prompt=prompt_asset["prompt"] if isinstance(prompt_asset.get("prompt"), str) else "",
+        output_schema=deepcopy(prompt_asset["output_schema"]),
+        prompt_version=_get_clean_text(prompt_asset.get("prompt_version"), max_chars=120),
+    )
     return prompt_asset
 
 
@@ -223,7 +228,13 @@ def _validation_rules() -> tuple[str, ...]:
     )
 
 
-def _provider_compact_prompt(input_data: dict[str, Any]) -> dict[str, Any]:
+def _provider_compact_prompt(
+    input_data: dict[str, Any],
+    *,
+    prompt: str,
+    output_schema: dict[str, Any],
+    prompt_version: str,
+) -> dict[str, Any]:
     current_question = _safe_dict(input_data.get("current_question"))
     current_answer = _safe_dict(input_data.get("current_answer"))
     question_sources = _limit_question_sources(_safe_list(current_question.get("question_sources")))
@@ -239,6 +250,9 @@ def _provider_compact_prompt(input_data: dict[str, Any]) -> dict[str, Any]:
         "feedback_mode": POLISH_FEEDBACK_QUICK_MODE,
         "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
         "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        "prompt_version": prompt_version,
+        "prompt": prompt,
+        "output_schema": output_schema,
         "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
         "input_contract": {
             "raw_model_io_storage": False,

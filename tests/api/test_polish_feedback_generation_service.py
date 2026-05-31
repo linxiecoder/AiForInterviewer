@@ -287,6 +287,9 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
 
     assert provider_prompt["feedback_mode"] == "quick"
     assert provider_prompt["task"] == "polish_feedback_quick_v1"
+    assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
+    assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
+    assert "Generate structured polish feedback" in provider_prompt["prompt"]
     assert "developer_constraints" not in provider_prompt
     assert "refusal_and_low_confidence_policy" not in provider_prompt
     assert len(serialized_provider_user) < 12000
@@ -295,11 +298,14 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
     assert len(provider_prompt["same_question_answers"]) <= 1
     assert "answer_text" not in provider_prompt["same_question_answers"][0]
     assert "PREVIOUS_FULL_ANSWER_0_SHOULD_NOT_BE_INCLUDED" not in serialized_provider_user
+    serialized_provider_data = json.dumps(
+        {key: value for key, value in provider_prompt.items() if key != "prompt"},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    for forbidden_key in ("full_resume", "full_jd", "work_experiences", "markdown_text"):
+        assert forbidden_key not in serialized_provider_data
     for forbidden in (
-        "full_resume",
-        "full_jd",
-        "work_experiences",
-        "markdown_text",
         "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
         "FULL_JD_SHOULD_NOT_BE_INCLUDED",
         "WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED",
