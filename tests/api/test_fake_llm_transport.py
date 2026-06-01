@@ -148,3 +148,68 @@ def test_fake_transport_advertises_only_canonical_progress_tree_generation_task(
 
     assert POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE in SUPPORTED_FAKE_TASK_TYPES
     assert retired_progress_tasks.isdisjoint(SUPPORTED_FAKE_TASK_TYPES)
+
+
+def test_fake_feedback_generation_prefers_agent_input_data_over_top_level_context() -> None:
+    result = FakeLlmTransport().generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-003", "P-SHARED-001", "P-SHARED-003"),
+            task_type="polish_feedback_generation",
+            input_refs=("sess_fake_feedback", "ans_fake_feedback"),
+            evidence_bundle={
+                "current_question": {
+                    "question_text": "TOP LEVEL QUESTION SHOULD NOT WIN",
+                },
+                "current_answer": {
+                    "answer_text": "TOP LEVEL ANSWER SHOULD NOT WIN",
+                },
+                "input_data": {
+                    "current_question": {
+                        "question_text": "INPUT DATA QUESTION SHOULD WIN",
+                    },
+                    "current_answer": {
+                        "answer_text": "INPUT DATA ANSWER SHOULD WIN",
+                    },
+                },
+            },
+        )
+    )
+
+    assert result.validation_status is ValidationStatus.VALID
+    assert result.result["feedback_metadata"]["question_excerpt"] == "INPUT DATA QUESTION SHOULD WIN"
+    assert result.result["answer_summary"] == "候选人回答摘要：INPUT DATA ANSWER SHOULD WIN"
+    assert "TOP LEVEL QUESTION" not in result.result["feedback_metadata"]["question_excerpt"]
+    assert "TOP LEVEL ANSWER" not in result.result["answer_summary"]
+
+
+def test_fake_feedback_quick_payload_passes_validator_without_future_sections() -> None:
+    from app.application.polish.feedback_validation import validate_generated_feedback_payload
+
+    result = FakeLlmTransport().generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-003", "P-POLISH-004", "P-POLISH-005"),
+            task_type="polish_feedback_generation",
+            input_refs=("sess_fake_feedback", "ans_fake_feedback"),
+            evidence_bundle={
+                "feedback_mode": "quick",
+                "input_data": {
+                    "current_question": {"question_text": "如何设计混合检索策略？"},
+                    "current_answer": {"answer_text": "我会结合关键词召回、向量召回和重排。"},
+                },
+            },
+        )
+    )
+
+    normalized, errors = validate_generated_feedback_payload(result.result)
+
+    assert errors == ()
+    assert normalized is not None
+    assert normalized["status"] == "generated"
+    assert normalized["score_result"]["score_value"] == 82
+    assert normalized["loss_points"]
+    assert normalized["reference_answer"]["sections"]
+    assert normalized["knowledge_points"] == []
+    assert normalized["technical_principles"] == []
+    assert normalized["project_asset_update_candidates"] == []
+    assert normalized["project_asset_consistency_check"] == {"status": "not_applicable"}
+    assert normalized["session_similarity_check"] == {"status": "not_applicable"}

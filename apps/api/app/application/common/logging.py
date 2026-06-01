@@ -133,7 +133,7 @@ class LogUtil:
         provider_base_host: str,
         contract_ids: Sequence[str],
         input_ref_count: int,
-        timeout_seconds: float,
+        timeout_seconds: float | None,
     ) -> None:
         cls._emit(
             LLM_TRANSPORT_LOGGER_NAME,

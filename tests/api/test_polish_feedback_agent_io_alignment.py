@@ -211,6 +211,26 @@ def test_feedback_prompt_builder_uses_agent_prompt_bundle_standard_shape() -> No
     assert asset["schema_version"] == POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION
 
 
+def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fields() -> None:
+    transport = _PayloadTransport({"payload": _generated_payload()})
+    prompt_asset = build_feedback_prompt_asset(_context())
+
+    FeedbackGenerationAgent(transport=transport).generate(
+        prompt_asset=prompt_asset,
+        input_refs=("answer_001",),
+    )
+
+    provider_prompt = transport.requests[-1].evidence_bundle
+    assert provider_prompt["task_type"] == POLISH_FEEDBACK_TASK_TYPE
+    assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
+    assert provider_prompt["prompt"] == prompt_asset["prompt"]
+    assert provider_prompt["output_schema"] == prompt_asset["output_schema"]
+    assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
+    assert "input_data" not in provider_prompt
+    assert "developer_constraints" not in provider_prompt
+    assert "refusal_and_low_confidence_policy" not in provider_prompt
+
+
 def test_feedback_prompt_asset_includes_agent_safety_policy_rules() -> None:
     asset = build_feedback_prompt_asset(_context())
     policy = asset["refusal_and_low_confidence_policy"]

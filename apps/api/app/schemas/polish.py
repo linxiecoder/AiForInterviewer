@@ -297,6 +297,10 @@ class PolishFeedbackPayload(BaseModel):
     score_result_ref: dict[str, Any] | None = None
     loss_points: list[dict[str, Any]] | None = None
     reference_answer: Any | None = None
+    asset_consistency_check: dict[str, Any] | None = None
+    answer_coverage: dict[str, Any] | None = None
+    answer_change_analysis: dict[str, Any] | None = None
+    feedback_cards: list[dict[str, Any]] | None = None
     knowledge_points: list[dict[str, Any]] | None = None
     technical_principles: list[dict[str, Any]] | None = None
     next_recommended_actions: list[str] | None = None

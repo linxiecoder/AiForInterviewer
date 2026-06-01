@@ -138,6 +138,43 @@ def test_openai_compatible_transport_uses_configured_max_tokens_from_env() -> No
     assert settings.timeout_seconds == 90.0
 
 
+def test_openai_compatible_transport_disables_request_timeout_for_polish_feedback_generation() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_feedback_timeout",
+                "model": "deepseek-v4-pro",
+                "choices": [{"message": {"content": '{"status":"success"}'}}],
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+            timeout_seconds=90.0,
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-FEEDBACK-GENERATED",),
+            task_type="polish_feedback_generation",
+        )
+    )
+
+    timeout = observed["timeout"]
+    assert isinstance(timeout, dict)
+    assert timeout
+    assert all(value is None for value in timeout.values())
+
+
 def test_openai_compatible_transport_uses_progress_tree_token_budget_and_json_mode() -> None:
     observed: dict[str, object] = {}
 

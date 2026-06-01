@@ -20,10 +20,10 @@ TURN_INTENTS = (
     "clarification",
 )
 EVIDENCE_SUPPORT_LEVELS = (
-    "direct_implemented",
-    "adjacent_implemented",
-    "conceptual_only",
-    "unsupported",
+    "direct_project_evidence",
+    "adjacent_project_evidence",
+    "job_gap_only",
+    "insufficient_context",
 )
 MAIN_QUESTION_STYLES = (
     "ask_how_implemented",
@@ -264,16 +264,14 @@ def _post_check(*, decision: dict[str, Any], question: dict[str, Any], post_chec
 
     question_text = str(question.get("question_text") or "")
     unsupported_claims = tuple(str(item) for item in decision.get("unsupported_capability_claims") or () if item)
-    if (
-        decision.get("evidence_support_level") == "adjacent_implemented"
-        and decision.get("allowed_extension_depth") == "follow_up_only"
-    ):
-        if any(claim and claim in question_text for claim in unsupported_claims):
+    if decision.get("evidence_support_level") == "adjacent_project_evidence":
+        is_hypothetical = any(marker in question_text for marker in ("如果", "假设", "你会如何", "会如何"))
+        if any(claim and claim in question_text for claim in unsupported_claims) and not is_hypothetical:
             errors.append("next_question_post_check_unsupported_claim_in_main_question")
-        if post_check_hints.get("unsupported_terms_in_question"):
+        if post_check_hints.get("unsupported_terms_in_question") and not is_hypothetical:
             errors.append("next_question_post_check_unsupported_claim_in_main_question")
 
-    if decision.get("evidence_support_level") == "adjacent_implemented":
+    if decision.get("evidence_support_level") in {"adjacent_project_evidence", "job_gap_only"}:
         lowered = question_text.lower()
         if any(pattern in question_text for pattern in FACTUAL_CLAIM_PATTERNS) and any(
             claim and claim in question_text for claim in unsupported_claims

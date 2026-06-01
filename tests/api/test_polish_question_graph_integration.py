@@ -168,15 +168,19 @@ def test_create_question_task_provider_enabled_graph_uses_transport_and_reposito
     assert blocker.calls == 0
     assert len(transport.requests) == 1
     request = transport.requests[0]
-    input_data = request.evidence_bundle["input_data"]
+    provider_request = request.evidence_bundle
     assert request.graph_name == "polish_question_graph"
     assert request.node_name == "question_drafting"
-    assert input_data["progress_node"]["ref"] == NODE_REF
-    assert input_data["evidence_refs"]
-    assert input_data["source_context"]["context_source"] == "use_case_repository_snapshot"
-    assert input_data["source_context"]["session_ref"] == SESSION_ID
-    assert input_data["source_context"]["resume_version_id"] == "resver_pr5_q2"
-    assert input_data["source_context"]["job_version_id"] == "jobver_pr5_q2"
+    assert "input_data" not in provider_request
+    assert provider_request["progress_node"]["ref"] == NODE_REF
+    assert provider_request["canonical_evidence"]["evidence_refs"]
+    assert provider_request["history_summary"]["generation_mode"] == "new_question"
+    assert provider_request["source_support_level"] in {
+        "direct_project_evidence",
+        "adjacent_project_evidence",
+        "job_gap_only",
+        "insufficient_context",
+    }
 
     metadata = repository.questions[0].question_metadata
     assert metadata["llm_generation_mode"] == "agent_provider_path"
@@ -349,14 +353,32 @@ class _RecordingQuestionProviderTransport:
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         self.requests.append(request)
-        input_data = request.evidence_bundle["input_data"]
-        policy = input_data["generation_policy"]
-        evidence_refs = tuple(input_data["evidence_refs"])
-        primary = input_data["evidence_summaries"][0]
-        question_text = (
-            f"围绕「{input_data['progress_node']['title']}」，请基于主要证据「{primary['excerpt']}」展开："
-            "说明 FastAPI 后端工作流的一致性边界、失败补偿、验证指标和复盘信号。"
+        bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+        canonical_evidence = bundle.get("canonical_evidence") if isinstance(bundle.get("canonical_evidence"), dict) else {}
+        expected_contract = (
+            bundle.get("expected_output_contract")
+            if isinstance(bundle.get("expected_output_contract"), dict)
+            else {}
         )
+        policy = (
+            expected_contract.get("generation_policy")
+            if isinstance(expected_contract.get("generation_policy"), dict)
+            else {}
+        )
+        progress_node = bundle.get("progress_node") if isinstance(bundle.get("progress_node"), dict) else {}
+        evidence_refs = tuple(ref for ref in canonical_evidence.get("evidence_refs", []) if isinstance(ref, str))
+        summaries = canonical_evidence.get("evidence_summaries") if isinstance(canonical_evidence.get("evidence_summaries"), list) else []
+        primary = summaries[0] if summaries and isinstance(summaries[0], dict) else {"excerpt": "当前证据"}
+        if bundle.get("source_support_level") == "adjacent_project_evidence":
+            question_text = (
+                f"围绕「{progress_node.get('title')}」，如果要基于主要证据「{primary.get('excerpt')}」"
+                "扩展到 FastAPI 后端工作流的一致性边界、失败补偿、验证指标和复盘信号，你会如何设计？"
+            )
+        else:
+            question_text = (
+                f"围绕「{progress_node.get('title')}」，请基于主要证据「{primary.get('excerpt')}」展开："
+                "说明 FastAPI 后端工作流的一致性边界、失败补偿、验证指标和复盘信号。"
+            )
         return LlmTransportResult(
             result={
                 "transport": "recording_provider",
@@ -364,7 +386,7 @@ class _RecordingQuestionProviderTransport:
                 "question_kind": policy["question_kind"],
                 "focus_dimension": policy["question_kind"],
                 "difficulty": "hard",
-                "skill_dimension": input_data["progress_node"]["expected_capability"],
+                "skill_dimension": progress_node.get("expected_capability"),
                 "expected_signal": "回答应围绕 FastAPI 后端工作流说明边界、取舍、失败处理和验证指标。",
                 "follow_ups": ["失败补偿如何验证？", "一致性边界如何证明？"],
                 "scoring_rubric": [
@@ -453,6 +475,15 @@ class _PolishRepository:
 
     def list_feedbacks_for_session(self, owner_id: str, session_id: str) -> tuple[PolishFeedback, ...]:
         return ()
+
+    def get_latest_feedback_for_answer(
+        self,
+        *,
+        owner_id: str,
+        answer_id: str,
+        status: str | None = None,
+    ) -> PolishFeedback | None:
+        return None
 
     def add_task(self, task: PolishTaskStatus, *, owner_id: str, actor_id: str, target_ref_id: str) -> None:
         self.tasks.append(task)

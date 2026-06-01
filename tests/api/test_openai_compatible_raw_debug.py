@@ -63,6 +63,29 @@ def test_local_raw_llm_io_dump_writes_full_request_and_response(
     assert dump["evidence_refs"] == list(result.evidence_refs)
 
 
+def test_local_raw_llm_io_dump_records_no_timeout_for_polish_feedback_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dump_dir = tmp_path / "raw-dump"
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_ENABLED_ENV, "true")
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_DIR_ENV, str(dump_dir))
+    transport = _transport_with_response(_successful_provider_response())
+
+    transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-FEEDBACK-GENERATED",),
+            task_type="polish_feedback_generation",
+            input_refs=("answer:1",),
+            evidence_bundle={"feedback_signal": "retry boundaries"},
+        )
+    )
+
+    dump = _single_dump_json(dump_dir)
+    assert dump["task_type"] == "polish_feedback_generation"
+    assert dump["timeout_seconds"] is None
+
+
 def test_local_raw_llm_io_dump_excludes_authorization_and_api_key(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

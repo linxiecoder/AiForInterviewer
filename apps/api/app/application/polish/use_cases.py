@@ -10,6 +10,7 @@ from typing import Any
 
 from app.application.common.logging import LogUtil
 from app.application.common.result import ApplicationResult
+from app.application.assets.ports import AssetRepository
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
     AgentTaskStatusRef,
@@ -27,6 +28,7 @@ from app.application.llm.errors import (
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
+from app.application.polish.canonical_evidence import CanonicalEvidenceService
 from app.application.polish.commands import (
     CompletePolishQuestionCommand,
     CreatePolishAnswerCommand,
@@ -39,6 +41,7 @@ from app.application.polish.commands import (
     RefreshPolishProgressTreeStateCommand,
     SoftDeletePolishSessionCommand,
 )
+from app.application.polish.answer_application_service import PolishAnswerApplicationService
 from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
@@ -53,8 +56,17 @@ from app.application.polish.entities import (
     PolishTaskStatus,
     PolishTopic,
 )
-from app.application.polish.feedback_reserved import build_reserved_feedback_artifacts
+from app.application.polish.feedback_application_service import PolishFeedbackApplicationService
+from app.application.polish.feedback_generation_service import (
+    FeedbackGenerationContext,
+    FeedbackGenerationService,
+)
+from app.application.polish.feedback_schema import (
+    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+    POLISH_FEEDBACK_TASK_TYPE,
+)
 from app.application.polish.ports import PolishRepository
+from app.application.polish.progress_application_service import PolishProgressApplicationService
 from app.application.polish.question_generation_policy import (
     DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
     QuestionGenerationPolicyResolutionContext,
@@ -63,8 +75,11 @@ from app.application.polish.question_generation_policy import (
     resolve_question_generation_runtime_policy,
     with_question_generation_policy_resolution,
 )
+from app.application.polish.question_application_service import PolishQuestionApplicationService
 from app.application.polish.question_generation_service import QuestionGenerationResult, QuestionGenerationService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
+from app.application.polish.report_application_service import PolishReportApplicationService
+from app.application.polish.session_application_service import PolishSessionApplicationService
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
 from app.application.polish.progress_evidence import select_progress_tree_evidence_chunks
@@ -111,6 +126,8 @@ UNNAMED_ANSWER_TEXT = "暂无回答"
 UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
 _ANSWER_SUBMISSION_LOCKS_GUARD = threading.Lock()
 _ANSWER_SUBMISSION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
+_FEEDBACK_GENERATION_LOCKS_GUARD = threading.Lock()
+_FEEDBACK_GENERATION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
 _ANSWER_IDEMPOTENCY_CACHE_GUARD = threading.Lock()
 _ANSWER_IDEMPOTENCY_CACHE: dict[tuple[str, str, str, str], tuple[str, str]] = {}
 POLISH_TOPICS: tuple[PolishTopic, ...] = (
@@ -141,7 +158,7 @@ POLISH_TOPICS: tuple[PolishTopic, ...] = (
 )
 
 
-class PolishUseCases:
+class _PolishUseCaseOperations:
     def __init__(
         self,
         *,
@@ -150,17 +167,26 @@ class PolishUseCases:
         resume_repository: ResumeRepository,
         job_repository: JobRepository,
         job_match_repository: JobMatchRepository | None = None,
+        asset_repository: AssetRepository | None = None,
+        canonical_evidence_service: CanonicalEvidenceService | None = None,
         progress_tree_service: PolishProgressTreeLlmService | None = None,
         ai_orchestration_facade: AiOrchestrationFacade | None = None,
         question_generation_service: QuestionGenerationService | None = None,
         question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
         question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver | None = None,
+        feedback_generation_service: FeedbackGenerationService | None = None,
     ) -> None:
         self._polish_repository = polish_repository
         self._binding_repository = binding_repository
         self._resume_repository = resume_repository
         self._job_repository = job_repository
         self._job_match_repository = job_match_repository
+        self._asset_repository = asset_repository
+        self._canonical_evidence_service = (
+            canonical_evidence_service
+            if canonical_evidence_service is not None
+            else (CanonicalEvidenceService(asset_repository) if asset_repository is not None else None)
+        )
         self._progress_tree_service = progress_tree_service or PolishProgressTreeLlmService(None)
         self._question_generation_policy = (
             question_generation_policy or DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY
@@ -171,6 +197,7 @@ class PolishUseCases:
         self._question_generation_policy_resolver = (
             question_generation_policy_resolver or resolve_question_generation_runtime_policy
         )
+        self._feedback_generation_service = feedback_generation_service or FeedbackGenerationService()
         self._ai_orchestration_facade = ai_orchestration_facade
 
     def _resolve_question_generation_policy(
@@ -885,27 +912,120 @@ class PolishUseCases:
                 error=DomainError(code="not_found_or_inaccessible", message="Question not found")
             )
 
-        now = utc_now()
-        task_id = generate_resource_id(ResourceIdPrefix.TASK)
-        feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
-        artifacts = build_reserved_feedback_artifacts(
-            session=session,
-            question=question,
-            answer=answer,
+        feedback_lock = _feedback_generation_lock(
             owner_id=command.owner_id,
-            actor_id=command.actor_id,
-            task_id=task_id,
-            feedback_id=feedback_id,
-            created_at=now,
+            session_id=command.session_id,
+            answer_id=answer.answer_id,
         )
-        self._polish_repository.add_feedback(artifacts.feedback)
-        self._polish_repository.add_task(
-            artifacts.task,
-            owner_id=command.owner_id,
-            actor_id=command.actor_id,
-            target_ref_id=command.answer_id,
-        )
-        return ApplicationResult(value=artifacts.task)
+        with feedback_lock:
+            existing_feedback = self._polish_repository.get_latest_feedback_for_answer(
+                owner_id=command.owner_id,
+                answer_id=answer.answer_id,
+                status="generated",
+            )
+            if (
+                existing_feedback is not None
+                and existing_feedback.session_id == command.session_id
+                and _has_generated_feedback_payload(existing_feedback)
+            ):
+                return ApplicationResult(value=_existing_generated_feedback_task(existing_feedback))
+
+            now = utc_now()
+            task_id = generate_resource_id(ResourceIdPrefix.TASK)
+            feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
+            detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+            turn = _find_turn(detail.turns, question.question_id)
+            answer_detail = _find_turn_answer(turn, answer.answer_id) if turn is not None else None
+            if turn is None or answer_detail is None:
+                return ApplicationResult(
+                    error=DomainError(code="not_found_or_inaccessible", message="Answer turn not found")
+                )
+            generation_context = _build_feedback_generation_context(
+                detail=detail,
+                turn=turn,
+                answer=answer_detail,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+            )
+            generation_result = self._feedback_generation_service.generate(generation_context)
+            if not generation_result.succeeded or generation_result.payload is None:
+                failed_payload = _failed_feedback_payload_for_storage(
+                    session_id=session.session_id,
+                    question_id=question.question_id,
+                    answer_id=answer.answer_id,
+                    feedback_id=feedback_id,
+                    validation_errors=generation_result.validation_errors,
+                    metadata=generation_result.metadata,
+                )
+                task = PolishTaskStatus(
+                    ai_task_id=task_id,
+                    task_type=POLISH_FEEDBACK_TASK_TYPE,
+                    status=AiTaskStatus.GENERATION_FAILED,
+                    contract_ids=POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+                    retryable=True,
+                    result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
+                    user_visible_status="反馈生成失败，可重试",
+                    validation_errors=generation_result.validation_errors,
+                )
+                feedback = PolishFeedback(
+                    feedback_id=feedback_id,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    session_id=session.session_id,
+                    answer_id=answer.answer_id,
+                    ai_task_id=task_id,
+                    score_result_id=None,
+                    feedback_summary=json.dumps(failed_payload, ensure_ascii=False, sort_keys=True),
+                    status=str(AiTaskStatus.GENERATION_FAILED),
+                    created_at=now,
+                    updated_at=now,
+                )
+                self._polish_repository.add_feedback(feedback)
+                self._polish_repository.add_task(
+                    task,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    target_ref_id=command.answer_id,
+                )
+                return ApplicationResult(value=task)
+
+            payload = _generated_feedback_payload_for_storage(
+                generation_result.payload,
+                session_id=session.session_id,
+                question_id=question.question_id,
+                answer_id=answer.answer_id,
+                feedback_id=feedback_id,
+            )
+            feedback = PolishFeedback(
+                feedback_id=feedback_id,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                session_id=session.session_id,
+                answer_id=answer.answer_id,
+                ai_task_id=task_id,
+                score_result_id=None,
+                feedback_summary=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                status="generated",
+                created_at=now,
+                updated_at=now,
+            )
+            task = PolishTaskStatus(
+                ai_task_id=task_id,
+                task_type=POLISH_FEEDBACK_TASK_TYPE,
+                status=AiTaskStatus.SUCCEEDED,
+                contract_ids=POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+                retryable=False,
+                result_ref=TraceRef(trace_ref_id=feedback_id, trace_type="feedback", created_at=now),
+                user_visible_status="反馈已生成",
+            )
+            self._polish_repository.add_feedback(feedback)
+            self._polish_repository.add_task(
+                task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.answer_id,
+            )
+            return ApplicationResult(value=task)
 
     def refresh_progress_tree_state(
         self,
@@ -993,6 +1113,16 @@ class PolishUseCases:
             turns=tuple(turns),
         )
         match_analysis = self._resolve_match_analysis(owner_id=owner_id, session=session)
+        canonical_evidence_pack = self._build_canonical_evidence_pack(
+            owner_id=owner_id,
+            detail=detail,
+            job=job,
+            job_version=job_version,
+            resume=resume,
+            resume_version=resume_version,
+            match_analysis=match_analysis,
+        )
+        canonical_asset_items = _canonical_project_asset_items(canonical_evidence_pack)
         progress_context = build_polish_progress_context(
             detail,
             job=job,
@@ -1001,7 +1131,8 @@ class PolishUseCases:
             resume_version=resume_version,
             match_analysis=match_analysis,
             weaknesses=None,
-            assets=None,
+            assets=canonical_asset_items,
+            canonical_evidence_pack=canonical_evidence_pack,
         )
         progress_tree_plan = session.progress_tree_plan or {
             "status": session.progress_tree_status,
@@ -1027,6 +1158,36 @@ class PolishUseCases:
             progress_context=progress_context,
             progress_tree_plan=progress_tree_plan,
             progress_tree_state=progress_tree_state,
+        )
+
+    def _build_canonical_evidence_pack(
+        self,
+        *,
+        owner_id: str,
+        detail: PolishSessionDetail,
+        job: Job | None,
+        job_version: JobVersion | None,
+        resume: Resume | None,
+        resume_version: ResumeVersion | None,
+        match_analysis: JobMatchAnalysis | None,
+    ) -> dict[str, Any] | None:
+        if self._canonical_evidence_service is None:
+            return None
+        return self._canonical_evidence_service.build_pack(
+            owner_id=owner_id,
+            session_id=detail.session.session_id,
+            job_id=detail.session.job_id,
+            job_version_id=detail.session.job_version_id,
+            resume_id=detail.session.resume_id,
+            resume_version_id=detail.session.resume_version_id,
+            query_inputs=_canonical_evidence_query_inputs(
+                detail=detail,
+                job=job,
+                job_version=job_version,
+                resume=resume,
+                resume_version=resume_version,
+                match_analysis=match_analysis,
+            ),
         )
 
     def _build_session_turns(self, owner_id: str, session_id: str) -> tuple[PolishSessionTurn, ...]:
@@ -1129,6 +1290,254 @@ class PolishUseCases:
         if job_title and resume_title:
             return f"{job_title} / {resume_title}"
         return f"{job_title or UNNAMED_JOB_TITLE} / {resume_title or UNNAMED_RESUME_TITLE}"
+
+
+class _PolishOperationDelegate:
+    def __init__(self, operations: _PolishUseCaseOperations) -> None:
+        self._operations = operations
+
+    def bind(self, operations: _PolishUseCaseOperations) -> None:
+        self._operations = operations
+
+    def bootstrap(self) -> ApplicationResult[str]:
+        return _PolishUseCaseOperations.bootstrap(self._operations)
+
+    def list_topics(self, query: ListPolishTopicsQuery) -> ApplicationResult[tuple[PolishTopic, ...]]:
+        return _PolishUseCaseOperations.list_topics(self._operations, query)
+
+    def list_sessions(self, query: ListPolishSessionsQuery) -> ApplicationResult[tuple[PolishSessionDetail, ...]]:
+        return _PolishUseCaseOperations.list_sessions(self._operations, query)
+
+    def create_session(self, command: CreatePolishSessionCommand) -> ApplicationResult[PolishSession]:
+        return _PolishUseCaseOperations.create_session(self._operations, command)
+
+    def generate_initial_progress_tree(
+        self,
+        command: GenerateInitialPolishProgressTreeCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.generate_initial_progress_tree(self._operations, command)
+
+    def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.get_session(self._operations, query)
+
+    def create_question_task(self, command: CreatePolishQuestionTaskCommand) -> ApplicationResult[PolishTaskStatus]:
+        return _PolishUseCaseOperations.create_question_task(self._operations, command)
+
+    def complete_question(self, command: CompletePolishQuestionCommand) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.complete_question(self._operations, command)
+
+    def end_session(self, command: EndPolishSessionCommand) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.end_session(self._operations, command)
+
+    def create_answer(self, command: CreatePolishAnswerCommand) -> ApplicationResult[PolishAnswer]:
+        return _PolishUseCaseOperations.create_answer(self._operations, command)
+
+    def create_feedback_task(self, command: CreatePolishFeedbackTaskCommand) -> ApplicationResult[PolishTaskStatus]:
+        return _PolishUseCaseOperations.create_feedback_task(self._operations, command)
+
+    def refresh_progress_tree_state(
+        self,
+        command: RefreshPolishProgressTreeStateCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.refresh_progress_tree_state(self._operations, command)
+
+    def generate_session_report(
+        self,
+        command: GeneratePolishSessionReportCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.generate_session_report(self._operations, command)
+
+    def soft_delete_session(
+        self,
+        command: SoftDeletePolishSessionCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        return _PolishUseCaseOperations.soft_delete_session(self._operations, command)
+
+
+class PolishUseCases(_PolishUseCaseOperations):
+    def __init__(
+        self,
+        *,
+        polish_repository: PolishRepository,
+        binding_repository: BindingRepository,
+        resume_repository: ResumeRepository,
+        job_repository: JobRepository,
+        job_match_repository: JobMatchRepository | None = None,
+        asset_repository: AssetRepository | None = None,
+        canonical_evidence_service: CanonicalEvidenceService | None = None,
+        progress_tree_service: PolishProgressTreeLlmService | None = None,
+        ai_orchestration_facade: AiOrchestrationFacade | None = None,
+        question_generation_service: QuestionGenerationService | None = None,
+        question_generation_policy: QuestionGenerationRuntimePolicy | None = None,
+        question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver | None = None,
+        feedback_generation_service: FeedbackGenerationService | None = None,
+    ) -> None:
+        super().__init__(
+            polish_repository=polish_repository,
+            binding_repository=binding_repository,
+            resume_repository=resume_repository,
+            job_repository=job_repository,
+            job_match_repository=job_match_repository,
+            asset_repository=asset_repository,
+            canonical_evidence_service=canonical_evidence_service,
+            progress_tree_service=progress_tree_service,
+            ai_orchestration_facade=ai_orchestration_facade,
+            question_generation_service=question_generation_service,
+            question_generation_policy=question_generation_policy,
+            question_generation_policy_resolver=question_generation_policy_resolver,
+            feedback_generation_service=feedback_generation_service,
+        )
+        self._operation_delegate = _PolishOperationDelegate(self)
+        self._session_service = PolishSessionApplicationService(self._operation_delegate)
+        self._question_service = PolishQuestionApplicationService(self._operation_delegate)
+        self._answer_service = PolishAnswerApplicationService(self._operation_delegate)
+        self._feedback_service = PolishFeedbackApplicationService(self._operation_delegate)
+        self._progress_service = PolishProgressApplicationService(self._operation_delegate)
+        self._report_service = PolishReportApplicationService(self._operation_delegate)
+
+    def _sync_services(self) -> None:
+        operation_delegate = getattr(self, "_operation_delegate", None)
+        if operation_delegate is None:
+            operation_delegate = _PolishOperationDelegate(self)
+            self._operation_delegate = operation_delegate
+        else:
+            operation_delegate.bind(self)
+
+        for attr, service_cls in (
+            ("_session_service", PolishSessionApplicationService),
+            ("_question_service", PolishQuestionApplicationService),
+            ("_answer_service", PolishAnswerApplicationService),
+            ("_feedback_service", PolishFeedbackApplicationService),
+            ("_progress_service", PolishProgressApplicationService),
+            ("_report_service", PolishReportApplicationService),
+        ):
+            service = getattr(self, attr, None)
+            if service is None:
+                setattr(self, attr, service_cls(operation_delegate))
+                continue
+            bind = getattr(service, "bind", None)
+            if callable(bind):
+                bind(operation_delegate)
+
+    def bootstrap(self) -> ApplicationResult[str]:
+        self._sync_services()
+        return self._session_service.bootstrap()
+
+    def list_topics(self, query: ListPolishTopicsQuery) -> ApplicationResult[tuple[PolishTopic, ...]]:
+        self._sync_services()
+        return self._session_service.list_topics(query)
+
+    def list_sessions(self, query: ListPolishSessionsQuery) -> ApplicationResult[tuple[PolishSessionDetail, ...]]:
+        self._sync_services()
+        return self._session_service.list_sessions(query)
+
+    def create_session(self, command: CreatePolishSessionCommand) -> ApplicationResult[PolishSession]:
+        self._sync_services()
+        return self._session_service.create_session(command)
+
+    def generate_initial_progress_tree(
+        self,
+        command: GenerateInitialPolishProgressTreeCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._progress_service.generate_initial_progress_tree(command)
+
+    def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._session_service.get_session(query)
+
+    def create_question_task(self, command: CreatePolishQuestionTaskCommand) -> ApplicationResult[PolishTaskStatus]:
+        self._sync_services()
+        return self._question_service.create_question_task(command)
+
+    def complete_question(self, command: CompletePolishQuestionCommand) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._question_service.complete_question(command)
+
+    def end_session(self, command: EndPolishSessionCommand) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._session_service.end_session(command)
+
+    def create_answer(self, command: CreatePolishAnswerCommand) -> ApplicationResult[PolishAnswer]:
+        self._sync_services()
+        return self._answer_service.create_answer(command)
+
+    def create_feedback_task(self, command: CreatePolishFeedbackTaskCommand) -> ApplicationResult[PolishTaskStatus]:
+        self._sync_services()
+        return self._feedback_service.create_feedback_task(command)
+
+    def refresh_progress_tree_state(
+        self,
+        command: RefreshPolishProgressTreeStateCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._progress_service.refresh_progress_tree_state(command)
+
+    def generate_session_report(
+        self,
+        command: GeneratePolishSessionReportCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._report_service.generate_session_report(command)
+
+    def soft_delete_session(
+        self,
+        command: SoftDeletePolishSessionCommand,
+    ) -> ApplicationResult[PolishSessionDetail]:
+        self._sync_services()
+        return self._session_service.soft_delete_session(command)
+
+
+def _canonical_project_asset_items(canonical_evidence_pack: dict[str, Any] | None) -> tuple[dict[str, Any], ...]:
+    if not isinstance(canonical_evidence_pack, dict):
+        return ()
+    canonical_project_assets = canonical_evidence_pack.get("canonical_project_assets")
+    if not isinstance(canonical_project_assets, dict):
+        return ()
+    items = canonical_project_assets.get("items")
+    if not isinstance(items, list):
+        return ()
+    return tuple(item for item in items if isinstance(item, dict))
+
+
+def _canonical_evidence_query_inputs(
+    *,
+    detail: PolishSessionDetail,
+    job: Job | None,
+    job_version: JobVersion | None,
+    resume: Resume | None,
+    resume_version: ResumeVersion | None,
+    match_analysis: JobMatchAnalysis | None,
+) -> tuple[object, ...]:
+    session = detail.session
+    values: list[object] = [
+        session.topic_id,
+        session.subtopic_id,
+        session.custom_topic_text_summary,
+        session.polish_theme,
+        detail.job_title,
+        detail.job_company,
+        detail.resume_title,
+        session.progress_tree_plan,
+        session.progress_tree_state,
+    ]
+    if job is not None:
+        values.extend([job.title, job.company, job.department, job.application_status])
+    if job_version is not None:
+        values.extend(job_version.responsibilities or [])
+        values.extend(job_version.requirements or [])
+        values.append(job_version.other_notes)
+    if resume is not None:
+        values.append(resume.title)
+    if resume_version is not None:
+        values.append(resume_version.markdown_text)
+    if match_analysis is not None:
+        values.append(match_analysis.result_payload_json)
+    for turn in detail.turns[-8:]:
+        values.extend([turn.question_text, turn.progress_node_ref, turn.question_metadata])
+        for answer in turn.answers[-3:]:
+            values.extend([answer.answer_text, answer.feedback_text, answer.feedback_payload])
+    return tuple(value for value in values if value not in (None, ""))
 
 
 def _metadata_for_new_question(raw_metadata: object, *, generated_at: str) -> dict[str, Any]:
@@ -1639,6 +2048,311 @@ def _find_turn_answer(
     return next((answer for answer in turn.answers if answer.answer_id == answer_id), None)
 
 
+def _build_feedback_generation_context(
+    *,
+    detail: PolishSessionDetail,
+    turn: PolishSessionTurn,
+    answer: PolishSessionAnswerDetail,
+    owner_id: str,
+    actor_id: str,
+) -> FeedbackGenerationContext:
+    progress_context = detail.progress_context if isinstance(detail.progress_context, dict) else {}
+    return FeedbackGenerationContext(
+        owner_id=owner_id,
+        actor_id=actor_id,
+        session_id=detail.session.session_id,
+        question_id=turn.question_id,
+        answer_id=answer.answer_id,
+        question_text=turn.question_text,
+        answer_text=answer.answer_text,
+        answer_round=answer.answer_round,
+        polish_theme=detail.session.polish_theme or detail.session.topic_id or "",
+        progress_node_ref=turn.progress_node_ref or "",
+        question_sources=_feedback_question_sources(turn.question_sources),
+        evidence_refs=tuple(ref for ref in turn.evidence_refs if isinstance(ref, str) and ref.strip()),
+        same_question_answers=_feedback_same_question_answers(turn=turn, current_answer_id=answer.answer_id),
+        same_project_turns=(),
+        session_recent_turns=_feedback_recent_turns(detail.turns),
+        project_asset_summaries=_canonical_project_asset_items({"canonical_project_assets": progress_context.get("canonical_project_assets")}),
+        canonical_project_assets=(
+            progress_context.get("canonical_project_assets")
+            if isinstance(progress_context.get("canonical_project_assets"), dict)
+            else {}
+        ),
+        question_metadata=turn.question_metadata if isinstance(turn.question_metadata, dict) else {},
+        job_snapshot=_feedback_job_snapshot(progress_context.get("job_snapshot")),
+        resume_snapshot=_feedback_resume_snapshot(progress_context.get("resume_snapshot")),
+        progress_node_snapshot=_feedback_progress_node_snapshot(
+            detail.progress_tree_plan,
+            progress_node_ref=turn.progress_node_ref,
+            question_text=turn.question_text,
+        ),
+    )
+
+
+def _feedback_question_sources(sources: tuple[PolishQuestionSource, ...]) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {
+            "index": source.index,
+            "source_type": source.source_type,
+            "title": source.title,
+            "excerpt": source.excerpt,
+            "ref_id": source.ref_id,
+            "availability": source.availability,
+        }
+        for source in sources
+    )
+
+
+def _feedback_same_question_answers(
+    *,
+    turn: PolishSessionTurn,
+    current_answer_id: str,
+) -> tuple[dict[str, Any], ...]:
+    answers: list[dict[str, Any]] = []
+    for answer in turn.answers[-5:]:
+        if answer.answer_id == current_answer_id:
+            continue
+        feedback_payload = answer.feedback_payload if isinstance(answer.feedback_payload, dict) else {}
+        loss_point_ids = []
+        compact_loss_points: list[dict[str, Any]] = []
+        loss_points = feedback_payload.get("loss_points") if isinstance(feedback_payload, dict) else None
+        if isinstance(loss_points, list):
+            for loss_point in loss_points:
+                if not isinstance(loss_point, dict):
+                    continue
+                loss_point_id = str(loss_point.get("loss_point_id") or "")
+                if loss_point_id:
+                    loss_point_ids.append(loss_point_id)
+                    compact_loss_points.append(
+                        {
+                            "loss_point_id": loss_point_id,
+                            "reason": _feedback_context_excerpt(loss_point.get("reason"), max_chars=240),
+                        }
+                    )
+        answer_coverage = feedback_payload.get("answer_coverage") if isinstance(feedback_payload, dict) else None
+        if not isinstance(answer_coverage, dict):
+            answer_coverage = {}
+        score_result = feedback_payload.get("score_result") if isinstance(feedback_payload, dict) else None
+        if not isinstance(score_result, dict):
+            score_result = {}
+        answers.append(
+            {
+                "answer_id": answer.answer_id,
+                "answer_round": answer.answer_round,
+                "answer_summary": _feedback_context_excerpt(answer.answer_text, max_chars=700),
+                "feedback_summary": _feedback_context_excerpt(answer.feedback_text, max_chars=700),
+                "loss_point_ids": loss_point_ids,
+                "loss_points": compact_loss_points,
+                "covered_points": _clean_feedback_list(answer_coverage.get("covered_points")),
+                "missing_points": _clean_feedback_list(answer_coverage.get("missing_points")),
+                "answer_coverage": {
+                    "covered_points": _clean_feedback_list(answer_coverage.get("covered_points")),
+                    "missing_points": _clean_feedback_list(answer_coverage.get("missing_points")),
+                },
+                "score_result": {"score_value": score_result.get("score_value")}
+                if score_result.get("score_value") is not None
+                else {},
+            }
+        )
+    return tuple(answers)
+
+
+def _feedback_recent_turns(turns: tuple[PolishSessionTurn, ...]) -> tuple[dict[str, Any], ...]:
+    recent_turns: list[dict[str, Any]] = []
+    for turn in turns[-3:]:
+        latest_answer = turn.answers[-1] if turn.answers else None
+        recent_turns.append(
+            {
+                "question_id": turn.question_id,
+                "question_summary": _feedback_context_excerpt(turn.question_text, max_chars=500),
+                "progress_node_ref": turn.progress_node_ref,
+                "answer_id": latest_answer.answer_id if latest_answer is not None else None,
+                "answer_round": latest_answer.answer_round if latest_answer is not None else None,
+                "answer_summary": _feedback_context_excerpt(latest_answer.answer_text, max_chars=700)
+                if latest_answer is not None
+                else None,
+                "feedback_summary": _feedback_context_excerpt(latest_answer.feedback_text, max_chars=700)
+                if latest_answer is not None
+                else None,
+            }
+        )
+    return tuple(recent_turns)
+
+
+def _feedback_job_snapshot(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "job_id": value.get("job_id"),
+        "job_version_id": value.get("job_version_id"),
+        "title": value.get("title"),
+        "company": value.get("company"),
+        "responsibilities": _clean_feedback_list(value.get("responsibilities"))[:5],
+        "requirements": _clean_feedback_list(value.get("requirements"))[:5],
+        "content_digest": value.get("content_digest"),
+    }
+
+
+def _feedback_resume_snapshot(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "resume_id": value.get("resume_id"),
+        "resume_version_id": value.get("resume_version_id"),
+        "title": value.get("title"),
+        "summary": value.get("summary"),
+        "projects": _clean_feedback_list(value.get("project_experiences"))[:5],
+        "content_digest": value.get("content_digest"),
+    }
+
+
+def _feedback_context_excerpt(value: Any, *, max_chars: int) -> str:
+    if value is None:
+        return ""
+    text = " ".join(str(value).split())
+    if len(text) > max_chars:
+        return text[:max_chars].rstrip()
+    return text
+
+
+def _feedback_progress_node_snapshot(
+    progress_tree_plan: dict[str, Any],
+    *,
+    progress_node_ref: str | None,
+    question_text: str,
+) -> dict[str, Any]:
+    if progress_node_ref:
+        for node in _iter_progress_nodes(progress_tree_plan.get("nodes")):
+            node_ref = _feedback_progress_node_ref(node)
+            if node_ref == progress_node_ref:
+                snapshot = dict(node)
+                snapshot.setdefault("node_ref", progress_node_ref)
+                snapshot.setdefault("question_title", question_text)
+                return snapshot
+    return {
+        "node_ref": progress_node_ref or "",
+        "question_title": question_text,
+        "title": question_text,
+    }
+
+
+def _iter_progress_nodes(value: Any):
+    if isinstance(value, dict):
+        yield value
+        for child_key in ("children", "items", "nodes", "deferred_candidates"):
+            yield from _iter_progress_nodes(value.get(child_key))
+    elif isinstance(value, list) or isinstance(value, tuple):
+        for item in value:
+            yield from _iter_progress_nodes(item)
+
+
+def _feedback_progress_node_ref(node: dict[str, Any]) -> str | None:
+    for key in ("progress_node_ref", "node_ref", "ref", "id"):
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _clean_feedback_list(value: Any) -> list[Any]:
+    if not isinstance(value, list) and not isinstance(value, tuple):
+        return []
+    return [item for item in value if item not in (None, "")]
+
+
+def _generated_feedback_payload_for_storage(
+    payload: dict[str, Any],
+    *,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    feedback_id: str,
+) -> dict[str, Any]:
+    stored = dict(payload)
+    feedback_text = str(stored.get("feedback_text") or "")
+    stored["feedback_id"] = feedback_id
+    stored["polish_session_ref"] = {"resource_type": "polish_session", "resource_id": session_id}
+    stored["question_ref"] = {"resource_type": "question", "resource_id": question_id}
+    stored["answer_ref"] = {"resource_type": "answer", "resource_id": answer_id}
+    stored.setdefault("feedback_summary", feedback_text)
+    stored.setdefault("candidate_refs", [])
+    stored.setdefault("legacy_compatibility", {"feedback_text": feedback_text})
+    metadata = stored.get("feedback_metadata")
+    stored["feedback_metadata"] = (metadata if isinstance(metadata, dict) else {}) | {
+        "generated": True,
+        "llm_called": True,
+        "task_type": POLISH_FEEDBACK_TASK_TYPE,
+    }
+    return stored
+
+
+def _failed_feedback_payload_for_storage(
+    *,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    feedback_id: str,
+    validation_errors: tuple[str, ...],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    error_code = validation_errors[0] if validation_errors else "llm_transport_generation_failed"
+    error_type = metadata.get("provider_error_type") if isinstance(metadata, dict) else None
+    return {
+        "contract_id": "P-POLISH-003",
+        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+        "status": str(AiTaskStatus.GENERATION_FAILED),
+        "feedback_id": feedback_id,
+        "polish_session_ref": {"resource_type": "polish_session", "resource_id": session_id},
+        "question_ref": {"resource_type": "question", "resource_id": question_id},
+        "answer_ref": {"resource_type": "answer", "resource_id": answer_id},
+        "feedback_text": "反馈生成失败，可重试",
+        "feedback_summary": "反馈生成超时或失败，可重试",
+        "user_visible_status": "反馈生成失败，可重试",
+        "retryable": True,
+        "error": {
+            "code": error_code,
+            "message": "反馈生成超时或失败，可重试",
+            "metadata": {"error_type": error_type} if error_type else {},
+        },
+        "validation_errors": list(validation_errors),
+        "score_result": None,
+        "score_result_ref": None,
+        "loss_points": [],
+        "reference_answer": None,
+        "knowledge_points": [],
+        "technical_principles": [],
+        "next_recommended_actions": ["retry_same_question", "continue_same_question", "generate_next_question"],
+        "candidate_refs": [],
+        "validation_result_ref": None,
+        "trace_refs": [],
+        "low_confidence_flags": [],
+        "user_confirmation_required": False,
+        "legacy_compatibility": {"feedback_text": "反馈生成失败，可重试"},
+    }
+
+
+def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:
+    return PolishTaskStatus(
+        ai_task_id=feedback.ai_task_id,
+        task_type=POLISH_FEEDBACK_TASK_TYPE,
+        status=AiTaskStatus.SUCCEEDED,
+        contract_ids=POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+        retryable=False,
+        result_ref=TraceRef(
+            trace_ref_id=feedback.feedback_id,
+            trace_type="feedback",
+            created_at=feedback.created_at,
+        ),
+        user_visible_status="反馈已存在",
+    )
+
+
+def _has_generated_feedback_payload(feedback: PolishFeedback) -> bool:
+    payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    return isinstance(payload, dict) and payload.get("status") == "generated"
+
+
 def _select_follow_up_target(
     parent_turn: PolishSessionTurn,
     parent_answer: PolishSessionAnswerDetail,
@@ -1892,6 +2606,16 @@ def _answer_submission_lock(*, owner_id: str, session_id: str, question_id: str)
         if lock is None:
             lock = threading.Lock()
             _ANSWER_SUBMISSION_LOCKS[lock_key] = lock
+        return lock
+
+
+def _feedback_generation_lock(*, owner_id: str, session_id: str, answer_id: str) -> threading.Lock:
+    lock_key = (owner_id, session_id, answer_id)
+    with _FEEDBACK_GENERATION_LOCKS_GUARD:
+        lock = _FEEDBACK_GENERATION_LOCKS.get(lock_key)
+        if lock is None:
+            lock = threading.Lock()
+            _FEEDBACK_GENERATION_LOCKS[lock_key] = lock
         return lock
 
 

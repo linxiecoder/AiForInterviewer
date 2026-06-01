@@ -86,6 +86,7 @@ import {
   resolveCurrentQuestionId,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
+  resolveWorkbenchQuestionFocusId,
   resolveProgressTreeSelectedNodeRefAfterClick,
   canSubmitAnswerFromKeyboard,
   getWorkbenchChatMessageAlignmentClassName,
@@ -346,13 +347,17 @@ type WorkbenchFeedbackItemsAreStable = Expect<
   Equal<
     typeof INTERVIEW_WORKBENCH_FEEDBACK_ITEMS,
     readonly [
-      "点评",
+      "总体点评",
       "打分",
       "得分点",
       "失分点",
       "参考回答",
       "考点解析",
       "技术原理扩展",
+      "同题回答效果",
+      "项目一致性检查",
+      "同场相似内容检查",
+      "项目资产更新候选",
       "权重说明",
       "面试意图",
       "技术短板",
@@ -855,12 +860,12 @@ function test_progress_tree_left_list_stays_compact(): void {
   assertContract(!bannerVisibleCopy.includes("你会如何验证混合检索效果？"), "公告条不应展示建议第一题");
 }
 
-function test_progress_tree_detail_defaults_to_current_priority(): void {
-  const session = buildTestSession(
+function test_progress_tree_detail_defaults_to_latest_turn_node(): void {
+  const baseSession = buildTestSession(
     [
       {
-        ...buildTestProgressNode("node_first", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
-        depth_goal: "第一节点目标",
+        ...buildTestProgressNode("node_latest", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "最新题目节点目标",
       },
       {
         ...buildTestProgressNode("node_priority", "AI Agent 任务规划与工具调用机制", "jd_gap_learning", "补齐学习类"),
@@ -869,13 +874,28 @@ function test_progress_tree_detail_defaults_to_current_priority(): void {
     ],
     "node_priority",
   );
+  const session: PolishSessionDetail = {
+    ...baseSession,
+    turns: [
+      {
+        question_id: "q_latest_detail",
+        question_text: "最新题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_latest",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
 
   const selectedRef = resolveProgressTreeDetailNodeRef(session, null);
   const detail = buildProgressTreeNodeDetailViewModel(session, selectedRef);
 
-  assertContract(selectedRef === "node_priority", "详情默认节点应优先使用 current_priority");
-  assertContract(detail?.title === "AI Agent 任务规划与工具调用机制", "详情应默认显示 current_priority 对应节点");
-  assertContract(detail?.depthRequirement === "当前优先节点目标", "详情应默认显示 current_priority 节点内容");
+  assertContract(selectedRef === "node_latest", "详情默认节点应优先使用最新题目所在节点");
+  assertContract(detail?.title === "大文件异步处理管道架构", "详情应默认显示最新题目对应节点");
+  assertContract(detail?.depthRequirement === "最新题目节点目标", "详情应默认显示最新题目节点内容");
 }
 
 function test_progress_tree_group_header_does_not_show_node_detail(): void {
@@ -915,12 +935,12 @@ function test_progress_tree_category_header_is_group_only(): void {
   assertContract(nextSelectedRef === "node_resume_1", "点击分类 header 不应设置为选中详情节点");
 }
 
-function test_progress_node_context_banner_defaults_to_current_priority(): void {
-  const session = buildTestSession(
+function test_progress_node_context_banner_defaults_to_latest_turn_node(): void {
+  const baseSession = buildTestSession(
     [
       {
-        ...buildTestProgressNode("node_first", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
-        depth_goal: "第一节点目标",
+        ...buildTestProgressNode("node_latest", "大文件异步处理管道架构", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "最新题目节点目标",
       },
       {
         ...buildTestProgressNode("node_priority", "AI Agent 任务规划与工具调用机制", "jd_gap_learning", "补齐学习类"),
@@ -929,13 +949,28 @@ function test_progress_node_context_banner_defaults_to_current_priority(): void 
     ],
     "node_priority",
   );
+  const session: PolishSessionDetail = {
+    ...baseSession,
+    turns: [
+      {
+        question_id: "q_latest_banner",
+        question_text: "最新题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_latest",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
 
   const selectedRef = resolveProgressTreeDetailNodeRef(session, null);
   const bannerContent = buildProgressTreeContextBannerContent(session, selectedRef);
 
-  assertContract(selectedRef === "node_priority", "上下文公告条默认节点应优先使用 current_priority");
-  assertContract(bannerContent.title === "AI Agent 任务规划与工具调用机制", "上下文公告条应默认展示 current_priority 对应节点");
-  assertContract(bannerContent.depthRequirement === "当前优先节点目标", "上下文公告条应默认显示 current_priority 节点内容");
+  assertContract(selectedRef === "node_latest", "上下文公告条默认节点应优先使用最新题目所在节点");
+  assertContract(bannerContent.title === "大文件异步处理管道架构", "上下文公告条应默认展示最新题目对应节点");
+  assertContract(bannerContent.depthRequirement === "最新题目节点目标", "上下文公告条应默认显示最新题目节点内容");
 }
 
 function test_progress_node_context_banner_updates_when_node_selected(): void {
@@ -1458,6 +1493,42 @@ function test_progress_tree_question_entry_is_selectable_by_node_type(): void {
   assertContract(selectedRef === "node_with_question", "点击题目节点应选中其 progress_node_ref");
 }
 
+function test_progress_tree_click_focuses_latest_question_for_node(): void {
+  const baseSession = buildTestSession([
+    buildTestProgressNode("node_focus", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+  ]);
+  const session: PolishSessionDetail = {
+    ...baseSession,
+    turns: [
+      {
+        question_id: "q_focus_old",
+        question_text: "旧题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_focus",
+        evidence_refs: [],
+        context_digest: "digest-old",
+        answers: [],
+      },
+      {
+        question_id: "q_focus_latest",
+        question_text: "最新题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:05:00Z",
+        progress_node_ref: "node_focus",
+        evidence_refs: [],
+        context_digest: "digest-latest",
+        answers: [],
+      },
+    ],
+  };
+  const progressNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0] ?? null;
+  const oldQuestionNode = progressNode?.children?.find((node) => node.key === "question:q_focus_old") ?? null;
+
+  assertContract(resolveWorkbenchQuestionFocusId(session, progressNode, "node_focus") === "q_focus_latest", "点击进展节点应定位到该节点最新题目");
+  assertContract(resolveWorkbenchQuestionFocusId(session, oldQuestionNode, "node_focus") === "q_focus_old", "点击题目节点应定位到该题目");
+}
+
 function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata(): void {
   const smokeSessionSummary = buildTestSessionSummary({
     id: "ses_auth_smoke",
@@ -1690,7 +1761,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
     ...card.traceItems,
   ].join(" ");
 
-  assertContract(card.sections.map((section) => section.title).join(",") === "点评,打分,得分点,失分点,参考回答,考点解析,技术原理扩展,权重说明,面试意图,技术短板,表达短板,高阶参考答案,口语化范本,多次回答改进,下一轮重答重点,下一轮训练建议", "反馈卡应展示旧模块和结构化反馈模块");
+  assertContract(card.sections.map((section) => section.title).join(",") === "总体点评,打分,得分点,失分点,参考回答,考点解析,技术原理扩展,同题回答效果,权重说明,面试意图,技术短板,表达短板,高阶参考答案,口语化范本,多次回答改进,下一轮重答重点,下一轮训练建议", "反馈卡应展示旧模块和结构化反馈模块");
   assertContract(visibleCopy.includes("P-POLISH-005"), "反馈卡应展示 contract_id / contract_ids");
   assertContract(visibleCopy.includes("72"), "反馈卡应展示 score_result 分值");
   assertContract(visibleCopy.includes("回答中已有可复用表达"), "反馈卡应展示 positive_evidence_points 得分点");
@@ -1723,6 +1794,206 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(card.nextActions.join(",") === "provide_more_answer_detail,generate_next_question", "下一步建议应去重并保持 contract enum");
   assertContract(toNextRecommendedActionLabel("provide_more_answer_detail") === "补充回答细节", "contract enum 应映射为按钮文案");
   assertContract(toNextRecommendedActionLabel("generate_next_question") === "生成下一题", "生成下一题 enum 应映射为按钮文案");
+}
+
+function test_generated_feedback_card_view_model_shows_phase6_payload_sections(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_phase6",
+    answer_round: 3,
+    answer_text: "我负责订单系统接口编排，并补齐幂等和回滚策略。",
+    answer_created_at: "2026-05-29T10:10:00Z",
+    feedback_text: "回答结构清晰，但项目一致性和重复表达需要澄清。",
+    feedback_id: "fb_phase6",
+    score_result_id: "score_phase6",
+    feedback_created_at: "2026-05-29T10:11:00Z",
+    feedback_payload: {
+      status: "generated",
+      feedback_text: "回答结构清晰，但项目一致性和重复表达需要澄清。",
+      answer_summary: {
+        coverage: "覆盖了接口编排、幂等策略和上线验证。",
+        main_gaps: ["缺少项目时间线澄清", "重复使用上一轮缓存表述"],
+      },
+      score_result: {
+        score_type: "polish_answer",
+        score_value: 82,
+        confidence_level: "high",
+      },
+      explicit_score: 78,
+      implicit_score: 86,
+      scoring_dimensions: [
+        {
+          dimension_id: "technical_depth",
+          title: "技术深度",
+          score_value: 78,
+          reason: "幂等策略有说明，但降级路径不足。",
+        },
+      ],
+      loss_points: [
+        {
+          loss_point_id: "lp_tradeoff",
+          title: "技术取舍说明不足",
+          severity: "major",
+          deduction: 10,
+          reason: "需要比较同步、异步和补偿方案。",
+          answer_excerpt: "我补齐幂等和回滚策略",
+          related_dimension: "technical_depth",
+        },
+      ],
+      reference_answer: {
+        sections: [
+          {
+            section_id: "sec_tradeoff",
+            title: "方案取舍",
+            content: "先说明业务目标，再比较同步链路、异步补偿和失败回滚。",
+            addresses_loss_point_ids: ["lp_tradeoff"],
+          },
+        ],
+      },
+      knowledge_points: [
+        {
+          title: "接口幂等",
+          explanation: "通过业务唯一键、状态机和重试保护避免重复写入。",
+        },
+      ],
+      technical_principles: [
+        {
+          title: "补偿事务",
+          explanation: "跨系统失败时通过补偿任务保证最终一致性。",
+        },
+      ],
+      same_question_effect: {
+        previous_answer_ref: "ans_feedback_002",
+        improved_points: ["补充了幂等键"],
+        repeated_loss_point_ids: ["lp_tradeoff"],
+        regressed_points: ["上线指标变少"],
+        score_delta: 6,
+        next_retry_focus: ["补齐失败回滚指标"],
+      },
+      project_asset_consistency_check: {
+        status: "conflict",
+        matched_project_name: "订单履约系统改造",
+        conflicts: [
+          {
+            title: "项目时间线冲突",
+            reason: "本轮回答和资产库中的上线月份不一致。",
+          },
+        ],
+        clarification_questions: ["请确认订单履约系统到底在几月上线？"],
+      },
+      session_similarity_check: {
+        status: "semantic_repetition",
+        related_turn_refs: ["turn_002"],
+        impact: "表达重复或覆盖不足",
+        explanation: "与上一轮回答复用了相同缓存表述。",
+      },
+      project_asset_update_candidates: [
+        {
+          candidate_type: "project_experience",
+          target_asset_ref: "asset_project_001",
+          proposed_change_type: "add_metric",
+          content_draft: "补充订单履约系统上线后错误率下降 18%。",
+          confidence_level: "medium",
+          user_confirmation_required: true,
+          private_note: "private_note_should_not_render",
+        },
+      ],
+      next_recommended_actions: ["retry_same_question", "generate_next_question"],
+      raw_prompt: "raw_prompt_should_not_render",
+      provider_payload: "provider_payload_should_not_render",
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = [
+    card.status,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.nextActions.map(toNextRecommendedActionLabel),
+  ].join(" ");
+  const projectConsistencySection = card.sections.find((section) => section.key === "project_asset_consistency_check");
+
+  assertContract(card.status === "generated", "generated payload 应保持 generated 状态");
+  assertContract(visibleCopy.includes("总体点评"), "generated payload 应展示总体点评区块");
+  assertContract(visibleCopy.includes("覆盖了接口编排"), "总体点评应展示 answer_summary.coverage");
+  assertContract(visibleCopy.includes("主要缺口：缺少项目时间线澄清"), "总体点评应展示 answer_summary.main_gaps");
+  assertContract(visibleCopy.includes("分数：82"), "打分应展示 score_result.score_value");
+  assertContract(visibleCopy.includes("评分类型：polish_answer"), "打分应展示 score_result.score_type");
+  assertContract(visibleCopy.includes("置信度：high"), "打分应展示 score_result.confidence_level");
+  assertContract(visibleCopy.includes("显性技术得分：78"), "打分应展示 explicit_score");
+  assertContract(visibleCopy.includes("隐性表达得分：86"), "打分应展示 implicit_score");
+  assertContract(visibleCopy.includes("技术深度"), "打分应展示 scoring_dimensions");
+  assertContract(visibleCopy.includes("严重度：major"), "失分点应展示 severity");
+  assertContract(visibleCopy.includes("扣分：10"), "失分点应展示 deduction");
+  assertContract(visibleCopy.includes("关联维度：technical_depth"), "失分点应展示 related_dimension");
+  assertContract(visibleCopy.includes("方案取舍"), "参考回答应展示 sections");
+  assertContract(visibleCopy.includes("本段修正：技术取舍说明不足"), "参考回答应把 addresses_loss_point_ids 映射到失分点 title");
+  assertContract(visibleCopy.includes("接口幂等"), "考点解析应展示 knowledge_points");
+  assertContract(visibleCopy.includes("补偿事务"), "技术原理扩展应展示 technical_principles");
+  assertContract(visibleCopy.includes("上一轮回答：ans_feedback_002"), "同题回答效果应展示 previous_answer_ref");
+  assertContract(visibleCopy.includes("已改进：补充了幂等键"), "同题回答效果应展示 improved_points");
+  assertContract(visibleCopy.includes("重复失分：技术取舍说明不足"), "同题回答效果应把 repeated_loss_point_ids 映射到 title");
+  assertContract(visibleCopy.includes("分数变化：+6"), "同题回答效果应展示 score_delta");
+  assertContract(visibleCopy.includes("下一轮聚焦：补齐失败回滚指标"), "同题回答效果应展示 next_retry_focus");
+  assertContract(projectConsistencySection?.tone === "warning", "项目一致性 conflict 应使用 warning 样式");
+  assertContract(visibleCopy.includes("需要澄清后再沉淀为资产"), "项目一致性 conflict 应提示先澄清再沉淀");
+  assertContract(visibleCopy.includes("请确认订单履约系统到底在几月上线？"), "项目一致性检查应展示 clarification question");
+  assertContract(visibleCopy.includes("表达重复或覆盖不足"), "semantic_repetition 应提示重复或覆盖不足");
+  assertContract(visibleCopy.includes("候选更新：project_experience"), "项目资产更新候选应以候选方式展示");
+  assertContract(visibleCopy.includes("需要用户确认：是"), "项目资产更新候选应展示 user_confirmation_required");
+  assertContract(visibleCopy.includes("重答同题"), "下一步建议应复用 action label 映射");
+  assertContract(!visibleCopy.includes("已写入资产"), "项目资产更新候选不应伪装为正式资产");
+  assertContract(!visibleCopy.includes("确认写入"), "本阶段不应出现确认写资产入口文案");
+  assertContract(!visibleCopy.includes("private_note_should_not_render"), "反馈卡不应暴露 private 字段");
+  assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "反馈卡不应暴露 raw prompt");
+  assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "反馈卡不应暴露 provider payload");
+}
+
+function test_feedback_card_view_model_handles_reserved_payload(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_reserved",
+    answer_round: 1,
+    answer_text: "回答已保存，反馈能力预留。",
+    answer_created_at: "2026-05-29T10:00:00Z",
+    feedback_text: "generated_feedback_should_not_render",
+    feedback_id: "fb_reserved",
+    score_result_id: null,
+    feedback_created_at: "2026-05-29T10:01:00Z",
+    feedback_payload: {
+      status: "reserved",
+      feedback_text: "generated_payload_should_not_render",
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
+
+  assertContract(card.status === "reserved", "reserved payload 应保持 reserved 状态");
+  assertContract(visibleCopy.includes("反馈能力预留/占位"), "reserved payload 应明确展示预留占位");
+  assertContract(!visibleCopy.includes("generated_feedback_should_not_render"), "reserved payload 不应伪装成 generated feedback");
+  assertContract(!visibleCopy.includes("generated_payload_should_not_render"), "reserved payload 不应展示 generated 文案");
+}
+
+function test_generated_feedback_card_view_model_handles_missing_phase6_fields(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_sparse_generated",
+    answer_round: 1,
+    answer_text: "回答已保存。",
+    answer_created_at: "2026-05-29T10:00:00Z",
+    feedback_text: "",
+    feedback_id: "fb_sparse",
+    score_result_id: null,
+    feedback_created_at: "2026-05-29T10:01:00Z",
+    feedback_payload: {
+      status: "generated",
+      feedback_text: "后端只返回了总体点评。",
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
+
+  assertContract(visibleCopy.includes("后端只返回了总体点评"), "generated payload 缺字段时仍应展示已有反馈");
+  assertContract(visibleCopy.includes("暂无打分结果"), "generated payload 缺 score_result 时应展示稳定空态");
+  assertContract(visibleCopy.includes("暂无同题历史回答"), "generated payload 缺 same_question_effect 时应展示同题历史空态");
 }
 
 function test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only(): void {
@@ -1863,7 +2134,7 @@ function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload()
   const titles = card.sections.map((section) => section.title);
   const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
 
-  assertContract(titles.includes("点评"), "旧 payload 应继续展示旧反馈区块");
+  assertContract(titles.includes("总体点评"), "旧 payload 应继续展示旧反馈区块");
   assertContract(visibleCopy.includes("旧版反馈仍应可展示"), "旧 payload 应继续展示 feedback_text");
   assertContract(visibleCopy.includes("68"), "旧 payload 应继续展示 score_result");
   assertContract(visibleCopy.includes("旧失分点"), "旧 payload 应继续展示 loss_points");
@@ -1902,13 +2173,67 @@ function test_feedback_card_view_model_handles_pending_payload(): void {
   const visibleCopy = card.sections.flatMap((section) => [section.title, ...section.items]).join(" ");
 
   assertContract(card.status === "pending", "pending payload 应保持 pending 状态");
-  assertContract(visibleCopy.includes("反馈生成中"), "pending payload 缺 feedback_text 时应使用稳定 fallback");
+  assertContract(visibleCopy.includes("本轮反馈尚未生成"), "pending payload 缺 feedback_text 时应使用稳定 fallback");
   assertContract(visibleCopy.includes("暂无打分结果"), "pending payload 缺 score_result 时不应崩溃");
   assertContract(!titles.includes("得分点"), "pending payload 不应展示空得分点");
   assertContract(!titles.includes("高阶参考答案"), "pending payload 不应展示空高阶参考答案");
   assertContract(!titles.includes("口语化范本"), "pending payload 不应展示空口语化范本");
   assertContract(!titles.includes("多次回答改进"), "pending payload 不应展示空 retry delta");
   assertContract(!titles.includes("下一轮重答重点"), "pending payload 不应展示空下一轮重答重点");
+}
+
+function test_feedback_card_view_model_handles_generation_failed_payload(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_failed",
+    answer_round: 1,
+    answer_text: "回答已保存，但真实 provider 超时。",
+    answer_created_at: "2026-05-30T10:00:00Z",
+    feedback_text: "反馈生成失败，可重试",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "generation_failed",
+      feedback_text: "反馈生成失败，可重试",
+      user_visible_status: "反馈生成失败，可重试",
+      retryable: true,
+      validation_errors: ["llm_transport_timeout"],
+      error: {
+        code: "llm_transport_timeout",
+        metadata: {
+          provider_payload: "provider_payload_should_not_render",
+          raw_prompt: "raw_prompt_should_not_render",
+        },
+      },
+      score_result: null,
+      loss_points: [],
+      reference_answer: null,
+      raw_provider_payload: "raw_provider_payload_should_not_render",
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const titles = card.sections.map((section) => section.title);
+  const visibleCopy = [
+    card.title,
+    card.status,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.nextActions.map(toNextRecommendedActionLabel),
+  ].join(" ");
+
+  assertContract(card.status === "generation_failed", "generation_failed payload 应保持失败态");
+  assertContract(card.title === "反馈生成失败", "失败反馈卡标题应明确展示反馈生成失败");
+  assertContract(titles.join(",") === "失败状态", "generation_failed 不应展开打分/失分点/参考回答等空 section");
+  assertContract(visibleCopy.includes("反馈生成超时或失败，可重试"), "失败态应展示可重试提示");
+  assertContract(visibleCopy.includes("错误码：llm_transport_timeout"), "失败态应展示简要 validation error");
+  assertContract(visibleCopy.includes("可重试：是"), "retryable=true 时应提示可重试");
+  assertContract(!visibleCopy.includes("本轮反馈尚未生成"), "generation_failed 不应展示 pending 空态");
+  assertContract(!visibleCopy.includes("暂无打分结果"), "generation_failed 不应展示空打分 section");
+  assertContract(!visibleCopy.includes("暂无明确失分点"), "generation_failed 不应展示空失分点 section");
+  assertContract(!visibleCopy.includes("暂无参考回答"), "generation_failed 不应展示空参考回答 section");
+  assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "失败态不应暴露 provider payload");
+  assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "失败态不应暴露 raw prompt");
+  assertContract(!visibleCopy.includes("raw_provider_payload_should_not_render"), "失败态不应暴露 raw provider payload");
 }
 
 function test_feedback_card_view_model_does_not_calculate_score_on_frontend(): void {
@@ -2263,10 +2588,10 @@ test_progress_node_context_renders_as_compact_banner();
 test_progress_tree_context_banner_shows_technical_coverage_from_children();
 test_progress_tree_context_banner_shows_technical_coverage_points_without_children();
 test_progress_tree_left_list_stays_compact();
-test_progress_tree_detail_defaults_to_current_priority();
+test_progress_tree_detail_defaults_to_latest_turn_node();
 test_progress_tree_group_header_does_not_show_node_detail();
 test_progress_tree_category_header_is_group_only();
-test_progress_node_context_banner_defaults_to_current_priority();
+test_progress_node_context_banner_defaults_to_latest_turn_node();
 test_progress_node_context_banner_updates_when_node_selected();
 test_progress_node_context_banner_hides_question_and_detail_lists();
 test_workbench_hero_actions_are_icon_only_and_copy_session_content();
@@ -2283,11 +2608,16 @@ test_workbench_question_actions_follow_current_question_status();
 test_progress_tree_context_menu_items_follow_question_action_state();
 test_progress_tree_context_menu_closes_on_escape_and_external_events();
 test_progress_tree_question_entry_is_selectable_by_node_type();
+test_progress_tree_click_focuses_latest_question_for_node();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
+test_generated_feedback_card_view_model_shows_phase6_payload_sections();
+test_feedback_card_view_model_handles_reserved_payload();
+test_generated_feedback_card_view_model_handles_missing_phase6_fields();
 test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only();
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
+test_feedback_card_view_model_handles_generation_failed_payload();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();
 test_clipboard_markdown_stays_compatible_with_structured_feedback_payload();
 test_session_clipboard_markdown_includes_full_context_tree_and_all_questions();

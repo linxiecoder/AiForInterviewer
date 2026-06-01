@@ -44,6 +44,8 @@ class QuestionMetadata:
     grounding_gate_issues: tuple[str, ...] = ()
     grounding_status: str | None = None
     grounding_validation_errors: tuple[str, ...] = ()
+    grounding_blocking_errors: tuple[str, ...] = ()
+    grounding_warnings: tuple[str, ...] = ()
     grounding_blocking_bypassed: bool = False
     manual_review_required: bool = False
     manual_review_reason: str | None = None
@@ -99,6 +101,8 @@ class QuestionMetadata:
             "grounding_gate_issues": list(self.grounding_gate_issues),
             "grounding_status": self.grounding_status,
             "grounding_validation_errors": list(self.grounding_validation_errors),
+            "grounding_blocking_errors": list(self.grounding_blocking_errors),
+            "grounding_warnings": list(self.grounding_warnings),
             "grounding_blocking_bypassed": self.grounding_blocking_bypassed,
             "manual_review_required": self.manual_review_required,
             "manual_review_reason": self.manual_review_reason,
@@ -173,6 +177,8 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "grounding_gate_issues": _string_list(payload.get("grounding_gate_issues")),
         "grounding_status": _string_or_none(payload.get("grounding_status"), max_chars=80),
         "grounding_validation_errors": _string_list(payload.get("grounding_validation_errors")),
+        "grounding_blocking_errors": _string_list(payload.get("grounding_blocking_errors")),
+        "grounding_warnings": _string_list(payload.get("grounding_warnings")),
         "grounding_blocking_bypassed": _bool_or_false(payload.get("grounding_blocking_bypassed")),
         "manual_review_required": _bool_or_false(payload.get("manual_review_required")),
         "manual_review_reason": _string_or_none(payload.get("manual_review_reason"), max_chars=160),
@@ -203,6 +209,24 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "follow_up_reason": _string_or_none(payload.get("follow_up_reason"), max_chars=240),
         "follow_up_target_dimension": _string_or_none(payload.get("follow_up_target_dimension"), max_chars=240),
     }
+    canonical_keys = {
+        "source_support_level",
+        "canonical_project_assets_available",
+        "canonical_project_asset_refs",
+    }
+    if any(key in payload for key in canonical_keys):
+        normalized.update(
+            {
+                "source_support_level": _string_or_none(payload.get("source_support_level"), max_chars=120),
+                "canonical_project_assets_available": _bool_or_false(
+                    payload.get("canonical_project_assets_available")
+                ),
+                "canonical_project_asset_refs": _string_list(
+                    payload.get("canonical_project_asset_refs"), max_item_chars=160
+                ),
+            }
+        )
+
     prompt_keys = {
         "prompt_asset_version",
         "prompt_schema_id",

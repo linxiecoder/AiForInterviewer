@@ -9,6 +9,12 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
     POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
 )
+from app.application.polish.feedback_rules import (
+    ANSWER_CHANGE_TRENDS,
+    ASSET_CONFLICT_TYPES,
+    ASSET_CONSISTENCY_STATUSES,
+    FEEDBACK_CARD_TYPES,
+)
 
 _ALLOWED_STATUSES = ("generated", "partial", "low_confidence", "validation_failed")
 _SESSION_SIMILARITY_STATUSES = (
@@ -71,7 +77,11 @@ def normalize_generated_feedback_payload(payload: dict[str, Any]) -> dict[str, A
     return normalized
 
 
-def validate_generated_feedback_payload(payload: object) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+def validate_generated_feedback_payload(
+    payload: object,
+    *,
+    require_phase4: bool = False,
+) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
     if not isinstance(payload, dict):
         return None, ("feedback_payload_schema_invalid",)
 
@@ -123,6 +133,25 @@ def validate_generated_feedback_payload(payload: object) -> tuple[dict[str, Any]
             errors.append("score_loss_deduction_mismatch")
 
     errors.extend(_project_asset_consistency_check(normalized.get("project_asset_consistency_check")))
+    errors.extend(_asset_consistency_check(normalized.get("asset_consistency_check"), require=require_phase4))
+    errors.extend(_answer_coverage(normalized.get("answer_coverage"), require=require_phase4))
+    errors.extend(_answer_change_analysis(normalized.get("answer_change_analysis"), require=require_phase4))
+    errors.extend(
+        _feedback_cards(
+            normalized.get("feedback_cards"),
+            asset_consistency_check=normalized.get("asset_consistency_check"),
+            answer_change_analysis=normalized.get("answer_change_analysis"),
+            require=require_phase4,
+        )
+    )
+    errors.extend(
+        _next_recommended_actions(
+            normalized.get("next_recommended_actions"),
+            asset_consistency_check=normalized.get("asset_consistency_check"),
+            answer_coverage=normalized.get("answer_coverage"),
+            answer_change_analysis=normalized.get("answer_change_analysis"),
+        )
+    )
     errors.extend(_same_question_effect(normalized.get("same_question_effect")))
     errors.extend(_session_similarity_check(normalized.get("session_similarity_check")))
     errors.extend(_project_asset_update_candidates(normalized.get("project_asset_update_candidates")))
@@ -140,6 +169,7 @@ def _default_value_for_field(field_name: str) -> object:
         "knowledge_points",
         "technical_principles",
         "project_asset_update_candidates",
+        "feedback_cards",
         "next_recommended_actions",
         "low_confidence_flags",
         "trace_refs",
@@ -149,6 +179,9 @@ def _default_value_for_field(field_name: str) -> object:
         "score_result",
         "same_question_effect",
         "project_asset_consistency_check",
+        "asset_consistency_check",
+        "answer_coverage",
+        "answer_change_analysis",
         "session_similarity_check",
         "reference_answer",
         "feedback_metadata",
@@ -271,6 +304,154 @@ def _project_asset_consistency_check(value: object) -> list[str]:
             errors.append("project_asset_conflict_clarification_required")
         if missing:
             errors.append("project_asset_conflict_fields_required")
+    return errors
+
+
+def _asset_consistency_check(value: object, *, require: bool) -> list[str]:
+    if value in (None, {}):
+        return ["asset_consistency_check_required"] if require else []
+    if not isinstance(value, dict):
+        return ["asset_consistency_check_invalid"]
+
+    errors: list[str] = []
+    status = _clean(value.get("status"), max_chars=80)
+    if status not in ASSET_CONSISTENCY_STATUSES:
+        errors.append("asset_consistency_status_invalid")
+    if not isinstance(value.get("checked_asset_refs"), list):
+        errors.append("asset_consistency_checked_refs_invalid")
+    conflicts = value.get("conflicts")
+    if not isinstance(conflicts, list):
+        errors.append("asset_consistency_conflicts_invalid")
+        conflicts = []
+    unsupported_claims = value.get("unsupported_claims")
+    if not isinstance(unsupported_claims, list):
+        errors.append("asset_consistency_unsupported_claims_invalid")
+        unsupported_claims = []
+    if not isinstance(value.get("user_clarification_required"), bool):
+        errors.append("asset_consistency_user_clarification_required_invalid")
+    if status == "conflict" and not conflicts and not unsupported_claims:
+        errors.append("asset_consistency_conflict_details_required")
+    for conflict in conflicts:
+        if not isinstance(conflict, dict):
+            errors.append("asset_consistency_conflict_invalid")
+            continue
+        conflict_type = _clean(conflict.get("conflict_type"), max_chars=80)
+        if conflict_type not in ASSET_CONFLICT_TYPES:
+            errors.append("asset_consistency_conflict_type_invalid")
+        missing = [field for field in _CONFLICT_REQUIRED_FIELDS if not _clean(conflict.get(field), max_chars=500)]
+        if "clarification_question" in missing:
+            errors.append("asset_consistency_conflict_clarification_required")
+        if missing:
+            errors.append("asset_consistency_conflict_fields_required")
+    for claim in unsupported_claims:
+        if not isinstance(claim, dict):
+            errors.append("asset_consistency_unsupported_claim_invalid")
+            continue
+        if not _clean(claim.get("current_answer_claim"), max_chars=500):
+            errors.append("asset_consistency_unsupported_claim_required")
+    return errors
+
+
+def _answer_coverage(value: object, *, require: bool) -> list[str]:
+    if value in (None, {}):
+        return ["answer_coverage_required"] if require else []
+    if not isinstance(value, dict):
+        return ["answer_coverage_invalid"]
+    errors: list[str] = []
+    for field_name in (
+        "expected_points",
+        "covered_points",
+        "missing_points",
+        "weak_points",
+        "contradicted_points",
+    ):
+        if not isinstance(value.get(field_name), list):
+            errors.append("answer_coverage_fields_invalid")
+    return errors
+
+
+def _answer_change_analysis(value: object, *, require: bool) -> list[str]:
+    if value in (None, {}):
+        return ["answer_change_analysis_required"] if require else []
+    if not isinstance(value, dict):
+        return ["answer_change_analysis_invalid"]
+    errors: list[str] = []
+    if not isinstance(value.get("has_prior_attempts"), bool):
+        errors.append("answer_change_has_prior_attempts_invalid")
+    for field_name in (
+        "previous_answer_refs",
+        "retained_points",
+        "newly_added_points",
+        "regressed_points",
+        "repeated_loss_points",
+        "fixed_loss_points",
+    ):
+        if not isinstance(value.get(field_name), list):
+            errors.append("answer_change_fields_invalid")
+    score_delta = value.get("score_delta")
+    if score_delta is not None and not _is_number(score_delta):
+        errors.append("answer_change_score_delta_invalid")
+    if _clean(value.get("trend"), max_chars=80) not in ANSWER_CHANGE_TRENDS:
+        errors.append("answer_change_trend_invalid")
+    return errors
+
+
+def _feedback_cards(
+    value: object,
+    *,
+    asset_consistency_check: object,
+    answer_change_analysis: object,
+    require: bool,
+) -> list[str]:
+    if value in (None, []):
+        return ["feedback_cards_required"] if require else []
+    if not isinstance(value, list):
+        return ["feedback_cards_invalid"]
+    errors: list[str] = []
+    card_types: list[str] = []
+    for card in value:
+        if not isinstance(card, dict):
+            errors.append("feedback_card_invalid")
+            continue
+        card_type = _clean(card.get("card_type") or card.get("type"), max_chars=80)
+        if card_type not in FEEDBACK_CARD_TYPES:
+            errors.append("feedback_card_type_invalid")
+            continue
+        card_types.append(card_type)
+    order = [FEEDBACK_CARD_TYPES.index(card_type) for card_type in card_types if card_type in FEEDBACK_CARD_TYPES]
+    if order != sorted(order):
+        errors.append("feedback_cards_order_invalid")
+    asset_status = asset_consistency_check.get("status") if isinstance(asset_consistency_check, dict) else None
+    if asset_status == "conflict" and card_types[:1] != ["asset_consistency"]:
+        errors.append("feedback_cards_asset_consistency_first_required")
+    regressed_points = []
+    if isinstance(answer_change_analysis, dict):
+        regressed_points = answer_change_analysis.get("regressed_points")
+    if regressed_points and "answer_change" not in card_types:
+        errors.append("feedback_cards_answer_change_required")
+    return errors
+
+
+def _next_recommended_actions(
+    value: object,
+    *,
+    asset_consistency_check: object,
+    answer_coverage: object,
+    answer_change_analysis: object,
+) -> list[str]:
+    actions = _string_list(value, max_items=20, max_item_chars=160)
+    if "generate_next_question" not in actions:
+        return []
+    errors: list[str] = []
+    asset_status = asset_consistency_check.get("status") if isinstance(asset_consistency_check, dict) else None
+    if asset_status == "conflict":
+        errors.append("next_action_generate_next_question_forbidden_asset_conflict")
+    if isinstance(answer_coverage, dict) and any(
+        answer_coverage.get(field_name) for field_name in ("missing_points", "weak_points", "contradicted_points")
+    ):
+        errors.append("next_action_generate_next_question_forbidden_unresolved_feedback")
+    if isinstance(answer_change_analysis, dict) and answer_change_analysis.get("regressed_points"):
+        errors.append("next_action_generate_next_question_forbidden_unresolved_feedback")
     return errors
 
 

@@ -57,6 +57,7 @@ from app.application.polish.feedback_reserved import (
     RESERVED_FEEDBACK_SCHEMA_VERSION,
     RESERVED_FEEDBACK_TEXT,
 )
+from app.application.polish.feedback_generation_service import FeedbackGenerationService
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.question_generation_policy import (
@@ -72,6 +73,7 @@ from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import ApiStatus
 from app.domain.shared.errors import DomainError
 from app.domain.shared.refs import TraceRef, VersionRef as DomainVersionRef
+from app.infrastructure.db.repositories.assets import SqlAlchemyAssetRepository
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.job_match import SqlAlchemyJobMatchAnalysisRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
@@ -582,11 +584,13 @@ def _use_cases(
         resume_repository=SqlAlchemyResumeRepository(session_factory),
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
+        asset_repository=SqlAlchemyAssetRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
         question_generation_service=QuestionGenerationService(
             llm_transport=llm_transport,
             runtime_policy=question_generation_policy,
         ),
+        feedback_generation_service=FeedbackGenerationService(llm_transport=llm_transport),
         question_generation_policy=question_generation_policy,
         question_generation_policy_resolver=question_generation_policy_resolver,
         ai_orchestration_facade=ai_orchestration_facade,

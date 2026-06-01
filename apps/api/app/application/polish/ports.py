@@ -57,6 +57,14 @@ class PolishRepository(Protocol):
 
     def add_feedback(self, feedback: PolishFeedback) -> None: ...
 
+    def get_latest_feedback_for_answer(
+        self,
+        *,
+        owner_id: str,
+        answer_id: str,
+        status: str | None = None,
+    ) -> PolishFeedback | None: ...
+
     def list_feedbacks_for_session(self, owner_id: str, session_id: str) -> tuple[PolishFeedback, ...]: ...
 
     def add_task(self, task: PolishTaskStatus, *, owner_id: str, actor_id: str, target_ref_id: str) -> None: ...

@@ -776,6 +776,15 @@
   background: #fbfdff;
 }
 
+.feedbackSectionWarning {
+  border-color: #f1c27d;
+  background: #fff8ec;
+}
+
+.feedbackSectionWarning[open] {
+  background: #fff8ec;
+}
+
 .feedbackSectionSummary {
   min-height: 38px;
   display: flex;

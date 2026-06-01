@@ -34,6 +34,7 @@ DEFAULT_TEMPERATURE = 0.0
 DEFAULT_MAX_TOKENS = 8000
 DEFAULT_PROGRESS_TREE_MAX_TOKENS = 12000
 PROGRESS_TREE_QUALITY_FIRST_TASK_TYPE = "polish_progress_quality_first_menu"
+NO_REQUEST_TIMEOUT_TASK_TYPES = frozenset({"polish_feedback_generation"})
 PROVIDER_OUTPUT_TRUNCATED_ERROR_TYPE = "provider_output_truncated"
 LLM_PROVIDER_ENV = "LLM_PROVIDER"
 LLM_OPENAI_API_KEY_ENV = "LLM_OPENAI_API_KEY"
@@ -134,7 +135,7 @@ class OpenAICompatibleLlmTransport:
         if self._client is not None:
             return self._generate_with_client(self._client, request)
 
-        with httpx.Client(timeout=self._settings.timeout_seconds) as client:
+        with httpx.Client(timeout=_request_timeout_seconds(self._settings, request)) as client:
             return self._generate_with_client(client, request)
 
     def _generate_with_client(
@@ -146,6 +147,7 @@ class OpenAICompatibleLlmTransport:
         started_at = perf_counter()
         started_at_wall = datetime.now(timezone.utc)
         chat_payload = _chat_completion_payload(self._settings, request)
+        request_timeout_seconds = _request_timeout_seconds(self._settings, request)
         request_headers = {
             "Authorization": f"Bearer {self._settings.api_key}",
             "Content-Type": "application/json",
@@ -156,7 +158,7 @@ class OpenAICompatibleLlmTransport:
                 f"{self._settings.base_url}/chat/completions",
                 headers=request_headers,
                 json=chat_payload,
-                timeout=self._settings.timeout_seconds,
+                timeout=request_timeout_seconds,
             )
         except httpx.TimeoutException as exc:
             self._log_request_failed(request, started_at=started_at, error_type="timeout")
@@ -374,7 +376,7 @@ class OpenAICompatibleLlmTransport:
             provider_base_host=_base_url_host(self._settings.base_url),
             contract_ids=request.contract_ids,
             input_ref_count=len(request.input_refs),
-            timeout_seconds=self._settings.timeout_seconds,
+            timeout_seconds=_request_timeout_seconds(self._settings, request),
         )
 
     def _log_request_success(
@@ -452,6 +454,15 @@ def _max_tokens_for_request(
     if request.task_type == PROGRESS_TREE_QUALITY_FIRST_TASK_TYPE:
         return settings.progress_tree_max_tokens
     return settings.max_tokens
+
+
+def _request_timeout_seconds(
+    settings: OpenAICompatibleLlmSettings,
+    request: LlmTransportRequest,
+) -> float | None:
+    if request.task_type in NO_REQUEST_TIMEOUT_TASK_TYPES:
+        return None
+    return settings.timeout_seconds
 
 
 def _duration_ms(started_at: float) -> float:
@@ -537,7 +548,7 @@ def _maybe_dump_local_raw_llm_io(
             "model": settings.model,
             "base_url": settings.base_url,
             "provider_base_host": _base_url_host(settings.base_url),
-            "timeout_seconds": settings.timeout_seconds,
+            "timeout_seconds": _request_timeout_seconds(settings, request),
             "temperature": settings.temperature,
             "started_at": _format_raw_io_timestamp(started_at_wall),
             "completed_at": _format_raw_io_timestamp(completed_at_wall),

@@ -18,7 +18,7 @@ import {
 } from "@ant-design/icons";
 import { Alert, Button, Card, Drawer, Form, Input, Modal, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
@@ -188,13 +188,17 @@ export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
   "当前节点表现",
 ] as const;
 export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
-  "点评",
+  "总体点评",
   "打分",
   "得分点",
   "失分点",
   "参考回答",
   "考点解析",
   "技术原理扩展",
+  "同题回答效果",
+  "项目一致性检查",
+  "同场相似内容检查",
+  "项目资产更新候选",
   "权重说明",
   "面试意图",
   "技术短板",
@@ -241,6 +245,7 @@ const WORKBENCH_MACHINE_STATE_COPY: Record<WorkbenchMachineState, { label: strin
 const NEXT_RECOMMENDED_ACTION_LABELS: Record<string, string> = {
   answer_again: "再答一版",
   continue_same_question: "继续打磨本题",
+  retry_same_question: "重答同题",
   generate_reference_answer: "查看参考回答",
   explain_knowledge_point: "查看考点解析",
   expand_technical_principle: "展开技术原理",
@@ -1623,12 +1628,29 @@ export function resolveProgressTreeDetailNodeRef(
     return selectedProgressNodeRef;
   }
 
+  const currentSessionRef = resolveSessionCurrentProgressNodeRef(session);
+  if (currentSessionRef && planNodes.some((node) => node.progress_node_ref === currentSessionRef)) {
+    return currentSessionRef;
+  }
+
   const currentPriorityRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
   if (currentPriorityRef && planNodes.some((node) => node.progress_node_ref === currentPriorityRef)) {
     return currentPriorityRef;
   }
 
   return planNodes[0]?.progress_node_ref ?? null;
+}
+
+export function resolveWorkbenchQuestionFocusId(
+  session: PolishSessionDetail,
+  selectedProgressNode: WorkbenchProgressNode | null,
+  progressNodeRef: string | null,
+): string | null {
+  return (
+    resolveQuestionNodeState(session, selectedProgressNode)?.questionId ??
+    resolveCurrentQuestionState(session, progressNodeRef)?.questionId ??
+    null
+  );
 }
 
 export function buildProgressTreeNodeDetailViewModel(
@@ -1991,6 +2013,7 @@ export function toNextRecommendedActionLabel(action: PolishRecommendedAction): s
 }
 
 type FeedbackSectionKey =
+  | "failed_status"
   | "feedback"
   | "score"
   | "positive_evidence_points"
@@ -2006,13 +2029,18 @@ type FeedbackSectionKey =
   | "oral_script"
   | "retry_delta"
   | "next_retry_focus"
-  | "next_training_suggestions";
+  | "next_training_suggestions"
+  | "same_question_effect"
+  | "project_asset_consistency_check"
+  | "session_similarity_check"
+  | "project_asset_update_candidates";
 
 export type FeedbackCardSectionViewModel = {
   key: FeedbackSectionKey;
   title: string;
   items: string[];
   defaultOpen: boolean;
+  tone?: "default" | "warning";
 };
 
 export type FeedbackCardViewModel = {
@@ -2072,21 +2100,38 @@ const CANDIDATE_STATUS_COLORS: Record<string, string> = {
 
 export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): FeedbackCardViewModel {
   const payload = answer.feedback_payload;
-  const feedbackText = payload?.feedback_text || answer.feedback_text || FALLBACK_FEEDBACK_TEXT;
   const contractId = toOptionalText(payload?.contract_id) ?? null;
   const contractIds = Array.from(new Set([...(payload?.contract_ids ?? []), ...(contractId ? [contractId] : [])]));
+  const status = toOptionalText(payload?.status) ?? (answer.feedback_id ? "generated" : "pending");
+  if (status === "generation_failed") {
+    return {
+      title: "反馈生成失败",
+      status,
+      contractId,
+      contractIds,
+      sections: [
+        {
+          key: "failed_status",
+          title: "失败状态",
+          items: buildFailedFeedbackItems(payload),
+          defaultOpen: true,
+          tone: "warning",
+        },
+      ],
+      nextActions: getAnswerNextRecommendedActions(answer),
+      traceItems: [],
+    };
+  }
   return {
     title: `第 ${answer.answer_round} 轮反馈`,
-    status: toOptionalText(payload?.status) ?? (answer.feedback_id ? "generated" : "pending"),
+    status,
     contractId,
     contractIds,
     sections: [
       {
         key: "feedback",
-        title: "点评",
-        items: dedupeTextItems([payload?.feedback_summary, feedbackText]).length > 0
-          ? dedupeTextItems([payload?.feedback_summary, feedbackText])
-          : [FALLBACK_FEEDBACK_TEXT],
+        title: "总体点评",
+        items: buildOverallFeedbackItems(payload, answer.feedback_text),
         defaultOpen: true,
       },
       {
@@ -2101,16 +2146,19 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         title: "失分点",
         items: buildRecordListItems(payload?.loss_points, [
           ["title", "失分点"],
+          ["severity", "严重度"],
+          ["deduction", "扣分"],
           ["deducted_points", "扣分"],
           ["reason", "原因"],
           ["answer_excerpt", "回答片段"],
+          ["related_dimension", "关联维度"],
         ], "暂无明确失分点"),
         defaultOpen: false,
       },
       {
         key: "reference_answer",
         title: "参考回答",
-        items: buildReferenceAnswerItems(payload?.reference_answer),
+        items: buildReferenceAnswerItems(payload?.reference_answer, payload?.loss_points),
         defaultOpen: false,
       },
       {
@@ -2131,6 +2179,10 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         ], "暂无技术原理扩展"),
         defaultOpen: false,
       },
+      ...buildSameQuestionEffectSections(payload),
+      ...buildProjectAssetConsistencySections(payload),
+      ...buildSessionSimilaritySections(payload),
+      ...buildProjectAssetUpdateCandidateSections(payload),
       ...buildThemeFeedbackSections(payload),
       ...buildRetryFeedbackSections(payload),
       ...buildNextTrainingFeedbackSections(payload),
@@ -2138,6 +2190,32 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: buildFeedbackTraceItems(),
   };
+}
+
+function buildFailedFeedbackItems(payload: PolishFeedbackPayload | undefined): string[] {
+  const validationErrors = Array.isArray(payload?.validation_errors)
+    ? payload.validation_errors.map((item) => toOptionalText(item)).filter((item): item is string => item !== null)
+    : [];
+  const errorCode = toOptionalText(payload?.error?.code);
+  const codes = Array.from(new Set([...(errorCode ? [errorCode] : []), ...validationErrors]));
+  return dedupeTextItems([
+    "反馈生成超时或失败，可重试",
+    payload?.retryable === true ? "可重试：是" : null,
+    ...codes.map((code) => `错误码：${code}`),
+  ]);
+}
+
+function feedbackStatusTagColor(status: string): "success" | "warning" | "processing" | "default" {
+  if (status === "generated") {
+    return "success";
+  }
+  if (status === "generation_failed") {
+    return "warning";
+  }
+  if (status === "pending") {
+    return "processing";
+  }
+  return "default";
 }
 
 export function buildCandidateReviewViewModel(
@@ -2183,6 +2261,26 @@ function candidateBelongsToAnswer(candidate: PolishCandidate, answer: PolishSess
   return Boolean(candidate.feedback_id && answer.feedback_id && candidate.feedback_id === answer.feedback_id);
 }
 
+function buildOverallFeedbackItems(payload: PolishFeedbackPayload | undefined, answerFeedbackText: string): string[] {
+  if (payload?.status === "reserved") {
+    return ["反馈能力预留/占位，当前不展示 generated 反馈内容。"];
+  }
+  if (payload?.status === "pending") {
+    return [FALLBACK_FEEDBACK_TEXT];
+  }
+  const answerSummary = payload?.answer_summary;
+  const mainGaps = Array.isArray(answerSummary?.main_gaps)
+    ? answerSummary.main_gaps.map((gap) => toOptionalText(gap)).filter((gap): gap is string => gap !== null)
+    : [];
+  const items = dedupeTextItems([
+    payload?.feedback_summary,
+    payload?.feedback_text || answerFeedbackText,
+    answerSummary?.coverage ? `覆盖情况：${answerSummary.coverage}` : null,
+    ...mainGaps.map((gap) => `主要缺口：${gap}`),
+  ]);
+  return items.length > 0 ? items : [FALLBACK_FEEDBACK_TEXT];
+}
+
 function buildStructuredEvidenceSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
   if (!payload) {
     return [];
@@ -2196,6 +2294,103 @@ function buildStructuredEvidenceSections(payload: PolishFeedbackPayload | undefi
       ["evidence_source", "证据来源"],
     ]), false),
   ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
+}
+
+function buildSameQuestionEffectSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  if (!payload || payload.status !== "generated") {
+    return [];
+  }
+  return [
+    {
+      key: "same_question_effect",
+      title: "同题回答效果",
+      items: buildSameQuestionEffectItems(payload.same_question_effect, payload.loss_points),
+      defaultOpen: false,
+    },
+  ];
+}
+
+function buildProjectAssetConsistencySections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  const check = payload?.project_asset_consistency_check;
+  if (!check) {
+    return [];
+  }
+  const status = toOptionalText(check.status);
+  const needsClarification = status === "conflict" || status === "ambiguous";
+  const conflicts = buildOptionalRecordListItems(check.conflicts, [
+    ["title", "冲突"],
+    ["field", "字段"],
+    ["current_value", "当前记录"],
+    ["proposed_value", "本轮回答"],
+    ["reason", "原因"],
+  ]).map((item) => `冲突项：${item}`);
+  const questions = compactTextList(check.clarification_questions).map((item) => `澄清问题：${item}`);
+  return [
+    {
+      key: "project_asset_consistency_check",
+      title: "项目一致性检查",
+      items: dedupeTextItems([
+        status ? `状态：${status}` : null,
+        check.matched_project_name ? `匹配项目：${check.matched_project_name}` : null,
+        needsClarification ? "需要澄清后再沉淀为资产" : null,
+        ...conflicts,
+        ...questions,
+      ]),
+      defaultOpen: needsClarification,
+      tone: needsClarification ? "warning" : "default",
+    },
+  ];
+}
+
+function buildSessionSimilaritySections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  const check = payload?.session_similarity_check;
+  if (!check) {
+    return [];
+  }
+  const status = toOptionalText(check.status);
+  return [
+    {
+      key: "session_similarity_check",
+      title: "同场相似内容检查",
+      items: dedupeTextItems([
+        status ? `状态：${status}${toSessionSimilarityStatusHint(status)}` : null,
+        compactTextList(check.related_turn_refs).length > 0 ? `相关轮次：${compactTextList(check.related_turn_refs).join("、")}` : null,
+        check.impact ? `影响：${check.impact}` : null,
+        check.explanation ? `说明：${check.explanation}` : null,
+        check.reason ? `原因：${check.reason}` : null,
+      ]),
+      defaultOpen: status === "semantic_repetition" || status === "cross_turn_conflict",
+      tone: status === "cross_turn_conflict" ? "warning" : "default",
+    },
+  ];
+}
+
+function buildProjectAssetUpdateCandidateSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  const candidates = payload?.project_asset_update_candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return [];
+  }
+  return [
+    {
+      key: "project_asset_update_candidates",
+      title: "项目资产更新候选",
+      items: candidates.flatMap((candidate) => {
+        const candidateType = toOptionalText(candidate.candidate_type) ?? "unknown";
+        return dedupeTextItems([
+          `候选更新：${candidateType}`,
+          candidate.target_asset_ref ? `目标资产：${candidate.target_asset_ref}` : null,
+          candidate.proposed_change_type ? `变更类型：${candidate.proposed_change_type}` : null,
+          candidate.content_draft ? `内容草稿：${candidate.content_draft}` : null,
+          candidate.summary ? `摘要：${candidate.summary}` : null,
+          candidate.confidence_level ? `置信度：${candidate.confidence_level}` : null,
+          typeof candidate.user_confirmation_required === "boolean"
+            ? `需要用户确认：${candidate.user_confirmation_required ? "是" : "否"}`
+            : null,
+        ]);
+      }),
+      defaultOpen: false,
+    },
+  ];
 }
 
 function buildThemeFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
@@ -2248,8 +2443,9 @@ function buildOptionalFeedbackSection(
   title: string,
   items: string[],
   defaultOpen: boolean,
+  tone?: "default" | "warning",
 ): FeedbackCardSectionViewModel | null {
-  return items.length > 0 ? { key, title, items, defaultOpen } : null;
+  return items.length > 0 ? { key, title, items, defaultOpen, tone } : null;
 }
 
 function compactTextList(value: string | string[] | null | undefined): string[] {
@@ -2282,26 +2478,130 @@ function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallb
   if (!score) {
     return fallbackScoreResultId ? [`score_result_id：${fallbackScoreResultId}`] : ["暂无打分结果"];
   }
+  const scoringDimensionItems = buildOptionalRecordListItems(payload?.scoring_dimensions, [
+    ["title", "评分维度"],
+    ["dimension_name", "评分维度"],
+    ["dimension_id", "维度 ID"],
+    ["score_value", "得分"],
+    ["score", "得分"],
+    ["max_score", "满分"],
+    ["reason", "原因"],
+    ["explanation", "说明"],
+    ["confidence_level", "置信度"],
+  ]);
   return dedupeTextItems([
     typeof score.score_value === "number" ? `分数：${score.score_value}` : null,
     score.score_type ? `评分类型：${score.score_type}` : null,
     score.confidence_level ? `置信度：${score.confidence_level}` : null,
+    typeof payload?.explicit_score === "number" ? `显性技术得分：${payload.explicit_score}` : null,
+    typeof payload?.implicit_score === "number" ? `隐性表达得分：${payload.implicit_score}` : null,
     score.score_result_id ? `score_result_id：${score.score_result_id}` : fallbackScoreResultId ? `score_result_id：${fallbackScoreResultId}` : null,
     score.rubric_version ? `rubric_version：${score.rubric_version}` : null,
+    ...scoringDimensionItems,
   ]);
 }
 
-function buildReferenceAnswerItems(value: unknown): string[] {
+function buildReferenceAnswerItems(value: unknown, lossPoints: unknown): string[] {
   const record = toRecord(value);
   if (record === null) {
     return ["暂无参考回答"];
   }
   const outline = Array.isArray(record.outline) ? record.outline.map(toOptionalText).filter((item): item is string => Boolean(item)) : [];
+  const lossPointTitleById = buildLossPointTitleById(lossPoints);
+  const sectionItems = Array.isArray(record.sections)
+    ? record.sections.flatMap((section) => buildReferenceAnswerSectionItems(section, lossPointTitleById))
+    : [];
   return dedupeTextItems([
     record.summary ? `摘要：${toOptionalText(record.summary)}` : null,
     outline.length > 0 ? `提纲：${outline.join(" / ")}` : null,
+    ...sectionItems,
     record.contract_id ? `contract_id：${toOptionalText(record.contract_id)}` : null,
   ]);
+}
+
+function buildReferenceAnswerSectionItems(value: unknown, lossPointTitleById: Map<string, string>): string[] {
+  const section = toRecord(value);
+  if (section === null) {
+    const text = toOptionalText(value);
+    return text ? [text] : [];
+  }
+  const title = toOptionalText(section.title);
+  const content = toOptionalText(section.content);
+  const addressesLossPointIds = Array.isArray(section.addresses_loss_point_ids)
+    ? section.addresses_loss_point_ids.map(toOptionalText).filter((item): item is string => item !== null)
+    : [];
+  const addressedTitles = addressesLossPointIds.map((lossPointId) => lossPointTitleById.get(lossPointId) ?? lossPointId);
+  return dedupeTextItems([
+    title ? `分段：${title}` : null,
+    content ? `内容：${content}` : null,
+    addressedTitles.length > 0 ? `本段修正：${addressedTitles.join("、")}` : null,
+  ]);
+}
+
+function buildSameQuestionEffectItems(value: unknown, lossPoints: unknown): string[] {
+  const effect = toRecord(value);
+  if (effect === null) {
+    return ["暂无同题历史回答"];
+  }
+  const lossPointTitleById = buildLossPointTitleById(lossPoints);
+  const repeatedLossPointIds = Array.isArray(effect.repeated_loss_point_ids)
+    ? effect.repeated_loss_point_ids.map(toOptionalText).filter((item): item is string => item !== null)
+    : compactTextList(effect.repeated_loss_points as string[] | string | null | undefined);
+  const nextRetryFocusItems = Array.isArray(effect.next_retry_focus)
+    ? effect.next_retry_focus.flatMap((item) => {
+      const record = toRecord(item);
+      if (record === null) {
+        return compactTextList(item as string);
+      }
+      return buildRecordItems(record, [
+        ["focus_area", "下一轮聚焦"],
+        ["priority", "优先级"],
+        ["related_dimension", "关联维度"],
+        ["suggested_action", "建议动作"],
+      ]);
+    })
+    : [];
+  const items = dedupeTextItems([
+    effect.previous_answer_ref ? `上一轮回答：${toOptionalText(effect.previous_answer_ref)}` : null,
+    ...compactTextList(effect.improved_points as string[] | string | null | undefined).map((item) => `已改进：${item}`),
+    ...repeatedLossPointIds.map((lossPointId) => `重复失分：${lossPointTitleById.get(lossPointId) ?? lossPointId}`),
+    ...compactTextList(effect.regressed_points as string[] | string | null | undefined).map((item) => `退步点：${item}`),
+    typeof effect.score_delta === "number" ? `分数变化：${effect.score_delta > 0 ? "+" : ""}${effect.score_delta}` : null,
+    ...nextRetryFocusItems.map((item) => item.startsWith("下一轮聚焦：") ? item : `下一轮聚焦：${item}`),
+  ]);
+  return items.length > 0 ? items : ["暂无同题历史回答"];
+}
+
+function buildLossPointTitleById(values: unknown): Map<string, string> {
+  const result = new Map<string, string>();
+  if (!Array.isArray(values)) {
+    return result;
+  }
+  values.forEach((value) => {
+    const record = toRecord(value);
+    if (record === null) {
+      return;
+    }
+    const lossPointId = toOptionalText(record.loss_point_id);
+    const title = toOptionalText(record.title);
+    if (lossPointId && title) {
+      result.set(lossPointId, title);
+    }
+  });
+  return result;
+}
+
+function toSessionSimilarityStatusHint(status: string): string {
+  if (status === "benign_reuse") {
+    return "（正常复用）";
+  }
+  if (status === "semantic_repetition") {
+    return "（表达重复或覆盖不足）";
+  }
+  if (status === "cross_turn_conflict") {
+    return "（可能存在事实冲突）";
+  }
+  return "";
 }
 
 function buildRecordListItems(
@@ -2366,6 +2666,12 @@ function isUserVisibleFeedbackRecordKey(key: string): boolean {
     "completion",
     "provider",
     "candidate",
+    "private",
+    "secret",
+    "hidden",
+    "token",
+    "api_key",
+    "cookie",
   ].some((privateMarker) => normalized.includes(privateMarker));
 }
 
@@ -3057,6 +3363,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
   const [selectedProgressNodeKey, setSelectedProgressNodeKey] = useState<string | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const [isProgressPanelCollapsed, setProgressPanelCollapsed] = useState<boolean>(false);
   const [progressPanelWidth, setProgressPanelWidth] = useState<number>(PROGRESS_PANEL_DEFAULT_WIDTH);
   const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
@@ -3295,6 +3602,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const canSendAnswer = questionActionState.canSendAnswer;
   const canGenerateQuestion = questionActionState.canGenerateQuestion;
   const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
+  const focusedQuestionId =
+    session === null ? null : resolveWorkbenchQuestionFocusId(session, selectedProgressNode, selectedProgressNodeDetailRef);
   const progressTreeContextMenuNode =
     progressTreeContextMenu === null ? null : findWorkbenchProgressNodeByKey(progressNodes, progressTreeContextMenu.nodeKey);
   const progressTreeContextMenuDetailRef =
@@ -3438,6 +3747,32 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
   }, [session]);
+
+  const scrollChatToQuestion = (questionId: string | null, behavior: ScrollBehavior = "smooth") => {
+    const container = chatScrollRef.current;
+    if (container === null) {
+      return;
+    }
+    if (questionId === null) {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+      return;
+    }
+    const target = Array.from(container.querySelectorAll<HTMLElement>("[data-workbench-question-id]"))
+      .find((element) => element.dataset.workbenchQuestionId === questionId);
+    if (target) {
+      target.scrollIntoView({ block: "start", behavior });
+      return;
+    }
+    container.scrollTo({ top: container.scrollHeight, behavior });
+  };
+
+  useEffect(() => {
+    if (!hasQuestion) {
+      return undefined;
+    }
+    const frameId = window.requestAnimationFrame(() => scrollChatToQuestion(focusedQuestionId, "auto"));
+    return () => window.cancelAnimationFrame(frameId);
+  }, [focusedQuestionId, hasQuestion, session?.turns.length]);
 
   useEffect(() => {
     setProgressNodeContextExpanded(false);
@@ -3870,8 +4205,13 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             canSelectNode
               ? () => {
                   const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
+                  const nextQuestionFocusId =
+                    session === null ? null : resolveWorkbenchQuestionFocusId(session, node, nextSelectedRef);
                   setSelectedProgressNodeRef(nextSelectedRef);
                   setSelectedProgressNodeKey(node.key);
+                  if (nextQuestionFocusId !== null) {
+                    window.requestAnimationFrame(() => scrollChatToQuestion(nextQuestionFocusId, "smooth"));
+                  }
                   if (isExpandable) {
                     toggleProgressNode(node.key);
                   }
@@ -4177,7 +4517,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 </div>
               </div>
 
-              <div className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
+              <div ref={chatScrollRef} className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
                 <div className={messageRowClassName("progress_context")} data-message-kind="progress_context">
                   {renderProgressTreeContextBanner()}
                 </div>
@@ -4199,7 +4539,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   />
                 )}
                 {session.turns.map((turn, turnIndex) => (
-                  <section key={turn.question_id} className={styles.chatTurn}>
+                  <section
+                    key={turn.question_id}
+                    className={styles.chatTurn}
+                    data-workbench-question-id={turn.question_id}
+                  >
                     <div className={messageRowClassName("system_question")} data-message-kind="system_question">
                       <div className={styles.questionBubble}>
                         <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>
@@ -4247,7 +4591,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                   <div className={styles.feedbackTextBlock}>
                                     <Typography.Text strong>{feedbackCard.title}</Typography.Text>
                                     <div className={styles.feedbackMetaRow}>
-                                      <Tag color={feedbackCard.status === "generated" ? "success" : "default"} className={styles.feedbackMetaTag}>
+                                      <Tag color={feedbackStatusTagColor(feedbackCard.status)} className={styles.feedbackMetaTag}>
                                         {feedbackCard.status}
                                       </Tag>
                                       {feedbackCard.contractId ? (
@@ -4263,7 +4607,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                 </div>
                                 <div className={styles.feedbackSectionList}>
                                   {feedbackCard.sections.map((section) => (
-                                    <details key={section.key} className={styles.feedbackSection} open={section.defaultOpen}>
+                                    <details
+                                      key={section.key}
+                                      className={`${styles.feedbackSection} ${section.tone === "warning" ? styles.feedbackSectionWarning : ""}`}
+                                      open={section.defaultOpen}
+                                    >
                                       <summary className={styles.feedbackSectionSummary}>{section.title}</summary>
                                       <ul className={styles.feedbackSectionItems}>
                                         {section.items.map((item) => (

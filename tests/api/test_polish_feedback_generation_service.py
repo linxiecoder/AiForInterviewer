@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -202,6 +203,122 @@ def test_service_metadata_includes_prompt_schema_llm_and_provider_status() -> No
     assert result.metadata["provider_status"] == "fake_transport"
 
 
+def test_feedback_request_uses_compact_output_budget() -> None:
+    transport = _PayloadTransport(_generated_payload())
+
+    result = _service(transport).generate(_context())
+
+    assert result.succeeded is True
+    assert transport.requests
+    assert getattr(transport.requests[-1], "max_tokens", 8000) < 2500
+
+
+def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits() -> None:
+    transport = _PayloadTransport(_generated_payload())
+    context = _context()
+    context["question_text"] = "请深入说明混合检索策略优化如何在召回率、精排质量和延迟之间做取舍。"
+    context["answer_text"] = "我会先用关键词召回保证确定性，再用向量召回补语义覆盖，最后用重排模型统一打分。 " * 80
+    context["evidence_refs"] = ["resume_project_hybrid_search", "question_source_hybrid_search"]
+    context["question_sources"] = [
+        {
+            "ref": "question_source_hybrid_search",
+            "source_type": "resume_project_contribution",
+            "title": "混合检索策略优化",
+            "excerpt": "通过 BM25、向量召回和 rerank 做多路召回融合。",
+        },
+        {
+            "ref": "question_source_inventory",
+            "source_type": "resume_project_contribution",
+            "title": "物料库存处理工作流",
+            "excerpt": "物料库存处理工作流包含库存冻结、调拨和盘点。",
+        },
+        {
+            "ref": "question_source_large_file",
+            "source_type": "resume_project_contribution",
+            "title": "大文件异步处理管道",
+            "excerpt": "大文件异步处理管道包含分片上传、解析和入库。",
+        },
+    ]
+    context["same_question_answers"] = [
+        {
+            "answer_id": f"answer_prev_{index}",
+            "answer_text": f"PREVIOUS_FULL_ANSWER_{index}_SHOULD_NOT_BE_INCLUDED " * 40,
+            "answer_summary": f"上一轮摘要 {index}：缺少召回融合后的评估指标。" * 20,
+        }
+        for index in range(3)
+    ]
+    context["job_snapshot"] = {
+        "job_id": "job_001",
+        "requirements": [f"岗位要求 {index}" for index in range(6)],
+        "full_jd": "FULL_JD_SHOULD_NOT_BE_INCLUDED",
+    }
+    context["resume_snapshot"] = {
+        "resume_id": "resume_001",
+        "projects": [
+            "混合检索策略优化：负责 BM25、向量召回、rerank 和线上评估。",
+            "物料库存处理工作流：负责库存冻结、调拨和盘点。",
+            "大文件异步处理管道：负责分片上传、解析和入库。",
+        ],
+        "full_resume": "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
+        "markdown_text": "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED",
+        "work_experiences": ["WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED"],
+    }
+    context["progress_node_snapshot"] = {
+        "node_ref": "progress_node_hybrid_search",
+        "title": "混合检索策略优化",
+        "expected_capability": "说明多路召回、重排、评估指标和延迟取舍。" * 10,
+        "related_resume_evidence": ["混合检索策略优化"],
+    }
+
+    result = _service(transport).generate(context)
+
+    assert result.succeeded is True
+    request = transport.requests[-1]
+    provider_prompt = request.evidence_bundle
+    serialized_provider_user = json.dumps(
+        {
+            "task_type": request.task_type,
+            "input_refs": list(request.input_refs),
+            "evidence_bundle": provider_prompt,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    assert provider_prompt["feedback_mode"] == "quick"
+    assert provider_prompt["task"] == "polish_feedback_quick_v1"
+    assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
+    assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
+    assert "Generate structured polish feedback" in provider_prompt["prompt"]
+    assert "developer_constraints" not in provider_prompt
+    assert "refusal_and_low_confidence_policy" not in provider_prompt
+    assert len(serialized_provider_user) < 12000
+    assert len(provider_prompt["evidence"]) <= 5
+    assert len(provider_prompt["current_question"]["question_sources"]) <= 2
+    assert len(provider_prompt["same_question_answers"]) <= 1
+    assert "answer_text" not in provider_prompt["same_question_answers"][0]
+    assert "PREVIOUS_FULL_ANSWER_0_SHOULD_NOT_BE_INCLUDED" not in serialized_provider_user
+    serialized_provider_data = json.dumps(
+        {key: value for key, value in provider_prompt.items() if key != "prompt"},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    for forbidden_key in ("full_resume", "full_jd", "work_experiences", "markdown_text"):
+        assert forbidden_key not in serialized_provider_data
+    for forbidden in (
+        "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
+        "FULL_JD_SHOULD_NOT_BE_INCLUDED",
+        "WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED",
+        "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED",
+        "物料库存处理工作流",
+        "大文件异步处理管道",
+    ):
+        assert forbidden not in serialized_provider_user
+    assert provider_prompt["feedback_metadata"]["prompt_char_count"] < 12000
+    assert provider_prompt["feedback_metadata"]["evidence_item_count"] <= 5
+    assert provider_prompt["feedback_metadata"]["context_compaction_applied"] is True
+
+
 def test_no_llm_transport_returns_failed_without_fake_feedback() -> None:
     result = _service(None).generate(_context())
 
@@ -250,9 +367,9 @@ def test_provider_exception_returns_failed() -> None:
 
     assert result.succeeded is False
     assert result.payload is None
-    assert result.validation_errors == ("llm_transport_generation_failed",)
+    assert result.validation_errors == ("llm_transport_timeout",)
     assert result.metadata["provider_status"] == "failed"
-    assert result.metadata["provider_error_type"] == "TimeoutError"
+    assert result.metadata["provider_error_type"] == "timeout"
 
 
 def test_provider_non_dict_payload_returns_failed() -> None:
@@ -279,7 +396,97 @@ def test_prompt_asset_includes_same_question_answers() -> None:
 
     asset = build_feedback_prompt_asset(_context())
 
-    assert asset["input_data"]["same_question_answers"] == _context()["same_question_answers"]
+    assert asset["input_data"]["same_question_answers"][0]["answer_id"] == "answer_prev"
+    assert asset["input_data"]["same_question_answers"][0]["answer_summary"] == "上一轮只说明了 MQ 解耦，缺少幂等和观测。"
+    assert asset["input_data"]["same_question_answers"][0]["loss_point_ids"] == ["lp_observability"]
+
+
+def test_prompt_asset_compacts_resume_job_and_evidence_context() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    context = _context()
+    context["job_snapshot"] = {
+        "job_id": "job_001",
+        "title": "后端工程师",
+        "full_jd": "FULL_JD_SHOULD_NOT_BE_INCLUDED",
+        "requirements": [f"岗位要求 {index}" for index in range(8)],
+        "responsibilities": [f"岗位职责 {index}" for index in range(8)],
+        "content_digest": "job_digest_001",
+    }
+    context["resume_snapshot"] = {
+        "resume_id": "resume_001",
+        "summary": "候选人有支付系统可靠性经验。",
+        "full_resume": "FULL_RESUME_SHOULD_NOT_BE_INCLUDED",
+        "markdown_text": "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED",
+        "projects": [f"项目全文 {index}" for index in range(8)],
+        "work_experiences": ["WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED"],
+        "content_digest": "resume_digest_001",
+    }
+    context["question_sources"] = [
+        {"source_type": "progress_node", "source_ref": f"node_{index}", "summary": f"节点摘要 {index}"}
+        for index in range(8)
+    ]
+    context["same_question_answers"] = [
+        {
+            "answer_id": f"answer_prev_{index}",
+            "answer_round": index,
+            "answer_text": f"PREVIOUS_FULL_ANSWER_{index}_SHOULD_NOT_BE_INCLUDED",
+            "answer_summary": f"上一轮摘要 {index}",
+            "feedback_summary": f"上一轮反馈摘要 {index}",
+            "loss_point_ids": [f"lp_{index}"],
+        }
+        for index in range(6)
+    ]
+    context["session_recent_turns"] = [
+        {
+            "question_id": f"question_recent_{index}",
+            "answer_id": f"answer_recent_{index}",
+            "answer_summary": f"最近回答摘要 {index}",
+            "feedback_summary": f"最近反馈摘要 {index}",
+        }
+        for index in range(6)
+    ]
+
+    asset = build_feedback_prompt_asset(context)
+    input_data = asset["input_data"]
+    serialized = repr(asset)
+
+    assert len(input_data["evidence_items"]) <= 12
+    assert len(input_data["session_recent_turns"]) <= 3
+    assert len(input_data["context_snapshots"]["job_snapshot"]["requirements"]) <= 5
+    assert len(input_data["context_snapshots"]["job_snapshot"]["responsibilities"]) <= 5
+    assert "full_jd" not in input_data["context_snapshots"]["job_snapshot"]
+    assert "full_resume" not in input_data["context_snapshots"]["resume_snapshot"]
+    assert "markdown_text" not in input_data["context_snapshots"]["resume_snapshot"]
+    assert "work_experiences" not in input_data["context_snapshots"]["resume_snapshot"]
+    assert "FULL_JD_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert "FULL_RESUME_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert "RESUME_MARKDOWN_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert "WORK_EXPERIENCE_SHOULD_NOT_BE_INCLUDED" not in serialized
+
+
+def test_prompt_asset_same_question_answers_do_not_repeat_full_answer_text() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    context = _context()
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev_full",
+            "answer_round": 1,
+            "answer_text": "PREVIOUS_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED",
+            "answer_summary": "上一轮摘要：缺少观测指标。",
+            "feedback_summary": "上一轮反馈：补充失败率和恢复耗时。",
+            "loss_point_ids": ["lp_observability"],
+        }
+    ]
+
+    asset = build_feedback_prompt_asset(context)
+    previous_answer = asset["input_data"]["same_question_answers"][0]
+    serialized = repr(asset)
+
+    assert "answer_text" not in previous_answer
+    assert "PREVIOUS_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED" not in serialized
+    assert previous_answer["answer_summary"] == "上一轮摘要：缺少观测指标。"
 
 
 def test_prompt_asset_includes_project_asset_summaries() -> None:
@@ -287,8 +494,247 @@ def test_prompt_asset_includes_project_asset_summaries() -> None:
 
     asset = build_feedback_prompt_asset(_context())
 
-    assert asset["input_data"]["project_asset_summaries"] == _context()["project_asset_summaries"]
+    assert asset["input_data"]["project_asset_summaries"][0]["asset_id"] == "asset_payment"
+    assert asset["input_data"]["project_asset_summaries"][0]["summary"] == "支付项目已有事务消息、幂等键和补偿任务素材。"
 
+
+
+def _context_with_canonical_assets(*, answer_text: str, asset_status: str = "asset_confirmed") -> dict[str, Any]:
+    context = _context()
+    context["answer_text"] = answer_text
+    context["question_metadata"] = {
+        "expected_answer_dimensions": ["FastAPI APIs", "PostgreSQL persistence", "observability metrics"],
+    }
+    context["progress_node_snapshot"] = {
+        "node_ref": "progress_node_backend_fact",
+        "title": "Backend workflow automation",
+        "expected_capability": "Explain FastAPI APIs, PostgreSQL persistence, and observability metrics.",
+        "missing_points": ["observability metrics"],
+    }
+    context["canonical_project_assets"] = {
+        "available": True,
+        "selection_policy": "rule_based_keyword_overlap_v1",
+        "items": [
+            {
+                "asset_id": "asset_backend_workflow",
+                "status": asset_status,
+                "asset_type": "project_story",
+                "title": "Backend workflow automation",
+                "summary": "Candidate built backend workflow automation with FastAPI and PostgreSQL.",
+                "content_excerpt": "Owns FastAPI APIs, PostgreSQL persistence, retries, and observability metrics.",
+            }
+        ],
+    }
+    return context
+
+
+def test_phase4_confirmed_asset_conflict_surfaces_first_card_and_blocks_next_question() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question"]
+    context = _context_with_canonical_assets(
+        answer_text="I led the project with Django and MongoDB instead of the documented stack.",
+        asset_status="asset_confirmed",
+    )
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    asset_check = result.payload["asset_consistency_check"]
+    assert asset_check["status"] == "conflict"
+    assert {conflict["conflict_type"] for conflict in asset_check["conflicts"]} >= {
+        "technology_stack_conflict"
+    }
+    assert result.payload["feedback_cards"][0]["card_type"] == "asset_consistency"
+    assert "generate_next_question" not in result.payload["next_recommended_actions"]
+    assert result.payload["project_asset_consistency_check"]["status"] == "conflict"
+
+
+def test_phase4_archived_asset_is_not_used_as_canonical_conflict_source() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question"]
+    context = _context_with_canonical_assets(
+        answer_text="I led the project with Django and MongoDB instead of the documented stack.",
+        asset_status="asset_archived",
+    )
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["asset_consistency_check"]["status"] == "insufficient_asset_context"
+    assert result.payload["project_asset_consistency_check"] == {"status": "not_applicable"}
+
+
+def test_phase4_confirmed_asset_unsupported_new_project_fact_is_candidate_claim() -> None:
+    context = _context_with_canonical_assets(
+        answer_text="I owned FastAPI APIs with PostgreSQL and introduced Redis cache for the project.",
+        asset_status="asset_confirmed",
+    )
+
+    result = _service(_PayloadTransport(_generated_payload())).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    unsupported_claims = result.payload["asset_consistency_check"]["unsupported_claims"]
+    assert unsupported_claims
+    assert any(claim["current_answer_claim"] == "redis" for claim in unsupported_claims)
+    assert result.payload["asset_consistency_check"]["status"] == "conflict"
+
+
+def test_phase4_missing_asset_consistency_from_llm_with_assets_gets_explicit_policy_warning() -> None:
+    context = _context_with_canonical_assets(
+        answer_text="I owned FastAPI APIs with PostgreSQL persistence.",
+        asset_status="asset_confirmed",
+    )
+
+    result = _service(_PayloadTransport(_generated_payload())).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    warnings = result.payload["feedback_metadata"]["phase4_validation_warnings"]
+    assert "asset_consistency_check_missing_from_llm_policy_generated" in warnings
+    assert result.payload["asset_consistency_check"]["checked_asset_refs"] == ["asset_backend_workflow"]
+
+
+def test_phase4_same_question_regression_and_fixed_loss_points_are_reported() -> None:
+    payload = _generated_payload()
+    payload["score_result"]["score_value"] = 88
+    payload["explicit_score"] = 88
+    payload["implicit_score"] = 86
+    payload["loss_points"] = [
+        {
+            "loss_point_id": "lp_recovery",
+            "severity": "major",
+            "deduction": 12,
+            "reason": "没有说明补偿任务的触发条件和终止条件。",
+        }
+    ]
+    payload["reference_answer"] = {
+        "sections": [
+            {
+                "section_id": "ref_recovery",
+                "title": "失败恢复",
+                "content": "说明重试、补偿、幂等键、死信和人工介入边界。",
+                "addresses_loss_point_ids": ["lp_recovery"],
+            }
+        ]
+    }
+    payload["same_question_effect"] = {
+        "improved_points": [],
+        "repeated_loss_point_ids": [],
+        "regressed_points": [],
+        "next_retry_focus": [],
+        "score_delta": 8,
+    }
+    context = _context()
+    context["answer_text"] = "本轮我补充失败补偿和幂等处理。"
+    context["question_metadata"] = {"expected_answer_dimensions": ["失败补偿", "观测指标"]}
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev",
+            "answer_round": 1,
+            "answer_summary": "上一轮覆盖了观测指标，但缺少补偿任务。",
+            "covered_points": ["观测指标"],
+            "loss_point_ids": ["lp_observability"],
+            "score_result": {"score_value": 80},
+        }
+    ]
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    change = result.payload["answer_change_analysis"]
+    assert change["has_prior_attempts"] is True
+    assert "观测指标" in change["regressed_points"]
+    assert "lp_observability" in change["fixed_loss_points"]
+    assert any(card["card_type"] == "answer_change" for card in result.payload["feedback_cards"])
+
+
+def test_phase4_missing_points_remove_generate_next_question() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question"]
+    context = _context()
+    context["answer_text"] = "我只说明了 MQ 解耦。"
+    context["question_metadata"] = {"expected_answer_dimensions": ["MQ 解耦", "幂等键", "观测指标"]}
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert "generate_next_question" not in result.payload["next_recommended_actions"]
+    assert result.payload["next_recommended_actions"][0] == "continue_same_question"
+
+
+def test_phase4_validator_rejects_generate_next_question_with_unresolved_points() -> None:
+    payload = _generated_payload()
+    payload.update(
+        {
+            "asset_consistency_check": {
+                "status": "consistent",
+                "checked_asset_refs": [],
+                "conflicts": [],
+                "unsupported_claims": [],
+                "user_clarification_required": False,
+            },
+            "answer_coverage": {
+                "expected_points": ["幂等键"],
+                "covered_points": [],
+                "missing_points": ["幂等键"],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "has_prior_attempts": False,
+                "previous_answer_refs": [],
+                "retained_points": [],
+                "newly_added_points": [],
+                "regressed_points": [],
+                "repeated_loss_points": [],
+                "fixed_loss_points": [],
+                "score_delta": None,
+                "trend": "first_attempt",
+            },
+            "feedback_cards": [
+                {"card_type": "asset_consistency", "status": "consistent", "payload": {}},
+                {"card_type": "overall", "status": "generated", "payload": {}},
+                {"card_type": "answer_coverage", "status": "available", "payload": {}},
+                {"card_type": "loss_points", "status": "available", "payload": []},
+                {"card_type": "reference_answer", "status": "available", "payload": {}},
+                {"card_type": "next_actions", "status": "available", "payload": {}},
+                {"card_type": "asset_update_candidates", "status": "candidate", "payload": []},
+            ],
+            "next_recommended_actions": ["generate_next_question"],
+        }
+    )
+
+    normalized, errors = validate_generated_feedback_payload(payload, require_phase4=True)
+
+    assert normalized is None
+    assert "next_action_generate_next_question_forbidden_unresolved_feedback" in errors
+
+
+def test_phase4_asset_update_candidates_are_forced_to_user_confirmation() -> None:
+    payload = _generated_payload()
+    payload["project_asset_update_candidates"][0]["user_confirmation_required"] = False
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["project_asset_update_candidates"][0]["user_confirmation_required"] is True
+    assert result.payload["feedback_cards"][-1]["card_type"] == "asset_update_candidates"
+
+
+def test_phase4_required_fields_can_be_enforced_by_validator() -> None:
+    normalized, errors = validate_generated_feedback_payload(_generated_payload(), require_phase4=True)
+
+    assert normalized is None
+    assert "asset_consistency_check_required" in errors
+    assert "answer_coverage_required" in errors
+    assert "answer_change_analysis_required" in errors
+    assert "feedback_cards_required" in errors
 
 def _contains_forbidden_key(value: object) -> bool:
     forbidden = {

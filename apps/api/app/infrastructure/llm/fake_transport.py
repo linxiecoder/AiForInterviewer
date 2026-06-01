@@ -91,13 +91,41 @@ class FakeLlmTransport:
 
 def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransportResult:
     bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
-    current_question = bundle.get("current_question") if isinstance(bundle.get("current_question"), dict) else {}
-    current_answer = bundle.get("current_answer") if isinstance(bundle.get("current_answer"), dict) else {}
-    project_assets = (
-        bundle.get("project_asset_summaries")
-        if isinstance(bundle.get("project_asset_summaries"), list)
-        else []
+    input_data = bundle.get("input_data") if isinstance(bundle.get("input_data"), dict) else {}
+    input_question = input_data.get("current_question")
+    fallback_question = bundle.get("current_question")
+    current_question = (
+        input_question
+        if isinstance(input_question, dict)
+        else fallback_question
+        if isinstance(fallback_question, dict)
+        else {}
     )
+    input_answer = input_data.get("current_answer")
+    fallback_answer = bundle.get("current_answer")
+    current_answer = (
+        input_answer
+        if isinstance(input_answer, dict)
+        else fallback_answer
+        if isinstance(fallback_answer, dict)
+        else {}
+    )
+    input_project_assets = input_data.get("project_asset_summaries")
+    fallback_project_assets = bundle.get("project_asset_summaries")
+    if isinstance(input_project_assets, list):
+        project_assets = input_project_assets
+    elif isinstance(fallback_project_assets, list):
+        project_assets = fallback_project_assets
+    else:
+        project_assets = []
+    input_same_question_answers = input_data.get("same_question_answers")
+    fallback_same_question_answers = bundle.get("same_question_answers")
+    if isinstance(input_same_question_answers, list):
+        same_question_answers = input_same_question_answers
+    elif isinstance(fallback_same_question_answers, list):
+        same_question_answers = fallback_same_question_answers
+    else:
+        same_question_answers = []
     question_text = _fake_question_excerpt(current_question.get("question_text") or "当前题目", limit=100)
     answer_text = _fake_question_excerpt(current_answer.get("answer_text") or "当前回答", limit=120)
     asset_summary = _fake_question_excerpt(
@@ -111,6 +139,7 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
             "question": question_text,
             "answer": answer_text,
             "assets": asset_summary,
+            "same_question_answer_count": len(same_question_answers),
         },
         ensure_ascii=True,
         sort_keys=True,
@@ -144,14 +173,8 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
             {
                 "loss_point_id": "lp_recovery_boundary",
                 "severity": "major",
-                "deduction": 12,
+                "deduction": 18,
                 "reason": "没有说明失败恢复的触发条件、终止条件和人工介入边界。",
-            },
-            {
-                "loss_point_id": "lp_observability",
-                "severity": "minor",
-                "deducted_points": 6,
-                "reason": "缺少消息堆积、失败率和恢复耗时等观测指标。",
             },
         ],
         "reference_answer": {
@@ -162,34 +185,57 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
                     "content": "说明重试、补偿、幂等键、死信队列、终止条件和人工介入边界。",
                     "addresses_loss_point_ids": ["lp_recovery_boundary"],
                 },
-                {
-                    "section_id": "ref_observability",
-                    "title": "观测与告警",
-                    "content": "补充消息堆积、失败率、恢复耗时、告警阈值和回滚动作。",
-                    "addresses_loss_point_ids": ["lp_observability"],
-                },
             ]
         },
-        "knowledge_points": ["事务消息", "幂等设计", "失败补偿"],
-        "technical_principles": ["先定义失败恢复边界，再选择消息队列和补偿策略。"],
+        "knowledge_points": [],
+        "technical_principles": [],
         "same_question_effect": {
             "improved_points": ["回答覆盖了异步解耦和失败重试"],
-            "repeated_loss_point_ids": ["lp_observability"],
+            "repeated_loss_point_ids": ["lp_recovery_boundary"] if same_question_answers else [],
             "regressed_points": [],
             "next_retry_focus": ["补齐恢复指标和终止条件"],
             "score_delta": 6,
         },
-        "project_asset_consistency_check": {"status": "consistent", "conflicts": []},
-        "session_similarity_check": {"status": "benign_reuse"},
-        "project_asset_update_candidates": [
-            {
-                "candidate_type": "project_asset_update_candidate",
-                "candidate_ref": stable_resource_id("asset", f"fake-feedback-asset:{seed}"),
-                "user_confirmation_required": True,
-                "target_asset_ref": {"resource_type": "asset", "resource_id": "asset_fake_payment"},
-                "summary": asset_summary or "补充项目中的失败恢复和观测指标表达素材。",
-            }
+        "project_asset_consistency_check": {"status": "not_applicable"},
+        "asset_consistency_check": {
+            "status": "insufficient_asset_context",
+            "checked_asset_refs": [],
+            "conflicts": [],
+            "unsupported_claims": [],
+            "user_clarification_required": False,
+        },
+        "answer_coverage": {
+            "expected_points": [],
+            "covered_points": [],
+            "missing_points": [],
+            "weak_points": [],
+            "contradicted_points": [],
+        },
+        "answer_change_analysis": {
+            "has_prior_attempts": bool(same_question_answers),
+            "previous_answer_refs": [
+                str(answer.get("answer_id"))
+                for answer in same_question_answers
+                if isinstance(answer, dict) and answer.get("answer_id")
+            ],
+            "retained_points": [],
+            "newly_added_points": [],
+            "regressed_points": [],
+            "repeated_loss_points": ["lp_recovery_boundary"] if same_question_answers else [],
+            "fixed_loss_points": [],
+            "score_delta": 6 if same_question_answers else None,
+            "trend": "unchanged" if same_question_answers else "first_attempt",
+        },
+        "feedback_cards": [
+            {"card_type": "asset_consistency", "status": "insufficient_asset_context", "payload": {"status": "insufficient_asset_context"}},
+            {"card_type": "overall", "status": "generated", "payload": {"score_result": {"score_value": 82}}},
+            {"card_type": "answer_coverage", "status": "available", "payload": {"expected_points": []}},
+            {"card_type": "loss_points", "status": "available", "payload": [{"loss_point_id": "lp_recovery_boundary"}]},
+            {"card_type": "reference_answer", "status": "available", "payload": {"sections": ["ref_recovery_boundary"]}},
+            {"card_type": "next_actions", "status": "available", "payload": {"next_recommended_actions": ["围绕失败恢复终止条件再追问一轮"]}},
         ],
+        "session_similarity_check": {"status": "not_applicable"},
+        "project_asset_update_candidates": [],
         "next_recommended_actions": ["围绕失败恢复终止条件再追问一轮"],
         "low_confidence_flags": [],
         "trace_refs": [{"resource_type": "llm_trace", "resource_id": trace_ref}],
@@ -212,6 +258,8 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
 def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:
     bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
     input_data = bundle.get("input_data") if isinstance(bundle.get("input_data"), dict) else {}
+    if not input_data and isinstance(bundle.get("canonical_evidence"), dict):
+        input_data = _fake_question_input_data_from_compact_request(bundle)
     progress_node = input_data.get("progress_node") if isinstance(input_data.get("progress_node"), dict) else {}
     policy = input_data.get("generation_policy") if isinstance(input_data.get("generation_policy"), dict) else {}
     follow_up = input_data.get("follow_up") if isinstance(input_data.get("follow_up"), dict) else {}
@@ -225,15 +273,23 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
         limit=80,
     )
     claim_mode = str(policy.get("claim_mode") or "")
+    support_level = str(input_data.get("source_support_level") or "")
     excerpt = _fake_question_primary_excerpt(summary_items, claim_mode=claim_mode, fallback=capability)
     if is_follow_up:
         target_dimension = _fake_question_excerpt(follow_up.get("target_dimension") or capability, limit=80)
         answer_excerpt = _fake_question_excerpt(follow_up.get("previous_answer") or "上一轮回答", limit=80)
-        question_text = (
-            f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
-            f"请结合上一题背景和岗位/简历证据「{excerpt}」，说明你的具体判断、边界、"
-            "失败处理、验证指标和关键取舍。"
-        )
+        if support_level in {"adjacent_project_evidence", "job_gap_only"}:
+            question_text = (
+                f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
+                f"如果要结合上一题背景和岗位/简历证据「{excerpt}」补齐这部分能力，"
+                "你会如何判断边界、设计失败处理、验证指标和关键取舍？"
+            )
+        else:
+            question_text = (
+                f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
+                f"请结合上一题背景和岗位/简历证据「{excerpt}」，说明你的具体判断、边界、"
+                "失败处理、验证指标和关键取舍。"
+            )
         difficulty = "hard"
         missing_context = []
         confidence = "medium"
@@ -253,6 +309,16 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
             f"请基于主要证据「{excerpt}」，说明你会如何补齐相关能力、设计验证路径并在面试中证明该能力。"
         )
         difficulty = "medium"
+        missing_context = []
+        confidence = "medium"
+        clarification_needed = False
+    elif support_level == "adjacent_project_evidence":
+        question_text = (
+            f"围绕「{title}」，已有材料只能相邻支持。"
+            f"如果要基于主要证据「{excerpt}」扩展到「{capability}」，你会如何设计边界、"
+            "异常处理、验证指标和关键取舍？"
+        )
+        difficulty = "hard"
         missing_context = []
         confidence = "medium"
         clarification_needed = False
@@ -297,11 +363,18 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
         "prompt_version": request.prompt_version,
     }
     if not is_follow_up:
-        support_level = "unsupported" if claim_mode == "job_gap_probe" else "direct_implemented"
-        turn_intent = "gap_compensation_design" if claim_mode == "job_gap_probe" else "project_implementation_deep_dive"
-        question_kind = "gap_compensation_design" if claim_mode == "job_gap_probe" else "implementation_deep_dive"
+        support_level = support_level or ("job_gap_only" if claim_mode == "job_gap_probe" else "direct_project_evidence")
+        if claim_mode == "job_gap_probe":
+            turn_intent = "gap_compensation_design"
+            question_kind = "gap_compensation_design"
+        elif support_level == "adjacent_project_evidence":
+            turn_intent = "extension_design_followup"
+            question_kind = "extension_design_followup"
+        else:
+            turn_intent = "project_implementation_deep_dive"
+            question_kind = "implementation_deep_dive"
         if clarification_needed:
-            support_level = "unsupported"
+            support_level = "insufficient_context"
             turn_intent = "clarification"
             question_kind = "clarification"
         result_payload = {
@@ -317,7 +390,13 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
                 "intent_reason": "fake transport deterministic next question intent",
                 "evidence_support_level": support_level,
                 "evidence_support_reason": "fake transport uses selected prompt evidence only",
-                "main_question_style": "ask_clarification" if clarification_needed else "ask_how_implemented",
+                "main_question_style": (
+                    "ask_clarification"
+                    if clarification_needed
+                    else "ask_hypothetical_design"
+                    if claim_mode == "job_gap_probe" or support_level == "adjacent_project_evidence"
+                    else "ask_how_implemented"
+                ),
                 "allowed_extension_depth": "none" if clarification_needed else "main_question_allowed",
                 "primary_evidence_refs": [evidence_refs[0]] if evidence_refs else [],
                 "secondary_evidence_refs": list(evidence_refs[1:]),
@@ -366,6 +445,41 @@ def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransport
         evidence_refs=evidence_refs,
     )
 
+
+
+def _fake_question_input_data_from_compact_request(bundle: dict[str, Any]) -> dict[str, Any]:
+    canonical_evidence = bundle.get("canonical_evidence") if isinstance(bundle.get("canonical_evidence"), dict) else {}
+    expected_contract = (
+        bundle.get("expected_output_contract")
+        if isinstance(bundle.get("expected_output_contract"), dict)
+        else {}
+    )
+    generation_policy = (
+        expected_contract.get("generation_policy")
+        if isinstance(expected_contract.get("generation_policy"), dict)
+        else {}
+    )
+    progress_node = bundle.get("progress_node") if isinstance(bundle.get("progress_node"), dict) else {}
+    history_summary = bundle.get("history_summary") if isinstance(bundle.get("history_summary"), dict) else {}
+    follow_up = history_summary.get("follow_up") if isinstance(history_summary.get("follow_up"), dict) else {}
+    input_data = {
+        "progress_node": progress_node,
+        "skill_dimension": progress_node.get("title") or generation_policy.get("question_kind") or "当前训练节点",
+        "generation_policy": {
+            "question_kind": generation_policy.get("question_kind") or "technical_chain_deep_dive",
+            "claim_mode": generation_policy.get("claim_mode") or "evidence_grounded",
+            "focus_dimension": generation_policy.get("question_kind") or "technical_chain_deep_dive",
+        },
+        "source_support_level": bundle.get("source_support_level"),
+        "evidence_refs": canonical_evidence.get("evidence_refs") if isinstance(canonical_evidence.get("evidence_refs"), list) else [],
+        "evidence_summaries": canonical_evidence.get("evidence_summaries") if isinstance(canonical_evidence.get("evidence_summaries"), list) else [],
+        "canonical_project_assets": canonical_evidence.get("canonical_project_assets") if isinstance(canonical_evidence.get("canonical_project_assets"), dict) else {},
+        "missing_context": canonical_evidence.get("missing_context") if isinstance(canonical_evidence.get("missing_context"), list) else [],
+    }
+    if follow_up:
+        input_data["generation_mode"] = "follow_up"
+        input_data["follow_up"] = follow_up
+    return input_data
 
 def _fake_question_excerpt(value: object, *, limit: int) -> str:
     text = " ".join(str(value or "").split())

@@ -38,6 +38,8 @@ class EvidenceScope:
     evidence_refs: tuple[str, ...] = ()
     question_sources: tuple[PolishQuestionSource, ...] = ()
     context_digest: str | None = None
+    canonical_project_assets: dict[str, Any] = field(default_factory=dict)
+    source_support_level: str | None = None
     dropped_context_summary: dict[str, Any] = field(default_factory=dict)
 
 
@@ -84,12 +86,18 @@ def build_question_blueprint(
         metadata={
             "blueprint_version": QUESTION_BLUEPRINT_VERSION,
             "primary_source_type": scope.primary_source_type,
+            "source_support_level": scope.source_support_level,
             "dropped_context_summary": scope.dropped_context_summary,
         },
     )
 
 
 def _claim_mode(scope: EvidenceScope) -> str:
+    support_level = (scope.source_support_level or "").strip().lower()
+    if support_level == "insufficient_context":
+        return CLAIM_MODE_CLARIFICATION_NEEDED
+    if support_level == "job_gap_only":
+        return CLAIM_MODE_JOB_GAP_PROBE
     if not scope.primary_evidence_ref or not _clean_text(scope.primary_evidence_text):
         return CLAIM_MODE_CLARIFICATION_NEEDED
     source_type = (scope.primary_source_type or "").strip().lower()

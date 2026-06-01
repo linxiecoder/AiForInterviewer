@@ -4,6 +4,8 @@ POLISH_FEEDBACK_GENERATED_SCHEMA_ID = "polish_feedback_generated_v1"
 POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION = "1.0"
 POLISH_FEEDBACK_AGENT_PROMPT_VERSION = "polish_feedback_agent_prompt.v1"
 POLISH_FEEDBACK_TASK_TYPE = "polish_feedback_generation"
+POLISH_FEEDBACK_QUICK_MODE = "quick"
+POLISH_FEEDBACK_QUICK_TASK = "polish_feedback_quick_v1"
 POLISH_FEEDBACK_GENERATED_CONTRACT_IDS = (
     "P-POLISH-003",
     "P-POLISH-004",
@@ -28,6 +30,10 @@ POLISH_FEEDBACK_GENERATED_PAYLOAD_FIELDS = (
     "technical_principles",
     "same_question_effect",
     "project_asset_consistency_check",
+    "asset_consistency_check",
+    "answer_coverage",
+    "answer_change_analysis",
+    "feedback_cards",
     "session_similarity_check",
     "project_asset_update_candidates",
     "next_recommended_actions",
