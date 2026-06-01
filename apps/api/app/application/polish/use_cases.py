@@ -77,7 +77,13 @@ from app.application.polish.question_generation_policy import (
 )
 from app.application.polish.question_application_service import PolishQuestionApplicationService
 from app.application.polish.question_generation_service import QuestionGenerationResult, QuestionGenerationService
-from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
+from app.application.polish.question_metadata import (
+    build_follow_up_coverage_decision,
+    empty_question_metadata,
+    merge_follow_up_completed_focus_refs,
+    normalize_question_metadata,
+    sync_follow_up_completed_focus_refs,
+)
 from app.application.polish.report_application_service import PolishReportApplicationService
 from app.application.polish.session_application_service import PolishSessionApplicationService
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
@@ -450,16 +456,41 @@ class _PolishUseCaseOperations:
             detail.progress_tree_state,
             progress_node_ref=requested_progress_node_ref,
         )
+        follow_up_context: dict[str, Any] | None = None
+        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
+            resolved_follow_up_context = _build_follow_up_generation_context(
+                command=command,
+                detail=detail,
+                completed_focus_refs=completed_focus_refs,
+            )
+            if isinstance(resolved_follow_up_context, DomainError):
+                return ApplicationResult(error=resolved_follow_up_context)
+            follow_up_context = resolved_follow_up_context
+            completed_focus_refs = merge_follow_up_completed_focus_refs(
+                follow_up_context,
+                completed_focus_refs,
+            )
+            sync_follow_up_completed_focus_refs(follow_up_context, completed_focus_refs)
         progress_context = _progress_context_with_completed_focus_refs(
             detail.progress_context,
             completed_focus_refs,
         )
-        follow_up_context: dict[str, Any] | None = None
-        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_FOLLOW_UP:
-            resolved_follow_up_context = _build_follow_up_generation_context(command=command, detail=detail)
-            if isinstance(resolved_follow_up_context, DomainError):
-                return ApplicationResult(error=resolved_follow_up_context)
-            follow_up_context = resolved_follow_up_context
+        if follow_up_context is not None and follow_up_context.get("completion_status") == "all_focus_completed":
+            task_id = generate_resource_id(ResourceIdPrefix.TASK)
+            task = _follow_up_completed_task_status(
+                task_id=task_id,
+                runtime_policy=runtime_policy,
+                requested_progress_node_ref=requested_progress_node_ref,
+                focus_key=_clean_question_request_text(follow_up_context.get("focus_key")) or "focus_follow_up_completed",
+                created_at=now,
+            )
+            self._polish_repository.add_task(
+                task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.session_id,
+            )
+            return ApplicationResult(value=task)
         graph_fallback_reason: str | None = None
         if self._ai_orchestration_facade is not None:
             stable_idempotency_key = _stable_polish_question_generation_idempotency_key(
@@ -1956,6 +1987,29 @@ def _polish_question_generation_validation_failed_task_status(
     )
 
 
+def _follow_up_completed_task_status(
+    *,
+    task_id: str,
+    runtime_policy: QuestionGenerationRuntimePolicy,
+    requested_progress_node_ref: str | None,
+    focus_key: str,
+    created_at: Any,
+) -> PolishTaskStatus:
+    candidate_refs = [ResourceRef(resource_type="follow_up_focus", resource_id=focus_key)]
+    if requested_progress_node_ref:
+        candidate_refs.append(ResourceRef(resource_type="progress_node", resource_id=requested_progress_node_ref))
+    return PolishTaskStatus(
+        ai_task_id=task_id,
+        task_type=runtime_policy.task_type,
+        status=AiTaskStatus.SUCCEEDED,
+        contract_ids=runtime_policy.contract_ids,
+        retryable=False,
+        result_ref=TraceRef(trace_ref_id=focus_key, trace_type="follow_up_decision", created_at=created_at),
+        user_visible_status="当前追问焦点已完成，可进入下一题",
+        candidate_refs=tuple(candidate_refs),
+    )
+
+
 def _graph_task_status_to_polish_status(raw_status: str) -> AiTaskStatus:
     normalized = str(raw_status or "").strip().lower()
     if normalized in {"running", "in_progress", "started"}:
@@ -1995,6 +2049,7 @@ def _build_follow_up_generation_context(
     *,
     command: CreatePolishQuestionTaskCommand,
     detail: PolishSessionDetail,
+    completed_focus_refs: tuple[str, ...],
 ) -> dict[str, Any] | DomainError:
     parent_turn = _find_turn(detail.turns, command.parent_question_id)
     if parent_turn is None:
@@ -2017,7 +2072,14 @@ def _build_follow_up_generation_context(
             details={"field": "parent_feedback_id"},
         )
 
-    target_dimension, follow_up_reason = _select_follow_up_target(parent_turn, parent_answer)
+    coverage_decision = build_follow_up_coverage_decision(
+        feedback_payload=parent_answer.feedback_payload,
+        expected_answer_dimensions=parent_turn.question_metadata.get("expected_answer_dimensions"),
+        completed_focus_refs=completed_focus_refs,
+        used_focus_refs=_follow_up_used_focus_refs(detail.turns, parent_question_id=parent_turn.question_id),
+    )
+    coverage_matrix = coverage_decision["coverage_matrix"]
+    focus = coverage_decision["focus"]
     progress_node_ref = _clean_question_request_text(command.selected_progress_node_ref) or parent_turn.progress_node_ref
     return {
         "parent_question_id": parent_turn.question_id,
@@ -2026,11 +2088,33 @@ def _build_follow_up_generation_context(
         "parent_answer_excerpt": _follow_up_excerpt(parent_answer.answer_text),
         "parent_feedback_id": parent_answer.feedback_id,
         "parent_feedback_excerpt": _clean_question_request_text(parent_answer.feedback_text, max_chars=240),
-        "target_dimension": target_dimension,
-        "follow_up_reason": follow_up_reason,
+        "target_dimension": focus["target_dimension"],
+        "follow_up_reason": focus["follow_up_reason"],
         "progress_node_ref": progress_node_ref,
         "parent_evidence_refs": list(parent_turn.evidence_refs),
+        "coverage_matrix": coverage_matrix,
+        "focus_key": focus["focus_key"],
+        "focus_source": focus["focus_source"],
+        "recommended_action": focus["recommended_action"],
+        "completed_focus_refs": list(coverage_matrix.get("completed_focus_refs") or []),
+        "completion_status": focus["completion_status"],
     }
+
+
+def _follow_up_used_focus_refs(
+    turns: tuple[PolishSessionTurn, ...],
+    *,
+    parent_question_id: str,
+) -> tuple[str, ...]:
+    refs: list[str] = []
+    for turn in turns:
+        metadata = turn.question_metadata if isinstance(turn.question_metadata, dict) else {}
+        if _clean_question_request_text(metadata.get("parent_question_id")) != parent_question_id:
+            continue
+        focus_key = _clean_question_request_text(metadata.get("focus_key"), max_chars=160)
+        if focus_key:
+            refs.append(focus_key)
+    return _clean_question_request_list(refs)
 
 
 def _find_turn(turns: tuple[PolishSessionTurn, ...], question_id: str | None) -> PolishSessionTurn | None:
@@ -2353,48 +2437,8 @@ def _has_generated_feedback_payload(feedback: PolishFeedback) -> bool:
     return isinstance(payload, dict) and payload.get("status") == "generated"
 
 
-def _select_follow_up_target(
-    parent_turn: PolishSessionTurn,
-    parent_answer: PolishSessionAnswerDetail,
-) -> tuple[str, str]:
-    payload = parent_answer.feedback_payload if isinstance(parent_answer.feedback_payload, dict) else {}
-    for item in _dict_list(payload.get("missing_answer_dimensions")):
-        target = _compact_follow_up_target(
-            item.get("title") or item.get("dimension_id") or item.get("expected_dimension")
-        )
-        if target:
-            return target, "missing_answer_dimension"
-    for key, reason in (("technical_gaps", "technical_gap"), ("communication_gaps", "communication_gap")):
-        for item in payload.get(key) or []:
-            target = _compact_follow_up_target(item)
-            if target:
-                return target, reason
-    for item in _dict_list(payload.get("loss_points")):
-        target = _compact_follow_up_target(item.get("title") or item.get("reason"))
-        if target:
-            return target, "loss_point"
-    for dimension in parent_turn.question_metadata.get("expected_answer_dimensions") or []:
-        target = _compact_follow_up_target(dimension)
-        if target and target not in parent_answer.answer_text:
-            return target, "unanswered_expected_dimension"
-    return "失败路径、边界和验证指标", "category_uncovered_direction"
-
-
-def _compact_follow_up_target(value: object) -> str | None:
-    text = _clean_question_request_text(value, max_chars=80)
-    return text or None
-
-
 def _follow_up_excerpt(answer_text: str) -> str:
     return _clean_question_request_text(answer_text, max_chars=80) or "上一轮回答"
-
-
-def _follow_up_source_excerpt(parent_answer: PolishSessionAnswerDetail) -> str:
-    feedback_text = _clean_question_request_text(parent_answer.feedback_text, max_chars=120)
-    answer_text = _follow_up_excerpt(parent_answer.answer_text)
-    if feedback_text:
-        return f"回答：{answer_text}；反馈：{feedback_text}"
-    return f"回答：{answer_text}"
 
 
 def _question_request_focus_key(target_dimension: str) -> str:

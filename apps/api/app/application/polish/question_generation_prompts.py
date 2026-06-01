@@ -702,6 +702,15 @@ def build_question_provider_request(
                 "previous_answer": _compact(_clean(follow_up.get("previous_answer")), limit=180),
                 "feedback_summary": _compact(_clean(follow_up.get("feedback_summary")), limit=180),
                 "target_dimension": _compact(_clean(follow_up.get("target_dimension")), limit=120),
+                "focus_key": _compact(_clean(follow_up.get("focus_key")), limit=160),
+                "focus_source": _compact(_clean(follow_up.get("focus_source")), limit=120),
+                "recommended_action": _compact(_clean(follow_up.get("recommended_action")), limit=120),
+                "coverage_matrix": _compact_follow_up_coverage_matrix(follow_up.get("coverage_matrix")),
+                "completed_focus_refs": [
+                    _compact(_clean(ref), limit=160)
+                    for ref in follow_up.get("completed_focus_refs", [])
+                    if _clean(ref)
+                ][:20],
                 "parent_evidence_refs": [
                     _compact(_clean(ref), limit=80)
                     for ref in follow_up.get("parent_evidence_refs", [])
@@ -819,6 +828,7 @@ def _follow_up_schema_id(policy: QuestionGenerationRuntimePolicy) -> str:
 
 
 def _follow_up_prompt_input(follow_up_context: dict[str, Any]) -> dict[str, Any]:
+    coverage_matrix = _compact_follow_up_coverage_matrix(follow_up_context.get("coverage_matrix"))
     return {
         "parent_question_id": _compact(_clean(follow_up_context.get("parent_question_id")), limit=80),
         "parent_answer_id": _compact(_clean(follow_up_context.get("parent_answer_id")), limit=80),
@@ -828,12 +838,81 @@ def _follow_up_prompt_input(follow_up_context: dict[str, Any]) -> dict[str, Any]
         "feedback_summary": _compact(_clean(follow_up_context.get("parent_feedback_excerpt")), limit=220),
         "target_dimension": _compact(_clean(follow_up_context.get("target_dimension")), limit=120),
         "follow_up_reason": _compact(_clean(follow_up_context.get("follow_up_reason")), limit=120),
+        "focus_key": _compact(_clean(follow_up_context.get("focus_key")), limit=160),
+        "focus_source": _compact(_clean(follow_up_context.get("focus_source")), limit=120),
+        "recommended_action": _compact(_clean(follow_up_context.get("recommended_action")), limit=120),
+        "coverage_matrix": coverage_matrix,
+        "completed_focus_refs": [
+            _compact(_clean(ref), limit=160)
+            for ref in follow_up_context.get("completed_focus_refs", [])
+            if _clean(ref)
+        ][:20],
         "parent_evidence_refs": [
             _compact(_clean(ref), limit=80)
             for ref in follow_up_context.get("parent_evidence_refs", [])
             if _clean(ref)
         ][:8],
     }
+
+
+def _compact_follow_up_coverage_matrix(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {
+            "expected_points": [],
+            "covered_points": [],
+            "missing_points": [],
+            "weak_points": [],
+            "contradicted_points": [],
+            "regressed_points": [],
+            "fixed_loss_points": [],
+            "repeated_loss_points": [],
+            "asset_conflicts": [],
+            "completed_focus_refs": [],
+            "focus_key": None,
+        }
+    return {
+        "expected_points": _compact_string_list(value.get("expected_points")),
+        "covered_points": _compact_string_list(value.get("covered_points")),
+        "missing_points": _compact_string_list(value.get("missing_points")),
+        "weak_points": _compact_string_list(value.get("weak_points")),
+        "contradicted_points": _compact_string_list(value.get("contradicted_points")),
+        "regressed_points": _compact_string_list(value.get("regressed_points")),
+        "fixed_loss_points": _compact_string_list(value.get("fixed_loss_points"), limit=120),
+        "repeated_loss_points": _compact_string_list(value.get("repeated_loss_points"), limit=120),
+        "asset_conflicts": _compact_asset_conflicts(value.get("asset_conflicts")),
+        "completed_focus_refs": _compact_string_list(value.get("completed_focus_refs"), limit=160),
+        "focus_key": _compact(_clean(value.get("focus_key")), limit=160),
+    }
+
+
+def _compact_string_list(value: object, *, limit: int = 160) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[str] = []
+    for item in value[:12]:
+        text = _compact(_clean(item), limit=limit)
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _compact_asset_conflicts(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    conflicts: list[dict[str, str]] = []
+    for item in value[:6]:
+        if not isinstance(item, dict):
+            continue
+        compact = {
+            "conflict_type": _compact(_clean(item.get("conflict_type")), limit=120),
+            "current_answer_claim": _compact(_clean(item.get("current_answer_claim")), limit=160),
+            "asset_claim": _compact(_clean(item.get("asset_claim")), limit=160),
+            "severity": _compact(_clean(item.get("severity")), limit=80),
+        }
+        compact = {key: value for key, value in compact.items() if value}
+        if compact:
+            conflicts.append(compact)
+    return conflicts
 
 
 def render_blueprint_question(blueprint: QuestionBlueprint, scope: EvidenceScope) -> str:

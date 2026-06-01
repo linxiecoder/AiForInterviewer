@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 from typing import Any
 
 import pytest
@@ -1705,7 +1706,7 @@ def test_follow_up_question_task_uses_llm_transport_request() -> None:
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert result.value.status == AiTaskStatus.SUCCEEDED, result.value.validation_errors
     assert len(transport.requests) == 1
     assert transport.requests[0].task_type == QUESTION_FOLLOW_UP_PROMPT_TASK_TYPE
     assert len(repository.questions) == 2
@@ -1714,10 +1715,430 @@ def test_follow_up_question_task_uses_llm_transport_request() -> None:
     assert metadata["generation_mode"] == "follow_up"
     assert metadata["question_pattern"] == "follow_up_targeted"
     assert metadata["llm_generation_mode"] == "provider_structured_json"
-    assert metadata["follow_up_reason"] == "missing_answer_dimension"
+    assert metadata["follow_up_reason"] == "missing_point"
     assert metadata["follow_up_target_dimension"] == "失败处理和验证指标"
     assert str(metadata["template_signature"]).startswith("llm:follow_up_prompt:")
     assert "上一轮回答" in follow_up_question.question_text
+
+
+def test_follow_up_question_task_builds_missing_point_focus_matrix_and_compact_request() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(
+        repository,
+        parent_question.question_id,
+        feedback_payload={
+            "feedback_text": (
+                "Built backend workflow automation with FastAPI and PostgreSQL. 缺少失败补偿，幂等设计已经覆盖。"
+                " token=raw-token secret=plain-secret cookie=session-secret。"
+            ),
+            "answer_coverage": {
+                "expected_points": ["幂等设计", "失败补偿", "上线验证"],
+                "covered_points": ["幂等设计"],
+                "missing_points": ["失败补偿", "上线验证"],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "regressed_points": [],
+                "fixed_loss_points": [],
+                "repeated_loss_points": [],
+            },
+            "asset_consistency_check": {"status": "consistent", "conflicts": []},
+            "next_recommended_actions": ["continue_same_question"],
+            "loss_points": [],
+        },
+    )
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+            completed_focus_refs=(_test_focus_key("missing_point", "失败补偿"),),
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED, result.value.validation_errors
+    assert len(repository.questions) == 2
+    metadata = repository.questions[-1].question_metadata
+    matrix = metadata["follow_up_coverage_matrix"]
+    assert matrix["expected_points"] == ["幂等设计", "失败补偿", "上线验证"]
+    assert matrix["covered_points"] == ["幂等设计"]
+    assert matrix["missing_points"] == ["失败补偿", "上线验证"]
+    assert matrix["focus_key"].startswith("focus_missing_point_")
+    assert matrix["focus_key"] == _test_focus_key("missing_point", "上线验证")
+    assert metadata["focus_key"] == matrix["focus_key"]
+    assert metadata["follow_up_reason"] == "missing_point"
+    assert metadata["follow_up_target_dimension"] == "上线验证"
+    assert metadata["recommended_follow_up_action"] == "continue_same_question"
+    provider_follow_up = transport.requests[0].evidence_bundle["history_summary"]["follow_up"]
+    assert provider_follow_up["coverage_matrix"]["missing_points"] == ["失败补偿", "上线验证"]
+    assert provider_follow_up["focus_key"] == _test_focus_key("missing_point", "上线验证")
+    assert _test_focus_key("missing_point", "失败补偿") in provider_follow_up["completed_focus_refs"]
+    assert metadata["focus_key"] not in provider_follow_up["completed_focus_refs"]
+    assert all(ref.startswith("focus_") for ref in provider_follow_up["completed_focus_refs"])
+    serialized_provider_request = json.dumps(
+        transport.requests[0].evidence_bundle,
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    for forbidden in (
+        "full_prompt_asset",
+        "raw_prompt",
+        "full_resume",
+        "full_jd",
+        "provider_payload",
+        "developer_constraints",
+        "资深技术面试追问设计专家",
+        "token=raw-token",
+        "secret=plain-secret",
+        "cookie=session-secret",
+        "raw-token",
+        "plain-secret",
+        "session-secret",
+    ):
+        assert forbidden not in serialized_provider_request
+
+
+def test_follow_up_question_task_filters_weak_points_already_covered() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(
+        repository,
+        parent_question.question_id,
+        feedback_payload={
+            "feedback_text": "Built backend workflow automation with FastAPI and PostgreSQL. 幂等已经覆盖，失败补偿较弱。",
+            "answer_coverage": {
+                "expected_points": ["幂等设计", "失败补偿"],
+                "covered_points": ["幂等设计"],
+                "missing_points": [],
+                "weak_points": ["幂等设计", "失败补偿"],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "regressed_points": [],
+                "fixed_loss_points": [],
+                "repeated_loss_points": [],
+            },
+            "asset_consistency_check": {"status": "consistent", "conflicts": []},
+            "next_recommended_actions": ["continue_same_question"],
+            "loss_points": [],
+        },
+    )
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 2
+    metadata = repository.questions[-1].question_metadata
+    matrix = metadata["follow_up_coverage_matrix"]
+    assert matrix["covered_points"] == ["幂等设计"]
+    assert matrix["weak_points"] == ["失败补偿"]
+    assert matrix["focus_key"].startswith("focus_weak_point_")
+    assert metadata["follow_up_target_dimension"] == "失败补偿"
+
+
+def test_follow_up_question_task_skips_fixed_loss_focus_and_targets_regression() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(
+        repository,
+        parent_question.question_id,
+        feedback_payload={
+            "feedback_text": "Built backend workflow automation with FastAPI and PostgreSQL. 上一轮已修复观测性扣分，但丢失了失败补偿说明。",
+            "answer_coverage": {
+                "expected_points": ["幂等设计", "失败补偿"],
+                "covered_points": ["幂等设计", "失败补偿"],
+                "missing_points": [],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "regressed_points": ["失败补偿"],
+                "fixed_loss_points": ["lp_observability"],
+                "repeated_loss_points": ["lp_retry"],
+            },
+            "asset_consistency_check": {"status": "consistent", "conflicts": []},
+            "next_recommended_actions": ["retry_same_question_preserve_regressed_points"],
+            "loss_points": [],
+        },
+    )
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 2
+    metadata = repository.questions[-1].question_metadata
+    matrix = metadata["follow_up_coverage_matrix"]
+    assert matrix["regressed_points"] == ["失败补偿"]
+    assert matrix["covered_points"] == ["幂等设计", "失败补偿"]
+    assert matrix["fixed_loss_points"] == ["lp_observability"]
+    assert _test_focus_key("loss_point", "lp_observability") in matrix["completed_focus_refs"]
+    assert _test_focus_key("loss_point", "lp_retry") in matrix["completed_focus_refs"]
+    assert _test_focus_key("regressed_point", "失败补偿") not in matrix["completed_focus_refs"]
+    assert metadata["focus_key"].startswith("focus_regressed_point_")
+    assert metadata["recommended_follow_up_action"] == "retry_same_question_preserve_regressed_points"
+    assert metadata["follow_up_target_dimension"] == "失败补偿"
+
+
+def test_follow_up_question_task_prioritizes_asset_conflict_and_blocks_next_question_action() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(
+        repository,
+        parent_question.question_id,
+        feedback_payload={
+            "feedback_text": "Built backend workflow automation with FastAPI and PostgreSQL. 回答声称使用 RocketMQ，但资产记录只支持 PostgreSQL。",
+            "answer_coverage": {
+                "expected_points": ["幂等设计"],
+                "covered_points": ["幂等设计"],
+                "missing_points": [],
+                "weak_points": [],
+                "contradicted_points": ["RocketMQ"],
+            },
+            "answer_change_analysis": {
+                "regressed_points": [],
+                "fixed_loss_points": [],
+                "repeated_loss_points": [],
+            },
+            "asset_consistency_check": {
+                "status": "conflict",
+                "conflicts": [
+                    {
+                        "conflict_type": "technology_stack_conflict",
+                        "current_answer_claim": "RocketMQ",
+                        "asset_claim": "PostgreSQL",
+                        "severity": "major",
+                    }
+                ],
+                "unsupported_claims": [],
+                "checked_asset_refs": ["asset_backend_workflow"],
+                "user_clarification_required": True,
+            },
+            "next_recommended_actions": ["generate_next_question"],
+            "loss_points": [],
+        },
+    )
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(repository.questions) == 2
+    metadata = repository.questions[-1].question_metadata
+    matrix = metadata["follow_up_coverage_matrix"]
+    assert matrix["asset_conflicts"][0]["current_answer_claim"] == "RocketMQ"
+    assert metadata["focus_key"].startswith("focus_asset_conflict_")
+    assert metadata["recommended_follow_up_action"] in {"clarify_asset_conflict", "revise_current_answer"}
+    assert metadata["recommended_follow_up_action"] != "generate_next_question"
+    provider_follow_up = transport.requests[0].evidence_bundle["history_summary"]["follow_up"]
+    assert provider_follow_up["recommended_action"] in {"clarify_asset_conflict", "revise_current_answer"}
+
+
+def test_follow_up_question_task_returns_next_question_decision_when_focuses_are_complete() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    completed_missing_key = _test_focus_key("missing_point", "失败补偿")
+    _attach_parent_answer_and_feedback(
+        repository,
+        parent_question.question_id,
+        feedback_payload={
+            "feedback_text": "Built backend workflow automation with FastAPI and PostgreSQL. 失败补偿此前已完成，本轮可以进入下一题。",
+            "answer_coverage": {
+                "expected_points": ["失败补偿"],
+                "covered_points": [],
+                "missing_points": ["失败补偿"],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "regressed_points": [],
+                "fixed_loss_points": [],
+                "repeated_loss_points": [],
+            },
+            "asset_consistency_check": {"status": "consistent", "conflicts": []},
+            "next_recommended_actions": ["continue_same_question"],
+            "loss_points": [],
+        },
+    )
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+            completed_focus_refs=(completed_missing_key,),
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert result.value.result_ref.trace_type == "follow_up_decision"
+    assert result.value.user_visible_status == "当前追问焦点已完成，可进入下一题"
+    assert len(repository.questions) == 1
+    assert transport.requests == []
+
+
+def test_follow_up_question_task_does_not_repeat_existing_focus_key() -> None:
+    transport = _RecordingQuestionTransport()
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(
+        repository,
+        parent_question.question_id,
+        feedback_payload={
+            "feedback_text": "Built backend workflow automation with FastAPI and PostgreSQL. 缺少失败补偿。",
+            "answer_coverage": {
+                "expected_points": ["失败补偿"],
+                "covered_points": [],
+                "missing_points": ["失败补偿"],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "regressed_points": [],
+                "fixed_loss_points": [],
+                "repeated_loss_points": [],
+            },
+            "asset_consistency_check": {"status": "consistent", "conflicts": []},
+            "next_recommended_actions": ["continue_same_question"],
+            "loss_points": [],
+        },
+    )
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=transport)
+    follow_up_command = _command(
+        generation_mode="follow_up",
+        selected_progress_node_ref=NODE_REF,
+        parent_question_id=parent_question.question_id,
+        parent_answer_id="ans_follow_parent",
+        parent_feedback_id="fb_follow_parent",
+    )
+
+    first = use_cases.create_question_task(follow_up_command)
+    transport.requests.clear()
+    second = use_cases.create_question_task(follow_up_command)
+
+    assert first.is_success
+    assert first.value is not None
+    assert first.value.status == AiTaskStatus.SUCCEEDED
+    assert repository.questions[-1].question_metadata["focus_key"].startswith("focus_missing_point_")
+    assert second.is_success
+    assert second.value is not None
+    assert second.value.result_ref.trace_type == "follow_up_decision"
+    assert len(repository.questions) == 2
+    assert transport.requests == []
+
+
+def test_follow_up_question_task_grounding_blocking_does_not_persist_question() -> None:
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService()
+    parent_result = use_cases.create_question_task(_command())
+    assert parent_result.is_success
+    parent_question = repository.questions[0]
+    _attach_parent_answer_and_feedback(repository, parent_question.question_id)
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_SoftGroundingWarningTransport()
+    )
+
+    result = use_cases.create_question_task(
+        _command(
+            generation_mode="follow_up",
+            selected_progress_node_ref=NODE_REF,
+            parent_question_id=parent_question.question_id,
+            parent_answer_id="ans_follow_parent",
+            parent_feedback_id="fb_follow_parent",
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert "adjacent_project_evidence_requires_hypothetical_extension" in result.value.validation_errors
+    assert len(repository.questions) == 1
+
+
+def test_follow_up_question_service_blocks_factual_question_with_empty_evidence_refs() -> None:
+    service = QuestionGenerationService(llm_transport=_SoftGroundingWarningTransport())
+    session, _context, plan, state = _question_generation_inputs(primary_text="")
+    context = {"content_digest": "ctx_follow_up_empty_evidence", "turns": []}
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+        follow_up_context=_follow_up_context(),
+    )
+
+    assert not result.succeeded
+    assert result.draft is None
+    assert "empty_evidence_refs_for_factual_question" in result.validation_errors
 
 
 def test_follow_up_question_task_parse_failure_persists_failed_task_without_question() -> None:
@@ -2254,8 +2675,18 @@ def _follow_up_context() -> dict[str, Any]:
     }
 
 
-def _attach_parent_answer_and_feedback(repository: Any, question_id: str) -> None:
+def _attach_parent_answer_and_feedback(
+    repository: Any,
+    question_id: str,
+    *,
+    feedback_payload: dict[str, Any] | None = None,
+    answer_text: str = "我主要做了接口串联，但没有展开失败兜底和指标验证。",
+) -> None:
     now = utc_now()
+    payload = feedback_payload or {
+        "feedback_text": "缺少失败处理和验证指标。",
+        "missing_answer_dimensions": [{"title": "失败处理和验证指标"}],
+    }
     answer = PolishAnswer(
         answer_id="ans_follow_parent",
         owner_id=OWNER_ID,
@@ -2263,7 +2694,7 @@ def _attach_parent_answer_and_feedback(repository: Any, question_id: str) -> Non
         session_id=SESSION_ID,
         question_id=question_id,
         answer_round=1,
-        answer_text="我主要做了接口串联，但没有展开失败兜底和指标验证。",
+        answer_text=answer_text,
         status="saved",
         created_at=now,
         updated_at=now,
@@ -2276,13 +2707,7 @@ def _attach_parent_answer_and_feedback(repository: Any, question_id: str) -> Non
         answer_id=answer.answer_id,
         ai_task_id="aitask_follow_feedback",
         score_result_id=None,
-        feedback_summary=json.dumps(
-            {
-                "feedback_text": "缺少失败处理和验证指标。",
-                "missing_answer_dimensions": [{"title": "失败处理和验证指标"}],
-            },
-            ensure_ascii=False,
-        ),
+        feedback_summary=json.dumps(payload, ensure_ascii=False),
         status="generated",
         created_at=now,
         updated_at=now,
@@ -2291,6 +2716,11 @@ def _attach_parent_answer_and_feedback(repository: Any, question_id: str) -> Non
     repository.feedbacks = [feedback]
     repository.list_answers_for_session = lambda owner_id, session_id: tuple(repository.answers)
     repository.list_feedbacks_for_session = lambda owner_id, session_id: tuple(repository.feedbacks)
+
+
+def _test_focus_key(source_type: str, value: str) -> str:
+    seed = f"{source_type}:{value}"
+    return f"focus_{source_type}_{sha256(seed.encode('utf-8')).hexdigest()[:12]}"
 
 
 class _RecordingQuestionTransport:

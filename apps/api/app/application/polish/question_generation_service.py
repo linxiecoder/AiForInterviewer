@@ -294,6 +294,14 @@ class QuestionGenerationService:
             )
         if not question_text:
             return _validation_failed("question_text_required", progress_node_ref=scope.progress_node_ref)
+        if is_follow_up and _same_compact_text(
+            question_text,
+            (follow_up_context or {}).get("parent_question_excerpt"),
+        ):
+            return _validation_failed(
+                "follow_up_question_repeats_parent_question",
+                progress_node_ref=scope.progress_node_ref,
+            )
         if _contains_unsafe_question_text_marker(question_text):
             return _validation_failed("question_text_unsafe_leakage", progress_node_ref=scope.progress_node_ref)
         llm_evidence_refs = tuple(llm_payload.get("evidence_refs") or ()) if llm_payload else ()
@@ -1139,20 +1147,88 @@ def _follow_up_generation_metadata(
         _clean(context.get("parent_answer_id")),
         _clean(context.get("parent_feedback_id")),
     ]
-    focus_seed = "|".join(ref for ref in input_refs if ref) or _clean(context.get("target_dimension")) or "follow_up"
+    coverage_matrix = _safe_follow_up_coverage_matrix(context.get("coverage_matrix"))
+    focus_key = _clean(context.get("focus_key")) or _clean(coverage_matrix.get("focus_key"))
+    focus_seed = "|".join(ref for ref in input_refs if ref) or _clean(context.get("progress_node_ref")) or "follow_up"
     focus_digest = sha256(focus_seed.encode("utf-8")).hexdigest()[:12]
+    if not focus_key:
+        focus_key = f"focus_controlled_fallback_{focus_digest}"
+    coverage_matrix["focus_key"] = focus_key
     return {
         "follow_up_reason": _clean(context.get("follow_up_reason")) or "business_follow_up_request",
         "follow_up_target_dimension": _clean(context.get("target_dimension")) or "未覆盖追问点",
         "follow_up_prompt_task_type": _clean(prompt_asset.get("task_type")),
         "follow_up_prompt_version": _clean(prompt_asset.get("prompt_version")),
         "follow_up_input_refs": [ref for ref in input_refs if ref],
+        "follow_up_coverage_matrix": coverage_matrix,
+        "follow_up_focus_source": _clean(context.get("focus_source"))
+        or _clean(coverage_matrix.get("focus_source")),
+        "recommended_follow_up_action": _clean(context.get("recommended_action"))
+        or _clean(coverage_matrix.get("recommended_action")),
+        "follow_up_completion_status": _clean(context.get("completion_status")) or "focus_pending",
         "focus_dimension": _clean(context.get("target_dimension")) or "follow_up_targeted",
-        "focus_key": f"focus_follow_up_{focus_digest}",
+        "focus_key": focus_key,
         "template_signature": f"llm:follow_up_prompt:{focus_digest}",
         "blueprint_signature": f"bp:follow_up_context:{focus_digest}",
         "duplicate_gate_result": "follow_up_parent_bound",
     }
+
+
+def _safe_follow_up_coverage_matrix(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {
+            "expected_points": [],
+            "covered_points": [],
+            "missing_points": [],
+            "weak_points": [],
+            "contradicted_points": [],
+            "regressed_points": [],
+            "fixed_loss_points": [],
+            "repeated_loss_points": [],
+            "asset_conflicts": [],
+            "completed_focus_refs": [],
+            "focus_key": None,
+        }
+    return {
+        "expected_points": _string_list(value.get("expected_points")),
+        "covered_points": _string_list(value.get("covered_points")),
+        "missing_points": _string_list(value.get("missing_points")),
+        "weak_points": _string_list(value.get("weak_points")),
+        "contradicted_points": _string_list(value.get("contradicted_points")),
+        "regressed_points": _string_list(value.get("regressed_points")),
+        "fixed_loss_points": _string_list(value.get("fixed_loss_points")),
+        "repeated_loss_points": _string_list(value.get("repeated_loss_points")),
+        "asset_conflicts": _safe_follow_up_asset_conflicts(value.get("asset_conflicts")),
+        "completed_focus_refs": _string_list(value.get("completed_focus_refs")),
+        "focus_key": _clean(value.get("focus_key")),
+        "focus_source": _clean(value.get("focus_source")),
+        "recommended_action": _clean(value.get("recommended_action")),
+    }
+
+
+def _safe_follow_up_asset_conflicts(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    conflicts: list[dict[str, str]] = []
+    for item in value[:6]:
+        if not isinstance(item, dict):
+            continue
+        compact = {
+            "conflict_type": _clean(item.get("conflict_type")),
+            "current_answer_claim": _clean(item.get("current_answer_claim")),
+            "asset_claim": _clean(item.get("asset_claim")),
+            "severity": _clean(item.get("severity")),
+        }
+        compact = {key: value for key, value in compact.items() if value}
+        if compact:
+            conflicts.append(compact)
+    return conflicts
+
+
+def _same_compact_text(left: object, right: object) -> bool:
+    left_text = " ".join(_clean(left).split())
+    right_text = " ".join(_clean(right).split())
+    return bool(left_text and right_text and left_text == right_text)
 
 
 def _render_follow_up_degraded_question(
