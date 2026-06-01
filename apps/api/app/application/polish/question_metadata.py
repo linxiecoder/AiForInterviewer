@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any
 
 
@@ -71,6 +72,10 @@ class QuestionMetadata:
     mastery_exception_used: bool = False
     follow_up_reason: str | None = None
     follow_up_target_dimension: str | None = None
+    follow_up_coverage_matrix: dict[str, Any] | None = None
+    follow_up_focus_source: str | None = None
+    recommended_follow_up_action: str | None = None
+    follow_up_completion_status: str | None = None
     builder_version: str = BUILDER_VERSION
     validator_version: str = VALIDATOR_VERSION
     signal_version: str = SIGNAL_VERSION
@@ -128,6 +133,10 @@ class QuestionMetadata:
             "mastery_exception_used": self.mastery_exception_used,
             "follow_up_reason": self.follow_up_reason,
             "follow_up_target_dimension": self.follow_up_target_dimension,
+            "follow_up_coverage_matrix": self.follow_up_coverage_matrix or {},
+            "follow_up_focus_source": self.follow_up_focus_source,
+            "recommended_follow_up_action": self.recommended_follow_up_action,
+            "follow_up_completion_status": self.follow_up_completion_status,
         }
 
 
@@ -208,6 +217,20 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "mastery_exception_used": _bool_or_false(payload.get("mastery_exception_used")),
         "follow_up_reason": _string_or_none(payload.get("follow_up_reason"), max_chars=240),
         "follow_up_target_dimension": _string_or_none(payload.get("follow_up_target_dimension"), max_chars=240),
+        "follow_up_coverage_matrix": _safe_json_dict(
+            payload.get("follow_up_coverage_matrix"),
+            max_items=64,
+            max_depth=4,
+        ),
+        "follow_up_focus_source": _string_or_none(payload.get("follow_up_focus_source"), max_chars=120),
+        "recommended_follow_up_action": _string_or_none(
+            payload.get("recommended_follow_up_action"),
+            max_chars=120,
+        ),
+        "follow_up_completion_status": _string_or_none(
+            payload.get("follow_up_completion_status"),
+            max_chars=120,
+        ),
     }
     canonical_keys = {
         "source_support_level",
@@ -407,6 +430,321 @@ def question_metadata_to_dict(raw: object) -> dict[str, Any]:
         except Exception:
             return empty_question_metadata().to_dict()
     return normalize_question_metadata(raw)
+
+
+def build_follow_up_coverage_decision(
+    *,
+    feedback_payload: object,
+    expected_answer_dimensions: object,
+    completed_focus_refs: tuple[str, ...],
+    used_focus_refs: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Build follow-up coverage matrix and focus decision from structured feedback."""
+
+    matrix = _build_follow_up_coverage_matrix(
+        feedback_payload=feedback_payload,
+        expected_answer_dimensions=expected_answer_dimensions,
+        completed_focus_refs=completed_focus_refs,
+        used_focus_refs=used_focus_refs,
+    )
+    focus = _select_follow_up_focus(matrix)
+    return {"coverage_matrix": matrix, "focus": focus}
+
+
+def merge_follow_up_completed_focus_refs(
+    follow_up_context: dict[str, Any],
+    current_refs: tuple[str, ...],
+) -> tuple[str, ...]:
+    matrix = follow_up_context.get("coverage_matrix")
+    matrix_refs = matrix.get("completed_focus_refs") if isinstance(matrix, dict) else ()
+    return tuple(_unique_texts([*current_refs, *_string_list(matrix_refs, max_item_chars=160)]))
+
+
+def sync_follow_up_completed_focus_refs(
+    follow_up_context: dict[str, Any],
+    completed_focus_refs: tuple[str, ...],
+) -> None:
+    refs = list(_unique_texts(completed_focus_refs, max_chars=160))
+    follow_up_context["completed_focus_refs"] = refs
+    matrix = follow_up_context.get("coverage_matrix")
+    if isinstance(matrix, dict):
+        matrix["completed_focus_refs"] = refs
+
+
+def _build_follow_up_coverage_matrix(
+    *,
+    feedback_payload: object,
+    expected_answer_dimensions: object,
+    completed_focus_refs: tuple[str, ...],
+    used_focus_refs: tuple[str, ...],
+) -> dict[str, Any]:
+    payload = feedback_payload if isinstance(feedback_payload, dict) else {}
+    answer_coverage = payload.get("answer_coverage") if isinstance(payload.get("answer_coverage"), dict) else {}
+    answer_change = (
+        payload.get("answer_change_analysis")
+        if isinstance(payload.get("answer_change_analysis"), dict)
+        else {}
+    )
+    asset_check = (
+        payload.get("asset_consistency_check")
+        if isinstance(payload.get("asset_consistency_check"), dict)
+        else {}
+    )
+
+    coverage_available = bool(answer_coverage)
+    expected_points = _follow_up_text_list(answer_coverage.get("expected_points"))
+    if not expected_points:
+        expected_points = _follow_up_text_list(expected_answer_dimensions)
+    covered_points = _follow_up_text_list(answer_coverage.get("covered_points"))
+    missing_points = _filter_covered_points(
+        _follow_up_text_list(answer_coverage.get("missing_points")),
+        covered_points,
+    )
+    weak_points = _filter_covered_points(
+        _follow_up_text_list(answer_coverage.get("weak_points")),
+        covered_points,
+    )
+    contradicted_points = _filter_covered_points(
+        _follow_up_text_list(answer_coverage.get("contradicted_points")),
+        covered_points,
+    )
+    if not missing_points:
+        legacy_missing = [
+            _string_or_none(
+                item.get("title") or item.get("dimension_id") or item.get("expected_dimension"),
+                max_chars=240,
+            )
+            for item in _dict_list(payload.get("missing_answer_dimensions"))
+        ]
+        missing_points = _filter_covered_points(
+            [item for item in legacy_missing if item],
+            covered_points,
+        )
+
+    regressed_points = _follow_up_text_list(answer_change.get("regressed_points"))
+    fixed_loss_points = _follow_up_text_list(answer_change.get("fixed_loss_points"), max_chars=120)
+    repeated_loss_points = _follow_up_text_list(answer_change.get("repeated_loss_points"), max_chars=120)
+    asset_conflicts = _follow_up_asset_conflicts(asset_check)
+    completed_refs = list(_unique_texts(completed_focus_refs, max_chars=160))
+    for point in covered_points:
+        completed_refs.extend(
+            (
+                _follow_up_focus_key("missing_point", point),
+                _follow_up_focus_key("weak_point", point),
+                _follow_up_focus_key("expected_point", point),
+            )
+        )
+    for loss_point_id in [*fixed_loss_points, *repeated_loss_points]:
+        completed_refs.append(_follow_up_focus_key("loss_point", loss_point_id))
+
+    return {
+        "expected_points": expected_points,
+        "covered_points": covered_points,
+        "missing_points": missing_points,
+        "weak_points": weak_points,
+        "contradicted_points": contradicted_points,
+        "regressed_points": regressed_points,
+        "fixed_loss_points": fixed_loss_points,
+        "repeated_loss_points": repeated_loss_points,
+        "asset_conflicts": asset_conflicts,
+        "completed_focus_refs": _unique_texts(completed_refs, max_chars=160),
+        "used_focus_refs": list(_unique_texts(used_focus_refs, max_chars=160)),
+        "focus_key": None,
+        "coverage_available": coverage_available,
+    }
+
+
+def _select_follow_up_focus(matrix: dict[str, Any]) -> dict[str, str]:
+    completed_refs = set(_string_list(matrix.get("completed_focus_refs"), max_item_chars=160))
+    completed_refs.update(_string_list(matrix.get("used_focus_refs"), max_item_chars=160))
+    candidates: list[dict[str, str]] = []
+    for conflict in _dict_list(matrix.get("asset_conflicts")):
+        candidates.append(
+            _follow_up_focus_candidate(
+                source_type="asset_conflict",
+                target_dimension=_asset_conflict_focus_text(conflict),
+                follow_up_reason="asset_conflict",
+                recommended_action="clarify_asset_conflict",
+            )
+        )
+    candidates.extend(
+        _follow_up_point_candidates(
+            matrix.get("regressed_points"),
+            source_type="regressed_point",
+            follow_up_reason="regressed_point",
+            recommended_action="retry_same_question_preserve_regressed_points",
+        )
+    )
+    candidates.extend(
+        _follow_up_point_candidates(
+            matrix.get("missing_points"),
+            source_type="missing_point",
+            follow_up_reason="missing_point",
+            recommended_action="continue_same_question",
+        )
+    )
+    candidates.extend(
+        _follow_up_point_candidates(
+            matrix.get("weak_points"),
+            source_type="weak_point",
+            follow_up_reason="weak_point",
+            recommended_action="continue_same_question",
+        )
+    )
+    prior_focus_points = [
+        *_follow_up_text_list(matrix.get("regressed_points")),
+        *_follow_up_text_list(matrix.get("missing_points")),
+        *_follow_up_text_list(matrix.get("weak_points")),
+        *_follow_up_text_list(matrix.get("contradicted_points")),
+    ]
+    expected_uncovered = [
+        point
+        for point in _follow_up_text_list(matrix.get("expected_points"))
+        if not _contains_similar_text(_follow_up_text_list(matrix.get("covered_points")), point)
+        and not _contains_similar_text(prior_focus_points, point)
+    ]
+    candidates.extend(
+        _follow_up_point_candidates(
+            expected_uncovered,
+            source_type="expected_point",
+            follow_up_reason="expected_point",
+            recommended_action="continue_same_question",
+        )
+    )
+    if candidates:
+        for candidate in candidates:
+            if candidate["focus_key"] not in completed_refs:
+                matrix["focus_key"] = candidate["focus_key"]
+                matrix["focus_source"] = candidate["focus_source"]
+                matrix["recommended_action"] = candidate["recommended_action"]
+                return {**candidate, "completion_status": "focus_pending"}
+        return _completed_follow_up_focus(matrix)
+    if matrix.get("coverage_available") and matrix.get("expected_points"):
+        return _completed_follow_up_focus(matrix)
+    fallback = _follow_up_focus_candidate(
+        source_type="controlled_fallback",
+        target_dimension="失败路径、边界和验证指标",
+        follow_up_reason="category_uncovered_direction",
+        recommended_action="continue_same_question",
+    )
+    matrix["focus_key"] = fallback["focus_key"]
+    matrix["focus_source"] = fallback["focus_source"]
+    matrix["recommended_action"] = fallback["recommended_action"]
+    return {**fallback, "completion_status": "focus_pending"}
+
+
+def _completed_follow_up_focus(matrix: dict[str, Any]) -> dict[str, str]:
+    completed = _follow_up_focus_candidate(
+        source_type="completed",
+        target_dimension="所有追问焦点已完成",
+        follow_up_reason="all_focus_completed",
+        recommended_action="ready_for_next_question",
+    )
+    matrix["focus_key"] = completed["focus_key"]
+    matrix["focus_source"] = completed["focus_source"]
+    matrix["recommended_action"] = completed["recommended_action"]
+    return {**completed, "completion_status": "all_focus_completed"}
+
+
+def _follow_up_point_candidates(
+    value: object,
+    *,
+    source_type: str,
+    follow_up_reason: str,
+    recommended_action: str,
+) -> list[dict[str, str]]:
+    return [
+        _follow_up_focus_candidate(
+            source_type=source_type,
+            target_dimension=point,
+            follow_up_reason=follow_up_reason,
+            recommended_action=recommended_action,
+        )
+        for point in _follow_up_text_list(value)
+    ]
+
+
+def _follow_up_focus_candidate(
+    *,
+    source_type: str,
+    target_dimension: str,
+    follow_up_reason: str,
+    recommended_action: str,
+) -> dict[str, str]:
+    target = _compact_follow_up_target(target_dimension) or "失败路径、边界和验证指标"
+    return {
+        "focus_key": _follow_up_focus_key(source_type, target),
+        "focus_source": source_type,
+        "target_dimension": target,
+        "follow_up_reason": follow_up_reason,
+        "recommended_action": recommended_action,
+    }
+
+
+def _follow_up_focus_key(source_type: str, value: str) -> str:
+    safe_source = _string_or_none(source_type, max_chars=80) or "controlled_fallback"
+    seed_value = _string_or_none(value, max_chars=240) or "follow_up"
+    seed = f"{safe_source}:{seed_value}"
+    return f"focus_{safe_source}_{sha256(seed.encode('utf-8')).hexdigest()[:12]}"
+
+
+def _follow_up_text_list(value: object, *, max_chars: int = 240) -> list[str]:
+    return _string_list(value, max_item_chars=max_chars)
+
+
+def _follow_up_asset_conflicts(asset_check: object) -> list[dict[str, str]]:
+    if not isinstance(asset_check, dict) or asset_check.get("status") != "conflict":
+        return []
+    conflicts: list[dict[str, str]] = []
+    for item in _dict_list(asset_check.get("conflicts"))[:6]:
+        compact = {
+            "conflict_type": _string_or_none(item.get("conflict_type"), max_chars=120),
+            "current_answer_claim": _string_or_none(item.get("current_answer_claim"), max_chars=160),
+            "asset_claim": _string_or_none(item.get("asset_claim"), max_chars=160),
+            "severity": _string_or_none(item.get("severity"), max_chars=80),
+        }
+        compact = {key: value for key, value in compact.items() if value}
+        if compact:
+            conflicts.append(compact)
+    return conflicts
+
+
+def _asset_conflict_focus_text(conflict: dict[str, Any]) -> str:
+    parts = [
+        _string_or_none(conflict.get("current_answer_claim"), max_chars=120),
+        _string_or_none(conflict.get("asset_claim"), max_chars=120),
+        _string_or_none(conflict.get("conflict_type"), max_chars=80),
+    ]
+    return " / ".join(part for part in parts if part) or "资产事实冲突"
+
+
+def _filter_covered_points(points: list[str], covered_points: list[str]) -> list[str]:
+    return [point for point in points if not _contains_similar_text(covered_points, point)]
+
+
+def _contains_similar_text(values: list[str], point: str) -> bool:
+    normalized = _string_or_none(point, max_chars=240)
+    if not normalized:
+        return False
+    for value in values:
+        current = _string_or_none(value, max_chars=240)
+        if current and (current in normalized or normalized in current):
+            return True
+    return False
+
+
+def _compact_follow_up_target(value: object) -> str | None:
+    return _string_or_none(value, max_chars=80)
+
+
+def _unique_texts(values: object, *, max_chars: int = 240) -> list[str]:
+    return _string_list(values, max_item_chars=max_chars)
+
+
+def _dict_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
 
 
 def _safe_string_map(
