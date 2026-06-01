@@ -432,12 +432,12 @@ def test_polish_session_list_requires_authentication() -> None:
     assert body["error"]["code"] == "unauthenticated"
 
 
-def test_create_app_question_path_registers_facade_and_records_graph_fallback_metadata(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "fake")
+def test_create_app_question_path_registers_facade_and_records_graph_fallback_metadata() -> None:
     app = create_app(
         initialize_schema=True,
         db_settings=DbSettings(database_url="sqlite+pysqlite:///:memory:"),
     )
+    app.state.llm_transport = FakeLlmTransport()
     assert getattr(app.state, "ai_orchestration_facade", None) is not None
 
     async def _actor_override() -> CurrentActor:
