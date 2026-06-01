@@ -19,8 +19,8 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 | Boundary | Rule |
 |---|---|
 | answer save | `PolishUseCases.create_answer` remains Core Business synchronous write; it does not call LLM and does not start graph |
-| feedback generation | independent AI task; answer save cannot implicitly generate feedback；Phase 2B runtime currently returns reserved placeholder only |
-| candidate | Phase 2B feedback returns empty candidate refs；future graph must not create formal Weakness / Asset / Training object without confirmation |
+| feedback generation | independent AI task; answer save cannot implicitly generate feedback；runtime calls `FeedbackGenerationService.generate()` and must not return legacy reserved compatibility as success；Phase 4 feedback rule fields are enforced by backend policy / validation |
+| candidate | generated feedback may keep candidate-compatible fields, but formal Weakness / Asset / Training objects cannot be created without confirmation；full candidate extraction remains future scope |
 | candidate generation | deferred until explicit authorization；not PR5 scope |
 | raw-off | no raw prompt/completion/provider payload in checkpoint/log/API/timeline |
 | Core dependency | Core Polish use case cannot import LangGraph or graph node |
@@ -31,7 +31,7 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 |---|---|---|---:|
 | `polish_progress_tree_graph` | generate or refresh session progress tree | progress tree/state, AI task result, trace/evidence | PR5 |
 | `polish_question_graph` | generate question from progress node and context | questions, AI task result, trace/evidence, low confidence flags | PR5 |
-| `polish_feedback_graph` | target graph for future feedback generation；Phase 2B keeps reserved placeholder | reserved feedback today；future feedback / score / candidate refs require re-authorization | Deferred after Phase 2B |
+| `polish_feedback_graph` | target graph parity for existing `FeedbackGenerationService.generate()` direct path | generated feedback today；Phase 4 feedback rules must be preserved；candidate refs require later authorization | PR5 parity candidate; Phase 4 rules implemented in direct path |
 
 ## 4. `polish_question_graph` node plan
 
@@ -82,14 +82,14 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 | Existing symbol | Target | Strategy |
 |---|---|---|
 | `PolishUseCases.create_question_task` | `QuestionGenerationService.generate` / future `polish_question_graph` facade entry | keep facade boundary |
-| `question_generation_service.py` | resolve progress node -> `EvidenceScope` -> `QuestionBlueprint` -> surface question -> grounding | keep as Phase 2A source of truth |
+| `question_generation_service.py` | resolve progress node -> `EvidenceScope` / `CanonicalEvidencePack` -> `source_support_level` four-state path -> compact provider request / `QuestionBlueprint` -> surface question -> blocking/warning grounding | keep as current question hardening source of truth |
 | `question_blueprint.py` | blueprint node | keep |
 | `question_grounding.py` | grounding gate | keep |
 | `PolishUseCases.refresh_progress_tree_state` | `polish_progress_tree_graph` entry | split |
 | `PolishUseCases.create_answer` | Core answer save | keep |
-| `PolishUseCases.create_feedback_task` | `feedback_reserved.py` reserved placeholder / future `polish_feedback_graph` entry | keep reserved path until feedback generation is re-authorized |
-| `build_reserved_feedback_artifacts` | reserved feedback node | keep as Phase 2B source of truth |
-| `build_reserved_feedback_payload` | reserved payload shape | keep |
+| `PolishUseCases.create_feedback_task` | `FeedbackGenerationService.generate` / future `polish_feedback_graph` entry | keep direct generated path as source of truth until graph parity wraps it |
+| `FeedbackGenerationService.generate` | generated feedback node | keep service call, validation, failure semantics, `CanonicalEvidencePack.canonical_project_assets` context, Phase 4 feedback fields and generated payload persistence/readback |
+| `build_reserved_feedback_artifacts` / `build_reserved_feedback_payload` | legacy/fallback compatibility shape | keep only as compatibility; never as successful generated feedback |
 | `SqlAlchemyPolishRepository.add_question/add_feedback/update_progress_tree/add_task` | persistence nodes | keep / wrap |
 
 ## 8. PR5 tests
@@ -99,8 +99,8 @@ PR5 只覆盖 progress tree、question 和 feedback graph parity。Candidate enh
 | question graph | existing question API shape preserved; owner scope; grounding failure returns validation_failed and writes no question; no raw LLM fields |
 | progress tree | refresh keeps node refs; low confidence path does not wipe valid previous tree |
 | answer save | answer save does not call LLM or start graph |
-| feedback graph | independent AI task shape preserved; Phase 2B returns reserved feedback only, with no score or candidates |
-| candidate boundary | Phase 2B candidate refs are empty; future candidate refs cannot create formal objects before confirmation |
+| feedback graph | independent AI task shape preserved; generated path calls `FeedbackGenerationService.generate()`, persists readable generated payload, preserves Phase 4 feedback fields, and maps provider / validation failure to `generation_failed` or equivalent failure state |
+| candidate boundary | generated feedback cannot create formal candidate objects; future candidate refs cannot create formal objects before confirmation |
 
 ## 9. Non-goals
 

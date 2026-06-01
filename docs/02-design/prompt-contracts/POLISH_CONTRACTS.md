@@ -118,75 +118,77 @@ Contract-shaped fake JSON 示例：
 ```
 
 
-#### Step 1D Feedback reserved placeholder 运行时契约
+#### Step 1D Feedback generation 运行时契约
 
-Phase 2B 后，`POST /polish-sessions/{session_id}/feedback` 只保留 answer 后的 feedback AI task 形状，并返回 reserved placeholder。当前 runtime 不生成 LLM feedback、不生成候选项、不生成参考答案、不生成 score result；`P-POLISH-004`、`P-POLISH-005` 和 `P-POLISH-009` 的完整反馈链路语义保留为后续重新授权范围。
+当前本地审计结论为 PASS：`POST /polish-sessions/{session_id}/feedback` 的主路径已接通 `FeedbackGenerationService.generate()`，成功时写入 `status=generated` 的 feedback，并通过 session detail 读回 generated payload。`reserved` payload 仅保留为历史兼容 / fallback 形状，不得作为成功生成路径返回；provider / validation failure 不返回 reserved success。
 
-Feedback reserved 规则：
+Feedback generation 规则：
 
-- `POST /polish-sessions/{session_id}/feedback` 以 `answer_id` 为输入，只为该 answer 写入一条 reserved feedback 记录和 succeeded AI task。
-- `feedback_payload.schema_id` 固定为 `polish_feedback_reserved_v1`，`schema_version` 固定为 `1.0`，`status` 固定为 `reserved`。
-- `contract_ids` 当前只包含 `P-POLISH-003`，表示回答诊断入口被保留；评分、参考回答、考点解析、候选回流不在当前 runtime 中执行。
-- `score_type`、`score_result`、`score_result_ref`、`reference_answer`、`validation_result_ref` 均为 `null`；`loss_points`、`knowledge_points`、`technical_principles`、`candidate_refs`、`trace_refs` 和 `low_confidence_flags` 均为空数组。
-- `feedback_metadata` 必须显式包含 `reserved=true`、`llm_called=false`、`candidate_extraction_called=false`、`reference_answer_generated=false` 和 `score_result_generated=false`。
-- 保留 legacy `feedback_text` 字段；旧消费方可以继续读取 `feedback_text`，新消费方读取 `feedback_payload`。
-- 当前 Step 1D 不扩大 DB / schema / repository 文件修改范围；后续若重新启用完整 feedback generation，必须重新补齐 contract、validator、fake/real provider gate、candidate/formal boundary 和测试证据。
+- `POST /polish-sessions/{session_id}/feedback` 以 `answer_id` 为输入，只为该 answer 启动独立 `polish_feedback_generation` AI task；answer save 不隐式生成反馈。
+- 成功路径必须调用 `FeedbackGenerationService.generate()`，生成 `schema_id=polish_feedback_generated_v1`、`schema_version=1.0` 的 generated / partial / low_confidence payload。
+- 成功 feedback 必须持久化 generated payload，并保留 legacy `feedback_text`、`feedback_payload`、`score_result`、`loss_points`、`reference_answer`、`next_recommended_actions`、`low_confidence_flags` 和 `trace_refs` 读取兼容。
+- `feedback_metadata` 成功路径必须表达 `generated=true`、`llm_called=true` 和 `task_type=polish_feedback_generation`；不得把 legacy `reserved` metadata 写成成功生成。
+- provider unavailable / not configured、provider exception / timeout、LLM output validation failed 或 dependency unavailable 必须落为 `generation_failed` / `validation_failed` 等失败语义，保留 validation errors，并允许重试；不得返回 reserved success。
+- response 和 persisted payload 不得泄露 raw prompt、system/developer prompt、raw completion、provider payload、完整简历/JD、token、secret 或 cookie。
+- Feedback context 必须消费 `CanonicalEvidencePack.canonical_project_assets` 的 compact 摘要；`asset_confirmed` 是 active canonical evidence，`asset_archived` 是 historical/reference-only，除非显式恢复不得作为 canonical evidence。
+- Phase 4 feedback rules 已由 backend policy / validation 实现：generated payload 必须覆盖 `asset_consistency_check`、`answer_coverage`、`answer_change_analysis` 和 `feedback_cards`，并在资产冲突、回答覆盖缺口和同题变化退化时按规则生成 warning / validation failure / card 排序。
+- Phase 5 Fake cleanup 未执行；Phase 6B follow-up coverage matrix 未执行；candidate extraction、正式 Weakness / Asset / Training 写回仍为后续授权范围；real provider E2E 未验证，除非另有实际证据。
 
-当前 `POST /polish-sessions/{session_id}/feedback` 返回 data 示例：
+当前 `POST /polish-sessions/{session_id}/feedback` 成功 data 形状示意：
 
 ```json
 {
   "ai_task_id": "task_...",
   "task_type": "polish_feedback_generation",
   "status": "succeeded",
-  "contract_ids": ["P-POLISH-003"],
+  "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
   "result_ref": {"trace_ref_id": "trace_feedback_002", "trace_type": "feedback"},
-  "user_visible_status": "反馈能力已预留",
-  "score_type": null,
-  "candidate_refs": [],
-  "suggestion_refs": [],
+  "user_visible_status": "反馈已生成",
   "feedback_id": "trace_feedback_002",
-  "feedback_status": "reserved",
+  "feedback_status": "generated",
   "session_id": "sess_001",
   "question_id": "q_001",
   "answer_id": "ans_002",
   "answer_round": 2,
-  "feedback_text": "本阶段反馈能力已预留，暂不生成 LLM 反馈、候选项、参考答案或评分。",
-  "score_result_id": null,
+  "feedback_text": "...",
+  "score_result": null,
+  "loss_points": [],
+  "reference_answer": null,
   "next_recommended_actions": [],
   "low_confidence_flags": [],
+  "asset_consistency_check": {"status": "consistent", "conflicts": [], "unsupported_claims": []},
+  "answer_coverage": {"expected_points": [], "covered_points": [], "missing_points": [], "weak_points": [], "contradicted_points": []},
+  "answer_change_analysis": {"retained_points": [], "newly_added_points": [], "regressed_points": [], "fixed_loss_points": [], "repeated_loss_points": []},
+  "feedback_cards": [],
   "trace_refs": [],
   "feedback_payload": {
-    "schema_id": "polish_feedback_reserved_v1",
+    "schema_id": "polish_feedback_generated_v1",
     "schema_version": "1.0",
-    "contract_id": "P-POLISH-003",
-    "contract_ids": ["P-POLISH-003"],
-    "status": "reserved",
+    "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
+    "status": "generated",
+    "feedback_text": "...",
     "score_result": null,
     "loss_points": [],
     "reference_answer": null,
-    "knowledge_points": [],
-    "technical_principles": [],
-    "candidate_refs": [],
-    "validation_result_ref": null,
+    "next_recommended_actions": [],
     "trace_refs": [],
     "low_confidence_flags": [],
-    "legacy_compatibility": {
-      "feedback_text": "本阶段反馈能力已预留，暂不生成 LLM 反馈、候选项、参考答案或评分。"
-    },
+    "asset_consistency_check": {"status": "consistent", "conflicts": [], "unsupported_claims": []},
+    "answer_coverage": {"expected_points": [], "covered_points": [], "missing_points": [], "weak_points": [], "contradicted_points": []},
+    "answer_change_analysis": {"retained_points": [], "newly_added_points": [], "regressed_points": [], "fixed_loss_points": [], "repeated_loss_points": []},
+    "feedback_cards": [],
     "feedback_metadata": {
-      "reserved": true,
-      "phase": "phase_2b",
-      "llm_called": false,
-      "candidate_extraction_called": false,
-      "reference_answer_generated": false,
-      "score_result_generated": false
+      "generated": true,
+      "llm_called": true,
+      "task_type": "polish_feedback_generation",
+      "canonical_project_assets_available": false,
+      "phase4_validation_warnings": []
     }
   }
 }
 ```
 
-Session detail 中 `turns[*].answers[*].feedback_payload` 必须与以上 reserved payload 同形；同一 answer 多次请求 feedback 时，session detail 使用最新 feedback，历史 feedback 保留为记录。当前 Step 1D 的测试重点是 reserved shape、legacy `feedback_text` 兼容、no score、no candidates、no raw fields、no implicit feedback on answer save。
+Session detail 中 `turns[*].answers[*].feedback_payload` 必须读取最新 generated payload；同一 answer 多次请求 feedback 时，session detail 使用最新 generated feedback，历史 feedback 保留为记录。当前 Step 1D 的测试重点是 service call、generated payload readback、failure semantics、legacy 字段兼容、no raw fields、no implicit feedback on answer save、Phase 4 fields 在 response / session detail 中可读、asset conflict card ordering、资产冲突时不直接建议 `generate_next_question`，以及资产候选必须保持 `user_confirmation_required`。
 
 ### 12.4 `P-POLISH-003` 回答诊断（Answer Diagnosis）
 

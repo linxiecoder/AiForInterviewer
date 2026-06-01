@@ -89,12 +89,14 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
     evidence_refs = _string_list(_get_list(context, "evidence_refs"))
     progress_node_ref = _get_text(context, "progress_node_ref", max_chars=200)
     related_terms = _related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))
+    canonical_project_assets = _compact_canonical_project_assets(_get_dict(context, "canonical_project_assets"))
     input_data = {
         "current_question": {
             "question_id": _get_text(context, "question_id"),
             "question_text": _get_text(context, "question_text", max_chars=600),
             "polish_theme": _get_text(context, "polish_theme", max_chars=500),
             "progress_node_ref": progress_node_ref,
+            "question_metadata": _compact_question_metadata(_get_dict(context, "question_metadata")),
             "question_sources": _compact_question_sources(
                 _get_list(context, "question_sources"),
                 evidence_refs=(*evidence_refs, progress_node_ref),
@@ -110,6 +112,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         "same_project_turns": _compact_recent_turns(_get_list(context, "same_project_turns")),
         "session_recent_turns": _compact_recent_turns(_get_list(context, "session_recent_turns")),
         "project_asset_summaries": _compact_project_asset_summaries(_get_list(context, "project_asset_summaries")),
+        "canonical_project_assets": canonical_project_assets,
         "context_snapshots": {
             "job_snapshot": _compact_job_snapshot(_get_dict(context, "job_snapshot")),
             "resume_snapshot": _compact_resume_snapshot(_get_dict(context, "resume_snapshot"), related_terms=related_terms),
@@ -224,7 +227,10 @@ def _validation_rules() -> tuple[str, ...]:
         "Do not invent user experience or project facts.",
         "Every major loss point must be covered by a reference answer section.",
         "Keep project asset and session similarity checks lightweight; use not_applicable when evidence is insufficient.",
-        "Do not generate project asset update candidates in quick mode.",
+        "Return Phase 4 fields: asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards.",
+        "If canonical_project_assets conflict with the answer, asset_consistency_check.status must be conflict.",
+        "If asset conflict exists, next_recommended_actions must not include generate_next_question.",
+        "Any project_asset_update_candidates must be candidates with user_confirmation_required=true.",
     )
 
 
@@ -244,6 +250,7 @@ def _provider_compact_prompt(
     job_snapshot = _safe_dict(context_snapshots.get("job_snapshot"))
     resume_snapshot = _safe_dict(context_snapshots.get("resume_snapshot"))
     evidence_items = _provider_evidence_items(_safe_list(input_data.get("evidence_items")))
+    canonical_project_assets = _safe_dict(input_data.get("canonical_project_assets"))
     provider_prompt: dict[str, Any] = {
         "task": POLISH_FEEDBACK_QUICK_TASK,
         "task_type": POLISH_FEEDBACK_TASK_TYPE,
@@ -272,6 +279,10 @@ def _provider_compact_prompt(
                 "loss_points",
                 "reference_answer.sections",
                 "same_question_effect",
+                "asset_consistency_check",
+                "answer_coverage",
+                "answer_change_analysis",
+                "feedback_cards",
                 "next_recommended_actions",
                 "low_confidence_flags",
                 "feedback_metadata",
@@ -283,6 +294,7 @@ def _provider_compact_prompt(
             ],
             "not_applicable_fields": [
                 "project_asset_consistency_check",
+                "asset_consistency_check",
                 "session_similarity_check",
             ],
         },
@@ -293,6 +305,10 @@ def _provider_compact_prompt(
             "progress_node_ref": _get_clean_text(current_question.get("progress_node_ref"), max_chars=120),
             "question_sources": question_sources,
             "evidence_refs": _string_list(current_question.get("evidence_refs"), max_chars=120)[:5],
+            "expected_answer_dimensions": _string_list(
+                _safe_dict(current_question.get("question_metadata")).get("expected_answer_dimensions"),
+                max_chars=160,
+            )[:5],
         },
         "current_answer": {
             "answer_id": _get_clean_text(current_answer.get("answer_id"), max_chars=120),
@@ -305,6 +321,7 @@ def _provider_compact_prompt(
             "major_loss_points": "must be mapped by reference_answer.sections.addresses_loss_point_ids",
         },
         "evidence": evidence_items,
+        "canonical_project_assets": canonical_project_assets,
         "same_question_answers": same_question_answers,
         "progress_node_snapshot": {
             "node_ref": _get_clean_text(progress_node.get("node_ref"), max_chars=120),
@@ -320,7 +337,8 @@ def _provider_compact_prompt(
             "Return JSON only.",
             "First answer diagnosis, scoring, loss points, and short reference answer only.",
             "Set knowledge_points, technical_principles, and project_asset_update_candidates to [] unless explicitly needed.",
-            "Set project_asset_consistency_check and session_similarity_check to {'status': 'not_applicable'} in quick mode.",
+            "Return asset_consistency_check, answer_coverage, answer_change_analysis, and feedback_cards.",
+            "If canonical_project_assets conflict with the answer, make asset_consistency the first feedback card.",
             "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         ],
         "feedback_metadata": {
@@ -348,8 +366,10 @@ def _provider_compact_prompt(
 def _provider_evidence_items(values: list[Any]) -> list[dict[str, object]]:
     priority = {
         "current_answer": 100,
+        "canonical_project_asset": 95,
         "progress_node_summary": 90,
         "question_source": 80,
+        "project_asset_summary": 78,
         "resume_project_evidence": 70,
         "same_question_history": 60,
         "job_requirement": 50,
@@ -509,6 +529,22 @@ def _evidence_items(context: object) -> list[AgentEvidenceItem]:
                 )
             )
 
+    for index, asset in enumerate(_canonical_project_asset_items(_get_dict(context, "canonical_project_assets")), start=1):
+        ref = _first_text(asset.get("asset_id"), asset.get("asset_ref"), asset.get("ref"), f"canonical_asset_{index}")
+        excerpt = _first_text(asset.get("summary"), asset.get("content_excerpt"), asset.get("title"))
+        if excerpt:
+            items.append(
+                AgentEvidenceItem(
+                    ref=ref,
+                    source_type="canonical_project_asset",
+                    title=_first_text(asset.get("title"), "Canonical project asset"),
+                    excerpt=excerpt,
+                    source_ref={"resource_type": "asset", "resource_id": ref},
+                    priority=95 - index,
+                    reason="canonical_project_asset",
+                )
+            )
+
     for index, asset in enumerate(_get_list(context, "project_asset_summaries"), start=1):
         if not isinstance(asset, dict):
             continue
@@ -645,6 +681,8 @@ def _compact_same_question_answers(values: list[Any]) -> list[dict[str, object]]
                 "answer_summary": _first_text_limited(answer.get("answer_summary"), answer.get("summary"), max_chars=240),
                 "feedback_summary": _first_text_limited(answer.get("feedback_summary"), max_chars=240),
                 "loss_point_ids": _string_list(answer.get("loss_point_ids"), max_chars=120)[:5],
+                "covered_points": _string_list(answer.get("covered_points"), max_chars=120)[:5],
+                "missing_points": _string_list(answer.get("missing_points"), max_chars=120)[:5],
             }
         )
     return answers
@@ -667,6 +705,50 @@ def _compact_recent_turns(values: list[Any]) -> list[dict[str, object]]:
             }
         )
     return turns
+
+
+def _compact_question_metadata(value: dict[str, Any]) -> dict[str, object]:
+    return {
+        "expected_answer_dimensions": _string_list(value.get("expected_answer_dimensions"), max_chars=160)[:5],
+        "focus_dimension": _first_text_limited(value.get("focus_dimension"), max_chars=160),
+        "focus_key": _first_text_limited(value.get("focus_key"), max_chars=160),
+        "source_availability": _first_text_limited(value.get("source_availability"), max_chars=80),
+    }
+
+
+def _compact_canonical_project_assets(value: dict[str, Any]) -> dict[str, object]:
+    items = _canonical_project_asset_items(value)
+    return {
+        "available": bool(value.get("available")) and bool(items),
+        "selection_policy": _first_text(value.get("selection_policy"), "rule_based_keyword_overlap_v1"),
+        "items": items,
+    }
+
+
+def _canonical_project_asset_items(value: dict[str, Any]) -> list[dict[str, object]]:
+    raw_items = value.get("items") if isinstance(value.get("items"), list) else []
+    items: list[dict[str, object]] = []
+    for index, item in enumerate(raw_items[:_PROJECT_ASSET_SUMMARIES_LIMIT], start=1):
+        if not isinstance(item, dict):
+            continue
+        if _first_text(item.get("status")) != "asset_confirmed":
+            continue
+        items.append(
+            {
+                "asset_id": _first_text(item.get("asset_id"), f"canonical_asset_{index}"),
+                "status": _first_text(item.get("status")),
+                "asset_type": _first_text(item.get("asset_type")),
+                "title": _first_text(item.get("title"), "Canonical project asset"),
+                "summary": _first_text_limited(item.get("summary"), max_chars=700),
+                "content_excerpt": _first_text_limited(item.get("content_excerpt"), max_chars=360),
+                "source_refs": _safe_ref_list(item.get("source_refs")),
+                "evidence_refs": _safe_ref_list(item.get("evidence_refs")),
+                "current_version_id": _first_text(item.get("current_version_id")),
+                "priority": item.get("priority") if isinstance(item.get("priority"), int) else None,
+                "relevance_reason": _first_text_limited(item.get("relevance_reason"), max_chars=160),
+            }
+        )
+    return items
 
 
 def _compact_project_asset_summaries(values: list[Any]) -> list[dict[str, object]]:
@@ -782,6 +864,23 @@ def _related_resume_projects(projects: list[Any], *, related_terms: tuple[str, .
     if normalized_terms:
         return []
     return project_texts[:1]
+
+
+def _safe_ref_list(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    refs: list[dict[str, str]] = []
+    for item in value[:5]:
+        if not isinstance(item, dict):
+            continue
+        cleaned = {
+            str(key): text
+            for key, raw_value in item.items()
+            if (text := _get_clean_text(raw_value, max_chars=120))
+        }
+        if cleaned:
+            refs.append(cleaned)
+    return refs
 
 
 def _safe_dict(value: object) -> dict[str, Any]:

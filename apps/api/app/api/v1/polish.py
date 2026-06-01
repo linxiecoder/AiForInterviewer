@@ -73,6 +73,7 @@ from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import ApiStatus
 from app.domain.shared.errors import DomainError
 from app.domain.shared.refs import TraceRef, VersionRef as DomainVersionRef
+from app.infrastructure.db.repositories.assets import SqlAlchemyAssetRepository
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.job_match import SqlAlchemyJobMatchAnalysisRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
@@ -583,6 +584,7 @@ def _use_cases(
         resume_repository=SqlAlchemyResumeRepository(session_factory),
         job_repository=SqlAlchemyJobRepository(session_factory),
         job_match_repository=SqlAlchemyJobMatchAnalysisRepository(session_factory),
+        asset_repository=SqlAlchemyAssetRepository(session_factory),
         progress_tree_service=PolishProgressTreeLlmService(llm_transport),
         question_generation_service=QuestionGenerationService(
             llm_transport=llm_transport,

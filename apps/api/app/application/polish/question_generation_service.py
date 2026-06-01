@@ -30,6 +30,7 @@ from app.application.polish.question_generation_prompts import (
     build_follow_up_question_prompt_asset,
     build_question_prompt_asset,
     build_question_prompt_metadata,
+    build_question_provider_request,
     render_blueprint_question,
     validate_question_prompt_anchor_contract,
 )
@@ -69,6 +70,48 @@ ENGINEERING_EVIDENCE_TERMS = (
     "重试",
     "幂等",
     "恢复",
+)
+SOURCE_SUPPORT_LEVEL_VALUES = {
+    "direct_project_evidence",
+    "adjacent_project_evidence",
+    "job_gap_only",
+    "insufficient_context",
+}
+PROJECT_EVIDENCE_SOURCE_TYPES = {
+    "asset_summary",
+    "resume_project",
+    "resume_project_contribution",
+    "resume_work_experience",
+    "resume_skill",
+    "turn_answer",
+    "turn_feedback",
+}
+JOB_GAP_SOURCE_TYPES = {"job_requirement", "job_responsibility", "match_gap", "match_focus"}
+DIRECT_SUPPORT_TERMS = (
+    "Redis",
+    "RocketMQ",
+    "Kafka",
+    "RabbitMQ",
+    "MinIO",
+    "FastAPI",
+    "PostgreSQL",
+    "MySQL",
+    "Elasticsearch",
+    "OpenSearch",
+    "分布式锁",
+    "事务消息",
+    "半消息回查",
+    "最终一致性",
+    "支付链路",
+    "库存扣减",
+    "幂等",
+    "失败补偿",
+    "异常恢复",
+    "上线验证",
+    "大文件",
+    "分片",
+    "状态机",
+    "异步",
 )
 
 
@@ -253,36 +296,46 @@ class QuestionGenerationService:
             return _validation_failed("question_text_required", progress_node_ref=scope.progress_node_ref)
         if _contains_unsafe_question_text_marker(question_text):
             return _validation_failed("question_text_unsafe_leakage", progress_node_ref=scope.progress_node_ref)
+        llm_evidence_refs = tuple(llm_payload.get("evidence_refs") or ()) if llm_payload else ()
+        draft_evidence_refs = llm_evidence_refs or blueprint.evidence_refs
+        llm_clarification_needed = bool(llm_payload.get("clarification_needed")) if llm_payload else False
         grounding_result = validate_question_grounding(
             blueprint=blueprint,
             question_text=question_text,
             primary_source_type=scope.primary_source_type,
+            source_support_level=scope.source_support_level,
+            evidence_refs=draft_evidence_refs,
+            canonical_project_assets=scope.canonical_project_assets,
         )
         grounding_errors = tuple(grounding_result.validation_errors)
-        grounding_failed = not grounding_result.passed
-        llm_evidence_refs = tuple(llm_payload.get("evidence_refs") or ()) if llm_payload else ()
-        draft_evidence_refs = llm_evidence_refs or blueprint.evidence_refs
-        llm_clarification_needed = bool(llm_payload.get("clarification_needed")) if llm_payload else False
+        grounding_blocking_errors = tuple(grounding_result.blocking_errors)
+        grounding_warnings = tuple(grounding_result.warnings)
+        if grounding_blocking_errors:
+            return QuestionGenerationResult(
+                succeeded=False,
+                draft=None,
+                blueprint=blueprint,
+                grounding_result=grounding_result,
+                validation_errors=grounding_errors,
+                progress_node_ref=scope.progress_node_ref,
+                evidence_refs=draft_evidence_refs,
+            )
         low_confidence_flags: list[str] = []
         if not draft_evidence_refs or llm_clarification_needed:
             low_confidence_flags.append("clarification_needed")
-        if grounding_failed:
-            low_confidence_flags.extend(("grounding_failed", "manual_review_required", *grounding_errors))
+        if grounding_warnings:
+            low_confidence_flags.extend(("grounding_warning", *grounding_warnings))
         low_confidence_flags = list(dict.fromkeys(low_confidence_flags))
-        quality_warnings = list(grounding_errors) if grounding_failed else []
-        manual_review_required = grounding_failed or llm_clarification_needed
+        quality_warnings = list(grounding_warnings)
+        manual_review_required = bool(grounding_warnings) or llm_clarification_needed
         manual_review_reason = (
-            "grounding_failed_soft_warning"
-            if grounding_failed
+            "grounding_warning"
+            if grounding_warnings
             else ("clarification_needed" if llm_clarification_needed else None)
         )
-        grounding_status = "failed_warning" if grounding_failed else "passed"
+        grounding_status = "passed_warning" if grounding_warnings else "passed"
         confidence_level = "low" if low_confidence_flags else ("medium" if draft_evidence_refs else "low")
-        source_availability = (
-            "weak"
-            if grounding_failed
-            else ("available" if draft_evidence_refs else "partial")
-        )
+        source_availability = "weak" if grounding_warnings else ("available" if draft_evidence_refs else "partial")
         next_question_metadata = _next_question_agent_metadata(llm_payload)
         draft = PolishQuestionDraft(
             question_text=question_text,
@@ -306,6 +359,13 @@ class QuestionGenerationService:
                 "validator_version": "polish_question_grounding.v1",
                 "signal_version": "evidence_grounded_blueprint.v1",
                 "source_availability": source_availability,
+                "source_support_level": scope.source_support_level,
+                "grounding_blocking_errors": list(grounding_blocking_errors),
+                "grounding_warnings": list(grounding_warnings),
+                "canonical_project_assets_available": bool(
+                    scope.canonical_project_assets.get("available")
+                ),
+                "canonical_project_asset_refs": _canonical_asset_refs(scope.canonical_project_assets),
                 "generation_service": QUESTION_GENERATION_SERVICE_VERSION,
                 "blueprint_version": blueprint.metadata.get("blueprint_version"),
                 **prompt_metadata,
@@ -326,7 +386,7 @@ class QuestionGenerationService:
                 "primary_source_type": scope.primary_source_type,
                 "grounding_status": grounding_status,
                 "grounding_validation_errors": list(grounding_errors),
-                "grounding_blocking_bypassed": grounding_failed,
+                "grounding_blocking_bypassed": False,
                 "manual_review_required": manual_review_required,
                 "manual_review_reason": manual_review_reason,
                 "grounding_gate_result": grounding_status,
@@ -358,11 +418,17 @@ def _generate_llm_question(
     task_type = _clean(prompt_asset.get("task_type")) or runtime_policy.task_type
     prompt_version = _clean(prompt_asset.get("prompt_version")) or runtime_policy.prompt_version
     schema_id = _clean(prompt_asset.get("schema_id")) or runtime_policy.prompt_schema_id
+    provider_request = build_question_provider_request(
+        prompt_asset,
+        blueprint=blueprint,
+        scope=scope,
+        runtime_policy=runtime_policy,
+    )
     request = LlmTransportRequest(
         contract_ids=runtime_policy.contract_ids,
         task_type=task_type,
         input_refs=(scope.progress_node_ref, *blueprint.evidence_refs),
-        evidence_bundle=prompt_asset,
+        evidence_bundle=provider_request,
         prompt_version=prompt_version,
         schema_id=schema_id,
     )
@@ -472,14 +538,14 @@ def _rewrite_project_clarification_question(
         else "处理关键工程链路"
     )
     rewritten = (
-        f"基于你在{background}中{mechanism_clause}的经历，这条实际链路当时是怎么串起来的？"
-        "请按业务入口、状态记录、存储或消息处理、异常处理和效果验证来说明。"
+        f"基于你在{background}中{mechanism_clause}的经历，如果要在原系统基础上扩展当前目标能力，"
+        "你会如何设计关键链路、边界、异常处理和效果验证？"
     )
     return (
         rewritten,
         {
             "question_text_rewritten_from_clarification": True,
-            "question_text_rewrite_reason": "project_clarification_to_implementation_deep_dive",
+            "question_text_rewrite_reason": "project_clarification_to_hypothetical_extension",
             "question_text_rewrite_source_ref": source.ref_id,
             "question_text_rewrite_target_capability": title,
         },
@@ -791,9 +857,157 @@ def _build_evidence_scope(
         primary_source_type=primary.source_type if primary is not None else None,
         evidence_refs=evidence_refs,
         question_sources=sources,
-        context_digest=_first_text(plan.get("context_digest"), context.get("content_digest"), None),
+        context_digest=_context_digest_with_canonical_assets(
+            _first_text(plan.get("context_digest"), context.get("content_digest", None)),
+            context,
+        ),
+        canonical_project_assets=_canonical_project_assets(context),
+        source_support_level=_source_support_level(
+            context,
+            chunks=chunks,
+            focus_target=focus_target,
+            canonical_project_assets=_canonical_project_assets(context),
+        ),
         dropped_context_summary=selection.dropped_context_summary,
     )
+
+
+def _canonical_project_assets(context: dict[str, Any]) -> dict[str, Any]:
+    value = context.get("canonical_project_assets")
+    if not isinstance(value, dict):
+        return {"available": False, "selection_policy": "rule_based_keyword_overlap_v1", "items": []}
+    items = value.get("items") if isinstance(value.get("items"), list) else []
+    safe_items: list[dict[str, Any]] = []
+    for item in items[:5]:
+        if not isinstance(item, dict):
+            continue
+        if _clean(item.get("status")) != "asset_confirmed":
+            continue
+        safe_items.append(
+            {
+                "asset_id": _clean(item.get("asset_id")),
+                "status": _clean(item.get("status")),
+                "asset_type": _clean(item.get("asset_type")),
+                "title": _clean(item.get("title")),
+                "summary": _compact_text(_clean(item.get("summary")), limit=360),
+                "content_excerpt": _compact_text(_clean(item.get("content_excerpt")), limit=360),
+                "source_refs": item.get("source_refs") if isinstance(item.get("source_refs"), list) else [],
+                "evidence_refs": item.get("evidence_refs") if isinstance(item.get("evidence_refs"), list) else [],
+                "current_version_id": _clean(item.get("current_version_id")),
+                "priority": item.get("priority") if isinstance(item.get("priority"), int) else None,
+                "relevance_reason": _clean(item.get("relevance_reason")),
+            }
+        )
+    return {
+        "available": bool(value.get("available")) and bool(safe_items),
+        "selection_policy": _clean(value.get("selection_policy")) or "rule_based_keyword_overlap_v1",
+        "items": safe_items,
+    }
+
+
+def _source_support_level(
+    context: dict[str, Any],
+    *,
+    chunks: tuple[ProgressEvidenceChunk, ...],
+    focus_target: AgentFocusTarget,
+    canonical_project_assets: dict[str, Any],
+) -> str:
+    pack = context.get("canonical_evidence_pack")
+    if isinstance(pack, dict):
+        raw_level = _normalize_source_support_level(pack.get("source_support_level"))
+        if raw_level in {"direct_project_evidence", "adjacent_project_evidence"}:
+            return raw_level
+
+    if not chunks and not canonical_project_assets.get("available"):
+        return "insufficient_context"
+
+    project_chunks = tuple(chunk for chunk in chunks if chunk.source_type in PROJECT_EVIDENCE_SOURCE_TYPES)
+    job_chunks = tuple(chunk for chunk in chunks if chunk.source_type in JOB_GAP_SOURCE_TYPES)
+    target_text = " ".join(
+        item
+        for item in (
+            focus_target.title,
+            focus_target.expected_capability,
+            " ".join(focus_target.missing_points),
+        )
+        if item
+    )
+    project_text = " ".join(
+        [chunk.text for chunk in project_chunks]
+        + [
+            str(item.get(key) or "")
+            for item in canonical_project_assets.get("items", [])
+            if isinstance(item, dict)
+            for key in ("title", "summary", "content_excerpt")
+        ]
+    )
+    if canonical_project_assets.get("available") or project_chunks:
+        if _has_direct_project_support(target_text=target_text, evidence_text=project_text):
+            return "direct_project_evidence"
+        return "adjacent_project_evidence"
+    if job_chunks:
+        return "job_gap_only"
+    return "insufficient_context"
+
+
+def _normalize_source_support_level(value: object) -> str:
+    text = _clean(value)
+    if text in SOURCE_SUPPORT_LEVEL_VALUES:
+        return text
+    if text == "canonical_asset_available":
+        return "direct_project_evidence"
+    if text in {"direct_implemented", "adjacent_implemented", "conceptual_only", "unsupported"}:
+        return {
+            "direct_implemented": "direct_project_evidence",
+            "adjacent_implemented": "adjacent_project_evidence",
+            "conceptual_only": "job_gap_only",
+            "unsupported": "insufficient_context",
+        }[text]
+    return ""
+
+
+def _has_direct_project_support(*, target_text: str, evidence_text: str) -> bool:
+    target_terms = _support_terms(target_text)
+    evidence_terms = _support_terms(evidence_text)
+    return bool(target_terms & evidence_terms)
+
+
+def _support_terms(value: object) -> set[str]:
+    text = str(value or "")
+    normalized = text.lower()
+    terms = {term.lower() for term in DIRECT_SUPPORT_TERMS if term.lower() in normalized}
+    terms.update(token for token in normalized.replace("/", " ").replace("、", " ").split() if len(token) >= 2)
+    return {term for term in terms if term not in {"设计", "能力", "项目", "说明", "验证", "技术", "链路"}}
+
+
+def _context_digest_with_canonical_assets(base_digest: str, context: dict[str, Any]) -> str:
+    canonical_pack = context.get("canonical_evidence_pack")
+    canonical_digest = ""
+    if isinstance(canonical_pack, dict):
+        canonical_digest = _clean(canonical_pack.get("context_digest"))
+    if not canonical_digest:
+        canonical_project_assets = _canonical_project_assets(context)
+        if canonical_project_assets.get("available"):
+            canonical_digest = sha256(
+                str(sorted(_canonical_asset_refs(canonical_project_assets))).encode("utf-8")
+            ).hexdigest()
+    if not canonical_digest:
+        return base_digest
+    return sha256(f"{base_digest}:{canonical_digest}".encode("utf-8")).hexdigest()
+
+
+def _canonical_asset_refs(canonical_project_assets: dict[str, Any]) -> list[str]:
+    items = canonical_project_assets.get("items")
+    if not isinstance(items, list):
+        return []
+    refs: list[str] = []
+    for item in items[:5]:
+        if not isinstance(item, dict):
+            continue
+        asset_id = _clean(item.get("asset_id"))
+        if asset_id:
+            refs.append(asset_id)
+    return refs
 
 
 def _focus_target_from_progress_node(node: dict[str, Any], requested_ref: str) -> AgentFocusTarget:
@@ -958,6 +1172,12 @@ def _render_follow_up_degraded_question(
         _clean(blueprint.primary_evidence_text) or _clean(scope.node_title) or "当前岗位与简历证据",
         limit=120,
     )
+    if scope.source_support_level in {"adjacent_project_evidence", "job_gap_only"}:
+        return (
+            f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
+            f"如果要结合上一题背景和当前岗位/简历证据「{evidence_excerpt}」补齐这部分能力，"
+            "你会如何判断边界、设计失败处理、验证指标和关键取舍？"
+        )
     return (
         f"你上一轮回答中提到「{answer_excerpt}」，现在围绕「{target_dimension}」继续追问："
         f"请结合上一题背景和当前岗位/简历证据「{evidence_excerpt}」，说明你的具体判断、边界、"

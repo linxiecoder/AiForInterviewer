@@ -88,6 +88,10 @@ STRUCTURED_FEEDBACK_OPTIONAL_FIELDS = (
     "missing_answer_dimensions",
     "p7_reference_answer",
     "reference_answer_requirements",
+    "asset_consistency_check",
+    "answer_coverage",
+    "answer_change_analysis",
+    "feedback_cards",
     "oral_script_requirements",
     "mastery_status",
     "score_delta",
@@ -3157,7 +3161,7 @@ def test_get_polish_session_does_not_regenerate_progress_tree() -> None:
     assert transport.calls == []
 
 
-def test_polish_question_grounding_failure_returns_succeeded_task_with_manual_review_metadata() -> None:
+def test_polish_question_grounding_failure_returns_validation_failed_without_question() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=_QuestionGroundingSoftWarningTransport())
@@ -3183,24 +3187,15 @@ def test_polish_question_grounding_failure_returns_succeeded_task_with_manual_re
 
     assert status_code == 202
     data = question_body["data"]
-    assert data["status"] == "succeeded"
-    assert data["user_visible_status"] == "题目已生成"
-    assert data["validation_errors"] == []
-    assert data["active_question_refs"]
-    assert any(ref["resource_type"] == "question" for ref in data["candidate_refs"])
+    assert data["status"] == "validation_failed"
+    assert data["validation_errors"]
+    assert not data["active_question_refs"]
+    assert not any(ref["resource_type"] == "question" for ref in data["candidate_refs"])
 
     status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
 
     assert status_code == 200
-    turns = detail_body["data"]["turns"]
-    assert len(turns) == 1
-    latest_turn = turns[-1]
-    assert latest_turn["question_text"] == _QuestionGroundingSoftWarningTransport.QUESTION_TEXT
-    metadata = latest_turn["question_metadata"]
-    assert metadata["manual_review_required"] is True
-    assert metadata["grounding_status"] == "failed_warning"
-    assert metadata["validation_errors"] == []
-    assert "source_contamination_or_ungrounded_question" in metadata["grounding_validation_errors"]
+    assert detail_body["data"]["turns"] == []
 
 
 def test_polish_question_prompt_contract_failure_returns_restart_status(monkeypatch) -> None:
@@ -3363,6 +3358,8 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_payload["loss_points"]
     assert feedback_payload["candidate_refs"] == []
     assert feedback_payload["feedback_metadata"]["llm_called"] is True
+    for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
+        assert phase4_field in feedback_payload
     assert "weaknesses" not in feedback_payload
     assert "assets" not in feedback_payload
     with session_factory() as db:
@@ -3397,6 +3394,8 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert structured_session_payload["status"] == "generated"
     assert structured_session_payload["candidate_refs"] == []
     assert structured_session_payload["score_result"]["score_value"] == 82
+    for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
+        assert phase4_field in structured_session_payload
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(structured_detail_body)
 
@@ -4606,7 +4605,8 @@ def test_polish_next_question_uses_progress_node_evidence_chunks() -> None:
     question_text = turn["question_text"]
     question_sources = turn["question_sources"]
     assert "主要证据" in question_text
-    assert "关键技术链路" in question_text
+    assert "你会如何" in question_text
+    assert "边界" in question_text
     assert "需要候选人解释 Kafka 事务消息、Outbox 和最终一致性。" not in question_text
     assert "支付系统重构：使用 FastAPI、Kafka、Outbox 和 PostgreSQL 完成一致性治理。" in question_text
     assert any(source["source_type"] == "job_requirement" for source in question_sources)

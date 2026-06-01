@@ -30,6 +30,7 @@ def build_polish_progress_context(
     match_analysis: JobMatchAnalysis | None,
     weaknesses: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
     assets: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
+    canonical_evidence_pack: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the backend-only semantic context for progress tree LLM calls."""
 
@@ -39,6 +40,7 @@ def build_polish_progress_context(
     match_context = _build_match_context(match_analysis)
     weakness_context = _build_collection_context(weaknesses)
     asset_context = _build_collection_context(assets)
+    canonical_project_assets = _canonical_project_assets(canonical_evidence_pack)
     turns = _build_turn_context(session_detail.turns)
     context = {
         "session": {
@@ -53,6 +55,8 @@ def build_polish_progress_context(
         "match_context": match_context,
         "weakness_context": weakness_context,
         "asset_context": asset_context,
+        "canonical_project_assets": canonical_project_assets,
+        "canonical_evidence_pack": _compact_canonical_evidence_pack(canonical_evidence_pack),
         "turns": turns,
     }
     context["content_digest"] = stable_digest(
@@ -69,6 +73,9 @@ def build_polish_progress_context(
                 "content_digest": resume_snapshot["content_digest"],
             },
             "match_context": match_context,
+            "canonical_project_assets": canonical_project_assets,
+            "source_support_level": context["canonical_evidence_pack"].get("source_support_level"),
+            "canonical_evidence_digest": context["canonical_evidence_pack"].get("context_digest"),
             "turns": turns,
         }
     )
@@ -232,6 +239,80 @@ def _build_collection_context(
             }
         )
     return {"available": True, "items": safe_items}
+
+
+def _canonical_project_assets(canonical_evidence_pack: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(canonical_evidence_pack, dict):
+        return {"available": False, "selection_policy": "rule_based_keyword_overlap_v1", "items": []}
+    value = canonical_evidence_pack.get("canonical_project_assets")
+    if not isinstance(value, dict):
+        return {"available": False, "selection_policy": "rule_based_keyword_overlap_v1", "items": []}
+    items = value.get("items") if isinstance(value.get("items"), list) else []
+    safe_items: list[dict[str, Any]] = []
+    for item in items[:5]:
+        if not isinstance(item, dict):
+            continue
+        if truncate_text(item.get("status"), max_chars=80) != "asset_confirmed":
+            continue
+        safe_items.append(
+            {
+                "asset_id": truncate_text(item.get("asset_id"), max_chars=160),
+                "status": truncate_text(item.get("status"), max_chars=80),
+                "asset_type": truncate_text(item.get("asset_type"), max_chars=80),
+                "title": truncate_text(item.get("title"), max_chars=160),
+                "summary": truncate_text(item.get("summary"), max_chars=480),
+                "content_excerpt": truncate_text(item.get("content_excerpt"), max_chars=480),
+                "source_refs": _safe_refs(item.get("source_refs")),
+                "evidence_refs": _safe_refs(item.get("evidence_refs")),
+                "current_version_id": truncate_text(item.get("current_version_id"), max_chars=160),
+                "priority": item.get("priority") if isinstance(item.get("priority"), int) else None,
+                "relevance_reason": truncate_text(item.get("relevance_reason"), max_chars=240),
+            }
+        )
+    return {
+        "available": bool(value.get("available")) and bool(safe_items),
+        "selection_policy": truncate_text(value.get("selection_policy"), max_chars=120)
+        or "rule_based_keyword_overlap_v1",
+        "items": safe_items,
+    }
+
+
+def _compact_canonical_evidence_pack(canonical_evidence_pack: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(canonical_evidence_pack, dict):
+        return {}
+    return {
+        "schema_version": truncate_text(canonical_evidence_pack.get("schema_version"), max_chars=120),
+        "owner_ref": _safe_ref(canonical_evidence_pack.get("owner_ref")),
+        "session_ref": _safe_ref(canonical_evidence_pack.get("session_ref")),
+        "job_snapshot_ref": _safe_ref(canonical_evidence_pack.get("job_snapshot_ref")),
+        "resume_snapshot_ref": _safe_ref(canonical_evidence_pack.get("resume_snapshot_ref")),
+        "progress_node_ref": truncate_text(canonical_evidence_pack.get("progress_node_ref"), max_chars=160),
+        "source_support_level": truncate_text(canonical_evidence_pack.get("source_support_level"), max_chars=120),
+        "context_digest": truncate_text(canonical_evidence_pack.get("context_digest"), max_chars=160),
+        "warnings": clean_list(tuple(canonical_evidence_pack.get("warnings") or ()), limit=10),
+        "blocking_issues": clean_list(tuple(canonical_evidence_pack.get("blocking_issues") or ()), limit=10),
+    }
+
+
+def _safe_refs(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    refs: list[dict[str, str]] = []
+    for item in value[:8]:
+        safe_ref = _safe_ref(item)
+        if safe_ref:
+            refs.append(safe_ref)
+    return refs
+
+
+def _safe_ref(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key): text
+        for key, raw_value in value.items()
+        if (text := truncate_text(raw_value, max_chars=160))
+    }
 
 
 def _build_turn_context(turns: tuple[PolishSessionTurn, ...]) -> list[dict[str, Any]]:

@@ -13,6 +13,7 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.feedback_rules import apply_feedback_core_rules
 from app.application.polish.feedback_validation import validate_generated_feedback_payload
 
 
@@ -46,6 +47,8 @@ class FeedbackGenerationContext:
     same_project_turns: tuple[dict[str, Any], ...] = ()
     session_recent_turns: tuple[dict[str, Any], ...] = ()
     project_asset_summaries: tuple[dict[str, Any], ...] = ()
+    canonical_project_assets: dict[str, Any] = field(default_factory=dict)
+    question_metadata: dict[str, Any] = field(default_factory=dict)
     job_snapshot: dict[str, Any] = field(default_factory=dict)
     resume_snapshot: dict[str, Any] = field(default_factory=dict)
     progress_node_snapshot: dict[str, Any] = field(default_factory=dict)
@@ -104,7 +107,11 @@ class FeedbackGenerationService:
                 metadata=agent_metadata,
             )
 
-        normalized_payload, validation_errors = validate_generated_feedback_payload(agent_result.payload)
+        ruled_payload = apply_feedback_core_rules(agent_result.payload, normalized_context)
+        normalized_payload, validation_errors = validate_generated_feedback_payload(
+            ruled_payload,
+            require_phase4=True,
+        )
         if validation_errors:
             return FeedbackGenerationResult(
                 succeeded=False,
@@ -186,8 +193,26 @@ def _input_refs(context: FeedbackGenerationContext | dict[str, Any]) -> tuple[st
         _value(context, "answer_id"),
         _value(context, "progress_node_ref"),
         *_list_values(context, "evidence_refs"),
+        *_canonical_asset_refs(context),
     )
     return tuple(ref for ref in refs if ref)
+
+
+def _canonical_asset_refs(context: FeedbackGenerationContext | dict[str, Any]) -> tuple[str, ...]:
+    value = context.get("canonical_project_assets") if isinstance(context, dict) else getattr(context, "canonical_project_assets", {})
+    if not isinstance(value, dict):
+        return ()
+    items = value.get("items")
+    if not isinstance(items, list):
+        return ()
+    refs: list[str] = []
+    for item in items[:5]:
+        if not isinstance(item, dict):
+            continue
+        asset_id = _clean(item.get("asset_id"))
+        if asset_id:
+            refs.append(asset_id)
+    return tuple(refs)
 
 
 def _payload_diagnostic(payload: object) -> dict[str, Any]:

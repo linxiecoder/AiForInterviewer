@@ -192,13 +192,14 @@ def _copy_source_priority_policy() -> dict[str, dict[str, int]]:
     policy = {purpose: dict(priority_map) for purpose, priority_map in SOURCE_PRIORITY_POLICY_BY_PURPOSE.items()}
     policy["next_question"] = {
         **policy.get("next_question", {}),
-        "resume_project": 1,
-        "resume_project_contribution": 2,
-        "resume_work_experience": 3,
-        "resume_skill": 4,
-        "job_requirement": 5,
-        "match_gap": 6,
-        "match_focus": 7,
+        "asset_summary": 1,
+        "resume_project": 2,
+        "resume_project_contribution": 3,
+        "resume_work_experience": 4,
+        "resume_skill": 5,
+        "job_requirement": 6,
+        "match_gap": 7,
+        "match_focus": 8,
     }
     return policy
 

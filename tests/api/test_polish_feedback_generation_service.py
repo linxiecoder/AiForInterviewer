@@ -498,6 +498,244 @@ def test_prompt_asset_includes_project_asset_summaries() -> None:
     assert asset["input_data"]["project_asset_summaries"][0]["summary"] == "支付项目已有事务消息、幂等键和补偿任务素材。"
 
 
+
+def _context_with_canonical_assets(*, answer_text: str, asset_status: str = "asset_confirmed") -> dict[str, Any]:
+    context = _context()
+    context["answer_text"] = answer_text
+    context["question_metadata"] = {
+        "expected_answer_dimensions": ["FastAPI APIs", "PostgreSQL persistence", "observability metrics"],
+    }
+    context["progress_node_snapshot"] = {
+        "node_ref": "progress_node_backend_fact",
+        "title": "Backend workflow automation",
+        "expected_capability": "Explain FastAPI APIs, PostgreSQL persistence, and observability metrics.",
+        "missing_points": ["observability metrics"],
+    }
+    context["canonical_project_assets"] = {
+        "available": True,
+        "selection_policy": "rule_based_keyword_overlap_v1",
+        "items": [
+            {
+                "asset_id": "asset_backend_workflow",
+                "status": asset_status,
+                "asset_type": "project_story",
+                "title": "Backend workflow automation",
+                "summary": "Candidate built backend workflow automation with FastAPI and PostgreSQL.",
+                "content_excerpt": "Owns FastAPI APIs, PostgreSQL persistence, retries, and observability metrics.",
+            }
+        ],
+    }
+    return context
+
+
+def test_phase4_confirmed_asset_conflict_surfaces_first_card_and_blocks_next_question() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question"]
+    context = _context_with_canonical_assets(
+        answer_text="I led the project with Django and MongoDB instead of the documented stack.",
+        asset_status="asset_confirmed",
+    )
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    asset_check = result.payload["asset_consistency_check"]
+    assert asset_check["status"] == "conflict"
+    assert {conflict["conflict_type"] for conflict in asset_check["conflicts"]} >= {
+        "technology_stack_conflict"
+    }
+    assert result.payload["feedback_cards"][0]["card_type"] == "asset_consistency"
+    assert "generate_next_question" not in result.payload["next_recommended_actions"]
+    assert result.payload["project_asset_consistency_check"]["status"] == "conflict"
+
+
+def test_phase4_archived_asset_is_not_used_as_canonical_conflict_source() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question"]
+    context = _context_with_canonical_assets(
+        answer_text="I led the project with Django and MongoDB instead of the documented stack.",
+        asset_status="asset_archived",
+    )
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["asset_consistency_check"]["status"] == "insufficient_asset_context"
+    assert result.payload["project_asset_consistency_check"] == {"status": "not_applicable"}
+
+
+def test_phase4_confirmed_asset_unsupported_new_project_fact_is_candidate_claim() -> None:
+    context = _context_with_canonical_assets(
+        answer_text="I owned FastAPI APIs with PostgreSQL and introduced Redis cache for the project.",
+        asset_status="asset_confirmed",
+    )
+
+    result = _service(_PayloadTransport(_generated_payload())).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    unsupported_claims = result.payload["asset_consistency_check"]["unsupported_claims"]
+    assert unsupported_claims
+    assert any(claim["current_answer_claim"] == "redis" for claim in unsupported_claims)
+    assert result.payload["asset_consistency_check"]["status"] == "conflict"
+
+
+def test_phase4_missing_asset_consistency_from_llm_with_assets_gets_explicit_policy_warning() -> None:
+    context = _context_with_canonical_assets(
+        answer_text="I owned FastAPI APIs with PostgreSQL persistence.",
+        asset_status="asset_confirmed",
+    )
+
+    result = _service(_PayloadTransport(_generated_payload())).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    warnings = result.payload["feedback_metadata"]["phase4_validation_warnings"]
+    assert "asset_consistency_check_missing_from_llm_policy_generated" in warnings
+    assert result.payload["asset_consistency_check"]["checked_asset_refs"] == ["asset_backend_workflow"]
+
+
+def test_phase4_same_question_regression_and_fixed_loss_points_are_reported() -> None:
+    payload = _generated_payload()
+    payload["score_result"]["score_value"] = 88
+    payload["explicit_score"] = 88
+    payload["implicit_score"] = 86
+    payload["loss_points"] = [
+        {
+            "loss_point_id": "lp_recovery",
+            "severity": "major",
+            "deduction": 12,
+            "reason": "没有说明补偿任务的触发条件和终止条件。",
+        }
+    ]
+    payload["reference_answer"] = {
+        "sections": [
+            {
+                "section_id": "ref_recovery",
+                "title": "失败恢复",
+                "content": "说明重试、补偿、幂等键、死信和人工介入边界。",
+                "addresses_loss_point_ids": ["lp_recovery"],
+            }
+        ]
+    }
+    payload["same_question_effect"] = {
+        "improved_points": [],
+        "repeated_loss_point_ids": [],
+        "regressed_points": [],
+        "next_retry_focus": [],
+        "score_delta": 8,
+    }
+    context = _context()
+    context["answer_text"] = "本轮我补充失败补偿和幂等处理。"
+    context["question_metadata"] = {"expected_answer_dimensions": ["失败补偿", "观测指标"]}
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev",
+            "answer_round": 1,
+            "answer_summary": "上一轮覆盖了观测指标，但缺少补偿任务。",
+            "covered_points": ["观测指标"],
+            "loss_point_ids": ["lp_observability"],
+            "score_result": {"score_value": 80},
+        }
+    ]
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    change = result.payload["answer_change_analysis"]
+    assert change["has_prior_attempts"] is True
+    assert "观测指标" in change["regressed_points"]
+    assert "lp_observability" in change["fixed_loss_points"]
+    assert any(card["card_type"] == "answer_change" for card in result.payload["feedback_cards"])
+
+
+def test_phase4_missing_points_remove_generate_next_question() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question"]
+    context = _context()
+    context["answer_text"] = "我只说明了 MQ 解耦。"
+    context["question_metadata"] = {"expected_answer_dimensions": ["MQ 解耦", "幂等键", "观测指标"]}
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert "generate_next_question" not in result.payload["next_recommended_actions"]
+    assert result.payload["next_recommended_actions"][0] == "continue_same_question"
+
+
+def test_phase4_validator_rejects_generate_next_question_with_unresolved_points() -> None:
+    payload = _generated_payload()
+    payload.update(
+        {
+            "asset_consistency_check": {
+                "status": "consistent",
+                "checked_asset_refs": [],
+                "conflicts": [],
+                "unsupported_claims": [],
+                "user_clarification_required": False,
+            },
+            "answer_coverage": {
+                "expected_points": ["幂等键"],
+                "covered_points": [],
+                "missing_points": ["幂等键"],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "has_prior_attempts": False,
+                "previous_answer_refs": [],
+                "retained_points": [],
+                "newly_added_points": [],
+                "regressed_points": [],
+                "repeated_loss_points": [],
+                "fixed_loss_points": [],
+                "score_delta": None,
+                "trend": "first_attempt",
+            },
+            "feedback_cards": [
+                {"card_type": "asset_consistency", "status": "consistent", "payload": {}},
+                {"card_type": "overall", "status": "generated", "payload": {}},
+                {"card_type": "answer_coverage", "status": "available", "payload": {}},
+                {"card_type": "loss_points", "status": "available", "payload": []},
+                {"card_type": "reference_answer", "status": "available", "payload": {}},
+                {"card_type": "next_actions", "status": "available", "payload": {}},
+                {"card_type": "asset_update_candidates", "status": "candidate", "payload": []},
+            ],
+            "next_recommended_actions": ["generate_next_question"],
+        }
+    )
+
+    normalized, errors = validate_generated_feedback_payload(payload, require_phase4=True)
+
+    assert normalized is None
+    assert "next_action_generate_next_question_forbidden_unresolved_feedback" in errors
+
+
+def test_phase4_asset_update_candidates_are_forced_to_user_confirmation() -> None:
+    payload = _generated_payload()
+    payload["project_asset_update_candidates"][0]["user_confirmation_required"] = False
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["project_asset_update_candidates"][0]["user_confirmation_required"] is True
+    assert result.payload["feedback_cards"][-1]["card_type"] == "asset_update_candidates"
+
+
+def test_phase4_required_fields_can_be_enforced_by_validator() -> None:
+    normalized, errors = validate_generated_feedback_payload(_generated_payload(), require_phase4=True)
+
+    assert normalized is None
+    assert "asset_consistency_check_required" in errors
+    assert "answer_coverage_required" in errors
+    assert "answer_change_analysis_required" in errors
+    assert "feedback_cards_required" in errors
+
 def _contains_forbidden_key(value: object) -> bool:
     forbidden = {
         "raw_prompt",

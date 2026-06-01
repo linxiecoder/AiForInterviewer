@@ -11,6 +11,7 @@ from app.api.v1 import polish as polish_api
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
+from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from tests.api.asgi_client import call_json
 from tests.api.test_polish_api import (
@@ -232,7 +233,8 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
     assert payload["project_asset_update_candidates"] == []
     assert payload["project_asset_consistency_check"] == {"status": "not_applicable"}
     assert payload["session_similarity_check"] == {"status": "not_applicable"}
-    assert payload["next_recommended_actions"] == ["围绕失败恢复终止条件再追问一轮"]
+    assert payload["next_recommended_actions"][0] == "continue_same_question"
+    assert "围绕失败恢复终止条件再追问一轮" in payload["next_recommended_actions"]
     assert llm_transport.feedback_request is not None
     assert getattr(llm_transport.feedback_request, "max_tokens", 8000) < 2500
     provider_prompt = llm_transport.feedback_request.evidence_bundle
@@ -253,7 +255,20 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
     assert len(provider_prompt["evidence"]) <= 5
     assert provider_prompt["feedback_metadata"]["prompt_char_count"] < 12000
     assert provider_prompt["feedback_metadata"]["evidence_item_count"] <= 5
-    for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
+    for forbidden_key in (
+        "prompt",
+        "completion",
+        "provider_payload",
+        "raw_prompt",
+        "system_prompt",
+        "developer_prompt",
+        "raw_completion",
+        "full_resume",
+        "full_jd",
+        "token",
+        "secret",
+        "cookie",
+    ):
         assert forbidden_key not in _collect_keys(feedback_body)
 
     status_code, generated_detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
@@ -325,8 +340,10 @@ def test_feedback_runtime_returns_existing_generated_feedback_without_second_llm
     assert detail_answer["feedback_payload"]["status"] == "generated"
 
 
-def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feedback() -> None:
-    session_factory = _session_factory()
+def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feedback(tmp_path) -> None:
+    settings = DbSettings(database_url=f"sqlite+pysqlite:///{(tmp_path / 'feedback-runtime.sqlite').as_posix()}")
+    session_factory = build_session_factory(settings)
+    initialize_schema(session_factory=session_factory)
     llm_transport = _BlockingFeedbackTransport()
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
     session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
