@@ -31,7 +31,7 @@ from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
 from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

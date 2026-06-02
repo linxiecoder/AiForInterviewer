@@ -12,7 +12,7 @@ from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport
 from tests.api.asgi_client import call_json
 from tests.api.test_polish_api import (
     ACTOR_A,

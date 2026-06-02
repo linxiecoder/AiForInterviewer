@@ -47,7 +47,7 @@ from app.application.polish.use_cases import (
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
 from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport
 
 from tests.api.test_polish_question_graph_integration import (
     ACTOR_ID,

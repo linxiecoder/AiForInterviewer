@@ -329,11 +329,11 @@ def test_service_fails_closed_when_envelope_has_validation_errors() -> None:
 
 
 def test_service_still_calls_phase2_validator_after_envelope_parse(monkeypatch: Any) -> None:
-    calls: list[object] = []
+    calls: list[dict[str, Any]] = []
 
-    def spy(payload: object) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
-        calls.append(payload)
-        return validate_generated_feedback_payload(payload)
+    def spy(payload: object, *, require_phase4: bool = False) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+        calls.append({"payload": payload, "require_phase4": require_phase4})
+        return validate_generated_feedback_payload(payload, require_phase4=require_phase4)
 
     monkeypatch.setattr(feedback_generation_service, "validate_generated_feedback_payload", spy)
 
@@ -342,7 +342,16 @@ def test_service_still_calls_phase2_validator_after_envelope_parse(monkeypatch: 
     ).generate(_context())
 
     assert result.succeeded is True
-    assert calls and calls[0] == _generated_payload()
+    assert calls
+    validated_payload = calls[0]["payload"]
+    expected_payload = _generated_payload()
+    assert isinstance(validated_payload, dict)
+    assert "payload" not in validated_payload
+    assert validated_payload["schema_id"] == expected_payload["schema_id"]
+    assert validated_payload["schema_version"] == expected_payload["schema_version"]
+    assert validated_payload["status"] == expected_payload["status"]
+    assert validated_payload["feedback_text"] == expected_payload["feedback_text"]
+    assert calls[0]["require_phase4"] is True
 
 
 def _contains_forbidden_key(value: object) -> bool:

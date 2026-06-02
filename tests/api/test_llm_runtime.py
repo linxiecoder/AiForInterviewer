@@ -1,10 +1,10 @@
 import pytest
 
 from app.application.llm.errors import LlmTransportConfigurationError
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
 from app.infrastructure.llm.openai_compatible import OpenAICompatibleLlmTransport
 from app.infrastructure.llm.runtime import build_llm_transport_from_env
 from app.main import create_app
+from tests.fakes.llm_transport import FakeLlmTransport
 
 
 def test_runtime_treats_blank_provider_as_openai_compatible(monkeypatch) -> None:

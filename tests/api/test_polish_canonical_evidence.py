@@ -55,6 +55,8 @@ def test_canonical_evidence_service_selects_confirmed_safe_owner_assets() -> Non
     canonical_assets = pack["canonical_project_assets"]
     assert canonical_assets["available"] is True
     assert canonical_assets["selection_policy"] == "rule_based_keyword_overlap_v1"
+    assert canonical_assets["status_policy"] == "asset_confirmed_only_v1"
+    assert canonical_assets["excluded_statuses"]["asset_archived"] == "historical_reference_only"
     assert [item["asset_id"] for item in canonical_assets["items"]] == ["asset_confirmed_note"]
     assert canonical_assets["items"][0]["status"] == "asset_confirmed"
     assert canonical_assets["items"][0]["asset_type"] == "technical_note"
@@ -73,6 +75,8 @@ def test_canonical_evidence_service_returns_unavailable_without_assets() -> None
 
     assert missing_repository_pack["canonical_project_assets"]["available"] is False
     assert missing_repository_pack["canonical_project_assets"]["items"] == []
+    assert missing_repository_pack["canonical_project_assets"]["warnings"] == ["asset_repository_absent"]
+    assert missing_repository_pack["canonical_project_assets"]["status_policy"] == "asset_confirmed_only_v1"
     assert missing_repository_pack["source_support_level"] == "insufficient_context"
 
     unrelated_repository = _AssetRepository(
@@ -94,7 +98,37 @@ def test_canonical_evidence_service_returns_unavailable_without_assets() -> None
 
     assert no_match_pack["canonical_project_assets"]["available"] is False
     assert no_match_pack["canonical_project_assets"]["items"] == []
+    assert no_match_pack["canonical_project_assets"]["status_policy"] == "asset_confirmed_only_v1"
     assert no_match_pack["source_support_level"] == "insufficient_context"
+
+
+def test_canonical_evidence_service_excludes_archived_assets_as_historical_reference() -> None:
+    repository = _AssetRepository(
+        [
+            _asset(
+                owner_id=OWNER_ID,
+                asset_id="asset_archived_workflow",
+                status="asset_archived",
+                asset_type="project_story",
+                title="Backend workflow automation",
+                summary="Archived FastAPI and PostgreSQL project fact.",
+                content="Archived FastAPI workflow automation with PostgreSQL queues.",
+            )
+        ]
+    )
+
+    pack = CanonicalEvidenceService(repository).build_pack(
+        owner_id=OWNER_ID,
+        session_id=SESSION_ID,
+        query_inputs=("FastAPI PostgreSQL workflow reliability",),
+    )
+
+    canonical_assets = pack["canonical_project_assets"]
+    assert canonical_assets["available"] is False
+    assert canonical_assets["items"] == []
+    assert canonical_assets["status_policy"] == "asset_confirmed_only_v1"
+    assert canonical_assets["excluded_statuses"]["asset_archived"] == "historical_reference_only"
+    assert pack["source_support_level"] == "insufficient_context"
 
 
 def test_canonical_evidence_service_limits_items_and_digest_tracks_asset_summary() -> None:
@@ -125,6 +159,16 @@ def test_canonical_evidence_service_limits_items_and_digest_tracks_asset_summary
     )
 
     assert changed_pack["context_digest"] != pack["context_digest"]
+
+    changed_version_assets = [dict(asset) for asset in assets]
+    changed_version_assets[0]["current_version_id"] = "asset_backend_workflow_0_v2"
+    changed_version_pack = CanonicalEvidenceService(_AssetRepository(changed_version_assets)).build_pack(
+        owner_id=OWNER_ID,
+        session_id=SESSION_ID,
+        query_inputs=("FastAPI PostgreSQL workflow reliability",),
+    )
+
+    assert changed_version_pack["context_digest"] != pack["context_digest"]
 
 
 def test_polish_question_and_feedback_context_include_canonical_assets() -> None:

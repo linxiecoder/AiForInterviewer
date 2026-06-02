@@ -4,8 +4,7 @@ from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
 )
-from app.infrastructure.llm.contracts import SUPPORTED_FAKE_TASK_TYPES
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport, SUPPORTED_FAKE_TASK_TYPES
 from app.infrastructure.llm.types import LlmTransportRequest
 from app.schemas.job_match import JobRequirementChunk, ResumeChunk
 

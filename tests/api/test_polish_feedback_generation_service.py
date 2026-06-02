@@ -14,7 +14,7 @@ from app.application.polish.feedback_schema import (
 )
 from app.application.polish.feedback_validation import validate_generated_feedback_payload
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport
 
 
 def _context() -> dict[str, Any]:
