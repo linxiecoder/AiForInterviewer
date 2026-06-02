@@ -12,7 +12,10 @@ from app.application.assets.ports import AssetRepository
 
 CANONICAL_EVIDENCE_PACK_SCHEMA_VERSION = "canonical_evidence_pack.v1"
 CANONICAL_ASSET_SELECTION_POLICY = "rule_based_keyword_overlap_v1"
+# Archived assets are historical/reference-only in the active product specs.
+CANONICAL_ASSET_STATUS_POLICY = "asset_confirmed_only_v1"
 CANONICAL_ASSET_STATUSES = ("asset_confirmed",)
+CANONICAL_EXCLUDED_ASSET_STATUSES = {"asset_archived": "historical_reference_only"}
 CANONICAL_ASSET_TYPES = (
     "project_story",
     "project_expression",
@@ -103,17 +106,15 @@ class CanonicalEvidenceService:
         ]
         if not items:
             return empty
-        return {
-            "available": True,
-            "selection_policy": CANONICAL_ASSET_SELECTION_POLICY,
-            "items": items,
-        }
+        return empty | {"available": True, "items": items}
 
 
 def empty_canonical_project_assets() -> dict[str, Any]:
     return {
         "available": False,
         "selection_policy": CANONICAL_ASSET_SELECTION_POLICY,
+        "status_policy": CANONICAL_ASSET_STATUS_POLICY,
+        "excluded_statuses": dict(CANONICAL_EXCLUDED_ASSET_STATUSES),
         "items": [],
     }
 
