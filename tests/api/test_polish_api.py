@@ -59,7 +59,7 @@ from app.infrastructure.db.models.question import Question as QuestionModel
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from app.infrastructure.llm.errors import LlmTransportResponseError
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport
 from app.main import create_app
 from app.schemas.polish import PolishFeedbackPayload, PolishSessionAnswerResponse, PolishTaskStatusResponse
 from tests.api.asgi_client import call_json
@@ -4738,7 +4738,6 @@ def test_progress_tree_retired_initial_generation_symbols_are_absent() -> None:
         Path("apps/api/app/application/polish/progress_tree.py"),
         Path("apps/api/app/application/polish/progress_prompts.py"),
         Path("apps/api/app/infrastructure/llm/fake_transport.py"),
-        Path("apps/api/app/infrastructure/llm/contracts.py"),
     ]
     source_text = "\n".join(path.read_text(encoding="utf-8") for path in source_paths)
     retired_symbols = (
@@ -5398,7 +5397,8 @@ def _isolated_polish_app(
     llm_transport=None,
 ) -> FastAPI:
     app = FastAPI()
-    app.state.llm_transport = llm_transport or FakeLlmTransport()
+    resolved_transport = llm_transport or FakeLlmTransport()
+    app.state.llm_transport = resolved_transport
     app.add_exception_handler(ApiHttpError, api_http_error_handler)
     app.include_router(polish_router, prefix="/api/v1")
 
@@ -5408,8 +5408,12 @@ def _isolated_polish_app(
     async def _session_factory_override():
         return session_factory
 
+    async def _llm_transport_override():
+        return app.state.llm_transport
+
     app.dependency_overrides[require_authenticated_actor] = _actor_override
     app.dependency_overrides[get_db_session_factory] = _session_factory_override
+    app.dependency_overrides[get_llm_transport] = _llm_transport_override
     return app
 
 

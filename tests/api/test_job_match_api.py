@@ -20,7 +20,7 @@ from app.infrastructure.db.repositories.job_match import SqlAlchemyJobMatchAnaly
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
-from app.infrastructure.llm.fake_transport import FakeLlmTransport
+from tests.fakes.llm_transport import FakeLlmTransport
 from app.infrastructure.llm.job_match import LlmJobMatchAnalyzer
 from app.infrastructure.llm.types import LlmTransportResult
 from app.schemas.job_match import DimensionScore, JobMatchResultPayload, MatchedRequirement, ResumeEvidence, SourceEvidenceRef

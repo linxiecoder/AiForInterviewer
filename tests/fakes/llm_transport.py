@@ -1,4 +1,12 @@
-"""LLM contract baseline constants."""
+"""Test-only LLM fake facade.
+
+Production app code must not import from ``tests`` modules. Runtime provider
+configuration must also keep rejecting ``LLM_PROVIDER=fake``; this facade exists
+only for explicit test injection.
+"""
+
+from app.infrastructure.llm.fake_transport import FakeLlmTransport
+
 
 SUPPORTED_FAKE_TASK_TYPES = frozenset(
     {
@@ -14,3 +22,5 @@ SUPPORTED_FAKE_TASK_TYPES = frozenset(
         "training_suggestion_generation",
     }
 )
+
+__all__ = ["FakeLlmTransport", "SUPPORTED_FAKE_TASK_TYPES"]
