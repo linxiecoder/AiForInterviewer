@@ -9,7 +9,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 
 # DOCS_INDEX
 
-本文件是 F0 文档治理落库后的当前有效文档索引。它只登记当前已经落库并可作为 active 入口的文档；尚未创建或尚未确认的目标文档不得被当作当前执行依据。
+本文件是 F0 文档治理落库后的当前有效文档索引。它登记当前已经落库并可作为 active 入口的文档，同时登记已纳入治理边界的 evidence-only 目录索引；尚未创建或尚未确认的目标文档不得被当作当前执行依据。evidence-only 目录只记录执行证据，不替代 active docs、`BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实。
 
 当前 AI 模拟面试工作台级 MVP 以 active PRD / UX / TECH / DATA_MODEL / SECURITY_PRIVACY / PROMPT_SPEC / API_SPEC / SCORING_SPEC / SEMANTICS_GLOSSARY / PERSISTENCE_MODEL / APPLICATION_FLOW_SPEC / RELEASE_HANDOFF_SPEC 文档体系为准；archive 下的 workbench-mvp 仅保留历史记录，不作为开发、验收或测试依据。
 
@@ -22,6 +22,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 文档治理 | `docs/00-governance/DOCS_GOVERNANCE.md` | 文档生命周期、命名、归档、迁移和防腐规则 |
 | AI 工作流 | `docs/00-governance/AI_WORKFLOW.md` | Codex / AI 读取、修改、落库和确认流程 |
 | 测试策略 | `docs/00-governance/TEST_POLICY.md` | 测试临时产物治理、受管临时目录工具和测试残留检查规则 |
+| 执行证据目录索引 | `docs/goals/README.md` | 受控窗口 close-out execution evidence 目录索引；`docs/goals/` 只记录执行历史、验证证据、proposed delta 和剩余缺口，不替代 active requirement、active design、delivery plan、ADR、Project source 或代码事实；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md` 或 active docs 启动任务或变更事实源 |
 | 产品需求 | `docs/01-product/PRD.md` | MVP 产品需求唯一事实源 |
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 历史需求吸收、替代、后置、缺口和待决策项 |
 | F2 低保真设计 | `docs/02-design/UX_SPEC.md` | F2 低保真设计唯一 active 文档；输入来源是 `PRD.md`，UNKNOWN 输入来源是 PRD §10；正文以功能场景设计包为主体，Figma 低保真稿链接、Page 名称、Prototype 表达状态和人工接受状态登记以 `UX_SPEC.md` 为准，仓库不存储 Figma 文件本体；不替代 `PRD.md`，不包含高保真 UI、技术设计、API、数据模型或 Prompt 设计 |
@@ -77,6 +78,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`PROMPT_ASSET_SPEC.md`、`PROMPT_EVALUATION_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`SKILL_MODEL_SPEC.md`、`PRESSURE_MODE_SPEC.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 和 `RELEASE_HANDOFF_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
 | `docs/03-delivery/` | active | 当前 `DELIVERY_PLAN.md`、`BACKLOG.md` 是阶段与任务入口；`refactor-multiagent-langgraph-implementation/` 是 PR2-PR8 LangGraph MultiAgent implementation entry；历史 LangGraph planning package 已删除，superseded; see Git history |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
+| `docs/goals/` | evidence-only | 只承载受控窗口执行证据、final report、audit/backfill delta、validation evidence 和 remaining gaps；不是 active requirement、active design、delivery plan、ADR 或代码事实源；当与 GitHub main 当前代码、当前 active docs 或 Project source 冲突时，以后者为准；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md`、active docs 或 ADR 流程 |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
 
 ## 3. 编号规则
@@ -103,3 +105,5 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 2. 已登记到本索引或对应目录索引。
 3. 未绕过 `DELIVERY_PLAN.md`、`BACKLOG.md`、`REQUIREMENT_TRACEABILITY.md` 和 `archive/MANIFEST.md` 的职责边界。
 4. 未新建并行阶段体系、任务体系或临时计划入口。
+
+`docs/goals/` 下的 goal records 只作为 execution evidence，不因登记到本索引而升级为 active requirement、active design、delivery plan、ADR 或代码事实。若 goal record 中的 proposed delta 需要成为当前事实，必须在后续授权窗口回写到对应 active docs、`BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码中。

@@ -1,7 +1,7 @@
 ---
 title: P1_W1_BACKFILL_DELTA
 type: note
-permalink: ai-for-interviewer/tmp/goal0603/p1-w1-backfill-delta-1
+permalink: ai-for-interviewer/docs/goals/2026-06-03/p1-w1/backfill-delta
 ---
 
 # P1-W1 Backfill Delta

@@ -1,7 +1,7 @@
 ---
 title: P1_W1_FINAL_REPORT
 type: note
-permalink: ai-for-interviewer/tmp/goal0603/p1-w1-final-report-1
+permalink: ai-for-interviewer/docs/goals/2026-06-03/p1-w1/final-report
 ---
 
 # P1-W1 Final Report
@@ -30,8 +30,8 @@ permalink: ai-for-interviewer/tmp/goal0603/p1-w1-final-report-1
 - `apps/api/app/application/polish/session_application_service.py`
 - `tests/architecture/test_agent_platform_c0_boundary.py`
 - `tests/api/test_polish_application_service_split.py`
-- `tmp/goal0603/P1_W1_FINAL_REPORT.md`
-- `tmp/goal0603/P1_W1_BACKFILL_DELTA.md`
+- `docs/goals/2026-06-03/P1-W1/P1_W1_FINAL_REPORT.md`
+- `docs/goals/2026-06-03/P1-W1/P1_W1_BACKFILL_DELTA.md`
 
 ## 4. Behavior Before / After
 
@@ -73,7 +73,7 @@ Pre-implementation red checks:
 
 ## 8. Backfill Delta Summary
 
-Backfill proposal written to `tmp/goal0603/P1_W1_BACKFILL_DELTA.md`.
+Backfill proposal written to `docs/goals/2026-06-03/P1-W1/P1_W1_BACKFILL_DELTA.md`.
 
 Key summary:
 
