@@ -52,7 +52,6 @@ from app.application.polish.entities import (
     PolishSessionDetail,
     PolishSessionTurn,
     PolishSession,
-    PolishSubtopic,
     PolishTaskStatus,
     PolishTopic,
 )
@@ -85,7 +84,7 @@ from app.application.polish.question_metadata import (
     sync_follow_up_completed_focus_refs,
 )
 from app.application.polish.report_application_service import PolishReportApplicationService
-from app.application.polish.session_application_service import PolishSessionApplicationService
+from app.application.polish.session_application_service import POLISH_TOPICS, PolishSessionApplicationService
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.progress_context import build_polish_progress_context
 from app.application.polish.progress_evidence import select_progress_tree_evidence_chunks
@@ -136,32 +135,6 @@ _FEEDBACK_GENERATION_LOCKS_GUARD = threading.Lock()
 _FEEDBACK_GENERATION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
 _ANSWER_IDEMPOTENCY_CACHE_GUARD = threading.Lock()
 _ANSWER_IDEMPOTENCY_CACHE: dict[tuple[str, str, str, str], tuple[str, str]] = {}
-POLISH_TOPICS: tuple[PolishTopic, ...] = (
-    PolishTopic(
-        topic_id="topic_authenticity_contribution",
-        title="经历真实性与贡献拷问",
-        description="围绕简历经历真实性、个人贡献边界、关键证据和追问抗压能力进行模拟面试。",
-        requires_job_binding=True,
-    ),
-    PolishTopic(
-        topic_id="topic_technical_depth",
-        title="能力深度与技术碾压",
-        description="围绕核心技术栈、架构设计、性能瓶颈和底层原理进行深度追问。",
-        requires_job_binding=True,
-    ),
-    PolishTopic(
-        topic_id="topic_scenario_roleplay",
-        title="情景模拟与角色扮演",
-        description="围绕真实业务场景、团队协作、跨角色沟通和临场决策进行角色化模拟。",
-        requires_job_binding=True,
-    ),
-    PolishTopic(
-        topic_id="topic_risk_defense",
-        title="风险点排查与防御性打磨",
-        description="围绕简历和岗位匹配中的风险点、薄弱项、反问陷阱和防御性表达进行打磨。",
-        requires_job_binding=True,
-    ),
-)
 
 
 class _PolishUseCaseOperations:
@@ -1419,12 +1392,19 @@ class PolishUseCases(_PolishUseCaseOperations):
             feedback_generation_service=feedback_generation_service,
         )
         self._operation_delegate = _PolishOperationDelegate(self)
-        self._session_service = PolishSessionApplicationService(self._operation_delegate)
+        self._session_service = PolishSessionApplicationService(
+            self._operation_delegate,
+            binding_repository=self._binding_repository,
+        )
         self._question_service = PolishQuestionApplicationService(self._operation_delegate)
         self._answer_service = PolishAnswerApplicationService(self._operation_delegate)
         self._feedback_service = PolishFeedbackApplicationService(self._operation_delegate)
         self._progress_service = PolishProgressApplicationService(self._operation_delegate)
-        self._report_service = PolishReportApplicationService(self._operation_delegate)
+        self._report_service = PolishReportApplicationService(
+            self._operation_delegate,
+            polish_repository=self._polish_repository,
+            build_session_detail=self._build_session_detail,
+        )
 
     def _sync_services(self) -> None:
         operation_delegate = getattr(self, "_operation_delegate", None)
@@ -1434,17 +1414,29 @@ class PolishUseCases(_PolishUseCaseOperations):
         else:
             operation_delegate.bind(self)
 
-        for attr, service_cls in (
-            ("_session_service", PolishSessionApplicationService),
-            ("_question_service", PolishQuestionApplicationService),
-            ("_answer_service", PolishAnswerApplicationService),
-            ("_feedback_service", PolishFeedbackApplicationService),
-            ("_progress_service", PolishProgressApplicationService),
-            ("_report_service", PolishReportApplicationService),
-        ):
+        service_specs = (
+            (
+                "_session_service",
+                PolishSessionApplicationService,
+                {"binding_repository": self._binding_repository},
+            ),
+            ("_question_service", PolishQuestionApplicationService, {}),
+            ("_answer_service", PolishAnswerApplicationService, {}),
+            ("_feedback_service", PolishFeedbackApplicationService, {}),
+            ("_progress_service", PolishProgressApplicationService, {}),
+            (
+                "_report_service",
+                PolishReportApplicationService,
+                {
+                    "polish_repository": self._polish_repository,
+                    "build_session_detail": self._build_session_detail,
+                },
+            ),
+        )
+        for attr, service_cls, kwargs in service_specs:
             service = getattr(self, attr, None)
             if service is None:
-                setattr(self, attr, service_cls(operation_delegate))
+                setattr(self, attr, service_cls(operation_delegate, **kwargs))
                 continue
             bind = getattr(service, "bind", None)
             if callable(bind):
