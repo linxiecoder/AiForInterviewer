@@ -2135,6 +2135,22 @@ def _build_feedback_generation_context(
     actor_id: str,
 ) -> FeedbackGenerationContext:
     progress_context = detail.progress_context if isinstance(detail.progress_context, dict) else {}
+    progress_context = InterviewContextBuilder().build_feedback_context(progress_context)
+    canonical_project_assets = (
+        progress_context.get("canonical_project_assets")
+        if isinstance(progress_context.get("canonical_project_assets"), dict)
+        else {}
+    )
+    canonical_evidence_pack = (
+        progress_context.get("canonical_evidence_pack")
+        if isinstance(progress_context.get("canonical_evidence_pack"), dict)
+        else {}
+    )
+    source_support_summary = (
+        progress_context.get("source_support_summary")
+        if isinstance(progress_context.get("source_support_summary"), dict)
+        else {}
+    )
     return FeedbackGenerationContext(
         owner_id=owner_id,
         actor_id=actor_id,
@@ -2151,12 +2167,11 @@ def _build_feedback_generation_context(
         same_question_answers=_feedback_same_question_answers(turn=turn, current_answer_id=answer.answer_id),
         same_project_turns=(),
         session_recent_turns=_feedback_recent_turns(detail.turns),
-        project_asset_summaries=_canonical_project_asset_items({"canonical_project_assets": progress_context.get("canonical_project_assets")}),
-        canonical_project_assets=(
-            progress_context.get("canonical_project_assets")
-            if isinstance(progress_context.get("canonical_project_assets"), dict)
-            else {}
-        ),
+        project_asset_summaries=_canonical_project_asset_items({"canonical_project_assets": canonical_project_assets}),
+        canonical_project_assets=canonical_project_assets,
+        canonical_evidence_pack=canonical_evidence_pack,
+        source_support_summary=source_support_summary,
+        source_support_level=_clean_question_request_text(source_support_summary.get("level")) if source_support_summary else "",
         question_metadata=turn.question_metadata if isinstance(turn.question_metadata, dict) else {},
         job_snapshot=_feedback_job_snapshot(progress_context.get("job_snapshot")),
         resume_snapshot=_feedback_resume_snapshot(progress_context.get("resume_snapshot")),

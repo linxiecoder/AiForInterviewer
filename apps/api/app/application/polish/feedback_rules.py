@@ -4,6 +4,8 @@ import re
 from copy import deepcopy
 from typing import Any
 
+from app.application.polish.context.expected_points import ExpectedPointsBuilder
+
 
 FEEDBACK_CORE_RULES_VERSION = "polish_feedback_core_rules.phase4.v1"
 
@@ -442,18 +444,7 @@ def _normalize_asset_update_candidates(payload: dict[str, Any]) -> None:
 
 
 def _expected_points(context: object) -> list[str]:
-    question_metadata = _ctx_dict(context, "question_metadata")
-    progress_node = _ctx_dict(context, "progress_node_snapshot")
-    canonical_assets = _canonical_project_assets(context)
-    job_snapshot = _ctx_dict(context, "job_snapshot")
-    points: list[str] = []
-    points.extend(_string_list(question_metadata.get("expected_answer_dimensions"), max_items=12, max_item_chars=240))
-    points.append(_clean(progress_node.get("expected_capability"), max_chars=240))
-    points.extend(_string_list(progress_node.get("missing_points"), max_items=8, max_item_chars=160))
-    for item in _asset_items(canonical_assets):
-        points.append(_clean(item.get("summary") or item.get("content_excerpt") or item.get("title"), max_chars=240))
-    points.extend(_string_list(job_snapshot.get("requirements"), max_items=8, max_item_chars=180))
-    return _unique([point for point in points if point])[:12]
+    return ExpectedPointsBuilder().build(context)
 
 
 def _prior_covered_points(previous_answers: list[dict[str, Any]]) -> list[str]:

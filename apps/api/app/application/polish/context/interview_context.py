@@ -12,6 +12,12 @@ class InterviewContextBuilder:
         self._source_support_service = source_support_service or SourceSupportSummaryService()
 
     def build_question_context(self, progress_context: dict[str, Any]) -> dict[str, Any]:
+        return self._build_context(progress_context)
+
+    def build_feedback_context(self, progress_context: dict[str, Any]) -> dict[str, Any]:
+        return self._build_context(progress_context)
+
+    def _build_context(self, progress_context: dict[str, Any]) -> dict[str, Any]:
         context = dict(progress_context)
         canonical_project_assets = _canonical_project_assets(context)
         result = self._source_support_service.build(canonical_project_assets=canonical_project_assets)
