@@ -75,7 +75,7 @@ Backfill window scope audit:
 
 ## 8. Follow-up Goal
 
-P1-W3 should continue controlled ownership migration by selecting the next low-risk Polish operation slice, preserving API behavior and keeping Question / Feedback runtime or AgentExecutor changes out of scope unless separately authorized.
+P1-W3 should focus on architecture boundary tests. Further Polish ownership migration should continue only in a later explicitly scoped ownership window.
 
 ## 9. Commit Hash
 
