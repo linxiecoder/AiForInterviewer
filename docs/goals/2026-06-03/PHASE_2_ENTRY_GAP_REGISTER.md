@@ -43,7 +43,7 @@ Allowed source labels:
 | P2-GAP-TEST-002 | Shared summary service tests missing | `closed` | `TEST_RESULT` | W2 added `tests/api/test_polish_source_support_summary_service.py`, covering direct / adjacent / job_gap / insufficient, archived exclusion, conflict HITL marker and current-answer non-canonical rule. | Cover direct / adjacent / job_gap / insufficient and asset status/conflict rules. | P2-W2, P2-W5 | High | Closed by W2 validation; W5 may add broader regression seed coverage. |
 | P2-GAP-TEST-003 | Question/Feedback context tests missing | `closed` | `TEST_RESULT` | W3 added `tests/api/test_polish_interview_context_question.py`; W4 added `tests/api/test_polish_interview_context_feedback.py` and `tests/api/test_polish_feedback_expected_points_context.py`. | Prove real callers consume unified context entry. | P2-W3, P2-W4 | High | Closed by focused application/service-level tests without provider rewrite. |
 | P2-GAP-SEED-001 | Eval seed convention needs mapping | `closed` | `TEST_RESULT` | W5 added `tests/evals/test_phase2_canonical_evidence_rules.py` as a Python eval-rule seed, matching the existing `tests/evals` convention instead of creating a new fixture system. | Add deterministic eval seeds only if they fit existing convention; otherwise defer with reason. | P2-W5 | Low | Closed by W5 eval seed validation; no claim that full AI quality gate is complete. |
-| P2-GAP-SRC-001 | Project source pack path absent | `open` | `GITHUB_CODE` | Root-level source pack files named in `phase2_goal.md` were not found during W0 recon. | Backfill actual discovered Project source files or explicitly defer absent paths in closeout. | P2-W6 | Medium | Re-run path discovery in W6 before source backfill. |
+| P2-GAP-SRC-001 | Project source pack path absent | `deferred` | `GITHUB_CODE` | W6 re-ran discovery for all root-level source pack files named in `phase2_goal.md`; all remain missing and no alternate same-name path was found. | Backfill actual discovered Project source files or explicitly defer absent paths in closeout. | P2-W6 | Medium | Deferred in `PHASE_2_CLOSEOUT_GAP_REGISTER.md`; owner must provide source pack path before matrix / risk / acceptance / roadmap backfill. |
 | P2-GAP-P1-001 | Remaining Polish ownership extraction | `deferred` | `PROJECT_SOURCE` | Phase 1 closeout marks remaining ownership extraction as deferred. | Do not continue broad ownership extraction in Phase 2. | N/A | Medium | Limit edits to context/canonical slices authorized by each window. |
 | P2-GAP-PRO-001 | Provider sanitizer gaps | `deferred` | `PROJECT_SOURCE` | Phase 1 closeout maps `developer_prompt` and `full_asset_body` sanitizer gaps to Phase 7. | Keep provider/prompt scope untouched in Phase 2. | N/A | Medium | Stop if validation requires provider or prompt asset changes. |
 | P2-GAP-AGT-001 | Agent runtime wiring | `deferred` | `PROJECT_SOURCE` | Phase 1 closeout maps question/feedback runtime wiring to later runtime phases. | No LangGraph / Agent runtime migration in Phase 2. | N/A | High | Stop if unified context requires runtime migration. |
@@ -65,10 +65,10 @@ Phase 2 must not be marked `complete_validated` while any of these remain true:
 
 | Window | Status | Notes |
 | --- | --- | --- |
-| P2-W0 | `validated_pending_commit` | Scope lock and gap register created; W0 validation passed before commit. |
-| P2-W1 | `validated_pending_commit` | `SourceSupportSummary` contract and `CanonicalEvidencePack` compatibility shape added; W1 validation passed before commit. |
-| P2-W2 | `validated_pending_commit` | Shared source support summary service added under context; W2 validation passed before commit. |
-| P2-W3 | `validated_pending_commit` | Question context now routes through `InterviewContextBuilder` and `SourceSupportSummaryService`; W3 validation passed before commit. |
-| P2-W4 | `validated_pending_commit` | Feedback context now routes through `InterviewContextBuilder`; expected points delegate to context-owned builder; W4 validation passed before commit. |
-| P2-W5 | `validated_pending_commit` | Added deterministic Phase 2 eval seed and context boundary architecture test; W5 validation passed before commit. |
-| P2-W6 | `not_started` | Actionable path: closeout and source backfill. |
+| P2-W0 | `validated_committed` | Scope lock and gap register committed in `84dc0e2`. |
+| P2-W1 | `validated_committed` | `SourceSupportSummary` contract and `CanonicalEvidencePack` compatibility shape committed in `f49203e`. |
+| P2-W2 | `validated_committed` | Shared source support summary service committed in `57b8abc`. |
+| P2-W3 | `validated_committed` | Question context routing committed in `8bc3d46`. |
+| P2-W4 | `validated_committed` | Feedback context routing and expected points builder committed in `f966251`. |
+| P2-W5 | `validated_committed` | Deterministic Phase 2 eval seed and context boundary architecture test committed in `5049ff1`. |
+| P2-W6 | `validated_pending_commit` | Closeout docs created; source pack backfill deferred because source files are absent. |

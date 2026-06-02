@@ -147,3 +147,15 @@ Window-specific tests must be run by exact path after they are created.
 ```text
 /goal follow docs/tmp/goal0603/phase2_goal.md and execute only P2-W1
 ```
+
+## 10. Phase 2 Closeout Backfill
+
+W6 re-ran source pack discovery after P2-W1 through P2-W5 commits. All root-level source pack files named by `phase2_goal.md` remain absent in the current repository. No alternate same-name paths were found.
+
+Closeout evidence:
+
+- `docs/goals/2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md`
+- `docs/goals/2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md`
+- `docs/goals/2026-06-03/PHASE_3_ENTRY_SCOPE_LOCK.md`
+
+Result: Phase 2 closes as `partial_deferred` because code/test capabilities are validated, but Project source pack backfill is deferred pending owner-provided source paths.

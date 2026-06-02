@@ -56,3 +56,11 @@ permalink: ai-for-interviewer/docs/goals
 
 - [PHASE_1_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_1_CLOSEOUT_ASSESSMENT.md)：Phase 1 close-out assessment；推荐 `close_with_deferred_gaps`，需 owner 确认；不启动后续阶段。
 - [PHASE_1_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_1_CLOSEOUT_GAP_REGISTER.md)：Phase 1 deferred gap register；登记 provider、Agent C0 catalog、runtime wiring、Canonical Evidence / SourceSupportSummary 和剩余 Polish ownership gap。
+
+### 2026-06-03 / Phase 2 Canonical Evidence
+
+- [PHASE_2_SCOPE_LOCK.md](2026-06-03/PHASE_2_SCOPE_LOCK.md)：Phase 2 scope lock / recon 输出，只作为执行证据。
+- [PHASE_2_ENTRY_GAP_REGISTER.md](2026-06-03/PHASE_2_ENTRY_GAP_REGISTER.md)：Phase 2 entry gap register 和窗口状态记录。
+- [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：Phase 2 closeout assessment；代码与测试能力完成，source pack backfill 因源文件缺失显式延期。
+- [PHASE_2_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md)：Phase 2 closeout 后剩余 / 后置缺口。
+- [PHASE_3_ENTRY_SCOPE_LOCK.md](2026-06-03/PHASE_3_ENTRY_SCOPE_LOCK.md)：Phase 3 Domain Policies 入口 scope lock candidate；不授权自动启动 Phase 3。
