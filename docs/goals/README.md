@@ -51,3 +51,8 @@ permalink: ai-for-interviewer/docs/goals
 
 - [P1_W3_FINAL_REPORT.md](2026-06-03/P1-W3/P1_W3_FINAL_REPORT.md)：P1-W3 architecture / boundary tests final report，只作为执行证据；Phase 1 仍保持 open。
 - [P1_W3_BACKFILL_DELTA.md](2026-06-03/P1-W3/P1_W3_BACKFILL_DELTA.md)：P1-W3 proposed backfill delta；记录 provider forbidden-key test/gate 和 `developer_prompt` / `full_asset_body` remaining gap。
+
+### 2026-06-03 / Phase 1 Close-out
+
+- [PHASE_1_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_1_CLOSEOUT_ASSESSMENT.md)：Phase 1 close-out assessment；推荐 `close_with_deferred_gaps`，需 owner 确认；不启动后续阶段。
+- [PHASE_1_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_1_CLOSEOUT_GAP_REGISTER.md)：Phase 1 deferred gap register；登记 provider、Agent C0 catalog、runtime wiring、Canonical Evidence / SourceSupportSummary 和剩余 Polish ownership gap。
