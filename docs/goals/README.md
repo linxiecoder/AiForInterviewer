@@ -41,3 +41,8 @@ permalink: ai-for-interviewer/docs/goals
 
 - [P1_W1_FINAL_REPORT.md](2026-06-03/P1-W1/P1_W1_FINAL_REPORT.md)：P1-W1 close-out final report，只作为执行证据。
 - [P1_W1_BACKFILL_DELTA.md](2026-06-03/P1-W1/P1_W1_BACKFILL_DELTA.md)：P1-W1 proposed backfill delta；除非后续授权窗口回写 active source docs，否则保持 proposed delta 状态。
+
+### 2026-06-03 / P1-W2
+
+- [P1_W2_FINAL_REPORT.md](2026-06-03/P1-W2/P1_W2_FINAL_REPORT.md)：P1-W2 close-out final report，只作为执行证据；implementation commit `fca4dd2fceed030f1fa7c102892945d71d6f7e2a`。
+- [P1_W2_BACKFILL_DELTA.md](2026-06-03/P1-W2/P1_W2_BACKFILL_DELTA.md)：P1-W2 proposed backfill delta；DDD-001 / DDD-002 仍为 advanced / partial，Phase 1 仍保持 open。
