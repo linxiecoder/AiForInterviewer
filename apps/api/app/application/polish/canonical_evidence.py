@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any, Iterable
 
@@ -23,9 +24,81 @@ CANONICAL_ASSET_TYPES = (
     "technical_note",
     "feedback_summary",
 )
+SOURCE_SUPPORT_LEVELS = (
+    "direct_project_evidence",
+    "adjacent_project_evidence",
+    "job_gap_only",
+    "insufficient_context",
+)
+SOURCE_SUPPORT_CONFIDENCE_LEVELS = ("high", "medium", "low")
+SOURCE_SUPPORT_POLICY_VERSION = "source_support_summary.v1"
+SOURCE_SUPPORT_COMPUTED_AT = "deterministic_context_v1"
 MAX_CANONICAL_ASSETS = 5
 MAX_ASSET_CANDIDATES = 80
 MAX_ASSET_EXCERPT_CHARS = 480
+
+
+@dataclass(frozen=True)
+class SourceSupportSummary:
+    level: str
+    primary_evidence_refs: tuple[dict[str, str], ...] = ()
+    adjacent_evidence_refs: tuple[dict[str, str], ...] = ()
+    job_gap_refs: tuple[dict[str, str], ...] = ()
+    missing_context: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...] = ()
+    confidence: str = "low"
+    policy_version: str = SOURCE_SUPPORT_POLICY_VERSION
+    computed_at: str = SOURCE_SUPPORT_COMPUTED_AT
+
+    def __post_init__(self) -> None:
+        level = _clean(self.level, max_chars=80)
+        if level not in SOURCE_SUPPORT_LEVELS:
+            raise ValueError("source_support_level_invalid")
+
+        primary_refs = _ref_tuple(self.primary_evidence_refs)
+        adjacent_refs = _ref_tuple(self.adjacent_evidence_refs)
+        job_gap_refs = _ref_tuple(self.job_gap_refs)
+        missing_context = _text_tuple(self.missing_context, max_chars=160)
+        reason_codes = _text_tuple(self.reason_codes, max_chars=160)
+        confidence = _clean(self.confidence, max_chars=40) or "low"
+        if confidence not in SOURCE_SUPPORT_CONFIDENCE_LEVELS:
+            raise ValueError("source_support_confidence_invalid")
+        policy_version = _clean(self.policy_version, max_chars=120) or SOURCE_SUPPORT_POLICY_VERSION
+        computed_at = _clean(self.computed_at, max_chars=120) or SOURCE_SUPPORT_COMPUTED_AT
+
+        if not reason_codes:
+            raise ValueError("source_support_reason_codes_required")
+        if level == "direct_project_evidence" and not primary_refs:
+            raise ValueError("source_support_primary_refs_required")
+        if level == "adjacent_project_evidence" and not adjacent_refs:
+            raise ValueError("source_support_adjacent_refs_required")
+        if level == "job_gap_only" and not job_gap_refs:
+            raise ValueError("source_support_job_gap_refs_required")
+        if level == "insufficient_context" and not missing_context:
+            raise ValueError("source_support_missing_context_required")
+
+        object.__setattr__(self, "level", level)
+        object.__setattr__(self, "primary_evidence_refs", primary_refs)
+        object.__setattr__(self, "adjacent_evidence_refs", adjacent_refs)
+        object.__setattr__(self, "job_gap_refs", job_gap_refs)
+        object.__setattr__(self, "missing_context", missing_context)
+        object.__setattr__(self, "reason_codes", reason_codes)
+        object.__setattr__(self, "confidence", confidence)
+        object.__setattr__(self, "policy_version", policy_version)
+        object.__setattr__(self, "computed_at", computed_at)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "level": self.level,
+            "primary_evidence_refs": [dict(item) for item in self.primary_evidence_refs],
+            "adjacent_evidence_refs": [dict(item) for item in self.adjacent_evidence_refs],
+            "job_gap_refs": [dict(item) for item in self.job_gap_refs],
+            "missing_context": list(self.missing_context),
+            "reason_codes": list(self.reason_codes),
+            "confidence": self.confidence,
+            "policy_version": self.policy_version,
+            "computed_at": self.computed_at,
+        }
 
 
 class CanonicalEvidenceService:
@@ -48,7 +121,8 @@ class CanonicalEvidenceService:
             owner_id=owner_id,
             query_inputs=query_inputs,
         )
-        source_support_level = _source_support_level(canonical_project_assets)
+        source_support_summary = source_support_summary_from_canonical_assets(canonical_project_assets)
+        source_support_level = source_support_level_from_summary(source_support_summary.to_dict())
         pack = {
             "schema_version": CANONICAL_EVIDENCE_PACK_SCHEMA_VERSION,
             "owner_ref": {"resource_type": "owner", "resource_id": owner_id},
@@ -61,6 +135,7 @@ class CanonicalEvidenceService:
             "prior_answer_refs": [],
             "prior_feedback_refs": [],
             "answer_attempt_refs": [],
+            "source_support_summary": source_support_summary.to_dict(),
             "source_support_level": source_support_level,
             "warnings": [],
             "blocking_issues": [],
@@ -122,6 +197,47 @@ def empty_canonical_project_assets() -> dict[str, Any]:
 def stable_digest(value: dict[str, Any]) -> str:
     payload = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def source_support_summary_from_canonical_assets(canonical_project_assets: dict[str, Any]) -> SourceSupportSummary:
+    canonical_assets = canonical_project_assets if isinstance(canonical_project_assets, dict) else {}
+    items = canonical_assets.get("items") if isinstance(canonical_assets.get("items"), list) else []
+    asset_refs = tuple(
+        ref
+        for item in items[:MAX_CANONICAL_ASSETS]
+        if isinstance(item, dict)
+        and (ref := _asset_ref(item)) is not None
+    )
+    if canonical_assets.get("available") and asset_refs:
+        return SourceSupportSummary(
+            level="direct_project_evidence",
+            primary_evidence_refs=asset_refs,
+            reason_codes=("canonical_asset_confirmed",),
+            confidence="high",
+        )
+
+    missing_context = ["confirmed_project_evidence"]
+    warnings = _text_tuple(canonical_assets.get("warnings"))
+    if "asset_repository_absent" in warnings:
+        missing_context.append("asset_repository")
+    if "asset_repository_unavailable" in warnings:
+        missing_context.append("asset_repository_available")
+    return SourceSupportSummary(
+        level="insufficient_context",
+        missing_context=tuple(missing_context),
+        reason_codes=("no_confirmed_canonical_asset",),
+        confidence="low",
+    )
+
+
+def source_support_level_from_summary(summary: SourceSupportSummary | dict[str, Any]) -> str:
+    if isinstance(summary, SourceSupportSummary):
+        return summary.level
+    if isinstance(summary, dict):
+        level = _clean(summary.get("level"), max_chars=80)
+        if level in SOURCE_SUPPORT_LEVELS:
+            return level
+    return "insufficient_context"
 
 
 def _owner_scoped_asset_candidates(
@@ -202,9 +318,9 @@ def _keywords(values: Iterable[object]) -> set[str]:
 
 
 def _source_support_level(canonical_project_assets: dict[str, Any]) -> str:
-    if canonical_project_assets.get("available") and canonical_project_assets.get("items"):
-        return "direct_project_evidence"
-    return "insufficient_context"
+    return source_support_level_from_summary(
+        source_support_summary_from_canonical_assets(canonical_project_assets)
+    )
 
 
 def _version_ref(resource_type: str, resource_id: str | None, version_id: str | None) -> dict[str, str] | None:
@@ -227,9 +343,48 @@ def _canonical_pack_digest_payload(pack: dict[str, Any]) -> dict[str, Any]:
         "job_snapshot_ref": pack.get("job_snapshot_ref"),
         "resume_snapshot_ref": pack.get("resume_snapshot_ref"),
         "progress_node_ref": pack.get("progress_node_ref"),
-        "source_support_level": pack.get("source_support_level"),
+        "source_support_summary": pack.get("source_support_summary"),
+        "source_support_level": source_support_level_from_summary(
+            pack.get("source_support_summary") if isinstance(pack.get("source_support_summary"), dict) else {}
+        ),
+        "blocking_issues": pack.get("blocking_issues") if isinstance(pack.get("blocking_issues"), list) else [],
         "canonical_project_assets": canonical_project_assets if isinstance(canonical_project_assets, dict) else {},
     }
+
+
+def _asset_ref(item: dict[str, Any]) -> dict[str, str] | None:
+    asset_id = _clean(item.get("asset_id"), max_chars=160)
+    if not asset_id:
+        return None
+    return {"resource_type": "asset", "resource_id": asset_id}
+
+
+def _ref_tuple(value: object) -> tuple[dict[str, str], ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    refs: list[dict[str, str]] = []
+    for item in value[:20]:
+        if not isinstance(item, dict):
+            continue
+        cleaned = {
+            str(key): text
+            for key, raw_value in item.items()
+            if (text := _clean(raw_value, max_chars=160))
+        }
+        if cleaned and cleaned not in refs:
+            refs.append(cleaned)
+    return tuple(refs)
+
+
+def _text_tuple(value: object, *, max_chars: int = 120) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    items: list[str] = []
+    for item in value[:20]:
+        text = _clean(item, max_chars=max_chars)
+        if text and text not in items:
+            items.append(text)
+    return tuple(items)
 
 
 def _safe_refs(value: object) -> list[dict[str, str]]:
