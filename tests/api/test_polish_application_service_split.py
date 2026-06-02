@@ -41,3 +41,15 @@ def test_use_cases_reexports_split_service_classes_for_existing_imports() -> Non
         module = importlib.import_module(f"app.application.polish.{module_name}")
 
         assert getattr(use_cases, class_name) is getattr(module, class_name)
+
+
+def test_session_application_service_bootstrap_owns_skeleton_result_without_delegate_call() -> None:
+    from app.application.polish.session_application_service import PolishSessionApplicationService
+
+    class BootstrapShouldNotBeCalled:
+        def bootstrap(self):  # pragma: no cover - assertion guard
+            raise AssertionError("bootstrap should be owned by the focused session service")
+
+    result = PolishSessionApplicationService(BootstrapShouldNotBeCalled()).bootstrap()
+
+    assert result.value == "polish_skeleton"

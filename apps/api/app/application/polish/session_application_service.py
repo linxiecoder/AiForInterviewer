@@ -48,7 +48,7 @@ class PolishSessionApplicationService:
         self._operations = operations
 
     def bootstrap(self) -> ApplicationResult[str]:
-        return self._operations.bootstrap()
+        return ApplicationResult(value="polish_skeleton")
 
     def list_topics(self, query: ListPolishTopicsQuery) -> ApplicationResult[tuple[PolishTopic, ...]]:
         return self._operations.list_topics(query)
