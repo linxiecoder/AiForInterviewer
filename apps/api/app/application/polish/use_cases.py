@@ -64,6 +64,7 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.context.interview_context import InterviewContextBuilder
 from app.application.polish.ports import PolishRepository
 from app.application.polish.progress_application_service import PolishProgressApplicationService
 from app.application.polish.question_generation_policy import (
@@ -448,6 +449,7 @@ class _PolishUseCaseOperations:
             detail.progress_context,
             completed_focus_refs,
         )
+        progress_context = InterviewContextBuilder().build_question_context(progress_context)
         if follow_up_context is not None and follow_up_context.get("completion_status") == "all_focus_completed":
             task_id = generate_resource_id(ResourceIdPrefix.TASK)
             task = _follow_up_completed_task_status(

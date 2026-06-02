@@ -18,6 +18,7 @@ from app.application.llm.agent_io import AgentFocusTarget, AgentOutputEnvelope
 from app.application.llm.ports import LlmTransport
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
+from app.application.polish.context.source_support import SourceSupportSummaryService
 from app.application.polish.next_question_agent import validate_next_question_agent_output
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
 from app.application.polish.question_blueprint import (
@@ -71,49 +72,6 @@ ENGINEERING_EVIDENCE_TERMS = (
     "幂等",
     "恢复",
 )
-SOURCE_SUPPORT_LEVEL_VALUES = {
-    "direct_project_evidence",
-    "adjacent_project_evidence",
-    "job_gap_only",
-    "insufficient_context",
-}
-PROJECT_EVIDENCE_SOURCE_TYPES = {
-    "asset_summary",
-    "resume_project",
-    "resume_project_contribution",
-    "resume_work_experience",
-    "resume_skill",
-    "turn_answer",
-    "turn_feedback",
-}
-JOB_GAP_SOURCE_TYPES = {"job_requirement", "job_responsibility", "match_gap", "match_focus"}
-DIRECT_SUPPORT_TERMS = (
-    "Redis",
-    "RocketMQ",
-    "Kafka",
-    "RabbitMQ",
-    "MinIO",
-    "FastAPI",
-    "PostgreSQL",
-    "MySQL",
-    "Elasticsearch",
-    "OpenSearch",
-    "分布式锁",
-    "事务消息",
-    "半消息回查",
-    "最终一致性",
-    "支付链路",
-    "库存扣减",
-    "幂等",
-    "失败补偿",
-    "异常恢复",
-    "上线验证",
-    "大文件",
-    "分片",
-    "状态机",
-    "异步",
-)
-
 
 @dataclass(frozen=True)
 class QuestionGenerationResult:
@@ -855,6 +813,12 @@ def _build_evidence_scope(
     primary = _primary_chunk(chunks, source_priority_policy=source_priority_policy)
     evidence_refs = tuple(chunk.chunk_id for chunk in chunks)
     sources = tuple(_question_source(index=index, chunk=chunk) for index, chunk in enumerate(chunks, start=1))
+    canonical_project_assets = _canonical_project_assets(context)
+    source_support = SourceSupportSummaryService().build(
+        canonical_project_assets=canonical_project_assets,
+        evidence_chunks=chunks,
+        focus_target=focus_target,
+    )
     return EvidenceScope(
         progress_node_ref=focus_target.ref,
         node_title=focus_target.title,
@@ -869,13 +833,8 @@ def _build_evidence_scope(
             _first_text(plan.get("context_digest"), context.get("content_digest", None)),
             context,
         ),
-        canonical_project_assets=_canonical_project_assets(context),
-        source_support_level=_source_support_level(
-            context,
-            chunks=chunks,
-            focus_target=focus_target,
-            canonical_project_assets=_canonical_project_assets(context),
-        ),
+        canonical_project_assets=canonical_project_assets,
+        source_support_level=source_support.summary.level,
         dropped_context_summary=selection.dropped_context_summary,
     )
 
@@ -911,81 +870,6 @@ def _canonical_project_assets(context: dict[str, Any]) -> dict[str, Any]:
         "selection_policy": _clean(value.get("selection_policy")) or "rule_based_keyword_overlap_v1",
         "items": safe_items,
     }
-
-
-def _source_support_level(
-    context: dict[str, Any],
-    *,
-    chunks: tuple[ProgressEvidenceChunk, ...],
-    focus_target: AgentFocusTarget,
-    canonical_project_assets: dict[str, Any],
-) -> str:
-    pack = context.get("canonical_evidence_pack")
-    if isinstance(pack, dict):
-        raw_level = _normalize_source_support_level(pack.get("source_support_level"))
-        if raw_level in {"direct_project_evidence", "adjacent_project_evidence"}:
-            return raw_level
-
-    if not chunks and not canonical_project_assets.get("available"):
-        return "insufficient_context"
-
-    project_chunks = tuple(chunk for chunk in chunks if chunk.source_type in PROJECT_EVIDENCE_SOURCE_TYPES)
-    job_chunks = tuple(chunk for chunk in chunks if chunk.source_type in JOB_GAP_SOURCE_TYPES)
-    target_text = " ".join(
-        item
-        for item in (
-            focus_target.title,
-            focus_target.expected_capability,
-            " ".join(focus_target.missing_points),
-        )
-        if item
-    )
-    project_text = " ".join(
-        [chunk.text for chunk in project_chunks]
-        + [
-            str(item.get(key) or "")
-            for item in canonical_project_assets.get("items", [])
-            if isinstance(item, dict)
-            for key in ("title", "summary", "content_excerpt")
-        ]
-    )
-    if canonical_project_assets.get("available") or project_chunks:
-        if _has_direct_project_support(target_text=target_text, evidence_text=project_text):
-            return "direct_project_evidence"
-        return "adjacent_project_evidence"
-    if job_chunks:
-        return "job_gap_only"
-    return "insufficient_context"
-
-
-def _normalize_source_support_level(value: object) -> str:
-    text = _clean(value)
-    if text in SOURCE_SUPPORT_LEVEL_VALUES:
-        return text
-    if text == "canonical_asset_available":
-        return "direct_project_evidence"
-    if text in {"direct_implemented", "adjacent_implemented", "conceptual_only", "unsupported"}:
-        return {
-            "direct_implemented": "direct_project_evidence",
-            "adjacent_implemented": "adjacent_project_evidence",
-            "conceptual_only": "job_gap_only",
-            "unsupported": "insufficient_context",
-        }[text]
-    return ""
-
-
-def _has_direct_project_support(*, target_text: str, evidence_text: str) -> bool:
-    target_terms = _support_terms(target_text)
-    evidence_terms = _support_terms(evidence_text)
-    return bool(target_terms & evidence_terms)
-
-
-def _support_terms(value: object) -> set[str]:
-    text = str(value or "")
-    normalized = text.lower()
-    terms = {term.lower() for term in DIRECT_SUPPORT_TERMS if term.lower() in normalized}
-    terms.update(token for token in normalized.replace("/", " ").replace("、", " ").split() if len(token) >= 2)
-    return {term for term in terms if term not in {"设计", "能力", "项目", "说明", "验证", "技术", "链路"}}
 
 
 def _context_digest_with_canonical_assets(base_digest: str, context: dict[str, Any]) -> str:

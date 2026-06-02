@@ -43,6 +43,7 @@ class SourceSupportSummaryService:
         job_gap_refs: Iterable[object] = (),
         current_answer_refs: Iterable[object] = (),
         asset_conflicts: Iterable[object] = (),
+        focus_target: object | None = None,
     ) -> SourceSupportBuildResult:
         canonical_assets = canonical_project_assets if isinstance(canonical_project_assets, dict) else {}
         current_answer_ref_tuple = _ref_tuple(current_answer_refs)
@@ -79,6 +80,18 @@ class SourceSupportSummaryService:
             )
 
         chunks = tuple(evidence_chunks)
+        direct_chunk_refs = _matching_project_chunk_refs(chunks, focus_target=focus_target)
+        if direct_chunk_refs:
+            return SourceSupportBuildResult(
+                summary=SourceSupportSummary(
+                    level="direct_project_evidence",
+                    primary_evidence_refs=direct_chunk_refs,
+                    reason_codes=("matching_project_evidence",),
+                    confidence="high",
+                ),
+                warnings=warnings,
+            )
+
         adjacent_refs = _chunk_refs(chunks, PROJECT_EVIDENCE_SOURCE_TYPES)
         if adjacent_refs:
             return SourceSupportBuildResult(
@@ -144,6 +157,103 @@ def _chunk_refs(chunks: Iterable[object], source_types: set[str]) -> tuple[dict[
         if ref not in refs:
             refs.append(ref)
     return tuple(refs)
+
+
+DIRECT_SUPPORT_TERMS = (
+    "Redis",
+    "RocketMQ",
+    "Kafka",
+    "RabbitMQ",
+    "MinIO",
+    "FastAPI",
+    "PostgreSQL",
+    "MySQL",
+    "Elasticsearch",
+    "OpenSearch",
+    "分布式锁",
+    "事务消息",
+    "半消息回查",
+    "最终一致性",
+    "支付链路",
+    "库存扣减",
+    "幂等",
+    "失败补偿",
+    "异常恢复",
+    "上线验证",
+    "大文件",
+    "分片",
+    "状态机",
+    "异步",
+)
+
+
+def _matching_project_chunk_refs(
+    chunks: Iterable[object],
+    *,
+    focus_target: object | None,
+) -> tuple[dict[str, str], ...]:
+    if focus_target is None:
+        return ()
+    target_text = _focus_target_text(focus_target)
+    if not target_text:
+        return ()
+    refs: list[dict[str, str]] = []
+    for chunk in chunks:
+        if _clean(_value(chunk, "source_type"), max_chars=120) not in PROJECT_EVIDENCE_SOURCE_TYPES:
+            continue
+        if not _has_direct_project_support(target_text=target_text, evidence_text=_chunk_text(chunk)):
+            continue
+        chunk_id = _clean(_value(chunk, "chunk_id") or _value(chunk, "ref"), max_chars=160)
+        if not chunk_id:
+            continue
+        ref = {"resource_type": _clean(_value(chunk, "source_type"), max_chars=120), "resource_id": chunk_id}
+        if ref not in refs:
+            refs.append(ref)
+    return tuple(refs)
+
+
+def _focus_target_text(focus_target: object) -> str:
+    missing_points = _value(focus_target, "missing_points")
+    if isinstance(missing_points, (list, tuple)):
+        missing_text = " ".join(str(item) for item in missing_points if item)
+    else:
+        missing_text = str(missing_points or "")
+    return " ".join(
+        item
+        for item in (
+            str(_value(focus_target, "title") or ""),
+            str(_value(focus_target, "expected_capability") or ""),
+            missing_text,
+        )
+        if item
+    )
+
+
+def _chunk_text(chunk: object) -> str:
+    return " ".join(
+        str(value)
+        for value in (
+            _value(chunk, "text"),
+            _value(chunk, "title"),
+            _value(chunk, "summary"),
+            _value(chunk, "content_excerpt"),
+        )
+        if value
+    )
+
+
+def _has_direct_project_support(*, target_text: str, evidence_text: str) -> bool:
+    target_terms = _support_terms(target_text)
+    evidence_terms = _support_terms(evidence_text)
+    return bool(target_terms & evidence_terms)
+
+
+def _support_terms(value: object) -> set[str]:
+    text = str(value or "")
+    normalized = text.lower()
+    terms = {term.lower() for term in DIRECT_SUPPORT_TERMS if term.lower() in normalized}
+    terms.update(token for token in normalized.replace("/", " ").replace("、", " ").split() if len(token) >= 2)
+    return {term for term in terms if term not in {"设计", "能力", "项目", "说明", "验证", "技术", "链路"}}
 
 
 def _has_asset_conflict(canonical_assets: dict[str, Any], *, asset_conflicts: Iterable[object]) -> bool:

@@ -46,6 +46,30 @@ def test_source_support_summary_service_classifies_adjacent_project_evidence() -
     assert result.summary.to_dict()["confidence"] == "medium"
 
 
+def test_source_support_summary_service_classifies_matching_project_evidence_as_direct() -> None:
+    result = SourceSupportSummaryService().build(
+        evidence_chunks=(
+            {
+                "chunk_id": "resume_project_payment",
+                "source_type": "resume_project",
+                "text": "支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+            },
+        ),
+        focus_target={
+            "title": "支付可靠性追问",
+            "expected_capability": "验证候选人能否围绕支付链路说明设计、取舍和复盘。",
+            "missing_points": ["需要补充验证指标。"],
+        },
+    )
+
+    assert result.summary.to_dict()["level"] == "direct_project_evidence"
+    assert result.summary.to_dict()["primary_evidence_refs"] == [
+        {"resource_type": "resume_project", "resource_id": "resume_project_payment"}
+    ]
+    assert result.summary.to_dict()["reason_codes"] == ["matching_project_evidence"]
+    assert result.summary.to_dict()["confidence"] == "high"
+
+
 def test_source_support_summary_service_classifies_job_gap_only() -> None:
     result = SourceSupportSummaryService().build(
         evidence_chunks=(
