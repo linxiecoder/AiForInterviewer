@@ -20,8 +20,11 @@ AGENT_PLATFORM_FORBIDDEN_IMPORTS = (
     "fastapi",
     "sqlalchemy",
     "alembic",
+    "asyncpg",
+    "psycopg",
     "langgraph",
     "openai",
+    "anthropic",
 )
 
 DOMAIN_FORBIDDEN_IMPORTS = (
@@ -215,8 +218,19 @@ def test_tool_registry_exposes_definitions_not_repository_objects() -> None:
 
     assert registry.list() == (tool,)
     assert all(item.__class__.__name__ == "ToolDefinition" for item in registry.list())
-    assert not hasattr(registry, "repository")
-    assert not hasattr(registry, "repositories")
+    for forbidden_handle in (
+        "repository",
+        "repositories",
+        "db",
+        "database",
+        "engine",
+        "session",
+        "unit_of_work",
+        "formal_writer",
+        "formal_write",
+        "write_formal",
+    ):
+        assert not hasattr(registry, forbidden_handle)
 
     with pytest.raises(RegistryValidationError):
         registry.register(object())
@@ -233,6 +247,11 @@ def test_agent_execution_result_is_candidate_only_until_handoff() -> None:
     assert "trace" in result_field_names
     assert "formal_refs" not in result_field_names
     assert "formal_outputs" not in result_field_names
+    assert "formal_write" not in result_field_names
+    assert "formal_write_ref" not in result_field_names
+    assert "formal_write_result" not in result_field_names
+    assert "formal_write_results" not in result_field_names
+    assert "formal_write_path" not in result_field_names
     assert "formal_write_boundary" in agent_field_names
     assert "formal_write_policy" in handoff_field_names
 

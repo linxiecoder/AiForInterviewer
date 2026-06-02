@@ -46,3 +46,8 @@ permalink: ai-for-interviewer/docs/goals
 
 - [P1_W2_FINAL_REPORT.md](2026-06-03/P1-W2/P1_W2_FINAL_REPORT.md)：P1-W2 close-out final report，只作为执行证据；implementation commit `fca4dd2fceed030f1fa7c102892945d71d6f7e2a`。
 - [P1_W2_BACKFILL_DELTA.md](2026-06-03/P1-W2/P1_W2_BACKFILL_DELTA.md)：P1-W2 proposed backfill delta；DDD-001 / DDD-002 仍为 advanced / partial，Phase 1 仍保持 open。
+
+### 2026-06-03 / P1-W3
+
+- [P1_W3_FINAL_REPORT.md](2026-06-03/P1-W3/P1_W3_FINAL_REPORT.md)：P1-W3 architecture / boundary tests final report，只作为执行证据；Phase 1 仍保持 open。
+- [P1_W3_BACKFILL_DELTA.md](2026-06-03/P1-W3/P1_W3_BACKFILL_DELTA.md)：P1-W3 proposed backfill delta；记录 provider forbidden-key test/gate 和 `developer_prompt` / `full_asset_body` remaining gap。
