@@ -28,11 +28,11 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- | --- | --- |
 | P3-W0 | `scope_locked_docs_only` | This record creates scope lock, catalog, entry gaps, and decision options under `docs/goals/2026-06-03/`. | Commit docs-only P3-W0 artifacts; wait for controller decision. |
 | P3-W1 | `partial_with_deferred_gap` | `SourceSupportPolicy` exists under `app.domain.polish.policies`; existing Phase 3 closeout records source support as implemented with deferred summary gap; no full `SourceSupportSummary` symbol or payload was found. | Audit/repair only if controller chooses; do not duplicate source support implementation. |
-| P3-W2 | `not_started_for_domain_policy` | Question grounding logic remains in `question_grounding.py`; follow-up coverage logic remains in `question_metadata.py` / `use_cases.py`; tests exist in API layer but not domain policy tests. | Extract question grounding and follow-up coverage policies, or split by controller-approved sub-window if too large. |
+| P3-W2 | `implemented_with_residual_gap` | `question_grounding_policy.py` and `follow_up_coverage_policy.py` exist with domain tests; `question_grounding.py` and `use_cases.py` call domain policies. `question_metadata.py` legacy helper remains residual because it was not in the allowed write set. | Keep residual helper / `next_question_agent.py` guardrail explicit; proceed to P3-W3 only under controller authorization. |
 | P3-W3 | `not_started_for_domain_policy` | Feedback asset consistency, answer coverage, and answer change logic remain in `feedback_rules.py`; API tests and deterministic evals exist. | Extract three feedback review policies while preserving behavior. |
 | P3-W4 | `not_started_for_domain_policy` | Feedback next-action rewrite remains in `feedback_rules.py`; validation gate rejects unsafe next question in `feedback_validation.py`. | Extract next-action policy and candidate confirmation semantics. |
-| P3-W5 | `partial_boundary_support` | `tests/architecture/test_domain_polish_policy_boundary.py` exists; `tests/domain/polish/` does not exist; application modules still carry policy-like logic. | Add / strengthen boundary and adapter tests after policies exist. |
-| P3-W6 | `not_started` | Phase 3 final closeout cannot run while QAG-002, QAG-003, FAG-002, FAG-003, FAG-004, and FAG-005 are not extracted. | Produce closeout only after implementation windows and validations pass, or record explicit deferred gaps. |
+| P3-W5 | `partial_boundary_support` | `tests/architecture/test_domain_polish_policy_boundary.py` exists; `tests/domain/polish/` now contains P3-W2 question policy tests; feedback policy domain tests remain future-window work. | Strengthen boundary / adapter tests as P3-W3 and P3-W4 policies are extracted. |
+| P3-W6 | `not_started` | Phase 3 final closeout cannot run while feedback policies remain unextracted and Phase 2 / SRC-001 / CTX-002 deferred gaps remain open; QAG-002 / QAG-003 are implemented for the main path with explicit residuals. | Produce closeout only after implementation windows and validations pass, or record explicit deferred gaps. |
 
 ## 3. P3-W1 - Source Support Policy Bridge
 
@@ -57,14 +57,14 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | QAG-002, QAG-003, DDD-004 |
 | Goal | Move question grounding and follow-up coverage decisions into pure domain policies. |
-| Current evidence | `validate_question_grounding()` in application code blocks unsafe factual claims and unsupported evidence. Follow-up focus selection currently lives in `question_metadata.py` and `use_cases.py`. |
+| Current evidence | `QuestionGroundingPolicy` and `FollowUpCoveragePolicy` now own main grounding and follow-up focus decisions; `question_grounding.py` and `use_cases.py` act as adapters for the main generation path. `question_metadata.py` still contains a legacy helper because it was not in the allowed write set. |
 | Allowed files | `apps/api/app/domain/polish/policies/question_grounding_policy.py`, `apps/api/app/domain/polish/policies/follow_up_coverage_policy.py`, `apps/api/app/domain/polish/policies/__init__.py`, adapters in `question_grounding.py`, `question_generation_service.py`, `question_application_service.py`, `use_cases.py`, domain/API/architecture tests, `docs/goals/**` |
 | Forbidden files | `question_generation_prompts.py`, provider / infrastructure, DB, API routes, Agent runtime, frontend |
 | Behavior change allowed | Only documented guardrails that prevent unsafe factual claims or repeated follow-up focus |
 | Prompt/schema/provider change allowed | No |
 | DB schema change allowed | No |
 | Validation commands | `python -m compileall apps/api/app/domain/polish apps/api/app/application/polish`; `pytest tests/domain/polish/test_question_grounding_policy.py -q`; `pytest tests/domain/polish/test_follow_up_coverage_policy.py -q`; `pytest tests/api/test_polish_question_refactor_phase1.py -q`; `pytest tests/architecture -q` |
-| Done criteria | Policies are pure; old modules are thin adapters or explicit gaps; tests cover direct / adjacent / job gap / insufficient and follow-up repetition / completed-focus blocking |
+| Done criteria | Met for main generation path with explicit residuals: policies are pure, `question_grounding.py` is a thin adapter, `use_cases.py` maps follow-up payload into domain input, and tests cover direct / adjacent / job gap / insufficient plus follow-up repetition / completed-focus blocking. |
 | Rollback | Revert new policy files and adapters; restore old application-level behavior |
 | Stop conditions | Prompt rewrite, provider payload change, API contract change, DB change, or Agent runtime change is needed |
 

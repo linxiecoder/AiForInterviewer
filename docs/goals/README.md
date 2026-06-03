@@ -64,6 +64,11 @@ permalink: ai-for-interviewer/docs/goals
 - [PHASE_3_ENTRY_GAP_REGISTER.md](2026-06-03/PHASE_3_ENTRY_GAP_REGISTER.md)：Phase 3 entry gap register；登记 Phase 2 closeout evidence、SRC-001、CTX-002、P3-W1 sequence 和剩余 Domain Policy gap。
 - [PHASE_3_DECISION_OPTIONS.md](2026-06-03/PHASE_3_DECISION_OPTIONS.md)：Phase 3 后续执行顺序选项和推荐 next prompt；需 controller 确认后才能进入实现。
 
+
+### 2026-06-03 / P3-W2
+
+- [P3_W2_FINAL_REPORT.md](2026-06-03/P3-W2/P3_W2_FINAL_REPORT.md)：P3-W2 question grounding / follow-up coverage domain policy final report；Phase 2 / SRC-001 / CTX-002 仍为 deferred gap，P3-W1 仍为 `partial_with_deferred_gap`。
+
 ### 2026-06-03 / Phase 3 P3-W1 Evidence
 
 - [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：既有 P3-W1 source support closeout evidence；只记录 source support partial，不关闭 Phase 3。

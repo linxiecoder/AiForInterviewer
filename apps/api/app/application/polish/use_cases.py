@@ -77,7 +77,6 @@ from app.application.polish.question_generation_policy import (
 from app.application.polish.question_application_service import PolishQuestionApplicationService
 from app.application.polish.question_generation_service import QuestionGenerationResult, QuestionGenerationService
 from app.application.polish.question_metadata import (
-    build_follow_up_coverage_decision,
     empty_question_metadata,
     merge_follow_up_completed_focus_refs,
     normalize_question_metadata,
@@ -104,6 +103,11 @@ from app.domain.bindings.ports import BindingRepository
 from app.domain.jobs.entities import Job, JobVersion
 from app.domain.jobs.ports import JobRepository
 from app.domain.resumes.entities import Resume, ResumeVersion
+from app.domain.polish.policies.follow_up_coverage_policy import (
+    FollowUpAssetConflict,
+    FollowUpCoverageInput,
+    FollowUpCoveragePolicy,
+)
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.errors import DomainError
@@ -2064,7 +2068,7 @@ def _build_follow_up_generation_context(
             details={"field": "parent_feedback_id"},
         )
 
-    coverage_decision = build_follow_up_coverage_decision(
+    coverage_decision = _build_follow_up_coverage_decision_from_feedback(
         feedback_payload=parent_answer.feedback_payload,
         expected_answer_dimensions=parent_turn.question_metadata.get("expected_answer_dimensions"),
         completed_focus_refs=completed_focus_refs,
@@ -2107,6 +2111,89 @@ def _follow_up_used_focus_refs(
         if focus_key:
             refs.append(focus_key)
     return _clean_question_request_list(refs)
+
+
+
+
+def _build_follow_up_coverage_decision_from_feedback(
+    *,
+    feedback_payload: object,
+    expected_answer_dimensions: object,
+    completed_focus_refs: tuple[str, ...],
+    used_focus_refs: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    payload = feedback_payload if isinstance(feedback_payload, dict) else {}
+    answer_coverage = payload.get("answer_coverage") if isinstance(payload.get("answer_coverage"), dict) else {}
+    answer_change = (
+        payload.get("answer_change_analysis")
+        if isinstance(payload.get("answer_change_analysis"), dict)
+        else {}
+    )
+    asset_check = (
+        payload.get("asset_consistency_check")
+        if isinstance(payload.get("asset_consistency_check"), dict)
+        else {}
+    )
+
+    expected_points = _follow_up_text_list(answer_coverage.get("expected_points"))
+    if not expected_points:
+        expected_points = _follow_up_text_list(expected_answer_dimensions)
+    missing_points = _follow_up_text_list(answer_coverage.get("missing_points"))
+    if not missing_points:
+        legacy_missing = [
+            _clean_question_request_text(
+                item.get("title") or item.get("dimension_id") or item.get("expected_dimension"),
+                max_chars=240,
+            )
+            for item in _dict_list(payload.get("missing_answer_dimensions"))
+        ]
+        missing_points = tuple(item for item in legacy_missing if item)
+
+    decision = FollowUpCoveragePolicy.decide(
+        FollowUpCoverageInput(
+            expected_points=expected_points,
+            covered_points=_follow_up_text_list(answer_coverage.get("covered_points")),
+            missing_points=missing_points,
+            weak_points=_follow_up_text_list(answer_coverage.get("weak_points")),
+            contradicted_points=_follow_up_text_list(answer_coverage.get("contradicted_points")),
+            regressed_points=_follow_up_text_list(answer_change.get("regressed_points")),
+            fixed_loss_points=_follow_up_text_list(answer_change.get("fixed_loss_points"), max_chars=120),
+            repeated_loss_points=_follow_up_text_list(answer_change.get("repeated_loss_points"), max_chars=120),
+            asset_conflicts=_follow_up_asset_conflicts(asset_check),
+            completed_focus_refs=_follow_up_text_list(completed_focus_refs, max_chars=160),
+            used_focus_refs=_follow_up_text_list(used_focus_refs, max_chars=160),
+            coverage_available=bool(answer_coverage),
+        )
+    )
+    return decision.to_legacy_dict()
+
+
+def _follow_up_asset_conflicts(asset_check: object) -> tuple[FollowUpAssetConflict, ...]:
+    if not isinstance(asset_check, dict) or asset_check.get("status") != "conflict":
+        return ()
+    conflicts: list[FollowUpAssetConflict] = []
+    for item in _dict_list(asset_check.get("conflicts"))[:6]:
+        conflict = FollowUpAssetConflict(
+            conflict_type=_clean_question_request_text(item.get("conflict_type"), max_chars=120),
+            current_answer_claim=_clean_question_request_text(item.get("current_answer_claim"), max_chars=160),
+            asset_claim=_clean_question_request_text(item.get("asset_claim"), max_chars=160),
+            severity=_clean_question_request_text(item.get("severity"), max_chars=80),
+        )
+        if conflict.conflict_type or conflict.current_answer_claim or conflict.asset_claim or conflict.severity:
+            conflicts.append(conflict)
+    return tuple(conflicts)
+
+
+def _follow_up_text_list(value: object, *, max_chars: int = 240) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    raw_items = value if isinstance(value, (list, tuple, set)) else [value]
+    cleaned: list[str] = []
+    for item in raw_items:
+        text = str(item or "").strip()
+        if text:
+            cleaned.append(text[:max_chars])
+    return tuple(dict.fromkeys(cleaned))
 
 
 def _find_turn(turns: tuple[PolishSessionTurn, ...], question_id: str | None) -> PolishSessionTurn | None:
