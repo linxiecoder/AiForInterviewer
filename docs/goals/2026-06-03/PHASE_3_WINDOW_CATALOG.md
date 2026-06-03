@@ -32,7 +32,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | P3-W3 | `implemented_p3_w3` | `asset_consistency_policy.py`, `answer_coverage_policy.py`, and `answer_change_policy.py` exist with domain tests; `feedback_rules.py` calls them as adapter / legacy payload bridge. | Proceed to P3-W4 next-action policy; keep Phase 2 / SRC-001 / CTX-002 deferred gaps open. |
 | P3-W4 | `implemented_p3_w4` | `feedback_next_action_policy.py` exists with domain tests; `feedback_rules.py` calls it as next-action adapter while `feedback_validation.py` keeps schema guardrails. | Proceed to P3-W5 bridge / boundary hardening; keep Phase 2 / SRC-001 / CTX-002 deferred gaps open. |
 | P3-W5 | `implemented_p3_w5` | `tests/architecture/test_domain_polish_policy_boundary.py` now locks Phase 3 policy file list, application bridge imports, policy entrypoint calls, and thin adapter runtime boundary. | Proceed only to P3-W6 assessment/backfill with Phase 2 / SRC-001 / CTX-002 still open; do not claim final closeout. |
-| P3-W6 | `not_started_blocked_by_deferred_gaps` | P3-W5 validations passed, but Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain deferred gaps. | Produce final closeout only after gaps are backfilled or explicitly accepted as final residual by controller. |
+| P3-W6 | `blocked_requires_controller_decision` | P3-W6 assessment updated closeout / gap evidence after P3-W5, but Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain deferred gaps. | Open CTX-002 / SourceSupportSummary repair or Phase 2 / SRC-001 backfill, or obtain explicit final-residual acceptance before final closeout. |
 
 ## 3. P3-W1 - Source Support Policy Bridge
 
@@ -125,14 +125,14 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | DDD-004, QAG-001, QAG-002, QAG-003, FAG-002, FAG-003, FAG-004, FAG-005, WIN-001, SRC-001 |
 | Goal | Produce final Phase 3 status, validation evidence, scope audit, and deferred gap register. |
-| Current evidence | P3-W5 is implemented; P3-W1 source support remains partial with deferred gap; Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain open and block final closeout unless backfilled or explicitly accepted as final residual. |
+| Current evidence | P3-W6 closeout assessment and gap register are updated post-P3-W5; P3-W1 source support remains partial with deferred gap; Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain open and block final closeout unless backfilled or explicitly accepted as final residual. |
 | Allowed files | `docs/goals/**`, registered docs / markdown backfill only if authorized |
 | Forbidden files | Implementation files unless controller explicitly opens a repair window |
 | Behavior change allowed | No |
 | Prompt/schema/provider change allowed | No |
 | DB schema change allowed | No |
 | Validation commands | `git diff --name-only`; `git diff --stat`; `python -m compileall apps/api/app/domain/polish apps/api/app/application/polish`; `pytest tests/domain/polish -q`; `pytest tests/architecture -q`; `pytest tests/api/test_polish_question_refactor_phase1.py -q`; `pytest tests/api -k "feedback and polish" -q` |
-| Done criteria | Capability statuses are honest; deferred gaps explicit; source backfill complete or impossible files listed |
+| Done criteria | Met for blocked closeout assessment: capability statuses are honest, deferred gaps are explicit, and impossible / blocked source backfill files are listed. Final closeout remains blocked. |
 | Rollback | Revert docs closeout/backfill changes |
 | Stop conditions | Any capability is claimed done without code + tests + source evidence |
 

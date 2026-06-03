@@ -62,4 +62,4 @@ This register explicitly does not claim:
 
 ## 5. Recommended Treatment
 
-Keep this gap register open after P3-W5. P3-W2 through P3-W5 may be treated as executed evidence, but Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain deferred gaps and continue to block Phase 3 final closeout unless they are backfilled or explicitly accepted as final residual by the controller.
+Keep this gap register open after P3-W6. P3-W2 through P3-W5 may be treated as executed implementation / bridge evidence, and P3-W6 may be treated as blocked closeout assessment evidence, but Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain deferred gaps and continue to block Phase 3 final closeout unless they are backfilled or explicitly accepted as final residual by the controller.
