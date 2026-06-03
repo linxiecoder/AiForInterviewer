@@ -1,5 +1,27 @@
 """Polish domain policy exports."""
 
+from app.domain.polish.policies.answer_change_policy import (
+    AnswerChangeDecision,
+    AnswerChangeInput,
+    AnswerChangePolicy,
+    AnswerChangeTrend,
+    PreviousAnswerSnapshot,
+)
+from app.domain.polish.policies.answer_coverage_policy import (
+    AnswerCoverageDecision,
+    AnswerCoverageInput,
+    AnswerCoveragePolicy,
+    CoverageLevel,
+)
+from app.domain.polish.policies.asset_consistency_policy import (
+    AssetConsistencyConflict,
+    AssetConsistencyDecision,
+    AssetConsistencyInput,
+    AssetConsistencyPolicy,
+    AssetConsistencyStatus,
+    CanonicalAssetItem,
+    UnsupportedAssetClaim,
+)
 from app.domain.polish.policies.follow_up_coverage_policy import (
     FollowUpAssetConflict,
     FollowUpCoverageAction,
@@ -23,12 +45,27 @@ from app.domain.polish.policies.source_support_policy import (
 )
 
 __all__ = [
+    "AnswerChangeDecision",
+    "AnswerChangeInput",
+    "AnswerChangePolicy",
+    "AnswerChangeTrend",
+    "AnswerCoverageDecision",
+    "AnswerCoverageInput",
+    "AnswerCoveragePolicy",
+    "AssetConsistencyConflict",
+    "AssetConsistencyDecision",
+    "AssetConsistencyInput",
+    "AssetConsistencyPolicy",
+    "AssetConsistencyStatus",
+    "CanonicalAssetItem",
+    "CoverageLevel",
     "FollowUpAssetConflict",
     "FollowUpCoverageAction",
     "FollowUpCoverageDecision",
     "FollowUpCoverageInput",
     "FollowUpCoveragePolicy",
     "FollowUpFocusDecision",
+    "PreviousAnswerSnapshot",
     "QuestionGroundingAction",
     "QuestionGroundingDecision",
     "QuestionGroundingInput",
@@ -38,4 +75,5 @@ __all__ = [
     "SourceSupportLevel",
     "SourceSupportPolicy",
     "SourceSupportTarget",
+    "UnsupportedAssetClaim",
 ]

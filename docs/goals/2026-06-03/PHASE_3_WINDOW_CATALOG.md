@@ -29,10 +29,10 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | P3-W0 | `scope_locked_docs_only` | This record creates scope lock, catalog, entry gaps, and decision options under `docs/goals/2026-06-03/`. | Commit docs-only P3-W0 artifacts; wait for controller decision. |
 | P3-W1 | `partial_with_deferred_gap` | `SourceSupportPolicy` exists under `app.domain.polish.policies`; existing Phase 3 closeout records source support as implemented with deferred summary gap; no full `SourceSupportSummary` symbol or payload was found. | Audit/repair only if controller chooses; do not duplicate source support implementation. |
 | P3-W2 | `implemented_with_residual_gap` | `question_grounding_policy.py` and `follow_up_coverage_policy.py` exist with domain tests; `question_grounding.py` and `use_cases.py` call domain policies. `question_metadata.py` legacy helper remains residual because it was not in the allowed write set. | Keep residual helper / `next_question_agent.py` guardrail explicit; proceed to P3-W3 only under controller authorization. |
-| P3-W3 | `not_started_for_domain_policy` | Feedback asset consistency, answer coverage, and answer change logic remain in `feedback_rules.py`; API tests and deterministic evals exist. | Extract three feedback review policies while preserving behavior. |
+| P3-W3 | `implemented_p3_w3` | `asset_consistency_policy.py`, `answer_coverage_policy.py`, and `answer_change_policy.py` exist with domain tests; `feedback_rules.py` calls them as adapter / legacy payload bridge. | Proceed to P3-W4 next-action policy; keep Phase 2 / SRC-001 / CTX-002 deferred gaps open. |
 | P3-W4 | `not_started_for_domain_policy` | Feedback next-action rewrite remains in `feedback_rules.py`; validation gate rejects unsafe next question in `feedback_validation.py`. | Extract next-action policy and candidate confirmation semantics. |
-| P3-W5 | `partial_boundary_support` | `tests/architecture/test_domain_polish_policy_boundary.py` exists; `tests/domain/polish/` now contains P3-W2 question policy tests; feedback policy domain tests remain future-window work. | Strengthen boundary / adapter tests as P3-W3 and P3-W4 policies are extracted. |
-| P3-W6 | `not_started` | Phase 3 final closeout cannot run while feedback policies remain unextracted and Phase 2 / SRC-001 / CTX-002 deferred gaps remain open; QAG-002 / QAG-003 are implemented for the main path with explicit residuals. | Produce closeout only after implementation windows and validations pass, or record explicit deferred gaps. |
+| P3-W5 | `partial_boundary_support_p3_w3` | `tests/architecture/test_domain_polish_policy_boundary.py` exists; `tests/domain/polish/` now contains P3-W2 question policy tests and P3-W3 feedback review policy tests. P3-W4 next-action policy remains future-window work. | Strengthen boundary / adapter tests after P3-W4 policy extraction. |
+| P3-W6 | `not_started` | Phase 3 final closeout cannot run while P3-W4 / P3-W5 remain open and Phase 2 / SRC-001 / CTX-002 deferred gaps remain open; QAG-002 / QAG-003 and FAG-002 / FAG-003 / FAG-004 have execution evidence with explicit residuals. | Produce closeout only after implementation windows and validations pass, or record explicit deferred gaps. |
 
 ## 3. P3-W1 - Source Support Policy Bridge
 
@@ -74,14 +74,14 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | FAG-002, FAG-003, FAG-004, DDD-004 |
 | Goal | Move asset consistency, answer coverage, and answer change review rules into pure domain policies. |
-| Current evidence | `feedback_rules.py` owns confirmed-only asset checks, archived exclusion, technology / metric / timeline / responsibility conflicts, expected point coverage, prior answer comparison, and feedback card generation. |
+| Current evidence | P3-W3 now adds pure `AssetConsistencyPolicy`, `AnswerCoveragePolicy`, and `AnswerChangePolicy`; `feedback_rules.py` owns context extraction, legacy payload mapping, feedback cards, and P3-W4 next-action bridge only. |
 | Allowed files | `asset_consistency_policy.py`, `answer_coverage_policy.py`, `answer_change_policy.py`, `policies/__init__.py`, adapter use in `feedback_rules.py`, `feedback_generation_service.py`, `feedback_application_service.py`, domain/API/architecture tests, `docs/goals/**` |
 | Forbidden files | `feedback_prompt_assets.py`, `question_generation_prompts.py`, provider / infrastructure, DB, API routes, Agent runtime, frontend |
 | Behavior change allowed | Only to preserve or make explicit existing deterministic guardrails |
 | Prompt/schema/provider change allowed | No |
 | DB schema change allowed | No |
 | Validation commands | `python -m compileall apps/api/app/domain/polish apps/api/app/application/polish`; `pytest tests/domain/polish/test_asset_consistency_policy.py -q`; `pytest tests/domain/polish/test_answer_coverage_policy.py -q`; `pytest tests/domain/polish/test_answer_change_policy.py -q`; `pytest tests/api -k "feedback and polish" -q`; `pytest tests/architecture -q` |
-| Done criteria | Three pure policies exist; tests cover conflict / new fact / archived exclusion, full / partial / missing coverage, and improved / regressed / unchanged / insufficient history |
+| Done criteria | Met for P3-W3: three pure policies exist; domain tests cover conflict / new fact / insufficient asset context, full / partial / missing coverage, and first-attempt / mixed / regressed history; feedback API regression preserves legacy payload behavior. |
 | Rollback | Revert new policies and feedback adapter changes |
 | Stop conditions | Provider prompt output, generated schema, storage, task status, or API shape must change |
 
@@ -108,7 +108,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | DDD-004, QAG-001, QAG-002, QAG-003, FAG-002, FAG-003, FAG-004, FAG-005 |
 | Goal | Ensure application services orchestrate policies and boundary tests prevent drift. |
-| Current evidence | Domain policy boundary test exists; domain policy test directory is missing; application modules still carry policy-like logic before W2-W4. |
+| Current evidence | Domain policy boundary test exists; P3-W2 and P3-W3 policy tests exist; P3-W4 next-action logic remains in application bridge pending extraction. |
 | Allowed files | Application adapters in polish modules, `apps/api/app/domain/polish/policies/**`, `tests/architecture/**`, `tests/domain/polish/**`, targeted API tests, `docs/goals/**` |
 | Forbidden files | Prompt assets, provider / infrastructure, DB, API routes, Agent runtime, frontend |
 | Behavior change allowed | No external behavior change |
@@ -125,7 +125,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | DDD-004, QAG-001, QAG-002, QAG-003, FAG-002, FAG-003, FAG-004, FAG-005, WIN-001, SRC-001 |
 | Goal | Produce final Phase 3 status, validation evidence, scope audit, and deferred gap register. |
-| Current evidence | Not ready: only P3-W1 source support is partial; other policy windows remain open. |
+| Current evidence | Not ready: P3-W1 source support remains partial with deferred gap; P3-W2 and P3-W3 are implemented; P3-W4 / P3-W5 and Phase 2 / SRC-001 / CTX-002 deferred gaps remain open. |
 | Allowed files | `docs/goals/**`, registered docs / markdown backfill only if authorized |
 | Forbidden files | Implementation files unless controller explicitly opens a repair window |
 | Behavior change allowed | No |
@@ -143,5 +143,5 @@ Stop and return to controller if:
 - A window requires modifying prompt assets, provider behavior, DB schema, API contract, Agent runtime, LangGraph runtime, or frontend.
 - A domain policy would need DB, LLM, FastAPI, infrastructure, provider SDKs, or prompt builders.
 - A candidate / suggestion would need to become a formal business fact without Application Service + Domain Policy + Handoff.
-- SourceSupportSummary or CTX-002 would be marked complete without full object, payload propagation, and tests.
+- SourceSupportSummary or CTX-002 would be falsely closed without full object, payload propagation, and tests.
 - Existing Phase 2 missing closeout evidence blocks the controller's desired sequencing.

@@ -69,6 +69,11 @@ permalink: ai-for-interviewer/docs/goals
 
 - [P3_W2_FINAL_REPORT.md](2026-06-03/P3-W2/P3_W2_FINAL_REPORT.md)：P3-W2 question grounding / follow-up coverage domain policy final report；Phase 2 / SRC-001 / CTX-002 仍为 deferred gap，P3-W1 仍为 `partial_with_deferred_gap`。
 
+
+### 2026-06-03 / P3-W3
+
+- [P3_W3_FINAL_REPORT.md](2026-06-03/P3-W3/P3_W3_FINAL_REPORT.md)：P3-W3 feedback review domain policies final report；FAG-002 / FAG-003 / FAG-004 已抽为 domain policy，P3-W4 和 Phase 2 / SRC-001 / CTX-002 deferred gaps 仍保持 open。
+
 ### 2026-06-03 / Phase 3 P3-W1 Evidence
 
 - [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：既有 P3-W1 source support closeout evidence；只记录 source support partial，不关闭 Phase 3。
