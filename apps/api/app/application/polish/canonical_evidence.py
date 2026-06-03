@@ -8,6 +8,7 @@ from hashlib import sha256
 from typing import Any, Iterable
 
 from app.application.assets.ports import AssetRepository
+from app.domain.polish.policies.source_support_policy import SourceSupportPolicy
 
 
 CANONICAL_EVIDENCE_PACK_SCHEMA_VERSION = "canonical_evidence_pack.v1"
@@ -202,9 +203,11 @@ def _keywords(values: Iterable[object]) -> set[str]:
 
 
 def _source_support_level(canonical_project_assets: dict[str, Any]) -> str:
-    if canonical_project_assets.get("available") and canonical_project_assets.get("items"):
-        return "direct_project_evidence"
-    return "insufficient_context"
+    items = canonical_project_assets.get("items") if isinstance(canonical_project_assets.get("items"), list) else []
+    return SourceSupportPolicy.classify_canonical_assets(
+        canonical_project_assets_available=bool(canonical_project_assets.get("available")),
+        canonical_project_asset_count=len(items),
+    ).legacy_source_support_level
 
 
 def _version_ref(resource_type: str, resource_id: str | None, version_id: str | None) -> dict[str, str] | None:

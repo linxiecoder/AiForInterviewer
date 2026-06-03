@@ -36,6 +36,11 @@ from app.application.polish.question_generation_service import (
     _parse_llm_question_payload,
 )
 from app.application.polish.question_metadata import normalize_question_metadata
+from app.domain.polish.policies.source_support_policy import (
+    SourceSupportEvidence,
+    SourceSupportPolicy,
+    SourceSupportTarget,
+)
 from app.application.polish.use_cases import (
     PolishAnswerApplicationService,
     PolishFeedbackApplicationService,
@@ -799,6 +804,65 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert metadata["grounding_validation_errors"] == []
     assert metadata["manual_review_required"] is False
 
+
+def test_source_support_policy_classifies_direct_project_evidence_from_canonical_assets() -> None:
+    decision = SourceSupportPolicy.classify_canonical_assets(
+        canonical_project_assets_available=True,
+        canonical_project_asset_count=1,
+    )
+
+    assert decision.legacy_source_support_level == "direct_project_evidence"
+    assert decision.reason_codes == ("canonical_project_assets_available",)
+
+
+def test_source_support_policy_classifies_adjacent_project_evidence_without_target_overlap() -> None:
+    decision = SourceSupportPolicy.classify_question_context(
+        target=SourceSupportTarget(
+            title="分布式锁与事务消息最终一致性设计",
+            expected_capability="验证分布式锁、事务消息和最终一致性设计能力。",
+        ),
+        evidence=(
+            SourceSupportEvidence(
+                source_type="resume_project",
+                text="候选人做过大文件异步处理管道，负责上传、解析、切块、向量化和入库。",
+                ref="resume_project_004",
+            ),
+        ),
+    )
+
+    assert decision.legacy_source_support_level == "adjacent_project_evidence"
+    assert decision.evidence_refs == ("resume_project_004",)
+    assert decision.reason_codes == ("project_evidence_without_direct_overlap",)
+
+
+def test_source_support_policy_classifies_job_gap_only_when_only_job_requirement_exists() -> None:
+    decision = SourceSupportPolicy.classify_question_context(
+        target=SourceSupportTarget(title="分布式一致性设计"),
+        evidence=(
+            SourceSupportEvidence(
+                source_type="job_requirement",
+                text="岗位要求能设计分布式一致性、幂等和补偿机制。",
+                ref="job_gap_001",
+            ),
+        ),
+    )
+
+    assert decision.legacy_source_support_level == "job_gap_only"
+    assert decision.evidence_refs == ("job_gap_001",)
+    assert decision.reason_codes == ("job_gap_evidence_only",)
+
+
+def test_source_support_policy_classifies_insufficient_context_without_sources() -> None:
+    decision = SourceSupportPolicy.classify_question_context(
+        target=SourceSupportTarget(title="分布式一致性设计"),
+        evidence=(),
+    )
+
+    assert decision.legacy_source_support_level == "insufficient_context"
+    assert decision.evidence_refs == ()
+    assert decision.reason_codes == ("no_source_context",)
+
+
 def test_question_provider_request_redacts_sensitive_values_from_compact_evidence() -> None:
     transport = _RecordingQuestionTransport()
     service = QuestionGenerationService(llm_transport=transport)
@@ -1318,6 +1382,7 @@ def test_next_question_agent_job_gap_only_role_requirement_uses_gap_probe() -> N
 
     assert result.succeeded
     assert result.draft is not None
+    assert transport.requests[0].evidence_bundle["source_support_level"] == "job_gap_only"
     assert result.draft.question_metadata["next_question_decision"]["turn_intent"] == "gap_compensation_design"
     assert result.draft.question_metadata["next_question_decision"]["evidence_support_level"] == "job_gap_only"
     assert "假设" in result.draft.question_text
@@ -1353,6 +1418,7 @@ def test_next_question_agent_clarifies_when_materials_missing() -> None:
 
     assert result.succeeded
     assert result.draft is not None
+    assert transport.requests[0].evidence_bundle["source_support_level"] == "insufficient_context"
     metadata = result.draft.question_metadata
     assert metadata["next_question_clarification_needed"] is True
     assert metadata["next_question_question"]["question_kind"] == "clarification"

@@ -39,6 +39,11 @@ from app.application.polish.question_generation_policy import (
     QuestionGenerationRuntimePolicy,
 )
 from app.application.polish.question_grounding import GroundingResult, validate_question_grounding
+from app.domain.polish.policies.source_support_policy import (
+    SourceSupportEvidence,
+    SourceSupportPolicy,
+    SourceSupportTarget,
+)
 
 
 QUESTION_GENERATION_SERVICE_VERSION = "polish_question_generation.v1"
@@ -71,50 +76,6 @@ ENGINEERING_EVIDENCE_TERMS = (
     "幂等",
     "恢复",
 )
-SOURCE_SUPPORT_LEVEL_VALUES = {
-    "direct_project_evidence",
-    "adjacent_project_evidence",
-    "job_gap_only",
-    "insufficient_context",
-}
-PROJECT_EVIDENCE_SOURCE_TYPES = {
-    "asset_summary",
-    "resume_project",
-    "resume_project_contribution",
-    "resume_work_experience",
-    "resume_skill",
-    "turn_answer",
-    "turn_feedback",
-}
-JOB_GAP_SOURCE_TYPES = {"job_requirement", "job_responsibility", "match_gap", "match_focus"}
-DIRECT_SUPPORT_TERMS = (
-    "Redis",
-    "RocketMQ",
-    "Kafka",
-    "RabbitMQ",
-    "MinIO",
-    "FastAPI",
-    "PostgreSQL",
-    "MySQL",
-    "Elasticsearch",
-    "OpenSearch",
-    "分布式锁",
-    "事务消息",
-    "半消息回查",
-    "最终一致性",
-    "支付链路",
-    "库存扣减",
-    "幂等",
-    "失败补偿",
-    "异常恢复",
-    "上线验证",
-    "大文件",
-    "分片",
-    "状态机",
-    "异步",
-)
-
-
 @dataclass(frozen=True)
 class QuestionGenerationResult:
     succeeded: bool
@@ -921,71 +882,25 @@ def _source_support_level(
     canonical_project_assets: dict[str, Any],
 ) -> str:
     pack = context.get("canonical_evidence_pack")
-    if isinstance(pack, dict):
-        raw_level = _normalize_source_support_level(pack.get("source_support_level"))
-        if raw_level in {"direct_project_evidence", "adjacent_project_evidence"}:
-            return raw_level
-
-    if not chunks and not canonical_project_assets.get("available"):
-        return "insufficient_context"
-
-    project_chunks = tuple(chunk for chunk in chunks if chunk.source_type in PROJECT_EVIDENCE_SOURCE_TYPES)
-    job_chunks = tuple(chunk for chunk in chunks if chunk.source_type in JOB_GAP_SOURCE_TYPES)
-    target_text = " ".join(
-        item
-        for item in (
-            focus_target.title,
-            focus_target.expected_capability,
-            " ".join(focus_target.missing_points),
-        )
-        if item
-    )
-    project_text = " ".join(
-        [chunk.text for chunk in project_chunks]
-        + [
+    return SourceSupportPolicy.classify_question_context(
+        existing_level=pack.get("source_support_level") if isinstance(pack, dict) else None,
+        target=SourceSupportTarget(
+            title=focus_target.title,
+            expected_capability=focus_target.expected_capability,
+            missing_points=tuple(focus_target.missing_points),
+        ),
+        evidence=tuple(
+            SourceSupportEvidence(source_type=chunk.source_type, text=chunk.text, ref=chunk.chunk_id)
+            for chunk in chunks
+        ),
+        canonical_project_assets_available=bool(canonical_project_assets.get("available")),
+        canonical_project_asset_texts=tuple(
             str(item.get(key) or "")
             for item in canonical_project_assets.get("items", [])
             if isinstance(item, dict)
             for key in ("title", "summary", "content_excerpt")
-        ]
-    )
-    if canonical_project_assets.get("available") or project_chunks:
-        if _has_direct_project_support(target_text=target_text, evidence_text=project_text):
-            return "direct_project_evidence"
-        return "adjacent_project_evidence"
-    if job_chunks:
-        return "job_gap_only"
-    return "insufficient_context"
-
-
-def _normalize_source_support_level(value: object) -> str:
-    text = _clean(value)
-    if text in SOURCE_SUPPORT_LEVEL_VALUES:
-        return text
-    if text == "canonical_asset_available":
-        return "direct_project_evidence"
-    if text in {"direct_implemented", "adjacent_implemented", "conceptual_only", "unsupported"}:
-        return {
-            "direct_implemented": "direct_project_evidence",
-            "adjacent_implemented": "adjacent_project_evidence",
-            "conceptual_only": "job_gap_only",
-            "unsupported": "insufficient_context",
-        }[text]
-    return ""
-
-
-def _has_direct_project_support(*, target_text: str, evidence_text: str) -> bool:
-    target_terms = _support_terms(target_text)
-    evidence_terms = _support_terms(evidence_text)
-    return bool(target_terms & evidence_terms)
-
-
-def _support_terms(value: object) -> set[str]:
-    text = str(value or "")
-    normalized = text.lower()
-    terms = {term.lower() for term in DIRECT_SUPPORT_TERMS if term.lower() in normalized}
-    terms.update(token for token in normalized.replace("/", " ").replace("、", " ").split() if len(token) >= 2)
-    return {term for term in terms if term not in {"设计", "能力", "项目", "说明", "验证", "技术", "链路"}}
+        ),
+    ).legacy_source_support_level
 
 
 def _context_digest_with_canonical_assets(base_digest: str, context: dict[str, Any]) -> str:
