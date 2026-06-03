@@ -1,7 +1,7 @@
 ---
 title: PHASE_2_CLOSEOUT_ASSESSMENT
 type: closeout-assessment
-status: partial-deferred
+status: close-with-deferred-gaps
 owner: P2-W6-SOURCE-BACKFILL-CLOSEOUT
 permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-2-closeout-assessment
 ---
@@ -14,23 +14,24 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-2-closeout-assessment
 
 | Item | Status | Source label | Evidence |
 | --- | --- | --- | --- |
-| Overall Phase 2 | `partial_deferred` | `TEST_RESULT` / `GITHUB_CODE` | P2-W0 到 P2-W5 已提交并通过各窗口验证；W6 发现 root-level Project source pack 文件仍不存在，source pack backfill 只能显式延期。 |
+| Overall Phase 2 | `close_with_deferred_gaps` | `TEST_RESULT` / `GITHUB_CODE` | P2-W0 到 P2-W5 已提交并通过各窗口验证；P2-W6 closeout 已提交于 `48af513`；root-level Project source pack 文件仍不存在，SRC-001 只能显式延期。 |
 | `CTX-001` CanonicalEvidencePack | `done` | `TEST_RESULT` | `CanonicalEvidenceService.build_pack()` 输出 `source_support_summary`，legacy `source_support_level` 从 summary 派生，digest 覆盖 summary / blocking issues。 |
 | `CTX-002` SourceSupportSummary | `done` | `TEST_RESULT` | `SourceSupportSummary` 与 `SourceSupportSummaryService` 覆盖 direct / adjacent / job_gap / insufficient、reason codes、confidence、refs、missing context。 |
 | `CTX-003` Interview Context | `done` | `TEST_RESULT` | Question 与 Feedback 均通过 `InterviewContextBuilder` / `SourceSupportSummaryService` 接收统一 context entry。 |
 | `FAG-001` Expected points builder | `done` | `TEST_RESULT` | `ExpectedPointsBuilder` 位于 `application/polish/context`，`feedback_rules._expected_points()` 只做 delegation。 |
-| `SRC-001` Source backfill | `deferred` | `GITHUB_CODE` | `07_CANONICAL_EVIDENCE_CONTRACT.md`、`09_REFACTOR_TRACEABILITY_MATRIX.md`、`12_ACCEPTANCE_GATES.md`、`13_DECISION_LOG.md`、`14_RISK_REGISTER.md`、`17_PHASE_ROADMAP_LOCK.md` 等 root-level source pack 文件不存在。 |
+| `SRC-001` Source backfill | `deferred_with_gap` | `GITHUB_CODE` | `07_CANONICAL_EVIDENCE_CONTRACT.md`、`09_REFACTOR_TRACEABILITY_MATRIX.md`、`12_ACCEPTANCE_GATES.md`、`13_DECISION_LOG.md`、`14_RISK_REGISTER.md`、`17_PHASE_ROADMAP_LOCK.md` 等 root-level source pack 文件不存在；本仓库没有实际 source pack 文件可更新。 |
 
 ## 2. Window Commits
 
-| Window | Commit | Result |
-| --- | --- | --- |
-| P2-W0 | `84dc0e2` | Scope lock and entry gap register created. |
-| P2-W1 | `f49203e` | Canonical evidence contract aligned. |
-| P2-W2 | `57b8abc` | Shared source support summary service added. |
-| P2-W3 | `8bc3d46` | Question context routed through canonical evidence. |
-| P2-W4 | `f966251` | Feedback context and expected points routed through context layer. |
-| P2-W5 | `5049ff1` | Evidence regression seeds and context boundary checks added. |
+| Window | Commit | Status | Result |
+| --- | --- | --- | --- |
+| P2-W0 | `84dc0e2` | `validated_committed` | Scope lock and entry gap register created. |
+| P2-W1 | `f49203e` | `validated_committed` | Canonical evidence contract aligned. |
+| P2-W2 | `57b8abc` | `validated_committed` | Shared source support summary service added. |
+| P2-W3 | `8bc3d46` | `validated_committed` | Question context routed through canonical evidence. |
+| P2-W4 | `f966251` | `validated_committed` | Feedback context and expected points routed through context layer. |
+| P2-W5 | `5049ff1` | `validated_committed` | Evidence regression seeds and context boundary checks added. |
+| P2-W6 | `48af513` | `complete_with_deferred_source_pack_gap` | Closeout/status docs committed; source pack backfill was deferred because source pack files were absent. |
 
 ## 3. Behavior Before / After
 
@@ -115,20 +116,28 @@ W6 checked the root-level Project source pack paths named by `phase2_goal.md`:
 19_PHASE1_WINDOW_CATALOG.md
 ```
 
-Result: all missing in current repo root. A `find` scan for the key source pack filenames also found no alternate path. Therefore source pack backfill is deferred rather than fabricated.
+Result: all missing in the current worktree. W6 and P2-W6.fix.01 found no alternate same-name path. Therefore source pack backfill is `deferred_with_gap` rather than fabricated, and no Project source pack file is claimed as updated.
 
 ## 6. Remaining Risks
 
 | Risk | Status | Owner |
 | --- | --- | --- |
-| Project source pack files absent, so matrix / risk / acceptance / roadmap source backfill cannot be written. | `deferred` | Owner / next source discovery window |
+| Project source pack files absent, so matrix / risk / acceptance / roadmap source backfill cannot be written. | `deferred_with_gap` | Owner / next source discovery window |
 | Provider sanitizer gaps for `developer_prompt` and `full_asset_body`. | `deferred` | Phase 7 provider/security scope |
 | Domain policy migration is intentionally not done in Phase 2. | `deferred` | Phase 3 |
 | Agent runtime / LangGraph wiring is intentionally not done in Phase 2. | `deferred` | Later runtime phases |
 
 ## 7. Phase 3 Entry Criteria
 
-Phase 3 may begin only with a new owner-confirmed scope lock. Candidate focus:
+Current recommendation: Phase 3 may open a scope-lock-only window with `SRC-001` accepted as `deferred_with_gap`; Phase 3 implementation must not start in this Phase 2 fix window. If the owner requires actual source pack backfill before Phase 3, Phase 3 is blocked until the source pack path is provided.
+
+Recommended next command:
+
+```text
+/goal follow docs/tmp/goal0603/phase3_goal.md and execute only P3-W0
+```
+
+Candidate focus:
 
 - source support policy;
 - grounding policy;

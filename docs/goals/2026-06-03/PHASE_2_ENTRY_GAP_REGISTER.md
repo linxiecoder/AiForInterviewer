@@ -17,6 +17,7 @@ Allowed statuses:
 - `open`
 - `closed`
 - `deferred`
+- `deferred_with_gap`
 - `blocked`
 
 Allowed source labels:
@@ -43,7 +44,7 @@ Allowed source labels:
 | P2-GAP-TEST-002 | Shared summary service tests missing | `closed` | `TEST_RESULT` | W2 added `tests/api/test_polish_source_support_summary_service.py`, covering direct / adjacent / job_gap / insufficient, archived exclusion, conflict HITL marker and current-answer non-canonical rule. | Cover direct / adjacent / job_gap / insufficient and asset status/conflict rules. | P2-W2, P2-W5 | High | Closed by W2 validation; W5 may add broader regression seed coverage. |
 | P2-GAP-TEST-003 | Question/Feedback context tests missing | `closed` | `TEST_RESULT` | W3 added `tests/api/test_polish_interview_context_question.py`; W4 added `tests/api/test_polish_interview_context_feedback.py` and `tests/api/test_polish_feedback_expected_points_context.py`. | Prove real callers consume unified context entry. | P2-W3, P2-W4 | High | Closed by focused application/service-level tests without provider rewrite. |
 | P2-GAP-SEED-001 | Eval seed convention needs mapping | `closed` | `TEST_RESULT` | W5 added `tests/evals/test_phase2_canonical_evidence_rules.py` as a Python eval-rule seed, matching the existing `tests/evals` convention instead of creating a new fixture system. | Add deterministic eval seeds only if they fit existing convention; otherwise defer with reason. | P2-W5 | Low | Closed by W5 eval seed validation; no claim that full AI quality gate is complete. |
-| P2-GAP-SRC-001 | Project source pack path absent | `deferred` | `GITHUB_CODE` | W6 re-ran discovery for all root-level source pack files named in `phase2_goal.md`; all remain missing and no alternate same-name path was found. | Backfill actual discovered Project source files or explicitly defer absent paths in closeout. | P2-W6 | Medium | Deferred in `PHASE_2_CLOSEOUT_GAP_REGISTER.md`; owner must provide source pack path before matrix / risk / acceptance / roadmap backfill. |
+| P2-GAP-SRC-001 | Project source pack path absent | `deferred_with_gap` | `GITHUB_CODE` | W6 and P2-W6.fix.01 re-ran discovery for root-level source pack files named in `phase2_goal.md`; all remain missing and no alternate same-name path was found. | Backfill actual discovered Project source files or explicitly defer absent paths in closeout. | P2-W6 | Medium | Deferred in `PHASE_2_CLOSEOUT_GAP_REGISTER.md` and `PHASE_2_SOURCE_BACKFILL_STATUS.md`; owner must provide source pack path before matrix / risk / acceptance / roadmap backfill. |
 | P2-GAP-P1-001 | Remaining Polish ownership extraction | `deferred` | `PROJECT_SOURCE` | Phase 1 closeout marks remaining ownership extraction as deferred. | Do not continue broad ownership extraction in Phase 2. | N/A | Medium | Limit edits to context/canonical slices authorized by each window. |
 | P2-GAP-PRO-001 | Provider sanitizer gaps | `deferred` | `PROJECT_SOURCE` | Phase 1 closeout maps `developer_prompt` and `full_asset_body` sanitizer gaps to Phase 7. | Keep provider/prompt scope untouched in Phase 2. | N/A | Medium | Stop if validation requires provider or prompt asset changes. |
 | P2-GAP-AGT-001 | Agent runtime wiring | `deferred` | `PROJECT_SOURCE` | Phase 1 closeout maps question/feedback runtime wiring to later runtime phases. | No LangGraph / Agent runtime migration in Phase 2. | N/A | High | Stop if unified context requires runtime migration. |
@@ -71,4 +72,4 @@ Phase 2 must not be marked `complete_validated` while any of these remain true:
 | P2-W3 | `validated_committed` | Question context routing committed in `8bc3d46`. |
 | P2-W4 | `validated_committed` | Feedback context routing and expected points builder committed in `f966251`. |
 | P2-W5 | `validated_committed` | Deterministic Phase 2 eval seed and context boundary architecture test committed in `5049ff1`. |
-| P2-W6 | `validated_pending_commit` | Closeout docs created; source pack backfill deferred because source files are absent. |
+| P2-W6 | `complete_with_deferred_source_pack_gap` | Closeout docs committed in `48af513`; source pack backfill remains `deferred_with_gap` because the source files are absent from this worktree. |

@@ -61,6 +61,7 @@ permalink: ai-for-interviewer/docs/goals
 
 - [PHASE_2_SCOPE_LOCK.md](2026-06-03/PHASE_2_SCOPE_LOCK.md)：Phase 2 scope lock / recon 输出，只作为执行证据。
 - [PHASE_2_ENTRY_GAP_REGISTER.md](2026-06-03/PHASE_2_ENTRY_GAP_REGISTER.md)：Phase 2 entry gap register 和窗口状态记录。
-- [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：Phase 2 closeout assessment；代码与测试能力完成，source pack backfill 因源文件缺失显式延期。
+- [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：Phase 2 closeout assessment；Phase 2 状态为 `close_with_deferred_gaps`，代码与测试能力完成，source pack backfill 因源文件缺失显式延期。
 - [PHASE_2_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md)：Phase 2 closeout 后剩余 / 后置缺口。
+- [PHASE_2_SOURCE_BACKFILL_STATUS.md](2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md)：P2-W6.fix.01 source-backfill 状态修复记录；确认 root source pack 在当前 worktree 不可用，SRC-001 为 `deferred_with_gap`。
 - [PHASE_3_ENTRY_SCOPE_LOCK.md](2026-06-03/PHASE_3_ENTRY_SCOPE_LOCK.md)：Phase 3 Domain Policies 入口 scope lock candidate；不授权自动启动 Phase 3。

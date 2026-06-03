@@ -156,6 +156,7 @@ Closeout evidence:
 
 - `docs/goals/2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md`
 - `docs/goals/2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md`
+- `docs/goals/2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md`
 - `docs/goals/2026-06-03/PHASE_3_ENTRY_SCOPE_LOCK.md`
 
-Result: Phase 2 closes as `partial_deferred` because code/test capabilities are validated, but Project source pack backfill is deferred pending owner-provided source paths.
+Result: Phase 2 closes as `close_with_deferred_gaps` because code/test capabilities are validated and committed through P2-W6, but Project source pack backfill is `deferred_with_gap` pending owner-provided source paths.
