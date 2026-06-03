@@ -56,3 +56,15 @@ permalink: ai-for-interviewer/docs/goals
 
 - [PHASE_1_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_1_CLOSEOUT_ASSESSMENT.md)：Phase 1 close-out assessment；推荐 `close_with_deferred_gaps`，需 owner 确认；不启动后续阶段。
 - [PHASE_1_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_1_CLOSEOUT_GAP_REGISTER.md)：Phase 1 deferred gap register；登记 provider、Agent C0 catalog、runtime wiring、Canonical Evidence / SourceSupportSummary 和剩余 Polish ownership gap。
+
+### 2026-06-03 / Phase 3 P3-W0 Scope Lock
+
+- [PHASE_3_SCOPE_LOCK.md](2026-06-03/PHASE_3_SCOPE_LOCK.md)：P3-W0 Domain Policies scope-lock / recon 记录；docs-only，未启动实现。
+- [PHASE_3_WINDOW_CATALOG.md](2026-06-03/PHASE_3_WINDOW_CATALOG.md)：Phase 3 window catalog 和当前 P3-W1..P3-W6 状态图；只作为执行建议。
+- [PHASE_3_ENTRY_GAP_REGISTER.md](2026-06-03/PHASE_3_ENTRY_GAP_REGISTER.md)：Phase 3 entry gap register；登记 Phase 2 closeout evidence、SRC-001、CTX-002、P3-W1 sequence 和剩余 Domain Policy gap。
+- [PHASE_3_DECISION_OPTIONS.md](2026-06-03/PHASE_3_DECISION_OPTIONS.md)：Phase 3 后续执行顺序选项和推荐 next prompt；需 controller 确认后才能进入实现。
+
+### 2026-06-03 / Phase 3 P3-W1 Evidence
+
+- [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：既有 P3-W1 source support closeout evidence；只记录 source support partial，不关闭 Phase 3。
+- [PHASE_3_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_3_CLOSEOUT_GAP_REGISTER.md)：既有 P3-W1 gap register；保留 CTX-002 / SourceSupportSummary deferred gap 和其他 Domain Policy 未完成项。
