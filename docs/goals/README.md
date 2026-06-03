@@ -79,6 +79,10 @@ permalink: ai-for-interviewer/docs/goals
 
 - [P3_W4_FINAL_REPORT.md](2026-06-03/P3-W4/P3_W4_FINAL_REPORT.md)：P3-W4 feedback next-action domain policy final report；FAG-005 已抽为 domain policy，P3-W5 和 Phase 2 / SRC-001 / CTX-002 deferred gaps 仍保持 open。
 
+### 2026-06-03 / P3-W5
+
+- [P3_W5_FINAL_REPORT.md](2026-06-03/P3-W5/P3_W5_FINAL_REPORT.md)：P3-W5 application bridge / boundary hardening final report；bridge / adapter architecture gate 已加固，Phase 2 / SRC-001 / CTX-002 deferred gaps 仍阻断 Phase 3 final closeout。
+
 ### 2026-06-03 / Phase 3 P3-W1 Evidence
 
 - [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：既有 P3-W1 source support closeout evidence；只记录 source support partial，不关闭 Phase 3。

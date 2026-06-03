@@ -31,8 +31,8 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | P3-W2 | `implemented_with_residual_gap` | `question_grounding_policy.py` and `follow_up_coverage_policy.py` exist with domain tests; `question_grounding.py` and `use_cases.py` call domain policies. `question_metadata.py` legacy helper remains residual because it was not in the allowed write set. | Keep residual helper / `next_question_agent.py` guardrail explicit; proceed to P3-W3 only under controller authorization. |
 | P3-W3 | `implemented_p3_w3` | `asset_consistency_policy.py`, `answer_coverage_policy.py`, and `answer_change_policy.py` exist with domain tests; `feedback_rules.py` calls them as adapter / legacy payload bridge. | Proceed to P3-W4 next-action policy; keep Phase 2 / SRC-001 / CTX-002 deferred gaps open. |
 | P3-W4 | `implemented_p3_w4` | `feedback_next_action_policy.py` exists with domain tests; `feedback_rules.py` calls it as next-action adapter while `feedback_validation.py` keeps schema guardrails. | Proceed to P3-W5 bridge / boundary hardening; keep Phase 2 / SRC-001 / CTX-002 deferred gaps open. |
-| P3-W5 | `not_started_after_p3_w4` | `tests/architecture/test_domain_polish_policy_boundary.py` exists; `tests/domain/polish/` now contains P3-W2, P3-W3, and P3-W4 policy tests. Bridge / adapter drift hardening remains open. | Strengthen boundary / adapter tests and audit residual application policy logic. |
-| P3-W6 | `not_started` | Phase 3 final closeout cannot run while P3-W5 remains open and Phase 2 / SRC-001 / CTX-002 deferred gaps remain open; QAG-002 / QAG-003 and FAG-002..FAG-005 have execution evidence with explicit residuals. | Produce closeout only after P3-W5 and validations pass, or record explicit deferred gaps. |
+| P3-W5 | `implemented_p3_w5` | `tests/architecture/test_domain_polish_policy_boundary.py` now locks Phase 3 policy file list, application bridge imports, policy entrypoint calls, and thin adapter runtime boundary. | Proceed only to P3-W6 assessment/backfill with Phase 2 / SRC-001 / CTX-002 still open; do not claim final closeout. |
+| P3-W6 | `not_started_blocked_by_deferred_gaps` | P3-W5 validations passed, but Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain deferred gaps. | Produce final closeout only after gaps are backfilled or explicitly accepted as final residual by controller. |
 
 ## 3. P3-W1 - Source Support Policy Bridge
 
@@ -108,14 +108,14 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | DDD-004, QAG-001, QAG-002, QAG-003, FAG-002, FAG-003, FAG-004, FAG-005 |
 | Goal | Ensure application services orchestrate policies and boundary tests prevent drift. |
-| Current evidence | Domain policy boundary test exists; P3-W2, P3-W3, and P3-W4 policy tests exist; bridge / adapter drift hardening remains open. |
+| Current evidence | P3-W5 enhanced `tests/architecture/test_domain_polish_policy_boundary.py` to assert Phase 3 policy files, application bridge imports, policy entrypoint calls, and thin adapter forbidden imports. |
 | Allowed files | Application adapters in polish modules, `apps/api/app/domain/polish/policies/**`, `tests/architecture/**`, `tests/domain/polish/**`, targeted API tests, `docs/goals/**` |
 | Forbidden files | Prompt assets, provider / infrastructure, DB, API routes, Agent runtime, frontend |
 | Behavior change allowed | No external behavior change |
 | Prompt/schema/provider change allowed | No |
 | DB schema change allowed | No |
 | Validation commands | `python -m compileall apps/api/app/domain/polish apps/api/app/application/polish`; `pytest tests/domain/polish -q`; `pytest tests/architecture -q`; `pytest tests/api/test_polish_question_refactor_phase1.py -q`; `pytest tests/api -k "feedback and polish" -q`; `rg -n "from app\\.infrastructure|import app\\.infrastructure|FastAPI|sqlalchemy|openai|anthropic|Prompt|prompt" apps/api/app/domain/polish || true` |
-| Done criteria | Boundary tests pass; application modules call policies; remaining legacy policy logic is explicitly deferred |
+| Done criteria | Met for bridge / boundary hardening: architecture tests pass, application bridges import and call domain policies, thin adapters are guarded from prompt/provider/DB/API/runtime drift, and CTX-002 remains explicit deferred gap. |
 | Rollback | Revert bridge / test changes from this window only |
 | Stop conditions | Broad cleanup or unrelated refactor is needed to pass |
 
@@ -125,7 +125,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-window-catalog
 | --- | --- |
 | Capability IDs | DDD-004, QAG-001, QAG-002, QAG-003, FAG-002, FAG-003, FAG-004, FAG-005, WIN-001, SRC-001 |
 | Goal | Produce final Phase 3 status, validation evidence, scope audit, and deferred gap register. |
-| Current evidence | Not ready: P3-W1 source support remains partial with deferred gap; P3-W2, P3-W3, and P3-W4 are implemented; P3-W5 and Phase 2 / SRC-001 / CTX-002 deferred gaps remain open. |
+| Current evidence | P3-W5 is implemented; P3-W1 source support remains partial with deferred gap; Phase 2 closeout evidence, SRC-001, and CTX-002 / `SourceSupportSummary` remain open and block final closeout unless backfilled or explicitly accepted as final residual. |
 | Allowed files | `docs/goals/**`, registered docs / markdown backfill only if authorized |
 | Forbidden files | Implementation files unless controller explicitly opens a repair window |
 | Behavior change allowed | No |
