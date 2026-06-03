@@ -14,6 +14,10 @@ from app.domain.polish.policies.asset_consistency_policy import (
     AssetConsistencyPolicy,
     CanonicalAssetItem,
 )
+from app.domain.polish.policies.feedback_next_action_policy import (
+    FeedbackNextActionInput,
+    FeedbackNextActionPolicy,
+)
 
 
 FEEDBACK_CORE_RULES_VERSION = "polish_feedback_core_rules.phase4.v1"
@@ -86,6 +90,8 @@ def apply_feedback_core_rules(payload: dict[str, Any], context: object) -> dict[
         answer_coverage=answer_coverage,
         answer_change=answer_change,
         candidates=result.get("project_asset_update_candidates"),
+        low_confidence_flags=result.get("low_confidence_flags"),
+        generation_status=_clean(result.get("status"), max_chars=80) or "generated",
     )
     result["feedback_cards"] = _build_feedback_cards(
         result,
@@ -260,26 +266,36 @@ def _next_recommended_actions(
     answer_coverage: dict[str, Any],
     answer_change: dict[str, Any],
     candidates: object,
+    low_confidence_flags: object = (),
+    generation_status: str | None = "generated",
+    validation_failed: bool = False,
 ) -> list[str]:
-    existing = _string_list(value, max_items=20, max_item_chars=160)
-    if asset_check.get("status") == "conflict":
-        return _unique(
-            [
-                "clarify_asset_conflict",
-                "revise_current_answer",
-                *[action for action in existing if action != "generate_next_question"],
-            ]
+    decision = FeedbackNextActionPolicy.decide(
+        FeedbackNextActionInput(
+            existing_actions=tuple(_string_list(value, max_items=20, max_item_chars=160)),
+            generation_status=generation_status,
+            validation_failed=validation_failed,
+            asset_status=_clean(asset_check.get("status"), max_chars=80),
+            asset_conflict_count=len(_dict_list(asset_check.get("conflicts"))),
+            unsupported_claim_count=len(_dict_list(asset_check.get("unsupported_claims"))),
+            asset_user_clarification_required=bool(asset_check.get("user_clarification_required")),
+            missing_points=tuple(_string_list(answer_coverage.get("missing_points"), max_items=40, max_item_chars=240)),
+            weak_points=tuple(_string_list(answer_coverage.get("weak_points"), max_items=40, max_item_chars=240)),
+            contradicted_points=tuple(
+                _string_list(answer_coverage.get("contradicted_points"), max_items=40, max_item_chars=240)
+            ),
+            regressed_points=tuple(
+                _string_list(answer_change.get("regressed_points"), max_items=40, max_item_chars=240)
+            ),
+            has_asset_update_candidates=bool(_dict_list(candidates)),
+            all_asset_update_candidates_require_confirmation=all(
+                bool(candidate.get("user_confirmation_required"))
+                for candidate in _dict_list(candidates)
+            ),
+            low_confidence_flags=tuple(_string_list(low_confidence_flags, max_items=20, max_item_chars=160)),
         )
-    non_terminal_actions = [action for action in existing if action != "generate_next_question"]
-    if answer_change.get("regressed_points"):
-        actions = _unique(["retry_same_question_preserve_regressed_points", *non_terminal_actions])
-    elif _has_unresolved_answer_points(answer_coverage):
-        actions = _unique(["continue_same_question", *non_terminal_actions])
-    else:
-        actions = existing
-    if _dict_list(candidates) and "confirm_asset_update_candidate" not in actions:
-        actions.append("confirm_asset_update_candidate")
-    return actions
+    )
+    return decision.to_legacy_actions()
 
 
 def _build_feedback_cards(

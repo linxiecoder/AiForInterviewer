@@ -667,6 +667,31 @@ def test_phase4_missing_points_remove_generate_next_question() -> None:
     assert result.payload["next_recommended_actions"][0] == "continue_same_question"
 
 
+def test_phase4_next_action_regression_retries_same_question() -> None:
+    payload = _generated_payload()
+    payload["next_recommended_actions"] = ["generate_next_question", "review_reference_answer"]
+    context = _context()
+    context["answer_text"] = "本轮补充了失败补偿。"
+    context["question_metadata"] = {"expected_answer_dimensions": ["失败补偿"]}
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev",
+            "covered_points": ["观测指标"],
+            "score_result": {"score_value": 80},
+        }
+    ]
+
+    result = _service(_PayloadTransport(payload)).generate(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert "generate_next_question" not in result.payload["next_recommended_actions"]
+    assert result.payload["next_recommended_actions"][:2] == [
+        "retry_same_question_preserve_regressed_points",
+        "review_reference_answer",
+    ]
+
+
 def test_phase4_validator_rejects_generate_next_question_with_unresolved_points() -> None:
     payload = _generated_payload()
     payload.update(
