@@ -126,6 +126,7 @@ Mitigation:
 - ToolRegistry。
 - AgentExecutor。
 - Phase 1 C0 skeleton。
+- Phase 4 C1 project-level catalog and architecture tests validate Question / Feedback definitions, skills, tools, trace, and handoff refs.
 
 ## RISK-009 DEC-Q3 目标被降级为 B
 
@@ -141,6 +142,22 @@ Mitigation:
 - DEC-006 confirmed：Phase 1 是 C0。
 - Acceptance Gates 增加 Agent Platform C0 Gate。
 - Matrix 增加 AGT-005 AgentExecutor port。
+- DEC-007 confirmed：Phase 4 C1 只是 contract catalog slice，runtime/eval gates 仍 deferred。
+
+## RISK-016 Phase 4 C1 被误当 runtime 接入完成
+
+Severity: high
+
+Description:
+
+C1 已注册 AgentDefinition / SkillDefinition / ToolDefinition，但若被误读为 Question / Feedback runtime 已经接入 AgentExecutor，会掩盖 Phase 5 / Phase 6 / Phase 8 的真实工作。
+
+Mitigation:
+
+- P4-W1 execution report 标明 no runtime wiring。
+- Matrix 只标 C1 contract capabilities validated，不标 Phase 5/6/8/9 done。
+- Acceptance Gates 增加 Agent Platform C1 Gate。
+- Phase 5 / Phase 6 / Phase 8 / Phase 9 必须单独 scope lock 和验证。
 
 ## RISK-010 Phase 1 被误解为仅 Polish 局部拆文件
 

@@ -247,6 +247,15 @@ Done Criteria:
 - Candidate-only rules enforced。
 - Tool no repository exposure gate。
 
+P4-W1 Status:
+
+- `polish_question_agent` / `polish_feedback_agent` definitions validated in project-level C1 catalog。
+- Question 8 skills / 8 tools and Feedback 10 skills / 9 tools validated by architecture tests。
+- Trace and handoff contract fields validated; Feedback asset update requires user confirmation。
+- Runtime workflow remains deferred to Phase 5 / Phase 6。
+- LangGraph / multi-agent runtime remains deferred to Phase 8。
+- Eval / CI gate remains deferred to Phase 9。
+
 ## Phase 5
 
 Name:

@@ -110,3 +110,9 @@ permalink: ai-for-interviewer/docs/goals
 - [P4_W0_WINDOW_CATALOG.md](2026-06-03/P4_W0_WINDOW_CATALOG.md)：P4-W0 proposed next-window catalog；定义 P4-W1 到 P4-W5 的目标、能力 ID、文件边界、验证和 stop conditions。
 - [P4_W0_ACCEPTANCE_GATES.md](2026-06-03/P4_W0_ACCEPTANCE_GATES.md)：P4-W0 acceptance gates；登记 candidate-only、no formal write、Tool no repository exposure、no provider/prompt leakage、no runtime wiring 等后续硬闸门。
 - [P4_W0_FINAL_REPORT.md](2026-06-03/P4_W0_FINAL_REPORT.md)：P4-W0 final report；记录 docs-only 变更、验证结果、推荐下一决策和剩余风险。
+
+### 2026-06-05 / P4-W1
+
+- [P4_W1_AGENT_CONTRACTS_SKILLS_TOOLS_C1_EXECUTION_REPORT.md](2026-06-05/P4_W1_AGENT_CONTRACTS_SKILLS_TOOLS_C1_EXECUTION_REPORT.md)：P4-W1 Agent Contracts / Skills / Tools C1 execution report；记录 RED/GREEN、C1 catalog、registry validation、forbidden-scope audit 和 source backfill。
+- [PHASE_4_CLOSEOUT_ASSESSMENT.md](2026-06-05/PHASE_4_CLOSEOUT_ASSESSMENT.md)：Phase 4 closeout assessment；状态为 `complete_with_deferred_gaps`，runtime/eval gates 仍 deferred。
+- [PHASE_4_GAP_REGISTER.md](2026-06-05/PHASE_4_GAP_REGISTER.md)：Phase 4 deferred gap register；记录 Phase 5/6/8/9 后续边界和既有 provider xfail gap。

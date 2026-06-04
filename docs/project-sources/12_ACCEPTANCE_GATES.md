@@ -126,6 +126,31 @@ Infrastructure：
 - Agent 直接写业务对象。
 - Candidate 被持久化为正式事实而无 handoff。
 
+## Agent Platform C1 Gate
+
+适用于 Phase 4 P4-W1。
+
+必须满足：
+
+- `polish_question_agent` 和 `polish_feedback_agent` 在项目级 `AgentDefinitionRegistry` 中注册。
+- 两个 Agent 引用的所有 SkillDefinition 都能在 `SkillRegistry` 中解析。
+- 两个 Agent 引用的所有 ToolDefinition 都能在 `ToolRegistry` 中解析。
+- `SkillRegistry` 和 `ToolRegistry` 支持按 `agent_id` 列出定义。
+- Question Agent 只能产出 `question_candidate`。
+- Feedback Agent 只能产出 `feedback_candidate` 和 `asset_update_candidate`。
+- AgentDefinition 不包含 formal output / formal write result 字段；正式写入只能经 Application Service + Domain Policy + Handoff。
+- Feedback `asset_update_candidate` 的 handoff 必须 `user_confirmation_required=true`。
+- ToolDefinition 必须声明 allowed `side_effect_policy`，并禁止 raw prompt、raw provider payload、full resume、full JD、secrets、tokens、cookies、api keys。
+- ToolRegistry 必须拒绝 repository / DB / SQLAlchemy / session / unit-of-work 直接暴露。
+- Trace contract 必须引用 input / plan / skill / tool / policy / provider / candidate / validation / handoff / output / events，并禁止敏感 raw payload。
+
+禁止：
+
+- 将 graph-local `TOOL_SCHEMAS` 当作项目级 `ToolRegistry` 的替代。
+- 在 Phase 4 C1 中接入 AgentExecutor runtime。
+- 在 Phase 4 C1 中修改 prompt/provider/API/DB/domain policy 行为。
+- 因 C1 catalog 已存在而将 Phase 5/6/8/9 runtime/eval gates 标记完成。
+
 ## Question Agent Gate
 
 必须满足：

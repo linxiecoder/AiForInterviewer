@@ -397,6 +397,31 @@ C0 accepted only when:
 - Tool no repository exposure rule is documented and tested or gated.
 - B is not marked as final target.
 
+## Phase 4 C1 Acceptance
+
+C1 accepted only when:
+
+- `polish_question_agent` and `polish_feedback_agent` are registered in project-level `AgentDefinitionRegistry`.
+- Question Agent exposes only `question_candidate`.
+- Feedback Agent exposes only `feedback_candidate` and `asset_update_candidate`.
+- Question Agent has 8 SkillDefinition refs and 8 ToolDefinition refs resolved by project-level registries.
+- Feedback Agent has 10 SkillDefinition refs and 9 ToolDefinition refs resolved by project-level registries.
+- `SkillRegistry.list_by_agent_id` and `ToolRegistry.list_by_agent_id` return agent-scoped definitions.
+- `ToolRegistry` rejects invalid `side_effect_policy`, missing forbidden data, and repository / DB / SQLAlchemy direct exposure.
+- `AgentDefinitionRegistry.validate_references` fails closed on unknown skill refs, unknown tool refs, duplicate IDs, and invalid candidate outputs.
+- Handoff contract includes payload schema, validation refs, quality gate, side-effect key, idempotency key, formal write preconditions, rollback policy, and user confirmation where required.
+- Trace contract includes input / plan / skill / tool / policy / provider / candidate / validation / handoff / output refs and events, and forbids raw prompt / raw provider / full sensitive context.
+- Architecture tests pass and validation evidence is recorded.
+- Source backfill is recorded in `docs/goals/` and `docs/project-sources/`.
+
+C1 does not accept:
+
+- Question / Feedback runtime wiring to AgentExecutor.
+- LangGraph / multi-agent runtime migration.
+- Provider request builder, transport, or prompt rewrite.
+- API / DB schema / domain policy behavior changes.
+- Eval / CI regression gate completion.
+
 ## Anti-Drift Rules
 
 The following are drift:

@@ -147,6 +147,30 @@ Recommendation:
 
 Phase 1 = DDD Rails + Agent Platform C0 + Polish Facade Convergence.
 
+## DEC-011 Phase 4 C1 Agent Contract Catalog
+
+Status: confirmed
+
+Decision:
+
+Phase 4 P4-W1 采用项目级 C1 contract catalog 作为 C target 的下一步过渡切片：
+
+- `polish_question_agent` 和 `polish_feedback_agent` 必须注册在项目级 `AgentDefinitionRegistry`。
+- Question / Feedback skills 和 tools 必须注册在项目级 `SkillRegistry` / `ToolRegistry`。
+- `ToolRegistry` 必须 fail-closed 校验 side-effect policy、required forbidden data 和 repository / DB / SQLAlchemy 直接暴露。
+- Trace / Handoff / Eval refs 只作为 contract metadata 绑定，不执行 runtime。
+
+Phase 4 C1 不做：
+
+- Question / Feedback planned workflow runtime wiring。
+- LangGraph / multi-agent runtime migration。
+- Provider request builder / transport / prompt rewrite。
+- API / DB schema / domain policy 行为改动。
+
+Recommendation:
+
+进入 Phase 5 / Phase 6 前必须重新 scope lock；不得把 C1 catalog 当作 runtime 接入完成。
+
 ## DEC-007 Provider Boundary Timing
 
 Status: confirmed

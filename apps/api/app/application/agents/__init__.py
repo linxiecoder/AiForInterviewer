@@ -9,9 +9,20 @@ from app.application.agents.contracts import (
     HandoffContract,
     SkillDefinition,
     ToolDefinition,
+    TraceContract,
+)
+from app.application.agents.definitions import (
+    AgentPlatformC1Registries,
+    build_default_agent_platform_c1_registries,
+    build_phase4_c1_agent_definitions,
+    build_phase4_c1_skill_definitions,
+    build_phase4_c1_tool_definitions,
 )
 from app.application.agents.registry import (
+    ALLOWED_CANDIDATE_OUTPUTS,
+    ALLOWED_TOOL_SIDE_EFFECT_POLICIES,
     AgentDefinitionRegistry,
+    REQUIRED_TOOL_FORBIDDEN_DATA,
     RegistryValidationError,
     SkillRegistry,
     ToolRegistry,
@@ -21,6 +32,7 @@ from app.application.agents.runtime import AgentExecutor
 __all__ = [
     "AgentDefinition",
     "AgentDefinitionRegistry",
+    "AgentPlatformC1Registries",
     "AgentExecutionPlan",
     "AgentExecutionResult",
     "AgentExecutionStatus",
@@ -34,4 +46,12 @@ __all__ = [
     "SkillRegistry",
     "ToolDefinition",
     "ToolRegistry",
+    "TraceContract",
+    "ALLOWED_CANDIDATE_OUTPUTS",
+    "ALLOWED_TOOL_SIDE_EFFECT_POLICIES",
+    "REQUIRED_TOOL_FORBIDDEN_DATA",
+    "build_default_agent_platform_c1_registries",
+    "build_phase4_c1_agent_definitions",
+    "build_phase4_c1_skill_definitions",
+    "build_phase4_c1_tool_definitions",
 ]

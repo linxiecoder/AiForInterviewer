@@ -101,7 +101,7 @@ def _sample_agent_definition() -> Any:
         non_goals=("formal persistence", "provider execution"),
         input_contract="polish.question.input.v1",
         output_contract="polish.question.candidate.v1",
-        candidate_outputs=("question_candidate_ref",),
+        candidate_outputs=("question_candidate",),
         formal_write_boundary="handoff_required",
         skills=("question_grounding_skill",),
         tools=("evidence_lookup_tool",),
@@ -140,6 +140,7 @@ def _sample_skill_definition() -> Any:
 
 def _sample_tool_definition() -> Any:
     from app.application.agents.contracts import ToolDefinition
+    from app.application.agents.registry import REQUIRED_TOOL_FORBIDDEN_DATA
 
     return ToolDefinition(
         tool_id="evidence_lookup_tool",
@@ -152,7 +153,7 @@ def _sample_tool_definition() -> Any:
         timeout_seconds=5,
         retry_policy="none",
         allowed_callers=("polish-question-agent",),
-        forbidden_data=("repository_object", "provider_payload"),
+        forbidden_data=tuple(sorted(REQUIRED_TOOL_FORBIDDEN_DATA)),
         trace_events=("tool.evidence_lookup.requested",),
     )
 

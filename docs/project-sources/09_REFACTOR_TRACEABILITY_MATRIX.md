@@ -61,30 +61,30 @@ wrapper split 不等于 capability done。
 | QAG-002 | Question grounding | question_grounding.py in application | question_grounding_policy.py in domain | Domain Policy | recon_done | Phase 3 |
 | QAG-003 | Follow-up coverage | metadata/use_cases | follow_up_coverage_policy.py | Domain Policy | recon_done | Phase 3 |
 | QAG-004 | Question Agent planner | implicit + graph phases | question_agent_planner.py under Agent Platform | Agent | recon_done | Phase 5 |
-| QAG-005 | Question Agent Definition | partial spec | AgentDefinition registered | Agent Platform | design_done | Phase 4 |
-| QAG-006 | Question Skills | listed in spec | registered skills with contracts | Agent Platform | design_done | Phase 4/5 |
-| QAG-007 | Question Tools | local graph TOOL_SCHEMAS | registered tools with contracts | Agent Platform | recon_done | Phase 4/5 |
+| QAG-005 | Question Agent Definition | partial spec | AgentDefinition registered | Agent Platform | validated | Phase 4 |
+| QAG-006 | Question Skills | listed in spec | registered skills with contracts | Agent Platform | validated | Phase 4/5 |
+| QAG-007 | Question Tools | local graph TOOL_SCHEMAS | registered tools with contracts | Agent Platform | validated | Phase 4/5 |
 | FAG-001 | Expected points builder | feedback_rules/question_metadata | expected_point_builder.py in context | Context | recon_done | Phase 2 |
 | FAG-002 | Asset consistency | feedback_rules.py | asset_consistency_policy.py | Domain Policy | recon_done | Phase 3 |
 | FAG-003 | Answer coverage | feedback_rules.py | answer_coverage_policy.py | Domain Policy | recon_done | Phase 3 |
 | FAG-004 | Answer change | feedback_rules.py | answer_change_policy.py | Domain Policy | recon_done | Phase 3 |
 | FAG-005 | Feedback next action | scattered / feedback_rules | feedback_next_action_policy.py | Domain Policy | recon_done | Phase 3/6 |
-| FAG-006 | Feedback Agent Definition | partial spec | AgentDefinition registered | Agent Platform | design_done | Phase 4 |
-| FAG-007 | Feedback Skills | listed in spec | registered skills with contracts | Agent Platform | design_done | Phase 4/6 |
-| FAG-008 | Feedback Tools | implicit functions | registered tools with contracts | Agent Platform | not_started | Phase 4/6 |
+| FAG-006 | Feedback Agent Definition | partial spec | AgentDefinition registered | Agent Platform | validated | Phase 4 |
+| FAG-007 | Feedback Skills | listed in spec | registered skills with contracts | Agent Platform | validated | Phase 4/6 |
+| FAG-008 | Feedback Tools | implicit functions | registered tools with contracts | Agent Platform | validated | Phase 4/6 |
 | AGT-001 | Agent contracts | ai_runtime contracts partial | application/agents/contracts/* | Agent Platform | recon_done | Phase 1 |
 | AGT-002 | AgentDefinitionRegistry | none / graph registry only | agent_definition_registry.py | Agent Platform | design_done | Phase 1 |
 | AGT-003 | SkillRegistry | none | skill_registry.py | Agent Platform | design_done | Phase 1 |
 | AGT-004 | ToolRegistry | graph-local tool schemas | tool_registry.py | Agent Platform | design_done | Phase 1 |
 | AGT-005 | AgentExecutor port | AgentGraphRunner exists for graph runtime | AgentExecutor protocol / port independent from LangGraph | Agent Platform | design_done | Phase 1 |
-| AGT-006 | Handoff contract | ai_runtime handoff partial | shared agent handoff contract | Agent Platform | recon_done | Phase 1/4 |
-| AGT-007 | Agent Trace Contract | ai_runtime trace refs partial | unified AgentExecutionTrace | Agent Platform | recon_done | Phase 1/4 |
+| AGT-006 | Handoff contract | ai_runtime handoff partial | shared agent handoff contract | Agent Platform | validated | Phase 1/4 |
+| AGT-007 | Agent Trace Contract | ai_runtime trace refs partial | unified AgentExecutionTrace | Agent Platform | validated | Phase 1/4 |
 | PRO-001 | Compact provider request | scattered Question/Feedback builders | CompactProviderRequestBuilder | Provider Boundary | recon_done | Phase 7 |
 | PRO-002 | Provider boundary tests | partial tests | forbidden keys + no full prompt asset fallback gate | Provider Boundary | design_done | Phase 1/7 |
 | FAKE-001 | Fake cleanup | runtime fake rejected; fake transport still exists for tests | tests/fakes + evals/replay only | Test/Eval | recon_done | Phase 7/9 |
 | EVAL-001 | AI Eval gate | seed evals / descriptors | evals + CI regression gate | Eval | recon_done | Phase 9 |
-| WIN-001 | Execution Window Protocol | protocol exists | every window has scope / forbidden / tests / rollback / backfill | Governance | design_done | Phase 0.1 |
-| SRC-001 | Source Backfill | sources partially stale after DEC confirmations | updated Project sources | Governance | implementation_planned | Phase 0.1 |
+| WIN-001 | Execution Window Protocol | protocol exists | every window has scope / forbidden / tests / rollback / backfill | Governance | validated | Phase 0.1 |
+| SRC-001 | Source Backfill | sources partially stale after DEC confirmations | updated Project sources | Governance | implemented | Phase 0.1 |
 
 ## Gap Register
 
@@ -98,3 +98,13 @@ wrapper split 不等于 capability done。
 | GAP-006 | provider compact builder 分散 | GitHub code recon | CompactProviderRequestBuilder |
 | GAP-007 | graph-local tool schema 不等于 ToolRegistry | GitHub code recon | project-level ToolRegistry |
 | GAP-008 | B 可能被误当 Agent Platform 目标态 | User confirmed concern | C target / C0 slice |
+
+## P4-W1 Backfill Evidence
+
+- `apps/api/app/application/agents/definitions/catalog.py` registers `polish_question_agent` and `polish_feedback_agent` at `p4.c1`.
+- Question Agent C1 contract has 8 skill refs, 8 tool refs, and only `question_candidate` output.
+- Feedback Agent C1 contract has 10 skill refs, 9 tool refs, and only `feedback_candidate` / `asset_update_candidate` outputs.
+- `ToolRegistry` validates allowed `side_effect_policy`, required forbidden data, and no direct repository / DB / SQLAlchemy exposure.
+- `AgentDefinitionRegistry.validate_references` fails closed for unknown skill refs, unknown tool refs, duplicate IDs, invalid candidate outputs, and unresolved skill tool refs.
+- Validation evidence: `tests/architecture/test_agent_platform_c1_boundary.py` and `tests/architecture` passed in the P4-W1 window.
+- Runtime workflow, LangGraph execution, and eval CI gates remain deferred to Phase 5 / Phase 6 / Phase 8 / Phase 9.

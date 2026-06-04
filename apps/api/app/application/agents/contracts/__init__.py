@@ -23,10 +23,22 @@ class HandoffContract:
     formal_write_policy: str = "handoff_required"
     allowed_formal_targets: tuple[str, ...] = field(default_factory=tuple)
     confirmation_required: bool = True
+    payload_schema_id: str = ""
+    validation_refs: tuple[str, ...] = field(default_factory=tuple)
+    quality_gate: str = ""
+    side_effect_key: str = ""
+    idempotency_key: str = ""
+    formal_write_preconditions: tuple[str, ...] = field(default_factory=tuple)
+    rollback_policy: str = ""
+    user_confirmation_required: bool | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "candidate_ref_types", _tuple(self.candidate_ref_types))
         object.__setattr__(self, "allowed_formal_targets", _tuple(self.allowed_formal_targets))
+        object.__setattr__(self, "validation_refs", _tuple(self.validation_refs))
+        object.__setattr__(self, "formal_write_preconditions", _tuple(self.formal_write_preconditions))
+        if self.user_confirmation_required is None:
+            object.__setattr__(self, "user_confirmation_required", self.confirmation_required)
 
 
 @dataclass(frozen=True)
@@ -35,10 +47,50 @@ class EvalContract:
     eval_suite_ids: tuple[str, ...] = field(default_factory=tuple)
     metrics: tuple[str, ...] = field(default_factory=tuple)
     failure_policy: str = "fail_closed"
+    dataset_refs: tuple[str, ...] = field(default_factory=tuple)
+    grader_refs: tuple[str, ...] = field(default_factory=tuple)
+    regression_cases: tuple[str, ...] = field(default_factory=tuple)
+    minimum_pass_criteria: str = ""
+    ci_gate: str = "not_bound"
+    failure_triage_policy: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "eval_suite_ids", _tuple(self.eval_suite_ids))
         object.__setattr__(self, "metrics", _tuple(self.metrics))
+        object.__setattr__(self, "dataset_refs", _tuple(self.dataset_refs))
+        object.__setattr__(self, "grader_refs", _tuple(self.grader_refs))
+        object.__setattr__(self, "regression_cases", _tuple(self.regression_cases))
+
+
+@dataclass(frozen=True)
+class TraceContract:
+    contract_id: str
+    input_refs: tuple[str, ...] = field(default_factory=tuple)
+    plan_refs: tuple[str, ...] = field(default_factory=tuple)
+    skill_refs: tuple[str, ...] = field(default_factory=tuple)
+    tool_refs: tuple[str, ...] = field(default_factory=tuple)
+    policy_refs: tuple[str, ...] = field(default_factory=tuple)
+    provider_refs: tuple[str, ...] = field(default_factory=tuple)
+    candidate_refs: tuple[str, ...] = field(default_factory=tuple)
+    validation_refs: tuple[str, ...] = field(default_factory=tuple)
+    handoff_refs: tuple[str, ...] = field(default_factory=tuple)
+    output_refs: tuple[str, ...] = field(default_factory=tuple)
+    events: tuple[str, ...] = field(default_factory=tuple)
+    forbidden_data: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "input_refs", _tuple(self.input_refs))
+        object.__setattr__(self, "plan_refs", _tuple(self.plan_refs))
+        object.__setattr__(self, "skill_refs", _tuple(self.skill_refs))
+        object.__setattr__(self, "tool_refs", _tuple(self.tool_refs))
+        object.__setattr__(self, "policy_refs", _tuple(self.policy_refs))
+        object.__setattr__(self, "provider_refs", _tuple(self.provider_refs))
+        object.__setattr__(self, "candidate_refs", _tuple(self.candidate_refs))
+        object.__setattr__(self, "validation_refs", _tuple(self.validation_refs))
+        object.__setattr__(self, "handoff_refs", _tuple(self.handoff_refs))
+        object.__setattr__(self, "output_refs", _tuple(self.output_refs))
+        object.__setattr__(self, "events", _tuple(self.events))
+        object.__setattr__(self, "forbidden_data", _tuple(self.forbidden_data))
 
 
 @dataclass(frozen=True)
@@ -68,6 +120,7 @@ class AgentDefinition:
     eval_contract: EvalContract
     handoff_contract: HandoffContract
     versioning_policy: str
+    task_types: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "non_goals", _tuple(self.non_goals))
@@ -76,6 +129,7 @@ class AgentDefinition:
         object.__setattr__(self, "tools", _tuple(self.tools))
         object.__setattr__(self, "guardrails", _tuple(self.guardrails))
         object.__setattr__(self, "hitl_triggers", _tuple(self.hitl_triggers))
+        object.__setattr__(self, "task_types", _tuple(self.task_types))
 
 
 @dataclass(frozen=True)
@@ -151,12 +205,28 @@ class AgentExecutionTrace:
     candidate_refs: tuple[str, ...] = field(default_factory=tuple)
     handoff_refs: tuple[str, ...] = field(default_factory=tuple)
     metadata: dict[str, Any] = field(default_factory=dict)
+    input_refs: tuple[str, ...] = field(default_factory=tuple)
+    plan_refs: tuple[str, ...] = field(default_factory=tuple)
+    skill_refs: tuple[str, ...] = field(default_factory=tuple)
+    tool_refs: tuple[str, ...] = field(default_factory=tuple)
+    policy_refs: tuple[str, ...] = field(default_factory=tuple)
+    provider_refs: tuple[str, ...] = field(default_factory=tuple)
+    validation_refs: tuple[str, ...] = field(default_factory=tuple)
+    output_refs: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "events", _tuple(self.events))
         object.__setattr__(self, "candidate_refs", _tuple(self.candidate_refs))
         object.__setattr__(self, "handoff_refs", _tuple(self.handoff_refs))
         object.__setattr__(self, "metadata", _metadata(self.metadata))
+        object.__setattr__(self, "input_refs", _tuple(self.input_refs))
+        object.__setattr__(self, "plan_refs", _tuple(self.plan_refs))
+        object.__setattr__(self, "skill_refs", _tuple(self.skill_refs))
+        object.__setattr__(self, "tool_refs", _tuple(self.tool_refs))
+        object.__setattr__(self, "policy_refs", _tuple(self.policy_refs))
+        object.__setattr__(self, "provider_refs", _tuple(self.provider_refs))
+        object.__setattr__(self, "validation_refs", _tuple(self.validation_refs))
+        object.__setattr__(self, "output_refs", _tuple(self.output_refs))
 
 
 @dataclass(frozen=True)
@@ -213,4 +283,5 @@ __all__ = [
     "HandoffContract",
     "SkillDefinition",
     "ToolDefinition",
+    "TraceContract",
 ]
