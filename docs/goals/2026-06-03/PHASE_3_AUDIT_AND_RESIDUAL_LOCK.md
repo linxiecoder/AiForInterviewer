@@ -12,7 +12,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-audit-and-residual-l
 
 ## 1. Root Cause
 
-Phase 3 P3-W2 到 P3-W6 已存在本地提交和窗口报告，但 remote GitHub 尚未由 controller 验证，且 Phase 2 closeout evidence、SRC-001 source pack / source backfill、CTX-002 / `SourceSupportSummary` 仍是 deferred residual blockers。
+Phase 3 P3-W0、P3-W2 到 P3-W6 以及 P3-AUDIT 已完成 controller remote commit verification；这些提交可作为 `GITHUB_REMOTE_VERIFIED_COMMITS` evidence。remote workflow / CI runs 未发现，因此不能声称 remote CI passed。Phase 2 closeout evidence、SRC-001 source pack / source backfill、CTX-002 / `SourceSupportSummary` 仍是 deferred residual blockers。
 
 本审计窗口的根因是：在进入任何 Phase 4 之前，需要把 P3-W2 到 P3-W6 的本地实现 / bridge / closeout 证据重新审计一遍，确认没有 forbidden scope drift，也没有把 deferred gaps 伪装成 done。
 
@@ -21,8 +21,10 @@ Phase 3 P3-W2 到 P3-W6 已存在本地提交和窗口报告，但 remote GitHub
 | Label | Treatment |
 | --- | --- |
 | `USER_REPORTED_LOCAL_COMMITS` | Controller 提供的 P3-W0 到 P3-W6 commit list；本审计按本地提交处理。 |
-| `TEST_RESULT_REPORTED` | 既有窗口报告中的测试结果作为历史证据；本审计另有 local rerun 结果。 |
-| `GITHUB_REMOTE_UNVERIFIED` | 未验证 remote GitHub；不得把这些提交声称为 remote-confirmed evidence。 |
+| `GITHUB_REMOTE_VERIFIED_COMMITS` | Controller 已验证 GitHub remote commit chain 中存在 P3-W0、P3-W2、P3-W3、P3-W4、P3-W5、P3-W6 和 P3-AUDIT commits；只证明提交存在于 remote，不证明 remote CI passed。 |
+| `LOCAL_TEST_RESULT_REPORTED` | 既有窗口报告中的测试结果作为历史证据；本审计另有 local rerun 结果。 |
+| `LOCALLY_AUDITED` | 本地 `git diff`、policy imports、bridge calls、forbidden path scan 和 pytest rerun 结果。 |
+| `NO_REMOTE_CI_RUNS_FOUND` | 本仓库当前未发现可引用的 remote workflow run evidence；不得把这些提交声称为 remote CI passed。 |
 | `LOCAL_CODE_EVIDENCE` | 本地 `git diff`、policy imports、bridge calls 和 pytest rerun 结果。 |
 | `LOCAL_DOC_EVIDENCE` | 本地 `docs/goals/**` closeout / gap / catalog 文档审计结果。 |
 
@@ -65,7 +67,9 @@ P3-W2 through P3-W5 are accepted as locally audited implementation / bridge evid
 | Command | Result |
 | --- | --- |
 | `git status --short --untracked-files=all` before audit edits | Clean. |
-| `git log --oneline -n 12` | Confirmed local P3-W0 through P3-W6 commits plus prior P3-W1. |
+| `git log --oneline -n 16` | Confirmed current chain includes `a5e34bb`, `dbe00c0`, `49bd87d`, `566c495`, `dbc1068`, `ab574be`, and `a1f76b3`; controller remote verification later confirmed these commits on GitHub. |
+| `git show --stat --oneline a1f76b3` | Confirmed P3-AUDIT commit stat: `PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md` and `docs/goals/README.md`, `139 insertions(+)`. |
+| `.github workflow evidence scan` | `.github` directory absent locally; no remote workflow run evidence recorded. |
 | `git show --stat --oneline dbe00c0` | P3-W2 local stat inspected. |
 | `git show --stat --oneline 49bd87d` | P3-W3 local stat inspected. |
 | `git show --stat --oneline 566c495` | P3-W4 local stat inspected. |
@@ -91,19 +95,21 @@ P3-W2 through P3-W5 are accepted as locally audited implementation / bridge evid
 | CTX-002 / `SourceSupportSummary` | `deferred_partial_blocks_phase3_final_closeout` | No full object / payload propagation / tests; not done. |
 | P3-W1 source support bridge | `partial_with_deferred_gap` | Do not repeat implementation; do not upgrade without CTX-002 repair or explicit final-residual decision. |
 | `PHASE_3_GAP_REGISTER.md` path from audit prompt | `missing_expected_path` | Actual current gap register is `PHASE_3_CLOSEOUT_GAP_REGISTER.md`; this audit records the discrepancy and does not create a duplicate gap register. |
-| GitHub remote verification | `GITHUB_REMOTE_UNVERIFIED` | Treat audited commits as local evidence until remote is verified. |
+| GitHub remote commit verification | `GITHUB_REMOTE_VERIFIED_COMMITS` | P3-W0, P3-W2, P3-W3, P3-W4, P3-W5, P3-W6, and P3-AUDIT commits are remote-verified commit evidence. |
+| Remote CI / workflow verification | `NO_REMOTE_CI_RUNS_FOUND` | No workflow run evidence is recorded; do not claim remote CI passed. |
 
 ## 7. Accepted / Not Accepted Status Per Window
 
 | Window | Audit status | Evidence | Lock |
 | --- | --- | --- | --- |
-| P3-W0 | `accepted_locally_as_scope_lock` | Docs-only scope lock and gap register exist. | Does not authorize implementation by itself. |
+| P3-W0 | `remote_verified_scope_lock` | Docs-only scope lock and gap register exist; commit `a5e34bb` is remote-verified commit evidence. | Does not authorize implementation by itself. |
 | P3-W1 | `accepted_as_partial_with_deferred_gap` | `SourceSupportPolicy` exists, but no `SourceSupportSummary`. | Not complete; do not repeat implementation. |
-| P3-W2 | `accepted_locally_audited_with_residual_gap` | Question grounding / follow-up policies and tests pass. | Does not close CTX-002 / Phase 2 / SRC-001. |
-| P3-W3 | `accepted_locally_audited` | Feedback review policies and tests pass. | Does not close Phase 3 final closeout. |
-| P3-W4 | `accepted_locally_audited` | Feedback next-action policy and feedback regression pass. | Does not authorize API/prompt/provider/schema changes. |
-| P3-W5 | `accepted_locally_audited` | Architecture bridge / boundary tests pass. | Bridge hardening is not final closeout. |
-| P3-W6 | `accepted_as_honest_blocked_closeout` | Closeout assessment and gap register keep blockers explicit. | Not final completion. |
+| P3-W2 | `remote_verified_locally_audited_with_residual_gap` | Question grounding / follow-up policies and tests pass; commit `dbe00c0` is remote-verified commit evidence. | Does not close CTX-002 / Phase 2 / SRC-001. |
+| P3-W3 | `remote_verified_locally_audited` | Feedback review policies and tests pass; commit `49bd87d` is remote-verified commit evidence. | Does not close Phase 3 final closeout. |
+| P3-W4 | `remote_verified_locally_audited` | Feedback next-action policy and feedback regression pass; commit `566c495` is remote-verified commit evidence. | Does not authorize API/prompt/provider/schema changes. |
+| P3-W5 | `remote_verified_locally_audited` | Architecture bridge / boundary tests pass; commit `dbc1068` is remote-verified commit evidence. | Bridge hardening is not final closeout. |
+| P3-W6 | `remote_verified_honest_blocked_closeout` | Closeout assessment and gap register keep blockers explicit; commit `ab574be` is remote-verified commit evidence. | Not final completion. |
+| P3-AUDIT | `remote_verified_residual_lock` | Audit / residual lock commit `a1f76b3` is remote-verified commit evidence. | Does not close residual blockers. |
 
 ## 8. Whether Phase 4 May Start
 
