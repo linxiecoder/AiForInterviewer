@@ -102,3 +102,11 @@ permalink: ai-for-interviewer/docs/goals
 - [PHASE_2_SOURCE_BACKFILL_STATUS.md](2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md)：Phase 2 source backfill status；登记 required Project source-pack anchors 已在 `docs/project-sources/**` 回填，original P2-W6 source pack deferment 已由 PRE-P4-W4 repair。
 - [PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W5 final closeout update；记录 Phase 3 `closed_with_recovered_phase2_evidence`，Phase 4 `entry_scope_lock_created` / `implementation_not_started`。
 - [PHASE_4_ENTRY_SCOPE_LOCK.md](2026-06-03/PHASE_4_ENTRY_SCOPE_LOCK.md)：Phase 4 entry scope-lock artifact；只授权未来 Agent Contracts / Skills / Tools planning，不启动 implementation。
+
+### 2026-06-03 / P4-W0
+
+- [P4_W0_SCOPE_LOCK.md](2026-06-03/P4_W0_SCOPE_LOCK.md)：P4-W0 docs-only scope lock；锁定 Phase 4 Agent Contracts / Skills / Tools planning 边界，不授权实现。
+- [P4_W0_DECISION_OPTIONS.md](2026-06-03/P4_W0_DECISION_OPTIONS.md)：P4-W0 decision options；提供 Option A / B / C，进入 P4-W1 前必须由 Controller / user 选择。
+- [P4_W0_WINDOW_CATALOG.md](2026-06-03/P4_W0_WINDOW_CATALOG.md)：P4-W0 proposed next-window catalog；定义 P4-W1 到 P4-W5 的目标、能力 ID、文件边界、验证和 stop conditions。
+- [P4_W0_ACCEPTANCE_GATES.md](2026-06-03/P4_W0_ACCEPTANCE_GATES.md)：P4-W0 acceptance gates；登记 candidate-only、no formal write、Tool no repository exposure、no provider/prompt leakage、no runtime wiring 等后续硬闸门。
+- [P4_W0_FINAL_REPORT.md](2026-06-03/P4_W0_FINAL_REPORT.md)：P4-W0 final report；记录 docs-only 变更、验证结果、推荐下一决策和剩余风险。
