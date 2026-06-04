@@ -7,6 +7,10 @@ from enum import Enum
 from typing import Iterable
 
 
+SOURCE_SUPPORT_POLICY_VERSION = "source_support_policy.v1"
+SOURCE_SUPPORT_COMPUTED_AT = "deterministic:source_support_policy.v1"
+
+
 class SourceSupportLevel(str, Enum):
     DIRECT_PROJECT_EVIDENCE = "direct_project_evidence"
     ADJACENT_PROJECT_EVIDENCE = "adjacent_project_evidence"
@@ -104,6 +108,57 @@ class SourceSupportDecision:
     def legacy_source_support_level(self) -> str:
         return self.level.value
 
+    def to_summary(self) -> "SourceSupportSummary":
+        return SourceSupportSummary.from_decision(self)
+
+
+@dataclass(frozen=True)
+class SourceSupportSummary:
+    level: SourceSupportLevel
+    primary_evidence_refs: tuple[str, ...] = ()
+    adjacent_evidence_refs: tuple[str, ...] = ()
+    job_gap_refs: tuple[str, ...] = ()
+    missing_context: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...] = ()
+    confidence: str = "low"
+    policy_version: str = SOURCE_SUPPORT_POLICY_VERSION
+    computed_at: str = SOURCE_SUPPORT_COMPUTED_AT
+
+    @classmethod
+    def from_decision(cls, decision: SourceSupportDecision) -> "SourceSupportSummary":
+        evidence_refs = tuple(dict.fromkeys(_clean(ref) for ref in decision.evidence_refs if _clean(ref)))
+        primary_evidence_refs: tuple[str, ...] = ()
+        adjacent_evidence_refs: tuple[str, ...] = ()
+        job_gap_refs: tuple[str, ...] = ()
+        if decision.level == SourceSupportLevel.DIRECT_PROJECT_EVIDENCE:
+            primary_evidence_refs = evidence_refs
+        elif decision.level == SourceSupportLevel.ADJACENT_PROJECT_EVIDENCE:
+            adjacent_evidence_refs = evidence_refs
+        elif decision.level == SourceSupportLevel.JOB_GAP_ONLY:
+            job_gap_refs = evidence_refs
+        return cls(
+            level=decision.level,
+            primary_evidence_refs=primary_evidence_refs,
+            adjacent_evidence_refs=adjacent_evidence_refs,
+            job_gap_refs=job_gap_refs,
+            missing_context=_missing_context(decision),
+            reason_codes=tuple(dict.fromkeys(_clean(code) for code in decision.reason_codes if _clean(code))),
+            confidence=_summary_confidence(decision.level),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "level": self.level.value,
+            "primary_evidence_refs": list(self.primary_evidence_refs),
+            "adjacent_evidence_refs": list(self.adjacent_evidence_refs),
+            "job_gap_refs": list(self.job_gap_refs),
+            "missing_context": list(self.missing_context),
+            "reason_codes": list(self.reason_codes),
+            "confidence": self.confidence,
+            "policy_version": self.policy_version,
+            "computed_at": self.computed_at,
+        }
+
 
 class SourceSupportPolicy:
     @classmethod
@@ -112,11 +167,13 @@ class SourceSupportPolicy:
         *,
         canonical_project_assets_available: bool,
         canonical_project_asset_count: int,
+        canonical_project_asset_refs: Iterable[object] = (),
     ) -> SourceSupportDecision:
         if canonical_project_assets_available and canonical_project_asset_count > 0:
             return SourceSupportDecision(
                 level=SourceSupportLevel.DIRECT_PROJECT_EVIDENCE,
                 reason_codes=("canonical_project_assets_available",),
+                evidence_refs=_clean_refs(canonical_project_asset_refs),
             )
         return SourceSupportDecision(
             level=SourceSupportLevel.INSUFFICIENT_CONTEXT,
@@ -133,6 +190,9 @@ class SourceSupportPolicy:
         canonical_project_asset_texts: Iterable[str] = (),
         existing_level: object | None = None,
     ) -> SourceSupportDecision:
+        source_evidence = tuple(evidence)
+        project_evidence = tuple(item for item in source_evidence if item.source_type in PROJECT_EVIDENCE_SOURCE_TYPES)
+        job_gap_evidence = tuple(item for item in source_evidence if item.source_type in JOB_GAP_SOURCE_TYPES)
         normalized_existing_level = cls.normalize_level(existing_level)
         if normalized_existing_level in {
             SourceSupportLevel.DIRECT_PROJECT_EVIDENCE,
@@ -141,17 +201,14 @@ class SourceSupportPolicy:
             return SourceSupportDecision(
                 level=normalized_existing_level,
                 reason_codes=("canonical_pack_source_support_level",),
+                evidence_refs=_evidence_refs(project_evidence),
             )
 
-        source_evidence = tuple(evidence)
         if not source_evidence and not canonical_project_assets_available:
             return SourceSupportDecision(
                 level=SourceSupportLevel.INSUFFICIENT_CONTEXT,
                 reason_codes=("no_source_context",),
             )
-
-        project_evidence = tuple(item for item in source_evidence if item.source_type in PROJECT_EVIDENCE_SOURCE_TYPES)
-        job_gap_evidence = tuple(item for item in source_evidence if item.source_type in JOB_GAP_SOURCE_TYPES)
         project_evidence_text = " ".join(
             tuple(item.text for item in project_evidence) + tuple(canonical_project_asset_texts)
         )
@@ -205,6 +262,28 @@ def _support_terms(value: object) -> set[str]:
 
 def _evidence_refs(evidence: Iterable[SourceSupportEvidence]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(ref for item in evidence if (ref := _clean(item.ref))))
+
+
+def _clean_refs(values: Iterable[object]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(ref for value in values if (ref := _clean(value))))
+
+
+def _summary_confidence(level: SourceSupportLevel) -> str:
+    if level == SourceSupportLevel.DIRECT_PROJECT_EVIDENCE:
+        return "high"
+    if level in {SourceSupportLevel.ADJACENT_PROJECT_EVIDENCE, SourceSupportLevel.JOB_GAP_ONLY}:
+        return "medium"
+    return "low"
+
+
+def _missing_context(decision: SourceSupportDecision) -> tuple[str, ...]:
+    if decision.level == SourceSupportLevel.INSUFFICIENT_CONTEXT:
+        return ("project_evidence", "job_requirement_evidence")
+    if decision.level == SourceSupportLevel.JOB_GAP_ONLY:
+        return ("direct_project_evidence",)
+    if decision.level == SourceSupportLevel.ADJACENT_PROJECT_EVIDENCE:
+        return ("direct_project_overlap",)
+    return ()
 
 
 def _clean(value: object) -> str:

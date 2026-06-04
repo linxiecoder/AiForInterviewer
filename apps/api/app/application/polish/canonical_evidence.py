@@ -49,7 +49,8 @@ class CanonicalEvidenceService:
             owner_id=owner_id,
             query_inputs=query_inputs,
         )
-        source_support_level = _source_support_level(canonical_project_assets)
+        source_support_decision = _source_support_decision(canonical_project_assets)
+        source_support_level = source_support_decision.legacy_source_support_level
         pack = {
             "schema_version": CANONICAL_EVIDENCE_PACK_SCHEMA_VERSION,
             "owner_ref": {"resource_type": "owner", "resource_id": owner_id},
@@ -63,6 +64,7 @@ class CanonicalEvidenceService:
             "prior_feedback_refs": [],
             "answer_attempt_refs": [],
             "source_support_level": source_support_level,
+            "source_support_summary": source_support_decision.to_summary().to_dict(),
             "warnings": [],
             "blocking_issues": [],
         }
@@ -203,11 +205,16 @@ def _keywords(values: Iterable[object]) -> set[str]:
 
 
 def _source_support_level(canonical_project_assets: dict[str, Any]) -> str:
+    return _source_support_decision(canonical_project_assets).legacy_source_support_level
+
+
+def _source_support_decision(canonical_project_assets: dict[str, Any]):
     items = canonical_project_assets.get("items") if isinstance(canonical_project_assets.get("items"), list) else []
     return SourceSupportPolicy.classify_canonical_assets(
         canonical_project_assets_available=bool(canonical_project_assets.get("available")),
         canonical_project_asset_count=len(items),
-    ).legacy_source_support_level
+        canonical_project_asset_refs=tuple(_clean(item.get("asset_id")) for item in items if isinstance(item, dict)),
+    )
 
 
 def _version_ref(resource_type: str, resource_id: str | None, version_id: str | None) -> dict[str, str] | None:
@@ -231,6 +238,9 @@ def _canonical_pack_digest_payload(pack: dict[str, Any]) -> dict[str, Any]:
         "resume_snapshot_ref": pack.get("resume_snapshot_ref"),
         "progress_node_ref": pack.get("progress_node_ref"),
         "source_support_level": pack.get("source_support_level"),
+        "source_support_summary": pack.get("source_support_summary")
+        if isinstance(pack.get("source_support_summary"), dict)
+        else {},
         "canonical_project_assets": canonical_project_assets if isinstance(canonical_project_assets, dict) else {},
     }
 

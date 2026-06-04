@@ -40,6 +40,7 @@ from app.application.polish.question_generation_policy import (
 )
 from app.application.polish.question_grounding import GroundingResult, validate_question_grounding
 from app.domain.polish.policies.source_support_policy import (
+    SourceSupportDecision,
     SourceSupportEvidence,
     SourceSupportPolicy,
     SourceSupportTarget,
@@ -329,6 +330,7 @@ class QuestionGenerationService:
                 "signal_version": "evidence_grounded_blueprint.v1",
                 "source_availability": source_availability,
                 "source_support_level": scope.source_support_level,
+                "source_support_summary": _source_support_summary(scope),
                 "grounding_blocking_errors": list(grounding_blocking_errors),
                 "grounding_warnings": list(grounding_warnings),
                 "canonical_project_assets_available": bool(
@@ -881,6 +883,21 @@ def _source_support_level(
     focus_target: AgentFocusTarget,
     canonical_project_assets: dict[str, Any],
 ) -> str:
+    return _source_support_decision(
+        context,
+        chunks=chunks,
+        focus_target=focus_target,
+        canonical_project_assets=canonical_project_assets,
+    ).legacy_source_support_level
+
+
+def _source_support_decision(
+    context: dict[str, Any],
+    *,
+    chunks: tuple[ProgressEvidenceChunk, ...],
+    focus_target: AgentFocusTarget,
+    canonical_project_assets: dict[str, Any],
+) -> SourceSupportDecision:
     pack = context.get("canonical_evidence_pack")
     return SourceSupportPolicy.classify_question_context(
         existing_level=pack.get("source_support_level") if isinstance(pack, dict) else None,
@@ -900,7 +917,30 @@ def _source_support_level(
             if isinstance(item, dict)
             for key in ("title", "summary", "content_excerpt")
         ),
-    ).legacy_source_support_level
+    )
+
+
+def _source_support_summary(scope: EvidenceScope) -> dict[str, object]:
+    decision = SourceSupportPolicy.classify_question_context(
+        existing_level=scope.source_support_level,
+        target=SourceSupportTarget(
+            title=scope.node_title,
+            expected_capability=scope.expected_capability,
+            missing_points=tuple(scope.missing_points),
+        ),
+        evidence=tuple(
+            SourceSupportEvidence(source_type=source.source_type, text=source.excerpt, ref=source.ref_id)
+            for source in scope.question_sources
+        ),
+        canonical_project_assets_available=bool(scope.canonical_project_assets.get("available")),
+        canonical_project_asset_texts=tuple(
+            str(item.get(key) or "")
+            for item in scope.canonical_project_assets.get("items", [])
+            if isinstance(item, dict)
+            for key in ("title", "summary", "content_excerpt")
+        ),
+    )
+    return decision.to_summary().to_dict()
 
 
 def _context_digest_with_canonical_assets(base_digest: str, context: dict[str, Any]) -> str:

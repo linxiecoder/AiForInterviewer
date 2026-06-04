@@ -780,6 +780,15 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
         assert forbidden not in serialized_provider_request
     assert "资深技术面试题设计专家" not in serialized_provider_request
     metadata = result.draft.question_metadata
+    source_support_summary = metadata["source_support_summary"]
+    assert source_support_summary["level"] == "direct_project_evidence"
+    assert source_support_summary["primary_evidence_refs"] == list(result.draft.evidence_refs)
+    assert source_support_summary["adjacent_evidence_refs"] == []
+    assert source_support_summary["job_gap_refs"] == []
+    assert source_support_summary["missing_context"] == []
+    assert source_support_summary["reason_codes"] == ["canonical_pack_source_support_level"]
+    assert source_support_summary["confidence"] == "high"
+    assert source_support_summary["policy_version"] == "source_support_policy.v1"
     assert metadata["llm_generation_mode"] == "provider_structured_json"
     assert metadata["fallback_visible"] is False
     assert metadata["llm_trace_refs"] == ["trace_next_question_agent_prompt_v1"]

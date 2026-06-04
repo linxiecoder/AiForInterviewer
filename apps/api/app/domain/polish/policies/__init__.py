@@ -47,6 +47,7 @@ from app.domain.polish.policies.source_support_policy import (
     SourceSupportEvidence,
     SourceSupportLevel,
     SourceSupportPolicy,
+    SourceSupportSummary,
     SourceSupportTarget,
 )
 
@@ -84,6 +85,7 @@ __all__ = [
     "SourceSupportEvidence",
     "SourceSupportLevel",
     "SourceSupportPolicy",
+    "SourceSupportSummary",
     "SourceSupportTarget",
     "UnsupportedAssetClaim",
 ]
