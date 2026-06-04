@@ -91,3 +91,4 @@ permalink: ai-for-interviewer/docs/goals
 
 - [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：post-P3-W5 Phase 3 closeout assessment；记录 Domain Policy implementation evidence，并明确 final closeout 被 Phase 2 / SRC-001 / CTX-002 deferred gaps 阻断。
 - [PHASE_3_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_3_CLOSEOUT_GAP_REGISTER.md)：post-P3-W5 / P3-W6 gap register；保留 CTX-002 / SourceSupportSummary、Phase 2 closeout evidence、SRC-001 和 P3-W1 partial gap。
+- [PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md](2026-06-03/PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md)：P3-AUDIT-AND-RESIDUAL-LOCK controller audit；接受 P3-W2 到 P3-W5 为 locally audited evidence，确认 P3-W6 是 blocked closeout，Phase 4 未启动。
