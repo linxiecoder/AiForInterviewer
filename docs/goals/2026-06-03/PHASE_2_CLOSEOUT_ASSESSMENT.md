@@ -2,13 +2,13 @@
 title: PHASE_2_CLOSEOUT_ASSESSMENT
 type: close-out-assessment
 status: evidence-only
-owner: PRE-P4-W2-PHASE2-SRC-BACKFILL
+owner: PRE-P4-W4-PROJECT-SOURCE-PACK-REPO-BACKFILL
 permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-2-closeout-assessment
 ---
 
 # Phase 2 Closeout Assessment
 
-本文件记录 PRE-P4-W2 对 Phase 2 closeout evidence 的当前仓库状态审计。它不是 Phase 2 completion report，不替代 active delivery 文档，也不把缺失证据重建为完成事实。
+本文件记录 PRE-P4-W2 对 Phase 2 closeout evidence 的当前仓库状态审计，并由 PRE-P4-W4 补充 SRC-001 Project source pack repo backfill 结果。它不是 Phase 2 completion report，不替代 active delivery 文档，也不把缺失的 Phase 2 closeout evidence 重建为完成事实。
 
 ## 1. Executive Summary
 
@@ -16,7 +16,8 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-2-closeout-assessment
 | --- | --- | --- |
 | Phase 2 closeout evidence | `still_blocked_missing_evidence` | W2 recon 未找到 pre-existing Phase 2 closeout evidence files。 |
 | Phase 2 completion claim | `not_claimed` | 没有验收记录、final report、controller acceptance 或 validation matrix 可证明 Phase 2 closed。 |
-| Phase 3 dependency | `blocks_phase3_final_closeout` | Phase 3 closeout 仍需要 Phase 2 closeout evidence 或 explicit final-residual acceptance。 |
+| SRC-001 source pack / source backfill | `repo_backfilled_from_project_sources` | PRE-P4-W4 recon 确认 required Project source anchors 已进入 `docs/project-sources/**`。 |
+| Phase 3 dependency | `blocks_phase3_final_closeout` | Phase 3 closeout 仍需要 Phase 2 closeout evidence 或 explicit final-residual acceptance；SRC-001 不再是 blocker。 |
 | Phase 4 authorization | `not_authorized_yet` | Phase 2 evidence gap 未关闭，不能作为 Phase 4 entry evidence。 |
 
 ## 2. Recon Evidence
@@ -28,15 +29,17 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-2-closeout-assessment
 | `PHASE_2_SOURCE_BACKFILL_STATUS.md` before W2 | Missing. |
 | Phase 2 validation / acceptance evidence | Not found in the W2 allowed evidence set. |
 | Controller final-residual acceptance for Phase 2 | Not found. |
+| PRE-P4-W4 Project source pack | Required Project source anchors found in `docs/project-sources/**`; this repairs SRC-001 only. |
 
 ## 3. What This File Does Not Claim
 
 | Non-claim | Reason |
 | --- | --- |
 | Phase 2 is done | Required closeout evidence was absent. |
+| Phase 2 evidence can be inferred from Project source pack | Project source pack backfill is separate from Phase 2 validation / acceptance proof. |
 | Phase 2 evidence can be inferred from Phase 3 docs | Phase 3 evidence-only docs cannot substitute for missing Phase 2 closeout evidence. |
-| Phase 4 entry authorization | Phase 3 final closeout remains blocked by this gap and SRC-001. |
-| Archive or historical plans are active truth | W2 did not restore archive or old plans as current execution basis. |
+| Phase 4 entry authorization | Phase 3 final closeout remains blocked by missing Phase 2 closeout evidence. |
+| Archive or historical plans are active truth | W2 / W4 did not restore archive or old plans as current execution basis. |
 
 ## 4. Required Follow-up
 
