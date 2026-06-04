@@ -22,6 +22,8 @@ Allowed P3-W6 closeout statuses:
 - `repaired_with_ctx002_bridge`
 - `still_blocked_missing_evidence`
 - `source_pack_gap_documented`
+- `C_phase3_still_blocked`
+- `not_authorized_yet`
 
 Forbidden wording:
 
@@ -50,12 +52,13 @@ Forbidden wording:
 
 | Item | Status | Reason |
 | --- | --- | --- |
-| Phase 3 final closeout | `still_blocked` | Phase 2 closeout evidence and SRC-001 remain unresolved. |
+| Phase 3 final closeout | `still_blocked` | PRE-P4-W3 selects outcome C because Phase 2 closeout evidence and SRC-001 remain unresolved and not accepted as final residuals. |
 | Phase 2 closeout evidence | `still_blocked_missing_evidence` | W2 documented missing closeout evidence files; no acceptance proof found. |
 | SRC-001 source pack / backfill | `source_pack_gap_documented` | Root source-pack files absent; excerpts are insufficient for full source backfill. |
 | Full SourceSupportSummary object | `repaired_with_ctx002_bridge` | Domain value object exists with compact safe fields. |
 | SourceSupportSummary bridge propagation | `repaired_with_ctx002_bridge` | Generation-time metadata and canonical evidence pack include summary; API / provider / prompt / DB / runtime contracts remain unchanged. |
 | P3-W1 completion | `repaired_with_ctx002_bridge` | Source support classification and compact summary bridge now exist; Phase 3 final closeout still waits on Phase 2 / SRC-001. |
+| PRE-P4-W3 final gate | `C_phase3_still_blocked` | Blocked report emitted; `PHASE_4_ENTRY_SCOPE_LOCK.md` was not created. |
 | Agent runtime / LangGraph runtime | `not_attempted_out_of_scope` | Phase 3 explicitly did not implement Agent runtime. |
 | Provider fail-closed builder | `not_attempted_out_of_scope` | Provider refactor / fail-closed builder is outside Phase 3. |
 | Production AI quality gate | `not_attempted_out_of_scope` | Unit/API tests are deterministic evidence only. |
@@ -67,7 +70,7 @@ Forbidden wording:
 | Legacy `source_support_level` may be mistaken for full persisted SourceSupportSummary | Open | PRE-P4-W1 adds compact summary bridge while keeping legacy field; persisted normalized API metadata is not claimed. |
 | P3-W5 bridge hardening may be mistaken for final Phase 3 closeout | Open | P3-W6 records `blocked_requires_controller_decision`, not done. |
 | Evidence-only goal docs may be mistaken for active source-of-truth | Open | This file states `docs/goals` evidence-only boundary and lists active source backfill as blocked. |
-| Phase 4 may start assuming Agent/provider/runtime work was done | Open | Phase 4 entry criteria explicitly forbid that assumption. |
+| Phase 4 entry may incorrectly assume Agent/provider/runtime work was done | Open | Phase 4 entry criteria explicitly forbid that assumption. |
 
 ## 5. Blocking Assessment
 
@@ -81,4 +84,4 @@ Forbidden wording:
 
 ## 6. Follow-up Goal
 
-Open a dedicated repair/backfill goal for missing Phase 2 / SRC-001 source evidence, or obtain explicit controller final-residual acceptance before any future closeout says Phase 3 is complete.
+Open a dedicated repair/backfill goal for missing Phase 2 / SRC-001 source evidence, or obtain explicit controller final-residual acceptance before any future closeout says Phase 3 is complete or any Phase 4 scope lock starts.

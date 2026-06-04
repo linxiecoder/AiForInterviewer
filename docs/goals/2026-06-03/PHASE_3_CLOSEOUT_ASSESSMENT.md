@@ -8,19 +8,20 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-closeout-assessment
 
 # Phase 3 Closeout Assessment
 
-本文件记录 post-P3-W5 的 Phase 3 closeout assessment，并由 PRE-P4-W1 回填 CTX-002 repair evidence、由 PRE-P4-W2 回填 Phase 2 / SRC evidence-gap status。它只作为 `docs/goals/**` 执行证据，不替代 active delivery 文档，不关闭 Phase 3；Phase 2 closeout evidence 和 SRC-001 仍阻断 final closeout。
+本文件记录 post-P3-W5 的 Phase 3 closeout assessment，并由 PRE-P4-W1 回填 CTX-002 repair evidence、由 PRE-P4-W2 回填 Phase 2 / SRC evidence-gap status、由 PRE-P4-W3 记录 final gate outcome C。它只作为 `docs/goals/**` 执行证据，不替代 active delivery 文档，不关闭 Phase 3；Phase 2 closeout evidence 和 SRC-001 仍阻断 final closeout。
 
 ## 1. Executive Summary
 
 | Item | Status | Evidence |
 | --- | --- | --- |
 | Phase 3 implementation windows | `implemented_through_p3_w5` | P3-W2 / P3-W3 / P3-W4 / P3-W5 final reports exist with validation evidence. |
-| Phase 3 final closeout | `still_blocked` | Phase 2 closeout evidence remains `still_blocked_missing_evidence`; SRC-001 remains `source_pack_gap_documented`; CTX-002 is repaired in PRE-P4-W1 evidence. |
+| Phase 3 final closeout | `still_blocked` | PRE-P4-W3 selects outcome C because Phase 2 closeout evidence remains `still_blocked_missing_evidence` and SRC-001 remains `source_pack_gap_documented`. |
+| PRE-P4-W3 final gate | `C_phase3_still_blocked` | No Phase 4 entry scope lock was created; no Phase 4 implementation was started. |
 | P3-W1 source support | `repaired_with_ctx002_bridge` | `SourceSupportPolicy` exists; `SourceSupportSummary` value object, generation-time metadata bridge, canonical evidence summary, and tests exist. |
 | Project source backfill | `source_pack_gap_documented` | W2 recon found condensed excerpts only; root source-pack anchors and Phase 2 closeout evidence remain absent. |
 | External behavior | `unchanged_by_closeout` | P3-W6 changed only evidence docs; no code behavior changed. |
 
-This assessment must not be read as Phase 3 final completion. It records that policy extraction and bridge hardening are validated, while final closeout remains blocked.
+This assessment must not be read as Phase 3 final completion. It records that policy extraction and bridge hardening are validated, CTX-002 is repaired, and final closeout remains blocked by Phase 2 / SRC evidence gaps.
 
 ## 2. Capability Status
 
@@ -93,7 +94,7 @@ These tests are deterministic code / contract regression evidence. They do not p
 
 ## 8. Phase 4 Entry Criteria
 
-Normal Phase 4 entry is not recommended from this assessment alone. Before Phase 4 or Agent-contract work depends on Phase 3, one of the following must happen:
+Normal Phase 4 entry is not authorized from this assessment. Before Phase 4 or Agent-contract work depends on Phase 3, one of the following must happen:
 
 1. Phase 2 closeout evidence and SRC-001 source pack are recovered / backfilled and validated; CTX-002 repair evidence remains available from PRE-P4-W1.
 2. Controller explicitly accepts Phase 2 closeout evidence and SRC-001 source-pack gaps as final residuals, then performs a final-closeout-only authorization pass.

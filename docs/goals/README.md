@@ -98,3 +98,4 @@ permalink: ai-for-interviewer/docs/goals
 - [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W2 Phase 2 closeout evidence assessment；记录未找到 pre-existing Phase 2 closeout proof，不声称 Phase 2 done。
 - [PHASE_2_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md)：PRE-P4-W2 Phase 2 closeout gap register；登记缺失的 closeout assessment、gap register、source status、validation / acceptance proof。
 - [PHASE_2_SOURCE_BACKFILL_STATUS.md](2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md)：PRE-P4-W2 source backfill status；登记 root Project source-pack anchors 缺失，condensed excerpts 不能替代 full source pack。
+- [PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W3 final closeout gate；记录 outcome C：Phase 3 `still_blocked`，Phase 4 `not_authorized_yet`，未创建 Phase 4 entry scope lock。
