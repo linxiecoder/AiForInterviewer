@@ -2,50 +2,56 @@
 title: PHASE_2_CLOSEOUT_ASSESSMENT
 type: close-out-assessment
 status: evidence-only
-owner: PRE-P4-W4-PROJECT-SOURCE-PACK-REPO-BACKFILL
+owner: PRE-P4-W5-PHASE2-EVIDENCE-RECONCILIATION
 permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-2-closeout-assessment
 ---
 
 # Phase 2 Closeout Assessment
 
-本文件记录 PRE-P4-W2 对 Phase 2 closeout evidence 的当前仓库状态审计，并由 PRE-P4-W4 补充 SRC-001 Project source pack repo backfill 结果。它不是 Phase 2 completion report，不替代 active delivery 文档，也不把缺失的 Phase 2 closeout evidence 重建为完成事实。
+本文件记录 Phase 2 closeout evidence 的当前 reconciliation 结果。PRE-P4-W5 已验证恢复的 Phase 2 docs 和 commit evidence 足以把 closeout evidence 状态升级为 `recovered_and_reconciled`。本文件仍只作为 `docs/goals/**` execution evidence，不替代 active delivery 文档、Project source、ADR 或当前代码事实。
 
 ## 1. Executive Summary
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| Phase 2 closeout evidence | `still_blocked_missing_evidence` | W2 recon 未找到 pre-existing Phase 2 closeout evidence files。 |
-| Phase 2 completion claim | `not_claimed` | 没有验收记录、final report、controller acceptance 或 validation matrix 可证明 Phase 2 closed。 |
-| SRC-001 source pack / source backfill | `repo_backfilled_from_project_sources` | PRE-P4-W4 recon 确认 required Project source anchors 已进入 `docs/project-sources/**`。 |
-| Phase 3 dependency | `blocks_phase3_final_closeout` | Phase 3 closeout 仍需要 Phase 2 closeout evidence 或 explicit final-residual acceptance；SRC-001 不再是 blocker。 |
-| Phase 4 authorization | `not_authorized_yet` | Phase 2 evidence gap 未关闭，不能作为 Phase 4 entry evidence。 |
+| Phase 2 closeout evidence | `recovered_and_reconciled` | `0dbfdb90` is current mainline Phase 2 docs evidence; `48af513` is recovered branch evidence for P2-W6 closeout assessment, closeout gap register, validation evidence and Phase 3 entry scope lock candidate. |
+| Phase 2 historical closeout status | `close_with_deferred_source_pack_gap` / `partial_deferred` | Recovered branch commit `48af513` records P2-W0 through P2-W5 validated and P2-W6 closed with source pack backfill deferred because root source files were absent at that time. |
+| SRC-001 source pack / source backfill | `repo_backfilled_from_project_sources` | `f712104` backfilled required Project source anchors into `docs/project-sources/**`. |
+| Phase 3 dependency | `unblocked_for_scope_lock_closeout` | Phase 2 evidence is recovered, CTX-002 is repaired, and SRC-001 is repo-backfilled. |
+| Phase 4 authorization | `scope_lock_allowed_only` | A Phase 4 entry scope-lock artifact may be created; implementation remains prohibited in this window. |
 
 ## 2. Recon Evidence
 
 | Evidence Target | Result |
 | --- | --- |
-| `PHASE_2_CLOSEOUT_ASSESSMENT.md` before W2 | Missing. |
-| `PHASE_2_CLOSEOUT_GAP_REGISTER.md` before W2 | Missing. |
-| `PHASE_2_SOURCE_BACKFILL_STATUS.md` before W2 | Missing. |
-| Phase 2 validation / acceptance evidence | Not found in the W2 allowed evidence set. |
-| Controller final-residual acceptance for Phase 2 | Not found. |
-| PRE-P4-W4 Project source pack | Required Project source anchors found in `docs/project-sources/**`; this repairs SRC-001 only. |
+| `git log --oneline -n 40` | Shows `0dbfdb9`, `f712104`, and the current PRE-P4 chain on current `main`. |
+| `git show --stat --oneline 0dbfdb90` | Shows creation of `PHASE_2_SCOPE_LOCK.md` and `PHASE_2_ENTRY_GAP_REGISTER.md`. |
+| `git show --stat --oneline 48af513` | Shows P2-W6 closeout docs, gap register, entry register update and Phase 3 entry scope lock candidate from recovered branch evidence. |
+| `git branch --all --contains 48af513` | Shows `48af513` on `phase2-autopilot` / `origin/phase2-autopilot`, not as an ancestor of current `main`. |
+| `git show 48af513:docs/goals/2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md` | Records Phase 2 as `partial_deferred`, with P2-W0 through P2-W5 commits and local validation matrix, as recovered branch evidence. |
+| `git show --stat --oneline f712104` | Shows `docs/project-sources/**` backfill and W4 status repairs. |
+| `docs/project-sources/README.md` | Confirms `docs/project-sources/**` is the active Project source pack and `docs/goals/**` is execution evidence only. |
 
 ## 3. What This File Does Not Claim
 
 | Non-claim | Reason |
 | --- | --- |
-| Phase 2 is done | Required closeout evidence was absent. |
-| Phase 2 evidence can be inferred from Project source pack | Project source pack backfill is separate from Phase 2 validation / acceptance proof. |
-| Phase 2 evidence can be inferred from Phase 3 docs | Phase 3 evidence-only docs cannot substitute for missing Phase 2 closeout evidence. |
-| Phase 4 entry authorization | Phase 3 final closeout remains blocked by missing Phase 2 closeout evidence. |
-| Archive or historical plans are active truth | W2 / W4 did not restore archive or old plans as current execution basis. |
+| No-gap Phase 2 closeout | P2-W6 explicitly closed with the source pack backfill deferred. |
+| Recovered evidence proves remote CI | No workflow run evidence is recorded in this window. |
+| Project source pack alone proves Phase 2 validation | Source pack backfill repairs SRC-001; Phase 2 validation evidence comes from recovered 48af513 branch docs. |
+| Phase 4 implementation authorization | Only `PHASE_4_ENTRY_SCOPE_LOCK.md` is authorized here; no implementation starts. |
+| Archive or historical plans are active truth | Current git history, active docs, `docs/project-sources/**`, and current validation remain the governing evidence. |
 
-## 4. Required Follow-up
+## 4. Status Preservation
 
-To close this gap later, a future authorized window needs one of:
+| Historical item | Preserved status | Current treatment |
+| --- | --- | --- |
+| P2-W0 through P2-W5 | `validated_committed` | Preserved from current `PHASE_2_ENTRY_GAP_REGISTER.md` and recovered 48af513 branch evidence. |
+| P2-W6 | `complete_with_deferred_source_pack_gap` | Preserved as original closeout condition. |
+| Original source pack gap | `partial_deferred` historical condition | Repaired later by PRE-P4-W4 through `docs/project-sources/**`. |
+| Provider sanitizer gaps | deferred | Remain Phase 7 provider/security scope. |
+| Agent runtime / LangGraph wiring | deferred | Remain later runtime scope. |
 
-1. Actual Phase 2 closeout evidence with validation / acceptance proof.
-2. An explicit controller final-residual acceptance that names the missing Phase 2 evidence and its risk.
+## 5. Phase 3 / Phase 4 Impact
 
-Until then, Phase 2 closeout evidence remains `still_blocked_missing_evidence`.
+Phase 3 may close as `closed_with_recovered_phase2_evidence` because the previously unavailable Phase 2 closeout evidence has been recovered and SRC-001 is already repo-backfilled. Phase 4 may receive only a scope-lock artifact for future Agent Contracts / Skills / Tools planning. No Phase 4 implementation, runtime replacement, provider rewrite, DB migration, API behavior change, LangGraph runtime, Agent runtime wiring, frontend work, or tests are authorized by this file.

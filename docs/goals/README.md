@@ -77,26 +77,28 @@ permalink: ai-for-interviewer/docs/goals
 
 ### 2026-06-03 / P3-W4
 
-- [P3_W4_FINAL_REPORT.md](2026-06-03/P3-W4/P3_W4_FINAL_REPORT.md)：P3-W4 feedback next-action domain policy final report；FAG-005 已抽为 domain policy；后续 PRE-P4 evidence 显示 CTX-002 已修复，Phase 2 / SRC-001 仍阻断 Phase 3 final closeout。
+- [P3_W4_FINAL_REPORT.md](2026-06-03/P3-W4/P3_W4_FINAL_REPORT.md)：P3-W4 feedback next-action domain policy final report；FAG-005 已抽为 domain policy；后续 PRE-P4 evidence 显示 CTX-002 已修复，SRC-001 已回填，Phase 2 closeout evidence 已恢复并对账。
 
 ### 2026-06-03 / P3-W5
 
-- [P3_W5_FINAL_REPORT.md](2026-06-03/P3-W5/P3_W5_FINAL_REPORT.md)：P3-W5 application bridge / boundary hardening final report；bridge / adapter architecture gate 已加固；后续 PRE-P4 evidence 显示 CTX-002 已修复，Phase 2 / SRC-001 仍阻断 Phase 3 final closeout。
+- [P3_W5_FINAL_REPORT.md](2026-06-03/P3-W5/P3_W5_FINAL_REPORT.md)：P3-W5 application bridge / boundary hardening final report；bridge / adapter architecture gate 已加固；后续 PRE-P4 evidence 显示 CTX-002 已修复，SRC-001 已回填，Phase 2 closeout evidence 已恢复并对账。
 
 ### 2026-06-03 / P3-W6
 
-- [P3_W6_FINAL_REPORT.md](2026-06-03/P3-W6/P3_W6_FINAL_REPORT.md)：P3-W6 closeout / source backfill assessment；Phase 3 implementation evidence 已汇总；后续 PRE-P4 evidence 显示 CTX-002 已修复，Phase 2 / SRC-001 仍阻断 final closeout。
+- [P3_W6_FINAL_REPORT.md](2026-06-03/P3-W6/P3_W6_FINAL_REPORT.md)：P3-W6 closeout / source backfill assessment；Phase 3 implementation evidence 已汇总；后续 PRE-P4 evidence 显示 CTX-002 已修复，SRC-001 已回填，Phase 2 closeout evidence 已恢复并对账。
 
 ### 2026-06-03 / Phase 3 Closeout Assessment
 
-- [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：post-P3-W5 Phase 3 closeout assessment；记录 Domain Policy implementation evidence、PRE-P4-W1 CTX-002 repair evidence、PRE-P4-W2 Phase 2 / SRC evidence-gap status 和 PRE-P4-W4 SRC-001 repo backfill；Phase 3 final closeout 仍被 Phase 2 closeout evidence 阻断。
-- [PHASE_3_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_3_CLOSEOUT_GAP_REGISTER.md)：post-P3-W5 / P3-W6 gap register；登记 CTX-002 / SourceSupportSummary 已由 PRE-P4-W1 修复、SRC-001 已由 PRE-P4-W4 回填，并保留 Phase 2 closeout evidence gap。
+- [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：post-P3-W5 Phase 3 closeout assessment；记录 Domain Policy implementation evidence、PRE-P4-W1 CTX-002 repair evidence、PRE-P4-W4 SRC-001 repo backfill 和 PRE-P4-W5 recovered Phase 2 evidence reconciliation；Phase 3 为 `closed_with_recovered_phase2_evidence`。
+- [PHASE_3_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_3_CLOSEOUT_GAP_REGISTER.md)：post-P3-W5 / P3-W6 gap register；登记 CTX-002 / SourceSupportSummary 已由 PRE-P4-W1 修复、SRC-001 已由 PRE-P4-W4 回填，Phase 2 closeout evidence 已由 PRE-P4-W5 恢复并对账。
 - [PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md](2026-06-03/PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md)：P3-AUDIT-AND-RESIDUAL-LOCK controller audit；接受 P3-W2 到 P3-W5 为 locally audited evidence，确认 P3-W6 是 blocked closeout，Phase 4 未启动。
 - [PRE_P4_REMOTE_VERIFICATION_BACKFILL.md](2026-06-03/PRE_P4_REMOTE_VERIFICATION_BACKFILL.md)：PRE-P4-W0 remote verification backfill；登记 P3-W0 / P3-W2 / P3-W3 / P3-W4 / P3-W5 / P3-W6 / P3-AUDIT 为 `GITHUB_REMOTE_VERIFIED_COMMITS`，同时明确 `NO_REMOTE_CI_RUNS_FOUND`、Phase 3 仍被 residual gaps 阻断、Phase 4 未启动。
 - [PRE_P4_CTX_002_SOURCE_SUPPORT_SUMMARY.md](2026-06-03/PRE_P4_CTX_002_SOURCE_SUPPORT_SUMMARY.md)：PRE-P4-W1 CTX-002 SourceSupportSummary repair evidence；登记 domain value object、legacy `source_support_level` 兼容和 provider / prompt / API / DB / runtime non-change 边界。
-- [PRE_P4_PHASE2_SRC_BACKFILL.md](2026-06-03/PRE_P4_PHASE2_SRC_BACKFILL.md)：PRE-P4-W2 Phase 2 / SRC backfill evidence；登记 Phase 2 closeout evidence 为 `still_blocked_missing_evidence`、SRC-001 当时为 `source_pack_gap_documented`，并明确 Phase 4 仍未授权。
-- [PRE_P4_PROJECT_SOURCE_PACK_BACKFILL.md](2026-06-03/PRE_P4_PROJECT_SOURCE_PACK_BACKFILL.md)：PRE-P4-W4 Project source pack repo backfill evidence；登记 `docs/project-sources/**` 已成为 repo-readable Project source anchors，SRC-001 为 `repo_backfilled_from_project_sources`，Phase 2 closeout evidence 仍为 `still_blocked_missing_evidence`，Phase 4 仍未授权。
-- [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W2 / W4 Phase 2 closeout evidence assessment；记录未找到 pre-existing Phase 2 closeout proof，不声称 Phase 2 done，并记录 SRC-001 已由 W4 回填。
-- [PHASE_2_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md)：PRE-P4-W2 / W4 Phase 2 closeout gap register；登记 closeout assessment、validation / acceptance proof 仍缺失，source backfill status 已由 W4 修复。
-- [PHASE_2_SOURCE_BACKFILL_STATUS.md](2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md)：PRE-P4-W2 / W4 source backfill status；登记 required Project source-pack anchors 已在 `docs/project-sources/**` 回填，condensed excerpts 仍不能替代 full source pack。
-- [PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W3 / W4 final closeout gate；记录 Phase 3 `still_blocked_by_phase2_closeout_evidence_only`，Phase 4 `not_authorized_yet`，未创建 Phase 4 entry scope lock。
+- [PRE_P4_PHASE2_SRC_BACKFILL.md](2026-06-03/PRE_P4_PHASE2_SRC_BACKFILL.md)：PRE-P4-W2 Phase 2 / SRC backfill evidence；记录当时证据不可用和 SRC-001 尚待回填的历史状态；后续 W4 / W5 已分别完成 source pack repo backfill 和 Phase 2 evidence reconciliation。
+- [PRE_P4_PROJECT_SOURCE_PACK_BACKFILL.md](2026-06-03/PRE_P4_PROJECT_SOURCE_PACK_BACKFILL.md)：PRE-P4-W4 Project source pack repo backfill evidence；登记 `docs/project-sources/**` 已成为 repo-readable Project source anchors，SRC-001 为 `repo_backfilled_from_project_sources`。
+- [PRE_P4_PHASE2_EVIDENCE_RECONCILIATION.md](2026-06-03/PRE_P4_PHASE2_EVIDENCE_RECONCILIATION.md)：PRE-P4-W5 recovered Phase 2 evidence reconciliation；登记 Phase 2 closeout evidence 为 `recovered_and_reconciled`，Phase 2 historical status 为 `close_with_deferred_source_pack_gap` / `partial_deferred`，Phase 3 为 `closed_with_recovered_phase2_evidence`。
+- [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：Phase 2 closeout evidence assessment；记录 current mainline 0dbfdb90 evidence、48af513 recovered branch evidence、original P2-W6 source pack deferment 和 PRE-P4-W4 SRC-001 repair。
+- [PHASE_2_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md)：Phase 2 closeout gap register；关闭 / supersede missing evidence gaps，保留 provider sanitizer、runtime、later-phase gaps。
+- [PHASE_2_SOURCE_BACKFILL_STATUS.md](2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md)：Phase 2 source backfill status；登记 required Project source-pack anchors 已在 `docs/project-sources/**` 回填，original P2-W6 source pack deferment 已由 PRE-P4-W4 repair。
+- [PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_FINAL_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W5 final closeout update；记录 Phase 3 `closed_with_recovered_phase2_evidence`，Phase 4 `entry_scope_lock_created` / `implementation_not_started`。
+- [PHASE_4_ENTRY_SCOPE_LOCK.md](2026-06-03/PHASE_4_ENTRY_SCOPE_LOCK.md)：Phase 4 entry scope-lock artifact；只授权未来 Agent Contracts / Skills / Tools planning，不启动 implementation。
