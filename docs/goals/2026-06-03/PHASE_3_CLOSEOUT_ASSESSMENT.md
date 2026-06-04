@@ -8,16 +8,16 @@ permalink: ai-for-interviewer/docs/goals/2026-06-03/phase-3-closeout-assessment
 
 # Phase 3 Closeout Assessment
 
-本文件记录 post-P3-W5 的 Phase 3 closeout assessment，并由 PRE-P4-W1 回填 CTX-002 repair evidence。它只作为 `docs/goals/**` 执行证据，不替代 active delivery 文档，不关闭 Phase 3；Phase 2 closeout evidence 和 SRC-001 仍保持 deferred gap 状态。
+本文件记录 post-P3-W5 的 Phase 3 closeout assessment，并由 PRE-P4-W1 回填 CTX-002 repair evidence、由 PRE-P4-W2 回填 Phase 2 / SRC evidence-gap status。它只作为 `docs/goals/**` 执行证据，不替代 active delivery 文档，不关闭 Phase 3；Phase 2 closeout evidence 和 SRC-001 仍阻断 final closeout。
 
 ## 1. Executive Summary
 
 | Item | Status | Evidence |
 | --- | --- | --- |
 | Phase 3 implementation windows | `implemented_through_p3_w5` | P3-W2 / P3-W3 / P3-W4 / P3-W5 final reports exist with validation evidence. |
-| Phase 3 final closeout | `blocked_requires_controller_decision` | Phase 2 closeout evidence and SRC-001 source pack / backfill remain deferred gaps; CTX-002 is repaired in PRE-P4-W1 evidence. |
+| Phase 3 final closeout | `still_blocked` | Phase 2 closeout evidence remains `still_blocked_missing_evidence`; SRC-001 remains `source_pack_gap_documented`; CTX-002 is repaired in PRE-P4-W1 evidence. |
 | P3-W1 source support | `repaired_with_ctx002_bridge` | `SourceSupportPolicy` exists; `SourceSupportSummary` value object, generation-time metadata bridge, canonical evidence summary, and tests exist. |
-| Project source backfill | `blocked_or_impossible_files_listed` | Active source docs have no stable Phase 3 anchor; root source-pack and Phase 2 closeout docs are absent. |
+| Project source backfill | `source_pack_gap_documented` | W2 recon found condensed excerpts only; root source-pack anchors and Phase 2 closeout evidence remain absent. |
 | External behavior | `unchanged_by_closeout` | P3-W6 changed only evidence docs; no code behavior changed. |
 
 This assessment must not be read as Phase 3 final completion. It records that policy extraction and bridge hardening are validated, while final closeout remains blocked.
@@ -35,7 +35,7 @@ This assessment must not be read as Phase 3 final completion. It records that po
 | `FAG-004` | `implemented_and_validated` | `AnswerChangePolicy` exists; `feedback_rules.py` calls `AnswerChangePolicy.evaluate()`; domain and feedback API tests pass. | None for P3-W3 scope. |
 | `FAG-005` | `implemented_and_validated` | `FeedbackNextActionPolicy` exists; `feedback_rules.py` calls `FeedbackNextActionPolicy.decide()`; domain and feedback API tests pass. | None for P3-W4 scope. |
 | `WIN-001` | `implemented_and_validated` | P3-W0 through P3-W6 followed window allowlists, multi-agent recon, validation, diff audit, and final reports. | P3-W6 final status remains blocked, not complete. |
-| `SRC-001` | `partial_with_deferred_gap` | Condensed source excerpts exist under `docs/tmp/goal0603_phase3/source_refs/`. | Root source-pack and Phase 2 closeout evidence missing; active source backfill incomplete. |
+| `SRC-001` | `source_pack_gap_documented` | Condensed source excerpts exist under `docs/tmp/goal0603_phase3/source_refs/`; W2 recon found no root source-pack anchors. | Not done; still blocks Phase 3 final closeout unless recovered or accepted as final residual. |
 | `CTX-002` | `repaired_with_ctx002_bridge` | `SourceSupportSummary` contains level, refs, missing_context, reason_codes, confidence, policy_version and deterministic computed marker; domain and API tests pass. | Full persisted normalized API metadata propagation is not claimed in W1. |
 
 ## 3. Scope Audit
@@ -76,18 +76,18 @@ These tests are deterministic code / contract regression evidence. They do not p
 
 | Backfill Target | Status | Notes |
 | --- | --- | --- |
-| Refactor Traceability Matrix | `not_updated_missing_project_source_anchor` | Active `REQUIREMENT_TRACEABILITY.md` does not carry Phase 3 / QAG / FAG / CTX / SRC anchors. |
-| Decision Log | `not_updated_no_new_long_lived_decision` | P3-W6 records blockers and evidence, not a durable ADR-level decision. |
-| Risk Register | `not_updated_missing_source_pack` | Active risk review docs do not carry Phase 3 window status; updating them from evidence-only excerpts would create drift. |
-| Acceptance Gates | `not_updated_missing_source_pack` | Acceptance evidence is recorded in this closeout assessment and final report. |
-| Phase Roadmap | `not_updated_missing_source_pack` | Root source-pack files requested by P3-W0 are absent. |
+| Refactor Traceability Matrix | `not_updated_missing_project_source_anchor` | W2 recon found no root `09_REFACTOR_TRACEABILITY_MATRIX.md`; updating active traceability from evidence-only excerpts would create drift. |
+| Decision Log | `not_updated_missing_project_source_anchor` | W2 recon found no root `13_DECISION_LOG.md`; no durable ADR-level decision was made in W2. |
+| Risk Register | `not_updated_missing_project_source_anchor` | W2 recon found no root `14_RISK_REGISTER.md`; condensed excerpts are insufficient for active source-pack backfill. |
+| Acceptance Gates | `not_updated_missing_project_source_anchor` | W2 recon found no root `12_ACCEPTANCE_GATES.md`; acceptance evidence remains in evidence-only closeout docs. |
+| Phase Roadmap | `not_updated_missing_project_source_anchor` | W2 recon found no root `17_PHASE_ROADMAP_LOCK.md`; W2 did not create a replacement roadmap hierarchy. |
 
 ## 7. Remaining Deferred Gaps
 
 | Gap | Status | Why it blocks final closeout |
 | --- | --- | --- |
-| Phase 2 closeout evidence | `deferred_gap_blocks_phase3_final_closeout` | Required closeout evidence files are absent and have not been accepted as final residual. |
-| SRC-001 source pack / source backfill | `deferred_gap_blocks_phase3_final_closeout` | Root source-pack files are absent; excerpts are not a full source pack. |
+| Phase 2 closeout evidence | `still_blocked_missing_evidence` | W2 recon found no pre-existing Phase 2 closeout evidence files and no final-residual acceptance. |
+| SRC-001 source pack / source backfill | `source_pack_gap_documented` | W2 recon found no root source-pack anchors; condensed excerpts are not a full source pack. |
 | CTX-002 / `SourceSupportSummary` | `repaired_with_ctx002_bridge` | Domain summary object, generation-time bridge, canonical evidence summary and tests exist; does not require prompt/provider/API/DB/runtime changes. |
 | P3-W1 status | `repaired_with_ctx002_bridge` | Upgraded by PRE-P4-W1 after summary object, bridge and tests were added. |
 
@@ -95,7 +95,7 @@ These tests are deterministic code / contract regression evidence. They do not p
 
 Normal Phase 4 entry is not recommended from this assessment alone. Before Phase 4 or Agent-contract work depends on Phase 3, one of the following must happen:
 
-1. Phase 2 closeout evidence and SRC-001 source pack are backfilled and validated; CTX-002 repair evidence remains available from PRE-P4-W1.
-2. Controller explicitly accepts those gaps as final residuals and authorizes Phase 4 to proceed with documented risk.
+1. Phase 2 closeout evidence and SRC-001 source pack are recovered / backfilled and validated; CTX-002 repair evidence remains available from PRE-P4-W1.
+2. Controller explicitly accepts Phase 2 closeout evidence and SRC-001 source-pack gaps as final residuals, then performs a final-closeout-only authorization pass.
 
 Phase 4 must not assume Phase 3 implemented Agent runtime, provider fail-closed builders, DB schema changes, API contract changes, prompt rewrites, LangGraph runtime, or production AI quality gates.

@@ -77,20 +77,24 @@ permalink: ai-for-interviewer/docs/goals
 
 ### 2026-06-03 / P3-W4
 
-- [P3_W4_FINAL_REPORT.md](2026-06-03/P3-W4/P3_W4_FINAL_REPORT.md)：P3-W4 feedback next-action domain policy final report；FAG-005 已抽为 domain policy，P3-W5 和 Phase 2 / SRC-001 / CTX-002 deferred gaps 仍保持 open。
+- [P3_W4_FINAL_REPORT.md](2026-06-03/P3-W4/P3_W4_FINAL_REPORT.md)：P3-W4 feedback next-action domain policy final report；FAG-005 已抽为 domain policy；后续 PRE-P4 evidence 显示 CTX-002 已修复，Phase 2 / SRC-001 仍阻断 Phase 3 final closeout。
 
 ### 2026-06-03 / P3-W5
 
-- [P3_W5_FINAL_REPORT.md](2026-06-03/P3-W5/P3_W5_FINAL_REPORT.md)：P3-W5 application bridge / boundary hardening final report；bridge / adapter architecture gate 已加固，Phase 2 / SRC-001 / CTX-002 deferred gaps 仍阻断 Phase 3 final closeout。
+- [P3_W5_FINAL_REPORT.md](2026-06-03/P3-W5/P3_W5_FINAL_REPORT.md)：P3-W5 application bridge / boundary hardening final report；bridge / adapter architecture gate 已加固；后续 PRE-P4 evidence 显示 CTX-002 已修复，Phase 2 / SRC-001 仍阻断 Phase 3 final closeout。
 
 ### 2026-06-03 / P3-W6
 
-- [P3_W6_FINAL_REPORT.md](2026-06-03/P3-W6/P3_W6_FINAL_REPORT.md)：P3-W6 closeout / source backfill assessment；Phase 3 implementation evidence 已汇总，但 final closeout 因 Phase 2 / SRC-001 / CTX-002 deferred gaps 保持 blocked。
+- [P3_W6_FINAL_REPORT.md](2026-06-03/P3-W6/P3_W6_FINAL_REPORT.md)：P3-W6 closeout / source backfill assessment；Phase 3 implementation evidence 已汇总；后续 PRE-P4 evidence 显示 CTX-002 已修复，Phase 2 / SRC-001 仍阻断 final closeout。
 
 ### 2026-06-03 / Phase 3 Closeout Assessment
 
-- [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：post-P3-W5 Phase 3 closeout assessment；记录 Domain Policy implementation evidence，并明确 final closeout 被 Phase 2 / SRC-001 / CTX-002 deferred gaps 阻断。
-- [PHASE_3_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_3_CLOSEOUT_GAP_REGISTER.md)：post-P3-W5 / P3-W6 gap register；保留 CTX-002 / SourceSupportSummary、Phase 2 closeout evidence、SRC-001 和 P3-W1 partial gap。
+- [PHASE_3_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_3_CLOSEOUT_ASSESSMENT.md)：post-P3-W5 Phase 3 closeout assessment；记录 Domain Policy implementation evidence、PRE-P4-W1 CTX-002 repair evidence 和 PRE-P4-W2 Phase 2 / SRC evidence-gap status；Phase 3 final closeout 仍被 Phase 2 / SRC-001 阻断。
+- [PHASE_3_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_3_CLOSEOUT_GAP_REGISTER.md)：post-P3-W5 / P3-W6 gap register；登记 CTX-002 / SourceSupportSummary 已由 PRE-P4-W1 修复，并保留 Phase 2 closeout evidence、SRC-001 source-pack gap。
 - [PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md](2026-06-03/PHASE_3_AUDIT_AND_RESIDUAL_LOCK.md)：P3-AUDIT-AND-RESIDUAL-LOCK controller audit；接受 P3-W2 到 P3-W5 为 locally audited evidence，确认 P3-W6 是 blocked closeout，Phase 4 未启动。
 - [PRE_P4_REMOTE_VERIFICATION_BACKFILL.md](2026-06-03/PRE_P4_REMOTE_VERIFICATION_BACKFILL.md)：PRE-P4-W0 remote verification backfill；登记 P3-W0 / P3-W2 / P3-W3 / P3-W4 / P3-W5 / P3-W6 / P3-AUDIT 为 `GITHUB_REMOTE_VERIFIED_COMMITS`，同时明确 `NO_REMOTE_CI_RUNS_FOUND`、Phase 3 仍被 residual gaps 阻断、Phase 4 未启动。
 - [PRE_P4_CTX_002_SOURCE_SUPPORT_SUMMARY.md](2026-06-03/PRE_P4_CTX_002_SOURCE_SUPPORT_SUMMARY.md)：PRE-P4-W1 CTX-002 SourceSupportSummary repair evidence；登记 domain value object、legacy `source_support_level` 兼容和 provider / prompt / API / DB / runtime non-change 边界。
+- [PRE_P4_PHASE2_SRC_BACKFILL.md](2026-06-03/PRE_P4_PHASE2_SRC_BACKFILL.md)：PRE-P4-W2 Phase 2 / SRC backfill evidence；登记 Phase 2 closeout evidence 为 `still_blocked_missing_evidence`、SRC-001 为 `source_pack_gap_documented`，并明确 Phase 4 仍未授权。
+- [PHASE_2_CLOSEOUT_ASSESSMENT.md](2026-06-03/PHASE_2_CLOSEOUT_ASSESSMENT.md)：PRE-P4-W2 Phase 2 closeout evidence assessment；记录未找到 pre-existing Phase 2 closeout proof，不声称 Phase 2 done。
+- [PHASE_2_CLOSEOUT_GAP_REGISTER.md](2026-06-03/PHASE_2_CLOSEOUT_GAP_REGISTER.md)：PRE-P4-W2 Phase 2 closeout gap register；登记缺失的 closeout assessment、gap register、source status、validation / acceptance proof。
+- [PHASE_2_SOURCE_BACKFILL_STATUS.md](2026-06-03/PHASE_2_SOURCE_BACKFILL_STATUS.md)：PRE-P4-W2 source backfill status；登记 root Project source-pack anchors 缺失，condensed excerpts 不能替代 full source pack。

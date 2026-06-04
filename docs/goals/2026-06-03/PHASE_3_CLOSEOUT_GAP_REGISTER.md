@@ -19,6 +19,9 @@ Allowed P3-W6 closeout statuses:
 - `complete_with_deferred_gap`
 - `blocked_requires_controller_decision`
 - `not_attempted_out_of_scope`
+- `repaired_with_ctx002_bridge`
+- `still_blocked_missing_evidence`
+- `source_pack_gap_documented`
 
 Forbidden wording:
 
@@ -30,8 +33,8 @@ Forbidden wording:
 
 | Gap ID | Capability | Status | Evidence | Required follow-up |
 | --- | --- | --- | --- | --- |
-| P3-GAP-P2-CLOSEOUT-001 | Phase 2 closeout evidence | `deferred_gap_blocks_phase3_final_closeout` | Phase 2 closeout evidence files were not found. | Backfill missing Phase 2 evidence or obtain explicit final-residual acceptance. |
-| P3-GAP-SRC-001 | SRC-001 source pack / source backfill | `deferred_gap_blocks_phase3_final_closeout` | Root source-pack files were not found; only condensed excerpts exist. | Recover/backfill source pack or obtain explicit final-residual acceptance. |
+| P3-GAP-P2-CLOSEOUT-001 | Phase 2 closeout evidence | `still_blocked_missing_evidence` | PRE-P4-W2 found no pre-existing Phase 2 closeout evidence files. | Recover actual Phase 2 closeout evidence or obtain explicit final-residual acceptance. |
+| P3-GAP-SRC-001 | SRC-001 source pack / source backfill | `source_pack_gap_documented` | PRE-P4-W2 found no root source-pack anchors; only condensed excerpts exist. | Recover/backfill source pack or obtain explicit final-residual acceptance. |
 | P3-GAP-CTX-002 | CTX-002 / `SourceSupportSummary` | `repaired_with_ctx002_bridge` | PRE-P4-W1 adds `SourceSupportSummary`, generation-time metadata bridge, canonical evidence summary and tests. | Keep regression coverage; do not claim prompt/provider/API/DB/runtime changes. |
 | P3-GAP-QAG-001 | Source support classification | `repaired_with_ctx002_bridge` | `SourceSupportPolicy` exists and is called by question generation; `SourceSupportDecision` converts to summary. | Keep legacy `source_support_level` compatibility and summary regression coverage. |
 | P3-GAP-QAG-002 | Question grounding policy | `implemented_and_validated` | `QuestionGroundingPolicy` exists and is bridged by `question_grounding.py`; tests pass. | Keep regression coverage. |
@@ -47,9 +50,9 @@ Forbidden wording:
 
 | Item | Status | Reason |
 | --- | --- | --- |
-| Phase 3 final closeout | `blocked_requires_controller_decision` | Required deferred gaps remain unresolved. |
-| Phase 2 closeout evidence | `deferred_gap_blocks_phase3_final_closeout` | Missing closeout evidence files. |
-| SRC-001 source pack / backfill | `deferred_gap_blocks_phase3_final_closeout` | Root source-pack files absent; excerpts are insufficient for full source backfill. |
+| Phase 3 final closeout | `still_blocked` | Phase 2 closeout evidence and SRC-001 remain unresolved. |
+| Phase 2 closeout evidence | `still_blocked_missing_evidence` | W2 documented missing closeout evidence files; no acceptance proof found. |
+| SRC-001 source pack / backfill | `source_pack_gap_documented` | Root source-pack files absent; excerpts are insufficient for full source backfill. |
 | Full SourceSupportSummary object | `repaired_with_ctx002_bridge` | Domain value object exists with compact safe fields. |
 | SourceSupportSummary bridge propagation | `repaired_with_ctx002_bridge` | Generation-time metadata and canonical evidence pack include summary; API / provider / prompt / DB / runtime contracts remain unchanged. |
 | P3-W1 completion | `repaired_with_ctx002_bridge` | Source support classification and compact summary bridge now exist; Phase 3 final closeout still waits on Phase 2 / SRC-001. |
@@ -70,8 +73,8 @@ Forbidden wording:
 
 | Area | Blocks Phase 3 final closeout? | Rationale |
 | --- | --- | --- |
-| Phase 2 closeout evidence | Yes | Missing evidence files were accepted only as deferred input, not completion. |
-| SRC-001 source pack / backfill | Yes | Full source-pack backfill is absent. |
+| Phase 2 closeout evidence | Yes | W2 documents missing evidence; it is not accepted as completion. |
+| SRC-001 source pack / backfill | Yes | W2 documents source-pack absence; full source-pack backfill is absent. |
 | CTX-002 / `SourceSupportSummary` | No | PRE-P4-W1 adds compact contract and tests; Phase 3 remains blocked by Phase 2 / SRC-001. |
 | P3-W2 through P3-W5 implementation evidence | No | Implemented / validated evidence exists. |
 | Prompt/provider/DB/API/Agent runtime non-goals | No | They were not required for Phase 3 and remained untouched. |
