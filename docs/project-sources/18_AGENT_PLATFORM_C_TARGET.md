@@ -402,6 +402,9 @@ C0 accepted only when:
 C1 accepted only when:
 
 - `polish_question_agent` and `polish_feedback_agent` are registered in project-level `AgentDefinitionRegistry`.
+- `catalog.py` is only a C1 registry aggregator; concrete Question / Feedback skill and tool definitions are not kept in the catalog file.
+- Agent definition versions are stable semantic versions, schema versions describe contract shape, and catalog revision is the only phase/window marker.
+- Registered `SkillDefinition` records include purpose, implementation_ref, preconditions, postconditions, fail-closed fallback policy, lifecycle status, definition version, schema version, and architecture test refs.
 - Question Agent exposes only `question_candidate`.
 - Feedback Agent exposes only `feedback_candidate` and `asset_update_candidate`.
 - Question Agent has 8 SkillDefinition refs and 8 ToolDefinition refs resolved by project-level registries.

@@ -1,0 +1,25 @@
+"""Stable Agent Platform C1 schema versions and catalog revision constants."""
+
+from __future__ import annotations
+
+AGENT_DEFINITION_SCHEMA_VERSION = "agent-definition.v1"
+SKILL_DEFINITION_SCHEMA_VERSION = "skill-definition.v1"
+TOOL_DEFINITION_SCHEMA_VERSION = "tool-definition.v1"
+
+POLISH_QUESTION_AGENT_VERSION = "1.0.0"
+POLISH_FEEDBACK_AGENT_VERSION = "1.0.0"
+
+CATALOG_REVISION = "2026-06-05.p4-w1.fix01"
+C1_MATURITY_LEVEL = "L2 planned guarded workflow"
+C1_LIFECYCLE_STATUS = "planned_guarded_workflow"
+
+__all__ = [
+    "AGENT_DEFINITION_SCHEMA_VERSION",
+    "CATALOG_REVISION",
+    "C1_LIFECYCLE_STATUS",
+    "C1_MATURITY_LEVEL",
+    "POLISH_FEEDBACK_AGENT_VERSION",
+    "POLISH_QUESTION_AGENT_VERSION",
+    "SKILL_DEFINITION_SCHEMA_VERSION",
+    "TOOL_DEFINITION_SCHEMA_VERSION",
+]

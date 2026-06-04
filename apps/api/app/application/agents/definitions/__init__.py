@@ -1,6 +1,9 @@
+"""Public imports for Agent Platform C1 contract catalog definitions."""
+
 from app.application.agents.contracts import AgentDefinition, SkillDefinition, ToolDefinition
 from app.application.agents.definitions.catalog import (
     AgentPlatformC1Registries,
+    CATALOG_REVISION,
     build_default_agent_platform_c1_registries,
     build_phase4_c1_agent_definitions,
     build_phase4_c1_skill_definitions,
@@ -10,6 +13,7 @@ from app.application.agents.definitions.catalog import (
 __all__ = [
     "AgentDefinition",
     "AgentPlatformC1Registries",
+    "CATALOG_REVISION",
     "SkillDefinition",
     "ToolDefinition",
     "build_default_agent_platform_c1_registries",

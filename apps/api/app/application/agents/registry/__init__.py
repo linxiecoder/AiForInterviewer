@@ -8,7 +8,7 @@ from app.application.agents.contracts import AgentDefinition, SkillDefinition, T
 
 
 class RegistryValidationError(ValueError):
-    """Raised when a C0 registry definition is missing, duplicated, or wrong-shaped."""
+    """Raised when contract-only agent catalog registry validation fails."""
 
 
 DefinitionT = TypeVar("DefinitionT")
@@ -124,6 +124,8 @@ class _DefinitionRegistry(Generic[DefinitionT]):
 
 
 class AgentDefinitionRegistry(_DefinitionRegistry[AgentDefinition]):
+    """Project-level AgentDefinition registry enforcing candidate-only contracts."""
+
     _id_attr = "agent_id"
     _definition_type = AgentDefinition
     _id_label = "agent_id"
@@ -159,6 +161,8 @@ class AgentDefinitionRegistry(_DefinitionRegistry[AgentDefinition]):
 
 
 class SkillRegistry(_DefinitionRegistry[SkillDefinition]):
+    """Project-level SkillDefinition registry for contract-only agent capabilities."""
+
     _id_attr = "skill_id"
     _definition_type = SkillDefinition
     _id_label = "skill_id"
@@ -169,6 +173,8 @@ class SkillRegistry(_DefinitionRegistry[SkillDefinition]):
 
 
 class ToolRegistry(_DefinitionRegistry[ToolDefinition]):
+    """Project-level ToolDefinition registry blocking direct DB or repository exposure."""
+
     _id_attr = "tool_id"
     _definition_type = ToolDefinition
     _id_label = "tool_id"

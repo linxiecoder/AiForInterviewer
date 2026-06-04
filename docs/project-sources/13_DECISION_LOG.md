@@ -171,6 +171,30 @@ Recommendation:
 
 进入 Phase 5 / Phase 6 前必须重新 scope lock；不得把 C1 catalog 当作 runtime 接入完成。
 
+## DEC-012 Agent Catalog Hygiene / Versioning Strategy
+
+Status: confirmed
+
+Decision:
+
+P4-W1.fix.01 将 C1 catalog 从单文件 God Catalog 调整为聚合器：
+
+- `catalog.py` 只保留 public C1 registry builder 和 project-level registry aggregation。
+- Question / Feedback 的具体 AgentDefinition、SkillDefinition、ToolDefinition 定义下沉到 `definitions/polish/` 子模块。
+- `agent.version` 使用稳定语义版本；定义结构使用 `schema_version`；执行窗口标记只进入 `catalog_revision`。
+- `SkillDefinition` 保持 contract-only，但必须携带 purpose、implementation_ref、preconditions、postconditions、fallback_policy、definition_version、schema_version 和 test_refs。
+
+P4-W1.fix.01 不做：
+
+- Question / Feedback runtime wiring。
+- LangGraph / multi-agent runtime migration。
+- Provider request builder / transport / prompt rewrite。
+- API / DB schema / domain policy 行为改动。
+
+Recommendation:
+
+后续 Phase 5 / Phase 6 可以复用 C1 catalog contract shape，但必须单独 scope lock runtime 行为；不得把 catalog revision 当作 runtime version。
+
 ## DEC-007 Provider Boundary Timing
 
 Status: confirmed

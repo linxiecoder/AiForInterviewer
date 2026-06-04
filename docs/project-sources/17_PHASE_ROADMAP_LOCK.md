@@ -250,6 +250,12 @@ Done Criteria:
 P4-W1 Status:
 
 - `polish_question_agent` / `polish_feedback_agent` definitions validated in project-level C1 catalog。
+
+P4-W1.fix.01 Status:
+
+- C1 catalog hygiene complete: `catalog.py` is an aggregator, concrete Question / Feedback definitions live under `definitions/polish/`, and public C1 registry builder imports are preserved.
+- Agent / Skill versioning separated from execution window marker: semantic definition versions and schema versions are stable, while `catalog_revision` records `2026-06-05.p4-w1.fix01`.
+- No runtime behavior change: AgentExecutor wiring, LangGraph runtime, provider requests, prompt assets, API, DB schema, and domain policy behavior remain out of scope.
 - Question 8 skills / 8 tools and Feedback 10 skills / 9 tools validated by architecture tests。
 - Trace and handoff contract fields validated; Feedback asset update requires user confirmation。
 - Runtime workflow remains deferred to Phase 5 / Phase 6。

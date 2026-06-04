@@ -18,6 +18,8 @@ def _metadata(values: dict[str, Any] | None) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class HandoffContract:
+    """Contract-only handoff metadata for candidate refs before any formal write."""
+
     contract_id: str
     candidate_ref_types: tuple[str, ...] = field(default_factory=tuple)
     formal_write_policy: str = "handoff_required"
@@ -43,6 +45,8 @@ class HandoffContract:
 
 @dataclass(frozen=True)
 class EvalContract:
+    """Contract-only evaluation metadata for agent catalog gates, not an eval runner."""
+
     contract_id: str
     eval_suite_ids: tuple[str, ...] = field(default_factory=tuple)
     metrics: tuple[str, ...] = field(default_factory=tuple)
@@ -64,6 +68,8 @@ class EvalContract:
 
 @dataclass(frozen=True)
 class TraceContract:
+    """Contract-only trace shape for candidate-producing agent workflows."""
+
     contract_id: str
     input_refs: tuple[str, ...] = field(default_factory=tuple)
     plan_refs: tuple[str, ...] = field(default_factory=tuple)
@@ -95,6 +101,8 @@ class TraceContract:
 
 @dataclass(frozen=True)
 class AgentDefinition:
+    """Agent catalog contract for candidate production without direct formal writes."""
+
     agent_id: str
     agent_name: str
     domain: str
@@ -121,6 +129,8 @@ class AgentDefinition:
     handoff_contract: HandoffContract
     versioning_policy: str
     task_types: tuple[str, ...] = field(default_factory=tuple)
+    schema_version: str = "agent-definition.v1"
+    catalog_revision: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "non_goals", _tuple(self.non_goals))
@@ -134,6 +144,8 @@ class AgentDefinition:
 
 @dataclass(frozen=True)
 class SkillDefinition:
+    """Skill catalog contract for planned capability slices with no runtime execution."""
+
     skill_id: str
     skill_name: str
     owner_agent_ids: tuple[str, ...]
@@ -148,6 +160,15 @@ class SkillDefinition:
     failure_semantics: str
     trace_events: tuple[str, ...]
     eval_refs: tuple[str, ...]
+    purpose: str = ""
+    implementation_ref: str = ""
+    preconditions: tuple[str, ...] = field(default_factory=tuple)
+    postconditions: tuple[str, ...] = field(default_factory=tuple)
+    fallback_policy: str = ""
+    lifecycle_status: str = "contract_only"
+    definition_version: str = "1.0.0"
+    schema_version: str = "skill-definition.v1"
+    test_refs: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "owner_agent_ids", _tuple(self.owner_agent_ids))
@@ -156,10 +177,15 @@ class SkillDefinition:
         object.__setattr__(self, "tool_refs", _tuple(self.tool_refs))
         object.__setattr__(self, "trace_events", _tuple(self.trace_events))
         object.__setattr__(self, "eval_refs", _tuple(self.eval_refs))
+        object.__setattr__(self, "preconditions", _tuple(self.preconditions))
+        object.__setattr__(self, "postconditions", _tuple(self.postconditions))
+        object.__setattr__(self, "test_refs", _tuple(self.test_refs))
 
 
 @dataclass(frozen=True)
 class ToolDefinition:
+    """Tool catalog contract for permitted agent calls without direct repository exposure."""
+
     tool_id: str
     tool_name: str
     input_schema_id: str
@@ -181,6 +207,8 @@ class ToolDefinition:
 
 @dataclass(frozen=True)
 class AgentExecutionPlan:
+    """Contract-only execution plan metadata for future AgentExecutor slices."""
+
     plan_id: str
     agent_id: str
     owner_id: str
@@ -198,6 +226,8 @@ class AgentExecutionPlan:
 
 @dataclass(frozen=True)
 class AgentExecutionTrace:
+    """Contract-only trace record for candidate, validation, and handoff references."""
+
     trace_id: str
     run_id: str
     agent_id: str
@@ -231,6 +261,8 @@ class AgentExecutionTrace:
 
 @dataclass(frozen=True)
 class AgentExecutionResult:
+    """Contract-only execution result that exposes candidate refs before handoff."""
+
     run_id: str
     status: str
     candidate_refs: tuple[str, ...]
@@ -246,6 +278,8 @@ class AgentExecutionResult:
 
 @dataclass(frozen=True)
 class AgentExecutionStatus:
+    """Contract-only status snapshot for non-formal agent execution progress."""
+
     run_id: str
     agent_id: str
     status: str
@@ -263,6 +297,8 @@ class AgentExecutionStatus:
 
 @dataclass(frozen=True)
 class AgentExecutionTimeline:
+    """Contract-only timeline wrapper for trace events, not a runtime store."""
+
     run_id: str
     events: tuple[AgentExecutionTrace, ...] = field(default_factory=tuple)
     cursor: str | None = None

@@ -243,7 +243,7 @@ Mitigation:
 - Provider behavior refactor deferred to Phase 7。
 - Execution Window Protocol 设置 forbidden scope。
 
-## RISK-016 Project source 不回填导致目标漂移
+## RISK-017 Project source 不回填导致目标漂移
 
 Severity: high
 

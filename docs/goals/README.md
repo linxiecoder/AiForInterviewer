@@ -114,5 +114,6 @@ permalink: ai-for-interviewer/docs/goals
 ### 2026-06-05 / P4-W1
 
 - [P4_W1_AGENT_CONTRACTS_SKILLS_TOOLS_C1_EXECUTION_REPORT.md](2026-06-05/P4_W1_AGENT_CONTRACTS_SKILLS_TOOLS_C1_EXECUTION_REPORT.md)：P4-W1 Agent Contracts / Skills / Tools C1 execution report；记录 RED/GREEN、C1 catalog、registry validation、forbidden-scope audit 和 source backfill。
+- [P4_W1_FIX01_AGENT_CATALOG_HYGIENE_EXECUTION_REPORT.md](2026-06-05/P4_W1_FIX01_AGENT_CATALOG_HYGIENE_EXECUTION_REPORT.md)：P4-W1.fix.01 Agent Catalog Hygiene execution report；记录 catalog decomposition、version separation、SkillDefinition contract hygiene、验证和 forbidden-scope audit。
 - [PHASE_4_CLOSEOUT_ASSESSMENT.md](2026-06-05/PHASE_4_CLOSEOUT_ASSESSMENT.md)：Phase 4 closeout assessment；状态为 `complete_with_deferred_gaps`，runtime/eval gates 仍 deferred。
 - [PHASE_4_GAP_REGISTER.md](2026-06-05/PHASE_4_GAP_REGISTER.md)：Phase 4 deferred gap register；记录 Phase 5/6/8/9 后续边界和既有 provider xfail gap。

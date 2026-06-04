@@ -101,10 +101,13 @@ wrapper split 不等于 capability done。
 
 ## P4-W1 Backfill Evidence
 
-- `apps/api/app/application/agents/definitions/catalog.py` registers `polish_question_agent` and `polish_feedback_agent` at `p4.c1`.
+- `apps/api/app/application/agents/definitions/catalog.py` registers `polish_question_agent` and `polish_feedback_agent` through a project-level C1 catalog aggregator.
+- P4-W1.fix.01 split concrete Question / Feedback skill and tool definitions into `apps/api/app/application/agents/definitions/polish/` while preserving the public C1 registry builder.
+- Agent definition versions are stable semantic versions (`1.0.0`); `catalog_revision` records `2026-06-05.p4-w1.fix01`.
+- Registered `SkillDefinition` records include purpose, contract-only implementation ref, preconditions, postconditions, fail-closed fallback policy, stable definition/schema version, and architecture test refs.
 - Question Agent C1 contract has 8 skill refs, 8 tool refs, and only `question_candidate` output.
 - Feedback Agent C1 contract has 10 skill refs, 9 tool refs, and only `feedback_candidate` / `asset_update_candidate` outputs.
 - `ToolRegistry` validates allowed `side_effect_policy`, required forbidden data, and no direct repository / DB / SQLAlchemy exposure.
 - `AgentDefinitionRegistry.validate_references` fails closed for unknown skill refs, unknown tool refs, duplicate IDs, invalid candidate outputs, and unresolved skill tool refs.
-- Validation evidence: `tests/architecture/test_agent_platform_c1_boundary.py` and `tests/architecture` passed in the P4-W1 window.
+- Validation evidence: `tests/architecture/test_agent_platform_c1_boundary.py` and `tests/architecture` passed in the P4-W1 window; P4-W1.fix.01 adds catalog hygiene and version-separation assertions to the same C1 boundary suite.
 - Runtime workflow, LangGraph execution, and eval CI gates remain deferred to Phase 5 / Phase 6 / Phase 8 / Phase 9.

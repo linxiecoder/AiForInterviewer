@@ -151,6 +151,25 @@ Infrastructure：
 - 在 Phase 4 C1 中修改 prompt/provider/API/DB/domain policy 行为。
 - 因 C1 catalog 已存在而将 Phase 5/6/8/9 runtime/eval gates 标记完成。
 
+## Agent Platform C1 Hygiene Gate
+
+适用于 P4-W1.fix.01。
+
+必须满足：
+
+- `catalog.py` 仅作为 C1 registry builder / aggregator，不承载完整 Question / Feedback skill 和 tool 清单。
+- Question / Feedback 具体 AgentDefinition、SkillDefinition 和 ToolDefinition 定义位于 agent definitions 子模块，且仍注册到项目级 registry。
+- `agent.version` 使用稳定语义版本，不使用执行阶段标记。
+- `schema_version` 表示定义结构版本，`catalog_revision` 是唯一允许记录 P4-W1.fix.01 窗口标记的位置。
+- 每个 `SkillDefinition` 必须包含非空 purpose、preconditions、postconditions、fallback_policy、definition_version、schema_version 和 test_refs。
+- C1 candidate-only、handoff、trace、Tool no repository exposure 和 forbidden data gate 继续通过。
+
+禁止：
+
+- 新增 Question-only 或 Feedback-only registry 绕过项目级 registry。
+- 把 catalog hygiene 解释为 Phase 5 / Phase 6 runtime wiring 已完成。
+- 因版本策略修正而修改 prompt/provider/API/DB/domain policy 行为。
+
 ## Question Agent Gate
 
 必须满足：

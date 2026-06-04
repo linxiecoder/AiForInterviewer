@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import fields, replace
+from pathlib import Path
 import re
 
 import pytest
@@ -52,6 +54,12 @@ EXPECTED_C_TARGET_CANDIDATE_OUTPUTS = frozenset(
     }
 )
 
+AGENT_PLATFORM_ROOT = Path(__file__).resolve().parents[2] / "apps/api/app/application/agents"
+CATALOG_PATH = AGENT_PLATFORM_ROOT / "definitions/catalog.py"
+CATALOG_REVISION = "2026-06-05.p4-w1.fix01"
+LEGACY_PHASE_SCHEMA_MARKER = "p4" + ".c1"
+LEGACY_PHASE_VERSION_CONSTANT = "C1" + "_VERSION"
+
 
 def _metadata_tokens(*values: str) -> set[str]:
     return {token for value in values for token in re.split(r"[^a-z0-9]+", value.lower()) if token}
@@ -60,6 +68,44 @@ def _metadata_tokens(*values: str) -> set[str]:
 def _contains_forbidden_direct_exposure(*values: str) -> bool:
     tokens = _metadata_tokens(*values)
     return any(term in tokens for term in FORBIDDEN_DIRECT_EXPOSURE_TERMS)
+
+
+def _public_ast_nodes_missing_docstrings(path: Path, node_type: type[ast.AST]) -> list[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    missing = []
+    for node in ast.walk(module):
+        if isinstance(node, node_type) and not node.name.startswith("_") and ast.get_docstring(node) is None:
+            missing.append(f"{path.relative_to(AGENT_PLATFORM_ROOT)}:{node.name}")
+    return sorted(missing)
+
+
+def test_agent_platform_public_contract_and_catalog_api_has_docstrings() -> None:
+    definitions_files = sorted((AGENT_PLATFORM_ROOT / "definitions").rglob("*.py"))
+    contract_class_files = (
+        sorted((AGENT_PLATFORM_ROOT / "contracts").rglob("*.py"))
+        + definitions_files
+        + sorted((AGENT_PLATFORM_ROOT / "registry").rglob("*.py"))
+    )
+
+    missing_module_docstrings = [
+        str(path.relative_to(AGENT_PLATFORM_ROOT))
+        for path in definitions_files
+        if ast.get_docstring(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))) is None
+    ]
+    missing_class_docstrings = [
+        item
+        for path in contract_class_files
+        for item in _public_ast_nodes_missing_docstrings(path, ast.ClassDef)
+    ]
+    missing_function_docstrings = [
+        item
+        for path in definitions_files
+        for item in _public_ast_nodes_missing_docstrings(path, ast.FunctionDef)
+    ]
+
+    assert missing_module_docstrings == []
+    assert missing_class_docstrings == []
+    assert missing_function_docstrings == []
 
 
 def test_default_phase4_c1_catalog_registers_question_and_feedback_agents() -> None:
@@ -77,8 +123,12 @@ def test_default_phase4_c1_catalog_registers_question_and_feedback_agents() -> N
         "polish_question_agent",
         "polish_feedback_agent",
     }
-    assert question_agent.version == "p4.c1"
-    assert feedback_agent.version == "p4.c1"
+    assert question_agent.version == "1.0.0"
+    assert feedback_agent.version == "1.0.0"
+    assert question_agent.schema_version == "agent-definition.v1"
+    assert feedback_agent.schema_version == "agent-definition.v1"
+    assert question_agent.catalog_revision == CATALOG_REVISION
+    assert feedback_agent.catalog_revision == CATALOG_REVISION
     assert question_agent.maturity_level == "L2 planned guarded workflow"
     assert feedback_agent.lifecycle_status == "planned_guarded_workflow"
 
@@ -107,6 +157,75 @@ def test_default_phase4_c1_catalog_registers_question_and_feedback_agents() -> N
     assert len(feedback_agent.tools) == 9
 
     agent_registry.validate_references(skill_registry, tool_registry)
+
+
+def test_phase4_c1_catalog_uses_stable_versions_and_enriched_skill_contracts() -> None:
+    from app.application.agents.contracts import AgentDefinition, SkillDefinition
+    from app.application.agents.definitions.catalog import (
+        CATALOG_REVISION as exported_catalog_revision,
+        build_default_agent_platform_c1_registries,
+    )
+
+    registries = build_default_agent_platform_c1_registries()
+
+    assert exported_catalog_revision == CATALOG_REVISION
+
+    agent_field_names = {field.name for field in fields(AgentDefinition)}
+    assert "schema_version" in agent_field_names
+    assert "catalog_revision" in agent_field_names
+
+    skill_field_names = {field.name for field in fields(SkillDefinition)}
+    for expected_field in (
+        "purpose",
+        "implementation_ref",
+        "preconditions",
+        "postconditions",
+        "fallback_policy",
+        "lifecycle_status",
+        "definition_version",
+        "schema_version",
+        "test_refs",
+    ):
+        assert expected_field in skill_field_names
+
+    for agent in registries.agent_definitions.list():
+        assert agent.version == "1.0.0"
+        assert agent.schema_version == "agent-definition.v1"
+        assert agent.catalog_revision == CATALOG_REVISION
+        assert LEGACY_PHASE_SCHEMA_MARKER not in agent.version
+        assert LEGACY_PHASE_SCHEMA_MARKER not in agent.input_contract
+        assert LEGACY_PHASE_SCHEMA_MARKER not in agent.output_contract
+        assert LEGACY_PHASE_SCHEMA_MARKER not in agent.handoff_contract.payload_schema_id
+
+    for skill in registries.skills.list():
+        assert skill.purpose
+        assert skill.implementation_ref
+        assert skill.preconditions
+        assert skill.postconditions
+        assert skill.fallback_policy
+        assert skill.lifecycle_status == "contract_only"
+        assert skill.definition_version == "1.0.0"
+        assert skill.schema_version == "skill-definition.v1"
+        assert skill.test_refs
+        assert LEGACY_PHASE_SCHEMA_MARKER not in skill.definition_version
+        assert LEGACY_PHASE_SCHEMA_MARKER not in skill.schema_version
+        assert LEGACY_PHASE_SCHEMA_MARKER not in skill.input_schema_id
+        assert LEGACY_PHASE_SCHEMA_MARKER not in skill.output_schema_id
+
+    for tool in registries.tools.list():
+        assert LEGACY_PHASE_SCHEMA_MARKER not in tool.input_schema_id
+        assert LEGACY_PHASE_SCHEMA_MARKER not in tool.output_schema_id
+
+
+def test_phase4_c1_catalog_module_is_aggregation_only() -> None:
+    source = CATALOG_PATH.read_text(encoding="utf-8")
+
+    assert len(source.splitlines()) < 120
+    assert LEGACY_PHASE_VERSION_CONSTANT not in source
+    assert "SkillDefinition(" not in source
+    assert "ToolDefinition(" not in source
+    assert "qag_source_support_classification_skill" not in source
+    assert "fag_expected_point_building_skill" not in source
 
 
 def test_phase4_c1_agents_are_candidate_only_and_handoff_guarded() -> None:
@@ -152,7 +271,7 @@ def test_phase4_c1_agents_are_candidate_only_and_handoff_guarded() -> None:
 
     feedback_handoff = feedback_agent.handoff_contract
     assert "asset_update_candidate" in feedback_handoff.candidate_ref_types
-    assert feedback_handoff.payload_schema_id == "agent.polish_feedback.handoff_payload.p4.c1"
+    assert feedback_handoff.payload_schema_id == "agent.polish_feedback.handoff_payload.v1"
     assert feedback_handoff.validation_refs
     assert feedback_handoff.quality_gate == "user_confirmed_asset_update"
     assert feedback_handoff.side_effect_key == "asset_update_candidate_handoff"

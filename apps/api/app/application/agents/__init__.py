@@ -13,6 +13,7 @@ from app.application.agents.contracts import (
 )
 from app.application.agents.definitions import (
     AgentPlatformC1Registries,
+    CATALOG_REVISION,
     build_default_agent_platform_c1_registries,
     build_phase4_c1_agent_definitions,
     build_phase4_c1_skill_definitions,
@@ -33,6 +34,7 @@ __all__ = [
     "AgentDefinition",
     "AgentDefinitionRegistry",
     "AgentPlatformC1Registries",
+    "CATALOG_REVISION",
     "AgentExecutionPlan",
     "AgentExecutionResult",
     "AgentExecutionStatus",
