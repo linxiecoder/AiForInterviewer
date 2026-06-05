@@ -7,26 +7,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import fields, is_dataclass
 from typing import Any
 
-from app.application.llm.types import LlmTransportRequest
-
-P7_PROVIDER_FORBIDDEN_KEYS = frozenset(
-    {
-        "raw_prompt",
-        "system_prompt",
-        "developer_prompt",
-        "raw_completion",
-        "provider_payload",
-        "raw_provider_payload",
-        "full_resume",
-        "full_jd",
-        "full_answer",
-        "full_asset_body",
-        "token",
-        "secret",
-        "cookie",
-        "api_key",
-    }
-)
+from app.application.llm.types import P7_PROVIDER_FORBIDDEN_KEYS, LlmTransportRequest
 
 _SENSITIVE_VALUE_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|token|secret|cookie)\s*[:=]\s*[^\s,;]+|\bbearer\s+[^\s,;]+|\bsk-[a-z0-9._-]+)"
@@ -82,6 +63,8 @@ def build_validated_transport_request(
     task_type: str,
     input_refs: tuple[str, ...],
     evidence_bundle: object,
+    graph_name: str | None = None,
+    node_name: str | None = None,
     prompt_version: str | None = None,
     schema_id: str | None = None,
     required_evidence_keys: Collection[str] = (),
@@ -96,6 +79,8 @@ def build_validated_transport_request(
         task_type=task_type,
         input_refs=input_refs,
         evidence_bundle=validated_bundle,
+        graph_name=graph_name,
+        node_name=node_name,
         prompt_version=prompt_version,
         schema_id=schema_id,
     )

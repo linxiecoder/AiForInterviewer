@@ -13,7 +13,7 @@ from app.application.llm.errors import (
     LlmTransportUnavailableError,
 )
 from app.application.llm.ports import LlmTransport
-from app.application.llm.types import LlmTransportRequest
+from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
 from app.schemas.job_match import JobMatchSourceBundle
 
 
@@ -33,6 +33,13 @@ DIMENSION_SPECS: dict[str, tuple[int, str]] = {
     "gap_risk": (15, "缺口风险控制"),
     "readiness_actions": (10, "准备行动清晰度"),
 }
+_JOB_MATCH_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
+    {
+        "source_digest",
+        "resume_chunks",
+        "job_requirement_chunks",
+    }
+)
 
 
 class LlmJobMatchAnalyzer:
@@ -45,14 +52,17 @@ class LlmJobMatchAnalyzer:
     def analyze(self, source_bundle: JobMatchSourceBundle) -> JobMatchAnalyzerOutput:
         """执行岗位匹配分析，返回规范化后的分析结果。"""
         try:
-            result = self._transport.generate(
-                LlmTransportRequest(
-                    contract_ids=JOB_MATCH_CONTRACT_IDS,
-                    task_type="job_match_analysis",
-                    input_refs=_source_input_refs(source_bundle),
-                    evidence_bundle=_evidence_bundle(source_bundle),
-                )
+            request = build_validated_transport_request(
+                contract_ids=JOB_MATCH_CONTRACT_IDS,
+                task_type="job_match_analysis",
+                input_refs=_source_input_refs(source_bundle),
+                evidence_bundle=_evidence_bundle(source_bundle),
+                required_evidence_keys=_JOB_MATCH_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+                allowed_evidence_keys=_JOB_MATCH_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
             )
+            result = self._transport.generate(request)
+        except ProviderRequestValidationError as exc:
+            raise JobMatchAnalyzerUnavailableError("provider_request_validation_failed") from exc
         except (LlmTransportConfigurationError, LlmTransportUnavailableError) as exc:
             raise JobMatchAnalyzerUnavailableError(str(exc)) from exc
         except LlmTransportResponseError as exc:

@@ -18,7 +18,7 @@ from app.application.llm.structured_output import (
     normalize_structured_status,
     structured_validation_errors_to_dicts,
 )
-from app.application.llm.types import LlmTransportRequest
+from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
 from app.application.polish.progress_context import has_sufficient_progress_context, truncate_text
 from app.application.polish.progress_evidence import build_progress_prompt_context
 from app.application.polish.progress_prompts import (
@@ -43,6 +43,37 @@ PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT = "insufficient_context"
 PROGRESS_TREE_STATUS_PENDING = "pending"
 PROGRESS_TREE_STATUS_GENERATING = "generating"
 PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
+
+_PROGRESS_QUALITY_FIRST_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
+    {
+        "source_digest",
+        "task_type",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "prompt",
+        "context",
+        "output_schema",
+    }
+)
+_PROGRESS_TREE_STATE_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
+    {
+        "source_digest",
+        "task_type",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "prompt",
+        "context",
+        "selected_evidence_chunks",
+        "dropped_context_summary",
+        "match_context_summary",
+        "turns_summary",
+        "existing_progress_tree_plan",
+        "existing_progress_tree_state",
+        "output_schema",
+    }
+)
 
 _RESUME_DEEP_DIVE = "resume_deep_dive"
 _JD_GAP_LEARNING = "jd_gap_learning"
@@ -149,14 +180,23 @@ class PolishProgressTreeLlmService:
             )
 
         try:
-            result = self._transport.generate(
-                LlmTransportRequest(
-                    contract_ids=POLISH_PROGRESS_TREE_CONTRACT_IDS,
-                    task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
-                    input_refs=_input_refs(context),
-                    evidence_bundle=build_progress_quality_first_menu_prompt(context),
-                )
+            request = build_validated_transport_request(
+                contract_ids=POLISH_PROGRESS_TREE_CONTRACT_IDS,
+                task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
+                input_refs=_input_refs(context),
+                evidence_bundle=build_progress_quality_first_menu_prompt(context),
+                required_evidence_keys=_PROGRESS_QUALITY_FIRST_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+                allowed_evidence_keys=_PROGRESS_QUALITY_FIRST_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
             )
+        except ProviderRequestValidationError as exc:
+            return _quality_first_failed_artifacts(
+                context,
+                reason="provider_request_validation_failed",
+                validation_errors=_provider_request_validation_errors(exc),
+            )
+
+        try:
+            result = self._transport.generate(request)
         except TimeoutError:
             return _quality_first_failed_artifacts(context, reason="provider_timeout")
         except LlmTransportConfigurationError:
@@ -279,18 +319,27 @@ class PolishProgressTreeLlmService:
             )
 
         try:
-            result = self._transport.generate(
-                LlmTransportRequest(
-                    contract_ids=POLISH_PROGRESS_TREE_STATE_CONTRACT_IDS,
-                    task_type="polish_progress_tree_state",
-                    input_refs=_input_refs(context),
-                    evidence_bundle=build_progress_tree_state_refresh_prompt(
-                        context=context,
-                        existing_plan=existing_plan,
-                        existing_state=existing_state,
-                    ),
-                )
+            request = build_validated_transport_request(
+                contract_ids=POLISH_PROGRESS_TREE_STATE_CONTRACT_IDS,
+                task_type="polish_progress_tree_state",
+                input_refs=_input_refs(context),
+                evidence_bundle=build_progress_tree_state_refresh_prompt(
+                    context=context,
+                    existing_plan=existing_plan,
+                    existing_state=existing_state,
+                ),
+                required_evidence_keys=_PROGRESS_TREE_STATE_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+                allowed_evidence_keys=_PROGRESS_TREE_STATE_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
             )
+        except ProviderRequestValidationError:
+            return _refresh_failed_artifacts(
+                existing_plan,
+                existing_state,
+                reason="provider_request_validation_failed",
+            )
+
+        try:
+            result = self._transport.generate(request)
         except (LlmTransportConfigurationError, LlmTransportUnavailableError, LlmTransportResponseError):
             return _refresh_failed_artifacts(
                 existing_plan,
@@ -1563,6 +1612,17 @@ def _quality_first_validation_errors(payload: dict[str, Any], *, reason: str) ->
             }
         )
     return errors[:8]
+
+
+def _provider_request_validation_errors(exc: ProviderRequestValidationError) -> list[dict[str, str]]:
+    return [
+        {
+            "field": "provider_request",
+            "code": "validation_failed",
+            "reason": error,
+        }
+        for error in exc.errors[:8]
+    ]
 
 
 def _quality_first_failed_artifacts(

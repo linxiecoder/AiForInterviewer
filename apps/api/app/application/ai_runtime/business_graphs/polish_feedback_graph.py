@@ -20,6 +20,7 @@ from app.application.ai_runtime.contracts import (
 )
 from app.application.ai_runtime.llm_trace import LlmTraceContext, PersistedLlmTransport
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.llm.provider_boundary import build_validated_transport_request
 from app.application.llm.types import LlmTransportRequest
 
 if TYPE_CHECKING:
@@ -385,7 +386,7 @@ def build_polish_feedback_trace_request(
         contract_ids=("P-POLISH-FEEDBACK-001",),
         replay_mode="production_resume",
     )
-    transport_request = LlmTransportRequest(
+    transport_request = build_validated_transport_request(
         contract_ids=("P-POLISH-FEEDBACK-001",),
         task_type=POLISH_FEEDBACK_TRACE_TASK_TYPE,
         input_refs=input_refs,
@@ -394,6 +395,8 @@ def build_polish_feedback_trace_request(
         node_name=POLISH_FEEDBACK_TRACE_GATE_NODE_NAME,
         prompt_version=POLISH_FEEDBACK_TRACE_GATE_PROMPT_VERSION,
         schema_id=POLISH_FEEDBACK_TRACE_GATE_SCHEMA_ID,
+        required_evidence_keys=_PR8_ALLOWED_EVIDENCE_BUNDLE_KEYS,
+        allowed_evidence_keys=_PR8_ALLOWED_EVIDENCE_BUNDLE_KEYS,
     )
     return PolishFeedbackTraceRequestPlan(
         trace_context=trace_context,

@@ -86,7 +86,8 @@ Current Phase 7 evidence:
 - Compact provider request boundary exists in `apps/api/app/application/llm/provider_boundary.py`.
 - Question and Feedback active provider paths validate before `transport.generate()` and fail closed on forbidden-key / schema validation errors.
 - Forbidden-key recursive rejection, schema top-level gate, redaction, no full prompt fallback, and provider validation failure are covered by focused tests recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`.
-- Status: `partially_mitigated`. The P7 slice proves Q/F active paths only; it is not a global provider transport backstop, and bounded answer excerpt semantics remain a deferred gap.
+- P7-W2 增加 DTO-level `LlmTransportRequest` forbidden-key backstop，将 progress tree / job match / feedback trace request construction 迁入 `build_validated_transport_request()`，并增加 static architecture gate，禁止 `provider_boundary.py` 之外的 production direct request constructors。
+- Status: `partially_mitigated`。当前 production provider request construction 已被 forbidden keys 与 per-task schema gates 覆盖，但 bounded answer excerpt semantics 与 full release-grade test coverage 仍 deferred。
 
 ## RISK-006 Fake 污染 runtime
 
@@ -126,6 +127,11 @@ Mitigation:
 - Keep unsupported claims visible: non-global provider backstop, bounded answer excerpt, single-writer identity `UNKNOWN`, and unrun full-repo / web / e2e tests.
 
 Status: `partially_mitigated`.
+
+P7-W2 update:
+
+- global provider static gate 与 DTO forbidden-key backstop 降低了 false-success risk，但 final project status 仍是 `validated_with_deferred_gaps`。
+- Remaining non-claims: 不声明 answer excerpt leakage elimination；不声明 full-repo pytest / web / e2e 已通过；不声明 Phase 7 `done`。
 
 ## RISK-007 Eval 只覆盖 seed 样本
 

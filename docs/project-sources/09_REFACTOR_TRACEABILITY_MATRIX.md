@@ -82,12 +82,12 @@ wrapper split 不等于 capability done。
 | AGT-005 | AgentExecutor port | AgentGraphRunner exists for graph runtime | AgentExecutor protocol / port independent from LangGraph | Agent Platform | design_done | Phase 1 |
 | AGT-006 | Handoff contract | ai_runtime handoff partial | shared agent handoff contract | Agent Platform | validated | Phase 1/4 |
 | AGT-007 | Agent Trace Contract | ai_runtime trace refs partial | unified AgentExecutionTrace | Agent Platform | validated | Phase 1/4 |
-| PRO-001 | Compact provider request | Q/F active provider paths now use compact provider boundary before transport; no global provider backstop yet | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | validated_with_deferred_gaps | Phase 7 |
-| PRO-002 | Provider boundary tests | P7 provider boundary tests cover catalog, recursive reject, redaction, schema gate, Q/F fail-closed paths | forbidden keys + no full prompt asset fallback gate | Provider Boundary | validated_with_deferred_gaps | Phase 1/7 |
+| PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；answer excerpt policy 仍 deferred | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | validated_with_deferred_gaps | Phase 7 |
+| PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree 与 job match fail-closed paths | forbidden keys + no full prompt asset fallback gate | Provider Boundary | validated_with_deferred_gaps | Phase 1/7 |
 | FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests | tests/fakes + evals/replay only | Test/Eval | validated_with_deferred_gaps | Phase 7/9 |
 | EVAL-001 | AI Eval gate | seed evals / descriptors | evals + CI regression gate | Eval | recon_done | Phase 9 |
-| WIN-001 | Execution Window Protocol | P7 followed read-only recon / scope lock / implementation / audit / source-backfill sequence; single-writer identity remains UNKNOWN from worktree evidence | every window has scope / forbidden / tests / rollback / backfill | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
-| SRC-001 | Source Backfill | Project sources updated for P7 evidence with explicit deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
+| WIN-001 | Execution Window Protocol | P7-W2 已按 read-only recon / design / single-writer implementation / audit / source-backfill 顺序执行；final status 保持 non-done | every window has scope / forbidden / tests / rollback / backfill | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
+| SRC-001 | Source Backfill | Project sources 已回填 P7-W1 与 P7-W2 evidence，并显式保留 deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
 
 ## P7-W1 Provider Fail-Closed Backfill Evidence
 
@@ -105,6 +105,24 @@ Remaining gaps:
 - Feedback compact prompt still includes a bounded `current_answer` excerpt; a short answer could equal the complete answer text.
 - Single-writer identity is `UNKNOWN` from current worktree evidence; only scope conformance is proven.
 - Full-repo pytest, web tests, and e2e tests were not run.
+
+## P7-W2 Provider Global Backstop Evidence
+
+Status: `validated_with_deferred_gaps`，不得标记 `done`。
+
+- `PRO-001`: `apps/api/app/application/llm/types.py` 为 `LlmTransportRequest` 增加 DTO-level recursive forbidden-key backstop，覆盖 `dataclasses.replace(...)` mutation paths。`apps/api/app/application/polish/progress_tree.py`、`apps/api/app/infrastructure/llm/job_match.py`、`apps/api/app/application/ai_runtime/business_graphs/polish_feedback_graph.py` 已在 transport 前使用 `build_validated_transport_request()`。
+- `PRO-002`: `tests/architecture/test_provider_boundary_static.py` 拒绝 `provider_boundary.py` 之外的 production direct `LlmTransportRequest(...)` constructors。`tests/api/test_provider_global_backstop.py` 证明 direct DTO bypass、replace injection、progress tree unsafe prompt、job match unsafe payload 均在 transport 前失败。
+- `FAKE-001`: existing fake runtime rejection 与 feedback direct fake non-success 行为仍由 required narrow suite 覆盖；本窗口未新增 fake runtime provider path。
+- `WIN-001`: A/B/C recon、D implementation report、E audit report、F source backfill report 已落在 `docs/goals/2026-06-05/`。
+- `SRC-001`: This section plus the P7-W2 updates in `14_RISK_REGISTER.md` and `17_PHASE_ROADMAP_LOCK.md` are the P7-W2 Project source backfill.
+
+P7-W2 gap classification:
+
+- `P7-GAP-001`: 当前 production `LlmTransportRequest` call sites 为 `validated`；static gate 防止新增 production direct constructors。
+- `P7-GAP-002`: `partially_mitigated`；DTO-level forbidden-key backstop 已存在，但 per-task schema compactness 仍由 builder / static gate 证明，而不是 universal runtime schema registry。
+- `P7-GAP-003`: `deferred`；bounded `current_answer.answer_text` 可能等于完整短回答，需要 product/security policy decision。
+- `P7-GAP-004`: `partially_mitigated`；D/E reports 已记录 single-writer sequence，但 worktree identity proof 无法由机器独立验证。
+- `P7-GAP-005`: `deferred`；full-repo pytest、web tests、e2e tests 未运行。
 
 ## Gap Register
 

@@ -414,6 +414,16 @@ P7-W1 Status:
 - Remaining gaps: only Q/F active provider paths are proven; no global provider backstop; bounded `current_answer` excerpt may equal a complete short answer; single-writer identity is `UNKNOWN`; full-repo pytest, web tests, and e2e tests were not run.
 - Non-claim: Phase 7 is not `done`; Phase 8 / Phase 9 work must not start from this record alone.
 
+P7-W2 Status:
+
+- Phase 7 Status: `validated_with_deferred_gaps`。
+- Implementation evidence: `apps/api/app/application/llm/types.py`、`apps/api/app/application/llm/provider_boundary.py`、`apps/api/app/application/polish/progress_tree.py`、`apps/api/app/infrastructure/llm/job_match.py`、`apps/api/app/application/ai_runtime/business_graphs/polish_feedback_graph.py`。
+- Test evidence: static + global provider backstop `7 passed`；PR8 trace gate `10 passed`；job match `11 passed`；provider boundary `4 passed`；required narrow suite plus global backstop `144 passed`；global backstop standalone `4 passed`。
+- Provider call-site result: 当前 production `LlmTransportRequest(...)` construction 仅限 `provider_boundary.py`；progress tree、job match、Question、Feedback、feedback trace requests 均使用 `build_validated_transport_request()`。
+- Global backstop result: `LlmTransportRequest` 拒绝 recursive P7 forbidden keys，覆盖 direct construction 与 `dataclasses.replace(...)` injection。Per-task required / allowed top-level schema 仍由 validated builder 与 static gate 证明，而不是 universal runtime schema registry。
+- Remaining gaps: bounded `current_answer.answer_text` 可能等于完整短回答；full-repo pytest、web tests、e2e tests 未运行。
+- Non-claim: Phase 7 不是 `done`；不得仅凭本记录启动 Phase 8 / Phase 9。
+
 ## Phase 8
 
 Name:
