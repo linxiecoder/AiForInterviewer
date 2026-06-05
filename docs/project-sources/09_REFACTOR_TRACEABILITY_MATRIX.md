@@ -82,8 +82,8 @@ wrapper split 不等于 capability done。
 | AGT-005 | AgentExecutor port | AgentGraphRunner exists for graph runtime | AgentExecutor protocol / port independent from LangGraph | Agent Platform | design_done | Phase 1 |
 | AGT-006 | Handoff contract | ai_runtime handoff partial | shared agent handoff contract | Agent Platform | validated | Phase 1/4 |
 | AGT-007 | Agent Trace Contract | ai_runtime trace refs partial | unified AgentExecutionTrace | Agent Platform | validated | Phase 1/4 |
-| PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；answer excerpt policy 仍 deferred | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | validated_with_deferred_gaps | Phase 7 |
-| PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree 与 job match fail-closed paths | forbidden keys + no full prompt asset fallback gate | Provider Boundary | validated_with_deferred_gaps | Phase 1/7 |
+| PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；P7-W3 已将 Feedback `current_answer.answer_text` formalized as bounded primary input | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | validated_with_deferred_gaps | Phase 7 |
+| PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree、job match、bounded current answer policy metadata、historical answer no raw fallback、nested `full_answer` fail-closed paths | forbidden keys + no full prompt asset fallback gate | Provider Boundary | validated_with_deferred_gaps | Phase 1/7 |
 | FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests | tests/fakes + evals/replay only | Test/Eval | validated_with_deferred_gaps | Phase 7/9 |
 | EVAL-001 | AI Eval gate | seed evals / descriptors | evals + CI regression gate | Eval | recon_done | Phase 9 |
 | WIN-001 | Execution Window Protocol | P7-W2 已按 read-only recon / design / single-writer implementation / audit / source-backfill 顺序执行；final status 保持 non-done | every window has scope / forbidden / tests / rollback / backfill | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
@@ -123,6 +123,23 @@ P7-W2 gap classification:
 - `P7-GAP-003`: `deferred`；bounded `current_answer.answer_text` 可能等于完整短回答，需要 product/security policy decision。
 - `P7-GAP-004`: `partially_mitigated`；D/E reports 已记录 single-writer sequence，但 worktree identity proof 无法由机器独立验证。
 - `P7-GAP-005`: `deferred`；full-repo pytest、web tests、e2e tests 未运行。
+
+## P7-W3 Answer Excerpt Policy Backfill Evidence
+
+Status: `validated_with_deferred_gaps`，不得标记 `done`。
+
+- Controller Decision B is now the active answer excerpt policy for Feedback provider requests: `current_answer.answer_text` is allowed only as bounded current-answer primary task input and must not be represented as `full_answer`.
+- `PRO-001`: `apps/api/app/application/polish/feedback_prompt_assets.py` records `answer_text_policy=current_answer_bounded_primary_input`, `answer_text_max_chars=1200`, `answer_text_is_bounded=true`, and `full_answer_forbidden=true` under both prompt asset / provider prompt `current_answer` and `input_contract`.
+- `PRO-002`: `tests/api/test_polish_feedback_generation_service.py` proves a short current answer may equal submitted text while carrying bounded policy metadata, provider prompt excludes forbidden keys, and historical same-question answers do not fallback to raw `answer_text`. `tests/api/test_polish_feedback_agent_io_alignment.py` proves nested `full_answer` fails closed before transport.
+- `SRC-001`: This section plus the P7-W3 updates in `14_RISK_REGISTER.md`, `17_PHASE_ROADMAP_LOCK.md`, and `20_PHASE7_CLOSEOUT.md` are the P7-W3 Project source backfill.
+
+P7-W3 gap classification:
+
+- `P7-GAP-001`: `validated` from P7-W2；production direct constructor static gate remains in place.
+- `P7-GAP-002`: `partially_mitigated`；per-task schema compactness remains builder / static-gate based, not universal runtime schema registry.
+- `P7-GAP-003`: `closed_by_policy_and_tests`；Controller Decision B is formalized in provider request metadata and focused tests.
+- `P7-GAP-004`: `partially_mitigated`；single-writer scope conformance is recorded, worktree identity proof remains machine-UNKNOWN.
+- `P7-GAP-005`: `deferred`；full-repo pytest、web tests、e2e tests remain out of scope for P7-W3 / deferred to P7-W4.
 
 ## Gap Register
 

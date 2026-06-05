@@ -29,8 +29,11 @@ _FEEDBACK_FORBIDDEN_OUTPUT_MARKERS = (
     "completion",
     "raw_completion",
     "provider_payload",
+    "raw_provider_payload",
     "full_resume",
     "full_jd",
+    "full_answer",
+    "full_asset_body",
     "token",
     "secret",
     "cookie",
@@ -42,8 +45,11 @@ _FEEDBACK_FORBIDDEN_METADATA_KEYS = (
     "completion",
     "raw_completion",
     "provider_payload",
+    "raw_provider_payload",
     "full_resume",
     "full_jd",
+    "full_answer",
+    "full_asset_body",
     "token",
     "secret",
     "cookie",
@@ -61,12 +67,16 @@ _UNSAFE_CONTEXT_KEYS = frozenset(
         "raw_provider_response",
         "full_resume",
         "full_jd",
+        "full_answer",
+        "full_asset_body",
         "api_key",
         "token",
         "secret",
         "cookie",
     }
 )
+_CURRENT_ANSWER_TEXT_MAX_CHARS = 1200
+_CURRENT_ANSWER_TEXT_POLICY = "current_answer_bounded_primary_input"
 _SOURCE_REF_KEYS = ("resource_type", "resource_id", "ref_type", "ref_id", "source_ref", "source_type")
 _EVIDENCE_ITEMS_LIMIT = 5
 _PROVIDER_EVIDENCE_ITEMS_LIMIT = 5
@@ -105,7 +115,11 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         },
         "current_answer": {
             "answer_id": _get_text(context, "answer_id"),
-            "answer_text": _get_text(context, "answer_text", max_chars=1200),
+            "answer_text": _get_text(context, "answer_text", max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS),
+            "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
+            "answer_text_is_bounded": True,
+            "full_answer_forbidden": True,
             "answer_round": _get(context, "answer_round"),
         },
         "same_question_answers": _compact_same_question_answers(_get_list(context, "same_question_answers")),
@@ -152,6 +166,10 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
             "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
             "required_context_refs": ["session_id", "question_id", "answer_id"],
             "raw_model_io_storage": False,
+            "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
+            "answer_text_is_bounded": True,
+            "full_answer_forbidden": True,
         },
         extra_fields={
             "asset_id": "prompt_asset.polish.feedback.generated.phase3",
@@ -264,6 +282,10 @@ def _provider_compact_prompt(
         "input_contract": {
             "raw_model_io_storage": False,
             "context_mode": "quick_compact",
+            "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
+            "answer_text_is_bounded": True,
+            "full_answer_forbidden": True,
         },
         "required_json_schema": {
             "required_fields": [
@@ -312,7 +334,14 @@ def _provider_compact_prompt(
         },
         "current_answer": {
             "answer_id": _get_clean_text(current_answer.get("answer_id"), max_chars=120),
-            "answer_text": _get_clean_text(current_answer.get("answer_text"), max_chars=1200),
+            "answer_text": _get_clean_text(
+                current_answer.get("answer_text"),
+                max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS,
+            ),
+            "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
+            "answer_text_is_bounded": True,
+            "full_answer_forbidden": True,
             "answer_round": current_answer.get("answer_round"),
         },
         "scoring_rules": {
@@ -386,7 +415,10 @@ def _provider_evidence_items(values: list[Any]) -> list[dict[str, object]]:
                 "ref": _get_clean_text(value.get("ref"), max_chars=120),
                 "source_type": _get_clean_text(value.get("source_type"), max_chars=80),
                 "title": _get_clean_text(value.get("title"), max_chars=120),
-                "excerpt": _get_clean_text(value.get("excerpt"), max_chars=300 if reason != "current_answer" else 1200),
+                "excerpt": _get_clean_text(
+                    value.get("excerpt"),
+                    max_chars=300 if reason != "current_answer" else _CURRENT_ANSWER_TEXT_MAX_CHARS,
+                ),
                 "reason": reason,
                 "priority": priority[reason],
             }
@@ -451,7 +483,7 @@ def _prompt_char_count(provider_prompt: dict[str, Any]) -> int:
 def _evidence_items(context: object) -> list[AgentEvidenceItem]:
     items: list[AgentEvidenceItem] = []
     question_text = _get_text(context, "question_text", max_chars=600)
-    answer_text = _get_text(context, "answer_text", max_chars=1200)
+    answer_text = _get_text(context, "answer_text", max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS)
     question_id = _get_text(context, "question_id") or "current_question"
     answer_id = _get_text(context, "answer_id") or "current_answer"
     evidence_refs = _string_list(_get_list(context, "evidence_refs"))
@@ -497,7 +529,7 @@ def _evidence_items(context: object) -> list[AgentEvidenceItem]:
         if not isinstance(answer, dict):
             continue
         ref = _first_text(answer.get("answer_id"), answer.get("ref"), f"same_question_answer_{index}")
-        excerpt = _first_text(answer.get("answer_summary"), answer.get("summary"), answer.get("answer_text"))
+        excerpt = _first_text(answer.get("answer_summary"), answer.get("summary"))
         if excerpt:
             items.append(
                 AgentEvidenceItem(

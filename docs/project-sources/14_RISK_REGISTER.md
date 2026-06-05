@@ -87,7 +87,8 @@ Current Phase 7 evidence:
 - Question and Feedback active provider paths validate before `transport.generate()` and fail closed on forbidden-key / schema validation errors.
 - Forbidden-key recursive rejection, schema top-level gate, redaction, no full prompt fallback, and provider validation failure are covered by focused tests recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`.
 - P7-W2 增加 DTO-level `LlmTransportRequest` forbidden-key backstop，将 progress tree / job match / feedback trace request construction 迁入 `build_validated_transport_request()`，并增加 static architecture gate，禁止 `provider_boundary.py` 之外的 production direct request constructors。
-- Status: `partially_mitigated`。当前 production provider request construction 已被 forbidden keys 与 per-task schema gates 覆盖，但 bounded answer excerpt semantics 与 full release-grade test coverage 仍 deferred。
+- P7-W3 formalizes Controller Decision B for Feedback answer text handling: `current_answer.answer_text` is allowed only as bounded current-answer primary input, provider request includes auditable policy metadata, historical answer raw `answer_text` fallback is removed, and nested `full_answer` remains fail-closed.
+- Status: `partially_mitigated`。当前 production provider request construction 已被 forbidden keys 与 per-task schema gates 覆盖；bounded answer excerpt semantics 已由 policy / tests 关闭，但 full release-grade full-repo / web / e2e coverage 仍 deferred。
 
 ## RISK-006 Fake 污染 runtime
 
@@ -132,6 +133,12 @@ P7-W2 update:
 
 - global provider static gate 与 DTO forbidden-key backstop 降低了 false-success risk，但 final project status 仍是 `validated_with_deferred_gaps`。
 - Remaining non-claims: 不声明 answer excerpt leakage elimination；不声明 full-repo pytest / web / e2e 已通过；不声明 Phase 7 `done`。
+
+P7-W3 update:
+
+- Controller Decision B 将 bounded `current_answer.answer_text` 明确为 allowed current primary task input，并由 policy metadata 与 focused tests 验证。
+- `P7-GAP-003` status: `closed_by_policy_and_tests`。
+- Remaining non-claims: 不声明 full-repo pytest / web / e2e 已通过；不声明 Phase 7 `done`；不启动 Phase 8 / Phase 9。
 
 ## RISK-007 Eval 只覆盖 seed 样本
 

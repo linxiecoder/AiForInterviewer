@@ -424,6 +424,16 @@ P7-W2 Status:
 - Remaining gaps: bounded `current_answer.answer_text` 可能等于完整短回答；full-repo pytest、web tests、e2e tests 未运行。
 - Non-claim: Phase 7 不是 `done`；不得仅凭本记录启动 Phase 8 / Phase 9。
 
+P7-W3 Status:
+
+- Phase 7 Status: `validated_with_deferred_gaps`。
+- Controller Decision B: Feedback `current_answer.answer_text` is allowed as bounded current-answer primary task input and must not be represented as `full_answer`.
+- Implementation evidence: `apps/api/app/application/polish/feedback_prompt_assets.py` adds answer text policy metadata under `current_answer` and `input_contract`, keeps the 1200 char bound, removes historical same-question `answer_text` evidence fallback, and expands Feedback prompt asset unsafe key filtering for `full_answer` / `full_asset_body`.
+- Test evidence: `tests/api/test_polish_feedback_generation_service.py` covers bounded current answer policy metadata, short current answer equality, provider prompt forbidden-key absence, and historical no-raw-answer fallback. `tests/api/test_polish_feedback_agent_io_alignment.py` covers provider request policy metadata and nested `full_answer` fail-closed before transport.
+- Gap result: `P7-GAP-003` is `closed_by_policy_and_tests`。
+- Remaining gaps: `P7-GAP-005` full-repo pytest、web tests、e2e tests 未运行，deferred to P7-W4。
+- Non-claim: Phase 7 不是 `done`；不得仅凭本记录启动 Phase 8 / Phase 9。
+
 ## Phase 8
 
 Name:

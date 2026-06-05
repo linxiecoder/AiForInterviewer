@@ -226,6 +226,14 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert provider_prompt["prompt"] == prompt_asset["prompt"]
     assert provider_prompt["output_schema"] == prompt_asset["output_schema"]
     assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
+    assert provider_prompt["input_contract"]["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert provider_prompt["input_contract"]["answer_text_max_chars"] == 1200
+    assert provider_prompt["input_contract"]["answer_text_is_bounded"] is True
+    assert provider_prompt["input_contract"]["full_answer_forbidden"] is True
+    assert provider_prompt["current_answer"]["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert provider_prompt["current_answer"]["answer_text_max_chars"] == 1200
+    assert provider_prompt["current_answer"]["answer_text_is_bounded"] is True
+    assert provider_prompt["current_answer"]["full_answer_forbidden"] is True
     assert "input_data" not in provider_prompt
     assert "developer_constraints" not in provider_prompt
     assert "refusal_and_low_confidence_policy" not in provider_prompt
@@ -251,6 +259,22 @@ def test_feedback_agent_blocks_forbidden_provider_prompt_before_transport() -> N
     transport = _PayloadTransport({"payload": _generated_payload()})
     prompt_asset = build_feedback_prompt_asset(_context())
     prompt_asset["provider_prompt"]["nested"] = [{"full_asset_body": "must not reach provider"}]
+
+    envelope = FeedbackGenerationAgent(transport=transport).generate(
+        prompt_asset=prompt_asset,
+        input_refs=("answer_001",),
+    )
+
+    assert envelope.succeeded is False
+    assert envelope.validation_errors == ("provider_request_validation_failed",)
+    assert envelope.metadata["provider_status"] == "not_called"
+    assert transport.requests == []
+
+
+def test_feedback_agent_blocks_full_answer_before_transport() -> None:
+    transport = _PayloadTransport({"payload": _generated_payload()})
+    prompt_asset = build_feedback_prompt_asset(_context())
+    prompt_asset["provider_prompt"]["current_answer"]["nested"] = {"full_answer": "must not reach provider"}
 
     envelope = FeedbackGenerationAgent(transport=transport).generate(
         prompt_asset=prompt_asset,
@@ -399,6 +423,8 @@ def _contains_forbidden_key(value: object) -> bool:
         "raw_provider_response",
         "full_resume",
         "full_jd",
+        "full_answer",
+        "full_asset_body",
         "api_key",
         "token",
         "secret",

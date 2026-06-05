@@ -223,6 +223,27 @@ def test_feedback_request_uses_compact_output_budget() -> None:
     assert getattr(transport.requests[-1], "max_tokens", 8000) < 2500
 
 
+def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> None:
+    transport = _PayloadTransport(_generated_payload())
+    context = _context()
+    context["answer_text"] = "Short complete answer that is still the current primary task input."
+
+    result = _service(transport).generate(context)
+
+    assert result.succeeded is True
+    provider_prompt = transport.requests[-1].evidence_bundle
+    current_answer = provider_prompt["current_answer"]
+    assert current_answer["answer_text"] == context["answer_text"]
+    assert current_answer["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert current_answer["answer_text_max_chars"] == 1200
+    assert current_answer["answer_text_is_bounded"] is True
+    assert current_answer["full_answer_forbidden"] is True
+    assert provider_prompt["input_contract"]["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert provider_prompt["input_contract"]["answer_text_max_chars"] == 1200
+    assert provider_prompt["input_contract"]["answer_text_is_bounded"] is True
+    assert provider_prompt["input_contract"]["full_answer_forbidden"] is True
+
+
 def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits() -> None:
     transport = _PayloadTransport(_generated_payload())
     context = _context()
@@ -307,6 +328,7 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
     assert len(provider_prompt["current_question"]["question_sources"]) <= 2
     assert len(provider_prompt["same_question_answers"]) <= 1
     assert "answer_text" not in provider_prompt["same_question_answers"][0]
+    assert not _contains_forbidden_key(provider_prompt)
     assert "PREVIOUS_FULL_ANSWER_0_SHOULD_NOT_BE_INCLUDED" not in serialized_provider_user
     serialized_provider_data = json.dumps(
         {key: value for key, value in provider_prompt.items() if key != "prompt"},
@@ -497,6 +519,26 @@ def test_prompt_asset_same_question_answers_do_not_repeat_full_answer_text() -> 
     assert "answer_text" not in previous_answer
     assert "PREVIOUS_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED" not in serialized
     assert previous_answer["answer_summary"] == "上一轮摘要：缺少观测指标。"
+
+
+def test_prompt_asset_does_not_fallback_to_historical_answer_text_when_summary_missing() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    context = _context()
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev_raw_only",
+            "answer_round": 1,
+            "answer_text": "PREVIOUS_RAW_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED",
+        }
+    ]
+
+    asset = build_feedback_prompt_asset(context)
+    previous_answer = asset["input_data"]["same_question_answers"][0]
+    serialized = repr(asset)
+
+    assert "answer_text" not in previous_answer
+    assert "PREVIOUS_RAW_FULL_ANSWER_SHOULD_NOT_BE_INCLUDED" not in serialized
 
 
 def test_prompt_asset_includes_project_asset_summaries() -> None:
@@ -782,6 +824,8 @@ def _contains_forbidden_key(value: object) -> bool:
         "raw_provider_payload",
         "provider_response",
         "raw_provider_response",
+        "full_answer",
+        "full_asset_body",
         "api_key",
         "token",
         "secret",
