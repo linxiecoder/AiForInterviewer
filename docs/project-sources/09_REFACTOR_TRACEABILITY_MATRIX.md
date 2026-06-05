@@ -16,6 +16,7 @@ permalink: ai-for-interviewer/docs/project-sources/09-refactor-traceability-matr
 - implementation_planned
 - implemented
 - implemented_with_validation_blockers
+- validated_with_deferred_gaps
 - validated_with_deferred_l5_runtime
 - validated
 - blocked
@@ -81,12 +82,29 @@ wrapper split 不等于 capability done。
 | AGT-005 | AgentExecutor port | AgentGraphRunner exists for graph runtime | AgentExecutor protocol / port independent from LangGraph | Agent Platform | design_done | Phase 1 |
 | AGT-006 | Handoff contract | ai_runtime handoff partial | shared agent handoff contract | Agent Platform | validated | Phase 1/4 |
 | AGT-007 | Agent Trace Contract | ai_runtime trace refs partial | unified AgentExecutionTrace | Agent Platform | validated | Phase 1/4 |
-| PRO-001 | Compact provider request | scattered Question/Feedback builders | CompactProviderRequestBuilder | Provider Boundary | recon_done | Phase 7 |
-| PRO-002 | Provider boundary tests | partial tests | forbidden keys + no full prompt asset fallback gate | Provider Boundary | design_done | Phase 1/7 |
-| FAKE-001 | Fake cleanup | runtime fake rejected; fake transport still exists for tests | tests/fakes + evals/replay only | Test/Eval | recon_done | Phase 7/9 |
+| PRO-001 | Compact provider request | Q/F active provider paths now use compact provider boundary before transport; no global provider backstop yet | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | validated_with_deferred_gaps | Phase 7 |
+| PRO-002 | Provider boundary tests | P7 provider boundary tests cover catalog, recursive reject, redaction, schema gate, Q/F fail-closed paths | forbidden keys + no full prompt asset fallback gate | Provider Boundary | validated_with_deferred_gaps | Phase 1/7 |
+| FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests | tests/fakes + evals/replay only | Test/Eval | validated_with_deferred_gaps | Phase 7/9 |
 | EVAL-001 | AI Eval gate | seed evals / descriptors | evals + CI regression gate | Eval | recon_done | Phase 9 |
-| WIN-001 | Execution Window Protocol | protocol exists | every window has scope / forbidden / tests / rollback / backfill | Governance | validated | Phase 0.1 |
-| SRC-001 | Source Backfill | sources partially stale after DEC confirmations | updated Project sources | Governance | implemented | Phase 0.1 |
+| WIN-001 | Execution Window Protocol | P7 followed read-only recon / scope lock / implementation / audit / source-backfill sequence; single-writer identity remains UNKNOWN from worktree evidence | every window has scope / forbidden / tests / rollback / backfill | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
+| SRC-001 | Source Backfill | Project sources updated for P7 evidence with explicit deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
+
+## P7-W1 Provider Fail-Closed Backfill Evidence
+
+Status: `validated_with_deferred_gaps`，不得标记 `done`。
+
+- `PRO-001`: `apps/api/app/application/llm/provider_boundary.py` adds the P7 forbidden-key catalog and validator. Question and Feedback active provider paths call `build_validated_transport_request()` before `transport.generate()` and fail closed with `provider_request_validation_failed` / `provider_request_invalid` when validation fails.
+- `PRO-002`: Validation evidence recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and independently audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`: provider boundary static tests `2 passed`; provider / fake / runtime selector `15 passed`; Question regression `65 passed`; Feedback service / agent / runtime selector `44 passed`; provider selector `19 passed`; Feedback selector `63 passed`; architecture selector `22 passed`; `git diff --check` clean.
+- `FAKE-001`: `FeedbackGenerationService(FakeLlmTransport())` returns fake-visible non-success with `fake_transport_not_runtime_provider`, `provider_status=fake_transport`, and `llm_called=False`; runtime fake rejection and fixture isolation remain covered by focused tests. Fake fixture availability for tests/evals/replay is preserved.
+- `WIN-001`: Agent A/B/C read-only recon, Controller scope lock, Agent D implementation report, and Agent E audit report exist under `docs/goals/2026-06-05/`. Agent E returned `WARN`, allowing source backfill but not a `done` claim.
+- `SRC-001`: This section plus the Phase 7 updates in `14_RISK_REGISTER.md` and `17_PHASE_ROADMAP_LOCK.md` are the P7 Project source backfill.
+
+Remaining gaps:
+
+- Only Q/F active provider paths are proven protected; the new boundary is not a global transport backstop for all `LlmTransportRequest` call sites.
+- Feedback compact prompt still includes a bounded `current_answer` excerpt; a short answer could equal the complete answer text.
+- Single-writer identity is `UNKNOWN` from current worktree evidence; only scope conformance is proven.
+- Full-repo pytest, web tests, and e2e tests were not run.
 
 ## Gap Register
 

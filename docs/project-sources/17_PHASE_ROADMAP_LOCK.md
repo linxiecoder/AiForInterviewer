@@ -404,6 +404,16 @@ Done Criteria:
 - Provider unavailable not success。
 - Fake only tests/evals/replay。
 
+P7-W1 Status:
+
+- Phase 7 Status: `validated_with_deferred_gaps`。
+- Implementation evidence: `apps/api/app/application/llm/provider_boundary.py`, `apps/api/app/application/polish/question_generation_service.py`, `apps/api/app/application/polish/feedback_agent.py`, `apps/api/app/application/polish/feedback_generation_service.py`, `apps/api/app/application/ai_runtime/contracts.py`, `apps/api/app/application/llm/agent_io.py`.
+- Test evidence: provider boundary static tests `2 passed`; provider / fake / runtime selector `15 passed`; Question regression `65 passed`; Feedback service / agent / runtime selector `44 passed`; provider selector `19 passed`; Feedback selector `63 passed`; architecture selector `22 passed`; `git diff --check` clean.
+- Audit evidence: `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md` returned `WARN`, not `FAIL`, and allowed source backfill.
+- Source backfill evidence: `docs/project-sources/09_REFACTOR_TRACEABILITY_MATRIX.md`, `docs/project-sources/14_RISK_REGISTER.md`, `docs/project-sources/17_PHASE_ROADMAP_LOCK.md`, and `docs/goals/2026-06-05/P7_F_SOURCE_BACKFILL_REPORT.md`.
+- Remaining gaps: only Q/F active provider paths are proven; no global provider backstop; bounded `current_answer` excerpt may equal a complete short answer; single-writer identity is `UNKNOWN`; full-repo pytest, web tests, and e2e tests were not run.
+- Non-claim: Phase 7 is not `done`; Phase 8 / Phase 9 work must not start from this record alone.
+
 ## Phase 8
 
 Name:

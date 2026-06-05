@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from app.application.llm.provider_boundary import P7_PROVIDER_FORBIDDEN_KEYS
+
 
 class GraphDisabledError(RuntimeError):
     """Raised when runtime or graph enablement is disabled."""
@@ -32,6 +34,7 @@ class RuntimeUnavailableError(RuntimeError):
 
 _SENSITIVE_KEYS = frozenset(
     {
+        *P7_PROVIDER_FORBIDDEN_KEYS,
         "raw" + "_prompt",
         "raw" + "_completion",
         "raw" + "_provider" + "_payload",

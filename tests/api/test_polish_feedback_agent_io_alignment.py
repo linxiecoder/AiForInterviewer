@@ -231,6 +231,38 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert "refusal_and_low_confidence_policy" not in provider_prompt
 
 
+def test_feedback_agent_fails_closed_when_compact_provider_prompt_missing() -> None:
+    transport = _PayloadTransport({"payload": _generated_payload()})
+    prompt_asset = build_feedback_prompt_asset(_context())
+    prompt_asset.pop("provider_prompt")
+
+    envelope = FeedbackGenerationAgent(transport=transport).generate(
+        prompt_asset=prompt_asset,
+        input_refs=("answer_001",),
+    )
+
+    assert envelope.succeeded is False
+    assert envelope.validation_errors == ("provider_request_validation_failed",)
+    assert envelope.metadata["provider_status"] == "not_called"
+    assert transport.requests == []
+
+
+def test_feedback_agent_blocks_forbidden_provider_prompt_before_transport() -> None:
+    transport = _PayloadTransport({"payload": _generated_payload()})
+    prompt_asset = build_feedback_prompt_asset(_context())
+    prompt_asset["provider_prompt"]["nested"] = [{"full_asset_body": "must not reach provider"}]
+
+    envelope = FeedbackGenerationAgent(transport=transport).generate(
+        prompt_asset=prompt_asset,
+        input_refs=("answer_001",),
+    )
+
+    assert envelope.succeeded is False
+    assert envelope.validation_errors == ("provider_request_validation_failed",)
+    assert envelope.metadata["provider_status"] == "not_called"
+    assert transport.requests == []
+
+
 def test_feedback_prompt_asset_includes_agent_safety_policy_rules() -> None:
     asset = build_feedback_prompt_asset(_context())
     policy = asset["refusal_and_low_confidence_policy"]

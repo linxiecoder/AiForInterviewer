@@ -92,6 +92,13 @@ class FeedbackGenerationService:
                 validation_errors=("llm_transport_unavailable",),
                 metadata=metadata | {"provider_status": "not_configured", "llm_called": False},
             )
+        if _is_fake_transport(self._llm_transport):
+            return FeedbackGenerationResult(
+                succeeded=False,
+                payload=None,
+                validation_errors=("fake_transport_not_runtime_provider",),
+                metadata=metadata | {"provider_status": "fake_transport", "llm_called": False},
+            )
 
         agent_result = FeedbackGenerationAgent(transport=self._llm_transport).generate(
             prompt_asset=prompt_asset,
@@ -157,6 +164,10 @@ def _agent_envelope_metadata(agent_result: object) -> dict[str, Any]:
     if not isinstance(metadata, dict):
         return {}
     return metadata
+
+
+def _is_fake_transport(transport: object) -> bool:
+    return getattr(transport, "status", None) == "deterministic_fake_only"
 
 
 def _base_metadata() -> dict[str, Any]:

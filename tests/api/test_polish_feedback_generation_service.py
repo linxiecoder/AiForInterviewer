@@ -173,21 +173,31 @@ def _service(llm_transport: object):
     return FeedbackGenerationService(llm_transport=llm_transport)
 
 
-def test_service_with_fake_transport_returns_succeeded_generated_payload() -> None:
+def test_service_with_fake_transport_returns_fake_visible_non_success() -> None:
     result = _service(FakeLlmTransport()).generate(_context())
 
-    assert result.succeeded is True
-    assert result.payload is not None
-    assert result.payload["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
-    assert result.payload["status"] == "generated"
-    assert result.validation_errors == ()
-    assert result.payload["loss_points"]
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors == ("fake_transport_not_runtime_provider",)
+    assert result.metadata["provider_status"] == "fake_transport"
+    assert result.metadata["llm_called"] is False
 
 
-def test_fake_generated_payload_passes_phase2_validator() -> None:
-    result = _service(FakeLlmTransport()).generate(_context())
+def test_fake_transport_fixture_payload_remains_available_for_explicit_tests() -> None:
+    request = LlmTransportRequest(
+        contract_ids=POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
+        task_type=POLISH_FEEDBACK_TASK_TYPE,
+        input_refs=("answer_001",),
+        evidence_bundle={
+            "current_question": {"question_text": "How would you recover failed async payment messages?"},
+            "current_answer": {"answer_text": "I would use retry jobs and alerts."},
+        },
+        prompt_version=POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+        schema_id=POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+    )
 
-    normalized, errors = validate_generated_feedback_payload(result.payload)
+    fake_result = FakeLlmTransport().generate(request)
+    normalized, errors = validate_generated_feedback_payload(fake_result.result)
 
     assert errors == ()
     assert normalized is not None
@@ -199,7 +209,7 @@ def test_service_metadata_includes_prompt_schema_llm_and_provider_status() -> No
 
     assert result.metadata["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
     assert result.metadata["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
-    assert result.metadata["llm_called"] is True
+    assert result.metadata["llm_called"] is False
     assert result.metadata["provider_status"] == "fake_transport"
 
 

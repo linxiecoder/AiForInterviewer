@@ -81,6 +81,13 @@ Mitigation:
 - Phase 1 先加 provider boundary tests / gate。
 - Phase 7 实施 provider boundary 重构。
 
+Current Phase 7 evidence:
+
+- Compact provider request boundary exists in `apps/api/app/application/llm/provider_boundary.py`.
+- Question and Feedback active provider paths validate before `transport.generate()` and fail closed on forbidden-key / schema validation errors.
+- Forbidden-key recursive rejection, schema top-level gate, redaction, no full prompt fallback, and provider validation failure are covered by focused tests recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`.
+- Status: `partially_mitigated`. The P7 slice proves Q/F active paths only; it is not a global provider transport backstop, and bounded answer excerpt semantics remain a deferred gap.
+
 ## RISK-006 Fake 污染 runtime
 
 Severity: medium
@@ -95,6 +102,30 @@ Mitigation:
 - Runtime env 禁止 fake provider。
 - import boundary scan。
 - Fake output trace visible。
+
+Current Phase 7 evidence:
+
+- `FeedbackGenerationService(FakeLlmTransport())` now returns fake-visible non-success with `fake_transport_not_runtime_provider`, `provider_status=fake_transport`, and `llm_called=False`.
+- Runtime fake rejection and fake fixture isolation are covered by focused tests recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`.
+- Agent E audit found no production app code newly importing `FakeLlmTransport`; production grep hits were runtime rejection text and fake module boundaries.
+- Status: `partially_mitigated`. Full-repo pytest, web tests, e2e tests, and Phase 9 CI eval gates were not run.
+
+## RISK-P7-FALSE-SUCCESS
+
+Severity: high
+
+Description:
+
+Provider / fake boundary work may be partially implemented while reports mark Phase 7 `done` without proving all active paths, grep interpretation, tests, audit, and source backfill.
+
+Mitigation:
+
+- Use claim ledger labels and read-only Audit / Diff review before source fact backfill.
+- Treat child-agent output as evidence candidates until audited.
+- Record `validated_with_deferred_gaps` when WARN gaps remain.
+- Keep unsupported claims visible: non-global provider backstop, bounded answer excerpt, single-writer identity `UNKNOWN`, and unrun full-repo / web / e2e tests.
+
+Status: `partially_mitigated`.
 
 ## RISK-007 Eval 只覆盖 seed 样本
 

@@ -7,7 +7,8 @@ from typing import Any
 
 from app.application.llm.agent_io import AgentOutputEnvelope
 from app.application.llm.ports import LlmTransport
-from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
+from app.application.llm.types import LlmTransportResult
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
     POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
@@ -17,6 +18,32 @@ from app.application.polish.feedback_schema import (
 )
 
 FEEDBACK_GENERATION_MAX_TOKENS = 1600
+_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
+    {
+        "task",
+        "task_type",
+        "feedback_mode",
+        "schema_id",
+        "schema_version",
+        "prompt_version",
+        "prompt",
+        "output_schema",
+        "contract_ids",
+        "input_contract",
+        "required_json_schema",
+        "current_question",
+        "current_answer",
+        "scoring_rules",
+        "evidence",
+        "canonical_project_assets",
+        "same_question_answers",
+        "progress_node_snapshot",
+        "job_requirements",
+        "resume_projects",
+        "output_requirements",
+        "feedback_metadata",
+    }
+)
 
 
 class FeedbackGenerationAgent:
@@ -29,14 +56,19 @@ class FeedbackGenerationAgent:
         prompt_asset: dict[str, Any],
         input_refs: tuple[str, ...],
     ) -> AgentOutputEnvelope:
-        request = LlmTransportRequest(
-            contract_ids=_contract_ids(prompt_asset),
-            task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
-            input_refs=input_refs,
-            evidence_bundle=_provider_prompt(prompt_asset),
-            prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-            schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        )
+        try:
+            request = build_validated_transport_request(
+                contract_ids=_contract_ids(prompt_asset),
+                task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
+                input_refs=input_refs,
+                evidence_bundle=_provider_prompt(prompt_asset),
+                prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+                schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+                required_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+                allowed_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+            )
+        except ProviderRequestValidationError as exc:
+            return _provider_request_validation_failed(prompt_asset, exc)
         object.__setattr__(request, "max_tokens", FEEDBACK_GENERATION_MAX_TOKENS)
         try:
             with _temporary_transport_max_tokens(self._transport, FEEDBACK_GENERATION_MAX_TOKENS):
@@ -184,7 +216,26 @@ def _provider_prompt(prompt_asset: dict[str, Any]) -> dict[str, Any]:
     provider_prompt = prompt_asset.get("provider_prompt")
     if isinstance(provider_prompt, dict):
         return provider_prompt
-    return prompt_asset
+    raise ProviderRequestValidationError(("missing_provider_request_key:provider_prompt",))
+
+
+def _provider_request_validation_failed(
+    prompt_asset: dict[str, Any],
+    exc: ProviderRequestValidationError,
+) -> AgentOutputEnvelope:
+    return AgentOutputEnvelope(
+        task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
+        schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+        schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+        status="provider_request_invalid",
+        validation_errors=("provider_request_validation_failed",),
+        metadata={
+            "provider_status": "not_called",
+            "llm_called": False,
+            "provider_request_errors": exc.errors,
+        },
+    )
 
 
 def _contract_ids(prompt_asset: dict[str, Any]) -> tuple[str, ...]:

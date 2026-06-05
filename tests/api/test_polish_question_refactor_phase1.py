@@ -831,6 +831,43 @@ def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> No
     assert metadata["manual_review_required"] is False
 
 
+def test_question_provider_boundary_blocks_forbidden_payload_before_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性追问",
+        expected_capability="验证候选人能否围绕支付可靠性说明设计、取舍和复盘。",
+    )
+
+    def unsafe_provider_request(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "task_type": "polish_question_generation",
+            "schema_id": NEXT_QUESTION_AGENT_SCHEMA_ID,
+            "schema_version": NEXT_QUESTION_AGENT_SCHEMA_VERSION,
+            "prompt_version": NEXT_QUESTION_AGENT_PROMPT_VERSION,
+            "progress_node": {"ref": NODE_REF, "developer_prompt": "must not reach provider"},
+        }
+
+    monkeypatch.setattr(
+        "app.application.polish.question_generation_service.build_question_provider_request",
+        unsafe_provider_request,
+    )
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded is False
+    assert result.draft is None
+    assert result.validation_errors == ("provider_request_validation_failed",)
+    assert transport.requests == []
+
+
 def test_source_support_policy_classifies_direct_project_evidence_from_canonical_assets() -> None:
     decision = SourceSupportPolicy.classify_canonical_assets(
         canonical_project_assets_available=True,

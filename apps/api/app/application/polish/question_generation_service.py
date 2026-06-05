@@ -16,7 +16,8 @@ from app.application.llm.errors import (
 )
 from app.application.llm.agent_io import AgentFocusTarget, AgentOutputEnvelope
 from app.application.llm.ports import LlmTransport
-from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
+from app.application.llm.types import LlmTransportResult
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
 from app.application.polish.next_question_agent import validate_next_question_agent_output
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
@@ -77,6 +78,22 @@ ENGINEERING_EVIDENCE_TERMS = (
     "幂等",
     "恢复",
 )
+_QUESTION_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
+    {
+        "task_type",
+        "schema_id",
+        "schema_version",
+        "prompt_version",
+        "progress_node",
+        "source_support_level",
+        "canonical_evidence",
+        "history_summary",
+        "expected_output_contract",
+        "safety_rules_summary",
+    }
+)
+
+
 @dataclass(frozen=True)
 class QuestionGenerationResult:
     succeeded: bool
@@ -395,16 +412,30 @@ def _generate_llm_question(
         scope=scope,
         runtime_policy=runtime_policy,
     )
-    request = LlmTransportRequest(
-        contract_ids=runtime_policy.contract_ids,
-        task_type=task_type,
-        input_refs=(scope.progress_node_ref, *blueprint.evidence_refs),
-        evidence_bundle=provider_request,
-        prompt_version=prompt_version,
-        schema_id=schema_id,
-    )
     max_retries = max(0, int(runtime_policy.llm_max_retries))
     max_attempts = max_retries + 1
+    try:
+        request = build_validated_transport_request(
+            contract_ids=runtime_policy.contract_ids,
+            task_type=task_type,
+            input_refs=(scope.progress_node_ref, *blueprint.evidence_refs),
+            evidence_bundle=provider_request,
+            prompt_version=prompt_version,
+            schema_id=schema_id,
+            required_evidence_keys=_QUESTION_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+            allowed_evidence_keys=_QUESTION_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+        )
+    except ProviderRequestValidationError:
+        return _llm_generation_failed(
+            blueprint=blueprint,
+            scope=scope,
+            validation_error="provider_request_validation_failed",
+            runtime_policy=runtime_policy,
+            attempt=0,
+            max_attempts=max_attempts,
+            started_at=perf_counter(),
+            error_type="provider_request_validation_failed",
+        )
     for attempt in range(1, max_attempts + 1):
         started_at = perf_counter()
         LogUtil.agent_runtime_step(
