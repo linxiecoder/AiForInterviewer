@@ -434,6 +434,17 @@ P7-W3 Status:
 - Remaining gaps: `P7-GAP-005` full-repo pytest、web tests、e2e tests 未运行，deferred to P7-W4。
 - Non-claim: Phase 7 不是 `done`；不得仅凭本记录启动 Phase 8 / Phase 9。
 
+P7-W4.fix.01 Status:
+
+- Phase 7 Status: `done`。
+- Controller Decision B: pytest-managed temp fixtures such as `tmp_path` / `tmp_path_factory` / `pytester` are allowed only when managed by pytest outside repo-root; repo-root scratch artifacts, leaked tmp directories, and untracked execution artifacts remain forbidden.
+- Controller Decision A: authenticated frontend smoke must not depend on fake LLM provider; runtime fake rejection must not be weakened.
+- Implementation evidence: `tests/test_temp_artifact_policy.py` allows pytest-managed fixture names while preserving repo-root `tmp*` rejection; `docs/00-governance/TEST_POLICY.md` reflects the same test artifact boundary; `scripts/qa/authenticated-frontend-smoke.mjs` sets `LLM_PROVIDER` to blank instead of fake.
+- Validation evidence: full-repo pytest `1067 passed in 86.00s`; `npm run web:test` passed; `npm run web:smoke:auth` passed; focused temp / fake policy tests `21 passed`; `git diff --check` clean.
+- Audit evidence: `docs/goals/2026-06-05/P7_W4_FIX01_E_AUDIT_REPORT.md` returned `PASS` with no provider / fake policy weakening and no API route, DB, frontend feature, domain policy, Phase 8 runtime, or Phase 9 eval / CI scope drift.
+- Gap result: `P7-GAP-005` is `closed_by_full_validation`。
+- Phase 8 handoff: `eligible_for_controller_decision`, not started。
+
 ## Phase 8
 
 Name:
@@ -468,6 +479,11 @@ Done Criteria:
 - Trace complete。
 - Replay read-only default。
 - HITL works。
+
+Current Status:
+
+- `eligible_for_controller_decision` after P7-W4.fix.01 full validation.
+- `not_started`; no Phase 8 runtime files were modified in P7-W4.fix.01.
 
 ## Phase 9
 

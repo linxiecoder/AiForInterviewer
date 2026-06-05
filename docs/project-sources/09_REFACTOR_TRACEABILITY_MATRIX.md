@@ -82,12 +82,12 @@ wrapper split 不等于 capability done。
 | AGT-005 | AgentExecutor port | AgentGraphRunner exists for graph runtime | AgentExecutor protocol / port independent from LangGraph | Agent Platform | design_done | Phase 1 |
 | AGT-006 | Handoff contract | ai_runtime handoff partial | shared agent handoff contract | Agent Platform | validated | Phase 1/4 |
 | AGT-007 | Agent Trace Contract | ai_runtime trace refs partial | unified AgentExecutionTrace | Agent Platform | validated | Phase 1/4 |
-| PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；P7-W3 已将 Feedback `current_answer.answer_text` formalized as bounded primary input | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | validated_with_deferred_gaps | Phase 7 |
-| PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree、job match、bounded current answer policy metadata、historical answer no raw fallback、nested `full_answer` fail-closed paths | forbidden keys + no full prompt asset fallback gate | Provider Boundary | validated_with_deferred_gaps | Phase 1/7 |
-| FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests | tests/fakes + evals/replay only | Test/Eval | validated_with_deferred_gaps | Phase 7/9 |
+| PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；P7-W3 已将 Feedback `current_answer.answer_text` formalized as bounded primary input；P7-W4.fix.01 full validation passed | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | done | Phase 7 |
+| PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree、job match、bounded current answer policy metadata、historical answer no raw fallback、nested `full_answer` fail-closed paths；P7-W4.fix.01 full-repo pytest / web validation passed | forbidden keys + no full prompt asset fallback gate | Provider Boundary | done | Phase 1/7 |
+| FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests; auth smoke no longer sets `LLM_PROVIDER=fake` | tests/fakes + evals/replay only | Test/Eval | done | Phase 7/9 |
 | EVAL-001 | AI Eval gate | seed evals / descriptors | evals + CI regression gate | Eval | recon_done | Phase 9 |
-| WIN-001 | Execution Window Protocol | P7-W2 已按 read-only recon / design / single-writer implementation / audit / source-backfill 顺序执行；final status 保持 non-done | every window has scope / forbidden / tests / rollback / backfill | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
-| SRC-001 | Source Backfill | Project sources 已回填 P7-W1 与 P7-W2 evidence，并显式保留 deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7 |
+| WIN-001 | Execution Window Protocol | P7-W4.fix.01 完成 A/B read-only recon、C single-writer implementation、D full validation、E audit、source backfill sequence | every window has scope / forbidden / tests / rollback / backfill | Governance | done | Phase 0.1/7 |
+| SRC-001 | Source Backfill | Project sources 已回填 P7-W4.fix.01 full validation evidence；`P7-GAP-005` closed by full validation | updated Project sources | Governance | done | Phase 0.1/7 |
 
 ## P7-W1 Provider Fail-Closed Backfill Evidence
 
@@ -140,6 +140,29 @@ P7-W3 gap classification:
 - `P7-GAP-003`: `closed_by_policy_and_tests`；Controller Decision B is formalized in provider request metadata and focused tests.
 - `P7-GAP-004`: `partially_mitigated`；single-writer scope conformance is recorded, worktree identity proof remains machine-UNKNOWN.
 - `P7-GAP-005`: `deferred`；full-repo pytest、web tests、e2e tests remain out of scope for P7-W3 / deferred to P7-W4.
+
+## P7-W4.fix.01 Full Validation Blocker Remediation Backfill Evidence
+
+Status: `done`。
+
+- `PRO-001`: P7 compact provider request fail-closed behavior remains unchanged. Full validation did not modify provider runtime, application provider builders, API routes, DB, domain policies, Phase 8 runtime, or Phase 9 eval / CI gates.
+- `PRO-002`: Full-repo pytest passed with `1067 passed in 86.00s`; focused temp / fake policy selector passed with `21 passed`; `git diff --check` passed.
+- `FAKE-001`: `scripts/qa/authenticated-frontend-smoke.mjs` no longer sets `LLM_PROVIDER=fake`; runtime fake rejection remains covered by `tests/api/test_llm_runtime.py` and `tests/api/test_fake_llm_boundary.py`.
+- `WIN-001`: Required execution board artifacts exist under `docs/goals/2026-06-05/P7_W4_FIX01_*.md`: A/B recon, C implementation, D validation, E audit.
+- `SRC-001`: This section plus the P7-W4.fix.01 updates in `14_RISK_REGISTER.md`, `17_PHASE_ROADMAP_LOCK.md`, and `20_PHASE7_CLOSEOUT.md` are the P7-W4.fix.01 Project source backfill.
+
+P7-W4.fix.01 gap classification:
+
+- `P7-GAP-001`: `validated` from P7-W2 / P7-W4 full validation.
+- `P7-GAP-002`: `partially_mitigated` by DTO-level forbidden-key backstop and builder / static gates; no Phase 7 done blocker remains.
+- `P7-GAP-003`: `closed_by_policy_and_tests`.
+- `P7-GAP-004`: `partially_mitigated`; execution sequence and diff audit are recorded, machine proof of human worktree identity remains outside code evidence.
+- `P7-GAP-005`: `closed_by_full_validation`; full-repo pytest, `npm run web:test`, `npm run web:smoke:auth`, focused temp policy tests, runtime fake rejection tests, and required grep interpretation passed.
+
+Phase result:
+
+- Phase 7: `done`.
+- Phase 8: `eligible_for_controller_decision`, not started.
 
 ## Gap Register
 

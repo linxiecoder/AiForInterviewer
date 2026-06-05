@@ -88,7 +88,8 @@ Current Phase 7 evidence:
 - Forbidden-key recursive rejection, schema top-level gate, redaction, no full prompt fallback, and provider validation failure are covered by focused tests recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`.
 - P7-W2 增加 DTO-level `LlmTransportRequest` forbidden-key backstop，将 progress tree / job match / feedback trace request construction 迁入 `build_validated_transport_request()`，并增加 static architecture gate，禁止 `provider_boundary.py` 之外的 production direct request constructors。
 - P7-W3 formalizes Controller Decision B for Feedback answer text handling: `current_answer.answer_text` is allowed only as bounded current-answer primary input, provider request includes auditable policy metadata, historical answer raw `answer_text` fallback is removed, and nested `full_answer` remains fail-closed.
-- Status: `partially_mitigated`。当前 production provider request construction 已被 forbidden keys 与 per-task schema gates 覆盖；bounded answer excerpt semantics 已由 policy / tests 关闭，但 full release-grade full-repo / web / e2e coverage 仍 deferred。
+- P7-W4.fix.01 full validation passed: full-repo pytest `1067 passed`, `npm run web:test` passed, `npm run web:smoke:auth` passed, focused temp / fake policy selector `21 passed`, and `git diff --check` passed.
+- Status: `mitigated_for_phase_7`。当前 production provider request construction 已被 forbidden keys 与 per-task schema gates 覆盖；bounded answer excerpt semantics 已由 policy / tests 关闭；`P7-GAP-005` 已由 full validation 关闭。
 
 ## RISK-006 Fake 污染 runtime
 
@@ -110,7 +111,9 @@ Current Phase 7 evidence:
 - `FeedbackGenerationService(FakeLlmTransport())` now returns fake-visible non-success with `fake_transport_not_runtime_provider`, `provider_status=fake_transport`, and `llm_called=False`.
 - Runtime fake rejection and fake fixture isolation are covered by focused tests recorded in `docs/goals/2026-06-05/P7_D_IMPLEMENTATION_REPORT.md` and audited in `docs/goals/2026-06-05/P7_E_AUDIT_REPORT.md`.
 - Agent E audit found no production app code newly importing `FakeLlmTransport`; production grep hits were runtime rejection text and fake module boundaries.
-- Status: `partially_mitigated`. Full-repo pytest, web tests, e2e tests, and Phase 9 CI eval gates were not run.
+- P7-W4.fix.01 removed the auth smoke dependency on runtime fake provider by changing the smoke env from `LLM_PROVIDER=fake` to blank while preserving runtime fake rejection.
+- Full validation evidence: `npm run web:smoke:auth` passed; focused runtime fake rejection tests passed; grep shows no auth smoke script `LLM_PROVIDER.*fake` hit.
+- Status: `mitigated_for_phase_7`. Phase 9 CI eval gates remain separate Phase 9 work and are not marked done.
 
 ## RISK-P7-FALSE-SUCCESS
 
@@ -139,6 +142,15 @@ P7-W3 update:
 - Controller Decision B 将 bounded `current_answer.answer_text` 明确为 allowed current primary task input，并由 policy metadata 与 focused tests 验证。
 - `P7-GAP-003` status: `closed_by_policy_and_tests`。
 - Remaining non-claims: 不声明 full-repo pytest / web / e2e 已通过；不声明 Phase 7 `done`；不启动 Phase 8 / Phase 9。
+
+P7-W4.fix.01 update:
+
+- Controller Decision B for temp artifact policy is implemented: pytest-managed temp fixtures are allowed only when managed outside repo-root; repo-root scratch artifacts remain forbidden.
+- Controller Decision A for auth smoke is implemented: auth smoke no longer sets `LLM_PROVIDER=fake`; runtime fake rejection remains intact.
+- Full validation passed: full-repo pytest `1067 passed`, `npm run web:test` passed, `npm run web:smoke:auth` passed.
+- `P7-GAP-005` status: `closed_by_full_validation`。
+- Phase 7 status: `done`。
+- Phase 8 status: `eligible_for_controller_decision`, not started。
 
 ## RISK-007 Eval 只覆盖 seed 样本
 

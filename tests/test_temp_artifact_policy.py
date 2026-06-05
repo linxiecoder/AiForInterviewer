@@ -37,10 +37,6 @@ PROHIBITED_PATTERNS = (
         "测试不得直接使用 TemporaryFile；请改用 ManagedTempArtifacts / ManagedTempArtifactsTestCase。",
     ),
     (
-        re.compile(r"\b(?:tmp_path|tmp_path_factory|pytester|runpytest(?:_subprocess)?)\b"),
-        "测试不得直接使用 pytest 临时目录/pytester 夹具；请改用 ManagedTempArtifacts / ManagedTempArtifactsTestCase。",
-    ),
-    (
         re.compile(r"shutil\.rmtree\s*\("),
         "测试不得手写 rmtree 清理测试目录；请改用 ManagedTempArtifacts / ManagedTempArtifactsTestCase。",
     ),
@@ -89,34 +85,51 @@ class TestTempArtifactPolicyTests(unittest.TestCase):
         messages = "\n".join(message for _, message in PROHIBITED_PATTERNS)
         self.assertNotIn("pytest tmp_path", messages)
         self.assertNotIn("pytest 提供的 `tmp_path` / `tmp_path_factory`", messages)
+        self.assertNotIn("pytest 临时目录/pytester", messages)
 
     def test_test_policy_doc_matches_managed_temp_strategy(self) -> None:
         text = DOC_POLICY_PATH.read_text(encoding="utf-8")
         self.assertIn("`ManagedTempArtifacts` / `ManagedTempArtifactsTestCase`", text)
-        self.assertIn("不得直接使用 `tmp_path` / `tmp_path_factory`", text)
+        self.assertIn("允许使用 pytest 受管临时夹具", text)
+        self.assertIn("不得在仓库根目录或 `tests/` 下直接创建", text)
         self.assertIn("AI_FOR_INTERVIEWER_KEEP_TEST_ARTIFACTS", text)
         self.assertIn("AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS", text)
         self.assertIn("tests/test_temp_artifact_policy.py", text)
         self.assertIn("tests/doc_governor/test_temp_artifacts.py", text)
+        self.assertNotIn("不得直接使用 `tmp_path` / `tmp_path_factory`", text)
         self.assertNotIn("或 pytest 提供的 `tmp_path` / `tmp_path_factory`", text)
 
-    def test_policy_rejects_pytest_temp_fixtures(self) -> None:
+    def test_policy_allows_pytest_managed_temp_fixtures_outside_repo_root(self) -> None:
         source = """
 import pytest
 
 
-def test_demo(tmp_path, pytester):
+def test_demo(tmp_path, tmp_path_factory, pytester):
     tmp_path.mkdir()
+    tmp_path_factory.mktemp("sample")
     pytester.makepyfile("pass")
+    pytester.runpytest()
 """
         violations = _collect_policy_violations(
             TEST_ROOT / "policy_fixture_sample.py",
             source,
         )
-        self.assertTrue(
-            any("pytest 临时目录/pytester" in item for item in violations),
-            violations,
+        self.assertEqual([], violations)
+
+    def test_policy_still_rejects_repo_root_tmp_dir_with_pytest_fixture(self) -> None:
+        source = """
+from pathlib import Path
+
+
+def test_demo(tmp_path):
+    repo_tmp = Path(__file__).parent / "tmp-leak"
+    return tmp_path, repo_tmp
+"""
+        violations = _collect_policy_violations(
+            TEST_ROOT / "policy_fixture_repo_tmp_sample.py",
+            source,
         )
+        self.assertTrue(any("ManagedTempArtifacts" in item for item in violations), violations)
 
     def test_policy_rejects_named_temporary_file_and_rmtree(self) -> None:
         source = """

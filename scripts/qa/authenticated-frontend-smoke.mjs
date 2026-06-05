@@ -102,7 +102,7 @@ function smokeEnv() {
     API_AUTH_DEV_USER_PASSWORD: DEV_PASSWORD,
     API_PORT,
     API_DATABASE_URL: databaseUrl,
-    LLM_PROVIDER: "fake",
+    LLM_PROVIDER: "",
     PYTHONPATH: process.env.PYTHONPATH ? `${pythonPath}${path.delimiter}${process.env.PYTHONPATH}` : pythonPath,
   };
 }

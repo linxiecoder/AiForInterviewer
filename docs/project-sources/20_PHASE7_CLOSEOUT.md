@@ -43,9 +43,50 @@ Gap result:
 | `P7-GAP-003` | `closed_by_policy_and_tests` | Controller Decision B + W3 policy metadata + focused tests |
 | `P7-GAP-005` | `deferred` | full-repo pytest、web tests、e2e tests remain out of scope for P7-W3 and are deferred to P7-W4 |
 
-## Non-Claims
+## P7-W3 Non-Claims
 
 - Phase 7 is not `done`.
 - Phase 8 runtime is not started.
 - Phase 9 eval / CI gate is not started.
 - Full-repo pytest、web tests、e2e tests have not been claimed by this source record.
+
+## P7-W4.fix.01 Full Validation Blocker Remediation
+
+Window ID: `P7-W4.fix.01-FULL-VALIDATION-BLOCKER-REMEDIATION`
+
+Status: `done`
+
+Controller Decisions:
+
+- Temp artifact policy decision B: pytest-managed temp fixtures are allowed when outside repo-root and managed by pytest; repo-root scratch artifacts, leaked tmp directories, and untracked execution artifacts remain forbidden.
+- Web smoke auth decision A: auth smoke must not set `LLM_PROVIDER=fake`; runtime fake rejection must not be weakened.
+
+Implementation evidence:
+
+- `tests/test_temp_artifact_policy.py` removes the one-size-fits-all pytest fixture name ban and adds focused tests proving pytest-managed fixtures are allowed while repo-root `tmp*` construction remains rejected.
+- `docs/00-governance/TEST_POLICY.md` records the same temp artifact boundary.
+- `scripts/qa/authenticated-frontend-smoke.mjs` no longer sets `LLM_PROVIDER=fake`; it sets `LLM_PROVIDER` to blank to override inherited fake env without enabling runtime fake provider.
+- `apps/api/app/infrastructure/llm/runtime.py` was not modified and still rejects `LLM_PROVIDER=fake`.
+
+Validation evidence:
+
+- `git diff --check`: passed.
+- Full-repo pytest: `1067 passed in 86.00s`.
+- `npm run web:test`: passed.
+- `npm run web:smoke:auth`: passed with authenticated smoke session `ses_auth_frontend_smoke`.
+- Focused temp / fake policy selector: `21 passed`.
+- Required grep: auth smoke script no longer has `LLM_PROVIDER.*fake`; remaining fake hits are runtime rejection, negative tests, test fake facade, fake runtime names, eval isolation tests, or frontend fake marker tests.
+
+Gap result:
+
+| Gap ID | Status | Evidence |
+|---|---|---|
+| `P7-GAP-003` | `closed_by_policy_and_tests` | P7-W3 Controller Decision B + policy metadata + focused tests |
+| `P7-GAP-005` | `closed_by_full_validation` | full-repo pytest, web:test, web:smoke:auth, focused temp policy, runtime fake rejection tests, and grep interpretation passed |
+
+## Current Closeout Status
+
+- Phase 7: `done`.
+- Phase 8: `eligible_for_controller_decision`, not started.
+- Phase 9 eval / CI gate: not started.
+- Runtime fake provider remains rejected.
