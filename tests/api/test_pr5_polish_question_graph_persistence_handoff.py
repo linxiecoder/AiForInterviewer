@@ -235,6 +235,7 @@ def test_graph_enabled_path_persists_question_without_direct_service() -> None:
     assert len(repository.questions) == 1
     assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
     assert repository.add_question_calls == 1
+    _assert_question_planned_workflow_metadata(repository.questions[0])
     assert blocker.calls == 0
 
 
@@ -268,6 +269,7 @@ def test_graph_enabled_path_persists_formal_candidate_payload_without_direct_ser
     assert result.value.status == AiTaskStatus.SUCCEEDED
     assert len(repository.questions) == 1
     assert repository.questions[0].question_text == _accepted_candidate()["question_text"]
+    _assert_question_planned_workflow_metadata(repository.questions[0])
     assert blocker.calls == 0
 
 
@@ -328,6 +330,7 @@ def test_graph_enabled_path_uses_only_accepted_polish_question_candidate_payload
     assert result.value.status == AiTaskStatus.SUCCEEDED
     assert len(repository.questions) == 1
     assert repository.questions[0].question_text == _accepted_candidate()["question_text"]
+    _assert_question_planned_workflow_metadata(repository.questions[0])
     assert blocker.calls == 0
 
 
@@ -371,13 +374,15 @@ def test_graph_quality_block_does_not_fallback_to_direct_service() -> None:
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
-    assert result.value.result_ref.trace_type == "agent_run"
-    assert repository.questions == []
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("question candidate quality gate is not accepted",),
+    )
     assert blocker.calls == 0
 
 
-def test_graph_disabled_still_uses_direct_service() -> None:
+def test_graph_disabled_returns_candidate_validation_task_without_formal_question() -> None:
     facade = _FakeQuestionFacade(error=GraphDisabledError("disabled"))
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
 
@@ -385,9 +390,37 @@ def test_graph_disabled_still_uses_direct_service() -> None:
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.SUCCEEDED
-    assert result.value.result_ref.trace_type == "question"
-    assert len(repository.questions) == 1
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("graph_disabled", "not_configured", "deterministic_degraded_generation"),
+    )
+
+
+def test_deterministic_graph_candidate_does_not_persist_formal_question() -> None:
+    candidate = _accepted_candidate(
+        question_metadata={
+            "llm_generation_mode": "deterministic_agent_fallback",
+            "fallback_reason": "provider_disabled_deterministic_drafting_tool",
+            "fallback_visible": True,
+            "provider_status": "disabled",
+        },
+    )
+    facade = _FakeQuestionFacade(status_ref=_GraphStatus(candidate=candidate))
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    blocker = _DirectQuestionGenerationBlocker()
+    use_cases._question_generation_service = blocker
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("provider_disabled_deterministic_drafting_tool", "deterministic_agent_fallback"),
+    )
+    assert blocker.calls == 0
 
 
 def test_no_langgraph_import_in_application_layers() -> None:
@@ -401,6 +434,39 @@ def test_no_langgraph_import_in_application_layers() -> None:
         violations.extend(_find_forbidden_imports(root, forbidden_prefixes=("langgraph", "langchain")))
 
     assert violations == []
+
+
+def _assert_question_candidate_validation_task(
+    task: PolishTaskStatus,
+    repository: "_PolishRepository",
+    *,
+    expected_errors: tuple[str, ...],
+) -> None:
+    assert task.status == AiTaskStatus.VALIDATION_FAILED
+    assert task.result_ref.trace_type == "question_candidate"
+    assert task.user_visible_status == "题目生成降级为候选，未写入正式题目"
+    assert set(expected_errors) <= set(task.validation_errors)
+    resource_types = {ref.resource_type for ref in task.candidate_refs}
+    assert {"agent_run", "question_candidate", "progress_node", "evidence", "trace"} <= resource_types
+    assert "question" not in resource_types
+    assert repository.questions == []
+    assert repository.tasks == [task]
+    assert repository.task_targets == [SESSION_ID]
+
+
+def _assert_question_planned_workflow_metadata(question: PolishQuestion) -> None:
+    metadata = question.question_metadata
+    assert metadata["planned_workflow"] == "phase5_question_agent_l2"
+    assert metadata["candidate_output"] == "question_candidate"
+    assert metadata["handoff_contract"] == "handoff.polish_question_agent.v1"
+    assert metadata["formal_write_boundary"] == "Application Service -> AgentPersistenceHandoff"
+    assert metadata["fallback_reported_as_generated_success"] is False
+    assert metadata["graph_candidate_ref"] == "question_candidate_ref_q4"
+    assert "source_support_policy.v1" in metadata["policy_refs"]
+    assert "question_grounding_policy.v1" in metadata["policy_refs"]
+    assert metadata["source_support_summary"]["level"] == "direct_project_evidence"
+    assert metadata["grounding_policy_result"]
+    assert metadata["validation_refs"]
 
 
 def _accepted_candidate(**overrides: Any) -> dict[str, Any]:

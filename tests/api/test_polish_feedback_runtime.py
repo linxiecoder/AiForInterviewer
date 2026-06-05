@@ -38,7 +38,7 @@ class _FeedbackUnavailableTransport:
     def generate(self, request: LlmTransportRequest):
         if request.task_type == "polish_feedback_generation":
             raise RuntimeError("feedback provider unavailable")
-        return self._fake.generate(request)
+        return _runtime_test_non_feedback_result(self._fake, request)
 
 
 class _TimeoutFeedbackTransport:
@@ -48,7 +48,7 @@ class _TimeoutFeedbackTransport:
     def generate(self, request: LlmTransportRequest):
         if request.task_type == "polish_feedback_generation":
             raise TimeoutError("feedback provider timed out")
-        return self._fake.generate(request)
+        return _runtime_test_non_feedback_result(self._fake, request)
 
 
 class _RecordingFeedbackTransport:
@@ -59,7 +59,7 @@ class _RecordingFeedbackTransport:
     def generate(self, request: LlmTransportRequest):
         if request.task_type == "polish_feedback_generation":
             self.feedback_requests.append(request)
-        return self._fake.generate(request)
+        return _runtime_test_non_feedback_result(self._fake, request)
 
     @property
     def feedback_request(self) -> LlmTransportRequest | None:
@@ -80,7 +80,7 @@ class _BlockingFeedbackTransport:
                 self.feedback_calls += 1
             self.first_feedback_entered.set()
             assert self.release_feedback.wait(timeout=2), "feedback generation was not released"
-        return self._fake.generate(request)
+        return _runtime_test_non_feedback_result(self._fake, request)
 
 
 class _FailOnceFeedbackTransport:
@@ -93,7 +93,7 @@ class _FailOnceFeedbackTransport:
             self.feedback_calls += 1
             if self.feedback_calls == 1:
                 raise RuntimeError("first feedback provider failure")
-        return self._fake.generate(request)
+        return _runtime_test_non_feedback_result(self._fake, request)
 
 
 class _ValidatorFailedFeedbackTransport:
@@ -103,7 +103,7 @@ class _ValidatorFailedFeedbackTransport:
 
     def generate(self, request: LlmTransportRequest):
         if request.task_type != "polish_feedback_generation":
-            return self._fake.generate(request)
+            return _runtime_test_non_feedback_result(self._fake, request)
         self.feedback_calls += 1
         return LlmTransportResult(
             result={
@@ -118,6 +118,63 @@ class _ValidatorFailedFeedbackTransport:
             trace_refs=("trace_validator_failed_feedback",),
             evidence_refs=("evidence_validator_failed_feedback",),
         )
+
+
+def _runtime_test_non_feedback_result(fake: FakeLlmTransport, request: LlmTransportRequest):
+    if request.task_type == "polish_question_generation":
+        return _runtime_test_question_provider_result(request)
+    return fake.generate(request)
+
+
+def _runtime_test_question_provider_result(request: LlmTransportRequest) -> LlmTransportResult:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    canonical_evidence = bundle.get("canonical_evidence") if isinstance(bundle.get("canonical_evidence"), dict) else {}
+    expected_contract = (
+        bundle.get("expected_output_contract")
+        if isinstance(bundle.get("expected_output_contract"), dict)
+        else {}
+    )
+    generation_policy = (
+        expected_contract.get("generation_policy")
+        if isinstance(expected_contract.get("generation_policy"), dict)
+        else {}
+    )
+    progress_node = bundle.get("progress_node") if isinstance(bundle.get("progress_node"), dict) else {}
+    evidence_refs = tuple(ref for ref in canonical_evidence.get("evidence_refs", []) if isinstance(ref, str))
+    summaries = (
+        canonical_evidence.get("evidence_summaries")
+        if isinstance(canonical_evidence.get("evidence_summaries"), list)
+        else []
+    )
+    primary = next((item for item in summaries if isinstance(item, dict) and item.get("excerpt")), {})
+    evidence_excerpt = str(primary.get("excerpt") or "Built backend workflow automation.").strip()
+    question_kind = generation_policy.get("question_kind") or "technical_chain_deep_dive"
+    return LlmTransportResult(
+        result={
+            "transport": "recording_provider",
+            "question_text": (
+                f"请围绕简历证据「{evidence_excerpt}」，说明后端工作流中异步解耦、失败补偿、"
+                "幂等键和观测指标如何设计。"
+            ),
+            "question_kind": question_kind,
+            "focus_dimension": question_kind,
+            "difficulty": "medium",
+            "skill_dimension": progress_node.get("expected_capability") or progress_node.get("title"),
+            "expected_signal": "回答应说明异步链路、失败恢复、幂等和指标验证。",
+            "follow_ups": ["失败恢复如何验证？"],
+            "scoring_rubric": [{"dimension": "reliability", "signals": ["失败补偿", "指标验证"]}],
+            "missing_context": [],
+            "evidence_refs": list(evidence_refs),
+            "confidence": "high",
+            "clarification_needed": False,
+            "trace_ref": "trace_feedback_runtime_question_provider",
+        },
+        validation_status=ValidationStatus.VALID,
+        confidence_level=ConfidenceLevel.HIGH,
+        low_confidence_flags=(),
+        trace_refs=("trace_feedback_runtime_question_provider",),
+        evidence_refs=evidence_refs,
+    )
 
 
 def _create_answer_ready_for_feedback(app, session_factory) -> tuple[str, str]:
@@ -215,11 +272,18 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
     assert data["status"] == "succeeded"
     assert data["retryable"] is False
     assert data["feedback_status"] == "generated"
-    assert data["candidate_refs"] == []
+    feedback_candidate_ref = next(
+        ref for ref in data["candidate_refs"] if ref["resource_type"] == "feedback_candidate"
+    )
     assert data["suggestion_refs"] == []
     payload = data["feedback_payload"]
     assert payload["status"] == "generated"
     assert payload["feedback_metadata"]["llm_called"] is True
+    assert payload["feedback_metadata"]["planned_workflow"] == "phase6_feedback_agent_l2"
+    assert payload["feedback_metadata"]["handoff_contract"] == "handoff.polish_feedback_agent.v1"
+    assert payload["feedback_metadata"]["candidate_ref"] == feedback_candidate_ref["resource_id"]
+    assert payload["feedback_metadata"]["asset_update_formal_write_performed"] is False
+    assert payload["candidate_refs"][0] == feedback_candidate_ref
     assert payload["score_result"]["score_value"] == 82
     assert payload["loss_points"]
     assert payload["reference_answer"]["sections"]

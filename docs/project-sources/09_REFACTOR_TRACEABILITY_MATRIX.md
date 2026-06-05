@@ -15,6 +15,8 @@ permalink: ai-for-interviewer/docs/project-sources/09-refactor-traceability-matr
 - design_done
 - implementation_planned
 - implemented
+- implemented_with_validation_blockers
+- validated_with_deferred_l5_runtime
 - validated
 - blocked
 - deferred
@@ -60,7 +62,7 @@ wrapper split 不等于 capability done。
 | QAG-001 | Source support classification | 多处散落 | source_support_policy.py 使用 SourceSupportSummary | Domain Policy | recon_done | Phase 3 |
 | QAG-002 | Question grounding | question_grounding.py in application | question_grounding_policy.py in domain | Domain Policy | recon_done | Phase 3 |
 | QAG-003 | Follow-up coverage | metadata/use_cases | follow_up_coverage_policy.py | Domain Policy | recon_done | Phase 3 |
-| QAG-004 | Question Agent planner | implicit + graph phases | question_agent_planner.py under Agent Platform | Agent | recon_done | Phase 5 |
+| QAG-004 | Question Agent planner | implicit + graph phases | dedicated Question planned workflow component + application-service handoff bridge | Agent | validated_with_deferred_l5_runtime | Phase 5 |
 | QAG-005 | Question Agent Definition | partial spec | AgentDefinition registered | Agent Platform | validated | Phase 4 |
 | QAG-006 | Question Skills | listed in spec | registered skills with contracts | Agent Platform | validated | Phase 4/5 |
 | QAG-007 | Question Tools | local graph TOOL_SCHEMAS | registered tools with contracts | Agent Platform | validated | Phase 4/5 |
@@ -68,7 +70,7 @@ wrapper split 不等于 capability done。
 | FAG-002 | Asset consistency | feedback_rules.py | asset_consistency_policy.py | Domain Policy | recon_done | Phase 3 |
 | FAG-003 | Answer coverage | feedback_rules.py | answer_coverage_policy.py | Domain Policy | recon_done | Phase 3 |
 | FAG-004 | Answer change | feedback_rules.py | answer_change_policy.py | Domain Policy | recon_done | Phase 3 |
-| FAG-005 | Feedback next action | scattered / feedback_rules | feedback_next_action_policy.py | Domain Policy | recon_done | Phase 3/6 |
+| FAG-005 | Feedback next action | scattered / feedback_rules | feedback_next_action_policy.py | Domain Policy | implemented | Phase 3/6 |
 | FAG-006 | Feedback Agent Definition | partial spec | AgentDefinition registered | Agent Platform | validated | Phase 4 |
 | FAG-007 | Feedback Skills | listed in spec | registered skills with contracts | Agent Platform | validated | Phase 4/6 |
 | FAG-008 | Feedback Tools | implicit functions | registered tools with contracts | Agent Platform | validated | Phase 4/6 |
@@ -111,3 +113,32 @@ wrapper split 不等于 capability done。
 - `AgentDefinitionRegistry.validate_references` fails closed for unknown skill refs, unknown tool refs, duplicate IDs, invalid candidate outputs, and unresolved skill tool refs.
 - Validation evidence: `tests/architecture/test_agent_platform_c1_boundary.py` and `tests/architecture` passed in the P4-W1 window; P4-W1.fix.01 adds catalog hygiene and version-separation assertions to the same C1 boundary suite.
 - Runtime workflow, LangGraph execution, and eval CI gates remain deferred to Phase 5 / Phase 6 / Phase 8 / Phase 9.
+
+## P5P6-W1 Backfill Evidence
+
+- Window `P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION` implemented Phase 5 / Phase 6 as C2 / C3 L2 planned guarded workflow only.
+- `QAG-004` now has an application-service planned workflow bridge: provider / graph output is normalized to `question_candidate`, enriched with source-support / policy / validation / handoff refs, and fallback or graph-disabled candidates return `validation_failed` instead of persisting a formal question.
+- `QAG-006` / `QAG-007` continue to rely on the Phase 4 C1 project-level Skill / Tool contracts; this window used those contracts as trace metadata and did not add Phase 8 runtime tool loops.
+- `FAG-005` is integrated into the Feedback planned handoff metadata through existing feedback policy outputs and explicit next-action / asset-update candidate refs.
+- `FAG-007` / `FAG-008` continue to rely on Phase 4 C1 project-level Skill / Tool contracts; this window added a local planned handoff bridge for `feedback_candidate` / `asset_update_candidate`, not autonomous runtime execution.
+- `AGT-006` / `AGT-007` were exercised through candidate refs, validation refs, policy refs and planned handoff metadata. Formal writes remain owned by Application Service paths.
+- `EVAL-001` has P5/P6 scoped local eval runner evidence for this window, but the Phase 9 CI regression gate remains deferred and must not be marked done.
+- `SRC-001` is backfilled for this window by the Project source updates and `docs/goals/2026-06-05/P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION/` evidence.
+- Phase 11 / Phase 12 Supervisor / Orchestrator and final L5 release gate were not implemented by this window.
+- Broad API tests still contain legacy expectations that fake / default / graph-disabled question fallback persists a formal question; those tests are a deferred alignment gap, not evidence that fallback success is allowed.
+
+## P5-W1.fix.01 Question Planned Workflow Remediation
+
+- Manual / Codex audit found the previous `QAG-004` wording overstrong because Question had candidate metadata and fallback behavior in `use_cases.py`, but no dedicated production `apps/api/app/application/polish/agents/question/planned_workflow.py`.
+- `P5-W1.fix.01-QUESTION-PLANNED-WORKFLOW-REMEDIATION` corrects that by adding a real Phase 5 Question planned workflow component and wiring normal graph/direct question paths through it before handoff.
+- `QAG-004` remains `implemented_with_validation_blockers`, not `done`: focused Question business assertions pass, but pytest process exit is still blocked by the pre-existing repo-root `tmp` temp leak checker and `tests/api/test_polish_canonical_evidence.py::test_polish_question_and_feedback_context_include_canonical_assets` remains a deferred legacy alignment gap outside this remediation write scope.
+- Phase 5 remains C2 / L2 planned guarded workflow only. Phase 8 runtime, Phase 11 Supervisor / Orchestrator, and Phase 12 L5 release gate are not implemented by this remediation.
+
+## P5P6-W1.fix.02 Validation Blocker Remediation
+
+- `P5P6-W1.fix.02-VALIDATION-BLOCKER-REMEDIATION` resolves the two remaining validation blockers for this window without prompt, provider, DB, API, frontend, Phase 8 runtime, or Phase 11 / Phase 12 changes.
+- The legacy canonical-evidence test now asserts provider-unavailable Question fallback as a `VALIDATION_FAILED` `question_candidate` task, while still proving canonical asset refs, source support level, validation refs, context digest, and fallback-not-success metadata are present on the candidate.
+- The same test keeps Feedback coverage by using the recorded `question_candidate` payload as test context and confirming Feedback context includes canonical assets plus `feedback_candidate` fallback-not-success metadata.
+- Repo-root `tmp/` was identified as local goal/source-pack scratch material and moved out of the repository to `/tmp/aifi-repo-root-tmp-P5P6-W1.fix.02-20260605`; the temp leak checker was not weakened.
+- Current broad selector evidence is `300 passed, 323 deselected`; no business assertion failure remains for the scoped Question / Feedback / Agent / Handoff / Canonical / SourceSupport selector.
+- `QAG-004` status is now `validated_with_deferred_l5_runtime`: Phase 5 remains C2 / L2 planned guarded workflow, and L5 runtime / release completion remains deferred.

@@ -298,6 +298,16 @@ Done Criteria:
 - Candidate handoff。
 - Tests / Eval passed。
 
+P5P6-W1 Status:
+
+- `P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION` implemented a Phase 5 C2 / L2 planned guarded workflow bridge.
+- `P5-W1.fix.01-QUESTION-PLANNED-WORKFLOW-REMEDIATION` added the dedicated production `apps/api/app/application/polish/agents/question/planned_workflow.py` component after audit found the earlier Question planned workflow claim overstrong.
+- Question output is normalized to `question_candidate` before any formal write decision.
+- graph-disabled、fake transport、deterministic fallback 和 validation failed path 不再持久化正式题目，也不报告 generated success。
+- `P5P6-W1.fix.02-VALIDATION-BLOCKER-REMEDIATION` aligned the legacy canonical-evidence test to candidate-only semantics and cleared the broad API business failure.
+- Current Question validation evidence: canonical evidence focused test `1 passed`, Question graph integration `12 passed`, Question persistence handoff `15 passed`, Question phase1 refactor `64 passed`, broad selector `300 passed, 323 deselected`, and local question eval `3 passed / 0 failed`.
+- Phase 8 runtime、Phase 11 Supervisor / Orchestrator 和 Phase 12 L5 release gate 未实现。
+
 ## Phase 6
 
 Name:
@@ -334,6 +344,30 @@ Done Criteria:
 - next action policy。
 - HITL asset candidate。
 - Tests / Eval passed。
+
+P5P6-W1 Status:
+
+- `P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION` implemented a Phase 6 C3 / L2 planned guarded workflow handoff bridge.
+- Feedback success path records `feedback_candidate` refs and policy / validation / handoff metadata.
+- Asset update proposals are candidate-only and require `user_confirmation_required=true`; formal asset write remains blocked until user confirmation.
+- Current Feedback validation evidence: Feedback runtime `7 passed`, local feedback eval `5 passed / 0 failed`, broad selector `300 passed, 323 deselected`; Phase 9 CI eval gate remains deferred.
+- Phase 8 runtime、Phase 11 Supervisor / Orchestrator 和 Phase 12 L5 release gate 未实现。
+
+## P5P6-W1 L5 Foundation Scope Lock
+
+Status:
+
+- `polish_question_agent`: C2 / L2 planned guarded workflow。
+- `polish_feedback_agent`: C3 / L2 planned guarded workflow。
+- Project: `validated_with_deferred_l5_runtime` for P5/P6 L2 planned guarded workflow; L5 Foundation progress only, not L5 release。
+
+Non-claims:
+
+- 不声明 autonomous Agent。
+- 不声明 L5 done。
+- 不声明 Phase 8 runtime complete。
+- 不声明 Phase 9 CI eval gate complete。
+- 不声明 Phase 11 / Phase 12 implemented。
 
 ## Phase 7
 

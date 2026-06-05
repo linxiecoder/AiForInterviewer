@@ -27,11 +27,6 @@ from app.application.polish.progress_prompts import (
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion
 from app.application.polish.feedback_reserved import build_reserved_feedback_artifacts
-from app.application.polish.next_question_agent import (
-    NEXT_QUESTION_AGENT_PROMPT_VERSION,
-    NEXT_QUESTION_AGENT_SCHEMA_ID,
-    NEXT_QUESTION_AGENT_SCHEMA_VERSION,
-)
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
@@ -43,7 +38,7 @@ from app.application.polish.progress_evidence import (
     _normalize_resume_project_containers,
     _split_markdown_sections,
 )
-from app.application.llm.types import LlmTransportResult
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.auth.entities import CurrentActor
 from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.jobs.entities import Job, JobVersion
@@ -432,7 +427,7 @@ def test_polish_session_list_requires_authentication() -> None:
     assert body["error"]["code"] == "unauthenticated"
 
 
-def test_create_app_question_path_registers_facade_and_records_graph_fallback_metadata() -> None:
+def test_create_app_question_path_graph_disabled_fake_transport_returns_question_candidate() -> None:
     app = create_app(
         initialize_schema=True,
         db_settings=DbSettings(database_url="sqlite+pysqlite:///:memory:"),
@@ -464,19 +459,16 @@ def test_create_app_question_path_registers_facade_and_records_graph_fallback_me
     )
 
     assert status_code == 202
-    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    task_data = question_body["data"]
+    assert task_data["status"] == "validation_failed"
+    assert task_data["result_ref"]["trace_type"] == "question_candidate"
+    assert "graph_disabled" in task_data["validation_errors"]
+    assert "fake_transport" in task_data["validation_errors"]
+    assert "deterministic_fake_transport" in task_data["validation_errors"]
+    assert any(ref["resource_type"] == "question_candidate" for ref in task_data["candidate_refs"])
+    assert all(ref["resource_type"] != "question" for ref in task_data["candidate_refs"])
     _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
-    turn = next(turn for turn in detail_body["data"]["turns"] if turn["question_id"] == question_id)
-    metadata = turn["question_metadata"]
-    assert metadata["graph_fallback_reason"] == "graph_disabled"
-    assert metadata["fallback_reason"] == "graph_disabled"
-    assert metadata["graph_status"] == "disabled_fallback"
-    assert metadata["prompt_asset_version"] == NEXT_QUESTION_AGENT_PROMPT_VERSION
-    assert metadata["prompt_schema_id"] == NEXT_QUESTION_AGENT_SCHEMA_ID
-    assert metadata["prompt_schema_version"] == NEXT_QUESTION_AGENT_SCHEMA_VERSION
-    assert metadata["prompt_input_digest"].startswith("sha256:")
-    assert metadata["prompt_evidence_refs"]
-    assert metadata["prompt_safety_summary"]["input_data_untrusted"] is True
+    assert detail_body["data"]["turns"] == []
     for forbidden_key in (
         "surface_prompt",
         "raw_prompt",
@@ -489,8 +481,8 @@ def test_create_app_question_path_registers_facade_and_records_graph_fallback_me
         "provider_payload",
         "raw_completion",
     ):
-        assert forbidden_key not in _collect_keys(metadata)
-    serialized_values = "\n".join(_string_values(metadata)).lower()
+        assert forbidden_key not in _collect_keys(question_body)
+    serialized_values = "\n".join(_string_values(question_body)).lower()
     for forbidden_value in ("full resume", "full jd", "provider payload", "raw completion"):
         assert forbidden_value not in serialized_values
 
@@ -3356,7 +3348,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_payload["score_result"]["score_value"] == 82
     assert feedback_payload["reference_answer"]["sections"]
     assert feedback_payload["loss_points"]
-    assert feedback_payload["candidate_refs"] == []
+    _assert_feedback_candidate_refs(feedback_payload["candidate_refs"])
     assert feedback_payload["feedback_metadata"]["llm_called"] is True
     for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
         assert phase4_field in feedback_payload
@@ -3372,7 +3364,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
         ):
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
     assert feedback_payload["legacy_compatibility"]["feedback_text"] == feedback_payload["feedback_text"]
-    assert feedback_body["data"]["candidate_refs"] == []
+    _assert_feedback_candidate_refs(feedback_body["data"]["candidate_refs"])
     assert feedback_body["data"]["suggestion_refs"] == []
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(feedback_body)
@@ -3392,7 +3384,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     )
     structured_session_payload = structured_answer["feedback_payload"]
     assert structured_session_payload["status"] == "generated"
-    assert structured_session_payload["candidate_refs"] == []
+    _assert_feedback_candidate_refs(structured_session_payload["candidate_refs"])
     assert structured_session_payload["score_result"]["score_value"] == 82
     for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
         assert phase4_field in structured_session_payload
@@ -3427,7 +3419,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert retry_payload["answer_ref"]["resource_id"] == second_answer_id
     assert retry_payload["status"] == "generated"
     assert retry_payload["score_result"]["score_value"] == 82
-    assert retry_payload["candidate_refs"] == []
+    _assert_feedback_candidate_refs(retry_payload["candidate_refs"])
     assert retry_payload["feedback_metadata"]["llm_called"] is True
     json.dumps(retry_payload, ensure_ascii=False)
     retry_payload_keys = _collect_keys(retry_payload)
@@ -3570,7 +3562,7 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     payload = feedback_body["data"]["feedback_payload"]
     assert payload["status"] == "generated"
     assert payload["score_result"]["score_value"] == 82
-    assert payload["candidate_refs"] == []
+    _assert_feedback_candidate_refs(payload["candidate_refs"])
     assert payload["feedback_metadata"]["llm_called"] is True
     assert payload["same_question_effect"]["repeated_loss_point_ids"]
     assert payload["same_question_effect"]["next_retry_focus"]
@@ -4766,6 +4758,131 @@ class _RecordingPolishProgressTransport(FakeLlmTransport):
         return super().generate(request)
 
 
+class _ProviderStyleQuestionTransport:
+    def __init__(self) -> None:
+        self.calls: list[LlmTransportRequest] = []
+        self._fallback = FakeLlmTransport()
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.calls.append(request)
+        if request.task_type not in {"polish_question_generation", "polish_question_follow_up_generation"}:
+            return self._fallback.generate(request)
+
+        input_data = _api_question_request_input_data(request)
+        generation_policy = input_data["generation_policy"]
+        evidence_refs = tuple(input_data["evidence_refs"])
+        evidence_summaries = input_data.get("evidence_summaries") if isinstance(input_data.get("evidence_summaries"), list) else []
+        evidence_excerpt = next(
+            (
+                str(item.get("excerpt"))
+                for item in evidence_summaries
+                if isinstance(item, dict)
+                and str(item.get("source_type") or "").startswith("resume_")
+                and item.get("excerpt")
+            ),
+            None,
+        ) or next(
+            (
+                str(item.get("excerpt"))
+                for item in evidence_summaries
+                if isinstance(item, dict) and item.get("excerpt")
+            ),
+            "Built backend workflow automation.",
+        )
+        title = str(input_data.get("selected_node_title") or "当前训练节点")
+        capability = str(input_data.get("skill_dimension") or title)
+        follow_up = input_data.get("follow_up") if isinstance(input_data.get("follow_up"), dict) else {}
+        if input_data.get("generation_mode") == "follow_up":
+            question_text = (
+                f"你上一轮回答中提到「{follow_up.get('previous_answer', '上一轮回答')}」，"
+                f"现在围绕「{follow_up.get('target_dimension', '追问目标')}」继续追问："
+                f"请结合上一题背景、岗位/简历证据「{evidence_excerpt}」和反馈缺口，"
+                "说明你的具体判断、边界、失败处理、验证指标和关键取舍。"
+            )
+        elif input_data.get("source_support_level") == "adjacent_project_evidence":
+            question_text = (
+                f"如果要基于主要证据「{evidence_excerpt}」扩展到「{capability}」，"
+                "你会如何设计边界、异常处理、验证指标和关键取舍？"
+            )
+        else:
+            question_text = (
+                f"围绕「{title}」，请只基于主要证据「{evidence_excerpt}」展开："
+                f"先说明业务背景和关键技术链路，再说明异常处理或关键取舍，最后用验证指标证明你具备「{capability}」。"
+            )
+        return LlmTransportResult(
+            result={
+                "question_text": question_text,
+                "question_kind": generation_policy["question_kind"],
+                "focus_dimension": generation_policy["focus_dimension"],
+                "difficulty": "medium",
+                "skill_dimension": capability,
+                "expected_signal": "回答应引用证据，说明边界、取舍、失败处理、验证指标和复盘信号。",
+                "follow_ups": ["失败补偿如何触发？", "如何证明方案有效？"],
+                "scoring_rubric": [
+                    {"dimension": "grounding", "signals": ["引用证据", "不编造经历"]},
+                    {"dimension": "reasoning", "signals": ["说明边界", "说明验证指标"]},
+                ],
+                "missing_context": [],
+                "evidence_refs": list(evidence_refs),
+                "confidence": "high",
+                "clarification_needed": False,
+            },
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.HIGH,
+            low_confidence_flags=(),
+            trace_refs=("trace_api_provider_question",),
+            evidence_refs=evidence_refs,
+        )
+
+
+def _api_question_request_input_data(request: LlmTransportRequest) -> dict:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    input_data = bundle.get("input_data") if isinstance(bundle.get("input_data"), dict) else None
+    if input_data is not None:
+        return input_data
+    canonical_evidence = bundle.get("canonical_evidence") if isinstance(bundle.get("canonical_evidence"), dict) else {}
+    expected_contract = (
+        bundle.get("expected_output_contract")
+        if isinstance(bundle.get("expected_output_contract"), dict)
+        else {}
+    )
+    generation_policy = (
+        expected_contract.get("generation_policy")
+        if isinstance(expected_contract.get("generation_policy"), dict)
+        else {}
+    )
+    progress_node = bundle.get("progress_node") if isinstance(bundle.get("progress_node"), dict) else {}
+    history_summary = bundle.get("history_summary") if isinstance(bundle.get("history_summary"), dict) else {}
+    follow_up = history_summary.get("follow_up") if isinstance(history_summary.get("follow_up"), dict) else {}
+    result = {
+        "selected_node_title": progress_node.get("title"),
+        "skill_dimension": progress_node.get("expected_capability") or progress_node.get("title"),
+        "source_support_level": bundle.get("source_support_level"),
+        "generation_policy": {
+            "question_kind": generation_policy.get("question_kind") or "technical_chain_deep_dive",
+            "claim_mode": generation_policy.get("claim_mode") or "evidence_grounded",
+            "focus_dimension": generation_policy.get("focus_dimension")
+            or generation_policy.get("question_kind")
+            or "technical_chain_deep_dive",
+        },
+        "evidence_refs": canonical_evidence.get("evidence_refs")
+        if isinstance(canonical_evidence.get("evidence_refs"), list)
+        else [],
+        "evidence_summaries": canonical_evidence.get("evidence_summaries")
+        if isinstance(canonical_evidence.get("evidence_summaries"), list)
+        else [],
+    }
+    if follow_up:
+        result["generation_mode"] = "follow_up"
+        result["follow_up"] = follow_up
+    return result
+
+
+def _assert_feedback_candidate_refs(candidate_refs: list[dict]) -> None:
+    assert any(ref["resource_type"] == "feedback_candidate" for ref in candidate_refs)
+    assert all(ref["resource_type"] != "asset" for ref in candidate_refs)
+
+
 class _QuestionGroundingSoftWarningTransport(FakeLlmTransport):
     QUESTION_TEXT = "请提供一个您亲身参与的项目，该项目涉及分布式锁与事务消息的最终一致性设计，并说明故障恢复策略。"
 
@@ -5397,7 +5514,7 @@ def _isolated_polish_app(
     llm_transport=None,
 ) -> FastAPI:
     app = FastAPI()
-    resolved_transport = llm_transport or FakeLlmTransport()
+    resolved_transport = llm_transport or _ProviderStyleQuestionTransport()
     app.state.llm_transport = resolved_transport
     app.add_exception_handler(ApiHttpError, api_http_error_handler)
     app.include_router(polish_router, prefix="/api/v1")

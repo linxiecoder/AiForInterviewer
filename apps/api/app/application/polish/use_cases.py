@@ -56,6 +56,12 @@ from app.application.polish.entities import (
     PolishTopic,
 )
 from app.application.polish.feedback_application_service import PolishFeedbackApplicationService
+from app.application.polish.agents.feedback import build_feedback_planned_handoff
+from app.application.polish.agents.question import (
+    build_direct_question_agent_run_id,
+    build_question_candidate_validation_task,
+    run_question_planned_workflow,
+)
 from app.application.polish.feedback_generation_service import (
     FeedbackGenerationContext,
     FeedbackGenerationService,
@@ -579,6 +585,35 @@ class _PolishUseCaseOperations:
                     runtime_policy=runtime_policy,
                 )
                 if candidate_payload is not None:
+                    workflow_result = run_question_planned_workflow(
+                        owner_id=command.owner_id,
+                        session_id=command.session_id,
+                        ai_task_id=graph_status.ai_task_id,
+                        agent_run_id=graph_status.agent_run_id,
+                        candidate_payload=candidate_payload,
+                        progress_context=progress_context,
+                        requested_progress_node_ref=requested_progress_node_ref,
+                        graph_fallback_reason=None,
+                        trace_refs=graph_status.trace_refs,
+                        follow_up_context=follow_up_context,
+                        runtime_policy=runtime_policy,
+                    )
+                    candidate_payload = workflow_result.candidate
+                    if workflow_result.validation_errors:
+                        task = build_question_candidate_validation_task(
+                            ai_task_id=graph_status.ai_task_id,
+                            workflow_result=workflow_result,
+                            validation_errors=None,
+                            created_at=now,
+                            runtime_policy=runtime_policy,
+                        )
+                        self._polish_repository.add_task(
+                            task,
+                            owner_id=command.owner_id,
+                            actor_id=command.actor_id,
+                            target_ref_id=command.session_id,
+                        )
+                        return ApplicationResult(value=task)
                     try:
                         plan = build_question_result_write_plan(
                             owner_id=command.owner_id,
@@ -588,7 +623,7 @@ class _PolishUseCaseOperations:
                             agent_run_id=graph_status.agent_run_id,
                             candidate=candidate_payload,
                             progress_node_ref=requested_progress_node_ref,
-                            trace_refs=graph_status.trace_refs,
+                            trace_refs=workflow_result.trace_refs,
                             contract_ids=runtime_policy.contract_ids,
                         )
                         write_result = AgentPersistenceHandoff().write_question_result(
@@ -596,10 +631,11 @@ class _PolishUseCaseOperations:
                             question_repository=self._polish_repository,
                             now=now,
                         )
-                    except RuntimeValidationError:
-                        task = _polish_question_graph_validation_failed_task_status(
-                            graph_status,
-                            requested_progress_node_ref=requested_progress_node_ref,
+                    except RuntimeValidationError as exc:
+                        task = build_question_candidate_validation_task(
+                            ai_task_id=graph_status.ai_task_id,
+                            workflow_result=workflow_result,
+                            validation_errors=(str(exc),),
                             created_at=now,
                             runtime_policy=runtime_policy,
                         )
@@ -650,7 +686,8 @@ class _PolishUseCaseOperations:
                 return ApplicationResult(value=task)
 
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
-        question_id = generate_resource_id(ResourceIdPrefix.QUESTION)
+        if graph_fallback_reason is None and self._ai_orchestration_facade is None:
+            graph_fallback_reason = "agent_facade_absent"
         question_generation_result = self._question_generation_service.generate(
             session=session,
             context=progress_context,
@@ -720,40 +757,89 @@ class _PolishUseCaseOperations:
                 question_metadata["follow_up_reason"] = "business_follow_up_request"
             if not question_metadata.get("follow_up_target_dimension"):
                 question_metadata["follow_up_target_dimension"] = question_metadata["focus_dimension"]
-        question = PolishQuestion(
-            question_id=question_id,
+        question_draft = replace(question_draft, question_metadata=question_metadata)
+        agent_run_id = build_direct_question_agent_run_id(
             owner_id=command.owner_id,
-            actor_id=command.actor_id,
             session_id=command.session_id,
             ai_task_id=task_id,
-            question_text=question_draft.question_text,
-            question_sources=question_draft.question_sources,
-            progress_node_ref=question_draft.progress_node_ref,
-            evidence_refs=question_draft.evidence_refs,
-            context_digest=question_draft.context_digest,
-            question_metadata=question_metadata,
-            status=QUESTION_STATUS_GENERATED,
-            created_at=now,
-            updated_at=now,
+            progress_node_ref=question_draft.progress_node_ref or requested_progress_node_ref,
         )
-        task = PolishTaskStatus(
+        workflow_result = run_question_planned_workflow(
+            owner_id=command.owner_id,
+            session_id=command.session_id,
             ai_task_id=task_id,
-            task_type=runtime_policy.task_type,
-            status=AiTaskStatus.SUCCEEDED,
-            contract_ids=runtime_policy.contract_ids,
-            retryable=False,
-            result_ref=TraceRef(trace_ref_id=question_id, trace_type="question", created_at=now),
-            user_visible_status="题目已生成",
-            candidate_refs=(
-                (ResourceRef(resource_type="question", resource_id=question_id),)
-                + ((ResourceRef(resource_type="progress_node", resource_id=question_draft.progress_node_ref),) if question_draft.progress_node_ref is not None else ())
-                + tuple(
-                    ResourceRef(resource_type="evidence", resource_id=evidence_ref)
-                    for evidence_ref in question_draft.evidence_refs
-                )
-            ),
+            agent_run_id=agent_run_id,
+            generation_result=replace(question_generation_result, draft=question_draft),
+            progress_context=progress_context,
+            requested_progress_node_ref=requested_progress_node_ref,
+            graph_fallback_reason=graph_fallback_reason,
+            follow_up_context=follow_up_context,
+            runtime_policy=runtime_policy,
         )
-        self._polish_repository.add_question(question)
+        candidate_payload = workflow_result.candidate
+        if workflow_result.validation_errors:
+            task = build_question_candidate_validation_task(
+                ai_task_id=task_id,
+                workflow_result=workflow_result,
+                validation_errors=None,
+                created_at=now,
+                runtime_policy=runtime_policy,
+            )
+            self._polish_repository.add_task(
+                task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.session_id,
+            )
+            return ApplicationResult(value=task)
+        try:
+            plan = build_question_result_write_plan(
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                session_id=command.session_id,
+                ai_task_id=task_id,
+                agent_run_id=agent_run_id,
+                candidate=candidate_payload,
+                progress_node_ref=requested_progress_node_ref,
+                trace_refs=workflow_result.trace_refs,
+                contract_ids=runtime_policy.contract_ids,
+            )
+            write_result = AgentPersistenceHandoff().write_question_result(
+                plan,
+                question_repository=self._polish_repository,
+                now=now,
+            )
+        except RuntimeValidationError as exc:
+            task = build_question_candidate_validation_task(
+                ai_task_id=task_id,
+                workflow_result=workflow_result,
+                validation_errors=(str(exc),),
+                created_at=now,
+                runtime_policy=runtime_policy,
+            )
+            self._polish_repository.add_task(
+                task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.session_id,
+            )
+            return ApplicationResult(value=task)
+        except RuntimePolicyError:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Polish question candidate handoff blocked",
+                    details={"reason": "candidate_handoff_policy_blocked"},
+                )
+            )
+        if write_result is None:
+            return ApplicationResult(
+                error=DomainError(
+                    code="generation_failed",
+                    message="Polish question candidate handoff failed",
+                )
+            )
+        task = write_result.task_status
         self._polish_repository.add_task(
             task,
             owner_id=command.owner_id,
@@ -1004,6 +1090,14 @@ class _PolishUseCaseOperations:
                 answer_id=answer.answer_id,
                 feedback_id=feedback_id,
             )
+            planned_feedback_handoff = build_feedback_planned_handoff(
+                payload=payload,
+                generation_result=generation_result,
+                context=generation_context,
+                task_id=task_id,
+                feedback_id=feedback_id,
+            )
+            payload = planned_feedback_handoff.payload
             feedback = PolishFeedback(
                 feedback_id=feedback_id,
                 owner_id=command.owner_id,
@@ -1025,6 +1119,7 @@ class _PolishUseCaseOperations:
                 retryable=False,
                 result_ref=TraceRef(trace_ref_id=feedback_id, trace_type="feedback", created_at=now),
                 user_visible_status="反馈已生成",
+                candidate_refs=planned_feedback_handoff.task_candidate_refs,
             )
             self._polish_repository.add_feedback(feedback)
             self._polish_repository.add_task(
@@ -2496,6 +2591,7 @@ def _failed_feedback_payload_for_storage(
 
 
 def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:
+    payload = _feedback_payload_from_summary(feedback.feedback_summary)
     return PolishTaskStatus(
         ai_task_id=feedback.ai_task_id,
         task_type=POLISH_FEEDBACK_TASK_TYPE,
@@ -2508,12 +2604,30 @@ def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskSta
             created_at=feedback.created_at,
         ),
         user_visible_status="反馈已存在",
+        candidate_refs=_feedback_candidate_refs_from_payload(payload),
     )
 
 
 def _has_generated_feedback_payload(feedback: PolishFeedback) -> bool:
     payload = _feedback_payload_from_summary(feedback.feedback_summary)
     return isinstance(payload, dict) and payload.get("status") == "generated"
+
+
+def _feedback_candidate_refs_from_payload(payload: object) -> tuple[ResourceRef, ...]:
+    if not isinstance(payload, dict):
+        return ()
+    refs = payload.get("candidate_refs")
+    if not isinstance(refs, (list, tuple)):
+        return ()
+    result: list[ResourceRef] = []
+    for item in refs:
+        if not isinstance(item, dict):
+            continue
+        resource_type = str(item.get("resource_type") or "").strip()
+        resource_id = str(item.get("resource_id") or "").strip()
+        if resource_type in {"feedback_candidate", "asset_update_candidate"} and resource_id:
+            result.append(ResourceRef(resource_type=resource_type, resource_id=resource_id))
+    return tuple(result)
 
 
 def _follow_up_excerpt(answer_text: str) -> str:

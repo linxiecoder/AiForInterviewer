@@ -265,3 +265,20 @@ Decision:
 Recommendation:
 
 执行 Phase 0.1 Source Backfill 后再进入 Phase 1。
+
+## DEC-013 P5/P6 Planned Workflow Maturity Boundary
+
+Status: confirmed
+
+Decision:
+
+`P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION` 只实现 Phase 5 / Phase 6 的 C2 / C3 L2 planned guarded workflow：
+
+- `polish_question_agent` 输出 `question_candidate`；fallback、fake、graph-disabled 或 validation failed 不持久化正式题目。
+- `polish_feedback_agent` 输出 `feedback_candidate` / `asset_update_candidate`；资产更新候选必须 `user_confirmation_required=true`，且不直接写正式资产。
+- Formal write 仍只能经 Application Service + Domain Policy + Handoff。
+- 本窗口只推进 L5 Foundation，不实现 Phase 8 runtime、Phase 11 Supervisor / Orchestrator 或 Phase 12 L5 release gate。
+
+Recommendation:
+
+后续若要接入 AgentExecutor runtime、跨 Agent orchestration、CI eval gate 或 L5 release gate，必须分别进入 Phase 8 / Phase 9 / Phase 11 / Phase 12 的独立 scope lock。

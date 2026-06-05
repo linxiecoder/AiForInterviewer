@@ -19,6 +19,7 @@ from app.application.llm.errors import LlmTransportUnavailableError
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.commands import CreatePolishQuestionTaskCommand
 from app.application.polish.entities import PolishAnswer, PolishFeedback, PolishQuestion, PolishSession, PolishTaskStatus
+import app.application.polish.use_cases as polish_use_cases_module
 from app.application.polish.question_generation_policy import (
     QuestionGenerationRuntimePolicy,
     QuestionGenerationRuntimePolicyResolver,
@@ -49,10 +50,44 @@ def test_create_question_task_uses_direct_service_when_facade_absent() -> None:
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.SUCCEEDED
-    assert result.value.result_ref.trace_type == "question"
-    assert len(repository.questions) == 1
-    assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("agent_facade_absent", "not_configured", "deterministic_degraded_generation"),
+    )
+
+
+def test_create_question_task_invokes_question_planned_workflow(monkeypatch: Any) -> None:
+    calls: list[dict[str, Any]] = []
+    original = polish_use_cases_module.run_question_planned_workflow
+
+    def recording_workflow(**kwargs: Any) -> Any:
+        workflow_result = original(**kwargs)
+        calls.append({"kwargs": kwargs, "result": workflow_result})
+        return workflow_result
+
+    monkeypatch.setattr(polish_use_cases_module, "run_question_planned_workflow", recording_workflow)
+    use_cases, repository = _use_cases(ai_orchestration_facade=None)
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert calls
+    call = calls[0]["kwargs"]
+    workflow_result = calls[0]["result"]
+    assert call["graph_fallback_reason"] == "agent_facade_absent"
+    assert call["generation_result"].draft is not None
+    metadata = workflow_result.candidate["question_metadata"]
+    assert metadata["planned_workflow"] == "phase5_question_agent_l2"
+    assert metadata["candidate_output"] == "question_candidate"
+    assert metadata["source_support_summary"]
+    assert metadata["grounding_policy_result"]
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("agent_facade_absent", "not_configured", "deterministic_degraded_generation"),
+    )
 
 
 def test_create_question_task_uses_direct_service_when_graph_disabled() -> None:
@@ -63,11 +98,12 @@ def test_create_question_task_uses_direct_service_when_graph_disabled() -> None:
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.SUCCEEDED
-    assert result.value.result_ref.trace_type == "question"
     assert len(facade.calls) == 1
-    assert len(repository.questions) == 1
-    assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("graph_disabled", "not_configured", "deterministic_degraded_generation"),
+    )
 
 
 def test_create_question_task_starts_graph_when_facade_enabled() -> None:
@@ -128,15 +164,11 @@ def test_create_question_task_persists_in_memory_runtime_agent_candidate_payload
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.SUCCEEDED
-    assert result.value.result_ref.trace_type == "question"
-    assert len(repository.questions) == 1
-    assert repository.questions[0].question_id == result.value.result_ref.trace_ref_id
-    assert repository.questions[0].ai_task_id == result.value.ai_task_id
-    assert repository.questions[0].question_metadata["llm_generation_mode"] == "deterministic_agent_fallback"
-    assert repository.questions[0].question_metadata["fallback_reason"] == "provider_disabled_deterministic_drafting_tool"
-    assert repository.questions[0].question_metadata["phase_results"]
-    assert repository.questions[0].question_metadata["tool_results"]
+    _assert_question_candidate_validation_task(
+        result.value,
+        repository,
+        expected_errors=("provider_disabled_deterministic_drafting_tool", "deterministic_agent_fallback"),
+    )
     assert blocker.calls == 0
 
     agent_run_ref = next(ref for ref in result.value.candidate_refs if ref.resource_type == "agent_run")
@@ -146,7 +178,7 @@ def test_create_question_task_persists_in_memory_runtime_agent_candidate_payload
     assert any(ref.startswith("question_candidate_ref_") for ref in status.output_refs)
 
 
-def test_create_question_task_provider_enabled_graph_uses_transport_and_repository_context() -> None:
+def test_create_question_task_provider_enabled_graph_blocks_ungrounded_formal_write() -> None:
     flags = _enabled_question_graph_flags(provider_enabled=True)
     transport = _RecordingQuestionProviderTransport()
     runtime = InMemoryLangGraphRuntime(flag_resolver=flags, polish_question_llm_transport=transport)
@@ -163,8 +195,13 @@ def test_create_question_task_provider_enabled_graph_uses_transport_and_reposito
 
     assert result.is_success
     assert result.value is not None
-    assert result.value.status == AiTaskStatus.SUCCEEDED
-    assert len(repository.questions) == 1
+    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert result.value.result_ref.trace_type == "question_candidate"
+    assert result.value.validation_errors == ("question candidate quality gate is not accepted",)
+    resource_types = {ref.resource_type for ref in result.value.candidate_refs}
+    assert {"agent_run", "question_candidate", "validation_result", "trace"} <= resource_types
+    assert "question" not in resource_types
+    assert repository.questions == []
     assert blocker.calls == 0
     assert len(transport.requests) == 1
     request = transport.requests[0]
@@ -181,14 +218,6 @@ def test_create_question_task_provider_enabled_graph_uses_transport_and_reposito
         "job_gap_only",
         "insufficient_context",
     }
-
-    metadata = repository.questions[0].question_metadata
-    assert metadata["llm_generation_mode"] == "agent_provider_path"
-    assert metadata["provider_status"] == "enabled"
-    assert metadata["fallback_reason"] is None
-    assert metadata["context_source"] == "use_case_repository_snapshot"
-    assert metadata["provider_calls"] == 1
-    assert "deterministic" not in metadata["llm_generation_mode"]
 
 
 def test_create_question_task_provider_failure_does_not_create_success_question() -> None:
@@ -308,6 +337,24 @@ def test_no_langgraph_import_in_application_polish_path() -> None:
     )
 
     assert violations == []
+
+
+def _assert_question_candidate_validation_task(
+    task: PolishTaskStatus,
+    repository: "_PolishRepository",
+    *,
+    expected_errors: tuple[str, ...],
+) -> None:
+    assert task.status == AiTaskStatus.VALIDATION_FAILED
+    assert task.result_ref.trace_type == "question_candidate"
+    assert task.user_visible_status == "题目生成降级为候选，未写入正式题目"
+    assert set(expected_errors) <= set(task.validation_errors)
+    resource_types = {ref.resource_type for ref in task.candidate_refs}
+    assert {"agent_run", "question_candidate", "progress_node", "evidence", "trace"} <= resource_types
+    assert "question" not in resource_types
+    assert repository.questions == []
+    assert repository.tasks == [task]
+    assert repository.task_targets == [SESSION_ID]
 
 
 class _FakeQuestionFacade:

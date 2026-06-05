@@ -166,6 +166,7 @@ def test_polish_use_cases_facade_syncs_replaced_question_generation_service() ->
 def test_polish_use_cases_facade_syncs_replaced_feedback_generation_service() -> None:
     feedback_generation_service = _FeedbackGenerationServiceStub()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=_RecordingQuestionTransport())
     use_cases._feedback_generation_service = feedback_generation_service
     question_result = use_cases.create_question_task(_command())
     assert question_result.is_success
@@ -208,6 +209,10 @@ def test_polish_use_cases_facade_syncs_replaced_feedback_generation_service() ->
     assert result.is_success
     assert result.value is not None
     assert result.value.status == AiTaskStatus.SUCCEEDED
+    feedback_candidate_ref = next(
+        ref for ref in result.value.candidate_refs if ref.resource_type == "feedback_candidate"
+    )
+    assert not any(ref.resource_type == "asset" for ref in result.value.candidate_refs)
     assert len(feedback_generation_service.contexts) == 1
     assert feedback_generation_service.contexts[0].answer_id == answer.answer_id
     assert len(repository.feedbacks) == 1
@@ -218,6 +223,18 @@ def test_polish_use_cases_facade_syncs_replaced_feedback_generation_service() ->
     assert feedback_payload["feedback_metadata"]["llm_called"] is True
     assert feedback_payload["feedback_metadata"]["generated"] is True
     assert feedback_payload["feedback_metadata"]["task_type"] == "polish_feedback_generation"
+    assert feedback_payload["feedback_metadata"]["planned_workflow"] == "phase6_feedback_agent_l2"
+    assert feedback_payload["feedback_metadata"]["candidate_output"] == "feedback_candidate"
+    assert feedback_payload["feedback_metadata"]["handoff_contract"] == "handoff.polish_feedback_agent.v1"
+    assert feedback_payload["feedback_metadata"]["candidate_ref"] == feedback_candidate_ref.resource_id
+    assert feedback_payload["feedback_metadata"]["formal_write_boundary"] == "Application Service -> Feedback planned handoff"
+    assert feedback_payload["feedback_metadata"]["asset_update_formal_write_performed"] is False
+    assert feedback_payload["candidate_refs"][0]["resource_type"] == "feedback_candidate"
+    assert feedback_payload["candidate_refs"][0]["resource_id"] == feedback_candidate_ref.resource_id
+    assert "asset_consistency_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
+    assert "answer_coverage_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
+    assert "answer_change_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
+    assert "feedback_next_action_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
 
     detail = use_cases.get_session(GetPolishSessionQuery(owner_id=OWNER_ID, session_id=SESSION_ID))
 
@@ -1761,7 +1778,9 @@ def test_question_task_persists_validation_failed_task_for_invalid_llm_output() 
 def test_follow_up_question_task_uses_llm_transport_request() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -1799,7 +1818,9 @@ def test_follow_up_question_task_uses_llm_transport_request() -> None:
 def test_follow_up_question_task_builds_missing_point_focus_matrix_and_compact_request() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -1888,7 +1909,9 @@ def test_follow_up_question_task_builds_missing_point_focus_matrix_and_compact_r
 def test_follow_up_question_task_filters_weak_points_already_covered() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -1941,7 +1964,9 @@ def test_follow_up_question_task_filters_weak_points_already_covered() -> None:
 def test_follow_up_question_task_skips_fixed_loss_focus_and_targets_regression() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -1999,7 +2024,9 @@ def test_follow_up_question_task_skips_fixed_loss_focus_and_targets_regression()
 def test_follow_up_question_task_prioritizes_asset_conflict_and_blocks_next_question_action() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -2067,7 +2094,9 @@ def test_follow_up_question_task_prioritizes_asset_conflict_and_blocks_next_ques
 def test_follow_up_question_task_returns_next_question_decision_when_focuses_are_complete() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -2119,7 +2148,9 @@ def test_follow_up_question_task_returns_next_question_decision_when_focuses_are
 def test_follow_up_question_task_does_not_repeat_existing_focus_key() -> None:
     transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -2171,7 +2202,9 @@ def test_follow_up_question_task_does_not_repeat_existing_focus_key() -> None:
 
 def test_follow_up_question_task_grounding_blocking_does_not_persist_question() -> None:
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -2219,7 +2252,7 @@ def test_follow_up_question_service_blocks_factual_question_with_empty_evidence_
 def test_follow_up_question_task_parse_failure_persists_failed_task_without_question() -> None:
     valid_transport = _RecordingQuestionTransport()
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=valid_transport)
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -2334,6 +2367,9 @@ def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -
 
 def test_question_task_metadata_uses_business_state_not_prototype_markers() -> None:
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
 
     result = use_cases.create_question_task(_command())
 
@@ -2341,42 +2377,26 @@ def test_question_task_metadata_uses_business_state_not_prototype_markers() -> N
     assert repository.questions
     metadata = repository.questions[0].question_metadata
     serialized_metadata = json.dumps(metadata, ensure_ascii=False)
-    assert metadata["llm_generation_mode"] == "deterministic_degraded_generation"
-    assert metadata["fallback_reason"] == "llm_transport_unavailable"
+    assert metadata["llm_generation_mode"] == "provider_structured_json"
     assert metadata["focus_dimension"] != "phase1_blueprint"
     assert not metadata["template_signature"].startswith("tpl:phase1_blueprint:")
     assert "phase1" not in serialized_metadata
     assert "local_blueprint_renderer" not in serialized_metadata
 
 
-def test_question_task_default_policy_marks_fallback_source_and_resolution_context() -> None:
+def test_question_task_default_policy_fallback_returns_candidate_validation_task() -> None:
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
 
     result = use_cases.create_question_task(_command())
 
     assert result.is_success
-    assert repository.questions
-    metadata = repository.questions[0].question_metadata
-    assert metadata["prompt_policy_source"] == "fallback_default"
-    assert metadata["prompt_policy_source_type"] == "fallback_default"
-    assert metadata["prompt_policy_fallback"] is True
-    context = metadata["prompt_policy_resolution_context"]
-    assert context["owner_id"] == OWNER_ID
-    assert context["actor_id"] == ACTOR_ID
-    assert context["tenant_id"] == OWNER_ID
-    assert context["session_id"] == SESSION_ID
-    assert context["job_id"] == "job_pr5_q2"
-    assert context["job_version_id"] == "jobver_pr5_q2"
-    assert context["generation_mode"] == "new_question"
-    assert context["requested_progress_node_ref"] == NODE_REF
-    item_sources = metadata["prompt_policy_item_sources"]
-    assert item_sources["contract_ids"] == {
-        "source": "python_default",
-        "version": "polish_question_generation_policy.v1",
-        "override": "none",
-    }
-    assert item_sources["prompt_schema_id"]["source"] == "python_default"
-    assert item_sources["source_priority_by_purpose"]["override"] == "none"
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert result.value.result_ref.trace_type == "question_candidate"
+    assert {"agent_facade_absent", "not_configured", "deterministic_degraded_generation"} <= set(
+        result.value.validation_errors
+    )
+    assert repository.questions == []
 
 
 def test_question_task_uses_custom_policy_resolver_for_new_question() -> None:
@@ -2407,6 +2427,9 @@ def test_question_task_uses_custom_policy_resolver_for_new_question() -> None:
         ai_orchestration_facade=None,
         question_generation_policy_resolver=resolver,
     )
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
 
     result = use_cases.create_question_task(_command())
 
@@ -2436,6 +2459,9 @@ def test_question_task_status_uses_injected_runtime_policy_contract_ids() -> Non
         source="test_dependency_injection",
     )
     use_cases, repository = _use_cases(ai_orchestration_facade=None, question_generation_policy=policy)
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
 
     result = use_cases.create_question_task(_command())
 
@@ -2472,7 +2498,9 @@ def test_follow_up_question_task_uses_custom_policy_resolver() -> None:
         ai_orchestration_facade=None,
         question_generation_policy_resolver=resolver,
     )
-    use_cases._question_generation_service = QuestionGenerationService()
+    use_cases._question_generation_service = QuestionGenerationService(
+        llm_transport=_RecordingQuestionTransport()
+    )
     parent_result = use_cases.create_question_task(_command())
     assert parent_result.is_success
     parent_question = repository.questions[0]
@@ -2558,6 +2586,7 @@ def test_question_task_blocks_unsafe_llm_question_text() -> None:
 
 def test_phase2_feedback_task_without_provider_returns_generation_failed_without_reserved_success() -> None:
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
+    use_cases._question_generation_service = QuestionGenerationService(llm_transport=_RecordingQuestionTransport())
     question_result = use_cases.create_question_task(_command())
     assert question_result.is_success
     question = repository.questions[0]

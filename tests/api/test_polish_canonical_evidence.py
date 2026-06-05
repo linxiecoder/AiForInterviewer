@@ -5,9 +5,10 @@ from typing import Any
 
 from app.application.polish.canonical_evidence import CanonicalEvidenceService
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
-from app.application.polish.entities import PolishAnswer
+from app.application.polish.entities import PolishAnswer, PolishQuestion
 from app.application.polish.feedback_generation_service import FeedbackGenerationResult
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+import app.application.polish.use_cases as polish_use_cases_module
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 
@@ -171,7 +172,7 @@ def test_canonical_evidence_service_limits_items_and_digest_tracks_asset_summary
     assert changed_version_pack["context_digest"] != pack["context_digest"]
 
 
-def test_polish_question_and_feedback_context_include_canonical_assets() -> None:
+def test_polish_question_and_feedback_context_include_canonical_assets(monkeypatch: Any) -> None:
     repository = _AssetRepository(
         [
             _asset(
@@ -185,6 +186,15 @@ def test_polish_question_and_feedback_context_include_canonical_assets() -> None
             )
         ]
     )
+    question_workflow_results: list[Any] = []
+    original_question_workflow = polish_use_cases_module.run_question_planned_workflow
+
+    def recording_question_workflow(**kwargs: Any) -> Any:
+        workflow_result = original_question_workflow(**kwargs)
+        question_workflow_results.append(workflow_result)
+        return workflow_result
+
+    monkeypatch.setattr(polish_use_cases_module, "run_question_planned_workflow", recording_question_workflow)
     feedback_generation_service = _FeedbackGenerationServiceStub()
     use_cases, polish_repository = _use_cases(ai_orchestration_facade=None)
     use_cases._canonical_evidence_service = CanonicalEvidenceService(repository)
@@ -192,11 +202,45 @@ def test_polish_question_and_feedback_context_include_canonical_assets() -> None
 
     question_result = use_cases.create_question_task(_command())
     assert question_result.is_success
-    question = polish_repository.questions[0]
-    assert question.question_metadata["canonical_project_assets_available"] is True
-    assert question.question_metadata["canonical_project_asset_refs"] == ["asset_backend_workflow"]
-    assert question.question_metadata["source_support_level"] == "direct_project_evidence"
-    assert question.context_digest != "ctx_pr5_q2"
+    assert question_result.value is not None
+    assert question_result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert question_result.value.result_ref.trace_type == "question_candidate"
+    assert polish_repository.questions == []
+    assert polish_repository.tasks == [question_result.value]
+    assert question_workflow_results
+
+    question_workflow_result = question_workflow_results[0]
+    question_candidate = question_workflow_result.candidate
+    question_metadata = question_candidate["question_metadata"]
+    assert question_result.value.result_ref.trace_ref_id == question_workflow_result.question_candidate_ref
+    assert any(
+        ref.resource_type == "question_candidate"
+        and ref.resource_id == question_workflow_result.question_candidate_ref
+        for ref in question_result.value.candidate_refs
+    )
+    assert set(question_result.value.validation_errors) >= {
+        "agent_facade_absent",
+        "not_configured",
+        "deterministic_degraded_generation",
+    }
+    assert question_metadata["planned_workflow"] == "phase5_question_agent_l2"
+    assert question_metadata["candidate_output"] == "question_candidate"
+    assert question_metadata["fallback_reported_as_generated_success"] is False
+    assert question_metadata["canonical_project_assets_available"] is True
+    assert question_metadata["canonical_project_asset_refs"] == ["asset_backend_workflow"]
+    assert question_metadata["source_support_level"] == "direct_project_evidence"
+    assert "validation_ref_source_support" in question_metadata["validation_refs"]
+    assert "validation_ref_question_grounding" in question_metadata["validation_refs"]
+    assert question_candidate["context_digest"] != "ctx_pr5_q2"
+
+    question = _question_from_candidate(
+        question_candidate,
+        owner_id=OWNER_ID,
+        actor_id=ACTOR_ID,
+        session_id=SESSION_ID,
+        ai_task_id=question_result.value.ai_task_id,
+    )
+    polish_repository.questions = [question]
 
     answer = PolishAnswer(
         answer_id="answer_with_canonical_asset",
@@ -242,6 +286,8 @@ def test_polish_question_and_feedback_context_include_canonical_assets() -> None
     assert feedback_context.project_asset_summaries[0]["asset_id"] == "asset_backend_workflow"
     feedback_payload = json.loads(polish_repository.feedbacks[0].feedback_summary)
     assert feedback_payload["status"] == "generated"
+    assert feedback_payload["feedback_metadata"]["candidate_output"] == "feedback_candidate"
+    assert feedback_payload["feedback_metadata"]["fallback_reported_as_generated_success"] is False
 
 
 def test_feedback_prompt_asset_compacts_only_confirmed_canonical_project_assets() -> None:
@@ -369,6 +415,34 @@ class _AssetRepository:
             ),
             None,
         )
+
+
+def _question_from_candidate(
+    candidate: dict[str, Any],
+    *,
+    owner_id: str,
+    actor_id: str,
+    session_id: str,
+    ai_task_id: str,
+) -> PolishQuestion:
+    now = utc_now()
+    return PolishQuestion(
+        question_id=str(candidate["candidate_ref"]),
+        owner_id=owner_id,
+        actor_id=actor_id,
+        session_id=session_id,
+        ai_task_id=ai_task_id,
+        question_text=str(candidate["question_text"]),
+        status="candidate_context_for_feedback_test",
+        created_at=now,
+        updated_at=now,
+        progress_node_ref=str(candidate.get("progress_node_ref") or "") or None,
+        evidence_refs=tuple(str(ref) for ref in candidate.get("evidence_refs", ()) if str(ref).strip()),
+        context_digest=str(candidate.get("context_digest") or "") or None,
+        question_metadata=(
+            dict(candidate["question_metadata"]) if isinstance(candidate.get("question_metadata"), dict) else {}
+        ),
+    )
 
 
 def _asset(

@@ -117,3 +117,16 @@ permalink: ai-for-interviewer/docs/goals
 - [P4_W1_FIX01_AGENT_CATALOG_HYGIENE_EXECUTION_REPORT.md](2026-06-05/P4_W1_FIX01_AGENT_CATALOG_HYGIENE_EXECUTION_REPORT.md)：P4-W1.fix.01 Agent Catalog Hygiene execution report；记录 catalog decomposition、version separation、SkillDefinition contract hygiene、验证和 forbidden-scope audit。
 - [PHASE_4_CLOSEOUT_ASSESSMENT.md](2026-06-05/PHASE_4_CLOSEOUT_ASSESSMENT.md)：Phase 4 closeout assessment；状态为 `complete_with_deferred_gaps`，runtime/eval gates 仍 deferred。
 - [PHASE_4_GAP_REGISTER.md](2026-06-05/PHASE_4_GAP_REGISTER.md)：Phase 4 deferred gap register；记录 Phase 5/6/8/9 后续边界和既有 provider xfail gap。
+
+### 2026-06-05 / P5P6-W1
+
+- [P5P6_W1_SCOPE_LOCK.md](2026-06-05/P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION/P5P6_W1_SCOPE_LOCK.md)：P5P6-W1 Controller scope lock；授权 Phase 5 / Phase 6 C2 / C3 L2 planned guarded workflow，禁止 Phase 8 / Phase 11 / Phase 12 和 prompt/provider/API/DB 行为改动。
+- [P5P6_W1_CLOSEOUT_REPORT.md](2026-06-05/P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION/P5P6_W1_CLOSEOUT_REPORT.md)：P5P6-W1 closeout report；记录 question_candidate / feedback_candidate planned handoff、验证证据、source backfill 和 deferred gaps。
+
+### 2026-06-05 / P5-W1.fix.01
+
+- [P5_W1_FIX01_CLOSEOUT_REPORT.md](2026-06-05/P5-W1.fix.01-QUESTION-PLANNED-WORKFLOW-REMEDIATION/P5_W1_FIX01_CLOSEOUT_REPORT.md)：Question planned workflow remediation closeout；记录 dedicated Question planned workflow component、normal path wiring、验证结果和 deferred blockers。
+
+### 2026-06-05 / P5P6-W1.fix.02
+
+- [P5P6_W1_FIX02_CLOSEOUT_REPORT.md](2026-06-05/P5P6-W1.fix.02-VALIDATION-BLOCKER-REMEDIATION/P5P6_W1_FIX02_CLOSEOUT_REPORT.md)：P5/P6 validation blocker remediation closeout；记录 canonical-evidence legacy test alignment、repo-root `tmp` 处理、验证结果、source backfill 和 L5 non-claim。

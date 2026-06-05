@@ -256,3 +256,60 @@ Mitigation:
 - Phase 0.1 Source Backfill。
 - 每个窗口 Done Criteria 要求 Backfill。
 - Decision Log / Matrix / Risk Register 必须同步。
+
+## RISK-018 P5/P6 planned workflow 被误读为 L5 完成
+
+Severity: high
+
+Description:
+
+Phase 5 / Phase 6 的 C2 / C3 L2 planned guarded workflow 可能被误读为 autonomous Agent、Phase 11 / Phase 12 或 L5 release 完成。
+
+Mitigation:
+
+- `P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION` 只记录为 L5 Foundation progress。
+- Phase Roadmap Lock 明确 Phase 8 / Phase 9 / Phase 11 / Phase 12 仍 deferred。
+- Final report 和 matrix 禁止使用 L5 done / autonomous done 表述。
+
+## RISK-019 legacy fallback 测试与 candidate-only 语义冲突
+
+Severity: medium
+
+Description:
+
+P5P6-W1.fix.02 前，部分旧 API 测试仍期待 fake / default / graph-disabled question fallback 持久化正式题目，这与 Phase 5 candidate-only / fallback-not-success gate 冲突。
+
+Mitigation:
+
+- 本窗口不恢复旧 fallback formal write。
+- `P5P6-W1.fix.02-VALIDATION-BLOCKER-REMEDIATION` 已将 `test_polish_question_and_feedback_context_include_canonical_assets` 对齐为 candidate-only / provider-unavailable-not-success 语义。
+- 更新后的测试仍断言 canonical asset refs、source support level、validation refs、context digest、`question_candidate` 输出和 fallback-not-success metadata。
+- Broad selector 当前为 `300 passed, 323 deselected`，不再有该 legacy business assertion failure。
+
+## RISK-020 repo root temp-like 目录导致 pytest 命令非零退出
+
+Severity: medium
+
+Description:
+
+P5P6-W1.fix.02 前，聚焦 pytest 用例主体报告通过，但测试结束阶段因 repo root 预存 `tmp` 目录触发 temp leak checker，命令以 exit code `1` 退出。
+
+Mitigation:
+
+- `P5P6-W1.fix.02-VALIDATION-BLOCKER-REMEDIATION` 确认 repo-root `tmp/` 仅包含 local goal / source-pack scratch material，不是测试即时产物。
+- 已将该目录移出仓库到 `/tmp/aifi-repo-root-tmp-P5P6-W1.fix.02-20260605`，未修改或弱化 temp leak checker。
+- 当前聚焦 pytest、eval pytest 和 broad selector 不再因 repo-root `tmp` 退出 `1`。
+
+## RISK-021 Phase 9 eval CI gate 尚未建立
+
+Severity: medium
+
+Description:
+
+P5/P6 scoped eval runners 可以本地运行，但仓库仍没有 Phase 9 CI regression gate，因此本地 eval 通过不能证明 AI 质量门禁已完成。
+
+Mitigation:
+
+- `EVAL-001` 不标记 done。
+- Source backfill 只记录本地 P5/P6 scoped eval evidence。
+- Phase 9 另行 scope lock CI gate、grader、dataset 和报告。

@@ -198,6 +198,50 @@ Infrastructure：
 - Feedback Agent 只能产出 feedback_candidate / asset_update_candidate。
 - Asset update formal write 必须用户确认。
 
+## P5P6-W1 Planned Workflow Gate
+
+适用于 `P5P6-W1-C2-C3-PLANNED-WORKFLOW-L5-FOUNDATION`。
+
+必须满足：
+
+- Phase 5 / Phase 6 只声明为 C2 / C3 L2 planned guarded workflow。
+- Question provider / graph output 必须先形成 `question_candidate`，再由 Application Service + Domain Policy + Handoff 路径决定是否正式写入。
+- graph disabled、fake transport、deterministic fallback 或 validation failed 不得持久化正常题目，也不得报告为 generated success。
+- Feedback 成功路径必须暴露 `feedback_candidate` refs；存在资产更新建议时必须暴露 `asset_update_candidate` refs 且 `user_confirmation_required=true`。
+- Feedback asset update candidate 不得直接写正式资产。
+- Trace / metadata 只能记录 input refs、policy refs、validation refs、candidate refs、handoff refs，不得写入 raw prompt、raw provider payload、full resume、full JD 或 secrets。
+- Phase 8 LangGraph / multi-agent runtime、Phase 11 Supervisor / Orchestrator、Phase 12 L5 release gate 必须保持未实现。
+
+本窗口验证记录：
+
+| Gate | Evidence | Result |
+|---|---|---|
+| Question candidate-only | `test_polish_question_graph_integration.py` reported `12 passed`; `test_pr5_polish_question_graph_persistence_handoff.py` reported `15 passed`; `test_polish_question_refactor_phase1.py` reported `64 passed`; pytest processes exited `1` because repo root had a pre-existing `tmp` temp-like directory | behavior evidence present; temp checker gap deferred |
+| Feedback candidate handoff | `test_polish_feedback_runtime.py` reported `7 passed`; pytest process exited `1` because repo root had a pre-existing `tmp` temp-like directory | behavior evidence present; temp checker gap deferred |
+| Architecture / platform | raw `tests/architecture -q` exited `2` because `app` was not on `PYTHONPATH`; supplemental `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture -q` reported `33 passed, 2 xfailed`, then exited `1` because of the same repo-root `tmp` temp-like directory | architecture evidence present; environment/PYTHONPATH and temp checker gaps deferred |
+| P5/P6 eval runners | `tests/evals -q` reported `19 passed` then exited `1` because of repo-root `tmp`; `evals.runners.run_question_eval` exited `0` with 3 total / 0 failed; `evals.runners.run_feedback_eval` exited `0` with 5 total / 0 failed | scoped eval evidence passed; temp checker gap deferred |
+| Broad API compatibility | `tests/api -k "question or feedback or agent or handoff or canonical or source_support"` reported `299 passed / 1 failed / 323 deselected`; the remaining failure is `tests/api/test_polish_canonical_evidence.py::test_polish_question_and_feedback_context_include_canonical_assets`, which still expects provider-unavailable Question fallback to persist a formal question and is outside this remediation write scope | legacy canonical-evidence alignment deferred; not a done gate |
+
+P5P6-W1.fix.02 current validation record:
+
+| Gate | Evidence | Result |
+|---|---|---|
+| Canonical evidence legacy alignment | `.venv/bin/python -m pytest tests/api/test_polish_canonical_evidence.py::test_polish_question_and_feedback_context_include_canonical_assets -q` | `1 passed`; provider-unavailable Question fallback remains `VALIDATION_FAILED` `question_candidate`, canonical asset refs remain asserted on candidate metadata, and Feedback canonical context remains asserted |
+| Question candidate-only | `test_polish_question_graph_integration.py` = `12 passed`; `test_pr5_polish_question_graph_persistence_handoff.py` = `15 passed`; `test_polish_question_refactor_phase1.py` = `64 passed` | passed; no formal generated success restored for fallback |
+| Feedback candidate handoff | `test_polish_feedback_runtime.py` = `7 passed` | passed; `feedback_candidate` bridge remains wired |
+| Architecture / platform | Raw `.venv/bin/python -m pytest tests/architecture -q` still requires application import path and exits collection with `ModuleNotFoundError: No module named 'app'`; `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture -q` = `33 passed, 2 xfailed` | behavior gate passed with existing path precondition; not a Phase 5/6 business assertion failure |
+| P5/P6 eval runners | `tests/evals -q` = `19 passed`; `evals.runners.run_question_eval` = 3 total / 0 failed; `evals.runners.run_feedback_eval` = 5 total / 0 failed | passed |
+| Broad API compatibility | `.venv/bin/python -m pytest tests/api -k "question or feedback or agent or handoff or canonical or source_support" -q` = `300 passed, 323 deselected` | passed; previous `299 passed / 1 failed` blocker cleared |
+| Temp leak checker | repo-root `tmp/` moved to `/tmp/aifi-repo-root-tmp-P5P6-W1.fix.02-20260605`; `find . -maxdepth 3 -type d -name "tmp" -print` now reports only `./docs/tmp` | repo-root temp blocker cleared without disabling leak detection |
+
+Current P5/P6 source status: `validated_with_deferred_l5_runtime`. This does not close Phase 8 runtime, Phase 9 CI eval gate, Phase 11 Supervisor / Orchestrator, Phase 12 L5 release gate, or provider/prompt/API/DB work.
+
+禁止：
+
+- 将本窗口写成 L5 done、autonomous Agent、Phase 11 / Phase 12 完成或 Phase 9 CI gate 完成。
+- 为了满足旧测试而恢复 fake / default / graph-disabled fallback formal write。
+- 修改 prompt/provider/API/DB 行为来扩大本窗口。
+
 ## Provider Gate
 
 必须满足：
