@@ -689,3 +689,40 @@ Not accepted:
 Result:
 
 P11-W5 may report Phase 11 integration/boundary evidence backfilled only if `pytest tests/architecture`, `pytest tests/evals` and `pytest tests/api` pass or any failures are explicitly recorded as blockers. `L5-006` remains release-blocking until a separately scoped Phase 12 window provides executable eval/replay/CI/report/human decision evidence.
+
+## DEC-L5-013 P12-W2 Preflight Stop / Insert P12-W1 Before Retry
+
+Status: confirmed
+
+Decision:
+
+Controller accepted the P12-W2 preflight stop for `P12-W2-REPLAY-RESUME-FAILURE-FIXTURES`. Existing Phase 12 eval artifacts are contract-only and cannot support replay fixture validation, so P12-W2 replay / resume / failure fixtures must not proceed until an executable multi-agent eval suite exists.
+
+Accepted result:
+
+- P12-W2 reports `complete_preflight_stop`.
+- P12-W2 blocker is `blocked_by_missing_executable_phase12_eval_suite`.
+- P12-W2 replay / resume / failure fixtures were not implemented.
+- `P12-W1-MULTI-AGENT-EVAL-SUITE` must be inserted before retrying P12-W2.
+- `L5-006` remains release-blocking.
+
+Evidence:
+
+- `evals/suites/phase12.json` has `lifecycle_status=contract_only`.
+- Phase 12 suite minimum pass criteria keep `eval_runner_required=false` and `release_gate_pass_required=false`.
+- `evals/graders/phase12_contract.json` is `data_contract_only_not_python_grader`.
+- The grader contract declares Python grader, runner integration, CI binding, report generation and negative-control execution not created in P12-W1.
+- `.github/workflows/eval-gate.yml` remains a Phase 9 replay eval gate and does not bind Phase 12.
+- Validation evidence preserved: `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/evals -q` -> `35 passed`; `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture -q` -> `33 passed`.
+
+Not accepted:
+
+- implementing P12-W1 in this backfill window.
+- continuing P12-W2 replay / resume / failure fixture implementation in this backfill window.
+- modifying code, tests, CI, provider, prompt, DB, API or frontend.
+- claiming L5 release, real-provider quality certification, remote CI success or Phase 12 release gate closure.
+- marking `L5-006` implemented, validated or done.
+
+Result:
+
+Insert P12-W1 multi-agent executable eval suite before retrying P12-W2. This decision is a docs-only governance backfill and does not close the Phase 12 release gate.
