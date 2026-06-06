@@ -33,9 +33,10 @@ description: Check AiForInterviewer API contracts across PRD, UX, backend, front
 ## Execution steps
 
 1. 确认 API 规范 active 状态。
-2. 对照 PRD/UX 检查接口、字段、错误语义和边界状态。
-3. 对照代码检查前后端契约一致性。
-4. 输出断链、兼容风险和测试建议。
+2. 跨模块理解、调用链分析、DDD / Agent / `PolishUseCases` 重构前，必须先经过 `aifi-context-index-gate`，用 Understand-Anything / CodeGraph 获取压缩上下文，再最小化 `Read` / `Grep`。
+3. 对照 PRD/UX 检查接口、字段、错误语义和边界状态。
+4. 对照代码检查前后端契约一致性。
+5. 输出断链、兼容风险和测试建议。
 
 ## Forbidden actions
 

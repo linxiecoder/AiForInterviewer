@@ -104,5 +104,8 @@ storage/
 /.cceval-variations.json
 /evaluation-results.json
 
-# Local CodeGraph index
+# Understand-Anything local generated index
+.understand-anything/
+
+# CodeGraph local generated index
 .codegraph/
