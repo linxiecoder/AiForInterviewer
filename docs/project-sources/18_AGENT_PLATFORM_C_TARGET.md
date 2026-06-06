@@ -129,6 +129,7 @@ Status:
 - P11-W1 Option A contract-first Orchestrator slice is `contract_slice_complete_with_deferred_runtime_gaps`.
 - P11-W2 runtime-hardening slice is `runtime_hardening_slice_complete_with_deferred_product_workflow`.
 - P11-W3 minimal candidate-only product slice is `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`.
+- P11-W4 controlled tool-loop / HITL slice is `runtime_bounds_hitl_slice_complete_with_deferred_release_gate`.
 - Not L5 release.
 
 Required capabilities:
@@ -179,6 +180,17 @@ P11-W3 candidate product slice evidence:
 - Asset update candidate requires user confirmation and remains `formal_write_blocked`.
 - Missing refs fail closed; asset conflict and formal write request block; low confidence is trace-visible.
 - Evidence remains candidate-only product slice evidence; it does not execute Orchestrator as runtime, persist state, call provider/LLM, render prompt, read/write DB, call repositories or change API/frontend/domain/polish behavior.
+
+P11-W4 controlled tool-loop / HITL evidence:
+
+- `AgentRuntimeLoopPolicy` carries explicit `max_steps`, `max_retries`, `timeout_seconds`, `stop_conditions`, `repair_strategy` and `fallback_semantics`.
+- `AgentGraphRunnerExecutorAdapter` injects the validated runtime loop policy into command metadata for start/resume/replay paths.
+- Runtime-reported `step_count`, `retry_count` and elapsed/timeout metadata are enforced at the adapter boundary; exceeded bounds cannot be reported as success.
+- Bound exhaustion is accepted only when the run is non-success and carries a matching stop condition or failure reason.
+- Runtime HITL trigger metadata is validated for formal write, asset conflict, low confidence, ambiguous ownership and validation-failed partial result, and `hitl_required` cannot be reported as success.
+- Runtime tool-call metadata must be permission-scoped through allowed tool refs and cannot expose repository, DB, SQLAlchemy session, unit-of-work or formal writer handles.
+- Candidate/formal and fallback boundaries remain enforced: fallback, validation failure or provider-unavailable markers cannot be reported as generated success or formal write success.
+- Evidence remains runtime-boundary hardening only; it does not implement Phase 12 release gate, call real providers, render prompts, change DB/API/frontend/domain behavior, or authorize direct formal writes.
 
 Forbidden unless separately scoped:
 

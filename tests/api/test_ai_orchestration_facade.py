@@ -105,6 +105,8 @@ def test_facade_direct_start_injects_shared_runtime_loop_policy() -> None:
         ),
         "allowed_callers": ("polish_question_agent",),
         "side_effect_policy": "candidate_write",
+        "repair_strategy": "retry_within_bounds_then_fail_closed",
+        "fallback_semantics": "candidate_only_blocked_or_failed_never_generated_success",
     }
 
 
@@ -255,6 +257,8 @@ def test_facade_start_surfaces_route_through_agent_executor_with_descriptor_runt
         "allowed_tools": descriptor.runtime_allowed_tools,
         "allowed_callers": descriptor.runtime_allowed_callers,
         "side_effect_policy": descriptor.runtime_side_effect_policy,
+        "repair_strategy": "retry_within_bounds_then_fail_closed",
+        "fallback_semantics": "candidate_only_blocked_or_failed_never_generated_success",
     }
 
 

@@ -576,6 +576,45 @@ P11-W3 non-claims:
 - P11-W3 does not close remote CI gap.
 - P11-W3 does not replace Phase 12 multi-agent eval.
 
+## P11-W4 Controlled Tool Loop / HITL Gate
+
+适用于 `P11-W4-CONTROLLED-TOOL-LOOP-HITL`。
+
+Status:
+
+- `runtime_bounds_hitl_slice_complete_with_deferred_release_gate` is allowed only for controlled runtime-boundary hardening.
+- This status is not L5 release, not real-provider quality certification, not remote CI success and not Phase 12 release gate completion.
+
+必须满足：
+
+- `AgentRuntimeLoopPolicy` 明确 `max_steps`、`max_retries`、`timeout_seconds`、`stop_conditions`、`repair_strategy` 和 `fallback_semantics`。
+- Facade / adapter command metadata must carry the validated runtime loop policy.
+- Runtime-reported max step, retry and timeout exhaustion must fail closed when reported as success.
+- Bound exhaustion may be accepted only as non-success with matching stop condition or failure reason.
+- HITL trigger validation covers `formal_write_requested`, `asset_conflict`, `low_confidence`, `ambiguous_ownership` and `validation_failed_partial_result`。
+- `hitl_required=true` cannot be reported as success.
+- Validation failed, provider unavailable and fallback markers cannot be reported as generated success or formal write success.
+- Runtime tool-call metadata must be scoped to allowed tool refs and must not expose repository, DB, SQLAlchemy session, unit-of-work or formal writer handles.
+- Candidate-only and formal-write handoff boundaries remain enforced.
+- Focused tests cover loop-bound exhaustion, HITL interrupt, resume owner/action validation, fallback generated-success rejection and forbidden direct tool/repository exposure.
+
+禁止：
+
+- unbounded autonomous swarm。
+- Agent direct DB / repository write。
+- Tool direct repository exposure。
+- prompt/provider/API/DB/frontend/domain behavior changes。
+- formal business writes outside Application Service -> Domain Policy -> Handoff。
+- claiming L5 release, real-provider quality certification, remote CI success or Phase 12 release gate completion。
+
+P11-W4 non-claims:
+
+- P11-W4 hardens runtime bounds and HITL/tool permissions only.
+- P11-W4 does not call real provider or change prompt/provider behavior.
+- P11-W4 does not change DB schema, API contract, frontend or domain policy.
+- P11-W4 does not authorize direct formal writes.
+- P11-W4 does not close Phase 12 release gate or claim L5 release.
+
 ## Phase 12 Release Gate
 
 适用于 Phase 12 L5 Eval, Hardening, and Release Gate。

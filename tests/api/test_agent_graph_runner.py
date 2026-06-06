@@ -440,6 +440,103 @@ def test_graph_runner_adapter_fails_closed_without_runtime_loop_policy() -> None
         )
 
 
+def test_graph_runner_adapter_enforces_loop_bound_exhaustion_without_success() -> None:
+    blocked_executor = agent_runtime.AgentGraphRunnerExecutorAdapter(_MaxStepsBlockedRunner())
+    blocked = blocked_executor.start(_execution_plan(plan_id="plan_steps_blocked", run_id="arun_steps_blocked"))
+
+    assert blocked.status == "agent_orchestration_blocked"
+    assert blocked.trace.failure_reason == "max_steps_exceeded"
+
+    retry_failed_executor = agent_runtime.AgentGraphRunnerExecutorAdapter(_RetryBoundFailureReasonRunner())
+    retry_failed = retry_failed_executor.start(
+        _execution_plan(plan_id="plan_retry_failure_reason", run_id="arun_retry_failure_reason")
+    )
+    assert retry_failed.status == "provider_failed"
+    assert retry_failed.trace.failure_reason == "provider_failed"
+
+    with pytest.raises(RuntimeValidationError, match="max_steps_exceeded"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_MaxStepsSuccessRunner()).start(
+            _execution_plan(plan_id="plan_steps_success", run_id="arun_steps_success")
+        )
+    with pytest.raises(RuntimeValidationError, match="max_retries_exceeded"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_RetryBoundSuccessRunner()).start(
+            _execution_plan(plan_id="plan_retry_success", run_id="arun_retry_success")
+        )
+    with pytest.raises(RuntimeValidationError, match="timeout"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_TimeoutSuccessRunner()).start(
+            _execution_plan(plan_id="plan_timeout_success", run_id="arun_timeout_success")
+        )
+
+
+def test_graph_runner_adapter_validates_hitl_interrupt_and_resume_payload() -> None:
+    executor = agent_runtime.AgentGraphRunnerExecutorAdapter(_HitlInterruptRunner())
+    result = executor.start(_execution_plan(plan_id="plan_hitl", run_id="arun_hitl"))
+
+    assert result.status == "requires_user_confirmation"
+    assert result.interrupt_refs == ("interrupt_ref_asset_conflict",)
+    assert result.trace.low_confidence_flags == ("source_gap",)
+
+    resumed = executor.resume(
+        "arun_hitl",
+        {
+            "cross_agent_resume": True,
+            "checkpoint_ref": "checkpoint_ref_hitl",
+            "base_version": 1,
+            "idempotency_key": "idem_resume_hitl",
+            "owner_id": "owner_1",
+            "interrupt_ref": "interrupt_ref_asset_conflict",
+            "resume_action": "continue",
+        },
+    )
+    assert resumed.status == "running"
+
+    with pytest.raises(ValueError, match="owner scope"):
+        executor.resume(
+            "arun_hitl",
+            {
+                "cross_agent_resume": True,
+                "checkpoint_ref": "checkpoint_ref_hitl",
+                "base_version": 1,
+                "idempotency_key": "idem_resume_hitl",
+                "owner_id": "owner_2",
+                "interrupt_ref": "interrupt_ref_asset_conflict",
+                "resume_action": "continue",
+            },
+        )
+
+
+def test_graph_runner_adapter_rejects_unscoped_or_repository_tool_calls() -> None:
+    with pytest.raises(RuntimeValidationError, match="permission scope"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_UnscopedToolRunner()).start(
+            _execution_plan(plan_id="plan_unscoped_tool", run_id="arun_unscoped_tool")
+        )
+    with pytest.raises(RuntimeValidationError, match="tool_not_allowed"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_DisallowedToolRunner()).start(
+            _execution_plan(plan_id="plan_disallowed_tool", run_id="arun_disallowed_tool")
+        )
+    with pytest.raises(RuntimeValidationError, match="repository"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_RepositoryToolExposureRunner()).start(
+            _execution_plan(plan_id="plan_repository_tool", run_id="arun_repository_tool")
+        )
+
+
+def test_graph_runner_adapter_rejects_fallback_reported_as_generated_success() -> None:
+    with pytest.raises(ValueError, match="fallback"):
+        agent_runtime.AgentGraphRunnerExecutorAdapter(_GeneratedFallbackSuccessRunner()).start(
+            _execution_plan(plan_id="plan_fallback_success", run_id="arun_fallback_success")
+        )
+
+
+def test_graph_runner_adapter_passes_repair_strategy_and_fallback_semantics_to_runner() -> None:
+    runner = _RecordingPolicyRunner()
+    agent_runtime.AgentGraphRunnerExecutorAdapter(runner).start(
+        _execution_plan(plan_id="plan_policy_semantics", run_id="arun_policy_semantics")
+    )
+
+    assert runner.last_policy["repair_strategy"] == "retry_within_bounds_then_fail_closed"
+    assert runner.last_policy["fallback_semantics"] == "candidate_only_blocked_or_failed_never_generated_success"
+
+
 def test_graph_runner_adapter_populates_phase8_trace_refs_from_runtime_result() -> None:
     runner = _TraceRichRunner()
     executor = agent_runtime.AgentGraphRunnerExecutorAdapter(runner)
@@ -835,6 +932,24 @@ def test_agent_executor_asset_update_handoff_carries_body_ref_without_raw_asset_
     assert "formal_refs" not in serialized_metadata
 
 
+def _execution_plan(*, plan_id: str, run_id: str) -> AgentExecutionPlan:
+    return AgentExecutionPlan(
+        plan_id=plan_id,
+        run_id=run_id,
+        ai_task_id=f"aitask_{plan_id}",
+        agent_id="polish_question_graph",
+        owner_id="owner_1",
+        actor_id="actor_1",
+        graph_name="polish_question_graph",
+        graph_version="v1",
+        objective="exercise controlled runtime loop policy",
+        input_refs=("session_1",),
+        requested_outputs=("candidate_refs",),
+        idempotency_key=f"idem_{plan_id}",
+        runtime_loop_policy=_runtime_loop_policy(),
+    )
+
+
 class _StubRunner:
     def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
         return AgentRunResult(run_id=context.run_id, status="queued", output_refs=("candidate_ref_1",))
@@ -1025,6 +1140,142 @@ class _UnknownMetadataEventStatusRunner(_StubRunner):
                 "tool_results": ({"tool_name": "context_retrieval", "status": "succeeded"},),
             },
         )
+
+
+class _MaxStepsBlockedRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="agent_orchestration_blocked",
+            metadata={
+                "runtime_step_count": 4,
+                "stop_condition": "max_steps_exceeded",
+                "failure_reason": "max_steps_exceeded",
+            },
+        )
+
+
+class _MaxStepsSuccessRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="fake_runtime_succeeded",
+            output_refs=("candidate_ref_1",),
+            metadata={"runtime_step_count": 4},
+        )
+
+
+class _RetryBoundSuccessRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="fake_runtime_succeeded",
+            output_refs=("candidate_ref_1",),
+            metadata={"runtime_retry_count": 2},
+        )
+
+
+class _RetryBoundFailureReasonRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="provider_failed",
+            metadata={"runtime_retry_count": 2, "failure_reason": "provider_failed"},
+        )
+
+
+class _TimeoutSuccessRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="fake_runtime_succeeded",
+            output_refs=("candidate_ref_1",),
+            metadata={"runtime_elapsed_seconds": 6},
+        )
+
+
+class _HitlInterruptRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        payload = AgentCandidatePayload(
+            candidate_ref="asset_update_candidate_ref_1",
+            candidate_type="asset_update_candidate",
+            payload_schema_id="polish_asset_update_candidate.v1",
+            payload={
+                "candidate_ref": "asset_update_candidate_ref_1",
+                "formal_write_blocked_until": "user_confirmation",
+                "user_confirmation_required": True,
+            },
+            low_confidence_flags=("source_gap",),
+        )
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="requires_user_confirmation",
+            output_refs=("asset_update_candidate_ref_1",),
+            interrupt_refs=("interrupt_ref_asset_conflict",),
+            candidate_payloads=(payload,),
+            metadata={
+                "hitl_triggers": ("asset_conflict", "low_confidence", "ambiguous_ownership"),
+                "asset_conflict_ref": "asset_conflict_ref_1",
+                "ownership_ambiguity_ref": "ownership_ambiguity_ref_1",
+                "low_confidence_flags": ("source_gap",),
+                "interrupt_refs": ("interrupt_ref_asset_conflict",),
+            },
+        )
+
+
+class _UnscopedToolRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="queued",
+            metadata={"tool_results": ({"status": "succeeded"},)},
+        )
+
+
+class _DisallowedToolRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="queued",
+            metadata={"tool_results": ({"tool_name": "unregistered_tool", "status": "succeeded"},)},
+        )
+
+
+class _RepositoryToolExposureRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="queued",
+            metadata={
+                "tool_results": (
+                    {
+                        "tool_name": "repository_lookup",
+                        "permission_scope": "repository_read",
+                        "status": "succeeded",
+                    },
+                )
+            },
+        )
+
+
+class _GeneratedFallbackSuccessRunner(_StubRunner):
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        return AgentRunResult(
+            run_id=context.run_id,
+            status="fake_runtime_succeeded",
+            output_refs=("candidate_ref_1",),
+            metadata={"fallback_reason": "provider_disabled", "fallback_reported_as_generated_success": True},
+        )
+
+
+class _RecordingPolicyRunner(_StubRunner):
+    last_policy: dict[str, object]
+
+    def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
+        policy = command.metadata.get("runtime_loop_policy")
+        assert isinstance(policy, dict)
+        self.last_policy = policy
+        return AgentRunResult(run_id=context.run_id, status="queued", output_refs=("candidate_ref_1",))
 
 
 class _TraceRichRunner(_StubRunner):
@@ -1228,7 +1479,7 @@ def _runtime_loop_policy() -> AgentRuntimeLoopPolicy:
         max_retries=1,
         timeout_seconds=5,
         stop_conditions=P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
-        allowed_tools=("evidence_selection",),
+        allowed_tools=("evidence_selection", "context_retrieval", "question_drafting"),
         allowed_callers=("polish_question_agent",),
         side_effect_policy="candidate_write",
     )

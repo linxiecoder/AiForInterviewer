@@ -373,6 +373,8 @@ class AgentRuntimeLoopPolicy:
     allowed_tools: tuple[str, ...]
     allowed_callers: tuple[str, ...]
     side_effect_policy: str
+    repair_strategy: str = "retry_within_bounds_then_fail_closed"
+    fallback_semantics: str = "candidate_only_blocked_or_failed_never_generated_success"
 
     def __post_init__(self) -> None:
         if self.max_steps <= 0:
@@ -397,6 +399,10 @@ class AgentRuntimeLoopPolicy:
             raise ValueError("allowed_tools are required")
         if not self.allowed_callers:
             raise ValueError("allowed_callers are required")
+        if not str(self.repair_strategy).strip():
+            raise ValueError("repair_strategy is required")
+        if not str(self.fallback_semantics).strip():
+            raise ValueError("fallback_semantics is required")
         if self.side_effect_policy not in {
             "read_only",
             "candidate_write",

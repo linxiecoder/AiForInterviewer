@@ -20,6 +20,7 @@ from app.application.ai_runtime.contracts import (
     AgentRunResult,
     AgentRunStatus,
     AgentRunTimelinePage,
+    RuntimeValidationError,
     validate_agent_runtime_status,
 )
 
@@ -361,6 +362,8 @@ class AgentGraphRunnerExecutorAdapter:
                     "allowed_tools": plan.runtime_loop_policy.allowed_tools,
                     "allowed_callers": plan.runtime_loop_policy.allowed_callers,
                     "side_effect_policy": plan.runtime_loop_policy.side_effect_policy,
+                    "repair_strategy": plan.runtime_loop_policy.repair_strategy,
+                    "fallback_semantics": plan.runtime_loop_policy.fallback_semantics,
                 },
                 **plan.metadata,
             },
@@ -386,6 +389,12 @@ class AgentGraphRunnerExecutorAdapter:
             raise ValueError("runtime result cannot expose formal refs")
         self._reject_runtime_formal_write_metadata(result.metadata)
         self._validate_status_consistency(result.status, result.metadata)
+        self._enforce_runtime_controls(
+            context,
+            status=result.status,
+            metadata=result.metadata,
+            interrupt_refs=result.interrupt_refs,
+        )
         candidate_refs = self._candidate_refs(result)
         handoff_candidate_descriptors = self._handoff_candidate_descriptors(result.candidate_payloads)
         trace = self._trace_from_refs(
@@ -453,6 +462,12 @@ class AgentGraphRunnerExecutorAdapter:
     def _status_from_run(self, context: AgentRunContext, status: AgentRunStatus) -> AgentExecutionStatus:
         self._reject_runtime_formal_write_metadata(status.metadata)
         self._validate_status_consistency(status.status, status.metadata)
+        self._enforce_runtime_controls(
+            context,
+            status=status.status,
+            metadata=status.metadata,
+            interrupt_refs=status.interrupt_refs,
+        )
         return AgentExecutionStatus(
             run_id=status.run_id,
             agent_id=context.graph_name,
@@ -545,6 +560,222 @@ class AgentGraphRunnerExecutorAdapter:
 
     def _validate_status_consistency(self, status: str, metadata: dict[str, Any]) -> None:
         validate_agent_runtime_status(status, metadata)
+
+    def _enforce_runtime_controls(
+        self,
+        context: AgentRunContext,
+        *,
+        status: str,
+        metadata: dict[str, Any],
+        interrupt_refs: tuple[str, ...],
+    ) -> None:
+        policy = self._runtime_loop_policy_from_context(context)
+        if not policy:
+            return
+        category = validate_agent_runtime_status(status, metadata)
+        self._reject_disallowed_runtime_tool_calls(policy, metadata)
+        self._reject_unbounded_success(policy, category=category, metadata=metadata)
+        self._validate_runtime_stop_conditions(policy, category=category, metadata=metadata, interrupt_refs=interrupt_refs)
+        self._validate_runtime_hitl_triggers(status=status, metadata=metadata, interrupt_refs=interrupt_refs)
+
+    @staticmethod
+    def _runtime_loop_policy_from_context(context: AgentRunContext) -> dict[str, Any]:
+        policy = context.command.metadata.get("runtime_loop_policy")
+        return dict(policy) if isinstance(policy, dict) else {}
+
+    @classmethod
+    def _reject_unbounded_success(
+        cls,
+        policy: dict[str, Any],
+        *,
+        category: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        cls._reject_bound_success(
+            metadata,
+            limit=policy.get("max_steps"),
+            value_keys=("runtime_step_count", "step_count", "steps_executed"),
+            stop_condition="max_steps_exceeded",
+            category=category,
+        )
+        cls._reject_bound_success(
+            metadata,
+            limit=policy.get("max_retries"),
+            value_keys=("runtime_retry_count", "retry_count", "retries_attempted"),
+            stop_condition="max_retries_exceeded",
+            category=category,
+            accepted_stop_conditions=("max_retries_exceeded", "provider_failed", "validation_failed"),
+        )
+        cls._reject_bound_success(
+            metadata,
+            limit=policy.get("timeout_seconds"),
+            value_keys=("runtime_elapsed_seconds", "elapsed_seconds", "duration_seconds"),
+            stop_condition="timeout",
+            category=category,
+        )
+
+    @classmethod
+    def _reject_bound_success(
+        cls,
+        metadata: dict[str, Any],
+        *,
+        limit: object,
+        value_keys: tuple[str, ...],
+        stop_condition: str,
+        category: str,
+        accepted_stop_conditions: tuple[str, ...] | None = None,
+    ) -> None:
+        numeric_limit = cls._metadata_number(limit)
+        if numeric_limit is None:
+            return
+        value = cls._first_metadata_number(metadata, value_keys)
+        if value is None or value <= numeric_limit:
+            return
+        accepted = accepted_stop_conditions or (stop_condition,)
+        if category != "succeeded" and any(cls._runtime_stop_condition_present(metadata, item) for item in accepted):
+            return
+        raise RuntimeValidationError(f"{stop_condition}: runtime loop bound exceeded")
+
+    @classmethod
+    def _validate_runtime_stop_conditions(
+        cls,
+        policy: dict[str, Any],
+        *,
+        category: str,
+        metadata: dict[str, Any],
+        interrupt_refs: tuple[str, ...],
+    ) -> None:
+        allowed = set(cls._metadata_refs(policy, "stop_conditions"))
+        triggered = cls._runtime_stop_conditions_from_metadata(metadata)
+        unknown = tuple(condition for condition in triggered if condition not in allowed and condition != "max_retries_exceeded")
+        if unknown:
+            raise RuntimeValidationError("runtime stop condition is not allowed: " + ", ".join(unknown))
+        if triggered and category == "succeeded":
+            raise RuntimeValidationError("runtime stop condition cannot be reported as success")
+        if (
+            {"formal_write_requested", "interrupt_required"} & set(triggered)
+            and category != "blocked"
+            and not cls._metadata_refs(metadata, "interrupt_refs")
+            and not interrupt_refs
+        ):
+            raise RuntimeValidationError("runtime stop condition requires interrupt refs")
+
+    @classmethod
+    def _validate_runtime_hitl_triggers(
+        cls,
+        *,
+        status: str,
+        metadata: dict[str, Any],
+        interrupt_refs: tuple[str, ...],
+    ) -> None:
+        triggers = [*cls._metadata_refs(metadata, "hitl_triggers")]
+        trigger = str(metadata.get("hitl_trigger") or "").strip()
+        if trigger:
+            triggers.append(trigger)
+        if metadata.get("hitl_required") is True and validate_agent_runtime_status(status, metadata) == "succeeded":
+            raise RuntimeValidationError("HITL-required runtime result cannot be reported as success")
+        if not triggers:
+            return
+        hitl_metadata = dict(metadata)
+        if interrupt_refs and not cls._metadata_refs(hitl_metadata, "interrupt_refs"):
+            hitl_metadata["interrupt_refs"] = interrupt_refs
+        for trigger_type in tuple(dict.fromkeys(triggers)):
+            validate_cross_agent_hitl_trigger(
+                trigger_type=trigger_type,
+                status=status,
+                metadata=hitl_metadata,
+            )
+
+    @classmethod
+    def _reject_disallowed_runtime_tool_calls(cls, policy: dict[str, Any], metadata: dict[str, Any]) -> None:
+        allowed_tools = set(cls._metadata_refs(policy, "allowed_tools"))
+        allowed_callers = set(cls._metadata_refs(policy, "allowed_callers"))
+        for tool_call in cls._runtime_tool_call_entries(metadata):
+            tool_refs = cls._tool_call_refs(tool_call)
+            if not tool_refs:
+                raise RuntimeValidationError("runtime tool call is missing permission scope")
+            if any(cls._tool_ref_exposes_repository(ref) for ref in tool_refs):
+                raise RuntimeValidationError("runtime tool call exposes repository or database internals")
+            if allowed_tools and not any(ref in allowed_tools for ref in tool_refs):
+                raise RuntimeValidationError("tool_not_allowed: " + sorted(tool_refs)[0])
+            caller_id = str(tool_call.get("caller_id") or tool_call.get("agent_id") or "").strip()
+            if caller_id and allowed_callers and caller_id not in allowed_callers:
+                raise RuntimeValidationError("caller not allowed for tool")
+
+    @classmethod
+    def _runtime_tool_call_entries(cls, metadata: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+        entries: list[dict[str, Any]] = []
+        for key in ("tool_calls", "tool_results", "runtime_tool_calls"):
+            value = metadata.get(key)
+            values = value if isinstance(value, (list, tuple)) else (value,)
+            for item in values:
+                if isinstance(item, dict):
+                    entries.append(item)
+        trace_refs = metadata.get("trace_refs")
+        if isinstance(trace_refs, dict):
+            entries.extend(cls._runtime_tool_call_entries(trace_refs))
+        return tuple(entries)
+
+    @staticmethod
+    def _tool_call_refs(tool_call: dict[str, Any]) -> set[str]:
+        refs: set[str] = set()
+        for key in ("tool_id", "tool_name", "permission_scope", "owner_scope"):
+            value = str(tool_call.get(key) or "").strip()
+            if value:
+                refs.add(value)
+        return refs
+
+    @staticmethod
+    def _tool_ref_exposes_repository(value: str) -> bool:
+        normalized = value.lower().replace("-", "_").replace(" ", "_")
+        return any(
+            token in normalized
+            for token in (
+                "repository",
+                "database",
+                "sqlalchemy",
+                "unit_of_work",
+                "formal_writer",
+                "formal_write_tool",
+            )
+        )
+
+    @classmethod
+    def _runtime_stop_conditions_from_metadata(cls, metadata: dict[str, Any]) -> tuple[str, ...]:
+        values = [
+            *cls._metadata_refs(metadata, "stop_conditions_triggered"),
+            *cls._metadata_refs(metadata, "stop_conditions"),
+        ]
+        stop_condition = str(metadata.get("stop_condition") or "").strip()
+        if stop_condition:
+            values.append(stop_condition)
+        return tuple(dict.fromkeys(values))
+
+    @classmethod
+    def _runtime_stop_condition_present(cls, metadata: dict[str, Any], stop_condition: str) -> bool:
+        failure_reason = str(metadata.get("failure_reason") or "").strip()
+        return stop_condition in cls._runtime_stop_conditions_from_metadata(metadata) or failure_reason == stop_condition
+
+    @classmethod
+    def _first_metadata_number(cls, metadata: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            number = cls._metadata_number(metadata.get(key))
+            if number is not None:
+                return number
+        return None
+
+    @staticmethod
+    def _metadata_number(value: object) -> float | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value.strip())
+            except ValueError:
+                return None
+        return None
 
     def _trace_from_refs(
         self,
