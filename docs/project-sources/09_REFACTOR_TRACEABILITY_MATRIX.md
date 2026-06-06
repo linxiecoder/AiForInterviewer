@@ -17,6 +17,7 @@ permalink: ai-for-interviewer/docs/project-sources/09-refactor-traceability-matr
 - implemented
 - implemented_with_validation_blockers
 - contract_slice_complete_with_deferred_runtime_gaps
+- runtime_hardening_slice_complete_with_deferred_product_workflow
 - validated_with_deferred_gaps
 - validated_with_deferred_l5_runtime
 - validated
@@ -100,7 +101,7 @@ wrapper split 不等于 capability done。
 | L5-002 | Supervisor / Orchestrator Agent | P11-W1 contract slice registers `interview_orchestrator_agent` as contract-only in the L5 contract catalog and is locally validated for contract/catalog/test evidence; it is not runtime-wired, does not execute product workflow and is not full L5 capability validation | Registered Supervisor / Orchestrator Agent with goal decomposition, plan, bounded loop and HITL scope; full L5 capability validation, runtime execution, product workflow and release gate remain deferred | Agent Platform | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
 | L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract` and is locally validated for contract behavior; runtime state/checkpoint/replay execution and full L5 capability validation remain deferred | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution, product workflow validation and release gate remain separately scoped | Agent Platform / Runtime | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
 | L5-004 | Multi-agent product workflow | Question / Feedback planned workflows and P8 target handoff primitive exist; no three-or-more-business-agent product workflow exists | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents | Product Orchestration | not_started | Phase 11 |
-| L5-005 | Controlled tool loop hardening | P8 covers current facade/generic/Question/Feedback paths; future / indirect graph tool-loop coverage remains deferred | Phase 11 orchestration tool calls bounded by max steps, retries, timeout, stop conditions, registry lookup and side-effect gates | Runtime / Tooling | implementation_planned | Phase 11 |
+| L5-005 | Controlled tool loop hardening | P8 covers current facade/generic/Question/Feedback paths; P11-W2 adds a narrow runtime-hardening slice for future cross-agent handoff, cross-agent resume validation, cross-agent replay safety, refs-only trace/timeline mapping and HITL trigger validation without product workflow wiring | Phase 11 orchestration tool calls bounded by max steps, retries, timeout, stop conditions, registry lookup and side-effect gates; product multi-agent workflow remains separately scoped | Runtime / Tooling | runtime_hardening_slice_complete_with_deferred_product_workflow | Phase 11 |
 | L5-006 | L5 eval / replay / release gate | P9 replay/fixture foundation exists with `deferred_remote_ci_gap`; no multi-agent eval/replay/release gate exists | Multi-agent eval datasets, graders, replay fixtures, CI artifact evidence, observability report and human release decision | Eval / Release | not_started | Phase 12 |
 
 ## P10 Stage Closeout / Source Backfill Evidence
@@ -145,6 +146,23 @@ Status: `contract_slice_complete_with_deferred_runtime_gaps` for Option A contra
 - P11-W1 does not certify real-provider quality.
 - P11-W1 does not claim L5 release.
 - P11-W1 does not implement Phase 12 release gate.
+
+## P11-W2 Runtime-hardening Slice Evidence
+
+Status: `runtime_hardening_slice_complete_with_deferred_product_workflow` for a narrow runtime-hardening slice. This status applies only to internal Agent Platform runtime-facing primitives and focused local tests. It is not product multi-agent workflow completion, not Orchestrator runtime execution, not full Phase 8 runtime gap closure and not L5 release.
+
+- `L5-005`: cross-agent runtime-hardening helpers now fail closed for route-bound handoff source/target mismatch, invalid candidate type, missing required trace refs, missing required validation refs, formal refs, unsafe metadata, missing checkpoint/base_version/idempotency, owner mismatch, unsupported resume action, non-read-only replay, formal-write-enabled replay, collapsed trace/timeline refs, unsafe trace metadata and HITL success-like failure semantics.
+- `L5-003`: contract and handoff surfaces are hardened only where this window directly touches cross-agent handoff validation; full runtime execution and product workflow validation remain deferred.
+- `L5-004`: remains `not_started`; no three-or-more-business-agent product workflow is implemented.
+- `L5-006`: remains `not_started`; no Phase 12 eval/replay/release gate is implemented.
+- P11-W2 adds `tests/application/agents/test_phase11_runtime_hardening.py` and updates focused P8/API/architecture gates.
+- P11-W2 does not execute `interview_orchestrator_agent` as a runtime agent.
+- P11-W2 does not wire Orchestrator into `AgentExecutor`, LangGraph, `AiOrchestrationFacade`, API routes, Question workflow, Feedback workflow, provider, prompt, DB, frontend or domain policies.
+- P11-W2 does not close `deferred_remote_ci_gap`.
+- P11-W2 does not rewrite stale eval reports.
+- P11-W2 does not certify real-provider quality.
+- P11-W2 does not claim L5 release.
+- P11-W2 does not implement Phase 12 release gate.
 
 ## P9 Eval / CI Regression Gate Backfill Evidence
 

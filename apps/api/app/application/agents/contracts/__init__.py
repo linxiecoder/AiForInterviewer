@@ -75,6 +75,29 @@ CROSS_AGENT_REQUIRED_FORBIDDEN_DATA = tuple(
     )
 )
 
+CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES = (
+    "read_only",
+    "candidate_write",
+    "formal_write_handoff_only",
+)
+
+CROSS_AGENT_HITL_TRIGGER_TYPES = (
+    "asset_conflict",
+    "formal_write_requested",
+    "low_confidence",
+    "ambiguous_ownership",
+    "validation_failed_partial_result",
+)
+
+CROSS_AGENT_ALLOWED_RESUME_ACTIONS = (
+    "continue",
+    "approve_candidate",
+    "reject_candidate",
+    "request_revision",
+    "cancel",
+    "acknowledge",
+)
+
 
 def _safe_metadata(values: dict[str, Any] | None) -> dict[str, Any]:
     return _safe_metadata_value(dict(values or {}))
@@ -135,6 +158,7 @@ class HandoffContract:
     formal_write_preconditions: tuple[str, ...] = field(default_factory=tuple)
     rollback_policy: str = ""
     user_confirmation_required: bool | None = None
+    cross_agent_route: CrossAgentHandoffRoute | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "candidate_ref_types", _tuple(self.candidate_ref_types))
@@ -143,6 +167,8 @@ class HandoffContract:
         object.__setattr__(self, "formal_write_preconditions", _tuple(self.formal_write_preconditions))
         if self.user_confirmation_required is None:
             object.__setattr__(self, "user_confirmation_required", self.confirmation_required)
+        if self.cross_agent_route is not None and not isinstance(self.cross_agent_route, CrossAgentHandoffRoute):
+            raise ValueError("cross_agent_route must be CrossAgentHandoffRoute")
 
 
 @dataclass(frozen=True)
@@ -476,11 +502,22 @@ class CrossAgentHandoffRoute:
             "required_validation_refs",
             _required_tuple(self.required_validation_refs, label="required_validation_refs"),
         )
-        object.__setattr__(self, "side_effect_policy", _required_text(self.side_effect_policy, label="side_effect_policy"))
+        side_effect_policy = _required_text(self.side_effect_policy, label="side_effect_policy")
+        if side_effect_policy not in CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES:
+            raise ValueError("side_effect_policy is not allowed for cross-agent handoff")
+        object.__setattr__(self, "side_effect_policy", side_effect_policy)
+        trigger_types = _tuple(self.user_confirmation_required_when)
+        unknown_triggers = tuple(
+            trigger
+            for trigger in trigger_types
+            if trigger not in CROSS_AGENT_HITL_TRIGGER_TYPES and not trigger.endswith("_candidate")
+        )
+        if unknown_triggers:
+            raise ValueError("unsupported HITL trigger for cross-agent handoff route")
         object.__setattr__(
             self,
             "user_confirmation_required_when",
-            _tuple(self.user_confirmation_required_when),
+            trigger_types,
         )
         object.__setattr__(self, "forbidden_data", _required_tuple(self.forbidden_data, label="forbidden_data"))
 
@@ -754,6 +791,9 @@ class AgentExecutionTimeline:
 
 __all__ = [
     "AgentDefinition",
+    "CROSS_AGENT_ALLOWED_RESUME_ACTIONS",
+    "CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES",
+    "CROSS_AGENT_HITL_TRIGGER_TYPES",
     "CROSS_AGENT_REQUIRED_FORBIDDEN_DATA",
     "CrossAgentHandoffRoute",
     "CrossAgentPlan",

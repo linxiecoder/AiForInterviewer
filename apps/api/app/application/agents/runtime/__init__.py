@@ -8,6 +8,8 @@ from app.application.agents.contracts import (
     AgentExecutionStatus,
     AgentExecutionTimeline,
     AgentExecutionTrace,
+    CROSS_AGENT_ALLOWED_RESUME_ACTIONS,
+    CROSS_AGENT_HITL_TRIGGER_TYPES,
 )
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
@@ -20,6 +22,241 @@ from app.application.ai_runtime.contracts import (
     AgentRunTimelinePage,
     validate_agent_runtime_status,
 )
+
+_CROSS_AGENT_FORBIDDEN_METADATA_KEY_PARTS = (
+    "raw_prompt",
+    "system_prompt",
+    "developer_prompt",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "checkpoint_payload",
+    "full_source_body",
+    "full_resume",
+    "full_jd",
+    "full_answer",
+    "full_asset_body",
+    "api_key",
+    "token",
+    "cookie",
+    "secret",
+)
+
+_CROSS_AGENT_REPLAY_COUNTER_KEYS = (
+    "provider_calls",
+    "provider_call_count",
+    "tool_calls",
+    "external_tool_calls",
+    "external_tool_call_count",
+    "repository_calls",
+    "repository_writes",
+    "repository_write_count",
+    "db_business_writes",
+    "database_business_writes",
+    "database_write_count",
+    "formal_business_writes",
+    "formal_write_count",
+    "formal_writes",
+)
+
+_CROSS_AGENT_REQUIRED_TIMELINE_REF_KEYS = (
+    "plan_refs",
+    "handoff_refs",
+    "validation_refs",
+    "candidate_refs",
+)
+
+_CROSS_AGENT_OPTIONAL_TIMELINE_REF_KEYS = (
+    "policy_refs",
+    "tool_refs",
+    "low_confidence_flags",
+    "interrupt_refs",
+)
+
+_FORMAL_METADATA_KEY_EXCEPTIONS = {
+    "formal_write_blocked",
+    "formal_write_blocked_until",
+}
+
+
+def validate_cross_agent_resume_payload(
+    resume_payload: dict[str, object],
+    *,
+    expected_owner_id: str = "",
+    interrupt_ref: str = "",
+    allowed_actions: tuple[str, ...] = CROSS_AGENT_ALLOWED_RESUME_ACTIONS,
+) -> dict[str, object]:
+    """Validate refs-only cross-agent resume control fields without persisting state."""
+
+    if not isinstance(resume_payload, dict):
+        raise ValueError("cross-agent resume payload must be an object")
+    _reject_cross_agent_unsafe_metadata(resume_payload, label="cross-agent resume payload")
+    checkpoint_ref = str(resume_payload.get("checkpoint_ref") or "").strip()
+    if not checkpoint_ref:
+        raise ValueError("checkpoint_ref is required for cross-agent resume")
+    base_version = resume_payload.get("base_version")
+    if type(base_version) is not int or base_version < 0:
+        raise ValueError("base_version must be a non-negative integer for cross-agent resume")
+    idempotency_key = str(resume_payload.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        raise ValueError("idempotency_key is required for cross-agent resume")
+    owner_ref = str(resume_payload.get("owner_id") or resume_payload.get("owner_ref") or "").strip()
+    if not owner_ref:
+        raise ValueError("owner_id or owner_ref is required for cross-agent resume")
+    if expected_owner_id and owner_ref != expected_owner_id:
+        raise ValueError("owner scope does not match cross-agent resume payload")
+    payload_interrupt_ref = str(resume_payload.get("interrupt_ref") or "").strip()
+    if interrupt_ref and payload_interrupt_ref != interrupt_ref:
+        raise ValueError("interrupt_ref does not match cross-agent resume payload")
+    if not payload_interrupt_ref:
+        raise ValueError("interrupt_ref is required for cross-agent interrupt resume")
+    resume_action = str(resume_payload.get("allowed_action") or resume_payload.get("resume_action") or "").strip()
+    if not resume_action:
+        raise ValueError("allowed_action or resume_action is required for cross-agent resume")
+    if resume_action not in allowed_actions:
+        raise ValueError("unsupported cross-agent resume action")
+    return {
+        **resume_payload,
+        "checkpoint_ref": checkpoint_ref,
+        "base_version": base_version,
+        "idempotency_key": idempotency_key,
+        "owner_ref": owner_ref,
+        "interrupt_ref": payload_interrupt_ref,
+        "resume_action": resume_action,
+    }
+
+
+def validate_cross_agent_replay_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    """Validate that cross-agent replay remains read-only and formal-write-blocked."""
+
+    if not isinstance(metadata, dict):
+        raise ValueError("cross-agent replay metadata must be an object")
+    _reject_cross_agent_unsafe_metadata(metadata, label="cross-agent replay metadata")
+    if metadata.get("read_only") is not True:
+        raise ValueError("cross-agent replay must be read_only")
+    if metadata.get("formal_write_blocked") is not True:
+        raise ValueError("cross-agent replay must be formal_write_blocked")
+    for key in _CROSS_AGENT_REPLAY_COUNTER_KEYS:
+        if not _metadata_counter_is_zero(metadata.get(key, 0)):
+            raise ValueError("cross-agent replay cannot call providers, tools, repositories, DB, or formal writes")
+    return dict(metadata)
+
+
+def map_cross_agent_trace_timeline_refs(metadata: dict[str, object]) -> dict[str, object]:
+    """Return refs-only cross-agent timeline buckets while keeping ref categories separate."""
+
+    if not isinstance(metadata, dict):
+        raise ValueError("cross-agent trace metadata must be an object")
+    _reject_cross_agent_unsafe_metadata(metadata, label="cross-agent trace metadata")
+    mapped: dict[str, object] = {
+        key: _metadata_refs(metadata, key)
+        for key in (*_CROSS_AGENT_REQUIRED_TIMELINE_REF_KEYS, *_CROSS_AGENT_OPTIONAL_TIMELINE_REF_KEYS)
+    }
+    missing = tuple(key for key in _CROSS_AGENT_REQUIRED_TIMELINE_REF_KEYS if not mapped[key])
+    if missing:
+        raise ValueError("cross-agent trace metadata is missing required refs")
+    output_refs = _metadata_refs(metadata, "output_refs")
+    collapsed_refs = set(output_refs) & (
+        set(mapped["handoff_refs"]) | set(mapped["validation_refs"])
+    )
+    if collapsed_refs:
+        raise ValueError("handoff refs and validation refs must not be collapsed into output_refs")
+    failure_reason = str(metadata.get("failure_reason") or "").strip()
+    status = str(metadata.get("status") or "").strip()
+    if status:
+        category = validate_agent_runtime_status(status, metadata)
+        if category in {"blocked", "failed", "interrupted"} and not failure_reason and not mapped["interrupt_refs"]:
+            raise ValueError("failure_reason or interrupt_refs are required for blocked cross-agent trace events")
+    if failure_reason:
+        mapped["failure_reason"] = failure_reason
+    if output_refs:
+        mapped["output_refs"] = output_refs
+    return mapped
+
+
+def validate_cross_agent_hitl_trigger(
+    *,
+    trigger_type: str,
+    status: str,
+    metadata: dict[str, object],
+) -> dict[str, object]:
+    """Validate refs-only cross-agent HITL control events and non-success semantics."""
+
+    normalized_trigger = str(trigger_type).strip()
+    if normalized_trigger not in CROSS_AGENT_HITL_TRIGGER_TYPES:
+        raise ValueError("unsupported cross-agent HITL trigger")
+    if not isinstance(metadata, dict):
+        raise ValueError("cross-agent HITL metadata must be an object")
+    _reject_cross_agent_unsafe_metadata(metadata, label="cross-agent HITL metadata")
+    category = validate_agent_runtime_status(status, metadata)
+    interrupt_refs = _metadata_refs(metadata, "interrupt_refs")
+    low_confidence_flags = _metadata_refs(metadata, "low_confidence_flags")
+    if normalized_trigger in {"formal_write_requested", "asset_conflict"}:
+        if category not in {"blocked", "interrupted", "cancelled"}:
+            raise ValueError("cross-agent HITL trigger must interrupt or block")
+        if not interrupt_refs and category != "blocked":
+            raise ValueError("cross-agent HITL trigger requires interrupt_refs when not blocked")
+    if normalized_trigger == "low_confidence" and not low_confidence_flags:
+        trace_refs = metadata.get("trace_refs")
+        nested_flags = (
+            _metadata_refs(trace_refs, "low_confidence_flags")
+            if isinstance(trace_refs, dict)
+            else ()
+        )
+        if not nested_flags:
+            raise ValueError("low_confidence HITL trigger must be trace-visible")
+    if normalized_trigger == "validation_failed_partial_result" and category == "succeeded":
+        raise ValueError("validation_failed_partial_result must not be reported as success")
+    return dict(metadata)
+
+
+def _is_cross_agent_resume_payload(resume_payload: dict[str, object]) -> bool:
+    return bool(resume_payload.get("cross_agent_resume") or resume_payload.get("cross_agent_handoff"))
+
+
+def _metadata_refs(metadata: dict[str, object], key: str) -> tuple[str, ...]:
+    value = metadata.get(key)
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,) if value.strip() else ()
+    if isinstance(value, (list, tuple, set)):
+        return tuple(str(item) for item in value if str(item).strip())
+    return ()
+
+
+def _reject_cross_agent_unsafe_metadata(value: object, *, label: str) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if _cross_agent_metadata_key_is_blocked(key):
+                raise ValueError(f"{label} contains unsafe metadata")
+            _reject_cross_agent_unsafe_metadata(item, label=label)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            _reject_cross_agent_unsafe_metadata(item, label=label)
+
+
+def _cross_agent_metadata_key_is_blocked(key: object) -> bool:
+    normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in _FORMAL_METADATA_KEY_EXCEPTIONS:
+        return False
+    if normalized in {"formal_ref", "formal_refs", "formal_outputs", "formal_write_result"}:
+        return True
+    return any(part in normalized for part in _CROSS_AGENT_FORBIDDEN_METADATA_KEY_PARTS)
+
+
+def _metadata_counter_is_zero(value: object) -> bool:
+    if isinstance(value, bool):
+        return value is False
+    if isinstance(value, int):
+        return value == 0
+    if isinstance(value, float):
+        return value == 0.0
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped == "" or stripped == "0"
+    return value is None
 
 
 @runtime_checkable
@@ -55,6 +292,12 @@ class AgentGraphRunnerExecutorAdapter:
         interrupt_ref = str(resume_payload.get("interrupt_ref") or "").strip()
         if not interrupt_ref:
             raise ValueError("interrupt_ref is required to resume an agent run")
+        if _is_cross_agent_resume_payload(resume_payload):
+            resume_payload = validate_cross_agent_resume_payload(
+                resume_payload,
+                expected_owner_id=context.owner_id,
+                interrupt_ref=interrupt_ref,
+            )
         result = self._runner.resume(context, interrupt_ref=interrupt_ref, resume_payload=resume_payload)
         return self._result_from_run(context, result)
 
@@ -62,6 +305,12 @@ class AgentGraphRunnerExecutorAdapter:
         self, context: AgentRunContext, *, interrupt_ref: str, resume_payload: dict[str, object]
     ) -> AgentExecutionResult:
         self._contexts[context.run_id] = context
+        if _is_cross_agent_resume_payload(resume_payload):
+            resume_payload = validate_cross_agent_resume_payload(
+                resume_payload,
+                expected_owner_id=context.owner_id,
+                interrupt_ref=interrupt_ref,
+            )
         result = self._runner.resume(context, interrupt_ref=interrupt_ref, resume_payload=resume_payload)
         return self._result_from_run(context, result)
 
@@ -177,6 +426,8 @@ class AgentGraphRunnerExecutorAdapter:
             "read_only": result.read_only,
             "formal_write_blocked": result.formal_write_blocked,
         }
+        if replay_metadata.get("cross_agent_replay") is True:
+            validate_cross_agent_replay_metadata(replay_metadata)
         self._reject_runtime_formal_write_metadata(replay_metadata)
         self._validate_status_consistency(result.status, replay_metadata)
         trace = self._trace_from_refs(
@@ -614,4 +865,11 @@ class AgentGraphRunnerExecutorAdapter:
         return tuple(dict.fromkeys(str(ref) for ref in refs if str(ref).strip()))
 
 
-__all__ = ["AgentExecutor", "AgentGraphRunnerExecutorAdapter"]
+__all__ = [
+    "AgentExecutor",
+    "AgentGraphRunnerExecutorAdapter",
+    "map_cross_agent_trace_timeline_refs",
+    "validate_cross_agent_hitl_trigger",
+    "validate_cross_agent_replay_metadata",
+    "validate_cross_agent_resume_payload",
+]

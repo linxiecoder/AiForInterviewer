@@ -637,10 +637,11 @@ Mitigation:
 - Phase 11 target requires cross-agent state / checkpoint / replay contract.
 - State is control state, not business fact persistence.
 - Replay must remain read-only and formal-write-blocked unless separately authorized.
+- P11-W2 adds focused runtime-hardening validation for cross-agent resume `checkpoint_ref` / `base_version` / `idempotency_key` / owner / interrupt / action and read-only / formal-write-blocked replay metadata, without persisting cross-agent state.
 
 Closure condition:
 
-- Phase 11 tests prove checkpoint/base/idempotency validation and replay trace behavior for cross-agent state.
+- Phase 11 product/runtime tests prove checkpoint/base/idempotency validation and replay trace behavior for cross-agent state in the selected product workflow.
 
 ## RISK-035 missing HITL for formal write / asset conflict
 
@@ -657,6 +658,7 @@ Mitigation:
 - Phase 11 requires these HITL triggers.
 - Formal writes remain Application Service -> Domain Policy -> Handoff.
 - Asset update candidates require user confirmation.
+- P11-W2 adds focused HITL trigger validation for `formal_write_requested`, `asset_conflict`, `low_confidence`, `ambiguous_ownership` and `validation_failed_partial_result`, including non-success semantics for formal write / asset conflict and success-like failure rejection.
 
 Closure condition:
 
@@ -713,3 +715,34 @@ P11-W1 non-claims:
 - P11-W1 does not certify real-provider quality.
 - P11-W1 does not claim L5 release.
 - P11-W1 does not implement Phase 12 release gate.
+
+## RISK-038 P11-W2 runtime hardening 被误读为 product workflow
+
+Severity: high
+
+Status: open
+
+Description:
+
+P11-W2 adds real runtime-facing validation helpers and stricter handoff guards. Without explicit wording, later readers could treat this as Orchestrator runtime execution, product multi-agent workflow, full Phase 8 runtime gap closure or L5 release evidence.
+
+Mitigation:
+
+- Matrix status is `runtime_hardening_slice_complete_with_deferred_product_workflow`.
+- P11-W2 source backfill repeats that product workflow, Orchestrator runtime execution, remote CI, stale eval report rewrite, real-provider quality certification, L5 release and Phase 12 release gate remain out of scope.
+- Architecture gate still verifies `interview_orchestrator_agent` is absent from runtime, handoff, ai_runtime, polish, API, domain and infrastructure Python paths.
+
+Closure condition:
+
+- A later Phase 11 product workflow window explicitly wires and verifies Supervisor / Orchestrator behavior with three or more business agents, focused runtime/HITL/trace/replay evidence and source backfill, or the controller explicitly accepts remaining workflow gaps.
+
+P11-W2 non-claims:
+
+- P11-W2 does not implement product multi-agent workflow.
+- P11-W2 does not execute `interview_orchestrator_agent` as a runtime agent.
+- P11-W2 does not close all Phase 8 runtime gaps.
+- P11-W2 does not close `deferred_remote_ci_gap`.
+- P11-W2 does not rewrite stale eval reports.
+- P11-W2 does not certify real-provider quality.
+- P11-W2 does not claim L5 release.
+- P11-W2 does not implement Phase 12 release gate.

@@ -598,11 +598,12 @@ Current Status:
 
 - `scope_lock_complete_with_deferred_gaps` for P11-W0 docs-only reconciliation.
 - `contract_slice_complete_with_deferred_runtime_gaps` for P11-W1 Option A contract-first Orchestrator.
-- Runtime/product workflow implementation not started.
+- `runtime_hardening_slice_complete_with_deferred_product_workflow` for P11-W2 narrow runtime-hardening slice.
+- Product workflow implementation not started.
 - `L5-002` Supervisor / Orchestrator is contract-only validated with deferred runtime/product workflow gaps.
 - `L5-003` cross-agent handoff / state / trace contracts are validated with deferred runtime execution gaps.
 - `L5-004` multi-agent product workflow remains `not_started`.
-- `L5-005` controlled tool loop hardening remains `implementation_planned`.
+- `L5-005` controlled tool loop hardening has a locally validated runtime-hardening slice, with deferred product workflow.
 
 Goal:
 
@@ -647,6 +648,13 @@ P11-W1 Evidence:
 - `docs/goals/2026-06-06/P11_W1_VALIDATION_REPORT.md`
 - `docs/goals/2026-06-06/P11_W1_SOURCE_BACKFILL_REPORT.md`
 
+P11-W2 Evidence:
+
+- `docs/goals/2026-06-06/P11_W2_RUNTIME_HARDENING_SLICE.md`
+- `docs/goals/2026-06-06/P11_W2_IMPLEMENTATION_REPORT.md`
+- `docs/goals/2026-06-06/P11_W2_VALIDATION_REPORT.md`
+- `docs/goals/2026-06-06/P11_W2_SOURCE_BACKFILL_REPORT.md`
+
 P11-W1 non-claims:
 
 - P11-W1 does not implement product multi-agent workflow.
@@ -657,6 +665,17 @@ P11-W1 non-claims:
 - P11-W1 does not certify real-provider quality.
 - P11-W1 does not claim L5 release.
 - P11-W1 does not implement Phase 12 release gate.
+
+P11-W2 non-claims:
+
+- P11-W2 does not implement product multi-agent workflow.
+- P11-W2 does not execute `interview_orchestrator_agent` as a runtime agent.
+- P11-W2 does not close all Phase 8 runtime gaps.
+- P11-W2 does not close `deferred_remote_ci_gap`.
+- P11-W2 does not rewrite stale eval reports.
+- P11-W2 does not certify real-provider quality.
+- P11-W2 does not claim L5 release.
+- P11-W2 does not implement Phase 12 release gate.
 
 ## Phase 12
 

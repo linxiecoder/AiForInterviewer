@@ -127,7 +127,8 @@ Status:
 
 - Target locked by P11-W0.
 - P11-W1 Option A contract-first Orchestrator slice is `contract_slice_complete_with_deferred_runtime_gaps`.
-- Runtime/product workflow implementation not started.
+- P11-W2 runtime-hardening slice is `runtime_hardening_slice_complete_with_deferred_product_workflow`.
+- Product workflow implementation not started.
 - Not L5 release.
 
 Required capabilities:
@@ -158,6 +159,15 @@ P11-W1 contract catalog evidence:
 - Cross-agent plan / step / handoff route / state / trace contracts are in `app.application.agents.contracts`.
 - Orchestrator skills and tools are contract-only definitions and validate through the project-level registries.
 - Phase 4 C1 Question / Feedback catalog remains backward-compatible and separate from the L5 contract builder.
+
+P11-W2 runtime-hardening evidence:
+
+- Route-bound cross-agent handoff validation fails closed on source/target mismatch, invalid candidate type, missing required trace refs, missing required validation refs, formal refs and unsafe metadata.
+- Cross-agent resume validation requires checkpoint ref, non-negative base version, idempotency key, owner scope, interrupt ref and supported action.
+- Cross-agent replay validation requires read-only, formal-write-blocked and zero provider/tool/repository/DB/formal-write metadata.
+- Cross-agent trace/timeline mapping preserves plan, handoff, validation and candidate refs separately.
+- HITL trigger validation covers formal write requested, asset conflict, low confidence, ambiguous ownership and validation-failed partial result control events.
+- Evidence remains internal Agent Platform runtime-hardening only; it does not execute Orchestrator, implement product workflow, persist cross-agent state or change provider/prompt/API/DB/frontend/domain behavior.
 
 Forbidden unless separately scoped:
 

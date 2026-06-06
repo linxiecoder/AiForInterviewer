@@ -37,6 +37,15 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P11-W2 Runtime-hardening Slice
+
+P11-W2 implements a narrow runtime-hardening slice for future controlled cross-agent orchestration. It hardens route-bound handoff validation, cross-agent resume/checkpoint validation, replay read-only/formal-write-blocked validation, refs-only trace/timeline mapping and HITL trigger validation. It does not implement product multi-agent workflow, execute `interview_orchestrator_agent` as a runtime agent, close all Phase 8 runtime gaps, close `deferred_remote_ci_gap`, rewrite stale eval reports, certify real-provider quality, claim L5 release or implement Phase 12 release gate.
+
+- [P11_W2_RUNTIME_HARDENING_SLICE.md](2026-06-06/P11_W2_RUNTIME_HARDENING_SLICE.md)：P11-W2 controller scope lock and runtime-hardening slice goal；status updates remain execution evidence only。
+- [P11_W2_IMPLEMENTATION_REPORT.md](2026-06-06/P11_W2_IMPLEMENTATION_REPORT.md)：P11-W2 implementation report；records runtime-hardening helpers, handoff guard changes, tests and remaining product workflow gaps。
+- [P11_W2_VALIDATION_REPORT.md](2026-06-06/P11_W2_VALIDATION_REPORT.md)：P11-W2 validation report；records local validation commands, grep checks and forbidden-scope audit。
+- [P11_W2_SOURCE_BACKFILL_REPORT.md](2026-06-06/P11_W2_SOURCE_BACKFILL_REPORT.md)：P11-W2 source-backfill report；records Matrix / Gates / Decision / Risk / Roadmap / C-target updates and non-claims。
+
 ### 2026-06-06 / P11-W1 Contract-first Orchestrator
 
 P11-W1 implements Option A as a contract-only Orchestrator foundation. It adds `interview_orchestrator_agent`, cross-agent plan / handoff / state / trace contracts, contract-only Orchestrator skills/tools, a separate L5 contract catalog builder and architecture/API contract gates. It does not implement product multi-agent workflow, execute Supervisor / Orchestrator at runtime, close Phase 8 runtime gaps, close `deferred_remote_ci_gap`, rewrite stale eval reports, certify real-provider quality, claim L5 release or implement Phase 12 release gate.

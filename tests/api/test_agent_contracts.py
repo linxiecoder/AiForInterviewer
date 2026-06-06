@@ -543,6 +543,10 @@ def test_cross_agent_orchestration_contracts_are_refs_only_and_fail_closed() -> 
 
     assert step.input_refs == ("session_ref_1",)
     assert handoff.required_trace_refs == ("trace.question_candidate",)
+    assert handoff.side_effect_policy in agent_contracts.CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES
+    assert set(handoff.user_confirmation_required_when) <= set(
+        agent_contracts.CROSS_AGENT_HITL_TRIGGER_TYPES
+    ) | {"asset_update_candidate"}
     assert state_contract.durable_state_refs == ("orch_state_ref",)
     assert trace_contract.validation_refs == ("validation_ref",)
     assert plan.participant_agent_ids == ("polish_question_agent", "polish_feedback_agent")
@@ -568,6 +572,31 @@ def test_cross_agent_orchestration_contracts_are_refs_only_and_fail_closed() -> 
             required_trace_refs=(),
             required_validation_refs=("validation",),
             side_effect_policy="candidate_write",
+            forbidden_data=("raw_prompt",),
+        )
+    with pytest.raises(ValueError, match="side_effect_policy"):
+        agent_contracts.CrossAgentHandoffRoute(
+            route_id="bad_route_side_effect",
+            source_agent_id="polish_question_agent",
+            target_agent_id="polish_feedback_agent",
+            allowed_candidate_types=("question_candidate",),
+            payload_schema_id="payload.v1",
+            required_trace_refs=("trace_ref",),
+            required_validation_refs=("validation_ref",),
+            side_effect_policy="formal_write",
+            forbidden_data=("raw_prompt",),
+        )
+    with pytest.raises(ValueError, match="HITL trigger"):
+        agent_contracts.CrossAgentHandoffRoute(
+            route_id="bad_route_trigger",
+            source_agent_id="polish_question_agent",
+            target_agent_id="polish_feedback_agent",
+            allowed_candidate_types=("question_candidate",),
+            payload_schema_id="payload.v1",
+            required_trace_refs=("trace_ref",),
+            required_validation_refs=("validation_ref",),
+            side_effect_policy="candidate_write",
+            user_confirmation_required_when=("silent_formal_write",),
             forbidden_data=("raw_prompt",),
         )
     with pytest.raises(ValueError, match="steps"):

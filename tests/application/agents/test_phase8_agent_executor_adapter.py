@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.application.agents.contracts import (
     AgentExecutionPlan,
     AgentRuntimeLoopPolicy,
@@ -51,6 +53,57 @@ def test_phase8_agent_executor_adapter_surfaces_runtime_without_formal_writes() 
     assert timeline.events[0].validation_refs == ("validation_ref_application",)
     assert cancelled.candidate_refs == started.output_refs
     assert cancelled.metadata["formal_write_blocked"] is True
+
+
+def test_phase8_agent_executor_adapter_uses_strict_cross_agent_resume_opt_in() -> None:
+    runner = _ApplicationRunner()
+    executor = AgentGraphRunnerExecutorAdapter(runner)
+    plan = AgentExecutionPlan(
+        plan_id="plan_application_phase8_resume",
+        run_id="arun_application_phase8_resume",
+        ai_task_id="aitask_application_phase8_resume",
+        agent_id="polish_question_graph",
+        owner_id="owner_1",
+        actor_id="actor_1",
+        graph_name="polish_question_graph",
+        graph_version="v0",
+        objective="application layer P8 adapter cross-agent resume opt-in gate",
+        input_refs=("session_ref_1",),
+        requested_outputs=("candidate_refs",),
+        idempotency_key="idem_application_phase8_resume",
+        runtime_loop_policy=_runtime_loop_policy(),
+    )
+
+    started = executor.start(plan)
+
+    with pytest.raises(ValueError, match="checkpoint_ref"):
+        executor.resume(
+            started.run_id,
+            {
+                "cross_agent_resume": True,
+                "interrupt_ref": "interrupt_ref_1",
+                "base_version": 1,
+                "idempotency_key": "idem_resume_1",
+                "owner_id": "owner_1",
+                "resume_action": "continue",
+            },
+        )
+
+    resumed = executor.resume(
+        started.run_id,
+        {
+            "cross_agent_resume": True,
+            "interrupt_ref": "interrupt_ref_1",
+            "checkpoint_ref": "checkpoint_ref_1",
+            "base_version": 1,
+            "idempotency_key": "idem_resume_1",
+            "owner_id": "owner_1",
+            "resume_action": "continue",
+        },
+    )
+
+    assert resumed.run_id == started.run_id
+    assert resumed.metadata["formal_write_blocked"] is True
 
 
 class _ApplicationRunner:

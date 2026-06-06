@@ -118,6 +118,8 @@ def test_phase11_l5_catalog_registers_orchestrator_without_replacing_c1() -> Non
 
 def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release() -> None:
     from app.application.agents.contracts import (
+        CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES,
+        CROSS_AGENT_HITL_TRIGGER_TYPES,
         CrossAgentPlan,
         CrossAgentHandoffRoute,
         CrossAgentStateContract,
@@ -157,7 +159,13 @@ def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release
 
 
 def test_cross_agent_contracts_fail_closed_and_forbid_raw_payloads() -> None:
-    from app.application.agents.contracts import CrossAgentHandoffRoute, CrossAgentPlan, CrossAgentTraceContract
+    from app.application.agents.contracts import (
+        CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES,
+        CROSS_AGENT_HITL_TRIGGER_TYPES,
+        CrossAgentHandoffRoute,
+        CrossAgentPlan,
+        CrossAgentTraceContract,
+    )
     from app.application.agents.definitions.catalog import build_default_agent_platform_l5_contract_registries
 
     orchestrator = build_default_agent_platform_l5_contract_registries().agent_definitions.get(
@@ -180,6 +188,10 @@ def test_cross_agent_contracts_fail_closed_and_forbid_raw_payloads() -> None:
     assert plan.trace_ref
     assert handoff.required_trace_refs
     assert handoff.required_validation_refs
+    assert handoff.side_effect_policy in CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES
+    assert set(handoff.user_confirmation_required_when) <= set(CROSS_AGENT_HITL_TRIGGER_TYPES) | {
+        "asset_update_candidate",
+    }
     assert trace.required_trace_refs
     assert trace.validation_refs
     assert REQUIRED_CROSS_AGENT_FORBIDDEN_DATA <= set(handoff.forbidden_data)

@@ -497,3 +497,44 @@ P11-W1 non-claims:
 - P11-W1 does not certify real-provider quality.
 - P11-W1 does not claim L5 release.
 - P11-W1 does not implement Phase 12 release gate.
+
+## DEC-020 P11-W2 Runtime-hardening Slice
+
+Status: accepted_for_p11_w2_runtime_hardening_slice
+
+Decision:
+
+P11-W2 selects a narrow runtime-hardening slice for future controlled cross-agent orchestration.
+
+Accepted scope:
+
+- harden route-bound cross-agent handoff validation.
+- add cross-agent resume/checkpoint validation helper and strict adapter opt-in.
+- add cross-agent replay read-only / formal-write-blocked validation.
+- add refs-only cross-agent trace/timeline mapping validation.
+- add HITL trigger validation for `formal_write_requested`, `asset_conflict`, `low_confidence`, `ambiguous_ownership` and `validation_failed_partial_result`.
+- update focused local tests and source backfill for the runtime-hardening slice only.
+
+Not accepted:
+
+- product multi-agent workflow.
+- executing `interview_orchestrator_agent` as a runtime agent.
+- Orchestrator wiring into `AgentExecutor`, LangGraph, `AiOrchestrationFacade`, Question workflow, Feedback workflow, API routes or persistence.
+- prompt/provider/API/DB/frontend/domain behavior changes.
+- eval dataset, grader, suite, report, script or workflow changes.
+- L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or full Phase 8 runtime gap closure.
+
+Result:
+
+P11-W2 may report `runtime_hardening_slice_complete_with_deferred_product_workflow` only if code/tests/source-backfill validation passes and all forbidden paths remain untouched.
+
+P11-W2 non-claims:
+
+- P11-W2 does not implement product multi-agent workflow.
+- P11-W2 does not execute `interview_orchestrator_agent` as a runtime agent.
+- P11-W2 does not close all Phase 8 runtime gaps.
+- P11-W2 does not close `deferred_remote_ci_gap`.
+- P11-W2 does not rewrite stale eval reports.
+- P11-W2 does not certify real-provider quality.
+- P11-W2 does not claim L5 release.
+- P11-W2 does not implement Phase 12 release gate.

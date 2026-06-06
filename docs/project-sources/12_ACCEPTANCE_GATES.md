@@ -490,6 +490,45 @@ P11-W1 non-claims:
 - P11-W1 does not claim L5 release.
 - P11-W1 does not implement Phase 12 release gate.
 
+## P11-W2 Runtime-hardening Slice Gate
+
+适用于 `P11-W2-RUNTIME-HARDENING-SLICE`。
+
+Status:
+
+- `runtime_hardening_slice_complete_with_deferred_product_workflow` is allowed only for the narrow runtime-hardening slice.
+- This status is not L5 release, not product workflow completion, not remote CI success and not Phase 12 release gate completion.
+
+必须满足：
+
+- Cross-agent handoff route validation fails closed on source/target mismatch, invalid candidate type, missing trace refs, missing validation refs, formal refs and unsafe metadata.
+- Cross-agent resume validation requires `checkpoint_ref`, non-negative integer `base_version`, `idempotency_key`, owner scope, `interrupt_ref` and supported action.
+- Cross-agent replay metadata remains `read_only`, `formal_write_blocked` and zero-provider/tool/repository/DB/formal-write.
+- Cross-agent trace/timeline mapping preserves plan, handoff, validation and candidate refs separately and rejects collapsed output refs.
+- HITL trigger validation covers `formal_write_requested`, `asset_conflict`, `low_confidence`, `ambiguous_ownership` and `validation_failed_partial_result`, and rejects success-like statuses when a failure reason is present.
+- Focused tests cover negative handoff, resume, replay, trace/timeline and HITL cases.
+
+禁止：
+
+- wiring Orchestrator into `AgentExecutor`, LangGraph, `AiOrchestrationFacade`, Question workflow, Feedback workflow, API routes or persistence.
+- executing `interview_orchestrator_agent` as a runtime agent.
+- product multi-agent workflow implementation.
+- prompt/provider/API/DB/frontend/domain behavior changes.
+- eval dataset, grader, suite, report, script or workflow changes.
+- claiming L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or full Phase 8 runtime gap closure.
+
+P11-W2 non-claims:
+
+- P11-W2 does not implement product multi-agent workflow.
+- P11-W2 does not execute `interview_orchestrator_agent` as a runtime agent.
+- P11-W2 does not close all Phase 8 runtime gaps.
+- P11-W2 does not close `deferred_remote_ci_gap`.
+- P11-W2 does not rewrite stale eval reports.
+- P11-W2 does not certify real-provider quality.
+- P11-W2 does not claim L5 release.
+- P11-W2 does not implement Phase 12 release gate.
+- P11-W2 does not change provider, prompt, API, DB, frontend, domain policy or business persistence behavior.
+
 ## Phase 12 Release Gate
 
 适用于 Phase 12 L5 Eval, Hardening, and Release Gate。
