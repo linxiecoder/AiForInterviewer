@@ -117,6 +117,88 @@ Current P8 foundation status:
 - Deferred: raw asset body transfer and formal asset composition/write semantics, future / indirect graph tool-loop expansion outside the covered facade start surfaces and Question/Feedback direct paths, remaining product-level runtime/orchestration wiring and runner-bound HITL emission / resume validation outside the already covered facade/generic/Question/Feedback paths, DB persistence/API status taxonomy beyond the runtime DTO and Polish question application status mapping, product-level Supervisor / L5 orchestration and proving complete trace population for remaining product/future runtime events outside current generic start/resume/cancel plus Feedback service-backed resume/start/cancel, Question start/resume/cancel and target handoff timeline coverage.
 - Non-goal remains: Phase 11 Supervisor / Orchestrator, Phase 12 L5 release gate, formal F8/M8 release, prompt/provider/API/DB/frontend/domain-policy changes.
 
+## L5 Controlled Multi-Agent Orchestration Target
+
+Phase:
+
+Phase 11
+
+Status:
+
+- Target locked by P11-W0.
+- P11-W1 Option A contract-first Orchestrator slice is `contract_slice_complete_with_deferred_runtime_gaps`.
+- Runtime/product workflow implementation not started.
+- Not L5 release.
+
+Required capabilities:
+
+- registered Supervisor / Orchestrator Agent
+- typed cross-agent goal decomposition
+- cross-agent plan contract
+- typed cross-agent handoff contract
+- cross-agent state / checkpoint / replay contract
+- cross-agent trace timeline
+- bounded tool loop with `max_steps` / `max_retries` / `timeout` / `stop_conditions`
+- HITL triggers for asset conflict, formal write, low confidence, ambiguous ownership and validation failed with partial result
+- at least one end-to-end product workflow with three or more business agents
+- candidate-only output boundary
+- formal write remains Application Service -> Domain Policy -> Handoff
+
+Non-claims:
+
+- P8 typed handoff primitive is not product-level Supervisor / L5 orchestration.
+- Question / Feedback planned workflows are not a three-or-more-business-agent product workflow.
+- P11-W0 source wording is not implementation evidence.
+- P11-W1 contract-only Orchestrator is not product multi-agent workflow or runtime execution evidence.
+- P11-W1 does not close Phase 8 runtime gaps, `deferred_remote_ci_gap`, stale eval report metadata risk, real-provider quality certification or Phase 12 release gate.
+
+P11-W1 contract catalog evidence:
+
+- `interview_orchestrator_agent` is registered only through `build_default_agent_platform_l5_contract_registries()`.
+- Cross-agent plan / step / handoff route / state / trace contracts are in `app.application.agents.contracts`.
+- Orchestrator skills and tools are contract-only definitions and validate through the project-level registries.
+- Phase 4 C1 Question / Feedback catalog remains backward-compatible and separate from the L5 contract builder.
+
+Forbidden unless separately scoped:
+
+- unbounded autonomous swarm
+- Agent direct DB / repository write
+- Tool direct repository exposure
+- infrastructure business policy
+- provider full prompt / full resume / full JD fallback
+- prompt/provider/API/DB/frontend/domain behavior changes
+- committed eval report rewrite
+- remote CI claim without visible run/artifact
+
+## L5 Eval, Hardening, and Release Gate Target
+
+Phase:
+
+Phase 12
+
+Status:
+
+- Target locked by P11-W0.
+- Release gate not started.
+
+Required capabilities:
+
+- multi-agent regression suite
+- cross-agent replay fixtures
+- failure-mode regression cases
+- L5 CI gate
+- observability / trace report
+- rollback policy
+- failure triage policy
+- remote CI artifact evidence
+- human release decision
+
+Non-claims:
+
+- P9 replay/fixture eval foundation is not real-provider quality certification.
+- `complete_with_deferred_remote_ci_gap` is not remote CI success.
+- Phase 12 cannot release with hidden candidate/formal or provider fail-open gaps.
+
 ## Required Contracts
 
 ### AgentDefinition

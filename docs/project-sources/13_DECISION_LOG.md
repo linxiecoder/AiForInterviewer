@@ -386,3 +386,114 @@ Not accepted:
 Recommendation:
 
 Enter Phase 11 only under a new scope lock that explicitly carries or resolves `deferred_remote_ci_gap`, preserves Phase 8 runtime gaps unless directly authorized for implementation, and keeps L5 release out of scope until a separate release gate.
+
+## DEC-017 Phase 11 Scope Lock Target
+
+Status: proposed
+
+Decision:
+
+Phase 11 target should be L5 Controlled Multi-Agent Orchestration.
+
+Proposed scope:
+
+- registered Supervisor / Orchestrator Agent
+- typed cross-agent goal decomposition
+- cross-agent plan contract
+- typed cross-agent handoff contract
+- cross-agent state / checkpoint / replay contract
+- cross-agent trace timeline
+- bounded tool loop with `max_steps` / `max_retries` / `timeout` / `stop_conditions`
+- HITL triggers for asset conflict, formal write, low confidence, ambiguous ownership and validation failed with partial result
+- at least one end-to-end product workflow with three or more business agents
+- candidate-only output boundary
+- formal write remains Application Service -> Domain Policy -> Handoff
+
+Not accepted:
+
+- L5 release claim
+- unbounded autonomous swarm
+- Agent direct DB / repository write
+- Tool direct repository exposure
+- provider full prompt / full resume / full JD fallback
+- prompt/provider/API/DB/frontend/domain behavior changes unless separately scoped
+- committed eval report rewrite
+- remote CI claim without visible run/artifact
+
+Recommendation:
+
+Controller/user must choose a next-window option before implementation. P11-W0 does not choose an option and does not implement Supervisor / Orchestrator.
+
+## DEC-018 Phase 12 Release Gate Target
+
+Status: proposed
+
+Decision:
+
+Phase 12 target should be L5 Eval, Hardening, and Release Gate.
+
+Proposed scope:
+
+- multi-agent regression suite
+- cross-agent replay fixtures
+- failure-mode regression cases
+- L5 CI gate
+- observability / trace report
+- rollback policy
+- failure triage policy
+- remote CI artifact evidence
+- human release decision
+
+Not accepted:
+
+- claiming L5 with unit tests only
+- claiming L5 with fake-only or replay-only eval
+- skipping replay / trace evidence
+- release with unresolved candidate/formal boundary gaps
+- release with unresolved provider fail-open gaps
+- release without human/controller decision
+
+Recommendation:
+
+Do not start Phase 12 until Phase 11 implementation evidence, carried Phase 8 gap treatment, remote CI artifact policy and human/controller release criteria are explicit.
+
+## DEC-019 P11-W1 Contract-first Orchestrator Option A
+
+Status: accepted_for_p11_w1_contract_slice
+
+Decision:
+
+P11-W1 selects Option A: Contract-first Orchestrator.
+
+Accepted scope:
+
+- add contract-only `interview_orchestrator_agent` AgentDefinition.
+- add cross-agent plan / step / handoff route / state / trace contracts.
+- add contract-only Orchestrator SkillDefinition and ToolDefinition records.
+- add `build_default_agent_platform_l5_contract_registries()` as a separate L5 contract catalog builder.
+- keep Phase 4 C1 Question / Feedback catalog behavior backward-compatible.
+- add architecture and API contract gates for candidate-only, no direct repository exposure, no runtime wiring and no release claim.
+
+Not accepted:
+
+- product multi-agent workflow.
+- Supervisor / Orchestrator runtime execution.
+- Orchestrator wiring into `AgentExecutor`, LangGraph, `AiOrchestrationFacade`, Question workflow, Feedback workflow, API routes or persistence.
+- prompt/provider/API/DB/frontend/domain behavior changes.
+- eval dataset, grader, suite, report, script or workflow changes.
+- L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or Phase 8 runtime gap closure.
+
+Result:
+
+P11-W1 may report `contract_slice_complete_with_deferred_runtime_gaps` only if code/tests/source-backfill validation passes and all forbidden paths remain untouched.
+
+P11-W1 non-claims:
+
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.

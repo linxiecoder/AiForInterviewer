@@ -452,6 +452,94 @@ deprecation_policy:
 compatibility_policy:
 ```
 
+## L5 Supervisor / Orchestrator Addendum
+
+P11-W0 locks the Phase 11 target as L5 Controlled Multi-Agent Orchestration.
+P11-W1 adds a contract-only `interview_orchestrator_agent` definition and cross-agent contract dataclasses. This is contract foundation only: it does not execute Supervisor / Orchestrator at runtime and does not implement product multi-agent workflow.
+
+Any `interview_orchestrator_agent`, future `supervisor_orchestrator_agent`, or equivalent Phase 11 definition must include:
+
+```yaml
+agent_id:
+agent_name:
+maturity_level: L5 multi-agent system
+lifecycle_status:
+goal_decomposition_contract:
+cross_agent_plan_contract:
+cross_agent_handoff_contract:
+cross_agent_state_contract:
+checkpoint_replay_contract:
+trace_timeline_contract:
+bounded_tool_loop:
+HITL_triggers:
+candidate_outputs:
+formal_write_boundary:
+eval_contract:
+```
+
+P11-W1 contract-only current shape:
+
+- `agent_id`: `interview_orchestrator_agent`
+- `lifecycle_status`: `contract_only`
+- `maturity_level`: L5 target contract foundation, not L5 release.
+- `candidate_outputs`: `cross_agent_plan_candidate`, `cross_agent_handoff_candidate`, `cross_agent_state_candidate`, `cross_agent_trace_candidate`.
+- `formal_write_boundary`: direct formal writes disallowed; Application Service -> Domain Policy -> Handoff remains the formal write boundary.
+- `skills`: Orchestrator goal decomposition, route planning, handoff validation, state/checkpoint planning, trace/timeline planning and HITL trigger planning.
+- `tools`: contract-only read/validate tools; no repository, DB, SQLAlchemy session, unit of work or formal writer exposure.
+- `catalog`: registered only through `build_default_agent_platform_l5_contract_registries()`, not through the Phase 4 C1 builder.
+
+Required rules:
+
+- Supervisor / Orchestrator may coordinate agents, but still cannot write formal business facts directly.
+- Every business-agent output remains candidate / suggestion / validation / plan / trace.
+- Cross-agent handoff must carry refs, schema IDs, validation refs, trace refs, side-effect keys and idempotency keys.
+- State / checkpoint / replay is orchestration control state, not business fact persistence.
+- Tool loops must define `max_steps`, `max_retries`, `timeout_seconds`, allowed tools, allowed callers, side-effect policy and stop conditions.
+- HITL must cover asset conflict, formal write, low confidence, ambiguous ownership and validation failed with partial result.
+- At least one Phase 11 product workflow must prove three or more business agents before any L5 workflow claim.
+
+Forbidden:
+
+- unbounded autonomous swarm
+- Agent direct DB / repository write
+- Tool direct repository exposure
+- provider full prompt / full resume / full JD fallback
+- prompt/provider/API/DB/frontend/domain behavior changes unless separately scoped
+- marking L5-002 to L5-006 implemented, validated or done without fresh code/test/eval evidence
+
+P11-W1 non-claims:
+
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.
+
+## Phase 12 Eval / Release Contract Addendum
+
+Phase 12 target is L5 Eval, Hardening, and Release Gate. It requires:
+
+```yaml
+multi_agent_eval_suite_ids:
+cross_agent_replay_fixture_refs:
+failure_mode_regression_cases:
+trace_report_refs:
+remote_ci_artifact_refs:
+rollback_policy:
+failure_triage_policy:
+human_release_decision:
+```
+
+Rules:
+
+- Unit tests cannot certify L5 release.
+- Replay/fake eval cannot certify real-provider quality.
+- Remote CI must cite visible run and artifact evidence.
+- Release is blocked while candidate/formal boundary, provider fail-closed or Phase 8 runtime gaps remain unresolved or explicitly accepted by the release controller.
+
 ## 禁止事项
 
 - Agent 不得直接写正式业务对象。

@@ -520,3 +520,196 @@ Mitigation:
 Closure condition:
 
 - A scoped Phase 8 follow-up or Phase 11 runtime/orchestration window implements or verifies the specific runtime gaps with tests, source backfill and no false L5 release claim.
+
+## RISK-029 fake Supervisor / Orchestrator
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 11 could create a named Supervisor / Orchestrator that only calls existing services serially without typed goal decomposition, plan, handoff, state, trace, bounded tool loop or HITL semantics.
+
+Mitigation:
+
+- Phase 11 Scope Gate requires registered definition, typed cross-agent contracts, trace timeline and tests.
+- Decision options remain proposed until controller/user confirms next-window scope.
+- Matrix keeps `L5-002` as `not_started` in P11-W0.
+
+Closure condition:
+
+- Phase 11 implementation evidence proves orchestration behavior and negative tests reject fake/shell orchestration.
+
+## RISK-030 contract-only L5 false claim
+
+Severity: high
+
+Status: open
+
+Description:
+
+P11-W0 or a contract-first Phase 11 window could be misread as L5 implementation or release because target contracts are documented.
+
+Mitigation:
+
+- P11-W0 records source status as scope lock / design only.
+- `L5-002` to `L5-006` cannot be marked implemented, validated or done in P11-W0.
+- P11-W1 may only claim `contract_slice_complete_with_deferred_runtime_gaps`; its Orchestrator definition, contracts, skills and tools are contract-only and architecture-gated for no runtime wiring.
+- Phase 12 release gate remains not started.
+
+Closure condition:
+
+- Later implementation and release windows provide code, tests, eval/replay, CI artifact and human/controller decision evidence.
+
+## RISK-031 serial service calls disguised as MultiAgent
+
+Severity: high
+
+Status: open
+
+Description:
+
+A product vertical slice could chain existing Question / Feedback / asset logic without true cross-agent plan, handoff, state, checkpoint/replay and trace semantics.
+
+Mitigation:
+
+- Phase 11 requires typed cross-agent plan/handoff/state/trace contracts.
+- At least one workflow must involve three or more business agents and keep candidate/formal boundaries.
+- Trace timeline must show cross-agent refs, not only sequential service calls.
+
+Closure condition:
+
+- End-to-end tests and trace evidence prove multi-agent orchestration semantics.
+
+## RISK-032 replay/fake eval mistaken for provider quality
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 9 replay/fake-visible evidence can be mistaken for real-provider quality certification or Phase 12 release evidence.
+
+Mitigation:
+
+- P11-W0 carries real-provider quality certification non-claim.
+- Phase 12 Release Gate forbids L5 release with fake-only or replay-only eval.
+- Any real-provider quality evidence must be separately scoped.
+
+Closure condition:
+
+- Separate real-provider/advisory eval window or release gate records provider evidence, redaction, human review and non-fake certification.
+
+## RISK-033 Phase 8 gaps normalized by wording
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 8 foundation evidence is extensive and could be shortened into done wording, hiding deferred runtime gaps needed by Phase 11.
+
+Mitigation:
+
+- Gap reconciliation table carries raw asset body, formal asset write, future tool-loop, product wiring, HITL, DB/API taxonomy and trace gaps.
+- Phase 11 Scope Gate requires per-gap treatment.
+- Phase 0-10 remains `closed_with_deferred_gaps`.
+
+Closure condition:
+
+- Each runtime gap is implemented/verified or explicitly accepted as deferred in a later authorized window.
+
+## RISK-034 missing cross-agent state durability
+
+Severity: high
+
+Status: open
+
+Description:
+
+Supervisor / Orchestrator could coordinate transient calls without durable checkpoint/replay semantics, making cross-agent recovery and audit unreliable.
+
+Mitigation:
+
+- Phase 11 target requires cross-agent state / checkpoint / replay contract.
+- State is control state, not business fact persistence.
+- Replay must remain read-only and formal-write-blocked unless separately authorized.
+
+Closure condition:
+
+- Phase 11 tests prove checkpoint/base/idempotency validation and replay trace behavior for cross-agent state.
+
+## RISK-035 missing HITL for formal write / asset conflict
+
+Severity: high
+
+Status: open
+
+Description:
+
+L5 workflow could bypass user confirmation or HITL when asset conflict, formal write, low confidence, ambiguous ownership or validation-failed partial result occurs.
+
+Mitigation:
+
+- Phase 11 requires these HITL triggers.
+- Formal writes remain Application Service -> Domain Policy -> Handoff.
+- Asset update candidates require user confirmation.
+
+Closure condition:
+
+- HITL trigger and resume tests cover all required cases in the selected product workflow.
+
+## RISK-036 Phase 12 release gate skipped
+
+Severity: high
+
+Status: open
+
+Description:
+
+After Phase 11 implementation, a team could claim L5 release without multi-agent eval/replay, remote CI artifact, observability report, rollback policy or human/controller decision.
+
+Mitigation:
+
+- Phase 12 is explicit and not started.
+- Phase 12 Release Gate forbids unit-test-only, fake-only or replay-only release claims.
+- Remote CI artifact evidence and human release decision are required.
+
+Closure condition:
+
+- Phase 12 completes with release evidence and controller/user approval.
+
+## RISK-037 P11-W1 contract Orchestrator 被误读为 runtime Orchestrator
+
+Severity: high
+
+Status: open
+
+Description:
+
+P11-W1 adds a real contract-only `interview_orchestrator_agent`, cross-agent contracts and L5 contract catalog builder. Without explicit wording, later readers could treat that as product multi-agent workflow, Supervisor / Orchestrator runtime execution, Phase 8 runtime gap closure or L5 release evidence.
+
+Mitigation:
+
+- P11-W1 source backfill and reports use `contract_slice_complete_with_deferred_runtime_gaps`.
+- Architecture gates assert `interview_orchestrator_agent` is absent from runtime, handoff, ai_runtime, polish, API, domain and infrastructure Python paths.
+- L5 catalog builder is separate from the Phase 4 C1 builder and only validates contract references.
+- P11-W1 non-claims are repeated in implementation and source-backfill records.
+
+Closure condition:
+
+- A later Phase 11 product/runtime window explicitly wires and verifies Supervisor / Orchestrator behavior with focused runtime, HITL, trace, replay and source-backfill evidence, or the release controller explicitly accepts the remaining runtime gaps.
+
+P11-W1 non-claims:
+
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.

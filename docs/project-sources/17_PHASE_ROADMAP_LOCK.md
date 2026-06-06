@@ -588,6 +588,109 @@ Phase 10 Evidence:
 - `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --report-dir /tmp/aifi-p10-closeout-eval-reports` passed with `30 passed`, `0 blocking_failures`, `2 deferred`, current short SHA `76c670c`.
 - `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture` observed expected failure `must_not_have_present:你负责过`.
 
+## Phase 11
+
+Name:
+
+L5 Controlled Multi-Agent Orchestration
+
+Current Status:
+
+- `scope_lock_complete_with_deferred_gaps` for P11-W0 docs-only reconciliation.
+- `contract_slice_complete_with_deferred_runtime_gaps` for P11-W1 Option A contract-first Orchestrator.
+- Runtime/product workflow implementation not started.
+- `L5-002` Supervisor / Orchestrator is contract-only validated with deferred runtime/product workflow gaps.
+- `L5-003` cross-agent handoff / state / trace contracts are validated with deferred runtime execution gaps.
+- `L5-004` multi-agent product workflow remains `not_started`.
+- `L5-005` controlled tool loop hardening remains `implementation_planned`.
+
+Goal:
+
+- Register a Supervisor / Orchestrator Agent.
+- Define typed cross-agent goal decomposition.
+- Define cross-agent plan, handoff, state, checkpoint, replay and trace contracts.
+- Enforce bounded tool loop with `max_steps`, `max_retries`, `timeout` and `stop_conditions`.
+- Add HITL triggers for asset conflict, formal write, low confidence, ambiguous ownership and validation failed with partial result.
+- Prove at least one end-to-end product workflow with three or more business agents.
+- Preserve candidate-only outputs and formal write through Application Service -> Domain Policy -> Handoff.
+
+Allowed only in a separately scoped Phase 11 implementation window:
+
+- Supervisor / Orchestrator runtime wiring.
+- Product multi-agent workflow implementation.
+- Scoped runtime/orchestration behavior explicitly authorized by the selected option.
+- Source backfill for implemented/verified capability only.
+
+Forbidden:
+
+- L5 release claim.
+- Unbounded autonomous swarm.
+- Agent direct DB / repository write.
+- Tool direct repository exposure.
+- Infrastructure business policy.
+- Provider full prompt / full resume / full JD fallback.
+- Prompt/provider/API/DB/frontend/domain behavior changes unless separately scoped.
+- Committed eval report rewrite.
+- Remote CI claim without visible run/artifact.
+
+P11-W0 Evidence:
+
+- `docs/goals/2026-06-06/P11_W0_SCOPE_LOCK_AND_GAP_RECONCILIATION.md`
+- `docs/goals/2026-06-06/P11_W0_GAP_RECONCILIATION.md`
+- `docs/goals/2026-06-06/P11_W0_DECISION_OPTIONS.md`
+- `docs/goals/2026-06-06/P11_W0_SOURCE_BACKFILL_AUDIT.md`
+
+P11-W1 Evidence:
+
+- `docs/goals/2026-06-06/P11_W1_CONTRACT_FIRST_ORCHESTRATOR.md`
+- `docs/goals/2026-06-06/P11_W1_IMPLEMENTATION_REPORT.md`
+- `docs/goals/2026-06-06/P11_W1_VALIDATION_REPORT.md`
+- `docs/goals/2026-06-06/P11_W1_SOURCE_BACKFILL_REPORT.md`
+
+P11-W1 non-claims:
+
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.
+
+## Phase 12
+
+Name:
+
+L5 Eval, Hardening, and Release Gate
+
+Current Status:
+
+- Not started.
+- `L5-006` remains `not_started`.
+- No L5 release, real-provider quality certification, formal F8/M8 release or remote CI success is claimed by P11-W0.
+
+Goal:
+
+- Multi-agent regression suite.
+- Cross-agent replay fixtures.
+- Failure-mode regression cases.
+- L5 CI gate.
+- Observability / trace report.
+- Rollback policy.
+- Failure triage policy.
+- Remote CI artifact evidence.
+- Human/controller release decision.
+
+Forbidden:
+
+- Claiming L5 with unit tests only.
+- Claiming L5 with fake-only or replay-only eval.
+- Skipping replay / trace evidence.
+- Release with unresolved candidate/formal boundary gaps unless explicitly accepted by release controller.
+- Release with unresolved provider fail-open gaps.
+- Release without human/controller decision.
+
 ## Phase 11 Entry Conditions
 
 Phase 11 may start only after these conditions are explicit in the next scope lock:

@@ -405,6 +405,115 @@ Phase 10 accepted evidence:
 - 关闭 Phase 8 runtime gaps。
 - 标记 L5 release、Phase 11 Supervisor / Orchestrator done 或 Phase 12 release gate done。
 
+## L5 Multi-Agent Gate
+
+适用于 Phase 11 / Phase 12 的 L5 能力声明。
+
+必须满足：
+
+- Phase 0-10 明确保持 L5 Foundation `closed_with_deferred_gaps`，不得作为 L5 release。
+- `deferred_remote_ci_gap`、Phase 8 runtime gaps、stale committed report metadata risk、Supervisor / Orchestrator not started、Phase 12 release gate not started 和 real-provider quality certification non-claim 必须显式处理。
+- L5-002 到 L5-006 不得在 P11-W0 标记 implemented、validated 或 done。
+- replay / fake / fixture evidence 不得当作 real-provider quality certification。
+- remote CI claim 必须引用 visible passing GitHub Actions run 和 artifact。
+- 每个跨 Agent 输出仍为 candidate / suggestion / validation / plan / trace。
+- formal write 只能经 Application Service -> Domain Policy -> Handoff。
+
+禁止：
+
+- 以 unit tests alone 声称 L5 release。
+- 以 serial service calls disguised as MultiAgent 声称 L5 orchestration。
+- 以 contracts-only documentation 声称 Supervisor / Orchestrator implemented。
+- 以 Phase 8 foundation partial 声称 Phase 11/12 done。
+
+## Phase 11 Scope Gate
+
+适用于 Phase 11 L5 Controlled Multi-Agent Orchestration。
+
+必须满足：
+
+- fresh scope lock 选择一个已确认的 next-window option。
+- registered Supervisor / Orchestrator Agent scope 明确。
+- typed cross-agent goal decomposition、plan、handoff、state、checkpoint、replay 和 trace contracts 明确。
+- bounded tool loop 包含 `max_steps`、`max_retries`、`timeout` 和 `stop_conditions`。
+- HITL triggers 覆盖 asset conflict、formal write、low confidence、ambiguous ownership、validation failed with partial result。
+- 至少一个三业务 Agent 产品 workflow 的实现和验证边界明确。
+- candidate-only 和 formal-write handoff 边界保持。
+- Phase 8 runtime gaps 是被实现、被验证还是继续 deferred 必须逐项说明。
+
+禁止：
+
+- unbounded autonomous swarm。
+- Agent direct DB / repository write。
+- Tool direct repository exposure。
+- infrastructure business policy。
+- prompt/provider/API/DB/frontend/domain behavior changes unless separately scoped。
+- committed eval report rewrite。
+- remote CI claim without visible run/artifact。
+
+## P11-W1 Contract-first Orchestrator Gate
+
+适用于 `P11-W1-CONTRACT-FIRST-ORCHESTRATOR` / Option A。
+
+Status:
+
+- `contract_slice_complete_with_deferred_runtime_gaps` is allowed only for the contract-first slice.
+- This status is not L5 release, not product workflow completion and not Phase 8 runtime gap closure.
+
+必须满足：
+
+- `interview_orchestrator_agent` is registered only in the L5 contract catalog.
+- Existing Phase 4 C1 builder continues to register Question / Feedback only.
+- Cross-agent plan, plan step, handoff route, state/checkpoint/replay and trace/timeline contracts exist as immutable contract-only dataclasses.
+- Cross-agent contracts require non-empty IDs, trace refs, validation refs, state refs and stop conditions where applicable.
+- Cross-agent contracts normalize tuple/list inputs and filter forbidden metadata keys.
+- Orchestrator skills are `contract_only`, do not call LLM, do not execute runtime logic, do not access DB/repository and include eval refs or deferred eval refs.
+- Orchestrator tools are `read_only` or `forbidden`, do not expose repository, DB, SQLAlchemy session, unit of work or formal writer, and include required forbidden data keys.
+- L5 contract catalog validates AgentDefinition -> SkillDefinition / ToolDefinition references.
+- Architecture gates prove candidate-only outputs, no formal outputs, no product workflow execution, no runtime wiring and no L5 release claim.
+
+禁止：
+
+- wiring Orchestrator into `AgentExecutor`, LangGraph, `AiOrchestrationFacade`, Question workflow, Feedback workflow, API routes or persistence.
+- executing Supervisor / Orchestrator at runtime.
+- modifying provider, prompt, API, DB, frontend, domain policy, eval datasets, eval graders, eval suites, eval reports, scripts or workflow files.
+- claiming L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or Phase 8 runtime gap closure.
+
+P11-W1 non-claims:
+
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.
+
+## Phase 12 Release Gate
+
+适用于 Phase 12 L5 Eval, Hardening, and Release Gate。
+
+必须满足：
+
+- multi-agent regression suite。
+- cross-agent replay fixtures。
+- failure-mode regression cases。
+- L5 CI gate with visible artifact evidence。
+- observability / trace report。
+- rollback policy。
+- failure triage policy。
+- human/controller release decision。
+
+禁止：
+
+- claiming L5 with unit tests only。
+- claiming L5 with fake-only or replay-only eval。
+- skipping replay / trace evidence。
+- release with unresolved candidate/formal boundary gaps unless explicitly accepted by release controller。
+- release with unresolved provider fail-open gaps。
+- release without human/controller decision。
+
 ## Traceability Gate
 
 必须满足：

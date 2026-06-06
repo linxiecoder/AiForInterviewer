@@ -23,6 +23,10 @@ ALLOWED_CANDIDATE_OUTPUTS = frozenset(
         "training_plan_candidate",
         "report_candidate",
         "review_candidate",
+        "cross_agent_plan_candidate",
+        "cross_agent_handoff_candidate",
+        "cross_agent_state_candidate",
+        "cross_agent_trace_candidate",
     }
 )
 ALLOWED_TOOL_SIDE_EFFECT_POLICIES = frozenset(
@@ -39,12 +43,16 @@ REQUIRED_TOOL_FORBIDDEN_DATA = frozenset(
         "system_prompt",
         "developer_prompt",
         "raw_provider_payload",
+        "provider_payload",
         "raw_completion",
         "full_resume",
         "full_jd",
+        "full_answer",
+        "full_asset_body",
         "secrets",
         "tokens",
         "cookies",
+        "api_key",
         "api_keys",
     }
 )

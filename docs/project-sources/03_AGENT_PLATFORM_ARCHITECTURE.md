@@ -303,6 +303,85 @@ Provider 行为重构留到 Phase 7。
 | Phase 8 | LangGraph / 多 Agent runtime |
 | Phase 9 | Eval / CI / Regression gate |
 | Phase 10 | 阶段收口和 Project sources 回填 |
+| Phase 11 | L5 Controlled Multi-Agent Orchestration |
+| Phase 12 | L5 Eval, Hardening, and Release Gate |
+
+## Phase 11 / Phase 12 Scope Lock Addendum
+
+P11-W0 reconciliation result:
+
+- Phase 0-10 is L5 Foundation `closed_with_deferred_gaps`, not L5 release.
+- Phase 8 runtime gaps remain deferred.
+- `deferred_remote_ci_gap` remains open unless a visible passing GitHub Actions run and artifact are cited.
+- Committed Phase 9 eval report metadata short SHA `f86adea` remains residual risk until a separate report refresh window is authorized.
+- Supervisor / Orchestrator implementation has not started.
+- Phase 12 release gate has not started.
+
+P11-W1 Contract-first Orchestrator result:
+
+- `interview_orchestrator_agent` exists as a contract-only AgentDefinition in the L5 contract catalog.
+- Cross-agent plan, handoff route, state/checkpoint/replay and trace/timeline contracts exist as immutable dataclasses under `app.application.agents.contracts`.
+- Orchestrator SkillDefinition and ToolDefinition records are contract-only and registered only by the L5 contract catalog builder.
+- Existing Phase 4 C1 Question / Feedback catalog behavior remains backward-compatible.
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.
+
+### Phase 11: L5 Controlled Multi-Agent Orchestration
+
+Required target capabilities:
+
+- registered Supervisor / Orchestrator Agent
+- typed cross-agent goal decomposition
+- cross-agent plan contract
+- typed cross-agent handoff contract
+- cross-agent state / checkpoint / replay contract
+- cross-agent trace timeline
+- bounded tool loop with `max_steps` / `max_retries` / `timeout` / `stop_conditions`
+- HITL triggers for asset conflict, formal write, low confidence, ambiguous ownership, and validation failed but partial result exists
+- at least one end-to-end product workflow with three or more business agents
+- candidate-only output boundary
+- formal write remains Application Service -> Domain Policy -> Handoff
+
+Forbidden in Phase 11 unless separately scoped:
+
+- L5 release claim
+- unbounded autonomous swarm
+- Agent direct DB / repository write
+- Tool direct repository exposure
+- infrastructure business policy
+- provider full prompt / full resume / full JD fallback
+- prompt/provider/API/DB/frontend/domain behavior changes
+- committed eval report rewrite
+- remote CI claim without visible run/artifact
+
+### Phase 12: L5 Eval, Hardening, and Release Gate
+
+Required target capabilities:
+
+- multi-agent regression suite
+- cross-agent replay fixtures
+- failure-mode regression cases
+- L5 CI gate
+- observability / trace report
+- rollback policy
+- failure triage policy
+- remote CI artifact evidence
+- human release decision
+
+Forbidden in Phase 12:
+
+- claiming L5 with unit tests only
+- claiming L5 with fake-only or replay-only eval
+- skipping replay / trace evidence
+- release with unresolved candidate/formal boundary gaps
+- release with unresolved provider fail-open gaps
+- release without human/controller decision
 
 ## 禁止偏移
 
@@ -316,3 +395,6 @@ Provider 行为重构留到 Phase 7。
 6. Provider request 从 prompt asset fallback。
 7. Fake runtime 污染生产路径。
 8. Eval 只停留在 seed 样本，不进入 regression gate。
+9. 将 Phase 11 / Phase 12 target wording 当作当前实现事实。
+10. 将 replay / fake eval evidence 当作 real-provider quality certification。
+11. 将 P11-W1 contract-only Orchestrator 当作 product workflow、runtime execution、Phase 8 runtime gap closure 或 L5 release。

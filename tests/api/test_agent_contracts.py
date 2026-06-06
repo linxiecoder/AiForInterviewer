@@ -470,6 +470,124 @@ def test_typed_handoff_envelope_and_trace_keep_phase8_refs_without_raw_metadata(
     }
 
 
+def test_cross_agent_orchestration_contracts_are_refs_only_and_fail_closed() -> None:
+    step = agent_contracts.CrossAgentPlanStep(
+        step_id="step_plan_question",
+        target_agent_id="polish_question_agent",
+        input_refs=["session_ref_1"],
+        required_candidate_types=["question_candidate"],
+        output_candidate_types=["question_candidate"],
+        depends_on_step_ids=[],
+        handoff_contract_id="handoff.orch.question_to_feedback.v1",
+        policy_refs=["candidate_only_policy"],
+        validation_refs=["validation.question_grounding"],
+    )
+    handoff = agent_contracts.CrossAgentHandoffRoute(
+        route_id="route_question_to_feedback",
+        source_agent_id="polish_question_agent",
+        target_agent_id="polish_feedback_agent",
+        allowed_candidate_types=["question_candidate"],
+        payload_schema_id="agent.orch.question_feedback.payload.v1",
+        required_trace_refs=["trace.question_candidate"],
+        required_validation_refs=["validation.question_grounding"],
+        side_effect_policy="candidate_write",
+        user_confirmation_required_when=["asset_update_candidate"],
+        forbidden_data=["raw_prompt", "raw_provider_payload", "full_answer", "full_asset_body", "secrets"],
+    )
+    state_contract = agent_contracts.CrossAgentStateContract(
+        state_schema_id="state.orch.v1",
+        checkpoint_policy="checkpoint_refs_only",
+        replay_policy="read_only_formal_write_blocked",
+        resume_policy="checkpoint_base_version_and_idempotency_required",
+        durable_state_refs=["orch_state_ref"],
+        ephemeral_state_refs=["orch_scratch_ref"],
+        owner_scope_policy="same_owner_only",
+        forbidden_data=["raw_prompt", "provider_payload", "full_resume", "full_jd", "full_asset_body"],
+    )
+    trace_contract = agent_contracts.CrossAgentTraceContract(
+        trace_schema_id="trace.orch.v1",
+        required_trace_refs=["trace.plan", "trace.handoff"],
+        timeline_event_types=["plan_created", "handoff_validated"],
+        plan_refs=["plan_ref"],
+        skill_refs=["skill_ref"],
+        tool_refs=["tool_ref"],
+        policy_refs=["policy_ref"],
+        handoff_refs=["handoff_ref"],
+        validation_refs=["validation_ref"],
+        candidate_refs=["question_candidate_ref"],
+        forbidden_data=["raw_prompt", "raw_provider_payload", "full_answer", "full_asset_body"],
+    )
+    plan = agent_contracts.CrossAgentPlan(
+        plan_id="plan_orch_1",
+        orchestrator_agent_id="interview_orchestrator_agent",
+        owner_id="owner_1",
+        objective="contract-only route planning",
+        participant_agent_ids=["polish_question_agent", "polish_feedback_agent"],
+        steps=[step],
+        max_steps=4,
+        max_retries=1,
+        timeout_seconds=20,
+        stop_conditions=["max_steps_exceeded", "timeout", "validation_failed", "hitl_required"],
+        state_ref="orch_state_ref",
+        trace_ref="orch_trace_ref",
+        handoff_policy="candidate_only_handoff",
+        handoff_routes=[handoff],
+        state_contract=state_contract,
+        trace_contract=trace_contract,
+        metadata={
+            RAW_KEY: "hidden",
+            FULL_ASSET_BODY_KEY: "hidden",
+            "safe": {"kept": "ref_ok", "items": [{"api_key": "secret", "safe_ref": "trace_ref"}]},
+        },
+    )
+
+    assert step.input_refs == ("session_ref_1",)
+    assert handoff.required_trace_refs == ("trace.question_candidate",)
+    assert state_contract.durable_state_refs == ("orch_state_ref",)
+    assert trace_contract.validation_refs == ("validation_ref",)
+    assert plan.participant_agent_ids == ("polish_question_agent", "polish_feedback_agent")
+    assert plan.steps == (step,)
+    assert plan.handoff_routes == (handoff,)
+    assert plan.metadata == {"safe": {"kept": "ref_ok", "items": [{"safe_ref": "trace_ref"}]}}
+
+    with pytest.raises(ValueError, match="target_agent_id"):
+        agent_contracts.CrossAgentPlanStep(
+            step_id="bad_step",
+            target_agent_id=" ",
+            output_candidate_types=("question_candidate",),
+            handoff_contract_id="handoff.bad",
+            validation_refs=("validation.bad",),
+        )
+    with pytest.raises(ValueError, match="required_trace_refs"):
+        agent_contracts.CrossAgentHandoffRoute(
+            route_id="bad_route",
+            source_agent_id="polish_question_agent",
+            target_agent_id="polish_feedback_agent",
+            allowed_candidate_types=("question_candidate",),
+            payload_schema_id="payload.v1",
+            required_trace_refs=(),
+            required_validation_refs=("validation",),
+            side_effect_policy="candidate_write",
+            forbidden_data=("raw_prompt",),
+        )
+    with pytest.raises(ValueError, match="steps"):
+        agent_contracts.CrossAgentPlan(
+            plan_id="bad_plan",
+            orchestrator_agent_id="interview_orchestrator_agent",
+            owner_id="owner_1",
+            objective="missing steps",
+            participant_agent_ids=("polish_question_agent",),
+            steps=(),
+            max_steps=1,
+            max_retries=0,
+            timeout_seconds=5,
+            stop_conditions=("timeout",),
+            state_ref="state_ref",
+            trace_ref="trace_ref",
+            handoff_policy="candidate_only_handoff",
+        )
+
+
 def test_checkpoint_metadata_uses_allowlist_and_rejects_payload_keys() -> None:
     guard = AgentSideEffectGuard()
     allowed = guard.verify_checkpoint_write(

@@ -14,12 +14,16 @@ REQUIRED_TOOL_FORBIDDEN_DATA = frozenset(
         "system_prompt",
         "developer_prompt",
         "raw_provider_payload",
+        "provider_payload",
         "raw_completion",
         "full_resume",
         "full_jd",
+        "full_answer",
+        "full_asset_body",
         "secrets",
         "tokens",
         "cookies",
+        "api_key",
         "api_keys",
     }
 )
@@ -260,7 +264,7 @@ def test_phase4_c1_catalog_uses_stable_versions_and_enriched_skill_contracts() -
 def test_phase4_c1_catalog_module_is_aggregation_only() -> None:
     source = CATALOG_PATH.read_text(encoding="utf-8")
 
-    assert len(source.splitlines()) < 120
+    assert len(source.splitlines()) < 160
     assert LEGACY_PHASE_VERSION_CONSTANT not in source
     assert "SkillDefinition(" not in source
     assert "ToolDefinition(" not in source

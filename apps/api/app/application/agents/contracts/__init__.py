@@ -47,6 +47,34 @@ P8_REQUIRED_RUNTIME_STOP_CONDITIONS = (
     "provider_failed",
 )
 
+CROSS_AGENT_REQUIRED_FORBIDDEN_DATA = tuple(
+    sorted(
+        {
+            "api_key",
+            "api_keys",
+            "checkpoint_payload",
+            "cookie",
+            "cookies",
+            "developer_prompt",
+            "full_answer",
+            "full_asset_body",
+            "full_jd",
+            "full_resume",
+            "full_source_body",
+            "hidden_rubric",
+            "provider_payload",
+            "raw_completion",
+            "raw_prompt",
+            "raw_provider_payload",
+            "secret",
+            "secrets",
+            "system_prompt",
+            "token",
+            "tokens",
+        }
+    )
+)
+
 
 def _safe_metadata(values: dict[str, Any] | None) -> dict[str, Any]:
     return _safe_metadata_value(dict(values or {}))
@@ -70,6 +98,24 @@ def _safe_metadata_value(value: Any) -> Any:
 
 def _metadata_key_is_blocked(key: Any) -> bool:
     return any(item in str(key).lower() for item in _BLOCKED_METADATA_KEYS)
+
+
+def _required_text(value: str, *, label: str) -> str:
+    normalized = str(value).strip()
+    if not normalized:
+        raise ValueError(f"{label} is required")
+    return normalized
+
+
+def _required_tuple(
+    values: tuple[str, ...] | list[str] | set[str] | str | None,
+    *,
+    label: str,
+) -> tuple[str, ...]:
+    normalized = _tuple(values)
+    if not normalized:
+        raise ValueError(f"{label} are required")
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -358,6 +404,229 @@ class ToolDefinition:
 
 
 @dataclass(frozen=True)
+class CrossAgentPlanStep:
+    """Contract-only step within a cross-agent plan; it does not execute agents."""
+
+    step_id: str
+    target_agent_id: str
+    handoff_contract_id: str
+    input_refs: tuple[str, ...] = field(default_factory=tuple)
+    required_candidate_types: tuple[str, ...] = field(default_factory=tuple)
+    output_candidate_types: tuple[str, ...] = field(default_factory=tuple)
+    depends_on_step_ids: tuple[str, ...] = field(default_factory=tuple)
+    policy_refs: tuple[str, ...] = field(default_factory=tuple)
+    validation_refs: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "step_id", _required_text(self.step_id, label="step_id"))
+        object.__setattr__(self, "target_agent_id", _required_text(self.target_agent_id, label="target_agent_id"))
+        object.__setattr__(
+            self,
+            "handoff_contract_id",
+            _required_text(self.handoff_contract_id, label="handoff_contract_id"),
+        )
+        object.__setattr__(self, "input_refs", _tuple(self.input_refs))
+        object.__setattr__(self, "required_candidate_types", _tuple(self.required_candidate_types))
+        object.__setattr__(
+            self,
+            "output_candidate_types",
+            _required_tuple(self.output_candidate_types, label="output_candidate_types"),
+        )
+        object.__setattr__(self, "depends_on_step_ids", _tuple(self.depends_on_step_ids))
+        object.__setattr__(self, "policy_refs", _tuple(self.policy_refs))
+        object.__setattr__(
+            self,
+            "validation_refs",
+            _required_tuple(self.validation_refs, label="validation_refs"),
+        )
+
+
+@dataclass(frozen=True)
+class CrossAgentHandoffRoute:
+    """Contract-only route for candidate refs between agents, not runtime wiring."""
+
+    route_id: str
+    source_agent_id: str
+    target_agent_id: str
+    payload_schema_id: str
+    side_effect_policy: str
+    allowed_candidate_types: tuple[str, ...] = field(default_factory=tuple)
+    required_trace_refs: tuple[str, ...] = field(default_factory=tuple)
+    required_validation_refs: tuple[str, ...] = field(default_factory=tuple)
+    user_confirmation_required_when: tuple[str, ...] = field(default_factory=tuple)
+    forbidden_data: tuple[str, ...] = CROSS_AGENT_REQUIRED_FORBIDDEN_DATA
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "route_id", _required_text(self.route_id, label="route_id"))
+        object.__setattr__(self, "source_agent_id", _required_text(self.source_agent_id, label="source_agent_id"))
+        object.__setattr__(self, "target_agent_id", _required_text(self.target_agent_id, label="target_agent_id"))
+        object.__setattr__(
+            self,
+            "allowed_candidate_types",
+            _required_tuple(self.allowed_candidate_types, label="allowed_candidate_types"),
+        )
+        object.__setattr__(self, "payload_schema_id", _required_text(self.payload_schema_id, label="payload_schema_id"))
+        object.__setattr__(
+            self,
+            "required_trace_refs",
+            _required_tuple(self.required_trace_refs, label="required_trace_refs"),
+        )
+        object.__setattr__(
+            self,
+            "required_validation_refs",
+            _required_tuple(self.required_validation_refs, label="required_validation_refs"),
+        )
+        object.__setattr__(self, "side_effect_policy", _required_text(self.side_effect_policy, label="side_effect_policy"))
+        object.__setattr__(
+            self,
+            "user_confirmation_required_when",
+            _tuple(self.user_confirmation_required_when),
+        )
+        object.__setattr__(self, "forbidden_data", _required_tuple(self.forbidden_data, label="forbidden_data"))
+
+
+@dataclass(frozen=True)
+class CrossAgentStateContract:
+    """Contract-only state/checkpoint/replay policy for orchestration control state."""
+
+    state_schema_id: str
+    checkpoint_policy: str
+    replay_policy: str
+    resume_policy: str
+    owner_scope_policy: str
+    durable_state_refs: tuple[str, ...] = field(default_factory=tuple)
+    ephemeral_state_refs: tuple[str, ...] = field(default_factory=tuple)
+    forbidden_data: tuple[str, ...] = CROSS_AGENT_REQUIRED_FORBIDDEN_DATA
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "state_schema_id", _required_text(self.state_schema_id, label="state_schema_id"))
+        object.__setattr__(
+            self,
+            "checkpoint_policy",
+            _required_text(self.checkpoint_policy, label="checkpoint_policy"),
+        )
+        object.__setattr__(self, "replay_policy", _required_text(self.replay_policy, label="replay_policy"))
+        object.__setattr__(self, "resume_policy", _required_text(self.resume_policy, label="resume_policy"))
+        object.__setattr__(
+            self,
+            "durable_state_refs",
+            _required_tuple(self.durable_state_refs, label="durable_state_refs"),
+        )
+        object.__setattr__(self, "ephemeral_state_refs", _tuple(self.ephemeral_state_refs))
+        object.__setattr__(
+            self,
+            "owner_scope_policy",
+            _required_text(self.owner_scope_policy, label="owner_scope_policy"),
+        )
+        object.__setattr__(self, "forbidden_data", _required_tuple(self.forbidden_data, label="forbidden_data"))
+
+
+@dataclass(frozen=True)
+class CrossAgentTraceContract:
+    """Contract-only trace/timeline policy for cross-agent candidate handoffs."""
+
+    trace_schema_id: str
+    required_trace_refs: tuple[str, ...] = field(default_factory=tuple)
+    timeline_event_types: tuple[str, ...] = field(default_factory=tuple)
+    plan_refs: tuple[str, ...] = field(default_factory=tuple)
+    skill_refs: tuple[str, ...] = field(default_factory=tuple)
+    tool_refs: tuple[str, ...] = field(default_factory=tuple)
+    policy_refs: tuple[str, ...] = field(default_factory=tuple)
+    handoff_refs: tuple[str, ...] = field(default_factory=tuple)
+    validation_refs: tuple[str, ...] = field(default_factory=tuple)
+    candidate_refs: tuple[str, ...] = field(default_factory=tuple)
+    forbidden_data: tuple[str, ...] = CROSS_AGENT_REQUIRED_FORBIDDEN_DATA
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "trace_schema_id", _required_text(self.trace_schema_id, label="trace_schema_id"))
+        object.__setattr__(
+            self,
+            "required_trace_refs",
+            _required_tuple(self.required_trace_refs, label="required_trace_refs"),
+        )
+        object.__setattr__(
+            self,
+            "timeline_event_types",
+            _required_tuple(self.timeline_event_types, label="timeline_event_types"),
+        )
+        object.__setattr__(self, "plan_refs", _required_tuple(self.plan_refs, label="plan_refs"))
+        object.__setattr__(self, "skill_refs", _required_tuple(self.skill_refs, label="skill_refs"))
+        object.__setattr__(self, "tool_refs", _required_tuple(self.tool_refs, label="tool_refs"))
+        object.__setattr__(self, "policy_refs", _required_tuple(self.policy_refs, label="policy_refs"))
+        object.__setattr__(self, "handoff_refs", _required_tuple(self.handoff_refs, label="handoff_refs"))
+        object.__setattr__(
+            self,
+            "validation_refs",
+            _required_tuple(self.validation_refs, label="validation_refs"),
+        )
+        object.__setattr__(self, "candidate_refs", _required_tuple(self.candidate_refs, label="candidate_refs"))
+        object.__setattr__(self, "forbidden_data", _required_tuple(self.forbidden_data, label="forbidden_data"))
+
+
+@dataclass(frozen=True)
+class CrossAgentPlan:
+    """Contract-only orchestration plan; it is never executed by this catalog."""
+
+    plan_id: str
+    orchestrator_agent_id: str
+    owner_id: str
+    objective: str
+    state_ref: str
+    trace_ref: str
+    handoff_policy: str
+    participant_agent_ids: tuple[str, ...] = field(default_factory=tuple)
+    steps: tuple[CrossAgentPlanStep, ...] = field(default_factory=tuple)
+    max_steps: int = 1
+    max_retries: int = 0
+    timeout_seconds: int | float = 1
+    stop_conditions: tuple[str, ...] = field(default_factory=tuple)
+    handoff_routes: tuple[CrossAgentHandoffRoute, ...] = field(default_factory=tuple)
+    state_contract: CrossAgentStateContract | None = None
+    trace_contract: CrossAgentTraceContract | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "plan_id", _required_text(self.plan_id, label="plan_id"))
+        object.__setattr__(
+            self,
+            "orchestrator_agent_id",
+            _required_text(self.orchestrator_agent_id, label="orchestrator_agent_id"),
+        )
+        object.__setattr__(self, "owner_id", _required_text(self.owner_id, label="owner_id"))
+        object.__setattr__(self, "objective", _required_text(self.objective, label="objective"))
+        object.__setattr__(
+            self,
+            "participant_agent_ids",
+            _required_tuple(self.participant_agent_ids, label="participant_agent_ids"),
+        )
+        steps = tuple(self.steps)
+        if not steps:
+            raise ValueError("steps are required")
+        if any(not isinstance(step, CrossAgentPlanStep) for step in steps):
+            raise ValueError("steps must contain CrossAgentPlanStep")
+        object.__setattr__(self, "steps", steps)
+        if self.max_steps <= 0:
+            raise ValueError("max_steps must be positive")
+        if self.max_retries < 0:
+            raise ValueError("max_retries must be non-negative")
+        if self.timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        object.__setattr__(self, "stop_conditions", _required_tuple(self.stop_conditions, label="stop_conditions"))
+        object.__setattr__(self, "state_ref", _required_text(self.state_ref, label="state_ref"))
+        object.__setattr__(self, "trace_ref", _required_text(self.trace_ref, label="trace_ref"))
+        object.__setattr__(self, "handoff_policy", _required_text(self.handoff_policy, label="handoff_policy"))
+        routes = tuple(self.handoff_routes)
+        if any(not isinstance(route, CrossAgentHandoffRoute) for route in routes):
+            raise ValueError("handoff_routes must contain CrossAgentHandoffRoute")
+        object.__setattr__(self, "handoff_routes", routes)
+        if self.state_contract is not None and not isinstance(self.state_contract, CrossAgentStateContract):
+            raise ValueError("state_contract must be CrossAgentStateContract")
+        if self.trace_contract is not None and not isinstance(self.trace_contract, CrossAgentTraceContract):
+            raise ValueError("trace_contract must be CrossAgentTraceContract")
+        object.__setattr__(self, "metadata", _safe_metadata(self.metadata))
+
+
+@dataclass(frozen=True)
 class AgentExecutionPlan:
     """Contract-only execution plan metadata for future AgentExecutor slices."""
 
@@ -485,6 +754,12 @@ class AgentExecutionTimeline:
 
 __all__ = [
     "AgentDefinition",
+    "CROSS_AGENT_REQUIRED_FORBIDDEN_DATA",
+    "CrossAgentHandoffRoute",
+    "CrossAgentPlan",
+    "CrossAgentPlanStep",
+    "CrossAgentStateContract",
+    "CrossAgentTraceContract",
     "AgentExecutionPlan",
     "AgentExecutionResult",
     "AgentExecutionStatus",

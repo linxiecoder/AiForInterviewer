@@ -95,6 +95,12 @@ wrapper split 不等于 capability done。
 | EVAL-001 | AI Eval gate | seed evals / descriptors；P9 suite manifest、capability-bound replay datasets、deterministic graders、JSON/Markdown reports、negative-control gate、package script and no-secret GitHub Actions job exist；P10 accepts Phase 9 as `complete_with_deferred_remote_ci_gap` with remote CI deferred and stale committed report metadata risk recorded | evals + CI regression gate | Eval | validated | Phase 9 |
 | WIN-001 | Execution Window Protocol | P7-W4.fix.01 完成 A/B read-only recon、C single-writer implementation、D full validation、E audit、source backfill sequence | every window has scope / forbidden / tests / rollback / backfill | Governance | done | Phase 0.1/7 |
 | SRC-001 | Source Backfill | Project sources 已回填 P7-W4.fix.01 full validation evidence；P8 foundation partial source backfill 已追加，但 P8 final status 仍有 deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7/8 |
+| L5-001 | Final L5 target lock | Phase 0-10 foundation is `closed_with_deferred_gaps`; Phase 11 / Phase 12 were entry/future conditions and not implementation facts | Phase 11 L5 Controlled Multi-Agent Orchestration and Phase 12 L5 Eval, Hardening, and Release Gate are explicitly scoped with non-claims | Governance / Agent Platform | design_done | P11-W0 |
+| L5-002 | Supervisor / Orchestrator Agent | P11-W1 registers `interview_orchestrator_agent` as contract-only in the L5 contract catalog; it is not runtime-wired and does not execute product workflow | Registered Supervisor / Orchestrator Agent with goal decomposition, plan, bounded loop and HITL scope; runtime/product workflow remains deferred | Agent Platform | validated_with_deferred_gaps | Phase 11 |
+| L5-003 | Cross-agent handoff / state / trace | P11-W1 adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract`; runtime state/checkpoint/replay execution remains deferred | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; product/runtime execution remains separately scoped | Agent Platform / Runtime | validated_with_deferred_gaps | Phase 11 |
+| L5-004 | Multi-agent product workflow | Question / Feedback planned workflows and P8 target handoff primitive exist; no three-or-more-business-agent product workflow exists | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents | Product Orchestration | not_started | Phase 11 |
+| L5-005 | Controlled tool loop hardening | P8 covers current facade/generic/Question/Feedback paths; future / indirect graph tool-loop coverage remains deferred | Phase 11 orchestration tool calls bounded by max steps, retries, timeout, stop conditions, registry lookup and side-effect gates | Runtime / Tooling | implementation_planned | Phase 11 |
+| L5-006 | L5 eval / replay / release gate | P9 replay/fixture foundation exists with `deferred_remote_ci_gap`; no multi-agent eval/replay/release gate exists | Multi-agent eval datasets, graders, replay fixtures, CI artifact evidence, observability report and human release decision | Eval / Release | not_started | Phase 12 |
 
 ## P10 Stage Closeout / Source Backfill Evidence
 
@@ -109,6 +115,34 @@ Status: `closed_with_deferred_gaps` for Phase 0-10 L5 Foundation closeout；`com
 - Phase 8 runtime gaps remain `validated_with_deferred_gaps` / `partial_with_deferred_gaps`; Phase 10 does not close them.
 - Phase 11 Supervisor / Orchestrator and Phase 12 L5 release remain `not_started` / deferred and must not be inferred from Phase 0-10 foundation closure.
 - Committed report metadata risk is residual only: Phase 10 does not rewrite `evals/reports/**`.
+
+## P11-W0 Scope Lock / Gap Reconciliation Evidence
+
+Status: `scope_lock_complete_with_deferred_gaps` for docs-only P11-W0 reconciliation. This status does not apply to L5 implementation capabilities.
+
+- `L5-001` is `design_done` because P11-W0 locks the L5 target and source wording.
+- `L5-002` through `L5-006` are not implemented, validated or done.
+- `deferred_remote_ci_gap`, Phase 8 runtime gaps, stale committed eval report metadata short SHA `f86adea`, Supervisor / Orchestrator not started, Phase 12 release gate not started and real-provider quality certification non-claim are carried forward.
+- Current code recon found C1 Question / Feedback catalog and P8 foundation contracts/runtime/handoff surfaces, but no registered Supervisor / Orchestrator and no three-or-more-business-agent product workflow.
+- Decision options for the next window remain `proposed`; no option is confirmed by this matrix.
+
+## P11-W1 Contract-first Orchestrator Evidence
+
+Status: `contract_slice_complete_with_deferred_runtime_gaps` for Option A contract-first implementation. This status applies only to contract/catalog/test evidence and does not close runtime, product workflow, remote CI, stale eval report, real-provider quality or release gaps.
+
+- `L5-002`: `interview_orchestrator_agent` exists as a contract-only AgentDefinition with candidate outputs only, no formal outputs, no direct DB/repository write, no runtime execution and no L5 release claim.
+- `L5-003`: cross-agent plan / step / handoff route / state / trace contracts exist, normalize tuple/list inputs, fail closed on required IDs/refs and filter forbidden metadata keys.
+- Registry / catalog evidence: `build_default_agent_platform_l5_contract_registries()` composes the existing Question / Feedback C1 contracts with the Orchestrator contract and validates agent->skill/tool references without replacing `build_default_agent_platform_c1_registries()`.
+- Tool evidence: Orchestrator ToolDefinition records are contract-only, `read_only` or `forbidden`, and ToolRegistry still rejects repository / DB / SQLAlchemy / session / formal writer exposure.
+- Validation evidence: P11-W1 architecture and contract tests cover no runtime wiring, candidate-only outputs, non-claims, required trace/validation refs and forbidden data.
+- P11-W1 does not implement product multi-agent workflow.
+- P11-W1 does not execute Supervisor / Orchestrator at runtime.
+- P11-W1 does not close Phase 8 runtime gaps.
+- P11-W1 does not close `deferred_remote_ci_gap`.
+- P11-W1 does not rewrite stale eval reports.
+- P11-W1 does not certify real-provider quality.
+- P11-W1 does not claim L5 release.
+- P11-W1 does not implement Phase 12 release gate.
 
 ## P9 Eval / CI Regression Gate Backfill Evidence
 

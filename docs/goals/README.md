@@ -37,6 +37,24 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P11-W1 Contract-first Orchestrator
+
+P11-W1 implements Option A as a contract-only Orchestrator foundation. It adds `interview_orchestrator_agent`, cross-agent plan / handoff / state / trace contracts, contract-only Orchestrator skills/tools, a separate L5 contract catalog builder and architecture/API contract gates. It does not implement product multi-agent workflow, execute Supervisor / Orchestrator at runtime, close Phase 8 runtime gaps, close `deferred_remote_ci_gap`, rewrite stale eval reports, certify real-provider quality, claim L5 release or implement Phase 12 release gate.
+
+- [P11_W1_CONTRACT_FIRST_ORCHESTRATOR.md](2026-06-06/P11_W1_CONTRACT_FIRST_ORCHESTRATOR.md)：P11-W1 controller scope lock and selected Option A goal；status updates remain execution evidence only。
+- [P11_W1_IMPLEMENTATION_REPORT.md](2026-06-06/P11_W1_IMPLEMENTATION_REPORT.md)：P11-W1 implementation report；records contract additions, registry/catalog wiring, behavior non-change and remaining runtime gaps。
+- [P11_W1_VALIDATION_REPORT.md](2026-06-06/P11_W1_VALIDATION_REPORT.md)：P11-W1 validation report；records local validation commands, grep checks and forbidden-scope audit。
+- [P11_W1_SOURCE_BACKFILL_REPORT.md](2026-06-06/P11_W1_SOURCE_BACKFILL_REPORT.md)：P11-W1 source-backfill report；records Matrix / Gates / Decision / Risk / Roadmap updates and non-claims。
+
+### 2026-06-06 / P11-W0 Scope Lock and Gap Reconciliation
+
+P11-W0 is docs-only scope lock and gap reconciliation. It preserves Phase 0-10 as L5 Foundation `closed_with_deferred_gaps`, carries `deferred_remote_ci_gap`, Phase 8 runtime gaps, stale committed eval report metadata short SHA `f86adea`, Supervisor / Orchestrator not started, Phase 12 release gate not started and real-provider quality certification non-claim. It does not implement Supervisor / Orchestrator, choose a next-window option, claim L5 release, claim remote CI success or rewrite committed eval reports.
+
+- [P11_W0_SCOPE_LOCK_AND_GAP_RECONCILIATION.md](2026-06-06/P11_W0_SCOPE_LOCK_AND_GAP_RECONCILIATION.md)：P11-W0 scope-lock input and execution result；status `scope_lock_complete_with_deferred_gaps` for docs-only reconciliation, not L5 capability done。
+- [P11_W0_GAP_RECONCILIATION.md](2026-06-06/P11_W0_GAP_RECONCILIATION.md)：P11-W0 gap reconciliation table；carries P10 gaps, Phase 8 runtime gaps, Supervisor / Orchestrator not started, Phase 12 not started and source drift treatment。
+- [P11_W0_DECISION_OPTIONS.md](2026-06-06/P11_W0_DECISION_OPTIONS.md)：P11-W0 proposed next-window options；Option A/B/C/D remain `proposed` and require controller/user confirmation。
+- [P11_W0_SOURCE_BACKFILL_AUDIT.md](2026-06-06/P11_W0_SOURCE_BACKFILL_AUDIT.md)：P11-W0 source-backfill audit；records read-only recon, updated files, forbidden paths untouched and CodeGraph fallback note。
+
 ### 2026-06-06 / P10-W1 Stage Closeout / Source Backfill
 
 Phase 10 is closeout/source-backfill only. It closes the Phase 0-10 L5 Foundation stage as `closed_with_deferred_gaps`, preserves `deferred_remote_ci_gap`, preserves Phase 8 runtime deferred gaps, and does not claim L5 release.
