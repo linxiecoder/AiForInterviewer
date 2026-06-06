@@ -538,3 +538,51 @@ P11-W2 non-claims:
 - P11-W2 does not certify real-provider quality.
 - P11-W2 does not claim L5 release.
 - P11-W2 does not implement Phase 12 release gate.
+
+## DEC-021 P11-W3 Minimal Three-Agent Candidate Product Slice
+
+Status: accepted_for_p11_w3_candidate_product_slice
+
+Decision:
+
+P11-W3 selects a minimal candidate-only three-business-agent product vertical slice.
+
+Accepted scope:
+
+- register `asset_candidate_agent` and `training_plan_agent` in the L5 contract catalog.
+- keep C1 catalog behavior unchanged.
+- add a deterministic refs-only product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`.
+- emit candidate refs only: `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate`.
+- connect handoff refs from feedback to asset candidate and from asset candidate to training plan.
+- require user confirmation for asset update candidates and keep formal writes blocked.
+- fail closed on missing required refs and unsafe metadata.
+- block or interrupt on asset conflict and formal write request.
+- preserve trace refs and validation refs as separate metadata buckets.
+- update focused local tests and source backfill for L5-004 only.
+
+Not accepted:
+
+- calling LLM or provider.
+- rendering prompts.
+- reading or writing DB.
+- calling repositories.
+- writing formal assets, feedback, progress, scores, reports or training plans.
+- wiring `interview_orchestrator_agent` into API, ai_runtime, polish, domain or infrastructure.
+- provider, prompt, API, DB, frontend, domain policy, application polish behavior, eval dataset, grader, suite, report, script or workflow changes.
+- L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or formal write completion.
+
+Result:
+
+P11-W3 may report `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate` only if code/tests/source-backfill validation passes and all forbidden paths remain untouched.
+
+P11-W3 non-claims:
+
+- P11-W3 implements only a minimal candidate-only product slice.
+- P11-W3 does not write formal assets, progress, scores, feedback, reports or training plans.
+- P11-W3 does not call LLM or provider.
+- P11-W3 does not modify provider, prompt, API, DB, frontend, domain policy or persistence behavior.
+- P11-W3 does not certify real-provider quality.
+- P11-W3 does not close Phase 12 release gate.
+- P11-W3 does not claim L5 release.
+- P11-W3 does not close remote CI gap.
+- P11-W3 does not replace Phase 12 multi-agent eval.

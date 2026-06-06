@@ -599,10 +599,10 @@ Current Status:
 - `scope_lock_complete_with_deferred_gaps` for P11-W0 docs-only reconciliation.
 - `contract_slice_complete_with_deferred_runtime_gaps` for P11-W1 Option A contract-first Orchestrator.
 - `runtime_hardening_slice_complete_with_deferred_product_workflow` for P11-W2 narrow runtime-hardening slice.
-- Product workflow implementation not started.
+- `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate` for P11-W3 minimal candidate-only three-business-agent product slice.
 - `L5-002` Supervisor / Orchestrator is contract-only validated with deferred runtime/product workflow gaps.
 - `L5-003` cross-agent handoff / state / trace contracts are validated with deferred runtime execution gaps.
-- `L5-004` multi-agent product workflow remains `not_started`.
+- `L5-004` multi-agent product workflow has a minimal candidate-only product slice with deferred formal write and release gate.
 - `L5-005` controlled tool loop hardening has a locally validated runtime-hardening slice, with deferred product workflow.
 
 Goal:
@@ -655,6 +655,13 @@ P11-W2 Evidence:
 - `docs/goals/2026-06-06/P11_W2_VALIDATION_REPORT.md`
 - `docs/goals/2026-06-06/P11_W2_SOURCE_BACKFILL_REPORT.md`
 
+P11-W3 Evidence:
+
+- `docs/goals/2026-06-06/P11_W3_MINIMAL_THREE_AGENT_PRODUCT_SLICE.md`
+- `docs/goals/2026-06-06/P11_W3_IMPLEMENTATION_REPORT.md`
+- `docs/goals/2026-06-06/P11_W3_VALIDATION_REPORT.md`
+- `docs/goals/2026-06-06/P11_W3_SOURCE_BACKFILL_REPORT.md`
+
 P11-W1 non-claims:
 
 - P11-W1 does not implement product multi-agent workflow.
@@ -676,6 +683,18 @@ P11-W2 non-claims:
 - P11-W2 does not certify real-provider quality.
 - P11-W2 does not claim L5 release.
 - P11-W2 does not implement Phase 12 release gate.
+
+P11-W3 non-claims:
+
+- P11-W3 implements only a minimal candidate-only product slice.
+- P11-W3 does not write formal assets, progress, scores, feedback, reports or training plans.
+- P11-W3 does not call LLM or provider.
+- P11-W3 does not modify provider, prompt, API, DB, frontend, domain policy or persistence behavior.
+- P11-W3 does not certify real-provider quality.
+- P11-W3 does not close Phase 12 release gate.
+- P11-W3 does not claim L5 release.
+- P11-W3 does not close remote CI gap.
+- P11-W3 does not replace Phase 12 multi-agent eval.
 
 ## Phase 12
 

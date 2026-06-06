@@ -128,7 +128,7 @@ Status:
 - Target locked by P11-W0.
 - P11-W1 Option A contract-first Orchestrator slice is `contract_slice_complete_with_deferred_runtime_gaps`.
 - P11-W2 runtime-hardening slice is `runtime_hardening_slice_complete_with_deferred_product_workflow`.
-- Product workflow implementation not started.
+- P11-W3 minimal candidate-only product slice is `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`.
 - Not L5 release.
 
 Required capabilities:
@@ -168,6 +168,17 @@ P11-W2 runtime-hardening evidence:
 - Cross-agent trace/timeline mapping preserves plan, handoff, validation and candidate refs separately.
 - HITL trigger validation covers formal write requested, asset conflict, low confidence, ambiguous ownership and validation-failed partial result control events.
 - Evidence remains internal Agent Platform runtime-hardening only; it does not execute Orchestrator, implement product workflow, persist cross-agent state or change provider/prompt/API/DB/frontend/domain behavior.
+
+P11-W3 candidate product slice evidence:
+
+- `asset_candidate_agent` and `training_plan_agent` are registered in the L5 contract catalog through AgentDefinition / Skill / Tool registries.
+- C1 catalog remains Question / Feedback only.
+- Minimal refs-only product slice includes `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`.
+- Happy path emits `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs only.
+- Handoff refs connect feedback -> asset candidate -> training plan candidate.
+- Asset update candidate requires user confirmation and remains `formal_write_blocked`.
+- Missing refs fail closed; asset conflict and formal write request block; low confidence is trace-visible.
+- Evidence remains candidate-only product slice evidence; it does not execute Orchestrator as runtime, persist state, call provider/LLM, render prompt, read/write DB, call repositories or change API/frontend/domain/polish behavior.
 
 Forbidden unless separately scoped:
 

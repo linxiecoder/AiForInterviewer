@@ -47,6 +47,11 @@ ORCHESTRATOR_CANDIDATE_OUTPUTS = frozenset(
         "cross_agent_trace_candidate",
     }
 )
+PRODUCT_SLICE_AGENT_IDS = frozenset({"asset_candidate_agent", "training_plan_agent"})
+PRODUCT_SLICE_CANDIDATE_OUTPUTS = {
+    "asset_candidate_agent": {"asset_update_candidate"},
+    "training_plan_agent": {"training_plan_candidate"},
+}
 REQUIRED_CROSS_AGENT_FORBIDDEN_DATA = frozenset(
     {
         "raw_prompt",
@@ -106,14 +111,51 @@ def test_phase11_l5_catalog_registers_orchestrator_without_replacing_c1() -> Non
 
     assert c1_agent_ids == {"polish_question_agent", "polish_feedback_agent"}
     assert ORCHESTRATOR_AGENT_ID not in c1_agent_ids
-    assert l5_agent_ids == c1_agent_ids | {ORCHESTRATOR_AGENT_ID}
-    assert build_phase11_l5_agent_definitions()[-1].agent_id == ORCHESTRATOR_AGENT_ID
+    assert l5_agent_ids == c1_agent_ids | {ORCHESTRATOR_AGENT_ID} | PRODUCT_SLICE_AGENT_IDS
+    assert ORCHESTRATOR_AGENT_ID in {agent.agent_id for agent in build_phase11_l5_agent_definitions()}
     assert ORCHESTRATOR_SKILL_IDS <= {skill.skill_id for skill in build_phase11_l5_skill_definitions()}
     assert ORCHESTRATOR_TOOL_IDS <= {tool.tool_id for tool in build_phase11_l5_tool_definitions()}
     assert c1_registries.agent_definitions.get("polish_question_agent") == l5_registries.agent_definitions.get(
         "polish_question_agent"
     )
     l5_registries.agent_definitions.validate_references(l5_registries.skills, l5_registries.tools)
+
+
+def test_phase11_l5_catalog_registers_product_slice_agents_without_changing_c1() -> None:
+    from app.application.agents.definitions.catalog import (
+        build_default_agent_platform_c1_registries,
+        build_default_agent_platform_l5_contract_registries,
+    )
+    from app.application.agents.registry import ALLOWED_CANDIDATE_OUTPUTS
+
+    c1_registries = build_default_agent_platform_c1_registries()
+    l5_registries = build_default_agent_platform_l5_contract_registries()
+
+    assert {agent.agent_id for agent in c1_registries.agent_definitions.list()} == {
+        "polish_question_agent",
+        "polish_feedback_agent",
+    }
+    for agent_id, expected_outputs in PRODUCT_SLICE_CANDIDATE_OUTPUTS.items():
+        agent = l5_registries.agent_definitions.get(agent_id)
+        assert set(agent.candidate_outputs) == expected_outputs
+        assert set(agent.candidate_outputs) <= ALLOWED_CANDIDATE_OUTPUTS
+        assert agent.lifecycle_status == "contract_only"
+        assert "not L5 release" in agent.maturity_level
+        assert agent.trace_contract.provider_refs == ()
+        assert agent.handoff_contract.allowed_formal_targets == ()
+        assert agent.handoff_contract.formal_write_policy == "handoff_required"
+        assert "no provider or LLM call".lower() in " ".join(agent.non_goals).lower()
+        assert "no direct DB or repository write".lower() in " ".join(agent.non_goals).lower()
+        assert l5_registries.skills.list_by_agent_id(agent_id)
+        assert l5_registries.tools.list_by_agent_id(agent_id)
+
+    asset_agent = l5_registries.agent_definitions.get("asset_candidate_agent")
+    assert asset_agent.handoff_contract.user_confirmation_required is True
+    assert asset_agent.handoff_contract.candidate_ref_types == ("asset_update_candidate",)
+
+    training_agent = l5_registries.agent_definitions.get("training_plan_agent")
+    assert training_agent.handoff_contract.user_confirmation_required is False
+    assert training_agent.handoff_contract.candidate_ref_types == ("training_plan_candidate",)
 
 
 def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release() -> None:

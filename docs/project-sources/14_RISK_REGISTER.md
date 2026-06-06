@@ -577,6 +577,7 @@ Mitigation:
 - Phase 11 requires typed cross-agent plan/handoff/state/trace contracts.
 - At least one workflow must involve three or more business agents and keep candidate/formal boundaries.
 - Trace timeline must show cross-agent refs, not only sequential service calls.
+- P11-W3 adds a deterministic candidate-only slice with three business agents and typed handoff refs, but keeps formal write and release gates deferred.
 
 Closure condition:
 
@@ -659,6 +660,7 @@ Mitigation:
 - Formal writes remain Application Service -> Domain Policy -> Handoff.
 - Asset update candidates require user confirmation.
 - P11-W2 adds focused HITL trigger validation for `formal_write_requested`, `asset_conflict`, `low_confidence`, `ambiguous_ownership` and `validation_failed_partial_result`, including non-success semantics for formal write / asset conflict and success-like failure rejection.
+- P11-W3 keeps asset update candidates `formal_write_blocked`, requires user confirmation and blocks the minimal product slice on asset conflict or formal write request.
 
 Closure condition:
 
@@ -746,3 +748,36 @@ P11-W2 non-claims:
 - P11-W2 does not certify real-provider quality.
 - P11-W2 does not claim L5 release.
 - P11-W2 does not implement Phase 12 release gate.
+
+## RISK-039 P11-W3 candidate slice 被误读为 formal product completion
+
+Severity: high
+
+Status: open
+
+Description:
+
+P11-W3 adds a real product-facing candidate workflow with three business agents. Without explicit wording, later readers could treat this as formal asset / feedback / training-plan write completion, real-provider quality certification, remote CI success, Phase 12 release gate completion or L5 release.
+
+Mitigation:
+
+- Matrix status is `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`.
+- Source backfill repeats that P11-W3 is candidate-only, refs-only and formal-write-blocked.
+- L5-006 remains `not_started`.
+- Validation keeps provider, prompt, API, DB, frontend, domain policy, eval dataset, grader, suite, report, script and workflow files out of scope.
+
+Closure condition:
+
+- A later authorized window implements and validates formal write handoff and Phase 12 eval/replay/release evidence, or the controller explicitly accepts remaining formal-write/release gaps.
+
+P11-W3 non-claims:
+
+- P11-W3 implements only a minimal candidate-only product slice.
+- P11-W3 does not write formal assets, progress, scores, feedback, reports or training plans.
+- P11-W3 does not call LLM or provider.
+- P11-W3 does not modify provider, prompt, API, DB, frontend, domain policy or persistence behavior.
+- P11-W3 does not certify real-provider quality.
+- P11-W3 does not close Phase 12 release gate.
+- P11-W3 does not claim L5 release.
+- P11-W3 does not close remote CI gap.
+- P11-W3 does not replace Phase 12 multi-agent eval.

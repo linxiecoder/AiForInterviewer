@@ -18,6 +18,7 @@ permalink: ai-for-interviewer/docs/project-sources/09-refactor-traceability-matr
 - implemented_with_validation_blockers
 - contract_slice_complete_with_deferred_runtime_gaps
 - runtime_hardening_slice_complete_with_deferred_product_workflow
+- candidate_product_slice_complete_with_deferred_formal_write_and_release_gate
 - validated_with_deferred_gaps
 - validated_with_deferred_l5_runtime
 - validated
@@ -100,7 +101,7 @@ wrapper split 不等于 capability done。
 | L5-001 | Final L5 target lock | Phase 0-10 foundation is `closed_with_deferred_gaps`; Phase 11 / Phase 12 were entry/future conditions and not implementation facts | Phase 11 L5 Controlled Multi-Agent Orchestration and Phase 12 L5 Eval, Hardening, and Release Gate are explicitly scoped with non-claims | Governance / Agent Platform | design_done | P11-W0 |
 | L5-002 | Supervisor / Orchestrator Agent | P11-W1 contract slice registers `interview_orchestrator_agent` as contract-only in the L5 contract catalog and is locally validated for contract/catalog/test evidence; it is not runtime-wired, does not execute product workflow and is not full L5 capability validation | Registered Supervisor / Orchestrator Agent with goal decomposition, plan, bounded loop and HITL scope; full L5 capability validation, runtime execution, product workflow and release gate remain deferred | Agent Platform | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
 | L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract` and is locally validated for contract behavior; runtime state/checkpoint/replay execution and full L5 capability validation remain deferred | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution, product workflow validation and release gate remain separately scoped | Agent Platform / Runtime | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
-| L5-004 | Multi-agent product workflow | Question / Feedback planned workflows and P8 target handoff primitive exist; no three-or-more-business-agent product workflow exists | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents | Product Orchestration | not_started | Phase 11 |
+| L5-004 | Multi-agent product workflow | P11-W3 adds a deterministic refs-only minimal candidate product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`; it emits only `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs, keeps formal writes blocked and requires user confirmation for asset updates; it does not wire Orchestrator into API/runtime/polish/domain/infrastructure and does not write formal assets, feedback, progress, scores, reports or training plans | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents; full formal write, release, real-provider quality and Phase 12 eval/replay/release gate remain separately scoped | Product Orchestration | candidate_product_slice_complete_with_deferred_formal_write_and_release_gate | Phase 11 |
 | L5-005 | Controlled tool loop hardening | P8 covers current facade/generic/Question/Feedback paths; P11-W2 adds a narrow runtime-hardening slice for future cross-agent handoff, cross-agent resume validation, cross-agent replay safety, refs-only trace/timeline mapping and HITL trigger validation without product workflow wiring | Phase 11 orchestration tool calls bounded by max steps, retries, timeout, stop conditions, registry lookup and side-effect gates; product multi-agent workflow remains separately scoped | Runtime / Tooling | runtime_hardening_slice_complete_with_deferred_product_workflow | Phase 11 |
 | L5-006 | L5 eval / replay / release gate | P9 replay/fixture foundation exists with `deferred_remote_ci_gap`; no multi-agent eval/replay/release gate exists | Multi-agent eval datasets, graders, replay fixtures, CI artifact evidence, observability report and human release decision | Eval / Release | not_started | Phase 12 |
 
@@ -163,6 +164,29 @@ Status: `runtime_hardening_slice_complete_with_deferred_product_workflow` for a 
 - P11-W2 does not certify real-provider quality.
 - P11-W2 does not claim L5 release.
 - P11-W2 does not implement Phase 12 release gate.
+
+## P11-W3 Minimal Three-Agent Candidate Product Slice Evidence
+
+Status: `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate` for a minimal refs-only product vertical slice. This status applies only to L5-004 candidate workflow evidence. It is not formal write completion, not L5 release, not real-provider quality certification, not remote CI success and not Phase 12 release gate completion.
+
+- `L5-004`: deterministic refs-only product slice exists under `app.application.agents.orchestration.minimal_three_agent_slice`.
+- The participant business agents are `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`.
+- The L5 contract catalog registers `asset_candidate_agent` and `training_plan_agent` through the project-level AgentDefinition / Skill / Tool registries while the C1 catalog remains Question / Feedback only.
+- Happy path emits candidate refs only: `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate`.
+- Handoff refs connect `feedback_candidate` to `asset_update_candidate`, then `asset_update_candidate` to `training_plan_candidate`.
+- Asset update candidates require user confirmation and keep `formal_write_blocked`.
+- Missing required refs fail closed; asset conflict and formal write request block the workflow; low confidence remains trace-visible.
+- Trace refs and validation refs remain separated in the result and timeline metadata.
+- P11-W3 does not call LLM or provider.
+- P11-W3 does not render prompts.
+- P11-W3 does not read or write DB.
+- P11-W3 does not call repositories.
+- P11-W3 does not modify provider, prompt, API, DB, frontend, domain policy, application polish behavior, eval datasets, eval graders, eval suites, eval reports, scripts or workflow files.
+- P11-W3 does not write formal assets, feedback, progress, scores, reports or training plans.
+- P11-W3 does not certify real-provider quality.
+- P11-W3 does not claim L5 release.
+- P11-W3 does not implement Phase 12 release gate.
+- `L5-006`: remains `not_started`; no Phase 12 eval/replay/release gate is implemented.
 
 ## P9 Eval / CI Regression Gate Backfill Evidence
 

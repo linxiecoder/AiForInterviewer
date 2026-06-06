@@ -529,6 +529,53 @@ P11-W2 non-claims:
 - P11-W2 does not implement Phase 12 release gate.
 - P11-W2 does not change provider, prompt, API, DB, frontend, domain policy or business persistence behavior.
 
+## P11-W3 Minimal Three-Agent Candidate Product Slice Gate
+
+适用于 `P11-W3-MINIMAL-THREE-AGENT-PRODUCT-SLICE`。
+
+Status:
+
+- `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate` is allowed only for the minimal candidate-only product slice.
+- This status is not formal write completion, not L5 release, not real-provider quality certification, not remote CI success and not Phase 12 release gate completion.
+
+必须满足：
+
+- L5 contract catalog registers `asset_candidate_agent` and `training_plan_agent` through project-level AgentDefinition / Skill / Tool registries.
+- Existing C1 catalog continues to register only `polish_question_agent` and `polish_feedback_agent`.
+- Minimal product slice includes the three business agents `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`.
+- Happy path emits candidate refs only: `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate`.
+- Handoff refs connect feedback -> asset candidate -> training plan candidate.
+- Asset update candidate requires user confirmation and keeps `formal_write_blocked`.
+- Missing required refs fail closed.
+- Asset conflict and formal write request block or interrupt and are trace-visible.
+- Low confidence is trace-visible and does not enable formal writes.
+- Trace refs and validation refs remain separated.
+- Unsafe metadata is rejected or sanitized.
+- Focused tests cover happy path, candidate refs, handoff refs, confirmation, fail-closed refs, blocked HITL cases, low confidence, metadata safety and no forbidden wiring.
+
+禁止：
+
+- calling LLM or provider.
+- rendering prompts.
+- reading or writing DB.
+- calling repositories.
+- writing formal assets, feedback, progress, scores, reports or training plans.
+- wiring `interview_orchestrator_agent` into API, ai_runtime, polish, domain or infrastructure.
+- modifying provider, prompt, API, DB, frontend, domain policy, application polish behavior, eval datasets, eval graders, eval suites, eval reports, scripts or workflow files.
+- claiming L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or formal write completion.
+
+P11-W3 non-claims:
+
+- P11-W3 implements only a minimal candidate-only product slice.
+- P11-W3 does not write formal assets, progress, scores, feedback, reports or training plans.
+- P11-W3 does not call LLM or provider.
+- P11-W3 does not modify provider, prompt, API, DB, frontend, domain policy or persistence behavior.
+- P11-W3 does not certify real-provider quality.
+- P11-W3 does not close Phase 12 release gate.
+- P11-W3 does not claim L5 release.
+- P11-W3 does not close remote CI gap.
+- P11-W3 does not replace Phase 12 multi-agent eval.
+
 ## Phase 12 Release Gate
 
 适用于 Phase 12 L5 Eval, Hardening, and Release Gate。

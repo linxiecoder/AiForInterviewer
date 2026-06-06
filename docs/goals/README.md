@@ -37,6 +37,15 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P11-W3 Minimal Three-Agent Candidate Product Slice
+
+P11-W3 implements a minimal candidate-only product vertical slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`. It emits only `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs, keeps trace refs and validation refs separated, requires user confirmation for asset updates and blocks formal write requests or asset conflicts. It does not call LLM/provider, render prompts, read/write DB, call repositories, write formal assets/feedback/progress/scores/reports/training plans, claim L5 release, certify real-provider quality, close remote CI gap or close Phase 12 release gate.
+
+- [P11_W3_MINIMAL_THREE_AGENT_PRODUCT_SLICE.md](2026-06-06/P11_W3_MINIMAL_THREE_AGENT_PRODUCT_SLICE.md)：P11-W3 controller scope lock and selected minimal candidate-only product slice goal；status updates remain execution evidence only。
+- [P11_W3_IMPLEMENTATION_REPORT.md](2026-06-06/P11_W3_IMPLEMENTATION_REPORT.md)：P11-W3 implementation report；records L5 catalog additions, refs-only product slice, tests and non-claims。
+- [P11_W3_VALIDATION_REPORT.md](2026-06-06/P11_W3_VALIDATION_REPORT.md)：P11-W3 validation report；records local validation commands, grep checks and forbidden-scope audit。
+- [P11_W3_SOURCE_BACKFILL_REPORT.md](2026-06-06/P11_W3_SOURCE_BACKFILL_REPORT.md)：P11-W3 source-backfill report；records L5-004 Matrix update, source updates and L5-006 non-claim。
+
 ### 2026-06-06 / P11-W2 Runtime-hardening Slice
 
 P11-W2 implements a narrow runtime-hardening slice for future controlled cross-agent orchestration. It hardens route-bound handoff validation, cross-agent resume/checkpoint validation, replay read-only/formal-write-blocked validation, refs-only trace/timeline mapping and HITL trigger validation. It does not implement product multi-agent workflow, execute `interview_orchestrator_agent` as a runtime agent, close all Phase 8 runtime gaps, close `deferred_remote_ci_gap`, rewrite stale eval reports, certify real-provider quality, claim L5 release or implement Phase 12 release gate.
