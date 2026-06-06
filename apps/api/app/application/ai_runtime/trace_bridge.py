@@ -11,6 +11,7 @@ from app.application.ai_runtime.contracts import (
     RuntimeUnavailableError,
     contains_sensitive_payload,
     sanitize_payload,
+    validate_agent_runtime_status,
 )
 from app.application.ai_runtime.side_effect_guard import sanitize_checkpoint_metadata
 
@@ -38,6 +39,7 @@ class AgentTraceBridge:
     def record_node_finished(
         self, *, owner_id: str, run_id: str, node_name: str, status: str, output_refs: tuple[str, ...]
     ) -> AgentTraceRecord:
+        validate_agent_runtime_status(status)
         return self._record(
             owner_id,
             run_id,
@@ -69,6 +71,7 @@ class AgentTraceBridge:
     def record_run_finished(
         self, *, owner_id: str, run_id: str, status: str, result_refs: tuple[str, ...]
     ) -> AgentTraceRecord:
+        validate_agent_runtime_status(status)
         return self._record(owner_id, run_id, "run_finished", {"status": status, "result_refs": result_refs})
 
     def _record(self, owner_id: str, run_id: str, event_type: str, metadata: dict[str, Any]) -> AgentTraceRecord:

@@ -9,6 +9,8 @@ permalink: ai-for-interviewer/docs/project-sources/20-phase7-closeout
 
 This file records active Project source backfill for Phase 7 provider request fail-closed windows. It does not replace `docs/03-delivery/BACKLOG.md`, `docs/03-delivery/DELIVERY_PLAN.md`, code truth, or tests.
 
+Note: Phase 8 statements in this file are a P7 closeout snapshot. Newer P8 status is recorded in `docs/project-sources/17_PHASE_ROADMAP_LOCK.md` and is `partial_with_deferred_gaps` after `P8-GOAL-ONE-SHOT-C4-RUNTIME`.
+
 ## P7-W3 Answer Excerpt Policy
 
 Window ID: `P7-W3-ANSWER-EXCERPT-POLICY-AND-IMPLEMENTATION`
@@ -84,9 +86,10 @@ Gap result:
 | `P7-GAP-003` | `closed_by_policy_and_tests` | P7-W3 Controller Decision B + policy metadata + focused tests |
 | `P7-GAP-005` | `closed_by_full_validation` | full-repo pytest, web:test, web:smoke:auth, focused temp policy, runtime fake rejection tests, and grep interpretation passed |
 
-## Current Closeout Status
+## P7 Closeout Snapshot
 
 - Phase 7: `done`.
-- Phase 8: `eligible_for_controller_decision`, not started.
+- Phase 8 at the time of P7 closeout was only a handoff candidate and had not yet begun.
+- Newer Phase 8 status: `partial_with_deferred_gaps` in `docs/project-sources/17_PHASE_ROADMAP_LOCK.md`.
 - Phase 9 eval / CI gate: not started.
 - Runtime fake provider remains rejected.

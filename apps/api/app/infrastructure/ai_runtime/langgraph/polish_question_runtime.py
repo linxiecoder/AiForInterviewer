@@ -16,6 +16,7 @@ from app.application.ai_runtime.business_graphs.polish_question_graph import (
     run_polish_question_agent,
 )
 from app.application.ai_runtime.contracts import (
+    AgentCandidatePayload,
     AgentCommandEnvelope,
     AgentReplayResult,
     AgentRunContext,
@@ -26,8 +27,11 @@ from app.application.ai_runtime.contracts import (
     GraphDisabledError,
     OwnerScopeError,
     RuntimePolicyError,
+    RuntimeValidationError,
+    classify_agent_runtime_status,
     sanitize_payload,
 )
+from app.application.ai_runtime.interrupts import AgentInterruptService
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.application.llm.ports import LlmTransport
 from app.application.polish.question_generation_service import QuestionGenerationService
@@ -86,14 +90,17 @@ class PolishQuestionGraphRuntime:
         polish_question_llm_transport: LlmTransport | None = None,
         status_store: dict[tuple[str, str], AgentRunStatus] | None = None,
         timeline_store: dict[tuple[str, str], list[AgentTimelineEvent]] | None = None,
+        interrupt_service: AgentInterruptService | None = None,
     ) -> None:
         self._flag_resolver = flag_resolver or RuntimeFlagResolver()
         self._checkpointer = checkpointer or RefsOnlyLangGraphCheckpointer()
         self._serializer = serializer or LangGraphRuntimeSerializer()
         self._polish_question_llm_transport = polish_question_llm_transport
+        self._interrupt_service = interrupt_service or AgentInterruptService()
         self._compiled_graph = self._compile_graph()
         self._statuses = status_store if status_store is not None else {}
         self._timelines = timeline_store if timeline_store is not None else {}
+        self._candidate_payloads: dict[tuple[str, str], tuple[AgentCandidatePayload, ...]] = {}
 
     def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
         if command != context.command:
@@ -152,42 +159,204 @@ class PolishQuestionGraphRuntime:
                 },
             }
         )
+        command_trace_metadata = _command_trace_event_metadata(command)
         events = self._timeline_for(context)
         events.extend(
             (
-                _event("run_started", "polish question agent runtime started", refs=(context.ai_task_id,)),
-                _event("checkpoint_recorded", "checkpoint ref recorded", refs=(checkpoint.checkpoint_ref,)),
-                _event("validation_recorded", "validation ref recorded", refs=validation_refs),
+                _event(
+                    "run_started",
+                    "polish question agent runtime started",
+                    refs=(context.ai_task_id,),
+                    metadata=_with_command_trace_event_metadata(None, command_trace_metadata),
+                ),
+                _event(
+                    "checkpoint_recorded",
+                    "checkpoint ref recorded",
+                    refs=(checkpoint.checkpoint_ref,),
+                    metadata={"checkpoint_refs": (checkpoint.checkpoint_ref,)},
+                ),
+                _event(
+                    "validation_recorded",
+                    "validation ref recorded",
+                    refs=validation_refs,
+                    metadata={"validation_refs": validation_refs},
+                ),
                 _event(
                     "candidate_payload_emitted",
                     "polish question candidate payload emitted",
                     refs=(candidate_ref,),
                     metadata={
                         "candidate_type": payload.candidate_type,
+                        "candidate_refs": (candidate_ref,),
+                        "output_refs": (candidate_ref,),
                         "payload_schema_id": payload.payload_schema_id,
                         "status": payload.status,
+                        "validation_refs": validation_refs,
                     },
                 ),
+            )
+        )
+        hitl_triggers = _hitl_triggers_from_metadata(command.metadata)
+        checkpoint_base_version = len(self._checkpointer.list_refs(context.owner_id, context.run_id))
+        hitl_interrupts = tuple(
+            self._interrupt_service.create_hitl_interrupt(
+                owner_id=context.owner_id,
+                actor_id=context.actor_id,
+                run_id=context.run_id,
+                node_name="polish_question_fake_start",
+                interrupt_type=trigger["interrupt_type"],
+                checkpoint_ref=checkpoint.checkpoint_ref,
+                base_version=checkpoint_base_version,
+                candidate_refs=(candidate_ref,),
+                validation_refs=validation_refs,
+                low_confidence_flags=payload.low_confidence_flags,
+                drawer_payload={
+                    "trigger_ref": trigger["trigger_ref"],
+                    "decision_point": "polish_question_fake_start",
+                },
+            )
+            for trigger in hitl_triggers
+        )
+        hitl_interrupt_refs = tuple(interrupt.interrupt_id for interrupt in hitl_interrupts)
+        if hitl_interrupt_refs:
+            events.append(
+                _event(
+                    "interrupt_opened",
+                    "polish question runtime HITL interrupt opened",
+                    refs=hitl_interrupt_refs,
+                    metadata=_with_command_trace_event_metadata(
+                        {
+                            "interrupt_refs": hitl_interrupt_refs,
+                            "checkpoint_refs": (checkpoint.checkpoint_ref,),
+                            "candidate_refs": (candidate_ref,),
+                            "validation_refs": validation_refs,
+                        },
+                        command_trace_metadata,
+                    ),
+                )
+            )
+        else:
+            events.append(
                 _event(
                     "run_succeeded",
                     "polish question agent runtime succeeded",
                     refs=(result_ref, candidate_ref),
+                    metadata=_with_command_trace_event_metadata(
+                        {
+                            "output_refs": (result_ref, candidate_ref),
+                            "candidate_refs": (candidate_ref,),
+                            "validation_refs": validation_refs,
+                        },
+                        command_trace_metadata,
+                    ),
+                )
+            )
+        result = AgentRunResult(
+            run_id=context.run_id,
+            status="interrupted" if hitl_interrupt_refs else agent_result.status,
+            output_refs=(result_ref, candidate_ref),
+            trace_refs=trace_refs,
+            interrupt_refs=hitl_interrupt_refs,
+            formal_refs=(),
+            candidate_payloads=(payload,),
+            metadata={**metadata, "hitl_interrupt_refs": list(hitl_interrupt_refs)},
+        )
+        self._statuses[(context.owner_id, context.run_id)] = AgentRunStatus(
+            run_id=context.run_id,
+            status=result.status,
+            owner_id=context.owner_id,
+            output_refs=result.output_refs,
+            trace_refs=result.trace_refs,
+            interrupt_refs=result.interrupt_refs,
+            formal_write_blocked=True,
+            metadata=result.metadata,
+        )
+        self._candidate_payloads[(context.owner_id, context.run_id)] = result.candidate_payloads
+        self._serializer.serialize_run_result(result)
+        return result
+
+    def resume(
+        self, context: AgentRunContext, interrupt_ref: str, resume_payload: dict[str, object]
+    ) -> AgentRunResult:
+        self._require_runtime_enabled(context)
+        status = self._require_status(context.owner_id, context.run_id)
+        if interrupt_ref not in status.interrupt_refs:
+            raise RuntimePolicyError("unknown interrupt ref for run")
+        sanitized_resume = sanitize_payload(resume_payload)
+        if not isinstance(sanitized_resume, dict):
+            raise RuntimeValidationError("resume payload must be an object")
+        checkpoint_ref = sanitized_resume.get("checkpoint_ref")
+        base_version = sanitized_resume.get("base_version")
+        idempotency_key = sanitized_resume.get("idempotency_key")
+        if not isinstance(checkpoint_ref, str) or not checkpoint_ref.strip():
+            raise RuntimeValidationError("checkpoint_ref is required for interrupt resume")
+        if type(base_version) is not int:
+            raise RuntimeValidationError("base_version is required for interrupt resume")
+        if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+            raise RuntimeValidationError("idempotency_key is required for interrupt resume")
+        resume_body = {
+            key: value
+            for key, value in sanitized_resume.items()
+            if key not in {"checkpoint_ref", "base_version", "idempotency_key"}
+        }
+        resume_status = self._interrupt_service.resume_interrupt(
+            run_id=context.run_id,
+            interrupt_id=interrupt_ref,
+            owner_id=context.owner_id,
+            actor_id=context.actor_id,
+            resume_payload=resume_body,
+            base_version=base_version,
+            idempotency_key=idempotency_key.strip(),
+            checkpoint_ref=checkpoint_ref.strip(),
+        )
+        candidate_payloads = self._candidate_payloads.get((context.owner_id, context.run_id), ())
+        command_trace_metadata = _command_trace_event_metadata(context.command)
+        events = self._timeline_for(context)
+        events.extend(
+            (
+                _event(
+                    "run_resumed",
+                    "polish question runtime resumed from HITL interrupt",
+                    refs=(interrupt_ref,),
+                    metadata=_with_command_trace_event_metadata(
+                        {
+                            "resume": resume_body,
+                            "interrupt_refs": (interrupt_ref,),
+                            "checkpoint_refs": status.trace_refs,
+                        },
+                        command_trace_metadata,
+                    ),
+                ),
+                _event(
+                    "run_succeeded",
+                    "polish question runtime resumed as candidate-only result",
+                    refs=status.output_refs,
+                    metadata=_with_command_trace_event_metadata(
+                        {
+                            "output_refs": status.output_refs,
+                            "candidate_refs": tuple(payload.candidate_ref for payload in candidate_payloads),
+                            "validation_refs": tuple(
+                                ref for ref in status.trace_refs if ref.startswith("validation_ref_")
+                            ),
+                            "resume_trace_refs": resume_status.trace_refs,
+                        },
+                        command_trace_metadata,
+                    ),
                 ),
             )
         )
         result = AgentRunResult(
             run_id=context.run_id,
-            status=agent_result.status,
-            output_refs=(result_ref, candidate_ref),
-            trace_refs=trace_refs,
-            interrupt_refs=(),
+            status="succeeded",
+            output_refs=status.output_refs,
+            trace_refs=status.trace_refs,
             formal_refs=(),
-            candidate_payloads=(payload,),
-            metadata=metadata,
+            candidate_payloads=candidate_payloads,
+            metadata={**status.metadata, "resume_action": str(resume_body.get("action") or "").strip()},
         )
         self._statuses[(context.owner_id, context.run_id)] = AgentRunStatus(
             run_id=context.run_id,
-            status=result.status,
+            status="succeeded",
             owner_id=context.owner_id,
             output_refs=result.output_refs,
             trace_refs=result.trace_refs,
@@ -204,13 +373,20 @@ class PolishQuestionGraphRuntime:
         if checkpoint is None:
             raise RuntimePolicyError("checkpoint ref not found for owner")
         timeline = self.get_timeline(context.run_id, context.owner_id)
+        status = self._statuses.get((context.owner_id, context.run_id))
+        timeline_refs = tuple(event.event_id for event in timeline.events)
         return AgentReplayResult(
             run_id=context.run_id,
-            status="replayed",
+            status=_replay_status_from_original(status.status if status is not None else ""),
             read_only=True,
             formal_write_blocked=True,
             trace_refs=(checkpoint.checkpoint_ref,),
-            timeline_refs=tuple(event.event_id for event in timeline.events),
+            timeline_refs=timeline_refs,
+            metadata=_replay_metadata_from_status(
+                status=status,
+                checkpoint_ref=checkpoint.checkpoint_ref,
+                timeline_refs=timeline_refs,
+            ),
         )
 
     def get_status(self, run_id: str, owner_id: str) -> AgentRunStatus:
@@ -228,6 +404,30 @@ class PolishQuestionGraphRuntime:
 
     def cancel(self, run_id: str, owner_id: str, reason: str, actor_id: str) -> AgentRunStatus:
         existing = self._require_status(owner_id, run_id)
+        metadata_trace_refs = (
+            existing.metadata.get("trace_refs") if isinstance(existing.metadata, dict) else None
+        )
+        checkpoint_refs = (
+            tuple(str(ref) for ref in metadata_trace_refs.get("checkpoint_refs", ()) if ref)
+            if isinstance(metadata_trace_refs, dict)
+            else ()
+        ) or tuple(ref for ref in existing.trace_refs if str(ref).startswith("ackpt_")) or existing.trace_refs
+        validation_refs = (
+            tuple(str(ref) for ref in metadata_trace_refs.get("validation_refs", ()) if ref)
+            if isinstance(metadata_trace_refs, dict)
+            else ()
+        ) or tuple(ref for ref in existing.trace_refs if str(ref).startswith("validation_ref_"))
+        cancel_metadata = {
+            "reason": sanitize_payload(reason),
+            "actor_id": sanitize_payload(actor_id),
+            "output_refs": existing.output_refs,
+            "candidate_refs": existing.output_refs,
+            "checkpoint_refs": checkpoint_refs,
+            "provider_calls": 0,
+            "formal_business_writes": 0,
+        }
+        if validation_refs:
+            cancel_metadata["validation_refs"] = validation_refs
         status = AgentRunStatus(
             run_id=run_id,
             status="cancelled",
@@ -239,6 +439,14 @@ class PolishQuestionGraphRuntime:
             metadata={"reason": sanitize_payload(reason), "provider_calls": 0, "formal_business_writes": 0},
         )
         self._statuses[(owner_id, run_id)] = status
+        self._timelines.setdefault((owner_id, run_id), []).append(
+            _event(
+                "run_cancelled",
+                "Runtime run cancelled",
+                refs=(*existing.output_refs, *checkpoint_refs, *validation_refs),
+                metadata=cancel_metadata,
+            )
+        )
         return status
 
     def _compile_graph(self):
@@ -405,6 +613,104 @@ def _polish_question_runtime_node(
     }
 
 
+def _replay_status_from_original(original_status: str) -> str:
+    if not str(original_status).strip():
+        return "replayed"
+    category = classify_agent_runtime_status(original_status)
+    if category in {"failed", "blocked", "interrupted", "cancelled"}:
+        return f"replayed_{category}"
+    return "replayed"
+
+
+def _replay_metadata_from_status(
+    *,
+    status: AgentRunStatus | None,
+    checkpoint_ref: str,
+    timeline_refs: tuple[str, ...],
+) -> dict[str, object]:
+    status_metadata = status.metadata if status is not None and isinstance(status.metadata, dict) else {}
+    status_metadata_trace_refs = _trace_refs_metadata_from_status_metadata(status_metadata)
+    original_status = status.status if status is not None else ""
+    original_category = classify_agent_runtime_status(original_status) if original_status else ""
+    status_trace_refs = status.trace_refs if status is not None else ()
+    metadata: dict[str, object] = {
+        "replay_mode": "read_only",
+        "original_status": original_status,
+        "original_status_category": original_category,
+        "replay_trace_match": bool(status_trace_refs and checkpoint_ref in status_trace_refs),
+        "replay_compared_trace_refs": tuple(dict.fromkeys((checkpoint_ref, *status_trace_refs))),
+        "timeline_refs": timeline_refs,
+        "provider_calls": 0,
+        "tool_calls": 0,
+        "repository_writes": 0,
+        "formal_business_writes": 0,
+    }
+    if status_metadata_trace_refs:
+        metadata["trace_refs"] = status_metadata_trace_refs
+        _merge_trace_refs_metadata(metadata, status_metadata_trace_refs)
+    for key in (
+        "failure_reason",
+        "fallback_reason",
+        "validation_refs",
+        "tool_refs",
+        "handoff_refs",
+        "policy_refs",
+        "provider_refs",
+        "low_confidence_flags",
+    ):
+        value = status_metadata.get(key)
+        if value:
+            metadata[key] = value
+    if original_category in {"failed", "blocked"} and not metadata.get("failure_reason"):
+        metadata["failure_reason"] = original_status
+    return metadata
+
+
+def _trace_refs_metadata_from_status_metadata(status_metadata: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    trace_refs = status_metadata.get("trace_refs")
+    if not isinstance(trace_refs, dict):
+        return {}
+    result: dict[str, tuple[str, ...]] = {}
+    for key in (
+        "checkpoint_refs",
+        "validation_refs",
+        "handoff_refs",
+        "tool_refs",
+        "policy_refs",
+        "provider_refs",
+        "low_confidence_refs",
+        "low_confidence_flags",
+    ):
+        if key in trace_refs:
+            result[key] = _metadata_ref_values(trace_refs.get(key))
+    return result
+
+
+def _merge_trace_refs_metadata(metadata: dict[str, object], trace_refs: dict[str, tuple[str, ...]]) -> None:
+    for nested_key, metadata_key in (
+        ("validation_refs", "validation_refs"),
+        ("handoff_refs", "handoff_refs"),
+        ("tool_refs", "tool_refs"),
+        ("policy_refs", "policy_refs"),
+        ("provider_refs", "provider_refs"),
+        ("low_confidence_refs", "low_confidence_flags"),
+        ("low_confidence_flags", "low_confidence_flags"),
+    ):
+        if nested_key in trace_refs:
+            refs = trace_refs.get(nested_key, ())
+            metadata[metadata_key] = tuple(dict.fromkeys((*_metadata_ref_values(metadata.get(metadata_key)), *refs)))
+
+
+def _metadata_ref_values(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value.strip(),) if value.strip() else ()
+    if isinstance(value, (list, tuple, set)):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return ()
+
+
 def _event(
     event_type: str,
     summary: str,
@@ -421,6 +727,60 @@ def _event(
     )
 
 
+def _command_trace_event_metadata(command: AgentCommandEnvelope) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for key in (
+        "plan_refs",
+        "skill_refs",
+        "tool_refs",
+        "policy_refs",
+        "provider_refs",
+        "validation_refs",
+        "handoff_refs",
+        "low_confidence_flags",
+    ):
+        refs = _metadata_refs(command.metadata, key)
+        if refs:
+            metadata[key] = refs
+
+    for key in ("failure_reason", "fallback_reason"):
+        value = sanitize_payload(command.metadata.get(key))
+        if isinstance(value, str) and value.strip():
+            metadata[key] = value.strip()
+    return metadata
+
+
+def _with_command_trace_event_metadata(
+    metadata: dict[str, Any] | None, command_metadata: dict[str, Any]
+) -> dict[str, Any]:
+    merged = dict(metadata or {})
+    _merge_command_trace_event_metadata(merged, command_metadata)
+    return merged
+
+
+def _merge_command_trace_event_metadata(target: dict[str, Any], command_metadata: dict[str, Any]) -> None:
+    for key, value in command_metadata.items():
+        if key in {"failure_reason", "fallback_reason"}:
+            target.setdefault(key, value)
+            continue
+        existing = target.get(key)
+        if isinstance(existing, tuple) and isinstance(value, tuple):
+            target[key] = tuple(dict.fromkeys((*existing, *value)))
+            continue
+        target.setdefault(key, value)
+
+
+def _metadata_refs(metadata: dict[str, Any], key: str) -> tuple[str, ...]:
+    value = metadata.get(key)
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value.strip(),) if value.strip() else ()
+    if isinstance(value, (list, tuple, set)):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return ()
+
+
 def _hash_payload(payload: Any) -> str:
     encoded = json.dumps(sanitize_payload(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -428,3 +788,19 @@ def _hash_payload(payload: Any) -> str:
 
 def _stable_id(*parts: str) -> str:
     return hashlib.sha256("::".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _hitl_triggers_from_metadata(metadata: dict[str, Any]) -> tuple[dict[str, str], ...]:
+    trigger_keys = (
+        ("formal_write_attempt_ref", "formal_write_attempt"),
+        ("asset_conflict_ref", "asset_conflict"),
+        ("low_confidence_formal_update_ref", "low_confidence_formal_update"),
+        ("ambiguous_ownership_ref", "ambiguous_ownership"),
+        ("validation_failed_partial_result_ref", "validation_failed_partial_result"),
+    )
+    triggers: list[dict[str, str]] = []
+    for metadata_key, interrupt_type in trigger_keys:
+        trigger_ref = metadata.get(metadata_key)
+        if isinstance(trigger_ref, str) and trigger_ref.strip():
+            triggers.append({"interrupt_type": interrupt_type, "trigger_ref": trigger_ref.strip()})
+    return tuple(triggers)

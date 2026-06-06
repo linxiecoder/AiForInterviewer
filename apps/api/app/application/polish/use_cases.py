@@ -18,6 +18,7 @@ from app.application.ai_runtime.contracts import (
     RuntimeConflictError,
     RuntimePolicyError,
     RuntimeValidationError,
+    classify_agent_runtime_status,
 )
 from app.application.ai_runtime.facade import AiOrchestrationFacade
 from app.application.ai_runtime.handoff import AgentPersistenceHandoff, build_question_result_write_plan
@@ -2103,15 +2104,22 @@ def _follow_up_completed_task_status(
 
 def _graph_task_status_to_polish_status(raw_status: str) -> AiTaskStatus:
     normalized = str(raw_status or "").strip().lower()
-    if normalized in {"running", "in_progress", "started"}:
+    if normalized == "in_progress":
         return AiTaskStatus.RUNNING
-    if normalized in {"cancelled", "canceled"}:
-        return AiTaskStatus.CANCELLED
     if normalized in {"timed_out", "timeout"}:
         return AiTaskStatus.TIMED_OUT
-    if normalized in {"validation_failed", "invalid"}:
+    category = classify_agent_runtime_status(normalized)
+    if category in {"pending", "succeeded", "replayed"}:
+        return AiTaskStatus.QUEUED
+    if category in {"running", "interrupted"}:
+        return AiTaskStatus.RUNNING
+    if category == "cancelled":
+        return AiTaskStatus.CANCELLED
+    if category == "blocked":
         return AiTaskStatus.VALIDATION_FAILED
-    if "failed" in normalized or normalized in {"error", "errored"}:
+    if category == "failed":
+        if "validation" in normalized or "invalid" in normalized:
+            return AiTaskStatus.VALIDATION_FAILED
         return AiTaskStatus.GENERATION_FAILED
     return AiTaskStatus.QUEUED
 

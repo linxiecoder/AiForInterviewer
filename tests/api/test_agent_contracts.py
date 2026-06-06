@@ -3,6 +3,11 @@ from __future__ import annotations
 import inspect
 from dataclasses import fields, is_dataclass
 
+import pytest
+
+import app.application.agents.contracts as agent_contracts
+import app.application.agents.handoff as agent_handoff
+from app.application.agents.contracts import ToolDefinition
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
     AgentCommandEnvelope,
@@ -40,6 +45,7 @@ FORBIDDEN_TERMS = (
 )
 RAW_KEY = "raw" + "_prompt"
 PROVIDER_KEY = "provider_" + "payload"
+FULL_ASSET_BODY_KEY = "full" + "_asset" + "_body"
 
 
 def test_contract_dtos_are_project_owned_dataclasses_without_runtime_internals() -> None:
@@ -109,6 +115,17 @@ def test_agent_candidate_payload_rejects_raw_payload_and_keeps_sanitized_candida
         assert "candidate payload contains sensitive content" in str(exc)
     else:
         raise AssertionError("raw candidate payload was accepted")
+    try:
+        AgentCandidatePayload(
+            candidate_ref="asset_update_candidate_ref_1",
+            candidate_type="asset_update_candidate",
+            payload_schema_id="polish_asset_update_candidate.v1",
+            payload={FULL_ASSET_BODY_KEY: {"title": "must stay out of runtime handoff"}},
+        )
+    except RuntimePolicyError as exc:
+        assert "candidate payload contains sensitive content" in str(exc)
+    else:
+        raise AssertionError("raw asset body candidate payload was accepted")
 
 
 def test_agent_run_result_and_task_status_ref_carry_candidate_payloads() -> None:
@@ -198,6 +215,43 @@ def test_trace_bridge_records_sanitized_refs_and_rejects_sensitive_llm_summary()
         raise AssertionError("sensitive LLM summary was accepted")
 
 
+def test_trace_bridge_rejects_unknown_non_dto_runtime_statuses() -> None:
+    bridge = AgentTraceBridge()
+
+    failed = bridge.record_node_finished(
+        owner_id="owner_1",
+        run_id="arun_1",
+        node_name="validator",
+        status="validation_failed",
+        output_refs=("validation_ref_1",),
+    )
+
+    assert failed.metadata["status"] == "validation_failed"
+    try:
+        bridge.record_node_finished(
+            owner_id="owner_1",
+            run_id="arun_1",
+            node_name="validator",
+            status="doneish",
+            output_refs=("candidate_ref_1",),
+        )
+    except RuntimeValidationError as exc:
+        assert "unknown runtime status" in str(exc)
+    else:
+        raise AssertionError("unknown node status was accepted")
+    try:
+        bridge.record_run_finished(
+            owner_id="owner_1",
+            run_id="arun_1",
+            status="write_enabled_replay",
+            result_refs=("candidate_ref_1",),
+        )
+    except RuntimeValidationError as exc:
+        assert "unknown runtime status" in str(exc)
+    else:
+        raise AssertionError("unknown run status was accepted")
+
+
 def test_side_effect_guard_blocks_sensitive_payloads_unconfirmed_formal_write_and_replay_write() -> None:
     guard = AgentSideEffectGuard()
 
@@ -222,6 +276,198 @@ def test_side_effect_guard_blocks_sensitive_payloads_unconfirmed_formal_write_an
         assert "replay" in str(exc)
     else:
         raise AssertionError("replay write was accepted")
+
+
+def test_runtime_loop_policy_fails_closed_and_guard_validates_tool_contract() -> None:
+    policy_cls = getattr(agent_contracts, "AgentRuntimeLoopPolicy", None)
+    assert policy_cls is not None
+
+    with pytest.raises(ValueError, match="max_steps"):
+        policy_cls(
+            max_steps=0,
+            max_retries=1,
+            timeout_seconds=5,
+            stop_conditions=("timeout",),
+            allowed_tools=("evidence_selection",),
+            allowed_callers=("polish_question_agent",),
+            side_effect_policy="candidate_write",
+        )
+    with pytest.raises(ValueError, match="stop_conditions"):
+        policy_cls(
+            max_steps=3,
+            max_retries=1,
+            timeout_seconds=5,
+            stop_conditions=(),
+            allowed_tools=("evidence_selection",),
+            allowed_callers=("polish_question_agent",),
+            side_effect_policy="candidate_write",
+        )
+    with pytest.raises(ValueError, match="missing required stop_conditions"):
+        policy_cls(
+            max_steps=3,
+            max_retries=1,
+            timeout_seconds=5,
+            stop_conditions=("timeout", "tool_not_allowed", "formal_write_requested"),
+            allowed_tools=("evidence_selection",),
+            allowed_callers=("polish_question_agent",),
+            side_effect_policy="candidate_write",
+        )
+
+    policy = policy_cls(
+        max_steps=3,
+        max_retries=1,
+        timeout_seconds=5,
+        stop_conditions=agent_contracts.P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+        allowed_tools=("evidence_selection",),
+        allowed_callers=("polish_question_agent",),
+        side_effect_policy="candidate_write",
+    )
+    tool = ToolDefinition(
+        tool_id="tool_evidence_selection",
+        tool_name="evidence_selection",
+        input_schema_id="schema.input.refs",
+        output_schema_id="schema.output.candidate.refs",
+        permission_scope="candidate_generation",
+        owner_scope="same_owner",
+        side_effect_policy="candidate_write",
+        timeout_seconds=5,
+        retry_policy="bounded_once",
+        allowed_callers=("polish_question_agent",),
+        forbidden_data=(RAW_KEY, PROVIDER_KEY, "raw_completion", "api_key"),
+        trace_events=("tool_started", "tool_finished"),
+    )
+    guard = AgentSideEffectGuard()
+
+    assert guard.authorize_tool_call(
+        owner_id="owner_1",
+        tool_name="evidence_selection",
+        input_refs=("session_ref_1",),
+        tool=tool,
+        caller_id="polish_question_agent",
+        permission_scope="candidate_generation",
+        owner_scope="same_owner",
+        side_effect_policy=policy.side_effect_policy,
+        payload={"candidate_ref": "candidate_ref_1"},
+    )
+    with pytest.raises(RuntimePolicyError, match="caller"):
+        guard.authorize_tool_call(
+            owner_id="owner_1",
+            tool_name="evidence_selection",
+            input_refs=("session_ref_1",),
+            tool=tool,
+            caller_id="feedback_agent",
+            permission_scope="candidate_generation",
+            owner_scope="same_owner",
+            side_effect_policy=policy.side_effect_policy,
+        )
+    with pytest.raises(RuntimePolicyError, match="side_effect_policy"):
+        guard.authorize_tool_call(
+            owner_id="owner_1",
+            tool_name="evidence_selection",
+            input_refs=("session_ref_1",),
+            tool=tool,
+            caller_id="polish_question_agent",
+            permission_scope="candidate_generation",
+            owner_scope="same_owner",
+            side_effect_policy="formal_write",
+        )
+    with pytest.raises(RuntimePolicyError, match="owner_scope"):
+        guard.authorize_tool_call(
+            owner_id="owner_1",
+            tool_name="evidence_selection",
+            input_refs=("session_ref_1",),
+            tool=tool,
+            caller_id="polish_question_agent",
+            permission_scope="candidate_generation",
+            owner_scope="cross_owner",
+            side_effect_policy=policy.side_effect_policy,
+        )
+    with pytest.raises(RuntimePolicyError, match="forbidden data"):
+        guard.authorize_tool_call(
+            owner_id="owner_1",
+            tool_name="evidence_selection",
+            input_refs=("session_ref_1",),
+            tool=tool,
+            caller_id="polish_question_agent",
+            permission_scope="candidate_generation",
+            owner_scope="same_owner",
+            side_effect_policy=policy.side_effect_policy,
+            payload={RAW_KEY: "hidden"},
+        )
+    with pytest.raises(RuntimePolicyError, match="ToolDefinition"):
+        guard.authorize_tool_call(
+            owner_id="owner_1",
+            tool_name="evidence_selection",
+            input_refs=("session_ref_1",),
+            caller_id="polish_question_agent",
+            permission_scope="candidate_generation",
+            owner_scope="same_owner",
+            side_effect_policy=policy.side_effect_policy,
+            payload={"candidate_ref": "candidate_ref_1"},
+        )
+
+
+def test_typed_handoff_envelope_and_trace_keep_phase8_refs_without_raw_metadata() -> None:
+    envelope_cls = getattr(agent_handoff, "AgentHandoffEnvelope", None)
+    assert envelope_cls is not None
+
+    handoff = envelope_cls(
+        candidate_ref="candidate_ref_1",
+        candidate_type="question_candidate",
+        payload_schema_id="schema.question_candidate.v1",
+        trace_refs=("trace_1",),
+        validation_refs=("validation_1",),
+        side_effect_key="side_effect_1",
+        idempotency_key="idem_1",
+        metadata={
+            RAW_KEY: "hidden",
+            FULL_ASSET_BODY_KEY: {"body": "hidden"},
+            "safe": {
+                "nested": "ok",
+                RAW_KEY: "hidden",
+                "items": [{"api_key": "secret", "allowed": "ref_ok"}],
+            },
+            "list": [{"full_asset_body": "hidden", "kept": "value"}],
+        },
+    )
+    trace = agent_contracts.AgentExecutionTrace(
+        trace_id="trace_1",
+        run_id="arun_1",
+        agent_id="polish_question_agent",
+        agent_version="v1",
+        ai_task_id="aitask_1",
+        input_refs=("session_1",),
+        candidate_refs=(handoff.candidate_ref,),
+        validation_refs=handoff.validation_refs,
+        handoff_refs=(handoff.handoff_ref,),
+        low_confidence_flags=("source_gap",),
+        failure_reason="validation_failed",
+        fallback_reason="provider_disabled",
+        metadata={
+            PROVIDER_KEY: {"token": "secret"},
+            "safe": {
+                "provider": {PROVIDER_KEY: {"token": "secret"}, "kept_ref": "trace_ref_ok"},
+                "items": [{"full_resume": "hidden", "kept": "value"}],
+            },
+        },
+    )
+
+    assert handoff.candidate_type == "question_candidate"
+    assert handoff.payload_schema_id == "schema.question_candidate.v1"
+    assert handoff.trace_refs == ("trace_1",)
+    assert handoff.validation_refs == ("validation_1",)
+    assert handoff.metadata == {
+        "safe": {"nested": "ok", "items": [{"allowed": "ref_ok"}]},
+        "list": [{"kept": "value"}],
+    }
+    assert trace.agent_version == "v1"
+    assert trace.ai_task_id == "aitask_1"
+    assert trace.low_confidence_flags == ("source_gap",)
+    assert trace.failure_reason == "validation_failed"
+    assert trace.fallback_reason == "provider_disabled"
+    assert trace.metadata == {
+        "safe": {"provider": {"kept_ref": "trace_ref_ok"}, "items": [{"kept": "value"}]}
+    }
 
 
 def test_checkpoint_metadata_uses_allowlist_and_rejects_payload_keys() -> None:

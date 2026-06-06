@@ -16,6 +16,62 @@ def _metadata(values: dict[str, Any] | None) -> dict[str, Any]:
     return dict(values or {})
 
 
+_BLOCKED_METADATA_KEYS = (
+    "raw_prompt",
+    "system_prompt",
+    "developer_prompt",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "checkpoint_payload",
+    "full_source_body",
+    "full_resume",
+    "full_jd",
+    "full_answer",
+    "full_asset_body",
+    "hidden_rubric",
+    "formal_refs",
+    "api_key",
+    "token",
+    "cookie",
+    "secret",
+)
+
+P8_REQUIRED_RUNTIME_STOP_CONDITIONS = (
+    "max_steps_exceeded",
+    "timeout",
+    "validation_failed",
+    "tool_not_allowed",
+    "formal_write_requested",
+    "interrupt_required",
+    "provider_failed",
+)
+
+
+def _safe_metadata(values: dict[str, Any] | None) -> dict[str, Any]:
+    return _safe_metadata_value(dict(values or {}))
+
+
+def _safe_metadata_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _safe_metadata_value(item)
+            for key, item in value.items()
+            if not _metadata_key_is_blocked(key)
+        }
+    if isinstance(value, list):
+        return [_safe_metadata_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_safe_metadata_value(item) for item in value)
+    if isinstance(value, set):
+        return tuple(_safe_metadata_value(item) for item in sorted(value, key=str))
+    return value
+
+
+def _metadata_key_is_blocked(key: Any) -> bool:
+    return any(item in str(key).lower() for item in _BLOCKED_METADATA_KEYS)
+
+
 @dataclass(frozen=True)
 class HandoffContract:
     """Contract-only handoff metadata for candidate refs before any formal write."""
@@ -41,6 +97,58 @@ class HandoffContract:
         object.__setattr__(self, "formal_write_preconditions", _tuple(self.formal_write_preconditions))
         if self.user_confirmation_required is None:
             object.__setattr__(self, "user_confirmation_required", self.confirmation_required)
+
+
+@dataclass(frozen=True)
+class AgentHandoffEnvelope:
+    """Typed candidate handoff envelope between AgentExecutor-compatible agents."""
+
+    candidate_ref: str
+    candidate_type: str
+    payload_schema_id: str
+    trace_refs: tuple[str, ...]
+    validation_refs: tuple[str, ...]
+    side_effect_key: str
+    idempotency_key: str
+    handoff_ref: str = ""
+    asset_update_candidate_ref: str = ""
+    asset_body_ref: str = ""
+    asset_schema_id: str = ""
+    formal_write_blocked_until: str = ""
+    user_confirmation_required: bool | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.candidate_ref.strip():
+            raise ValueError("candidate_ref is required")
+        if not self.candidate_type.strip():
+            raise ValueError("candidate_type is required")
+        if not self.payload_schema_id.strip():
+            raise ValueError("payload_schema_id is required")
+        if not self.side_effect_key.strip():
+            raise ValueError("side_effect_key is required")
+        if not self.idempotency_key.strip():
+            raise ValueError("idempotency_key is required")
+        object.__setattr__(self, "trace_refs", _tuple(self.trace_refs))
+        object.__setattr__(self, "validation_refs", _tuple(self.validation_refs))
+        object.__setattr__(self, "asset_update_candidate_ref", str(self.asset_update_candidate_ref).strip())
+        object.__setattr__(self, "asset_body_ref", str(self.asset_body_ref).strip())
+        object.__setattr__(self, "asset_schema_id", str(self.asset_schema_id).strip())
+        object.__setattr__(self, "formal_write_blocked_until", str(self.formal_write_blocked_until).strip())
+        if not self.trace_refs:
+            raise ValueError("trace_refs are required")
+        if not self.validation_refs:
+            raise ValueError("validation_refs are required")
+        if self.candidate_type == "asset_update_candidate":
+            if not self.asset_update_candidate_ref:
+                object.__setattr__(self, "asset_update_candidate_ref", self.candidate_ref)
+            if self.user_confirmation_required is None:
+                object.__setattr__(self, "user_confirmation_required", True)
+            if not self.formal_write_blocked_until:
+                object.__setattr__(self, "formal_write_blocked_until", "user_confirmation")
+        if not self.handoff_ref:
+            object.__setattr__(self, "handoff_ref", f"handoff_{self.candidate_ref}")
+        object.__setattr__(self, "metadata", _safe_metadata(self.metadata))
 
 
 @dataclass(frozen=True)
@@ -183,6 +291,50 @@ class SkillDefinition:
 
 
 @dataclass(frozen=True)
+class AgentRuntimeLoopPolicy:
+    """Fail-closed runtime loop bounds for AgentExecutor-compatible runs."""
+
+    max_steps: int
+    max_retries: int
+    timeout_seconds: int | float
+    stop_conditions: tuple[str, ...]
+    allowed_tools: tuple[str, ...]
+    allowed_callers: tuple[str, ...]
+    side_effect_policy: str
+
+    def __post_init__(self) -> None:
+        if self.max_steps <= 0:
+            raise ValueError("max_steps must be positive")
+        if self.max_retries < 0:
+            raise ValueError("max_retries must be non-negative")
+        if self.timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        object.__setattr__(self, "stop_conditions", _tuple(self.stop_conditions))
+        object.__setattr__(self, "allowed_tools", _tuple(self.allowed_tools))
+        object.__setattr__(self, "allowed_callers", _tuple(self.allowed_callers))
+        if not self.stop_conditions:
+            raise ValueError("stop_conditions are required")
+        missing_stop_conditions = tuple(
+            condition for condition in P8_REQUIRED_RUNTIME_STOP_CONDITIONS if condition not in self.stop_conditions
+        )
+        if missing_stop_conditions:
+            raise ValueError(
+                "missing required stop_conditions: " + ", ".join(missing_stop_conditions)
+            )
+        if not self.allowed_tools:
+            raise ValueError("allowed_tools are required")
+        if not self.allowed_callers:
+            raise ValueError("allowed_callers are required")
+        if self.side_effect_policy not in {
+            "read_only",
+            "candidate_write",
+            "formal_write_handoff_only",
+            "forbidden",
+        }:
+            raise ValueError(f"invalid side_effect_policy: {self.side_effect_policy}")
+
+
+@dataclass(frozen=True)
 class ToolDefinition:
     """Tool catalog contract for permitted agent calls without direct repository exposure."""
 
@@ -213,12 +365,23 @@ class AgentExecutionPlan:
     agent_id: str
     owner_id: str
     objective: str
+    run_id: str = ""
+    ai_task_id: str = ""
+    actor_id: str = ""
+    graph_name: str = ""
+    graph_version: str = ""
+    input_refs: tuple[str, ...] = field(default_factory=tuple)
+    requested_outputs: tuple[str, ...] = field(default_factory=tuple)
+    idempotency_key: str = ""
+    runtime_loop_policy: AgentRuntimeLoopPolicy | None = None
     steps: tuple[str, ...] = field(default_factory=tuple)
     candidate_output_refs: tuple[str, ...] = field(default_factory=tuple)
     handoff_contract: HandoffContract | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "input_refs", _tuple(self.input_refs))
+        object.__setattr__(self, "requested_outputs", _tuple(self.requested_outputs))
         object.__setattr__(self, "steps", _tuple(self.steps))
         object.__setattr__(self, "candidate_output_refs", _tuple(self.candidate_output_refs))
         object.__setattr__(self, "metadata", _metadata(self.metadata))
@@ -231,6 +394,8 @@ class AgentExecutionTrace:
     trace_id: str
     run_id: str
     agent_id: str
+    agent_version: str = ""
+    ai_task_id: str = ""
     events: tuple[str, ...] = field(default_factory=tuple)
     candidate_refs: tuple[str, ...] = field(default_factory=tuple)
     handoff_refs: tuple[str, ...] = field(default_factory=tuple)
@@ -243,12 +408,15 @@ class AgentExecutionTrace:
     provider_refs: tuple[str, ...] = field(default_factory=tuple)
     validation_refs: tuple[str, ...] = field(default_factory=tuple)
     output_refs: tuple[str, ...] = field(default_factory=tuple)
+    low_confidence_flags: tuple[str, ...] = field(default_factory=tuple)
+    failure_reason: str = ""
+    fallback_reason: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "events", _tuple(self.events))
         object.__setattr__(self, "candidate_refs", _tuple(self.candidate_refs))
         object.__setattr__(self, "handoff_refs", _tuple(self.handoff_refs))
-        object.__setattr__(self, "metadata", _metadata(self.metadata))
+        object.__setattr__(self, "metadata", _safe_metadata(self.metadata))
         object.__setattr__(self, "input_refs", _tuple(self.input_refs))
         object.__setattr__(self, "plan_refs", _tuple(self.plan_refs))
         object.__setattr__(self, "skill_refs", _tuple(self.skill_refs))
@@ -257,6 +425,7 @@ class AgentExecutionTrace:
         object.__setattr__(self, "provider_refs", _tuple(self.provider_refs))
         object.__setattr__(self, "validation_refs", _tuple(self.validation_refs))
         object.__setattr__(self, "output_refs", _tuple(self.output_refs))
+        object.__setattr__(self, "low_confidence_flags", _tuple(self.low_confidence_flags))
 
 
 @dataclass(frozen=True)
@@ -267,11 +436,17 @@ class AgentExecutionResult:
     status: str
     candidate_refs: tuple[str, ...]
     trace: AgentExecutionTrace
+    output_refs: tuple[str, ...] = field(default_factory=tuple)
+    interrupt_refs: tuple[str, ...] = field(default_factory=tuple)
+    candidate_payloads: tuple[Any, ...] = field(default_factory=tuple)
     handoff_refs: tuple[str, ...] = field(default_factory=tuple)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "candidate_refs", _tuple(self.candidate_refs))
+        object.__setattr__(self, "output_refs", _tuple(self.output_refs))
+        object.__setattr__(self, "interrupt_refs", _tuple(self.interrupt_refs))
+        object.__setattr__(self, "candidate_payloads", tuple(self.candidate_payloads))
         object.__setattr__(self, "handoff_refs", _tuple(self.handoff_refs))
         object.__setattr__(self, "metadata", _metadata(self.metadata))
 
@@ -315,8 +490,11 @@ __all__ = [
     "AgentExecutionStatus",
     "AgentExecutionTimeline",
     "AgentExecutionTrace",
+    "AgentHandoffEnvelope",
+    "AgentRuntimeLoopPolicy",
     "EvalContract",
     "HandoffContract",
+    "P8_REQUIRED_RUNTIME_STOP_CONDITIONS",
     "SkillDefinition",
     "ToolDefinition",
     "TraceContract",

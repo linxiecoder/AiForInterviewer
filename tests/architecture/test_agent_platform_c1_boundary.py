@@ -55,10 +55,18 @@ EXPECTED_C_TARGET_CANDIDATE_OUTPUTS = frozenset(
 )
 
 AGENT_PLATFORM_ROOT = Path(__file__).resolve().parents[2] / "apps/api/app/application/agents"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+AI_RUNTIME_ROOT = REPO_ROOT / "apps/api/app/application/ai_runtime"
 CATALOG_PATH = AGENT_PLATFORM_ROOT / "definitions/catalog.py"
 CATALOG_REVISION = "2026-06-05.p4-w1.fix01"
 LEGACY_PHASE_SCHEMA_MARKER = "p4" + ".c1"
 LEGACY_PHASE_VERSION_CONSTANT = "C1" + "_VERSION"
+EXPECTED_RUNTIME_TOOL_AUTHORIZATION_CALL_FILES = frozenset(
+    {
+        "apps/api/app/application/ai_runtime/business_graphs/polish_feedback_graph.py",
+        "apps/api/app/application/ai_runtime/business_graphs/polish_question_graph.py",
+    }
+)
 
 
 def _metadata_tokens(*values: str) -> set[str]:
@@ -77,6 +85,17 @@ def _public_ast_nodes_missing_docstrings(path: Path, node_type: type[ast.AST]) -
         if isinstance(node, node_type) and not node.name.startswith("_") and ast.get_docstring(node) is None:
             missing.append(f"{path.relative_to(AGENT_PLATFORM_ROOT)}:{node.name}")
     return sorted(missing)
+
+
+def _runtime_tool_authorization_calls() -> list[tuple[Path, ast.Call]]:
+    calls: list[tuple[Path, ast.Call]] = []
+    for path in sorted(AI_RUNTIME_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr == "authorize_tool_call":
+                    calls.append((path, node))
+    return calls
 
 
 def test_agent_platform_public_contract_and_catalog_api_has_docstrings() -> None:
@@ -106,6 +125,27 @@ def test_agent_platform_public_contract_and_catalog_api_has_docstrings() -> None
     assert missing_module_docstrings == []
     assert missing_class_docstrings == []
     assert missing_function_docstrings == []
+
+
+def test_runtime_tool_authorization_call_sites_require_tool_definition_keyword() -> None:
+    calls = _runtime_tool_authorization_calls()
+    call_files = {str(path.relative_to(REPO_ROOT)) for path, _node in calls}
+    missing_tool_keyword = []
+    none_tool_keyword = []
+
+    for path, node in calls:
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords if keyword.arg is not None}
+        site = f"{path.relative_to(REPO_ROOT)}:{node.lineno}"
+        if "tool" not in keywords:
+            missing_tool_keyword.append(site)
+            continue
+        tool_value = keywords["tool"]
+        if isinstance(tool_value, ast.Constant) and tool_value.value is None:
+            none_tool_keyword.append(site)
+
+    assert call_files == EXPECTED_RUNTIME_TOOL_AUTHORIZATION_CALL_FILES
+    assert missing_tool_keyword == []
+    assert none_tool_keyword == []
 
 
 def test_default_phase4_c1_catalog_registers_question_and_feedback_agents() -> None:

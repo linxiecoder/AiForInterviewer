@@ -20,6 +20,13 @@ class GraphDescriptor:
     supported_outputs: tuple[str, ...]
     prompt_contract_ids: tuple[str, ...]
     eval_suite_ids: tuple[str, ...]
+    runtime_max_steps: int = 0
+    runtime_max_retries: int = -1
+    runtime_timeout_seconds: int | float = 0
+    runtime_stop_conditions: tuple[str, ...] = field(default_factory=tuple)
+    runtime_allowed_tools: tuple[str, ...] = field(default_factory=tuple)
+    runtime_allowed_callers: tuple[str, ...] = field(default_factory=tuple)
+    runtime_side_effect_policy: str = ""
     resume_schema_ids: dict[str, str] = field(default_factory=dict)
     interrupt_types: tuple[str, ...] = field(default_factory=tuple)
     required_permissions: tuple[str, ...] = field(default_factory=tuple)
@@ -40,6 +47,9 @@ class GraphDescriptor:
             raise RuntimeValidationError(f"unsupported graph lifecycle: {self.lifecycle_status}")
         if self.default_enabled:
             raise RuntimeValidationError("graph descriptors must be default-off in PR3")
+        object.__setattr__(self, "runtime_stop_conditions", tuple(self.runtime_stop_conditions))
+        object.__setattr__(self, "runtime_allowed_tools", tuple(self.runtime_allowed_tools))
+        object.__setattr__(self, "runtime_allowed_callers", tuple(self.runtime_allowed_callers))
 
 
 class AgentGraphRegistry:
@@ -70,6 +80,13 @@ class AgentGraphRegistry:
                 supported_outputs=("result_refs", "candidate_refs", "suggestion_refs"),
                 prompt_contract_ids=("P-JOBMATCH-001",),
                 eval_suite_ids=("EVAL-JOBMATCH-001",),
+                runtime_max_steps=4,
+                runtime_max_retries=1,
+                runtime_timeout_seconds=15,
+                runtime_stop_conditions=_DEFAULT_RUNTIME_STOP_CONDITIONS,
+                runtime_allowed_tools=("job_match_runtime_entry",),
+                runtime_allowed_callers=("facade",),
+                runtime_side_effect_policy="candidate_write",
                 required_permissions=("owner",),
                 visibility="hidden_placeholder",
                 health_summary_refs=("health.job_match.deferred",),
@@ -88,6 +105,13 @@ class AgentGraphRegistry:
                 supported_outputs=("result_refs", "candidate_refs", "suggestion_refs"),
                 prompt_contract_ids=("P-RESUME-ANALYSIS-001",),
                 eval_suite_ids=("EVAL-RESUME-ANALYSIS-001",),
+                runtime_max_steps=4,
+                runtime_max_retries=1,
+                runtime_timeout_seconds=15,
+                runtime_stop_conditions=_DEFAULT_RUNTIME_STOP_CONDITIONS,
+                runtime_allowed_tools=("resume_analysis_runtime_entry",),
+                runtime_allowed_callers=("facade",),
+                runtime_side_effect_policy="candidate_write",
                 required_permissions=("owner",),
                 visibility="hidden_placeholder",
                 health_summary_refs=("health.resume_analysis.deferred",),
@@ -106,6 +130,13 @@ class AgentGraphRegistry:
                 supported_outputs=("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs"),
                 prompt_contract_ids=("P-REPORT-001",),
                 eval_suite_ids=("EVAL-REPORT-001",),
+                runtime_max_steps=4,
+                runtime_max_retries=1,
+                runtime_timeout_seconds=15,
+                runtime_stop_conditions=_DEFAULT_RUNTIME_STOP_CONDITIONS,
+                runtime_allowed_tools=("report_generation_runtime_entry",),
+                runtime_allowed_callers=("facade",),
+                runtime_side_effect_policy="candidate_write",
                 resume_schema_ids={"user_confirmation": "agent.resume.user_confirmation.v1"},
                 interrupt_types=("user_confirmation",),
                 required_permissions=("owner",),
@@ -126,6 +157,13 @@ class AgentGraphRegistry:
                 supported_outputs=("candidate_refs", "suggestion_refs", "interrupt_refs"),
                 prompt_contract_ids=("P-REVIEW-001",),
                 eval_suite_ids=("EVAL-REVIEW-001",),
+                runtime_max_steps=4,
+                runtime_max_retries=1,
+                runtime_timeout_seconds=15,
+                runtime_stop_conditions=_DEFAULT_RUNTIME_STOP_CONDITIONS,
+                runtime_allowed_tools=("review_generation_runtime_entry",),
+                runtime_allowed_callers=("facade",),
+                runtime_side_effect_policy="candidate_write",
                 resume_schema_ids={"user_confirmation": "agent.resume.user_confirmation.v1"},
                 interrupt_types=("user_confirmation",),
                 required_permissions=("owner",),
@@ -180,3 +218,14 @@ class AgentGraphRegistry:
                     "visibility": descriptor.visibility,
                 }
         raise RuntimeValidationError(f"unknown resume schema: {interrupt_type}")
+
+
+_DEFAULT_RUNTIME_STOP_CONDITIONS = (
+    "max_steps_exceeded",
+    "timeout",
+    "validation_failed",
+    "tool_not_allowed",
+    "formal_write_requested",
+    "interrupt_required",
+    "provider_failed",
+)

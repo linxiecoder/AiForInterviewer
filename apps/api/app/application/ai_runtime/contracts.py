@@ -92,6 +92,113 @@ def sanitize_payload(value: Any) -> Any:
     return value
 
 
+_RUNTIME_STATUS_EXACT_CATEGORIES = {
+    "queued": "pending",
+    "created": "pending",
+    "planned": "pending",
+    "captured": "pending",
+    "started": "running",
+    "running": "running",
+    "retry_scheduled": "running",
+    "delegated": "running",
+    "resumed": "running",
+    "succeeded": "succeeded",
+    "completed": "succeeded",
+    "generated": "succeeded",
+    "accepted": "succeeded",
+    "candidate": "succeeded",
+    "passed": "succeeded",
+    "ok": "succeeded",
+    "saved": "succeeded",
+    "repaired": "succeeded",
+    "finalized": "succeeded",
+    "failed": "failed",
+    "validation_failed": "failed",
+    "provider_failed": "failed",
+    "provider_request_invalid": "failed",
+    "blocked": "blocked",
+    "skipped": "blocked",
+    "interrupted": "interrupted",
+    "requires_user_confirmation": "interrupted",
+    "open": "interrupted",
+    "replayed": "replayed",
+    "replayed_debug": "replayed",
+    "skeleton_replayed": "replayed",
+    "replay_reused": "replayed",
+    "cancelled": "cancelled",
+    "canceled": "cancelled",
+    "rejected": "cancelled",
+    "expired": "cancelled",
+}
+
+_REPLAY_SIDE_EFFECT_COUNTER_KEYS = (
+    "provider_calls",
+    "tool_calls",
+    "external_tool_calls",
+    "repository_calls",
+    "repository_reads",
+    "repository_writes",
+    "db_business_writes",
+    "formal_business_writes",
+)
+
+
+def classify_agent_runtime_status(status: str) -> str:
+    normalized = str(status).strip().lower()
+    if not normalized:
+        raise RuntimeValidationError("runtime status is required")
+    exact = _RUNTIME_STATUS_EXACT_CATEGORIES.get(normalized)
+    if exact is not None:
+        return exact
+    if any(marker in normalized for marker in ("failed", "failure", "invalid", "error")):
+        return "failed"
+    if any(marker in normalized for marker in ("blocked", "conflict")):
+        return "blocked"
+    if any(marker in normalized for marker in ("interrupt", "confirmation")):
+        return "interrupted"
+    if normalized.startswith("replay") or "replayed" in normalized:
+        return "replayed"
+    if any(marker in normalized for marker in ("cancel", "reject", "expired")):
+        return "cancelled"
+    if any(marker in normalized for marker in ("success", "succeeded", "accepted", "generated", "completed")):
+        return "succeeded"
+    raise RuntimeValidationError(f"unknown runtime status: {status}")
+
+
+def validate_agent_runtime_status(status: str, metadata: dict[str, Any] | None = None) -> str:
+    category = classify_agent_runtime_status(status)
+    failure_reason = str(dict(metadata or {}).get("failure_reason") or "").strip()
+    if failure_reason and category == "succeeded":
+        raise RuntimeValidationError("runtime status cannot be success-like when failure_reason is set")
+    return category
+
+
+def validate_replay_side_effect_metadata(metadata: dict[str, Any]) -> None:
+    for key in _REPLAY_SIDE_EFFECT_COUNTER_KEYS:
+        if not _replay_side_effect_counter_is_zero(metadata.get(key)):
+            raise RuntimeValidationError("replay cannot call providers, tools, or repositories")
+
+
+def _replay_side_effect_counter_is_zero(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value is False
+    if isinstance(value, (int, float)):
+        return value == 0
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return True
+        try:
+            return float(stripped) == 0
+        except ValueError:
+            return False
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) == 0
+    return False
+
+
 @dataclass(frozen=True)
 class AgentCommandEnvelope:
     entrypoint: str
@@ -136,6 +243,7 @@ class AgentCandidatePayload:
             raise RuntimeValidationError("payload_schema_id is required")
         if not str(self.status).strip():
             raise RuntimeValidationError("status is required")
+        validate_agent_runtime_status(str(self.status))
         if not isinstance(self.payload, dict):
             raise RuntimeValidationError("candidate payload must be a dict")
         if contains_sensitive_payload(self.payload):
@@ -169,8 +277,11 @@ class AgentRunResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        metadata = sanitize_payload(self.metadata)
+        validate_agent_runtime_status(self.status, metadata)
+        object.__setattr__(self, "status", str(self.status).strip())
         object.__setattr__(self, "candidate_payloads", _candidate_payload_tuple(self.candidate_payloads))
-        object.__setattr__(self, "metadata", sanitize_payload(self.metadata))
+        object.__setattr__(self, "metadata", metadata)
 
 
 @dataclass(frozen=True)
@@ -182,6 +293,17 @@ class AgentReplayResult:
     output_refs: tuple[str, ...] = field(default_factory=tuple)
     trace_refs: tuple[str, ...] = field(default_factory=tuple)
     timeline_refs: tuple[str, ...] = field(default_factory=tuple)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        metadata = sanitize_payload(self.metadata)
+        validate_agent_runtime_status(self.status, metadata)
+        validate_replay_side_effect_metadata(metadata)
+        object.__setattr__(self, "status", str(self.status).strip())
+        object.__setattr__(self, "output_refs", tuple(self.output_refs))
+        object.__setattr__(self, "trace_refs", tuple(self.trace_refs))
+        object.__setattr__(self, "timeline_refs", tuple(self.timeline_refs))
+        object.__setattr__(self, "metadata", metadata)
 
 
 @dataclass(frozen=True)
@@ -197,7 +319,10 @@ class AgentRunStatus:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "metadata", sanitize_payload(self.metadata))
+        metadata = sanitize_payload(self.metadata)
+        validate_agent_runtime_status(self.status, metadata)
+        object.__setattr__(self, "status", str(self.status).strip())
+        object.__setattr__(self, "metadata", metadata)
 
 
 @dataclass(frozen=True)
@@ -231,6 +356,8 @@ class AgentTaskStatusRef:
     candidate_payloads: tuple[AgentCandidatePayload, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        validate_agent_runtime_status(self.status)
+        object.__setattr__(self, "status", str(self.status).strip())
         object.__setattr__(self, "candidate_payloads", _candidate_payload_tuple(self.candidate_payloads))
 
 
@@ -243,11 +370,14 @@ class AgentInterruptRef:
     resume_schema_id: str
     status: str
     record_version: int
+    checkpoint_ref: str = ""
     drawer_payload: dict[str, Any] = field(default_factory=dict)
     trace_refs: tuple[str, ...] = field(default_factory=tuple)
     formal_refs: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        validate_agent_runtime_status(self.status)
+        object.__setattr__(self, "status", str(self.status).strip())
         object.__setattr__(self, "drawer_payload", sanitize_payload(self.drawer_payload))
 
 

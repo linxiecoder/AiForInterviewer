@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 from sqlalchemy import text
 
+from app.application.ai_runtime.business_graphs import polish_feedback_graph
 from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
     POLISH_FEEDBACK_GRAPH_NAME,
     build_polish_feedback_graph_descriptor,
     build_polish_feedback_trace_request,
     plan_polish_feedback_provider_trace_gate,
 )
+from app.application.agents.registry import ToolRegistry
 from app.application.ai_runtime.contracts import RuntimePolicyError
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.llm_trace.persisted_transport import FailClosedPersistedLlmTransport
@@ -201,6 +204,61 @@ def test_pr8_graph_descriptor_remains_default_off_provider_off() -> None:
     assert descriptor.disabled_behavior == "legacy_direct_path_retained"
 
 
+def test_pr8_trace_gate_requires_registered_runtime_tool(monkeypatch) -> None:
+    monkeypatch.setattr(polish_feedback_graph, "POLISH_FEEDBACK_TRACE_GATE_NODE_NAME", "unregistered_trace_gate")
+
+    with pytest.raises(RuntimePolicyError, match="tool_not_allowed"):
+        polish_feedback_graph.build_polish_feedback_trace_request(**_request_kwargs())
+
+
+def test_pr8_trace_gate_rejects_runtime_loop_policy_caller_mismatch(monkeypatch) -> None:
+    monkeypatch.setattr(
+        polish_feedback_graph,
+        "_runtime_loop_policy",
+        lambda: _feedback_loop_policy(allowed_callers=("unexpected_feedback_agent",)),
+    )
+
+    with pytest.raises(RuntimePolicyError, match="caller not allowed"):
+        build_polish_feedback_trace_request(**_request_kwargs())
+
+
+def test_pr8_trace_gate_rejects_runtime_loop_policy_side_effect_mismatch(monkeypatch) -> None:
+    monkeypatch.setattr(
+        polish_feedback_graph,
+        "_runtime_loop_policy",
+        lambda: _feedback_loop_policy(side_effect_policy="read_only"),
+    )
+
+    with pytest.raises(RuntimePolicyError, match="side_effect_policy mismatch"):
+        build_polish_feedback_trace_request(**_request_kwargs())
+
+
+def test_pr8_trace_gate_rejects_runtime_permission_scope_mismatch(monkeypatch) -> None:
+    monkeypatch.setattr(polish_feedback_graph, "_RUNTIME_TOOL_PERMISSION_SCOPE", "runtime:other", raising=False)
+
+    with pytest.raises(RuntimePolicyError, match="permission_scope mismatch"):
+        build_polish_feedback_trace_request(**_request_kwargs())
+
+
+def test_pr8_trace_gate_rejects_runtime_owner_scope_mismatch(monkeypatch) -> None:
+    monkeypatch.setattr(polish_feedback_graph, "_RUNTIME_TOOL_OWNER_SCOPE", "other_owner_scope", raising=False)
+
+    with pytest.raises(RuntimePolicyError, match="owner_scope mismatch"):
+        build_polish_feedback_trace_request(**_request_kwargs())
+
+
+def test_pr8_trace_gate_rejects_tool_declared_forbidden_data(monkeypatch) -> None:
+    tool = polish_feedback_graph._runtime_tool_definition(polish_feedback_graph.POLISH_FEEDBACK_TRACE_GATE_NODE_NAME)
+    blocked_tool = replace(
+        tool,
+        forbidden_data=tuple(sorted(set(tool.forbidden_data) | {"parity_result_ref"})),
+    )
+    monkeypatch.setattr(polish_feedback_graph, "_RUNTIME_TOOL_REGISTRY", ToolRegistry((blocked_tool,)), raising=False)
+
+    with pytest.raises(RuntimePolicyError, match="forbidden data payload blocked"):
+        build_polish_feedback_trace_request(**_request_kwargs())
+
+
 def _test_pr8_raw_inputs_rejected() -> None:
     forbidden_inputs = {
         _key("question", "text"): "hidden question body",
@@ -293,6 +351,23 @@ def _request_kwargs(**overrides: Any) -> dict[str, Any]:
     }
     kwargs.update(overrides)
     return kwargs
+
+
+def _feedback_loop_policy(
+    *,
+    allowed_callers: tuple[str, ...] = (polish_feedback_graph.POLISH_FEEDBACK_AGENT_ID,),
+    side_effect_policy: str = "candidate_write",
+) -> polish_feedback_graph.AgentRuntimeLoopPolicy:
+    descriptor = build_polish_feedback_graph_descriptor()
+    return polish_feedback_graph.AgentRuntimeLoopPolicy(
+        max_steps=descriptor.runtime_max_steps,
+        max_retries=descriptor.runtime_max_retries,
+        timeout_seconds=descriptor.runtime_timeout_seconds,
+        stop_conditions=descriptor.runtime_stop_conditions,
+        allowed_tools=descriptor.runtime_allowed_tools,
+        allowed_callers=allowed_callers,
+        side_effect_policy=side_effect_policy,
+    )
 
 
 def _only_llm_call(session_factory) -> dict[str, Any]:

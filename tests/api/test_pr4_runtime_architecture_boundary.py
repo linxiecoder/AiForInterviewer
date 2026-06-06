@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from app.application.agents.contracts import P8_REQUIRED_RUNTIME_STOP_CONDITIONS
 from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_NAME,
@@ -70,6 +71,7 @@ def test_pr4_pr5_boundary_allows_only_authorized_skeleton_and_no_formal_write_by
             input_refs=("input_ref_1",),
             requested_outputs=("candidate_refs",),
             idempotency_key="idem_arch",
+            metadata={"runtime_loop_policy": _runtime_loop_policy_metadata()},
         ),
     )
 
@@ -153,6 +155,18 @@ def _concrete_lang_import_violations() -> list[str]:
             if _is_langgraph_or_langchain(module_name):
                 violations.append(f"{rel}: {module_name}")
     return violations
+
+
+def _runtime_loop_policy_metadata() -> dict[str, object]:
+    return {
+        "max_steps": 8,
+        "max_retries": 1,
+        "timeout_seconds": 30,
+        "stop_conditions": P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+        "allowed_tools": ("generic_runtime_tool",),
+        "allowed_callers": ("generic_runtime",),
+        "side_effect_policy": "candidate_write",
+    }
 
 
 def _python_files(*roots: Path) -> list[Path]:

@@ -4,8 +4,13 @@ import ast
 from pathlib import Path
 from typing import Any
 
-from app.application.ai_runtime.business_graphs.polish_question_graph import POLISH_QUESTION_GRAPH_FLAG
+from app.application.ai_runtime.business_graphs.polish_question_graph import (
+    POLISH_QUESTION_GRAPH_FLAG,
+    build_polish_question_graph_descriptor,
+)
 from app.application.ai_runtime.contracts import (
+    AgentCommandEnvelope,
+    AgentRunContext,
     AgentTaskStatusRef,
     GraphDisabledError,
     RuntimeConflictError,
@@ -148,6 +153,32 @@ def test_create_question_task_starts_graph_when_facade_enabled() -> None:
     assert context_snapshot["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == NODE_REF
 
 
+def test_graph_task_status_mapping_uses_runtime_status_taxonomy_without_api_or_db_status_expansion() -> None:
+    cases = {
+        "planned": AiTaskStatus.QUEUED,
+        "in_progress": AiTaskStatus.RUNNING,
+        "resumed": AiTaskStatus.RUNNING,
+        "requires_user_confirmation": AiTaskStatus.RUNNING,
+        "timeout": AiTaskStatus.TIMED_OUT,
+        "blocked": AiTaskStatus.VALIDATION_FAILED,
+        "conflict_detected": AiTaskStatus.VALIDATION_FAILED,
+        "provider_failed": AiTaskStatus.GENERATION_FAILED,
+        "replayed_debug": AiTaskStatus.QUEUED,
+        "expired": AiTaskStatus.CANCELLED,
+        "accepted": AiTaskStatus.QUEUED,
+    }
+
+    for raw_status, expected_status in cases.items():
+        assert polish_use_cases_module._graph_task_status_to_polish_status(raw_status) == expected_status
+
+    try:
+        polish_use_cases_module._graph_task_status_to_polish_status("doneish")
+    except RuntimeValidationError as exc:
+        assert "unknown runtime status" in str(exc)
+    else:
+        raise AssertionError("unknown runtime status was accepted")
+
+
 def test_create_question_task_persists_in_memory_runtime_agent_candidate_payload() -> None:
     flags = _enabled_question_graph_flags()
     runtime = InMemoryLangGraphRuntime(flag_resolver=flags)
@@ -176,6 +207,146 @@ def test_create_question_task_persists_in_memory_runtime_agent_candidate_payload
     assert status.status == "agent_orchestration_succeeded"
     assert status.metadata["accepted_candidate_payload"] is True
     assert any(ref.startswith("question_candidate_ref_") for ref in status.output_refs)
+
+
+def test_question_runtime_cancel_timeline_retains_separate_checkpoint_and_validation_refs() -> None:
+    flags = _enabled_question_graph_flags()
+    runtime = InMemoryLangGraphRuntime(flag_resolver=flags)
+    facade = AiOrchestrationFacade(
+        runner=runtime,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=flags,
+    )
+    use_cases, _repository = _use_cases(ai_orchestration_facade=facade)
+    use_cases._question_generation_service = _DirectQuestionGenerationBlocker()
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    agent_run_ref = next(ref for ref in result.value.candidate_refs if ref.resource_type == "agent_run")
+    started_status = runtime.get_status(agent_run_ref.resource_id, OWNER_ID)
+    checkpoint_refs = tuple(ref for ref in started_status.trace_refs if ref.startswith("ackpt_"))
+    validation_refs = tuple(ref for ref in started_status.trace_refs if ref.startswith("validation_ref_"))
+    assert checkpoint_refs
+    assert validation_refs
+
+    runtime.cancel(agent_run_ref.resource_id, OWNER_ID, reason="operator stopped", actor_id=ACTOR_ID)
+
+    timeline = runtime.get_timeline(agent_run_ref.resource_id, OWNER_ID)
+    cancel_event = timeline.events[-1]
+    assert cancel_event.event_type == "run_cancelled"
+    assert cancel_event.metadata["checkpoint_refs"] == checkpoint_refs
+    assert cancel_event.metadata["validation_refs"] == validation_refs
+    assert set(cancel_event.metadata["candidate_refs"]) <= set(started_status.output_refs)
+    assert cancel_event.metadata["provider_calls"] == 0
+    assert cancel_event.metadata["formal_business_writes"] == 0
+
+
+def test_question_runtime_start_resume_timeline_preserves_p8_ref_matrix_from_command_metadata() -> None:
+    flags = _enabled_question_graph_flags()
+    runtime = InMemoryLangGraphRuntime(flag_resolver=flags)
+    descriptor = build_polish_question_graph_descriptor()
+    start_command = AgentCommandEnvelope(
+        entrypoint="start",
+        input_refs=(SESSION_ID, NODE_REF, "focus_ref_rte005"),
+        requested_outputs=("candidate_refs",),
+        idempotency_key="idem_question_rte005_start",
+        metadata={
+            "plan_refs": ("plan_ref_question_start",),
+            "skill_refs": ("skill_ref_question_runtime",),
+            "tool_refs": ("tool_ref_question_graph",),
+            "policy_refs": ("policy_ref_candidate_only",),
+            "provider_refs": ("provider_ref_disabled",),
+            "validation_refs": ("validation_ref_command_start",),
+            "handoff_refs": ("handoff_ref_question_start",),
+            "low_confidence_flags": ("low_confidence_ref_question_start",),
+            "failure_reason": "validation_failed_partial_result",
+            "fallback_reason": "provider_disabled_deterministic_drafting_tool",
+            "formal_write_attempt_ref": "formal_attempt_ref_question_start",
+        },
+    )
+    start_context = AgentRunContext(
+        owner_id=OWNER_ID,
+        actor_id=ACTOR_ID,
+        run_id="arun_question_rte005",
+        ai_task_id="aitask_question_rte005",
+        graph_name=descriptor.graph_name,
+        graph_version=descriptor.graph_version,
+        command=start_command,
+    )
+
+    started = runtime.start(start_context, start_command)
+
+    assert started.status == "interrupted"
+    interrupt_ref = started.interrupt_refs[0]
+    checkpoint_ref = next(ref for ref in started.trace_refs if ref.startswith("ackpt_"))
+    started_timeline = runtime.get_timeline(start_context.run_id, OWNER_ID)
+    start_event = next(event for event in started_timeline.events if event.event_type == "run_started")
+    interrupt_event = next(event for event in started_timeline.events if event.event_type == "interrupt_opened")
+    assert start_event.metadata["plan_refs"] == ("plan_ref_question_start",)
+    assert start_event.metadata["skill_refs"] == ("skill_ref_question_runtime",)
+    assert start_event.metadata["tool_refs"] == ("tool_ref_question_graph",)
+    assert start_event.metadata["policy_refs"] == ("policy_ref_candidate_only",)
+    assert start_event.metadata["provider_refs"] == ("provider_ref_disabled",)
+    assert start_event.metadata["validation_refs"] == ("validation_ref_command_start",)
+    assert start_event.metadata["handoff_refs"] == ("handoff_ref_question_start",)
+    assert start_event.metadata["low_confidence_flags"] == ("low_confidence_ref_question_start",)
+    assert start_event.metadata["failure_reason"] == "validation_failed_partial_result"
+    assert start_event.metadata["fallback_reason"] == "provider_disabled_deterministic_drafting_tool"
+    assert interrupt_event.metadata["plan_refs"] == ("plan_ref_question_start",)
+    assert interrupt_event.metadata["validation_refs"][-1] == "validation_ref_command_start"
+
+    resume_command = AgentCommandEnvelope(
+        entrypoint="resume",
+        input_refs=(interrupt_ref, checkpoint_ref),
+        requested_outputs=("candidate_refs", "interrupt_refs"),
+        idempotency_key="idem_question_rte005_resume",
+        metadata={
+            "plan_refs": ("plan_ref_question_resume",),
+            "skill_refs": ("skill_ref_question_runtime_resume",),
+            "tool_refs": ("tool_ref_question_graph_resume",),
+            "policy_refs": ("policy_ref_candidate_only",),
+            "provider_refs": ("provider_ref_disabled",),
+            "validation_refs": ("validation_ref_command_resume",),
+            "handoff_refs": ("handoff_ref_question_resume",),
+            "low_confidence_flags": ("low_confidence_ref_question_resume",),
+            "fallback_reason": "resume_candidate_only",
+        },
+    )
+    resume_context = AgentRunContext(
+        owner_id=OWNER_ID,
+        actor_id=ACTOR_ID,
+        run_id=start_context.run_id,
+        ai_task_id=start_context.ai_task_id,
+        graph_name=descriptor.graph_name,
+        graph_version=descriptor.graph_version,
+        command=resume_command,
+    )
+
+    resumed = runtime.resume(
+        resume_context,
+        interrupt_ref=interrupt_ref,
+        resume_payload={
+            "action": "continue_as_candidate",
+            "checkpoint_ref": checkpoint_ref,
+            "base_version": 1,
+            "idempotency_key": "idem_question_rte005_resume",
+        },
+    )
+
+    assert resumed.status == "succeeded"
+    resumed_timeline = runtime.get_timeline(start_context.run_id, OWNER_ID)
+    resume_event = next(event for event in resumed_timeline.events if event.event_type == "run_resumed")
+    resume_success_event = resumed_timeline.events[-1]
+    assert resume_success_event.event_type == "run_succeeded"
+    assert resume_event.metadata["plan_refs"] == ("plan_ref_question_resume",)
+    assert resume_event.metadata["validation_refs"] == ("validation_ref_command_resume",)
+    assert resume_event.metadata["handoff_refs"] == ("handoff_ref_question_resume",)
+    assert resume_event.metadata["fallback_reason"] == "resume_candidate_only"
+    assert resume_success_event.metadata["plan_refs"] == ("plan_ref_question_resume",)
+    assert resume_success_event.metadata["validation_refs"][-1] == "validation_ref_command_resume"
+    assert resume_success_event.metadata["low_confidence_flags"] == ("low_confidence_ref_question_resume",)
 
 
 def test_create_question_task_provider_enabled_graph_blocks_ungrounded_formal_write() -> None:

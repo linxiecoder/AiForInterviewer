@@ -10,6 +10,10 @@ from dataclasses import asdict, dataclass
 from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any
 
+from app.application.agents.contracts import AgentRuntimeLoopPolicy, ToolDefinition
+from app.application.agents.definitions.common import FORBIDDEN_DATA
+from app.application.agents.registry import RegistryValidationError, ToolRegistry
+from app.application.ai_runtime.side_effect_guard import AgentSideEffectGuard
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
     AgentCommandEnvelope,
@@ -34,6 +38,7 @@ POLISH_QUESTION_GRAPH_VERSION = "pr9-agent-orchestration"
 POLISH_QUESTION_GRAPH_FLAG = "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
 POLISH_QUESTION_PROVIDER_FLAG = "AIFI_REAL_PROVIDER_ENABLED"
 POLISH_QUESTION_TRACE_TASK_TYPE = "polish_question_generation"
+POLISH_QUESTION_AGENT_ID = "polish_question_agent"
 POLISH_QUESTION_RUNTIME_DEFAULT = False
 POLISH_QUESTION_PROVIDER_GATE = False
 MAX_AGENT_STEPS = 7
@@ -41,7 +46,7 @@ MAX_RETRIES = 2
 QUESTION_AGENT_TIMEOUT_SECONDS = 20
 QUESTION_AGENT_BACKOFF_SECONDS = 0.25
 
-_DEFAULT_ENTRYPOINTS = ("start", "replay")
+_DEFAULT_ENTRYPOINTS = ("start", "resume", "replay", "timeline", "cancel")
 _SUPPORTED_OUTPUTS = ("result_refs", "candidate_refs", "suggestion_refs", "interrupt_refs")
 _LEGACY_PROMPT_CONTRACT_IDS = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
 POLISH_QUESTION_READONLY_PARITY_VERSION = "pr5-q3-readonly-parity"
@@ -109,6 +114,35 @@ TOOL_SCHEMAS = (
     PolishQuestionToolSchema("grounding_validation", "polish_question.grounding_validation.input.v1", "polish_question.grounding_validation.output.v1"),
     PolishQuestionToolSchema("candidate_persistence", "polish_question.candidate_persistence.input.v1", "polish_question.candidate_persistence.output.v1"),
 )
+_RUNTIME_TOOL_PERMISSION_SCOPE = "runtime_candidate_generation"
+_RUNTIME_TOOL_OWNER_SCOPE = "same_owner"
+
+
+def _build_runtime_tool_registry() -> ToolRegistry:
+    definitions = []
+    for schema in TOOL_SCHEMAS:
+        side_effect_policy = "candidate_write" if schema.tool_name in {"question_drafting", "candidate_persistence"} else "read_only"
+        definitions.append(
+            ToolDefinition(
+                tool_id=f"runtime_polish_question_{schema.tool_name}",
+                tool_name=schema.tool_name,
+                input_schema_id=schema.input_schema_id,
+                output_schema_id=schema.output_schema_id,
+                permission_scope=_RUNTIME_TOOL_PERMISSION_SCOPE,
+                owner_scope=_RUNTIME_TOOL_OWNER_SCOPE,
+                side_effect_policy=side_effect_policy,
+                timeout_seconds=schema.timeout_seconds,
+                retry_policy=f"bounded_{schema.max_retries}",
+                allowed_callers=(POLISH_QUESTION_AGENT_ID,),
+                forbidden_data=FORBIDDEN_DATA,
+                trace_events=(f"polish_question.{schema.tool_name}.started", f"polish_question.{schema.tool_name}.finished"),
+            )
+        )
+    return ToolRegistry(definitions)
+
+
+_RUNTIME_TOOL_REGISTRY = _build_runtime_tool_registry()
+_RUNTIME_SIDE_EFFECT_GUARD = AgentSideEffectGuard()
 
 
 @dataclass(frozen=True)
@@ -143,6 +177,21 @@ def build_polish_question_graph_descriptor() -> "GraphDescriptor":
         supported_outputs=_SUPPORTED_OUTPUTS,
         prompt_contract_ids=_LEGACY_PROMPT_CONTRACT_IDS,
         eval_suite_ids=("EVAL-POLISH-QUESTION-001",),
+        runtime_max_steps=MAX_AGENT_STEPS,
+        runtime_max_retries=MAX_RETRIES,
+        runtime_timeout_seconds=QUESTION_AGENT_TIMEOUT_SECONDS,
+        runtime_stop_conditions=(
+            "max_steps_exceeded",
+            "timeout",
+            "validation_failed",
+            "tool_not_allowed",
+            "formal_write_requested",
+            "interrupt_required",
+            "provider_failed",
+        ),
+        runtime_allowed_tools=tuple(schema.tool_name for schema in TOOL_SCHEMAS),
+        runtime_allowed_callers=(POLISH_QUESTION_AGENT_ID,),
+        runtime_side_effect_policy="candidate_write",
         resume_schema_ids={},
         interrupt_types=(),
         required_permissions=("owner",),
@@ -275,6 +324,7 @@ def execute_polish_question_agent(
     fallback_reason = None if provider_enabled else "provider_disabled_deterministic_drafting_tool"
 
     retrieved_context = _execute_agent_tool(
+        context=context,
         phase="plan_task",
         tool_name="context_retrieval",
         input_payload={"request_digest": request_digest, "input_ref_count": len(command.input_refs)},
@@ -285,6 +335,7 @@ def execute_polish_question_agent(
         tool_results=tool_results,
     )
     selected_evidence = _execute_agent_tool(
+        context=context,
         phase="retrieve_context",
         tool_name="evidence_selection",
         input_payload={"context_ref": retrieved_context["output_ref"]},
@@ -298,6 +349,7 @@ def execute_polish_question_agent(
         tool_results=tool_results,
     )
     drafted_question = _execute_agent_tool(
+        context=context,
         phase="draft_question",
         tool_name="question_drafting",
         input_payload={"scenario_ref": selected_evidence["scenario_ref"]},
@@ -318,6 +370,7 @@ def execute_polish_question_agent(
         tool_results=tool_results,
     )
     validation = _execute_agent_tool(
+        context=context,
         phase="validate_grounding",
         tool_name="grounding_validation",
         input_payload={"candidate_ref": drafted_question["candidate"]["candidate_ref"]},
@@ -336,6 +389,7 @@ def execute_polish_question_agent(
     )
     validation = repaired["validation"]
     persisted_candidate = _execute_agent_tool(
+        context=context,
         phase="persist_candidate",
         tool_name="candidate_persistence",
         input_payload={"candidate_ref": repaired["candidate"]["candidate_ref"]},
@@ -748,6 +802,7 @@ def run_polish_question_readonly_parity(
 
 def _execute_agent_tool(
     *,
+    context: AgentRunContext,
     phase: str,
     tool_name: str,
     input_payload: dict[str, Any],
@@ -759,12 +814,28 @@ def _execute_agent_tool(
 ) -> dict[str, Any]:
     _ensure_agent_can_continue(phase_results, config=config, deadline_at=deadline_at)
     schema = _tool_schema(tool_name)
+    loop_policy = _runtime_loop_policy(config)
+    if tool_name not in loop_policy.allowed_tools:
+        raise RuntimePolicyError(f"tool_not_allowed: {tool_name}")
+    tool_definition = _runtime_tool_definition(tool_name)
+    _ensure_tool_allowed_by_loop_policy(tool_definition=tool_definition, loop_policy=loop_policy)
     started_at = perf_counter()
     attempts = 0
     last_error: str | None = None
+    input_ref = _stable_id(context.owner_id, context.run_id, phase, input_payload)
     while attempts <= config.max_retries:
         attempts += 1
-        input_ref = _stable_id(phase, input_payload)
+        _RUNTIME_SIDE_EFFECT_GUARD.authorize_tool_call(
+            owner_id=context.owner_id,
+            tool_name=tool_name,
+            input_refs=(input_ref,),
+            tool=tool_definition,
+            caller_id=POLISH_QUESTION_AGENT_ID,
+            permission_scope=_RUNTIME_TOOL_PERMISSION_SCOPE,
+            owner_scope=_RUNTIME_TOOL_OWNER_SCOPE,
+            side_effect_policy=tool_definition.side_effect_policy,
+            payload=input_payload,
+        )
         LogUtil.agent_runtime_step(
             task_type=POLISH_QUESTION_TRACE_TASK_TYPE,
             graph_name=POLISH_QUESTION_GRAPH_NAME,
@@ -789,8 +860,10 @@ def _execute_agent_tool(
             output_ref = str(output.get("output_ref") or f"{tool_name}_ref_{attempts}")
             latency_ms = round((perf_counter() - started_at) * 1000, 3)
             tool_result = {
+                "tool_id": tool_definition.tool_id,
                 "tool_name": tool_name,
                 "status": "succeeded",
+                "side_effect_policy": tool_definition.side_effect_policy,
                 "input_schema_id": schema.input_schema_id,
                 "output_schema_id": schema.output_schema_id,
                 "input_ref": input_ref,
@@ -803,7 +876,9 @@ def _execute_agent_tool(
                 {
                     "phase": phase,
                     "status": "succeeded",
+                    "tool_id": tool_definition.tool_id,
                     "tool_name": tool_name,
+                    "side_effect_policy": tool_definition.side_effect_policy,
                     "input_ref": input_ref,
                     "output_ref": output_ref,
                     "attempts": attempts,
@@ -878,6 +953,48 @@ def _execute_agent_tool(
             sleep(config.backoff_seconds)
 
     raise RuntimeValidationError(f"{tool_name} exhausted retry attempts")
+
+
+def _runtime_loop_policy(config: PolishQuestionAgentConfig) -> AgentRuntimeLoopPolicy:
+    return AgentRuntimeLoopPolicy(
+        max_steps=config.max_agent_steps,
+        max_retries=config.max_retries,
+        timeout_seconds=config.timeout_seconds,
+        stop_conditions=(
+            "max_steps_exceeded",
+            "timeout",
+            "tool_not_allowed",
+            "formal_write_requested",
+            "interrupt_required",
+            "provider_failed",
+            "validation_failed",
+        ),
+        allowed_tools=tuple(schema.tool_name for schema in TOOL_SCHEMAS),
+        allowed_callers=(POLISH_QUESTION_AGENT_ID,),
+        side_effect_policy="candidate_write",
+    )
+
+
+def _runtime_tool_definition(tool_name: str) -> ToolDefinition:
+    try:
+        return _RUNTIME_TOOL_REGISTRY.get(f"runtime_polish_question_{tool_name}")
+    except RegistryValidationError as exc:
+        raise RuntimePolicyError(f"tool_not_allowed: {tool_name}") from exc
+
+
+def _ensure_tool_allowed_by_loop_policy(
+    *, tool_definition: ToolDefinition, loop_policy: AgentRuntimeLoopPolicy
+) -> None:
+    if POLISH_QUESTION_AGENT_ID not in loop_policy.allowed_callers:
+        raise RuntimePolicyError("caller not allowed for tool")
+    if loop_policy.side_effect_policy == "forbidden":
+        raise RuntimePolicyError("side_effect_policy mismatch")
+    if loop_policy.side_effect_policy == "candidate_write":
+        if tool_definition.side_effect_policy in {"read_only", "candidate_write"}:
+            return
+        raise RuntimePolicyError("side_effect_policy mismatch")
+    if tool_definition.side_effect_policy != loop_policy.side_effect_policy:
+        raise RuntimePolicyError("side_effect_policy mismatch")
 
 
 def _run_operation_with_timeout(

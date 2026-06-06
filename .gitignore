@@ -103,3 +103,6 @@ storage/
 !.claude/hooks/*.sh
 /.cceval-variations.json
 /evaluation-results.json
+
+# Local CodeGraph index
+.codegraph/

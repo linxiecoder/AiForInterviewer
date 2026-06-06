@@ -130,3 +130,21 @@ permalink: ai-for-interviewer/docs/goals
 ### 2026-06-05 / P5P6-W1.fix.02
 
 - [P5P6_W1_FIX02_CLOSEOUT_REPORT.md](2026-06-05/P5P6-W1.fix.02-VALIDATION-BLOCKER-REMEDIATION/P5P6_W1_FIX02_CLOSEOUT_REPORT.md)：P5/P6 validation blocker remediation closeout；记录 canonical-evidence legacy test alignment、repo-root `tmp` 处理、验证结果、source backfill 和 L5 non-claim。
+
+### 2026-06-05 / P8-GOAL-ONE-SHOT-C4-RUNTIME
+
+- [P8_W0_AGENT_RUNTIME_RECON.md](2026-06-05/P8_W0_AGENT_RUNTIME_RECON.md)：P8-W0 Runtime Surface Recon，只读记录 runtime / adapter / dependency / status / timeline 当前事实、gap 和允许文件建议。
+- [P8_W0_AGENT_CONTRACT_RECON.md](2026-06-05/P8_W0_AGENT_CONTRACT_RECON.md)：P8-W0 Contract / Handoff / Trace Recon，只读记录 AgentExecutor port、handoff、trace、candidate-only / formal-write boundary 当前事实和 gap。
+- [P8_W0_AGENT_QF_RECON.md](2026-06-05/P8_W0_AGENT_QF_RECON.md)：P8-W0 Question / Feedback Integration Recon，只读记录 Question / Feedback planned workflow bridge、candidate refs 和 runtime adapter 接入风险。
+- [P8_W0_AGENT_TEST_RECON.md](2026-06-05/P8_W0_AGENT_TEST_RECON.md)：P8-W0 Test / Architecture Gate Recon，只读记录可复用测试、缺失 P8 gates、验证顺序和风险。
+- [P8_W0_AGENT_RISK_RECON.md](2026-06-05/P8_W0_AGENT_RISK_RECON.md)：P8-W0 Risk / Source Backfill Recon，只读记录 source backfill 风险、false-done 风险和 P8/L5/F8 non-claim 要求。
+- [P8_W0_SCOPE_LOCK.md](2026-06-05/P8_W0_SCOPE_LOCK.md)：P8-W0 Controller scope lock；合并五个 recon 结果，授权 P8 W1-W5 受控实现窗口；不声明 Phase 8 done、L5 release、Phase 11/12 或 formal F8/M8 release。
+- [P8_W1_RUNTIME_ADAPTER_REPORT.md](2026-06-05/P8_W1_RUNTIME_ADAPTER_REPORT.md)：P8-W1 runtime adapter / executor integration report；记录 AgentExecutor adapter foundation、facade routing 和验证证据。
+- [P8_W2_CONTROLLED_TOOL_LOOP_REPORT.md](2026-06-05/P8_W2_CONTROLLED_TOOL_LOOP_REPORT.md)：P8-W2 controlled tool loop report；记录 bounded runtime loop policy、ToolRegistry / SideEffectGuard fail-closed 语义和剩余 deferred gaps。
+- [P8_W3_RESUME_REPLAY_INTERRUPT_REPORT.md](2026-06-05/P8_W3_RESUME_REPLAY_INTERRUPT_REPORT.md)：P8-W3 interrupt / resume / checkpoint / replay report；记录 HITL trigger matrix、checkpoint-bound resume、read-only replay 和 remaining runtime gaps。
+- [P8_W4_HANDOFF_TRACE_REPORT.md](2026-06-05/P8_W4_HANDOFF_TRACE_REPORT.md)：P8-W4 typed handoff / trace / timeline report；记录 typed handoff envelope、refs-only timeline/trace 扩展和 product-level orchestration non-goal。
+- [P8_W5_VALIDATION_AND_BACKFILL_REPORT.md](2026-06-05/P8_W5_VALIDATION_AND_BACKFILL_REPORT.md)：P8-W5 validation / audits / source backfill report；记录 focused / full backend validation、Project source backfill 和 `partial_with_deferred_gaps` 口径。
+- [P8_FINAL_BOUNDARY_AUDIT.md](2026-06-05/P8_FINAL_BOUNDARY_AUDIT.md)：P8 final boundary audit；核查 forbidden scope、formal-write boundary、ToolRegistry boundary 和 no-false-done wording。
+- [P8_FINAL_RUNTIME_AUDIT.md](2026-06-05/P8_FINAL_RUNTIME_AUDIT.md)：P8 final runtime audit；核查 loop bounds、resume/checkpoint、failure taxonomy、trace/timeline 和 typed handoff runtime gaps。
+- [P8_FINAL_SOURCE_AUDIT.md](2026-06-05/P8_FINAL_SOURCE_AUDIT.md)：P8 final source audit；核查 source backfill consistency、false-done risks、README 索引和 remaining WARN。
+- [P8_FINAL_EXECUTION_REPORT.md](2026-06-05/P8_FINAL_EXECUTION_REPORT.md)：P8 final execution report；汇总 root cause、multi-agent execution board、changed files、validation commands/results、done criteria checklist、source backfill 和 remaining risks；状态保持 `partial_with_deferred_gaps`。

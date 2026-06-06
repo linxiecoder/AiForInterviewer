@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.agents.contracts import ToolDefinition
 from app.application.ai_runtime.contracts import RuntimePolicyError, contains_sensitive_payload, sanitize_payload
 
 
@@ -49,11 +50,41 @@ class AgentSideEffectGuard:
             raise RuntimePolicyError("user confirmation required before formal write")
         return True
 
-    def authorize_tool_call(self, *, owner_id: str, tool_name: str, input_refs: tuple[str, ...]) -> bool:
+    def authorize_tool_call(
+        self,
+        *,
+        owner_id: str,
+        tool_name: str,
+        input_refs: tuple[str, ...],
+        tool: ToolDefinition | None = None,
+        caller_id: str | None = None,
+        permission_scope: str | None = None,
+        owner_scope: str | None = None,
+        side_effect_policy: str | None = None,
+        payload: Any | None = None,
+    ) -> bool:
         if not owner_id or not tool_name:
             raise RuntimePolicyError("owner-scoped tool call required")
         if any(not ref for ref in input_refs):
             raise RuntimePolicyError("tool input refs must be explicit")
+        if tool is None:
+            raise RuntimePolicyError("registered ToolDefinition required for runtime tool call")
+        if tool.tool_name != tool_name:
+            raise RuntimePolicyError("tool_not_allowed")
+        if caller_id not in tool.allowed_callers:
+            raise RuntimePolicyError("caller not allowed for tool")
+        if permission_scope is not None and permission_scope != tool.permission_scope:
+            raise RuntimePolicyError("permission_scope mismatch")
+        if owner_scope is not None and owner_scope != tool.owner_scope:
+            raise RuntimePolicyError("owner_scope mismatch")
+        if side_effect_policy is not None and side_effect_policy != tool.side_effect_policy:
+            raise RuntimePolicyError("side_effect_policy mismatch")
+        if tool.side_effect_policy == "forbidden":
+            raise RuntimePolicyError("tool side_effect_policy is forbidden")
+        if payload is not None and (
+            contains_sensitive_payload(payload) or _contains_tool_forbidden_payload(payload, tool.forbidden_data)
+        ):
+            raise RuntimePolicyError("forbidden data payload blocked")
         return True
 
     def verify_checkpoint_write(self, metadata: dict[str, Any]) -> dict[str, Any]:
@@ -80,3 +111,25 @@ def _is_allowed_checkpoint_metadata_key(key: str) -> bool:
         or key.endswith("_version")
         or (key.startswith("retention_") and (key.endswith("_ref") or key.endswith("_refs")))
     )
+
+
+def _contains_tool_forbidden_payload(value: Any, forbidden_data: tuple[str, ...]) -> bool:
+    forbidden_keys = frozenset(_normalize_payload_key(key) for key in forbidden_data)
+    if not forbidden_keys:
+        return False
+    return _contains_forbidden_payload_key(value, forbidden_keys)
+
+
+def _contains_forbidden_payload_key(value: Any, forbidden_keys: frozenset[str]) -> bool:
+    if isinstance(value, dict):
+        return any(
+            _normalize_payload_key(key) in forbidden_keys or _contains_forbidden_payload_key(item, forbidden_keys)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple, set)):
+        return any(_contains_forbidden_payload_key(item, forbidden_keys) for item in value)
+    return False
+
+
+def _normalize_payload_key(key: object) -> str:
+    return str(key).strip().lower().replace("-", "_").replace(" ", "_")

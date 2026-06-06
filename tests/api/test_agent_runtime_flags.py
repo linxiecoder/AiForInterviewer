@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.application.ai_runtime.registry import AgentGraphRegistry
@@ -14,6 +16,12 @@ def test_runtime_and_graph_flags_default_false() -> None:
     assert resolver.resolve_runtime_flag("AIFI_AI_RUNTIME_ENABLED", actor_id="actor_1").enabled is False
     assert resolver.resolve_graph_flag(descriptor, actor_id="actor_1", caller="facade").enabled is False
     assert resolver.is_real_provider_enabled(actor_id="actor_1").enabled is False
+
+
+def test_env_example_documents_langgraph_runtime_flag_default_off() -> None:
+    env_example = Path(".env.example").read_text(encoding="utf-8")
+
+    assert "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED=false" in env_example
 
 
 def test_flag_source_priority_uses_test_override_before_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -61,4 +69,3 @@ def test_real_provider_gate_is_independent_from_graph_enablement() -> None:
 
     assert resolver.resolve_runtime_flag("AIFI_AI_RUNTIME_ENABLED", actor_id="actor_1").enabled is True
     assert resolver.is_real_provider_enabled(actor_id="actor_1").enabled is False
-

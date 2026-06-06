@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.application.ai_runtime.contracts import OwnerScopeError, RuntimeConflictError, RuntimeValidationError
-from app.application.ai_runtime.interrupts import AgentInterruptService
+from app.application.ai_runtime.interrupts import AgentInterruptService, P8_HITL_INTERRUPT_TYPES
 
 
 RAW_KEY = "raw" + "_completion"
@@ -171,3 +171,127 @@ def test_interrupt_resume_conflicts_on_stale_version_or_idempotency_body_change(
             base_version=7,
             idempotency_key="idem_1",
         )
+
+
+def test_hitl_interrupt_matrix_requires_checkpoint_refs_and_sanitizes_payloads() -> None:
+    service = AgentInterruptService()
+
+    for interrupt_type in P8_HITL_INTERRUPT_TYPES:
+        interrupt = service.create_hitl_interrupt(
+            owner_id="owner_1",
+            actor_id="actor_1",
+            run_id="arun_1",
+            node_name=f"node_{interrupt_type}",
+            interrupt_type=interrupt_type,
+            checkpoint_ref="ackpt_p8_1",
+            base_version=11,
+            candidate_refs=("candidate_ref_1",),
+            validation_refs=("validation_ref_1",),
+            low_confidence_flags=("source_gap",),
+            drawer_payload={RAW_KEY: "hidden", "safe": interrupt_type},
+        )
+
+        assert interrupt.interrupt_type == interrupt_type
+        assert interrupt.resume_schema_id == "agent.resume.hitl.v1"
+        assert interrupt.checkpoint_ref == "ackpt_p8_1"
+        assert interrupt.formal_refs == ()
+        assert interrupt.drawer_payload["trigger_type"] == interrupt_type
+        assert interrupt.drawer_payload["checkpoint_ref"] == "ackpt_p8_1"
+        assert interrupt.drawer_payload["candidate_refs"] == ("candidate_ref_1",)
+        assert interrupt.drawer_payload["validation_refs"] == ("validation_ref_1",)
+        assert interrupt.drawer_payload["low_confidence_flags"] == ("source_gap",)
+        assert RAW_KEY not in interrupt.drawer_payload
+
+    with pytest.raises(RuntimeValidationError, match="checkpoint"):
+        service.create_hitl_interrupt(
+            owner_id="owner_1",
+            actor_id="actor_1",
+            run_id="arun_missing_checkpoint",
+            node_name="formal_write",
+            interrupt_type="formal_write_attempt",
+            checkpoint_ref="",
+            base_version=1,
+        )
+    with pytest.raises(RuntimeValidationError, match="interrupt type"):
+        service.create_hitl_interrupt(
+            owner_id="owner_1",
+            actor_id="actor_1",
+            run_id="arun_bad_type",
+            node_name="unknown",
+            interrupt_type="not_a_p8_trigger",
+            checkpoint_ref="ackpt_p8_1",
+            base_version=1,
+        )
+
+
+def test_hitl_resume_validates_checkpoint_ref_base_version_and_allowed_action() -> None:
+    service = AgentInterruptService()
+    interrupt = service.create_hitl_interrupt(
+        owner_id="owner_1",
+        actor_id="actor_1",
+        run_id="arun_1",
+        node_name="low_confidence_update",
+        interrupt_type="low_confidence_formal_update",
+        checkpoint_ref="ackpt_p8_1",
+        base_version=5,
+        candidate_refs=("candidate_ref_1",),
+    )
+
+    with pytest.raises(RuntimeValidationError, match="checkpoint"):
+        service.resume_interrupt(
+            run_id="arun_1",
+            interrupt_id=interrupt.interrupt_id,
+            owner_id="owner_1",
+            actor_id="actor_1",
+            resume_payload={"action": "defer_to_handoff"},
+            base_version=5,
+            idempotency_key="idem_missing_checkpoint",
+        )
+    with pytest.raises(RuntimeConflictError, match="checkpoint"):
+        service.resume_interrupt(
+            run_id="arun_1",
+            interrupt_id=interrupt.interrupt_id,
+            owner_id="owner_1",
+            actor_id="actor_1",
+            resume_payload={"action": "defer_to_handoff"},
+            base_version=5,
+            idempotency_key="idem_wrong_checkpoint",
+            checkpoint_ref="ackpt_other",
+        )
+    with pytest.raises(RuntimeConflictError, match="stale"):
+        service.resume_interrupt(
+            run_id="arun_1",
+            interrupt_id=interrupt.interrupt_id,
+            owner_id="owner_1",
+            actor_id="actor_1",
+            resume_payload={"action": "defer_to_handoff"},
+            base_version=4,
+            idempotency_key="idem_stale",
+            checkpoint_ref="ackpt_p8_1",
+        )
+    with pytest.raises(RuntimeValidationError, match="unsupported"):
+        service.resume_interrupt(
+            run_id="arun_1",
+            interrupt_id=interrupt.interrupt_id,
+            owner_id="owner_1",
+            actor_id="actor_1",
+            resume_payload={"action": "approve"},
+            base_version=5,
+            idempotency_key="idem_bad_action",
+            checkpoint_ref="ackpt_p8_1",
+        )
+
+    resumed = service.resume_interrupt(
+        run_id="arun_1",
+        interrupt_id=interrupt.interrupt_id,
+        owner_id="owner_1",
+        actor_id="actor_1",
+        resume_payload={"action": "defer_to_handoff"},
+        base_version=5,
+        idempotency_key="idem_valid",
+        checkpoint_ref="ackpt_p8_1",
+    )
+
+    assert resumed.status == "running"
+    assert resumed.formal_refs == ()
+    assert resumed.interrupt_refs == (interrupt.interrupt_id,)

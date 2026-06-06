@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.application.agents.contracts import P8_REQUIRED_RUNTIME_STOP_CONDITIONS
 from app.application.ai_runtime.contracts import AgentCommandEnvelope, AgentRunContext, RuntimePolicyError
 from app.application.ai_runtime.llm_trace import LlmTraceContext
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
@@ -67,6 +68,7 @@ def _context() -> AgentRunContext:
         input_refs=("runtime_input_ref_1",),
         requested_outputs=("candidate_refs",),
         idempotency_key="idem_pr4",
+        metadata={"runtime_loop_policy": _runtime_loop_policy_metadata()},
     )
     return AgentRunContext(
         owner_id="owner_1",
@@ -83,3 +85,15 @@ def _session_factory():
     factory = build_session_factory(DbSettings(database_url="sqlite+pysqlite:///:memory:"))
     initialize_schema(session_factory=factory)
     return factory
+
+
+def _runtime_loop_policy_metadata() -> dict[str, object]:
+    return {
+        "max_steps": 8,
+        "max_retries": 1,
+        "timeout_seconds": 30,
+        "stop_conditions": P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+        "allowed_tools": ("generic_runtime_tool",),
+        "allowed_callers": ("generic_runtime",),
+        "side_effect_policy": "candidate_write",
+    }

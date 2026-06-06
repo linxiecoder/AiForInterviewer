@@ -282,3 +282,49 @@ Decision:
 Recommendation:
 
 后续若要接入 AgentExecutor runtime、跨 Agent orchestration、CI eval gate 或 L5 release gate，必须分别进入 Phase 8 / Phase 9 / Phase 11 / Phase 12 的独立 scope lock。
+
+## DEC-014 P8 Runtime Foundation Boundary
+
+Status: Accepted for C4 foundation partial; not accepted as Phase 8 done.
+
+Decision:
+
+`P8-GOAL-ONE-SHOT-C4-RUNTIME` implements a C4 runtime foundation slice, not a product-level L5 workflow or release gate.
+
+Accepted:
+
+- LangGraph dependency decision is `existing`; no dependency or lock-file change is needed.
+- `AgentGraphRunnerExecutorAdapter` is the compatibility bridge from current `AgentGraphRunner` runtime to the AgentExecutor-compatible boundary; facade-created starts now route through that adapter and adapter execution results preserve runner output / interrupt / typed candidate payload refs.
+- Runtime loop bounds are represented by `AgentRuntimeLoopPolicy`; missing bounds fail closed at the AgentExecutor adapter boundary and at the facade-created command boundary through descriptor runtime policy metadata.
+- Runtime tool authorization must fail closed without a registered `ToolDefinition`.
+- Polish question concrete runtime phase tools must resolve registered runtime `ToolDefinition` entries before execution and fail closed on unregistered tools.
+- Polish question direct runtime policy must include `interrupt_required` as a stop condition.
+- Feedback PR8 provider trace gate must resolve a registered runtime `ToolDefinition` before execution and fail closed on unregistered trace-gate nodes.
+- Replay through `AiOrchestrationFacade.replay_agent_run()` must be read-only and formal-write-blocked.
+- P8 HITL interrupt types are represented at the interrupt service boundary and checkpoint-bound resume validation is required for those HITL interrupts.
+- Feedback in-memory runtime must open checkpoint-bound runner HITL for refs-only `formal_write_attempt_ref`, `asset_conflict_ref`, `low_confidence_formal_update_ref`, `ambiguous_ownership_ref` and `validation_failed_partial_result_ref` metadata and keep those paths non-success / formal-write-blocked.
+- Polish question concrete runtime must open checkpoint-bound runner HITL for refs-only P8 trigger metadata and keep those paths non-success / formal-write-blocked.
+- Low-confidence Feedback HITL refs must populate trace and drawer flags.
+- Feedback service-backed HITL resume timeline metadata must preserve candidate refs and validation refs from the interrupted run.
+- Facade resume must require checkpoint/strict-base/idempotency control fields, fail closed on unsupported actions before runner invocation, and block returned runtime formal refs through the AgentExecutor adapter boundary.
+- Generic in-memory runtime user-confirmation interrupts must be registered through `AgentInterruptService` so resume validates checkpoint ref / base version / idempotency / allowed action before graph continuation.
+- Polish question concrete HITL resume must validate checkpoint ref / base version / idempotency / allowed action before graph continuation.
+- Service-backed in-memory runner resume must validate checkpoint ref / base version / allowed action before graph continuation.
+- Adapter traces may carry P8 validation / handoff / tool / policy / provider / low-confidence / failure / fallback refs when runtime metadata provides them.
+- Generic runtime start/resume events and Polish question / Feedback concrete runtime start timeline events may carry refs-only checkpoint / validation / candidate / interrupt / output metadata where applicable.
+- Adapter execution result/status surfaces may expose mapped handoff refs when runtime metadata or trace refs provide them.
+- Source result candidate descriptors may be converted into target `AgentExecutionPlan` input refs only through `HandoffContract` / `AgentHandoffEnvelope`; raw candidate payload body, raw asset body, raw prompt and `formal_refs` must not cross this handoff metadata boundary.
+- Asset update candidate handoff may expose refs-only `asset_body_ref` / `asset_schema_id`, user-confirmation and formal-write-blocked metadata as foundation evidence; it must not be read as formal asset composition/write or product-level Agent A -> Agent B orchestration.
+- Target executor timelines may merge command handoff envelope candidate / validation / handoff refs for trace visibility, but must still exclude raw prompt, raw provider payload, raw asset body and raw candidate payload body.
+- Runtime DTO status taxonomy must classify run result/status/replay/task/interrupt refs and fail closed on unknown status or success-like status with `failure_reason`; adapter result/status mapping must reuse that shared guard, and adapter metadata phase/tool event statuses must reject unknown non-DTO values before trace event emission.
+- Feedback in-memory runtime emits typed refs-only `feedback_candidate` and `asset_update_candidate` payloads with validation refs, checkpoint-backed trace refs, refs-only asset body descriptors and no formal refs.
+- Typed handoff is represented by `AgentHandoffEnvelope`; formal writes remain Application Service -> Domain Policy / validation -> Handoff -> Repository / Transaction.
+
+Not accepted as done:
+
+- Raw asset body transfer, formal asset composition/write semantics and product-level Supervisor / L5 orchestration.
+- Future / indirect graph tool-loop expansion and full product runtime migration without shared loop-policy / registry consumption evidence.
+- Remaining product-level runtime/orchestration wiring and runner-bound HITL emission / resume validation outside the already covered facade/generic/Question/Feedback paths.
+- Complete trace population for remaining product/future runtime events outside current generic runtime plus Feedback service-backed resume, Question/Feedback start/resume-event and target handoff timeline coverage.
+- Non-DTO persistence/API status taxonomy beyond the runtime DTO, trace bridge and adapter metadata event status guards.
+- Phase 11 Supervisor / Orchestrator, Phase 12 L5 release gate, or formal F8/M8 release.

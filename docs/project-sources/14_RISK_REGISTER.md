@@ -369,3 +369,21 @@ Mitigation:
 - `EVAL-001` 不标记 done。
 - Source backfill 只记录本地 P5/P6 scoped eval evidence。
 - Phase 9 另行 scope lock CI gate、grader、dataset 和报告。
+
+## RISK-022 P8 C4 runtime foundation 被误读为 L5 完成
+
+Severity: high
+
+Status: open_mitigated_by_partial_backfill
+
+Description:
+
+Phase 8 C4 runtime foundation may be misread as full multi-agent product workflow, Phase 11 Supervisor / Orchestrator, Phase 12 L5 release gate, or formal F8/M8 MVP release.
+
+Mitigation:
+
+- `P8_W0_SCOPE_LOCK.md` records C4-only scope and explicitly forbids prompt/provider/API/DB/frontend/domain-policy changes, Phase 11, Phase 12 and L5 claims.
+- P8 source backfill uses `partial_with_deferred_gaps` / `validated_with_deferred_gaps`, not `done`.
+- P8 source backfill distinguishes AgentExecutor-bound handoff plan, `execute_agent_handoff()` target AgentExecutor start and target timeline ref visibility from product-level Supervisor / L5 orchestration.
+- Final reports must list deferred gaps for raw asset body transfer and formal asset composition/write semantics, product-level Supervisor / L5 orchestration beyond the AgentExecutor-bound handoff plan / execution primitive and target timeline ref visibility, shared loop-policy and registry consumption by concrete graph tool calls outside the facade command boundary, remediated Polish question path and Feedback PR8 trace gate path, remaining product-level runtime/orchestration wiring and runner-bound HITL emission / resume validation outside the already covered facade/generic/Question/Feedback paths, DB persistence/API status taxonomy beyond the runtime DTO and Polish question application status mapping, `AgentTraceBridge` and adapter metadata event status guards, and full trace population for remaining product/future runtime events outside current generic runtime plus Feedback service-backed resume, Question/Feedback start/resume-event and target handoff timeline coverage.
+- Validation evidence is allowed to prove the implemented foundation slice only; it does not prove L5 release or Supervisor / Orchestrator completion.

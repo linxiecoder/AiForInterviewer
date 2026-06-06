@@ -7,6 +7,8 @@ from dataclasses import asdict
 import pytest
 
 import app.application.ai_runtime.business_graphs.polish_question_graph as question_graph
+from app.application.agents.contracts import P8_REQUIRED_RUNTIME_STOP_CONDITIONS
+from app.application.agents.registry import ToolRegistry
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     MAX_AGENT_STEPS,
     MAX_RETRIES,
@@ -27,9 +29,12 @@ from app.application.ai_runtime.contracts import (
     AgentCommandEnvelope,
     AgentRunContext,
     AgentRunResult,
+    RuntimeConflictError,
+    RuntimePolicyError,
     RuntimeValidationError,
     contains_sensitive_payload,
 )
+from app.application.ai_runtime.interrupts import AgentInterruptService
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.observability.logging import BackendLogSettings, LogUtil
 from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
@@ -380,6 +385,98 @@ def test_execute_polish_question_agent_fails_when_max_steps_exhausted() -> None:
         )
 
 
+def test_polish_question_runtime_loop_policy_includes_interrupt_stop_condition() -> None:
+    policy = question_graph._runtime_loop_policy(PolishQuestionAgentConfig())
+
+    assert "interrupt_required" in policy.stop_conditions
+
+
+def test_execute_polish_question_agent_requires_registered_runtime_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(question_graph, "_RUNTIME_TOOL_REGISTRY", ToolRegistry(), raising=False)
+
+    with pytest.raises(RuntimePolicyError, match="tool_not_allowed"):
+        execute_polish_question_agent(
+            context=_context(),
+            command=_command(),
+            runtime_flag_source="test_override",
+            provider_enabled=False,
+            provider_flag_source="test_override",
+            config=PolishQuestionAgentConfig(max_agent_steps=3, max_retries=0),
+        )
+
+
+def test_execute_polish_question_agent_enforces_loop_policy_allowed_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def disallow_question_agent(_: PolishQuestionAgentConfig) -> question_graph.AgentRuntimeLoopPolicy:
+        return question_graph.AgentRuntimeLoopPolicy(
+            max_steps=3,
+            max_retries=0,
+            timeout_seconds=QUESTION_AGENT_TIMEOUT_SECONDS,
+            stop_conditions=P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+            allowed_tools=tuple(schema.tool_name for schema in TOOL_SCHEMAS),
+            allowed_callers=("another_agent",),
+            side_effect_policy="candidate_write",
+        )
+
+    monkeypatch.setattr(question_graph, "_runtime_loop_policy", disallow_question_agent)
+
+    with pytest.raises(RuntimePolicyError, match="caller not allowed for tool"):
+        execute_polish_question_agent(
+            context=_context(),
+            command=_command(),
+            runtime_flag_source="test_override",
+            provider_enabled=False,
+            provider_flag_source="test_override",
+            config=PolishQuestionAgentConfig(max_agent_steps=3, max_retries=0),
+        )
+
+
+def test_execute_polish_question_agent_enforces_loop_policy_side_effect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def readonly_loop_policy(_: PolishQuestionAgentConfig) -> question_graph.AgentRuntimeLoopPolicy:
+        return question_graph.AgentRuntimeLoopPolicy(
+            max_steps=3,
+            max_retries=0,
+            timeout_seconds=QUESTION_AGENT_TIMEOUT_SECONDS,
+            stop_conditions=P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+            allowed_tools=tuple(schema.tool_name for schema in TOOL_SCHEMAS),
+            allowed_callers=("polish_question_agent",),
+            side_effect_policy="read_only",
+        )
+
+    monkeypatch.setattr(question_graph, "_runtime_loop_policy", readonly_loop_policy)
+
+    with pytest.raises(RuntimePolicyError, match="side_effect_policy mismatch"):
+        execute_polish_question_agent(
+            context=_context(),
+            command=_command(),
+            runtime_flag_source="test_override",
+            provider_enabled=False,
+            provider_flag_source="test_override",
+            config=PolishQuestionAgentConfig(max_agent_steps=4, max_retries=0),
+        )
+
+
+def test_execute_polish_question_tool_enforces_tool_forbidden_data() -> None:
+    with pytest.raises(RuntimePolicyError, match="forbidden data payload blocked"):
+        question_graph._execute_agent_tool(
+            context=_context(),
+            phase="plan_task",
+            tool_name="context_retrieval",
+            input_payload={
+                "request_digest": "request_ref_forbidden",
+                "api_keys": ("hidden_key_ref",),
+            },
+            operation=lambda: {"output_ref": "context_ref_should_not_run"},
+            config=PolishQuestionAgentConfig(max_agent_steps=3, max_retries=0),
+            deadline_at=question_graph.perf_counter() + QUESTION_AGENT_TIMEOUT_SECONDS,
+            phase_results=[],
+            tool_results=[],
+        )
+
+
 def test_execute_polish_question_agent_repairs_validation_failure_with_bounded_transform(
     monkeypatch,
 ) -> None:
@@ -451,7 +548,7 @@ def test_in_memory_runtime_polish_question_timeline_is_sanitized() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
     context = _context()
 
-    runtime.start(context, context.command)
+    result = runtime.start(context, context.command)
     timeline = runtime.get_timeline(context.run_id, context.owner_id)
 
     assert [event.event_type for event in timeline.events] == [
@@ -461,6 +558,21 @@ def test_in_memory_runtime_polish_question_timeline_is_sanitized() -> None:
         "candidate_payload_emitted",
         "run_succeeded",
     ]
+    events_by_type = {event.event_type: event for event in timeline.events}
+    candidate_payload = result.candidate_payloads[0]
+    assert events_by_type["validation_recorded"].metadata["validation_refs"] == candidate_payload.validation_refs
+    assert events_by_type["candidate_payload_emitted"].metadata["candidate_refs"] == (
+        candidate_payload.candidate_ref,
+    )
+    assert events_by_type["candidate_payload_emitted"].metadata["validation_refs"] == (
+        candidate_payload.validation_refs
+    )
+    assert events_by_type["candidate_payload_emitted"].metadata["output_refs"] == (
+        candidate_payload.candidate_ref,
+    )
+    assert events_by_type["run_succeeded"].metadata["output_refs"] == result.output_refs
+    assert events_by_type["run_succeeded"].metadata["candidate_refs"] == (candidate_payload.candidate_ref,)
+    assert events_by_type["run_succeeded"].metadata["validation_refs"] == candidate_payload.validation_refs
     serialized = repr(asdict(timeline))
     assert "question_text" not in serialized
     for marker in FORBIDDEN_MARKERS:
@@ -485,6 +597,133 @@ def test_in_memory_runtime_polish_question_status_has_refs_only() -> None:
     assert status.metadata["accepted_candidate_payload"] is True
     assert "candidate" not in status.metadata
     assert "payload" not in status.metadata
+
+
+def test_in_memory_runtime_polish_question_cancel_records_refs_only_timeline_event() -> None:
+    runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_question_graph_flag())
+    context = _context()
+
+    result = runtime.start(context, context.command)
+    cancelled = runtime.cancel(
+        context.run_id,
+        context.owner_id,
+        reason="user cancelled after candidate review",
+        actor_id=context.actor_id,
+    )
+    timeline = runtime.get_timeline(context.run_id, context.owner_id)
+    cancel_event = timeline.events[-1]
+
+    assert cancelled.status == "cancelled"
+    assert cancelled.output_refs == result.output_refs
+    assert cancel_event.event_type == "run_cancelled"
+    checkpoint_refs = tuple(ref for ref in result.trace_refs if ref.startswith("ackpt_"))
+    validation_refs = tuple(ref for ref in result.trace_refs if ref.startswith("validation_ref_"))
+    candidate_refs = tuple(ref for ref in result.output_refs if ref.startswith("question_candidate_ref_"))
+    assert cancel_event.refs == (*result.output_refs, *checkpoint_refs, *validation_refs)
+    assert cancel_event.metadata == {
+        "reason": "user cancelled after candidate review",
+        "actor_id": context.actor_id,
+        "output_refs": result.output_refs,
+        "candidate_refs": candidate_refs,
+        "checkpoint_refs": checkpoint_refs,
+        "validation_refs": validation_refs,
+        "provider_calls": 0,
+        "formal_business_writes": 0,
+    }
+    serialized = repr(asdict(timeline))
+    assert "question_text" not in serialized
+    for marker in FORBIDDEN_MARKERS:
+        assert marker not in serialized
+
+
+def test_polish_question_runtime_formal_write_attempt_uses_checkpoint_bound_hitl_resume() -> None:
+    interrupt_service = AgentInterruptService()
+    runtime = InMemoryLangGraphRuntime(
+        flag_resolver=_enabled_runtime_with_question_graph_flag(),
+        interrupt_service=interrupt_service,
+    )
+    command = _command(metadata={"formal_write_attempt_ref": "formal_write_attempt_ref_question_1"})
+    context = _context(command=command)
+
+    started = runtime.start(context, command)
+    interrupt = interrupt_service.get_interrupt(started.interrupt_refs[0], owner_id=context.owner_id)
+
+    assert started.status == "interrupted"
+    assert started.formal_refs == ()
+    assert started.candidate_payloads[0].candidate_ref in started.output_refs
+    assert interrupt is not None
+    assert interrupt.interrupt_type == "formal_write_attempt"
+    assert interrupt.resume_schema_id == "agent.resume.hitl.v1"
+    assert interrupt.checkpoint_ref == started.trace_refs[0]
+    assert interrupt.formal_refs == ()
+    assert interrupt.drawer_payload["trigger_ref"] == "formal_write_attempt_ref_question_1"
+    assert interrupt.drawer_payload["formal_write_blocked"] is True
+    assert interrupt.drawer_payload["candidate_refs"] == (started.candidate_payloads[0].candidate_ref,)
+    assert tuple(interrupt.drawer_payload["validation_refs"]) == started.candidate_payloads[0].validation_refs
+
+    with pytest.raises(RuntimeValidationError, match="checkpoint_ref"):
+        runtime.resume(
+            context,
+            interrupt_ref=started.interrupt_refs[0],
+            resume_payload={
+                "action": "continue_as_candidate",
+                "base_version": interrupt.record_version,
+                "idempotency_key": "idem_question_resume_missing_checkpoint",
+            },
+        )
+
+    with pytest.raises(RuntimeConflictError, match="checkpoint"):
+        runtime.resume(
+            context,
+            interrupt_ref=started.interrupt_refs[0],
+            resume_payload={
+                "action": "continue_as_candidate",
+                "checkpoint_ref": "ackpt_wrong",
+                "base_version": interrupt.record_version,
+                "idempotency_key": "idem_question_resume_wrong_checkpoint",
+            },
+        )
+
+    with pytest.raises(RuntimeValidationError, match="unsupported resume action"):
+        runtime.resume(
+            context,
+            interrupt_ref=started.interrupt_refs[0],
+            resume_payload={
+                "action": "approve",
+                "checkpoint_ref": interrupt.checkpoint_ref,
+                "base_version": interrupt.record_version,
+                "idempotency_key": "idem_question_resume_bad_action",
+            },
+        )
+
+    resumed = runtime.resume(
+        context,
+        interrupt_ref=started.interrupt_refs[0],
+        resume_payload={
+            "action": "continue_as_candidate",
+            "checkpoint_ref": interrupt.checkpoint_ref,
+            "base_version": interrupt.record_version,
+            "idempotency_key": "idem_question_resume_valid",
+        },
+    )
+
+    assert resumed.status == "succeeded"
+    assert resumed.formal_refs == ()
+    assert resumed.output_refs == started.output_refs
+    assert resumed.candidate_payloads == started.candidate_payloads
+    assert resumed.metadata["resume_action"] == "continue_as_candidate"
+    assert runtime.get_status(context.run_id, context.owner_id).interrupt_refs == ()
+    assert [
+        event.event_type for event in runtime.get_timeline(context.run_id, context.owner_id).events
+    ] == [
+        "run_started",
+        "checkpoint_recorded",
+        "validation_recorded",
+        "candidate_payload_emitted",
+        "interrupt_opened",
+        "run_resumed",
+        "run_succeeded",
+    ]
 
 
 def _enabled_runtime_with_question_graph_flag() -> RuntimeFlagResolver:
