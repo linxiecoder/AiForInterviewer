@@ -4,6 +4,38 @@ type: note
 permalink: ai-for-interviewer/docs/goals/2026-06-07/windows/p11-w5-l5-integration-boundary-tests-backfill
 ---
 
+Current Accepted State:
+P11-W4 was accepted by 总控 as runtime_bounds_hitl_slice_complete_with_deferred_release_gate.
+
+Acceptance Scope:
+- L5-005 may move to validated/high after Traceability Matrix and Risk Register backfill.
+- This is not L5 release.
+- This is not Phase 12 release gate.
+- L5-006 remains release-blocking.
+
+Required P11-W5 Preflight:
+- Verify P11-W4 backfill exists in docs/project-sources/09_REFACTOR_TRACEABILITY_MATRIX.md.
+- Verify RISK-018 residual risk is updated in docs/project-sources/14_RISK_REGISTER.md.
+- Verify git status is clean or only contains explicitly scoped P11-W5 changes.
+- Do not implement Phase 12 release gate in this window.
+
+P11-W5 Goal:
+Close Phase 11 integration and boundary evidence for L5-002 through L5-005:
+- Supervisor / Orchestrator registration evidence.
+- Three-or-more-agent typed handoff workflow evidence.
+- Cross-agent trace / state / handoff evidence.
+- Controlled loop / HITL boundary evidence.
+- Candidate-only and formal-write handoff boundary tests.
+- Project source backfill.
+
+Forbidden:
+- No provider behavior change.
+- No prompt rewrite.
+- No DB schema or migration.
+- No frontend/API contract change.
+- No Phase 12 eval/replay/CI release implementation.
+- No L5 release claim.
+
 # P11-W5-L5-INTEGRATION-BOUNDARY-TESTS-BACKFILL
 
 ## Activation rule

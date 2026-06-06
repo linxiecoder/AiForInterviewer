@@ -335,6 +335,19 @@ Mitigation:
 - Phase Roadmap Lock 明确 Phase 8 / Phase 9 / Phase 11 / Phase 12 仍 deferred。
 - Final report 和 matrix 禁止使用 L5 done / autonomous done 表述。
 
+P11-W4 mitigation evidence:
+
+- P11-W4 accepted status is `runtime_bounds_hitl_slice_complete_with_deferred_release_gate`, limited to controlled runtime-boundary hardening.
+- Controlled loop metadata covers `max_steps`, `max_retries`, `timeout_seconds`, `stop_conditions`, `repair_strategy` and `fallback_semantics`.
+- Bound exhaustion, `hitl_required=true`, fallback/generated-success markers and forbidden repository/DB/tool exposure markers fail closed instead of being reported as success.
+- HITL trigger metadata covers formal write, asset conflict, low confidence, ambiguous ownership and validation-failed partial result.
+
+Residual risk:
+
+- `L5-005` is not `done`; evidence remains runtime-boundary hardening, not L5 release.
+- `L5-006` remains release-blocking until Phase 12 provides executable eval/replay/CI/report/human decision evidence.
+- Real-provider quality certification, remote CI success, formal write completion and Phase 12 release gate completion remain non-claims.
+
 ## RISK-019 legacy fallback 测试与 candidate-only 语义冲突
 
 Severity: medium
