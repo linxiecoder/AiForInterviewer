@@ -14,11 +14,29 @@ REQUIRED_WINDOW_CATEGORIES = {
     "happy_path",
     "insufficient_context",
     "asset_conflict",
+    "formal_write_requested",
     "provider_failure",
     "validation_failure",
     "hitl",
+    "ownership_ambiguity",
     "replay",
+    "replay_mismatch",
+    "bounded_loop_stop",
     "cross_agent_handoff_failure",
+}
+REQUIRED_EXECUTION_FIXTURES = {
+    "option_d_local_multi_agent_happy",
+    "option_d_local_multi_agent_insufficient_context",
+    "option_d_local_multi_agent_asset_conflict",
+    "option_d_local_multi_agent_low_confidence",
+    "option_d_local_multi_agent_formal_write_requested",
+    "option_d_local_multi_agent_ownership_ambiguity",
+    "option_d_provider_unavailable_fail_closed",
+    "option_d_validation_failed_partial_result",
+    "option_d_cross_agent_handoff_failure",
+    "option_d_local_multi_agent_replay",
+    "option_d_local_multi_agent_replay_mismatch",
+    "option_d_bounded_loop_stop",
 }
 
 
@@ -67,8 +85,10 @@ def test_phase12_l5_manifest_defines_blocking_eval_gate_and_quality_lanes() -> N
 def test_phase12_l5_datasets_cover_window_required_scenarios_and_case_metadata() -> None:
     cases = _phase12_l5_cases()
     categories = {case["case_category"] for case in cases}
+    execution_fixtures = {case.get("execution_fixture") for case in cases if case.get("execution_fixture")}
 
     assert REQUIRED_WINDOW_CATEGORIES <= categories
+    assert REQUIRED_EXECUTION_FIXTURES <= execution_fixtures
     for case in cases:
         assert case["capability_ids"], case["case_id"]
         assert case["dataset_refs"], case["case_id"]
@@ -100,6 +120,14 @@ def test_phase12_l5_runner_passes_blocking_gate_without_provider_dependency() ->
     assert report["suite_id"] == "phase12_l5"
     assert report["summary"]["blocking_failures"] == 0
     assert set(report["summary"]["case_categories_covered"]) >= REQUIRED_WINDOW_CATEGORIES
+    fixture_results = [
+        case["execution_fixture_result"]
+        for dataset in report["dataset_results"]
+        for case in dataset["cases"]
+        if case["execution_fixture_result"] is not None
+    ]
+    assert {result["fixture_id"] for result in fixture_results} >= REQUIRED_EXECUTION_FIXTURES
+    assert all(result["passed"] for result in fixture_results)
     assert report["release_path_policy"]["eval_failure_blocks_l5_release_path"] is True
     assert report["ci"]["default_requires_live_provider_credentials"] is False
     assert report["ci"]["mode_is_ci_safe"] is True

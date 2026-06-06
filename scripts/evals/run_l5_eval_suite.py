@@ -316,6 +316,7 @@ def _grade_case(case: dict[str, Any], *, dataset_path: Path, dataset_config: dic
     failures: list[str] = []
     warnings: list[str] = []
     assertions_checked: list[str] = []
+    execution_fixture_result: dict[str, Any] | None = None
     missing = sorted(REQUIRED_CASE_FIELDS - set(case))
     failures.extend(f"missing_required_field:{field}" for field in missing)
     assertions_checked.append("required_fields_present")
@@ -366,7 +367,14 @@ def _grade_case(case: dict[str, Any], *, dataset_path: Path, dataset_config: dic
         failures.append("happy_path_expected_failure_mode_must_be_none")
     if category not in {"happy_path", "replay"} and failure_mode in {"", "none"}:
         failures.append("negative_case_expected_failure_mode_required")
-    if category in {"asset_conflict", "hitl", "provider_failure", "validation_failure"}:
+    if category in {
+        "asset_conflict",
+        "formal_write_requested",
+        "hitl",
+        "ownership_ambiguity",
+        "provider_failure",
+        "validation_failure",
+    }:
         if not _non_empty_str_list(case.get("expected_hitl_refs")):
             failures.append("hitl_refs_required_for_blocked_or_reviewed_case")
     if category == "cross_agent_handoff_failure" and not _non_empty_str_list(case.get("expected_handoff_refs")):
@@ -376,6 +384,13 @@ def _grade_case(case: dict[str, Any], *, dataset_path: Path, dataset_config: dic
         if "read_only" not in criteria_text or "side_effect_counters_zero" not in criteria_text:
             failures.append("replay_case_requires_read_only_side_effect_criteria")
     assertions_checked.append("category_specific_contract")
+
+    execution_fixture = _text(case.get("execution_fixture"))
+    if execution_fixture:
+        execution_fixture_result = _run_execution_fixture(execution_fixture)
+        assertions_checked.append("execution_fixture_passed")
+        if not execution_fixture_result["passed"]:
+            failures.extend(execution_fixture_result["failures"])
 
     return {
         "case_id": _text(case.get("case_id")) or "<missing>",
@@ -391,7 +406,491 @@ def _grade_case(case: dict[str, Any], *, dataset_path: Path, dataset_config: dic
         "expected_failure_mode": failure_mode,
         "expected_non_claims": sorted(non_claims),
         "triage": triage,
+        "execution_fixture_result": execution_fixture_result,
     }
+
+
+def _run_execution_fixture(fixture_id: str) -> dict[str, Any]:
+    handlers = {
+        "option_d_local_multi_agent_happy": _execute_option_d_happy_fixture,
+        "option_d_local_multi_agent_insufficient_context": _execute_option_d_insufficient_context_fixture,
+        "option_d_local_multi_agent_asset_conflict": _execute_option_d_asset_conflict_fixture,
+        "option_d_local_multi_agent_low_confidence": _execute_option_d_low_confidence_fixture,
+        "option_d_local_multi_agent_formal_write_requested": _execute_option_d_formal_write_requested_fixture,
+        "option_d_local_multi_agent_ownership_ambiguity": _execute_option_d_ownership_ambiguity_fixture,
+        "option_d_local_multi_agent_replay": _execute_option_d_replay_fixture,
+        "option_d_local_multi_agent_replay_mismatch": _execute_option_d_replay_mismatch_fixture,
+        "option_d_bounded_loop_stop": _execute_bounded_loop_stop_fixture,
+        "option_d_provider_unavailable_fail_closed": lambda: _execute_synthetic_runtime_fixture(
+            fixture_id="option_d_provider_unavailable_fail_closed",
+            status="provider_failed",
+            output_refs=(),
+            trace_refs=("trace_ref_provider_unavailable",),
+            metadata={
+                "failure_reason": "provider_failed",
+                "provider_calls": 0,
+                "repository_writes": 0,
+                "formal_business_writes": 0,
+                "formal_write_blocked": True,
+                "runtime_step_count": 1,
+            },
+        ),
+        "option_d_validation_failed_partial_result": lambda: _execute_synthetic_runtime_fixture(
+            fixture_id="option_d_validation_failed_partial_result",
+            status="validation_failed",
+            output_refs=("feedback_candidate_ref_partial",),
+            trace_refs=("trace_ref_validation_failed", "validation_ref_schema_failed"),
+            metadata={
+                "failure_reason": "validation_failed",
+                "validation_refs": ("validation_ref_schema_failed",),
+                "provider_calls": 0,
+                "repository_writes": 0,
+                "formal_business_writes": 0,
+                "formal_write_blocked": True,
+                "runtime_step_count": 2,
+            },
+        ),
+        "option_d_cross_agent_handoff_failure": lambda: _execute_synthetic_runtime_fixture(
+            fixture_id="option_d_cross_agent_handoff_failure",
+            status="blocked",
+            output_refs=("feedback_candidate_ref_handoff_source",),
+            trace_refs=("trace_ref_handoff_failure", "handoff_ref_invalid_route"),
+            interrupt_refs=("hitl_ref_handoff_failure_triage",),
+            metadata={
+                "failure_reason": "handoff_failure",
+                "handoff_refs": ("handoff_ref_invalid_route",),
+                "validation_refs": ("validation_ref_handoff_route_rejected",),
+                "provider_calls": 0,
+                "repository_writes": 0,
+                "formal_business_writes": 0,
+                "formal_write_blocked": True,
+                "runtime_step_count": 2,
+            },
+        ),
+    }
+    handler = handlers.get(fixture_id)
+    if handler is None:
+        return _fixture_result(fixture_id=fixture_id, actual={}, failures=("unknown_execution_fixture",))
+    try:
+        return handler()
+    except Exception as exc:
+        return _fixture_result(
+            fixture_id=fixture_id,
+            actual={"exception": type(exc).__name__, "message": str(exc)},
+            failures=("execution_fixture_exception",),
+        )
+
+
+def _execute_option_d_happy_fixture() -> dict[str, Any]:
+    facade, constants = _option_d_facade_and_constants()
+    status = facade.start_local_multi_agent_orchestration(**_option_d_start_kwargs("eval_happy"))
+    run_status = facade.get_agent_run_status(run_id=status.agent_run_id, owner_id="owner_option_d_eval")
+    timeline = facade.get_agent_run_timeline(run_id=status.agent_run_id, owner_id="owner_option_d_eval")
+    checkpoint_ref = _first_ref(run_status.metadata.get("checkpoint_refs"))
+    replay = facade.replay_agent_run(
+        owner_id="owner_option_d_eval",
+        actor_id="actor_option_d_eval",
+        run_id=status.agent_run_id,
+        ai_task_id=status.ai_task_id,
+        graph_name=constants["graph_name"],
+        graph_version=constants["graph_version"],
+        checkpoint_ref=checkpoint_ref,
+    )
+    actual = _option_d_actual(
+        status=status,
+        run_status=run_status,
+        timeline_event_types=tuple(event.event_type for event in timeline.events),
+        replay={
+            "status": replay.status,
+            "read_only": replay.read_only,
+            "formal_write_blocked": replay.formal_write_blocked,
+            "replay_trace_match": replay.metadata.get("replay_trace_match"),
+            "provider_calls": replay.metadata.get("provider_calls"),
+            "repository_writes": replay.metadata.get("repository_writes"),
+            "formal_business_writes": replay.metadata.get("formal_business_writes"),
+        },
+    )
+    failures = _common_option_d_failures(actual)
+    if actual["status"] != "interrupted":
+        failures.append("happy_fixture_must_wait_for_hitl")
+    if actual["candidate_ref_count"] < 3:
+        failures.append("happy_fixture_requires_three_candidate_refs")
+    if actual["handoff_ref_count"] < 2:
+        failures.append("happy_fixture_requires_typed_handoff_refs")
+    if "local_multi_agent_step_0" not in actual["timeline_event_types"]:
+        failures.append("happy_fixture_missing_local_step_trace")
+    if actual["replay"].get("read_only") is not True:
+        failures.append("happy_fixture_replay_must_be_read_only")
+    if actual["replay"].get("replay_trace_match") is not True:
+        failures.append("happy_fixture_replay_trace_must_match_checkpoint")
+    return _fixture_result(fixture_id="option_d_local_multi_agent_happy", actual=actual, failures=failures)
+
+
+def _execute_option_d_insufficient_context_fixture() -> dict[str, Any]:
+    return _execute_option_d_start_fixture(
+        fixture_id="option_d_local_multi_agent_insufficient_context",
+        expected_status="failed",
+        expected_metadata_key="missing_required_refs",
+        feedback_candidate_ref="",
+    )
+
+
+def _execute_option_d_asset_conflict_fixture() -> dict[str, Any]:
+    return _execute_option_d_start_fixture(
+        fixture_id="option_d_local_multi_agent_asset_conflict",
+        expected_status="blocked",
+        expected_hitl_trigger="asset_conflict",
+        asset_conflict_ref="asset_conflict_ref_option_d_eval",
+    )
+
+
+def _execute_option_d_low_confidence_fixture() -> dict[str, Any]:
+    return _execute_option_d_start_fixture(
+        fixture_id="option_d_local_multi_agent_low_confidence",
+        expected_status="interrupted",
+        expected_hitl_trigger="low_confidence",
+        low_confidence_flags=("source_gap",),
+    )
+
+
+def _execute_option_d_formal_write_requested_fixture() -> dict[str, Any]:
+    return _execute_option_d_start_fixture(
+        fixture_id="option_d_local_multi_agent_formal_write_requested",
+        expected_status="blocked",
+        expected_hitl_trigger="formal_write_requested",
+        formal_write_requested_ref="formal_write_interrupt_ref_option_d_eval",
+    )
+
+
+def _execute_option_d_ownership_ambiguity_fixture() -> dict[str, Any]:
+    return _execute_option_d_start_fixture(
+        fixture_id="option_d_local_multi_agent_ownership_ambiguity",
+        expected_status="blocked",
+        expected_hitl_trigger="ambiguous_ownership",
+        ownership_ambiguity_ref="ownership_ambiguity_ref_option_d_eval",
+    )
+
+
+def _execute_option_d_replay_fixture() -> dict[str, Any]:
+    result = _execute_option_d_happy_fixture()
+    actual = dict(result["actual"])
+    failures = list(result["failures"])
+    replay = actual.get("replay") if isinstance(actual.get("replay"), dict) else {}
+    if replay.get("provider_calls") != 0:
+        failures.append("replay_fixture_provider_calls_must_be_zero")
+    if replay.get("repository_writes") != 0:
+        failures.append("replay_fixture_repository_writes_must_be_zero")
+    if replay.get("formal_business_writes") != 0:
+        failures.append("replay_fixture_formal_business_writes_must_be_zero")
+    return _fixture_result(fixture_id="option_d_local_multi_agent_replay", actual=actual, failures=failures)
+
+
+def _execute_option_d_replay_mismatch_fixture() -> dict[str, Any]:
+    facade, constants = _option_d_facade_and_constants()
+    status = facade.start_local_multi_agent_orchestration(**_option_d_start_kwargs("eval_replay_mismatch"))
+    try:
+        facade.replay_agent_run(
+            owner_id="owner_option_d_eval",
+            actor_id="actor_option_d_eval",
+            run_id=status.agent_run_id,
+            ai_task_id=status.ai_task_id,
+            graph_name=constants["graph_name"],
+            graph_version=constants["graph_version"],
+            checkpoint_ref="ackpt_missing_option_d_replay_mismatch",
+        )
+    except Exception as exc:
+        actual = {
+            "status": "blocked",
+            "exception": type(exc).__name__,
+            "message": str(exc),
+            "provider_calls": 0,
+            "repository_writes": 0,
+            "formal_business_writes": 0,
+            "formal_write_blocked": True,
+        }
+        failures = [] if "checkpoint" in str(exc).lower() else ["replay_mismatch_missing_checkpoint_guard"]
+        if actual["formal_write_blocked"] is not True:
+            failures.append("replay_mismatch_formal_write_blocked_required")
+        return _fixture_result(
+            fixture_id="option_d_local_multi_agent_replay_mismatch",
+            actual=actual,
+            failures=failures,
+        )
+    return _fixture_result(
+        fixture_id="option_d_local_multi_agent_replay_mismatch",
+        actual={"status": "unexpected_success"},
+        failures=("replay_mismatch_must_not_succeed",),
+    )
+
+
+def _execute_option_d_start_fixture(
+    *,
+    fixture_id: str,
+    expected_status: str,
+    expected_hitl_trigger: str = "",
+    expected_metadata_key: str = "",
+    **overrides: object,
+) -> dict[str, Any]:
+    facade, _ = _option_d_facade_and_constants()
+    status = facade.start_local_multi_agent_orchestration(
+        **_option_d_start_kwargs(fixture_id.removeprefix("option_d_"), **overrides)
+    )
+    run_status = facade.get_agent_run_status(run_id=status.agent_run_id, owner_id="owner_option_d_eval")
+    timeline = facade.get_agent_run_timeline(run_id=status.agent_run_id, owner_id="owner_option_d_eval")
+    actual = _option_d_actual(
+        status=status,
+        run_status=run_status,
+        timeline_event_types=tuple(event.event_type for event in timeline.events),
+        replay={},
+    )
+    failures = _common_option_d_failures(actual)
+    if actual["status"] != expected_status:
+        failures.append(f"{fixture_id}_status_mismatch")
+    if expected_hitl_trigger and expected_hitl_trigger not in actual["hitl_triggers"]:
+        failures.append(f"{fixture_id}_missing_hitl_trigger")
+    if expected_metadata_key and not actual["metadata"].get(expected_metadata_key):
+        failures.append(f"{fixture_id}_missing_metadata:{expected_metadata_key}")
+    return _fixture_result(fixture_id=fixture_id, actual=actual, failures=failures)
+
+
+def _execute_bounded_loop_stop_fixture() -> dict[str, Any]:
+    from app.application.agents.contracts import AgentExecutionPlan, AgentRuntimeLoopPolicy, P8_REQUIRED_RUNTIME_STOP_CONDITIONS
+    from app.application.agents.runtime import AgentGraphRunnerExecutorAdapter
+    from app.application.ai_runtime.contracts import AgentRunResult
+
+    class _BoundedLoopStopRunner:
+        def start(self, context: Any, command: Any) -> Any:
+            return AgentRunResult(
+                run_id=context.run_id,
+                status="blocked",
+                trace_refs=("trace_ref_bounded_loop_stop",),
+                metadata={
+                    "failure_reason": "max_steps_exceeded",
+                    "runtime_step_count": 5,
+                    "stop_condition": "max_steps_exceeded",
+                    "provider_calls": 0,
+                    "repository_writes": 0,
+                    "formal_business_writes": 0,
+                    "formal_write_blocked": True,
+                },
+            )
+
+    executor = AgentGraphRunnerExecutorAdapter(_BoundedLoopStopRunner())
+    result = executor.start(
+        AgentExecutionPlan(
+            plan_id="plan_option_d_bounded_loop_stop",
+            run_id="arun_option_d_bounded_loop_stop",
+            ai_task_id="aitask_option_d_bounded_loop_stop",
+            agent_id="interview_orchestrator_agent",
+            owner_id="owner_option_d_eval",
+            actor_id="actor_option_d_eval",
+            graph_name="interview_orchestrator_agent",
+            graph_version="option-d-local-runtime",
+            objective="exercise bounded loop stop fixture",
+            input_refs=("session_ref_option_d_eval",),
+            requested_outputs=("candidate_refs",),
+            idempotency_key="idem_option_d_bounded_loop_stop",
+            runtime_loop_policy=AgentRuntimeLoopPolicy(
+                max_steps=4,
+                max_retries=1,
+                timeout_seconds=20,
+                stop_conditions=P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+                allowed_tools=("local_multi_agent_orchestrator_entry",),
+                allowed_callers=("interview_orchestrator_agent",),
+                side_effect_policy="candidate_write",
+            ),
+        )
+    )
+    actual = {
+        "status": result.status,
+        "failure_reason": result.trace.failure_reason,
+        "provider_calls": result.metadata.get("provider_calls"),
+        "repository_writes": result.metadata.get("repository_writes"),
+        "formal_business_writes": result.metadata.get("formal_business_writes"),
+        "formal_write_blocked": result.metadata.get("formal_write_blocked"),
+    }
+    failures: list[str] = []
+    if actual["status"] != "blocked" or actual["failure_reason"] != "max_steps_exceeded":
+        failures.append("bounded_loop_stop_must_block_with_max_steps_exceeded")
+    failures.extend(_side_effect_failures(actual, prefix="bounded_loop_stop"))
+    if actual["formal_write_blocked"] is not True:
+        failures.append("bounded_loop_stop_formal_write_blocked_required")
+    return _fixture_result(fixture_id="option_d_bounded_loop_stop", actual=actual, failures=failures)
+
+
+def _execute_synthetic_runtime_fixture(
+    *,
+    fixture_id: str,
+    status: str,
+    output_refs: tuple[str, ...],
+    trace_refs: tuple[str, ...],
+    metadata: dict[str, object],
+    interrupt_refs: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    from app.application.agents.contracts import AgentExecutionPlan, AgentRuntimeLoopPolicy, P8_REQUIRED_RUNTIME_STOP_CONDITIONS
+    from app.application.agents.runtime import AgentGraphRunnerExecutorAdapter
+    from app.application.ai_runtime.contracts import AgentRunResult
+
+    class _SyntheticRunner:
+        def start(self, context: Any, command: Any) -> Any:
+            return AgentRunResult(
+                run_id=context.run_id,
+                status=status,
+                output_refs=output_refs,
+                trace_refs=trace_refs,
+                interrupt_refs=interrupt_refs,
+                metadata=metadata,
+            )
+
+    executor = AgentGraphRunnerExecutorAdapter(_SyntheticRunner())
+    result = executor.start(
+        AgentExecutionPlan(
+            plan_id=f"plan_{fixture_id}",
+            run_id=f"arun_{fixture_id}",
+            ai_task_id=f"aitask_{fixture_id}",
+            agent_id="interview_orchestrator_agent",
+            owner_id="owner_option_d_eval",
+            actor_id="actor_option_d_eval",
+            graph_name="interview_orchestrator_agent",
+            graph_version="option-d-local-runtime",
+            objective=f"exercise {fixture_id}",
+            input_refs=("session_ref_option_d_eval",),
+            requested_outputs=("candidate_refs", "interrupt_refs"),
+            idempotency_key=f"idem_{fixture_id}",
+            runtime_loop_policy=AgentRuntimeLoopPolicy(
+                max_steps=4,
+                max_retries=1,
+                timeout_seconds=20,
+                stop_conditions=P8_REQUIRED_RUNTIME_STOP_CONDITIONS,
+                allowed_tools=("local_multi_agent_orchestrator_entry",),
+                allowed_callers=("interview_orchestrator_agent",),
+                side_effect_policy="candidate_write",
+            ),
+        )
+    )
+    actual = {
+        "status": result.status,
+        "failure_reason": result.trace.failure_reason,
+        "candidate_ref_count": len(result.candidate_refs),
+        "handoff_refs": result.trace.handoff_refs,
+        "validation_refs": result.trace.validation_refs,
+        "provider_calls": result.metadata.get("provider_calls"),
+        "repository_writes": result.metadata.get("repository_writes"),
+        "formal_business_writes": result.metadata.get("formal_business_writes"),
+    }
+    failures = _side_effect_failures(actual, prefix=fixture_id)
+    if result.metadata.get("formal_write_blocked") is not True:
+        failures.append(f"{fixture_id}_formal_write_blocked_required")
+    return _fixture_result(fixture_id=fixture_id, actual=actual, failures=failures)
+
+
+def _option_d_facade_and_constants() -> tuple[Any, dict[str, str]]:
+    from app.application.ai_runtime.business_graphs.local_multi_agent_orchestrator import (
+        LOCAL_MULTI_AGENT_GRAPH_FLAG,
+        LOCAL_MULTI_AGENT_GRAPH_NAME,
+        LOCAL_MULTI_AGENT_GRAPH_VERSION,
+    )
+    from app.application.ai_runtime.facade import AiOrchestrationFacade
+    from app.application.ai_runtime.registry import AgentGraphRegistry
+    from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+    from app.infrastructure.ai_runtime.langgraph.in_memory_runtime import InMemoryLangGraphRuntime
+
+    flag_resolver = RuntimeFlagResolver(
+        test_overrides={
+            "AIFI_AI_RUNTIME_ENABLED": True,
+            "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True,
+            LOCAL_MULTI_AGENT_GRAPH_FLAG: True,
+        }
+    )
+    runtime = InMemoryLangGraphRuntime(flag_resolver=flag_resolver)
+    return (
+        AiOrchestrationFacade(
+            runner=runtime,
+            registry=AgentGraphRegistry.default(),
+            flag_resolver=flag_resolver,
+        ),
+        {"graph_name": LOCAL_MULTI_AGENT_GRAPH_NAME, "graph_version": LOCAL_MULTI_AGENT_GRAPH_VERSION},
+    )
+
+
+def _option_d_start_kwargs(idempotency_key: str, **overrides: object) -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "owner_id": "owner_option_d_eval",
+        "actor_id": "actor_option_d_eval",
+        "session_ref": "session_ref_option_d_eval",
+        "feedback_candidate_ref": "feedback_candidate_ref_option_d_eval",
+        "answer_ref": "answer_ref_option_d_eval",
+        "question_ref": "question_ref_option_d_eval",
+        "evidence_refs": ("evidence_ref_option_d_1", "evidence_ref_option_d_2"),
+        "source_trace_refs": ("trace_ref_option_d_source",),
+        "validation_refs": ("validation_ref_option_d_feedback", "validation_ref_option_d_asset"),
+        "idempotency_key": idempotency_key,
+    }
+    kwargs.update(overrides)
+    return kwargs
+
+
+def _option_d_actual(*, status: Any, run_status: Any, timeline_event_types: tuple[str, ...], replay: dict[str, Any]) -> dict[str, Any]:
+    metadata = dict(run_status.metadata)
+    return {
+        "status": status.status,
+        "candidate_ref_count": len(status.candidate_refs),
+        "interrupt_ref_count": len(status.interrupt_refs),
+        "formal_refs": status.formal_refs,
+        "metadata": metadata,
+        "handoff_ref_count": len(tuple(metadata.get("handoff_refs") or ())),
+        "validation_ref_count": len(tuple(metadata.get("validation_refs") or ())),
+        "hitl_triggers": tuple(metadata.get("hitl_triggers") or ()),
+        "provider_calls": metadata.get("provider_calls"),
+        "repository_writes": metadata.get("repository_writes"),
+        "db_business_writes": metadata.get("db_business_writes"),
+        "formal_business_writes": metadata.get("formal_business_writes"),
+        "formal_write_blocked": metadata.get("formal_write_blocked"),
+        "timeline_event_types": timeline_event_types,
+        "replay": replay,
+    }
+
+
+def _common_option_d_failures(actual: dict[str, Any]) -> list[str]:
+    failures = _side_effect_failures(actual, prefix="option_d")
+    if actual["formal_refs"]:
+        failures.append("option_d_formal_refs_must_be_empty")
+    if actual["formal_write_blocked"] is not True:
+        failures.append("option_d_formal_write_blocked_required")
+    if actual["validation_ref_count"] == 0:
+        failures.append("option_d_validation_refs_required")
+    return failures
+
+
+def _side_effect_failures(actual: dict[str, Any], *, prefix: str) -> list[str]:
+    failures: list[str] = []
+    if actual.get("provider_calls") != 0:
+        failures.append(f"{prefix}_provider_calls_must_be_zero")
+    if actual.get("repository_writes") != 0:
+        failures.append(f"{prefix}_repository_writes_must_be_zero")
+    if actual.get("db_business_writes", 0) != 0:
+        failures.append(f"{prefix}_db_business_writes_must_be_zero")
+    if actual.get("formal_business_writes") != 0:
+        failures.append(f"{prefix}_formal_business_writes_must_be_zero")
+    return failures
+
+
+def _fixture_result(*, fixture_id: str, actual: dict[str, Any], failures: tuple[str, ...] | list[str]) -> dict[str, Any]:
+    unique_failures = tuple(dict.fromkeys(failures))
+    return {
+        "fixture_id": fixture_id,
+        "passed": not unique_failures,
+        "failures": list(unique_failures),
+        "actual": actual,
+    }
+
+
+def _first_ref(value: object) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, (list, tuple)) and value:
+        return str(value[0]).strip()
+    raise ValueError("checkpoint ref is required for Option D replay fixture")
 
 
 def _render_markdown_report(report: dict[str, Any]) -> str:
