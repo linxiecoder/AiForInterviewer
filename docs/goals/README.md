@@ -37,6 +37,16 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P12-W0 Release Gate Scope Lock
+
+P12-W0 starts Phase 12 as docs-only release-gate scope lock. It defines Phase 12 scope, release evidence contract, proposed next-window options and source backfill. It keeps implementation deferred, keeps all next-window options proposed, keeps `L5-006` not implemented / not validated / not done, and does not claim L5 release, Phase 12 release gate completion, real-provider quality certification, remote CI success or formal write completion.
+
+- [P12_W0_RELEASE_GATE_SCOPE_LOCK.md](2026-06-06/P12_W0_RELEASE_GATE_SCOPE_LOCK.md)：P12-W0 controller scope-lock input；defines docs-only allowlist, forbidden implementation/eval/CI changes and required checks。
+- [P12_W0_RELEASE_GATE_SCOPE_REPORT.md](2026-06-06/P12_W0_RELEASE_GATE_SCOPE_REPORT.md)：Release gate scope report；records Phase 12 scope, current gaps, non-claims and validation evidence。
+- [P12_W0_RELEASE_EVIDENCE_CONTRACT.md](2026-06-06/P12_W0_RELEASE_EVIDENCE_CONTRACT.md)：Release evidence contract；defines eval / replay / CI / observability / release decision evidence requirements。
+- [P12_W0_DECISION_OPTIONS.md](2026-06-06/P12_W0_DECISION_OPTIONS.md)：Phase 12 next-window options；Option A/B/C/D remain `proposed` and require Controller/user confirmation。
+- [P12_W0_SOURCE_BACKFILL_REPORT.md](2026-06-06/P12_W0_SOURCE_BACKFILL_REPORT.md)：Source backfill report；records Project source treatment, Matrix status treatment, risk treatment and non-claims。
+
 ### 2026-06-06 / P11-W4 Phase 11 Closeout and Source Sanity Audit
 
 P11-W4 closes Phase 11 as controlled multi-agent foundation plus a minimal candidate-only product slice. It reconciles P11-W0 through P11-W3, accepts the P11-W3 post-push audit as `post_push_audit_passed`, keeps `L5-004` as candidate product slice only, keeps `L5-005` as runtime-hardening slice only and keeps `L5-006` as `not_started`. It does not claim L5 release, Phase 12 release gate completion, real-provider quality certification, remote CI success, formal write completion or any L5 capability `done` status.

@@ -781,3 +781,196 @@ P11-W3 non-claims:
 - P11-W3 does not claim L5 release.
 - P11-W3 does not close remote CI gap.
 - P11-W3 does not replace Phase 12 multi-agent eval.
+
+## RISK-040 Phase 12 release overclaim
+
+Severity: critical
+
+Status: open
+
+Description:
+
+P12-W0 scope lock or a later partial Phase 12 slice could be shortened into a release claim before eval, replay, CI artifact, observability, rollback and human decision evidence exist.
+
+Mitigation:
+
+- P12-W0 status is `release_gate_scope_locked_with_deferred_implementation`.
+- `L5-006` remains not implemented, not validated and not done.
+- Phase 12 Release Gate requires eval, replay, CI artifact, observability and release decision evidence before release wording.
+
+Closure condition:
+
+- Controller/user accepts a release decision package with all required Phase 12 evidence links.
+
+## RISK-041 fake/replay eval mistaken as real-provider quality
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 9 fake/replay evidence and future Phase 12 replay fixtures can prove deterministic regression behavior, but they can be mistaken for real-provider quality certification.
+
+Mitigation:
+
+- Fake-only and replay-only evidence must carry non-claims.
+- Optional real-provider advisory mode must be explicit, non-default and separately scoped.
+- Real-provider quality needs provider config, redaction, human review and non-fake results.
+
+Closure condition:
+
+- A separately authorized real-provider evidence window records the required provider evidence, or release decision explicitly keeps this as a non-claim.
+
+## RISK-042 CI workflow existence mistaken as passing artifact evidence
+
+Severity: high
+
+Status: open
+
+Description:
+
+A workflow file can exist without a visible passing run or uploaded artifact. Treating workflow presence as remote CI success would close the release gate by wording only.
+
+Mitigation:
+
+- Remote CI success may only be claimed with a visible passing run and uploaded artifact.
+- P12 evidence contract requires workflow name, command list, artifact name, retention expectation and artifact link.
+
+Closure condition:
+
+- A Phase 12 or successor CI verification window cites visible passing CI run and artifact evidence.
+
+## RISK-043 local eval pass mistaken as remote CI pass
+
+Severity: high
+
+Status: open
+
+Description:
+
+Local eval, replay or pytest success can be useful regression evidence but does not prove remote CI behavior.
+
+Mitigation:
+
+- Local command output and remote CI artifact evidence are separate evidence categories.
+- Release decision must list local evidence and remote artifact evidence separately.
+
+Closure condition:
+
+- Remote CI artifact evidence is cited or the release decision explicitly carries remote CI as deferred.
+
+## RISK-044 trace report stores forbidden payloads
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 12 observability reports could accidentally store raw prompt, provider payload, full resume, full JD, full answer, full asset body or secrets.
+
+Mitigation:
+
+- Observability contract requires refs-only report schema and forbidden-data scan result.
+- Forbidden keys include raw prompt, provider payload, full resume, full JD, full answer, full asset body, token, secret, cookie and API key.
+
+Closure condition:
+
+- Phase 12 trace report generation includes a passing forbidden-data scan.
+
+## RISK-045 release without rollback plan
+
+Severity: high
+
+Status: open
+
+Description:
+
+Release could be approved from eval/CI evidence without a rollback trigger, owner and procedure.
+
+Mitigation:
+
+- Release decision evidence requires rollback plan.
+- Phase 12 gate blocks release decision when rollback plan is missing.
+
+Closure condition:
+
+- Controller/user accepts a rollback plan linked from the release decision package.
+
+## RISK-046 release without human decision
+
+Severity: critical
+
+Status: open
+
+Description:
+
+Automated eval/replay/CI evidence could be misread as automatic release approval.
+
+Mitigation:
+
+- Human/controller release decision is a required evidence category.
+- No release claim is valid from automation alone.
+
+Closure condition:
+
+- Human/controller decision is recorded with date, actor, accepted risks, deferred gaps and evidence links.
+
+## RISK-047 formal write boundary weakened during release
+
+Severity: critical
+
+Status: open
+
+Description:
+
+Release pressure could weaken candidate-only and formal-write handoff boundaries, allowing Agents or Tools to write formal business facts directly.
+
+Mitigation:
+
+- Formal writes remain Application Service -> Domain Policy -> Handoff.
+- Phase 12 gate forbids formal write claims unless a separately scoped window implements and validates the handoff path.
+- P12-W0 modifies no provider, prompt, API, DB, frontend, runtime or domain policy behavior.
+
+Closure condition:
+
+- Formal write remains blocked, or a later authorized formal-write window provides implementation and validation evidence.
+
+## RISK-048 negative-control omitted
+
+Severity: high
+
+Status: open
+
+Description:
+
+An eval gate that only passes positive cases may not prove that blocking failures actually fail the gate.
+
+Mitigation:
+
+- Phase 12 evidence contract requires negative-control behavior.
+- CI evidence must show that expected negative-control failure is observed.
+
+Closure condition:
+
+- Phase 12 report includes negative-control evidence and blocking failure behavior.
+
+## RISK-049 multi-agent eval coverage too narrow
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 12 eval could cover only the happy path and miss insufficient context, asset conflict, formal write request, low confidence, provider failure, validation failure, handoff failure, replay mismatch, forbidden data and release non-claim cases.
+
+Mitigation:
+
+- P12 evidence contract lists required case categories.
+- Suite manifest must map capability IDs to case IDs and minimum pass criteria.
+
+Closure condition:
+
+- Phase 12 suite manifest and report show required case coverage or explicit Controller-accepted deferred gaps.

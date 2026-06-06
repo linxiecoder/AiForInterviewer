@@ -374,6 +374,19 @@ Required target capabilities:
 - remote CI artifact evidence
 - human release decision
 
+P12-W0 release-gate scope lock result:
+
+- P12-W0 is docs-only release-gate scope lock.
+- Phase 12 implementation has not started.
+- `L5-006` remains not implemented, not validated and not done.
+- The required evidence contract must cover eval, replay, CI, observability and human release decision evidence before any release-gate closure wording.
+- Multi-agent eval evidence must include capability IDs, case IDs, input refs, expected candidate / handoff / validation / HITL refs, failure modes, non-claims, grader refs and minimum pass criteria.
+- Replay evidence must prove `read_only=true`, `formal_write_blocked=true`, zero provider calls, zero DB writes, zero formal writes and refs-only trace comparison.
+- CI evidence must include command list, blocking behavior, negative-control behavior and visible artifact evidence before remote CI success can be claimed.
+- Observability evidence must provide refs-only trace report fields and forbidden-data scan result.
+- Release decision evidence must include human/controller decision, accepted risks, deferred gaps, rollback plan, version/tag ref, date/actor, evidence links and non-claims.
+- Next Phase 12 implementation option remains proposed until Controller/user confirmation.
+
 Forbidden in Phase 12:
 
 - claiming L5 with unit tests only
@@ -382,6 +395,10 @@ Forbidden in Phase 12:
 - release with unresolved candidate/formal boundary gaps
 - release with unresolved provider fail-open gaps
 - release without human/controller decision
+- treating P12-W0 scope lock as release-gate completion
+- treating Phase 9 replay/fake evidence as real-provider quality certification
+- claiming remote CI success without visible run/artifact
+- weakening formal write boundary during release gate work
 
 ## 禁止偏移
 

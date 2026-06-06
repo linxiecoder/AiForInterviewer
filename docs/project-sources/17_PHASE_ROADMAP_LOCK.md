@@ -704,9 +704,10 @@ L5 Eval, Hardening, and Release Gate
 
 Current Status:
 
-- Not started.
+- Release gate scope locked by P12-W0.
+- Implementation not started.
 - `L5-006` remains `not_started`.
-- No L5 release, real-provider quality certification, formal F8/M8 release or remote CI success is claimed by P11-W0.
+- No L5 release, real-provider quality certification, formal F8/M8 release, Phase 12 release gate completion or remote CI success is claimed by P12-W0.
 
 Goal:
 
@@ -720,6 +721,21 @@ Goal:
 - Remote CI artifact evidence.
 - Human/controller release decision.
 
+P12-W0 Evidence:
+
+- `docs/goals/2026-06-06/P12_W0_RELEASE_GATE_SCOPE_LOCK.md`
+- `docs/goals/2026-06-06/P12_W0_RELEASE_GATE_SCOPE_REPORT.md`
+- `docs/goals/2026-06-06/P12_W0_RELEASE_EVIDENCE_CONTRACT.md`
+- `docs/goals/2026-06-06/P12_W0_DECISION_OPTIONS.md`
+- `docs/goals/2026-06-06/P12_W0_SOURCE_BACKFILL_REPORT.md`
+
+P12-W0 treatment:
+
+- Scope lock only.
+- Phase 12 implementation remains pending Controller option choice.
+- Next-window options remain proposed, not confirmed.
+- Phase 12 is release evidence and hardening, not new product feature scope.
+
 Forbidden:
 
 - Claiming L5 with unit tests only.
@@ -728,6 +744,9 @@ Forbidden:
 - Release with unresolved candidate/formal boundary gaps unless explicitly accepted by release controller.
 - Release with unresolved provider fail-open gaps.
 - Release without human/controller decision.
+- Claiming remote CI success without visible run/artifact.
+- Treating P12-W0 scope lock as release gate completion.
+- Marking `L5-006` implemented, validated or done before evidence exists.
 
 ## Phase 11 Entry Conditions
 

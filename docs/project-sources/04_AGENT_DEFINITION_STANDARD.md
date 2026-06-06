@@ -524,13 +524,40 @@ Phase 12 target is L5 Eval, Hardening, and Release Gate. It requires:
 
 ```yaml
 multi_agent_eval_suite_ids:
+capability_ids:
+case_ids:
+input_refs:
+expected_candidate_refs:
+expected_handoff_refs:
+expected_validation_refs:
+expected_HITL_refs:
+expected_failure_mode:
+expected_non_claims:
+grader_refs:
+minimum_pass_criteria:
 cross_agent_replay_fixture_refs:
+checkpoint_refs:
+read_only: true
+formal_write_blocked: true
+zero_provider_calls: true
+zero_db_writes: true
+zero_formal_writes: true
+trace_comparison:
 failure_mode_regression_cases:
 trace_report_refs:
+forbidden_data_scan_result:
+ci_workflow_name:
+ci_command_list:
 remote_ci_artifact_refs:
+blocking_failure_behavior:
+negative_control_behavior:
 rollback_policy:
 failure_triage_policy:
 human_release_decision:
+accepted_risks:
+deferred_gaps:
+release_version_or_tag_ref:
+evidence_links:
 ```
 
 Rules:
@@ -539,6 +566,9 @@ Rules:
 - Replay/fake eval cannot certify real-provider quality.
 - Remote CI must cite visible run and artifact evidence.
 - Release is blocked while candidate/formal boundary, provider fail-closed or Phase 8 runtime gaps remain unresolved or explicitly accepted by the release controller.
+- P12-W0 records the evidence contract only; it does not implement eval, replay, CI, trace, release decision or real-provider quality behavior.
+- Optional real-provider advisory mode must be explicit, non-default and separately scoped before it can be used as quality evidence.
+- AgentDefinition `eval_contract` refs may point to Phase 12 evidence only after a later implementation window creates the suite / replay / CI artifacts.
 
 ## 禁止事项
 

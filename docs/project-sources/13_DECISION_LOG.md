@@ -586,3 +586,45 @@ P11-W3 non-claims:
 - P11-W3 does not claim L5 release.
 - P11-W3 does not close remote CI gap.
 - P11-W3 does not replace Phase 12 multi-agent eval.
+
+## DEC-022 P12-W0 Release Gate Scope Lock
+
+Status: accepted_for_p12_w0_scope_lock_only
+
+Decision:
+
+P12-W0 starts Phase 12 as a docs-only release-gate scope lock. It defines evidence requirements and proposed next-window options, but it does not implement Phase 12 eval / replay / CI / observability / release decision behavior.
+
+Accepted scope:
+
+- create release gate scope report.
+- create release evidence contract.
+- create proposed Phase 12 decision options.
+- create source backfill report.
+- update allowed Project sources and `docs/goals/README.md` only as needed.
+- define eval, replay, CI, observability and release decision evidence requirements.
+- define Phase 12 gate and stop conditions.
+- keep next-window options proposed.
+
+Not accepted:
+
+- code, test, eval dataset, eval suite, eval grader, eval runner, eval report, script or workflow changes.
+- provider, prompt, API, DB, frontend, runtime or domain policy behavior changes.
+- eval runner behavior implementation.
+- CI behavior implementation.
+- L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or formal write completion claims.
+- marking `L5-006` implemented, validated or done.
+- marking any L5 capability done.
+
+Result:
+
+P12-W0 may report `release_gate_scope_locked_with_deferred_implementation` if all created reports and source backfill stay inside the docs-only allowlist and final validation shows no implementation/eval/workflow files changed.
+
+Next-window options:
+
+- Option A Eval-contract-first: proposed.
+- Option B Replay-gate-first: proposed.
+- Option C CI-artifact-first: proposed.
+- Option D Full Phase 12 eval gate slice: proposed.
+
+No option is confirmed by this decision. Controller/user confirmation is required before implementation starts.

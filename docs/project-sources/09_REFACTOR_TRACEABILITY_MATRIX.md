@@ -218,6 +218,29 @@ P11-W4 non-claims:
 - P11-W4 does not claim product workflow release.
 - P11-W4 does not claim full L5 validation complete.
 - P11-W4 does not mark `L5-006` implemented, validated or done.
+
+## P12-W0 Release Gate Scope Lock Evidence
+
+Status: `release_gate_scope_locked_with_deferred_implementation` for docs-only scope lock. This is not an implementation status for `L5-006`, not a release gate completion status and not a `done` status for any L5 capability.
+
+- P12-W0 creates release-gate scope, release evidence contract, decision options and source-backfill report under `docs/goals/2026-06-06/`.
+- `L5-006` remains `not_started` in the Matrix row; no multi-agent eval/replay/release gate implementation is claimed.
+- `EVAL-001` remains `validated`; P12-W0 does not upgrade replay / fixture evidence into Phase 12 release evidence.
+- Required Phase 12 evidence is defined for eval, replay, CI, observability and human release decision, but implementation remains pending Controller/user option choice.
+- Remote CI gap remains open unless a visible passing CI run and uploaded artifact are cited.
+- Real-provider quality certification remains a non-claim unless a separately scoped provider evidence window records provider config, redaction, human review and non-fake results.
+- Formal write remains Application Service -> Domain Policy -> Handoff and is not changed by P12-W0.
+
+P12-W0 non-claims:
+
+- P12-W0 does not modify code, tests, eval datasets, eval suites, eval graders, eval reports, scripts, workflows, provider, prompt, API, DB, frontend, runtime or domain policy files.
+- P12-W0 does not claim L5 release.
+- P12-W0 does not claim real-provider quality certification.
+- P12-W0 does not claim remote CI success.
+- P12-W0 does not claim formal write completion.
+- P12-W0 does not claim product workflow release.
+- P12-W0 does not claim full L5 validation complete.
+- P12-W0 does not mark `L5-006` implemented, validated or done.
 - P11-W4 does not mark any L5 capability done.
 
 ## P9 Eval / CI Regression Gate Backfill Evidence

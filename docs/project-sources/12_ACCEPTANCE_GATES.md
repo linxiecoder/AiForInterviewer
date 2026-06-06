@@ -580,16 +580,28 @@ P11-W3 non-claims:
 
 适用于 Phase 12 L5 Eval, Hardening, and Release Gate。
 
+P12-W0 status:
+
+- `release_gate_scope_locked_with_deferred_implementation` is allowed only for docs-only release-gate scope lock.
+- This status is not L5 release, not remote CI success, not real-provider quality certification and not Phase 12 release gate completion.
+- `L5-006` remains not implemented, not validated and not done until a later scoped implementation window creates and validates the required evidence.
+
 必须满足：
 
 - multi-agent regression suite。
+- suite manifest includes capability IDs, case IDs, input refs, expected candidate refs, expected handoff refs, expected validation refs, expected HITL refs, expected failure mode, expected non-claims, grader refs and minimum pass criteria。
+- required eval cases cover happy path candidate product slice, insufficient context, asset conflict, formal write requested, low confidence, provider failure, validation failure, cross-agent handoff failure, replay mismatch, forbidden data, fake/replay non-claim and release non-claim。
 - cross-agent replay fixtures。
+- replay evidence proves `read_only=true`, `formal_write_blocked=true`, zero provider calls, zero repository / DB business writes, zero formal writes, trace comparison, candidate refs preserved, validation refs preserved and handoff refs preserved。
 - failure-mode regression cases。
-- L5 CI gate with visible artifact evidence。
+- L5 CI gate with workflow name, command list, visible artifact evidence, artifact retention expectation, blocking failure behavior and negative-control behavior。
+- default CI gate does not require live provider credentials。
+- optional real-provider advisory mode is explicit, non-default and separately scoped。
 - observability / trace report。
+- trace report contains agent_id, run_id, plan refs, skill refs, tool refs, policy refs, candidate refs, handoff refs, validation refs, HITL refs, failure reason, fallback reason and forbidden-data scan result。
 - rollback policy。
 - failure triage policy。
-- human/controller release decision。
+- human/controller release decision with accepted risks, deferred gaps, rollback plan, version/tag ref, date/actor, evidence links and non-claims。
 
 禁止：
 
@@ -599,6 +611,14 @@ P11-W3 non-claims:
 - release with unresolved candidate/formal boundary gaps unless explicitly accepted by release controller。
 - release with unresolved provider fail-open gaps。
 - release without human/controller decision。
+- claiming remote CI success without visible passing run and uploaded artifact。
+- treating a workflow file as artifact evidence。
+- treating local eval pass as remote CI pass。
+- storing forbidden payloads in reports。
+- release without rollback plan。
+- omitting negative-control evidence。
+- weakening formal write boundary during release work。
+- marking `L5-006` implemented, validated or done from P12-W0 scope-lock evidence。
 
 ## Traceability Gate
 
