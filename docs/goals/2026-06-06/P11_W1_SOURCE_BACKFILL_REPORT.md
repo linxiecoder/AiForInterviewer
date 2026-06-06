@@ -19,7 +19,7 @@ P11-W1 backfills only the contract-first Orchestrator slice. It records contract
 |---|---|
 | `docs/project-sources/03_AGENT_PLATFORM_ARCHITECTURE.md` | Added P11-W1 contract-first result and non-claims. |
 | `docs/project-sources/04_AGENT_DEFINITION_STANDARD.md` | Added current `interview_orchestrator_agent` contract-only shape and non-claims. |
-| `docs/project-sources/09_REFACTOR_TRACEABILITY_MATRIX.md` | Updated `L5-002` and `L5-003` to `validated_with_deferred_gaps` for contract-only evidence; kept runtime/product/release gaps open. |
+| `docs/project-sources/09_REFACTOR_TRACEABILITY_MATRIX.md` | Updated `L5-002` and `L5-003` to `contract_slice_complete_with_deferred_runtime_gaps` for contract-only evidence; kept full L5 capability validation, runtime/product/release gaps open. |
 | `docs/project-sources/12_ACCEPTANCE_GATES.md` | Added P11-W1 Contract-first Orchestrator Gate. |
 | `docs/project-sources/13_DECISION_LOG.md` | Added DEC-019 for Option A acceptance in P11-W1. |
 | `docs/project-sources/14_RISK_REGISTER.md` | Added RISK-037 for contract Orchestrator being misread as runtime Orchestrator. |
@@ -27,10 +27,21 @@ P11-W1 backfills only the contract-first Orchestrator slice. It records contract
 | `docs/project-sources/18_AGENT_PLATFORM_C_TARGET.md` | Updated L5 target status and contract catalog evidence. |
 | `docs/goals/README.md` | Indexed P11-W1 goal, implementation, validation and source-backfill records as evidence-only. |
 
+## 2.1 fix.01 矩阵状态语义修正
+
+P11-W1.fix.01 根据 Controller audit 修正 Matrix wording。此前 `L5-002` 和 `L5-003` 的 Matrix 行使用 `validated_with_deferred_gaps`，对 contract-only slice 来说语义过强，可能被误读为 full L5 capability validation。
+
+修正后的状态：
+
+- `L5-002`: `contract_slice_complete_with_deferred_runtime_gaps`.
+- `L5-003`: `contract_slice_complete_with_deferred_runtime_gaps`.
+
+这表示 P11-W1 contract slice 仅在 contract/catalog/test evidence 层面完成实现并通过本地验证。它不关闭 full L5 capability validation、Supervisor / Orchestrator runtime execution、product multi-agent workflow、Phase 8 runtime gaps、`deferred_remote_ci_gap`、stale eval report metadata risk、real-provider quality certification、L5 release 或 Phase 12 release gate。
+
 ## 3. Status Treatment
 
-- `L5-002`: `validated_with_deferred_gaps` for contract-only Orchestrator AgentDefinition and catalog registration.
-- `L5-003`: `validated_with_deferred_gaps` for cross-agent plan / handoff / state / trace contracts.
+- `L5-002`: `contract_slice_complete_with_deferred_runtime_gaps` for contract-only Orchestrator AgentDefinition and catalog registration.
+- `L5-003`: `contract_slice_complete_with_deferred_runtime_gaps` for cross-agent plan / handoff / state / trace contracts.
 - `L5-004`: remains `not_started`; no product multi-agent workflow.
 - `L5-005`: remains `implementation_planned`; no runtime tool-loop hardening is implemented by P11-W1.
 - `L5-006`: remains `not_started`; no Phase 12 release gate.
