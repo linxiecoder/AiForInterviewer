@@ -229,4 +229,3 @@ def test_phase12_window_does_not_modify_reports_or_phase9_assets() -> None:
     ]
 
     assert protected_hits == []
-
