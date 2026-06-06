@@ -215,19 +215,19 @@ Status:
 - Target locked by P11-W0.
 - USER_CONFIRMED Option D is Local Complete Multi-Agent Capability.
 - Canonical goal path: `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
-- `L5-006A` local multi-agent eval / replay / failure hardening is in scope for Option D and currently has executable local eval foundation only.
+- `L5-006A` local multi-agent eval / replay / failure hardening is validated for Option D local execution.
 - `L5-006B` production release gate / remote CI hard claim / real-provider production certification / production observability / release decision is deferred and out of scope for Option D.
 - Production release gate is not started.
 
 Option D local required capabilities:
 
-- multi-agent regression suite
-- cross-agent replay fixtures
-- failure-mode regression cases
-- failure triage policy
-- local observability / trace report
-- fake-safe negative controls
-- default-off local product/runtime wiring combined with replay/trace/HITL/bounded-loop/failure hardening
+- multi-agent regression suite: validated by Phase 12 deterministic local gate.
+- cross-agent replay fixtures: validated with read-only replay, trace comparison and zero provider / repository / DB / formal-write counters.
+- failure-mode regression cases: validated for insufficient context, asset conflict, low confidence, formal write request, ownership ambiguity, provider unavailable, validation failed partial result, cross-agent handoff failure, replay mismatch and bounded-loop stop.
+- failure triage policy: validated through case `triage` metadata and blocking failure reporting.
+- local observability / trace report: validated through refs-only timeline / trace / checkpoint / handoff / validation metadata in local fixtures.
+- fake-safe negative controls: validated by Phase 12 and Phase 9 negative-control runs.
+- default-off local product/runtime wiring combined with replay/trace/HITL/bounded-loop/failure hardening: validated by D-W2 / D-W3 code and eval evidence.
 
 Production release required capabilities:
 
@@ -241,9 +241,18 @@ Non-claims:
 
 - P9 replay/fixture eval foundation is not real-provider quality certification.
 - `complete_with_deferred_remote_ci_gap` is not remote CI success.
-- Option D is not production release readiness.
+- Option D local validation is not production release readiness.
 - Option D does not require or claim A/B testing, traffic split, canary rollout or online experiment metrics.
 - Phase 12 cannot release with hidden candidate/formal or provider fail-open gaps.
+
+D-W4 validation evidence:
+
+- `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/application/agents tests/architecture -q` -> 58 passed.
+- `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture tests/evals -q` -> 74 passed.
+- `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/evals -q` -> 41 passed.
+- `PYTHONPATH=.:apps/api .venv/bin/python scripts/evals/run_l5_eval_suite.py --mode deterministic --report-dir /tmp/aifi-phase12-l5-option-d` -> 13 passed, 0 blocking failures.
+- `PYTHONPATH=.:apps/api .venv/bin/python scripts/evals/run_eval_gate.py --suite phase9 --mode replay --report-dir /tmp/aifi-phase9-option-d` -> 30 passed, 2 deferred, 0 blocking failures.
+- Phase 12 and Phase 9 negative controls -> observed_expected_failure=true.
 
 ## Required Contracts
 

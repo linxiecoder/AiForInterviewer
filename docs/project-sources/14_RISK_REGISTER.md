@@ -570,7 +570,7 @@ Closure condition:
 
 Severity: high
 
-Status: open
+Status: mitigated_for_option_d_local_closeout
 
 Description:
 
@@ -1108,18 +1108,19 @@ Status: open
 
 Description:
 
-Updating the older unsplit `L5-006` from `not_started` to a P12-W1 or Option D status could be misread as local hardening complete, production release-ready, validated or done.
+Updating the older unsplit `L5-006` from `not_started` to a P12-W1 or Option D status could be misread as local hardening complete, production release-ready, validated or done. After D-W4, the current risk is specifically that `L5-006A` local validation could be mistaken for `L5-006B` production release readiness.
 
 Mitigation:
 
 - Matrix now splits `L5-006` into `L5-006A` local hardening and `L5-006B` production release.
-- `L5-006A` status is `partial_local_eval_foundation_with_deferred_replay_failure_trace_gaps`, not done.
+- `L5-006A` status is `validated` for Option D local eval / replay / failure hardening after D-W4 source backfill.
 - `L5-006B` status is `deferred_out_of_scope_for_option_d`.
-- P12-W1 and D-W0 reports repeat that replay/resume/failure fixtures, trace report, real-provider quality certification, remote CI success, production observability/SLO and release decision remain deferred where applicable.
+- Current Phase 12 report payloads still emit historical capability id `L5-006`; D-W4 Project sources map that evidence only to `L5-006A` local hardening and record metadata normalization as a future eval hygiene gap.
+- D-W4 source backfill records local replay, trace, failure fixtures and negative-control evidence for `L5-006A`, while repeating that real-provider quality certification, remote CI success, production observability/SLO, rollback evidence and human/controller production release decision remain deferred under `L5-006B`.
 
 Closure condition:
 
-- `L5-006A` can move beyond partial local hardening only after a separately scoped Option D window provides local replay/trace/failure evidence and source backfill without forbidden-scope changes.
+- `L5-006A` local overclaim risk is mitigated by D-W4 local replay/trace/failure evidence and source backfill without forbidden-scope changes.
 - `L5-006B` can move beyond deferred only after a separately scoped production release window provides visible remote CI artifact evidence, real-provider production certification, production observability/SLO, rollback evidence and human/controller release decision.
 
 ## RISK-055 Phase 9 report rewrite during Phase 12 contract work
@@ -1166,7 +1167,7 @@ Closure condition:
 
 Severity: critical
 
-Status: open
+Status: mitigated_for_option_d_local_closeout
 
 Description:
 
@@ -1178,7 +1179,11 @@ Mitigation:
 - Matrix splits `L5-006A` local hardening from `L5-006B` production release.
 - Acceptance Gates state that A/B testing, traffic split, canary rollout, online experiment metrics, production observability/SLO, remote CI hard claim and real-provider production certification are out of scope for Option D.
 - Canonical goal path is `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
+- D-W4 source backfill records Option D only as locally implemented and locally validated.
+- D-W4 keeps `L5-006B` deferred and out of scope for production release gate, visible remote CI artifact evidence, real-provider production certification, production observability/SLO, rollback evidence and human/controller production release decision.
+- D-W4 validation evidence includes local architecture/eval tests, Phase 12 deterministic gate, Phase 9 replay gate and negative controls; this evidence is not remote CI success or real-provider production quality certification.
 
 Closure condition:
 
-- Option D closeout uses local capability wording only, leaves `L5-006B` deferred, and records any production release decision in a separately authorized release scope.
+- For Option D local closeout: closed by local capability wording, explicit `L5-006B` deferral and D-W4 source backfill.
+- For future production release: remains guarded until a separately authorized release scope records visible remote CI artifact evidence, real-provider production certification, production observability/SLO, rollback evidence and human/controller release decision.

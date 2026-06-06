@@ -730,27 +730,32 @@ Current Status:
 - Canonical Option D goal path: `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
 - Release gate scope locked by P12-W0.
 - P12-W1 implemented executable L5 eval suite foundation.
-- `L5-006A` current status is `partial_local_eval_foundation_with_deferred_replay_failure_trace_gaps`, not done and not closed.
+- D-W2 implemented default-off local multi-agent runtime wiring.
+- D-W3 implemented local eval / replay / failure hardening fixtures and negative controls.
+- D-W4 source backfill records Option D local capability as implemented and locally validated.
+- `L5-006A` current status is `validated` for local eval / replay / failure hardening.
 - `L5-006B` current status is `deferred_out_of_scope_for_option_d`.
-- P12-W2 local replay / resume / failure fixtures and P12-W3 local observability / trace report remain open for `L5-006A`.
-- P12-W4 production release readiness audit, real-provider production certification, production observability/SLO, remote CI artifact evidence and human release decision remain deferred under `L5-006B`.
-- No L5 release, real-provider quality certification, formal F8/M8 release, Phase 12 release gate completion or remote CI success is claimed by P12-W0 or P12-W1.
+- Production release readiness audit, real-provider production certification, production observability/SLO, remote CI artifact evidence, rollback evidence and human/controller production release decision remain deferred under `L5-006B`.
+- No production L5 release, real-provider quality certification, formal F8/M8 release, production release gate completion or remote CI success is claimed by Option D.
 
-Current P12-W1 State:
+Current D-W4 Local State:
 
-- P12-W1 implemented executable L5 eval suite foundation.
+- D-W2 local runtime wiring validates `interview_orchestrator_agent` behind `AIFI_ENABLE_LOCAL_MULTI_AGENT_ORCHESTRATION=false` by default.
+- D-W2 local product path includes `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`.
+- D-W3 Phase 12 local gate covers happy path, insufficient context, asset conflict, low confidence, formal write request, ownership ambiguity, provider unavailable, validation failed partial result, cross-agent handoff failure, replay, replay mismatch, bounded-loop stop and fake/replay non-claim.
 - Executable runner: scripts/evals/run_l5_eval_suite.py.
 - Executable suite / datasets: tests/evals/phase12/**.
+- Current Phase 12 report payloads still emit historical capability id `L5-006`; under DEC-L5-015 this evidence is interpreted only as `L5-006A` local hardening evidence, with metadata normalization deferred to a future eval hygiene change.
 - CI workflow binding exists for Phase 12 L5 gate, but visible remote CI artifact evidence remains a separate production-release claim.
-- P12-W2 replay / resume / failure fixtures must be retried against the executable P12-W1 suite for `L5-006A`.
-- P12-W3 local observability / trace report remains open for `L5-006A`.
-- P12-W4 release readiness audit, remote CI hard claim, real-provider production certification, production observability/SLO and human production release decision remain deferred under `L5-006B`.
+- Latest local validation evidence: `tests/architecture tests/evals` -> 74 passed; `tests/evals` -> 41 passed; Phase 12 L5 deterministic gate -> 13 passed / 0 blocking failures; Phase 9 replay gate -> 30 passed / 2 deferred / 0 blocking failures; Phase 12 and Phase 9 negative controls -> observed_expected_failure=true; `git diff --check` -> passed.
+- Release readiness audit, remote CI hard claim, real-provider production certification, production observability/SLO, rollback evidence and human/controller production release decision remain deferred under `L5-006B`.
 
 Non-claims:
 
-- P12-W1 is not L5 release.
-- P12-W1 is not Phase 12 release gate closure.
-- P12-W1 is not real-provider quality certification.
+- Option D local validation is not production L5 release.
+- Option D local validation is not production release gate closure.
+- Option D local validation is not real-provider quality certification.
+- Option D local validation is not remote CI hard claim.
 - Option D is not production release readiness and does not require A/B testing.
 
 Goal:
@@ -796,14 +801,14 @@ P12-W1 Contract-first Historical Evidence:
 - `evals/schemas/phase12_release_report_schema.json`
 - `tests/evals/test_phase12_eval_contracts.py`
 
-P12-W1 treatment:
+P12-W1 treatment, superseded by D-W4 local validation for `L5-006A`:
 
 - Executable eval suite foundation only.
 - `tests/evals/phase12/**` and `scripts/evals/run_l5_eval_suite.py` are the executable Phase 12 L5 eval suite foundation.
 - Older `evals/suites/phase12.json` and `evals/graders/phase12_contract.json` remain contract-only artifacts.
 - Deterministic / fake-safe eval evidence is not real-provider quality certification.
-- P12-W2 must be retried against the executable P12-W1 suite for local replay / resume / failure fixtures.
-- P12-W3 local observability / trace report remains open.
+- At P12-W1 time, P12-W2 still needed retry against the executable P12-W1 suite for local replay / resume / failure fixtures.
+- At P12-W1 time, P12-W3 local observability / trace report remained open.
 - P12-W4 release readiness audit, remote CI artifact evidence, real-provider production certification, production observability/SLO and human release decision remain open under `L5-006B`, outside Option D.
 
 Forbidden:

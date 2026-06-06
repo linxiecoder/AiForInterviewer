@@ -696,6 +696,16 @@ Option D Local Hardening Gate:
 - Local deterministic/fake-safe eval evidence is not real-provider production quality certification.
 - Local pytest/eval success is not remote CI hard claim.
 
+D-W4 Option D Local Closeout Gate:
+
+- Allowed local status language: `Option D local complete controlled multi-agent capability is implemented and locally validated`.
+- Matrix may mark `L5-002`, `L5-003`, `L5-004`, `L5-005` and `L5-006A` as `validated` only after the source backfill records implementation evidence, eval/replay evidence, failure fixture evidence, negative-control evidence and forbidden-scope non-claims.
+- `L5-006B` must remain `deferred_out_of_scope_for_option_d`.
+- The D-W4 local closeout must not mark production L5 release, Phase 12 production release gate, remote CI hard claim, real-provider production quality certification, production observability/SLO, rollback readiness or human/controller production release decision as complete.
+- D-W4 local closeout must explicitly record that A/B testing, traffic split, canary rollout, online experiment metrics and production rollout governance are out of scope and not required.
+- Latest D-W4 validation evidence must include `tests/architecture tests/evals`, `tests/evals`, Phase 12 L5 deterministic gate, Phase 9 replay gate, both negative controls and `git diff --check`.
+- If current Phase 12 reports still emit historical capability id `L5-006`, D-W4 source backfill may map that evidence only to `L5-006A` local hardening and must record the metadata normalization gap; it may not be used as an unsplit `L5-006` completion claim.
+
 P12-W0 status:
 
 - `release_gate_scope_locked_with_deferred_implementation` is allowed only for docs-only release-gate scope lock.
