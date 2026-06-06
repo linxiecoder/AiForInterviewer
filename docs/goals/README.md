@@ -37,6 +37,15 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P11-W4 Phase 11 Closeout and Source Sanity Audit
+
+P11-W4 closes Phase 11 as controlled multi-agent foundation plus a minimal candidate-only product slice. It reconciles P11-W0 through P11-W3, accepts the P11-W3 post-push audit as `post_push_audit_passed`, keeps `L5-004` as candidate product slice only, keeps `L5-005` as runtime-hardening slice only and keeps `L5-006` as `not_started`. It does not claim L5 release, Phase 12 release gate completion, real-provider quality certification, remote CI success, formal write completion or any L5 capability `done` status.
+
+- [P11_W4_PHASE11_CLOSEOUT_SOURCE_SANITY_AUDIT.md](2026-06-06/P11_W4_PHASE11_CLOSEOUT_SOURCE_SANITY_AUDIT.md)：P11-W4 controller closeout / source sanity audit input；docs-only scope and hard non-claim rules。
+- [P11_W4_PHASE11_CLOSEOUT_REPORT.md](2026-06-06/P11_W4_PHASE11_CLOSEOUT_REPORT.md)：Phase 11 closeout report；records evidence chain, capability status, validation evidence and deferred release gate。
+- [P11_W4_SOURCE_SANITY_AUDIT_REPORT.md](2026-06-06/P11_W4_SOURCE_SANITY_AUDIT_REPORT.md)：Source sanity audit report；records Matrix audit, forbidden claim grep, Orchestrator non-wiring audit and forbidden path audit。
+- [P11_W4_PHASE12_ENTRY_CRITERIA.md](2026-06-06/P11_W4_PHASE12_ENTRY_CRITERIA.md)：Phase 12 entry criteria；defines eval / replay / CI / release evidence requirements and stop conditions。
+
 ### 2026-06-06 / P11-W3 Minimal Three-Agent Candidate Product Slice
 
 P11-W3 implements a minimal candidate-only product vertical slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`. It emits only `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs, keeps trace refs and validation refs separated, requires user confirmation for asset updates and blocks formal write requests or asset conflicts. It does not call LLM/provider, render prompts, read/write DB, call repositories, write formal assets/feedback/progress/scores/reports/training plans, claim L5 release, certify real-provider quality, close remote CI gap or close Phase 12 release gate.

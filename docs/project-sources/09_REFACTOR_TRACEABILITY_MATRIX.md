@@ -188,6 +188,38 @@ Status: `candidate_product_slice_complete_with_deferred_formal_write_and_release
 - P11-W3 does not implement Phase 12 release gate.
 - `L5-006`: remains `not_started`; no Phase 12 eval/replay/release gate is implemented.
 
+## P11-W4 Phase 11 Closeout / Source Sanity Evidence
+
+Status: `phase11_closed_with_deferred_release_gate` for Phase 11 closeout summary only. This is not a Matrix capability status upgrade, not L5 release, not Phase 12 release gate completion and not a `done` status for any L5 capability.
+
+- P11-W4 reconciles P11-W0 through P11-W3 evidence and accepts the controller decision that P11-W3 post-push audit is `post_push_audit_passed`.
+- Phase 11 is closed as controlled multi-agent foundation plus a minimal candidate-only product slice.
+- `L5-001` remains `design_done`.
+- `L5-002` remains `contract_slice_complete_with_deferred_runtime_gaps`.
+- `L5-003` remains `contract_slice_complete_with_deferred_runtime_gaps`.
+- `L5-004` remains `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`; candidate product slice only, not release.
+- `L5-005` remains `runtime_hardening_slice_complete_with_deferred_product_workflow`; runtime-hardening slice only, not full runtime closure.
+- `L5-006` remains `not_started`.
+- `EVAL-001` remains `validated`; P11-W4 does not upgrade eval / replay / release gate status.
+- No L5 capability is marked `done`.
+- Phase 12 release gate remains open.
+- Remote CI artifact evidence remains open.
+- Real-provider quality certification remains open.
+- Formal write remains open and must go through Application Service -> Domain Policy -> Handoff.
+- L5 release remains open.
+- Multi-agent eval / replay / release evidence remains open.
+
+P11-W4 non-claims:
+
+- P11-W4 does not modify code, tests, eval datasets, eval suites, eval graders, eval reports, scripts, workflows, provider, prompt, API, DB, frontend or domain policy files.
+- P11-W4 does not claim real-provider quality certification.
+- P11-W4 does not claim remote CI success.
+- P11-W4 does not claim formal write completion.
+- P11-W4 does not claim product workflow release.
+- P11-W4 does not claim full L5 validation complete.
+- P11-W4 does not mark `L5-006` implemented, validated or done.
+- P11-W4 does not mark any L5 capability done.
+
 ## P9 Eval / CI Regression Gate Backfill Evidence
 
 Status: `validated` for `EVAL-001` replay/fixture regression foundation；post-push accepted status is `complete_with_deferred_remote_ci_gap` because remote GitHub Actions evidence remains deferred；不得解读为 real-provider quality、P8 runtime closure 或 L5 release。
