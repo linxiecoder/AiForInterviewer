@@ -181,14 +181,14 @@ P12-W1 mitigation evidence:
 - Phase 12 gate test added: tests/evals/test_phase12_l5_eval_gate.py.
 - Deterministic run passed with blocking_failures=0, total_cases=9.
 - Negative control produced expected failure.
-- CI workflow includes Phase 12 L5 gate.
+- CI workflow binding exists for Phase 12 L5 gate, but visible remote CI artifact evidence remains a separate production-release claim.
 
 Residual risk:
 
 - Real-provider quality certification is not claimed.
-- Replay / resume / failure fixtures remain P12-W2.
-- Observability / trace report remains P12-W3.
-- Human release decision remains P12-W4.
+- `L5-006A` local replay / resume / failure fixtures remain P12-W2.
+- `L5-006A` local observability / trace report remains P12-W3.
+- `L5-006B` production release readiness, remote CI hard claim, production observability/SLO, real-provider production certification and human production release decision remain deferred / out of scope for Option D.
 
 ## RISK-008 多 Agent 扩展复制混乱
 
@@ -340,7 +340,7 @@ Mitigation:
 P12-W1 mitigation evidence:
 
 - P12-W1 adds executable eval gate foundation, but does not claim L5 release.
-- L5-006 remains open until replay, trace report, CI/release evidence, and human release decision are complete.
+- Pre-split L5-006 is now separated: `L5-006A` remains open for local replay / trace / failure hardening evidence, and `L5-006B` remains deferred for production CI/release evidence and human production release decision.
 
 Residual risk:
 
@@ -377,7 +377,7 @@ P11-W5 mitigation evidence:
 Residual risk:
 
 - `L5-005` is not `done`; evidence remains controlled runtime-boundary hardening plus integration/boundary tests, not L5 release.
-- `L5-006` remains release-blocking until Phase 12 provides executable eval/replay/CI/report/human decision evidence.
+- Pre-split `L5-006` remains release-blocking in this historical P11-W5 context; D-W0 splits current tracking into `L5-006A` local hardening and `L5-006B` deferred production release.
 - Real-provider quality certification, remote CI success, formal write completion and Phase 12 release gate completion remain non-claims.
 
 ## RISK-019 legacy fallback 测试与 candidate-only 语义冲突
@@ -1108,16 +1108,19 @@ Status: open
 
 Description:
 
-Updating `L5-006` from `not_started` to the P12-W1 contract-slice status could be misread as implemented, validated or done.
+Updating the older unsplit `L5-006` from `not_started` to a P12-W1 or Option D status could be misread as local hardening complete, production release-ready, validated or done.
 
 Mitigation:
 
-- Matrix status is `eval_contract_slice_complete_with_deferred_runner_ci_release`, not implemented, validated or done.
-- P12-W1 reports repeat that runner, replay, CI, report generation, real-provider quality certification, remote CI success and release decision remain deferred.
+- Matrix now splits `L5-006` into `L5-006A` local hardening and `L5-006B` production release.
+- `L5-006A` status is `partial_local_eval_foundation_with_deferred_replay_failure_trace_gaps`, not done.
+- `L5-006B` status is `deferred_out_of_scope_for_option_d`.
+- P12-W1 and D-W0 reports repeat that replay/resume/failure fixtures, trace report, real-provider quality certification, remote CI success, production observability/SLO and release decision remain deferred where applicable.
 
 Closure condition:
 
-- `L5-006` can move beyond contract-slice status only after a separately scoped window provides executable evidence and source backfill without forbidden-scope changes.
+- `L5-006A` can move beyond partial local hardening only after a separately scoped Option D window provides local replay/trace/failure evidence and source backfill without forbidden-scope changes.
+- `L5-006B` can move beyond deferred only after a separately scoped production release window provides visible remote CI artifact evidence, real-provider production certification, production observability/SLO, rollback evidence and human/controller release decision.
 
 ## RISK-055 Phase 9 report rewrite during Phase 12 contract work
 
@@ -1151,10 +1154,31 @@ P11-W5 backfills integration and boundary tests for `L5-002` through `L5-005`. T
 
 Mitigation:
 
-- Matrix keeps `L5-006` release-blocking and does not mark any L5 capability `done`.
+- Matrix splits `L5-006A` local hardening from deferred `L5-006B` production release and does not mark any L5 capability `done`.
 - P11-W5 Decision Log, Acceptance Gate and Phase Roadmap repeat that this window does not implement eval runner, replay execution, CI binding, observability report, release report generation or human/controller release decision.
 - P11-W5 validation is local `pytest tests/architecture`, `pytest tests/evals` and `pytest tests/api`; it is not remote CI artifact evidence and not real-provider quality certification.
 
 Closure condition:
 
 - Phase 12 separately provides executable eval/replay/CI/report/human-decision evidence and controller/user accepts a release decision package.
+
+## RISK-057 Option D local capability mistaken for production release
+
+Severity: critical
+
+Status: open
+
+Description:
+
+USER_CONFIRMED Option D is Local Complete Multi-Agent Capability. It combines default-off local product/runtime wiring with local replay/trace/HITL/bounded-loop/failure hardening. If this is shortened to "L5 release" or treated as production rollout readiness, the project could falsely claim production release, A/B readiness, remote CI success or real-provider production certification.
+
+Mitigation:
+
+- DEC-L5-015 records Option D as a local capability target, not a production release target.
+- Matrix splits `L5-006A` local hardening from `L5-006B` production release.
+- Acceptance Gates state that A/B testing, traffic split, canary rollout, online experiment metrics, production observability/SLO, remote CI hard claim and real-provider production certification are out of scope for Option D.
+- Canonical goal path is `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
+
+Closure condition:
+
+- Option D closeout uses local capability wording only, leaves `L5-006B` deferred, and records any production release decision in a separately authorized release scope.

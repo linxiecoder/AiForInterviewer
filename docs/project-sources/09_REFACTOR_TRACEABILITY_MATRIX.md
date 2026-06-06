@@ -104,15 +104,17 @@ wrapper split 不等于 capability done。
 | L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract`; P11-W5 tests backfill trace / validation / handoff separation and typed handoff evidence into the architecture validation command | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution and Phase 12 release gate remain separately scoped | Agent Platform / Runtime | validated_with_deferred_gaps | Phase 11 |
 | L5-004 | Multi-agent product workflow | P11-W3 adds a deterministic refs-only minimal candidate product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`; P11-W5 architecture tests now prove three-business-agent candidate refs, typed feedback -> asset -> training handoffs, trace-visible low confidence, asset-conflict block and formal-write block under the window validation scope | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents; formal write completion, real-provider quality and Phase 12 eval/replay/release gate remain separately scoped | Product Orchestration | validated_with_deferred_gaps | Phase 11 |
 | L5-005 | Controlled tool loop hardening | P11-W4 accepted controlled runtime-boundary hardening: `AgentRuntimeLoopPolicy` carries `max_steps`, `max_retries`, `timeout_seconds`, `stop_conditions`, `repair_strategy` and `fallback_semantics`; adapter/facade command metadata carries validated policy; runtime-reported step/retry/timeout exhaustion, `hitl_required` success-like results, fallback/generated-success markers and repository/DB/tool exposure markers fail closed; P11-W5 source backfill records this as validated boundary evidence, not release evidence | Bounded cross-agent tool loop and HITL boundary evidence for Phase 11; product release, formal write completion, real-provider quality and Phase 12 release gate remain separately scoped | Runtime / Tooling | validated | Phase 11 |
-| L5-006 | L5 eval / replay / release gate | P12-W1 implemented executable L5 eval suite foundation: runner, Phase 12 datasets, eval gate tests, deterministic mode, negative control, and CI binding exist; P12-W2 replay/resume/failure fixtures, P12-W3 observability/trace report, and P12-W4 human release decision remain open | multi-agent eval, replay, CI, failure triage, rollback policy, trace report, and human release decision | Eval / Release | implemented | Phase 12 |
+| L5-006A | Local multi-agent eval / replay / failure hardening | P12-W1 implemented executable local L5 eval suite foundation: runner, Phase 12 datasets, eval gate tests, deterministic mode and negative control exist; Option D makes this the local hardening track, but P12-W2 replay/resume/failure fixtures and P12-W3 local trace report remain open | deterministic local multi-agent eval, replay/resume fixtures, failure fixtures, local trace report and fake-safe negative controls | Eval / Local Hardening | partial_local_eval_foundation_with_deferred_replay_failure_trace_gaps | Phase 12 / Option D |
+| L5-006B | Production release gate / remote CI hard claim / real-provider production certification / production observability / release decision | USER_CONFIRMED Option D excludes production release readiness and A/B testing; remote CI artifact hard claim, real-provider production certification, production observability/SLO and human production release decision require a separate release scope | production release gate, visible remote CI artifact evidence, real-provider production quality certification, production observability/SLO, rollback and human/controller release decision | Eval / Production Release | deferred_out_of_scope_for_option_d | Future release scope |
 
 ### P12-W1 Backfill — Executable L5 Eval Suite Foundation
 
 Status:
 
 - P12-W1 implementation slice is complete.
-- L5-006 moves from blocked to implemented.
-- This does not close L5-006.
+- L5-006 is split into `L5-006A` and `L5-006B`.
+- `L5-006A` has executable local eval foundation evidence, but remains partial until local replay/resume/failure fixtures and local trace hardening are validated.
+- `L5-006B` is deferred / out of scope for Option D.
 - This is not L5 release and not Phase 12 release gate closure.
 
 Code / eval evidence:
@@ -124,7 +126,7 @@ Code / eval evidence:
   - tests/evals/phase12/datasets/*.jsonl
 - Phase 12 eval gate test:
   - tests/evals/test_phase12_l5_eval_gate.py
-- CI binding:
+- CI workflow binding exists, but this is not a visible remote CI hard claim:
   - .github/workflows/eval-gate.yml
 
 Validation evidence:
@@ -139,10 +141,34 @@ Validation evidence:
 
 Remaining gap:
 
-- P12-W2 replay / resume / failure fixtures remain open.
-- P12-W3 observability / trace report remains open.
-- P12-W4 release readiness audit and human release decision remain open.
+- P12-W2 replay / resume / failure fixtures remain open for `L5-006A`.
+- P12-W3 local observability / trace report remains open for `L5-006A`.
+- P12-W4 production release readiness audit, remote CI artifact evidence, production observability/SLO, real-provider production certification and human production release decision remain deferred under `L5-006B`.
 - Real-provider quality certification is not claimed.
+
+### D-W0 Option D Source Revision Backfill
+
+Status:
+
+- USER_CONFIRMED Option D is recorded as the current local capability target.
+- Option D = Local Complete Multi-Agent Capability.
+- Option D combines default-off local product/runtime wiring with local replay/trace/HITL/bounded-loop/failure hardening.
+- Option D excludes production release readiness and A/B testing.
+- Canonical goal path: `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
+- Decision record: `DEC-L5-015`.
+
+L5-006 split:
+
+- `L5-006A`: Local multi-agent eval / replay / failure hardening; in scope for Option D, but not done until local replay/resume/failure fixtures, local trace report, source backfill and gap closure evidence are proven.
+- `L5-006B`: Production release gate / remote CI hard claim / real-provider production certification / production observability / release decision; deferred and out of scope for Option D.
+
+Non-claims:
+
+- No production L5 release is claimed.
+- No A/B testing, traffic split, canary rollout or online experiment framework is required for Option D.
+- No remote CI hard claim is made without visible passing GitHub Actions run and artifact evidence.
+- No real-provider production quality certification is claimed.
+- No capability is marked `done` by this docs-only source revision.
 
 ### P11-W4 Backfill — Controlled Tool Loop / HITL
 
@@ -153,7 +179,7 @@ Status: `runtime_bounds_hitl_slice_complete_with_deferred_release_gate` for cont
 - HITL trigger metadata is validated for formal write, asset conflict, low confidence, ambiguous ownership and validation-failed partial result; `hitl_required=true` cannot be reported as success.
 - Runtime tool-call metadata must stay scoped to allowed tool refs and must not expose repository, DB, SQLAlchemy session, unit-of-work or formal writer handles.
 - Candidate/formal and fallback boundaries remain enforced: fallback, validation failure or provider-unavailable markers cannot be reported as generated success or formal write success.
-- `L5-006` remains release-blocking Phase 12 scope; executable eval/replay/CI/report/human decision evidence is still required before any L5 release claim.
+- Pre-split `L5-006` remained release-blocking Phase 12 scope at this window; D-W0 now separates local hardening as `L5-006A` and production release as deferred `L5-006B`.
 
 ### P11-W5 Integration / Boundary Tests Backfill
 
@@ -163,7 +189,7 @@ Status: `validated_with_deferred_gaps` for `L5-002` through `L5-004`; `validated
 - P11-W5 validates candidate-only and formal-write boundaries in the window validation scope: happy path emits `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs only; formal-write request blocks before candidate or handoff success; asset conflict blocks before asset/training candidates.
 - P11-W5 carries P11-W4 controlled-loop / HITL evidence as `L5-005` validated boundary evidence after Matrix and Risk Register backfill; this does not implement Phase 12 eval/replay/CI/report/human decision evidence.
 - Required validation commands for this window are `pytest tests/architecture`, `pytest tests/evals` and `pytest tests/api`; local command output must be recorded in the final window report before any closure claim.
-- `L5-006` remains release-blocking. P11-W5 does not claim L5 release, real-provider quality certification, remote CI success, formal F8/M8 release or Phase 12 release gate completion.
+- Pre-split `L5-006` remained release-blocking at P11-W5. D-W0 now records `L5-006A` as partial local hardening and `L5-006B` as deferred / out of scope for Option D. P11-W5 does not claim L5 release, real-provider quality certification, remote CI success, formal F8/M8 release or Phase 12 release gate completion.
 
 ## P10 Stage Closeout / Source Backfill Evidence
 
@@ -259,7 +285,7 @@ Status: `phase11_closed_with_deferred_release_gate` for Phase 11 closeout summar
 - At P11-W4 closeout time, `L5-003` remained `contract_slice_complete_with_deferred_runtime_gaps`.
 - At P11-W4 closeout time, `L5-004` remained `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`; candidate product slice only, not release.
 - At P11-W4 closeout time, `L5-005` remained `runtime_hardening_slice_complete_with_deferred_product_workflow`; runtime-hardening slice only, not full runtime closure.
-- `L5-006` remained `not_started` at P11-W4 closeout time and remains release-blocking in the current Matrix row.
+- Pre-split `L5-006` remained `not_started` at P11-W4 closeout time; current Matrix rows split it into `L5-006A` and `L5-006B`.
 - `EVAL-001` remains `validated`; P11-W4 does not upgrade eval / replay / release gate status.
 - No L5 capability is marked `done`.
 - Phase 12 release gate remains open.
@@ -277,14 +303,14 @@ P11-W4 non-claims:
 - P11-W4 does not claim formal write completion.
 - P11-W4 does not claim product workflow release.
 - P11-W4 does not claim full L5 validation complete.
-- P11-W4 does not mark `L5-006` implemented, validated or done.
+- P11-W4 did not mark pre-split `L5-006` implemented, validated or done.
 
 ## P12-W0 Release Gate Scope Lock Evidence
 
-Status: `release_gate_scope_locked_with_deferred_implementation` for docs-only scope lock. This is not an implementation status for `L5-006`, not a release gate completion status and not a `done` status for any L5 capability.
+Status: `release_gate_scope_locked_with_deferred_implementation` for docs-only scope lock. This is not an implementation status for pre-split `L5-006`, not a release gate completion status and not a `done` status for any L5 capability.
 
 - P12-W0 creates release-gate scope, release evidence contract, decision options and source-backfill report under `docs/goals/2026-06-06/`.
-- `L5-006` remains `not_started` in the Matrix row; no multi-agent eval/replay/release gate implementation is claimed.
+- Pre-split `L5-006` remained `not_started` in the Matrix row at P12-W0; no multi-agent eval/replay/release gate implementation was claimed.
 - `EVAL-001` remains `validated`; P12-W0 does not upgrade replay / fixture evidence into Phase 12 release evidence.
 - Required Phase 12 evidence is defined for eval, replay, CI, observability and human release decision, but implementation remains pending Controller/user option choice.
 - Remote CI gap remains open unless a visible passing CI run and uploaded artifact are cited.
@@ -300,11 +326,11 @@ P12-W0 non-claims:
 - P12-W0 does not claim formal write completion.
 - P12-W0 does not claim product workflow release.
 - P12-W0 does not claim full L5 validation complete.
-- P12-W0 does not mark `L5-006` implemented, validated or done.
+- P12-W0 does not mark pre-split `L5-006` implemented, validated or done.
 
 ## P12-W1 Eval-contract-first Evidence
 
-Status: `eval_contract_slice_complete_with_deferred_runner_ci_release` for contract-only eval artifacts and static contract tests. This status is not an implementation status, not a validation status, not a release gate completion status and not a `done` status for `L5-006` or any L5 capability.
+Status: `eval_contract_slice_complete_with_deferred_runner_ci_release` for contract-only eval artifacts and static contract tests. This status is not a validation status, not a release gate completion status and not a `done` status for pre-split `L5-006`, `L5-006A`, `L5-006B` or any L5 capability.
 
 - Controller selected P12-W0 Option A Eval-contract-first for P12-W1.
 - P12-W1 creates `evals/suites/phase12.json`, `evals/datasets/phase12/*.jsonl`, `evals/graders/phase12_contract.json`, `evals/schemas/phase12_release_report_schema.json` and `tests/evals/test_phase12_eval_contracts.py`.
@@ -322,7 +348,7 @@ P12-W1 non-claims:
 - P12-W1 does not claim L5 release.
 - P12-W1 does not claim real-provider quality certification.
 - P12-W1 does not claim remote CI success.
-- P12-W1 does not mark `L5-006` implemented, validated or done.
+- P12-W1 does not mark pre-split `L5-006`, `L5-006A` or `L5-006B` validated or done.
 - P11-W4 does not mark any L5 capability done.
 
 ## P12-W2 Preflight Stop Backfill Evidence
@@ -336,7 +362,7 @@ Status: `complete_preflight_stop` for P12-W2 preflight only. Blocker: `blocked_b
 - `.github/workflows/eval-gate.yml` remains bound to the Phase 9 eval gate only.
 - Existing Phase 12 eval artifacts cannot support P12-W2 replay fixture validation; `P12-W1-MULTI-AGENT-EVAL-SUITE` must be inserted before retrying P12-W2.
 - Preservation evidence: `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/evals -q` reported `35 passed`; `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture -q` reported `33 passed`.
-- `L5-006` remains release-blocking and is not marked implemented, validated, done or released by this preflight stop.
+- Pre-split `L5-006` remained release-blocking and was not marked implemented, validated, done or released by this preflight stop; D-W0 split status now applies.
 
 P12-W2 preflight non-claims:
 

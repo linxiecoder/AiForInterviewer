@@ -1,16 +1,17 @@
 ---
-title: CODEX_OPTION_D_LOCAL_MULTI_AGENT_GOAL_PACKAGE
+title: option_d_local_complete_multi_agent_goal
 type: note
-permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-implementation/codex-option-d-local-multi-agent-goal-package
+permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-implementation/option-d-local-complete-multi-agent-goal
 ---
 
 # Codex Goal Package — Option D: Local Complete Multi-Agent Capability
 
 **Project:** AiForInterviewer 多 Agent / DDD 重构总控  
-**Goal package version:** 2026-06-06-D1  
+**Goal package version:** 2026-06-07-D-W0-source-revision
 **Execution target:** Codex CLI, plan mode first, then goal mode  
 **Primary outcome:** Build a real, locally executable, controlled multi-agent system.  
 **Explicit non-outcome:** Do not implement production release governance, A/B testing, canary/traffic rollout, or production real-provider certification in this goal.
+**Project source decision:** `DEC-L5-015 Option D Local Complete Multi-Agent Capability`
 
 ---
 
@@ -84,7 +85,7 @@ Do not implement or claim completion of:
 - canary release;
 - online experiment metrics;
 - production observability / SLO / alerting;
-- remote CI artifact hard claim, unless actually visible and already available;
+- remote CI artifact hard claim;
 - real-provider production quality certification;
 - frontend behavior;
 - DB schema / migration;
@@ -765,7 +766,7 @@ You are in the AiForInterviewer repository.
 
 Do not edit code yet.
 
-Task: reconcile the user-confirmed Option D target with current GitHub code, tests, evals, Project sources, and the existing current-code-informed remaining_refactor_exec_plan.md.
+Task: reconcile the user-confirmed Option D target with current GitHub code, tests, evals, Project sources, and the canonical Option D source package.
 
 Option D means Local Complete Multi-Agent Capability:
 - combine default-off product/runtime wiring with local multi-agent replay, trace, HITL, bounded-loop, and failure hardening;
@@ -777,7 +778,7 @@ Source of truth:
 3. Current tests/evals.
 4. Project sources.
 5. GOAL0531 historical intent only.
-6. Subwindow output only after audit.
+6. Subwindow output only after 总控 audit.
 
 First revalidate the prior recon:
 - git fetch origin main
@@ -819,11 +820,11 @@ The plan must include:
 After reviewing the plan, paste this as a normal Codex task, not `/goal`, to create the repo-local goal file:
 
 ```text
-Create a docs-only Option D goal package in the repository.
+Revise the docs-only Option D goal package in the repository.
 
 Allowed files:
 - docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md
-- docs/project-sources/** only if needed to record DEC-012 Option D and split L5-006A/L5-006B
+- docs/project-sources/** only if needed to record `DEC-L5-015` Option D and split L5-006A/L5-006B
 - docs/goals/** only if this repo already uses docs/goals for goal evidence
 
 Forbidden:

@@ -33,26 +33,27 @@ Option D means:
 From the provided Option D Reconciliation Plan:
 
 - Current branch: `refactor/option-d-local-multi-agent`.
-- Branch is clean.
-- HEAD is ahead of `origin/main` by one commit, containing only the Option D package.
+- Branch was clean at the time of the supplied reconciliation plan; D-W0 source revision creates docs-only changes.
+- HEAD was ahead of `origin/main` by one commit at recon time.
 - Architecture/eval smoke: `74 passed`.
 - Phase 12 L5 runner: `9 passed / 0 blocking_failures`; negative control observed expected failure.
 - Phase 9 replay: `30 passed / 2 deferred / 0 blocking_failures`; negative control observed expected failure.
 - CodeGraph is available.
-- Current repo has L5 eval foundation, but Option D has not yet been backfilled as Project source fact.
-- L5-006 is still not split into `L5-006A local eval/replay/failure hardening` and `L5-006B production release deferred`.
+- Current repo has L5 eval foundation.
+- D-W0 backfills Option D as a Project source fact under `DEC-L5-015`.
+- D-W0 splits `L5-006` into `L5-006A local eval/replay/failure hardening` and `L5-006B production release deferred`.
 
 ## Critical Decision
 
 Do **not** start implementation before W0.
 
-The previous plan/package needs revision because:
+The previous plan/package needed revision because:
 
 - No standalone `remaining_refactor_exec_plan.md` was found.
-- The current Option D package points to a canonical path that does not yet exist.
-- It assumes a decision ID that may not be available.
+- The current Option D package pointed to a canonical path that did not yet exist.
+- It assumed a decision ID that was not available.
 - It predates current P12-W1 executable eval facts.
-- Project sources do not yet record USER_CONFIRMED Option D or L5-006A/B split.
+- Project sources did not yet record USER_CONFIRMED Option D or L5-006A/B split.
 
 ## Recommended Canonical Path
 
@@ -68,7 +69,7 @@ If the current file is:
 docs/03-delivery/refactor-multiagent-langgraph-implementation/CODEX_OPTION_D_LOCAL_MULTI_AGENT_GOAL_PACKAGE.md
 ```
 
-then W0 should use `git mv` to rename it to the canonical path, or create the canonical replacement and mark the old file as superseded. Prefer `git mv` to avoid duplicate active goal documents.
+then W0 should use `git mv` to rename it to the canonical path, or create the canonical replacement and mark the old file as superseded. D-W0 used `git mv` to avoid duplicate active goal documents.
 
 ## W0: Plan / Source Revision Prompt
 

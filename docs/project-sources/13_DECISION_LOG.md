@@ -744,7 +744,7 @@ P12-W1 added executable datasets, deterministic runner, negative control, eval t
 Non-claims:
 
 - This does not complete P12-W2 replay / resume / failure fixtures.
-- This does not close L5-006.
+- This does not close pre-split `L5-006`; after D-W0, it does not close `L5-006A` local hardening or `L5-006B` production release.
 - This does not claim L5 release.
 - This does not claim Phase 12 release gate closure.
 - This does not claim real-provider quality certification.
@@ -753,3 +753,61 @@ Non-claims:
 Next:
 
 Retry P12-W2-REPLAY-RESUME-FAILURE-FIXTURES against the executable P12-W1 suite.
+
+## DEC-L5-015 Option D Local Complete Multi-Agent Capability
+
+Status: confirmed
+
+Decision:
+
+USER_CONFIRMED Option D is the current local capability target.
+
+Option D = Local Complete Multi-Agent Capability.
+
+Option D combines default-off local product/runtime wiring with local replay/trace/HITL/bounded-loop/failure hardening.
+
+Option D excludes production release readiness and A/B testing.
+
+Canonical goal path:
+
+`docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`
+
+L5-006 split:
+
+- `L5-006A`: Local multi-agent eval / replay / failure hardening.
+- `L5-006B`: Production release gate / remote CI hard claim / real-provider production certification / production observability / release decision.
+
+Accepted scope:
+
+- Use GitHub current code and current tests/evals as implementation facts.
+- Use Project sources as architecture and guardrails.
+- Use GOAL0531 as historical intent only.
+- Use subwindow output only after 总控 audit.
+- Treat Option D as a local capability program, not a production release program.
+
+Not accepted:
+
+- Production L5 release claim.
+- Production release readiness claim.
+- A/B testing, traffic split, canary rollout or online experiment framework as Option D requirements.
+- Remote CI hard claim without visible passing GitHub Actions run and artifact evidence.
+- Real-provider production quality certification.
+- Production observability/SLO or production release decision inside Option D.
+- Marking any capability `done` without code, tests/evals, old-duty removal, no forbidden scope, source backfill and gap closure/deferred reason evidence.
+
+Result:
+
+- `L5-006A` is in scope for Option D but remains not done until local replay/resume/failure fixtures, local trace evidence, source backfill and gap closure are proven.
+- `L5-006B` is deferred and out of scope for Option D.
+- The older unsplit `L5-006` wording must not be used as a completion claim.
+- The canonical Option D goal package must be read from the path above.
+
+Validation evidence for this source revision:
+
+- `git fetch origin main` completed.
+- `git rev-list --left-right --count HEAD...origin/main` returned `1 0`.
+- `PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture tests/evals -q` returned `74 passed`.
+
+Next:
+
+Start implementation only from `option_d_local_complete_multi_agent_goal.md`, with production release readiness, A/B testing, remote CI hard claim and real-provider production certification deferred unless separately authorized.

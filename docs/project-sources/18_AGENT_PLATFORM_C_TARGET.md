@@ -130,6 +130,7 @@ Status:
 - P11-W2 runtime-hardening slice is `runtime_hardening_slice_complete_with_deferred_product_workflow`.
 - P11-W3 minimal candidate-only product slice is `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`.
 - P11-W4 controlled tool-loop / HITL slice is `runtime_bounds_hitl_slice_complete_with_deferred_release_gate`.
+- D-W0 records USER_CONFIRMED Option D as the local complete multi-agent target.
 - Not L5 release.
 
 Required capabilities:
@@ -212,24 +213,36 @@ Phase 12
 Status:
 
 - Target locked by P11-W0.
-- Release gate not started.
+- USER_CONFIRMED Option D is Local Complete Multi-Agent Capability.
+- Canonical goal path: `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
+- `L5-006A` local multi-agent eval / replay / failure hardening is in scope for Option D and currently has executable local eval foundation only.
+- `L5-006B` production release gate / remote CI hard claim / real-provider production certification / production observability / release decision is deferred and out of scope for Option D.
+- Production release gate is not started.
 
-Required capabilities:
+Option D local required capabilities:
 
 - multi-agent regression suite
 - cross-agent replay fixtures
 - failure-mode regression cases
-- L5 CI gate
-- observability / trace report
-- rollback policy
 - failure triage policy
-- remote CI artifact evidence
-- human release decision
+- local observability / trace report
+- fake-safe negative controls
+- default-off local product/runtime wiring combined with replay/trace/HITL/bounded-loop/failure hardening
+
+Production release required capabilities:
+
+- L5 CI gate with visible remote artifact evidence
+- production observability / SLO / alerting
+- rollback policy
+- real-provider production quality certification
+- human/controller release decision
 
 Non-claims:
 
 - P9 replay/fixture eval foundation is not real-provider quality certification.
 - `complete_with_deferred_remote_ci_gap` is not remote CI success.
+- Option D is not production release readiness.
+- Option D does not require or claim A/B testing, traffic split, canary rollout or online experiment metrics.
 - Phase 12 cannot release with hidden candidate/formal or provider fail-open gaps.
 
 ## Required Contracts
