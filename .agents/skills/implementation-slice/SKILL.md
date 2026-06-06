@@ -21,23 +21,24 @@ Use this skill only after the relevant active backlog/delivery entries are appro
 
 1. Implement only one bounded slice.
 2. 跨模块理解、调用链分析、DDD / Agent / `PolishUseCases` 重构前，必须先经过 `aifi-context-index-gate`，用 Understand-Anything / CodeGraph 获取压缩上下文，再最小化 `Read` / `Grep`。
-3. Before editing, produce:
+3. docs false-done closeout、runtime evidence recon、Agent / `PolishUseCases` / DDD 任务开始前，先走 `aifi-context-index-gate`，再确认实现 slice 是否仍有 active backlog / delivery 授权。
+4. Before editing, produce:
    - backlog item or delivery phase reference
    - scope
    - files likely affected
    - tests to run
    - risk level
-4. Keep diff small.
-5. Do not modify protected areas without explicit approval:
+5. Keep diff small.
+6. Do not modify protected areas without explicit approval:
    - database migrations
    - auth-critical code
    - billing
    - deployment config
    - secrets
    - infra
-6. Do not create parallel planning docs.
-7. After editing, run relevant tests.
-8. Final response must include:
+7. Do not create parallel planning docs.
+8. After editing, run relevant tests.
+9. Final response must include:
    - files changed
    - tests run
    - failing tests, if any

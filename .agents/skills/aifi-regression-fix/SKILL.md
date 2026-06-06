@@ -34,10 +34,11 @@ description: Diagnose and fix authorized AiForInterviewer regressions by tracing
 
 1. 复现或读取失败证据。
 2. 跨模块理解、调用链分析、DDD / Agent / `PolishUseCases` 重构前，必须先经过 `aifi-context-index-gate`，用 Understand-Anything / CodeGraph 获取压缩上下文，再最小化 `Read` / `Grep`。
-3. 判断回归来源和影响范围。
-4. 执行最小修复，不扩大重构。
-5. 运行相关测试并报告命令输出。
-6. 标记未验证路径和发布风险。
+3. docs false-done closeout、runtime evidence recon、Agent / `PolishUseCases` / DDD 相关回归或发布阻断判断，先走 `aifi-context-index-gate`，再读取失败测试和最小代码路径。
+4. 判断回归来源和影响范围。
+5. 执行最小修复，不扩大重构。
+6. 运行相关测试并报告命令输出。
+7. 标记未验证路径和发布风险。
 
 ## Forbidden actions
 

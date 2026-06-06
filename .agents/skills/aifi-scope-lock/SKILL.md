@@ -15,6 +15,7 @@ description: Establish an AiForInterviewer Scope Lock before controlled read or 
 - 只有用户明确给出写入授权时，才允许进入对应的受控写入模式。
 - 不执行提交、推送、发布或归档自动化。
 - 如果任务需要跨模块理解、影响面分析、调用链分析或大量文件读取，先调用 `aifi-context-index-gate`，用 Understand-Anything / CodeGraph 获取压缩上下文，而不是直接 `Read` / `Grep` 多文件。
+- 如果任务需要跨文档 / 代码证据交叉验证，或需要读取多个 project-source / goal / runtime 文件，先调用 `aifi-context-index-gate`，再启动 subagent 或多文件 `Read` / `Grep`。
 
 ## Required output
 
