@@ -615,6 +615,46 @@ P11-W4 non-claims:
 - P11-W4 does not authorize direct formal writes.
 - P11-W4 does not close Phase 12 release gate or claim L5 release.
 
+## P11-W5 Integration / Boundary Tests Backfill Gate
+
+适用于 `P11-W5-L5-INTEGRATION-BOUNDARY-TESTS-BACKFILL`。
+
+Status:
+
+- `validated_with_deferred_gaps` is allowed for `L5-002` through `L5-004` when integration/boundary tests and source backfill prove the scoped evidence.
+- `validated` is allowed for `L5-005` controlled runtime-boundary hardening after Traceability Matrix and Risk Register backfill.
+- No L5 capability may be marked `done` in this window.
+
+必须满足：
+
+- Supervisor / Orchestrator registration evidence exists and does not replace the C1 Question / Feedback catalog.
+- Cross-agent handoff / state / trace contracts remain typed, refs-only and validated for required refs.
+- At least one evidence-backed workflow includes three or more business agents and uses typed handoff refs.
+- Controlled loop evidence covers `max_steps`, `max_retries`, `timeout`, `stop_conditions`, HITL and forbidden repository / DB / formal writer exposure boundaries.
+- Candidate outputs remain candidate/suggestion only.
+- Formal-write request blocks before candidate or handoff success unless a separately authorized Application Service -> Domain Policy -> Handoff path exists.
+- HITL triggers remain explicit for asset conflict, formal write, low confidence, ambiguous ownership and validation-failed partial result.
+- Project source backfill updates Matrix, Decision Log, Risk Register, Acceptance Gates and Phase Roadmap.
+- Required validation commands are run or blockers recorded: `pytest tests/architecture`, `pytest tests/evals`, `pytest tests/api`.
+
+禁止：
+
+- provider behavior change。
+- prompt rewrite。
+- DB schema or migration。
+- frontend/API contract change。
+- Phase 12 eval runner, replay execution, CI binding, report generation, observability report or release decision implementation。
+- L5 release, real-provider quality certification, remote CI success, formal F8/M8 release or Phase 12 release gate completion claim。
+- marking `L5-006` implemented, validated or done。
+
+P11-W5 non-claims:
+
+- P11-W5 backfills integration/boundary evidence only.
+- P11-W5 does not implement Phase 12 release gate.
+- P11-W5 does not certify real-provider quality or remote CI success.
+- P11-W5 does not authorize direct formal writes.
+- P11-W5 does not mark any L5 capability `done`.
+
 ## Phase 12 Release Gate
 
 适用于 Phase 12 L5 Eval, Hardening, and Release Gate。

@@ -100,10 +100,10 @@ wrapper split 不等于 capability done。
 | WIN-001 | Execution Window Protocol | P7-W4.fix.01 完成 A/B read-only recon、C single-writer implementation、D full validation、E audit、source backfill sequence | every window has scope / forbidden / tests / rollback / backfill | Governance | done | Phase 0.1/7 |
 | SRC-001 | Source Backfill | Project sources 已回填 P7-W4.fix.01 full validation evidence；P8 foundation partial source backfill 已追加，但 P8 final status 仍有 deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7/8 |
 | L5-001 | Final L5 target lock | Phase 0-10 foundation is `closed_with_deferred_gaps`; Phase 11 / Phase 12 were entry/future conditions and not implementation facts | Phase 11 L5 Controlled Multi-Agent Orchestration and Phase 12 L5 Eval, Hardening, and Release Gate are explicitly scoped with non-claims | Governance / Agent Platform | design_done | P11-W0 |
-| L5-002 | Supervisor / Orchestrator Agent | P11-W1 contract slice registers `interview_orchestrator_agent` as contract-only in the L5 contract catalog and is locally validated for contract/catalog/test evidence; it is not runtime-wired, does not execute product workflow and is not full L5 capability validation | Registered Supervisor / Orchestrator Agent with goal decomposition, plan, bounded loop and HITL scope; full L5 capability validation, runtime execution, product workflow and release gate remain deferred | Agent Platform | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
-| L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract` and is locally validated for contract behavior; runtime state/checkpoint/replay execution and full L5 capability validation remain deferred | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution, product workflow validation and release gate remain separately scoped | Agent Platform / Runtime | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
-| L5-004 | Multi-agent product workflow | P11-W3 adds a deterministic refs-only minimal candidate product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`; it emits only `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs, keeps formal writes blocked and requires user confirmation for asset updates; it does not wire Orchestrator into API/runtime/polish/domain/infrastructure and does not write formal assets, feedback, progress, scores, reports or training plans | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents; full formal write, release, real-provider quality and Phase 12 eval/replay/release gate remain separately scoped | Product Orchestration | candidate_product_slice_complete_with_deferred_formal_write_and_release_gate | Phase 11 |
-| L5-005 | Controlled tool loop hardening | P11-W4 accepted controlled runtime-boundary hardening: `AgentRuntimeLoopPolicy` carries `max_steps`, `max_retries`, `timeout_seconds`, `stop_conditions`, `repair_strategy` and `fallback_semantics`; adapter/facade command metadata carries validated policy; runtime-reported step/retry/timeout exhaustion, `hitl_required` success-like results, fallback/generated-success markers and repository/DB/tool exposure markers fail closed | Bounded cross-agent tool loop and HITL boundary evidence for Phase 11; product release, formal write, real-provider quality and Phase 12 release gate remain separately scoped | Runtime / Tooling | runtime_bounds_hitl_slice_complete_with_deferred_release_gate | Phase 11 |
+| L5-002 | Supervisor / Orchestrator Agent | P11-W1 contract slice registers `interview_orchestrator_agent` as contract-only in the L5 contract catalog; P11-W5 integration/boundary tests now cover registration, non-release wording, no runtime/provider/API/DB/domain wiring and Orchestrator participation in the refs-only evidence package | Registered Supervisor / Orchestrator Agent with goal decomposition, plan, bounded loop and HITL scope; full runtime execution, product release and Phase 12 release gate remain separately scoped | Agent Platform | validated_with_deferred_gaps | Phase 11 |
+| L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract`; P11-W5 tests backfill trace / validation / handoff separation and typed handoff evidence into the architecture validation command | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution and Phase 12 release gate remain separately scoped | Agent Platform / Runtime | validated_with_deferred_gaps | Phase 11 |
+| L5-004 | Multi-agent product workflow | P11-W3 adds a deterministic refs-only minimal candidate product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`; P11-W5 architecture tests now prove three-business-agent candidate refs, typed feedback -> asset -> training handoffs, trace-visible low confidence, asset-conflict block and formal-write block under the window validation scope | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents; formal write completion, real-provider quality and Phase 12 eval/replay/release gate remain separately scoped | Product Orchestration | validated_with_deferred_gaps | Phase 11 |
+| L5-005 | Controlled tool loop hardening | P11-W4 accepted controlled runtime-boundary hardening: `AgentRuntimeLoopPolicy` carries `max_steps`, `max_retries`, `timeout_seconds`, `stop_conditions`, `repair_strategy` and `fallback_semantics`; adapter/facade command metadata carries validated policy; runtime-reported step/retry/timeout exhaustion, `hitl_required` success-like results, fallback/generated-success markers and repository/DB/tool exposure markers fail closed; P11-W5 source backfill records this as validated boundary evidence, not release evidence | Bounded cross-agent tool loop and HITL boundary evidence for Phase 11; product release, formal write completion, real-provider quality and Phase 12 release gate remain separately scoped | Runtime / Tooling | validated | Phase 11 |
 | L5-006 | L5 eval / replay / release gate | Phase 12 release-gate design scope is locked and contract-first artifacts exist, but `L5-006` remains release-blocking: no executable eval runner, replay execution, CI binding/artifact, observability report, real-provider quality certification, human release decision or release gate completion exists | Release-blocking Phase 12 eval/replay/CI/observability/report/human-decision evidence required before any L5 release claim; fake-only/replay-only evidence cannot certify real-provider quality | Eval / Release | design_done | Phase 12 |
 
 ### P11-W4 Backfill — Controlled Tool Loop / HITL
@@ -117,6 +117,16 @@ Status: `runtime_bounds_hitl_slice_complete_with_deferred_release_gate` for cont
 - Candidate/formal and fallback boundaries remain enforced: fallback, validation failure or provider-unavailable markers cannot be reported as generated success or formal write success.
 - `L5-006` remains release-blocking Phase 12 scope; executable eval/replay/CI/report/human decision evidence is still required before any L5 release claim.
 
+### P11-W5 Integration / Boundary Tests Backfill
+
+Status: `validated_with_deferred_gaps` for `L5-002` through `L5-004`; `validated` for `L5-005` controlled runtime-boundary hardening only. No L5 capability is marked `done`.
+
+- P11-W5 adds architecture validation coverage for Supervisor / Orchestrator registration, non-release wording, no runtime/provider/API/DB/domain wiring, three-business-agent candidate workflow evidence, typed feedback -> asset -> training handoff refs and trace / validation / handoff separation.
+- P11-W5 validates candidate-only and formal-write boundaries in the window validation scope: happy path emits `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs only; formal-write request blocks before candidate or handoff success; asset conflict blocks before asset/training candidates.
+- P11-W5 carries P11-W4 controlled-loop / HITL evidence as `L5-005` validated boundary evidence after Matrix and Risk Register backfill; this does not implement Phase 12 eval/replay/CI/report/human decision evidence.
+- Required validation commands for this window are `pytest tests/architecture`, `pytest tests/evals` and `pytest tests/api`; local command output must be recorded in the final window report before any closure claim.
+- `L5-006` remains release-blocking. P11-W5 does not claim L5 release, real-provider quality certification, remote CI success, formal F8/M8 release or Phase 12 release gate completion.
+
 ## P10 Stage Closeout / Source Backfill Evidence
 
 Status: `closed_with_deferred_gaps` for Phase 0-10 L5 Foundation closeout；`complete_with_deferred_remote_ci_gap` for the accepted Phase 9 final state。
@@ -128,7 +138,7 @@ Status: `closed_with_deferred_gaps` for Phase 0-10 L5 Foundation closeout；`com
 - Negative-control evidence: `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture` observed the expected `must_not_have_present` blocking failure.
 - `deferred_remote_ci_gap` is explicit: no GitHub Actions run/artifact is claimed by Phase 10.
 - Phase 8 runtime gaps remain `validated_with_deferred_gaps` / `partial_with_deferred_gaps`; Phase 10 does not close them.
-- Phase 11 Supervisor / Orchestrator and Phase 12 L5 release remain `not_started` / deferred and must not be inferred from Phase 0-10 foundation closure.
+- At Phase 10 closeout time, Phase 11 Supervisor / Orchestrator and Phase 12 L5 release were `not_started` / deferred and could not be inferred from Phase 0-10 foundation closure. Later P11 rows above carry the current Phase 11 evidence status.
 - Committed report metadata risk is residual only: Phase 10 does not rewrite `evals/reports/**`.
 
 ## P11-W0 Scope Lock / Gap Reconciliation Evidence
@@ -136,9 +146,9 @@ Status: `closed_with_deferred_gaps` for Phase 0-10 L5 Foundation closeout；`com
 Status: `scope_lock_complete_with_deferred_gaps` for docs-only P11-W0 reconciliation. This status does not apply to L5 implementation capabilities.
 
 - `L5-001` is `design_done` because P11-W0 locks the L5 target and source wording.
-- `L5-002` through `L5-006` are not implemented, validated or done.
+- At P11-W0 scope-lock time, `L5-002` through `L5-006` were not implemented, validated or done; current capability rows above supersede this historical window status.
 - `deferred_remote_ci_gap`, Phase 8 runtime gaps, stale committed eval report metadata short SHA `f86adea`, Supervisor / Orchestrator not started, Phase 12 release gate not started and real-provider quality certification non-claim are carried forward.
-- Current code recon found C1 Question / Feedback catalog and P8 foundation contracts/runtime/handoff surfaces, but no registered Supervisor / Orchestrator and no three-or-more-business-agent product workflow.
+- P11-W0 code recon found C1 Question / Feedback catalog and P8 foundation contracts/runtime/handoff surfaces, but no registered Supervisor / Orchestrator and no three-or-more-business-agent product workflow at that time.
 - Decision options for the next window remain `proposed`; no option is confirmed by this matrix.
 
 ## P11-W1 Contract-first Orchestrator Evidence
@@ -206,12 +216,12 @@ Status: `phase11_closed_with_deferred_release_gate` for Phase 11 closeout summar
 
 - P11-W4 reconciles P11-W0 through P11-W3 evidence and accepts the controller decision that P11-W3 post-push audit is `post_push_audit_passed`.
 - Phase 11 is closed as controlled multi-agent foundation plus a minimal candidate-only product slice.
-- `L5-001` remains `design_done`.
-- `L5-002` remains `contract_slice_complete_with_deferred_runtime_gaps`.
-- `L5-003` remains `contract_slice_complete_with_deferred_runtime_gaps`.
-- `L5-004` remains `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`; candidate product slice only, not release.
-- `L5-005` remains `runtime_hardening_slice_complete_with_deferred_product_workflow`; runtime-hardening slice only, not full runtime closure.
-- `L5-006` remains `not_started`.
+- At P11-W4 closeout time, `L5-001` remained `design_done`.
+- At P11-W4 closeout time, `L5-002` remained `contract_slice_complete_with_deferred_runtime_gaps`.
+- At P11-W4 closeout time, `L5-003` remained `contract_slice_complete_with_deferred_runtime_gaps`.
+- At P11-W4 closeout time, `L5-004` remained `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate`; candidate product slice only, not release.
+- At P11-W4 closeout time, `L5-005` remained `runtime_hardening_slice_complete_with_deferred_product_workflow`; runtime-hardening slice only, not full runtime closure.
+- `L5-006` remained `not_started` at P11-W4 closeout time and remains release-blocking in the current Matrix row.
 - `EVAL-001` remains `validated`; P11-W4 does not upgrade eval / replay / release gate status.
 - No L5 capability is marked `done`.
 - Phase 12 release gate remains open.

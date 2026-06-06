@@ -342,9 +342,15 @@ P11-W4 mitigation evidence:
 - Bound exhaustion, `hitl_required=true`, fallback/generated-success markers and forbidden repository/DB/tool exposure markers fail closed instead of being reported as success.
 - HITL trigger metadata covers formal write, asset conflict, low confidence, ambiguous ownership and validation-failed partial result.
 
+P11-W5 mitigation evidence:
+
+- P11-W5 backfills integration/boundary tests and Project sources for `L5-002` through `L5-005`; this is evidence backfill, not Phase 12 release-gate work.
+- `L5-005` may be recorded as `validated` for controlled runtime-boundary hardening after Matrix and Risk Register backfill, but it remains not `done` and does not certify release readiness.
+- P11-W5 architecture tests cover three-business-agent candidate refs, typed handoff refs, trace / validation / handoff separation, asset-conflict block and formal-write block under the window validation scope.
+
 Residual risk:
 
-- `L5-005` is not `done`; evidence remains runtime-boundary hardening, not L5 release.
+- `L5-005` is not `done`; evidence remains controlled runtime-boundary hardening plus integration/boundary tests, not L5 release.
 - `L5-006` remains release-blocking until Phase 12 provides executable eval/replay/CI/report/human decision evidence.
 - Real-provider quality certification, remote CI success, formal write completion and Phase 12 release gate completion remain non-claims.
 
@@ -1106,3 +1112,23 @@ Mitigation:
 Closure condition:
 
 - Future report refresh or Phase 9 remediation is separately scoped and does not use Phase 12 contract work as implicit authorization.
+
+## RISK-056 P11-W5 validated evidence mistaken for L5 release
+
+Severity: high
+
+Status: open
+
+Description:
+
+P11-W5 backfills integration and boundary tests for `L5-002` through `L5-005`. The resulting `validated` / `validated_with_deferred_gaps` wording can be misread as L5 release readiness, Phase 12 release gate completion or `L5-006` closure.
+
+Mitigation:
+
+- Matrix keeps `L5-006` release-blocking and does not mark any L5 capability `done`.
+- P11-W5 Decision Log, Acceptance Gate and Phase Roadmap repeat that this window does not implement eval runner, replay execution, CI binding, observability report, release report generation or human/controller release decision.
+- P11-W5 validation is local `pytest tests/architecture`, `pytest tests/evals` and `pytest tests/api`; it is not remote CI artifact evidence and not real-provider quality certification.
+
+Closure condition:
+
+- Phase 12 separately provides executable eval/replay/CI/report/human-decision evidence and controller/user accepts a release decision package.

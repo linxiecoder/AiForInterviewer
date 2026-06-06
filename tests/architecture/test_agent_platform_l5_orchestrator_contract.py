@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import fields, replace
+from dataclasses import fields, is_dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -158,6 +158,107 @@ def test_phase11_l5_catalog_registers_product_slice_agents_without_changing_c1()
     assert training_agent.handoff_contract.candidate_ref_types == ("training_plan_candidate",)
 
 
+def test_phase11_l5_product_slice_integrates_three_business_agents_typed_handoff_and_trace() -> None:
+    from app.application.agents.orchestration.minimal_three_agent_slice import PRODUCT_SLICE_STATUS_READY
+
+    result = _build_p11_w5_product_slice(low_confidence_flags=("source_gap",))
+
+    assert result.status == PRODUCT_SLICE_STATUS_READY
+    assert result.orchestrator_agent_id == ORCHESTRATOR_AGENT_ID
+    assert len(result.participant_agent_ids) >= 3
+    assert set(result.participant_agent_ids) == {
+        "polish_feedback_agent",
+        "asset_candidate_agent",
+        "training_plan_agent",
+    }
+    assert set(result.candidate_refs) == {
+        "feedback_candidate",
+        "asset_update_candidate",
+        "training_plan_candidate",
+    }
+    assert result.formal_write_blocked is True
+    assert result.hitl_required is True
+    assert result.asset_update_user_confirmation_required is True
+    assert result.metadata["candidate_only"] is True
+    assert result.metadata["formal_write_blocked"] is True
+    assert result.metadata["llm_call_count"] == 0
+    assert result.metadata["provider_call_count"] == 0
+    assert result.metadata["external_call_count"] == 0
+
+    handoff_edges = {
+        (handoff.source_agent_id, handoff.target_agent_id, handoff.candidate_type)
+        for handoff in result.handoff_refs
+    }
+    assert handoff_edges == {
+        ("polish_feedback_agent", "asset_candidate_agent", "asset_update_candidate"),
+        ("asset_candidate_agent", "training_plan_agent", "training_plan_candidate"),
+    }
+    for handoff in result.handoff_refs:
+        assert is_dataclass(handoff)
+        assert handoff.handoff_ref
+        assert handoff.source_candidate_ref
+        assert handoff.candidate_ref
+        assert handoff.trace_refs == result.trace_refs
+        assert handoff.validation_refs == result.validation_refs
+        assert handoff.side_effect_policy == "candidate_write"
+        assert handoff.formal_write_blocked is True
+
+    for candidate in result.candidates:
+        assert candidate.formal_write_blocked is True
+        assert candidate.trace_refs == result.trace_refs
+        assert candidate.validation_refs == result.validation_refs
+
+    handoff_refs = tuple(handoff.handoff_ref for handoff in result.handoff_refs)
+    for event in result.timeline_events:
+        assert event["handoff_refs"] == handoff_refs
+        assert event["trace_refs"] == result.trace_refs
+        assert event["validation_refs"] == result.validation_refs
+        assert event["low_confidence_flags"] == ("source_gap",)
+        assert event["formal_write_blocked"] is True
+        assert set(event["handoff_refs"]).isdisjoint(event["validation_refs"])
+
+
+def test_phase11_l5_formal_write_request_is_blocked_before_candidate_or_handoff_success() -> None:
+    from app.application.agents.orchestration.minimal_three_agent_slice import (
+        PRODUCT_SLICE_STATUS_BLOCKED,
+        PRODUCT_SLICE_STATUS_READY,
+    )
+
+    result = _build_p11_w5_product_slice(
+        formal_write_requested=True,
+        formal_write_requested_ref="formal_write_interrupt_ref_p11w5",
+    )
+
+    assert result.status == PRODUCT_SLICE_STATUS_BLOCKED
+    assert result.status != PRODUCT_SLICE_STATUS_READY
+    assert result.failure_reason == "formal_write_requested"
+    assert result.blocking_reasons == ("formal_write_requested",)
+    assert result.candidate_refs == {}
+    assert result.handoff_refs == ()
+    assert result.formal_write_blocked is True
+    assert result.metadata["interrupt_refs"] == ("formal_write_interrupt_ref_p11w5",)
+    assert result.metadata["formal_write_blocked"] is True
+    assert "formal_refs" not in result.metadata
+    assert "formal_write_result" not in result.metadata
+
+
+def test_phase11_l5_asset_conflict_blocks_before_asset_or_training_candidates() -> None:
+    from app.application.agents.orchestration.minimal_three_agent_slice import PRODUCT_SLICE_STATUS_BLOCKED
+
+    result = _build_p11_w5_product_slice(asset_conflict_ref="asset_conflict_interrupt_ref_p11w5")
+
+    assert result.status == PRODUCT_SLICE_STATUS_BLOCKED
+    assert result.failure_reason == "asset_conflict"
+    assert result.blocking_reasons == ("asset_conflict",)
+    assert result.candidate_refs == {"feedback_candidate": "feedback_candidate_ref_p11w5"}
+    assert "asset_update_candidate" not in result.candidate_refs
+    assert "training_plan_candidate" not in result.candidate_refs
+    assert result.formal_write_blocked is True
+    assert result.metadata["asset_conflict_ref"] == "asset_conflict_interrupt_ref_p11w5"
+    assert result.metadata["interrupt_refs"] == ("asset_conflict_interrupt_ref_p11w5",)
+    assert result.timeline_events[0]["failure_reason"] == "asset_conflict"
+
+
 def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release() -> None:
     from app.application.agents.contracts import (
         CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES,
@@ -185,6 +286,13 @@ def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release
     assert isinstance(orchestrator.input_contract.state_contract, CrossAgentStateContract)
     assert ORCHESTRATOR_SKILL_IDS == set(orchestrator.skills)
     assert ORCHESTRATOR_TOOL_IDS == set(orchestrator.tools)
+    assert set(orchestrator.hitl_triggers) == {
+        "asset_conflict",
+        "formal_write_requested",
+        "low_confidence",
+        "ambiguous_ownership",
+        "validation_failed_partial_result",
+    }
 
     non_goal_text = " ".join(orchestrator.non_goals).lower()
     for required_non_claim in (
@@ -231,6 +339,9 @@ def test_cross_agent_contracts_fail_closed_and_forbid_raw_payloads() -> None:
     assert handoff.required_trace_refs
     assert handoff.required_validation_refs
     assert handoff.side_effect_policy in CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES
+    assert set(orchestrator.hitl_triggers) <= set(CROSS_AGENT_HITL_TRIGGER_TYPES)
+    assert "formal_write_requested" in handoff.user_confirmation_required_when
+    assert "asset_update_candidate" in handoff.user_confirmation_required_when
     assert set(handoff.user_confirmation_required_when) <= set(CROSS_AGENT_HITL_TRIGGER_TYPES) | {
         "asset_update_candidate",
     }
@@ -317,3 +428,21 @@ def test_orchestrator_is_not_runtime_wired_or_provider_bound() -> None:
         if any(module == prefix or module.startswith(f"{prefix}.") for prefix in forbidden_import_prefixes)
     ]
     assert import_violations == []
+
+
+def _build_p11_w5_product_slice(**overrides: object):
+    from app.application.agents.orchestration import build_minimal_three_agent_product_slice
+
+    params: dict[str, object] = {
+        "owner_id": "owner_p11w5",
+        "session_ref": "session_ref_p11w5",
+        "feedback_candidate_ref": "feedback_candidate_ref_p11w5",
+        "answer_ref": "answer_ref_p11w5",
+        "question_ref": "question_ref_p11w5",
+        "evidence_refs": ("evidence_ref_p11w5_1", "evidence_ref_p11w5_2"),
+        "source_trace_refs": ("trace_ref_p11w5_feedback",),
+        "validation_refs": ("validation_ref_p11w5_feedback", "validation_ref_p11w5_asset"),
+        "idempotency_key": "idem_p11w5",
+    }
+    params.update(overrides)
+    return build_minimal_three_agent_product_slice(**params)

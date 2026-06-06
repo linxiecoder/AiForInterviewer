@@ -600,10 +600,12 @@ Current Status:
 - `contract_slice_complete_with_deferred_runtime_gaps` for P11-W1 Option A contract-first Orchestrator.
 - `runtime_hardening_slice_complete_with_deferred_product_workflow` for P11-W2 narrow runtime-hardening slice.
 - `candidate_product_slice_complete_with_deferred_formal_write_and_release_gate` for P11-W3 minimal candidate-only three-business-agent product slice.
-- `L5-002` Supervisor / Orchestrator is contract-only validated with deferred runtime/product workflow gaps.
-- `L5-003` cross-agent handoff / state / trace contracts are validated with deferred runtime execution gaps.
-- `L5-004` multi-agent product workflow has a minimal candidate-only product slice with deferred formal write and release gate.
-- `L5-005` controlled tool loop hardening has a locally validated runtime-hardening slice, with deferred product workflow.
+- P11-W5 integration/boundary tests and source backfill validate scoped Phase 11 evidence without L5 release claim.
+- `L5-002` Supervisor / Orchestrator is `validated_with_deferred_gaps`: registration, contract catalog and no forbidden runtime wiring are evidence-backed; runtime release remains separately scoped.
+- `L5-003` cross-agent handoff / state / trace contracts are `validated_with_deferred_gaps`: typed refs, trace / validation / handoff separation and boundary tests are evidence-backed; release evidence remains deferred.
+- `L5-004` multi-agent product workflow is `validated_with_deferred_gaps`: minimal three-business-agent candidate-only slice and typed handoff refs are evidence-backed; formal write completion and release remain deferred.
+- `L5-005` controlled tool loop hardening is `validated` for controlled runtime-boundary evidence after Matrix and Risk Register backfill; it is not `done` and not release evidence.
+- `L5-006` remains release-blocking and must not be marked implemented, validated or done by Phase 11 evidence.
 
 Goal:
 
@@ -662,6 +664,16 @@ P11-W3 Evidence:
 - `docs/goals/2026-06-06/P11_W3_VALIDATION_REPORT.md`
 - `docs/goals/2026-06-06/P11_W3_SOURCE_BACKFILL_REPORT.md`
 
+P11-W5 Evidence:
+
+- `docs/goals/2026-06-07/windows/P11-W5-L5-INTEGRATION-BOUNDARY-TESTS-BACKFILL.md`
+- `tests/architecture/test_agent_platform_l5_orchestrator_contract.py`
+- `docs/project-sources/09_REFACTOR_TRACEABILITY_MATRIX.md`
+- `docs/project-sources/13_DECISION_LOG.md`
+- `docs/project-sources/14_RISK_REGISTER.md`
+- `docs/project-sources/12_ACCEPTANCE_GATES.md`
+- `docs/project-sources/17_PHASE_ROADMAP_LOCK.md`
+
 P11-W1 non-claims:
 
 - P11-W1 does not implement product multi-agent workflow.
@@ -695,6 +707,16 @@ P11-W3 non-claims:
 - P11-W3 does not claim L5 release.
 - P11-W3 does not close remote CI gap.
 - P11-W3 does not replace Phase 12 multi-agent eval.
+
+P11-W5 non-claims:
+
+- P11-W5 backfills integration/boundary evidence only.
+- P11-W5 does not implement Phase 12 eval runner, replay execution, CI binding, report generation, observability report or release decision.
+- P11-W5 does not call or certify real provider behavior.
+- P11-W5 does not change prompt, provider, API, DB schema, frontend or domain policy behavior.
+- P11-W5 does not claim remote CI success, L5 release, formal F8/M8 release or Phase 12 release gate completion.
+- P11-W5 does not mark any L5 capability `done`.
+- P11-W5 does not mark `L5-006` implemented, validated or done.
 
 ## Phase 12
 

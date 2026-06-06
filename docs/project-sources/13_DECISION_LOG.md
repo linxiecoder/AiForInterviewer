@@ -659,3 +659,33 @@ Not accepted:
 Result:
 
 P12-W1 may report `eval_contract_slice_complete_with_deferred_runner_ci_release` only if contract artifacts and static tests pass, forbidden paths remain untouched and all non-claims are preserved. Runner behavior, replay execution, CI binding, report generation, remote CI artifact evidence and release decision remain deferred to separately scoped windows.
+
+## DEC-024 P11-W5 Integration / Boundary Tests Backfill
+
+Status: confirmed
+
+Decision:
+
+P11-W5 closes Phase 11 integration and boundary evidence by backfilling tests and Project sources for `L5-002` through `L5-005`. This is an evidence/backfill window, not an L5 release window and not a Phase 12 release-gate implementation window.
+
+Accepted scope:
+
+- add or update tests only under `tests/architecture/**`, `tests/evals/**` or `tests/api/**`.
+- backfill Project sources: Traceability Matrix, Decision Log, Risk Register, Acceptance Gates and Phase Roadmap.
+- preserve existing Phase 11 implementation boundaries: candidate-only outputs, refs-only handoffs, formal-write block, HITL triggers and no direct repository / DB tool exposure.
+- allow only minimal Phase 11-scoped implementation fixes if a boundary test exposes a small bug.
+- treat `L5-005` controlled runtime-boundary evidence as `validated` after Matrix and Risk Register backfill, without marking any L5 capability `done`.
+
+Not accepted:
+
+- provider behavior change.
+- prompt rewrite.
+- DB schema or migration.
+- frontend or API contract change.
+- Phase 12 eval runner, replay execution, CI binding, report generation, observability report or release decision implementation.
+- L5 release, real-provider quality certification, remote CI success, formal F8/M8 release or Phase 12 release gate completion claims.
+- marking `L5-006` implemented, validated or done.
+
+Result:
+
+P11-W5 may report Phase 11 integration/boundary evidence backfilled only if `pytest tests/architecture`, `pytest tests/evals` and `pytest tests/api` pass or any failures are explicitly recorded as blockers. `L5-006` remains release-blocking until a separately scoped Phase 12 window provides executable eval/replay/CI/report/human decision evidence.
