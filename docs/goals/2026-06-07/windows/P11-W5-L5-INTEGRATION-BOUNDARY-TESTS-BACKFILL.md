@@ -155,3 +155,73 @@ Revert tests/docs changed in this window. Revert any scoped bug fixes if necessa
 ## Stop conditions
 
 Stop and return to 总控 if source backfill reveals unclosed candidate/formal, provider fail-open, fake contamination, or missing trace/replay blockers.
+---
+
+## Window Result — 2026-06-06
+
+Status:
+
+`complete / accepted_by_total_control_pending_commit`
+
+Total Control Review:
+
+- P11-W5 accepted by 总控.
+- Phase 11 is closeable as `closed_with_l5_release_gate_deferred`.
+- This is not L5 release.
+- This is not Phase 12 release gate closure.
+- L5-006 remains release-blocking until Phase 12 proves executable eval / replay / CI / trace report / failure triage / rollback policy / human release decision.
+
+Files Changed:
+
+- `tests/architecture/test_agent_platform_l5_orchestrator_contract.py`
+- `docs/project-sources/09_REFACTOR_TRACEABILITY_MATRIX.md`
+- `docs/project-sources/13_DECISION_LOG.md`
+- `docs/project-sources/14_RISK_REGISTER.md`
+- `docs/project-sources/12_ACCEPTANCE_GATES.md`
+- `docs/project-sources/17_PHASE_ROADMAP_LOCK.md`
+
+Validation:
+
+- `PYTHONPATH=.:apps/api .venv/bin/pytest tests/architecture -q` -> 33 passed.
+- `PYTHONPATH=.:apps/api .venv/bin/pytest tests/evals -q` -> 35 passed.
+- `PYTHONPATH=.:apps/api .venv/bin/pytest tests/api -q` -> 725 passed.
+- `git diff --check` -> passed.
+
+Scope / Governance:
+
+- Only `tests/architecture/**` and `docs/project-sources/**` were modified before this result backfill.
+- No provider behavior change.
+- No prompt rewrite.
+- No DB schema / migration change.
+- No frontend / API contract change.
+- No Phase 12 release gate implementation.
+- No L5 release claim.
+- No remote CI claim.
+- No real-provider quality certification claim.
+
+Capability Status After P11-W5:
+
+- `L5-002 Supervisor / Orchestrator Agent`: validated / high.
+- `L5-003 Cross-agent handoff / state / trace`: validated / high.
+- `L5-004 Three-or-more-agent product workflow`: validated / high.
+- `L5-005 Controlled tool loop hardening`: validated / high.
+- `L5-006 L5 eval / replay / release gate`: design_done / release-blocking.
+
+Remaining Risks:
+
+- Phase 12 executable eval / replay / CI release gate remains open.
+- Remote CI artifact is not yet available.
+- Real-provider quality certification is not claimed.
+- Replay must not persist raw prompt / raw provider payload.
+- Candidate-only and formal-write handoff boundaries must remain enforced.
+
+Follow-up Goal:
+
+Next window:
+
+`P12-W2-REPLAY-RESUME-FAILURE-FIXTURES`
+
+P12-W2 must start with a P12-W1 insertion check:
+
+- If existing Phase 12 eval artifacts are sufficient for replay fixture validation, continue P12-W2.
+- If Phase 12 artifacts are contract-only and lack dataset / grader / regression cases, stop and insert `P12-W1-MULTI-AGENT-EVAL-SUITE` before P12-W2.
