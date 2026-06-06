@@ -1,0 +1,1030 @@
+{
+  "blocking_failures": [],
+  "capability_results": [
+    {
+      "blocking_failures": [],
+      "capability_id": "AGT-006",
+      "case_ids": [
+        "p9_agt_question_candidate_refs_only",
+        "p9_agt_feedback_candidate_refs_only",
+        "p9_agt_asset_update_candidate_handoff_confirmation",
+        "p9_agt_trace_validation_handoff_refs_required"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "AGT-007",
+      "case_ids": [
+        "p9_agt_question_candidate_refs_only",
+        "p9_agt_feedback_candidate_refs_only",
+        "p9_agt_asset_update_candidate_handoff_confirmation",
+        "p9_agt_trace_validation_handoff_refs_required"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "CTX-001",
+      "case_ids": [
+        "p9_ctx_direct_project_evidence_grounded",
+        "p9_ctx_adjacent_project_hypothetical",
+        "p9_ctx_job_gap_only_no_fact_claim",
+        "p9_ctx_insufficient_context_deferred"
+      ],
+      "deferred_cases": [
+        "p9_ctx_insufficient_context_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "CTX-002",
+      "case_ids": [
+        "p9_ctx_direct_project_evidence_grounded",
+        "p9_ctx_adjacent_project_hypothetical",
+        "p9_ctx_job_gap_only_no_fact_claim",
+        "p9_ctx_insufficient_context_deferred"
+      ],
+      "deferred_cases": [
+        "p9_ctx_insufficient_context_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "CTX-003",
+      "case_ids": [
+        "p9_ctx_direct_project_evidence_grounded",
+        "p9_ctx_adjacent_project_hypothetical",
+        "p9_ctx_job_gap_only_no_fact_claim",
+        "p9_ctx_insufficient_context_deferred"
+      ],
+      "deferred_cases": [
+        "p9_ctx_insufficient_context_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "FAG-006",
+      "case_ids": [
+        "p9_fag_asset_conflict_blocks_generate_next_question",
+        "p9_fag_asset_candidate_requires_confirmation",
+        "p9_fag_answer_coverage_missing_points",
+        "p9_fag_same_question_change_regression",
+        "p9_fag_provider_unavailable_not_success",
+        "p9_fag_validation_failed_not_success"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "FAG-007",
+      "case_ids": [
+        "p9_fag_asset_conflict_blocks_generate_next_question",
+        "p9_fag_asset_candidate_requires_confirmation",
+        "p9_fag_answer_coverage_missing_points",
+        "p9_fag_same_question_change_regression",
+        "p9_fag_provider_unavailable_not_success",
+        "p9_fag_validation_failed_not_success"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "FAG-008",
+      "case_ids": [
+        "p9_fag_asset_conflict_blocks_generate_next_question",
+        "p9_fag_asset_candidate_requires_confirmation",
+        "p9_fag_answer_coverage_missing_points",
+        "p9_fag_same_question_change_regression",
+        "p9_fag_provider_unavailable_not_success",
+        "p9_fag_validation_failed_not_success"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "FAKE-001",
+      "case_ids": [
+        "p9_fake_fixture_mode_trace_visible",
+        "p9_fake_replay_only_non_claim",
+        "p9_fake_runtime_env_rejected_as_regression_evidence",
+        "p9_fake_not_real_provider_quality"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "L5-001",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "PRO-001",
+      "case_ids": [
+        "p9_pro_forbidden_provider_keys_rejected",
+        "p9_pro_forbidden_keys_absent_from_report_payload",
+        "p9_pro_no_full_prompt_asset_fallback",
+        "p9_pro_fail_closed_validation_error_refs"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "PRO-002",
+      "case_ids": [
+        "p9_pro_forbidden_provider_keys_rejected",
+        "p9_pro_forbidden_keys_absent_from_report_payload",
+        "p9_pro_no_full_prompt_asset_fallback",
+        "p9_pro_fail_closed_validation_error_refs"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "QAG-004",
+      "case_ids": [
+        "p9_qag_grounding_blocked_no_formal_question",
+        "p9_qag_follow_up_anti_repetition",
+        "p9_qag_deterministic_fallback_candidate_not_success",
+        "p9_qag_question_candidate_trace_validation_refs"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "QAG-006",
+      "case_ids": [
+        "p9_qag_grounding_blocked_no_formal_question",
+        "p9_qag_follow_up_anti_repetition",
+        "p9_qag_deterministic_fallback_candidate_not_success",
+        "p9_qag_question_candidate_trace_validation_refs"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "QAG-007",
+      "case_ids": [
+        "p9_qag_grounding_blocked_no_formal_question",
+        "p9_qag_follow_up_anti_repetition",
+        "p9_qag_deterministic_fallback_candidate_not_success",
+        "p9_qag_question_candidate_trace_validation_refs"
+      ],
+      "deferred_cases": [],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-001",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-002",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-003",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-004",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-005",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-006",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    },
+    {
+      "blocking_failures": [],
+      "capability_id": "RTE-007",
+      "case_ids": [
+        "p9_rte_replay_read_only_existing_surface",
+        "p9_rte_runtime_loop_policy_existing_surface",
+        "p9_rte_trace_timeline_refs_existing_surface",
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "deferred_cases": [
+        "p9_rte_future_runtime_surface_deferred"
+      ],
+      "status": "passed"
+    }
+  ],
+  "ci": {
+    "default_requires_live_provider_credentials": false,
+    "llm_provider_env_used": false,
+    "mode_is_ci_safe": true
+  },
+  "commit_sha": "f86adea",
+  "dataset_digests": {
+    "canonical_evidence": "sha256:ff7f2a28bfb545609fe85fe8998075cee721931137b0ac09a209ce84f0b3bd4f",
+    "fake_gate": "sha256:b24d8315033b106d8713800e4b0a05016d84c787b892a09c4685a316be274103",
+    "feedback_agent": "sha256:d926c533a4bc0b08f165046b930fd894d4a3589588809518918f2a085b5e2b3f",
+    "handoff_trace": "sha256:8daf8c156bd4956988a2459cccaccf9adb662d1eae5cc9450d7230984f0322b6",
+    "provider_boundary": "sha256:724d0db109ee98dd7b78498ca0a66ef95cf80b110392818a63dce7b99a614369",
+    "question_agent": "sha256:e4d80be3be81a87a3dff4ae86b716614c7c265f5aea7a05bfa0c475352fad5fd",
+    "runtime_foundation_contract": "sha256:92bebe4d39d4840abb9b845796b9408e599d34fdcf03f0d9c88ff0c6d1c7546d"
+  },
+  "dataset_results": [
+    {
+      "blocking": true,
+      "capability_ids": [
+        "CTX-001",
+        "CTX-002",
+        "CTX-003"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "CTX-001",
+            "CTX-002",
+            "CTX-003"
+          ],
+          "case_id": "p9_ctx_direct_project_evidence_grounded",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "source_support_summary_refs_visible"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "source_support_contract",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "CTX-001",
+            "CTX-002",
+            "CTX-003"
+          ],
+          "case_id": "p9_ctx_adjacent_project_hypothetical",
+          "checked_rules": [
+            "adjacent_project_evidence_no_unsupported_claim_as_fact",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "question_generation",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "CTX-001",
+            "CTX-002",
+            "CTX-003"
+          ],
+          "case_id": "p9_ctx_job_gap_only_no_fact_claim",
+          "checked_rules": [
+            "job_gap_only_no_completed_fact_claim",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "question_generation",
+          "warnings": []
+        },
+        {
+          "blocking": false,
+          "capability_ids": [
+            "CTX-001",
+            "CTX-002",
+            "CTX-003"
+          ],
+          "case_id": "p9_ctx_insufficient_context_deferred",
+          "checked_rules": [
+            "insufficient_context_deferred",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "source_support_contract",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "canonical_evidence",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 4,
+      "path": "evals/datasets/phase9/canonical_evidence.jsonl",
+      "total_cases": 4
+    },
+    {
+      "blocking": true,
+      "capability_ids": [
+        "QAG-004",
+        "QAG-006",
+        "QAG-007"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "QAG-004",
+            "QAG-006",
+            "QAG-007"
+          ],
+          "case_id": "p9_qag_grounding_blocked_no_formal_question",
+          "checked_rules": [
+            "grounding_blocked_no_formal_question",
+            "must_have_must_not_have",
+            "question_candidate_refs_required"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "question_generation",
+          "warnings": [
+            "unknown_source_support_level:insufficient_context"
+          ]
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "QAG-004",
+            "QAG-006",
+            "QAG-007"
+          ],
+          "case_id": "p9_qag_follow_up_anti_repetition",
+          "checked_rules": [
+            "direct_project_evidence_grounded_deep_dive",
+            "follow_up_anti_repetition",
+            "must_have_must_not_have",
+            "question_candidate_refs_required"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "question_generation",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "QAG-004",
+            "QAG-006",
+            "QAG-007"
+          ],
+          "case_id": "p9_qag_deterministic_fallback_candidate_not_success",
+          "checked_rules": [
+            "deterministic_fallback_not_success",
+            "job_gap_only_no_completed_fact_claim",
+            "must_have_must_not_have",
+            "question_candidate_refs_required"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "question_generation",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "QAG-004",
+            "QAG-006",
+            "QAG-007"
+          ],
+          "case_id": "p9_qag_question_candidate_trace_validation_refs",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "question_agent",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 4,
+      "path": "evals/datasets/phase9/question_agent.jsonl",
+      "total_cases": 4
+    },
+    {
+      "blocking": true,
+      "capability_ids": [
+        "FAG-006",
+        "FAG-007",
+        "FAG-008"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAG-006",
+            "FAG-007",
+            "FAG-008"
+          ],
+          "case_id": "p9_fag_asset_conflict_blocks_generate_next_question",
+          "checked_rules": [
+            "confirmed_asset_conflict_detected",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "feedback_asset_consistency",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAG-006",
+            "FAG-007",
+            "FAG-008"
+          ],
+          "case_id": "p9_fag_asset_candidate_requires_confirmation",
+          "checked_rules": [
+            "asset_candidate_requires_user_confirmation",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "asset_candidate",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAG-006",
+            "FAG-007",
+            "FAG-008"
+          ],
+          "case_id": "p9_fag_answer_coverage_missing_points",
+          "checked_rules": [
+            "answer_coverage_gap_detected",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "feedback_answer_coverage",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAG-006",
+            "FAG-007",
+            "FAG-008"
+          ],
+          "case_id": "p9_fag_same_question_change_regression",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "same_question_regression_detected"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "feedback_answer_change",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAG-006",
+            "FAG-007",
+            "FAG-008"
+          ],
+          "case_id": "p9_fag_provider_unavailable_not_success",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "provider_fail_closed_reason_codes",
+            "provider_failure_not_success"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "provider_boundary",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAG-006",
+            "FAG-007",
+            "FAG-008"
+          ],
+          "case_id": "p9_fag_validation_failed_not_success",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "provider_fail_closed_reason_codes",
+            "provider_failure_not_success"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "provider_boundary",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "feedback_agent",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 6,
+      "path": "evals/datasets/phase9/feedback_agent.jsonl",
+      "total_cases": 6
+    },
+    {
+      "blocking": true,
+      "capability_ids": [
+        "PRO-001",
+        "PRO-002"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "PRO-001",
+            "PRO-002"
+          ],
+          "case_id": "p9_pro_forbidden_provider_keys_rejected",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "provider_fail_closed_reason_codes",
+            "provider_failure_not_success"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "provider_boundary",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "PRO-001",
+            "PRO-002"
+          ],
+          "case_id": "p9_pro_forbidden_keys_absent_from_report_payload",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "provider_fail_closed_reason_codes",
+            "provider_failure_not_success"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "provider_boundary",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "PRO-001",
+            "PRO-002"
+          ],
+          "case_id": "p9_pro_no_full_prompt_asset_fallback",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "no_full_prompt_asset_fallback",
+            "provider_fail_closed_reason_codes",
+            "provider_failure_not_success"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "provider_boundary",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "PRO-001",
+            "PRO-002"
+          ],
+          "case_id": "p9_pro_fail_closed_validation_error_refs",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "provider_fail_closed_reason_codes",
+            "provider_failure_not_success"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "provider_boundary",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "provider_boundary",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 4,
+      "path": "evals/datasets/phase9/provider_boundary.jsonl",
+      "total_cases": 4
+    },
+    {
+      "blocking": true,
+      "capability_ids": [
+        "FAKE-001"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAKE-001"
+          ],
+          "case_id": "p9_fake_fixture_mode_trace_visible",
+          "checked_rules": [
+            "fake_replay_non_claim_visible",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "fake_gate",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAKE-001"
+          ],
+          "case_id": "p9_fake_replay_only_non_claim",
+          "checked_rules": [
+            "fake_replay_non_claim_visible",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "fake_gate",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAKE-001"
+          ],
+          "case_id": "p9_fake_runtime_env_rejected_as_regression_evidence",
+          "checked_rules": [
+            "fake_replay_non_claim_visible",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "fake_gate",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "FAKE-001"
+          ],
+          "case_id": "p9_fake_not_real_provider_quality",
+          "checked_rules": [
+            "fake_replay_non_claim_visible",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "fake_gate",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "fake_gate",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 4,
+      "path": "evals/datasets/phase9/fake_gate.jsonl",
+      "total_cases": 4
+    },
+    {
+      "blocking": true,
+      "capability_ids": [
+        "AGT-006",
+        "AGT-007"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "AGT-006",
+            "AGT-007"
+          ],
+          "case_id": "p9_agt_question_candidate_refs_only",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "AGT-006",
+            "AGT-007"
+          ],
+          "case_id": "p9_agt_feedback_candidate_refs_only",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "AGT-006",
+            "AGT-007"
+          ],
+          "case_id": "p9_agt_asset_update_candidate_handoff_confirmation",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "AGT-006",
+            "AGT-007"
+          ],
+          "case_id": "p9_agt_trace_validation_handoff_refs_required",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "handoff_trace",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 4,
+      "path": "evals/datasets/phase9/handoff_trace.jsonl",
+      "total_cases": 4
+    },
+    {
+      "blocking": true,
+      "capability_ids": [
+        "RTE-001",
+        "RTE-002",
+        "RTE-003",
+        "RTE-004",
+        "RTE-005",
+        "RTE-006",
+        "RTE-007",
+        "L5-001"
+      ],
+      "cases": [
+        {
+          "blocking": true,
+          "capability_ids": [
+            "RTE-001",
+            "RTE-002",
+            "RTE-003",
+            "RTE-004",
+            "RTE-005",
+            "RTE-006",
+            "RTE-007",
+            "L5-001"
+          ],
+          "case_id": "p9_rte_replay_read_only_existing_surface",
+          "checked_rules": [
+            "fake_replay_non_claim_visible",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "fake_gate",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "RTE-001",
+            "RTE-002",
+            "RTE-003",
+            "RTE-004",
+            "RTE-005",
+            "RTE-006",
+            "RTE-007",
+            "L5-001"
+          ],
+          "case_id": "p9_rte_runtime_loop_policy_existing_surface",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        },
+        {
+          "blocking": true,
+          "capability_ids": [
+            "RTE-001",
+            "RTE-002",
+            "RTE-003",
+            "RTE-004",
+            "RTE-005",
+            "RTE-006",
+            "RTE-007",
+            "L5-001"
+          ],
+          "case_id": "p9_rte_trace_timeline_refs_existing_surface",
+          "checked_rules": [
+            "candidate_handoff_refs_only",
+            "must_have_must_not_have"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "agent_handoff_trace",
+          "warnings": []
+        },
+        {
+          "blocking": false,
+          "capability_ids": [
+            "RTE-001",
+            "RTE-002",
+            "RTE-003",
+            "RTE-004",
+            "RTE-005",
+            "RTE-006",
+            "RTE-007",
+            "L5-001"
+          ],
+          "case_id": "p9_rte_future_runtime_surface_deferred",
+          "checked_rules": [
+            "must_have_must_not_have",
+            "runtime_gap_remains_deferred"
+          ],
+          "failures": [],
+          "passed": true,
+          "task_type": "runtime_foundation_gap",
+          "warnings": []
+        }
+      ],
+      "dataset_id": "runtime_foundation_contract",
+      "failed": 0,
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "passed": 4,
+      "path": "evals/datasets/phase9/runtime_foundation_contract.jsonl",
+      "total_cases": 4
+    }
+  ],
+  "deferred_cases": [
+    {
+      "capability_ids": [
+        "CTX-001",
+        "CTX-002",
+        "CTX-003"
+      ],
+      "case_id": "p9_ctx_insufficient_context_deferred",
+      "category": "deferred",
+      "dataset_id": "canonical_evidence",
+      "owner_phase": "P8_follow_up_or_later",
+      "reason": "Current context is insufficient for a grounded eval case."
+    },
+    {
+      "capability_ids": [
+        "RTE-001",
+        "RTE-002",
+        "RTE-003",
+        "RTE-004",
+        "RTE-005",
+        "RTE-006",
+        "RTE-007",
+        "L5-001"
+      ],
+      "case_id": "p9_rte_future_runtime_surface_deferred",
+      "category": "deferred",
+      "dataset_id": "runtime_foundation_contract",
+      "owner_phase": "P8_follow_up",
+      "reason": "Future/product runtime surfaces remain outside Phase 9 eval implementation scope."
+    }
+  ],
+  "finished_at_utc": "2026-06-06T09:40:10Z",
+  "generated_at_utc": "2026-06-06T09:40:10Z",
+  "grader_versions": [
+    "code_rules.v2"
+  ],
+  "manifest_version": "phase9.eval_suite.v1",
+  "mode": "replay",
+  "negative_control_result": {
+    "checked": false,
+    "observed_expected_failure": null,
+    "reason": "Run --expect-fail-fixture for negative-control proof."
+  },
+  "non_claims": [
+    "replay_mode_is_not_real_provider_quality_evidence",
+    "fake_visible_eval_is_not_production_provider_quality_evidence",
+    "phase9_is_l5_foundation_regression_evidence_only_not_l5_release",
+    "phase8_runtime_gaps_remain_deferred"
+  ],
+  "provider_evidence_type": "replay",
+  "report_schema_version": "phase9.eval_report.v1",
+  "runner_version": "phase9.eval_gate.v1",
+  "security_scan": {
+    "forbidden_report_keys_found": [],
+    "forbidden_report_values_found": [],
+    "raw_payload_stored": false
+  },
+  "skips": [],
+  "started_at_utc": "2026-06-06T09:40:10Z",
+  "suite_id": "phase9",
+  "summary": {
+    "blocking_failures": 0,
+    "deferred": 2,
+    "failed": 0,
+    "passed": 30,
+    "skipped": 0,
+    "total_cases": 30
+  }
+}

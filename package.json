@@ -20,6 +20,8 @@
     "web:dev": "npm run dev:web",
     "web:build": "npm --workspace apps/web run build",
     "web:test": "npm --workspace apps/web run test",
-    "web:smoke:auth": "node scripts/qa/authenticated-frontend-smoke.mjs"
+    "web:smoke:auth": "node scripts/qa/authenticated-frontend-smoke.mjs",
+    "eval:gate": "python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --report-dir evals/reports",
+    "eval:gate:negative": "python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture"
   }
 }

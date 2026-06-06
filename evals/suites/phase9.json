@@ -1,0 +1,82 @@
+{
+  "manifest_version": "phase9.eval_suite.v1",
+  "suite_id": "phase9",
+  "mode": "replay",
+  "ci_blocking": true,
+  "minimum_pass_criteria": {
+    "blocking_failures": 0,
+    "invalid_cases": 0
+  },
+  "datasets": [
+    {
+      "dataset_id": "canonical_evidence",
+      "path": "evals/datasets/phase9/canonical_evidence.jsonl",
+      "capability_ids": ["CTX-001", "CTX-002", "CTX-003"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    },
+    {
+      "dataset_id": "question_agent",
+      "path": "evals/datasets/phase9/question_agent.jsonl",
+      "capability_ids": ["QAG-004", "QAG-006", "QAG-007"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    },
+    {
+      "dataset_id": "feedback_agent",
+      "path": "evals/datasets/phase9/feedback_agent.jsonl",
+      "capability_ids": ["FAG-006", "FAG-007", "FAG-008"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    },
+    {
+      "dataset_id": "provider_boundary",
+      "path": "evals/datasets/phase9/provider_boundary.jsonl",
+      "capability_ids": ["PRO-001", "PRO-002"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    },
+    {
+      "dataset_id": "fake_gate",
+      "path": "evals/datasets/phase9/fake_gate.jsonl",
+      "capability_ids": ["FAKE-001"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    },
+    {
+      "dataset_id": "handoff_trace",
+      "path": "evals/datasets/phase9/handoff_trace.jsonl",
+      "capability_ids": ["AGT-006", "AGT-007"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    },
+    {
+      "dataset_id": "runtime_foundation_contract",
+      "path": "evals/datasets/phase9/runtime_foundation_contract.jsonl",
+      "capability_ids": ["RTE-001", "RTE-002", "RTE-003", "RTE-004", "RTE-005", "RTE-006", "RTE-007", "L5-001"],
+      "grader": "code_rules",
+      "grader_version": "code_rules.v2",
+      "blocking": true
+    }
+  ],
+  "negative_control_refs": [
+    {
+      "dataset_id": "negative_control",
+      "path": "evals/datasets/phase9/negative_control.jsonl",
+      "expected_failure_contains": "must_not_have_present"
+    }
+  ],
+  "report_safety_scanners": ["phase9.forbidden_data.v1"],
+  "non_claims": [
+    "replay_mode_is_not_real_provider_quality_evidence",
+    "fake_visible_eval_is_not_production_provider_quality_evidence",
+    "phase9_is_l5_foundation_regression_evidence_only_not_l5_release",
+    "phase8_runtime_gaps_remain_deferred"
+  ]
+}
