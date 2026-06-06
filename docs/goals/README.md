@@ -148,3 +148,7 @@ permalink: ai-for-interviewer/docs/goals
 - [P8_FINAL_RUNTIME_AUDIT.md](2026-06-05/P8_FINAL_RUNTIME_AUDIT.md)：P8 final runtime audit；核查 loop bounds、resume/checkpoint、failure taxonomy、trace/timeline 和 typed handoff runtime gaps。
 - [P8_FINAL_SOURCE_AUDIT.md](2026-06-05/P8_FINAL_SOURCE_AUDIT.md)：P8 final source audit；核查 source backfill consistency、false-done risks、README 索引和 remaining WARN。
 - [P8_FINAL_EXECUTION_REPORT.md](2026-06-05/P8_FINAL_EXECUTION_REPORT.md)：P8 final execution report；汇总 root cause、multi-agent execution board、changed files、validation commands/results、done criteria checklist、source backfill 和 remaining risks；状态保持 `partial_with_deferred_gaps`。
+
+### 2026-06-06 / P8-GAP-LOCK-BEFORE-P9
+
+- [P8_GAP_LOCK_BEFORE_P9.md](2026-06-06/P8_GAP_LOCK_BEFORE_P9.md)：P8 gap lock before Phase 9；绑定 P8-GAP-001..006 owner window、P9 treatment、forbidden scope 和 non-claim；状态保持 `validated_with_deferred_gaps` / `partial_with_deferred_gaps`，只作为 execution evidence。
