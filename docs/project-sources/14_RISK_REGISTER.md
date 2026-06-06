@@ -174,6 +174,22 @@ P9 update:
 - `.github/workflows/eval-gate.yml` runs the replay gate and negative-control gate without live provider credentials.
 - Remaining non-claim: replay/fixture/fake-visible evals are not real-provider quality evidence.
 
+P12-W1 mitigation evidence:
+
+- Executable L5 eval runner added: scripts/evals/run_l5_eval_suite.py.
+- Phase 12 datasets added under tests/evals/phase12/datasets/.
+- Phase 12 gate test added: tests/evals/test_phase12_l5_eval_gate.py.
+- Deterministic run passed with blocking_failures=0, total_cases=9.
+- Negative control produced expected failure.
+- CI workflow includes Phase 12 L5 gate.
+
+Residual risk:
+
+- Real-provider quality certification is not claimed.
+- Replay / resume / failure fixtures remain P12-W2.
+- Observability / trace report remains P12-W3.
+- Human release decision remains P12-W4.
+
 ## RISK-008 多 Agent 扩展复制混乱
 
 Severity: high
@@ -320,6 +336,16 @@ Mitigation:
 - Phase 0.1 Source Backfill。
 - 每个窗口 Done Criteria 要求 Backfill。
 - Decision Log / Matrix / Risk Register 必须同步。
+
+P12-W1 mitigation evidence:
+
+- P12-W1 adds executable eval gate foundation, but does not claim L5 release.
+- L5-006 remains open until replay, trace report, CI/release evidence, and human release decision are complete.
+
+Residual risk:
+
+- Do not treat executable eval foundation alone as L5 release.
+- Do not treat fake-only / deterministic-only evidence as real-provider quality certification.
 
 ## RISK-018 P5/P6 planned workflow 被误读为 L5 完成
 

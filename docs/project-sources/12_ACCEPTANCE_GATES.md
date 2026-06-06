@@ -426,6 +426,27 @@ Phase 10 accepted evidence:
 - 以 contracts-only documentation 声称 Supervisor / Orchestrator implemented。
 - 以 Phase 8 foundation partial 声称 Phase 11/12 done。
 
+## P12-W1 Executable Eval Suite Foundation Gate
+
+P12-W1 may be accepted only as an eval-suite foundation when:
+
+- executable runner exists under scripts/evals/run_l5_eval_suite.py;
+- executable Phase 12 suite / datasets exist under tests/evals/phase12/**;
+- Phase 12 gate test exists and passes;
+- deterministic run passes with zero blocking failures;
+- negative control fails as expected;
+- CI workflow includes the Phase 12 L5 gate;
+- no product behavior, provider, prompt, DB, API contract, frontend, or production runtime behavior changes are introduced;
+- no raw prompt / raw provider payload / raw completion / full resume / full JD / full asset body is persisted.
+
+Non-claims:
+
+- P12-W1 does not complete replay / resume / failure fixtures.
+- P12-W1 does not close L5-006.
+- P12-W1 does not claim L5 release.
+- P12-W1 does not claim real-provider quality certification.
+- P12-W1 does not record human release decision.
+
 ## Phase 11 Scope Gate
 
 适用于 Phase 11 L5 Controlled Multi-Agent Orchestration。

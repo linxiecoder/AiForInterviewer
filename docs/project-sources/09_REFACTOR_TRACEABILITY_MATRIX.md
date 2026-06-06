@@ -104,7 +104,45 @@ wrapper split 不等于 capability done。
 | L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract`; P11-W5 tests backfill trace / validation / handoff separation and typed handoff evidence into the architecture validation command | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution and Phase 12 release gate remain separately scoped | Agent Platform / Runtime | validated_with_deferred_gaps | Phase 11 |
 | L5-004 | Multi-agent product workflow | P11-W3 adds a deterministic refs-only minimal candidate product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`; P11-W5 architecture tests now prove three-business-agent candidate refs, typed feedback -> asset -> training handoffs, trace-visible low confidence, asset-conflict block and formal-write block under the window validation scope | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents; formal write completion, real-provider quality and Phase 12 eval/replay/release gate remain separately scoped | Product Orchestration | validated_with_deferred_gaps | Phase 11 |
 | L5-005 | Controlled tool loop hardening | P11-W4 accepted controlled runtime-boundary hardening: `AgentRuntimeLoopPolicy` carries `max_steps`, `max_retries`, `timeout_seconds`, `stop_conditions`, `repair_strategy` and `fallback_semantics`; adapter/facade command metadata carries validated policy; runtime-reported step/retry/timeout exhaustion, `hitl_required` success-like results, fallback/generated-success markers and repository/DB/tool exposure markers fail closed; P11-W5 source backfill records this as validated boundary evidence, not release evidence | Bounded cross-agent tool loop and HITL boundary evidence for Phase 11; product release, formal write completion, real-provider quality and Phase 12 release gate remain separately scoped | Runtime / Tooling | validated | Phase 11 |
-| L5-006 | L5 eval / replay / release gate | Phase 12 release-gate design scope is locked and contract-first artifacts exist; P12-W2 preflight stop is accepted because the existing Phase 12 artifacts are contract-only and cannot support replay fixture validation. `L5-006` remains release-blocking: no executable eval runner, replay execution, CI binding/artifact, observability report, real-provider quality certification, human release decision or release gate completion exists | Release-blocking Phase 12 eval/replay/CI/observability/report/human-decision evidence required before any L5 release claim; `P12-W1-MULTI-AGENT-EVAL-SUITE` must be inserted before retrying P12-W2 replay / resume / failure fixtures; fake-only/replay-only evidence cannot certify real-provider quality | Eval / Release | blocked | Phase 12 |
+| L5-006 | L5 eval / replay / release gate | P12-W1 implemented executable L5 eval suite foundation: runner, Phase 12 datasets, eval gate tests, deterministic mode, negative control, and CI binding exist; P12-W2 replay/resume/failure fixtures, P12-W3 observability/trace report, and P12-W4 human release decision remain open | multi-agent eval, replay, CI, failure triage, rollback policy, trace report, and human release decision | Eval / Release | implemented | Phase 12 |
+
+### P12-W1 Backfill — Executable L5 Eval Suite Foundation
+
+Status:
+
+- P12-W1 implementation slice is complete.
+- L5-006 moves from blocked to implemented.
+- This does not close L5-006.
+- This is not L5 release and not Phase 12 release gate closure.
+
+Code / eval evidence:
+
+- Executable runner:
+  - scripts/evals/run_l5_eval_suite.py
+- Executable Phase 12 suite / datasets:
+  - tests/evals/phase12/suite.json
+  - tests/evals/phase12/datasets/*.jsonl
+- Phase 12 eval gate test:
+  - tests/evals/test_phase12_l5_eval_gate.py
+- CI binding:
+  - .github/workflows/eval-gate.yml
+
+Validation evidence:
+
+- PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/evals/test_phase12_l5_eval_gate.py -q -> 6 passed.
+- PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/evals -q -> 41 passed.
+- PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/architecture -q -> 33 passed.
+- PYTHONPATH=.:apps/api .venv/bin/python scripts/evals/run_l5_eval_suite.py --mode deterministic -> blocking_failures=0, total_cases=9.
+- Phase 12 negative control -> observed_expected_failure=true.
+- Phase 9 runner and negative control passed.
+- git diff --check -> passed.
+
+Remaining gap:
+
+- P12-W2 replay / resume / failure fixtures remain open.
+- P12-W3 observability / trace report remains open.
+- P12-W4 release readiness audit and human release decision remain open.
+- Real-provider quality certification is not claimed.
 
 ### P11-W4 Backfill — Controlled Tool Loop / HITL
 

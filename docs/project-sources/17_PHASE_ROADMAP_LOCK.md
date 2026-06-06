@@ -727,10 +727,26 @@ L5 Eval, Hardening, and Release Gate
 Current Status:
 
 - Release gate scope locked by P12-W0.
-- P12-W1 Eval-contract-first creates contract-only eval artifacts and static tests.
-- `L5-006` current status is `eval_contract_slice_complete_with_deferred_runner_ci_release`, not implemented, not validated and not done.
-- Runner behavior, replay execution, CI binding, report generation, real-provider quality certification, remote CI artifact evidence and release decision remain deferred.
+- P12-W1 implemented executable L5 eval suite foundation.
+- `L5-006` current status is `implemented`, not validated, not done and not closed.
+- P12-W2 replay / resume / failure fixtures, P12-W3 observability / trace report, P12-W4 release readiness audit, real-provider quality certification, remote CI artifact evidence and human release decision remain open.
 - No L5 release, real-provider quality certification, formal F8/M8 release, Phase 12 release gate completion or remote CI success is claimed by P12-W0 or P12-W1.
+
+Current P12-W1 State:
+
+- P12-W1 implemented executable L5 eval suite foundation.
+- Executable runner: scripts/evals/run_l5_eval_suite.py.
+- Executable suite / datasets: tests/evals/phase12/**.
+- CI workflow includes Phase 12 L5 gate.
+- P12-W2 replay / resume / failure fixtures must be retried against the executable P12-W1 suite.
+- P12-W3 observability / trace report remains open.
+- P12-W4 release readiness audit and human release decision remain open.
+
+Non-claims:
+
+- P12-W1 is not L5 release.
+- P12-W1 is not Phase 12 release gate closure.
+- P12-W1 is not real-provider quality certification.
 
 Goal:
 
@@ -759,7 +775,16 @@ P12-W0 treatment:
 - Next-window options remain open after P12-W1 audit.
 - Phase 12 is release evidence and hardening, not new product feature scope.
 
-P12-W1 Evidence:
+P12-W1 Executable Evidence:
+
+- `docs/goals/2026-06-07/windows/P12-W1-MULTI-AGENT-EVAL-SUITE.md`
+- `scripts/evals/run_l5_eval_suite.py`
+- `tests/evals/phase12/suite.json`
+- `tests/evals/phase12/datasets/*.jsonl`
+- `tests/evals/test_phase12_l5_eval_gate.py`
+- `.github/workflows/eval-gate.yml`
+
+P12-W1 Contract-first Historical Evidence:
 
 - `docs/goals/2026-06-06/P12_W1_EVAL_CONTRACT_FIRST.md`
 - `docs/goals/2026-06-06/P12_W1_IMPLEMENTATION_REPORT.md`
@@ -775,12 +800,13 @@ P12-W1 Evidence:
 
 P12-W1 treatment:
 
-- Eval-contract-first only.
-- Contract artifacts are not executable eval gate evidence.
-- Dataset skeletons are not eval pass evidence.
-- Grader contract is not grader implementation.
-- Release report schema is not a generated report artifact.
-- P12-W2 or later must be separately selected for runner, replay, CI, report generation, remote CI artifacts or release decision work.
+- Executable eval suite foundation only.
+- `tests/evals/phase12/**` and `scripts/evals/run_l5_eval_suite.py` are the executable Phase 12 L5 eval suite foundation.
+- Older `evals/suites/phase12.json` and `evals/graders/phase12_contract.json` remain contract-only artifacts.
+- Deterministic / fake-safe eval evidence is not real-provider quality certification.
+- P12-W2 must be retried against the executable P12-W1 suite for replay / resume / failure fixtures.
+- P12-W3 observability / trace report remains open.
+- P12-W4 release readiness audit, remote CI artifact evidence and human release decision remain open.
 
 Forbidden:
 

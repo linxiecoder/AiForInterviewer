@@ -726,3 +726,30 @@ Not accepted:
 Result:
 
 Insert P12-W1 multi-agent executable eval suite before retrying P12-W2. This decision is a docs-only governance backfill and does not close the Phase 12 release gate.
+
+## DEC-L5-014 Phase 12 Executable Eval Suite Path
+
+Status: confirmed
+
+Decision:
+
+tests/evals/phase12/** and scripts/evals/run_l5_eval_suite.py are the executable Phase 12 L5 eval suite foundation.
+
+The older evals/suites/phase12.json and evals/graders/phase12_contract.json remain contract-only artifacts and must not be treated as the executable release gate.
+
+Rationale:
+
+P12-W1 added executable datasets, deterministic runner, negative control, eval tests, and CI binding without modifying product behavior, provider, prompt, DB, API contract, frontend, or production runtime.
+
+Non-claims:
+
+- This does not complete P12-W2 replay / resume / failure fixtures.
+- This does not close L5-006.
+- This does not claim L5 release.
+- This does not claim Phase 12 release gate closure.
+- This does not claim real-provider quality certification.
+- This does not record human release decision.
+
+Next:
+
+Retry P12-W2-REPLAY-RESUME-FAILURE-FIXTURES against the executable P12-W1 suite.
