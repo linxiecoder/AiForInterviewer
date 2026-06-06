@@ -19,6 +19,7 @@ permalink: ai-for-interviewer/docs/project-sources/09-refactor-traceability-matr
 - contract_slice_complete_with_deferred_runtime_gaps
 - runtime_hardening_slice_complete_with_deferred_product_workflow
 - candidate_product_slice_complete_with_deferred_formal_write_and_release_gate
+- eval_contract_slice_complete_with_deferred_runner_ci_release
 - validated_with_deferred_gaps
 - validated_with_deferred_l5_runtime
 - validated
@@ -103,7 +104,7 @@ wrapper split 不等于 capability done。
 | L5-003 | Cross-agent handoff / state / trace | P11-W1 contract slice adds `CrossAgentPlan`, `CrossAgentPlanStep`, `CrossAgentHandoffRoute`, `CrossAgentStateContract` and `CrossAgentTraceContract` and is locally validated for contract behavior; runtime state/checkpoint/replay execution and full L5 capability validation remain deferred | Typed cross-agent plan, handoff, state, checkpoint, replay and trace timeline contracts; full runtime execution, product workflow validation and release gate remain separately scoped | Agent Platform / Runtime | contract_slice_complete_with_deferred_runtime_gaps | Phase 11 |
 | L5-004 | Multi-agent product workflow | P11-W3 adds a deterministic refs-only minimal candidate product slice with `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`; it emits only `feedback_candidate`, `asset_update_candidate` and `training_plan_candidate` refs, keeps formal writes blocked and requires user confirmation for asset updates; it does not wire Orchestrator into API/runtime/polish/domain/infrastructure and does not write formal assets, feedback, progress, scores, reports or training plans | At least one end-to-end workflow with Supervisor / Orchestrator plus three or more business agents; full formal write, release, real-provider quality and Phase 12 eval/replay/release gate remain separately scoped | Product Orchestration | candidate_product_slice_complete_with_deferred_formal_write_and_release_gate | Phase 11 |
 | L5-005 | Controlled tool loop hardening | P8 covers current facade/generic/Question/Feedback paths; P11-W2 adds a narrow runtime-hardening slice for future cross-agent handoff, cross-agent resume validation, cross-agent replay safety, refs-only trace/timeline mapping and HITL trigger validation without product workflow wiring | Phase 11 orchestration tool calls bounded by max steps, retries, timeout, stop conditions, registry lookup and side-effect gates; product multi-agent workflow remains separately scoped | Runtime / Tooling | runtime_hardening_slice_complete_with_deferred_product_workflow | Phase 11 |
-| L5-006 | L5 eval / replay / release gate | P9 replay/fixture foundation exists with `deferred_remote_ci_gap`; no multi-agent eval/replay/release gate exists | Multi-agent eval datasets, graders, replay fixtures, CI artifact evidence, observability report and human release decision | Eval / Release | not_started | Phase 12 |
+| L5-006 | L5 eval / replay / release gate | P9 replay/fixture foundation exists with `deferred_remote_ci_gap`; P12-W0 locked Phase 12 release-gate scope; P12-W1 adds contract-only Phase 12 suite manifest, dataset skeletons, grader contract, release report schema and static contract tests; no eval runner, replay execution, CI binding, report generation, release decision, real-provider quality certification or release gate completion exists | Multi-agent eval datasets, graders, replay fixtures, CI artifact evidence, observability report and human release decision | Eval / Release | eval_contract_slice_complete_with_deferred_runner_ci_release | Phase 12 |
 
 ## P10 Stage Closeout / Source Backfill Evidence
 
@@ -241,6 +242,28 @@ P12-W0 non-claims:
 - P12-W0 does not claim product workflow release.
 - P12-W0 does not claim full L5 validation complete.
 - P12-W0 does not mark `L5-006` implemented, validated or done.
+
+## P12-W1 Eval-contract-first Evidence
+
+Status: `eval_contract_slice_complete_with_deferred_runner_ci_release` for contract-only eval artifacts and static contract tests. This status is not an implementation status, not a validation status, not a release gate completion status and not a `done` status for `L5-006` or any L5 capability.
+
+- Controller selected P12-W0 Option A Eval-contract-first for P12-W1.
+- P12-W1 creates `evals/suites/phase12.json`, `evals/datasets/phase12/*.jsonl`, `evals/graders/phase12_contract.json`, `evals/schemas/phase12_release_report_schema.json` and `tests/evals/test_phase12_eval_contracts.py`.
+- The Phase 12 suite manifest, dataset skeletons, grader contract and release report schema are contract-only artifacts.
+- Static contract validation passed locally: `PYTHONPATH=.:apps/api .venv/bin/pytest tests/evals/test_phase12_eval_contracts.py -q` reported `8 passed`; `PYTHONPATH=.:apps/api .venv/bin/pytest tests/evals -q` reported `35 passed`.
+- `EVAL-001` remains `validated`; P12-W1 does not upgrade Phase 9 replay / fixture evidence into Phase 12 release evidence or remote CI evidence.
+- Runner behavior, CI workflow binding, replay execution, report generation, remote CI artifact evidence, real-provider quality certification and human release decision remain deferred.
+
+P12-W1 non-claims:
+
+- P12-W1 does not implement eval runner behavior.
+- P12-W1 does not run or complete a Phase 12 release gate.
+- P12-W1 does not modify CI workflows.
+- P12-W1 does not generate or rewrite eval reports.
+- P12-W1 does not claim L5 release.
+- P12-W1 does not claim real-provider quality certification.
+- P12-W1 does not claim remote CI success.
+- P12-W1 does not mark `L5-006` implemented, validated or done.
 - P11-W4 does not mark any L5 capability done.
 
 ## P9 Eval / CI Regression Gate Backfill Evidence

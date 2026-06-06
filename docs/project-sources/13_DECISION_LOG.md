@@ -628,3 +628,34 @@ Next-window options:
 - Option D Full Phase 12 eval gate slice: proposed.
 
 No option is confirmed by this decision. Controller/user confirmation is required before implementation starts.
+
+## DEC-023 P12-W1 Eval-contract-first Option A
+
+Status: confirmed
+
+Decision:
+
+Controller selected P12-W0 Option A, Eval-contract-first, for P12-W1. This confirmation applies only to option selection and the contract-first slice. It is not a release completion decision.
+
+Accepted scope:
+
+- create `evals/suites/phase12.json`.
+- create Phase 12 dataset skeletons under `evals/datasets/phase12/`.
+- create `evals/graders/phase12_contract.json` as a data contract only.
+- create `evals/schemas/phase12_release_report_schema.json` as a schema contract only.
+- create static tests in `tests/evals/test_phase12_eval_contracts.py`.
+- update allowed Project sources and `docs/goals/README.md` only as needed to record the contract-first slice.
+
+Not accepted:
+
+- eval runner behavior implementation or modification.
+- CI workflow modification.
+- release report generation or eval report rewrite.
+- Phase 9 suite, dataset, grader or report modification.
+- provider, prompt, API, DB, frontend, runtime or domain policy behavior changes.
+- L5 release, real-provider quality certification, remote CI success, Phase 12 release gate completion or formal write completion claims.
+- marking `L5-006` implemented, validated or done.
+
+Result:
+
+P12-W1 may report `eval_contract_slice_complete_with_deferred_runner_ci_release` only if contract artifacts and static tests pass, forbidden paths remain untouched and all non-claims are preserved. Runner behavior, replay execution, CI binding, report generation, remote CI artifact evidence and release decision remain deferred to separately scoped windows.

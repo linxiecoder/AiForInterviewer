@@ -705,9 +705,10 @@ L5 Eval, Hardening, and Release Gate
 Current Status:
 
 - Release gate scope locked by P12-W0.
-- Implementation not started.
-- `L5-006` remains `not_started`.
-- No L5 release, real-provider quality certification, formal F8/M8 release, Phase 12 release gate completion or remote CI success is claimed by P12-W0.
+- P12-W1 Eval-contract-first creates contract-only eval artifacts and static tests.
+- `L5-006` current status is `eval_contract_slice_complete_with_deferred_runner_ci_release`, not implemented, not validated and not done.
+- Runner behavior, replay execution, CI binding, report generation, real-provider quality certification, remote CI artifact evidence and release decision remain deferred.
+- No L5 release, real-provider quality certification, formal F8/M8 release, Phase 12 release gate completion or remote CI success is claimed by P12-W0 or P12-W1.
 
 Goal:
 
@@ -732,9 +733,32 @@ P12-W0 Evidence:
 P12-W0 treatment:
 
 - Scope lock only.
-- Phase 12 implementation remains pending Controller option choice.
-- Next-window options remain proposed, not confirmed.
+- Phase 12 implementation remains pending scoped execution after the contract-first slice.
+- Next-window options remain open after P12-W1 audit.
 - Phase 12 is release evidence and hardening, not new product feature scope.
+
+P12-W1 Evidence:
+
+- `docs/goals/2026-06-06/P12_W1_EVAL_CONTRACT_FIRST.md`
+- `docs/goals/2026-06-06/P12_W1_IMPLEMENTATION_REPORT.md`
+- `docs/goals/2026-06-06/P12_W1_VALIDATION_REPORT.md`
+- `docs/goals/2026-06-06/P12_W1_SOURCE_BACKFILL_REPORT.md`
+- `evals/suites/phase12.json`
+- `evals/datasets/phase12/multi_agent_product_slice.jsonl`
+- `evals/datasets/phase12/replay_and_failure_modes.jsonl`
+- `evals/datasets/phase12/release_non_claims.jsonl`
+- `evals/graders/phase12_contract.json`
+- `evals/schemas/phase12_release_report_schema.json`
+- `tests/evals/test_phase12_eval_contracts.py`
+
+P12-W1 treatment:
+
+- Eval-contract-first only.
+- Contract artifacts are not executable eval gate evidence.
+- Dataset skeletons are not eval pass evidence.
+- Grader contract is not grader implementation.
+- Release report schema is not a generated report artifact.
+- P12-W2 or later must be separately selected for runner, replay, CI, report generation, remote CI artifacts or release decision work.
 
 Forbidden:
 
@@ -746,6 +770,7 @@ Forbidden:
 - Release without human/controller decision.
 - Claiming remote CI success without visible run/artifact.
 - Treating P12-W0 scope lock as release gate completion.
+- Treating P12-W1 eval contract artifacts as release gate completion.
 - Marking `L5-006` implemented, validated or done before evidence exists.
 
 ## Phase 11 Entry Conditions

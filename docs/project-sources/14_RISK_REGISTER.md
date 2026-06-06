@@ -974,3 +974,122 @@ Mitigation:
 Closure condition:
 
 - Phase 12 suite manifest and report show required case coverage or explicit Controller-accepted deferred gaps.
+
+## RISK-050 P12-W1 contract-only eval mistaken for executable gate
+
+Severity: critical
+
+Status: open
+
+Description:
+
+P12-W1 creates Phase 12 eval contract artifacts and static tests only. If `eval_contract_slice_complete_with_deferred_runner_ci_release` is shortened into executable eval gate evidence, Phase 12 could be treated as closed before runner, replay, CI, report and release decision evidence exist.
+
+Mitigation:
+
+- P12-W1 status includes `deferred_runner_ci_release`.
+- Suite manifest states `contract_only_not_executable_release_gate`.
+- Acceptance Gate requires P12-W2 or later for runner, replay, CI, report generation and release decision evidence.
+
+Closure condition:
+
+- A later scoped Phase 12 window implements and validates executable eval/replay/CI/report behavior, or release decision explicitly carries the gap as deferred.
+
+## RISK-051 dataset skeleton mistaken for eval pass
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 12 JSONL files created in P12-W1 are refs-only skeletons. They can define required cases but do not prove case execution or pass/fail behavior.
+
+Mitigation:
+
+- Dataset cases set `deferred_if_not_executable=true`.
+- Suite manifest labels dataset refs as `dataset_skeleton_not_eval_pass`.
+- Static tests validate shape and case coverage only.
+
+Closure condition:
+
+- Executable Phase 12 runner or successor evaluation records case results, blocking failures, deferred cases and negative-control behavior.
+
+## RISK-052 report schema mistaken for generated report artifact
+
+Severity: high
+
+Status: open
+
+Description:
+
+`evals/schemas/phase12_release_report_schema.json` can be misread as an actual Phase 12 release report or release decision artifact.
+
+Mitigation:
+
+- Report schema labels itself `schema_contract_only_no_report_generation`.
+- P12-W1 does not write `evals/reports/**`.
+- Source backfill keeps release report generation deferred.
+
+Closure condition:
+
+- A later authorized report-generation window writes report artifacts with forbidden-data scans, artifact refs, rollback policy refs and explicit non-claims.
+
+## RISK-053 grader contract mistaken for grader implementation
+
+Severity: high
+
+Status: open
+
+Description:
+
+`evals/graders/phase12_contract.json` defines assertion types and required fields, but it is not Python grader behavior and is not imported by the runner in P12-W1.
+
+Mitigation:
+
+- Grader contract labels itself `data_contract_only_not_python_grader`.
+- P12-W1 does not modify `evals/graders/code_rules.py` or runner files.
+- Static tests assert grader implementation and runner integration remain deferred.
+
+Closure condition:
+
+- A later scoped implementation window creates or updates deterministic grader behavior and validates it without weakening existing Phase 9 gates.
+
+## RISK-054 L5-006 overclaim from P12-W1 source backfill
+
+Severity: critical
+
+Status: open
+
+Description:
+
+Updating `L5-006` from `not_started` to the P12-W1 contract-slice status could be misread as implemented, validated or done.
+
+Mitigation:
+
+- Matrix status is `eval_contract_slice_complete_with_deferred_runner_ci_release`, not implemented, validated or done.
+- P12-W1 reports repeat that runner, replay, CI, report generation, real-provider quality certification, remote CI success and release decision remain deferred.
+
+Closure condition:
+
+- `L5-006` can move beyond contract-slice status only after a separately scoped window provides executable evidence and source backfill without forbidden-scope changes.
+
+## RISK-055 Phase 9 report rewrite during Phase 12 contract work
+
+Severity: high
+
+Status: open
+
+Description:
+
+Phase 12 contract work could accidentally rewrite existing Phase 9 reports or suite assets, hiding stale report metadata or mixing Phase 9 replay evidence with Phase 12 release evidence.
+
+Mitigation:
+
+- P12-W1 forbids `evals/reports/**`, `evals/suites/phase9.json`, `evals/datasets/phase9/**` and `evals/graders/code_rules.py` changes.
+- Static tests inspect git status for Phase 9 and report path changes.
+- Validation requires `git diff --name-only` and contextual report-path grep interpretation.
+
+Closure condition:
+
+- Future report refresh or Phase 9 remediation is separately scoped and does not use Phase 12 contract work as implicit authorization.

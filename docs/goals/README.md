@@ -37,6 +37,15 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P12-W1 Eval-contract-first
+
+P12-W1 creates Phase 12 eval contract artifacts only. It adds a Phase 12 suite manifest, three refs-only dataset skeletons, a grader contract, a release report schema and static contract tests. It does not implement eval runner behavior, run a Phase 12 release gate, modify CI, generate or rewrite eval reports, certify real-provider quality, claim remote CI success, claim L5 release or complete the Phase 12 release gate. `L5-006` status is `eval_contract_slice_complete_with_deferred_runner_ci_release`, not implemented / validated / done.
+
+- [P12_W1_EVAL_CONTRACT_FIRST.md](2026-06-06/P12_W1_EVAL_CONTRACT_FIRST.md)：P12-W1 controller scope-lock input；defines Option A Eval-contract-first allowlist, forbidden paths, artifacts, validation and stop conditions。
+- [P12_W1_IMPLEMENTATION_REPORT.md](2026-06-06/P12_W1_IMPLEMENTATION_REPORT.md)：P12-W1 implementation report；records eval contract artifacts, static tests, behavior non-change and non-claims。
+- [P12_W1_VALIDATION_REPORT.md](2026-06-06/P12_W1_VALIDATION_REPORT.md)：P12-W1 validation report；records local validation commands, JSON/JSONL checks, grep interpretation and forbidden path audit。
+- [P12_W1_SOURCE_BACKFILL_REPORT.md](2026-06-06/P12_W1_SOURCE_BACKFILL_REPORT.md)：P12-W1 source-backfill report；records Matrix / Gate / Decision / Risk / Roadmap updates and deferred runner / CI / release gaps。
+
 ### 2026-06-06 / P12-W0 Release Gate Scope Lock
 
 P12-W0 starts Phase 12 as docs-only release-gate scope lock. It defines Phase 12 scope, release evidence contract, proposed next-window options and source backfill. It keeps implementation deferred, keeps all next-window options proposed, keeps `L5-006` not implemented / not validated / not done, and does not claim L5 release, Phase 12 release gate completion, real-provider quality certification, remote CI success or formal write completion.

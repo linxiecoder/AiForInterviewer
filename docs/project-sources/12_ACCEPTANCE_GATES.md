@@ -586,6 +586,14 @@ P12-W0 status:
 - This status is not L5 release, not remote CI success, not real-provider quality certification and not Phase 12 release gate completion.
 - `L5-006` remains not implemented, not validated and not done until a later scoped implementation window creates and validates the required evidence.
 
+P12-W1 Eval Contract Gate:
+
+- `eval_contract_slice_complete_with_deferred_runner_ci_release` is allowed only for the contract-first eval slice: Phase 12 suite manifest, dataset skeletons, grader contract, release report schema and static contract tests.
+- This status is contract evidence only. It is not executable eval evidence, not replay evidence, not CI evidence, not release report evidence, not real-provider quality certification and not Phase 12 release gate completion.
+- `L5-006` must not be marked implemented, validated or done from P12-W1 evidence.
+- Contract artifacts must state that dataset skeletons are not eval pass evidence, grader contract is not grader implementation, report schema is not a generated report and local pytest is not remote CI success.
+- P12-W2 or later must be separately scoped before runner behavior, replay execution, CI workflow binding, report generation, remote CI artifacts or release decision evidence can be implemented or claimed.
+
 必须满足：
 
 - multi-agent regression suite。

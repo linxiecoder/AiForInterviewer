@@ -1,0 +1,143 @@
+{
+  "manifest_version": "phase12.eval_contract.v1",
+  "suite_id": "phase12",
+  "suite_name": "Phase 12 L5 eval contract skeleton",
+  "phase": "Phase 12",
+  "lifecycle_status": "contract_only",
+  "evidence_type": "contract_only_not_executable_release_gate",
+  "capability_ids": [
+    "L5-006",
+    "L5-004",
+    "L5-005",
+    "EVAL-001",
+    "AGT-006",
+    "AGT-007",
+    "RTE-003",
+    "RTE-004",
+    "RTE-005",
+    "RTE-006",
+    "PRO-001",
+    "PRO-002",
+    "FAKE-001",
+    "SRC-001",
+    "WIN-001"
+  ],
+  "dataset_refs": [
+    {
+      "dataset_id": "multi_agent_product_slice",
+      "path": "evals/datasets/phase12/multi_agent_product_slice.jsonl",
+      "case_ids": [
+        "p12_multi_agent_happy_path_candidate_product_slice",
+        "p12_multi_agent_insufficient_context_fail_closed",
+        "p12_multi_agent_asset_conflict_hitl",
+        "p12_multi_agent_formal_write_requested_blocked",
+        "p12_multi_agent_low_confidence_hitl"
+      ],
+      "lifecycle_status": "contract_only",
+      "evidence_type": "dataset_skeleton_not_eval_pass"
+    },
+    {
+      "dataset_id": "replay_and_failure_modes",
+      "path": "evals/datasets/phase12/replay_and_failure_modes.jsonl",
+      "case_ids": [
+        "p12_failure_provider_failure_fail_closed",
+        "p12_failure_validation_failure_partial_result",
+        "p12_failure_cross_agent_handoff_failure",
+        "p12_replay_mismatch_read_only_blocked",
+        "p12_forbidden_data_refs_only_blocked"
+      ],
+      "lifecycle_status": "contract_only",
+      "evidence_type": "dataset_skeleton_not_eval_pass"
+    },
+    {
+      "dataset_id": "release_non_claims",
+      "path": "evals/datasets/phase12/release_non_claims.jsonl",
+      "case_ids": [
+        "p12_fake_replay_non_claim_not_quality_certification",
+        "p12_release_non_claim_no_l5_release_gate"
+      ],
+      "lifecycle_status": "contract_only",
+      "evidence_type": "dataset_skeleton_not_eval_pass"
+    }
+  ],
+  "grader_contract_refs": [
+    {
+      "grader_contract_id": "phase12_contract",
+      "path": "evals/graders/phase12_contract.json",
+      "lifecycle_status": "contract_only",
+      "evidence_type": "data_contract_only_not_python_grader"
+    }
+  ],
+  "report_schema_ref": {
+    "schema_id": "phase12_release_report_schema",
+    "path": "evals/schemas/phase12_release_report_schema.json",
+    "lifecycle_status": "contract_only",
+    "evidence_type": "schema_contract_only_no_report_generation"
+  },
+  "default_mode": "static_contract_review_no_live_provider",
+  "ci_gate_status": "not_bound",
+  "minimum_pass_criteria": {
+    "contract_artifacts_present": true,
+    "all_dataset_lines_valid_json": true,
+    "all_required_case_categories_present": true,
+    "all_required_case_fields_present": true,
+    "non_claims_present": true,
+    "forbidden_payload_keys_absent": true,
+    "eval_runner_required": false,
+    "release_gate_pass_required": false
+  },
+  "blocking_failure_policy": {
+    "missing_contract_artifact": "blocking",
+    "missing_required_case_category": "blocking",
+    "missing_required_case_field": "blocking",
+    "forbidden_payload_key_present": "blocking",
+    "missing_non_claim": "blocking",
+    "runner_ci_or_report_generation_needed": "stop_and_return_to_controller"
+  },
+  "negative_control_policy": {
+    "required_for_future_executable_gate": true,
+    "p12_w1_execution_status": "defined_only_not_executed",
+    "negative_control_result_required_before_release_claim": true
+  },
+  "provider_evidence_policy": {
+    "default_provider_mode": "none",
+    "live_provider_usage": "forbidden_in_p12_w1",
+    "replay_fake_local_evidence_is_not_real_provider_quality_certification": true,
+    "real_provider_quality_certification": "not_claimed"
+  },
+  "non_claims": [
+    "p12_w1_does_not_implement_eval_runner",
+    "p12_w1_does_not_run_release_gate",
+    "p12_w1_does_not_modify_ci",
+    "p12_w1_does_not_generate_release_report",
+    "p12_w1_does_not_rewrite_eval_reports",
+    "p12_w1_does_not_certify_real_provider_quality",
+    "p12_w1_does_not_claim_remote_ci_success",
+    "p12_w1_does_not_claim_l5_release",
+    "p12_w1_does_not_complete_phase12_release_gate",
+    "p12_w1_does_not_change_runtime_provider_prompt_api_db_domain_frontend_behavior",
+    "l5_006_not_implemented_not_validated_not_done"
+  ],
+  "forbidden_data": [
+    "raw_prompt",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "full_resume",
+    "full_jd",
+    "full_answer",
+    "full_asset_body",
+    "api_key",
+    "token",
+    "secret",
+    "cookie"
+  ],
+  "deferred_implementation": {
+    "eval_runner_behavior": "deferred_to_p12_w2_or_later",
+    "replay_fixture_execution": "deferred_to_p12_w2_or_later",
+    "ci_workflow_binding": "deferred_to_p12_w2_or_later",
+    "release_report_generation": "deferred_to_p12_w2_or_later",
+    "remote_ci_artifact_evidence": "deferred_to_p12_w2_or_later",
+    "human_release_decision": "deferred_to_later_controller_window"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "schema_id": "phase12_release_report_schema",
+  "schema_version": "phase12.release_report_contract.v1",
+  "lifecycle_status": "contract_only",
+  "evidence_type": "schema_contract_only_no_report_generation",
+  "required_top_level_fields": [
+    "suite_id",
+    "mode",
+    "commit_sha",
+    "dataset_digests",
+    "grader_contract_refs",
+    "total_cases",
+    "passed",
+    "failed",
+    "skipped",
+    "deferred",
+    "blocking_failures",
+    "negative_control_result",
+    "artifact_refs",
+    "trace_report_refs",
+    "release_decision",
+    "accepted_risks",
+    "rollback_policy_ref",
+    "non_claims",
+    "forbidden_data_scan"
+  ],
+  "required_summary_fields": [
+    "total_cases",
+    "passed",
+    "failed",
+    "skipped",
+    "deferred",
+    "blocking_failures",
+    "case_categories_covered",
+    "contract_only_cases",
+    "executable_cases",
+    "non_claim_count"
+  ],
+  "required_capability_fields": [
+    "capability_id",
+    "case_ids",
+    "status",
+    "blocking_failures",
+    "deferred_cases",
+    "non_claims"
+  ],
+  "required_case_result_fields": [
+    "case_id",
+    "dataset_id",
+    "capability_ids",
+    "case_category",
+    "passed",
+    "blocking",
+    "deferred_if_not_executable",
+    "failures",
+    "warnings",
+    "assertions_checked",
+    "expected_failure_mode",
+    "expected_non_claims"
+  ],
+  "required_trace_fields": [
+    "trace_report_refs",
+    "agent_refs",
+    "run_refs",
+    "plan_refs",
+    "skill_refs",
+    "tool_refs",
+    "policy_refs",
+    "candidate_refs",
+    "handoff_refs",
+    "validation_refs",
+    "hitl_refs",
+    "failure_reason_refs",
+    "fallback_reason_refs",
+    "forbidden_data_scan_ref"
+  ],
+  "required_artifact_fields": [
+    "artifact_refs",
+    "dataset_digests",
+    "grader_contract_refs",
+    "trace_report_refs",
+    "remote_ci_run_ref",
+    "remote_ci_artifact_ref",
+    "report_digest",
+    "source_backfill_refs"
+  ],
+  "required_release_decision_fields": [
+    "decision_status",
+    "decision_actor_ref",
+    "decision_date",
+    "accepted_risks",
+    "deferred_gaps",
+    "rollback_policy_ref",
+    "evidence_refs",
+    "non_claims"
+  ],
+  "forbidden_keys": [
+    "raw_prompt",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "full_resume",
+    "full_jd",
+    "full_answer",
+    "full_asset_body",
+    "api_key",
+    "token",
+    "secret",
+    "cookie"
+  ],
+  "non_claim_fields": [
+    "non_claims.no_l5_release",
+    "non_claims.no_real_provider_quality_certification",
+    "non_claims.no_remote_ci_success",
+    "non_claims.no_phase12_release_gate_complete",
+    "non_claims.no_eval_runner_implementation",
+    "non_claims.no_release_report_generation",
+    "non_claims.no_eval_report_rewrite"
+  ],
+  "closure_criteria": {
+    "phase12_release_gate_can_be_considered_only_if": [
+      "executable_phase12_eval_gate_passes",
+      "negative_control_observed_expected_failure",
+      "cross_agent_replay_evidence_passes",
+      "trace_report_forbidden_data_scan_passes",
+      "visible_remote_ci_run_and_artifact_cited",
+      "rollback_policy_ref_present",
+      "human_controller_release_decision_present",
+      "accepted_risks_and_deferred_gaps_recorded",
+      "real_provider_quality_claim_has_separately_scoped_evidence_or_remains_non_claim"
+    ],
+    "p12_w1_satisfies_closure": false
+  },
+  "deferred_implementation": {
+    "schema_validation_runtime": "deferred_to_p12_w2_or_later",
+    "report_writer": "not_created_in_p12_w1",
+    "report_file": "not_created_in_p12_w1",
+    "ci_artifact_binding": "not_created_in_p12_w1",
+    "release_decision_workflow": "not_created_in_p12_w1"
+  }
+}

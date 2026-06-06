@@ -1,0 +1,124 @@
+{
+  "grader_contract_id": "phase12_contract",
+  "schema_version": "phase12.grader_contract.v1",
+  "lifecycle_status": "contract_only",
+  "evidence_type": "data_contract_only_not_python_grader",
+  "supported_assertion_types": [
+    "required_case_fields_present",
+    "required_case_category_present",
+    "candidate_refs_present",
+    "handoff_refs_present",
+    "validation_refs_present",
+    "trace_refs_present",
+    "hitl_refs_present_when_blocked",
+    "expected_failure_mode_present",
+    "expected_non_claims_present",
+    "minimum_assertions_present",
+    "forbidden_payload_keys_absent",
+    "deferred_if_not_executable_true",
+    "release_decision_not_claimed"
+  ],
+  "required_case_fields": [
+    "case_id",
+    "capability_ids",
+    "evidence_type",
+    "input_refs",
+    "expected_candidate_refs",
+    "expected_handoff_refs",
+    "expected_validation_refs",
+    "expected_trace_refs",
+    "expected_hitl_refs",
+    "expected_failure_mode",
+    "expected_non_claims",
+    "grader_refs",
+    "minimum_assertions",
+    "forbidden_data",
+    "owner_phase",
+    "deferred_if_not_executable"
+  ],
+  "blocking_assertion_types": [
+    "missing_contract_artifact",
+    "invalid_json_or_jsonl",
+    "missing_required_case_field",
+    "missing_required_case_category",
+    "missing_non_claim",
+    "forbidden_payload_key_present",
+    "phase9_or_report_path_modified",
+    "runner_or_ci_behavior_change_detected"
+  ],
+  "non_claim_assertions": {
+    "required_non_claims": [
+      "no_l5_release",
+      "no_real_provider_quality_certification",
+      "no_remote_ci_success",
+      "no_phase12_release_gate_complete",
+      "no_eval_runner_implementation",
+      "no_release_report_generation"
+    ],
+    "failure_if_claimed": [
+      "l5_release_claimed",
+      "real_provider_quality_certified",
+      "remote_ci_success_claimed",
+      "phase12_release_gate_completed",
+      "l5_006_marked_implemented_validated_or_done"
+    ]
+  },
+  "forbidden_data_assertions": {
+    "forbidden_data_catalog": [
+      "raw_prompt",
+      "raw_completion",
+      "provider_payload",
+      "raw_provider_payload",
+      "full_resume",
+      "full_jd",
+      "full_answer",
+      "full_asset_body",
+      "api_key",
+      "token",
+      "secret",
+      "cookie"
+    ],
+    "payload_key_policy": "dataset_cases_may_list_forbidden_terms_only_in_forbidden_data_catalogs_not_as_payload_keys",
+    "payload_value_policy": "dataset_cases_use_refs_reason_codes_and_assertions_only"
+  },
+  "replay_assertions": [
+    "replay_read_only_true",
+    "formal_write_blocked_true",
+    "provider_call_count_zero",
+    "repository_write_count_zero",
+    "db_business_write_count_zero",
+    "formal_write_count_zero",
+    "trace_comparison_refs_present",
+    "replay_mismatch_blocks_release_claim"
+  ],
+  "trace_assertions": [
+    "trace_refs_present",
+    "validation_refs_present",
+    "handoff_refs_present",
+    "candidate_refs_present",
+    "policy_refs_present_when_applicable",
+    "failure_reason_refs_present_when_applicable",
+    "forbidden_data_scan_ref_present"
+  ],
+  "hitl_assertions": [
+    "asset_conflict_requires_hitl_ref",
+    "formal_write_requested_requires_interrupt_ref",
+    "low_confidence_requires_review_ref",
+    "validation_failure_requires_controller_review_ref"
+  ],
+  "release_decision_assertions": [
+    "release_decision_ref_required_for_future_gate",
+    "accepted_risks_required_for_future_gate",
+    "rollback_policy_ref_required_for_future_gate",
+    "remote_ci_artifact_ref_required_for_remote_ci_claim",
+    "real_provider_evidence_ref_required_for_quality_certification",
+    "non_claims_required_until_release_decision"
+  ],
+  "deferred_implementation": {
+    "python_grader": "not_created_in_p12_w1",
+    "runner_integration": "not_created_in_p12_w1",
+    "ci_binding": "not_created_in_p12_w1",
+    "report_generation": "not_created_in_p12_w1",
+    "negative_control_execution": "not_created_in_p12_w1"
+  }
+}
