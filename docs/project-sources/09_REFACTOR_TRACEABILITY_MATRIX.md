@@ -92,9 +92,32 @@ wrapper split 不等于 capability done。
 | PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；P7-W3 已将 Feedback `current_answer.answer_text` formalized as bounded primary input；P7-W4.fix.01 full validation passed | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | done | Phase 7 |
 | PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree、job match、bounded current answer policy metadata、historical answer no raw fallback、nested `full_answer` fail-closed paths；P7-W4.fix.01 full-repo pytest / web validation passed | forbidden keys + no full prompt asset fallback gate | Provider Boundary | done | Phase 1/7 |
 | FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests; auth smoke no longer sets `LLM_PROVIDER=fake` | tests/fakes + evals/replay only | Test/Eval | done | Phase 7/9 |
-| EVAL-001 | AI Eval gate | seed evals / descriptors | evals + CI regression gate | Eval | recon_done | Phase 9 |
+| EVAL-001 | AI Eval gate | seed evals / descriptors；P9 suite manifest、capability-bound replay datasets、deterministic graders、JSON/Markdown reports、negative-control gate、package script and no-secret GitHub Actions job exist | evals + CI regression gate | Eval | validated | Phase 9 |
 | WIN-001 | Execution Window Protocol | P7-W4.fix.01 完成 A/B read-only recon、C single-writer implementation、D full validation、E audit、source backfill sequence | every window has scope / forbidden / tests / rollback / backfill | Governance | done | Phase 0.1/7 |
 | SRC-001 | Source Backfill | Project sources 已回填 P7-W4.fix.01 full validation evidence；P8 foundation partial source backfill 已追加，但 P8 final status 仍有 deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7/8 |
+
+## P9 Eval / CI Regression Gate Backfill Evidence
+
+Status: `validated` for `EVAL-001` replay/fixture regression foundation；不得解读为 real-provider quality、P8 runtime closure 或 L5 release。
+
+- `EVAL-001`: `evals/suites/phase9.json` binds the Phase 9 suite to capability IDs, dataset refs, grader refs, minimum pass criteria and CI blocking behavior. `scripts/evals/run_eval_gate.py` runs deterministic `replay` / `fixture` suites, emits JSON + Markdown reports, scans generated reports before write, and returns non-zero on blocking eval failures.
+- `CTX-001` / `CTX-002` / `CTX-003`: `evals/datasets/phase9/canonical_evidence.jsonl` adds direct project evidence, adjacent hypothetical, job-gap no-fact-claim and insufficient-context deferred cases.
+- `QAG-004` / `QAG-006` / `QAG-007`: `evals/datasets/phase9/question_agent.jsonl` adds grounding-blocked, follow-up anti-repetition, deterministic fallback-not-success and `question_candidate` trace/validation/handoff-ref cases.
+- `FAG-006` / `FAG-007` / `FAG-008`: `evals/datasets/phase9/feedback_agent.jsonl` adds asset-conflict next-action blocking, asset candidate confirmation, answer coverage, same-question answer change, provider-unavailable and validation-failed non-success cases.
+- `PRO-001` / `PRO-002`: `evals/datasets/phase9/provider_boundary.jsonl` plus `evals/graders/code_rules.py` add report/provider forbidden-data, no full prompt asset fallback and fail-closed reason-code coverage. The production provider boundary was not modified.
+- `FAKE-001`: `evals/datasets/phase9/fake_gate.jsonl` records fake/replay visible non-claims and runtime fake rejection as regression evidence only. Runtime fake rejection was not weakened.
+- `AGT-006` / `AGT-007`: `evals/datasets/phase9/handoff_trace.jsonl` adds refs-only `question_candidate`, `feedback_candidate` and `asset_update_candidate` handoff/trace coverage without formal refs.
+- P8 / L5 guard: `evals/datasets/phase9/runtime_foundation_contract.jsonl` only protects existing P8 partial foundation surfaces and records future/product runtime surfaces as `deferred_with_reason`.
+- Report evidence: `docs/goals/2026-06-06/P9_EVAL_REPORT.md` and `evals/reports/phase9_eval_report.json` record 30 passed cases, 0 failed, 0 blocking failures, 2 explicit deferred cases and replay/fake/L5 non-claims.
+- Negative control: `python scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture` observes `p9_nc_job_gap_claims_completed_work` failing for `must_not_have_present`, proving blocking eval failures can make the gate non-zero.
+- CI evidence: `.github/workflows/eval-gate.yml` runs `python -m pytest tests/evals -q`, the Phase 9 replay gate and the negative-control gate without live provider credentials; `package.json` registers `eval:gate` and `eval:gate:negative`.
+
+Non-claims:
+
+- Replay/fixture eval pass is not real-provider quality evidence.
+- P9 does not implement or close Phase 8 runtime deferred gaps.
+- P9 is L5 Foundation regression evidence only, not L5 release.
+- No prompt/provider/API/DB/frontend/domain-policy production behavior changed in this Phase 9 backfill.
 
 ## P7-W1 Provider Fail-Closed Backfill Evidence
 

@@ -166,6 +166,14 @@ Mitigation:
 - Eval gate 进入 CI。
 - Phase 9 建立 graders / datasets / reports。
 
+P9 update:
+
+- `evals/suites/phase9.json` now binds Phase 9 dataset refs, grader refs, capability IDs, pass criteria, CI behavior and non-claims.
+- `evals/datasets/phase9/*.jsonl` adds deterministic regression cases for canonical evidence/source support, Question Agent, Feedback Agent, provider boundary, fake gate, handoff/trace and runtime deferred-gap non-claims.
+- `scripts/evals/run_eval_gate.py` produces JSON + Markdown reports, scans report output, exits non-zero on blocking failures and supports a negative-control proof fixture.
+- `.github/workflows/eval-gate.yml` runs the replay gate and negative-control gate without live provider credentials.
+- Remaining non-claim: replay/fixture/fake-visible evals are not real-provider quality evidence.
+
 ## RISK-008 多 Agent 扩展复制混乱
 
 Severity: high
@@ -370,6 +378,14 @@ Mitigation:
 - Source backfill 只记录本地 P5/P6 scoped eval evidence。
 - Phase 9 另行 scope lock CI gate、grader、dataset 和报告。
 
+P9 update:
+
+- Status: `mitigated_by_phase9_replay_gate`。
+- Phase 9 CI integration now exists in `.github/workflows/eval-gate.yml`.
+- Local Phase 9 replay gate evidence is recorded in `docs/goals/2026-06-06/P9_EVAL_REPORT.md` and `evals/reports/phase9_eval_report.json`: 30 total cases, 30 passed, 0 blocking failures and 2 explicit deferred cases.
+- Negative-control gate evidence proves the gate detects a blocking job-gap completed-work claim failure.
+- The risk is not closed as real-provider quality certification; replay/fake non-claims remain required.
+
 ## RISK-022 P8 C4 runtime foundation 被误读为 L5 完成
 
 Severity: high
@@ -387,3 +403,20 @@ Mitigation:
 - P8 source backfill distinguishes AgentExecutor-bound handoff plan, `execute_agent_handoff()` target AgentExecutor start and target timeline ref visibility from product-level Supervisor / L5 orchestration.
 - Final reports must list deferred gaps for raw asset body transfer and formal asset composition/write semantics, product-level Supervisor / L5 orchestration beyond the AgentExecutor-bound handoff plan / execution primitive and target timeline ref visibility, shared loop-policy and registry consumption by concrete graph tool calls outside the facade command boundary, remediated Polish question path and Feedback PR8 trace gate path, remaining product-level runtime/orchestration wiring and runner-bound HITL emission / resume validation outside the already covered facade/generic/Question/Feedback paths, DB persistence/API status taxonomy beyond the runtime DTO and Polish question application status mapping, `AgentTraceBridge` and adapter metadata event status guards, and full trace population for remaining product/future runtime events outside current generic runtime plus Feedback service-backed resume, Question/Feedback start/resume-event and target handoff timeline coverage.
 - Validation evidence is allowed to prove the implemented foundation slice only; it does not prove L5 release or Supervisor / Orchestrator completion.
+
+## RISK-023 Replay / fake eval evidence 被误读为真实 provider 质量证明
+
+Severity: high
+
+Status: open_mitigated_by_phase9_non_claims
+
+Description:
+
+Phase 9 replay / fixture / fake-visible evals can regress deterministic contracts, but they do not prove live provider output quality. If reports or source backfill omit this distinction, a local replay gate could be falsely treated as AI quality certification.
+
+Mitigation:
+
+- Phase 9 manifest and reports include non-claims: replay mode is not real-provider quality evidence; fake-visible eval is not production provider quality evidence; Phase 9 is L5 Foundation regression evidence only, not L5 release.
+- `scripts/evals/run_eval_gate.py` records `mode`, `provider_evidence_type` and CI credential metadata in the JSON report.
+- `.github/workflows/eval-gate.yml` uses default replay mode and does not require provider credentials.
+- Future real-provider/advisory eval modes must be explicitly configured, skipped by default, and separately reported.

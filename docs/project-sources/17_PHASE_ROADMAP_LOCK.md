@@ -522,6 +522,17 @@ Done Criteria:
 - CI gate documented。
 - Reports generated。
 
+Current Status:
+
+- `validated` for deterministic replay/fixture eval regression foundation.
+- `evals/suites/phase9.json` registers Phase 9 suite, capability IDs, dataset refs, grader refs, CI behavior, negative-control refs and non-claims.
+- `evals/datasets/phase9/*.jsonl` covers canonical evidence/source support, Question Agent, Feedback Agent, provider boundary, fake gate, handoff/trace and runtime-foundation deferred cases.
+- `scripts/evals/run_eval_gate.py` runs the default replay gate, writes JSON/Markdown reports, scans report output and exits non-zero on blocking failures.
+- `docs/goals/2026-06-06/P9_EVAL_REPORT.md` records 30 total cases, 30 passed, 0 blocking failures and 2 explicit deferred cases.
+- `.github/workflows/eval-gate.yml` integrates the replay gate and negative-control gate without live provider credentials.
+- `package.json` registers `eval:gate` and `eval:gate:negative`.
+- Non-claim: Phase 9 evidence is deterministic regression evidence only; it is not real-provider quality certification, P8 closure, Phase 11 / Phase 12 implementation or L5 release.
+
 ## Phase 10
 
 Name:

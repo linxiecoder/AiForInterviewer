@@ -328,3 +328,32 @@ Not accepted as done:
 - Complete trace population for remaining product/future runtime events outside current generic runtime plus Feedback service-backed resume, Question/Feedback start/resume-event and target handoff timeline coverage.
 - Non-DTO persistence/API status taxonomy beyond the runtime DTO, trace bridge and adapter metadata event status guards.
 - Phase 11 Supervisor / Orchestrator, Phase 12 L5 release gate, or formal F8/M8 release.
+
+## DEC-015 Phase 9 Default Replay Eval Gate
+
+Status: accepted
+
+Decision:
+
+Phase 9 introduces a deterministic offline replay/fixture eval gate as the default CI regression gate.
+
+Accepted:
+
+- The default gate is `python scripts/evals/run_eval_gate.py --suite phase9 --mode replay`.
+- The suite registry lives at `evals/suites/phase9.json` and binds suite ID, capability IDs, dataset refs, grader refs, pass criteria, CI behavior, negative-control refs and non-claims.
+- Phase 9 datasets live under `evals/datasets/phase9/` and are intentionally refs/reason-code based; they must not store raw prompt, raw completion, provider payload, full resume, full JD, full answer, full asset body, secrets, tokens, cookies or API keys.
+- The gate writes a machine JSON report under `evals/reports/` and a Markdown evidence report under the requested docs/goals report directory.
+- The gate must return non-zero on blocking eval failures and must provide a negative-control mode proving this behavior.
+- The GitHub Actions job in `.github/workflows/eval-gate.yml` runs eval tests, replay gate and negative-control gate without live provider credentials.
+
+Not accepted:
+
+- Replay/fixture/fake-visible eval pass as real-provider quality evidence.
+- Unit tests alone as AI quality proof.
+- Phase 8 runtime gap closure.
+- Phase 11 Supervisor / Orchestrator or Phase 12 L5 release gate.
+- L5 release, formal F8/M8 release readiness, prompt/provider/API/DB/frontend/domain-policy behavior changes.
+
+Recommendation:
+
+Future real-provider or advisory eval modes must be separate, skipped by default unless explicit environment configuration exists, and must preserve the same report redaction and non-claim rules.

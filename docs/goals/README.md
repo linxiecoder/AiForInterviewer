@@ -37,6 +37,20 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P9-W0-W4 Eval / CI / Regression Gate
+
+- [P9_MASTER_GOAL.md](2026-06-06/P9_MASTER_GOAL.md)：Phase 9 eval / CI / regression gate master goal，只作为 execution evidence。
+- [P8_GAP_LOCK_BEFORE_P9.md](2026-06-06/P8_GAP_LOCK_BEFORE_P9.md)：P8 deferred gap lock；P9 只能做 regression guard，不关闭 P8 runtime gaps。
+- [P9_AGENT_A_EVAL_BASELINE_RECON.md](2026-06-06/P9_AGENT_A_EVAL_BASELINE_RECON.md)：Agent A 只读 eval baseline recon。
+- [P9_AGENT_B_DATASET_GRADER_DESIGN.md](2026-06-06/P9_AGENT_B_DATASET_GRADER_DESIGN.md)：Agent B 只读 dataset / grader design。
+- [P9_AGENT_C_RUNNER_CI_RECON.md](2026-06-06/P9_AGENT_C_RUNNER_CI_RECON.md)：Agent C 只读 runner / report / CI recon。
+- [P9_AGENT_D_BOUNDARY_FAKE_AUDIT.md](2026-06-06/P9_AGENT_D_BOUNDARY_FAKE_AUDIT.md)：Agent D 只读 provider / fake / security audit。
+- [P9_AGENT_E_PHASE8_GAP_GUARD.md](2026-06-06/P9_AGENT_E_PHASE8_GAP_GUARD.md)：Agent E 只读 P8 gap guard / L5 non-claim audit。
+- [P9_CONTROLLER_RECON_MERGE.md](2026-06-06/P9_CONTROLLER_RECON_MERGE.md)：Controller recon merge；记录单写者实现边界。
+- [P9_EVAL_REPORT.md](2026-06-06/P9_EVAL_REPORT.md)：Phase 9 replay eval gate Markdown report；JSON machine report 位于 `evals/reports/phase9_eval_report.json`。
+- [P9_FINAL_REPORT.md](2026-06-06/P9_FINAL_REPORT.md)：Phase 9 final report；记录变更、验证、CI evidence、source backfill 和剩余 deferred gaps。
+- [P9_FINAL_AUDIT.md](2026-06-06/P9_FINAL_AUDIT.md)：Phase 9 final audit；记录 scope、diff、validation 和剩余 remote CI execution risk。
+
 ### 2026-06-03 / P1-W1
 
 - [P1_W1_FINAL_REPORT.md](2026-06-03/P1-W1/P1_W1_FINAL_REPORT.md)：P1-W1 close-out final report，只作为执行证据。

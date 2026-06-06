@@ -341,6 +341,36 @@ Still not accepted as full `done`:
 - Product-level Supervisor / L5 orchestration is not implemented; Phase 11 Supervisor / Orchestrator and Phase 12 L5 release gate remain out of scope.
 - No L5 release, formal F8/M8 release, prompt/provider/API/DB/frontend/domain-policy change is claimed.
 
+## Phase 9 Eval / CI Regression Gate
+
+Current status: `validated` for deterministic replay/fixture regression gate.
+
+Accepted evidence in P9-W0-W4-EVAL-CI-REGRESSION-GATE:
+
+- Five read-only recon reports exist under `docs/goals/2026-06-06/P9_AGENT_*.md`, and the controller merge exists at `docs/goals/2026-06-06/P9_CONTROLLER_RECON_MERGE.md`.
+- `evals/suites/phase9.json` binds suite ID, capability IDs, dataset refs, grader refs, minimum pass criteria, CI behavior, negative-control refs and non-claims.
+- `evals/datasets/phase9/*.jsonl` covers canonical evidence/source support, Question Agent, Feedback Agent, provider boundary, fake gate, handoff/trace and runtime-foundation deferred cases.
+- `evals/graders/code_rules.py` adds deterministic task types for answer coverage, provider boundary, fake gate, handoff/trace, runtime deferred gap and source-support contracts; scanner coverage includes normalized forbidden keys and secret-like value patterns.
+- `scripts/evals/run_eval_gate.py` runs the default `replay` gate, writes `evals/reports/phase9_eval_report.json`, writes Markdown reports such as `docs/goals/2026-06-06/P9_EVAL_REPORT.md`, scans JSON/Markdown report content before write and exits non-zero on blocking failures.
+- Negative control passed: `--expect-fail-fixture` observes the intentionally failing job-gap completed-work claim fixture and returns success only because the expected blocking failure is detected.
+- CI integration exists in `.github/workflows/eval-gate.yml`; default job runs eval tests, replay gate and negative-control gate without live provider credentials.
+- Local validation evidence recorded in `docs/goals/2026-06-06/P9_FINAL_REPORT.md`: `tests/evals` passed, replay gate passed with 30 total / 30 passed / 0 blocking failures / 2 deferred cases, and negative-control gate passed.
+
+Gate rules:
+
+- Blocking eval failure must return non-zero.
+- Default CI mode must not require provider credentials.
+- Reports must not store raw prompt, raw completion, provider payload, full resume, full JD, full answer, full asset body, secrets, tokens, cookies or API keys.
+- Skips/deferred cases must be explicit and categorized.
+- Replay/fixture/fake-visible evidence must not be represented as real-provider quality evidence.
+
+Still not accepted as broader `done`:
+
+- No real-provider quality is certified.
+- No P8 runtime deferred gap is implemented or closed.
+- No Phase 11 Supervisor / Orchestrator or Phase 12 L5 release gate is implemented.
+- No formal F8/M8 release readiness is claimed.
+
 ## Traceability Gate
 
 必须满足：

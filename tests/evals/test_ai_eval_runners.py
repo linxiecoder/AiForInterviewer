@@ -169,7 +169,8 @@ def test_default_runner_does_not_write_eval_reports_directory() -> None:
 
     assert result.returncode == 0
     after = sorted(path.name for path in (REPO_ROOT / "evals" / "reports").iterdir())
-    assert after == before == [".gitkeep"]
+    assert after == before
+    assert ".gitkeep" in before
 
 
 def test_runners_do_not_depend_on_llm_provider_or_fake_runtime() -> None:
