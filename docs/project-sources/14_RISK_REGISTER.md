@@ -420,3 +420,103 @@ Mitigation:
 - `scripts/evals/run_eval_gate.py` records `mode`, `provider_evidence_type` and CI credential metadata in the JSON report.
 - `.github/workflows/eval-gate.yml` uses default replay mode and does not require provider credentials.
 - Future real-provider/advisory eval modes must be explicitly configured, skipped by default, and separately reported.
+
+## RISK-024 deferred_remote_ci_gap 被误读为 remote CI 已通过
+
+Severity: high
+
+Status: open_deferred
+
+Description:
+
+Phase 9 has local validation and a GitHub Actions workflow file, but no visible passing GitHub Actions run/artifact is claimed in Phase 10. If `complete_with_deferred_remote_ci_gap` is shortened to `complete` or `done`, later windows may incorrectly assume remote CI passed.
+
+Mitigation:
+
+- Phase 10 source backfill records `deferred_remote_ci_gap` in closeout report, gap register, acceptance gate, decision log and roadmap lock.
+- Remote CI may only be claimed when a passing GitHub Actions run and uploaded artifact are visible and cited.
+- Local `tests/evals`, replay gate and negative-control results remain local behavior evidence only.
+
+Closure condition:
+
+- A later authorized CI verification window cites a passing GitHub Actions `Eval Gate` run and `phase9-eval-reports` artifact, or explicitly carries the gap forward again.
+
+## RISK-025 stale committed eval report metadata short SHA f86adea
+
+Severity: medium
+
+Status: open_residual_metadata_risk
+
+Description:
+
+Committed Phase 9 eval reports embed short SHA `f86adea`, while Phase 10 accepted current implementation fact is `76c670c859d3f7d32d13e604b3d0edffeefd2048`. This can confuse report readers even though a non-mutating rerun proves current behavior.
+
+Mitigation:
+
+- Phase 10 records the mismatch as residual report-metadata risk, not behavior blocker.
+- Non-mutating rerun to `/tmp/aifi-p10-closeout-eval-reports` produced current `76c670c` report evidence with `30 passed`, `0 blocking_failures`, `2 deferred`.
+- Phase 10 does not rewrite `evals/reports/**` or committed P9 reports.
+
+Closure condition:
+
+- Either leave the risk documented, or run a separate authorized report refresh window that rewrites committed reports without changing runner, grader, suite, dataset or implementation behavior.
+
+## RISK-026 eval report churn from committed report-dir reruns
+
+Severity: medium
+
+Status: open_mitigated_by_phase10_gate
+
+Description:
+
+Running the eval gate with a committed report directory can rewrite `evals/reports/**` or `docs/goals/2026-06-06/P9_EVAL_REPORT.md`, causing report churn and obscuring whether behavior changed.
+
+Mitigation:
+
+- Phase 10 validation uses `/tmp/aifi-p10-closeout-eval-reports`.
+- Phase 10 acceptance gate requires non-mutating report dirs unless a separate report refresh window is authorized.
+- Committed report rewrite remains forbidden in this closeout/source-backfill window.
+
+Closure condition:
+
+- Future report refresh work must be separately scoped, reviewed as report metadata refresh, and must not mix with runner/grader/suite or implementation behavior changes.
+
+## RISK-027 Phase 0-10 foundation closeout 被误读为 L5 release
+
+Severity: high
+
+Status: open_mitigated_by_phase10_non_claims
+
+Description:
+
+Closing Phase 0-10 foundation could be misread as L5 release, formal F8/M8 release readiness, real-provider quality certification, or Phase 12 release gate completion.
+
+Mitigation:
+
+- Phase 10 closeout uses `closed_with_deferred_gaps` and explicitly states L5 Foundation only.
+- Phase 10 roadmap lock keeps Phase 11 Supervisor / Orchestrator and Phase 12 L5 release not started.
+- Acceptance gates and decision log explicitly forbid L5 release claims from Phase 10 evidence.
+
+Closure condition:
+
+- Only a future release-gate window with explicit release criteria, remote CI evidence, rollout/rollback evidence and user/controller approval can close this risk.
+
+## RISK-028 Phase 8 runtime gap false-closure
+
+Severity: high
+
+Status: open_deferred
+
+Description:
+
+Phase 8 runtime foundation has extensive validation evidence, but still carries deferred runtime gaps. A Phase 10 source-backfill closeout could accidentally normalize those gaps into done if it focuses only on foundation closure.
+
+Mitigation:
+
+- Phase 10 records Phase 8 runtime gaps as deferred in closeout report, gap register, acceptance gate, decision log and roadmap lock.
+- P8 source status remains `validated_with_deferred_gaps` / `partial_with_deferred_gaps`.
+- Phase 11 entry conditions require remaining gaps to be explicitly carried or resolved under a new scope lock.
+
+Closure condition:
+
+- A scoped Phase 8 follow-up or Phase 11 runtime/orchestration window implements or verifies the specific runtime gaps with tests, source backfill and no false L5 release claim.

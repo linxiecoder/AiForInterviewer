@@ -92,13 +92,27 @@ wrapper split 不等于 capability done。
 | PRO-001 | Compact provider request | 当前 active production `LlmTransportRequest` caller paths 已在 transport 前使用 compact provider boundary；DTO-level forbidden-key backstop 已存在；P7-W3 已将 Feedback `current_answer.answer_text` formalized as bounded primary input；P7-W4.fix.01 full validation passed | CompactProviderRequestBuilder / equivalent with schema-bound redacted request and fail-closed validation | Provider Boundary | done | Phase 7 |
 | PRO-002 | Provider boundary tests | P7 provider boundary tests 覆盖 catalog、recursive reject、redaction、schema gate、Q/F fail-closed paths、global DTO backstop、static no-direct-constructor gate、progress tree、job match、bounded current answer policy metadata、historical answer no raw fallback、nested `full_answer` fail-closed paths；P7-W4.fix.01 full-repo pytest / web validation passed | forbidden keys + no full prompt asset fallback gate | Provider Boundary | done | Phase 1/7 |
 | FAKE-001 | Fake cleanup | runtime fake rejected; Feedback direct fake transport now returns fake-visible non-success; fake fixture remains for tests; auth smoke no longer sets `LLM_PROVIDER=fake` | tests/fakes + evals/replay only | Test/Eval | done | Phase 7/9 |
-| EVAL-001 | AI Eval gate | seed evals / descriptors；P9 suite manifest、capability-bound replay datasets、deterministic graders、JSON/Markdown reports、negative-control gate、package script and no-secret GitHub Actions job exist | evals + CI regression gate | Eval | validated | Phase 9 |
+| EVAL-001 | AI Eval gate | seed evals / descriptors；P9 suite manifest、capability-bound replay datasets、deterministic graders、JSON/Markdown reports、negative-control gate、package script and no-secret GitHub Actions job exist；P10 accepts Phase 9 as `complete_with_deferred_remote_ci_gap` with remote CI deferred and stale committed report metadata risk recorded | evals + CI regression gate | Eval | validated | Phase 9 |
 | WIN-001 | Execution Window Protocol | P7-W4.fix.01 完成 A/B read-only recon、C single-writer implementation、D full validation、E audit、source backfill sequence | every window has scope / forbidden / tests / rollback / backfill | Governance | done | Phase 0.1/7 |
 | SRC-001 | Source Backfill | Project sources 已回填 P7-W4.fix.01 full validation evidence；P8 foundation partial source backfill 已追加，但 P8 final status 仍有 deferred gaps | updated Project sources | Governance | validated_with_deferred_gaps | Phase 0.1/7/8 |
 
+## P10 Stage Closeout / Source Backfill Evidence
+
+Status: `closed_with_deferred_gaps` for Phase 0-10 L5 Foundation closeout；`complete_with_deferred_remote_ci_gap` for the accepted Phase 9 final state。
+
+- `EVAL-001` remains `validated`, not `done`: deterministic replay / fixture regression foundation is locally validated, but remote GitHub Actions execution is unavailable/deferred and committed eval report metadata still embeds short SHA `f86adea`.
+- Current implementation fact: `HEAD` and `origin/main` both resolve to `76c670c859d3f7d32d13e604b3d0edffeefd2048` in the Phase 10 recon.
+- Non-mutating current rerun evidence: `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --report-dir /tmp/aifi-p10-closeout-eval-reports` passed with `30 passed`, `0 blocking_failures`, `2 deferred`, and report metadata for current behavior showed short SHA `76c670c`.
+- Required eval test evidence: `PYTHONPATH=.:apps/api .venv/bin/pytest tests/evals -q` passed with `27 passed`.
+- Negative-control evidence: `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture` observed the expected `must_not_have_present` blocking failure.
+- `deferred_remote_ci_gap` is explicit: no GitHub Actions run/artifact is claimed by Phase 10.
+- Phase 8 runtime gaps remain `validated_with_deferred_gaps` / `partial_with_deferred_gaps`; Phase 10 does not close them.
+- Phase 11 Supervisor / Orchestrator and Phase 12 L5 release remain `not_started` / deferred and must not be inferred from Phase 0-10 foundation closure.
+- Committed report metadata risk is residual only: Phase 10 does not rewrite `evals/reports/**`.
+
 ## P9 Eval / CI Regression Gate Backfill Evidence
 
-Status: `validated` for `EVAL-001` replay/fixture regression foundation；不得解读为 real-provider quality、P8 runtime closure 或 L5 release。
+Status: `validated` for `EVAL-001` replay/fixture regression foundation；post-push accepted status is `complete_with_deferred_remote_ci_gap` because remote GitHub Actions evidence remains deferred；不得解读为 real-provider quality、P8 runtime closure 或 L5 release。
 
 - `EVAL-001`: `evals/suites/phase9.json` binds the Phase 9 suite to capability IDs, dataset refs, grader refs, minimum pass criteria and CI blocking behavior. `scripts/evals/run_eval_gate.py` runs deterministic `replay` / `fixture` suites, emits JSON + Markdown reports, scans generated reports before write, and returns non-zero on blocking eval failures.
 - `CTX-001` / `CTX-002` / `CTX-003`: `evals/datasets/phase9/canonical_evidence.jsonl` adds direct project evidence, adjacent hypothetical, job-gap no-fact-claim and insufficient-context deferred cases.

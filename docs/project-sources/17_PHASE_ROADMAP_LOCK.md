@@ -524,13 +524,16 @@ Done Criteria:
 
 Current Status:
 
-- `validated` for deterministic replay/fixture eval regression foundation.
+- `complete_with_deferred_remote_ci_gap` for deterministic replay/fixture eval regression foundation after Phase 10 closeout acceptance.
 - `evals/suites/phase9.json` registers Phase 9 suite, capability IDs, dataset refs, grader refs, CI behavior, negative-control refs and non-claims.
 - `evals/datasets/phase9/*.jsonl` covers canonical evidence/source support, Question Agent, Feedback Agent, provider boundary, fake gate, handoff/trace and runtime-foundation deferred cases.
 - `scripts/evals/run_eval_gate.py` runs the default replay gate, writes JSON/Markdown reports, scans report output and exits non-zero on blocking failures.
 - `docs/goals/2026-06-06/P9_EVAL_REPORT.md` records 30 total cases, 30 passed, 0 blocking failures and 2 explicit deferred cases.
 - `.github/workflows/eval-gate.yml` integrates the replay gate and negative-control gate without live provider credentials.
 - `package.json` registers `eval:gate` and `eval:gate:negative`.
+- Phase 10 recon confirms `HEAD` and `origin/main` at `76c670c859d3f7d32d13e604b3d0edffeefd2048`.
+- Remote GitHub Actions evidence remains `deferred_remote_ci_gap`; no remote run/artifact is claimed.
+- Committed eval reports still embed short SHA `f86adea`; Phase 10 treats this as residual report-metadata risk and does not rewrite reports.
 - Non-claim: Phase 9 evidence is deterministic regression evidence only; it is not real-provider quality certification, P8 closure, Phase 11 / Phase 12 implementation or L5 release.
 
 ## Phase 10
@@ -564,3 +567,42 @@ Done Criteria:
 - All completed capability done evidence present。
 - Deferred gaps documented。
 - Next roadmap updated。
+
+Current Status:
+
+- `closeout_source_backfill_complete_with_deferred_gaps` for Phase 10 docs/source-backfill.
+- Phase 0-10 L5 Foundation stage is closed as `closed_with_deferred_gaps`, not as L5 release.
+- Phase 9 accepted state is `complete_with_deferred_remote_ci_gap`.
+- `deferred_remote_ci_gap` remains open until a visible passing GitHub Actions run and artifact are cited or the gap is explicitly carried again.
+- Phase 8 runtime gaps remain deferred and are not closed by Phase 10 source backfill.
+- Phase 11 Supervisor / Orchestrator implementation has not started.
+- Phase 12 L5 release gate has not started.
+- No prompt/provider/API/DB/domain/runtime/frontend behavior changed in Phase 10.
+
+Phase 10 Evidence:
+
+- `docs/goals/2026-06-06/P10_CLOSEOUT_REPORT.md`
+- `docs/goals/2026-06-06/P10_DEFERRED_GAP_REGISTER.md`
+- `docs/goals/2026-06-06/P10_SOURCE_BACKFILL_AUDIT.md`
+- `PYTHONPATH=.:apps/api .venv/bin/pytest tests/evals -q` passed with `27 passed`.
+- `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --report-dir /tmp/aifi-p10-closeout-eval-reports` passed with `30 passed`, `0 blocking_failures`, `2 deferred`, current short SHA `76c670c`.
+- `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture` observed expected failure `must_not_have_present:你负责过`.
+
+## Phase 11 Entry Conditions
+
+Phase 11 may start only after these conditions are explicit in the next scope lock:
+
+1. Phase 0-10 foundation is treated as closed with deferred gaps, not clean release.
+2. Remaining gaps are explicitly carried: `deferred_remote_ci_gap`, Phase 8 runtime gaps, stale committed report metadata risk and L5 release non-claim.
+3. Remote CI gap is either resolved by visible passing GitHub Actions run/artifact or explicitly accepted as deferred for the Phase 11 window.
+4. No L5 release, formal F8/M8 release or real-provider quality certification is claimed.
+5. Supervisor / Orchestrator implementation is not assumed to exist and must be separately scoped.
+6. Committed eval reports are not rewritten unless a separate report refresh window authorizes it.
+
+Phase 11 must stop and return to Controller if it requires:
+
+- claiming remote CI without visible evidence;
+- closing Phase 8 runtime gaps by wording only;
+- marking L5 release or formal F8/M8 release;
+- changing prompt/provider/API/DB/domain/runtime/frontend behavior outside the Phase 11 scope;
+- rewriting committed eval reports without explicit authorization.

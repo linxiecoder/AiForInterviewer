@@ -343,7 +343,7 @@ Still not accepted as full `done`:
 
 ## Phase 9 Eval / CI Regression Gate
 
-Current status: `validated` for deterministic replay/fixture regression gate.
+Current status: `complete_with_deferred_remote_ci_gap` for deterministic replay/fixture regression gate after Phase 10 closeout acceptance. `EVAL-001` remains `validated` in the traceability matrix; it is not `done` while remote GitHub Actions evidence is deferred and stale committed report metadata risk remains.
 
 Accepted evidence in P9-W0-W4-EVAL-CI-REGRESSION-GATE:
 
@@ -370,6 +370,40 @@ Still not accepted as broader `done`:
 - No P8 runtime deferred gap is implemented or closed.
 - No Phase 11 Supervisor / Orchestrator or Phase 12 L5 release gate is implemented.
 - No formal F8/M8 release readiness is claimed.
+- No remote GitHub Actions success is claimed unless a visible passing run and artifact are cited.
+
+## Phase 10 Closeout / Source Backfill Gate
+
+适用于 `P10-W1-STAGE-CLOSEOUT-SOURCE-BACKFILL`。
+
+必须满足：
+
+- Phase 10 只做 docs/source-backfill，不修改业务代码、prompt/provider/API/DB/domain/runtime/frontend、eval runner、grader、suite、dataset、workflow 或 committed eval reports。
+- Phase 9 post-push accepted status 可写为 `complete_with_deferred_remote_ci_gap` only if `deferred_remote_ci_gap` is explicitly recorded.
+- `EVAL-001` 只能按 matrix 语义保持 `validated`，不得在 remote CI gap 和 stale metadata risk 未关闭时升级为 `done`。
+- Remote CI 只有在 GitHub Actions run/artifact 可见且通过时才能作为 evidence；local validation 不能替代 remote CI claim。
+- Committed reports with stale metadata short SHA `f86adea` are residual report-metadata risk unless remediated by a separate authorized report refresh window.
+- Non-mutating eval reruns must use an external report dir such as `/tmp/...` and must not rewrite `evals/reports/**` or `docs/goals/2026-06-06/P9_EVAL_REPORT.md` in this window.
+- Phase 8 runtime gaps remain deferred.
+- Phase 11 Supervisor / Orchestrator remains not started.
+- Phase 12 / L5 release remains not started and no formal F8/M8 release readiness is claimed.
+
+Phase 10 accepted evidence:
+
+| Gate | Evidence | Result |
+|---|---|---|
+| Scope / forbidden paths | `git status --short --untracked-files=all` clean before patch; edits limited to allowed docs/source files | pass pending final diff audit |
+| HEAD / origin | `git rev-parse HEAD` and `git rev-parse origin/main` both `76c670c859d3f7d32d13e604b3d0edffeefd2048` | pass |
+| Local eval tests | `PYTHONPATH=.:apps/api .venv/bin/pytest tests/evals -q` | `27 passed` |
+| Non-mutating current eval rerun | `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --report-dir /tmp/aifi-p10-closeout-eval-reports` | `30 passed`, `0 blocking_failures`, `2 deferred`, current short SHA `76c670c` |
+| Negative control | `python3 scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture` | expected failure observed |
+
+禁止：
+
+- 把 `complete_with_deferred_remote_ci_gap` 改写为 remote CI passed。
+- 把 stale committed report metadata 当成行为 blocker 并在本窗口重写 reports。
+- 关闭 Phase 8 runtime gaps。
+- 标记 L5 release、Phase 11 Supervisor / Orchestrator done 或 Phase 12 release gate done。
 
 ## Traceability Gate
 

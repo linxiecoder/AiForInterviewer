@@ -357,3 +357,32 @@ Not accepted:
 Recommendation:
 
 Future real-provider or advisory eval modes must be separate, skipped by default unless explicit environment configuration exists, and must preserve the same report redaction and non-claim rules.
+
+## DEC-016 Phase 9 Accepted with Deferred Remote CI Gap
+
+Status: confirmed
+
+Decision:
+
+Accept Phase 9 as `complete_with_deferred_remote_ci_gap` during Phase 10 closeout/source-backfill.
+
+Accepted:
+
+- User-confirmed post-push audit verdict is `PASS_WITH_RISK`.
+- Current implementation fact is `HEAD` / `origin/main` at `76c670c859d3f7d32d13e604b3d0edffeefd2048`.
+- Local validation evidence includes `tests/evals` passing, deterministic replay eval gate passing with `30 passed`, `0 blocking_failures`, `2 deferred`, and negative-control expected failure observed.
+- Non-mutating Phase 10 rerun to `/tmp/aifi-p10-closeout-eval-reports` proves current `76c670c` behavior without rewriting committed reports.
+- Phase 9 deterministic replay/fixture gate remains L5 Foundation regression evidence only.
+
+Not accepted:
+
+- No remote GitHub Actions evidence is claimed.
+- No committed eval report rewrite is authorized in Phase 10.
+- Existing committed eval report metadata short SHA `f86adea` is not silently normalized; it is recorded as residual metadata risk.
+- Phase 8 runtime gaps remain deferred.
+- Phase 11 Supervisor / Orchestrator is not started.
+- Phase 0-10 are L5 Foundation only, not L5 release or formal F8/M8 release.
+
+Recommendation:
+
+Enter Phase 11 only under a new scope lock that explicitly carries or resolves `deferred_remote_ci_gap`, preserves Phase 8 runtime gaps unless directly authorized for implementation, and keeps L5 release out of scope until a separate release gate.

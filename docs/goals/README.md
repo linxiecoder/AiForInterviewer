@@ -37,7 +37,17 @@ permalink: ai-for-interviewer/docs/goals
 
 ## Index
 
+### 2026-06-06 / P10-W1 Stage Closeout / Source Backfill
+
+Phase 10 is closeout/source-backfill only. It closes the Phase 0-10 L5 Foundation stage as `closed_with_deferred_gaps`, preserves `deferred_remote_ci_gap`, preserves Phase 8 runtime deferred gaps, and does not claim L5 release.
+
+- [P10_CLOSEOUT_REPORT.md](2026-06-06/P10_CLOSEOUT_REPORT.md)：Phase 10 closeout report；记录 Phase 0-10 foundation closure、Phase 9 accepted state、validation evidence、remote CI deferral、non-claims 和 Phase 11 entry conditions。
+- [P10_DEFERRED_GAP_REGISTER.md](2026-06-06/P10_DEFERRED_GAP_REGISTER.md)：Phase 10 deferred gap register；登记 `deferred_remote_ci_gap`、Phase 8 runtime gaps、stale report metadata short SHA `f86adea`、L5 release not started 和 owner phase。
+- [P10_SOURCE_BACKFILL_AUDIT.md](2026-06-06/P10_SOURCE_BACKFILL_AUDIT.md)：Phase 10 source-backfill audit；记录 updated/read-only files、forbidden paths untouched、matrix/gate/decision/risk/roadmap backfill 和 remaining source drift。
+
 ### 2026-06-06 / P9-W0-W4 Eval / CI / Regression Gate
+
+Accepted post-push status: `complete_with_deferred_remote_ci_gap`。Remote GitHub Actions evidence remains unavailable/deferred；committed eval reports embed short SHA `f86adea` and are treated as residual metadata risk, while current accepted implementation fact is `76c670c859d3f7d32d13e604b3d0edffeefd2048`。This section does not claim Phase 8 runtime gap closure, real-provider quality evidence or L5 release.
 
 - [P9_MASTER_GOAL.md](2026-06-06/P9_MASTER_GOAL.md)：Phase 9 eval / CI / regression gate master goal，只作为 execution evidence。
 - [P8_GAP_LOCK_BEFORE_P9.md](2026-06-06/P8_GAP_LOCK_BEFORE_P9.md)：P8 deferred gap lock；P9 只能做 regression guard，不关闭 P8 runtime gaps。
