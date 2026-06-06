@@ -33,6 +33,12 @@ jobs:
       - name: Run Phase 9 negative-control gate
         run: python scripts/evals/run_eval_gate.py --suite phase9 --mode replay --expect-fail-fixture
 
+      - name: Run Phase 12 L5 eval gate
+        run: python scripts/evals/run_l5_eval_suite.py --mode deterministic --report-dir "$RUNNER_TEMP/aifi-eval-reports"
+
+      - name: Run Phase 12 L5 negative-control gate
+        run: python scripts/evals/run_l5_eval_suite.py --mode deterministic --expect-fail-fixture
+
       - name: Upload eval reports
         uses: actions/upload-artifact@v4
         if: always()

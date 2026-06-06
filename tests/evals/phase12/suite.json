@@ -1,0 +1,120 @@
+{
+  "manifest_version": "phase12.l5_eval_suite.v1",
+  "suite_id": "phase12_l5",
+  "suite_name": "Phase 12 L5 multi-agent eval gate",
+  "phase": "Phase 12",
+  "ci_blocking": true,
+  "default_mode": "deterministic",
+  "supported_modes": [
+    "deterministic",
+    "replay"
+  ],
+  "capability_ids": [
+    "L5-006",
+    "EVAL-001",
+    "L5-002",
+    "L5-003",
+    "L5-004",
+    "L5-005"
+  ],
+  "minimum_pass_criteria": {
+    "blocking_failures": 0,
+    "invalid_cases": 0,
+    "negative_control_expected_failure_required": true,
+    "required_case_categories": [
+      "happy_path",
+      "insufficient_context",
+      "asset_conflict",
+      "provider_failure",
+      "validation_failure",
+      "hitl",
+      "replay",
+      "cross_agent_handoff_failure"
+    ],
+    "required_case_fields_ref": "scripts/evals/run_l5_eval_suite.py:REQUIRED_CASE_FIELDS",
+    "l5_release_path_requires_all_blocking_cases_pass": true,
+    "real_provider_quality_claim_requires_separate_evidence": true
+  },
+  "datasets": [
+    {
+      "dataset_id": "multi_agent_core",
+      "path": "tests/evals/phase12/datasets/multi_agent_core.jsonl",
+      "capability_ids": [
+        "L5-006",
+        "EVAL-001",
+        "L5-002",
+        "L5-003",
+        "L5-004",
+        "L5-005"
+      ],
+      "grader": "phase12_l5_case_rules",
+      "grader_version": "phase12_l5_case_rules.v1",
+      "blocking": true
+    },
+    {
+      "dataset_id": "failure_and_replay",
+      "path": "tests/evals/phase12/datasets/failure_and_replay.jsonl",
+      "capability_ids": [
+        "L5-006",
+        "EVAL-001",
+        "L5-002",
+        "L5-003",
+        "L5-004",
+        "L5-005"
+      ],
+      "grader": "phase12_l5_case_rules",
+      "grader_version": "phase12_l5_case_rules.v1",
+      "blocking": true
+    },
+    {
+      "dataset_id": "quality_lanes",
+      "path": "tests/evals/phase12/datasets/quality_lanes.jsonl",
+      "capability_ids": [
+        "L5-006",
+        "EVAL-001"
+      ],
+      "grader": "phase12_l5_case_rules",
+      "grader_version": "phase12_l5_case_rules.v1",
+      "blocking": true
+    }
+  ],
+  "negative_control_refs": [
+    {
+      "dataset_id": "negative_control",
+      "path": "tests/evals/phase12/datasets/negative_control.jsonl",
+      "expected_failure_contains": "missing_trace_refs"
+    }
+  ],
+  "quality_lanes": {
+    "deterministic_regression": {
+      "ci_blocking": true,
+      "uses_live_provider": false,
+      "purpose": "schema, refs, handoff, HITL, failure-mode and non-claim regression"
+    },
+    "replay_regression": {
+      "ci_blocking": true,
+      "uses_live_provider": false,
+      "purpose": "read-only replay and trace comparison fixtures"
+    },
+    "provider_quality": {
+      "ci_blocking": false,
+      "uses_live_provider": true,
+      "purpose": "future scoped provider-quality evidence only",
+      "not_claimed_by_default": true
+    }
+  },
+  "release_path_policy": {
+    "eval_failure_blocks_l5_release_path": true,
+    "passing_deterministic_gate_is_not_l5_release": true,
+    "remote_ci_artifact_required_for_remote_ci_claim": true,
+    "real_provider_evidence_required_for_quality_certification": true,
+    "controller_release_decision_required": true
+  },
+  "non_claims": [
+    "no_l5_release",
+    "no_real_provider_quality_certification",
+    "no_remote_ci_success",
+    "no_phase12_release_gate_complete",
+    "deterministic_and_replay_evidence_are_not_provider_quality_certification"
+  ]
+}
