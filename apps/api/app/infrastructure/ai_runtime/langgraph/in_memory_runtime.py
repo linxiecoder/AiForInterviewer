@@ -31,10 +31,19 @@ from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
     build_polish_feedback_fake_runtime_payload,
     build_polish_feedback_graph_descriptor,
 )
+from app.application.ai_runtime.business_graphs.local_multi_agent_orchestrator import (
+    LOCAL_MULTI_AGENT_GRAPH_NAME,
+    build_local_multi_agent_orchestrator_graph_descriptor,
+)
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
     POLISH_QUESTION_GRAPH_NAME,
 )
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.agents.orchestration.minimal_three_agent_slice import (
+    PRODUCT_SLICE_STATUS_BLOCKED,
+    PRODUCT_SLICE_STATUS_FAILED_CLOSED,
+    build_minimal_three_agent_product_slice,
+)
 from app.application.llm.ports import LlmTransport
 from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGraphCheckpointer
 from app.infrastructure.ai_runtime.langgraph.polish_question_runtime import PolishQuestionGraphRuntime
@@ -89,6 +98,8 @@ class InMemoryLangGraphRuntime:
     def start(self, context: AgentRunContext, command: AgentCommandEnvelope) -> AgentRunResult:
         if command != context.command:
             raise RuntimePolicyError("command must match context command")
+        if context.graph_name == LOCAL_MULTI_AGENT_GRAPH_NAME:
+            return self._start_local_multi_agent_orchestration(context=context, command=command)
         if context.graph_name == POLISH_FEEDBACK_GRAPH_NAME:
             return self._start_polish_feedback_fake(context=context, command=command)
         if context.graph_name == POLISH_QUESTION_GRAPH_NAME:
@@ -635,6 +646,170 @@ class InMemoryLangGraphRuntime:
         self._serializer.serialize_run_result(result)
         return result
 
+    def _start_local_multi_agent_orchestration(
+        self, *, context: AgentRunContext, command: AgentCommandEnvelope
+    ) -> AgentRunResult:
+        gate = self._require_runtime_enabled(context)
+        descriptor = build_local_multi_agent_orchestrator_graph_descriptor()
+        graph_decision = self._flag_resolver.resolve_graph_flag(
+            descriptor, actor_id=context.actor_id, caller="runner_entry"
+        )
+        if not graph_decision.enabled:
+            raise GraphDisabledError(f"graph disabled: {descriptor.graph_name}")
+        _require_descriptor_runtime_loop_policy(command=command, descriptor=descriptor)
+
+        state = self._invoke_graph(context=context, entrypoint="local_multi_agent_orchestrator_start")
+        checkpoint = self._record_checkpoint(
+            context=context,
+            node_name="local_multi_agent_orchestrator_start",
+            state=state,
+        )
+        metadata = command.metadata
+        ownership_ambiguity_ref = _metadata_text(metadata, "ownership_ambiguity_ref")
+        if ownership_ambiguity_ref:
+            slice_result = build_minimal_three_agent_product_slice(
+                owner_id=context.owner_id,
+                session_ref=_metadata_text(metadata, "session_ref"),
+                feedback_candidate_ref="",
+                answer_ref=_metadata_text(metadata, "answer_ref"),
+                question_ref=_metadata_text(metadata, "question_ref"),
+                evidence_refs=_metadata_refs(metadata, "evidence_refs"),
+                source_trace_refs=_metadata_refs(metadata, "source_trace_refs"),
+                validation_refs=_metadata_refs(metadata, "validation_refs"),
+                idempotency_key=str(command.idempotency_key or ""),
+                metadata={"ownership_ambiguity_ref": ownership_ambiguity_ref},
+            )
+            status = "blocked"
+            interrupt_refs = (ownership_ambiguity_ref,)
+            hitl_triggers = ("ambiguous_ownership",)
+        else:
+            formal_write_requested_ref = _metadata_text(metadata, "formal_write_requested_ref")
+            slice_result = build_minimal_three_agent_product_slice(
+                owner_id=context.owner_id,
+                session_ref=_metadata_text(metadata, "session_ref"),
+                feedback_candidate_ref=_metadata_text(metadata, "feedback_candidate_ref"),
+                answer_ref=_metadata_text(metadata, "answer_ref"),
+                question_ref=_metadata_text(metadata, "question_ref"),
+                evidence_refs=_metadata_refs(metadata, "evidence_refs"),
+                source_trace_refs=_metadata_refs(metadata, "source_trace_refs"),
+                validation_refs=_metadata_refs(metadata, "validation_refs"),
+                asset_conflict_ref=_metadata_text(metadata, "asset_conflict_ref"),
+                low_confidence_flags=_metadata_refs(metadata, "low_confidence_flags"),
+                formal_write_requested=bool(formal_write_requested_ref),
+                formal_write_requested_ref=formal_write_requested_ref,
+                idempotency_key=str(command.idempotency_key or ""),
+            )
+            status = _local_multi_agent_status(slice_result)
+            interrupt_refs = _local_multi_agent_interrupt_refs(context=context, result=slice_result)
+            hitl_triggers = _local_multi_agent_hitl_triggers(slice_result)
+
+        trace_refs = tuple(dict.fromkeys((*slice_result.trace_refs, checkpoint.checkpoint_ref)))
+        candidate_payloads = _local_multi_agent_candidate_payloads(slice_result)
+        output_refs = tuple(dict.fromkeys((*slice_result.candidate_refs.values(),)))
+        runtime_metadata = {
+            **_runtime_metadata(state, gate),
+            **slice_result.metadata,
+            "graph_name": context.graph_name,
+            "graph_version": context.graph_version,
+            "workflow_ref": slice_result.workflow_ref,
+            "orchestrator_agent_id": slice_result.orchestrator_agent_id,
+            "participant_agent_ids": slice_result.participant_agent_ids,
+            "candidate_refs": tuple(output_refs),
+            "handoff_refs": tuple(handoff.handoff_ref for handoff in slice_result.handoff_refs),
+            "validation_refs": slice_result.validation_refs,
+            "trace_refs": trace_refs,
+            "checkpoint_refs": (checkpoint.checkpoint_ref,),
+            "interrupt_refs": interrupt_refs,
+            "hitl_required": bool(interrupt_refs),
+            "hitl_triggers": hitl_triggers,
+            "runtime_step_count": min(len(slice_result.timeline_events) + 1, descriptor.runtime_max_steps),
+            "runtime_retry_count": 0,
+            "runtime_elapsed_seconds": 0,
+            "provider_calls": 0,
+            "repository_writes": 0,
+            "db_business_writes": 0,
+            "formal_business_writes": 0,
+        }
+        events = self._timeline_for(context)
+        command_trace_metadata = _command_trace_event_metadata(command)
+        run_started_metadata = {
+            "ai_task_id": context.ai_task_id,
+            "input_refs": command.input_refs,
+            "plan_refs": (slice_result.workflow_ref,),
+        }
+        _merge_command_trace_event_metadata(run_started_metadata, command_trace_metadata)
+        events.append(
+            _event(
+                "run_started",
+                "local multi-agent orchestrator started",
+                refs=(context.ai_task_id,),
+                metadata=run_started_metadata,
+            )
+        )
+        events.append(
+            _event(
+                "checkpoint_recorded",
+                "local multi-agent checkpoint ref recorded",
+                refs=(checkpoint.checkpoint_ref,),
+                metadata={"checkpoint_refs": (checkpoint.checkpoint_ref,)},
+            )
+        )
+        for index, event in enumerate(slice_result.timeline_events):
+            event_refs = tuple(
+                dict.fromkeys(
+                    (
+                        *tuple(slice_result.candidate_refs.values()),
+                        *tuple(handoff.handoff_ref for handoff in slice_result.handoff_refs),
+                        *slice_result.validation_refs,
+                    )
+                )
+            )
+            events.append(
+                _event(
+                    f"local_multi_agent_step_{index}",
+                    "local multi-agent refs-only step",
+                    refs=event_refs,
+                    metadata={**event, "checkpoint_refs": (checkpoint.checkpoint_ref,)},
+                )
+            )
+        if interrupt_refs:
+            events.append(
+                _event(
+                    "interrupt_opened",
+                    "local multi-agent HITL interrupt opened",
+                    refs=interrupt_refs,
+                    metadata={
+                        "interrupt_refs": interrupt_refs,
+                        "candidate_refs": output_refs,
+                        "validation_refs": slice_result.validation_refs,
+                        "hitl_triggers": hitl_triggers,
+                    },
+                )
+            )
+
+        result = AgentRunResult(
+            run_id=context.run_id,
+            status=status,
+            output_refs=output_refs,
+            trace_refs=trace_refs,
+            interrupt_refs=interrupt_refs,
+            formal_refs=(),
+            candidate_payloads=candidate_payloads,
+            metadata=runtime_metadata,
+        )
+        self._statuses[(context.owner_id, context.run_id)] = AgentRunStatus(
+            run_id=context.run_id,
+            status=result.status,
+            owner_id=context.owner_id,
+            output_refs=result.output_refs,
+            trace_refs=result.trace_refs,
+            interrupt_refs=result.interrupt_refs,
+            formal_write_blocked=True,
+            metadata=runtime_metadata,
+        )
+        self._serializer.serialize_run_result(result)
+        return result
+
     def _record_polish_feedback_checkpoint(
         self, *, context: AgentRunContext, state: _InMemoryGraphState
     ):
@@ -750,6 +925,70 @@ def _metadata_refs(metadata: dict[str, Any], key: str) -> tuple[str, ...]:
     if isinstance(value, (list, tuple, set)):
         return tuple(str(item).strip() for item in value if str(item).strip())
     return ()
+
+
+def _metadata_text(metadata: dict[str, Any], key: str) -> str:
+    value = metadata.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _local_multi_agent_status(result: Any) -> str:
+    if result.status == PRODUCT_SLICE_STATUS_FAILED_CLOSED:
+        return "failed"
+    if result.status == PRODUCT_SLICE_STATUS_BLOCKED:
+        return "blocked"
+    if result.hitl_required or result.metadata.get("low_confidence_flags"):
+        return "interrupted"
+    return "succeeded"
+
+
+def _local_multi_agent_interrupt_refs(*, context: AgentRunContext, result: Any) -> tuple[str, ...]:
+    metadata_interrupt_refs = _metadata_refs(result.metadata, "interrupt_refs")
+    if metadata_interrupt_refs:
+        return metadata_interrupt_refs
+    if result.status == PRODUCT_SLICE_STATUS_BLOCKED or result.hitl_required or result.metadata.get("low_confidence_flags"):
+        return ("hitl_ref_" + _stable_id(context.owner_id, context.run_id, result.workflow_ref),)
+    return ()
+
+
+def _local_multi_agent_hitl_triggers(result: Any) -> tuple[str, ...]:
+    failure_reason = str(result.failure_reason or "").strip()
+    if failure_reason == "asset_conflict":
+        return ("asset_conflict",)
+    if failure_reason == "formal_write_requested":
+        return ("formal_write_requested",)
+    if result.metadata.get("low_confidence_flags"):
+        return ("low_confidence",)
+    return ()
+
+
+def _local_multi_agent_candidate_payloads(result: Any) -> tuple[AgentCandidatePayload, ...]:
+    return tuple(
+        AgentCandidatePayload(
+            candidate_ref=candidate.candidate_ref,
+            candidate_type=candidate.candidate_type,
+            payload_schema_id=f"local_multi_agent.{candidate.candidate_type}.v1",
+            payload={
+                "candidate_ref": candidate.candidate_ref,
+                "candidate_type": candidate.candidate_type,
+                "source_agent_id": candidate.source_agent_id,
+                "depends_on_candidate_refs": candidate.depends_on_candidate_refs,
+                "trace_refs": candidate.trace_refs,
+                "validation_refs": candidate.validation_refs,
+                "handoff_refs": tuple(handoff.handoff_ref for handoff in result.handoff_refs),
+                "user_confirmation_required": candidate.user_confirmation_required,
+                "formal_write_blocked": candidate.formal_write_blocked,
+                "sanitized": True,
+            },
+            status="requires_user_confirmation" if candidate.user_confirmation_required else "accepted",
+            trace_refs=candidate.trace_refs,
+            validation_refs=candidate.validation_refs,
+            low_confidence_flags=_metadata_refs(result.metadata, "low_confidence_flags"),
+        )
+        for candidate in result.candidates
+    )
 
 
 def _require_descriptor_runtime_loop_policy(*, command: AgentCommandEnvelope, descriptor: Any) -> None:

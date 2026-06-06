@@ -59,6 +59,11 @@ class AgentGraphRegistry:
 
     @classmethod
     def default(cls) -> "AgentGraphRegistry":
+        from app.application.ai_runtime.business_graphs.local_multi_agent_orchestrator import (
+            LOCAL_MULTI_AGENT_GRAPH_NAME,
+            LOCAL_MULTI_AGENT_TASK_TYPE,
+            build_local_multi_agent_orchestrator_graph_descriptor,
+        )
         from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
             build_polish_feedback_graph_descriptor,
         )
@@ -67,6 +72,7 @@ class AgentGraphRegistry:
         )
 
         descriptors = {
+            LOCAL_MULTI_AGENT_GRAPH_NAME: build_local_multi_agent_orchestrator_graph_descriptor(),
             "polish_question_graph": build_polish_question_graph_descriptor(),
             "polish_feedback_graph": build_polish_feedback_graph_descriptor(),
             "job_match_graph": GraphDescriptor(
@@ -175,6 +181,7 @@ class AgentGraphRegistry:
             ),
         }
         task_map = {
+            LOCAL_MULTI_AGENT_TASK_TYPE: LOCAL_MULTI_AGENT_GRAPH_NAME,
             "polish_question_generation": "polish_question_graph",
             "polish_feedback_generation": "polish_feedback_graph",
             "job_match_analysis": "job_match_graph",

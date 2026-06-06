@@ -4,6 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from app.application.ai_runtime.business_graphs.local_multi_agent_orchestrator import (
+    LOCAL_MULTI_AGENT_GRAPH_FLAG,
+    LOCAL_MULTI_AGENT_GRAPH_NAME,
+    LOCAL_MULTI_AGENT_TASK_TYPE,
+)
 from app.application.ai_runtime.registry import AgentGraphRegistry
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.application.ai_runtime.contracts import RuntimePolicyError
@@ -14,6 +19,20 @@ def test_runtime_and_graph_flags_default_false() -> None:
     descriptor = AgentGraphRegistry.default().get_graph_descriptor("polish_question_generation")
 
     assert resolver.resolve_runtime_flag("AIFI_AI_RUNTIME_ENABLED", actor_id="actor_1").enabled is False
+    assert resolver.resolve_graph_flag(descriptor, actor_id="actor_1", caller="facade").enabled is False
+    assert resolver.is_real_provider_enabled(actor_id="actor_1").enabled is False
+
+
+def test_local_multi_agent_graph_flag_default_false_and_provider_independent() -> None:
+    resolver = RuntimeFlagResolver()
+    descriptor = AgentGraphRegistry.default().get_graph_descriptor(LOCAL_MULTI_AGENT_TASK_TYPE)
+
+    assert descriptor.graph_name == LOCAL_MULTI_AGENT_GRAPH_NAME
+    assert descriptor.runtime_flag_key == LOCAL_MULTI_AGENT_GRAPH_FLAG
+    assert descriptor.default_enabled is False
+    assert descriptor.provider_enabled is False
+    assert descriptor.formal_write_targets == ()
+    assert descriptor.db_business_write_targets == ()
     assert resolver.resolve_graph_flag(descriptor, actor_id="actor_1", caller="facade").enabled is False
     assert resolver.is_real_provider_enabled(actor_id="actor_1").enabled is False
 

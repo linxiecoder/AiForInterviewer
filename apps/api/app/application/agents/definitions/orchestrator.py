@@ -64,7 +64,7 @@ ORCHESTRATOR_HITL_TRIGGERS = (
 
 
 def build_interview_orchestrator_agent_definition() -> AgentDefinition:
-    """Build the P11-W1 contract-only Orchestrator Agent definition."""
+    """Build the Option D default-off local Orchestrator Agent definition."""
 
     plan_contract, handoff_route, state_contract, trace_contract = _build_cross_agent_contracts()
     return AgentDefinition(
@@ -74,13 +74,13 @@ def build_interview_orchestrator_agent_definition() -> AgentDefinition:
         version=INTERVIEW_ORCHESTRATOR_AGENT_VERSION,
         maturity_level=L5_CONTRACT_MATURITY_LEVEL,
         lifecycle_status=L5_CONTRACT_LIFECYCLE_STATUS,
-        mission="Plan cross-agent candidate handoffs without executing product workflow.",
+        mission="Plan and execute default-off local cross-agent candidate handoffs.",
         user_goal="Prepare reviewable orchestration plan, handoff, state and trace candidates.",
-        autonomous_goal="Validate contract references for future controlled multi-agent orchestration.",
+        autonomous_goal="Validate refs-only local multi-agent orchestration without formal writes.",
         non_goals=(
             "no L5 release claim",
-            "no runtime execution",
-            "no product workflow execution",
+            "no default-on runtime execution",
+            "no production product workflow execution",
             "no direct DB or repository write",
             "no prompt/provider/API/DB/domain behavior change",
             "no real-provider quality certification",
@@ -260,7 +260,7 @@ def _build_cross_agent_contracts() -> tuple[
         ),
         state_ref="orchestrator_plan_state_ref",
         trace_ref="trace.interview_orchestrator.timeline.v1",
-        handoff_policy="candidate_only_handoff_no_runtime_execution",
+        handoff_policy="candidate_only_handoff_default_off_local_runtime",
         handoff_routes=(handoff_route,),
         state_contract=state_contract,
         trace_contract=trace_contract,
@@ -284,7 +284,7 @@ def _build_orchestrator_skill(
         tool_refs=tool_refs,
         deterministic_policy_refs=policy_refs,
         eval_refs=(ORCHESTRATOR_EVAL_SUITE_ID, "phase12_multi_agent_eval_deferred"),
-        output_summary="orchestration contract refs are validated without runtime execution",
+        output_summary="orchestration refs are validated for default-off local runtime execution",
     )
     return replace(skill, test_refs=(L5_ARCHITECTURE_TEST_REF,))
 

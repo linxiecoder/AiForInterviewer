@@ -3,6 +3,11 @@ from __future__ import annotations
 import pytest
 
 from app.application.agents.contracts import P8_REQUIRED_RUNTIME_STOP_CONDITIONS
+from app.application.ai_runtime.business_graphs.local_multi_agent_orchestrator import (
+    LOCAL_MULTI_AGENT_GRAPH_FLAG,
+    LOCAL_MULTI_AGENT_GRAPH_NAME,
+    LOCAL_MULTI_AGENT_TASK_TYPE,
+)
 from app.application.ai_runtime.contracts import (
     AgentCandidatePayload,
     AgentCommandEnvelope,
@@ -249,6 +254,97 @@ def test_facade_start_surfaces_route_through_agent_executor_with_descriptor_runt
     assert metadata["graph_version"] == descriptor.graph_version
     assert metadata["plan_id"].startswith("plan_")
     assert metadata["objective"] == f"start {task_type}"
+    assert metadata["runtime_loop_policy"] == {
+        "max_steps": descriptor.runtime_max_steps,
+        "max_retries": descriptor.runtime_max_retries,
+        "timeout_seconds": descriptor.runtime_timeout_seconds,
+        "stop_conditions": descriptor.runtime_stop_conditions,
+        "allowed_tools": descriptor.runtime_allowed_tools,
+        "allowed_callers": descriptor.runtime_allowed_callers,
+        "side_effect_policy": descriptor.runtime_side_effect_policy,
+        "repair_strategy": "retry_within_bounds_then_fail_closed",
+        "fallback_semantics": "candidate_only_blocked_or_failed_never_generated_success",
+    }
+
+
+def test_facade_local_multi_agent_default_off_blocks_without_runner_call() -> None:
+    runner = _RecordingRunner()
+    facade = AiOrchestrationFacade(
+        runner=runner,
+        registry=AgentGraphRegistry.default(),
+        flag_resolver=RuntimeFlagResolver(test_overrides={"AIFI_AI_RUNTIME_ENABLED": True}),
+    )
+
+    with pytest.raises(GraphDisabledError, match=LOCAL_MULTI_AGENT_GRAPH_NAME):
+        facade.start_local_multi_agent_orchestration(
+            owner_id="owner_1",
+            actor_id="actor_1",
+            session_ref="session_ref_1",
+            feedback_candidate_ref="feedback_candidate_ref_1",
+            answer_ref="answer_ref_1",
+            question_ref="question_ref_1",
+            evidence_refs=("evidence_ref_1",),
+            source_trace_refs=("trace_ref_1",),
+            validation_refs=("validation_ref_1",),
+            idempotency_key="idem_local_default_off",
+        )
+
+    assert runner.started == []
+
+
+def test_facade_local_multi_agent_routes_through_agent_executor_with_refs_only_policy() -> None:
+    runner = _RecordingRunner()
+    registry = AgentGraphRegistry.default()
+    facade = AiOrchestrationFacade(
+        runner=runner,
+        registry=registry,
+        flag_resolver=RuntimeFlagResolver(
+            test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, LOCAL_MULTI_AGENT_GRAPH_FLAG: True}
+        ),
+    )
+
+    status_ref = facade.start_local_multi_agent_orchestration(
+        owner_id="owner_1",
+        actor_id="actor_1",
+        session_ref="session_ref_1",
+        feedback_candidate_ref="feedback_candidate_ref_1",
+        answer_ref="answer_ref_1",
+        question_ref="question_ref_1",
+        evidence_refs=("evidence_ref_1", "evidence_ref_2"),
+        source_trace_refs=("trace_ref_feedback",),
+        validation_refs=("validation_ref_feedback", "validation_ref_asset"),
+        low_confidence_flags=("source_gap",),
+        idempotency_key="idem_local_route",
+    )
+
+    descriptor = registry.get_graph_descriptor(LOCAL_MULTI_AGENT_TASK_TYPE)
+    assert len(runner.started) == 1
+    context = runner.started[0]
+    metadata = context.command.metadata
+    assert status_ref.status == "queued"
+    assert status_ref.formal_refs == ()
+    assert context.graph_name == LOCAL_MULTI_AGENT_GRAPH_NAME
+    assert context.graph_version == descriptor.graph_version
+    assert context.command.input_refs == (
+        "session_ref_1",
+        "feedback_candidate_ref_1",
+        "answer_ref_1",
+        "question_ref_1",
+        "evidence_ref_1",
+        "evidence_ref_2",
+        "trace_ref_feedback",
+        "validation_ref_feedback",
+        "validation_ref_asset",
+    )
+    assert context.command.requested_outputs == ("candidate_refs", "interrupt_refs")
+    assert metadata["task_type"] == LOCAL_MULTI_AGENT_TASK_TYPE
+    assert metadata["graph_name"] == LOCAL_MULTI_AGENT_GRAPH_NAME
+    assert metadata["session_ref"] == "session_ref_1"
+    assert metadata["feedback_candidate_ref"] == "feedback_candidate_ref_1"
+    assert metadata["evidence_refs"] == ("evidence_ref_1", "evidence_ref_2")
+    assert metadata["source_trace_refs"] == ("trace_ref_feedback",)
+    assert metadata["validation_refs"] == ("validation_ref_feedback", "validation_ref_asset")
+    assert metadata["low_confidence_flags"] == ("source_gap",)
     assert metadata["runtime_loop_policy"] == {
         "max_steps": descriptor.runtime_max_steps,
         "max_retries": descriptor.runtime_max_retries,

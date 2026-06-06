@@ -18,6 +18,14 @@ FORBIDDEN_WIRING_ROOTS = (
     REPO_ROOT / "apps/api/app/domain",
     REPO_ROOT / "apps/api/app/infrastructure",
 )
+ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING = frozenset(
+    {
+        "apps/api/app/application/ai_runtime/business_graphs/local_multi_agent_orchestrator.py",
+        "apps/api/app/application/ai_runtime/facade.py",
+        "apps/api/app/application/ai_runtime/registry.py",
+        "apps/api/app/infrastructure/ai_runtime/langgraph/in_memory_runtime.py",
+    }
+)
 ORCHESTRATOR_AGENT_ID = "interview_orchestrator_agent"
 ORCHESTRATOR_SKILL_IDS = frozenset(
     {
@@ -297,8 +305,8 @@ def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release
     non_goal_text = " ".join(orchestrator.non_goals).lower()
     for required_non_claim in (
         "no l5 release claim",
-        "no runtime execution",
-        "no product workflow execution",
+        "no default-on runtime execution",
+        "no production product workflow execution",
         "no direct db or repository write",
         "no prompt/provider/api/db/domain behavior change",
         "no real-provider quality certification",
@@ -394,7 +402,7 @@ def test_orchestrator_tools_are_contract_only_and_registry_blocks_direct_exposur
         ToolRegistry((forbidden_tool,))
 
 
-def test_orchestrator_is_not_runtime_wired_or_provider_bound() -> None:
+def test_orchestrator_is_only_default_off_local_runtime_wired_and_not_provider_bound() -> None:
     from app.application.agents.definitions.catalog import build_default_agent_platform_l5_contract_registries
 
     build_default_agent_platform_l5_contract_registries()
@@ -405,7 +413,7 @@ def test_orchestrator_is_not_runtime_wired_or_provider_bound() -> None:
         for path in _python_files(root)
         if ORCHESTRATOR_AGENT_ID in path.read_text(encoding="utf-8")
     ]
-    assert wired_files == []
+    assert [path for path in wired_files if path not in ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING] == []
 
     checked_files = (
         AGENTS_ROOT / "definitions" / "catalog.py",

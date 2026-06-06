@@ -15,6 +15,9 @@ from app.application.agents.contracts import (
     AgentRuntimeLoopPolicy,
 )
 from app.application.agents.runtime import AgentGraphRunnerExecutorAdapter
+from app.application.ai_runtime.business_graphs.local_multi_agent_orchestrator import (
+    LOCAL_MULTI_AGENT_TASK_TYPE,
+)
 from app.application.ai_runtime.contracts import (
     AgentCommandEnvelope,
     AgentGraphRunner,
@@ -121,6 +124,54 @@ class AiOrchestrationFacade:
             input_refs=(session_ref, question_ref, answer_ref),
             requested_outputs=requested_outputs,
             idempotency_key=idempotency_key,
+        )
+
+    def start_local_multi_agent_orchestration(
+        self,
+        *,
+        owner_id: str,
+        actor_id: str,
+        session_ref: str,
+        feedback_candidate_ref: str,
+        answer_ref: str,
+        question_ref: str,
+        evidence_refs: tuple[str, ...],
+        source_trace_refs: tuple[str, ...],
+        validation_refs: tuple[str, ...],
+        idempotency_key: str,
+        asset_conflict_ref: str = "",
+        low_confidence_flags: tuple[str, ...] = (),
+        formal_write_requested_ref: str = "",
+        ownership_ambiguity_ref: str = "",
+    ) -> AgentTaskStatusRef:
+        return self._start_run(
+            task_type=LOCAL_MULTI_AGENT_TASK_TYPE,
+            owner_id=owner_id,
+            actor_id=actor_id,
+            input_refs=(
+                session_ref,
+                feedback_candidate_ref,
+                answer_ref,
+                question_ref,
+                *evidence_refs,
+                *source_trace_refs,
+                *validation_refs,
+            ),
+            requested_outputs=("candidate_refs", "interrupt_refs"),
+            idempotency_key=idempotency_key,
+            command_metadata={
+                "session_ref": session_ref,
+                "feedback_candidate_ref": feedback_candidate_ref,
+                "answer_ref": answer_ref,
+                "question_ref": question_ref,
+                "evidence_refs": evidence_refs,
+                "source_trace_refs": source_trace_refs,
+                "validation_refs": validation_refs,
+                "asset_conflict_ref": asset_conflict_ref,
+                "low_confidence_flags": low_confidence_flags,
+                "formal_write_requested_ref": formal_write_requested_ref,
+                "ownership_ambiguity_ref": ownership_ambiguity_ref,
+            },
         )
 
     def start_report_generation(
