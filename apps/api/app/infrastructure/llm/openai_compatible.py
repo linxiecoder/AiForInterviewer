@@ -24,6 +24,7 @@ from app.application.llm.errors import (
 )
 from app.infrastructure.llm.job_match import JOB_MATCH_PROMPT_VERSION
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.infrastructure.env_reader import EnvReader
 from app.infrastructure.observability.logging import LogUtil, get_request_trace_context
 
 
@@ -44,6 +45,7 @@ LLM_OPENAI_TIMEOUT_SECONDS_ENV = "LLM_OPENAI_TIMEOUT_SECONDS"
 LLM_OPENAI_TEMPERATURE_ENV = "LLM_OPENAI_TEMPERATURE"
 LLM_OPENAI_MAX_TOKENS_ENV = "LLM_OPENAI_MAX_TOKENS"
 LLM_PROGRESS_TREE_MAX_TOKENS_ENV = "LLM_PROGRESS_TREE_MAX_TOKENS"
+LLM_OPENAI_TRUST_ENV_ENV = "LLM_OPENAI_TRUST_ENV"
 LOCAL_LLM_RAW_IO_ENABLED_ENV = "AIFI_LOCAL_LLM_RAW_IO_ENABLED"
 LOCAL_LLM_RAW_IO_DIR_ENV = "AIFI_LOCAL_LLM_RAW_IO_DIR"
 LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV = "AIFI_LOCAL_LLM_RAW_IO_INCLUDE_HEADERS"
@@ -66,6 +68,7 @@ class OpenAICompatibleLlmSettings:
     temperature: float = DEFAULT_TEMPERATURE
     max_tokens: int = DEFAULT_MAX_TOKENS
     progress_tree_max_tokens: int = DEFAULT_PROGRESS_TREE_MAX_TOKENS
+    trust_env: bool = False
 
     @classmethod
     def from_env(
@@ -73,39 +76,19 @@ class OpenAICompatibleLlmSettings:
         environ: Mapping[str, str] | None = None,
     ) -> "OpenAICompatibleLlmSettings":
         """从环境变量（或传入字典）读取 LLM 配置。API 密钥只从环境变量读取，不进入前端响应或日志。"""
-        values = os.environ if environ is None else environ
+        env = EnvReader(os.environ if environ is None else environ)
         return cls(
-            api_key=_env_optional(values, LLM_OPENAI_API_KEY_ENV)
-            or _env_optional(values, "OPENAI_API_KEY")
-            or "",
-            model=_env_optional(values, LLM_OPENAI_MODEL_ENV)
-            or _env_optional(values, "OPENAI_MODEL")
-            or DEFAULT_OPENAI_MODEL,
+            api_key=env.first_of(LLM_OPENAI_API_KEY_ENV, "OPENAI_API_KEY") or "",
+            model=env.first_of(LLM_OPENAI_MODEL_ENV, "OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
             base_url=_normalize_base_url(
-                _env_optional(values, LLM_OPENAI_BASE_URL_ENV)
-                or _env_optional(values, "OPENAI_BASE_URL")
+                env.first_of(LLM_OPENAI_BASE_URL_ENV, "OPENAI_BASE_URL")
                 or DEFAULT_OPENAI_BASE_URL,
             ),
-            timeout_seconds=_env_float(
-                values,
-                LLM_OPENAI_TIMEOUT_SECONDS_ENV,
-                DEFAULT_TIMEOUT_SECONDS,
-            ),
-            temperature=_env_float(
-                values,
-                LLM_OPENAI_TEMPERATURE_ENV,
-                DEFAULT_TEMPERATURE,
-            ),
-            max_tokens=_env_int(
-                values,
-                LLM_OPENAI_MAX_TOKENS_ENV,
-                DEFAULT_MAX_TOKENS,
-            ),
-            progress_tree_max_tokens=_env_int(
-                values,
-                LLM_PROGRESS_TREE_MAX_TOKENS_ENV,
-                DEFAULT_PROGRESS_TREE_MAX_TOKENS,
-            ),
+            timeout_seconds=env.float(LLM_OPENAI_TIMEOUT_SECONDS_ENV, DEFAULT_TIMEOUT_SECONDS),
+            temperature=env.float(LLM_OPENAI_TEMPERATURE_ENV, DEFAULT_TEMPERATURE),
+            max_tokens=env.int(LLM_OPENAI_MAX_TOKENS_ENV, DEFAULT_MAX_TOKENS),
+            progress_tree_max_tokens=env.int(LLM_PROGRESS_TREE_MAX_TOKENS_ENV, DEFAULT_PROGRESS_TREE_MAX_TOKENS),
+            trust_env=env.bool(LLM_OPENAI_TRUST_ENV_ENV, False),
         )
 
 
@@ -135,7 +118,17 @@ class OpenAICompatibleLlmTransport:
         if self._client is not None:
             return self._generate_with_client(self._client, request)
 
-        with httpx.Client(timeout=_request_timeout_seconds(self._settings, request)) as client:
+        try:
+            client = httpx.Client(
+                timeout=_request_timeout_seconds(self._settings, request),
+                trust_env=self._settings.trust_env,
+            )
+        except ImportError as exc:
+            self._dump_client_initialization_failed(request, exc)
+            raise LlmTransportUnavailableError(
+                "LLM provider 客户端初始化失败，请检查代理配置或依赖。"
+            ) from exc
+        with client:
             return self._generate_with_client(client, request)
 
     def _generate_with_client(
@@ -368,6 +361,33 @@ class OpenAICompatibleLlmTransport:
             evidence_refs=(evidence_ref,),
         )
 
+    def _dump_client_initialization_failed(
+        self,
+        request: LlmTransportRequest,
+        exc: ImportError,
+    ) -> None:
+        started_at = perf_counter()
+        started_at_wall = datetime.now(timezone.utc)
+        _maybe_dump_local_raw_llm_io(
+            request=request,
+            settings=self._settings,
+            started_at=started_at,
+            started_at_wall=started_at_wall,
+            chat_payload=_chat_completion_payload(self._settings, request),
+            request_headers={
+                "Authorization": f"Bearer {self._settings.api_key}",
+                "Content-Type": "application/json",
+            },
+            response_status_code=None,
+            response_body=None,
+            response_text=None,
+            parsed_result=None,
+            trace_refs=(),
+            evidence_refs=(),
+            error_type="client_initialization_failed",
+            error_message=_client_initialization_error_message(exc),
+        )
+
     def _log_request_start(self, request: LlmTransportRequest) -> None:
         """记录 LLM 请求启动日志（含 task_type / model / contract_ids 等关键字段）。"""
         LogUtil.llm_transport_request_start(
@@ -477,21 +497,11 @@ def _base_url_host(base_url: str) -> str:
 
 
 def _local_raw_io_enabled(environ: Mapping[str, str] | None = None) -> bool:
-    """仅在本地显式开关打开时启用 raw LLM I/O dump。"""
-    values = os.environ if environ is None else environ
-    return values.get(LOCAL_LLM_RAW_IO_ENABLED_ENV, "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return EnvReader(environ).bool(LOCAL_LLM_RAW_IO_ENABLED_ENV, False)
 
 
 def _local_raw_io_dir(environ: Mapping[str, str] | None = None) -> Path:
-    """返回 raw LLM I/O dump 目录；默认位于 .local/llm-raw。"""
-    values = os.environ if environ is None else environ
-    configured = values.get(LOCAL_LLM_RAW_IO_DIR_ENV, "").strip()
-    return Path(configured or DEFAULT_LOCAL_LLM_RAW_IO_DIR)
+    return Path(EnvReader(environ).str(LOCAL_LLM_RAW_IO_DIR_ENV, DEFAULT_LOCAL_LLM_RAW_IO_DIR))
 
 
 def _maybe_dump_local_raw_llm_io(
@@ -549,6 +559,7 @@ def _maybe_dump_local_raw_llm_io(
             "base_url": settings.base_url,
             "provider_base_host": _base_url_host(settings.base_url),
             "timeout_seconds": _request_timeout_seconds(settings, request),
+            "trust_env": settings.trust_env,
             "temperature": settings.temperature,
             "started_at": _format_raw_io_timestamp(started_at_wall),
             "completed_at": _format_raw_io_timestamp(completed_at_wall),
@@ -606,13 +617,7 @@ def _local_raw_io_headers(headers: Mapping[str, str]) -> dict[str, str]:
 
 
 def _local_raw_io_include_headers(environ: Mapping[str, str] | None = None) -> bool:
-    values = os.environ if environ is None else environ
-    return values.get(LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV, "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return EnvReader(environ).bool(LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV, False)
 
 
 def _local_raw_io_file_name(
@@ -708,6 +713,8 @@ def _system_prompt(task_type: str) -> str:
             "你是 AiForInterviewer 的结构化 JSON 任务执行器。",
             "必须使用中文输出，不要返回英文说明。",
             "只返回合法 JSON，不要 Markdown 包裹。",
+            COMPACT_JSON_REASONING_CONSTRAINT,
+            "不要输出思考过程、分析过程、推理过程或额外说明。",
             "必须严格遵守 user message 中 evidence_bundle.prompt、output_schema、schema_id 和 prompt_version。",
             "不得暴露 provider payload、secret、token 或原始 completion。",
         ]
@@ -834,38 +841,13 @@ def _evidence_ref(request: LlmTransportRequest) -> str:
     return stable_resource_id("trace", f"openai-compatible-evidence:{seed}")
 
 
-def _env_optional(values: Mapping[str, str], name: str) -> str | None:
-    """从环境变量字典中读取可选字符串；不存在或空白时返回 None。"""
-    value = values.get(name)
-    if value is None:
-        return None
-    stripped = value.strip()
-    return stripped or None
-
-
-def _env_float(values: Mapping[str, str], name: str, default: float) -> float:
-    """从环境变量字典中读取浮点数；解析失败时返回默认值。"""
-    value = _env_optional(values, name)
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except ValueError:
-        return default
-
-
-def _env_int(values: Mapping[str, str], name: str, default: int) -> int:
-    """从环境变量字典中读取正整数；解析失败或小于等于 0 时返回默认值。"""
-    value = _env_optional(values, name)
-    if value is None:
-        return default
-    try:
-        parsed = int(value)
-    except ValueError:
-        return default
-    return parsed if parsed > 0 else default
-
-
 def _normalize_base_url(raw: str) -> str:
     """标准化 base_url：去除首尾空白和尾部斜杠，为空时返回默认值。"""
     return raw.strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL
+
+
+def _client_initialization_error_message(exc: ImportError) -> str:
+    message = str(exc)
+    if "socksio" in message.lower():
+        return "HTTP client initialization failed because SOCKS proxy support is unavailable."
+    return "HTTP client initialization failed before provider request was sent."

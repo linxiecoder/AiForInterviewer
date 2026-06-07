@@ -2,8 +2,9 @@
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import os
 from typing import Iterable
+
+from app.infrastructure.env_reader import EnvReader
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -45,6 +46,8 @@ DEFAULT_CORS_ALLOW_ORIGINS = (
 DEFAULT_CORS_METHODS = ("GET", "POST", "PATCH", "DELETE", "OPTIONS")
 DEFAULT_CORS_HEADERS = ("Content-Type", "Accept", "Authorization")
 
+_env = EnvReader()
+
 
 @dataclass(frozen=True)
 class ApiSettings:
@@ -62,12 +65,12 @@ class ApiSettings:
 def get_settings() -> ApiSettings:
     """读取当前保留 API 入口需要的最小运行配置。"""
     return ApiSettings(
-        title=_env(API_TITLE_ENV, DEFAULT_API_TITLE),
-        version=_env(API_VERSION_ENV, DEFAULT_API_VERSION),
-        api_prefix=_normalize_prefix(_env(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
-        host=_env(API_HOST_ENV, DEFAULT_API_HOST),
-        port=_env_int(API_PORT_ENV, DEFAULT_API_PORT),
-        debug=_env_bool(API_DEBUG_ENV, False),
+        title=_env.str(API_TITLE_ENV, DEFAULT_API_TITLE),
+        version=_env.str(API_VERSION_ENV, DEFAULT_API_VERSION),
+        api_prefix=_normalize_prefix(_env.str(API_PREFIX_ENV, DEFAULT_API_PREFIX)),
+        host=_env.str(API_HOST_ENV, DEFAULT_API_HOST),
+        port=_env.int(API_PORT_ENV, DEFAULT_API_PORT),
+        debug=_env.bool(API_DEBUG_ENV, False),
         cors_allow_origins=_read_cors_allow_origins(),
     )
 
@@ -155,45 +158,8 @@ def _server_url(settings: ApiSettings) -> str:
     return f"http://{host}:{settings.port}"
 
 
-def _env(name: str, default: str) -> str:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    stripped = value.strip()
-    return stripped or default
-
-
-def _env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except ValueError:
-        return default
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    normalized = value.strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    return default
-
-
-def _env_optional(name: str) -> str | None:
-    value = os.getenv(name)
-    if value is None:
-        return None
-    return value.strip() or None
-
-
 def _read_cors_allow_origins() -> tuple[str, ...]:
-    configured = _env_optional(API_CORS_ALLOW_ORIGINS_ENV)
+    configured = _env.optional(API_CORS_ALLOW_ORIGINS_ENV)
     if configured is None:
         env_mode = _read_env_mode()
         if env_mode in API_CORS_LOCAL_LIKE_ENV_VALUES:
@@ -205,9 +171,8 @@ def _read_cors_allow_origins() -> tuple[str, ...]:
 
 def _read_env_mode() -> str:
     return (
-        _env("API_AUTH_ENV", _env("API_ENV", "local")).strip().lower()
-        or "local"
-    )
+        _env.first_of("API_AUTH_ENV", "API_ENV") or "local"
+    ).strip().lower()
 
 
 def _parse_cors_origins(raw: str) -> tuple[str, ...]:
