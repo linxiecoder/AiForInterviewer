@@ -253,7 +253,7 @@ def build_question_prompt_asset(
             ),
         },
         "evidence_selection_policy": {
-            "role": "legacy_compatibility_retrieval_hints_only",
+            "role": "historical_retrieval_hints_only",
             "not_a_decision_policy": True,
             "engineering_mechanism_terms": list(QUESTION_ENGINEERING_MECHANISM_TERMS),
             "preferred_background_rule": (

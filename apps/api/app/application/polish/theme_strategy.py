@@ -54,8 +54,6 @@ _POLISH_THEME_STRATEGIES: dict[str, PolishThemeStrategy] = {
         question_types=("技术深度", "表达结构", "owner 视角", "显性技术权重", "隐性表达权重"),
         feedback_sections=(
             "weight_explanation",
-            "explicit_score",
-            "implicit_score",
             "technical_gaps",
             "communication_gaps",
         ),
