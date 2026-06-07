@@ -105,6 +105,24 @@ def test_feedback_candidate_model_accepts_reference_section_id_canonical() -> No
     assert candidate.reference_answer.sections[0].section_id == "ref_recovery"
 
 
+def test_feedback_candidate_model_generates_missing_reference_section_title() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"][0].pop("title")
+
+    candidate = FeedbackCandidatePayload.model_validate(payload)
+
+    assert candidate.reference_answer.sections[0].title == "参考回答 1"
+
+
+def test_feedback_candidate_model_generates_missing_reference_section_id() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"][0].pop("section_id")
+
+    candidate = FeedbackCandidatePayload.model_validate(payload)
+
+    assert candidate.reference_answer.sections[0].section_id == "section_1"
+
+
 def test_feedback_candidate_model_normalizes_same_question_effect_string() -> None:
     payload = _candidate_payload()
     payload["same_question_effect"] = "unchanged"

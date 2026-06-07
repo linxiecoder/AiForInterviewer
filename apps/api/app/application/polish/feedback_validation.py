@@ -130,6 +130,8 @@ def validate_feedback_candidate_payload(
     if errors:
         return None, tuple(dict.fromkeys(errors))
 
+    _append_candidate_reference_answer_recovery_warnings(source_payload, warnings)
+
     try:
         candidate_model = FeedbackCandidatePayload.model_validate(source_payload)
     except ValidationError as exc:
@@ -163,16 +165,13 @@ def validate_feedback_candidate_payload(
 
     normalized["reference_answer"] = deepcopy(normalized.get("reference_answer"))
     reference_answer = normalized["reference_answer"]
-    if not isinstance(reference_answer, dict):
-        errors.append("reference_answer_required")
-    else:
-        sections = reference_answer.get("sections")
-        if not isinstance(sections, list) or not sections:
-            errors.append("reference_answer_sections_required")
-        elif not all(isinstance(section, dict) for section in sections):
-            errors.append("reference_answer_sections_invalid")
-        _, reference_errors = _reference_answer(reference_answer, known_loss_point_ids=loss_point_ids)
-        warnings.extend(reference_errors)
+    normalized["reference_answer"] = _normalize_reference_answer_sections(
+        reference_answer,
+        known_loss_point_ids=loss_point_ids,
+        errors=errors,
+        warnings=warnings,
+        recoverable=True,
+    )
 
     if normalized.get("same_question_effect") is not None:
         normalized_effect, effect_warnings = _normalize_candidate_same_question_effect(
@@ -273,16 +272,21 @@ def validate_final_feedback_payload(
 
     reference_answer = normalized.get("reference_answer")
     normalized["reference_answer"] = deepcopy(reference_answer)
-    if not isinstance(reference_answer, dict):
-        errors.append("reference_answer_required")
-    else:
-        sections = reference_answer.get("sections")
-        if not isinstance(sections, list) or not sections:
-            errors.append("reference_answer_sections_required")
-        elif not all(isinstance(section, dict) for section in sections):
-            errors.append("reference_answer_sections_invalid")
-        _, reference_errors = _reference_answer(reference_answer, known_loss_point_ids=loss_point_ids)
-        errors.extend(reference_errors)
+    final_reference_warnings: list[str] = []
+    normalized["reference_answer"] = _normalize_reference_answer_sections(
+        reference_answer,
+        known_loss_point_ids=loss_point_ids,
+        errors=errors,
+        warnings=final_reference_warnings,
+        recoverable=False,
+    )
+    if final_reference_warnings:
+        metadata = normalized.get("feedback_metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        existing = _string_list(metadata.get("validation_warnings"), max_items=40, max_item_chars=160)
+        metadata["validation_warnings"] = list(dict.fromkeys([*existing, *final_reference_warnings]))
+        normalized["feedback_metadata"] = metadata
 
     normalized["asset_consistency_check"] = normalized.get("asset_consistency_check", {})
     normalized["answer_coverage"] = normalized.get("answer_coverage", {})
@@ -351,6 +355,30 @@ def _candidate_pre_validation_warnings(payload: dict[str, Any]) -> list[str]:
         else:
             warnings.append("reference_answer_top_level_addresses_loss_point_ids_unassigned")
     return warnings
+
+
+def _append_candidate_reference_answer_recovery_warnings(payload: dict[str, Any], warnings: list[str]) -> None:
+    reference_answer = payload.get("reference_answer")
+    if not isinstance(reference_answer, dict):
+        return
+    sections = reference_answer.get("sections")
+    if not isinstance(sections, list):
+        return
+    seen_section_ids: set[str] = set()
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        section_id = _clean(section.get("section_id") or section.get("id"), max_chars=120)
+        if not section_id:
+            warnings.append("reference_answer_section_id_generated")
+        elif section_id in seen_section_ids:
+            warnings.append("reference_answer_section_id_rewritten")
+        seen_section_ids.add(section_id)
+        if not _clean(section.get("title"), max_chars=240):
+            warnings.append("reference_answer_section_title_generated")
+        addresses = section.get("addresses_loss_point_ids")
+        if addresses is not None and not isinstance(addresses, list):
+            warnings.append("reference_answer_addresses_loss_point_ids_invalid")
 
 
 def _candidate_model_errors(exc: ValidationError) -> tuple[str, ...]:
@@ -468,6 +496,98 @@ def _normalize_loss_point_ids(value: object) -> None:
         alias = _clean(item.get("id") or item.get("loss_id"), max_chars=120)
         if alias:
             item["loss_point_id"] = alias
+
+
+def _normalize_reference_answer_sections(
+    value: object,
+    *,
+    known_loss_point_ids: set[str],
+    errors: list[str],
+    warnings: list[str],
+    recoverable: bool,
+) -> object:
+    if not isinstance(value, dict):
+        errors.append("reference_answer_required")
+        return value
+
+    sections = value.get("sections")
+    if not isinstance(sections, list) or not sections:
+        errors.append("reference_answer_sections_required")
+        return value
+    if not all(isinstance(section, dict) for section in sections):
+        errors.append("reference_answer_sections_invalid")
+        return value
+
+    normalized_sections: list[dict[str, Any]] = []
+    seen_section_ids: set[str] = set()
+    for index, raw_section in enumerate(sections, start=1):
+        section = dict(raw_section)
+        content = _clean(section.get("content"), max_chars=12000)
+        if not content:
+            warnings.append("reference_answer_section_content_missing")
+            continue
+        section["content"] = content
+
+        section_id = _clean(section.get("section_id") or section.get("id"), max_chars=120)
+        if not section_id:
+            if recoverable:
+                section_id = _generated_reference_section_id(index, seen_section_ids)
+                warnings.append("reference_answer_section_id_generated")
+            else:
+                errors.append("reference_answer_section_identity_unrecoverable")
+                section_id = _generated_reference_section_id(index, seen_section_ids)
+        elif section_id in seen_section_ids:
+            if recoverable:
+                section_id = _generated_reference_section_id(index, seen_section_ids)
+                warnings.append("reference_answer_section_id_rewritten")
+            else:
+                errors.append("reference_answer_section_id_duplicate")
+        seen_section_ids.add(section_id)
+        section["section_id"] = section_id
+        section.pop("id", None)
+
+        title = _clean(section.get("title"), max_chars=240)
+        if not title:
+            title = f"参考回答 {index}"
+            warnings.append("reference_answer_section_title_generated")
+        section["title"] = title
+
+        raw_refs = section.get("addresses_loss_point_ids")
+        if raw_refs is None:
+            section["addresses_loss_point_ids"] = []
+        elif not isinstance(raw_refs, list):
+            section["addresses_loss_point_ids"] = []
+            warnings.append("reference_answer_addresses_loss_point_ids_invalid")
+        else:
+            normalized_refs: list[str] = []
+            for ref in _string_list(raw_refs, max_items=40, max_item_chars=120):
+                if ref not in known_loss_point_ids:
+                    if recoverable:
+                        warnings.append("reference_answer_unknown_loss_point_ref_removed")
+                    else:
+                        errors.append("reference_answer_unknown_loss_point_ref")
+                    continue
+                if ref not in normalized_refs:
+                    normalized_refs.append(ref)
+            section["addresses_loss_point_ids"] = normalized_refs
+
+        normalized_sections.append(section)
+
+    if not normalized_sections:
+        errors.append("reference_answer_sections_invalid")
+
+    normalized_reference_answer = dict(value)
+    normalized_reference_answer["sections"] = normalized_sections
+    return normalized_reference_answer
+
+
+def _generated_reference_section_id(index: int, seen_section_ids: set[str]) -> str:
+    candidate = f"section_{index}"
+    suffix = index
+    while candidate in seen_section_ids:
+        suffix += 1
+        candidate = f"section_{suffix}"
+    return candidate
 
 
 def _candidate_has_score_signal(payload: dict[str, Any]) -> bool:

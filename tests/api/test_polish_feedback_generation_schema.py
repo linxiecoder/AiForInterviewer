@@ -6,6 +6,19 @@ from typing import Any
 import pytest
 
 
+def _prompt_context() -> dict[str, Any]:
+    return {
+        "owner_id": "owner_001",
+        "actor_id": "user_001",
+        "session_id": "sess_001",
+        "question_id": "question_001",
+        "answer_id": "answer_001",
+        "question_text": "请说明订单异步处理如何保证失败可恢复。",
+        "answer_text": "我会用消息队列、幂等键、重试任务和告警恢复失败消息。",
+        "evidence_refs": ["resume_project_payment"],
+    }
+
+
 
 def _schema_module():
     try:
@@ -176,6 +189,41 @@ def test_feedback_payload_cross_layer_fields_are_explicitly_excluded() -> None:
     assert set(schema.POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS) & set(
         schema.POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
     ) == shared_fields
+
+
+def test_provider_output_schema_keeps_reference_section_title_property() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    output_schema = build_feedback_prompt_asset(_prompt_context())["provider_prompt"]["output_schema"]
+    reference_section_schema = output_schema["$defs"]["ReferenceAnswerSection"]
+
+    assert "title" in reference_section_schema["properties"]
+    assert "title" not in reference_section_schema.get("required", [])
+
+
+def test_provider_output_schema_has_no_required_fields_missing_from_properties() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    output_schema = build_feedback_prompt_asset(_prompt_context())["provider_prompt"]["output_schema"]
+
+    assert _required_missing_from_properties(output_schema) == []
+
+
+def _required_missing_from_properties(schema: object, path: str = "$") -> list[str]:
+    missing: list[str] = []
+    if isinstance(schema, dict):
+        properties = schema.get("properties")
+        required = schema.get("required")
+        if isinstance(properties, dict) and isinstance(required, list):
+            for field_name in required:
+                if field_name not in properties:
+                    missing.append(f"{path}.required.{field_name}")
+        for key, value in schema.items():
+            missing.extend(_required_missing_from_properties(value, f"{path}.{key}"))
+    elif isinstance(schema, list):
+        for index, value in enumerate(schema):
+            missing.extend(_required_missing_from_properties(value, f"{path}[{index}]"))
+    return missing
 
 
 def test_valid_feedback_payload_passes_and_does_not_mutate_input() -> None:

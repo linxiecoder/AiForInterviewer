@@ -3366,9 +3366,13 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     feedback_payload = feedback_body["data"]["feedback_payload"]
     assert feedback_payload["schema_id"] == "polish_feedback_generated_v1"
     assert feedback_payload["schema_version"] == "1.0"
-    assert feedback_payload["status"] == "generated"
+    assert feedback_payload["status"] in {"generated", "partial"}
     assert feedback_payload["score_result"]["score_value"] == 82
     assert feedback_payload["reference_answer"]["sections"]
+    for index, section in enumerate(feedback_payload["reference_answer"]["sections"], start=1):
+        assert section["section_id"]
+        assert section["title"] == f"参考回答 {index}"
+        assert section["content"]
     assert feedback_payload["loss_points"]
     assert "candidate_refs" not in feedback_payload
     assert "project_asset_update_candidates" not in feedback_payload
@@ -3393,8 +3397,8 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
         assert forbidden_key not in _collect_keys(feedback_body)
 
-    assert feedback_body["data"]["feedback_status"] == "generated"
-    assert feedback_body["data"]["feedback_payload"]["status"] == "generated"
+    assert feedback_body["data"]["feedback_status"] in {"generated", "partial"}
+    assert feedback_body["data"]["feedback_payload"]["status"] in {"generated", "partial"}
     assert "weaknesses" not in feedback_body["data"]["feedback_payload"]
     assert "assets" not in feedback_body["data"]["feedback_payload"]
 
@@ -3407,7 +3411,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
         if answer["answer_id"] == first_answer_id
     )
     structured_session_payload = structured_answer["feedback_payload"]
-    assert structured_session_payload["status"] == "generated"
+    assert structured_session_payload["status"] in {"generated", "partial"}
     assert "candidate_refs" not in structured_session_payload
     assert "project_asset_update_candidates" not in structured_session_payload
     assert structured_session_payload["score_result"]["score_value"] == 82
@@ -3442,7 +3446,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert second_feedback_body["data"]["answer_round"] == 2
     retry_payload = second_feedback_body["data"]["feedback_payload"]
     assert "answer_ref" not in retry_payload
-    assert retry_payload["status"] == "generated"
+    assert retry_payload["status"] in {"generated", "partial"}
     assert retry_payload["score_result"]["score_value"] == 82
     assert "candidate_refs" not in retry_payload
     assert retry_payload["feedback_metadata"]["llm_called"] is True
@@ -3585,7 +3589,7 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     assert status_code == 202
     assert elapsed_seconds < 5.0
     payload = feedback_body["data"]["feedback_payload"]
-    assert payload["status"] == "generated"
+    assert payload["status"] in {"generated", "partial"}
     assert payload["score_result"]["score_value"] == 82
     assert "candidate_refs" not in payload
     assert payload["feedback_metadata"]["llm_called"] is True
@@ -3642,7 +3646,7 @@ def test_polish_feedback_generates_when_question_metadata_missing() -> None:
     assert status_code == 202
     payload = feedback_body["data"]["feedback_payload"]
     assert payload["feedback_text"]
-    assert payload["status"] == "generated"
+    assert payload["status"] in {"generated", "partial"}
     assert payload["feedback_metadata"]["llm_called"] is True
 
 
@@ -4821,6 +4825,11 @@ def _api_polish_feedback_candidate_payload(value: object) -> object:
         return value
     filtered = {key: value[key] for key in POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS if key in value}
     filtered.pop("project_asset_update_candidates", None)
+    reference_answer = filtered.get("reference_answer")
+    if isinstance(reference_answer, dict) and isinstance(reference_answer.get("sections"), list):
+        for section in reference_answer["sections"]:
+            if isinstance(section, dict):
+                section.pop("title", None)
     loss_points = filtered.get("loss_points")
     if isinstance(loss_points, list) and len(loss_points) == 1:
         first = loss_points[0] if isinstance(loss_points[0], dict) else None

@@ -110,6 +110,22 @@ def test_feedback_pipeline_strips_provider_metadata_and_generates_recoverable_ca
         assert retired_error not in result.validation_errors
 
 
+def test_feedback_pipeline_generates_recoverable_candidate_when_reference_title_missing() -> None:
+    payload = _recoverable_candidate()
+    payload["reference_answer"]["sections"][0].pop("title")
+
+    result = FeedbackGenerationService(llm_transport=_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["status"] in {"generated", "partial"}
+    section = result.payload["reference_answer"]["sections"][0]
+    assert section["section_id"] == "ref_recovery"
+    assert section["title"] == "参考回答 1"
+    assert section["content"] == "说明重试、死信、补偿、幂等和人工介入边界。"
+    assert "reference_answer_sections_invalid" not in result.validation_errors
+
+
 def test_feedback_pipeline_passes_normalized_candidate_to_core_rules(monkeypatch: Any) -> None:
     from app.application.polish import feedback_generation_service
     from app.application.polish.feedback_rules import apply_feedback_core_rules

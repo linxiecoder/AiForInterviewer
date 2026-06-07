@@ -22,6 +22,24 @@ SAME_QUESTION_EFFECT_TRENDS = ("unchanged", "improved", "regressed", "mixed", "f
 _SAME_QUESTION_EFFECT_ALIASES = {"not_applicable": "unchanged"}
 
 
+def _clean_text(value: object, *, max_chars: int = 240) -> str:
+    if value is None:
+        return ""
+    text = " ".join(str(value).split())
+    if len(text) > max_chars:
+        return text[:max_chars].rstrip()
+    return text
+
+
+def _generated_reference_section_id(index: int, seen_section_ids: set[str]) -> str:
+    candidate = f"section_{index}"
+    suffix = index
+    while candidate in seen_section_ids:
+        suffix += 1
+        candidate = f"section_{suffix}"
+    return candidate
+
+
 class _PayloadModel(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -54,9 +72,9 @@ class LossPoint(_PayloadModel):
 
 
 class ReferenceAnswerSection(_PayloadModel):
-    section_id: str
-    title: str
-    content: str
+    section_id: str = ""
+    title: str = ""
+    content: str = ""
     addresses_loss_point_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -67,6 +85,12 @@ class ReferenceAnswerSection(_PayloadModel):
         payload = dict(value)
         if not payload.get("section_id") and payload.get("id"):
             payload["section_id"] = payload.get("id")
+        if not _clean_text(payload.get("section_id"), max_chars=120):
+            payload["section_id"] = "section_1"
+        if not _clean_text(payload.get("title"), max_chars=240):
+            payload["title"] = "参考回答 1"
+        if not isinstance(payload.get("addresses_loss_point_ids"), list):
+            payload["addresses_loss_point_ids"] = []
         return payload
 
 
@@ -95,6 +119,26 @@ class ReferenceAnswer(_PayloadModel):
                 warnings.append("reference_answer_top_level_addresses_loss_point_ids_unassigned")
         if warnings:
             payload["__validation_warnings"] = warnings
+        sections = payload.get("sections")
+        if isinstance(sections, list):
+            normalized_sections: list[object] = []
+            seen_section_ids: set[str] = set()
+            for index, item in enumerate(sections, start=1):
+                if not isinstance(item, dict):
+                    normalized_sections.append(item)
+                    continue
+                section = dict(item)
+                section_id = _clean_text(section.get("section_id") or section.get("id"), max_chars=120)
+                if not section_id:
+                    section_id = _generated_reference_section_id(index, seen_section_ids)
+                section["section_id"] = section_id
+                seen_section_ids.add(section_id)
+                if not _clean_text(section.get("title"), max_chars=240):
+                    section["title"] = f"参考回答 {index}"
+                if not isinstance(section.get("addresses_loss_point_ids"), list):
+                    section["addresses_loss_point_ids"] = []
+                normalized_sections.append(section)
+            payload["sections"] = normalized_sections
         return payload
 
     @model_validator(mode="after")

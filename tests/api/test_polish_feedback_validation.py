@@ -232,6 +232,94 @@ def test_validate_feedback_candidate_payload_requires_reference_sections_list() 
     assert "reference_answer_sections_required" in errors
 
 
+def test_validate_feedback_candidate_payload_generates_missing_reference_section_title() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"][0].pop("title")
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    assert "reference_answer_sections_invalid" not in errors
+    assert normalized["reference_answer"]["sections"][0]["title"] == "参考回答 1"
+    assert "reference_answer_section_title_generated" in normalized["feedback_metadata"]["validation_warnings"]
+
+
+def test_validate_feedback_candidate_payload_generates_missing_reference_section_id() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"][0].pop("section_id")
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    assert normalized["reference_answer"]["sections"][0]["section_id"] == "section_1"
+    assert "reference_answer_section_id_generated" in normalized["feedback_metadata"]["validation_warnings"]
+
+
+def test_validate_feedback_candidate_payload_drops_unknown_reference_loss_point_refs() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"][0]["addresses_loss_point_ids"] = [
+        "lp_observability",
+        "lp_unknown",
+    ]
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    section = normalized["reference_answer"]["sections"][0]
+    assert section["addresses_loss_point_ids"] == ["lp_observability"]
+    assert "reference_answer_unknown_loss_point_ref_removed" in normalized["feedback_metadata"]["validation_warnings"]
+
+
+def test_validate_feedback_candidate_payload_defaults_missing_reference_addresses_to_empty_list() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"][0].pop("addresses_loss_point_ids")
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    assert normalized["reference_answer"]["sections"][0]["addresses_loss_point_ids"] == []
+
+
+def test_validate_feedback_candidate_payload_rejects_sections_without_any_content() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"] = [
+        {
+            "section_id": "ref_empty",
+            "title": "空参考回答",
+            "content": " ",
+            "addresses_loss_point_ids": ["lp_observability"],
+        }
+    ]
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert "reference_answer_sections_invalid" in errors
+
+
+def test_validate_feedback_candidate_payload_rewrites_duplicate_reference_section_ids() -> None:
+    payload = _candidate_payload()
+    payload["reference_answer"]["sections"].append(
+        {
+            "section_id": "ref_observability",
+            "title": "",
+            "content": "补充说明恢复边界、重试停止条件和人工介入标准。",
+        }
+    )
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    section_ids = [section["section_id"] for section in normalized["reference_answer"]["sections"]]
+    assert section_ids == ["ref_observability", "section_2"]
+    assert "reference_answer_section_id_rewritten" in normalized["feedback_metadata"]["validation_warnings"]
+
+
 def test_validate_final_feedback_payload_accepts_valid_payload() -> None:
     payload = _final_payload()
 

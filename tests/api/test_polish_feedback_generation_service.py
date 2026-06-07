@@ -415,15 +415,47 @@ def test_provider_invalid_schema_returns_failed() -> None:
     assert "feedback_text_required" in result.validation_errors
 
 
-def test_provider_loss_reference_mapping_invalid_returns_failed() -> None:
+def test_provider_loss_reference_mapping_invalid_is_recovered_with_warning() -> None:
     payload = _generated_payload()
     payload["reference_answer"]["sections"][0]["addresses_loss_point_ids"] = ["lp_unknown"]
 
     result = _service(_PayloadTransport(payload)).generate(_context())
 
-    assert result.succeeded is False
-    assert result.payload is None
-    assert "reference_answer_unknown_loss_point_ref" in result.validation_errors
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["status"] == "partial"
+    section = result.payload["reference_answer"]["sections"][0]
+    assert section["addresses_loss_point_ids"] == []
+    assert "reference_answer_unknown_loss_point_ref_removed" in result.payload["feedback_metadata"]["validation_warnings"]
+
+
+def test_provider_reference_sections_without_titles_generate_feedback_with_default_titles() -> None:
+    payload = _generated_payload()
+    for section in payload["reference_answer"]["sections"]:
+        section.pop("title")
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["status"] in {"generated", "partial"}
+    titles = [section["title"] for section in result.payload["reference_answer"]["sections"]]
+    assert titles == ["参考回答 1", "参考回答 2"]
+    assert "reference_answer_sections_invalid" not in result.validation_errors
+
+
+def test_provider_reference_sections_without_ids_generate_feedback_with_stable_ids() -> None:
+    payload = _generated_payload()
+    for section in payload["reference_answer"]["sections"]:
+        section.pop("section_id")
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    section_ids = [section["section_id"] for section in result.payload["reference_answer"]["sections"]]
+    assert section_ids == ["section_1", "section_2"]
+    assert "reference_answer_sections_invalid" not in result.validation_errors
 
 
 def test_provider_phase4_fields_and_loss_point_id_alias_generate_feedback() -> None:

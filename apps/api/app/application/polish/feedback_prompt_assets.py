@@ -254,15 +254,15 @@ def _feedback_candidate_output_schema() -> dict[str, Any]:
     return schema
 
 
-def _compact_json_schema(value: Any) -> Any:
+def _compact_json_schema(value: Any, *, parent_key: str | None = None) -> Any:
     if isinstance(value, dict):
         return {
-            key: _compact_json_schema(nested)
+            key: _compact_json_schema(nested, parent_key=key)
             for key, nested in value.items()
-            if key not in {"title"}
+            if not (key == "title" and parent_key != "properties")
         }
     if isinstance(value, list):
-        return [_compact_json_schema(item) for item in value]
+        return [_compact_json_schema(item, parent_key=parent_key) for item in value]
     return value
 
 
@@ -382,12 +382,14 @@ def _provider_compact_prompt(
         "output_requirements": [
             "Return JSON only.",
             "Use only output_schema candidate fields.",
-            "Return feedback_text, answer_summary, loss_points, reference_answer, low_confidence_flags, evidence_refs.",
+            "Required: feedback_text, answer_summary, loss_points, reference_answer, low_confidence_flags, evidence_refs.",
+            "reference_answer.sections[].title recommended; service generates if omitted.",
+            "reference_answer.sections[].content required for display.",
             "score_reasoning is recommended; if uncertain, omit it.",
             "Optional candidate fields: same_question_effect, project_asset_update_candidates.",
             "Aliases accepted: loss_points[].id/loss_id, reference_answer.sections[].id.",
             "same_question_effect may be an object or unchanged/improved/regressed/mixed/first_attempt.",
-            "Do not include metadata/final fields: feedback_id, schema_id, schema_version, model_name, prompt_version, score_result, deterministic service fields, task refs, stored feedback summaries.",
+            "Do not include final/metadata fields: feedback_id, schema_id, schema_version, model_name, prompt_version, score_result.",
             "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         ],
         "feedback_metadata": {
