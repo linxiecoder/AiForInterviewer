@@ -20,6 +20,7 @@ ALLOWED_LANG_IMPORT_PREFIX = Path("apps/api/app/infrastructure/ai_runtime/langgr
 BUSINESS_GRAPH_ROOT = APP_ROOT / "application" / "ai_runtime" / "business_graphs"
 ALLOWED_PR5_BUSINESS_GRAPH_FILES = {
     BUSINESS_GRAPH_ROOT / "__init__.py",
+    BUSINESS_GRAPH_ROOT / "local_multi_agent_orchestrator.py",
     BUSINESS_GRAPH_ROOT / "polish_feedback_graph.py",
     BUSINESS_GRAPH_ROOT / "polish_question_graph.py",
 }

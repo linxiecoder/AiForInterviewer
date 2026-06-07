@@ -18,6 +18,14 @@ FORBIDDEN_WIRING_ROOTS = (
     REPO_ROOT / "apps/api/app/domain",
     REPO_ROOT / "apps/api/app/infrastructure",
 )
+ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING = frozenset(
+    {
+        "apps/api/app/application/ai_runtime/business_graphs/local_multi_agent_orchestrator.py",
+        "apps/api/app/application/ai_runtime/facade.py",
+        "apps/api/app/application/ai_runtime/registry.py",
+        "apps/api/app/infrastructure/ai_runtime/langgraph/in_memory_runtime.py",
+    }
+)
 ORCHESTRATOR_AGENT_ID = "interview_orchestrator_agent"
 ORCHESTRATOR_SKILL_IDS = frozenset(
     {
@@ -259,7 +267,7 @@ def test_phase11_l5_asset_conflict_blocks_before_asset_or_training_candidates() 
     assert result.timeline_events[0]["failure_reason"] == "asset_conflict"
 
 
-def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release() -> None:
+def test_orchestrator_definition_is_default_off_local_candidate_only_and_non_release() -> None:
     from app.application.agents.contracts import (
         CROSS_AGENT_ALLOWED_SIDE_EFFECT_POLICIES,
         CROSS_AGENT_HITL_TRIGGER_TYPES,
@@ -274,9 +282,10 @@ def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release
     registries = build_default_agent_platform_l5_contract_registries()
     orchestrator = registries.agent_definitions.get(ORCHESTRATOR_AGENT_ID)
 
-    assert orchestrator.lifecycle_status in {"contract_only", "implementation_planned"}
+    assert orchestrator.lifecycle_status == "default_off_local_runtime_validated"
     assert "release" not in orchestrator.lifecycle_status
-    assert "L5 target contract" in orchestrator.maturity_level
+    assert "default-off local runtime" in orchestrator.maturity_level
+    assert "not production L5 release" in orchestrator.maturity_level
     assert set(orchestrator.candidate_outputs) == ORCHESTRATOR_CANDIDATE_OUTPUTS
     assert set(orchestrator.candidate_outputs) <= ALLOWED_CANDIDATE_OUTPUTS
     assert "direct formal writes disallowed" in orchestrator.formal_write_boundary
@@ -297,8 +306,8 @@ def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release
     non_goal_text = " ".join(orchestrator.non_goals).lower()
     for required_non_claim in (
         "no l5 release claim",
-        "no runtime execution",
-        "no product workflow execution",
+        "no default-on runtime execution",
+        "no production workflow release or traffic rollout",
         "no direct db or repository write",
         "no prompt/provider/api/db/domain behavior change",
         "no real-provider quality certification",
@@ -306,6 +315,49 @@ def test_orchestrator_definition_is_contract_only_candidate_only_and_non_release
         assert required_non_claim in non_goal_text
     for forbidden_field in ("formal_outputs", "formal_refs", "formal_write_result"):
         assert forbidden_field not in {field.name for field in fields(type(orchestrator))}
+
+
+def test_orchestrator_metadata_uses_default_off_local_runtime_language() -> None:
+    from app.application.agents.definitions.catalog import build_default_agent_platform_l5_contract_registries
+
+    orchestrator = build_default_agent_platform_l5_contract_registries().agent_definitions.get(
+        ORCHESTRATOR_AGENT_ID
+    )
+
+    metadata_text = " ".join(
+        (
+            orchestrator.maturity_level,
+            orchestrator.lifecycle_status,
+            orchestrator.mission,
+            orchestrator.user_goal,
+            orchestrator.autonomous_goal,
+            *orchestrator.non_goals,
+            orchestrator.formal_write_boundary,
+            orchestrator.memory_state,
+            orchestrator.planning_strategy,
+            *orchestrator.guardrails,
+            orchestrator.failure_semantics,
+            orchestrator.eval_contract.contract_id,
+            *orchestrator.eval_contract.eval_suite_ids,
+            *orchestrator.eval_contract.metrics,
+            *orchestrator.eval_contract.dataset_refs,
+            *orchestrator.eval_contract.grader_refs,
+            *orchestrator.eval_contract.regression_cases,
+            orchestrator.eval_contract.minimum_pass_criteria,
+            orchestrator.eval_contract.failure_triage_policy,
+            orchestrator.catalog_revision,
+        )
+    ).lower()
+
+    for stale_phrase in ("no_runtime_wiring", "contract_deferred", "no_product_workflow_execution"):
+        assert stale_phrase not in metadata_text
+
+    assert "default-off local runtime" in metadata_text
+    assert "default_off_local_runtime_guard" in orchestrator.guardrails
+    assert "no_production_workflow_release" in orchestrator.guardrails
+    assert "candidate_only" in orchestrator.guardrails
+    assert "direct formal writes disallowed" in orchestrator.formal_write_boundary
+    assert "real-provider quality certification" in metadata_text
 
 
 def test_cross_agent_contracts_fail_closed_and_forbid_raw_payloads() -> None:
@@ -394,7 +446,7 @@ def test_orchestrator_tools_are_contract_only_and_registry_blocks_direct_exposur
         ToolRegistry((forbidden_tool,))
 
 
-def test_orchestrator_is_not_runtime_wired_or_provider_bound() -> None:
+def test_orchestrator_is_only_default_off_local_runtime_wired_and_not_provider_bound() -> None:
     from app.application.agents.definitions.catalog import build_default_agent_platform_l5_contract_registries
 
     build_default_agent_platform_l5_contract_registries()
@@ -405,7 +457,7 @@ def test_orchestrator_is_not_runtime_wired_or_provider_bound() -> None:
         for path in _python_files(root)
         if ORCHESTRATOR_AGENT_ID in path.read_text(encoding="utf-8")
     ]
-    assert wired_files == []
+    assert [path for path in wired_files if path not in ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING] == []
 
     checked_files = (
         AGENTS_ROOT / "definitions" / "catalog.py",

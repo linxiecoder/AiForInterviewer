@@ -605,7 +605,7 @@ Current Status:
 - `L5-003` cross-agent handoff / state / trace contracts are `validated_with_deferred_gaps`: typed refs, trace / validation / handoff separation and boundary tests are evidence-backed; release evidence remains deferred.
 - `L5-004` multi-agent product workflow is `validated_with_deferred_gaps`: minimal three-business-agent candidate-only slice and typed handoff refs are evidence-backed; formal write completion and release remain deferred.
 - `L5-005` controlled tool loop hardening is `validated` for controlled runtime-boundary evidence after Matrix and Risk Register backfill; it is not `done` and not release evidence.
-- `L5-006` remains release-blocking and must not be marked implemented, validated or done by Phase 11 evidence.
+- Pre-split `L5-006` remains release-blocking and must not be marked done by Phase 11 evidence; D-W0 splits it into `L5-006A` local hardening and `L5-006B` production release.
 
 Goal:
 
@@ -716,7 +716,7 @@ P11-W5 non-claims:
 - P11-W5 does not change prompt, provider, API, DB schema, frontend or domain policy behavior.
 - P11-W5 does not claim remote CI success, L5 release, formal F8/M8 release or Phase 12 release gate completion.
 - P11-W5 does not mark any L5 capability `done`.
-- P11-W5 does not mark `L5-006` implemented, validated or done.
+- P11-W5 does not mark pre-split `L5-006`, `L5-006A` or `L5-006B` implemented, validated or done.
 
 ## Phase 12
 
@@ -726,39 +726,42 @@ L5 Eval, Hardening, and Release Gate
 
 Current Status:
 
+- D-W0 records USER_CONFIRMED Option D as Local Complete Multi-Agent Capability.
+- Canonical Option D goal path: `docs/03-delivery/refactor-multiagent-langgraph-implementation/option_d_local_complete_multi_agent_goal.md`.
 - Release gate scope locked by P12-W0.
 - P12-W1 implemented executable L5 eval suite foundation.
-- `L5-006` current status is `implemented`, not validated, not done and not closed.
-- P12-W2 replay / resume / failure fixtures, P12-W3 observability / trace report, P12-W4 release readiness audit, real-provider quality certification, remote CI artifact evidence and human release decision remain open.
-- No L5 release, real-provider quality certification, formal F8/M8 release, Phase 12 release gate completion or remote CI success is claimed by P12-W0 or P12-W1.
+- D-W2 implemented default-off local multi-agent runtime wiring.
+- D-W3 implemented local eval / replay / failure hardening fixtures and negative controls.
+- D-W4 source backfill records Option D local capability as implemented and locally validated.
+- `L5-006A` current status is `validated` for local eval / replay / failure hardening.
+- `L5-006B` current status is `deferred_out_of_scope_for_option_d`.
+- Production release readiness audit, real-provider production certification, production observability/SLO, remote CI artifact evidence, rollback evidence and human/controller production release decision remain deferred under `L5-006B`.
+- No production L5 release, real-provider quality certification, formal F8/M8 release, production release gate completion or remote CI success is claimed by Option D.
 
-Current P12-W1 State:
+Current D-W4 Local State:
 
-- P12-W1 implemented executable L5 eval suite foundation.
+- D-W2 local runtime wiring validates `interview_orchestrator_agent` behind `AIFI_ENABLE_LOCAL_MULTI_AGENT_ORCHESTRATION=false` by default.
+- D-W2 local product path includes `polish_feedback_agent`, `asset_candidate_agent` and `training_plan_agent`.
+- D-W3 Phase 12 local gate covers happy path, insufficient context, asset conflict, low confidence, formal write request, ownership ambiguity, provider unavailable, validation failed partial result, cross-agent handoff failure, replay, replay mismatch, bounded-loop stop and fake/replay non-claim.
 - Executable runner: scripts/evals/run_l5_eval_suite.py.
 - Executable suite / datasets: tests/evals/phase12/**.
-- CI workflow includes Phase 12 L5 gate.
-- P12-W2 replay / resume / failure fixtures must be retried against the executable P12-W1 suite.
-- P12-W3 observability / trace report remains open.
-- P12-W4 release readiness audit and human release decision remain open.
+- Current Phase 12 report payloads still emit historical capability id `L5-006`; under DEC-L5-015 this evidence is interpreted only as `L5-006A` local hardening evidence, with metadata normalization deferred to a future eval hygiene change.
+- CI workflow binding exists for Phase 12 L5 gate, but visible remote CI artifact evidence remains a separate production-release claim.
+- Latest local validation evidence: `tests/architecture tests/evals` -> 74 passed; `tests/evals` -> 41 passed; Phase 12 L5 deterministic gate -> 13 passed / 0 blocking failures; Phase 9 replay gate -> 30 passed / 2 deferred / 0 blocking failures; Phase 12 and Phase 9 negative controls -> observed_expected_failure=true; `git diff --check` -> passed.
+- Release readiness audit, remote CI hard claim, real-provider production certification, production observability/SLO, rollback evidence and human/controller production release decision remain deferred under `L5-006B`.
 
 Non-claims:
 
-- P12-W1 is not L5 release.
-- P12-W1 is not Phase 12 release gate closure.
-- P12-W1 is not real-provider quality certification.
+- Option D local validation is not production L5 release.
+- Option D local validation is not production release gate closure.
+- Option D local validation is not real-provider quality certification.
+- Option D local validation is not remote CI hard claim.
+- Option D is not production release readiness and does not require A/B testing.
 
 Goal:
 
-- Multi-agent regression suite.
-- Cross-agent replay fixtures.
-- Failure-mode regression cases.
-- L5 CI gate.
-- Observability / trace report.
-- Rollback policy.
-- Failure triage policy.
-- Remote CI artifact evidence.
-- Human/controller release decision.
+- `L5-006A`: local multi-agent regression suite, cross-agent replay fixtures, failure-mode regression cases, local trace report, local negative controls and failure triage.
+- `L5-006B`: production L5 CI gate, visible remote CI artifact evidence, production observability/SLO, rollback policy, real-provider production certification and human/controller release decision.
 
 P12-W0 Evidence:
 
@@ -798,15 +801,15 @@ P12-W1 Contract-first Historical Evidence:
 - `evals/schemas/phase12_release_report_schema.json`
 - `tests/evals/test_phase12_eval_contracts.py`
 
-P12-W1 treatment:
+P12-W1 treatment, superseded by D-W4 local validation for `L5-006A`:
 
 - Executable eval suite foundation only.
 - `tests/evals/phase12/**` and `scripts/evals/run_l5_eval_suite.py` are the executable Phase 12 L5 eval suite foundation.
 - Older `evals/suites/phase12.json` and `evals/graders/phase12_contract.json` remain contract-only artifacts.
 - Deterministic / fake-safe eval evidence is not real-provider quality certification.
-- P12-W2 must be retried against the executable P12-W1 suite for replay / resume / failure fixtures.
-- P12-W3 observability / trace report remains open.
-- P12-W4 release readiness audit, remote CI artifact evidence and human release decision remain open.
+- At P12-W1 time, P12-W2 still needed retry against the executable P12-W1 suite for local replay / resume / failure fixtures.
+- At P12-W1 time, P12-W3 local observability / trace report remained open.
+- P12-W4 release readiness audit, remote CI artifact evidence, real-provider production certification, production observability/SLO and human release decision remain open under `L5-006B`, outside Option D.
 
 Forbidden:
 
@@ -817,9 +820,11 @@ Forbidden:
 - Release with unresolved provider fail-open gaps.
 - Release without human/controller decision.
 - Claiming remote CI success without visible run/artifact.
+- Treating Option D local capability as production release readiness.
+- Requiring or claiming A/B testing inside Option D.
 - Treating P12-W0 scope lock as release gate completion.
 - Treating P12-W1 eval contract artifacts as release gate completion.
-- Marking `L5-006` implemented, validated or done before evidence exists.
+- Marking pre-split `L5-006`, `L5-006A` or `L5-006B` implemented, validated or done before required evidence exists.
 
 ## Phase 11 Entry Conditions
 

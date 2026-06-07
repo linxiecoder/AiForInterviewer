@@ -1,4 +1,4 @@
-"""Contract-only Phase 11 Supervisor / Orchestrator catalog definitions."""
+"""Option D default-off local Supervisor / Orchestrator catalog definitions."""
 
 from __future__ import annotations
 
@@ -19,14 +19,17 @@ from app.application.agents.definitions.common import FORBIDDEN_DATA, build_skil
 from app.application.agents.definitions.versions import (
     AGENT_DEFINITION_SCHEMA_VERSION,
     INTERVIEW_ORCHESTRATOR_AGENT_VERSION,
-    L5_CONTRACT_CATALOG_REVISION,
-    L5_CONTRACT_LIFECYCLE_STATUS,
-    L5_CONTRACT_MATURITY_LEVEL,
 )
 
 
 INTERVIEW_ORCHESTRATOR_AGENT_ID = "interview_orchestrator_agent"
-ORCHESTRATOR_EVAL_SUITE_ID = "eval.interview_orchestrator_agent.contract_deferred.v1"
+ORCHESTRATOR_CATALOG_REVISION = "2026-06-07.d-w5.metadata-hygiene.option-d-local-runtime"
+ORCHESTRATOR_LIFECYCLE_STATUS = "default_off_local_runtime_validated"
+ORCHESTRATOR_MATURITY_LEVEL = (
+    "Option D local multi-agent capability metadata; "
+    "default-off local runtime; not production L5 release"
+)
+ORCHESTRATOR_EVAL_SUITE_ID = "eval.interview_orchestrator_agent.default_off_local_runtime.v1"
 L5_ARCHITECTURE_TEST_REF = (
     "tests/architecture/test_agent_platform_l5_orchestrator_contract.py::"
     "test_phase11_l5_catalog_registers_orchestrator_without_replacing_c1"
@@ -64,7 +67,7 @@ ORCHESTRATOR_HITL_TRIGGERS = (
 
 
 def build_interview_orchestrator_agent_definition() -> AgentDefinition:
-    """Build the P11-W1 contract-only Orchestrator Agent definition."""
+    """Build the Option D default-off local Orchestrator Agent definition."""
 
     plan_contract, handoff_route, state_contract, trace_contract = _build_cross_agent_contracts()
     return AgentDefinition(
@@ -72,15 +75,15 @@ def build_interview_orchestrator_agent_definition() -> AgentDefinition:
         agent_name="Interview Orchestrator Agent",
         domain="interview_orchestration",
         version=INTERVIEW_ORCHESTRATOR_AGENT_VERSION,
-        maturity_level=L5_CONTRACT_MATURITY_LEVEL,
-        lifecycle_status=L5_CONTRACT_LIFECYCLE_STATUS,
-        mission="Plan cross-agent candidate handoffs without executing product workflow.",
+        maturity_level=ORCHESTRATOR_MATURITY_LEVEL,
+        lifecycle_status=ORCHESTRATOR_LIFECYCLE_STATUS,
+        mission="Plan and execute default-off local cross-agent candidate handoffs.",
         user_goal="Prepare reviewable orchestration plan, handoff, state and trace candidates.",
-        autonomous_goal="Validate contract references for future controlled multi-agent orchestration.",
+        autonomous_goal="Validate refs-only local multi-agent orchestration without formal writes.",
         non_goals=(
             "no L5 release claim",
-            "no runtime execution",
-            "no product workflow execution",
+            "no default-on runtime execution",
+            "no production workflow release or traffic rollout",
             "no direct DB or repository write",
             "no prompt/provider/API/DB/domain behavior change",
             "no real-provider quality certification",
@@ -95,26 +98,26 @@ def build_interview_orchestrator_agent_definition() -> AgentDefinition:
         ),
         skills=ORCHESTRATOR_SKILL_IDS,
         tools=ORCHESTRATOR_TOOL_IDS,
-        memory_state="contract_refs_only_no_runtime_state",
-        planning_strategy="contract_first_cross_agent_plan_only",
+        memory_state="refs_only_default_off_local_runtime_state",
+        planning_strategy="default_off_local_cross_agent_plan",
         guardrails=(
             "candidate_only",
-            "no_runtime_wiring",
-            "no_product_workflow_execution",
+            "default_off_local_runtime_guard",
+            "no_production_workflow_release",
             "no_repository_or_db_tool_exposure",
         ),
         hitl_triggers=ORCHESTRATOR_HITL_TRIGGERS,
-        failure_semantics="fail_closed_without_runtime_execution_or_formal_write",
+        failure_semantics="fail_closed_for_disabled_local_runtime_or_formal_write",
         trace_contract=trace_contract,
         eval_contract=EvalContract(
             contract_id="eval.interview_orchestrator_agent.v1",
             eval_suite_ids=(ORCHESTRATOR_EVAL_SUITE_ID,),
-            metrics=("contract_shape", "no_runtime_wiring", "forbidden_data_omission"),
+            metrics=("definition_shape", "default_off_local_runtime_guard", "forbidden_data_omission"),
             failure_policy="fail_closed",
-            dataset_refs=("phase12.multi_agent_eval_dataset.deferred",),
-            grader_refs=("phase12.multi_agent_grader.deferred",),
-            regression_cases=("phase11.contract_architecture_gate",),
-            minimum_pass_criteria="contract catalog validates without runtime execution",
+            dataset_refs=("phase12.multi_agent_eval_dataset.local",),
+            grader_refs=("phase12.multi_agent_grader.local",),
+            regression_cases=("phase12.default_off_local_runtime_gate",),
+            minimum_pass_criteria="definition validates default-off local runtime guardrails",
             ci_gate="deferred_remote_ci_gap",
             failure_triage_policy="record_gap_without_l5_release_claim",
         ),
@@ -122,12 +125,12 @@ def build_interview_orchestrator_agent_definition() -> AgentDefinition:
         versioning_policy="semver_definition_version_with_l5_contract_catalog_revision",
         task_types=(),
         schema_version=AGENT_DEFINITION_SCHEMA_VERSION,
-        catalog_revision=L5_CONTRACT_CATALOG_REVISION,
+        catalog_revision=ORCHESTRATOR_CATALOG_REVISION,
     )
 
 
 def build_interview_orchestrator_skill_definitions() -> tuple[SkillDefinition, ...]:
-    """Build contract-only skill definitions owned by the Orchestrator."""
+    """Build default-off local Orchestrator skill definitions."""
 
     return (
         _build_orchestrator_skill(
@@ -176,7 +179,7 @@ def build_interview_orchestrator_skill_definitions() -> tuple[SkillDefinition, .
 
 
 def build_interview_orchestrator_tool_definitions() -> tuple[ToolDefinition, ...]:
-    """Build contract-only tool definitions for Orchestrator validation."""
+    """Build default-off local Orchestrator tool definitions."""
 
     return (
         _build_orchestrator_tool("orch_read_agent_catalog_contract", "read_agent_catalog_contract"),
@@ -244,7 +247,7 @@ def _build_cross_agent_contracts() -> tuple[
         plan_id="plan.interview_orchestrator.contract.v1",
         orchestrator_agent_id=INTERVIEW_ORCHESTRATOR_AGENT_ID,
         owner_id="owner_ref",
-        objective="contract-only cross-agent orchestration plan",
+        objective="refs-only default-off local cross-agent orchestration plan",
         participant_agent_ids=("polish_question_agent", "polish_feedback_agent"),
         steps=(plan_step,),
         max_steps=4,
@@ -260,7 +263,7 @@ def _build_cross_agent_contracts() -> tuple[
         ),
         state_ref="orchestrator_plan_state_ref",
         trace_ref="trace.interview_orchestrator.timeline.v1",
-        handoff_policy="candidate_only_handoff_no_runtime_execution",
+        handoff_policy="candidate_only_handoff_default_off_local_runtime",
         handoff_routes=(handoff_route,),
         state_contract=state_contract,
         trace_contract=trace_contract,
@@ -283,8 +286,8 @@ def _build_orchestrator_skill(
         purpose=purpose,
         tool_refs=tool_refs,
         deterministic_policy_refs=policy_refs,
-        eval_refs=(ORCHESTRATOR_EVAL_SUITE_ID, "phase12_multi_agent_eval_deferred"),
-        output_summary="orchestration contract refs are validated without runtime execution",
+        eval_refs=(ORCHESTRATOR_EVAL_SUITE_ID, "phase12_multi_agent_eval_local"),
+        output_summary="orchestration refs are validated for default-off local runtime execution",
     )
     return replace(skill, test_refs=(L5_ARCHITECTURE_TEST_REF,))
 
@@ -299,7 +302,7 @@ def _build_orchestrator_tool(tool_id: str, tool_name: str, *, side_effect_policy
     return replace(
         tool,
         permission_scope="agent_catalog_contract_read" if tool_id.endswith("catalog_contract") else "contract_validation",
-        owner_scope="orchestrator_contract_only",
+        owner_scope="orchestrator_default_off_local_runtime",
         trace_events=(f"tool.{tool_id}.contract_validated",),
         forbidden_data=FORBIDDEN_DATA,
     )

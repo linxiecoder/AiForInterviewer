@@ -413,7 +413,7 @@ Phase 10 accepted evidence:
 
 - Phase 0-10 明确保持 L5 Foundation `closed_with_deferred_gaps`，不得作为 L5 release。
 - `deferred_remote_ci_gap`、Phase 8 runtime gaps、stale committed report metadata risk、Supervisor / Orchestrator not started、Phase 12 release gate not started 和 real-provider quality certification non-claim 必须显式处理。
-- L5-002 到 L5-006 不得在 P11-W0 标记 implemented、validated 或 done。
+- L5-002 到未拆分的 L5-006 不得在 P11-W0 标记 implemented、validated 或 done；D-W0 后使用 `L5-006A` / `L5-006B` 拆分状态，禁止继续用未拆分 `L5-006` 作为完成口径。
 - replay / fake / fixture evidence 不得当作 real-provider quality certification。
 - remote CI claim 必须引用 visible passing GitHub Actions run 和 artifact。
 - 每个跨 Agent 输出仍为 candidate / suggestion / validation / plan / trace。
@@ -435,14 +435,15 @@ P12-W1 may be accepted only as an eval-suite foundation when:
 - Phase 12 gate test exists and passes;
 - deterministic run passes with zero blocking failures;
 - negative control fails as expected;
-- CI workflow includes the Phase 12 L5 gate;
+- CI workflow binding may exist, but visible remote CI artifact evidence remains a separate production-release claim;
 - no product behavior, provider, prompt, DB, API contract, frontend, or production runtime behavior changes are introduced;
 - no raw prompt / raw provider payload / raw completion / full resume / full JD / full asset body is persisted.
 
 Non-claims:
 
 - P12-W1 does not complete replay / resume / failure fixtures.
-- P12-W1 does not close L5-006.
+- P12-W1 does not close `L5-006A` local hardening.
+- P12-W1 does not start or close `L5-006B` production release.
 - P12-W1 does not claim L5 release.
 - P12-W1 does not claim real-provider quality certification.
 - P12-W1 does not record human release decision.
@@ -666,7 +667,7 @@ Status:
 - frontend/API contract change。
 - Phase 12 eval runner, replay execution, CI binding, report generation, observability report or release decision implementation。
 - L5 release, real-provider quality certification, remote CI success, formal F8/M8 release or Phase 12 release gate completion claim。
-- marking `L5-006` implemented, validated or done。
+- marking pre-split `L5-006`, `L5-006A` or `L5-006B` implemented, validated or done without the required scoped evidence。
 
 P11-W5 non-claims:
 
@@ -680,17 +681,42 @@ P11-W5 non-claims:
 
 适用于 Phase 12 L5 Eval, Hardening, and Release Gate。
 
+Option D split:
+
+- `L5-006A` is the local multi-agent eval / replay / failure hardening track.
+- `L5-006B` is the production release gate / remote CI hard claim / real-provider production certification / production observability / release decision track.
+- USER_CONFIRMED Option D includes `L5-006A` and excludes `L5-006B`.
+- A/B testing, traffic split, canary rollout, online experiment metrics and production rollout governance are out of scope for Option D.
+- Production release readiness remains deferred until a separate release scope records visible remote CI artifact evidence, real-provider production certification, production observability/SLO, rollback evidence and human/controller release decision.
+
+Option D Local Hardening Gate:
+
+- Option D may only claim local complete multi-agent capability when default-off local product/runtime wiring, local replay, local trace, HITL, bounded-loop and failure hardening evidence all pass.
+- `L5-006A` may not be marked `done` unless local code, tests/evals, old-duty removal, no forbidden scope, source backfill and every gap closure/deferred reason are proven.
+- Local deterministic/fake-safe eval evidence is not real-provider production quality certification.
+- Local pytest/eval success is not remote CI hard claim.
+
+D-W4 Option D Local Closeout Gate:
+
+- Allowed local status language: `Option D local complete controlled multi-agent capability is implemented and locally validated`.
+- Matrix may mark `L5-002`, `L5-003`, `L5-004`, `L5-005` and `L5-006A` as `validated` only after the source backfill records implementation evidence, eval/replay evidence, failure fixture evidence, negative-control evidence and forbidden-scope non-claims.
+- `L5-006B` must remain `deferred_out_of_scope_for_option_d`.
+- The D-W4 local closeout must not mark production L5 release, Phase 12 production release gate, remote CI hard claim, real-provider production quality certification, production observability/SLO, rollback readiness or human/controller production release decision as complete.
+- D-W4 local closeout must explicitly record that A/B testing, traffic split, canary rollout, online experiment metrics and production rollout governance are out of scope and not required.
+- Latest D-W4 validation evidence must include `tests/architecture tests/evals`, `tests/evals`, Phase 12 L5 deterministic gate, Phase 9 replay gate, both negative controls and `git diff --check`.
+- If current Phase 12 reports still emit historical capability id `L5-006`, D-W4 source backfill may map that evidence only to `L5-006A` local hardening and must record the metadata normalization gap; it may not be used as an unsplit `L5-006` completion claim.
+
 P12-W0 status:
 
 - `release_gate_scope_locked_with_deferred_implementation` is allowed only for docs-only release-gate scope lock.
 - This status is not L5 release, not remote CI success, not real-provider quality certification and not Phase 12 release gate completion.
-- `L5-006` remains not implemented, not validated and not done until a later scoped implementation window creates and validates the required evidence.
+- Pre-split `L5-006` remains not done; after D-W0, `L5-006A` and `L5-006B` must be evaluated separately.
 
 P12-W1 Eval Contract Gate:
 
 - `eval_contract_slice_complete_with_deferred_runner_ci_release` is allowed only for the contract-first eval slice: Phase 12 suite manifest, dataset skeletons, grader contract, release report schema and static contract tests.
 - This status is contract evidence only. It is not executable eval evidence, not replay evidence, not CI evidence, not release report evidence, not real-provider quality certification and not Phase 12 release gate completion.
-- `L5-006` must not be marked implemented, validated or done from P12-W1 evidence.
+- `L5-006A` must not be marked validated or done from P12-W1 evidence alone; `L5-006B` remains deferred / out of scope.
 - Contract artifacts must state that dataset skeletons are not eval pass evidence, grader contract is not grader implementation, report schema is not a generated report and local pytest is not remote CI success.
 - P12-W2 or later must be separately scoped before runner behavior, replay execution, CI workflow binding, report generation, remote CI artifacts or release decision evidence can be implemented or claimed.
 
@@ -702,7 +728,8 @@ P12-W1 Eval Contract Gate:
 - cross-agent replay fixtures。
 - replay evidence proves `read_only=true`, `formal_write_blocked=true`, zero provider calls, zero repository / DB business writes, zero formal writes, trace comparison, candidate refs preserved, validation refs preserved and handoff refs preserved。
 - failure-mode regression cases。
-- L5 CI gate with workflow name, command list, visible artifact evidence, artifact retention expectation, blocking failure behavior and negative-control behavior。
+- local L5 eval gate with command list, blocking failure behavior and negative-control behavior for `L5-006A`。
+- production L5 CI gate with workflow name, visible artifact evidence, artifact retention expectation and remote run link only for separately scoped `L5-006B`。
 - default CI gate does not require live provider credentials。
 - optional real-provider advisory mode is explicit, non-default and separately scoped。
 - observability / trace report。
@@ -722,11 +749,14 @@ P12-W1 Eval Contract Gate:
 - claiming remote CI success without visible passing run and uploaded artifact。
 - treating a workflow file as artifact evidence。
 - treating local eval pass as remote CI pass。
+- treating Option D local capability as production release readiness。
+- requiring or claiming A/B testing inside Option D。
 - storing forbidden payloads in reports。
 - release without rollback plan。
 - omitting negative-control evidence。
 - weakening formal write boundary during release work。
-- marking `L5-006` implemented, validated or done from P12-W0 scope-lock evidence。
+- marking `L5-006A` done without local replay/trace/failure evidence。
+- marking `L5-006B` implemented, validated or done inside Option D。
 
 ## Traceability Gate
 

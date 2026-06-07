@@ -21,6 +21,14 @@ FORBIDDEN_WIRING_ROOTS = (
     REPO_ROOT / "apps/api/app/domain",
     REPO_ROOT / "apps/api/app/infrastructure",
 )
+ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING = frozenset(
+    {
+        "apps/api/app/application/ai_runtime/business_graphs/local_multi_agent_orchestrator.py",
+        "apps/api/app/application/ai_runtime/facade.py",
+        "apps/api/app/application/ai_runtime/registry.py",
+        "apps/api/app/infrastructure/ai_runtime/langgraph/in_memory_runtime.py",
+    }
+)
 
 
 def test_happy_path_creates_candidate_only_three_business_agent_workflow() -> None:
@@ -186,7 +194,7 @@ def test_slice_source_has_no_external_execution_or_storage_calls() -> None:
         assert token not in source
 
 
-def test_orchestrator_is_not_wired_into_forbidden_application_roots() -> None:
+def test_orchestrator_is_only_wired_through_default_off_local_runtime_roots() -> None:
     wired_files = [
         path.relative_to(REPO_ROOT).as_posix()
         for root in FORBIDDEN_WIRING_ROOTS
@@ -194,7 +202,7 @@ def test_orchestrator_is_not_wired_into_forbidden_application_roots() -> None:
         if "interview_orchestrator_agent" in path.read_text(encoding="utf-8")
     ]
 
-    assert wired_files == []
+    assert [path for path in wired_files if path not in ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING] == []
 
 
 def _slice(**overrides: object):
