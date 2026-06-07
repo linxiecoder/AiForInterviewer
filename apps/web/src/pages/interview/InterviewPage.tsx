@@ -363,6 +363,8 @@ export const INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS = {
 export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON = "追问本题" as const;
 export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON = "换一道题" as const;
 export const INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON = "为当前节点出题" as const;
+export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP = "无法定位当前节点，暂不能出题" as const;
+export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_GUARD_MODE = "new_question" as const;
 export const INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON = "标记完成" as const;
 export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_DISABLED_WITHOUT_HISTORY = "先提交一轮回答后再追问" as const;
 export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_UNSUPPORTED = "当前接口暂不支持追问生成" as const;
@@ -430,6 +432,7 @@ export type WorkbenchQuestionActionState = {
   isCurrentQuestionCompleted: boolean;
   canSendAnswer: boolean;
   canGenerateQuestion: boolean;
+  canRegenerateQuestion: boolean;
   canMarkQuestionCompleted: boolean;
 };
 
@@ -1545,9 +1548,34 @@ export function canFollowUpCurrentQuestion(params: {
 }
 
 export function canRegenerateQuestionForCurrentNode(params: {
-  canGenerateQuestion: boolean;
+  canCreateQuestionTask: boolean;
+  isQuestionNode: boolean;
+  currentQuestionProgressNodeRef: string | null;
+  selectedProgressNodeRef: string | null;
 }): boolean {
-  return params.canGenerateQuestion;
+  if (!params.canCreateQuestionTask) {
+    return false;
+  }
+  return params.isQuestionNode
+    ? params.currentQuestionProgressNodeRef !== null || params.selectedProgressNodeRef !== null
+    : params.selectedProgressNodeRef !== null;
+}
+
+export function deriveRegenerateQuestionDisabledReason(params: {
+  canCreateQuestionTask: boolean;
+  isQuestionNode: boolean;
+  currentQuestionProgressNodeRef: string | null;
+  selectedProgressNodeRef: string | null;
+}): string | null {
+  if (params.canCreateQuestionTask) {
+    return null;
+  }
+  if (params.currentQuestionProgressNodeRef === null && params.selectedProgressNodeRef === null) {
+    return INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP;
+  }
+  return params.isQuestionNode
+    ? "当前题目上下文异常，暂不可执行换题"
+    : "题目生成中，暂不可执行换题";
 }
 
 export function canMarkCurrentQuestionCompleted(params: {
@@ -1568,6 +1596,7 @@ export type WorkbenchQuestionComposerActionViewModel = {
   showFollowUpCurrentQuestionButton: boolean;
   canFollowUpCurrentQuestion: boolean;
   canRegenerateCurrentQuestion: boolean;
+  regenerateQuestionDisabledReason: string | null;
   canMarkCurrentQuestionCompleted: boolean;
   followUpCurrentQuestionDisabledReason: string | null;
   markCurrentQuestionCompletedDisabledReason: string;
@@ -1583,6 +1612,7 @@ export function deriveComposerActionViewModel(params: {
   questionActionState: WorkbenchQuestionActionState;
   answerText: string;
   isFollowUpQuestionApiSupported?: boolean;
+  selectedProgressNodeRef?: string | null;
 }): WorkbenchQuestionComposerActionViewModel {
   const isFollowUpQuestionApiSupported = params.isFollowUpQuestionApiSupported ?? false;
 
@@ -1600,8 +1630,18 @@ export function deriveComposerActionViewModel(params: {
       : INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER)
     : INTERVIEW_WORKBENCH_SEND_DISABLED_PLACEHOLDER;
 
+  const canCreateQuestionTask = params.questionActionState.canSendAnswer || params.questionActionState.canGenerateQuestion;
   const canRegenerateCurrentQuestion = canRegenerateQuestionForCurrentNode({
-    canGenerateQuestion: params.questionActionState.canGenerateQuestion,
+    canCreateQuestionTask,
+    isQuestionNode: params.questionActionState.isQuestionNode,
+    currentQuestionProgressNodeRef: params.questionActionState.currentQuestionProgressNodeRef,
+    selectedProgressNodeRef: params.selectedProgressNodeRef ?? null,
+  });
+  const regenerateQuestionDisabledReason = deriveRegenerateQuestionDisabledReason({
+    canCreateQuestionTask,
+    isQuestionNode: params.questionActionState.isQuestionNode,
+    currentQuestionProgressNodeRef: params.questionActionState.currentQuestionProgressNodeRef,
+    selectedProgressNodeRef: params.selectedProgressNodeRef ?? null,
   });
   const regenerateQuestionButtonCopy = params.questionActionState.isQuestionNode
     ? INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON
@@ -1619,6 +1659,7 @@ export function deriveComposerActionViewModel(params: {
     showFollowUpCurrentQuestionButton: params.questionActionState.isQuestionNode,
     canFollowUpCurrentQuestion: canFollowUpCurrentQuestionResult,
     canRegenerateCurrentQuestion,
+    regenerateQuestionDisabledReason,
     canMarkCurrentQuestionCompleted: canMark,
     followUpCurrentQuestionDisabledReason: !params.questionActionState.canSendAnswer
       ? INTERVIEW_WORKBENCH_SEND_DISABLED_PLACEHOLDER
@@ -1683,6 +1724,12 @@ export function deriveWorkbenchQuestionActionState(params: {
     hasCurrentQuestion,
     isCurrentQuestionCompleted,
     canSendAnswer: canUseSession && isSelectedQuestionNode,
+    canRegenerateQuestion: canRegenerateQuestionForCurrentNode({
+      canCreateQuestionTask: canUseSession,
+      isQuestionNode: isSelectedQuestionNode,
+      currentQuestionProgressNodeRef: currentQuestionState?.progressNodeRef ?? null,
+      selectedProgressNodeRef: params.progressNodeRef,
+    }),
     canGenerateQuestion:
       canUseSession &&
       params.canShowProgressTree &&
@@ -3894,10 +3941,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     return await new Promise<boolean>((resolve) => {
       Modal.confirm({
         title: INTERVIEW_WORKBENCH_REGRADE_CONFIRM_TITLE,
-          content: INTERVIEW_WORKBENCH_REGRADE_CONFIRM_DESCRIPTION,
-          onOk: () => resolve(true),
-          onCancel: () => resolve(false),
-        });
+        content: INTERVIEW_WORKBENCH_REGRADE_CONFIRM_DESCRIPTION,
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
     });
   };
 
@@ -3927,7 +3974,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       return;
     }
     const targetProgressNodeRef = questionActionState.currentQuestionProgressNodeRef ?? selectedProgressNodeDetailRef;
-    await createQuestion(targetProgressNodeRef);
+    if (targetProgressNodeRef === null) {
+      setAnswerError(INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP);
+      return;
+    }
+    await createQuestion(
+      targetProgressNodeRef,
+      {
+        // 语义降级：当前后端未提供「重新生成当前节点题目」独立 generation_mode，沿用 new_question 并附带上下文。
+        generationMode: INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_GUARD_MODE,
+        parentQuestionId: questionActionState.currentQuestionId,
+        parentAnswerId: questionActionState.currentQuestionLatestAnswerId,
+        parentFeedbackId: questionActionState.currentQuestionLatestFeedbackId,
+      },
+    );
   };
 
   const copySessionContent = async () => {
@@ -3991,6 +4051,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     session,
     questionActionState,
     answerText,
+    selectedProgressNodeRef: selectedProgressNodeDetailRef,
     isFollowUpQuestionApiSupported: true,
   });
   const canSendAnswer = questionActionState.canSendAnswer;
@@ -4626,16 +4687,24 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 </span>
               </Tooltip>
             ) : null}
-            <Button
-              icon={<ReloadOutlined />}
-              loading={creatingQuestion}
-              disabled={!canRegenerateCurrentQuestion}
-              onClick={() => {
-                void regenerateCurrentQuestion();
-              }}
+            <Tooltip
+              title={composerActionState.canRegenerateCurrentQuestion
+                ? composerActionState.regenerateQuestionButtonCopy
+                : composerActionState.regenerateQuestionDisabledReason ?? INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP}
             >
-              {composerActionState.regenerateQuestionButtonCopy}
-            </Button>
+              <span>
+                <Button
+                  icon={<ReloadOutlined />}
+                  loading={creatingQuestion}
+                  disabled={!canRegenerateCurrentQuestion}
+                  onClick={() => {
+                    void regenerateCurrentQuestion();
+                  }}
+                >
+                  {composerActionState.regenerateQuestionButtonCopy}
+                </Button>
+              </span>
+            </Tooltip>
             <Tooltip
               title={composerActionState.canMarkCurrentQuestionCompleted
                 ? INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON
