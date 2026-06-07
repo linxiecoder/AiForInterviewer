@@ -59,6 +59,7 @@ import {
   buildInterviewCreatePendingDescription,
   buildCandidateReviewViewModel,
   buildFeedbackCardViewModel,
+  mapFeedbackCodeToDisplay,
   buildPolishSessionReportDialogViewModel,
   buildProgressTreeNodeClipboardMarkdown,
   buildProgressTreeContextMenuItems,
@@ -1735,17 +1736,22 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   };
 
   const card = buildFeedbackCardViewModel(answer);
+  const contractIds = card.contractIds;
   const visibleCopy = [
     card.title,
     card.status,
-    card.contractId,
-    ...card.contractIds,
     ...card.sections.flatMap((section) => [section.title, ...section.items]),
     ...card.traceItems,
   ].join(" ");
+  const lossSection = card.sections.find((section) => section.key === "loss_points");
+  const lossTableValues = (lossSection?.tableRows ?? [])
+    .map((row) => `${row.severity} ${row.deduction} ${row.issue} ${row.suggestion}`)
+    .join(" ");
 
   assertContract(card.sections.map((section) => section.title).join(",") === "总体点评,打分,得分点,失分点,参考回答,权重说明,面试意图,技术短板,表达短板,高阶参考答案,口语化范本,多次回答改进,下一轮重答重点,下一轮训练建议", "反馈卡应展示 final payload 和结构化反馈模块");
-  assertContract(visibleCopy.includes("P-POLISH-005"), "反馈卡应展示 contract_ids");
+  assertContract(card.contractId === "P-POLISH-003", "反馈卡应保留首个 contract_id 用于调试兜底");
+  assertContract(contractIds.includes("P-POLISH-005"), "反馈卡应保留完整 contract_ids 便于 debug");
+  assertContract(!visibleCopy.includes("P-POLISH-005"), "反馈卡默认不展示 contract_id raw code");
   assertContract(visibleCopy.includes("72"), "反馈卡应展示 score_result 分值");
   assertContract(visibleCopy.includes("回答中已有可复用表达"), "反馈卡应展示 positive_evidence_points 得分点");
   assertContract(visibleCopy.includes("技术取舍说明不足"), "反馈卡应展示 loss_points");
@@ -1762,6 +1768,8 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(visibleCopy.includes("重复失分：技术取舍说明不足"), "反馈卡应展示 repeated_loss_points");
   assertContract(visibleCopy.includes("重点：失败补偿仍需更具体"), "反馈卡应展示 next_retry_focus");
   assertContract(visibleCopy.includes("下一轮用 60/40 权重再答一版"), "反馈卡应展示下一轮训练建议");
+  assertContract(lossTableValues.includes("主要失分"), "失分表格应展示中文严重程度");
+  assertContract(lossTableValues.includes("12"), "失分表格应展示扣分数值");
   assertContract(card.traceItems.length === 0, "反馈卡 view model 不应暴露 trace 引用字段");
   assertContract(!visibleCopy.includes("trace_should_not_render"), "反馈卡不应暴露 trace 字段");
   assertContract(!visibleCopy.includes("internal_should_not_render"), "反馈卡不应暴露 internal 字段");
@@ -1850,13 +1858,17 @@ function test_generated_feedback_card_view_model_shows_phase6_payload_sections()
   assertContract(visibleCopy.includes("覆盖了接口编排"), "总体点评应展示 answer_summary.coverage");
   assertContract(visibleCopy.includes("主要缺口：缺少项目时间线澄清"), "总体点评应展示 answer_summary.main_gaps");
   assertContract(visibleCopy.includes("分数：82"), "打分应展示 score_result.score_value");
-  assertContract(visibleCopy.includes("评分类型：polish_answer"), "打分应展示 score_result.score_type");
+  assertContract(visibleCopy.includes("评分类型：回答打磨"), "打分应展示中文 score_type");
   assertContract(visibleCopy.includes("置信度：high"), "打分应展示 score_result.confidence_level");
-  assertContract(visibleCopy.includes("严重度：major"), "失分点应展示 severity");
-  assertContract(visibleCopy.includes("扣分：10"), "失分点应展示 deduction");
-  assertContract(visibleCopy.includes("关联维度：technical_depth"), "失分点应展示 related_dimension");
+  const lossPointsSection = card.sections.find((section) => section.key === "loss_points");
+  const lossRows = lossPointsSection?.tableRows ?? [];
+  assertContract(lossRows.length === 1, "失分点应保留表格化 rows");
+  assertContract(lossRows[0]?.severity === "主要失分", "失分点表格应展示中文严重程度");
+  assertContract(lossRows[0]?.deduction === "10", "失分点表格应展示扣分数值");
+  assertContract(lossRows[0]?.issue.includes("需要比较同步、异步和补偿方案。"), "失分点表格应保留问题字段");
   assertContract(visibleCopy.includes("方案取舍"), "参考回答应展示 sections");
-  assertContract(visibleCopy.includes("本段修正：技术取舍说明不足"), "参考回答应把 addresses_loss_point_ids 映射到失分点 title");
+  assertContract(!visibleCopy.includes("本段修正："), "参考回答不再展示 addresses_loss_point_ids 映射描述");
+  assertContract(!visibleCopy.includes("sec_tradeoff"), "参考回答不应展示 section_id");
   assertContract(projectConsistencySection?.tone === "warning", "项目一致性 conflict 应使用 warning 样式");
   assertContract(visibleCopy.includes("需要澄清后再沉淀为资产"), "项目一致性 conflict 应提示先澄清再沉淀");
   assertContract(visibleCopy.includes("请确认订单履约系统到底在几月上线？"), "项目一致性检查应展示 clarification question");
@@ -1866,6 +1878,152 @@ function test_generated_feedback_card_view_model_shows_phase6_payload_sections()
   assertContract(!visibleCopy.includes("private_note_should_not_render"), "反馈卡不应暴露 private 字段");
   assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "反馈卡不应暴露 raw prompt");
   assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "反馈卡不应暴露 provider payload");
+}
+
+function test_map_feedback_code_to_display_to_chinese_by_default(): void {
+  assertContract(mapFeedbackCodeToDisplay("polish_answ").text === "回答打磨", "polish_answ 应映射为中文");
+  assertContract(mapFeedbackCodeToDisplay("major").text === "主要失分", "major 应映射为中文");
+  assertContract(
+    mapFeedbackCodeToDisplay("insufficient_asset_context").text ===
+      "项目素材不足，回答与资产库证据不够一致",
+    "insufficient_asset_context 应映射为中文",
+  );
+  assertContract(mapFeedbackCodeToDisplay("P-POLISH-003").text === "未知状态", "原始代码应有未知状态兜底");
+}
+
+function test_feedback_card_view_model_hides_raw_feedback_codes(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_code_guard",
+    answer_round: 1,
+    answer_text: "我会先说明背景再给出技术策略。",
+    answer_created_at: "2026-06-02T09:00:00Z",
+    feedback_text: "结构完整，但仍有表达改进空间。",
+    feedback_id: "fb_raw_codes",
+    score_result_id: "score_raw_codes",
+    feedback_created_at: "2026-06-02T09:01:00Z",
+    feedback_payload: {
+      contract_ids: ["P-POLISH-003", "P-POLISH-004"],
+      status: "generated",
+      feedback_text: "结构完整，但仍有表达改进空间。",
+      score_result: {
+        score_type: "polish_answ",
+        score_value: 75,
+        confidence_level: "medium",
+      },
+      loss_points: [
+        {
+          severity: "major",
+          deduction: 5,
+          reason: "表达层次有待梳理。",
+        },
+      ],
+      asset_consistency_check: {
+        status: "insufficient_asset_context",
+      },
+      next_recommended_actions: ["generate_next_question"],
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = [
+    card.title,
+    card.status,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.nextActions.map(toNextRecommendedActionLabel),
+    ...(card.sections.find((section) => section.key === "loss_points")?.tableRows
+      ?.map((row) => `${row.severity} ${row.deduction} ${row.issue}`) ?? []),
+  ].join(" ");
+  const hasContractId = visibleCopy.includes("P-POLISH-003") || visibleCopy.includes("P-POLISH-004");
+
+  assertContract(!hasContractId, "反馈卡默认不直接展示 contract_id");
+  assertContract(!visibleCopy.includes("polish_answ"), "反馈卡默认不展示 score_type raw code");
+  assertContract(!visibleCopy.includes("major"), "反馈卡默认不展示 severity raw code");
+  assertContract(!visibleCopy.includes("insufficient_asset_context"), "反馈卡默认不展示 consistency raw code");
+  assertContract(visibleCopy.includes("评分类型：回答打磨"), "评分类型应显示中文文案");
+  assertContract(visibleCopy.includes("主要失分"), "失分点严重程度应显示中文文案");
+}
+
+function test_feedback_card_view_model_renders_loss_points_as_table_rows(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_loss_table",
+    answer_round: 2,
+    answer_text: "我会先讲需求，再设计方案。",
+    answer_created_at: "2026-06-02T10:00:00Z",
+    feedback_text: "可以更完整地覆盖关键权衡。",
+    feedback_id: "fb_loss_table",
+    score_result_id: "score_loss_table",
+    feedback_created_at: "2026-06-02T10:01:00Z",
+    feedback_payload: {
+      status: "generated",
+      loss_points: [
+        {
+          severity: "major",
+          deduction: 9,
+          reason: "缺少方案对比。",
+          suggestion: "补充优缺点对比。",
+        },
+        {
+          severity: "minor",
+          deduction: 3,
+          reason: "措辞仍偏复杂。",
+          suggestion: "补充一句简短总结。",
+        },
+      ],
+      score_result: null,
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const lossSection = card.sections.find((section) => section.key === "loss_points");
+  const rows = lossSection?.tableRows ?? [];
+  const rowsCopy = rows
+    .map((row) => `${row.index}-${row.severity}-${row.deduction}-${row.issue}-${row.suggestion}`)
+    .join(" ");
+
+  assertContract(rows.length === 2, "多条 loss_points 应渲染为 2 条表格行");
+  assertContract(rows[0]?.index === 1, "loss_points 表格行应保留序号");
+  assertContract(rows[0]?.severity === "主要失分", "第一条严重程度应中文");
+  assertContract(rows[0]?.deduction === "9", "第一条扣分应展示数值");
+  assertContract(rows[1]?.severity === "轻微失分", "第二条严重程度应中文");
+  assertContract(rows[1]?.deduction === "3", "第二条扣分应展示数值");
+  assertContract(rowsCopy.includes("缺少方案对比。"), "修正建议/问题应显示");
+  assertContract(rowsCopy.includes("补充优缺点对比。"), "修正建议字段应显示");
+}
+
+function test_feedback_card_reference_answer_sections_assemble_to_paragraphs(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_reference_sections",
+    answer_round: 1,
+    answer_text: "这是一道结构化问题。",
+    answer_created_at: "2026-06-02T11:00:00Z",
+    feedback_text: "参考回答可直接复述。",
+    feedback_id: "fb_reference_sections",
+    score_result_id: null,
+    feedback_created_at: "2026-06-02T11:01:00Z",
+    feedback_payload: {
+      status: "generated",
+      reference_answer: {
+        summary: "先说明动机，再给出实现步骤。",
+        sections: [
+          { section_id: "s1", title: "背景", content: "从岗位需求出发。" },
+          { section_id: "s2", content: "给出可执行的解决方案。" },
+        ],
+      },
+      score_result: null,
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const referenceSection = card.sections.find((section) => section.key === "reference_answer");
+  const items = referenceSection?.items ?? [];
+  const sectionText = items.join(" ");
+
+  assertContract(referenceSection !== undefined, "应生成参考回答区块");
+  assertContract(sectionText.includes("先说明动机"), "参考回答应优先展示 summary");
+  assertContract(sectionText.includes("背景：从岗位需求出发。"), "参考回答 sections 应拼接为正文");
+  assertContract(sectionText.includes("给出可执行的解决方案。"), "参考回答可包含仅 content 的 section");
+  assertContract(!sectionText.includes("section_id"), "参考回答不应展示 section_id");
+  assertContract(!sectionText.includes("s1"), "参考回答不应展示 section_id 符号");
 }
 
 function test_generated_feedback_card_view_model_handles_missing_phase6_fields(): void {
@@ -2486,7 +2644,11 @@ test_progress_tree_context_menu_closes_on_escape_and_external_events();
 test_progress_tree_question_entry_is_selectable_by_node_type();
 test_progress_tree_click_focuses_latest_question_for_node();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
+test_map_feedback_code_to_display_to_chinese_by_default();
+test_feedback_card_view_model_hides_raw_feedback_codes();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();
+test_feedback_card_view_model_renders_loss_points_as_table_rows();
+test_feedback_card_reference_answer_sections_assemble_to_paragraphs();
 test_generated_feedback_card_view_model_shows_phase6_payload_sections();
 test_generated_feedback_card_view_model_handles_missing_phase6_fields();
 test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_only();

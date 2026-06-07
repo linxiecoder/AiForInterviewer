@@ -16,10 +16,32 @@ import {
   SendOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Drawer, Form, Input, Modal, Popover, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Input,
+  Modal,
+  Popover,
+  Progress,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
 import { useRouteController } from "../../app/routes/router";
 import { fetchJobs } from "../../entities/job/api/jobApi";
 import type { JobSummary } from "../../entities/job/model/types";
@@ -277,6 +299,40 @@ export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
   user_answer: "right",
   user_answer_placeholder: "right",
 } as const;
+const FEEDBACK_CODE_DISPLAY_MAP: Record<string, string> = {
+  pending: "待处理",
+  generated: "已生成",
+  failed: "生成失败",
+  complete: "已完成",
+  completed: "已完成",
+  in_progress: "进行中",
+  inprogress: "进行中",
+  done: "完成",
+  conflict: "冲突",
+  ambiguous: "不确定",
+  consistent: "一致",
+  insufficient_asset_context: "项目素材不足，回答与资产库证据不够一致",
+  polish_answer: "回答打磨",
+  polish_answ: "回答打磨",
+  retry_same_question: "重答同题",
+  continue_same_question: "继续本题",
+  provide_more_answer_detail: "补充回答细节",
+  generate_next_question: "生成下一题",
+  answer_again: "重新作答",
+  reference_answer: "参考回答",
+  loss_points: "失分点",
+  scoring: "评分",
+  consistency_check: "项目一致性检查",
+  major: "主要失分",
+  minor: "轻微失分",
+  critical: "严重失分",
+  warning: "轻微风险",
+  notice: "提示",
+};
+const FEEDBACK_LOSS_POINTS_TABLE_COLUMNS = ["序号", "严重程度", "扣分", "问题", "修正建议"] as const;
+const CODE_NOT_AVAILABLE_TEXT = "未知状态";
+const FEEDBACK_REFERENCE_SECTION_FALLBACK = "暂无参考回答";
+const FEEDBACK_LOSS_POINTS_TABLE_EMPTY_TEXT = "暂无明确失分点";
 export const INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS = [
   "progress_context",
   "system_question",
@@ -617,6 +673,37 @@ export function buildPolishSessionPath<const TSessionId extends string>(sessionI
 export function buildInterviewCreatePendingDescription(elapsedSeconds: number): string {
   const safeElapsedSeconds = Math.max(0, Math.floor(elapsedSeconds));
   return `已等待 ${safeElapsedSeconds} 秒，正在创建会话并生成进展树。耗时较长时请勿重复点击；${INTERVIEW_CREATE_PENDING_STATUS.logHint}`;
+}
+
+export function mapFeedbackCodeToDisplay(code: string | null | undefined): {
+  text: string;
+  rawCode: string | null;
+  isKnownCode: boolean;
+} {
+  const trimmedCode = toOptionalText(code);
+  if (trimmedCode === null) {
+    return {
+      text: CODE_NOT_AVAILABLE_TEXT,
+      rawCode: null,
+      isKnownCode: false,
+    };
+  }
+
+  const normalizedCode = trimmedCode.toLowerCase();
+  const mappedText = FEEDBACK_CODE_DISPLAY_MAP[normalizedCode];
+  if (mappedText !== undefined) {
+    return {
+      text: mappedText,
+      rawCode: trimmedCode,
+      isKnownCode: true,
+    };
+  }
+
+  return {
+    text: CODE_NOT_AVAILABLE_TEXT,
+    rawCode: trimmedCode,
+    isKnownCode: false,
+  };
 }
 
 export function filterPolishSessionsBySearch(
@@ -2030,12 +2117,22 @@ type FeedbackSectionKey =
   | "next_training_suggestions"
   | "asset_consistency_check";
 
+export type FeedbackLossPointTableRow = {
+  index: number;
+  severity: string;
+  deduction: string;
+  issue: string;
+  suggestion: string;
+};
+
 export type FeedbackCardSectionViewModel = {
   key: FeedbackSectionKey;
   title: string;
   items: string[];
   defaultOpen: boolean;
   tone?: "default" | "warning";
+  tableColumns?: readonly string[];
+  tableRows?: readonly FeedbackLossPointTableRow[];
 };
 
 export type FeedbackCardViewModel = {
@@ -2141,21 +2238,15 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
       {
         key: "loss_points",
         title: "失分点",
-        items: buildRecordListItems(payload?.loss_points, [
-          ["title", "失分点"],
-          ["severity", "严重度"],
-          ["deduction", "扣分"],
-          ["deducted_points", "扣分"],
-          ["reason", "原因"],
-          ["answer_excerpt", "回答片段"],
-          ["related_dimension", "关联维度"],
-        ], "暂无明确失分点"),
+        items: [],
+        tableColumns: FEEDBACK_LOSS_POINTS_TABLE_COLUMNS,
+        tableRows: buildLossPointRows(payload?.loss_points),
         defaultOpen: false,
       },
       {
         key: "reference_answer",
         title: "参考回答",
-        items: buildReferenceAnswerItems(payload?.reference_answer, payload?.loss_points),
+        items: buildReferenceAnswerItems(payload?.reference_answer),
         defaultOpen: false,
       },
       ...buildAssetConsistencySections(payload),
@@ -2175,6 +2266,81 @@ function resolvePolishFeedbackStatus(
     return status;
   }
   return "pending";
+}
+
+function getLossPointTableRowFallbackValue(text: string | null, fallback: string): string {
+  return text ?? fallback;
+}
+
+function pickFirstRecordText(record: Record<string, unknown>, fieldNames: string[]): string | null {
+  for (const field of fieldNames) {
+    const text = toOptionalText(record[field]);
+    if (text !== null) {
+      return text;
+    }
+  }
+  return null;
+}
+
+function normalizeLossPointDeductionValue(value: unknown): string {
+  const text = toOptionalText(value);
+  if (text === null) {
+    return "0";
+  }
+  const numericValue = Number(text);
+  if (Number.isFinite(numericValue)) {
+    return String(Math.trunc(Math.abs(numericValue)));
+  }
+  return "0";
+}
+
+function mapFeedbackRecordText(fieldName: string, rawText: string | null): string | null {
+  if (rawText === null) {
+    return null;
+  }
+  const normalizedField = fieldName.toLowerCase();
+  if (["severity", "status", "score_type", "type", "action", "result_type"].includes(normalizedField)) {
+    return mapFeedbackCodeToDisplay(rawText).text;
+  }
+  return rawText;
+}
+
+function buildLossPointRows(values: unknown): FeedbackLossPointTableRow[] {
+  if (!Array.isArray(values) || values.length === 0) {
+    return [];
+  }
+  return values.map((value, index) => {
+    const record = toRecord(value);
+    if (record === null) {
+      return {
+        index: index + 1,
+        severity: CODE_NOT_AVAILABLE_TEXT,
+        deduction: "0",
+        issue: getLossPointTableRowFallbackValue(toOptionalText(value), "问题待补充"),
+        suggestion: "修正建议待补充",
+      };
+    }
+    const severityCode = pickFirstRecordText(record, ["severity", "level", "criticality"]);
+    const severity = mapFeedbackCodeToDisplay(severityCode).text;
+    const deduction = normalizeLossPointDeductionValue(
+      pickFirstRecordText(record, ["deduction", "deducted_points"]) ?? (record.score_delta as unknown),
+    );
+    const issue = getLossPointTableRowFallbackValue(
+      pickFirstRecordText(record, ["reason", "description", "content", "message"]),
+      "问题待补充",
+    );
+    const suggestion = getLossPointTableRowFallbackValue(
+      pickFirstRecordText(record, ["suggestion", "fix", "recommendation", "improvement"]),
+      getLossPointTableRowFallbackValue(pickFirstRecordText(record, ["title", "related_dimension", "dimension_id"]), "修正建议待补充"),
+    );
+    return {
+      index: index + 1,
+      severity,
+      deduction,
+      issue,
+      suggestion,
+    };
+  });
 }
 
 function buildFailedFeedbackItems(payload: PolishFeedbackPayload | undefined): string[] {
@@ -2297,7 +2463,7 @@ function buildAssetConsistencySections(payload: PolishFeedbackPayload | undefine
       key: "asset_consistency_check",
       title: "项目一致性检查",
       items: dedupeTextItems([
-        status ? `状态：${status}` : null,
+        status ? `状态：${mapFeedbackCodeToDisplay(status).text}` : null,
         check.matched_project_name ? `匹配项目：${check.matched_project_name}` : null,
         needsClarification ? "需要澄清后再沉淀为资产" : null,
         ...conflicts,
@@ -2392,33 +2558,49 @@ function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallb
   if (!score) {
     return fallbackScoreResultId ? [`score_result_id：${fallbackScoreResultId}`] : ["暂无打分结果"];
   }
+  const scoreType = mapFeedbackCodeToDisplay(score.score_type).text;
   return dedupeTextItems([
     typeof score.score_value === "number" ? `分数：${score.score_value}` : null,
-    score.score_type ? `评分类型：${score.score_type}` : null,
+    score.score_type ? `评分类型：${scoreType}` : null,
     score.confidence_level ? `置信度：${score.confidence_level}` : null,
     score.score_result_id ? `score_result_id：${score.score_result_id}` : fallbackScoreResultId ? `score_result_id：${fallbackScoreResultId}` : null,
     score.rubric_version ? `rubric_version：${score.rubric_version}` : null,
   ]);
 }
 
-function buildReferenceAnswerItems(value: unknown, lossPoints: unknown): string[] {
+function buildReferenceAnswerItems(value: unknown): string[] {
   const record = toRecord(value);
   if (record === null) {
-    return ["暂无参考回答"];
+    return [FEEDBACK_REFERENCE_SECTION_FALLBACK];
   }
-  const outline = Array.isArray(record.outline) ? record.outline.map(toOptionalText).filter((item): item is string => Boolean(item)) : [];
-  const lossPointTitleById = buildLossPointTitleById(lossPoints);
-  const sectionItems = Array.isArray(record.sections)
-    ? record.sections.flatMap((section) => buildReferenceAnswerSectionItems(section, lossPointTitleById))
+
+  const summary = toOptionalText(record.summary);
+  const sectionsValue = Array.isArray(record.sections)
+    ? record.sections
+    : Array.isArray(record.reference_answer_sections)
+      ? record.reference_answer_sections
+      : [];
+  const sections = Array.isArray(sectionsValue) ? sectionsValue : [];
+
+  if (sections.length > 0) {
+    const sectionItems = sections.flatMap((section) => buildReferenceAnswerSectionItems(section));
+    if (summary !== null) {
+      return [summary, ...sectionItems];
+    }
+    return sectionItems.length > 0 ? sectionItems : [FEEDBACK_REFERENCE_SECTION_FALLBACK];
+  }
+
+  const outline = Array.isArray(record.outline)
+    ? record.outline.map(toOptionalText).filter((item): item is string => Boolean(item))
     : [];
-  return dedupeTextItems([
-    record.summary ? `摘要：${toOptionalText(record.summary)}` : null,
-    outline.length > 0 ? `提纲：${outline.join(" / ")}` : null,
-    ...sectionItems,
-  ]);
+  const fallbackItems = Array.isArray(record.sections)
+    ? record.sections.flatMap((section) => buildReferenceAnswerSectionItems(section))
+    : [];
+  const paragraphItems = dedupeTextItems([summary, ...outline, ...fallbackItems]);
+  return paragraphItems.length > 0 ? paragraphItems : [FEEDBACK_REFERENCE_SECTION_FALLBACK];
 }
 
-function buildReferenceAnswerSectionItems(value: unknown, lossPointTitleById: Map<string, string>): string[] {
+function buildReferenceAnswerSectionItems(value: unknown): string[] {
   const section = toRecord(value);
   if (section === null) {
     const text = toOptionalText(value);
@@ -2426,34 +2608,16 @@ function buildReferenceAnswerSectionItems(value: unknown, lossPointTitleById: Ma
   }
   const title = toOptionalText(section.title);
   const content = toOptionalText(section.content);
-  const addressesLossPointIds = Array.isArray(section.addresses_loss_point_ids)
-    ? section.addresses_loss_point_ids.map(toOptionalText).filter((item): item is string => item !== null)
-    : [];
-  const addressedTitles = addressesLossPointIds.map((lossPointId) => lossPointTitleById.get(lossPointId) ?? lossPointId);
-  return dedupeTextItems([
-    title ? `分段：${title}` : null,
-    content ? `内容：${content}` : null,
-    addressedTitles.length > 0 ? `本段修正：${addressedTitles.join("、")}` : null,
-  ]);
-}
-
-function buildLossPointTitleById(values: unknown): Map<string, string> {
-  const result = new Map<string, string>();
-  if (!Array.isArray(values)) {
-    return result;
+  if (title === null && content === null) {
+    return [];
   }
-  values.forEach((value) => {
-    const record = toRecord(value);
-    if (record === null) {
-      return;
-    }
-    const lossPointId = toOptionalText(record.loss_point_id);
-    const title = toOptionalText(record.title);
-    if (lossPointId && title) {
-      result.set(lossPointId, title);
-    }
-  });
-  return result;
+  if (title === null) {
+    return [content ?? FEEDBACK_REFERENCE_SECTION_FALLBACK];
+  }
+  if (content === null) {
+    return [title];
+  }
+  return [`${title}：${content}`];
 }
 
 function buildRecordListItems(
@@ -2487,7 +2651,8 @@ function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>):
   const preferredItems = fieldLabels
     .map(([field, label]) => {
       const text = toOptionalText(record[field]);
-      return text ? `${label}：${text}` : null;
+      const mappedText = mapFeedbackRecordText(field, text);
+      return mappedText ? `${label}：${mappedText}` : null;
     })
     .filter((item): item is string => item !== null);
   if (preferredItems.length > 0) {
@@ -2497,7 +2662,8 @@ function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>):
     .filter(([key]) => isUserVisibleFeedbackRecordKey(key))
     .map(([key, item]) => {
       const text = toOptionalText(item);
-      return text ? `${key}：${text}` : null;
+      const mappedText = mapFeedbackRecordText(key, text);
+      return mappedText ? `${key}：${mappedText}` : null;
     })
     .filter((item): item is string => item !== null)
     .slice(0, 6);
@@ -2554,6 +2720,64 @@ function dedupeTextItems(values: Array<string | null | undefined>): string[] {
     result.push(text);
   }
   return result;
+}
+
+function renderFeedbackSectionContent(section: FeedbackCardSectionViewModel): ReactNode {
+  if (section.key === "loss_points" && section.tableRows !== undefined) {
+    if (section.tableRows.length === 0) {
+      return (
+        <div className={styles.feedbackSectionTextList}>
+          <Typography.Text type="secondary">{FEEDBACK_LOSS_POINTS_TABLE_EMPTY_TEXT}</Typography.Text>
+        </div>
+      );
+    }
+    const columns = section.tableColumns ?? FEEDBACK_LOSS_POINTS_TABLE_COLUMNS;
+    return (
+      <div className={styles.feedbackSectionTableWrap}>
+        <table className={styles.feedbackSectionTable}>
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {section.tableRows.map((row) => (
+              <tr key={`${section.key}:${row.index}`}>
+                <td>{row.index}</td>
+                <td>{row.severity}</td>
+                <td>{row.deduction}</td>
+                <td>{row.issue}</td>
+                <td>{row.suggestion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (section.key === "reference_answer") {
+    const paragraphs = section.items.length > 0 ? section.items : [FEEDBACK_REFERENCE_SECTION_FALLBACK];
+    return (
+      <div className={styles.feedbackSectionTextList}>
+        {paragraphs.map((paragraph) => (
+          <Typography.Paragraph key={`${section.key}:${paragraph}`} className={styles.feedbackSectionParagraph}>
+            {paragraph}
+          </Typography.Paragraph>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <ul className={styles.feedbackSectionItems}>
+      {section.items.map((item) => (
+        <li key={`${section.key}:${item}`}>{item}</li>
+      ))}
+    </ul>
+  );
 }
 
 export function InterviewPage() {
@@ -4444,16 +4668,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                     <Typography.Text strong>{feedbackCard.title}</Typography.Text>
                                     <div className={styles.feedbackMetaRow}>
                                       <Tag color={feedbackStatusTagColor(feedbackCard.status)} className={styles.feedbackMetaTag}>
-                                        {feedbackCard.status}
+                                        {mapFeedbackCodeToDisplay(feedbackCard.status).text}
                                       </Tag>
-                                      {feedbackCard.contractId ? (
-                                        <Tag color="blue" className={styles.feedbackMetaTag}>{feedbackCard.contractId}</Tag>
-                                      ) : null}
-                                      {feedbackCard.contractIds.map((contractId) => (
-                                        contractId === feedbackCard.contractId ? null : (
-                                          <Tag key={contractId} className={styles.feedbackMetaTag}>{contractId}</Tag>
-                                        )
-                                      ))}
                                     </div>
                                   </div>
                                 </div>
@@ -4465,11 +4681,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                       open={section.defaultOpen}
                                     >
                                       <summary className={styles.feedbackSectionSummary}>{section.title}</summary>
-                                      <ul className={styles.feedbackSectionItems}>
-                                        {section.items.map((item) => (
-                                          <li key={`${section.key}:${item}`}>{item}</li>
-                                        ))}
-                                      </ul>
+                                      {renderFeedbackSectionContent(section)}
                                     </details>
                                   ))}
                                   {feedbackCard.traceItems.length > 0 ? (
