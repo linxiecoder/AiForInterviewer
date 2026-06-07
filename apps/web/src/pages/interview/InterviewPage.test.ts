@@ -74,8 +74,17 @@ import {
   buildWorkbenchProgressNodes,
   canAutoCreateQuestionFromProgressNode,
   collectDefaultExpandedProgressNodeKeys,
+  canFollowUpCurrentQuestion,
+  canMarkCurrentQuestionCompleted,
+  deriveComposerActionViewModel,
   deriveWorkbenchQuestionActionState,
   deriveWorkbenchMachineState,
+  INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_DISABLED_WITHOUT_HISTORY,
+  INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_UNSUPPORTED,
+  INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_DISABLED_WITHOUT_FEEDBACK,
+  INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON,
+  INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER,
+  INTERVIEW_WORKBENCH_SEND_RETRY_PLACEHOLDER,
   getInterviewCreateAvailability,
   getWorkbenchProgressNodeQuestionTargetRef,
   getWorkbenchProgressNodeStatusLightTone,
@@ -97,6 +106,7 @@ import {
   getWorkbenchChatMessageAlignmentClassName,
   shouldCloseProgressTreeContextMenuFromKeyboard,
   shouldSubmitAnswerFromKeyboard,
+  shouldConfirmBeforeRegenerateQuestion,
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
   toNextRecommendedActionLabel,
@@ -652,6 +662,20 @@ function buildTestSession(
     custom_topic_text_summary: null,
     created_at: "2026-05-20T10:00:00Z",
     updated_at: "2026-05-20T10:00:00Z",
+  };
+}
+
+function buildQuestionAnswer(overrides: Partial<PolishSessionAnswer> = {}): PolishSessionAnswer {
+  return {
+    answer_id: "ans_default",
+    answer_round: 1,
+    answer_text: "默认作答内容",
+    answer_created_at: "2026-05-21T10:01:00Z",
+    feedback_text: "",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    ...overrides,
   };
 }
 
@@ -1384,6 +1408,289 @@ function test_workbench_question_actions_follow_current_question_status(): void 
   assertContract(completedQuestionState.currentQuestionStatus === "completed", "已完成题目状态应为 completed");
   assertContract(completedQuestionState.canGenerateQuestion === true, "已有已完成题目应允许生成题目");
   assertContract(completedQuestionState.canMarkQuestionCompleted === false, "已有已完成题目不允许重复标记完成");
+}
+
+function test_workbench_composer_primary_button_stays_send_for_selected_question(): void {
+  const session = buildTestSession(
+    [
+      buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+      buildTestProgressNode("node_without_question", "待生成节点", "jd_gap_learning", "补齐学习类"),
+    ],
+    "node_with_question",
+  );
+  const sessionWithQuestion: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+
+  const progressNodes = buildWorkbenchProgressNodes(sessionWithQuestion);
+  const questionNode = progressNodes[0]?.children?.[0]?.children?.[0] ?? null;
+  const questionActionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: questionNode,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const composerActionState = deriveComposerActionViewModel({
+    session: sessionWithQuestion,
+    questionActionState,
+    answerText: "",
+    isFollowUpQuestionApiSupported: true,
+  });
+
+  assertContract(composerActionState.sendAnswerButtonLabel === "发送", "选中题目时主按钮应保持发送");
+  assertContract(
+    composerActionState.sendAnswerPlaceholder === INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER,
+    "选中未回答题目时主输入框应使用普通回答占位文案",
+  );
+  assertContract(
+    composerActionState.regenerateQuestionButtonCopy === INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON,
+    "选中题目时次级按钮应显示换一道题",
+  );
+}
+
+function test_workbench_composer_send_remains_retry_when_question_has_answer(): void {
+  const session = buildTestSession([
+    buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+  ], "node_with_question");
+  const sessionWithQuestion: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [buildQuestionAnswer({
+          feedback_text: "上次回答不完整",
+        })],
+      },
+    ],
+  };
+  const progressNodes = buildWorkbenchProgressNodes(sessionWithQuestion);
+  const questionNode = progressNodes[0]?.children?.[0]?.children?.[0] ?? null;
+  const questionActionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: questionNode,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const composerActionState = deriveComposerActionViewModel({
+    session: sessionWithQuestion,
+    questionActionState,
+    answerText: "继续补充细节",
+    isFollowUpQuestionApiSupported: true,
+  });
+
+  assertContract(
+    composerActionState.sendAnswerPlaceholder === INTERVIEW_WORKBENCH_SEND_RETRY_PLACEHOLDER,
+    "有历史回答时应提示继续打磨语义",
+  );
+  assertContract(
+    canFollowUpCurrentQuestion({
+      isQuestionNode: true,
+      canSendAnswer: true,
+      hasCurrentQuestionAnswer: questionActionState.hasCurrentQuestionAnswer,
+      hasCurrentQuestionFeedback: questionActionState.hasCurrentQuestionFeedback,
+      isFollowUpQuestionApiSupported: true,
+    })
+      === true,
+    "有历史回答时可执行追问",
+  );
+}
+
+function test_workbench_composer_follow_up_disabled_without_history_or_contract(): void {
+  const session = buildTestSession([
+    buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+  ], "node_with_question");
+  const sessionWithQuestion: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const progressNodes = buildWorkbenchProgressNodes(sessionWithQuestion);
+  const questionNode = progressNodes[0]?.children?.[0]?.children?.[0] ?? null;
+  const questionActionState = deriveWorkbenchQuestionActionState({
+    session: sessionWithQuestion,
+    selectedProgressNode: questionNode,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const composerActionStateNoHistory = deriveComposerActionViewModel({
+    session: sessionWithQuestion,
+    questionActionState,
+    answerText: "",
+    isFollowUpQuestionApiSupported: true,
+  });
+  const composerActionStateWithoutContract = deriveComposerActionViewModel({
+    session: sessionWithQuestion,
+    questionActionState,
+    answerText: "",
+    isFollowUpQuestionApiSupported: false,
+  });
+
+  assertContract(
+    composerActionStateNoHistory.canFollowUpCurrentQuestion === false,
+    "无历史回答或反馈时应禁用追问本题",
+  );
+  assertContract(
+    composerActionStateNoHistory.followUpCurrentQuestionDisabledReason === INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_DISABLED_WITHOUT_HISTORY,
+    "无历史时应显示先提交再追问提示",
+  );
+  assertContract(
+    composerActionStateWithoutContract.followUpCurrentQuestionDisabledReason === INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_UNSUPPORTED,
+    "接口不支持时应显示 contract 缺口提示",
+  );
+}
+
+function test_workbench_composer_mark_completed_and_regenerate_confirmation_gate(): void {
+  const session = buildTestSession([
+    buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
+  ], "node_with_question");
+  const sessionWithoutFeedback: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [buildQuestionAnswer({
+          feedback_text: "上次回答",
+        })],
+      },
+    ],
+  };
+  const sessionWithFeedback: PolishSessionDetail = {
+    ...session,
+    turns: [
+      {
+        question_id: "q_existing",
+        question_text: "已有题目",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_with_question",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [buildQuestionAnswer({
+          feedback_id: "fb_1",
+          feedback_created_at: "2026-05-21T10:03:00Z",
+          feedback_text: "回复完整",
+          feedback_payload: {
+            status: "generated",
+            feedback_id: "fb_1",
+          },
+        })],
+      },
+    ],
+  };
+  const progressNodes = buildWorkbenchProgressNodes(session);
+  const questionNode = progressNodes[0]?.children?.[0]?.children?.[0] ?? null;
+  const stateWithoutFeedback = deriveWorkbenchQuestionActionState({
+    session: sessionWithoutFeedback,
+    selectedProgressNode: questionNode,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const stateWithFeedback = deriveWorkbenchQuestionActionState({
+    session: sessionWithFeedback,
+    selectedProgressNode: questionNode,
+    progressNodeRef: "node_with_question",
+    canShowProgressTree: true,
+    creatingQuestion: false,
+    submittingAnswer: false,
+    feedbackGenerating: false,
+    completingQuestion: false,
+    endingSession: false,
+  });
+  const composerWithoutFeedback = deriveComposerActionViewModel({
+    session: sessionWithoutFeedback,
+    questionActionState: stateWithoutFeedback,
+    answerText: "",
+    isFollowUpQuestionApiSupported: true,
+  });
+  const composerWithFeedback = deriveComposerActionViewModel({
+    session: sessionWithFeedback,
+    questionActionState: stateWithFeedback,
+    answerText: "",
+    isFollowUpQuestionApiSupported: true,
+  });
+
+  assertContract(
+    canMarkCurrentQuestionCompleted({
+      hasCurrentQuestion: stateWithoutFeedback.hasCurrentQuestion,
+      hasCurrentQuestionFeedback: stateWithoutFeedback.hasCurrentQuestionFeedback,
+      isCurrentQuestionCompleted: stateWithoutFeedback.isCurrentQuestionCompleted,
+    }) === false,
+    "无反馈时不应可标记完成",
+  );
+  assertContract(
+    composerWithoutFeedback.markCurrentQuestionCompletedDisabledReason === INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_DISABLED_WITHOUT_FEEDBACK,
+    "无反馈时按钮应给出提示",
+  );
+  assertContract(
+    composerWithFeedback.canMarkCurrentQuestionCompleted,
+    "有反馈时按钮应可点",
+  );
+  assertContract(
+    !shouldConfirmBeforeRegenerateQuestion(""),
+    "空草稿无需再次确认",
+  );
+  assertContract(
+    !shouldConfirmBeforeRegenerateQuestion("   "),
+    "空白草稿无需再次确认",
+  );
+  assertContract(
+    shouldConfirmBeforeRegenerateQuestion("继续提问之前的草稿"),
+    "存在草稿需弹确认",
+  );
 }
 
 function test_progress_tree_context_menu_items_follow_question_action_state(): void {
@@ -2753,10 +3060,14 @@ test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback();
 test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_not_changed();
 test_workbench_sticky_header_view_model_matches_current_question_context();
 test_workbench_sticky_question_text_collapse_behavior();
-test_progress_tree_pending_and_failed_states_use_generation_action();
-test_progress_tree_click_auto_generates_only_for_nodes_without_question();
-test_workbench_question_actions_follow_current_question_status();
-test_progress_tree_context_menu_items_follow_question_action_state();
+  test_progress_tree_pending_and_failed_states_use_generation_action();
+  test_progress_tree_click_auto_generates_only_for_nodes_without_question();
+  test_workbench_question_actions_follow_current_question_status();
+  test_workbench_composer_primary_button_stays_send_for_selected_question();
+  test_workbench_composer_send_remains_retry_when_question_has_answer();
+  test_workbench_composer_follow_up_disabled_without_history_or_contract();
+  test_workbench_composer_mark_completed_and_regenerate_confirmation_gate();
+  test_progress_tree_context_menu_items_follow_question_action_state();
 test_progress_tree_context_menu_closes_on_escape_and_external_events();
 test_progress_tree_question_entry_is_selectable_by_node_type();
 test_progress_tree_click_focuses_latest_question_for_node();

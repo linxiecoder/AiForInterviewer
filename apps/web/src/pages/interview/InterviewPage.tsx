@@ -360,6 +360,19 @@ export const INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS = {
   markQuestionCompleted: "标记为已完成",
   copyNodeInfo: "复制节点信息",
 } as const;
+export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON = "追问本题" as const;
+export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON = "换一道题" as const;
+export const INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON = "为当前节点出题" as const;
+export const INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON = "标记完成" as const;
+export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_DISABLED_WITHOUT_HISTORY = "先提交一轮回答后再追问" as const;
+export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_UNSUPPORTED = "当前接口暂不支持追问生成" as const;
+export const INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_DISABLED_WITHOUT_FEEDBACK = "生成反馈后才能标记完成" as const;
+export const INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER = "请输入当前题目的回答" as const;
+export const INTERVIEW_WORKBENCH_SEND_RETRY_PLACEHOLDER = "继续输入新的回答，本次将作为重答/继续打磨" as const;
+export const INTERVIEW_WORKBENCH_SEND_DISABLED_PLACEHOLDER = "请选择左侧已有题目的节点后作答" as const;
+export const INTERVIEW_WORKBENCH_REGRADE_CONFIRM_TITLE = "确认重新生成题目" as const;
+export const INTERVIEW_WORKBENCH_REGRADE_CONFIRM_DESCRIPTION =
+  "输入区有未发送内容，继续操作会保留草稿，但可能不再适配当前题目。是否继续？" as const;
 const WORKBENCH_PROGRESS_NODE_STATUS_TEXT = {
   completed: "已完成",
   in_progress: "进行中",
@@ -407,6 +420,11 @@ export type WorkbenchCurrentQuestionState = {
 export type WorkbenchQuestionActionState = {
   currentQuestionId: string | null;
   currentQuestionStatus: WorkbenchQuestionStatus | null;
+  currentQuestionProgressNodeRef: string | null;
+  currentQuestionLatestAnswerId: string | null;
+  currentQuestionLatestFeedbackId: string | null;
+  hasCurrentQuestionAnswer: boolean;
+  hasCurrentQuestionFeedback: boolean;
   isQuestionNode: boolean;
   hasCurrentQuestion: boolean;
   isCurrentQuestionCompleted: boolean;
@@ -1446,6 +1464,20 @@ function getLatestTurnForProgressNode(session: PolishSessionDetail, progressNode
   return matchingTurns.length > 0 ? matchingTurns[matchingTurns.length - 1] : null;
 }
 
+function resolveQuestionLatestAnswer(
+  session: PolishSessionDetail,
+  questionId: string | null,
+): PolishSessionAnswer | null {
+  if (questionId === null) {
+    return null;
+  }
+  const questionTurn = session.turns.find((turn) => turn.question_id === questionId) ?? null;
+  if (questionTurn === null) {
+    return null;
+  }
+  return questionTurn.answers.length > 0 ? questionTurn.answers[questionTurn.answers.length - 1] : null;
+}
+
 function resolveQuestionTurnStatus(
   session: PolishSessionDetail,
   turn: PolishSessionDetail["turns"][number],
@@ -1497,6 +1529,115 @@ export function resolveQuestionNodeState(
   };
 }
 
+export function canFollowUpCurrentQuestion(params: {
+  isQuestionNode: boolean;
+  canSendAnswer: boolean;
+  hasCurrentQuestionAnswer: boolean;
+  hasCurrentQuestionFeedback: boolean;
+  isFollowUpQuestionApiSupported: boolean;
+}): boolean {
+  return Boolean(
+    params.isQuestionNode &&
+    params.canSendAnswer &&
+    params.isFollowUpQuestionApiSupported &&
+    (params.hasCurrentQuestionAnswer || params.hasCurrentQuestionFeedback),
+  );
+}
+
+export function canRegenerateQuestionForCurrentNode(params: {
+  canGenerateQuestion: boolean;
+}): boolean {
+  return params.canGenerateQuestion;
+}
+
+export function canMarkCurrentQuestionCompleted(params: {
+  hasCurrentQuestion: boolean;
+  hasCurrentQuestionFeedback: boolean;
+  isCurrentQuestionCompleted: boolean;
+}): boolean {
+  return Boolean(params.hasCurrentQuestion && params.hasCurrentQuestionFeedback && !params.isCurrentQuestionCompleted);
+}
+
+export function shouldConfirmBeforeRegenerateQuestion(answerText: string): boolean {
+  return answerText.trim().length > 0;
+}
+
+export type WorkbenchQuestionComposerActionViewModel = {
+  sendAnswerButtonLabel: "发送" | "发送回答";
+  sendAnswerPlaceholder: string;
+  showFollowUpCurrentQuestionButton: boolean;
+  canFollowUpCurrentQuestion: boolean;
+  canRegenerateCurrentQuestion: boolean;
+  canMarkCurrentQuestionCompleted: boolean;
+  followUpCurrentQuestionDisabledReason: string | null;
+  markCurrentQuestionCompletedDisabledReason: string;
+  shouldConfirmBeforeRegenerateQuestion: boolean;
+  regenerateQuestionButtonCopy: string;
+  followUpQuestionParentQuestionId: string | null;
+  followUpQuestionParentAnswerId: string | null;
+  followUpQuestionParentFeedbackId: string | null;
+};
+
+export function deriveComposerActionViewModel(params: {
+  session: PolishSessionDetail | null;
+  questionActionState: WorkbenchQuestionActionState;
+  answerText: string;
+  isFollowUpQuestionApiSupported?: boolean;
+}): WorkbenchQuestionComposerActionViewModel {
+  const isFollowUpQuestionApiSupported = params.isFollowUpQuestionApiSupported ?? false;
+
+  const canFollowUpCurrentQuestionResult = canFollowUpCurrentQuestion({
+    isQuestionNode: params.questionActionState.isQuestionNode,
+    canSendAnswer: params.questionActionState.canSendAnswer,
+    hasCurrentQuestionAnswer: params.questionActionState.hasCurrentQuestionAnswer,
+    hasCurrentQuestionFeedback: params.questionActionState.hasCurrentQuestionFeedback,
+    isFollowUpQuestionApiSupported,
+  });
+
+  const sendAnswerPlaceholder = params.questionActionState.canSendAnswer
+    ? (params.questionActionState.hasCurrentQuestionAnswer
+      ? INTERVIEW_WORKBENCH_SEND_RETRY_PLACEHOLDER
+      : INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER)
+    : INTERVIEW_WORKBENCH_SEND_DISABLED_PLACEHOLDER;
+
+  const canRegenerateCurrentQuestion = canRegenerateQuestionForCurrentNode({
+    canGenerateQuestion: params.questionActionState.canGenerateQuestion,
+  });
+  const regenerateQuestionButtonCopy = params.questionActionState.isQuestionNode
+    ? INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON
+    : INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON;
+
+  const canMark = canMarkCurrentQuestionCompleted({
+    hasCurrentQuestion: params.questionActionState.hasCurrentQuestion,
+    hasCurrentQuestionFeedback: params.questionActionState.hasCurrentQuestionFeedback,
+    isCurrentQuestionCompleted: params.questionActionState.isCurrentQuestionCompleted,
+  });
+
+  return {
+    sendAnswerButtonLabel: "发送",
+    sendAnswerPlaceholder,
+    showFollowUpCurrentQuestionButton: params.questionActionState.isQuestionNode,
+    canFollowUpCurrentQuestion: canFollowUpCurrentQuestionResult,
+    canRegenerateCurrentQuestion,
+    canMarkCurrentQuestionCompleted: canMark,
+    followUpCurrentQuestionDisabledReason: !params.questionActionState.canSendAnswer
+      ? INTERVIEW_WORKBENCH_SEND_DISABLED_PLACEHOLDER
+      : (!isFollowUpQuestionApiSupported
+        ? INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_UNSUPPORTED
+        : !canFollowUpCurrentQuestionResult
+          ? INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_DISABLED_WITHOUT_HISTORY
+          : null),
+    markCurrentQuestionCompletedDisabledReason: canMark
+      ? ""
+      : INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_DISABLED_WITHOUT_FEEDBACK,
+    shouldConfirmBeforeRegenerateQuestion: shouldConfirmBeforeRegenerateQuestion(params.answerText),
+    regenerateQuestionButtonCopy,
+    followUpQuestionParentQuestionId: params.questionActionState.currentQuestionId,
+    followUpQuestionParentAnswerId: params.questionActionState.currentQuestionLatestAnswerId,
+    followUpQuestionParentFeedbackId: params.questionActionState.currentQuestionLatestFeedbackId,
+  };
+}
+
 export function deriveWorkbenchQuestionActionState(params: {
   session: PolishSessionDetail | null;
   selectedProgressNode: WorkbenchProgressNode | null;
@@ -1517,6 +1658,11 @@ export function deriveWorkbenchQuestionActionState(params: {
   const isSelectedQuestionNode = selectedQuestionState !== null;
   const hasCurrentQuestion = currentQuestionState !== null;
   const isCurrentQuestionCompleted = currentQuestionState?.status === "completed";
+  const currentQuestionLatestAnswer = params.session === null
+    ? null
+    : resolveQuestionLatestAnswer(params.session, currentQuestionState?.questionId ?? null);
+  const hasCurrentQuestionAnswer = currentQuestionLatestAnswer !== null;
+  const hasCurrentQuestionFeedback = answerHasGeneratedFeedback(currentQuestionLatestAnswer);
   const isBusy =
     params.creatingQuestion ||
     params.submittingAnswer ||
@@ -1528,6 +1674,11 @@ export function deriveWorkbenchQuestionActionState(params: {
   return {
     currentQuestionId: currentQuestionState?.questionId ?? null,
     currentQuestionStatus: currentQuestionState?.status ?? null,
+    currentQuestionProgressNodeRef: currentQuestionState?.progressNodeRef ?? null,
+    currentQuestionLatestAnswerId: currentQuestionLatestAnswer?.answer_id ?? null,
+    currentQuestionLatestFeedbackId: currentQuestionLatestAnswer?.feedback_id ?? currentQuestionLatestAnswer?.feedback_payload?.feedback_id ?? null,
+    hasCurrentQuestionAnswer,
+    hasCurrentQuestionFeedback,
     isQuestionNode: isSelectedQuestionNode,
     hasCurrentQuestion,
     isCurrentQuestionCompleted,
@@ -1536,7 +1687,11 @@ export function deriveWorkbenchQuestionActionState(params: {
       canUseSession &&
       params.canShowProgressTree &&
       !(hasCurrentQuestion && !isCurrentQuestionCompleted),
-    canMarkQuestionCompleted: canUseSession && hasCurrentQuestion && !isCurrentQuestionCompleted,
+    canMarkQuestionCompleted: canUseSession && canMarkCurrentQuestionCompleted({
+      hasCurrentQuestion,
+      hasCurrentQuestionFeedback,
+      isCurrentQuestionCompleted,
+    }),
   };
 }
 
@@ -3601,7 +3756,15 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     void loadSession();
   }, [sessionId]);
 
-  const createQuestion = async (progressNodeRef?: string | null) => {
+  const createQuestion = async (
+    progressNodeRef?: string | null,
+    options: {
+      generationMode?: "new_question" | "follow_up" | string | null;
+      parentQuestionId?: string | null;
+      parentAnswerId?: string | null;
+      parentFeedbackId?: string | null;
+    } = {},
+  ) => {
     if (session === null) {
       return;
     }
@@ -3623,11 +3786,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setWorkbenchFailureState(null);
     try {
       await createPolishQuestionTask(sessionId, {
-        generation_mode: "new_question",
+        generation_mode: options.generationMode ?? "new_question",
         progress_node_ref: targetProgressNodeRef,
         selected_progress_node_ref: targetProgressNodeRef,
         selected_category_path: buildSelectedCategoryPath(session.progress_tree_plan.nodes, targetProgressNodeRef),
         completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
+        parent_question_id: options.parentQuestionId,
+        parent_answer_id: options.parentAnswerId,
+        parent_feedback_id: options.parentFeedbackId,
       });
       await loadSession();
     } catch (createError) {
@@ -3721,6 +3887,49 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
   };
 
+  const requestRegenerateQuestionWithDraftCheck = async () => {
+    if (!shouldConfirmBeforeRegenerateQuestion(answerText)) {
+      return true;
+    }
+    return await new Promise<boolean>((resolve) => {
+      Modal.confirm({
+        title: INTERVIEW_WORKBENCH_REGRADE_CONFIRM_TITLE,
+          content: INTERVIEW_WORKBENCH_REGRADE_CONFIRM_DESCRIPTION,
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+    });
+  };
+
+  const followUpCurrentQuestion = async () => {
+    if (questionActionState.currentQuestionProgressNodeRef === null || questionActionState.currentQuestionId === null) {
+      setAnswerError("当前问题上下文不足，无法发起追问。");
+      return;
+    }
+    if (session === null) {
+      setAnswerError("会话尚未加载完成，请稍后重试。");
+      return;
+    }
+    await createQuestion(
+      questionActionState.currentQuestionProgressNodeRef,
+      {
+        generationMode: "follow_up",
+        parentQuestionId: questionActionState.currentQuestionId,
+        parentAnswerId: questionActionState.currentQuestionLatestAnswerId,
+        parentFeedbackId: questionActionState.currentQuestionLatestFeedbackId,
+      },
+    );
+  };
+
+  const regenerateCurrentQuestion = async () => {
+    const shouldProceed = await requestRegenerateQuestionWithDraftCheck();
+    if (!shouldProceed) {
+      return;
+    }
+    const targetProgressNodeRef = questionActionState.currentQuestionProgressNodeRef ?? selectedProgressNodeDetailRef;
+    await createQuestion(targetProgressNodeRef);
+  };
+
   const copySessionContent = async () => {
     if (session === null) {
       return;
@@ -3778,9 +3987,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     completingQuestion,
     endingSession,
   });
+  const composerActionState = deriveComposerActionViewModel({
+    session,
+    questionActionState,
+    answerText,
+    isFollowUpQuestionApiSupported: true,
+  });
   const canSendAnswer = questionActionState.canSendAnswer;
-  const canGenerateQuestion = questionActionState.canGenerateQuestion;
-  const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
+  const canRegenerateCurrentQuestion = composerActionState.canRegenerateCurrentQuestion;
   const focusedQuestionId =
     session === null ? null : resolveWorkbenchQuestionFocusId(session, selectedProgressNode, selectedProgressNodeDetailRef);
   const focusedQuestionTurn = session === null || focusedQuestionId === null
@@ -4388,32 +4602,58 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               void sendAnswer();
             }
           }}
-          placeholder={canSendAnswer ? "请输入当前题目的回答" : "请选择左侧已有题目的节点后作答"}
+          placeholder={composerActionState.sendAnswerPlaceholder}
           maxLength={2000}
           disabled={!canSendAnswer}
         />
         <div className={styles.currentQuestionComposerActions}>
           <div className={styles.currentQuestionComposerLeftActions}>
+            {composerActionState.showFollowUpCurrentQuestionButton ? (
+              <Tooltip
+                title={composerActionState.followUpCurrentQuestionDisabledReason ?? INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON}
+              >
+                <span>
+                  <Button
+                    icon={<PlusOutlined />}
+                    loading={creatingQuestion}
+                    disabled={!composerActionState.canFollowUpCurrentQuestion}
+                    onClick={() => {
+                      void followUpCurrentQuestion();
+                    }}
+                  >
+                    {INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
             <Button
-              icon={<PlusOutlined />}
-              onClick={() => {
-                void createQuestion();
-              }}
+              icon={<ReloadOutlined />}
               loading={creatingQuestion}
-              disabled={!canGenerateQuestion}
-            >
-              生成题目
-            </Button>
-            <Button
-              icon={<CheckCircleOutlined />}
-              loading={completingQuestion}
-              disabled={!canMarkQuestionCompleted}
+              disabled={!canRegenerateCurrentQuestion}
               onClick={() => {
-                void completeCurrentQuestion();
+                void regenerateCurrentQuestion();
               }}
             >
-              标记为已完成
+              {composerActionState.regenerateQuestionButtonCopy}
             </Button>
+            <Tooltip
+              title={composerActionState.canMarkCurrentQuestionCompleted
+                ? INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON
+                : composerActionState.markCurrentQuestionCompletedDisabledReason}
+            >
+              <span>
+                <Button
+                  icon={<CheckCircleOutlined />}
+                  loading={completingQuestion}
+                  disabled={!composerActionState.canMarkCurrentQuestionCompleted}
+                  onClick={() => {
+                    void completeCurrentQuestion();
+                  }}
+                >
+                  {INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON}
+                </Button>
+              </span>
+            </Tooltip>
           </div>
           <Tooltip title={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}>
             <span
@@ -4431,7 +4671,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                   void sendAnswer();
                 }}
               >
-                发送
+                {composerActionState.sendAnswerButtonLabel}
               </Button>
             </span>
           </Tooltip>
