@@ -6,10 +6,10 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 # Codex Goal Package — Option D: Local Complete Multi-Agent Capability
 
-**Project:** AiForInterviewer 多 Agent / DDD 重构总控  
+**Project:** AiForInterviewer 多 Agent / DDD 重构总控
 **Goal package version:** 2026-06-07-D-W0-source-revision
-**Execution target:** Codex CLI, plan mode first, then goal mode  
-**Primary outcome:** Build a real, locally executable, controlled multi-agent system.  
+**Execution target:** Codex CLI, plan mode first, then goal mode
+**Primary outcome:** Build a real, locally executable, controlled multi-agent system.
 **Explicit non-outcome:** Do not implement production release governance, A/B testing, canary/traffic rollout, or production real-provider certification in this goal.
 **Project source decision:** `DEC-L5-015 Option D Local Complete Multi-Agent Capability`
 
