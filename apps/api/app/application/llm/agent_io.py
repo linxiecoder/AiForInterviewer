@@ -217,10 +217,10 @@ class AgentPromptBundle:
 
 
 @dataclass(frozen=True)
-class AgentOutputEnvelope:
-    """Legacy dict-based Agent output envelope.
+class LegacyAgentOutputEnvelope:
+    """Legacy dict-based Agent output envelope used by pre-schema-first agents.
 
-    New schema-first agents should use typed envelopes from agent_contracts.py.
+    New schema-first agents must use app.application.llm.agent_contracts.AgentOutputEnvelope.
     """
 
     task_type: str

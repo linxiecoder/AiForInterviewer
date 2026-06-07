@@ -3,7 +3,9 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
-from app.application.llm.agent_io import AgentOutputEnvelope
+from app.application.llm.agent_io import (
+    LegacyAgentOutputEnvelope,
+)
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish import feedback_generation_service
 from app.application.polish.feedback_agent import FeedbackGenerationAgent
@@ -345,7 +347,7 @@ def test_feedback_agent_returns_agent_output_envelope_for_valid_provider_payload
         input_refs=("answer_001",),
     )
 
-    assert isinstance(envelope, AgentOutputEnvelope)
+    assert isinstance(envelope, LegacyAgentOutputEnvelope)
     assert envelope.succeeded is True
     assert envelope.task_type == POLISH_FEEDBACK_TASK_TYPE
     assert envelope.schema_id == POLISH_FEEDBACK_FINAL_SCHEMA_ID
@@ -372,7 +374,7 @@ def test_feedback_agent_invalid_provider_payload_returns_envelope_validation_err
         input_refs=("answer_001",),
     )
 
-    assert isinstance(envelope, AgentOutputEnvelope)
+    assert isinstance(envelope, LegacyAgentOutputEnvelope)
     assert envelope.succeeded is False
     assert envelope.payload == {}
     assert envelope.validation_errors == ("feedback_payload_schema_invalid",)

@@ -5,7 +5,9 @@ from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any
 
-from app.application.llm.agent_io import AgentOutputEnvelope
+from app.application.llm.agent_io import (
+    LegacyAgentOutputEnvelope,
+)
 from app.application.llm.ports import LlmTransport
 from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
 from app.application.llm.types import LlmTransportResult
@@ -71,7 +73,7 @@ class FeedbackGenerationAgent:
         *,
         prompt_asset: dict[str, Any],
         input_refs: tuple[str, ...],
-    ) -> AgentOutputEnvelope:
+    ) -> LegacyAgentOutputEnvelope:
         try:
             request = build_validated_transport_request(
                 contract_ids=_contract_ids(prompt_asset),
@@ -91,7 +93,7 @@ class FeedbackGenerationAgent:
                 provider_result = self._transport.generate(request)
         except Exception as exc:
             validation_error = _transport_validation_error(exc)
-            return AgentOutputEnvelope(
+            return LegacyAgentOutputEnvelope(
                 task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
                 schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
                 schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
@@ -112,7 +114,7 @@ def _feedback_output_envelope(
     result: LlmTransportResult,
     *,
     prompt_asset: dict[str, Any],
-) -> AgentOutputEnvelope:
+) -> LegacyAgentOutputEnvelope:
     raw_payload = result.result if isinstance(result.result, dict) else {}
     payload, extracted_metadata, extraction_errors = _extract_payload(result)
     provider_status = _provider_status(result, payload)
@@ -125,7 +127,7 @@ def _feedback_output_envelope(
         "llm_called": True,
     }
     if extraction_errors or payload is None:
-        return AgentOutputEnvelope(
+        return LegacyAgentOutputEnvelope(
             task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
             schema_id=_text(raw_payload.get("schema_id")) or _text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
             schema_version=_text(raw_payload.get("schema_version"))
@@ -158,7 +160,7 @@ def _feedback_output_envelope(
             ]
         )
     )
-    return AgentOutputEnvelope(
+    return LegacyAgentOutputEnvelope(
         task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
         schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
@@ -247,8 +249,8 @@ def _provider_prompt(prompt_asset: dict[str, Any]) -> dict[str, Any]:
 def _provider_request_validation_failed(
     prompt_asset: dict[str, Any],
     exc: ProviderRequestValidationError,
-) -> AgentOutputEnvelope:
-    return AgentOutputEnvelope(
+) -> LegacyAgentOutputEnvelope:
+    return LegacyAgentOutputEnvelope(
         task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
         schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,

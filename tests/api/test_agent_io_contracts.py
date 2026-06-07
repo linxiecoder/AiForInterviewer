@@ -148,7 +148,7 @@ def test_shared_agent_io_types_are_exported() -> None:
         "AgentEvidenceItem",
         "AgentFocusTarget",
         "AgentPromptBundle",
-        "AgentOutputEnvelope",
+        "LegacyAgentOutputEnvelope",
         "AgentSafetyPolicy",
     ):
         assert hasattr(agent_io, type_name)
@@ -259,7 +259,7 @@ def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
     assert "_question_payload_envelope(" in inspect.getsource(
         question_generation_service._parse_llm_question_payload
     )
-    assert "AgentOutputEnvelope(" in inspect.getsource(
+    assert "LegacyAgentOutputEnvelope(" in inspect.getsource(
         question_generation_service._question_payload_envelope
     )
 
@@ -269,7 +269,7 @@ def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
     assert "_quality_first_menu_payload_envelope(" in inspect.getsource(
         progress_tree._normalize_quality_first_menu_payload
     )
-    assert "AgentOutputEnvelope(" in inspect.getsource(
+    assert "LegacyAgentOutputEnvelope(" in inspect.getsource(
         progress_tree._quality_first_menu_payload_envelope
     )
 
@@ -279,7 +279,7 @@ def test_output_parsers_use_agent_output_envelope_source_contract() -> None:
     assert "_progress_tree_state_payload_envelope(" in inspect.getsource(
         progress_tree._normalize_state
     )
-    assert "AgentOutputEnvelope(" in inspect.getsource(
+    assert "LegacyAgentOutputEnvelope(" in inspect.getsource(
         progress_tree._progress_tree_state_payload_envelope
     )
 

@@ -408,7 +408,9 @@ def test_agent_prompt_bundle_omits_empty_optional_fields_and_unknown_extra_field
 
 
 def test_question_payload_envelope_keeps_nested_next_question_agent_output_shape() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
     from app.application.polish.question_generation_service import _question_payload_envelope
 
     blueprint = _question_output_blueprint()
@@ -417,7 +419,7 @@ def test_question_payload_envelope_keeps_nested_next_question_agent_output_shape
     envelope = _question_payload_envelope(raw_payload, blueprint=blueprint)
     parsed_payload, parse_errors = _parse_llm_question_payload(raw_payload, blueprint=blueprint)
 
-    assert isinstance(envelope, AgentOutputEnvelope)
+    assert isinstance(envelope, LegacyAgentOutputEnvelope)
     assert envelope.succeeded is True
     assert envelope.task_type == "polish_question_generation"
     assert envelope.schema_id == NEXT_QUESTION_AGENT_SCHEMA_ID
@@ -492,7 +494,9 @@ def test_question_payload_envelope_keeps_nested_next_question_agent_output_shape
 
 
 def test_question_payload_envelope_keeps_legacy_flat_payload_shape() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
     from app.application.polish.question_generation_service import _question_payload_envelope
 
     blueprint = _question_output_blueprint()
@@ -501,7 +505,7 @@ def test_question_payload_envelope_keeps_legacy_flat_payload_shape() -> None:
     envelope = _question_payload_envelope(raw_payload, blueprint=blueprint)
     parsed_payload, parse_errors = _parse_llm_question_payload(raw_payload, blueprint=blueprint)
 
-    assert isinstance(envelope, AgentOutputEnvelope)
+    assert isinstance(envelope, LegacyAgentOutputEnvelope)
     assert envelope.succeeded is True
     assert envelope.task_type == "polish_question_generation"
     assert envelope.evidence_refs == ("resume_project_001",)

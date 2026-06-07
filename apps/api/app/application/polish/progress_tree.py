@@ -6,7 +6,9 @@ import re
 from hashlib import sha256
 from typing import Any
 
-from app.application.llm.agent_io import AgentOutputEnvelope
+from app.application.llm.agent_io import (
+    LegacyAgentOutputEnvelope,
+)
 from app.application.llm.errors import (
     LlmTransportConfigurationError,
     LlmTransportResponseError,
@@ -422,9 +424,9 @@ def _quality_first_menu_payload_envelope(
     payload: dict[str, Any],
     *,
     context: dict[str, Any],
-) -> AgentOutputEnvelope:
-    def failed(*validation_errors: str) -> AgentOutputEnvelope:
-        return AgentOutputEnvelope(
+) -> LegacyAgentOutputEnvelope:
+    def failed(*validation_errors: str) -> LegacyAgentOutputEnvelope:
+        return LegacyAgentOutputEnvelope(
             task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
             schema_id=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
             schema_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
@@ -537,7 +539,7 @@ def _quality_first_menu_payload_envelope(
         "validation": "quality_gate",
     }
     evidence_ref_validation = _quality_first_evidence_ref_validation_summary(nodes, allowed_evidence_refs)
-    return AgentOutputEnvelope(
+    return LegacyAgentOutputEnvelope(
         task_type=POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
         schema_id=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID,
         schema_version=POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_VERSION,
@@ -1944,9 +1946,9 @@ def _progress_tree_state_payload_envelope(
     prompt_version: str,
     schema_id: str,
     schema_version: str,
-) -> AgentOutputEnvelope:
-    def enveloped(state: dict[str, Any]) -> AgentOutputEnvelope:
-        return AgentOutputEnvelope(
+) -> LegacyAgentOutputEnvelope:
+    def enveloped(state: dict[str, Any]) -> LegacyAgentOutputEnvelope:
+        return LegacyAgentOutputEnvelope(
             task_type="polish_progress_tree_state",
             schema_id=schema_id,
             schema_version=schema_version,

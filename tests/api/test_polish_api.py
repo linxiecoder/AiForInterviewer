@@ -1911,7 +1911,9 @@ def test_progress_tree_quality_first_prompt_contract_prefers_priority_path_not_q
 
 
 def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_shape() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
     from app.application.polish.progress_tree import (
         _normalize_quality_first_menu_payload,
         _quality_first_menu_payload_envelope,
@@ -1923,7 +1925,7 @@ def test_progress_tree_quality_first_initial_output_envelope_preserves_tuple_sha
     envelope = _quality_first_menu_payload_envelope(payload, context=context)
     normalized = _normalize_quality_first_menu_payload(payload, context=context)
 
-    assert isinstance(envelope, AgentOutputEnvelope)
+    assert isinstance(envelope, LegacyAgentOutputEnvelope)
     assert envelope.succeeded
     assert normalized is not None
     nodes, low_confidence_flags, quality_summary, deferred_candidates, evidence_ref_validation = normalized
@@ -2290,7 +2292,9 @@ def test_progress_tree_quality_first_defers_checklist_without_cost_gate_misdefer
 
 
 def test_progress_tree_state_refresh_output_envelope_preserves_state_shape() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
     from app.application.polish.progress_tree import (
         _normalize_state,
         _progress_tree_state_payload_envelope,
@@ -2366,9 +2370,9 @@ def test_progress_tree_state_refresh_output_envelope_preserves_state_shape() -> 
         schema_version=POLISH_PROGRESS_TREE_STATE_SCHEMA_VERSION,
     )
 
-    assert isinstance(envelope, AgentOutputEnvelope)
+    assert isinstance(envelope, LegacyAgentOutputEnvelope)
     assert envelope.succeeded
-    assert "AgentOutputEnvelope(" in inspect.getsource(_progress_tree_state_payload_envelope)
+    assert "LegacyAgentOutputEnvelope(" in inspect.getsource(_progress_tree_state_payload_envelope)
     assert envelope.payload["progress_tree_state"] == normalized
     assert normalized["status"] == "ready"
     assert normalized["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID

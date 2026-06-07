@@ -221,18 +221,22 @@ def test_question_prompt_evidence_summaries_keep_external_shape_and_schema_enums
 
 
 def test_agent_output_envelope_succeeded_when_validation_errors_empty() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
 
-    envelope = AgentOutputEnvelope(task_type="polish_question_generation")
+    envelope = LegacyAgentOutputEnvelope(task_type="polish_question_generation")
 
     assert envelope.succeeded is True
     assert envelope.to_payload_dict() == {"task_type": "polish_question_generation"}
 
 
 def test_agent_output_envelope_not_succeeded_when_validation_errors_present() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
 
-    envelope = AgentOutputEnvelope(
+    envelope = LegacyAgentOutputEnvelope(
         task_type="polish_question_generation",
         validation_errors=("llm_question_text_required",),
     )
@@ -245,9 +249,11 @@ def test_agent_output_envelope_not_succeeded_when_validation_errors_present() ->
 
 
 def test_agent_output_envelope_to_payload_dict_filters_unsafe_metadata() -> None:
-    from app.application.llm.agent_io import AgentOutputEnvelope
+    from app.application.llm.agent_io import (
+        LegacyAgentOutputEnvelope,
+    )
 
-    envelope = AgentOutputEnvelope(
+    envelope = LegacyAgentOutputEnvelope(
         task_type="polish_question_generation",
         metadata={
             "source": "unit_test",

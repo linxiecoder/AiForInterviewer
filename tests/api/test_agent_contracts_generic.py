@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import inspect
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -8,10 +10,12 @@ import app.application.llm.agent_contracts as typed_agent_contracts
 from app.application.llm import agent_io
 from app.application.llm.agent_contracts import (
     AgentContract,
-    TypedAgentCandidateEnvelope,
+    AgentOutputEnvelope,
     TypedAgentFinalEnvelope,
     TypedAgentInputEnvelope,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class _InputPayload(BaseModel):
@@ -31,11 +35,14 @@ class _OtherCandidatePayload(BaseModel):
     question_text: str
 
 
-def test_agent_contract_envelope_names_do_not_collide_with_legacy_agent_io() -> None:
-    assert not hasattr(typed_agent_contracts, "AgentOutputEnvelope")
-    assert hasattr(typed_agent_contracts, "TypedAgentCandidateEnvelope")
-    assert hasattr(agent_io, "AgentOutputEnvelope")
-    assert "Legacy dict-based Agent output envelope" in (inspect.getdoc(agent_io.AgentOutputEnvelope) or "")
+def test_agent_contract_envelope_names_are_canonical() -> None:
+    assert typed_agent_contracts.AgentOutputEnvelope is AgentOutputEnvelope
+    assert hasattr(typed_agent_contracts, "AgentOutputEnvelope")
+    assert hasattr(agent_io, "LegacyAgentOutputEnvelope")
+    assert not hasattr(agent_io, "AgentOutputEnvelope")
+    assert "Legacy dict-based Agent output envelope used by pre-schema-first agents" in (
+        inspect.getdoc(agent_io.LegacyAgentOutputEnvelope) or ""
+    )
 
 
 def test_agent_contract_generates_candidate_and_final_json_schema() -> None:
@@ -59,7 +66,7 @@ def test_agent_contract_generates_candidate_and_final_json_schema() -> None:
 
 
 def test_agent_output_envelope_keeps_metadata_out_of_payload() -> None:
-    envelope = TypedAgentCandidateEnvelope[_CandidatePayload](
+    envelope = AgentOutputEnvelope[_CandidatePayload](
         agent_name="feedback",
         task_type="polish_feedback_generation",
         schema_id="feedback_candidate",
@@ -82,6 +89,24 @@ def test_agent_output_envelope_keeps_metadata_out_of_payload() -> None:
     assert "request_id" not in dumped["payload"]
 
 
+def test_agent_output_envelope_has_single_class_definition_and_no_legacy_import_alias() -> None:
+    agent_output_class_defs: list[Path] = []
+    forbidden_imports: list[Path] = []
+    for root in (REPO_ROOT / "apps", REPO_ROOT / "tests"):
+        for path in root.rglob("*.py"):
+            source = path.read_text(encoding="utf-8-sig")
+            tree = ast.parse(source, filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef) and node.name == "AgentOutputEnvelope":
+                    agent_output_class_defs.append(path.relative_to(REPO_ROOT))
+                if isinstance(node, ast.ImportFrom) and node.module == "app.application.llm.agent_io":
+                    if any(alias.name == "AgentOutputEnvelope" for alias in node.names):
+                        forbidden_imports.append(path.relative_to(REPO_ROOT))
+
+    assert agent_output_class_defs == [Path("apps/api/app/application/llm/agent_contracts.py")]
+    assert forbidden_imports == []
+
+
 def test_generic_envelopes_accept_different_payload_types() -> None:
     input_envelope = TypedAgentInputEnvelope[_InputPayload](
         agent_name="feedback",
@@ -91,7 +116,7 @@ def test_generic_envelopes_accept_different_payload_types() -> None:
         prompt_version="prompt.v1",
         payload=_InputPayload(answer_id="answer_001"),
     )
-    output_envelope = TypedAgentCandidateEnvelope[_OtherCandidatePayload](
+    output_envelope = AgentOutputEnvelope[_OtherCandidatePayload](
         agent_name="question",
         task_type="polish_question_generation",
         schema_id="question_candidate",

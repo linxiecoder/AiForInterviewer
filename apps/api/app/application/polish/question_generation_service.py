@@ -14,7 +14,10 @@ from app.application.llm.errors import (
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
-from app.application.llm.agent_io import AgentFocusTarget, AgentOutputEnvelope
+from app.application.llm.agent_io import (
+    AgentFocusTarget,
+    LegacyAgentOutputEnvelope,
+)
 from app.application.llm.ports import LlmTransport
 from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
 from app.application.llm.types import LlmTransportResult
@@ -638,14 +641,14 @@ def _question_payload_envelope(
     payload: dict[str, Any],
     *,
     blueprint: QuestionBlueprint,
-) -> AgentOutputEnvelope:
+) -> LegacyAgentOutputEnvelope:
     if isinstance(payload.get("decision"), dict) or isinstance(payload.get("question"), dict):
         agent_payload, agent_errors = validate_next_question_agent_output(
             payload,
             allowed_evidence_refs=blueprint.evidence_refs,
         )
         if agent_errors or agent_payload is None:
-            return AgentOutputEnvelope(
+            return LegacyAgentOutputEnvelope(
                 task_type=_QUESTION_OUTPUT_TASK_TYPE,
                 schema_id=_clean(payload.get("schema_id")) or None,
                 prompt_version=_clean(payload.get("prompt_version")) or None,
@@ -667,7 +670,7 @@ def _question_payload_envelope(
             "clarification_needed": agent_payload["clarification_needed"],
             "next_question_agent": agent_payload,
         }
-        return AgentOutputEnvelope(
+        return LegacyAgentOutputEnvelope(
             task_type=_QUESTION_OUTPUT_TASK_TYPE,
             schema_id=_clean(agent_payload.get("schema_id")) or None,
             schema_version=_clean(agent_payload.get("schema_version")) or None,
@@ -724,11 +727,11 @@ def _question_payload_envelope(
     evidence_refs = _string_list(payload.get("evidence_refs"), max_items=8)
 
     if errors:
-        return AgentOutputEnvelope(
+        return LegacyAgentOutputEnvelope(
             task_type=_QUESTION_OUTPUT_TASK_TYPE,
             validation_errors=tuple(dict.fromkeys(errors)),
         )
-    return AgentOutputEnvelope(
+    return LegacyAgentOutputEnvelope(
         task_type=_QUESTION_OUTPUT_TASK_TYPE,
         payload={
             "question_text": question_text,

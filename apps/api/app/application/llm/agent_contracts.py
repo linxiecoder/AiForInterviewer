@@ -32,7 +32,7 @@ class TypedAgentInputEnvelope(_AgentEnvelopeBase, Generic[InputPayloadT]):
     payload: InputPayloadT
 
 
-class TypedAgentCandidateEnvelope(_AgentEnvelopeBase, Generic[CandidatePayloadT]):
+class AgentOutputEnvelope(_AgentEnvelopeBase, Generic[CandidatePayloadT]):
     payload: CandidatePayloadT
 
 
