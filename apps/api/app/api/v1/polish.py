@@ -52,10 +52,11 @@ from app.application.polish.entities import (
     PolishTaskStatus,
     PolishTopic,
 )
-from app.application.polish.feedback_reserved import (
-    RESERVED_FEEDBACK_SCHEMA_ID,
-    RESERVED_FEEDBACK_SCHEMA_VERSION,
-    RESERVED_FEEDBACK_TEXT,
+from app.application.polish.feedback_schema import (
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
 )
 from app.application.polish.feedback_generation_service import FeedbackGenerationService
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
@@ -107,7 +108,7 @@ LEGACY_TOPIC_TITLE_BY_ID = {
     "topic_system_design": "能力深度与技术深挖",
     "topic_behavioral": "情景模拟与角色扮演",
 }
-LEGACY_PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
+PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
 
 # 仅作答（无反馈）时允许的推荐操作
 ANSWER_NEXT_RECOMMENDED_ACTIONS = (
@@ -128,6 +129,15 @@ FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
         "raw_provider_payload",  # sensitive response denylist marker
         "provider_response",
         "raw_provider_response",
+    }
+)
+
+FEEDBACK_PAYLOAD_RESPONSE_TOP_LEVEL_KEYS = frozenset(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS) | frozenset(
+    {
+        "error",
+        "retryable",
+        "user_visible_status",
+        "validation_errors",
     }
 )
 
@@ -944,7 +954,7 @@ def _clean_optional_header(value: str | None) -> str | None:
     return stripped or None
 
 
-# ── 核心：反馈 payload 构造（pending / reserved / stored payload） ─────
+# ── 核心：反馈 payload 构造（pending / stored payload） ───────────────
 def _answer_feedback_payload(
     answer: object,
     *,
@@ -958,64 +968,47 @@ def _answer_feedback_payload(
     stored_payload = getattr(answer, "feedback_payload", None)
     if isinstance(stored_payload, dict) and feedback_id:
         return _response_safe_feedback_payload(stored_payload)
-    if not feedback_id:
-        return {
-            "contract_id": "P-POLISH-003",
-            "contract_ids": ["P-POLISH-003"],
-            "status": "pending",
-            "polish_session_ref": {"resource_type": "polish_session", "resource_id": answer_session_id},
-            "question_ref": {"resource_type": "question", "resource_id": answer_question_id},
-            "answer_ref": {"resource_type": "answer", "resource_id": answer_id},
-            "feedback_text": LEGACY_PENDING_FEEDBACK_TEXT,
-            "feedback_summary": LEGACY_PENDING_FEEDBACK_TEXT,
-            "score_result": None,
-            "score_result_ref": None,
-            "loss_points": [],
-            "reference_answer": None,
-            "knowledge_points": [],
-            "technical_principles": [],
-            "next_recommended_actions": list(ANSWER_NEXT_RECOMMENDED_ACTIONS),
-            "candidate_refs": [],
-            "validation_result_ref": None,
-            "trace_refs": _answer_trace_refs(answer),
-            "low_confidence_flags": [],
-            "user_confirmation_required": False,
-            "legacy_compatibility": {"feedback_text": LEGACY_PENDING_FEEDBACK_TEXT},
-        }
+    return _pending_feedback_payload(
+        answer_id=answer_id,
+        session_id=answer_session_id,
+        question_id=answer_question_id,
+        feedback_id=str(feedback_id) if feedback_id else None,
+        trace_refs=_answer_trace_refs(answer),
+    )
 
-    return {
-        "schema_id": RESERVED_FEEDBACK_SCHEMA_ID,
-        "schema_version": RESERVED_FEEDBACK_SCHEMA_VERSION,
-        "contract_id": "P-POLISH-003",
-        "contract_ids": ["P-POLISH-003"],
-        "status": "reserved",
-        "feedback_id": feedback_id,
-        "polish_session_ref": {"resource_type": "polish_session", "resource_id": answer_session_id},
-        "question_ref": {"resource_type": "question", "resource_id": answer_question_id},
-        "answer_ref": {"resource_type": "answer", "resource_id": answer_id},
-        "feedback_text": RESERVED_FEEDBACK_TEXT,
-        "feedback_summary": RESERVED_FEEDBACK_TEXT,
+
+def _pending_feedback_payload(
+    *,
+    answer_id: str,
+    session_id: str,
+    question_id: str,
+    feedback_id: str | None,
+    trace_refs: list[dict[str, object]],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+        "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+        "status": "pending",
+        "feedback_text": PENDING_FEEDBACK_TEXT,
+        "answer_summary": None,
         "score_result": None,
-        "score_result_ref": None,
         "loss_points": [],
         "reference_answer": None,
-        "knowledge_points": [],
-        "technical_principles": [],
-        "next_recommended_actions": [],
-        "candidate_refs": [],
-        "validation_result_ref": None,
-        "trace_refs": _answer_trace_refs(answer),
+        "next_recommended_actions": list(ANSWER_NEXT_RECOMMENDED_ACTIONS),
+        "trace_refs": trace_refs,
         "low_confidence_flags": [],
-        "user_confirmation_required": False,
-        "legacy_compatibility": {"feedback_text": RESERVED_FEEDBACK_TEXT},
         "feedback_metadata": {
-            "reserved": True,
             "llm_called": False,
-            "candidate_extraction_called": False,
-            "reference_answer_generated": False,
-            "score_result_generated": False,
+            "pending_reason": "feedback_not_generated",
+            "answer_id": answer_id,
+            "session_id": session_id,
+            "question_id": question_id,
         },
     }
+    if feedback_id:
+        payload["feedback_id"] = feedback_id
+    return payload
 
 
 # ── 安全脱敏 ────────────────────────────────────────────────────────
@@ -1092,17 +1085,18 @@ def _response_safe_feedback_payload(payload: dict[str, Any]) -> dict[str, object
 
 
 # 递归删除 payload 中所有禁止暴露的键，并脱敏字符串值中的敏感内容
-def _drop_forbidden_feedback_payload_response_keys(value: Any) -> Any:
+def _drop_forbidden_feedback_payload_response_keys(value: Any, *, _depth: int = 0) -> Any:
     if isinstance(value, dict):
         return {
-            str(key): _drop_forbidden_feedback_payload_response_keys(item)
+            str(key): _drop_forbidden_feedback_payload_response_keys(item, _depth=_depth + 1)
             for key, item in value.items()
             if not _is_forbidden_feedback_payload_response_key(str(key))
+            and (_depth != 0 or str(key) in FEEDBACK_PAYLOAD_RESPONSE_TOP_LEVEL_KEYS)
         }
     if isinstance(value, list):
-        return [_drop_forbidden_feedback_payload_response_keys(item) for item in value]
+        return [_drop_forbidden_feedback_payload_response_keys(item, _depth=_depth) for item in value]
     if isinstance(value, tuple):
-        return [_drop_forbidden_feedback_payload_response_keys(item) for item in value]
+        return [_drop_forbidden_feedback_payload_response_keys(item, _depth=_depth) for item in value]
     if isinstance(value, str):
         return _redact_forbidden_feedback_payload_response_text(value)
     return value

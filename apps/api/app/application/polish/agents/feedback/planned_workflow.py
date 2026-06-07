@@ -50,15 +50,16 @@ def build_feedback_planned_handoff(
     )
     trace_refs = _feedback_trace_refs(stored, generation_result)
     validation_refs = _feedback_validation_refs(stored, trace_refs=trace_refs)
+    asset_source = stored.get("project_asset_update_candidates")
+    if not isinstance(asset_source, (list, tuple)):
+        asset_source = _asset_update_candidates_from_cards(stored.get("feedback_cards"))
     asset_update_candidates, asset_candidate_refs = _normalized_asset_update_candidates(
-        stored.get("project_asset_update_candidates"),
+        asset_source,
         feedback_candidate_ref=feedback_candidate_ref,
     )
-    stored["project_asset_update_candidates"] = asset_update_candidates
-    stored["candidate_refs"] = _payload_candidate_refs(
-        feedback_candidate_ref=feedback_candidate_ref,
-        asset_candidate_refs=asset_candidate_refs,
-    )
+    _replace_asset_update_candidates_card(stored, asset_update_candidates)
+    stored.pop("project_asset_update_candidates", None)
+    stored.pop("candidate_refs", None)
 
     metadata = dict(stored.get("feedback_metadata")) if isinstance(stored.get("feedback_metadata"), dict) else {}
     metadata.update(_safe_generation_metadata(generation_result.metadata))
@@ -149,6 +150,41 @@ def _normalized_asset_update_candidates(
     return candidates, tuple(dict.fromkeys(refs))
 
 
+def _replace_asset_update_candidates_card(
+    payload: dict[str, Any],
+    asset_update_candidates: list[dict[str, Any]],
+) -> None:
+    cards = payload.get("feedback_cards")
+    if not isinstance(cards, list):
+        cards = []
+    preserved_cards = [
+        card
+        for card in cards
+        if not (isinstance(card, dict) and card.get("card_type") == "asset_update_candidates")
+    ]
+    if asset_update_candidates:
+        preserved_cards.append(
+            {
+                "card_type": "asset_update_candidates",
+                "status": "candidate",
+                "payload": asset_update_candidates,
+            }
+        )
+    payload["feedback_cards"] = preserved_cards
+
+
+def _asset_update_candidates_from_cards(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    for card in value:
+        if not isinstance(card, dict) or card.get("card_type") != "asset_update_candidates":
+            continue
+        payload = card.get("payload")
+        if isinstance(payload, list):
+            return [dict(item) for item in payload if isinstance(item, dict)]
+    return []
+
+
 def _feedback_trace_refs(
     payload: dict[str, Any],
     generation_result: FeedbackGenerationResult,
@@ -178,19 +214,6 @@ def _feedback_validation_refs(payload: dict[str, Any], *, trace_refs: tuple[str,
         refs.append("validation_ref_feedback_cards")
     refs.extend(ref for ref in trace_refs if ref.startswith("validation_ref_"))
     return tuple(dict.fromkeys(refs))
-
-
-def _payload_candidate_refs(
-    *,
-    feedback_candidate_ref: str,
-    asset_candidate_refs: tuple[str, ...],
-) -> list[dict[str, str]]:
-    refs = [{"resource_type": "feedback_candidate", "resource_id": feedback_candidate_ref}]
-    refs.extend(
-        {"resource_type": "asset_update_candidate", "resource_id": candidate_ref}
-        for candidate_ref in asset_candidate_refs
-    )
-    return refs
 
 
 def _task_candidate_refs(

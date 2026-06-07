@@ -8,6 +8,8 @@ import pytest
 from sqlalchemy import text
 
 from app.api.v1 import polish as polish_api
+from app.application.common.logging import LogUtil
+from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
@@ -120,10 +122,48 @@ class _ValidatorFailedFeedbackTransport:
         )
 
 
+def _runtime_feedback_candidate_payload(value: object) -> object:
+    if not isinstance(value, dict):
+        return value
+    filtered = {
+        key: value[key]
+        for key in POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
+        if key in value
+    }
+    filtered.pop("project_asset_update_candidates", None)
+    loss_points = filtered.get("loss_points")
+    if isinstance(loss_points, list) and len(loss_points) == 1:
+        first = loss_points[0] if isinstance(loss_points[0], dict) else None
+        if (
+            isinstance(first, dict)
+            and str(first.get("severity") or "").strip() == "major"
+            and str(first.get("loss_point_id") or "").strip()
+        ):
+            filtered["loss_points"] = [
+                first,
+                {
+                    "loss_point_id": "lp_feedback_minor_point",
+                    "severity": "minor",
+                    "reason": "补充可验证指标与异常边界说明。",
+                },
+            ]
+    return filtered
+
+
 def _runtime_test_non_feedback_result(fake: FakeLlmTransport, request: LlmTransportRequest):
     if request.task_type == "polish_question_generation":
         return _runtime_test_question_provider_result(request)
-    return fake.generate(request)
+    result = fake.generate(request)
+    if request.task_type == "polish_feedback_generation":
+        return LlmTransportResult(
+            result=_runtime_feedback_candidate_payload(result.result),
+            validation_status=result.validation_status,
+            confidence_level=result.confidence_level,
+            low_confidence_flags=result.low_confidence_flags,
+            trace_refs=result.trace_refs,
+            evidence_refs=result.evidence_refs,
+        )
+    return result
 
 
 def _runtime_test_question_provider_result(request: LlmTransportRequest) -> LlmTransportResult:
@@ -211,7 +251,13 @@ def _create_answer_ready_for_feedback(app, session_factory) -> tuple[str, str]:
     return session_id, answer_body["data"]["answer_id"]
 
 
-def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
+def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    succeeded_log_calls: list[dict] = []
+    monkeypatch.setattr(
+        LogUtil,
+        "feedback_generation_succeeded",
+        staticmethod(lambda **fields: succeeded_log_calls.append(fields)),
+    )
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     llm_transport = _RecordingFeedbackTransport()
@@ -283,7 +329,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
     assert payload["feedback_metadata"]["handoff_contract"] == "handoff.polish_feedback_agent.v1"
     assert payload["feedback_metadata"]["candidate_ref"] == feedback_candidate_ref["resource_id"]
     assert payload["feedback_metadata"]["asset_update_formal_write_performed"] is False
-    assert payload["candidate_refs"][0] == feedback_candidate_ref
+    assert "candidate_refs" not in payload
     assert payload["score_result"]["score_value"] == 82
     assert payload["loss_points"]
     assert payload["reference_answer"]["sections"]
@@ -292,19 +338,15 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
         first_loss_point_id in section.get("addresses_loss_point_ids", [])
         for section in payload["reference_answer"]["sections"]
     )
-    assert payload["knowledge_points"] == []
-    assert payload["technical_principles"] == []
-    assert payload["project_asset_update_candidates"] == []
-    assert payload["project_asset_consistency_check"] == {"status": "not_applicable"}
-    assert payload["session_similarity_check"] == {"status": "not_applicable"}
+    assert "project_asset_update_candidates" not in payload
     assert payload["next_recommended_actions"][0] == "continue_same_question"
     assert "围绕失败恢复终止条件再追问一轮" in payload["next_recommended_actions"]
     assert llm_transport.feedback_request is not None
     assert 4000 <= getattr(llm_transport.feedback_request, "max_tokens", 8000) < 8000
     provider_prompt = llm_transport.feedback_request.evidence_bundle
     assert provider_prompt["task_type"] == "polish_feedback_generation"
-    assert provider_prompt["feedback_mode"] == "quick"
-    assert provider_prompt["task"] == "polish_feedback_quick_v1"
+    assert provider_prompt["feedback_mode"] == "candidate_compact"
+    assert provider_prompt["task"] == "polish_feedback_candidate_v1"
     assert provider_prompt["input_contract"]["raw_model_io_storage"] is False
     assert provider_prompt["current_question"]["question_id"] == question_id
     assert provider_prompt["current_answer"]["answer_id"] == answer_id
@@ -346,6 +388,16 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
     assert generated_answer["feedback_payload"]["status"] == "generated"
     assert generated_answer["feedback_payload"]["feedback_metadata"]["llm_called"] is True
     assert generated_answer["feedback_payload"]["score_result"]["score_value"] == 82
+    assert len(succeeded_log_calls) == 1
+    succeeded_log = succeeded_log_calls[0]
+    assert succeeded_log["session_id"] == session_id
+    assert succeeded_log["question_id"] == question_id
+    assert succeeded_log["answer_id"] == answer_id
+    assert succeeded_log["llm_called"] is True
+    assert succeeded_log["error_code"] is None
+    assert succeeded_log["validation_stage"] == "final"
+    assert succeeded_log["candidate_valid"] is True
+    assert succeeded_log["duration_ms"] >= 0
 
     with session_factory() as db:
         for table_name in (
@@ -443,7 +495,13 @@ def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feed
     assert len(generated_feedbacks) == 1
 
 
-def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback() -> None:
+def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(monkeypatch: pytest.MonkeyPatch) -> None:
+    failed_log_calls: list[dict] = []
+    monkeypatch.setattr(
+        LogUtil,
+        "feedback_generation_failed",
+        staticmethod(lambda **fields: failed_log_calls.append(fields)),
+    )
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(
@@ -505,7 +563,7 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
     assert data["feedback_payload"]["score_result"] is None
     assert data["feedback_payload"]["loss_points"] == []
     assert data["feedback_payload"]["reference_answer"] is None
-    assert "feedback_metadata" not in data["feedback_payload"]
+    assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is False
     repository = SqlAlchemyPolishRepository(session_factory)
     stored_feedbacks = repository.list_feedbacks_for_session(OWNER_A, session_id)
     assert not any(feedback.status == "generated" for feedback in stored_feedbacks)
@@ -520,6 +578,15 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
     )
     assert detail_answer["feedback_payload"]["status"] == "generation_failed"
     assert detail_answer["feedback_payload"]["error"]["code"] == "llm_transport_generation_failed"
+    assert len(failed_log_calls) == 1
+    failed_log = failed_log_calls[0]
+    assert failed_log["session_id"] == session_id
+    assert failed_log["question_id"] == question_id
+    assert failed_log["answer_id"] == answer_id
+    assert failed_log["llm_called"] is True
+    assert failed_log["provider_status"] == "failed"
+    assert failed_log["error_code"] == "llm_transport_generation_failed"
+    assert failed_log["duration_ms"] >= 0
 
 
 def test_feedback_runtime_provider_timeout_returns_failed_retryable_payload() -> None:

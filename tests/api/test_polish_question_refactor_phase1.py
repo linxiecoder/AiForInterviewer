@@ -120,22 +120,34 @@ class _FeedbackGenerationServiceStub:
                 "feedback_text": "真实反馈来自替换后的生成服务。",
                 "answer_summary": "候选人说明了业务背景、一致性方案和验证指标。",
                 "score_result": {"score_type": "polish_answer", "score_value": 88},
-                "explicit_score": 88,
-                "implicit_score": 86,
                 "loss_points": [],
                 "reference_answer": {"sections": []},
-                "knowledge_points": [],
-                "technical_principles": [],
-                "same_question_effect": {
-                    "improved_points": [],
-                    "repeated_loss_point_ids": [],
-                    "regressed_points": [],
-                    "next_retry_focus": [],
-                    "score_delta": 0,
+                "asset_consistency_check": {
+                    "status": "consistent",
+                    "checked_asset_refs": [],
+                    "conflicts": [],
+                    "unsupported_claims": [],
+                    "user_clarification_required": False,
                 },
-                "project_asset_consistency_check": {"status": "not_applicable"},
-                "session_similarity_check": {"status": "not_applicable"},
-                "project_asset_update_candidates": [],
+                "answer_coverage": {
+                    "expected_points": [],
+                    "covered_points": [],
+                    "missing_points": [],
+                    "weak_points": [],
+                    "contradicted_points": [],
+                },
+                "answer_change_analysis": {
+                    "has_prior_attempts": False,
+                    "previous_answer_refs": [],
+                    "retained_points": [],
+                    "newly_added_points": [],
+                    "regressed_points": [],
+                    "repeated_loss_points": [],
+                    "fixed_loss_points": [],
+                    "score_delta": None,
+                    "trend": "first_attempt",
+                },
+                "feedback_cards": [{"card_type": "overall", "status": "generated", "payload": {}}],
                 "next_recommended_actions": ["continue_same_question"],
                 "low_confidence_flags": [],
                 "trace_refs": [{"resource_type": "llm_trace", "resource_id": "trace_feedback_stub"}],
@@ -229,8 +241,7 @@ def test_polish_use_cases_facade_syncs_replaced_feedback_generation_service() ->
     assert feedback_payload["feedback_metadata"]["candidate_ref"] == feedback_candidate_ref.resource_id
     assert feedback_payload["feedback_metadata"]["formal_write_boundary"] == "Application Service -> Feedback planned handoff"
     assert feedback_payload["feedback_metadata"]["asset_update_formal_write_performed"] is False
-    assert feedback_payload["candidate_refs"][0]["resource_type"] == "feedback_candidate"
-    assert feedback_payload["candidate_refs"][0]["resource_id"] == feedback_candidate_ref.resource_id
+    assert "candidate_refs" not in feedback_payload
     assert "asset_consistency_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
     assert "answer_coverage_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
     assert "answer_change_policy.v1" in feedback_payload["feedback_metadata"]["policy_refs"]
@@ -2674,9 +2685,9 @@ def test_phase2_feedback_task_without_provider_returns_generation_failed_without
     assert feedback_payload["status"] != "reserved"
     assert feedback_payload["error"]["code"] == "llm_transport_unavailable"
     assert feedback_payload["score_result"] is None
-    assert feedback_payload["candidate_refs"] == []
+    assert "candidate_refs" not in feedback_payload
     assert feedback_payload["reference_answer"] is None
-    assert "feedback_metadata" not in feedback_payload
+    assert feedback_payload["feedback_metadata"]["llm_called"] is False
 
 
 

@@ -14,6 +14,7 @@ from app.domain.polish.policies.asset_consistency_policy import (
     AssetConsistencyPolicy,
     CanonicalAssetItem,
 )
+from app.domain.polish.policies.scoring_policy import ScoringInput, ScoringLossPoint, ScoringPolicy
 from app.domain.polish.policies.feedback_next_action_policy import (
     FeedbackNextActionInput,
     FeedbackNextActionPolicy,
@@ -69,6 +70,7 @@ def apply_feedback_core_rules(payload: dict[str, Any], context: object) -> dict[
 
     _normalize_asset_update_candidates(result)
     _normalize_loss_points(result)
+    _apply_scoring_policy(result)
     _normalize_reference_answer(result)
     _normalize_same_question_effect(result)
 
@@ -78,10 +80,6 @@ def apply_feedback_core_rules(payload: dict[str, Any], context: object) -> dict[
         canonical_assets_available=bool(canonical_assets.get("available")) and bool(asset_items),
     )
     result["asset_consistency_check"] = asset_check
-    if asset_check["status"] == "conflict" or asset_items:
-        result["project_asset_consistency_check"] = _legacy_project_asset_consistency(asset_check)
-    else:
-        result["project_asset_consistency_check"] = {"status": "not_applicable"}
 
     answer_coverage = _build_answer_coverage(result, context, answer_text=answer_text, asset_check=asset_check)
     result["answer_coverage"] = answer_coverage
@@ -169,16 +167,6 @@ def _canonical_asset_item(item: dict[str, Any]) -> CanonicalAssetItem:
         summary=_clean(item.get("summary"), max_chars=800),
         content_excerpt=_clean(item.get("content_excerpt"), max_chars=800),
     )
-
-
-def _legacy_project_asset_consistency(asset_check: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": asset_check.get("status"),
-        "checked_asset_refs": list(asset_check.get("checked_asset_refs") or []),
-        "conflicts": list(asset_check.get("conflicts") or []),
-        "unsupported_claims": list(asset_check.get("unsupported_claims") or []),
-        "user_clarification_required": bool(asset_check.get("user_clarification_required")),
-    }
 
 
 def _build_answer_coverage(
@@ -392,6 +380,53 @@ def _normalize_loss_points(payload: dict[str, Any]) -> None:
                 loss_point["reason"] = description
         normalized.append(loss_point)
     payload["loss_points"] = normalized
+
+
+def _apply_scoring_policy(payload: dict[str, Any]) -> None:
+    raw_loss_points = payload.get("loss_points")
+    normalized_loss_points = raw_loss_points if isinstance(raw_loss_points, list) else []
+
+    decision = ScoringPolicy.evaluate(
+        ScoringInput(
+            loss_points=tuple(
+                ScoringLossPoint(
+                    loss_point_id=_clean(loss_point.get("loss_point_id"), max_chars=120),
+                    severity=_clean(loss_point.get("severity"), max_chars=40),
+                    reason=_clean(loss_point.get("reason"), max_chars=1000),
+                )
+                for loss_point in _dict_list(payload.get("loss_points"))
+            )
+        )
+    )
+    payload["score_result"] = {
+        "score_type": "polish_answer",
+        "score_value": decision.score_value,
+        "scoring_basis": "score_result computed from loss_point severities on server; LLM score fields are not trusted",
+    }
+
+    scored_loss_points: list[dict[str, Any]] = []
+    scored_iter = iter(decision.scored_loss_points)
+    for loss_point in normalized_loss_points:
+        if not isinstance(loss_point, dict):
+            scored_loss_points.append(loss_point)
+            continue
+        scored_loss_point = next(scored_iter, None)
+        normalized = dict(loss_point)
+        if scored_loss_point is not None:
+            normalized["deduction"] = scored_loss_point.deduction
+            normalized["severity"] = scored_loss_point.severity
+            normalized.pop("deducted_points", None)
+        else:
+            normalized["deduction"] = 0.0
+        scored_loss_points.append(normalized)
+    payload["loss_points"] = scored_loss_points
+
+    warnings = _string_list(payload.get("low_confidence_flags"), max_items=20, max_item_chars=160)
+    for warning in decision.warnings:
+        warning_text = _clean(warning, max_chars=160)
+        if warning_text and warning_text not in warnings:
+            warnings.append(warning_text)
+    payload["low_confidence_flags"] = warnings
 
 
 def _normalize_reference_answer(payload: dict[str, Any]) -> None:

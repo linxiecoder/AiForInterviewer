@@ -17,9 +17,9 @@ from app.application.polish.progress_prompts import (
 )
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
 from app.application.polish.question_generation_prompts import (
@@ -146,35 +146,21 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
     )
     trace_ref = stable_resource_id("trace", f"fake-polish-feedback-trace:{seed}")
     evidence_ref = stable_resource_id("trace", f"fake-polish-feedback-evidence:{seed}")
-    result_ref = stable_resource_id("task", f"fake-polish-feedback-result:{seed}")
     payload = {
-        "transport": "fake",
-        "model_name": "fake_polish_feedback_generation_v1",
-        "result_ref": result_ref,
-        "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
-        "status": "generated",
-        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
         "feedback_text": (
             "回答已经覆盖异步解耦，但还需要把失败恢复边界、幂等处理和观测指标讲清楚。"
         ),
         "answer_summary": f"候选人回答摘要：{answer_text}",
-        "score_result": {
-            "score_type": "polish_answer",
-            "score_value": 82,
-        },
-        "explicit_score": 82,
-        "implicit_score": 80,
-        "scoring_dimensions": [
-            {"dimension": "architecture", "score": 42},
-            {"dimension": "reliability", "score": 40},
+        "score_reasoning": [
+            {"dimension": "failure_recovery", "rationale": "失败恢复边界与终止条件未充分展开。"},
+            {"dimension": "observability", "rationale": "关键观测指标与告警阈值解释不足。"},
         ],
         "loss_points": [
             {
                 "loss_point_id": "lp_recovery_boundary",
                 "severity": "major",
-                "deduction": 18,
                 "reason": "没有说明失败恢复的触发条件、终止条件和人工介入边界。",
+                "evidence_refs": [evidence_ref],
             },
         ],
         "reference_answer": {
@@ -187,8 +173,6 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
                 },
             ]
         },
-        "knowledge_points": [],
-        "technical_principles": [],
         "same_question_effect": {
             "improved_points": ["回答覆盖了异步解耦和失败重试"],
             "repeated_loss_point_ids": ["lp_recovery_boundary"] if same_question_answers else [],
@@ -196,54 +180,17 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
             "next_retry_focus": ["补齐恢复指标和终止条件"],
             "score_delta": 6,
         },
-        "project_asset_consistency_check": {"status": "not_applicable"},
-        "asset_consistency_check": {
-            "status": "insufficient_asset_context",
-            "checked_asset_refs": [],
-            "conflicts": [],
-            "unsupported_claims": [],
-            "user_clarification_required": False,
-        },
-        "answer_coverage": {
-            "expected_points": [],
-            "covered_points": [],
-            "missing_points": [],
-            "weak_points": [],
-            "contradicted_points": [],
-        },
-        "answer_change_analysis": {
-            "has_prior_attempts": bool(same_question_answers),
-            "previous_answer_refs": [
-                str(answer.get("answer_id"))
-                for answer in same_question_answers
-                if isinstance(answer, dict) and answer.get("answer_id")
-            ],
-            "retained_points": [],
-            "newly_added_points": [],
-            "regressed_points": [],
-            "repeated_loss_points": ["lp_recovery_boundary"] if same_question_answers else [],
-            "fixed_loss_points": [],
-            "score_delta": 6 if same_question_answers else None,
-            "trend": "unchanged" if same_question_answers else "first_attempt",
-        },
-        "feedback_cards": [
-            {"card_type": "asset_consistency", "status": "insufficient_asset_context", "payload": {"status": "insufficient_asset_context"}},
-            {"card_type": "overall", "status": "generated", "payload": {"score_result": {"score_value": 82}}},
-            {"card_type": "answer_coverage", "status": "available", "payload": {"expected_points": []}},
-            {"card_type": "loss_points", "status": "available", "payload": [{"loss_point_id": "lp_recovery_boundary"}]},
-            {"card_type": "reference_answer", "status": "available", "payload": {"sections": ["ref_recovery_boundary"]}},
-            {"card_type": "next_actions", "status": "available", "payload": {"next_recommended_actions": ["围绕失败恢复终止条件再追问一轮"]}},
+        "project_asset_update_candidates": [
+            {
+                "candidate_type": "project_asset_update_candidate",
+                "candidate_ref": "asset_candidate_payment",
+                "user_confirmation_required": True,
+                "target_asset_ref": {"resource_type": "asset", "resource_id": "asset_payment"},
+                "summary": "补充支付系统失败恢复和观测指标素材。",
+            }
         ],
-        "session_similarity_check": {"status": "not_applicable"},
-        "project_asset_update_candidates": [],
-        "next_recommended_actions": ["围绕失败恢复终止条件再追问一轮"],
         "low_confidence_flags": [],
-        "trace_refs": [{"resource_type": "llm_trace", "resource_id": trace_ref}],
-        "feedback_metadata": {
-            "prompt_version": POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-            "llm_called": True,
-            "question_excerpt": question_text,
-        },
+        "evidence_refs": [evidence_ref],
     }
     return LlmTransportResult(
         result=payload,

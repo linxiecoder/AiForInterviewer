@@ -50,6 +50,13 @@ from app.domain.polish.policies.source_support_policy import (
     SourceSupportSummary,
     SourceSupportTarget,
 )
+from app.domain.polish.policies.scoring_policy import (
+    ScoringDecision,
+    ScoredLossPoint,
+    ScoringInput,
+    ScoringLossPoint,
+    ScoringPolicy,
+)
 
 __all__ = [
     "AnswerChangeDecision",
@@ -87,5 +94,10 @@ __all__ = [
     "SourceSupportPolicy",
     "SourceSupportSummary",
     "SourceSupportTarget",
+    "ScoredLossPoint",
+    "ScoringDecision",
+    "ScoringInput",
+    "ScoringLossPoint",
+    "ScoringPolicy",
     "UnsupportedAssetClaim",
 ]

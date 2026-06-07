@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any
 
 from app.application.llm.ports import LlmTransport
@@ -8,13 +9,16 @@ from app.application.polish.feedback_agent import FeedbackGenerationAgent
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
 from app.application.polish.feedback_rules import apply_feedback_core_rules
-from app.application.polish.feedback_validation import validate_generated_feedback_payload
+from app.application.polish.feedback_validation import (
+    validate_feedback_candidate_payload,
+    validate_final_feedback_payload,
+)
 
 
 FEEDBACK_GENERATION_SERVICE_VERSION = "polish_feedback_generation_service.v1"
@@ -105,43 +109,77 @@ class FeedbackGenerationService:
             input_refs=_input_refs(normalized_context),
         )
         agent_metadata = metadata | _agent_envelope_metadata(agent_result)
+        provider_status = str(agent_metadata.get("provider_status") or "not_called")
+        llm_called = bool(agent_metadata.get("llm_called", False))
         if not agent_result.succeeded:
             return FeedbackGenerationResult(
                 succeeded=False,
                 payload=None,
                 validation_errors=agent_result.validation_errors,
                 low_confidence_flags=agent_result.low_confidence_flags,
-                metadata=agent_metadata,
+                metadata=agent_metadata
+                | {
+                    "validation_stage": "candidate",
+                    "candidate_valid": False,
+                    "llm_output_validation_status": "invalid",
+                    "provider_status": provider_status,
+                    "llm_called": llm_called,
+                },
             )
 
-        ruled_payload = apply_feedback_core_rules(agent_result.payload, normalized_context)
-        normalized_payload, validation_errors = validate_generated_feedback_payload(
-            ruled_payload,
-            require_phase4=True,
+        candidate_payload, validation_errors = validate_feedback_candidate_payload(agent_result.payload)
+        if validation_errors:
+            candidate_payload_metadata = agent_result.payload if isinstance(agent_result.payload, dict) else {}
+            return FeedbackGenerationResult(
+                succeeded=False,
+                payload=None,
+                validation_errors=validation_errors,
+                low_confidence_flags=tuple(
+                    _string_tuple(
+                        (*agent_result.low_confidence_flags, *_string_tuple(candidate_payload_metadata.get("low_confidence_flags")))
+                    )
+                ),
+                trace_refs=_string_tuple(agent_result.evidence_refs),
+                metadata=agent_metadata
+                | {
+                    "validation_stage": "candidate",
+                    "candidate_valid": False,
+                    "llm_output_validation_status": "invalid",
+                    "provider_status": provider_status,
+                    "llm_called": llm_called,
+                },
+            )
+
+        assert candidate_payload is not None
+        ruled_payload = apply_feedback_core_rules(candidate_payload, normalized_context)
+        final_payload = self._build_final_payload(
+            ruled_payload=ruled_payload,
+            prompt_asset=prompt_asset,
+            agent_trace_refs=agent_result.evidence_refs,
+            agent_low_confidence_flags=agent_result.low_confidence_flags,
         )
+        normalized_payload, validation_errors = validate_final_feedback_payload(final_payload, require_feedback_id=False)
         if validation_errors:
             return FeedbackGenerationResult(
                 succeeded=False,
                 payload=None,
                 validation_errors=validation_errors,
-                low_confidence_flags=agent_result.low_confidence_flags,
+                low_confidence_flags=tuple(_string_tuple(normalized_payload.get("low_confidence_flags")))
+                if normalized_payload is not None
+                else tuple(),
+                trace_refs=_string_tuple(normalized_payload.get("trace_refs")) if normalized_payload is not None else (),
                 metadata=agent_metadata
                 | {
+                    "validation_stage": "final",
+                    "candidate_valid": True,
                     "llm_output_validation_status": "invalid",
-                    "provider_payload_diagnostic": _payload_diagnostic(agent_result.payload),
+                    "provider_status": provider_status,
+                    "llm_called": llm_called,
                 },
             )
 
-        assert normalized_payload is not None
-        low_confidence_flags = tuple(
-            dict.fromkeys(
-                [
-                    *agent_result.low_confidence_flags,
-                    *_string_tuple(normalized_payload.get("low_confidence_flags")),
-                ]
-            )
-        )
         trace_refs = _string_tuple(normalized_payload.get("trace_refs"))
+        low_confidence_flags = _string_tuple(normalized_payload.get("low_confidence_flags"))
         return FeedbackGenerationResult(
             succeeded=True,
             payload=normalized_payload,
@@ -150,10 +188,59 @@ class FeedbackGenerationService:
             trace_refs=trace_refs,
             metadata=agent_metadata
             | {
+                "validation_stage": "final",
+                "candidate_valid": True,
                 "llm_output_validation_status": "valid",
-                "llm_called": True,
+                "provider_status": provider_status,
+                "llm_called": llm_called,
             },
         )
+
+
+    def _build_final_payload(
+        self,
+        *,
+        ruled_payload: dict[str, Any],
+        prompt_asset: dict[str, Any],
+        agent_trace_refs: tuple[str, ...],
+        agent_low_confidence_flags: tuple[str, ...],
+    ) -> dict[str, Any]:
+        trace_refs = _string_tuple(agent_trace_refs) + _string_tuple(ruled_payload.get("trace_refs"))
+        final_payload: dict[str, Any] = {
+            "schema_id": _clean(prompt_asset.get("schema_id"), max_chars=120),
+            "schema_version": _clean(prompt_asset.get("schema_version"), max_chars=40),
+            "status": _clean(ruled_payload.get("status"), max_chars=40) or "generated",
+            "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+            "feedback_id": "",
+            "feedback_text": _clean(ruled_payload.get("feedback_text"), max_chars=12000),
+            "answer_summary": _clean(ruled_payload.get("answer_summary"), max_chars=4000),
+            "score_result": deepcopy(ruled_payload.get("score_result")),
+            "loss_points": deepcopy(ruled_payload.get("loss_points")),
+            "reference_answer": deepcopy(ruled_payload.get("reference_answer")),
+            "asset_consistency_check": deepcopy(ruled_payload.get("asset_consistency_check")),
+            "answer_coverage": deepcopy(ruled_payload.get("answer_coverage")),
+            "answer_change_analysis": deepcopy(ruled_payload.get("answer_change_analysis")),
+            "feedback_cards": deepcopy(ruled_payload.get("feedback_cards")),
+            "next_recommended_actions": list(_string_tuple(ruled_payload.get("next_recommended_actions"))),
+            "low_confidence_flags": tuple(
+                _string_tuple(
+                    (
+                        *agent_low_confidence_flags,
+                        *_string_tuple(ruled_payload.get("low_confidence_flags")),
+                    )
+                )
+            ),
+            "trace_refs": list(dict.fromkeys(trace_refs)),
+            "feedback_metadata": _final_feedback_metadata(ruled_payload),
+        }
+        return final_payload
+
+
+def _final_feedback_metadata(ruled_payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = ruled_payload.get("feedback_metadata")
+    if isinstance(metadata, dict):
+        return dict(metadata)
+    return {}
 
 
 def _agent_envelope_metadata(agent_result: object) -> dict[str, Any]:
@@ -175,9 +262,9 @@ def _base_metadata() -> dict[str, Any]:
         "service_version": FEEDBACK_GENERATION_SERVICE_VERSION,
         "task_type": POLISH_FEEDBACK_TASK_TYPE,
         "prompt_version": POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-        "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
-        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+        "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+        "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
     }
 
 
@@ -224,17 +311,6 @@ def _canonical_asset_refs(context: FeedbackGenerationContext | dict[str, Any]) -
         if asset_id:
             refs.append(asset_id)
     return tuple(refs)
-
-
-def _payload_diagnostic(payload: object) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {"payload_type": type(payload).__name__}
-    return {
-        "payload_type": "dict",
-        "schema_id": _clean(payload.get("schema_id"), max_chars=120),
-        "status": _clean(payload.get("status"), max_chars=80),
-        "field_count": len(payload),
-    }
 
 
 def _value(context: FeedbackGenerationContext | dict[str, Any], field_name: str) -> str:

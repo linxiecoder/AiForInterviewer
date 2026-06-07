@@ -34,6 +34,14 @@ SENSITIVE_FIELD_MARKERS = (
     "prompt",
     "completion",
 )
+NON_SENSITIVE_FIELD_NAMES = (
+    "prompt_char_count",
+)
+NON_SENSITIVE_EVENT_FIELD_NAMES = (
+    ("feedback_generation_started", "session_id"),
+    ("feedback_generation_failed", "session_id"),
+    ("feedback_generation_succeeded", "session_id"),
+)
 
 
 @dataclass(frozen=True)
@@ -263,6 +271,102 @@ class LogUtil:
         )
 
     @classmethod
+    def feedback_generation_started(
+        cls,
+        *,
+        session_id: str,
+        question_id: str,
+        answer_id: str,
+    ) -> None:
+        cls._emit(
+            APP_LOGGER_NAME,
+            logging.INFO,
+            "feedback_generation_started",
+            {
+                "session_id": session_id,
+                "question_id": question_id,
+                "answer_id": answer_id,
+                "llm_called": False,
+                "provider_status": "not_called",
+                "validation_stage": None,
+                "candidate_valid": None,
+                "prompt_char_count": None,
+                "evidence_item_count": None,
+                "duration_ms": 0,
+            },
+        )
+
+    @classmethod
+    def feedback_generation_failed(
+        cls,
+        *,
+        session_id: str,
+        question_id: str,
+        answer_id: str,
+        llm_called: bool | None,
+        provider_status: str | None,
+        error_code: str | None,
+        validation_stage: str | None,
+        candidate_valid: bool | None,
+        prompt_char_count: int | None,
+        evidence_item_count: int | None,
+        duration_ms: float,
+    ) -> None:
+        cls._emit(
+            APP_LOGGER_NAME,
+            logging.INFO,
+            "feedback_generation_failed",
+            {
+                "session_id": session_id,
+                "question_id": question_id,
+                "answer_id": answer_id,
+                "llm_called": llm_called,
+                "provider_status": provider_status,
+                "error_code": error_code,
+                "validation_stage": validation_stage,
+                "candidate_valid": candidate_valid,
+                "prompt_char_count": prompt_char_count,
+                "evidence_item_count": evidence_item_count,
+                "duration_ms": duration_ms,
+            },
+        )
+
+    @classmethod
+    def feedback_generation_succeeded(
+        cls,
+        *,
+        session_id: str,
+        question_id: str,
+        answer_id: str,
+        llm_called: bool | None,
+        provider_status: str | None,
+        validation_stage: str | None,
+        candidate_valid: bool | None,
+        prompt_char_count: int | None,
+        evidence_item_count: int | None,
+        duration_ms: float,
+        error_code: str | None = None,
+    ) -> None:
+        cls._emit(
+            APP_LOGGER_NAME,
+            logging.INFO,
+            "feedback_generation_succeeded",
+            {
+                "session_id": session_id,
+                "question_id": question_id,
+                "answer_id": answer_id,
+                "llm_called": llm_called,
+                "provider_status": provider_status,
+                "error_code": error_code,
+                "validation_stage": validation_stage,
+                "candidate_valid": candidate_valid,
+                "prompt_char_count": prompt_char_count,
+                "evidence_item_count": evidence_item_count,
+                "duration_ms": duration_ms,
+            },
+        )
+
+    @classmethod
     def auth_dev_seed_disabled_missing_password(cls) -> None:
         cls._emit(
             SECURITY_AUTH_LOGGER_NAME,
@@ -391,7 +495,7 @@ class LogUtil:
             record.setdefault("request_id", trace_context.request_id)
             record.setdefault("trace_id", trace_context.trace_id)
         for key, value in fields.items():
-            record[str(key)] = cls._sanitize(value, key=str(key))
+            record[str(key)] = cls._sanitize(value, key=str(key), event=event)
         return record
 
     @classmethod
@@ -407,15 +511,18 @@ class LogUtil:
         return logger
 
     @staticmethod
-    def _sanitize(value: Any, *, key: str | None = None) -> Any:
-        if key is not None and _is_sensitive_key(key):
+    def _sanitize(value: Any, *, key: str | None = None, event: str | None = None) -> Any:
+        if key is not None and _is_sensitive_key(key, event=event):
             return REDACTED_VALUE
         if isinstance(value, Mapping):
-            return {str(item_key): LogUtil._sanitize(item_value, key=str(item_key)) for item_key, item_value in value.items()}
+            return {
+                str(item_key): LogUtil._sanitize(item_value, key=str(item_key), event=event)
+                for item_key, item_value in value.items()
+            }
         if isinstance(value, list):
-            return [LogUtil._sanitize(item) for item in value]
+            return [LogUtil._sanitize(item, event=event) for item in value]
         if isinstance(value, tuple):
-            return [LogUtil._sanitize(item) for item in value]
+            return [LogUtil._sanitize(item, event=event) for item in value]
         return value
 
     @staticmethod
@@ -459,6 +566,11 @@ def _level_value(level: str) -> int:
     return value if isinstance(value, int) else logging.INFO
 
 
-def _is_sensitive_key(key: str) -> bool:
+def _is_sensitive_key(key: str, *, event: str | None = None) -> bool:
     normalized = key.lower().replace("-", "_")
+    normalized_event = event.lower() if isinstance(event, str) else None
+    if (normalized_event, normalized) in NON_SENSITIVE_EVENT_FIELD_NAMES:
+        return False
+    if normalized in NON_SENSITIVE_FIELD_NAMES:
+        return False
     return any(marker in normalized for marker in SENSITIVE_FIELD_MARKERS)

@@ -277,41 +277,28 @@ class PolishAnswerResponse(BaseModel):
     updated_at: datetime
 
 
-class PolishFeedbackLegacyCompatibility(BaseModel):
-    feedback_text: str | None = None
-
-
 class PolishFeedbackPayload(BaseModel):
     schema_id: str | None = None
     schema_version: str | None = None
-    contract_id: str | None = None
     contract_ids: list[str] | None = None
     status: str | None = None
     feedback_id: str | None = None
-    polish_session_ref: dict[str, Any] | None = None
-    question_ref: dict[str, Any] | None = None
-    answer_ref: dict[str, Any] | None = None
     feedback_text: str | None = None
-    feedback_summary: str | None = None
+    answer_summary: str | None = None
+    score_reasoning: str | None = None
     score_result: dict[str, Any] | None = None
-    score_result_ref: dict[str, Any] | None = None
     loss_points: list[dict[str, Any]] | None = None
     reference_answer: Any | None = None
     asset_consistency_check: dict[str, Any] | None = None
     answer_coverage: dict[str, Any] | None = None
     answer_change_analysis: dict[str, Any] | None = None
     feedback_cards: list[dict[str, Any]] | None = None
-    knowledge_points: list[dict[str, Any]] | None = None
-    technical_principles: list[dict[str, Any]] | None = None
     next_recommended_actions: list[str] | None = None
-    candidate_refs: list[dict[str, Any]] | None = None
-    validation_result_ref: dict[str, Any] | None = None
+    same_question_effect: dict[str, Any] | None = None
+    evidence_refs: list[str] | None = None
     trace_refs: list[dict[str, Any]] | None = None
     low_confidence_flags: list[dict[str, Any]] | None = None
-    user_confirmation_required: bool | None = None
-    legacy_compatibility: PolishFeedbackLegacyCompatibility | None = None
     answer_diagnosis: dict[str, Any] | None = None
-    scoring_dimensions: list[dict[str, Any]] | None = None
     positive_evidence_points: list[dict[str, Any]] | None = None
     missing_answer_dimensions: list[dict[str, Any]] | None = None
     p7_reference_answer: str | None = None
@@ -330,8 +317,6 @@ class PolishFeedbackPayload(BaseModel):
     polish_theme_label: str | None = None
     explicit_weight: int | None = None
     implicit_weight: int | None = None
-    explicit_score: int | None = None
-    implicit_score: int | None = None
     weight_explanation: str | None = None
     interview_intent: str | None = None
     feedback_metadata: dict[str, Any] | None = None
@@ -342,8 +327,6 @@ class PolishFeedbackPayload(BaseModel):
     polished_answer_candidates: list[dict[str, Any]] | None = None
     technical_gaps: list[str] | None = None
     communication_gaps: list[str] | None = None
-    should_continue_same_question: bool | None = None
-    should_generate_next_question: bool | None = None
     updated_reference_answer: str | None = None
     updated_oral_script: str | None = None
 

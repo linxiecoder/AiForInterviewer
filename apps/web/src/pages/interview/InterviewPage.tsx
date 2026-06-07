@@ -2019,8 +2019,6 @@ type FeedbackSectionKey =
   | "positive_evidence_points"
   | "loss_points"
   | "reference_answer"
-  | "knowledge_points"
-  | "technical_principles"
   | "weight_explanation"
   | "interview_intent"
   | "technical_gaps"
@@ -2030,10 +2028,7 @@ type FeedbackSectionKey =
   | "retry_delta"
   | "next_retry_focus"
   | "next_training_suggestions"
-  | "same_question_effect"
-  | "project_asset_consistency_check"
-  | "session_similarity_check"
-  | "project_asset_update_candidates";
+  | "asset_consistency_check";
 
 export type FeedbackCardSectionViewModel = {
   key: FeedbackSectionKey;
@@ -2100,10 +2095,12 @@ const CANDIDATE_STATUS_COLORS: Record<string, string> = {
 
 export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): FeedbackCardViewModel {
   const payload = answer.feedback_payload;
-  const contractId = toOptionalText(payload?.contract_id) ?? null;
-  const contractIds = Array.from(new Set([...(payload?.contract_ids ?? []), ...(contractId ? [contractId] : [])]));
-  const status = toOptionalText(payload?.status) ?? (answer.feedback_id ? "generated" : "pending");
-  if (status === "generation_failed") {
+  const contractIds = Array.from(
+    new Set((payload?.contract_ids ?? []).map((item) => toOptionalText(item)).filter((item): item is string => item !== null)),
+  );
+  const contractId = contractIds[0] ?? null;
+  const status = resolvePolishFeedbackStatus(toOptionalText(payload?.status));
+  if (status === "failed") {
     return {
       title: "反馈生成失败",
       status,
@@ -2161,28 +2158,7 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         items: buildReferenceAnswerItems(payload?.reference_answer, payload?.loss_points),
         defaultOpen: false,
       },
-      {
-        key: "knowledge_points",
-        title: "考点解析",
-        items: buildRecordListItems(payload?.knowledge_points, [
-          ["title", "考点"],
-          ["explanation", "解析"],
-        ], "暂无考点解析"),
-        defaultOpen: false,
-      },
-      {
-        key: "technical_principles",
-        title: "技术原理扩展",
-        items: buildRecordListItems(payload?.technical_principles, [
-          ["title", "原理"],
-          ["explanation", "说明"],
-        ], "暂无技术原理扩展"),
-        defaultOpen: false,
-      },
-      ...buildSameQuestionEffectSections(payload),
-      ...buildProjectAssetConsistencySections(payload),
-      ...buildSessionSimilaritySections(payload),
-      ...buildProjectAssetUpdateCandidateSections(payload),
+      ...buildAssetConsistencySections(payload),
       ...buildThemeFeedbackSections(payload),
       ...buildRetryFeedbackSections(payload),
       ...buildNextTrainingFeedbackSections(payload),
@@ -2190,6 +2166,15 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: buildFeedbackTraceItems(),
   };
+}
+
+function resolvePolishFeedbackStatus(
+  status: string | null | undefined,
+): "pending" | "generated" | "failed" {
+  if (status === "pending" || status === "generated" || status === "failed") {
+    return status;
+  }
+  return "pending";
 }
 
 function buildFailedFeedbackItems(payload: PolishFeedbackPayload | undefined): string[] {
@@ -2209,7 +2194,7 @@ function feedbackStatusTagColor(status: string): "success" | "warning" | "proces
   if (status === "generated") {
     return "success";
   }
-  if (status === "generation_failed") {
+  if (status === "failed") {
     return "warning";
   }
   if (status === "pending") {
@@ -2262,9 +2247,6 @@ function candidateBelongsToAnswer(candidate: PolishCandidate, answer: PolishSess
 }
 
 function buildOverallFeedbackItems(payload: PolishFeedbackPayload | undefined, answerFeedbackText: string): string[] {
-  if (payload?.status === "reserved") {
-    return ["反馈能力预留/占位，当前不展示 generated 反馈内容。"];
-  }
   if (payload?.status === "pending") {
     return [FALLBACK_FEEDBACK_TEXT];
   }
@@ -2273,7 +2255,6 @@ function buildOverallFeedbackItems(payload: PolishFeedbackPayload | undefined, a
     ? answerSummary.main_gaps.map((gap) => toOptionalText(gap)).filter((gap): gap is string => gap !== null)
     : [];
   const items = dedupeTextItems([
-    payload?.feedback_summary,
     payload?.feedback_text || answerFeedbackText,
     answerSummary?.coverage ? `覆盖情况：${answerSummary.coverage}` : null,
     ...mainGaps.map((gap) => `主要缺口：${gap}`),
@@ -2296,22 +2277,8 @@ function buildStructuredEvidenceSections(payload: PolishFeedbackPayload | undefi
   ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
 }
 
-function buildSameQuestionEffectSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
-  if (!payload || payload.status !== "generated") {
-    return [];
-  }
-  return [
-    {
-      key: "same_question_effect",
-      title: "同题回答效果",
-      items: buildSameQuestionEffectItems(payload.same_question_effect, payload.loss_points),
-      defaultOpen: false,
-    },
-  ];
-}
-
-function buildProjectAssetConsistencySections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
-  const check = payload?.project_asset_consistency_check;
+function buildAssetConsistencySections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+  const check = payload?.asset_consistency_check;
   if (!check) {
     return [];
   }
@@ -2327,7 +2294,7 @@ function buildProjectAssetConsistencySections(payload: PolishFeedbackPayload | u
   const questions = compactTextList(check.clarification_questions).map((item) => `澄清问题：${item}`);
   return [
     {
-      key: "project_asset_consistency_check",
+      key: "asset_consistency_check",
       title: "项目一致性检查",
       items: dedupeTextItems([
         status ? `状态：${status}` : null,
@@ -2342,57 +2309,6 @@ function buildProjectAssetConsistencySections(payload: PolishFeedbackPayload | u
   ];
 }
 
-function buildSessionSimilaritySections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
-  const check = payload?.session_similarity_check;
-  if (!check) {
-    return [];
-  }
-  const status = toOptionalText(check.status);
-  return [
-    {
-      key: "session_similarity_check",
-      title: "同场相似内容检查",
-      items: dedupeTextItems([
-        status ? `状态：${status}${toSessionSimilarityStatusHint(status)}` : null,
-        compactTextList(check.related_turn_refs).length > 0 ? `相关轮次：${compactTextList(check.related_turn_refs).join("、")}` : null,
-        check.impact ? `影响：${check.impact}` : null,
-        check.explanation ? `说明：${check.explanation}` : null,
-        check.reason ? `原因：${check.reason}` : null,
-      ]),
-      defaultOpen: status === "semantic_repetition" || status === "cross_turn_conflict",
-      tone: status === "cross_turn_conflict" ? "warning" : "default",
-    },
-  ];
-}
-
-function buildProjectAssetUpdateCandidateSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
-  const candidates = payload?.project_asset_update_candidates;
-  if (!Array.isArray(candidates) || candidates.length === 0) {
-    return [];
-  }
-  return [
-    {
-      key: "project_asset_update_candidates",
-      title: "项目资产更新候选",
-      items: candidates.flatMap((candidate) => {
-        const candidateType = toOptionalText(candidate.candidate_type) ?? "unknown";
-        return dedupeTextItems([
-          `候选更新：${candidateType}`,
-          candidate.target_asset_ref ? `目标资产：${candidate.target_asset_ref}` : null,
-          candidate.proposed_change_type ? `变更类型：${candidate.proposed_change_type}` : null,
-          candidate.content_draft ? `内容草稿：${candidate.content_draft}` : null,
-          candidate.summary ? `摘要：${candidate.summary}` : null,
-          candidate.confidence_level ? `置信度：${candidate.confidence_level}` : null,
-          typeof candidate.user_confirmation_required === "boolean"
-            ? `需要用户确认：${candidate.user_confirmation_required ? "是" : "否"}`
-            : null,
-        ]);
-      }),
-      defaultOpen: false,
-    },
-  ];
-}
-
 function buildThemeFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
   if (!payload) {
     return [];
@@ -2402,8 +2318,6 @@ function buildThemeFeedbackSections(payload: PolishFeedbackPayload | undefined):
       payload.polish_theme_label ? `主题：${payload.polish_theme_label}` : null,
       typeof payload.explicit_weight === "number" ? `显性技术权重：${payload.explicit_weight}%` : null,
       typeof payload.implicit_weight === "number" ? `隐性表达权重：${payload.implicit_weight}%` : null,
-      typeof payload.explicit_score === "number" ? `显性技术得分：${payload.explicit_score}` : null,
-      typeof payload.implicit_score === "number" ? `隐性表达得分：${payload.implicit_score}` : null,
       payload.weight_explanation,
     ]), true),
     buildOptionalFeedbackSection("interview_intent", "面试意图", compactTextList(payload.interview_intent), false),
@@ -2478,26 +2392,12 @@ function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallb
   if (!score) {
     return fallbackScoreResultId ? [`score_result_id：${fallbackScoreResultId}`] : ["暂无打分结果"];
   }
-  const scoringDimensionItems = buildOptionalRecordListItems(payload?.scoring_dimensions, [
-    ["title", "评分维度"],
-    ["dimension_name", "评分维度"],
-    ["dimension_id", "维度 ID"],
-    ["score_value", "得分"],
-    ["score", "得分"],
-    ["max_score", "满分"],
-    ["reason", "原因"],
-    ["explanation", "说明"],
-    ["confidence_level", "置信度"],
-  ]);
   return dedupeTextItems([
     typeof score.score_value === "number" ? `分数：${score.score_value}` : null,
     score.score_type ? `评分类型：${score.score_type}` : null,
     score.confidence_level ? `置信度：${score.confidence_level}` : null,
-    typeof payload?.explicit_score === "number" ? `显性技术得分：${payload.explicit_score}` : null,
-    typeof payload?.implicit_score === "number" ? `隐性表达得分：${payload.implicit_score}` : null,
     score.score_result_id ? `score_result_id：${score.score_result_id}` : fallbackScoreResultId ? `score_result_id：${fallbackScoreResultId}` : null,
     score.rubric_version ? `rubric_version：${score.rubric_version}` : null,
-    ...scoringDimensionItems,
   ]);
 }
 
@@ -2515,7 +2415,6 @@ function buildReferenceAnswerItems(value: unknown, lossPoints: unknown): string[
     record.summary ? `摘要：${toOptionalText(record.summary)}` : null,
     outline.length > 0 ? `提纲：${outline.join(" / ")}` : null,
     ...sectionItems,
-    record.contract_id ? `contract_id：${toOptionalText(record.contract_id)}` : null,
   ]);
 }
 
@@ -2538,40 +2437,6 @@ function buildReferenceAnswerSectionItems(value: unknown, lossPointTitleById: Ma
   ]);
 }
 
-function buildSameQuestionEffectItems(value: unknown, lossPoints: unknown): string[] {
-  const effect = toRecord(value);
-  if (effect === null) {
-    return ["暂无同题历史回答"];
-  }
-  const lossPointTitleById = buildLossPointTitleById(lossPoints);
-  const repeatedLossPointIds = Array.isArray(effect.repeated_loss_point_ids)
-    ? effect.repeated_loss_point_ids.map(toOptionalText).filter((item): item is string => item !== null)
-    : compactTextList(effect.repeated_loss_points as string[] | string | null | undefined);
-  const nextRetryFocusItems = Array.isArray(effect.next_retry_focus)
-    ? effect.next_retry_focus.flatMap((item) => {
-      const record = toRecord(item);
-      if (record === null) {
-        return compactTextList(item as string);
-      }
-      return buildRecordItems(record, [
-        ["focus_area", "下一轮聚焦"],
-        ["priority", "优先级"],
-        ["related_dimension", "关联维度"],
-        ["suggested_action", "建议动作"],
-      ]);
-    })
-    : [];
-  const items = dedupeTextItems([
-    effect.previous_answer_ref ? `上一轮回答：${toOptionalText(effect.previous_answer_ref)}` : null,
-    ...compactTextList(effect.improved_points as string[] | string | null | undefined).map((item) => `已改进：${item}`),
-    ...repeatedLossPointIds.map((lossPointId) => `重复失分：${lossPointTitleById.get(lossPointId) ?? lossPointId}`),
-    ...compactTextList(effect.regressed_points as string[] | string | null | undefined).map((item) => `退步点：${item}`),
-    typeof effect.score_delta === "number" ? `分数变化：${effect.score_delta > 0 ? "+" : ""}${effect.score_delta}` : null,
-    ...nextRetryFocusItems.map((item) => item.startsWith("下一轮聚焦：") ? item : `下一轮聚焦：${item}`),
-  ]);
-  return items.length > 0 ? items : ["暂无同题历史回答"];
-}
-
 function buildLossPointTitleById(values: unknown): Map<string, string> {
   const result = new Map<string, string>();
   if (!Array.isArray(values)) {
@@ -2589,19 +2454,6 @@ function buildLossPointTitleById(values: unknown): Map<string, string> {
     }
   });
   return result;
-}
-
-function toSessionSimilarityStatusHint(status: string): string {
-  if (status === "benign_reuse") {
-    return "（正常复用）";
-  }
-  if (status === "semantic_repetition") {
-    return "（表达重复或覆盖不足）";
-  }
-  if (status === "cross_turn_conflict") {
-    return "（可能存在事实冲突）";
-  }
-  return "";
 }
 
 function buildRecordListItems(

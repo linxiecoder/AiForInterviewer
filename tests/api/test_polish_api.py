@@ -26,7 +26,7 @@ from app.application.polish.progress_prompts import (
     build_progress_tree_state_refresh_prompt,
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion
-from app.application.polish.feedback_reserved import build_reserved_feedback_artifacts
+from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
@@ -78,7 +78,6 @@ ACTOR_B = CurrentActor(
 )
 STRUCTURED_FEEDBACK_OPTIONAL_FIELDS = (
     "answer_diagnosis",
-    "scoring_dimensions",
     "positive_evidence_points",
     "missing_answer_dimensions",
     "p7_reference_answer",
@@ -128,15 +127,32 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
         assert field_name in PolishFeedbackPayload.model_fields
         assert not PolishFeedbackPayload.model_fields[field_name].is_required()
 
-    legacy_payload = PolishFeedbackPayload.model_validate(
+    removed_fields = {
+        "contract_id",
+        "polish_session_ref",
+        "question_ref",
+        "answer_ref",
+        "feedback_summary",
+        "score_result_ref",
+        "project_asset_update_candidates",
+        "candidate_refs",
+        "validation_result_ref",
+        "should_continue_same_question",
+        "should_generate_next_question",
+    }
+    assert not (removed_fields & set(PolishFeedbackPayload.model_fields))
+
+    payload = PolishFeedbackPayload.model_validate(
         {
             "feedback_text": "legacy feedback text",
             "feedback_summary": "legacy feedback text",
-            "legacy_compatibility": {"feedback_text": "legacy feedback text"},
+            "retired_extra_payload": {"feedback_text": "legacy feedback text"},
+            "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "legacy_weakness"}],
         }
     ).model_dump(mode="json")
-    assert legacy_payload["feedback_text"] == "legacy feedback text"
-    assert legacy_payload["legacy_compatibility"]["feedback_text"] == "legacy feedback text"
+    assert payload["feedback_text"] == "legacy feedback text"
+    assert "retired_extra_payload" not in payload
+    assert "candidate_refs" not in payload
 
 
 def test_response_safe_feedback_payload_filters_forbidden_keys_values_and_preserves_fields() -> None:
@@ -163,11 +179,12 @@ def test_response_safe_feedback_payload_filters_forbidden_keys_values_and_preser
         "reference_answer": {"summary": "正常参考回答摘要"},
         "oral_script": "正常口语脚本",
         "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "cand_safe"}],
+        "project_asset_update_candidates": [{"candidate_ref": "asset_candidate_safe"}],
         "weakness_candidates": [{"title": "可读候选", "candidate_payload": {"safe_note": "safe"}}],
         "asset_candidates": [],
         "training_suggestion_candidates": [],
         **{key: f"{key} must not be returned" for key in forbidden_keys},
-        "nested": {
+        "feedback_metadata": {
             "list": [
                 {"full_resume": "full resume markdown must not be returned"},
                 {"full_jd": "full JD text must not be returned"},
@@ -183,9 +200,10 @@ def test_response_safe_feedback_payload_filters_forbidden_keys_values_and_preser
     assert result["score_result"]["score_value"] == 72
     assert result["loss_points"][0]["title"] == "结构化举证不足"
     assert result["reference_answer"]["summary"] == "正常参考回答摘要"
-    assert result["oral_script"] == "正常口语脚本"
-    assert result["candidate_refs"][0]["resource_type"] == "weakness_candidate"
-    assert result["weakness_candidates"][0]["candidate_payload"]["safe_note"] == "safe"
+    assert "oral_script" not in result
+    assert "candidate_refs" not in result
+    assert "project_asset_update_candidates" not in result
+    assert "weakness_candidates" not in result
     assert not (_collect_keys(result) & set(forbidden_keys))
     serialized_values = "\n".join(_string_values(result)).lower()
     for forbidden_text in (
@@ -248,7 +266,7 @@ def test_feedback_task_response_sanitizes_stored_sensitive_feedback_payload() ->
 
     assert result["feedback_payload"]["feedback_text"] == "stored feedback text"
     assert result["feedback_payload"]["score_result"]["score_value"] == 70
-    assert result["feedback_payload"]["candidate_refs"][0]["resource_type"] == "weakness_candidate"
+    assert "candidate_refs" not in result["feedback_payload"]
     forbidden = {
         "raw_prompt",
         "prompt",
@@ -319,17 +337,17 @@ def test_pending_feedback_payload_remains_safe_when_no_feedback_exists() -> None
     assert "full resume markdown" not in serialized_values
 
 
-def test_feedback_payload_without_stored_payload_uses_reserved_placeholder() -> None:
+def test_feedback_payload_without_stored_payload_uses_pending_placeholder() -> None:
     from types import SimpleNamespace
 
     now = utc_now()
     answer = SimpleNamespace(
-        answer_id="ans_reserved_without_stored_payload",
+        answer_id="ans_pending_without_stored_payload",
         answer_round=1,
-        session_id="psess_reserved_without_stored_payload",
-        question_id="ques_reserved_without_stored_payload",
+        session_id="psess_pending_without_stored_payload",
+        question_id="ques_pending_without_stored_payload",
         answer_text="我会补充接口幂等、失败补偿和上线后指标。",
-        feedback_id="trc_reserved_without_stored_payload",
+        feedback_id="trc_pending_without_stored_payload",
         feedback_created_at=now,
         score_result_id=None,
         feedback_text="legacy generated feedback must not be rehydrated",
@@ -339,13 +357,13 @@ def test_feedback_payload_without_stored_payload_uses_reserved_placeholder() -> 
 
     result = polish_api._answer_feedback_payload(answer)
 
-    assert result["status"] == "reserved"
+    assert result["status"] == "pending"
+    assert result["feedback_id"] == "trc_pending_without_stored_payload"
+    assert result["feedback_text"] == "本轮反馈尚未生成"
     assert result["score_result"] is None
     assert result["reference_answer"] is None
-    assert result["candidate_refs"] == []
-    assert result["feedback_metadata"]["reserved"] is True
+    assert "candidate_refs" not in result
     assert result["feedback_metadata"]["llm_called"] is False
-    assert result["feedback_metadata"]["candidate_extraction_called"] is False
 
 
 async def _run_inline_threadpool(func, *args, **kwargs):
@@ -3327,7 +3345,8 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert pending_answer["feedback_payload"]["status"] == "pending"
     pending_schema_payload = PolishSessionAnswerResponse.model_validate(pending_answer).model_dump(mode="json")
     assert pending_schema_payload["feedback_payload"]["status"] == "pending"
-    assert pending_schema_payload["feedback_payload"]["legacy_compatibility"]["feedback_text"] == "本轮反馈尚未生成"
+    assert pending_schema_payload["feedback_payload"]["feedback_text"] == "本轮反馈尚未生成"
+    assert "candidate_refs" not in pending_schema_payload["feedback_payload"]
 
     status_code, feedback_body = call_json(
         app,
@@ -3348,7 +3367,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_payload["score_result"]["score_value"] == 82
     assert feedback_payload["reference_answer"]["sections"]
     assert feedback_payload["loss_points"]
-    _assert_feedback_candidate_refs(feedback_payload["candidate_refs"])
+    assert "candidate_refs" not in feedback_payload
+    assert "project_asset_update_candidates" not in feedback_payload
+    assert "score_reasoning" not in feedback_payload
+    assert "evidence_refs" not in feedback_payload
     assert feedback_payload["feedback_metadata"]["llm_called"] is True
     for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
         assert phase4_field in feedback_payload
@@ -3363,7 +3385,6 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
             "training_recommendations",
         ):
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
-    assert feedback_payload["legacy_compatibility"]["feedback_text"] == feedback_payload["feedback_text"]
     _assert_feedback_candidate_refs(feedback_body["data"]["candidate_refs"])
     assert feedback_body["data"]["suggestion_refs"] == []
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
@@ -3384,7 +3405,8 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     )
     structured_session_payload = structured_answer["feedback_payload"]
     assert structured_session_payload["status"] == "generated"
-    _assert_feedback_candidate_refs(structured_session_payload["candidate_refs"])
+    assert "candidate_refs" not in structured_session_payload
+    assert "project_asset_update_candidates" not in structured_session_payload
     assert structured_session_payload["score_result"]["score_value"] == 82
     for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
         assert phase4_field in structured_session_payload
@@ -3416,10 +3438,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert second_feedback_body["data"]["answer_id"] == second_answer_id
     assert second_feedback_body["data"]["answer_round"] == 2
     retry_payload = second_feedback_body["data"]["feedback_payload"]
-    assert retry_payload["answer_ref"]["resource_id"] == second_answer_id
+    assert "answer_ref" not in retry_payload
     assert retry_payload["status"] == "generated"
     assert retry_payload["score_result"]["score_value"] == 82
-    _assert_feedback_candidate_refs(retry_payload["candidate_refs"])
+    assert "candidate_refs" not in retry_payload
     assert retry_payload["feedback_metadata"]["llm_called"] is True
     json.dumps(retry_payload, ensure_ascii=False)
     retry_payload_keys = _collect_keys(retry_payload)
@@ -3562,10 +3584,10 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     payload = feedback_body["data"]["feedback_payload"]
     assert payload["status"] == "generated"
     assert payload["score_result"]["score_value"] == 82
-    _assert_feedback_candidate_refs(payload["candidate_refs"])
+    assert "candidate_refs" not in payload
     assert payload["feedback_metadata"]["llm_called"] is True
-    assert payload["same_question_effect"]["repeated_loss_point_ids"]
-    assert payload["same_question_effect"]["next_retry_focus"]
+    assert "same_question_effect" not in payload
+    assert isinstance(payload["answer_change_analysis"], dict)
 
 
 def test_polish_feedback_generates_when_question_metadata_missing() -> None:
@@ -3670,7 +3692,7 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
                     "next_recommended_actions": ["answer_again"],
                     "low_confidence_flags": [],
                     "trace_refs": [],
-                    "legacy_compatibility": {"feedback_text": "legacy feedback text"},
+                    "retired_extra_payload": {"feedback_text": "legacy feedback text"},
                     "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "legacy_weakness"}],
                     "prompt": "raw prompt must not leave the API boundary",
                     "completion": "raw completion must not leave the API boundary",
@@ -3702,10 +3724,12 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
     answer = detail_body["data"]["turns"][0]["answers"][0]
     assert answer["feedback_text"] == "legacy feedback text"
     assert answer["feedback_payload"]["feedback_text"] == "legacy feedback text"
-    assert answer["feedback_payload"]["candidate_refs"][0]["resource_type"] == "weakness_candidate"
+    assert "candidate_refs" not in answer["feedback_payload"]
+    assert "retired_extra_payload" not in answer["feedback_payload"]
     legacy_schema_payload = PolishSessionAnswerResponse.model_validate(answer).model_dump(mode="json")
     assert legacy_schema_payload["feedback_payload"]["feedback_text"] == "legacy feedback text"
-    assert legacy_schema_payload["feedback_payload"]["legacy_compatibility"]["feedback_text"] == "legacy feedback text"
+    assert "retired_extra_payload" not in legacy_schema_payload["feedback_payload"]
+    assert "candidate_refs" not in legacy_schema_payload["feedback_payload"]
     forbidden = {
         "raw_prompt",
         "prompt",
@@ -3739,63 +3763,6 @@ def test_polish_session_keeps_old_feedback_payload_compatible() -> None:
         "provider_payload",
     ):
         assert forbidden_text not in serialized_values
-
-
-def test_polish_feedback_reserved_does_not_extract_candidates() -> None:
-    session_factory = _session_factory()
-    repository = SqlAlchemyPolishRepository(session_factory)
-    binding_id = _seed_polish_sources(session_factory, OWNER_A)
-    app = _isolated_polish_app(session_factory, ACTOR_A)
-    _, create_body = call_json(
-        app,
-        "/api/v1/polish-sessions",
-        "POST",
-        json_body={
-            "resume_job_binding_id": binding_id,
-            "topic_id": "topic_technical_depth",
-        },
-    )
-    session_id = create_body["data"]["session_id"]
-    _, generate_body = _generate_initial_progress_tree(app, session_id)
-    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
-    _, question_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/questions",
-        "POST",
-        json_body={"progress_node_ref": progress_node_ref},
-    )
-    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
-    _, answer_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/answers",
-        "POST",
-        json_body={"question_id": question_id, "answer_text": "我会补充接口幂等和失败补偿。"},
-    )
-
-    session = repository.get_session(OWNER_A, session_id)
-    question = repository.get_question(OWNER_A, question_id)
-    answer = repository.get_answer(OWNER_A, answer_body["data"]["answer_id"])
-    assert session is not None
-    assert question is not None
-    assert answer is not None
-
-    artifacts = build_reserved_feedback_artifacts(
-        session=session,
-        question=question,
-        answer=answer,
-        owner_id=OWNER_A,
-        actor_id=OWNER_A,
-        task_id="task_reserved_helper",
-        feedback_id="trc_reserved_helper",
-        created_at=utc_now(),
-    )
-
-    payload = artifacts.payload
-    assert payload["status"] == "reserved"
-    assert payload["candidate_refs"] == []
-    assert payload["feedback_metadata"]["candidate_extraction_called"] is False
-    assert payload["legacy_compatibility"]["feedback_text"] == payload["feedback_text"]
-
 
 def test_polish_question_metadata_repository_roundtrips_and_falls_back_safely() -> None:
     session_factory = _session_factory()
@@ -4766,7 +4733,17 @@ class _ProviderStyleQuestionTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         self.calls.append(request)
         if request.task_type not in {"polish_question_generation", "polish_question_follow_up_generation"}:
-            return self._fallback.generate(request)
+            result = self._fallback.generate(request)
+            if request.task_type == "polish_feedback_generation":
+                return LlmTransportResult(
+                    result=_api_polish_feedback_candidate_payload(result.result),
+                    validation_status=result.validation_status,
+                    confidence_level=result.confidence_level,
+                    low_confidence_flags=result.low_confidence_flags,
+                    trace_refs=result.trace_refs,
+                    evidence_refs=result.evidence_refs,
+                )
+            return result
 
         input_data = _api_question_request_input_data(request)
         generation_policy = input_data["generation_policy"]
@@ -4833,6 +4810,30 @@ class _ProviderStyleQuestionTransport:
             trace_refs=("trace_api_provider_question",),
             evidence_refs=evidence_refs,
         )
+
+
+def _api_polish_feedback_candidate_payload(value: object) -> object:
+    if not isinstance(value, dict):
+        return value
+    filtered = {key: value[key] for key in POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS if key in value}
+    filtered.pop("project_asset_update_candidates", None)
+    loss_points = filtered.get("loss_points")
+    if isinstance(loss_points, list) and len(loss_points) == 1:
+        first = loss_points[0] if isinstance(loss_points[0], dict) else None
+        if (
+            isinstance(first, dict)
+            and str(first.get("severity") or "").strip() == "major"
+            and str(first.get("loss_point_id") or "").strip()
+        ):
+            filtered["loss_points"] = [
+                first,
+                {
+                    "loss_point_id": "lp_feedback_minor_point",
+                    "severity": "minor",
+                    "reason": "补充可验证指标与异常边界说明。",
+                },
+            ]
+    return filtered
 
 
 def _api_question_request_input_data(request: LlmTransportRequest) -> dict:

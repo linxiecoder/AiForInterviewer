@@ -125,25 +125,12 @@ export interface PolishScoreResultPayload {
   score_value?: number;
   score_version?: string;
   rubric_version?: string;
-  contract_id?: string;
   confidence_level?: "low" | "medium" | "high" | string;
 }
 
 export interface PolishFeedbackAnswerSummary {
   coverage?: string | null;
   main_gaps?: string[];
-}
-
-export interface PolishFeedbackScoringDimension extends Record<string, unknown> {
-  dimension_id?: string | null;
-  title?: string | null;
-  dimension_name?: string | null;
-  score_value?: number | null;
-  score?: number | null;
-  max_score?: number | null;
-  reason?: string | null;
-  explanation?: string | null;
-  confidence_level?: "low" | "medium" | "high" | string | null;
 }
 
 export interface PolishLossPointPayload extends Record<string, unknown> {
@@ -166,7 +153,6 @@ export interface PolishReferenceAnswerSection extends Record<string, unknown> {
 }
 
 export interface PolishReferenceAnswerPayload extends Record<string, unknown> {
-  contract_id?: string;
   summary?: string;
   outline?: string[];
   sections?: PolishReferenceAnswerSection[];
@@ -174,22 +160,7 @@ export interface PolishReferenceAnswerPayload extends Record<string, unknown> {
 
 export interface PolishGeneratedReferenceAnswer extends PolishReferenceAnswerPayload {}
 
-export interface PolishExplanationPayload extends Record<string, unknown> {
-  title?: string;
-  explanation?: string;
-}
-
 export interface PolishStructuredFeedbackRecordPayload extends Record<string, unknown> {}
-
-export interface PolishSameQuestionEffect extends Record<string, unknown> {
-  previous_answer_ref?: string | null;
-  improved_points?: string[];
-  repeated_loss_point_ids?: string[];
-  repeated_loss_points?: string[];
-  regressed_points?: string[];
-  score_delta?: number | null;
-  next_retry_focus?: string[] | PolishStructuredFeedbackRecordPayload[];
-}
 
 export interface PolishProjectAssetConflict extends Record<string, unknown> {
   title?: string | null;
@@ -206,31 +177,11 @@ export interface PolishProjectAssetConsistencyCheck extends Record<string, unkno
   clarification_questions?: string[];
 }
 
-export interface PolishSessionSimilarityCheck extends Record<string, unknown> {
-  status?: "none" | "benign_reuse" | "semantic_repetition" | "cross_turn_conflict" | string;
-  related_turn_refs?: string[];
-  impact?: string | null;
-  explanation?: string | null;
-  reason?: string | null;
-}
-
-export interface PolishProjectAssetUpdateCandidate extends Record<string, unknown> {
-  candidate_type?: string | null;
-  target_asset_ref?: string | null;
-  proposed_change_type?: string | null;
-  content_draft?: string | null;
-  summary?: string | null;
-  confidence_level?: "low" | "medium" | "high" | string | null;
-  user_confirmation_required?: boolean | null;
-}
-
 export interface PolishFeedbackPayload extends Record<string, unknown> {
-  contract_id?: string;
   contract_ids?: string[];
-  status?: "pending" | "generated" | "reserved" | "generation_failed" | string;
+  status?: "pending" | "generated" | "failed";
   feedback_id?: string | null;
   feedback_text?: string | null;
-  feedback_summary?: string | null;
   answer_summary?: PolishFeedbackAnswerSummary | null;
   polish_theme?: PolishTheme | string | null;
   polish_theme_label?: string | null;
@@ -238,12 +189,9 @@ export interface PolishFeedbackPayload extends Record<string, unknown> {
   implicit_weight?: number | null;
   weight_explanation?: string | null;
   interview_intent?: string | null;
-  explicit_score?: number | null;
-  implicit_score?: number | null;
   technical_gaps?: string[];
   communication_gaps?: string[];
   answer_diagnosis?: Record<string, unknown> | null;
-  scoring_dimensions?: PolishFeedbackScoringDimension[];
   positive_evidence_points?: PolishStructuredFeedbackRecordPayload[];
   missing_answer_dimensions?: PolishStructuredFeedbackRecordPayload[];
   p7_reference_answer?: string | null;
@@ -262,14 +210,8 @@ export interface PolishFeedbackPayload extends Record<string, unknown> {
   score_result?: PolishScoreResultPayload | null;
   loss_points?: PolishLossPointPayload[];
   reference_answer?: PolishGeneratedReferenceAnswer | null;
-  knowledge_points?: PolishExplanationPayload[];
-  technical_principles?: PolishExplanationPayload[];
-  same_question_effect?: PolishSameQuestionEffect | null;
-  project_asset_consistency_check?: PolishProjectAssetConsistencyCheck | null;
-  session_similarity_check?: PolishSessionSimilarityCheck | null;
-  project_asset_update_candidates?: PolishProjectAssetUpdateCandidate[];
+  asset_consistency_check?: PolishProjectAssetConsistencyCheck | null;
   next_recommended_actions?: PolishRecommendedAction[];
-  candidate_refs?: PolishFeedbackResourceRef[];
   validation_result_ref?: PolishFeedbackResourceRef | null;
   trace_refs?: Array<Record<string, unknown>>;
   low_confidence_flags?: PolishLowConfidenceFlag[];

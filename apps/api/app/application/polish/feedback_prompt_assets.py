@@ -13,12 +13,12 @@ from app.application.llm.agent_io import (
 )
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
-    POLISH_FEEDBACK_GENERATED_PAYLOAD_FIELDS,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
-    POLISH_FEEDBACK_QUICK_MODE,
-    POLISH_FEEDBACK_QUICK_TASK,
+    POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+    POLISH_FEEDBACK_CANDIDATE_MODE,
+    POLISH_FEEDBACK_CANDIDATE_TASK,
     POLISH_FEEDBACK_TASK_TYPE,
 )
 
@@ -92,7 +92,7 @@ _PROJECT_ASSET_SUMMARIES_LIMIT = 5
 
 
 def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
-    """Build the compact runtime prompt asset for generated polish feedback."""
+    """Build the compact runtime prompt asset for feedback candidate output."""
 
     safety_policy = _feedback_safety_policy()
     validation_rules = _validation_rules()
@@ -139,31 +139,27 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
     prompt_asset = AgentPromptBundle(
         task_type=POLISH_FEEDBACK_TASK_TYPE,
         prompt_version=POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-        schema_id=POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        schema_version=POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        schema_id=POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        schema_version=POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         prompt="\n".join(
             [
                 "Generate structured polish feedback for the current answer.",
                 *safety_policy.to_prompt_rules(),
                 *validation_rules,
-                (
-                    f"schema_id 固定为 {POLISH_FEEDBACK_GENERATED_SCHEMA_ID}，schema_version 固定为 "
-                    f"{POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION}。"
-                ),
             ]
         ),
         input_data=input_data,
         output_schema={
-            "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-            "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+            "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+            "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
             "required_status": "generated_or_partial_or_low_confidence",
-            "fields": list(POLISH_FEEDBACK_GENERATED_PAYLOAD_FIELDS),
+            "fields": list(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS),
         },
         system_role="You review interview polish answers and return validated feedback JSON.",
         developer_constraints=tuple((*safety_policy.to_prompt_rules(), *validation_rules)),
         user_task="Evaluate the current answer using only the provided evidence and context snapshots.",
         input_contract={
-            "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+            "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
             "required_context_refs": ["session_id", "question_id", "answer_id"],
             "raw_model_io_storage": False,
             "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
@@ -196,7 +192,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
             },
         },
     ).to_prompt_asset_dict()
-    prompt_asset["feedback_mode"] = POLISH_FEEDBACK_QUICK_MODE
+    prompt_asset["feedback_mode"] = POLISH_FEEDBACK_CANDIDATE_MODE
     prompt_asset["provider_prompt"] = _provider_compact_prompt(
         input_data,
         prompt=prompt_asset["prompt"] if isinstance(prompt_asset.get("prompt"), str) else "",
@@ -241,14 +237,15 @@ def _feedback_safety_policy() -> AgentSafetyPolicy:
 
 def _validation_rules() -> tuple[str, ...]:
     return (
-        "Output schema_id must be polish_feedback_generated_v1.",
+        "Output schema_id/schema_version/contract_ids/feedback_id are not part of the candidate JSON contract.",
+        "Do not output final score payload fields such as score_result, deduction, or deducted_points.",
+        "Do not output server-generated validation fields such as asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, next_recommended_actions, or task candidate references.",
+        "Do not output raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         "Do not invent user experience or project facts.",
         "Every major loss point must be covered by a reference answer section.",
-        "Keep project asset and session similarity checks lightweight; use not_applicable when evidence is insufficient.",
-        "Return Phase 4 fields: asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards.",
-        "If canonical_project_assets conflict with the answer, asset_consistency_check.status must be conflict.",
-        "If asset conflict exists, next_recommended_actions must not include generate_next_question.",
+        "If canonical_project_assets conflict with the answer, mark conflict in asset checks through service layer synthesis, not candidate output.",
         "Any project_asset_update_candidates must be candidates with user_confirmation_required=true.",
+        "Keep project asset and session similarity checks lightweight in service synthesis when evidence is insufficient.",
     )
 
 
@@ -270,15 +267,15 @@ def _provider_compact_prompt(
     evidence_items = _provider_evidence_items(_safe_list(input_data.get("evidence_items")))
     canonical_project_assets = _safe_dict(input_data.get("canonical_project_assets"))
     provider_prompt: dict[str, Any] = {
-        "task": POLISH_FEEDBACK_QUICK_TASK,
+        "task": POLISH_FEEDBACK_CANDIDATE_TASK,
         "task_type": POLISH_FEEDBACK_TASK_TYPE,
-        "feedback_mode": POLISH_FEEDBACK_QUICK_MODE,
-        "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        "feedback_mode": POLISH_FEEDBACK_CANDIDATE_MODE,
+        "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         "prompt_version": prompt_version,
         "prompt": prompt,
         "output_schema": output_schema,
-        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
+        "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
         "input_contract": {
             "raw_model_io_storage": False,
             "context_mode": "quick_compact",
@@ -289,36 +286,21 @@ def _provider_compact_prompt(
         },
         "required_json_schema": {
             "required_fields": [
-                "schema_id",
-                "schema_version",
-                "status",
-                "contract_ids",
                 "feedback_text",
                 "answer_summary",
-                "score_result",
-                "explicit_score",
-                "implicit_score",
+                "score_reasoning",
                 "loss_points",
                 "reference_answer.sections",
-                "same_question_effect",
-                "asset_consistency_check",
-                "answer_coverage",
-                "answer_change_analysis",
-                "feedback_cards",
-                "next_recommended_actions",
                 "low_confidence_flags",
-                "feedback_metadata",
+                "evidence_refs",
             ],
             "default_empty_fields": [
-                "knowledge_points",
-                "technical_principles",
+                "same_question_effect",
                 "project_asset_update_candidates",
+                "low_confidence_flags",
+                "evidence_refs",
             ],
-            "not_applicable_fields": [
-                "project_asset_consistency_check",
-                "asset_consistency_check",
-                "session_similarity_check",
-            ],
+            "not_applicable_fields": [],
         },
         "current_question": {
             "question_id": _get_clean_text(current_question.get("question_id"), max_chars=120),
@@ -346,7 +328,7 @@ def _provider_compact_prompt(
         },
         "scoring_rules": {
             "scale": "0-100",
-            "score_result.score_value": "explicit_score aligned score",
+            "score_reasoning": "Each entry includes dimension and rationale.",
             "major_loss_points": "must be mapped by reference_answer.sections.addresses_loss_point_ids",
         },
         "evidence": evidence_items,
@@ -364,14 +346,14 @@ def _provider_compact_prompt(
         "resume_projects": _string_list(resume_snapshot.get("projects"), max_chars=240)[:_RESUME_PROJECTS_LIMIT],
         "output_requirements": [
             "Return JSON only.",
-            "First answer diagnosis, scoring, loss points, and short reference answer only.",
-            "Set knowledge_points, technical_principles, and project_asset_update_candidates to [] unless explicitly needed.",
-            "Return asset_consistency_check, answer_coverage, answer_change_analysis, and feedback_cards.",
-            "If canonical_project_assets conflict with the answer, make asset_consistency the first feedback card.",
+            "Return only candidate JSON fields; final feedback fields are produced by service flow.",
+            "Return feedback_text, answer_summary, score_reasoning, loss_points, reference_answer, low_confidence_flags, and evidence_refs.",
+            "same_question_effect and project_asset_update_candidates are optional when available.",
+            "Do not include score_result, deduction, deducted_points, asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, next_recommended_actions, task candidate references, or stored feedback summaries in candidate output.",
             "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         ],
         "feedback_metadata": {
-            "feedback_mode": POLISH_FEEDBACK_QUICK_MODE,
+            "feedback_mode": POLISH_FEEDBACK_CANDIDATE_MODE,
             "context_compaction_applied": True,
             "omitted_context_summary": [
                 "same project history",

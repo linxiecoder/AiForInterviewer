@@ -10,12 +10,16 @@ from app.application.polish.feedback_agent import FeedbackGenerationAgent
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
-from app.application.polish.feedback_validation import validate_generated_feedback_payload
+from app.application.polish.feedback_validation import (
+    validate_feedback_candidate_payload,
+    validate_final_feedback_payload,
+)
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 
 
@@ -88,31 +92,17 @@ def _context() -> dict[str, Any]:
 
 def _generated_payload(*, low_confidence_flags: list[str] | None = None) -> dict[str, Any]:
     return {
-        "schema_id": POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        "schema_version": POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
-        "status": "generated",
-        "contract_ids": list(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS),
         "feedback_text": "The answer covers async decoupling but should define recovery boundaries.",
         "answer_summary": "The answer mentions queues, idempotency, retry jobs, and alerts.",
-        "score_result": {"score_type": "polish_answer", "score_value": 82},
-        "explicit_score": 82,
-        "implicit_score": 80,
-        "scoring_dimensions": [
-            {"dimension": "architecture", "score": 42},
-            {"dimension": "reliability", "score": 40},
+        "score_reasoning": [
+            {"dimension": "reliability", "rationale": "Recovery boundaries and alert thresholds remain underspecified."},
         ],
         "loss_points": [
             {
                 "loss_point_id": "lp_recovery",
                 "severity": "major",
-                "deduction": 12,
+                "evidence_refs": ["resume_project_payment"],
                 "reason": "Recovery stop conditions are not explicit.",
-            },
-            {
-                "loss_point_id": "lp_metrics",
-                "severity": "minor",
-                "deducted_points": 6,
-                "reason": "Alert thresholds are not explicit.",
             },
         ],
         "reference_answer": {
@@ -127,12 +117,10 @@ def _generated_payload(*, low_confidence_flags: list[str] | None = None) -> dict
                     "section_id": "ref_metrics",
                     "title": "Metrics",
                     "content": "Explain queue depth, failure rate, recovery latency, and alert thresholds.",
-                    "addresses_loss_point_ids": ["lp_metrics"],
+                    "addresses_loss_point_ids": ["lp_recovery"],
                 },
             ]
         },
-        "knowledge_points": ["idempotency", "compensation"],
-        "technical_principles": ["Define failure boundaries before choosing queue mechanics."],
         "same_question_effect": {
             "improved_points": ["Added async decoupling"],
             "repeated_loss_point_ids": ["lp_metrics"],
@@ -140,8 +128,6 @@ def _generated_payload(*, low_confidence_flags: list[str] | None = None) -> dict
             "next_retry_focus": ["recovery boundaries"],
             "score_delta": 6,
         },
-        "project_asset_consistency_check": {"status": "consistent", "conflicts": []},
-        "session_similarity_check": {"status": "benign_reuse"},
         "project_asset_update_candidates": [
             {
                 "candidate_type": "project_asset_update_candidate",
@@ -151,13 +137,8 @@ def _generated_payload(*, low_confidence_flags: list[str] | None = None) -> dict
                 "summary": "Add recovery and alerting material to the payment asset.",
             }
         ],
-        "next_recommended_actions": ["Practice recovery stop conditions."],
         "low_confidence_flags": low_confidence_flags or [],
-        "trace_refs": [{"resource_type": "llm_trace", "resource_id": "trace_feedback_001"}],
-        "feedback_metadata": {
-            "prompt_version": POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-            "llm_called": True,
-        },
+        "evidence_refs": ["resume_project_payment", "job_requirement_reliability"],
     }
 
 
@@ -207,8 +188,8 @@ def test_feedback_prompt_builder_uses_agent_prompt_bundle_standard_shape() -> No
     } <= set(asset)
     assert asset["task_type"] == POLISH_FEEDBACK_TASK_TYPE
     assert asset["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
-    assert asset["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
-    assert asset["schema_version"] == POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION
+    assert asset["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
+    assert asset["schema_version"] == POLISH_FEEDBACK_FINAL_SCHEMA_VERSION
 
 
 def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fields() -> None:
@@ -225,7 +206,7 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
     assert provider_prompt["prompt"] == prompt_asset["prompt"]
     assert provider_prompt["output_schema"] == prompt_asset["output_schema"]
-    assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
+    assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
     assert provider_prompt["input_contract"]["answer_text_policy"] == "current_answer_bounded_primary_input"
     assert provider_prompt["input_contract"]["answer_text_max_chars"] == 1200
     assert provider_prompt["input_contract"]["answer_text_is_bounded"] is True
@@ -237,6 +218,33 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert "input_data" not in provider_prompt
     assert "developer_constraints" not in provider_prompt
     assert "refusal_and_low_confidence_policy" not in provider_prompt
+
+
+def test_feedback_prompt_required_json_schema_is_candidate_only() -> None:
+    provider_prompt = build_feedback_prompt_asset(_context())["provider_prompt"]
+    required_fields = set(provider_prompt["required_json_schema"]["required_fields"])
+    candidate_fields = set(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)
+    assert required_fields == {
+        "feedback_text",
+        "answer_summary",
+        "score_reasoning",
+        "loss_points",
+        "reference_answer.sections",
+        "low_confidence_flags",
+        "evidence_refs",
+    }
+    assert set(provider_prompt["output_schema"]["fields"]) == candidate_fields
+    assert not provider_prompt["required_json_schema"]["not_applicable_fields"]
+    assert "score_result" not in provider_prompt["required_json_schema"]["required_fields"]
+    assert "asset_consistency_check" not in provider_prompt["required_json_schema"]["required_fields"]
+    assert "answer_coverage" not in provider_prompt["required_json_schema"]["required_fields"]
+    assert "feedback_cards" not in provider_prompt["required_json_schema"]["required_fields"]
+    assert "next_recommended_actions" not in provider_prompt["required_json_schema"]["required_fields"]
+    requirements_text = "\n".join(provider_prompt["output_requirements"]).lower()
+    assert "candidate json fields" in requirements_text
+    assert "final feedback fields are produced by service flow" in requirements_text
+    for final_field in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
+        assert final_field not in requirements_text
 
 
 def test_feedback_agent_fails_closed_when_compact_provider_prompt_missing() -> None:
@@ -334,12 +342,22 @@ def test_feedback_agent_returns_agent_output_envelope_for_valid_provider_payload
     assert isinstance(envelope, AgentOutputEnvelope)
     assert envelope.succeeded is True
     assert envelope.task_type == POLISH_FEEDBACK_TASK_TYPE
-    assert envelope.schema_id == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
-    assert envelope.schema_version == POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION
+    assert envelope.schema_id == POLISH_FEEDBACK_FINAL_SCHEMA_ID
+    assert envelope.schema_version == POLISH_FEEDBACK_FINAL_SCHEMA_VERSION
     assert envelope.prompt_version == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
-    assert envelope.payload["schema_id"] == POLISH_FEEDBACK_GENERATED_SCHEMA_ID
+    assert envelope.payload["feedback_text"] == "The answer covers async decoupling but should define recovery boundaries."
+    assert envelope.payload["score_reasoning"] == [{"dimension": "reliability", "rationale": "Recovery boundaries and alert thresholds remain underspecified."}]
+    assert envelope.payload["loss_points"][0]["loss_point_id"] == "lp_recovery"
+    assert envelope.payload["low_confidence_flags"] == ["payload_low_confidence"]
+    assert envelope.payload["evidence_refs"] == ["resume_project_payment", "job_requirement_reliability"]
+    assert "score_result" not in envelope.payload
+    assert "asset_consistency_check" not in envelope.payload
     assert envelope.low_confidence_flags == ("provider_low_confidence", "payload_low_confidence")
-    assert envelope.evidence_refs == ("provider_evidence",)
+    assert envelope.evidence_refs == (
+        "provider_evidence",
+        "resume_project_payment",
+        "job_requirement_reliability",
+    )
 
 
 def test_feedback_agent_invalid_provider_payload_returns_envelope_validation_errors() -> None:
@@ -384,30 +402,29 @@ def test_service_fails_closed_when_envelope_has_validation_errors() -> None:
     assert result.validation_errors == ("feedback_payload_schema_invalid",)
 
 
-def test_service_still_calls_phase2_validator_after_envelope_parse(monkeypatch: Any) -> None:
+def test_service_calls_candidate_and_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
 
-    def spy(payload: object, *, require_phase4: bool = False) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
-        calls.append({"payload": payload, "require_phase4": require_phase4})
-        return validate_generated_feedback_payload(payload, require_phase4=require_phase4)
+    def spy_candidate(payload: object) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+        calls.append({"validator": "candidate", "payload": payload})
+        return validate_feedback_candidate_payload(payload)
 
-    monkeypatch.setattr(feedback_generation_service, "validate_generated_feedback_payload", spy)
+    def spy_final(payload: object, *, require_feedback_id: bool = False) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+        calls.append({"validator": "final", "payload": payload, "require_feedback_id": require_feedback_id})
+        return validate_final_feedback_payload(payload, require_feedback_id=require_feedback_id)
+
+    monkeypatch.setattr(feedback_generation_service, "validate_feedback_candidate_payload", spy_candidate)
+    monkeypatch.setattr(feedback_generation_service, "validate_final_feedback_payload", spy_final)
 
     result = feedback_generation_service.FeedbackGenerationService(
         llm_transport=_PayloadTransport({"payload": _generated_payload()})
     ).generate(_context())
 
     assert result.succeeded is True
-    assert calls
-    validated_payload = calls[0]["payload"]
-    expected_payload = _generated_payload()
-    assert isinstance(validated_payload, dict)
-    assert "payload" not in validated_payload
-    assert validated_payload["schema_id"] == expected_payload["schema_id"]
-    assert validated_payload["schema_version"] == expected_payload["schema_version"]
-    assert validated_payload["status"] == expected_payload["status"]
-    assert validated_payload["feedback_text"] == expected_payload["feedback_text"]
-    assert calls[0]["require_phase4"] is True
+    assert len(calls) >= 2
+    assert calls[0]["validator"] == "candidate"
+    assert calls[1]["validator"] == "final"
+    assert calls[1]["require_feedback_id"] is False
 
 
 def _contains_forbidden_key(value: object) -> bool:

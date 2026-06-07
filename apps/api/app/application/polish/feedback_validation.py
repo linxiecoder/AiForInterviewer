@@ -4,10 +4,11 @@ from copy import deepcopy
 from typing import Any
 
 from app.application.polish.feedback_schema import (
-    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
-    POLISH_FEEDBACK_GENERATED_PAYLOAD_FIELDS,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
 )
 from app.application.polish.feedback_rules import (
     ANSWER_CHANGE_TRENDS,
@@ -17,12 +18,6 @@ from app.application.polish.feedback_rules import (
 )
 
 _ALLOWED_STATUSES = ("generated", "partial", "low_confidence", "validation_failed")
-_SESSION_SIMILARITY_STATUSES = (
-    "benign_reuse",
-    "semantic_repetition",
-    "cross_turn_conflict",
-    "not_applicable",
-)
 _UNSAFE_MARKERS = (
     "raw_prompt",
     "system_prompt",
@@ -55,93 +50,224 @@ _SAME_QUESTION_LIST_FIELDS = (
 )
 _FORMAL_ASSET_WRITE_FLAGS = ("formal_asset_written", "auto_confirmed")
 _FULL_ASSET_BODY_FIELDS = ("asset_body", "asset_payload", "full_asset", "full_asset_body", "content")
+_CANDIDATE_REQUIRED_FIELDS = (
+    "feedback_text",
+    "answer_summary",
+    "score_reasoning",
+    "loss_points",
+    "reference_answer",
+    "low_confidence_flags",
+    "evidence_refs",
+)
+_CANDIDATE_FORBIDDEN_FIELDS = frozenset(
+    {
+        "schema_id",
+        "schema_version",
+        "contract_ids",
+        "feedback_id",
+        "score_result",
+        "deduction",
+        "deducted_points",
+        "asset_consistency_check",
+        "answer_coverage",
+        "answer_change_analysis",
+        "feedback_cards",
+        "next_recommended_actions",
+        "raw_prompt",
+        "raw_completion",
+        "provider_payload",
+        "raw_provider_payload",
+        "full_resume",
+        "full_jd",
+        "full_answer",
+        "token",
+        "secret",
+        "cookie",
+    }
+)
+_FINAL_REQUIRED_FIELDS = (
+    "schema_id",
+    "schema_version",
+    "status",
+    "contract_ids",
+    "feedback_id",
+    "feedback_text",
+    "answer_summary",
+    "score_result",
+    "loss_points",
+    "reference_answer",
+    "asset_consistency_check",
+    "answer_coverage",
+    "answer_change_analysis",
+    "feedback_cards",
+    "next_recommended_actions",
+    "low_confidence_flags",
+    "trace_refs",
+    "feedback_metadata",
+)
+_FINAL_FORBIDDEN_FIELDS = frozenset()
 
 
-def normalize_generated_feedback_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return a detached, minimally normalized generated-feedback payload."""
-
-    normalized = deepcopy(payload)
-    for field_name in POLISH_FEEDBACK_GENERATED_PAYLOAD_FIELDS:
-        normalized.setdefault(field_name, _default_value_for_field(field_name))
-    normalized["schema_id"] = _clean(normalized.get("schema_id"), max_chars=120)
-    normalized["schema_version"] = _clean(normalized.get("schema_version"), max_chars=40)
-    normalized["status"] = _clean(normalized.get("status"), max_chars=40)
-    normalized["contract_ids"] = _string_list(normalized.get("contract_ids"), max_items=20, max_item_chars=80)
-    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=12000)
-    normalized["answer_summary"] = _clean(normalized.get("answer_summary"), max_chars=4000)
-    normalized["low_confidence_flags"] = _string_list(
-        normalized.get("low_confidence_flags"),
-        max_items=20,
-        max_item_chars=160,
-    )
-    return normalized
-
-
-def validate_generated_feedback_payload(
+def validate_feedback_candidate_payload(
     payload: object,
-    *,
-    require_phase4: bool = False,
 ) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
     if not isinstance(payload, dict):
         return None, ("feedback_payload_schema_invalid",)
 
     errors: list[str] = []
+    normalized = deepcopy(payload)
+
+    unexpected_fields = set(normalized) - set(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)
+    if unexpected_fields:
+        errors.append("feedback_candidate_unknown_fields")
+    forbidden_fields = _CANDIDATE_FORBIDDEN_FIELDS & set(normalized)
+    if forbidden_fields:
+        errors.append("feedback_candidate_forbidden_fields")
     if _contains_unsafe_marker(payload):
         errors.append("feedback_payload_unsafe_leakage")
 
-    normalized = normalize_generated_feedback_payload(payload)
-    status = normalized["status"]
-    generated_status = status == "generated"
+    for field in _CANDIDATE_REQUIRED_FIELDS:
+        if field not in normalized:
+            errors.append("feedback_candidate_required_fields_missing")
 
-    if normalized["schema_id"] != POLISH_FEEDBACK_GENERATED_SCHEMA_ID:
-        errors.append("feedback_schema_id_invalid")
-    if normalized["schema_version"] != POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION:
-        errors.append("feedback_schema_version_invalid")
-    if status not in _ALLOWED_STATUSES:
-        errors.append("feedback_status_invalid")
-    if generated_status and not normalized["feedback_text"]:
+    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=12000)
+    if "feedback_text" in normalized and not normalized["feedback_text"]:
         errors.append("feedback_text_required")
+    normalized["answer_summary"] = _clean(normalized.get("answer_summary"), max_chars=4000)
+    if "answer_summary" in normalized and not normalized["answer_summary"]:
+        errors.append("answer_summary_required")
+    normalized["score_reasoning"] = _normalize_score_reasoning(normalized.get("score_reasoning"), errors=errors)
+    normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=20, max_item_chars=160)
+    normalized["evidence_refs"] = _string_list(normalized.get("evidence_refs"), max_items=40, max_item_chars=200)
 
-    if set(POLISH_FEEDBACK_GENERATED_CONTRACT_IDS) - set(normalized["contract_ids"]):
-        errors.append("feedback_contract_ids_missing_required")
-
-    score_value, score_errors = _score_value(normalized.get("score_result"))
-    errors.extend(score_errors)
-
-    loss_point_ids, major_loss_point_ids, deductions, loss_errors = _loss_points(
+    normalized["loss_points"] = _normalize_loss_point_evidence_refs(normalized.get("loss_points"), errors=errors)
+    loss_point_ids, _, _, loss_errors = _loss_points(
         normalized.get("loss_points"),
-        generated_status=generated_status,
+        generated_status=False,
     )
     errors.extend(loss_errors)
 
-    covered_loss_point_ids, reference_errors = _reference_answer(
-        normalized.get("reference_answer"),
-        known_loss_point_ids=loss_point_ids,
-    )
-    errors.extend(reference_errors)
-
-    if generated_status:
-        if loss_point_ids and not _reference_sections(normalized.get("reference_answer")):
+    normalized["reference_answer"] = deepcopy(normalized.get("reference_answer"))
+    reference_answer = normalized["reference_answer"]
+    if not isinstance(reference_answer, dict):
+        errors.append("reference_answer_required")
+    else:
+        sections = reference_answer.get("sections")
+        if not isinstance(sections, list):
             errors.append("reference_answer_sections_required")
-        missing_major_coverage = major_loss_point_ids - covered_loss_point_ids
-        if missing_major_coverage:
-            errors.append("loss_point_reference_mapping_missing")
+        elif not all(isinstance(section, dict) for section in sections):
+            errors.append("reference_answer_sections_invalid")
+        _, reference_errors = _reference_answer(reference_answer, known_loss_point_ids=loss_point_ids)
+        errors.extend(reference_errors)
 
-    if deductions and len(deductions) == len(loss_point_ids) and score_value is not None:
-        expected_score = max(0.0, 100.0 - sum(deductions))
-        if abs(expected_score - score_value) > 5:
-            errors.append("score_loss_deduction_mismatch")
+    if normalized.get("same_question_effect") is not None:
+        errors.extend(_same_question_effect(normalized.get("same_question_effect")))
+    if normalized.get("project_asset_update_candidates") is not None:
+        errors.extend(_project_asset_update_candidates(normalized.get("project_asset_update_candidates")))
 
-    errors.extend(_project_asset_consistency_check(normalized.get("project_asset_consistency_check")))
-    errors.extend(_asset_consistency_check(normalized.get("asset_consistency_check"), require=require_phase4))
-    errors.extend(_answer_coverage(normalized.get("answer_coverage"), require=require_phase4))
-    errors.extend(_answer_change_analysis(normalized.get("answer_change_analysis"), require=require_phase4))
+    if errors:
+        return None, tuple(dict.fromkeys(errors))
+    return normalized, ()
+
+
+def validate_final_feedback_payload(
+    payload: object,
+    *,
+    require_feedback_id: bool = True,
+) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    if not isinstance(payload, dict):
+        return None, ("feedback_payload_schema_invalid",)
+
+    errors: list[str] = []
+    normalized = deepcopy(payload)
+
+    if _contains_unsafe_marker(payload):
+        errors.append("feedback_payload_unsafe_leakage")
+
+    unexpected_fields = set(normalized) - set(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS)
+    if unexpected_fields:
+        errors.append("feedback_final_unknown_fields")
+    forbidden_fields = _FINAL_FORBIDDEN_FIELDS & set(normalized)
+    if forbidden_fields:
+        errors.append("feedback_final_forbidden_fields")
+
+    for field in _FINAL_REQUIRED_FIELDS:
+        if field == "feedback_id" and not require_feedback_id:
+            continue
+        if field not in normalized:
+            errors.append("feedback_final_required_fields_missing")
+
+    normalized["schema_id"] = _clean(normalized.get("schema_id"), max_chars=120)
+    if normalized["schema_id"] != POLISH_FEEDBACK_FINAL_SCHEMA_ID:
+        errors.append("feedback_schema_id_invalid")
+    normalized["schema_version"] = _clean(normalized.get("schema_version"), max_chars=40)
+    if normalized["schema_version"] != POLISH_FEEDBACK_FINAL_SCHEMA_VERSION:
+        errors.append("feedback_schema_version_invalid")
+
+    normalized["status"] = _clean(normalized.get("status"), max_chars=40)
+    if normalized["status"] not in _ALLOWED_STATUSES:
+        errors.append("feedback_status_invalid")
+    normalized["contract_ids"] = _string_list(normalized.get("contract_ids"), max_items=20, max_item_chars=80)
+    if set(POLISH_FEEDBACK_FINAL_CONTRACT_IDS) - set(normalized["contract_ids"]):
+        errors.append("feedback_contract_ids_missing_required")
+    normalized["feedback_id"] = _clean(normalized.get("feedback_id"), max_chars=120)
+    if not normalized["feedback_id"] and require_feedback_id:
+        errors.append("feedback_id_required")
+    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=12000)
+    if not normalized["feedback_text"]:
+        errors.append("feedback_text_required")
+    normalized["answer_summary"] = _clean(normalized.get("answer_summary"), max_chars=4000)
+    if not normalized["answer_summary"]:
+        errors.append("answer_summary_required")
+    normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=40, max_item_chars=160)
+
+    _, score_errors = _score_value(normalized.get("score_result"))
+    errors.extend(score_errors)
+    normalized["score_result"] = normalized.get("score_result")
+
+    normalized["loss_points"] = _normalize_loss_point_evidence_refs(normalized.get("loss_points"), errors=errors)
+    loss_point_ids, _, _, loss_errors = _loss_points(
+        normalized.get("loss_points"),
+        generated_status=False,
+    )
+    errors.extend(loss_errors)
+    if not isinstance(normalized["loss_points"], list):
+        errors.append("loss_points_invalid")
+
+    reference_answer = normalized.get("reference_answer")
+    normalized["reference_answer"] = deepcopy(reference_answer)
+    if not isinstance(reference_answer, dict):
+        errors.append("reference_answer_required")
+    else:
+        sections = reference_answer.get("sections")
+        if not isinstance(sections, list):
+            errors.append("reference_answer_sections_required")
+        elif not all(isinstance(section, dict) for section in sections):
+            errors.append("reference_answer_sections_invalid")
+        _, reference_errors = _reference_answer(reference_answer, known_loss_point_ids=loss_point_ids)
+        errors.extend(reference_errors)
+
+    normalized["asset_consistency_check"] = normalized.get("asset_consistency_check", {})
+    normalized["answer_coverage"] = normalized.get("answer_coverage", {})
+    normalized["answer_change_analysis"] = normalized.get("answer_change_analysis", {})
+    normalized["feedback_cards"] = normalized.get("feedback_cards", [])
+    normalized["next_recommended_actions"] = normalized.get("next_recommended_actions")
+    normalized["trace_refs"] = _string_list(normalized.get("trace_refs"), max_items=20, max_item_chars=160)
+    if not normalized["trace_refs"]:
+        errors.append("trace_refs_required")
+    normalized["feedback_metadata"] = normalized.get("feedback_metadata")
+    if not isinstance(normalized["feedback_metadata"], dict):
+        errors.append("feedback_metadata_invalid")
+
+    errors.extend(_asset_consistency_check(normalized.get("asset_consistency_check"), require=True))
+    errors.extend(_answer_coverage(normalized.get("answer_coverage"), require=True))
+    errors.extend(_answer_change_analysis(normalized.get("answer_change_analysis"), require=True))
     errors.extend(
         _feedback_cards(
             normalized.get("feedback_cards"),
             asset_consistency_check=normalized.get("asset_consistency_check"),
             answer_change_analysis=normalized.get("answer_change_analysis"),
-            require=require_phase4,
+            require=True,
         )
     )
     errors.extend(
@@ -152,42 +278,65 @@ def validate_generated_feedback_payload(
             answer_change_analysis=normalized.get("answer_change_analysis"),
         )
     )
-    errors.extend(_same_question_effect(normalized.get("same_question_effect")))
-    errors.extend(_session_similarity_check(normalized.get("session_similarity_check")))
-    errors.extend(_project_asset_update_candidates(normalized.get("project_asset_update_candidates")))
 
     if errors:
         return None, tuple(dict.fromkeys(errors))
     return normalized, ()
 
 
-def _default_value_for_field(field_name: str) -> object:
-    if field_name in {
-        "contract_ids",
-        "scoring_dimensions",
-        "loss_points",
-        "knowledge_points",
-        "technical_principles",
-        "project_asset_update_candidates",
-        "feedback_cards",
-        "next_recommended_actions",
-        "low_confidence_flags",
-        "trace_refs",
-    }:
+def _normalize_score_reasoning(value: object, *, errors: list[str]) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        errors.append("score_reasoning_required")
         return []
-    if field_name in {
-        "score_result",
-        "same_question_effect",
-        "project_asset_consistency_check",
-        "asset_consistency_check",
-        "answer_coverage",
-        "answer_change_analysis",
-        "session_similarity_check",
-        "reference_answer",
-        "feedback_metadata",
-    }:
-        return {}
-    return ""
+
+    normalized_reasoning: list[dict[str, Any]] = []
+    for reason in value:
+        if not isinstance(reason, dict):
+            errors.append("score_reasoning_item_invalid")
+            continue
+        dimension = _clean(reason.get("dimension"), max_chars=80)
+        rationale = _clean(reason.get("rationale"), max_chars=2000)
+        if not dimension or not rationale:
+            errors.append("score_reasoning_item_fields_missing")
+            continue
+        item = dict(reason)
+        item["dimension"] = dimension
+        item["rationale"] = rationale
+        normalized_reasoning.append(item)
+
+    if not normalized_reasoning:
+        errors.append("score_reasoning_required")
+    return normalized_reasoning
+
+
+def _normalize_loss_point_evidence_refs(
+    value: object,
+    *,
+    errors: list[str],
+) -> list[Any]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        errors.append("loss_points_invalid")
+        return []
+
+    normalized_items: list[Any] = []
+    for item in value:
+        if not isinstance(item, dict):
+            normalized_items.append(item)
+            continue
+        normalized_item = dict(item)
+        if "evidence_refs" in normalized_item:
+            refs = normalized_item.get("evidence_refs")
+            if refs is None:
+                normalized_item["evidence_refs"] = []
+            elif isinstance(refs, list):
+                normalized_item["evidence_refs"] = _string_list(refs, max_items=40, max_item_chars=200)
+            else:
+                errors.append("loss_point_evidence_refs_invalid")
+                normalized_item["evidence_refs"] = []
+        normalized_items.append(normalized_item)
+    return normalized_items
 
 
 def _score_value(score_result: object) -> tuple[float | None, list[str]]:
@@ -279,32 +428,6 @@ def _reference_sections(value: object) -> list[dict[str, Any]]:
     if not isinstance(sections, list):
         return []
     return [section for section in sections if isinstance(section, dict)]
-
-
-def _project_asset_consistency_check(value: object) -> list[str]:
-    errors: list[str] = []
-    if value in (None, {}):
-        return errors
-    if not isinstance(value, dict):
-        return ["project_asset_consistency_check_invalid"]
-
-    status = _clean(value.get("status"), max_chars=80)
-    if status != "conflict":
-        return errors
-
-    conflicts = value.get("conflicts")
-    if not isinstance(conflicts, list) or not conflicts:
-        return ["project_asset_conflicts_required"]
-    for conflict in conflicts:
-        if not isinstance(conflict, dict):
-            errors.append("project_asset_conflict_invalid")
-            continue
-        missing = [field for field in _CONFLICT_REQUIRED_FIELDS if not _clean(conflict.get(field), max_chars=500)]
-        if "clarification_question" in missing:
-            errors.append("project_asset_conflict_clarification_required")
-        if missing:
-            errors.append("project_asset_conflict_fields_required")
-    return errors
 
 
 def _asset_consistency_check(value: object, *, require: bool) -> list[str]:
@@ -468,31 +591,6 @@ def _same_question_effect(value: object) -> list[str]:
     score_delta = value.get("score_delta")
     if score_delta is not None and not _is_number(score_delta):
         errors.append("same_question_score_delta_invalid")
-    return errors
-
-
-def _session_similarity_check(value: object) -> list[str]:
-    if value in (None, {}):
-        return []
-    if not isinstance(value, dict):
-        return ["session_similarity_check_invalid"]
-
-    errors: list[str] = []
-    status = _clean(value.get("status"), max_chars=80)
-    if status not in _SESSION_SIMILARITY_STATUSES:
-        errors.append("session_similarity_status_invalid")
-        return errors
-
-    if status == "cross_turn_conflict":
-        related_turn_refs = value.get("related_turn_refs")
-        if not isinstance(related_turn_refs, list) or not related_turn_refs:
-            errors.append("session_similarity_cross_turn_refs_required")
-        has_explanation = any(
-            _clean(value.get(field), max_chars=1000)
-            for field in ("reason", "description", "conflict_summary", "explanation")
-        )
-        if not has_explanation:
-            errors.append("session_similarity_cross_turn_explanation_required")
     return errors
 
 

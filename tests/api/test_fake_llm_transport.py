@@ -1,4 +1,5 @@
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
+from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_TASK_TYPE,
     POLISH_PROGRESS_TREE_STATE_SCHEMA_ID,
@@ -175,14 +176,13 @@ def test_fake_feedback_generation_prefers_agent_input_data_over_top_level_contex
     )
 
     assert result.validation_status is ValidationStatus.VALID
-    assert result.result["feedback_metadata"]["question_excerpt"] == "INPUT DATA QUESTION SHOULD WIN"
     assert result.result["answer_summary"] == "候选人回答摘要：INPUT DATA ANSWER SHOULD WIN"
-    assert "TOP LEVEL QUESTION" not in result.result["feedback_metadata"]["question_excerpt"]
+    assert "TOP LEVEL QUESTION" not in result.result["answer_summary"]
     assert "TOP LEVEL ANSWER" not in result.result["answer_summary"]
 
 
-def test_fake_feedback_quick_payload_passes_validator_without_future_sections() -> None:
-    from app.application.polish.feedback_validation import validate_generated_feedback_payload
+def test_fake_feedback_candidate_payload_passes_validator_without_future_sections() -> None:
+    from app.application.polish.feedback_validation import validate_feedback_candidate_payload
 
     result = FakeLlmTransport().generate(
         LlmTransportRequest(
@@ -190,7 +190,7 @@ def test_fake_feedback_quick_payload_passes_validator_without_future_sections() 
             task_type="polish_feedback_generation",
             input_refs=("sess_fake_feedback", "ans_fake_feedback"),
             evidence_bundle={
-                "feedback_mode": "quick",
+                "feedback_mode": "candidate_compact",
                 "input_data": {
                     "current_question": {"question_text": "如何设计混合检索策略？"},
                     "current_answer": {"answer_text": "我会结合关键词召回、向量召回和重排。"},
@@ -199,16 +199,11 @@ def test_fake_feedback_quick_payload_passes_validator_without_future_sections() 
         )
     )
 
-    normalized, errors = validate_generated_feedback_payload(result.result)
+    candidate_payload = {key: result.result[key] for key in POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS if key in result.result}
+    normalized, errors = validate_feedback_candidate_payload(candidate_payload)
 
     assert errors == ()
     assert normalized is not None
-    assert normalized["status"] == "generated"
-    assert normalized["score_result"]["score_value"] == 82
     assert normalized["loss_points"]
     assert normalized["reference_answer"]["sections"]
-    assert normalized["knowledge_points"] == []
-    assert normalized["technical_principles"] == []
-    assert normalized["project_asset_update_candidates"] == []
-    assert normalized["project_asset_consistency_check"] == {"status": "not_applicable"}
-    assert normalized["session_similarity_check"] == {"status": "not_applicable"}
+    assert normalized["feedback_text"]

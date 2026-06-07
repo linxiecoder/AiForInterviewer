@@ -11,9 +11,9 @@ from app.application.llm.provider_boundary import ProviderRequestValidationError
 from app.application.llm.types import LlmTransportResult
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-    POLISH_FEEDBACK_GENERATED_CONTRACT_IDS,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-    POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
 
@@ -63,7 +63,7 @@ class FeedbackGenerationAgent:
                 input_refs=input_refs,
                 evidence_bundle=_provider_prompt(prompt_asset),
                 prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-                schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+                schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
                 required_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
                 allowed_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
             )
@@ -77,8 +77,8 @@ class FeedbackGenerationAgent:
             validation_error = _transport_validation_error(exc)
             return AgentOutputEnvelope(
                 task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
-                schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-                schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+                schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+                schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
                 prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
                 status="provider_failed",
                 validation_errors=(validation_error,),
@@ -109,10 +109,10 @@ def _feedback_output_envelope(
     if extraction_errors or payload is None:
         return AgentOutputEnvelope(
             task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
-            schema_id=_text(raw_payload.get("schema_id")) or _text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+            schema_id=_text(raw_payload.get("schema_id")) or _text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
             schema_version=_text(raw_payload.get("schema_version"))
             or _text(prompt_asset.get("schema_version"))
-            or POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+            or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
             prompt_version=_text(raw_payload.get("prompt_version"))
             or _text(prompt_asset.get("prompt_version"))
             or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
@@ -145,11 +145,11 @@ def _feedback_output_envelope(
         schema_id=_text(payload.get("schema_id"))
         or _text(raw_payload.get("schema_id"))
         or _text(prompt_asset.get("schema_id"))
-        or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
+        or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         schema_version=_text(payload.get("schema_version"))
         or _text(raw_payload.get("schema_version"))
         or _text(prompt_asset.get("schema_version"))
-        or POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         prompt_version=_text(payload.get("prompt_version"))
         or _text(raw_payload.get("prompt_version"))
         or _text(payload_metadata.get("prompt_version"))
@@ -225,8 +225,8 @@ def _provider_request_validation_failed(
 ) -> AgentOutputEnvelope:
     return AgentOutputEnvelope(
         task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
-        schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_GENERATED_SCHEMA_ID,
-        schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_GENERATED_SCHEMA_VERSION,
+        schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
         status="provider_request_invalid",
         validation_errors=("provider_request_validation_failed",),
@@ -244,9 +244,9 @@ def _contract_ids(prompt_asset: dict[str, Any]) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)):
         value = input_contract.get("contract_ids")
     if not isinstance(value, (list, tuple)):
-        return POLISH_FEEDBACK_GENERATED_CONTRACT_IDS
+        return POLISH_FEEDBACK_FINAL_CONTRACT_IDS
     result = tuple(text for item in value if (text := _text(item)))
-    return result or POLISH_FEEDBACK_GENERATED_CONTRACT_IDS
+    return result or POLISH_FEEDBACK_FINAL_CONTRACT_IDS
 
 
 def _string_tuple(value: object) -> tuple[str, ...]:
