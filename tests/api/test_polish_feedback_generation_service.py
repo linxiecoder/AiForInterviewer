@@ -213,14 +213,14 @@ def test_service_metadata_includes_prompt_schema_llm_and_provider_status() -> No
     assert result.metadata["provider_status"] == "fake_transport"
 
 
-def test_feedback_request_uses_compact_output_budget() -> None:
+def test_feedback_request_uses_structured_output_budget() -> None:
     transport = _PayloadTransport(_generated_payload())
 
     result = _service(transport).generate(_context())
 
     assert result.succeeded is True
     assert transport.requests
-    assert getattr(transport.requests[-1], "max_tokens", 8000) < 2500
+    assert 4000 <= getattr(transport.requests[-1], "max_tokens", 8000) < 8000
 
 
 def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> None:
@@ -647,6 +647,41 @@ def test_phase4_missing_asset_consistency_from_llm_with_assets_gets_explicit_pol
     warnings = result.payload["feedback_metadata"]["phase4_validation_warnings"]
     assert "asset_consistency_check_missing_from_llm_policy_generated" in warnings
     assert result.payload["asset_consistency_check"]["checked_asset_refs"] == ["asset_backend_workflow"]
+
+
+def test_phase4_rules_normalize_provider_aliases_before_validation() -> None:
+    payload = _generated_payload()
+    payload["loss_points"] = [
+        {
+            "id": "loss_point_1",
+            "severity": "major",
+            "deduction": 20,
+            "description": "答案没有解释混合检索中 ES 与 KNN 结果的融合依据。",
+        }
+    ]
+    payload["reference_answer"] = {
+        "sections": [
+            {
+                "id": "section_1",
+                "title": "检索融合策略",
+                "content": "说明关键词检索、向量检索、重排和召回质量评估。",
+                "addresses_loss_point_ids": ["loss_point_1"],
+            }
+        ]
+    }
+    payload["same_question_effect"] = "unchanged"
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    loss_point = result.payload["loss_points"][0]
+    assert loss_point["loss_point_id"] == "loss_point_1"
+    assert loss_point["reason"] == "答案没有解释混合检索中 ES 与 KNN 结果的融合依据。"
+    section = result.payload["reference_answer"]["sections"][0]
+    assert section["section_id"] == "section_1"
+    assert result.payload["same_question_effect"]["trend"] == "unchanged"
+    assert result.payload["same_question_effect"]["repeated_loss_point_ids"] == []
 
 
 def test_phase4_same_question_regression_and_fixed_loss_points_are_reported() -> None:

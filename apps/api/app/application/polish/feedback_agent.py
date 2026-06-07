@@ -17,7 +17,7 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_TASK_TYPE,
 )
 
-FEEDBACK_GENERATION_MAX_TOKENS = 1600
+FEEDBACK_GENERATION_MAX_TOKENS = 4800
 _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
     {
         "task",

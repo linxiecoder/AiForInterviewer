@@ -68,6 +68,9 @@ def apply_feedback_core_rules(payload: dict[str, Any], context: object) -> dict[
     original_missing = _missing_phase4_fields(payload)
 
     _normalize_asset_update_candidates(result)
+    _normalize_loss_points(result)
+    _normalize_reference_answer(result)
+    _normalize_same_question_effect(result)
 
     asset_check = _build_asset_consistency_check(
         answer_text=answer_text,
@@ -367,6 +370,72 @@ def _normalize_asset_update_candidates(payload: dict[str, Any]) -> None:
             candidate["user_confirmation_required"] = True
         normalized.append(candidate)
     payload["project_asset_update_candidates"] = normalized
+
+
+def _normalize_loss_points(payload: dict[str, Any]) -> None:
+    loss_points = payload.get("loss_points")
+    if not isinstance(loss_points, list):
+        return
+    normalized: list[Any] = []
+    for item in loss_points:
+        if not isinstance(item, dict):
+            normalized.append(item)
+            continue
+        loss_point = dict(item)
+        if not _clean(loss_point.get("loss_point_id"), max_chars=120):
+            alias = _clean(loss_point.get("id") or loss_point.get("loss_id"), max_chars=120)
+            if alias:
+                loss_point["loss_point_id"] = alias
+        if not _clean(loss_point.get("reason"), max_chars=1000):
+            description = _clean(loss_point.get("description"), max_chars=1000)
+            if description:
+                loss_point["reason"] = description
+        normalized.append(loss_point)
+    payload["loss_points"] = normalized
+
+
+def _normalize_reference_answer(payload: dict[str, Any]) -> None:
+    reference_answer = payload.get("reference_answer")
+    if not isinstance(reference_answer, dict):
+        return
+    sections = reference_answer.get("sections")
+    if not isinstance(sections, list):
+        return
+    normalized_sections: list[Any] = []
+    for item in sections:
+        if not isinstance(item, dict):
+            normalized_sections.append(item)
+            continue
+        section = dict(item)
+        if not _clean(section.get("section_id"), max_chars=120):
+            alias = _clean(section.get("id"), max_chars=120)
+            if alias:
+                section["section_id"] = alias
+        normalized_sections.append(section)
+    normalized_reference_answer = dict(reference_answer)
+    normalized_reference_answer["sections"] = normalized_sections
+    payload["reference_answer"] = normalized_reference_answer
+
+
+def _normalize_same_question_effect(payload: dict[str, Any]) -> None:
+    effect = payload.get("same_question_effect")
+    if isinstance(effect, dict):
+        normalized_effect = dict(effect)
+        for field_name in ("improved_points", "repeated_loss_point_ids", "regressed_points", "next_retry_focus"):
+            if not isinstance(normalized_effect.get(field_name), list):
+                normalized_effect[field_name] = []
+        payload["same_question_effect"] = normalized_effect
+        return
+    trend = _clean(effect, max_chars=80)
+    if trend in ANSWER_CHANGE_TRENDS:
+        payload["same_question_effect"] = {
+            "trend": trend,
+            "improved_points": [],
+            "repeated_loss_point_ids": [],
+            "regressed_points": [],
+            "next_retry_focus": [],
+            "score_delta": None,
+        }
 
 
 def _expected_points(context: object) -> list[str]:

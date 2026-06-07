@@ -4,8 +4,10 @@ from pathlib import Path
 import httpx
 import pytest
 
+import app.infrastructure.llm.openai_compatible as openai_compatible
 from app.infrastructure.llm.errors import LlmTransportResponseError, LlmTransportUnavailableError
 from app.infrastructure.llm.openai_compatible import (
+    LLM_OPENAI_TRUST_ENV_ENV,
     LOCAL_LLM_RAW_IO_DIR_ENV,
     LOCAL_LLM_RAW_IO_ENABLED_ENV,
     OpenAICompatibleLlmSettings,
@@ -168,6 +170,92 @@ def test_local_raw_llm_io_dump_failure_does_not_break_transport(
     result = transport.generate(_raw_debug_request())
 
     assert result.result["question_text"] == "请结合 FastAPI 项目说明一次接口编排取舍。"
+
+
+def test_openai_compatible_settings_trust_env_requires_explicit_opt_in() -> None:
+    settings = OpenAICompatibleLlmSettings.from_env(
+        {
+            "LLM_OPENAI_API_KEY": "test-key",
+            "ALL_PROXY": "socks5://127.0.0.1:7890",
+        }
+    )
+
+    assert settings.trust_env is False
+
+    trusted_settings = OpenAICompatibleLlmSettings.from_env(
+        {
+            "LLM_OPENAI_API_KEY": "test-key",
+            LLM_OPENAI_TRUST_ENV_ENV: "true",
+        }
+    )
+
+    assert trusted_settings.trust_env is True
+
+
+def test_openai_compatible_transport_disables_environment_proxy_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    class ClientStub:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            observed.update(kwargs)
+
+        def __enter__(self) -> "ClientStub":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def post(self, *args: object, **kwargs: object) -> httpx.Response:
+            return httpx.Response(200, json=_successful_provider_response())
+
+    monkeypatch.setattr(openai_compatible.httpx, "Client", ClientStub)
+
+    result = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://api.deepseek.com/v1",
+        )
+    ).generate(_raw_debug_request())
+
+    assert result.result["question_text"] == "请结合 FastAPI 项目说明一次接口编排取舍。"
+    assert observed["trust_env"] is False
+
+
+def test_local_raw_llm_io_dump_writes_client_initialization_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dump_dir = tmp_path / "raw-dump"
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_ENABLED_ENV, "true")
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_DIR_ENV, str(dump_dir))
+
+    def fail_client(*args: object, **kwargs: object) -> httpx.Client:
+        assert kwargs["trust_env"] is True
+        raise ImportError("Using SOCKS proxy, but the 'socksio' package is not installed.")
+
+    monkeypatch.setattr(openai_compatible.httpx, "Client", fail_client)
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://api.deepseek.com/v1",
+            trust_env=True,
+        )
+    )
+
+    with pytest.raises(LlmTransportUnavailableError, match="客户端初始化失败"):
+        transport.generate(_raw_debug_request())
+
+    dump = _single_dump_json(dump_dir)
+    assert dump["trust_env"] is True
+    assert dump["response"]["status_code"] is None
+    assert dump["parsed_result"] is None
+    assert dump["error"]["type"] == "client_initialization_failed"
+    assert "SOCKS proxy support" in dump["error"]["message"]
+    assert dump["request"]["chat_completion_payload"]["model"] == "deepseek-v4-pro"
 
 
 def _transport_with_response(

@@ -300,7 +300,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload() -> None:
     assert payload["next_recommended_actions"][0] == "continue_same_question"
     assert "围绕失败恢复终止条件再追问一轮" in payload["next_recommended_actions"]
     assert llm_transport.feedback_request is not None
-    assert getattr(llm_transport.feedback_request, "max_tokens", 8000) < 2500
+    assert 4000 <= getattr(llm_transport.feedback_request, "max_tokens", 8000) < 8000
     provider_prompt = llm_transport.feedback_request.evidence_bundle
     assert provider_prompt["task_type"] == "polish_feedback_generation"
     assert provider_prompt["feedback_mode"] == "quick"
