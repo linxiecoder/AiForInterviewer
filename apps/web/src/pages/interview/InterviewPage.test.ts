@@ -2034,20 +2034,30 @@ function test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback()
     focusedQuestionId: "q_1",
     selectedProgressNodeRef: "node_1",
     latestAnswerId: "ans_1",
+    latestFeedbackId: null,
   });
   const nextAnswerFocus = buildQuestionConversationAutoScrollTrigger({
     focusedQuestionId: "q_1",
     selectedProgressNodeRef: "node_1",
     latestAnswerId: "ans_2",
+    latestFeedbackId: null,
+  });
+  const nextFeedbackFocus = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId: "q_1",
+    selectedProgressNodeRef: "node_1",
+    latestAnswerId: "ans_2",
+    latestFeedbackId: "fb_2",
   });
   const nextQuestionFocus = buildQuestionConversationAutoScrollTrigger({
     focusedQuestionId: "q_2",
     selectedProgressNodeRef: "node_2",
     latestAnswerId: null,
+    latestFeedbackId: null,
   });
 
-  assertContract(firstFocus !== null && nextAnswerFocus !== null && nextQuestionFocus !== null, "自动滚动 trigger 在有效上下文下应可构建");
-  assertContract(firstFocus !== nextAnswerFocus, "同题目新增反馈后 trigger 应变化");
+  assertContract(firstFocus !== null && nextAnswerFocus !== null && nextFeedbackFocus !== null && nextQuestionFocus !== null, "自动滚动 trigger 在有效上下文下应可构建");
+  assertContract(firstFocus !== nextAnswerFocus, "同题目新增回答后 trigger 应变化");
+  assertContract(nextAnswerFocus !== nextFeedbackFocus, "同题目新增反馈后 trigger 应变化");
   assertContract(firstFocus !== nextQuestionFocus, "切换题目后 trigger 应变化");
 }
 
@@ -2056,11 +2066,13 @@ function test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_no
     focusedQuestionId: "q_1",
     selectedProgressNodeRef: "node_1",
     latestAnswerId: "ans_1",
+    latestFeedbackId: "fb_1",
   });
   const sameTrigger = buildQuestionConversationAutoScrollTrigger({
     focusedQuestionId: "q_1",
     selectedProgressNodeRef: "node_1",
     latestAnswerId: "ans_1",
+    latestFeedbackId: "fb_1",
   });
 
   assertContract(currentTrigger !== null && sameTrigger !== null, "同题目应可构建稳定 trigger");
@@ -2077,8 +2089,8 @@ function test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_no
       nextTrigger: sameTrigger,
       previousTrigger: currentTrigger,
       hasUserManuallyScrolled: false,
-    }) === true,
-    "同题目且未手动滚动时可复用上次定位策略",
+    }) === false,
+    "同题目无新回答/反馈时不应反复强制滚动",
   );
 }
 
@@ -2547,8 +2559,13 @@ function test_feedback_card_view_model_hides_raw_feedback_codes(): void {
   assertContract(!visibleCopy.includes("polish_answ"), "反馈卡默认不展示 score_type raw code");
   assertContract(!visibleCopy.includes("major"), "反馈卡默认不展示 severity raw code");
   assertContract(!visibleCopy.includes("insufficient_asset_context"), "反馈卡默认不展示 consistency raw code");
+  assertContract(!visibleCopy.includes("P-POLISH-003"), "反馈卡默认不展示 contract_id raw code");
   assertContract(visibleCopy.includes("评分类型：回答打磨"), "评分类型应显示中文文案");
   assertContract(visibleCopy.includes("主要失分"), "失分点严重程度应显示中文文案");
+  assertContract(
+    visibleCopy.includes("项目素材不足，回答与资产库证据不够一致"),
+    "项目素材不足状态应显示中文文案",
+  );
 }
 
 function test_feedback_card_view_model_renders_loss_points_as_table_rows(): void {

@@ -543,6 +543,7 @@ export type WorkbenchQuestionConversationAutoScrollTrigger = {
   focusedQuestionId: string | null;
   selectedProgressNodeRef: string | null;
   latestAnswerId: string | null;
+  latestFeedbackId: string | null;
 };
 
 export type WorkbenchStickyQuestionContextViewModel = {
@@ -555,13 +556,19 @@ export type WorkbenchStickyQuestionContextViewModel = {
 };
 
 export function buildQuestionConversationAutoScrollTrigger(params: WorkbenchQuestionConversationAutoScrollTrigger): string | null {
-  if (params.focusedQuestionId === null && params.selectedProgressNodeRef === null && params.latestAnswerId === null) {
+  if (
+    params.focusedQuestionId === null &&
+    params.selectedProgressNodeRef === null &&
+    params.latestAnswerId === null &&
+    params.latestFeedbackId === null
+  ) {
     return null;
   }
   return [
     params.focusedQuestionId ?? "",
     params.selectedProgressNodeRef ?? "",
     params.latestAnswerId ?? "",
+    params.latestFeedbackId ?? "",
   ].join("|");
 }
 
@@ -574,7 +581,7 @@ export function shouldAutoScrollQuestionConversation(params: {
     return false;
   }
   if (params.nextTrigger === params.previousTrigger) {
-    return !params.hasUserManuallyScrolled;
+    return false;
   }
   return true;
 }
@@ -4092,11 +4099,18 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     focusedQuestionTurn === null || focusedQuestionTurn.answers.length === 0
       ? null
       : focusedQuestionTurn.answers[focusedQuestionTurn.answers.length - 1].answer_id;
+  const focusedQuestionLatestAnswer =
+    focusedQuestionTurn === null || focusedQuestionTurn.answers.length === 0
+      ? null
+      : focusedQuestionTurn.answers[focusedQuestionTurn.answers.length - 1];
+  const focusedQuestionLatestFeedbackId =
+    focusedQuestionLatestAnswer?.feedback_id ?? focusedQuestionLatestAnswer?.feedback_payload?.feedback_id ?? null;
   const stickyQuestionContext = buildStickyQuestionContextViewModel(session, focusedQuestionId, selectedProgressNodeDetailRef);
   const chatScrollAutoTrigger = buildQuestionConversationAutoScrollTrigger({
     focusedQuestionId,
     selectedProgressNodeRef: selectedProgressNodeDetailRef,
     latestAnswerId: focusedQuestionLatestAnswerId,
+    latestFeedbackId: focusedQuestionLatestFeedbackId,
   });
   const progressTreeContextMenuNode =
     progressTreeContextMenu === null ? null : findWorkbenchProgressNodeByKey(progressNodes, progressTreeContextMenu.nodeKey);
