@@ -353,7 +353,7 @@ export interface CreatePolishSessionRequest {
 
 export interface CreatePolishQuestionTaskRequest {
   progress_node_ref?: string | null;
-  generation_mode?: "new_question" | "follow_up" | string | null;
+  generation_mode?: "new_question" | "follow_up" | "regenerate_current_node" | string | null;
   selected_primary_category_ref?: string | null;
   selected_secondary_category_ref?: string | null;
   selected_progress_node_ref?: string | null;

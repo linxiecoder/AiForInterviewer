@@ -122,7 +122,12 @@ QUESTION_STATUS_GENERATED = "generated"
 ANSWER_STATUS_SAVED = "saved"
 QUESTION_GENERATION_MODE_NEW = "new_question"
 QUESTION_GENERATION_MODE_FOLLOW_UP = "follow_up"
-QUESTION_GENERATION_MODES = {QUESTION_GENERATION_MODE_NEW, QUESTION_GENERATION_MODE_FOLLOW_UP}
+QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE = "regenerate_current_node"
+QUESTION_GENERATION_MODES = {
+    QUESTION_GENERATION_MODE_NEW,
+    QUESTION_GENERATION_MODE_FOLLOW_UP,
+    QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE,
+}
 
 ANSWER_TEXT_MIN_LENGTH = 2
 ANSWER_TEXT_MAX_LENGTH = 8000
@@ -377,6 +382,25 @@ class _PolishUseCaseOperations:
         if request_error is not None:
             return ApplicationResult(error=request_error)
         detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+        requested_progress_node_ref = _question_generation_requested_ref(command)
+        if requested_progress_node_ref is None:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="progress_node_ref is required",
+                    details={"field": "progress_node_ref"},
+                )
+            )
+        if _question_generation_mode(command) == QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE:
+            plan_progress_node_refs = _plan_progress_node_refs(detail.progress_tree_plan)
+            if requested_progress_node_ref not in plan_progress_node_refs:
+                return ApplicationResult(
+                    error=DomainError(
+                        code="validation_failed",
+                        message="target progress node could not be located",
+                        details={"field": "selected_progress_node_ref", "progress_node_ref": requested_progress_node_ref},
+                    )
+                )
         if detail.progress_tree_status == PROGRESS_TREE_STATUS_INSUFFICIENT_CONTEXT:
             return ApplicationResult(
                 error=DomainError(
@@ -403,15 +427,6 @@ class _PolishUseCaseOperations:
             )
 
         now = utc_now()
-        requested_progress_node_ref = _question_generation_requested_ref(command)
-        if requested_progress_node_ref is None:
-            return ApplicationResult(
-                error=DomainError(
-                    code="validation_failed",
-                    message="progress_node_ref is required",
-                    details={"field": "progress_node_ref"},
-                )
-            )
         try:
             runtime_policy = self._resolve_question_generation_policy(
                 command=command,
@@ -2208,6 +2223,12 @@ def _validate_question_generation_request(command: CreatePolishQuestionTaskComma
                 message="new_question must not include follow_up parent refs",
                 details={"field": "generation_mode"},
             )
+    if mode == QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE and _question_generation_requested_ref(command) is None:
+        return DomainError(
+            code="validation_failed",
+            message="regenerate_current_node requires a selected progress node",
+            details={"field": "selected_progress_node_ref"},
+        )
     if mode == QUESTION_GENERATION_MODE_FOLLOW_UP:
         if _clean_question_request_text(command.parent_question_id) is None:
             return DomainError(

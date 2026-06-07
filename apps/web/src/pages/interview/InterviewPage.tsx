@@ -64,6 +64,7 @@ import {
   softDeletePolishSession,
 } from "../../entities/polish/api/polishApi";
 import type {
+  CreatePolishQuestionTaskRequest,
   CreatePolishSessionRequest,
   PolishCandidate,
   PolishFeedbackPayload,
@@ -364,7 +365,8 @@ export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON = "追问本�
 export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON = "换一道题" as const;
 export const INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON = "为当前节点出题" as const;
 export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP = "无法定位当前节点，暂不能出题" as const;
-export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_GUARD_MODE = "new_question" as const;
+export const INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE = "regenerate_current_node" as const;
+export const INTERVIEW_WORKBENCH_REGENERATE_DEFAULT_QUESTION_MODE = "new_question" as const;
 export const INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON = "标记完成" as const;
 export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_DISABLED_WITHOUT_HISTORY = "先提交一轮回答后再追问" as const;
 export const INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_UNSUPPORTED = "当前接口暂不支持追问生成" as const;
@@ -1606,6 +1608,31 @@ export type WorkbenchQuestionComposerActionViewModel = {
   followUpQuestionParentAnswerId: string | null;
   followUpQuestionParentFeedbackId: string | null;
 };
+
+export type InterviewQuestionGenerationMode =
+  | "new_question"
+  | "follow_up"
+  | "regenerate_current_node"
+  | string;
+
+export function buildCreatePolishQuestionTaskRequest(params: {
+  generationMode: InterviewQuestionGenerationMode | null | undefined;
+  progressNodeRef: string;
+  selectedCategoryPath: readonly string[];
+  parentQuestionId?: string | null;
+  parentAnswerId?: string | null;
+  parentFeedbackId?: string | null;
+}): CreatePolishQuestionTaskRequest {
+  return {
+    generation_mode: params.generationMode ?? INTERVIEW_WORKBENCH_REGENERATE_DEFAULT_QUESTION_MODE,
+    progress_node_ref: params.progressNodeRef,
+    selected_progress_node_ref: params.progressNodeRef,
+    selected_category_path: [...params.selectedCategoryPath],
+    parent_question_id: params.parentQuestionId,
+    parent_answer_id: params.parentAnswerId,
+    parent_feedback_id: params.parentFeedbackId,
+  };
+}
 
 export function deriveComposerActionViewModel(params: {
   session: PolishSessionDetail | null;
@@ -3806,7 +3833,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const createQuestion = async (
     progressNodeRef?: string | null,
     options: {
-      generationMode?: "new_question" | "follow_up" | string | null;
+      generationMode?: InterviewQuestionGenerationMode | null;
       parentQuestionId?: string | null;
       parentAnswerId?: string | null;
       parentFeedbackId?: string | null;
@@ -3833,14 +3860,15 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setWorkbenchFailureState(null);
     try {
       await createPolishQuestionTask(sessionId, {
-        generation_mode: options.generationMode ?? "new_question",
-        progress_node_ref: targetProgressNodeRef,
-        selected_progress_node_ref: targetProgressNodeRef,
-        selected_category_path: buildSelectedCategoryPath(session.progress_tree_plan.nodes, targetProgressNodeRef),
+        ...buildCreatePolishQuestionTaskRequest({
+          generationMode: options.generationMode,
+          progressNodeRef: targetProgressNodeRef,
+          selectedCategoryPath: buildSelectedCategoryPath(session.progress_tree_plan.nodes, targetProgressNodeRef),
+          parentQuestionId: options.parentQuestionId,
+          parentAnswerId: options.parentAnswerId,
+          parentFeedbackId: options.parentFeedbackId,
+        }),
         completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
-        parent_question_id: options.parentQuestionId,
-        parent_answer_id: options.parentAnswerId,
-        parent_feedback_id: options.parentFeedbackId,
       });
       await loadSession();
     } catch (createError) {
@@ -3981,8 +4009,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     await createQuestion(
       targetProgressNodeRef,
       {
-        // 语义降级：当前后端未提供「重新生成当前节点题目」独立 generation_mode，沿用 new_question 并附带上下文。
-        generationMode: INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_GUARD_MODE,
+        generationMode: INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
         parentQuestionId: questionActionState.currentQuestionId,
         parentAnswerId: questionActionState.currentQuestionLatestAnswerId,
         parentFeedbackId: questionActionState.currentQuestionLatestFeedbackId,

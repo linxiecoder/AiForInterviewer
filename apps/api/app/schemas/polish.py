@@ -197,7 +197,7 @@ class PolishSessionSummaryResponse(BaseModel):
 
 QUESTION_REF_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_:\-.]{0,127}$"
 _QUESTION_REF_RE = re.compile(QUESTION_REF_PATTERN)
-QUESTION_GENERATION_MODES = {"new_question", "follow_up"}
+QUESTION_GENERATION_MODES = {"new_question", "follow_up", "regenerate_current_node"}
 QUESTION_REQUEST_INJECTION_MARKERS = (
     "ignore previous",
     "ignore all previous",
@@ -246,7 +246,7 @@ class CreateQuestionTaskRequest(BaseModel):
     @model_validator(mode="after")
     def _validate_generation_mode_combinations(self) -> "CreateQuestionTaskRequest":
         if self.generation_mode is not None and self.generation_mode not in QUESTION_GENERATION_MODES:
-            raise ValueError("generation_mode must be new_question or follow_up")
+            raise ValueError("generation_mode must be new_question, follow_up or regenerate_current_node")
         if self.generation_mode == "new_question" and (
             self.parent_question_id is not None
             or self.parent_answer_id is not None

@@ -4118,6 +4118,117 @@ def test_polish_question_generation_records_selected_category_context() -> None:
     assert metadata["completed_focus_refs"] == ["focus_observability"]
 
 
+def test_polish_question_generation_accepts_regenerate_current_node_mode() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={
+            "generation_mode": "regenerate_current_node",
+            "selected_progress_node_ref": progress_node_ref,
+            "parent_question_id": "q_parent",
+            "parent_answer_id": "a_parent",
+            "parent_feedback_id": "fb_parent",
+        },
+    )
+
+    assert status_code == 202
+    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turn = next(turn for turn in detail_body["data"]["turns"] if turn["question_id"] == question_id)
+    metadata = turn["question_metadata"]
+    assert metadata["generation_mode"] == "regenerate_current_node"
+    assert metadata["selected_progress_node_ref"] == progress_node_ref
+    assert metadata["parent_question_id"] == "q_parent"
+    assert metadata["parent_answer_id"] == "a_parent"
+    assert metadata["parent_feedback_id"] == "fb_parent"
+
+
+def test_polish_question_regeneration_current_node_does_not_require_question_completion() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    _, first_question_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"generation_mode": "new_question", "selected_progress_node_ref": progress_node_ref},
+    )
+    first_question_id = first_question_body["data"]["result_ref"]["trace_ref_id"]
+
+    status_code, regenerate_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={
+            "generation_mode": "regenerate_current_node",
+            "selected_progress_node_ref": progress_node_ref,
+            "parent_question_id": first_question_id,
+        },
+    )
+
+    assert status_code == 202
+    regenerate_question_id = regenerate_body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    regenerate_turn = next(turn for turn in detail_body["data"]["turns"] if turn["question_id"] == regenerate_question_id)
+    regenerate_metadata = regenerate_turn["question_metadata"]
+    assert regenerate_metadata["generation_mode"] == "regenerate_current_node"
+    assert regenerate_metadata["selected_progress_node_ref"] == progress_node_ref
+
+
+def test_polish_question_generation_regenerate_current_node_requires_target_node_exists() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={
+            "generation_mode": "regenerate_current_node",
+            "selected_progress_node_ref": "not_exists",
+        },
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["field"] == "selected_progress_node_ref"
+    assert body["error"]["details"]["progress_node_ref"] == "not_exists"
+
+
 def test_polish_question_generation_rejects_follow_up_without_parent_refs() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)

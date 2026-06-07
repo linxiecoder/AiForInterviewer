@@ -87,6 +87,7 @@ import {
   INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_DISABLED_WITHOUT_FEEDBACK,
   INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON,
   INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON,
+  INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
   INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER,
   INTERVIEW_WORKBENCH_SEND_RETRY_PLACEHOLDER,
   getInterviewCreateAvailability,
@@ -114,6 +115,7 @@ import {
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
   toNextRecommendedActionLabel,
+  buildCreatePolishQuestionTaskRequest,
   type PolishBindingOption,
 } from "./InterviewPage";
 import {
@@ -1734,6 +1736,40 @@ function test_workbench_composer_regenerate_preserves_draft_guard(): void {
   );
 }
 
+function test_workbench_rebuild_question_request_mode_for_regenerate_and_follow_up(): void {
+  const regenerateRequest = buildCreatePolishQuestionTaskRequest({
+    generationMode: INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
+    progressNodeRef: "node_current",
+    selectedCategoryPath: ["技术深度", "一致性治理"],
+    parentQuestionId: "q_parent",
+    parentAnswerId: "a_parent",
+    parentFeedbackId: "fb_parent",
+  });
+
+  assertContract(
+    regenerateRequest.generation_mode === INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
+    "换一道题应使用新的 regenerate_current_node mode",
+  );
+  assertContract(
+    regenerateRequest.parent_question_id === "q_parent",
+    "换题请求可携带 parent_question_id",
+  );
+
+  const followUpRequest = buildCreatePolishQuestionTaskRequest({
+    generationMode: "follow_up",
+    progressNodeRef: "node_current",
+    selectedCategoryPath: ["技术深度", "一致性治理"],
+    parentQuestionId: "q_parent",
+    parentAnswerId: "a_parent",
+    parentFeedbackId: "fb_parent",
+  });
+
+  assertContract(
+    followUpRequest.generation_mode === "follow_up",
+    "追问本题仍使用 follow_up mode",
+  );
+}
+
 function test_workbench_composer_mark_completed_and_regenerate_confirmation_gate(): void {
   const session = buildTestSession([
     buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
@@ -3221,6 +3257,7 @@ test_workbench_sticky_question_text_collapse_behavior();
   test_workbench_composer_regenerate_available_for_current_question_without_completion();
   test_workbench_composer_regenerate_for_node_without_selected_question_and_no_node_ref();
   test_workbench_composer_regenerate_preserves_draft_guard();
+  test_workbench_rebuild_question_request_mode_for_regenerate_and_follow_up();
   test_workbench_composer_mark_completed_and_regenerate_confirmation_gate();
   test_progress_tree_context_menu_items_follow_question_action_state();
 test_progress_tree_context_menu_closes_on_escape_and_external_events();
