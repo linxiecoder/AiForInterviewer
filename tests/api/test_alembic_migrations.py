@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -10,11 +11,25 @@ from sqlalchemy import create_engine, inspect, text
 import app.infrastructure.db.session as db_session
 from tools.testing.temp_artifacts import ManagedTempArtifacts
 
+ALEMBIC_VERSION_NUM_LIMIT = 32
+MIGRATION_VERSIONS_DIR = Path("apps/api/migrations/versions")
+
 
 def test_session_runtime_backfill_symbols_are_removed() -> None:
     assert not hasattr(db_session, "_KNOWN_SCHEMA_COLUMN_BACKFILLS")
     assert not hasattr(db_session, "_backfill_known_schema_columns")
     assert "ALTER TABLE" not in Path(db_session.__file__).read_text(encoding="utf-8")
+
+
+def test_alembic_revision_ids_fit_version_table_limit() -> None:
+    revisions = _revision_ids()
+    too_long = {
+        path.name: revision
+        for path, revision in revisions.items()
+        if len(revision) > ALEMBIC_VERSION_NUM_LIMIT
+    }
+
+    assert too_long == {}
 
 
 def test_alembic_upgrade_creates_version_and_representative_tables(monkeypatch) -> None:
@@ -52,7 +67,7 @@ def test_alembic_upgrade_creates_version_and_representative_tables(monkeypatch) 
         }.issubset(tables)
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0004_feedback_reserved_to_pending"
+        assert version == "0004_feedback_reserved_pending"
     finally:
         temp_artifacts.cleanup()
 
@@ -190,7 +205,7 @@ def test_asset_rag_revision_preserves_legacy_unversioned_rag_tables(monkeypatch)
                 text("SELECT COUNT(*) FROM rag_documents_legacy_pre_0003")
             ).scalar_one()
             legacy_chunks = connection.execute(text("SELECT COUNT(*) FROM rag_chunks_legacy_pre_0003")).scalar_one()
-        assert version == "0004_feedback_reserved_to_pending"
+        assert version == "0004_feedback_reserved_pending"
         assert legacy_documents == 1
         assert legacy_chunks == 1
     finally:
@@ -253,12 +268,12 @@ def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypa
 
         payload = json.loads(row["feedback_summary"])
         assert row["status"] == "pending"
-        assert version == "0004_feedback_reserved_to_pending"
+        assert version == "0004_feedback_reserved_pending"
         assert payload["schema_id"] == "polish_feedback_generated_v1"
         assert payload["status"] == "pending"
         assert payload["feedback_text"] == "本轮反馈尚未生成"
         assert payload["feedback_metadata"]["llm_called"] is False
-        assert payload["feedback_metadata"]["migration"] == "0004_feedback_reserved_to_pending"
+        assert payload["feedback_metadata"]["migration"] == "0004_feedback_reserved_pending"
         assert "reserved" not in payload["feedback_metadata"]
         assert "candidate_refs" not in payload
         assert "retired_extra_payload" not in payload
@@ -270,3 +285,18 @@ def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypa
 
 def _column_names(engine, table_name: str) -> list[str]:
     return [column["name"] for column in inspect(engine).get_columns(table_name)]
+
+
+def _revision_ids() -> dict[Path, str]:
+    revisions: dict[Path, str] = {}
+    for path in sorted(MIGRATION_VERSIONS_DIR.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if not any(isinstance(target, ast.Name) and target.id == "revision" for target in node.targets):
+                continue
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                revisions[path] = node.value.value
+                break
+    return revisions

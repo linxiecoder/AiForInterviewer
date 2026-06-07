@@ -134,7 +134,6 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
         "answer_ref",
         "feedback_summary",
         "score_result_ref",
-        "project_asset_update_candidates",
         "candidate_refs",
         "validation_result_ref",
         "should_continue_same_question",
@@ -3588,6 +3587,7 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     assert payload["feedback_metadata"]["llm_called"] is True
     assert "same_question_effect" not in payload
     assert isinstance(payload["answer_change_analysis"], dict)
+    assert "repeated_loss_points" in payload["answer_change_analysis"]
 
 
 def test_polish_feedback_generates_when_question_metadata_missing() -> None:

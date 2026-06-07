@@ -44,6 +44,22 @@ _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
         "feedback_metadata",
     }
 )
+_PROVIDER_METADATA_FIELDS = frozenset(
+    {
+        "model_name",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "provider_status",
+        "provider_model",
+        "provider_validation_status",
+        "llm_called",
+        "request_id",
+        "trace_id",
+        "trace_refs",
+        "raw_io_ref",
+    }
+)
 
 
 class FeedbackGenerationAgent:
@@ -98,9 +114,11 @@ def _feedback_output_envelope(
     prompt_asset: dict[str, Any],
 ) -> AgentOutputEnvelope:
     raw_payload = result.result if isinstance(result.result, dict) else {}
-    payload, extraction_errors = _extract_payload(result)
+    payload, extracted_metadata, extraction_errors = _extract_payload(result)
     provider_status = _provider_status(result, payload)
     metadata = {
+        **result.metadata,
+        **extracted_metadata,
         "provider_status": provider_status,
         "provider_validation_status": str(result.validation_status),
         "provider_confidence_level": str(result.confidence_level),
@@ -119,11 +137,11 @@ def _feedback_output_envelope(
             status="validation_failed",
             validation_errors=extraction_errors,
             low_confidence_flags=tuple(result.low_confidence_flags),
+            trace_refs=tuple(result.trace_refs),
             evidence_refs=tuple(result.evidence_refs),
             metadata=metadata,
         )
 
-    payload_metadata = payload.get("feedback_metadata") if isinstance(payload.get("feedback_metadata"), dict) else {}
     low_confidence_flags = tuple(
         dict.fromkeys(
             [
@@ -141,39 +159,43 @@ def _feedback_output_envelope(
         )
     )
     return AgentOutputEnvelope(
-        task_type=_text(raw_payload.get("task_type")) or _text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
-        schema_id=_text(payload.get("schema_id"))
-        or _text(raw_payload.get("schema_id"))
-        or _text(prompt_asset.get("schema_id"))
-        or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
-        schema_version=_text(payload.get("schema_version"))
-        or _text(raw_payload.get("schema_version"))
-        or _text(prompt_asset.get("schema_version"))
-        or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
-        prompt_version=_text(payload.get("prompt_version"))
-        or _text(raw_payload.get("prompt_version"))
-        or _text(payload_metadata.get("prompt_version"))
-        or _text(prompt_asset.get("prompt_version"))
-        or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-        status=_text(payload.get("status")) or None,
+        task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
+        schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        schema_version=_text(prompt_asset.get("schema_version")) or POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+        prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+        status=None,
         payload=payload,
         low_confidence_flags=low_confidence_flags,
+        trace_refs=tuple(result.trace_refs),
         evidence_refs=evidence_refs,
         metadata=metadata,
     )
 
 
-def _extract_payload(result: LlmTransportResult) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
-    raw_payload = result.result
-    if not isinstance(raw_payload, dict):
-        return None, ("feedback_payload_schema_invalid",)
+def _extract_payload(result: LlmTransportResult) -> tuple[dict[str, Any] | None, dict[str, Any], tuple[str, ...]]:
+    if not isinstance(result.result, dict):
+        return None, {}, ("feedback_payload_schema_invalid",)
+    raw_payload = dict(result.result)
+    extracted_metadata = _extract_provider_metadata(raw_payload)
     for field_name in ("payload", "generated_feedback", "generated_feedback_payload"):
         nested = raw_payload.get(field_name)
         if nested is not None:
             if not isinstance(nested, dict):
-                return None, ("feedback_payload_schema_invalid",)
-            return dict(nested), ()
-    return dict(raw_payload), ()
+                return None, extracted_metadata, ("feedback_payload_schema_invalid",)
+            payload = dict(nested)
+            extracted_metadata.update(_extract_provider_metadata(payload))
+            return payload, extracted_metadata, ()
+    payload = dict(raw_payload)
+    extracted_metadata.update(_extract_provider_metadata(payload))
+    return payload, extracted_metadata, ()
+
+
+def _extract_provider_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for field_name in _PROVIDER_METADATA_FIELDS:
+        if field_name in payload:
+            metadata[field_name] = payload.pop(field_name)
+    return metadata
 
 
 def _provider_status(result: LlmTransportResult, payload: dict[str, Any] | None) -> str:
@@ -181,6 +203,9 @@ def _provider_status(result: LlmTransportResult, payload: dict[str, Any] | None)
         return "fake_transport"
     if isinstance(result.result, dict) and result.result.get("transport") == "fake":
         return "fake_transport"
+    status = result.metadata.get("provider_status") if isinstance(result.metadata, dict) else None
+    if isinstance(status, str) and status.strip():
+        return status.strip()
     return "called"
 
 

@@ -155,7 +155,7 @@ class FeedbackGenerationService:
         final_payload = self._build_final_payload(
             ruled_payload=ruled_payload,
             prompt_asset=prompt_asset,
-            agent_trace_refs=agent_result.evidence_refs,
+            agent_trace_refs=agent_result.trace_refs,
             agent_low_confidence_flags=agent_result.low_confidence_flags,
         )
         normalized_payload, validation_errors = validate_final_feedback_payload(final_payload, require_feedback_id=False)
@@ -209,7 +209,7 @@ class FeedbackGenerationService:
         final_payload: dict[str, Any] = {
             "schema_id": _clean(prompt_asset.get("schema_id"), max_chars=120),
             "schema_version": _clean(prompt_asset.get("schema_version"), max_chars=40),
-            "status": _clean(ruled_payload.get("status"), max_chars=40) or "generated",
+            "status": _feedback_status(ruled_payload),
             "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
             "feedback_id": "",
             "feedback_text": _clean(ruled_payload.get("feedback_text"), max_chars=12000),
@@ -234,6 +234,17 @@ class FeedbackGenerationService:
             "feedback_metadata": _final_feedback_metadata(ruled_payload),
         }
         return final_payload
+
+
+def _feedback_status(ruled_payload: dict[str, Any]) -> str:
+    status = _clean(ruled_payload.get("status"), max_chars=40)
+    if status in {"generated", "partial", "low_confidence", "validation_failed"}:
+        return status
+    metadata = ruled_payload.get("feedback_metadata")
+    validation_warnings = metadata.get("validation_warnings") if isinstance(metadata, dict) else None
+    if isinstance(validation_warnings, list) and validation_warnings:
+        return "partial"
+    return "generated"
 
 
 def _final_feedback_metadata(ruled_payload: dict[str, Any]) -> dict[str, Any]:

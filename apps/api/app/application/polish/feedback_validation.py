@@ -3,6 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from pydantic import ValidationError
+
+from app.application.polish.feedback_models import FeedbackCandidatePayload, FeedbackFinalPayload
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
@@ -53,26 +56,14 @@ _FULL_ASSET_BODY_FIELDS = ("asset_body", "asset_payload", "full_asset", "full_as
 _CANDIDATE_REQUIRED_FIELDS = (
     "feedback_text",
     "answer_summary",
-    "score_reasoning",
     "loss_points",
     "reference_answer",
-    "low_confidence_flags",
-    "evidence_refs",
 )
 _CANDIDATE_FORBIDDEN_FIELDS = frozenset(
     {
-        "schema_id",
-        "schema_version",
-        "contract_ids",
         "feedback_id",
-        "score_result",
         "deduction",
         "deducted_points",
-        "asset_consistency_check",
-        "answer_coverage",
-        "answer_change_analysis",
-        "feedback_cards",
-        "next_recommended_actions",
         "raw_prompt",
         "raw_completion",
         "provider_payload",
@@ -85,6 +76,19 @@ _CANDIDATE_FORBIDDEN_FIELDS = frozenset(
         "cookie",
     }
 )
+_SAME_QUESTION_EFFECT_ENUMS = ("unchanged", "improved", "regressed", "not_applicable")
+_OPTIONAL_ENHANCED_FIELD_TYPES: dict[str, type | tuple[type, ...]] = {
+    "score_result": dict,
+    "scoring_dimensions": list,
+    "knowledge_points": list,
+    "technical_principles": list,
+    "project_asset_consistency_check": dict,
+    "asset_consistency_check": dict,
+    "answer_coverage": dict,
+    "answer_change_analysis": dict,
+    "feedback_cards": list,
+    "session_similarity_check": dict,
+}
 _FINAL_REQUIRED_FIELDS = (
     "schema_id",
     "schema_version",
@@ -115,32 +119,42 @@ def validate_feedback_candidate_payload(
         return None, ("feedback_payload_schema_invalid",)
 
     errors: list[str] = []
-    normalized = deepcopy(payload)
+    warnings: list[str] = _candidate_pre_validation_warnings(payload)
+    source_payload = deepcopy(payload)
 
-    unexpected_fields = set(normalized) - set(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)
-    if unexpected_fields:
-        errors.append("feedback_candidate_unknown_fields")
-    forbidden_fields = _CANDIDATE_FORBIDDEN_FIELDS & set(normalized)
+    forbidden_fields = _CANDIDATE_FORBIDDEN_FIELDS & set(source_payload)
     if forbidden_fields:
         errors.append("feedback_candidate_forbidden_fields")
     if _contains_unsafe_marker(payload):
         errors.append("feedback_payload_unsafe_leakage")
+    if errors:
+        return None, tuple(dict.fromkeys(errors))
 
-    for field in _CANDIDATE_REQUIRED_FIELDS:
-        if field not in normalized:
-            errors.append("feedback_candidate_required_fields_missing")
+    try:
+        candidate_model = FeedbackCandidatePayload.model_validate(source_payload)
+    except ValidationError as exc:
+        return None, _candidate_model_errors(exc)
+
+    normalized = candidate_model.model_dump(mode="json", exclude_none=True)
+    warnings.extend(candidate_model.validation_warnings)
 
     normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=12000)
-    if "feedback_text" in normalized and not normalized["feedback_text"]:
+    if not normalized["feedback_text"]:
         errors.append("feedback_text_required")
     normalized["answer_summary"] = _clean(normalized.get("answer_summary"), max_chars=4000)
-    if "answer_summary" in normalized and not normalized["answer_summary"]:
+    if not normalized["answer_summary"]:
         errors.append("answer_summary_required")
-    normalized["score_reasoning"] = _normalize_score_reasoning(normalized.get("score_reasoning"), errors=errors)
+    normalized["score_reasoning"] = _normalize_score_reasoning_for_candidate(
+        normalized.get("score_reasoning"),
+        warnings=warnings,
+    )
+    if not _candidate_has_score_signal(normalized):
+        warnings.append("score_result_missing_server_scored_from_loss_points")
     normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=20, max_item_chars=160)
     normalized["evidence_refs"] = _string_list(normalized.get("evidence_refs"), max_items=40, max_item_chars=200)
 
     normalized["loss_points"] = _normalize_loss_point_evidence_refs(normalized.get("loss_points"), errors=errors)
+    _normalize_loss_point_ids(normalized.get("loss_points"))
     loss_point_ids, _, _, loss_errors = _loss_points(
         normalized.get("loss_points"),
         generated_status=False,
@@ -153,17 +167,29 @@ def validate_feedback_candidate_payload(
         errors.append("reference_answer_required")
     else:
         sections = reference_answer.get("sections")
-        if not isinstance(sections, list):
+        if not isinstance(sections, list) or not sections:
             errors.append("reference_answer_sections_required")
         elif not all(isinstance(section, dict) for section in sections):
             errors.append("reference_answer_sections_invalid")
         _, reference_errors = _reference_answer(reference_answer, known_loss_point_ids=loss_point_ids)
-        errors.extend(reference_errors)
+        warnings.extend(reference_errors)
 
     if normalized.get("same_question_effect") is not None:
-        errors.extend(_same_question_effect(normalized.get("same_question_effect")))
+        normalized_effect, effect_warnings = _normalize_candidate_same_question_effect(
+            normalized.get("same_question_effect")
+        )
+        normalized["same_question_effect"] = normalized_effect
+        warnings.extend(effect_warnings)
+        warnings.extend(_same_question_effect(normalized.get("same_question_effect")))
     if normalized.get("project_asset_update_candidates") is not None:
-        errors.extend(_project_asset_update_candidates(normalized.get("project_asset_update_candidates")))
+        normalized_candidates, candidate_warnings = _normalize_candidate_project_asset_update_candidates(
+            normalized.get("project_asset_update_candidates")
+        )
+        normalized["project_asset_update_candidates"] = normalized_candidates
+        warnings.extend(candidate_warnings)
+    warnings.extend(_optional_enhancement_warnings(normalized))
+    if warnings:
+        _append_validation_warnings(normalized, warnings)
 
     if errors:
         return None, tuple(dict.fromkeys(errors))
@@ -183,6 +209,17 @@ def validate_final_feedback_payload(
 
     if _contains_unsafe_marker(payload):
         errors.append("feedback_payload_unsafe_leakage")
+    if errors:
+        return None, tuple(dict.fromkeys(errors))
+
+    model_input = deepcopy(payload)
+    if not require_feedback_id and isinstance(model_input, dict):
+        model_input.setdefault("feedback_id", "")
+    try:
+        final_model = FeedbackFinalPayload.model_validate(model_input)
+    except ValidationError as exc:
+        return None, _final_model_errors(exc)
+    normalized = final_model.model_dump(mode="json")
 
     unexpected_fields = set(normalized) - set(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS)
     if unexpected_fields:
@@ -240,7 +277,7 @@ def validate_final_feedback_payload(
         errors.append("reference_answer_required")
     else:
         sections = reference_answer.get("sections")
-        if not isinstance(sections, list):
+        if not isinstance(sections, list) or not sections:
             errors.append("reference_answer_sections_required")
         elif not all(isinstance(section, dict) for section in sections):
             errors.append("reference_answer_sections_invalid")
@@ -284,20 +321,101 @@ def validate_final_feedback_payload(
     return normalized, ()
 
 
-def _normalize_score_reasoning(value: object, *, errors: list[str]) -> list[dict[str, Any]]:
+def _candidate_pre_validation_warnings(payload: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    score_reasoning = payload.get("score_reasoning")
+    if not isinstance(score_reasoning, list) or not score_reasoning:
+        warnings.append("score_reasoning_missing")
+    same_question_effect = payload.get("same_question_effect")
+    if same_question_effect not in (None, "", {}):
+        if isinstance(same_question_effect, str):
+            if same_question_effect not in _SAME_QUESTION_EFFECT_ENUMS and same_question_effect != "first_attempt":
+                warnings.append("same_question_effect_invalid")
+        elif not isinstance(same_question_effect, dict):
+            warnings.append("same_question_effect_invalid")
+    candidates = payload.get("project_asset_update_candidates")
+    if candidates not in (None, []):
+        if not isinstance(candidates, list):
+            warnings.append("project_asset_update_candidates_invalid")
+        else:
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    warnings.append("project_asset_update_candidate_invalid")
+                elif candidate.get("user_confirmation_required") is not True:
+                    warnings.append("project_asset_candidate_user_confirmation_required")
+    reference_answer = payload.get("reference_answer")
+    if isinstance(reference_answer, dict) and isinstance(reference_answer.get("addresses_loss_point_ids"), list):
+        sections = reference_answer.get("sections")
+        if isinstance(sections, list) and len(sections) == 1:
+            warnings.append("reference_answer_top_level_addresses_loss_point_ids_normalized")
+        else:
+            warnings.append("reference_answer_top_level_addresses_loss_point_ids_unassigned")
+    return warnings
+
+
+def _candidate_model_errors(exc: ValidationError) -> tuple[str, ...]:
+    errors: list[str] = []
+    for issue in exc.errors():
+        loc = ".".join(str(part) for part in issue.get("loc", ()))
+        if loc == "feedback_text":
+            errors.append("feedback_text_required")
+        elif loc == "answer_summary":
+            errors.append("answer_summary_required")
+        elif loc.startswith("loss_points") and loc.endswith("loss_point_id"):
+            errors.append("loss_point_identity_unrecoverable")
+        elif loc.startswith("loss_points"):
+            errors.append("loss_point_invalid")
+        elif loc == "reference_answer":
+            errors.append("reference_answer_required")
+        elif loc == "reference_answer.sections":
+            errors.append("reference_answer_sections_required")
+        elif loc.startswith("reference_answer.sections") and loc.endswith("section_id"):
+            errors.append("reference_answer_section_identity_unrecoverable")
+        elif loc.startswith("reference_answer.sections"):
+            errors.append("reference_answer_sections_invalid")
+        else:
+            errors.append("feedback_payload_schema_invalid")
+    return tuple(dict.fromkeys(errors or ["feedback_payload_schema_invalid"]))
+
+
+def _final_model_errors(exc: ValidationError) -> tuple[str, ...]:
+    errors: list[str] = []
+    for issue in exc.errors():
+        error_type = str(issue.get("type") or "")
+        loc = ".".join(str(part) for part in issue.get("loc", ()))
+        if error_type == "extra_forbidden":
+            errors.append("feedback_final_unknown_fields")
+        elif error_type == "missing":
+            errors.append("feedback_final_required_fields_missing")
+        elif loc == "status":
+            errors.append("feedback_status_invalid")
+        elif loc == "reference_answer":
+            errors.append("reference_answer_required")
+        elif loc == "reference_answer.sections":
+            errors.append("reference_answer_sections_required")
+        elif loc.startswith("reference_answer.sections") and loc.endswith("section_id"):
+            errors.append("reference_answer_section_identity_unrecoverable")
+        elif loc.startswith("reference_answer.sections"):
+            errors.append("reference_answer_sections_invalid")
+        else:
+            errors.append("feedback_payload_schema_invalid")
+    return tuple(dict.fromkeys(errors or ["feedback_payload_schema_invalid"]))
+
+
+def _normalize_score_reasoning_for_candidate(value: object, *, warnings: list[str]) -> list[dict[str, Any]]:
     if not isinstance(value, list):
-        errors.append("score_reasoning_required")
+        warnings.append("score_reasoning_missing")
         return []
 
     normalized_reasoning: list[dict[str, Any]] = []
     for reason in value:
         if not isinstance(reason, dict):
-            errors.append("score_reasoning_item_invalid")
+            warnings.append("score_reasoning_item_invalid")
             continue
         dimension = _clean(reason.get("dimension"), max_chars=80)
         rationale = _clean(reason.get("rationale"), max_chars=2000)
         if not dimension or not rationale:
-            errors.append("score_reasoning_item_fields_missing")
+            warnings.append("score_reasoning_item_fields_missing")
             continue
         item = dict(reason)
         item["dimension"] = dimension
@@ -305,7 +423,7 @@ def _normalize_score_reasoning(value: object, *, errors: list[str]) -> list[dict
         normalized_reasoning.append(item)
 
     if not normalized_reasoning:
-        errors.append("score_reasoning_required")
+        warnings.append("score_reasoning_missing")
     return normalized_reasoning
 
 
@@ -337,6 +455,28 @@ def _normalize_loss_point_evidence_refs(
                 normalized_item["evidence_refs"] = []
         normalized_items.append(normalized_item)
     return normalized_items
+
+
+def _normalize_loss_point_ids(value: object) -> None:
+    if not isinstance(value, list):
+        return
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        if _clean(item.get("loss_point_id"), max_chars=120):
+            continue
+        alias = _clean(item.get("id") or item.get("loss_id"), max_chars=120)
+        if alias:
+            item["loss_point_id"] = alias
+
+
+def _candidate_has_score_signal(payload: dict[str, Any]) -> bool:
+    score_result = payload.get("score_result")
+    if isinstance(score_result, dict) and _is_number(score_result.get("score_value")):
+        return True
+    if _is_number(payload.get("explicit_score")) or _is_number(payload.get("implicit_score")):
+        return True
+    return bool(payload.get("score_reasoning"))
 
 
 def _score_value(score_result: object) -> tuple[float | None, list[str]]:
@@ -373,7 +513,7 @@ def _loss_points(
             continue
         loss_point_id = _clean(item.get("loss_point_id"), max_chars=120)
         if not loss_point_id:
-            errors.append("loss_point_id_required")
+            errors.append("loss_point_identity_unrecoverable")
             continue
         if loss_point_id in loss_point_ids:
             errors.append("loss_point_id_duplicate")
@@ -406,7 +546,7 @@ def _reference_answer(value: object, *, known_loss_point_ids: set[str]) -> tuple
     for section in sections:
         section_id = _clean(section.get("section_id"), max_chars=120)
         if not section_id:
-            errors.append("reference_answer_section_id_required")
+            errors.append("reference_answer_section_identity_unrecoverable")
         elif section_id in seen_section_ids:
             errors.append("reference_answer_section_id_duplicate")
         seen_section_ids.add(section_id)
@@ -587,37 +727,99 @@ def _same_question_effect(value: object) -> list[str]:
     errors: list[str] = []
     for field_name in _SAME_QUESTION_LIST_FIELDS:
         if not isinstance(value.get(field_name), list):
-            errors.append("same_question_effect_fields_invalid")
+            errors.append("same_question_effect_invalid_fields")
     score_delta = value.get("score_delta")
     if score_delta is not None and not _is_number(score_delta):
         errors.append("same_question_score_delta_invalid")
     return errors
 
 
-def _project_asset_update_candidates(value: object) -> list[str]:
-    if value in (None, []):
-        return []
-    if not isinstance(value, list):
-        return ["project_asset_update_candidates_invalid"]
+def _normalize_candidate_same_question_effect(value: object) -> tuple[dict[str, Any], list[str]]:
+    if isinstance(value, dict):
+        normalized = dict(value)
+        for field_name in _SAME_QUESTION_LIST_FIELDS:
+            if not isinstance(normalized.get(field_name), list):
+                normalized[field_name] = []
+        if "trend" in normalized:
+            trend = _clean(normalized.get("trend"), max_chars=80)
+            if trend:
+                normalized["trend"] = trend
+        return normalized, []
+    trend = _clean(value, max_chars=80)
+    if trend in _SAME_QUESTION_EFFECT_ENUMS:
+        normalized_trend = "unchanged" if trend == "not_applicable" else trend
+        return (
+            {
+                "trend": normalized_trend,
+                "improved_points": [],
+                "repeated_loss_point_ids": [],
+                "regressed_points": [],
+                "next_retry_focus": [],
+                "score_delta": None,
+            },
+            [],
+        )
+    return {}, ["same_question_effect_invalid"]
 
-    errors: list[str] = []
+
+def _normalize_candidate_project_asset_update_candidates(value: object) -> tuple[list[dict[str, Any]], list[str]]:
+    if value in (None, []):
+        return [], []
+    if not isinstance(value, list):
+        return [], ["project_asset_update_candidates_invalid"]
+
+    normalized: list[dict[str, Any]] = []
+    warnings: list[str] = []
     for candidate in value:
         if not isinstance(candidate, dict):
-            errors.append("project_asset_update_candidate_invalid")
+            warnings.append("project_asset_update_candidate_invalid")
             continue
         if candidate.get("candidate_type") != "project_asset_update_candidate":
-            errors.append("project_asset_candidate_type_invalid")
-        if candidate.get("user_confirmation_required") is not True:
-            errors.append("project_asset_candidate_user_confirmation_required")
+            warnings.append("project_asset_candidate_type_invalid")
+            continue
+        item = dict(candidate)
+        if item.get("user_confirmation_required") is not True:
+            warnings.append("project_asset_candidate_user_confirmation_required")
+            item["user_confirmation_required"] = True
         for field_name in _FORMAL_ASSET_WRITE_FLAGS:
-            if candidate.get(field_name) is True:
-                errors.append("project_asset_candidate_formal_write_forbidden")
-        target_asset_ref = candidate.get("target_asset_ref")
+            if item.pop(field_name, None) is True:
+                warnings.append("project_asset_candidate_formal_write_forbidden")
+        for field_name in _FULL_ASSET_BODY_FIELDS:
+            if field_name in item:
+                item.pop(field_name, None)
+                warnings.append("project_asset_candidate_full_asset_body_forbidden")
+        target_asset_ref = item.get("target_asset_ref")
         if target_asset_ref is not None and not _is_reference_object(target_asset_ref):
-            errors.append("project_asset_candidate_target_ref_invalid")
-        if any(field in candidate for field in _FULL_ASSET_BODY_FIELDS):
-            errors.append("project_asset_candidate_full_asset_body_forbidden")
-    return errors
+            item.pop("target_asset_ref", None)
+            warnings.append("project_asset_candidate_target_ref_invalid")
+        normalized.append(item)
+    return normalized, warnings
+
+
+def _optional_enhancement_warnings(payload: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for field_name, expected_type in _OPTIONAL_ENHANCED_FIELD_TYPES.items():
+        if field_name not in payload:
+            continue
+        value = payload.get(field_name)
+        if value in (None, {}, []):
+            continue
+        if not isinstance(value, expected_type):
+            warnings.append(f"{field_name}_invalid")
+            payload.pop(field_name, None)
+    return warnings
+
+
+def _append_validation_warnings(payload: dict[str, Any], warnings: list[str]) -> None:
+    deduped = list(dict.fromkeys(warning for warning in warnings if warning))
+    if not deduped:
+        return
+    metadata = payload.get("feedback_metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    existing = _string_list(metadata.get("validation_warnings"), max_items=40, max_item_chars=160)
+    metadata["validation_warnings"] = list(dict.fromkeys([*existing, *deduped]))
+    payload["feedback_metadata"] = metadata
 
 
 def _is_reference_object(value: object) -> bool:

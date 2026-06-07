@@ -65,6 +65,7 @@ class LlmTransportResult:
     low_confidence_flags: tuple[str, ...]
     trace_refs: tuple[str, ...]
     evidence_refs: tuple[str, ...]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def _forbidden_provider_key_paths(value: object, *, path: str = "$") -> tuple[str, ...]:

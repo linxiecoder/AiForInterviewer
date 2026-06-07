@@ -324,17 +324,16 @@ class OpenAICompatibleLlmTransport:
                 error_message=str(exc),
             )
             raise
-        result.setdefault("prompt_version", _request_prompt_version(request))
         # model_name 用于审计和落库，只能来自 provider 外层响应或本地配置；
         # 不能信任模型正文里自报的 model_name，否则会出现"实际调用 deepseek，记录成 gpt-4"的偏差。
-        result["model_name"] = _provider_model_name(response_json, self._settings.model)
+        provider_model = _provider_model_name(response_json, self._settings.model)
         trace_ref = _trace_ref(request, response_json)
         evidence_ref = _evidence_ref(request)
         self._log_request_success(
             request,
             started_at=started_at,
             status_code=response.status_code,
-            provider_model=result["model_name"],
+            provider_model=provider_model,
         )
         _maybe_dump_local_raw_llm_io(
             request=request,
@@ -359,6 +358,12 @@ class OpenAICompatibleLlmTransport:
             low_confidence_flags=_low_confidence_flags(result),
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
+            metadata={
+                "model_name": provider_model,
+                "provider_model": provider_model,
+                "prompt_version": _request_prompt_version(request),
+                "provider_status": "called",
+            },
         )
 
     def _dump_client_initialization_failed(

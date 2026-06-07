@@ -11,9 +11,9 @@ from app.application.llm.agent_io import (
     AgentPromptBundle,
     AgentSafetyPolicy,
 )
+from app.application.polish.feedback_models import FeedbackCandidatePayload
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
-    POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
     POLISH_FEEDBACK_FINAL_SCHEMA_ID,
     POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
@@ -96,6 +96,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
 
     safety_policy = _feedback_safety_policy()
     validation_rules = _validation_rules()
+    output_schema = _feedback_candidate_output_schema()
     evidence_refs = _string_list(_get_list(context, "evidence_refs"))
     progress_node_ref = _get_text(context, "progress_node_ref", max_chars=200)
     related_terms = _related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))
@@ -149,12 +150,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
             ]
         ),
         input_data=input_data,
-        output_schema={
-            "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
-            "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
-            "required_status": "generated_or_partial_or_low_confidence",
-            "fields": list(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS),
-        },
+        output_schema=output_schema,
         system_role="You review interview polish answers and return validated feedback JSON.",
         developer_constraints=tuple((*safety_policy.to_prompt_rules(), *validation_rules)),
         user_task="Evaluate the current answer using only the provided evidence and context snapshots.",
@@ -237,16 +233,72 @@ def _feedback_safety_policy() -> AgentSafetyPolicy:
 
 def _validation_rules() -> tuple[str, ...]:
     return (
-        "Output schema_id/schema_version/contract_ids/feedback_id are not part of the candidate JSON contract.",
-        "Do not output final score payload fields such as score_result, deduction, or deducted_points.",
-        "Do not output server-generated validation fields such as asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, next_recommended_actions, or task candidate references.",
+        "feedback_id is produced by the service and must not be output by the model.",
+        "score_reasoning is recommended but may be omitted when evidence is insufficient; service-side scoring remains authoritative.",
+        "Final fields such as score_result, asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, and next_recommended_actions are produced by the service.",
         "Do not output raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         "Do not invent user experience or project facts.",
         "Every major loss point must be covered by a reference answer section.",
-        "If canonical_project_assets conflict with the answer, mark conflict in asset checks through service layer synthesis, not candidate output.",
+        "If canonical_project_assets conflict with the answer, mark conflict in optional asset checks without writing formal assets.",
         "Any project_asset_update_candidates must be candidates with user_confirmation_required=true.",
         "Keep project asset and session similarity checks lightweight in service synthesis when evidence is insufficient.",
     )
+
+
+def _feedback_candidate_output_schema() -> dict[str, Any]:
+    schema = _compact_json_schema(FeedbackCandidatePayload.model_json_schema())
+    schema["schema_id"] = POLISH_FEEDBACK_FINAL_SCHEMA_ID
+    schema["schema_version"] = POLISH_FEEDBACK_FINAL_SCHEMA_VERSION
+    schema["required_status"] = "generated_or_partial_or_low_confidence"
+    schema["fields"] = list(FeedbackCandidatePayload.model_fields)
+    return schema
+
+
+def _compact_json_schema(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _compact_json_schema(nested)
+            for key, nested in value.items()
+            if key not in {"title"}
+        }
+    if isinstance(value, list):
+        return [_compact_json_schema(item) for item in value]
+    return value
+
+
+def _required_json_schema(output_schema: dict[str, Any]) -> dict[str, Any]:
+    properties = output_schema.get("properties")
+    field_names = tuple(properties) if isinstance(properties, dict) else tuple(FeedbackCandidatePayload.model_fields)
+    required_fields = [
+        field_name
+        for field_name in (
+            "feedback_text",
+            "answer_summary",
+            "loss_points",
+            "reference_answer.sections",
+            "low_confidence_flags",
+            "evidence_refs",
+        )
+        if field_name.split(".", maxsplit=1)[0] in field_names
+    ]
+    required_roots = {field_name.split(".", maxsplit=1)[0] for field_name in required_fields}
+    optional_fields = [field_name for field_name in field_names if field_name not in required_roots]
+    return {
+        "required_fields": required_fields,
+        "optional_fields": optional_fields,
+        "default_empty_fields": [
+            field_name
+            for field_name in (
+                "score_reasoning",
+                "same_question_effect",
+                "project_asset_update_candidates",
+                "low_confidence_flags",
+                "evidence_refs",
+            )
+            if field_name in field_names
+        ],
+        "not_applicable_fields": [],
+    }
 
 
 def _provider_compact_prompt(
@@ -284,24 +336,7 @@ def _provider_compact_prompt(
             "answer_text_is_bounded": True,
             "full_answer_forbidden": True,
         },
-        "required_json_schema": {
-            "required_fields": [
-                "feedback_text",
-                "answer_summary",
-                "score_reasoning",
-                "loss_points",
-                "reference_answer.sections",
-                "low_confidence_flags",
-                "evidence_refs",
-            ],
-            "default_empty_fields": [
-                "same_question_effect",
-                "project_asset_update_candidates",
-                "low_confidence_flags",
-                "evidence_refs",
-            ],
-            "not_applicable_fields": [],
-        },
+        "required_json_schema": _required_json_schema(output_schema),
         "current_question": {
             "question_id": _get_clean_text(current_question.get("question_id"), max_chars=120),
             "question_text": _get_clean_text(current_question.get("question_text"), max_chars=600),
@@ -346,10 +381,13 @@ def _provider_compact_prompt(
         "resume_projects": _string_list(resume_snapshot.get("projects"), max_chars=240)[:_RESUME_PROJECTS_LIMIT],
         "output_requirements": [
             "Return JSON only.",
-            "Return only candidate JSON fields; final feedback fields are produced by service flow.",
-            "Return feedback_text, answer_summary, score_reasoning, loss_points, reference_answer, low_confidence_flags, and evidence_refs.",
-            "same_question_effect and project_asset_update_candidates are optional when available.",
-            "Do not include score_result, deduction, deducted_points, asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, next_recommended_actions, task candidate references, or stored feedback summaries in candidate output.",
+            "Use only output_schema candidate fields.",
+            "Return feedback_text, answer_summary, loss_points, reference_answer, low_confidence_flags, evidence_refs.",
+            "score_reasoning is recommended; if uncertain, omit it.",
+            "Optional candidate fields: same_question_effect, project_asset_update_candidates.",
+            "Aliases accepted: loss_points[].id/loss_id, reference_answer.sections[].id.",
+            "same_question_effect may be an object or unchanged/improved/regressed/mixed/first_attempt.",
+            "Do not include metadata/final fields: feedback_id, schema_id, schema_version, model_name, prompt_version, score_result, deterministic service fields, task refs, stored feedback summaries.",
             "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         ],
         "feedback_metadata": {

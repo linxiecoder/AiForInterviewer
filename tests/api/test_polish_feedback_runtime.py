@@ -563,7 +563,8 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
     assert data["feedback_payload"]["score_result"] is None
     assert data["feedback_payload"]["loss_points"] == []
     assert data["feedback_payload"]["reference_answer"] is None
-    assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is False
+    assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is True
+    assert data["feedback_payload"]["feedback_metadata"]["provider_status"] == "failed"
     repository = SqlAlchemyPolishRepository(session_factory)
     stored_feedbacks = repository.list_feedbacks_for_session(OWNER_A, session_id)
     assert not any(feedback.status == "generated" for feedback in stored_feedbacks)
@@ -686,6 +687,10 @@ def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_
     assert data["feedback_payload"]["feedback_text"] == "反馈生成失败，可重试"
     assert data["feedback_payload"]["error"]["code"] in data["validation_errors"]
     assert data["validation_errors"]
+    assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is True
+    assert data["feedback_payload"]["feedback_metadata"]["provider_status"] == "called"
+    assert data["feedback_payload"]["feedback_metadata"]["candidate_valid"] is False
+    assert data["feedback_payload"]["feedback_metadata"]["validation_stage"] == "candidate"
     repository = SqlAlchemyPolishRepository(session_factory)
     stored_feedbacks = repository.list_feedbacks_for_session(OWNER_A, session_id)
     assert not any(feedback.status == "generated" for feedback in stored_feedbacks)

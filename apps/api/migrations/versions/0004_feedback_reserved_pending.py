@@ -1,4 +1,4 @@
-"""feedback reserved to pending"""
+"""feedback reserved pending"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0004_feedback_reserved_to_pending"
+revision = "0004_feedback_reserved_pending"
 down_revision = "0003_asset_rag_pgvector"
 branch_labels = None
 depends_on = None

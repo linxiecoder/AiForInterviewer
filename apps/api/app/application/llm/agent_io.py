@@ -218,6 +218,11 @@ class AgentPromptBundle:
 
 @dataclass(frozen=True)
 class AgentOutputEnvelope:
+    """Legacy dict-based Agent output envelope.
+
+    New schema-first agents should use typed envelopes from agent_contracts.py.
+    """
+
     task_type: str
     schema_id: str | None = None
     schema_version: str | None = None
@@ -226,6 +231,7 @@ class AgentOutputEnvelope:
     payload: dict[str, Any] = field(default_factory=dict)
     validation_errors: tuple[str, ...] = ()
     low_confidence_flags: tuple[str, ...] = ()
+    trace_refs: tuple[str, ...] = ()
     evidence_refs: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -249,6 +255,8 @@ class AgentOutputEnvelope:
             output["validation_errors"] = list(self.validation_errors)
         if self.low_confidence_flags:
             output["low_confidence_flags"] = list(self.low_confidence_flags)
+        if self.trace_refs:
+            output["trace_refs"] = list(self.trace_refs)
         if self.evidence_refs:
             output["evidence_refs"] = list(self.evidence_refs)
         metadata = _safe_output_metadata(self.metadata)

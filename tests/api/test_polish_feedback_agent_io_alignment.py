@@ -220,14 +220,13 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert "refusal_and_low_confidence_policy" not in provider_prompt
 
 
-def test_feedback_prompt_required_json_schema_is_candidate_only() -> None:
+def test_feedback_prompt_required_json_schema_separates_core_and_optional_fields() -> None:
     provider_prompt = build_feedback_prompt_asset(_context())["provider_prompt"]
     required_fields = set(provider_prompt["required_json_schema"]["required_fields"])
     candidate_fields = set(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)
     assert required_fields == {
         "feedback_text",
         "answer_summary",
-        "score_reasoning",
         "loss_points",
         "reference_answer.sections",
         "low_confidence_flags",
@@ -235,16 +234,23 @@ def test_feedback_prompt_required_json_schema_is_candidate_only() -> None:
     }
     assert set(provider_prompt["output_schema"]["fields"]) == candidate_fields
     assert not provider_prompt["required_json_schema"]["not_applicable_fields"]
+    assert "score_reasoning" not in provider_prompt["required_json_schema"]["required_fields"]
+    assert "score_reasoning" in provider_prompt["required_json_schema"]["optional_fields"]
     assert "score_result" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "asset_consistency_check" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "answer_coverage" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "feedback_cards" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "next_recommended_actions" not in provider_prompt["required_json_schema"]["required_fields"]
+    assert set(provider_prompt["required_json_schema"]["optional_fields"]) >= {
+        "score_reasoning",
+        "project_asset_update_candidates",
+        "same_question_effect",
+    }
     requirements_text = "\n".join(provider_prompt["output_requirements"]).lower()
-    assert "candidate json fields" in requirements_text
-    assert "final feedback fields are produced by service flow" in requirements_text
+    assert "feedback_text, answer_summary, loss_points" in requirements_text
+    assert "optional candidate fields" in requirements_text
     for final_field in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
-        assert final_field not in requirements_text
+        assert final_field not in provider_prompt["output_schema"]["fields"]
 
 
 def test_feedback_agent_fails_closed_when_compact_provider_prompt_missing() -> None:

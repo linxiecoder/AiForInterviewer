@@ -4,7 +4,6 @@ from copy import deepcopy
 from typing import Any
 
 from app.application.polish.feedback_schema import (
-    POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_FINAL_SCHEMA_ID,
     POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
 )
@@ -144,9 +143,68 @@ def test_validate_feedback_candidate_payload_accepts_valid_payload() -> None:
     assert len(normalized["loss_points"]) == 1
 
 
-def test_validate_feedback_candidate_payload_rejects_final_fields() -> None:
+def test_validate_feedback_candidate_payload_accepts_phase4_fields_without_unknown_error() -> None:
     payload = _candidate_payload()
-    payload["score_result"] = {"score_type": "polish_answer", "score_value": 80}
+    payload.update(
+        {
+            "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+            "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+            "status": "generated",
+            "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
+            "score_result": {"score_type": "polish_answer", "score_value": 82},
+            "explicit_score": 76,
+            "implicit_score": 88,
+            "scoring_dimensions": [{"dimension": "reliability", "score": 82}],
+            "knowledge_points": ["消息重试"],
+            "technical_principles": ["幂等"],
+            "asset_consistency_check": {"status": "consistent"},
+            "answer_coverage": {"covered_points": ["MQ"]},
+            "answer_change_analysis": {"trend": "unchanged"},
+            "feedback_cards": [{"card_type": "overall", "payload": {}}],
+            "session_similarity_check": {"status": "not_applicable"},
+            "next_recommended_actions": ["review_reference_answer"],
+            "trace_refs": ["trace_provider_001"],
+            "feedback_metadata": {"provider": "deepseek-v4-pro"},
+        }
+    )
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert "feedback_candidate_unknown_fields" not in errors
+    assert errors == ()
+    assert "score_result" not in normalized
+    assert "feedback_metadata" not in normalized
+
+
+def test_validate_feedback_candidate_payload_normalizes_loss_point_id_alias() -> None:
+    payload = _candidate_payload()
+    payload["loss_points"][0].pop("loss_point_id")
+    payload["loss_points"][0]["id"] = "lp_observability"
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert "loss_point_id_required" not in errors
+    assert errors == ()
+    assert normalized["loss_points"][0]["loss_point_id"] == "lp_observability"
+
+
+def test_validate_feedback_candidate_payload_normalizes_same_question_effect_string() -> None:
+    payload = _candidate_payload()
+    payload["same_question_effect"] = "unchanged"
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert "same_question_effect_fields_invalid" not in errors
+    assert errors == ()
+    assert normalized["same_question_effect"]["trend"] == "unchanged"
+
+
+def test_validate_feedback_candidate_payload_rejects_server_generated_feedback_id() -> None:
+    payload = _candidate_payload()
+    payload["feedback_id"] = "feedback_from_provider_should_not_be_trusted"
 
     normalized, errors = validate_feedback_candidate_payload(payload)
 
@@ -182,7 +240,8 @@ def test_validate_final_feedback_payload_accepts_valid_payload() -> None:
     assert errors == ()
     assert normalized is not None
     assert normalized["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
-    assert all(field in normalized for field in POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS)
+    for field in _final_payload():
+        assert field in normalized
 
 def _with_final_change(**changes: object) -> dict[str, Any]:
     payload = _final_payload()

@@ -371,7 +371,27 @@ def _failed_feedback_payload_for_storage(
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
     error_code = validation_errors[0] if validation_errors else "llm_transport_generation_failed"
-    error_type = metadata.get("provider_error_type") if isinstance(metadata, dict) else None
+    source_metadata = metadata if isinstance(metadata, dict) else {}
+    error_type = source_metadata.get("provider_error_type")
+    feedback_metadata: dict[str, Any] = {
+        "llm_called": _metadata_bool(source_metadata.get("llm_called")) or False,
+        "task_type": POLISH_FEEDBACK_TASK_TYPE,
+        "answer_id": answer_id,
+        "question_id": question_id,
+        "session_id": session_id,
+    }
+    for field_name in (
+        "provider_status",
+        "candidate_valid",
+        "validation_stage",
+        "llm_output_validation_status",
+        "prompt_version",
+        "schema_id",
+        "schema_version",
+        "provider_error_type",
+    ):
+        if field_name in source_metadata:
+            feedback_metadata[field_name] = source_metadata[field_name]
     return {
         "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
@@ -394,13 +414,7 @@ def _failed_feedback_payload_for_storage(
         "next_recommended_actions": ["retry_same_question", "continue_same_question"],
         "trace_refs": [],
         "low_confidence_flags": [],
-        "feedback_metadata": {
-            "llm_called": False,
-            "task_type": POLISH_FEEDBACK_TASK_TYPE,
-            "answer_id": answer_id,
-            "question_id": question_id,
-            "session_id": session_id,
-        },
+        "feedback_metadata": feedback_metadata,
     }
 
 

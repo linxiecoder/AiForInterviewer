@@ -426,6 +426,57 @@ def test_provider_loss_reference_mapping_invalid_returns_failed() -> None:
     assert "reference_answer_unknown_loss_point_ref" in result.validation_errors
 
 
+def test_provider_phase4_fields_and_loss_point_id_alias_generate_feedback() -> None:
+    payload = _generated_payload()
+    payload["schema_id"] = POLISH_FEEDBACK_FINAL_SCHEMA_ID
+    payload["schema_version"] = "1.0"
+    payload["status"] = "generated"
+    payload["contract_ids"] = list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS)
+    payload["score_result"] = {"score_type": "polish_answer", "score_value": 91}
+    payload["explicit_score"] = 88
+    payload["implicit_score"] = 83
+    payload["scoring_dimensions"] = [{"dimension": "reliability", "score": 84}]
+    payload["knowledge_points"] = ["失败恢复"]
+    payload["technical_principles"] = ["幂等"]
+    payload["loss_points"][0]["id"] = payload["loss_points"][0].pop("loss_point_id")
+    payload["same_question_effect"] = "unchanged"
+    payload["asset_consistency_check"] = {"status": "consistent"}
+    payload["answer_coverage"] = {"covered_points": ["MQ"]}
+    payload["answer_change_analysis"] = {"trend": "unchanged"}
+    payload["feedback_cards"] = [{"card_type": "overall", "payload": {}}]
+    payload["session_similarity_check"] = {"status": "not_applicable"}
+    payload["next_recommended_actions"] = ["review_reference_answer"]
+    payload["trace_refs"] = ["trace_model_001"]
+    payload["feedback_metadata"] = {"provider": "deepseek-v4-pro"}
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["status"] == "generated"
+    assert result.payload["loss_points"][0]["loss_point_id"] == "lp_recovery"
+    assert "same_question_effect" not in result.payload
+    assert "explicit_score" not in result.payload
+    assert "session_similarity_check" not in result.payload
+    assert isinstance(result.payload["answer_change_analysis"], dict)
+
+
+def test_provider_invalid_enhancement_fields_are_warnings_not_generation_failure() -> None:
+    payload = _generated_payload()
+    payload["project_asset_update_candidates"] = "invalid-enhancement"
+    payload["session_similarity_check"] = ["invalid-enhancement"]
+
+    result = _service(_PayloadTransport(payload)).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["status"] == "partial"
+    metadata = result.payload["feedback_metadata"]
+    assert "validation_warnings" in metadata
+    assert "project_asset_update_candidates_invalid" in metadata["validation_warnings"]
+    assert "session_similarity_check" not in result.payload
+
+
 def test_unsafe_provider_payload_returns_failed() -> None:
     payload = _generated_payload()
     payload["feedback_text"] = "当前文本包含 token=hidden-chain，不应下沉。"
@@ -908,11 +959,19 @@ def test_phase4_asset_update_candidates_are_forced_to_user_confirmation() -> Non
 
     result = _service(_PayloadTransport(payload)).generate(_context())
 
-    assert result.succeeded is False
-    assert result.payload is None
-    assert result.metadata["validation_stage"] == "candidate"
-    assert result.metadata["candidate_valid"] is False
-    assert "project_asset_candidate_user_confirmation_required" in result.validation_errors
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert "project_asset_update_candidates" not in result.payload
+    asset_candidate_cards = [
+        card
+        for card in result.payload["feedback_cards"]
+        if card.get("card_type") == "asset_update_candidates"
+    ]
+    assert asset_candidate_cards
+    assert asset_candidate_cards[0]["payload"][0]["user_confirmation_required"] is True
+    assert "project_asset_candidate_user_confirmation_required" in result.payload["feedback_metadata"][
+        "validation_warnings"
+    ]
 
 
 def test_phase4_required_fields_can_be_enforced_by_validator() -> None:

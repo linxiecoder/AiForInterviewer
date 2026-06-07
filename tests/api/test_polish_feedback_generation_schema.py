@@ -269,7 +269,7 @@ def test_unsafe_secret_or_token_value_fails() -> None:
     assert "feedback_payload_unsafe_leakage" in errors
 
 
-def test_low_confidence_payload_can_pass_without_complete_reference_answer() -> None:
+def test_low_confidence_payload_still_requires_reference_answer_sections() -> None:
     payload = _valid_payload()
     payload["status"] = "low_confidence"
     payload["feedback_text"] = "当前证据不足，先给出待完善项。"
@@ -287,10 +287,8 @@ def test_low_confidence_payload_can_pass_without_complete_reference_answer() -> 
 
     normalized, errors = _validate(payload)
 
-    assert errors == ()
-    assert normalized is not None
-    assert normalized["status"] == "low_confidence"
-    assert "reference_answer_source_unavailable" in normalized["low_confidence_flags"]
+    assert normalized is None
+    assert "reference_answer_sections_required" in errors
 
 
 def test_contract_ids_missing_required_contracts_fails() -> None:
