@@ -85,6 +85,10 @@ import {
   resolveProgressTreeRecoveryAction,
   isProgressTreePendingGeneration,
   resolveCurrentQuestionId,
+  buildQuestionConversationAutoScrollTrigger,
+  shouldAutoScrollQuestionConversation,
+  shouldCollapseCurrentQuestionText,
+  buildStickyQuestionContextViewModel,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveWorkbenchQuestionFocusId,
@@ -1530,6 +1534,115 @@ function test_progress_tree_click_focuses_latest_question_for_node(): void {
   assertContract(resolveWorkbenchQuestionFocusId(session, oldQuestionNode, "node_focus") === "q_focus_old", "点击题目节点应定位到该题目");
 }
 
+function test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback(): void {
+  const firstFocus = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId: "q_1",
+    selectedProgressNodeRef: "node_1",
+    latestAnswerId: "ans_1",
+  });
+  const nextAnswerFocus = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId: "q_1",
+    selectedProgressNodeRef: "node_1",
+    latestAnswerId: "ans_2",
+  });
+  const nextQuestionFocus = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId: "q_2",
+    selectedProgressNodeRef: "node_2",
+    latestAnswerId: null,
+  });
+
+  assertContract(firstFocus !== null && nextAnswerFocus !== null && nextQuestionFocus !== null, "自动滚动 trigger 在有效上下文下应可构建");
+  assertContract(firstFocus !== nextAnswerFocus, "同题目新增反馈后 trigger 应变化");
+  assertContract(firstFocus !== nextQuestionFocus, "切换题目后 trigger 应变化");
+}
+
+function test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_not_changed(): void {
+  const currentTrigger = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId: "q_1",
+    selectedProgressNodeRef: "node_1",
+    latestAnswerId: "ans_1",
+  });
+  const sameTrigger = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId: "q_1",
+    selectedProgressNodeRef: "node_1",
+    latestAnswerId: "ans_1",
+  });
+
+  assertContract(currentTrigger !== null && sameTrigger !== null, "同题目应可构建稳定 trigger");
+  assertContract(
+    shouldAutoScrollQuestionConversation({
+      nextTrigger: sameTrigger,
+      previousTrigger: currentTrigger,
+      hasUserManuallyScrolled: true,
+    }) === false,
+    "同题目且用户手动滚动时不应再次自动滚动",
+  );
+  assertContract(
+    shouldAutoScrollQuestionConversation({
+      nextTrigger: sameTrigger,
+      previousTrigger: currentTrigger,
+      hasUserManuallyScrolled: false,
+    }) === true,
+    "同题目且未手动滚动时可复用上次定位策略",
+  );
+}
+
+function test_workbench_sticky_header_view_model_matches_current_question_context(): void {
+  const session = {
+    ...buildTestSession([
+      buildTestProgressNode("node_focus", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+    ]),
+    turns: [
+      {
+        question_id: "q_focus",
+        question_text: "如果让你在高并发检索中平衡召回率与精确率，你会如何设计并优先优化？",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_focus",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [
+          {
+            answer_id: "ans_1",
+            answer_round: 1,
+            answer_text: "答：我会先从 query rewrite 开始，结合多路召回再重排。",
+            answer_created_at: "2026-05-21T10:01:00Z",
+            feedback_text: "回复完整。",
+            feedback_id: "fb_1",
+            score_result_id: "score_1",
+            feedback_created_at: "2026-05-21T10:02:00Z",
+            feedback_payload: {
+              feedback_id: "fb_1",
+              feedback_text: "回复完整。",
+              status: "generated" as const,
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const stickyContext = buildStickyQuestionContextViewModel(session, "q_focus", "node_focus");
+
+  assertContract(stickyContext?.progressNodeTitle === "混合检索策略设计", "sticky header 应包含当前节点上下文");
+  assertContract(stickyContext?.capabilityTheme === "深度打磨类", "sticky header 应包含当前能力主题");
+  assertContract(stickyContext?.questionIndexLabel === "题目 1", "sticky header 应包含题目编号");
+  assertContract(
+    stickyContext?.questionText === "如果让你在高并发检索中平衡召回率与精确率，你会如何设计并优先优化？",
+    "sticky header 应包含题目正文",
+  );
+  assertContract(stickyContext?.feedbackStatusLabel === mapFeedbackCodeToDisplay("generated").text, "sticky header 应复用反馈状态中文映射");
+}
+
+function test_workbench_sticky_question_text_collapse_behavior(): void {
+  assertContract(
+    shouldCollapseCurrentQuestionText("短题干示例", { isExpanded: false }) === false,
+    "短题干不应默认折叠",
+  );
+  const longText = "请结合你的实际项目经验，完整回答以下问题，要求覆盖架构演进路径、指标体系、故障回滚策略、上线流程与持续优化机制。".repeat(6);
+  assertContract(shouldCollapseCurrentQuestionText(longText, { isExpanded: false }) === true, "长题干默认应折叠");
+  assertContract(shouldCollapseCurrentQuestionText(longText, { isExpanded: true }) === false, "展开后长题干应完整展示");
+}
+
 function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata(): void {
   const smokeSessionSummary = buildTestSessionSummary({
     id: "ses_auth_smoke",
@@ -2636,6 +2749,10 @@ test_question_node_clipboard_includes_full_question_answer_and_feedback();
 test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
+test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback();
+test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_not_changed();
+test_workbench_sticky_header_view_model_matches_current_question_context();
+test_workbench_sticky_question_text_collapse_behavior();
 test_progress_tree_pending_and_failed_states_use_generation_action();
 test_progress_tree_click_auto_generates_only_for_nodes_without_question();
 test_workbench_question_actions_follow_current_question_status();

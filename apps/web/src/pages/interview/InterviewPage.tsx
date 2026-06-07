@@ -514,6 +514,60 @@ export type ProgressTreeContextBannerSection = {
   items: string[];
 };
 
+const WORKBENCH_STICKY_QUESTION_TEXT_COLLAPSE_THRESHOLD = 130;
+
+export type WorkbenchQuestionConversationAutoScrollTrigger = {
+  focusedQuestionId: string | null;
+  selectedProgressNodeRef: string | null;
+  latestAnswerId: string | null;
+};
+
+export type WorkbenchStickyQuestionContextViewModel = {
+  focusedQuestionId: string;
+  progressNodeTitle: string;
+  capabilityTheme: string;
+  questionIndexLabel: string;
+  questionText: string;
+  feedbackStatusLabel: string;
+};
+
+export function buildQuestionConversationAutoScrollTrigger(params: WorkbenchQuestionConversationAutoScrollTrigger): string | null {
+  if (params.focusedQuestionId === null && params.selectedProgressNodeRef === null && params.latestAnswerId === null) {
+    return null;
+  }
+  return [
+    params.focusedQuestionId ?? "",
+    params.selectedProgressNodeRef ?? "",
+    params.latestAnswerId ?? "",
+  ].join("|");
+}
+
+export function shouldAutoScrollQuestionConversation(params: {
+  nextTrigger: string | null;
+  previousTrigger: string | null;
+  hasUserManuallyScrolled: boolean;
+}): boolean {
+  if (params.nextTrigger === null) {
+    return false;
+  }
+  if (params.nextTrigger === params.previousTrigger) {
+    return !params.hasUserManuallyScrolled;
+  }
+  return true;
+}
+
+export function shouldCollapseCurrentQuestionText(
+  questionText: string,
+  options: { isExpanded?: boolean; threshold?: number } = {},
+): boolean {
+  const isExpanded = options.isExpanded ?? false;
+  const threshold = options.threshold ?? WORKBENCH_STICKY_QUESTION_TEXT_COLLAPSE_THRESHOLD;
+  if (questionText.length <= threshold) {
+    return false;
+  }
+  return !isExpanded;
+}
+
 type InterviewListError = {
   message: string;
   details: string;
@@ -1319,6 +1373,51 @@ export function resolveCurrentQuestionId(
   progressNodeRef: string | null = null,
 ): string | null {
   return resolveCurrentQuestionState(session, progressNodeRef)?.questionId ?? null;
+}
+
+export function buildStickyQuestionContextViewModel(
+  session: PolishSessionDetail | null,
+  focusedQuestionId: string | null,
+  selectedProgressNodeRef: string | null,
+):
+  | WorkbenchStickyQuestionContextViewModel
+  | null {
+  if (session === null) {
+    return null;
+  }
+
+  if (focusedQuestionId === null) {
+    return null;
+  }
+
+  const selectedQuestionIndex = session.turns.findIndex((turn) => turn.question_id === focusedQuestionId);
+  if (selectedQuestionIndex === -1) {
+    return null;
+  }
+
+  const turn = session.turns[selectedQuestionIndex];
+  const selectedNode = findProgressTreeNodeByRef(
+    session.progress_tree_plan.nodes,
+    selectedProgressNodeRef ?? turn.progress_node_ref ?? null,
+  );
+  const latestAnswer = turn.answers.length > 0 ? turn.answers[turn.answers.length - 1] : null;
+  const feedbackStatusLabel = mapFeedbackCodeToDisplay(latestAnswer?.feedback_payload?.status ?? null).text;
+
+  const nodeTitle = selectedNode === null
+    ? "未选择节点"
+    : resolveProgressNodeTitle(selectedNode);
+  const nodeCategory = selectedNode === null
+    ? "未选择能力主题"
+    : resolveProgressNodeCategoryTitle(selectedNode);
+
+  return {
+    focusedQuestionId,
+    progressNodeTitle: nodeTitle,
+    capabilityTheme: nodeCategory,
+    questionIndexLabel: `题目 ${selectedQuestionIndex + 1}`,
+    questionText: turn.question_text || FALLBACK_QUESTION_TEXT,
+    feedbackStatusLabel,
+  };
 }
 
 export function resolveCurrentQuestionState(
@@ -3440,9 +3539,13 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
   const [selectedProgressNodeKey, setSelectedProgressNodeKey] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollLastAutoTriggerRef = useRef<string | null>(null);
+  const chatScrollManuallyScrolledRef = useRef<boolean>(false);
+  const chatScrollIsAutoingRef = useRef<boolean>(false);
   const [isProgressPanelCollapsed, setProgressPanelCollapsed] = useState<boolean>(false);
   const [progressPanelWidth, setProgressPanelWidth] = useState<number>(PROGRESS_PANEL_DEFAULT_WIDTH);
   const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
+  const [isCurrentQuestionTextExpanded, setCurrentQuestionTextExpanded] = useState<boolean>(false);
   const [candidates, setCandidates] = useState<PolishCandidate[]>([]);
   const [candidateLoadError, setCandidateLoadError] = useState<string | null>(null);
   const [candidateActionKey, setCandidateActionKey] = useState<string | null>(null);
@@ -3680,6 +3783,19 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const canMarkQuestionCompleted = questionActionState.canMarkQuestionCompleted;
   const focusedQuestionId =
     session === null ? null : resolveWorkbenchQuestionFocusId(session, selectedProgressNode, selectedProgressNodeDetailRef);
+  const focusedQuestionTurn = session === null || focusedQuestionId === null
+    ? null
+    : session.turns.find((turn) => turn.question_id === focusedQuestionId) ?? null;
+  const focusedQuestionLatestAnswerId =
+    focusedQuestionTurn === null || focusedQuestionTurn.answers.length === 0
+      ? null
+      : focusedQuestionTurn.answers[focusedQuestionTurn.answers.length - 1].answer_id;
+  const stickyQuestionContext = buildStickyQuestionContextViewModel(session, focusedQuestionId, selectedProgressNodeDetailRef);
+  const chatScrollAutoTrigger = buildQuestionConversationAutoScrollTrigger({
+    focusedQuestionId,
+    selectedProgressNodeRef: selectedProgressNodeDetailRef,
+    latestAnswerId: focusedQuestionLatestAnswerId,
+  });
   const progressTreeContextMenuNode =
     progressTreeContextMenu === null ? null : findWorkbenchProgressNodeByKey(progressNodes, progressTreeContextMenu.nodeKey);
   const progressTreeContextMenuDetailRef =
@@ -3829,26 +3945,64 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     if (container === null) {
       return;
     }
+    chatScrollIsAutoingRef.current = true;
     if (questionId === null) {
       container.scrollTo({ top: container.scrollHeight, behavior });
-      return;
+    } else {
+      const target = container.querySelector<HTMLElement>(`[data-workbench-question-bottom-anchor="${questionId}"]`)
+        ?? Array.from(container.querySelectorAll<HTMLElement>("[data-workbench-question-id]"))
+          .find((element) => element.dataset.workbenchQuestionId === questionId);
+
+      if (target) {
+        target.scrollIntoView({ block: "end", behavior });
+      } else {
+        container.scrollTo({ top: container.scrollHeight, behavior });
+      }
     }
-    const target = Array.from(container.querySelectorAll<HTMLElement>("[data-workbench-question-id]"))
-      .find((element) => element.dataset.workbenchQuestionId === questionId);
-    if (target) {
-      target.scrollIntoView({ block: "start", behavior });
-      return;
-    }
-    container.scrollTo({ top: container.scrollHeight, behavior });
+    window.requestAnimationFrame(() => {
+      chatScrollIsAutoingRef.current = false;
+    });
   };
 
   useEffect(() => {
     if (!hasQuestion) {
-      return undefined;
+      return;
+    }
+    const shouldAutoScroll = shouldAutoScrollQuestionConversation({
+      nextTrigger: chatScrollAutoTrigger,
+      previousTrigger: chatScrollLastAutoTriggerRef.current,
+      hasUserManuallyScrolled: chatScrollManuallyScrolledRef.current,
+    });
+    if (!shouldAutoScroll) {
+      return;
     }
     const frameId = window.requestAnimationFrame(() => scrollChatToQuestion(focusedQuestionId, "auto"));
+    chatScrollManuallyScrolledRef.current = false;
+    chatScrollLastAutoTriggerRef.current = chatScrollAutoTrigger;
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusedQuestionId, hasQuestion, session?.turns.length]);
+  }, [chatScrollAutoTrigger, hasQuestion, focusedQuestionId]);
+
+  useEffect(() => {
+    const container = chatScrollRef.current;
+    if (container === null) {
+      return;
+    }
+    const markManualScroll = () => {
+      if (chatScrollIsAutoingRef.current) {
+        return;
+      }
+      chatScrollManuallyScrolledRef.current = true;
+    };
+
+    container.addEventListener("scroll", markManualScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", markManualScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    setCurrentQuestionTextExpanded(false);
+  }, [focusedQuestionId]);
 
   useEffect(() => {
     setProgressNodeContextExpanded(false);
@@ -4064,6 +4218,75 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   const messageRowClassName = (kind: WorkbenchChatMessageKind) =>
     [styles.messageRow, styles[getWorkbenchChatMessageAlignmentClassName(kind)]].join(" ");
+
+  const renderCurrentQuestionContextStickyHeader = () => {
+    if (stickyQuestionContext === null) {
+      return null;
+    }
+    const isQuestionTextCollapsed = shouldCollapseCurrentQuestionText(stickyQuestionContext.questionText, {
+      isExpanded: isCurrentQuestionTextExpanded,
+    });
+    const canToggleQuestionText = shouldCollapseCurrentQuestionText(stickyQuestionContext.questionText, {
+      isExpanded: false,
+    });
+
+    return (
+      <section className={styles.conversationQuestionHeader} aria-label="当前题目上下文">
+        <div className={styles.conversationQuestionHeaderMetaRow}>
+          <div className={styles.conversationQuestionHeaderMetaItem}>
+            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
+              当前节点上下文
+            </Typography.Text>
+            <Typography.Text className={styles.conversationQuestionHeaderValue}>{stickyQuestionContext.progressNodeTitle}</Typography.Text>
+          </div>
+          <div className={styles.conversationQuestionHeaderMetaItem}>
+            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
+              能力主题
+            </Typography.Text>
+            <Typography.Text className={styles.conversationQuestionHeaderValue}>{stickyQuestionContext.capabilityTheme}</Typography.Text>
+          </div>
+        </div>
+        <div className={styles.conversationQuestionHeaderMetaRow}>
+          <div className={styles.conversationQuestionHeaderMetaItem}>
+            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
+              当前题目
+            </Typography.Text>
+            <Typography.Text className={styles.conversationQuestionHeaderValue}>
+              {stickyQuestionContext.questionIndexLabel}
+            </Typography.Text>
+          </div>
+          <div className={styles.conversationQuestionHeaderMetaItem}>
+            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
+              当前反馈状态
+            </Typography.Text>
+            <Typography.Text className={styles.conversationQuestionHeaderValue}>
+              {stickyQuestionContext.feedbackStatusLabel}
+            </Typography.Text>
+          </div>
+        </div>
+        <div className={styles.conversationQuestionHeaderQuestionRow}>
+          <Typography.Text strong>题目正文</Typography.Text>
+          <button
+            type="button"
+            className={styles.conversationQuestionHeaderToggle}
+            hidden={!canToggleQuestionText}
+            onClick={() => {
+              setCurrentQuestionTextExpanded((expanded) => !expanded);
+            }}
+          >
+            {isCurrentQuestionTextExpanded ? "收起" : "展开"}
+          </button>
+        </div>
+        <Typography.Text
+          className={`${styles.conversationQuestionHeaderText} ${
+            isQuestionTextCollapsed ? styles.conversationQuestionHeaderTextCollapsed : ""
+          }`}
+        >
+          {stickyQuestionContext.questionText}
+        </Typography.Text>
+      </section>
+    );
+  };
 
   const renderProgressTreeContextBanner = () => {
     if (selectedProgressNodeBanner === null || selectedProgressNodeBanner.title === null) {
@@ -4281,13 +4504,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             canSelectNode
               ? () => {
                   const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
-                  const nextQuestionFocusId =
-                    session === null ? null : resolveWorkbenchQuestionFocusId(session, node, nextSelectedRef);
                   setSelectedProgressNodeRef(nextSelectedRef);
                   setSelectedProgressNodeKey(node.key);
-                  if (nextQuestionFocusId !== null) {
-                    window.requestAnimationFrame(() => scrollChatToQuestion(nextQuestionFocusId, "smooth"));
-                  }
+                  chatScrollManuallyScrolledRef.current = false;
                   if (isExpandable) {
                     toggleProgressNode(node.key);
                   }
@@ -4597,6 +4816,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 <div className={messageRowClassName("progress_context")} data-message-kind="progress_context">
                   {renderProgressTreeContextBanner()}
                 </div>
+                {renderCurrentQuestionContextStickyHeader()}
                 {isSessionEnded ? <Alert type="info" showIcon message="模拟面试已结束" /> : null}
                 {candidateLoadError !== null ? (
                   <Alert
@@ -4637,13 +4857,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                           <div className={styles.answerBubble}>
                             <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
                           </div>
-                        </div>
-                        <div className={messageRowClassName("feedback")} data-message-kind="feedback">
-                          <section className={styles.feedbackAccordion} aria-label="反馈占位区域">
-                            <div className={styles.feedbackItem}>
-                              <Typography.Text type="secondary">{FALLBACK_FEEDBACK_TEXT}</Typography.Text>
-                            </div>
-                          </section>
                         </div>
                       </>
                     ) : (
@@ -4794,6 +5007,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                         );
                       })
                     )}
+                    <div className={styles.chatTurnBottomAnchor} data-workbench-question-bottom-anchor={turn.question_id} />
                   </section>
                 ))}
               </div>
