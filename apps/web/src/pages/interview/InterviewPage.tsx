@@ -170,6 +170,28 @@ export const INTERVIEW_WORKBENCH_LAYOUT_AREAS = [
   "feedback_accordion",
   "current_question_answer",
 ] as const;
+export const INTERVIEW_WORKBENCH_LAYOUT_VARIANT = "layout_b_resizable_progress_fixed_composer" as const;
+export const INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS = [
+  "summary_bar",
+  "left_progress_tree",
+  "right_conversation_header",
+  "right_chat_scroll",
+  "right_sticky_merged_context_card",
+  "right_fixed_next_action_bar",
+  "right_fixed_composer",
+] as const;
+export const INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT = {
+  layoutArea: "right_sticky_merged_context_card",
+  progressContext: "merged_into_current_question_card",
+  currentQuestion: "same_sticky_card",
+  behavior: "sticky_collapsible",
+} as const;
+export const INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY = {
+  root: "viewport_locked",
+  progressPanel: "independent_scroll",
+  chatScroll: "independent_auto_scroll",
+  composer: "outside_chat_scroll",
+} as const;
 export const INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS = {
   root: "interview-workbench-viewport",
   progressPanel: "interview-workbench-progress-panel",
@@ -291,6 +313,16 @@ export const INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY = [
 ] as const;
 export const INTERVIEW_WORKBENCH_PRIMARY_ACTIONS = ["send_answer"] as const;
 export const INTERVIEW_WORKBENCH_CURRENT_QUESTION_COMPOSER_PLACEMENT = "right_panel_bottom_fixed" as const;
+export const INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT = "fixed_above_current_question_composer" as const;
+export const INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY = {
+  feedbackCard: "readonly",
+  nextActions: "composer_action_bar",
+  candidateActions: "composer_action_bar",
+} as const;
+export const INTERVIEW_WORKBENCH_ROUND_META_LABEL_POLICY = {
+  answer: "compact_pill",
+  feedback: "compact_pill",
+} as const;
 export const INTERVIEW_WORKBENCH_DISABLED_ACTIONS = [] as const;
 export const INTERVIEW_WORKBENCH_STATE_REGIONS = ["loading", "error", "not_found"] as const;
 export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
@@ -331,6 +363,13 @@ const FEEDBACK_CODE_DISPLAY_MAP: Record<string, string> = {
   notice: "提示",
 };
 const FEEDBACK_LOSS_POINTS_TABLE_COLUMNS = ["序号", "严重程度", "扣分", "问题", "修正建议"] as const;
+export const INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS = {
+  index: "44px",
+  severity: "96px",
+  deduction: "64px",
+  issue: "34%",
+  suggestion: "42%",
+} as const;
 const CODE_NOT_AVAILABLE_TEXT = "未知状态";
 const FEEDBACK_REFERENCE_SECTION_FALLBACK = "暂无参考回答";
 const FEEDBACK_LOSS_POINTS_TABLE_EMPTY_TEXT = "暂无明确失分点";
@@ -2434,6 +2473,40 @@ export function toNextRecommendedActionLabel(action: PolishRecommendedAction): s
   return NEXT_RECOMMENDED_ACTION_LABELS[action] ?? action;
 }
 
+function normalizeRoundNumber(round: number | null | undefined): number {
+  if (typeof round !== "number" || !Number.isFinite(round) || round < 1) {
+    return 1;
+  }
+  return Math.floor(round);
+}
+
+export function buildAnswerRoundMetaLabel(round: number | null | undefined): string {
+  return `回答 #${normalizeRoundNumber(round)}`;
+}
+
+export function buildFeedbackRoundMetaLabel(round: number | null | undefined): string {
+  return `反馈 #${normalizeRoundNumber(round)}`;
+}
+
+export function buildWorkbenchFixedNextActionBarViewModel(
+  answer: PolishSessionAnswer | null | undefined,
+): WorkbenchFixedNextActionBarViewModel | null {
+  if (answer === null || answer === undefined) {
+    return null;
+  }
+  const actions = getAnswerNextRecommendedActions(answer).map((action) => ({
+    action,
+    label: toNextRecommendedActionLabel(action),
+  }));
+  if (actions.length === 0) {
+    return null;
+  }
+  return {
+    placement: INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT,
+    actions,
+  };
+}
+
 type FeedbackSectionKey =
   | "failed_status"
   | "feedback"
@@ -2480,6 +2553,14 @@ export type FeedbackCardViewModel = {
   traceItems: string[];
 };
 
+export type WorkbenchFixedNextActionBarViewModel = {
+  placement: typeof INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT;
+  actions: Array<{
+    action: PolishRecommendedAction;
+    label: string;
+  }>;
+};
+
 export type CandidateReviewItemViewModel = {
   candidateId: string;
   typeLabel: string;
@@ -2499,6 +2580,18 @@ export type CandidateReviewViewModel = {
   pendingCount: number;
   settledCount: number;
   mergeHint: string | null;
+};
+
+export type WorkbenchCandidateActionBarViewModel = {
+  placement: typeof INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT;
+  pendingCount: number;
+  items: Array<{
+    candidateId: string;
+    title: string;
+    typeLabel: string;
+    confirmLabel: "确认候选";
+    dismissLabel: "忽略候选";
+  }>;
 };
 
 const CANDIDATE_TYPE_LABELS: Record<string, string> = {
@@ -2552,7 +2645,7 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     };
   }
   return {
-    title: `第 ${answer.answer_round} 轮反馈`,
+    title: buildFeedbackRoundMetaLabel(answer.answer_round),
     status,
     contractId,
     contractIds,
@@ -2727,7 +2820,7 @@ export function buildCandidateReviewViewModel(
       confidenceLabel: confidence ? `置信度：${confidence}` : null,
       canConfirm: status === "candidate",
       canDismiss: status === "candidate",
-      mergeHint: mergeTarget ? "后端支持候选合并；当前最小入口先提供确认或忽略，合并将在后续面板完善。" : null,
+      mergeHint: mergeTarget ? "输入区上方动作条提供候选确认或忽略入口；候选合并将在后续面板完善。" : null,
     };
   });
   return {
@@ -2735,8 +2828,28 @@ export function buildCandidateReviewViewModel(
     pendingCount: items.filter((item) => item.canConfirm || item.canDismiss).length,
     settledCount: items.filter((item) => !item.canConfirm && !item.canDismiss).length,
     mergeHint: items.length > 0
-      ? "后端支持候选合并；当前最小入口先提供确认或忽略，合并将在后续面板完善。"
+      ? "输入区上方动作条提供候选确认或忽略入口；候选合并将在后续面板完善。"
       : null,
+  };
+}
+
+export function buildWorkbenchCandidateActionBarViewModel(
+  candidateReview: CandidateReviewViewModel | null | undefined,
+): WorkbenchCandidateActionBarViewModel | null {
+  const pendingItems = (candidateReview?.items ?? []).filter((item) => item.canConfirm || item.canDismiss);
+  if (pendingItems.length === 0) {
+    return null;
+  }
+  return {
+    placement: INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT,
+    pendingCount: pendingItems.length,
+    items: pendingItems.map((item) => ({
+      candidateId: item.candidateId,
+      title: item.title,
+      typeLabel: item.typeLabel,
+      confirmLabel: "确认候选",
+      dismissLabel: "忽略候选",
+    })),
   };
 }
 
@@ -3070,6 +3183,13 @@ function renderFeedbackSectionContent(section: FeedbackCardSectionViewModel): Re
     return (
       <div className={styles.feedbackSectionTableWrap}>
         <table className={styles.feedbackSectionTable}>
+          <colgroup>
+            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.index }} />
+            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.severity }} />
+            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.deduction }} />
+            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.issue }} />
+            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.suggestion }} />
+          </colgroup>
           <thead>
             <tr>
               {columns.map((column) => (
@@ -4105,6 +4225,15 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       : focusedQuestionTurn.answers[focusedQuestionTurn.answers.length - 1];
   const focusedQuestionLatestFeedbackId =
     focusedQuestionLatestAnswer?.feedback_id ?? focusedQuestionLatestAnswer?.feedback_payload?.feedback_id ?? null;
+  const fixedNextActionBar = buildWorkbenchFixedNextActionBarViewModel(focusedQuestionLatestAnswer);
+  const fixedNextActionProgressNodeRef = focusedQuestionTurn?.progress_node_ref ?? selectedProgressNodeDetailRef;
+  const focusedCandidateReview = buildCandidateReviewViewModel(
+    focusedQuestionLatestAnswer
+      ? candidates.filter((candidate) => candidateBelongsToAnswer(candidate, focusedQuestionLatestAnswer))
+      : [],
+  );
+  const fixedCandidateActionBar = buildWorkbenchCandidateActionBarViewModel(focusedCandidateReview);
+  const shouldShowFixedComposerActionBar = fixedNextActionBar !== null || fixedCandidateActionBar !== null;
   const stickyQuestionContext = buildStickyQuestionContextViewModel(session, focusedQuestionId, selectedProgressNodeDetailRef);
   const chatScrollAutoTrigger = buildQuestionConversationAutoScrollTrigger({
     focusedQuestionId,
@@ -4539,6 +4668,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     if (stickyQuestionContext === null) {
       return null;
     }
+    const progressContextCanExpand =
+      selectedProgressNodeBanner !== null
+      && selectedProgressNodeBanner.title !== null
+      && shouldShowProgressTreeContextBannerToggle(selectedProgressNodeBanner);
+    const progressContextExpandedSections =
+      selectedProgressNodeBanner !== null && selectedProgressNodeBanner.title !== null
+        ? buildProgressTreeContextBannerExpandedSections(selectedProgressNodeBanner)
+        : [];
     const isQuestionTextCollapsed = shouldCollapseCurrentQuestionText(stickyQuestionContext.questionText, {
       isExpanded: isCurrentQuestionTextExpanded,
     });
@@ -4547,7 +4684,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     });
 
     return (
-      <section className={styles.conversationQuestionHeader} aria-label="当前题目上下文">
+      <section
+        className={styles.conversationQuestionHeader}
+        aria-label="当前题目与节点上下文"
+        data-layout-area={INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.layoutArea}
+      >
         <div className={styles.conversationQuestionHeaderMetaRow}>
           <div className={styles.conversationQuestionHeaderMetaItem}>
             <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
@@ -4600,43 +4741,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         >
           {stickyQuestionContext.questionText}
         </Typography.Text>
-      </section>
-    );
-  };
-
-  const renderProgressTreeContextBanner = () => {
-    if (selectedProgressNodeBanner === null || selectedProgressNodeBanner.title === null) {
-      return (
-        <section
-          className={`${styles.progressNodeContextBanner} ${styles.progressNodeContextEmpty}`}
-          aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
-        >
-          <div className={styles.progressNodeContextHeader}>
-            <Typography.Text strong className={styles.progressNodeContextLabel}>
-              {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
-            </Typography.Text>
-            <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
-              {selectedProgressNodeBanner?.emptyDescription ?? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY}
-            </Typography.Text>
-          </div>
-        </section>
-      );
-    }
-
-    const canExpandContext = shouldShowProgressTreeContextBannerToggle(selectedProgressNodeBanner);
-    const expandedSections = buildProgressTreeContextBannerExpandedSections(selectedProgressNodeBanner);
-
-    return (
-      <section className={styles.progressNodeContextBanner} aria-label={INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}>
-        <div className={styles.progressNodeContextHeader}>
-          <Typography.Text strong className={styles.progressNodeContextLabel}>
-            {INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE}
+        {selectedProgressNodeBanner?.depthRequirement && !isProgressNodeContextExpanded ? (
+          <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
+            {selectedProgressNodeBanner.depthRequirement}
           </Typography.Text>
-          <Typography.Text strong className={styles.progressNodeContextTitle}>
-            {selectedProgressNodeBanner.title}
-          </Typography.Text>
-        </div>
-        {canExpandContext ? (
+        ) : null}
+        {progressContextCanExpand ? (
           <button
             className={styles.progressNodeContextToggle}
             type="button"
@@ -4648,14 +4758,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               : INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand}
           </button>
         ) : null}
-        {selectedProgressNodeBanner.depthRequirement && !isProgressNodeContextExpanded ? (
-          <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
-            {selectedProgressNodeBanner.depthRequirement}
-          </Typography.Text>
-        ) : null}
         {isProgressNodeContextExpanded ? (
           <div className={styles.progressNodeContextExpandedBody}>
-            {expandedSections.map((section) => (
+            {progressContextExpandedSections.map((section) => (
               <section className={styles.progressNodeContextSection} key={section.key}>
                 <Typography.Text strong className={styles.progressNodeContextSectionTitle}>
                   {section.title}
@@ -4684,8 +4789,80 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       <div
         className={styles.currentQuestionComposer}
         data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.currentQuestionComposer}
+        data-layout-area="right_fixed_composer"
       >
         {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
+        {shouldShowFixedComposerActionBar ? (
+          <div
+            className={styles.currentQuestionNextActionBar}
+            data-layout-area="right_fixed_next_action_bar"
+            aria-label="输入区操作"
+          >
+            {fixedNextActionBar !== null ? (
+              <div className={styles.currentQuestionActionGroup}>
+                <Typography.Text strong className={styles.currentQuestionNextActionTitle}>
+                  下一步建议
+                </Typography.Text>
+                <div className={styles.currentQuestionNextActionButtons}>
+                  {fixedNextActionBar.actions.map((item) => (
+                    <Button
+                      key={`${fixedNextActionBar.placement}:${item.action}`}
+                      size="small"
+                      disabled={creatingQuestion || submittingAnswer || feedbackGenerating || isSessionEnded}
+                      loading={item.action === "generate_next_question" && creatingQuestion}
+                      onClick={() => handleNextRecommendedAction(item.action, fixedNextActionProgressNodeRef)}
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {fixedCandidateActionBar !== null ? (
+              <div className={styles.currentQuestionActionGroup}>
+                <Typography.Text strong className={styles.currentQuestionNextActionTitle}>
+                  候选处理
+                </Typography.Text>
+                <Tag color="processing" className={styles.feedbackMetaTag}>
+                  {`待确认 ${fixedCandidateActionBar.pendingCount} 项`}
+                </Tag>
+                <div className={styles.currentQuestionCandidateActions}>
+                  {fixedCandidateActionBar.items.map((item) => (
+                    <div className={styles.currentQuestionCandidateActionItem} key={item.candidateId}>
+                      <Typography.Text className={styles.currentQuestionCandidateActionTitle}>
+                        {item.title}
+                      </Typography.Text>
+                      <Button
+                        size="small"
+                        type="primary"
+                        icon={<CheckCircleOutlined />}
+                        loading={candidateActionKey === `${item.candidateId}:confirm`}
+                        disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`)}
+                        onClick={() => {
+                          void runCandidateAction(item.candidateId, "confirm");
+                        }}
+                      >
+                        {item.confirmLabel}
+                      </Button>
+                      <Button
+                        size="small"
+                        danger
+                        icon={<CloseCircleOutlined />}
+                        loading={candidateActionKey === `${item.candidateId}:dismiss`}
+                        disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`)}
+                        onClick={() => {
+                          void runCandidateAction(item.candidateId, "dismiss");
+                        }}
+                      >
+                        {item.dismissLabel}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <Input.TextArea
           className={styles.currentQuestionComposerInput}
           rows={4}
@@ -4953,8 +5130,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           />
         </div>
       ) : (
-        <div className={styles.workbenchRoot} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.root}>
-          <section className={styles.heroPanel}>
+        <div
+          className={styles.workbenchRoot}
+          data-layout-variant={INTERVIEW_WORKBENCH_LAYOUT_VARIANT}
+          data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.root}
+        >
+          <section className={styles.heroPanel} data-layout-area="summary_bar">
             <div className={styles.heroHeader}>
               <div className={styles.heroSummary}>
                 <div className={styles.metaPills}>
@@ -5025,7 +5206,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           </Modal>
 
           <section className={workspaceGridClassName} style={workspaceGridStyle}>
-            <aside className={progressPanelClassName} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressPanel}>
+            <aside
+              className={progressPanelClassName}
+              data-layout-area="left_progress_tree"
+              data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.progressPanel}
+            >
               {isProgressPanelCollapsed ? (
                 <Tooltip title="展开模拟面试进度">
                   <Button
@@ -5151,7 +5336,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             )}
 
             <main className={styles.conversationPanel} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.conversationPanel}>
-              <div className={styles.conversationHeader}>
+              <div className={styles.conversationHeader} data-layout-area="right_conversation_header">
                 <div className={styles.conversationHeaderTitle}>
                   <Typography.Title level={5} className={styles.panelTitle}>
                     对话与反馈
@@ -5162,10 +5347,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 </div>
               </div>
 
-              <div ref={chatScrollRef} className={styles.chatScroll} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}>
-                <div className={messageRowClassName("progress_context")} data-message-kind="progress_context">
-                  {renderProgressTreeContextBanner()}
-                </div>
+              <div
+                ref={chatScrollRef}
+                className={styles.chatScroll}
+                data-layout-area="right_chat_scroll"
+                data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}
+              >
                 {renderCurrentQuestionContextStickyHeader()}
                 {isSessionEnded ? <Alert type="info" showIcon message="模拟面试已结束" /> : null}
                 {candidateLoadError !== null ? (
@@ -5212,7 +5399,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     ) : (
                       turn.answers.map((answer) => {
                         const feedbackCard = buildFeedbackCardViewModel(answer);
-                        const nextActions = feedbackCard.nextActions;
                         const candidateReview = buildCandidateReviewViewModel(
                           candidates.filter((candidate) => candidateBelongsToAnswer(candidate, answer)),
                         );
@@ -5220,7 +5406,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                           <section key={answer.answer_id} className={styles.chatAnswerGroup}>
                             <div className={messageRowClassName("user_answer")} data-message-kind="user_answer">
                               <div className={styles.answerBubble}>
-                                <Typography.Text strong>{`第 ${answer.answer_round} 轮回答`}</Typography.Text>
+                                <div className={styles.answerBubbleHeader}>
+                                  <Tag className={styles.answerRoundPill}>{buildAnswerRoundMetaLabel(answer.answer_round)}</Tag>
+                                </div>
                                 <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
                               </div>
                             </div>
@@ -5228,8 +5416,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                               <section className={styles.feedbackAccordion} aria-label={`${feedbackCard.title}区域`}>
                                 <div className={styles.feedbackCardHeader}>
                                   <div className={styles.feedbackTextBlock}>
-                                    <Typography.Text strong>{feedbackCard.title}</Typography.Text>
-                                    <div className={styles.feedbackMetaRow}>
+                                    <div className={styles.feedbackCardTitleRow}>
+                                      <Tag className={styles.feedbackRoundPill}>{feedbackCard.title}</Tag>
                                       <Tag color={feedbackStatusTagColor(feedbackCard.status)} className={styles.feedbackMetaTag}>
                                         {mapFeedbackCodeToDisplay(feedbackCard.status).text}
                                       </Tag>
@@ -5259,12 +5447,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                   ) : null}
                                 </div>
                                 {candidateReview.items.length > 0 ? (
-                                  <section className={styles.candidateReviewPanel} aria-label="候选对象确认">
+                                  <section className={styles.candidateReviewPanel} aria-label="候选对象摘要">
                                     <div className={styles.candidateReviewHeader}>
                                       <div className={styles.feedbackTextBlock}>
-                                        <Typography.Text strong>候选确认</Typography.Text>
+                                        <Typography.Text strong>候选摘要</Typography.Text>
                                         <Typography.Text type="secondary" className={styles.candidateReviewSummary}>
-                                          {`待确认 ${candidateReview.pendingCount} 项，已处理 ${candidateReview.settledCount} 项`}
+                                          {`待确认 ${candidateReview.pendingCount} 项，已处理 ${candidateReview.settledCount} 项；请在输入区上方动作条处理`}
                                         </Typography.Text>
                                       </div>
                                       <Tag color={candidateReview.pendingCount > 0 ? "processing" : "default"} className={styles.feedbackMetaTag}>
@@ -5285,40 +5473,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                                 <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag>
                                               ) : null}
                                             </Space>
-                                            <Space size={6} wrap>
-                                              {item.canConfirm ? (
-                                                <Tooltip title="确认并交给后端写入正式对象">
-                                                  <Button
-                                                    size="small"
-                                                    type="primary"
-                                                    icon={<CheckCircleOutlined />}
-                                                    loading={candidateActionKey === `${item.candidateId}:confirm`}
-                                                    disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`}
-                                                    onClick={() => {
-                                                      void runCandidateAction(item.candidateId, "confirm");
-                                                    }}
-                                                  >
-                                                    确认
-                                                  </Button>
-                                                </Tooltip>
-                                              ) : null}
-                                              {item.canDismiss ? (
-                                                <Tooltip title="忽略该候选对象">
-                                                  <Button
-                                                    size="small"
-                                                    danger
-                                                    icon={<CloseCircleOutlined />}
-                                                    loading={candidateActionKey === `${item.candidateId}:dismiss`}
-                                                    disabled={candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`}
-                                                    onClick={() => {
-                                                      void runCandidateAction(item.candidateId, "dismiss");
-                                                    }}
-                                                  >
-                                                    忽略
-                                                  </Button>
-                                                </Tooltip>
-                                              ) : null}
-                                            </Space>
                                           </div>
                                           <div className={styles.candidateReviewBody}>
                                             <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
@@ -5335,21 +5489,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                                       ))}
                                     </div>
                                   </section>
-                                ) : null}
-                                {nextActions.length > 0 ? (
-                                  <div className={styles.nextActionBar} aria-label="下一步建议">
-                                    {nextActions.map((action) => (
-                                      <Button
-                                        key={`${answer.answer_id}:${action}`}
-                                        size="small"
-                                        disabled={creatingQuestion || submittingAnswer || feedbackGenerating}
-                                        loading={action === "generate_next_question" && creatingQuestion}
-                                        onClick={() => handleNextRecommendedAction(action, turn.progress_node_ref)}
-                                      >
-                                        {toNextRecommendedActionLabel(action)}
-                                      </Button>
-                                    ))}
-                                  </div>
                                 ) : null}
                               </section>
                             </div>

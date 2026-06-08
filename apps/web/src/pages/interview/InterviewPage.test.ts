@@ -27,10 +27,18 @@ import {
   INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS,
   INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY,
   INTERVIEW_WORKBENCH_LAYOUT_AREAS,
+  INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS,
+  INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY,
+  INTERVIEW_WORKBENCH_LAYOUT_VARIANT,
   INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
   INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS,
+  INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS,
+  INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT,
+  INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT,
   INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY,
+  INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY,
   INTERVIEW_WORKBENCH_PROGRESS_HEADER_COPY,
+  INTERVIEW_WORKBENCH_ROUND_META_LABEL_POLICY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT,
   INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE,
@@ -58,7 +66,11 @@ import {
   buildPolishSessionCreateRequest,
   buildInterviewCreatePendingDescription,
   buildCandidateReviewViewModel,
+  buildAnswerRoundMetaLabel,
   buildFeedbackCardViewModel,
+  buildFeedbackRoundMetaLabel,
+  buildWorkbenchCandidateActionBarViewModel,
+  buildWorkbenchFixedNextActionBarViewModel,
   mapFeedbackCodeToDisplay,
   buildPolishSessionReportDialogViewModel,
   buildProgressTreeNodeClipboardMarkdown,
@@ -259,6 +271,45 @@ type WorkbenchLayoutAreasAreStable = Expect<
     readonly ["top_summary", "progress_panel", "conversation_panel", "feedback_accordion", "current_question_answer"]
   >
 >;
+type WorkbenchLayoutVariantIsPlanB = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_LAYOUT_VARIANT, "layout_b_resizable_progress_fixed_composer">
+>;
+type WorkbenchLayoutBGridAreasAreStable = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS,
+    readonly [
+      "summary_bar",
+      "left_progress_tree",
+      "right_conversation_header",
+      "right_chat_scroll",
+      "right_sticky_merged_context_card",
+      "right_fixed_next_action_bar",
+      "right_fixed_composer"
+    ]
+  >
+>;
+type WorkbenchMergedContextCardLayoutIsStable = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT,
+    {
+      readonly layoutArea: "right_sticky_merged_context_card";
+      readonly progressContext: "merged_into_current_question_card";
+      readonly currentQuestion: "same_sticky_card";
+      readonly behavior: "sticky_collapsible";
+    }
+  >
+>;
+type WorkbenchLayoutBScrollPolicyIsStable = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY,
+    {
+      readonly root: "viewport_locked";
+      readonly progressPanel: "independent_scroll";
+      readonly chatScroll: "independent_auto_scroll";
+      readonly composer: "outside_chat_scroll";
+    }
+  >
+>;
 type WorkbenchLayoutTestIdsAreStable = Expect<
   Equal<
     typeof INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
@@ -277,6 +328,40 @@ type WorkbenchScrollRegionsAreStable = Expect<
 >;
 type WorkbenchLeftDetailUsesFullWidth = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS, readonly ["progress_context", "system_question", "feedback"]>
+>;
+type WorkbenchNextActionPlacementIsFixedAboveComposer = Expect<
+  Equal<typeof INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT, "fixed_above_current_question_composer">
+>;
+type WorkbenchFeedbackCardInteractionPolicyIsReadonly = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY,
+    {
+      readonly feedbackCard: "readonly";
+      readonly nextActions: "composer_action_bar";
+      readonly candidateActions: "composer_action_bar";
+    }
+  >
+>;
+type WorkbenchRoundMetaLabelPolicyIsCompact = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_ROUND_META_LABEL_POLICY,
+    {
+      readonly answer: "compact_pill";
+      readonly feedback: "compact_pill";
+    }
+  >
+>;
+type WorkbenchLossPointTableColumnWidthsAreStable = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS,
+    {
+      readonly index: "44px";
+      readonly severity: "96px";
+      readonly deduction: "64px";
+      readonly issue: "34%";
+      readonly suggestion: "42%";
+    }
+  >
 >;
 type WorkbenchHeroActionsStayOnSummaryRowEnd = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT, "summary_row_end">
@@ -1167,6 +1252,25 @@ function test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right()
   assertContract(getWorkbenchChatMessageAlignmentClassName("feedback") === "messageRowLeft", "反馈卡应使用左对齐行容器");
   assertContract(getWorkbenchChatMessageAlignmentClassName("user_answer") === "messageRowRight", "用户回答应使用右对齐行容器");
   assertContract(getWorkbenchChatMessageAlignmentClassName("user_answer_placeholder") === "messageRowRight", "暂无回答应使用右对齐行容器");
+}
+
+function test_workbench_layout_b_keeps_progress_and_conversation_scroll_independent(): void {
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_VARIANT === "layout_b_resizable_progress_fixed_composer", "模拟面试工作台应使用方案 B 布局");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[0] === "summary_bar", "方案 B 顶部概要应独立于双栏工作区");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[1] === "left_progress_tree", "方案 B 左栏应固定承载进展树");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[2] === "right_conversation_header", "方案 B 右侧顶部应承载对话状态头");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[3] === "right_chat_scroll", "方案 B 右侧中段应作为聊天独立滚动区");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[4] === "right_sticky_merged_context_card", "方案 B 当前题目和节点上下文应合并为右侧单一 sticky 卡");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[5] === "right_fixed_next_action_bar", "方案 B 下一步建议应固定在输入区上方");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[6] === "right_fixed_composer", "方案 B 回答输入区应固定在右侧面板底部");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.root === "viewport_locked", "方案 B 根容器应锁定视口高度");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.progressPanel === "independent_scroll", "方案 B 左侧进展树应独立滚动");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.chatScroll === "independent_auto_scroll", "方案 B 聊天区应保留独立自动滚动");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.composer === "outside_chat_scroll", "方案 B 输入区不应进入聊天滚动内容");
+  assertContract(INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT === "fixed_above_current_question_composer", "方案 B 下一步建议应固定在输入框正上方");
+  assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.progressContext === "merged_into_current_question_card", "当前节点上下文不应再作为独立 progress_context 大卡渲染");
+  assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.currentQuestion === "same_sticky_card", "当前题目应和节点上下文共用同一张 sticky 卡");
+  assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.behavior === "sticky_collapsible", "合并后的上下文卡应保持 sticky 且支持折叠");
 }
 
 function test_question_node_clipboard_includes_full_question_answer_and_feedback(): void {
@@ -2270,6 +2374,74 @@ function test_workbench_ctrl_enter_submits_answer(): void {
   assertContract(!canSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: false }, true), "普通 Enter 应继续保留换行行为");
 }
 
+function test_workbench_next_actions_render_in_fixed_composer_bar(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_fixed_actions",
+    answer_round: 1,
+    answer_text: "我会继续补充失败兜底和指标验证。",
+    answer_created_at: "2026-06-08T01:00:00Z",
+    feedback_text: "建议继续补充细节，再生成下一题。",
+    feedback_id: "fb_fixed_actions",
+    score_result_id: null,
+    feedback_created_at: "2026-06-08T01:01:00Z",
+    feedback_payload: {
+      status: "generated",
+      feedback_id: "fb_fixed_actions",
+      feedback_text: "建议继续补充细节，再生成下一题。",
+      next_recommended_actions: ["provide_more_answer_detail", "generate_next_question", "provide_more_answer_detail"],
+    },
+  };
+  const fixedBar = buildWorkbenchFixedNextActionBarViewModel(answer);
+
+  assertContract(fixedBar !== null, "有下一步建议时应生成固定动作条 view model");
+  assertContract(fixedBar?.placement === INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT, "下一步建议应固定在输入框正上方");
+  assertContract(fixedBar?.actions.map((item) => item.action).join(",") === "provide_more_answer_detail,generate_next_question", "固定动作条应对 contract enum 去重");
+  assertContract(fixedBar?.actions.map((item) => item.label).join(",") === "补充回答细节,生成下一题", "固定动作条应展示中文动作文案");
+  assertContract(buildWorkbenchFixedNextActionBarViewModel(null) === null, "没有当前反馈时不应渲染固定动作条");
+}
+
+function test_workbench_candidate_actions_render_in_fixed_composer_bar(): void {
+  const review = buildCandidateReviewViewModel([
+    {
+      candidate_id: "cand_action_001",
+      candidate_type: "weakness_candidate",
+      status: "candidate",
+      title: "补齐指标验证",
+      summary: "回答缺少上线指标和复盘口径。",
+      answer_id: "ans_fixed_actions",
+      feedback_id: "fb_fixed_actions",
+    },
+    {
+      candidate_id: "cand_action_002",
+      candidate_type: "asset_candidate",
+      status: "confirmed",
+      title: "已沉淀项目表达",
+      summary: "该候选已经处理完成。",
+      answer_id: "ans_fixed_actions",
+      feedback_id: "fb_fixed_actions",
+    },
+  ]);
+  const actionBar = buildWorkbenchCandidateActionBarViewModel(review);
+
+  assertContract(INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY.feedbackCard === "readonly", "反馈卡应保持只读策略");
+  assertContract(INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY.candidateActions === "composer_action_bar", "候选确认/忽略应迁移到输入区动作条");
+  assertContract(actionBar !== null, "存在待处理 candidate 时应生成输入区候选动作条 view model");
+  assertContract(actionBar?.placement === INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT, "候选动作应与下一步建议共用输入区上方固定动作条");
+  assertContract(actionBar?.pendingCount === 1, "候选动作条只应聚焦待处理 candidate");
+  assertContract(actionBar?.items.map((item) => item.confirmLabel).join(",") === "确认候选", "候选确认按钮应使用中文文案");
+  assertContract(actionBar?.items.map((item) => item.dismissLabel).join(",") === "忽略候选", "候选忽略按钮应使用中文文案");
+  assertContract(buildWorkbenchCandidateActionBarViewModel(buildCandidateReviewViewModel([])) === null, "无 candidate 时不应渲染候选动作条");
+}
+
+function test_workbench_round_labels_use_compact_meta_pills(): void {
+  assertContract(INTERVIEW_WORKBENCH_ROUND_META_LABEL_POLICY.answer === "compact_pill", "回答轮次应使用紧凑 pill/meta");
+  assertContract(INTERVIEW_WORKBENCH_ROUND_META_LABEL_POLICY.feedback === "compact_pill", "反馈轮次应使用紧凑 pill/meta");
+  assertContract(buildAnswerRoundMetaLabel(3) === "回答 #3", "回答轮次不应再展示为大标题");
+  assertContract(buildFeedbackRoundMetaLabel(3) === "反馈 #3", "反馈轮次不应再展示为大标题");
+  assertContract(!buildAnswerRoundMetaLabel(3).includes("轮回答"), "回答 compact label 不应包含旧大标题文案");
+  assertContract(!buildFeedbackRoundMetaLabel(3).includes("轮反馈"), "反馈 compact label 不应包含旧大标题文案");
+}
+
 function test_feedback_card_view_model_uses_contract_payload_sections_and_actions(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_feedback_001",
@@ -2613,6 +2785,10 @@ function test_feedback_card_view_model_renders_loss_points_as_table_rows(): void
   assertContract(rows[1]?.deduction === "3", "第二条扣分应展示数值");
   assertContract(rowsCopy.includes("缺少方案对比。"), "修正建议/问题应显示");
   assertContract(rowsCopy.includes("补充优缺点对比。"), "修正建议字段应显示");
+  assertContract(INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.severity === "96px", "失分点表格严重程度列应窄于正文列");
+  assertContract(INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.deduction === "64px", "失分点表格扣分列应使用窄列");
+  assertContract(INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.issue === "34%", "失分点表格问题列应占主要阅读空间");
+  assertContract(INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.suggestion === "42%", "失分点表格修正建议列应占主要阅读空间");
 }
 
 function test_feedback_card_reference_answer_sections_assemble_to_paragraphs(): void {
@@ -3257,9 +3433,13 @@ test_workbench_hero_actions_are_icon_only_and_copy_session_content();
 test_progress_tree_node_status_uses_row_trailing_lights();
 test_progress_node_context_banner_supports_expand_toggle_for_depth();
 test_workbench_chat_bubble_alignment_keeps_system_left_and_user_right();
+test_workbench_layout_b_keeps_progress_and_conversation_scroll_independent();
 test_question_node_clipboard_includes_full_question_answer_and_feedback();
 test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
+test_workbench_next_actions_render_in_fixed_composer_bar();
+test_workbench_candidate_actions_render_in_fixed_composer_bar();
+test_workbench_round_labels_use_compact_meta_pills();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback();
 test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_not_changed();

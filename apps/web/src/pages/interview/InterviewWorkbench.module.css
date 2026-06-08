@@ -97,6 +97,7 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(260px, var(--progress-panel-width, 360px)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -117,6 +118,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 100%;
   padding: 12px 14px;
   overflow: hidden;
 }
@@ -166,6 +168,7 @@
 .conversationPanel {
   inline-size: 100%;
   min-width: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -556,6 +559,7 @@
 }
 
 .conversationHeader {
+  flex: 0 0 auto;
   min-height: 48px;
   padding: 10px 16px;
   border-bottom: 1px solid #dce6f2;
@@ -584,6 +588,8 @@
   padding: 20px 20px 24px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 16px 156px;
 }
 
 .conversationQuestionHeader {
@@ -786,6 +792,28 @@
   color: #ffffff;
 }
 
+.answerBubbleHeader {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.answerRoundPill,
+.feedbackRoundPill {
+  margin: 0;
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #eef5ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.answerRoundPill {
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
 .answerBubble :global(.ant-typography) {
   color: inherit;
 }
@@ -835,6 +863,14 @@
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+}
+
+.feedbackCardTitleRow {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 
@@ -925,6 +961,23 @@
   font-weight: 600;
 }
 
+.feedbackSectionTable th:nth-child(1),
+.feedbackSectionTable td:nth-child(1) {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.feedbackSectionTable th:nth-child(2),
+.feedbackSectionTable td:nth-child(2) {
+  white-space: nowrap;
+}
+
+.feedbackSectionTable th:nth-child(3),
+.feedbackSectionTable td:nth-child(3) {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .feedbackSectionTextList {
   display: grid;
   gap: 6px;
@@ -996,21 +1049,81 @@
   line-height: 1.55;
 }
 
-.nextActionBar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 2px 2px;
-}
-
 .currentQuestionComposer {
   flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
   width: 100%;
   display: grid;
   gap: 10px;
   padding: 14px 20px 18px;
   border-top: 1px solid #dce6f2;
   background: #ffffff;
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.currentQuestionNextActionBar {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid #e6edf7;
+}
+
+.currentQuestionActionGroup {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.currentQuestionNextActionTitle {
+  flex: 0 0 auto;
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.currentQuestionNextActionButtons {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.currentQuestionCandidateActions {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.currentQuestionCandidateActionItem {
+  min-width: min(100%, 280px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.currentQuestionCandidateActionTitle {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  color: #334155;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .currentQuestionComposerInput {
