@@ -96,22 +96,225 @@
   overflow: hidden;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(260px, var(--progress-panel-width, 360px)) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, var(--progress-panel-width, 320px)) minmax(430px, 1fr) minmax(0, var(--feedback-panel-width, 430px));
   grid-template-rows: minmax(0, 1fr);
   gap: 12px;
 }
 
 .workspaceGridCollapsed {
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+}
+
+.workspaceGridLeftCollapsed {
+  grid-template-columns: 48px minmax(430px, 1fr) minmax(0, var(--feedback-panel-width, 430px));
+}
+
+.workspaceGridRightCollapsed {
+  grid-template-columns: minmax(320px, var(--progress-panel-width, 320px)) minmax(0, 1fr) 48px;
 }
 
 .progressPanel,
-.conversationPanel {
+.conversationPanel,
+.feedbackPanel {
   min-height: 0;
   border: 1px solid #dce6f2;
   border-radius: 8px;
   background: #ffffff;
   overflow: hidden;
+}
+
+.feedbackPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.feedbackPanelHeader {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dbe7f8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feedbackPanelEmpty,
+.feedbackPanelSummary {
+  padding: 10px 12px;
+}
+
+.feedbackPanelSummary {
+  color: #64748b;
+}
+
+.feedbackPanelTabs {
+  flex: 0 0 44px;
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #e5eff8;
+  padding: 0 10px;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-nav) {
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-nav::before) {
+  border-bottom: 0;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-nav-wrap) {
+  min-height: 44px;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-nav-list) {
+  width: 100%;
+  height: 44px;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-tab) {
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-tab-active) {
+  border-color: #cfe0f7;
+  background: #eef5ff;
+  box-shadow: inset 0 -2px 0 #2563eb;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-tab-btn) {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.feedbackPanelTabs :global(.ant-tabs-ink-bar) {
+  display: none;
+}
+
+.feedbackPanelContent {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.feedbackPanelSummarySections {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.feedbackPanelCollapsed {
+  background: #ffffff;
+}
+
+.feedbackPanelCollapsedButton {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.feedbackPanelCollapsedButton:hover,
+.feedbackPanelCollapsedButton:focus-visible {
+  color: #1d4ed8;
+}
+
+.feedbackPanelResizeHandle {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  transform: translateX(-50%);
+}
+
+.feedbackPanelResizeHandle::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 50%;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.42);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.16s ease, background 0.16s ease;
+}
+
+.feedbackPanelResizeHandle:hover::after,
+.feedbackPanelResizeHandle:focus-visible::after {
+  background: rgba(37, 99, 235, 0.72);
+  opacity: 1;
+}
+
+.feedbackPanelSection {
+  min-width: 0;
+  border: 1px solid #dfe7f1;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.feedbackPanelSectionTitle {
+  min-width: 0;
+  display: block;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.feedbackPanelCandidateActions {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .progressPanel {
@@ -138,7 +341,7 @@
   z-index: 3;
   top: 0;
   bottom: 0;
-  left: calc(var(--progress-panel-width, 360px) + 6px);
+  left: calc(var(--progress-panel-width, 320px) + 6px);
   width: 14px;
   padding: 0;
   border: 0;
@@ -585,7 +788,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px 20px 24px;
+  padding: 0 20px 24px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -593,86 +796,321 @@
 }
 
 .conversationQuestionHeader {
-  position: sticky;
-  top: 0;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 3;
-  display: grid;
-  gap: 10px;
-  padding: 12px 14px;
+  min-height: 48px;
+  display: block;
+  padding: 0;
   border: 1px solid #dce6f2;
-  border-radius: 8px;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
   background: #f8fbff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.conversationQuestionHeaderCompactBar {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 12px;
+}
+
+.conversationQuestionHeaderSummary {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 
 .conversationQuestionHeaderMetaRow {
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
 }
 
 .conversationQuestionHeaderMetaItem {
   min-width: 0;
-  display: grid;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
   gap: 2px;
+  line-height: 1.35;
 }
 
 .conversationQuestionHeaderMetaLabel {
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .conversationQuestionHeaderValue {
-  font-size: 13px;
-  color: #1f2937;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.conversationQuestionHeaderQuestionRow {
   min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.conversationQuestionHeaderToggle {
-  min-width: 58px;
-  max-width: 78px;
-  min-height: 26px;
-  padding: 2px 10px;
-  border: 1px solid #d7e3f6;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #2563eb;
-  cursor: pointer;
+  max-width: min(280px, 100%);
+  display: inline-block;
   font-size: 12px;
-  line-height: 1.4;
+  color: #1f2937;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
 }
 
-.conversationQuestionHeaderToggle:hover,
-.conversationQuestionHeaderToggle:focus-visible {
-  border-color: #95b7ff;
-  background: #eef5ff;
-  outline: none;
-}
-
-.conversationQuestionHeaderText {
-  color: #475569;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.conversationQuestionHeaderTextCollapsed {
+.conversationQuestionHeaderNodeSummary {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+.conversationQuestionHeaderText {
+  display: block;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.conversationQuestionHeaderQuestionPrefix {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.conversationQuestionHeaderTextCollapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.conversationQuestionHeaderQuestionLine {
+  min-width: 0;
+  display: -webkit-box;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.conversationQuestionHeaderToggle {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #1f2937;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.conversationQuestionHeaderToggle:hover,
+.conversationQuestionHeaderToggle:focus-visible {
+  background: #eef5ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
+.conversationQuestionHeaderToggle:focus-visible {
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
+.conversationQuestionHeaderToggle:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.conversationQuestionHeaderToggle:disabled:hover {
+  background: transparent;
+}
+
+.conversationQuestionHeaderPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 12px;
+  right: 12px;
+  z-index: 8;
+  max-height: min(460px, calc(100dvh - 180px));
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid #cbd8e6;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.2);
+}
+
+.conversationQuestionHeaderPopoverGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.conversationQuestionHeaderPopoverSection {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e1e9f3;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.conversationQuestionHeaderPopoverTitle {
+  color: #0f172a;
+}
+
+.conversationQuestionHeaderPopoverBlock {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.conversationQuestionHeaderPopoverBlockTitle {
+  font-size: 12px;
+}
+
+.conversationQuestionHeaderPopoverText {
+  margin: 0 !important;
+  color: #334155;
+  line-height: 1.6;
+  white-space: break-spaces;
+}
+
+.conversationQuestionHeaderPopoverList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  line-height: 1.55;
+}
+
 .chatTurnBottomAnchor {
   height: 1px;
+}
+
+.timeline {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  padding: 4px 0 10px;
+}
+
+.timelineItem {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.timelineItemLeft {
+  justify-items: start;
+}
+
+.timelineItemRight {
+  justify-items: end;
+}
+
+.timelineMeta {
+  max-width: min(100%, var(--workbench-question-bubble-max-width, min(88%, 920px)));
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.timelineBubble {
+  max-width: min(100%, var(--workbench-question-bubble-max-width, min(88%, 920px)));
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+button.timelineBubble {
+  font: inherit;
+  cursor: pointer;
+}
+
+.timelineBubbleQuestion {
+  border: 1px solid #dce6f2;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+.timelineBubbleHint {
+  border: 1px dashed #cbd8e6;
+  background: #f8fbff;
+  color: #64748b;
+}
+
+.timelineBubbleAnswer {
+  max-width: min(100%, var(--workbench-answer-bubble-max-width, min(88%, 920px)));
+  border: 1px solid #8ab8ff;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.timelineBubbleAnswer :global(.ant-typography) {
+  color: inherit;
+}
+
+.timelineBubbleQuickReview {
+  width: min(100%, var(--workbench-answer-bubble-max-width, min(88%, 920px)));
+  max-width: min(100%, var(--workbench-answer-bubble-max-width, min(88%, 920px)));
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.timelineBubbleSelected {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.timelineQuickReviewSummaryRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.timelineQuickReviewMetric {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timelineQuickReviewLink {
+  margin-left: auto;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .chatTurn,
@@ -726,7 +1164,7 @@
 .questionBubble {
   width: 100%;
   min-width: 0;
-  max-width: none;
+  max-width: min(100%, var(--workbench-question-bubble-max-width, min(88%, 920px)));
   align-self: flex-start;
   border: 1px solid #dce6f2;
   background: #ffffff;
@@ -784,7 +1222,7 @@
 .answerBubble {
   align-self: flex-end;
   width: fit-content;
-  max-width: min(720px, 78%);
+  max-width: min(100%, var(--workbench-answer-bubble-max-width, min(88%, 920px)));
   display: grid;
   gap: 6px;
   border: 1px solid #8ab8ff;
@@ -821,9 +1259,9 @@
 .feedbackAccordion {
   display: grid;
   gap: 8px;
-  width: 100%;
+  width: min(100%, var(--workbench-feedback-bubble-max-width, min(88%, 920px)));
   min-width: 0;
-  max-width: none;
+  max-width: 100%;
   padding: 10px;
   border: 1px solid #e1e9f3;
   border-radius: 8px;
@@ -878,6 +1316,18 @@
   margin: 0;
 }
 
+.feedbackPanelSelectedMeta {
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e4ebf5;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .feedbackSectionList {
   display: grid;
   gap: 8px;
@@ -902,6 +1352,76 @@
 
 .feedbackSectionWarning[open] {
   background: #fff8ec;
+}
+
+.statusChip {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.35;
+  font-size: 12px;
+}
+
+.statusChipDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.statusChipLabel {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.statusChipSuccess {
+  border-color: #86efac;
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.statusChipWarning {
+  border-color: #fcd34d;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.statusChipProcessing {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.statusChipDefault {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.statusChipBlue {
+  border-color: #bfdbfe;
+  background: #eef5ff;
+  color: #1d4ed8;
+}
+
+.statusChipOrange {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.statusChipSuccessDot,
+.statusChipWarningDot,
+.statusChipProcessingDot,
+.statusChipDefaultDot,
+.statusChipBlueDot,
+.statusChipOrangeDot {
+  background: currentColor;
 }
 
 .feedbackSectionSummary {
@@ -931,6 +1451,99 @@
 
 .feedbackSectionItems li {
   overflow-wrap: anywhere;
+}
+
+.feedbackSectionLossPointCards {
+  display: grid;
+  gap: 8px;
+  padding: 0 0 4px;
+}
+
+.feedbackLossPointCard {
+  border: 1px solid #dfe7f1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.feedbackLossPointCardHeader {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e5eff8;
+}
+
+.feedbackLossPointCardHeaderTitle {
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.feedbackLossPointCardHeaderMeta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.feedbackLossPointChip {
+  margin: 0 !important;
+  line-height: 1.35;
+  font-size: 12px;
+}
+
+.feedbackLossPointSeverityChipDefault {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+
+.feedbackLossPointSeverityChipMinor {
+  border-color: #fde68a !important;
+  background: #fef9c3 !important;
+  color: #92400e !important;
+}
+
+.feedbackLossPointSeverityChipCritical {
+  border-color: #fda4af !important;
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+}
+
+.feedbackLossPointDeductionChip {
+  border-color: #bfdbfe !important;
+  background: #eef5ff !important;
+  color: #1d4ed8 !important;
+}
+
+.feedbackLossPointCardBody {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  padding: 8px 10px 10px;
+}
+
+.feedbackLossPointCardField {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.feedbackLossPointCardFieldLabel {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.feedbackLossPointCardFieldValue {
+  margin-bottom: 0 !important;
+  white-space: break-spaces;
 }
 
 .feedbackSectionTableWrap {
@@ -1213,7 +1826,19 @@
     grid-template-columns: 1fr;
   }
 
+  .workspaceGridLeftCollapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceGridRightCollapsed {
+    grid-template-columns: 1fr;
+  }
+
   .progressPanelResizeHandle {
+    display: none;
+  }
+
+  .feedbackPanelResizeHandle {
     display: none;
   }
 
@@ -1237,6 +1862,25 @@
   .feedbackAccordion {
     max-width: 100%;
     width: 100%;
+  }
+
+  .conversationQuestionHeaderPopoverGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .timelineBubble,
+  .timelineMeta {
+    max-width: 100%;
+  }
+
+  .feedbackPanel,
+  .feedbackPanelContent,
+  .feedbackPanelSummarySections {
+    min-height: 0;
+  }
+
+  .feedbackLossPointCardBody {
+    grid-template-columns: 1fr;
   }
 
   .messageRowLeft > .progressNodeContextBanner {

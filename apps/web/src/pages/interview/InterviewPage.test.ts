@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import {
   INTERVIEW_CREATE_BUTTON_STATE,
   INTERVIEW_CREATE_ENTRY_KIND,
@@ -25,15 +27,21 @@ import {
   INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY,
   INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT,
   INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS,
+  INTERVIEW_WORKBENCH_CHAT_SCROLL_PADDING_POLICY,
   INTERVIEW_WORKBENCH_DETAIL_WIDTH_POLICY,
   INTERVIEW_WORKBENCH_LAYOUT_AREAS,
   INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS,
   INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY,
   INTERVIEW_WORKBENCH_LAYOUT_VARIANT,
   INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
+  INTERVIEW_WORKBENCH_FEEDBACK_PANEL_RESIZE_HANDLE_POLICY,
+  INTERVIEW_WORKBENCH_FEEDBACK_PANEL_TAB_LAYOUT_POLICY,
+  INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY,
+  INTERVIEW_WORKBENCH_QUICK_REVIEW_CARD_LAYOUT_POLICY,
   INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS,
   INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS,
   INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT,
+  INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICIES,
   INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT,
   INTERVIEW_WORKBENCH_NORMAL_STATE_FORBIDDEN_COPY,
   INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY,
@@ -58,6 +66,7 @@ import {
   INTERVIEW_WORKBENCH_PRIMARY_ACTIONS,
   INTERVIEW_WORKBENCH_SCROLL_REGIONS,
   INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP,
+  INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
   INTERVIEW_WORKBENCH_STATE_MACHINE,
   buildPolishBindingOptions,
@@ -68,6 +77,9 @@ import {
   buildCandidateReviewViewModel,
   buildAnswerRoundMetaLabel,
   buildFeedbackCardViewModel,
+  buildAnswerQuickReviewViewModel,
+  buildInterviewTimelineViewModel,
+  buildSelectedAnswerFeedbackMetaViewModel,
   buildFeedbackRoundMetaLabel,
   buildWorkbenchCandidateActionBarViewModel,
   buildWorkbenchFixedNextActionBarViewModel,
@@ -84,6 +96,7 @@ import {
   buildProgressTreeNodeDetailViewModel,
   buildWorkbenchProgressNodeTitleMeta,
   buildWorkbenchProgressNodes,
+  buildFeedbackPanelTabs,
   canAutoCreateQuestionFromProgressNode,
   collectDefaultExpandedProgressNodeKeys,
   canFollowUpCurrentQuestion,
@@ -111,10 +124,12 @@ import {
   resolveProgressTreeRecoveryAction,
   isProgressTreePendingGeneration,
   resolveCurrentQuestionId,
+  resolveLatestAnswerIdForQuestion,
   buildQuestionConversationAutoScrollTrigger,
   shouldAutoScrollQuestionConversation,
   shouldCollapseCurrentQuestionText,
   buildStickyQuestionContextViewModel,
+  buildStickyQuestionContextCompactMetaItems,
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveWorkbenchQuestionFocusId,
@@ -126,6 +141,7 @@ import {
   shouldConfirmBeforeRegenerateQuestion,
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
+  shouldRenderQuestionBubbleInConversation,
   toNextRecommendedActionLabel,
   buildCreatePolishQuestionTaskRequest,
   type PolishBindingOption,
@@ -283,6 +299,7 @@ type WorkbenchLayoutBGridAreasAreStable = Expect<
       "right_conversation_header",
       "right_chat_scroll",
       "right_sticky_merged_context_card",
+      "right_feedback_sheet",
       "right_fixed_next_action_bar",
       "right_fixed_composer"
     ]
@@ -295,13 +312,13 @@ type WorkbenchMergedContextCardLayoutIsStable = Expect<
       readonly layoutArea: "right_sticky_merged_context_card";
       readonly progressContext: "merged_into_current_question_card";
       readonly currentQuestion: "same_sticky_card";
-      readonly behavior: "sticky_collapsible";
+      readonly behavior: "compact_sticky_popover";
     }
   >
 >;
-type WorkbenchLayoutBScrollPolicyIsStable = Expect<
-  Equal<
-    typeof INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY,
+  type WorkbenchLayoutBScrollPolicyIsStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY,
     {
       readonly root: "viewport_locked";
       readonly progressPanel: "independent_scroll";
@@ -310,25 +327,95 @@ type WorkbenchLayoutBScrollPolicyIsStable = Expect<
     }
   >
 >;
-type WorkbenchLayoutTestIdsAreStable = Expect<
-  Equal<
-    typeof INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
+  type WorkbenchLayoutTestIdsAreStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS,
     {
       readonly root: "interview-workbench-viewport";
       readonly progressPanel: "interview-workbench-progress-panel";
       readonly progressNodeList: "interview-workbench-progress-node-list";
       readonly conversationPanel: "interview-workbench-conversation-panel";
       readonly chatScroll: "interview-workbench-chat-scroll";
+      readonly feedbackPanel: "interview-workbench-feedback-sheet";
       readonly currentQuestionComposer: "interview-workbench-current-question-composer";
     }
   >
 >;
-type WorkbenchScrollRegionsAreStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_SCROLL_REGIONS, readonly ["progress_node_list", "chat_scroll"]>
->;
-type WorkbenchLeftDetailUsesFullWidth = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS, readonly ["progress_context", "system_question", "feedback"]>
->;
+  type WorkbenchScrollRegionsAreStable = Expect<
+    Equal<typeof INTERVIEW_WORKBENCH_SCROLL_REGIONS, readonly ["progress_node_list", "chat_scroll"]>
+  >;
+  type WorkbenchProgressPanelWidthPolicyIsStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY,
+      {
+        readonly defaultCollapsed: 48;
+        readonly default: 320;
+        readonly min: 320;
+        readonly max: 520;
+      }
+    >
+  >;
+  type WorkbenchFeedbackPanelResizeHandlePolicyIsStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_FEEDBACK_PANEL_RESIZE_HANDLE_POLICY,
+      {
+        readonly owner: "feedback_panel";
+        readonly edge: "left";
+        readonly position: "absolute_panel_edge";
+        readonly visualCentering: "translateX(-50%)";
+      }
+    >
+  >;
+  type WorkbenchFeedbackPanelTabLayoutPolicyIsStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_FEEDBACK_PANEL_TAB_LAYOUT_POLICY,
+      {
+        readonly columns: "repeat(4, minmax(0, 1fr))";
+        readonly alignment: "center";
+        readonly safeInset: "panel_horizontal_padding";
+      }
+    >
+  >;
+  type WorkbenchMessageWidthPoliciesAreStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICIES,
+      {
+        readonly allOpen: {
+          readonly questionBubbleMaxWidth: "min(88%, 920px)";
+          readonly answerBubbleMaxWidth: "min(88%, 920px)";
+          readonly feedbackBubbleMaxWidth: "min(88%, 920px)";
+        };
+        readonly progressCollapsed: {
+          readonly questionBubbleMaxWidth: "min(92%, 1100px)";
+          readonly answerBubbleMaxWidth: "min(92%, 1100px)";
+          readonly feedbackBubbleMaxWidth: "min(92%, 1100px)";
+        };
+        readonly feedbackCollapsed: {
+          readonly questionBubbleMaxWidth: "min(92%, 1100px)";
+          readonly answerBubbleMaxWidth: "min(92%, 1100px)";
+          readonly feedbackBubbleMaxWidth: "min(92%, 1100px)";
+        };
+        readonly bothCollapsed: {
+          readonly questionBubbleMaxWidth: "min(96%, 1320px)";
+          readonly answerBubbleMaxWidth: "min(96%, 1320px)";
+          readonly feedbackBubbleMaxWidth: "min(96%, 1320px)";
+        };
+      }
+    >
+  >;
+  type WorkbenchQuickReviewCardLayoutPolicyIsStable = Expect<
+    Equal<
+      typeof INTERVIEW_WORKBENCH_QUICK_REVIEW_CARD_LAYOUT_POLICY,
+      {
+        readonly widthSource: "answer_bubble_max_width";
+        readonly primaryRow: "label_score_maturity_status_link";
+        readonly actionTreatment: "weak_text_link";
+      }
+    >
+  >;
+  type WorkbenchLeftDetailUsesFullWidth = Expect<
+    Equal<typeof INTERVIEW_WORKBENCH_LEFT_FULL_WIDTH_MESSAGE_KINDS, readonly ["progress_context", "system_question", "feedback"]>
+  >;
 type WorkbenchNextActionPlacementIsFixedAboveComposer = Expect<
   Equal<typeof INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT, "fixed_above_current_question_composer">
 >;
@@ -338,7 +425,7 @@ type WorkbenchFeedbackCardInteractionPolicyIsReadonly = Expect<
     {
       readonly feedbackCard: "readonly";
       readonly nextActions: "composer_action_bar";
-      readonly candidateActions: "composer_action_bar";
+      readonly candidateActions: "feedback_panel";
     }
   >
 >;
@@ -411,7 +498,7 @@ type ProgressTreeContextBannerEmptyCopyIsStable = Expect<
   >
 >;
 type ProgressTreeContextBannerToggleCopyIsStable = Expect<
-  Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY, { readonly expand: "展开"; readonly collapse: "收起" }>
+  Equal<typeof INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY, { readonly expand: "展开更多上下文"; readonly collapse: "收起上下文" }>
 >;
 type ProgressTreeLeftListFieldsAreStable = Expect<
   Equal<
@@ -447,7 +534,33 @@ type ProgressTreeScrollClassIsScoped = Expect<
   Equal<typeof INTERVIEW_PROGRESS_TREE_SCROLL_CLASS, "progressTreeScroll">
 >;
 type WorkbenchHeaderChipsAreStable = Expect<
-  Equal<typeof INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS, readonly ["岗位", "简历", "当前节点", "能力主题", "进度", "当前节点表现"]>
+  Equal<typeof INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS, readonly ["岗位", "简历", "当前节点", "能力主题", "分类", "进度", "当前节点表现"]>
+>;
+type WorkbenchStickyContextCardDisplayPolicyIsCompact = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY,
+    {
+      readonly metaLayout: "question_first_status_only";
+      readonly questionPrefix: "题干：";
+      readonly collapsedQuestionLines: 2;
+      readonly questionInlineToggle: "removed";
+      readonly expandControl: "single_context_toggle";
+      readonly toggleIcon: "progress_tree_chevron";
+      readonly duplicatedNodeThemeCategory: "moved_to_summary_bar";
+      readonly focusedQuestionBubble: "rendered_in_chat_flow";
+    }
+  >
+>;
+type WorkbenchChatScrollPaddingPolicyRemovesTopGap = Expect<
+  Equal<
+    typeof INTERVIEW_WORKBENCH_CHAT_SCROLL_PADDING_POLICY,
+    {
+      readonly top: 0;
+      readonly horizontal: 20;
+      readonly bottom: 24;
+      readonly stickyCardOwnPadding: true;
+    }
+  >
 >;
 type WorkbenchFeedbackItemsAreStable = Expect<
   Equal<
@@ -1223,8 +1336,8 @@ function test_progress_node_context_banner_supports_expand_toggle_for_depth(): v
   assertContract(shouldShowProgressTreeContextBannerToggle(bannerContent), "有深度要求时公告条应支持展开");
   assertContract(!shouldShowProgressTreeContextBannerToggle(emptyBanner), "空态公告条不应显示展开入口");
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT === "label_and_node_title_same_row", "公告条标题和节点名称应固定在同一行");
-  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand === "展开", "公告条展开按钮文案应为展开");
-  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse === "收起", "公告条收起按钮文案应为收起");
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand === "展开更多上下文", "sticky 上下文卡展开按钮文案应为展开更多上下文");
+  assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse === "收起上下文", "sticky 上下文卡收起按钮文案应为收起上下文");
   assertContract(expandedSections.map((section) => section.key).join(",") === "depth_requirement,technical_coverage,follow_up_directions,loss_risks", "展开后应显示深度要求、技术点覆盖、连续追问方向、常见失分风险");
   assertContract(expandedCopy.includes("深度要求"), "展开后应展示深度要求标题");
   assertContract(expandedCopy.includes("技术点覆盖"), "展开后应展示技术点覆盖标题");
@@ -1261,8 +1374,9 @@ function test_workbench_layout_b_keeps_progress_and_conversation_scroll_independ
   assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[2] === "right_conversation_header", "方案 B 右侧顶部应承载对话状态头");
   assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[3] === "right_chat_scroll", "方案 B 右侧中段应作为聊天独立滚动区");
   assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[4] === "right_sticky_merged_context_card", "方案 B 当前题目和节点上下文应合并为右侧单一 sticky 卡");
-  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[5] === "right_fixed_next_action_bar", "方案 B 下一步建议应固定在输入区上方");
-  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[6] === "right_fixed_composer", "方案 B 回答输入区应固定在右侧面板底部");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[5] === "right_feedback_sheet", "方案 B Sheet 反馈区应位于聊天区与下一步建议之间");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[6] === "right_fixed_next_action_bar", "方案 B 下一步建议应固定在输入区上方");
+  assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS[7] === "right_fixed_composer", "方案 B 回答输入区应固定在右侧面板底部");
   assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.root === "viewport_locked", "方案 B 根容器应锁定视口高度");
   assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.progressPanel === "independent_scroll", "方案 B 左侧进展树应独立滚动");
   assertContract(INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY.chatScroll === "independent_auto_scroll", "方案 B 聊天区应保留独立自动滚动");
@@ -1270,7 +1384,9 @@ function test_workbench_layout_b_keeps_progress_and_conversation_scroll_independ
   assertContract(INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT === "fixed_above_current_question_composer", "方案 B 下一步建议应固定在输入框正上方");
   assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.progressContext === "merged_into_current_question_card", "当前节点上下文不应再作为独立 progress_context 大卡渲染");
   assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.currentQuestion === "same_sticky_card", "当前题目应和节点上下文共用同一张 sticky 卡");
-  assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.behavior === "sticky_collapsible", "合并后的上下文卡应保持 sticky 且支持折叠");
+  assertContract(INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.behavior === "compact_sticky_popover", "合并后的上下文卡应保持 sticky 紧凑条并用浮层展开");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_SCROLL_PADDING_POLICY.top === 0, "聊天滚动区顶部 padding 应为 0，sticky 卡应紧贴对话标题栏");
+  assertContract(INTERVIEW_WORKBENCH_CHAT_SCROLL_PADDING_POLICY.stickyCardOwnPadding === true, "sticky 卡应自行保留内部 padding");
 }
 
 function test_question_node_clipboard_includes_full_question_answer_and_feedback(): void {
@@ -2201,8 +2317,12 @@ function test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_no
 function test_workbench_sticky_header_view_model_matches_current_question_context(): void {
   const session = {
     ...buildTestSession([
-      buildTestProgressNode("node_focus", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
-    ]),
+      {
+        ...buildTestProgressNode("node_focus", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "能说明召回、排序、重排和评估指标之间的取舍。",
+      },
+    ], "node_focus"),
+    polish_theme: "mixed" as const,
     turns: [
       {
         question_id: "q_focus",
@@ -2232,19 +2352,161 @@ function test_workbench_sticky_header_view_model_matches_current_question_contex
       },
     ],
   };
-  const stickyContext = buildStickyQuestionContextViewModel(session, "q_focus", "node_focus");
+  const selectedQuestionNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0]?.children?.[0] ?? null;
+  const buildStickyContext = buildStickyQuestionContextViewModel as unknown as (
+    activeSession: PolishSessionDetail | null,
+    focusedQuestionId: string | null,
+    selectedProgressNodeRef: string | null,
+    options?: { selectedProgressNode?: unknown; selectedProgressNodeDetailRef?: string | null },
+  ) => (NonNullable<ReturnType<typeof buildStickyQuestionContextViewModel>> & {
+    selectedQuestionId?: string | null;
+    nodeStatusLabel?: string;
+    nodeSummary?: string | null;
+    shouldShowQuestionContext?: boolean;
+    questionIndexLabel?: string | null;
+    questionText?: string | null;
+    feedbackStatusLabel?: string | null;
+  }) | null;
+  const stickyContext = buildStickyContext(session, "q_focus", "node_focus", {
+    selectedProgressNode: selectedQuestionNode,
+    selectedProgressNodeDetailRef: "node_focus",
+  });
+  const compactMetaItems = stickyContext === null ? [] : buildStickyQuestionContextCompactMetaItems(stickyContext);
+  const compactMetaCopy = compactMetaItems.map((item) => `${item.label}：${item.value}`).join(" ");
 
   assertContract(stickyContext?.progressNodeTitle === "混合检索策略设计", "sticky header 应包含当前节点上下文");
-  assertContract(stickyContext?.capabilityTheme === "深度打磨类", "sticky header 应包含当前能力主题");
+  assertContract(stickyContext?.capabilityThemeLabel === "混合", "sticky header 能力主题应来自 session 主题");
+  assertContract(stickyContext?.nodeCategoryLabel === "深度打磨类", "sticky header 节点分类应单独展示");
+  assertContract(stickyContext?.nodeStatusLabel === "进行中", "sticky header 应展示节点状态");
+  assertContract(stickyContext?.nodeSummary === "能说明召回、排序、重排和评估指标之间的取舍。", "sticky header 应展示节点简短目标摘要");
+  assertContract(stickyContext?.selectedQuestionId === "q_focus", "选中题目节点时 sticky header 应追加题目信息");
   assertContract(stickyContext?.questionIndexLabel === "题目 1", "sticky header 应包含题目编号");
   assertContract(
     stickyContext?.questionText === "如果让你在高并发检索中平衡召回率与精确率，你会如何设计并优先优化？",
     "sticky header 应包含题目正文",
   );
   assertContract(stickyContext?.feedbackStatusLabel === mapFeedbackCodeToDisplay("generated").text, "sticky header 应复用反馈状态中文映射");
+  assertContract(
+    compactMetaCopy === "状态：进行中 反馈：已生成",
+    "sticky header 收起态只保留状态和反馈轻量信息",
+  );
+  assertContract(!compactMetaCopy.includes("节点：") && !compactMetaCopy.includes("主题：") && !compactMetaCopy.includes("分类："), "节点/主题/分类应移到顶部横栏和展开浮层，不在 sticky 收起态重复展示");
+  assertContract(INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY.questionInlineToggle === "removed", "题目正文右侧独立展开按钮应移除");
+  assertContract(INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY.expandControl === "single_context_toggle", "sticky card 应只保留一个整体展开入口");
+}
+
+function test_workbench_sticky_header_view_model_shows_node_context_without_focused_question(): void {
+  const session = {
+    ...buildTestSession([
+      {
+        ...buildTestProgressNode("node_ability", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "能说明召回、排序、重排和评估指标之间的取舍。",
+      },
+    ], "node_ability"),
+    polish_theme: "mixed" as const,
+  };
+  const stickyContext = buildStickyQuestionContextViewModel(session, null, "node_ability") as
+    | (NonNullable<ReturnType<typeof buildStickyQuestionContextViewModel>> & {
+      selectedQuestionId?: string | null;
+      nodeStatusLabel?: string;
+      nodeSummary?: string | null;
+      questionText?: string | null;
+      feedbackStatusLabel?: string | null;
+    })
+    | null;
+  const compactMetaItems = stickyContext === null ? [] : buildStickyQuestionContextCompactMetaItems(stickyContext);
+  const compactMetaCopy = compactMetaItems.map((item) => `${item.label}：${item.value}`).join(" ");
+
+  assertContract(stickyContext !== null, "选中能力节点且 focusedQuestionId 为空时 sticky context view model 不应为 null");
+  assertContract(stickyContext?.progressNodeTitle === "混合检索策略设计", "选中能力节点时 sticky card 应展示节点标题");
+  assertContract(stickyContext?.capabilityThemeLabel === "混合", "能力主题应展示 session 级主题");
+  assertContract(stickyContext?.nodeCategoryLabel === "深度打磨类", "节点分类应展示节点分类字段");
+  assertContract(stickyContext?.nodeStatusLabel === "进行中", "节点状态应展示当前节点状态");
+  assertContract(stickyContext?.nodeSummary === "能说明召回、排序、重排和评估指标之间的取舍。", "节点摘要应展示深度要求");
+  assertContract(stickyContext?.selectedQuestionId === null, "选中能力节点但不是题目时不应追加题目信息");
+  assertContract(stickyContext?.questionText === null, "选中能力节点但不是题目时不应展示题目正文");
+  assertContract(stickyContext?.feedbackStatusLabel === null, "选中能力节点但不是题目时不应展示反馈状态");
+  assertContract(
+    compactMetaCopy === "状态：进行中",
+    "能力节点 sticky card 收起态只保留状态轻量信息",
+  );
+}
+
+function test_workbench_sticky_header_view_model_uses_empty_state_without_selected_node_or_priority(): void {
+  const session = {
+    ...buildTestSession([
+      buildTestProgressNode("node_latest", "最近题目节点", "resume_deep_dive", "深度打磨类"),
+    ]),
+    polish_theme: "mixed" as const,
+    turns: [
+      {
+        question_id: "q_latest",
+        question_text: "这个题干不应在空态 sticky card 中展示。",
+        question_sources: [],
+        question_created_at: "2026-05-21T10:00:00Z",
+        progress_node_ref: "node_latest",
+        evidence_refs: [],
+        context_digest: "digest",
+        answers: [],
+      },
+    ],
+  };
+  const buildStickyContext = buildStickyQuestionContextViewModel as unknown as (
+    activeSession: PolishSessionDetail | null,
+    focusedQuestionId: string | null,
+    selectedProgressNodeRef: string | null,
+    options?: { selectedProgressNode?: unknown; selectedProgressNodeDetailRef?: string | null },
+  ) => (NonNullable<ReturnType<typeof buildStickyQuestionContextViewModel>> & {
+    selectedQuestionId?: string | null;
+    emptyDescription?: string | null;
+    questionText?: string | null;
+  }) | null;
+  const stickyContext = buildStickyContext(session, "q_latest", null, {
+    selectedProgressNode: null,
+    selectedProgressNodeDetailRef: null,
+  });
+
+  assertContract(stickyContext !== null, "无选中节点且无 current priority 时 sticky card 仍应返回空态 view model");
+  assertContract(stickyContext?.progressNodeTitle === "请选择左侧节点", "空态 sticky card 应提示选择左侧节点");
+  assertContract(stickyContext?.emptyDescription === "请选择左侧节点。", "空态 sticky card 应展示空态说明");
+  assertContract(stickyContext?.selectedQuestionId === null, "空态 sticky card 不应从 focused question 追加题目信息");
+  assertContract(stickyContext?.questionText === null, "空态 sticky card 不应展示最近题目的题干");
+}
+
+function test_workbench_sticky_header_view_model_keeps_focused_question_for_selected_node(): void {
+  const session = {
+    ...buildTestSession([
+      {
+        ...buildTestProgressNode("node_ability_with_question", "检索链路架构改造", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "覆盖召回、排序、重排和指标验证之间的取舍。",
+      },
+    ], "node_ability_with_question"),
+    polish_theme: "mixed" as const,
+    turns: [
+      {
+        question_id: "q_node_focus",
+        question_text: "请完整说明你如何改造高并发检索链路，并解释灰度、回滚和降级取舍。",
+        question_sources: [],
+        question_created_at: "2026-06-08T13:01:00Z",
+        progress_node_ref: "node_ability_with_question",
+        answers: [],
+      },
+    ],
+  };
+  const selectedAbilityNode = buildWorkbenchProgressNodes(session)[0]?.children?.[0] ?? null;
+  const stickyContext = buildStickyQuestionContextViewModel(session, "q_node_focus", "node_ability_with_question", {
+    selectedProgressNode: selectedAbilityNode,
+    selectedProgressNodeDetailRef: "node_ability_with_question",
+  });
+
+  assertContract(stickyContext?.selectedQuestionId === "q_node_focus", "选中能力节点且该节点有 focused question 时 sticky context 应保留当前题目");
+  assertContract(stickyContext?.questionText === "请完整说明你如何改造高并发检索链路，并解释灰度、回滚和降级取舍。", "sticky context 应展示当前题干而不是能力节点空态");
+  assertContract(stickyContext?.nonQuestionHint === null, "有 focused question 时不应显示该节点暂无选中题目的空态提示");
 }
 
 function test_workbench_sticky_question_text_collapse_behavior(): void {
+  assertContract(INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY.questionPrefix === "题干：", "sticky card 题目正文行应使用题干前缀");
+  assertContract(INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY.collapsedQuestionLines === 2, "sticky card 题目正文默认最多两行");
   assertContract(
     shouldCollapseCurrentQuestionText("短题干示例", { isExpanded: false }) === false,
     "短题干不应默认折叠",
@@ -2252,6 +2514,391 @@ function test_workbench_sticky_question_text_collapse_behavior(): void {
   const longText = "请结合你的实际项目经验，完整回答以下问题，要求覆盖架构演进路径、指标体系、故障回滚策略、上线流程与持续优化机制。".repeat(6);
   assertContract(shouldCollapseCurrentQuestionText(longText, { isExpanded: false }) === true, "长题干默认应折叠");
   assertContract(shouldCollapseCurrentQuestionText(longText, { isExpanded: true }) === false, "展开后长题干应完整展示");
+}
+
+function test_current_focused_question_bubble_is_rendered_when_sticky_context_visible(): void {
+  assertContract(
+    shouldRenderQuestionBubbleInConversation("q_history", "q_focus") === true,
+    "历史题目的 system_question 气泡应继续展示",
+  );
+  assertContract(
+    shouldRenderQuestionBubbleInConversation("q_focus", "q_focus") === true,
+    "当前 focused question 的 system_question 气泡仍应在聊天流中展示完整题干",
+  );
+  assertContract(
+    shouldRenderQuestionBubbleInConversation("q_focus", null) === true,
+    "没有 sticky focused question 时应保留题目气泡兜底",
+  );
+}
+
+function buildSelectedAnswerFixtureSession(): PolishSessionDetail {
+  return {
+    ...buildTestSession([
+      {
+        ...buildTestProgressNode("node_timeline", "混合检索策略设计", "resume_deep_dive", "深度打磨类"),
+        depth_goal: "说明混合检索目标、评估指标和失败兜底。",
+        common_loss_risks: ["缺少指标验证"],
+        follow_up_focus: ["追问召回与重排取舍"],
+      },
+    ], "node_timeline"),
+    polish_theme: "mixed" as const,
+    turns: [
+      {
+        question_id: "q_timeline",
+        question_text: "你在硬件测试知识库项目中将检索准确率从不足 60% 提升到 82%，请说明混合检索策略如何设计。",
+        question_sources: [],
+        question_created_at: "2026-06-08T15:04:38",
+        progress_node_ref: "node_timeline",
+        evidence_refs: [],
+        context_digest: "timeline-digest",
+        answers: [
+          {
+            answer_id: "ans_timeline_1",
+            answer_round: 1,
+            answer_text: "第一版回答只说明了向量召回和关键词召回。",
+            answer_created_at: "2026-06-08T15:05:09",
+            feedback_text: "第一轮反馈要求补充重排依据。",
+            feedback_id: "fb_timeline_1",
+            score_result_id: "score_timeline_1",
+            feedback_created_at: "2026-06-08T15:05:30",
+            feedback_payload: {
+              status: "generated",
+              feedback_text: "第一轮反馈要求补充重排依据。",
+              score_result: {
+                score_value: 62,
+                score_type: "polish_answer",
+              },
+              loss_points: [
+                {
+                  severity: "major",
+                  deduction: 8,
+                  reason: "缺少重排指标。",
+                  suggestion: "补充重排指标和离线评估。",
+                },
+              ],
+              reference_answer: {
+                summary: "先说明多路召回，再说明重排和评估。",
+              },
+              next_recommended_actions: ["continue_same_question"],
+            },
+          },
+          {
+            answer_id: "ans_timeline_2",
+            answer_round: 2,
+            answer_text: "第二版回答补充了 BM25、向量召回、交叉编码器重排和命中率评估。",
+            answer_created_at: "2026-06-08T15:07:14",
+            feedback_text: "第二轮反馈认为可以换题继续验证。",
+            feedback_id: "fb_timeline_2",
+            score_result_id: "score_timeline_2",
+            feedback_created_at: "2026-06-08T15:07:40",
+            feedback_payload: {
+              status: "generated",
+              feedback_text: "第二轮反馈认为可以换题继续验证。",
+              score_result: {
+                score_value: 86,
+                score_type: "polish_answer",
+              },
+              loss_points: [],
+              reference_answer: {
+                summary: "回答可继续补充线上监控和回滚策略。",
+              },
+              next_recommended_actions: ["generate_next_question"],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function test_selected_question_defaults_to_latest_answer(): void {
+  const session = buildSelectedAnswerFixtureSession();
+  const latestAnswerId = resolveLatestAnswerIdForQuestion(session, "q_timeline");
+  const meta = buildSelectedAnswerFeedbackMetaViewModel(session, latestAnswerId);
+
+  assertContract(latestAnswerId === "ans_timeline_2", "选择题目时 selectedAnswerId 应默认取该题最后一次回答");
+  assertContract(meta?.questionLabel === "题目 1", "右侧反馈 meta 应绑定所选题目");
+  assertContract(meta?.answerLabel === "回答 #2", "右侧反馈 meta 应绑定最后一次回答");
+  assertContract(meta?.answerTimeLabel === "15:07:14", "右侧反馈 meta 应展示回答时间到秒");
+}
+
+function test_selected_answer_feedback_meta_switches_between_answers(): void {
+  const session = buildSelectedAnswerFixtureSession();
+  const answerOneMeta = buildSelectedAnswerFeedbackMetaViewModel(session, "ans_timeline_1");
+  const answerTwoMeta = buildSelectedAnswerFeedbackMetaViewModel(session, "ans_timeline_2");
+  const answerOneCard = buildFeedbackCardViewModel(session.turns[0].answers[0]);
+  const answerTwoCard = buildFeedbackCardViewModel(session.turns[0].answers[1]);
+  const answerOneCopy = answerOneCard.sections.flatMap((section) => section.items).join(" ");
+  const answerTwoCopy = answerTwoCard.sections.flatMap((section) => section.items).join(" ");
+
+  assertContract(answerOneMeta?.answerLabel === "回答 #1", "点击中间回答 #1 时右侧 view model 应绑定回答 #1");
+  assertContract(answerTwoMeta?.answerLabel === "回答 #2", "点击中间回答 #2 时右侧 view model 应绑定回答 #2");
+  assertContract(answerOneCopy.includes("第一轮反馈要求补充重排依据。"), "回答 #1 应展示回答 #1 的反馈");
+  assertContract(answerTwoCopy.includes("第二轮反馈认为可以换题继续验证。"), "回答 #2 应展示回答 #2 的反馈");
+}
+
+function test_timeline_view_model_contains_interview_events_and_second_level_time(): void {
+  const session = buildSelectedAnswerFixtureSession();
+  const timeline = buildInterviewTimelineViewModel(session, null);
+  const kinds = timeline.events.map((event) => event.kind);
+  const metaCopy = timeline.events.map((event) => event.metaLabel).join(" ");
+
+  assertContract(kinds.includes("system_question"), "timeline 应包含系统提问事件");
+  assertContract(kinds.includes("user_answer"), "timeline 应包含用户回答事件");
+  assertContract(kinds.includes("quick_review"), "timeline 应包含简评事件");
+  assertContract(metaCopy.includes("15:04:38"), "系统提问时间应展示到秒");
+  assertContract(metaCopy.includes("15:05:09"), "用户回答时间应展示到秒");
+  assertContract(metaCopy.includes("15:05:30"), "简评时间应展示到秒");
+}
+
+function test_answer_quick_review_view_model_uses_score_maturity_and_suggestion(): void {
+  const answer = buildSelectedAnswerFixtureSession().turns[0].answers[1];
+  const quickReview = buildAnswerQuickReviewViewModel(answer, "2026-06-08");
+  const visibleCopy = [
+    quickReview.scoreLabel,
+    quickReview.maturityLabel,
+    quickReview.suggestion,
+    quickReview.statusLabel,
+    quickReview.createdAtLabel,
+  ].join(" ");
+
+  assertContract(quickReview.scoreLabel === "86 / 100", "简评应展示得分");
+  assertContract(quickReview.maturityLabel === "成熟", "简评应展示成熟度");
+  assertContract(quickReview.suggestion === "当前回答已基本成熟，建议换一道题继续验证。", "简评应展示一句话建议");
+  assertContract(quickReview.createdAtLabel === "15:07:40", "简评生成时间应展示到秒");
+  assertContract(!visibleCopy.includes("undefined") && !visibleCopy.includes("null"), "简评不应显示 undefined/null");
+}
+
+function test_answer_quick_review_without_score_uses_safe_empty_state(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_no_score",
+    answer_round: 1,
+    answer_text: "回答尚未生成反馈。",
+    answer_created_at: "2026-06-08T16:00:00",
+    feedback_text: "",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "pending",
+    },
+  };
+  const quickReview = buildAnswerQuickReviewViewModel(answer, "2026-06-08");
+  const visibleCopy = `${quickReview.scoreLabel} ${quickReview.maturityLabel} ${quickReview.suggestion} ${quickReview.createdAtLabel}`;
+
+  assertContract(quickReview.scoreLabel === "暂无评分", "无分数时简评应展示暂无评分");
+  assertContract(quickReview.maturityLabel === "待评估", "无分数时成熟度应待评估");
+  assertContract(quickReview.suggestion === "反馈尚未生成，请稍后查看完整反馈。", "无分数时应展示合理建议");
+  assertContract(quickReview.createdAtLabel === "反馈时间未知", "缺少反馈时间时不得伪造生成时间");
+  assertContract(!visibleCopy.includes("undefined") && !visibleCopy.includes("null"), "无分数简评不应显示 undefined/null");
+}
+
+function test_middle_timeline_removes_full_feedback_card_dom_contract(): void {
+  const pageText = readFileSync(new URL("./InterviewPage.tsx", import.meta.url), "utf8");
+  const cssText = readFileSync(new URL("./InterviewWorkbench.module.css", import.meta.url), "utf8");
+
+  assertContract(cssText.includes(".timelineItem"), "中间区应提供 timeline item class");
+  assertContract(cssText.includes(".timelineMeta"), "中间区应提供 timeline meta class");
+  assertContract(cssText.includes(".timelineBubbleQuickReview"), "中间区应提供简评气泡 class");
+  assertContract(!pageText.includes("styles.feedbackAccordion"), "中间区不应再渲染完整 feedbackAccordion");
+  assertContract(!pageText.includes("styles.feedbackCardHeader"), "中间区不应再渲染完整 feedback card header");
+  assertContract(!pageText.includes("styles.feedbackSectionList"), "中间区不应再渲染完整 feedback section list");
+}
+
+function test_selected_answer_feedback_panel_contract_is_explicit(): void {
+  const pageText = readFileSync(new URL("./InterviewPage.tsx", import.meta.url), "utf8");
+
+  assertContract(pageText.includes("selectedAnswerId"), "右侧反馈区应由 selectedAnswerId 驱动");
+  assertContract(pageText.includes("请选择一轮回答查看反馈分析"), "未选中回答时应显示明确空态");
+  assertContract(pageText.includes("当前回答暂无反馈，可稍后重试生成反馈"), "选中回答无反馈时应显示明确空态");
+  assertContract(pageText.includes("<Typography.Text strong>反馈分析</Typography.Text>"), "右侧 header 应固定为反馈分析");
+}
+
+function test_sticky_popover_contract_splits_node_context_and_question(): void {
+  const pageText = readFileSync(new URL("./InterviewPage.tsx", import.meta.url), "utf8");
+
+  assertContract(pageText.includes("节点上下文"), "sticky 展开浮层应包含节点上下文区块");
+  assertContract(pageText.includes("当前题目"), "sticky 展开浮层应包含当前题目区块");
+  assertContract(pageText.includes("当前查看回答"), "sticky 当前题目区块应展示当前查看回答");
+  assertContract(pageText.includes("<DownOutlined />") && pageText.includes("<RightOutlined />"), "sticky 默认按钮应复用进展树 chevron 图标展开/收起");
+  assertContract(!pageText.includes("展开更多上下文"), "sticky 不应使用固定文字按钮展开更多上下文");
+}
+
+function test_pinned_focused_question_uses_full_system_question_bubble(): void {
+  const session = buildSelectedAnswerFixtureSession();
+  const timeline = buildInterviewTimelineViewModel(session, "q_timeline");
+  const firstEvent = timeline.events[0];
+
+  assertContract(firstEvent?.kind === "system_question", "当前 focused question 在 timeline 中仍应是系统提问气泡");
+  assertContract(
+    firstEvent?.text === "你在硬件测试知识库项目中将检索准确率从不足 60% 提升到 82%，请说明混合检索策略如何设计。",
+    "当前 focused question 应在聊天流中展示完整题干",
+  );
+  assertContract(
+    !String(firstEvent?.text).includes("当前题目已固定在顶部上下文。"),
+    "聊天流不得使用 sticky 占位文案替代题干",
+  );
+}
+
+function test_loss_point_suggestion_uses_business_fallback_when_empty(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_loss_fallback",
+    answer_round: 1,
+    answer_text: "回答缺少验证方式。",
+    answer_created_at: "2026-06-08T16:10:00",
+    feedback_text: "需要补充验证方式。",
+    feedback_id: "fb_loss_fallback",
+    score_result_id: null,
+    feedback_created_at: "2026-06-08T16:11:00",
+    feedback_payload: {
+      status: "generated",
+      loss_points: [
+        {
+          severity: "major",
+          deduction: 6,
+          reason: "缺少验证方式。",
+          suggestion: "",
+        },
+      ],
+      score_result: null,
+    },
+  };
+  const card = buildFeedbackCardViewModel(answer);
+  const row = card.sections.find((section) => section.key === "loss_points")?.tableRows?.[0];
+
+  assertContract(row?.suggestion === "建议补充该点的设计依据、关键步骤和验证方式。", "失分点修正建议为空时应使用业务兜底");
+  assertContract(row?.suggestion !== "-" && row?.suggestion !== "修正建议待补充", "失分点修正建议不得使用旧空白兜底");
+}
+
+function getCssRuleBody(cssText: string, selector: string): string {
+  const ruleStart = cssText.indexOf(`${selector} {`);
+  if (ruleStart === -1) {
+    return "";
+  }
+  const bodyStart = cssText.indexOf("{", ruleStart) + 1;
+  const bodyEnd = cssText.indexOf("}", bodyStart);
+  return cssText.slice(bodyStart, bodyEnd);
+}
+
+function test_workbench_sticky_context_compact_css_classes_exist(): void {
+  const cssText = readFileSync(new URL("./InterviewWorkbench.module.css", import.meta.url), "utf8");
+  const toggleRule = getCssRuleBody(cssText, ".conversationQuestionHeaderToggle");
+
+  assertContract(cssText.includes(".conversationQuestionHeader"), "sticky card 根 class 应存在");
+  assertContract(cssText.includes(".conversationQuestionHeaderCompactBar"), "sticky 默认态应使用紧凑条 class");
+  assertContract(cssText.includes(".conversationQuestionHeaderMetaRow"), "sticky card compact meta row class 应存在");
+  assertContract(cssText.includes(".conversationQuestionHeaderQuestionLine"), "sticky card 题目行 class 应存在");
+  assertContract(cssText.includes(".conversationQuestionHeaderPopover"), "sticky 展开态应使用浮层 class");
+  assertContract(cssText.includes("position: absolute;"), "sticky 浮层应绝对定位，不推开时间线");
+  assertContract(cssText.includes(".conversationQuestionHeaderPopoverSection"), "sticky 浮层应分区展示上下文");
+  assertContract(cssText.includes("padding: 0 20px 24px;"), "chatScroll 顶部 padding 应保持为 0");
+  assertContract(toggleRule.includes("border: 0;"), "sticky 展开按钮不应使用圆形主按钮边框");
+  assertContract(toggleRule.includes("background: transparent;"), "sticky 展开按钮背景应接近进展树 chevron");
+  assertContract(toggleRule.includes("height: 24px;"), "sticky 展开按钮高度应稳定且接近左侧 chevron");
+  assertContract(!toggleRule.includes("border-radius: 999px;"), "sticky 展开按钮不应使用圆形按钮视觉");
+}
+
+function test_workbench_layout_collapse_classes_affect_grid_columns(): void {
+  const cssText = readFileSync(new URL("./InterviewWorkbench.module.css", import.meta.url), "utf8");
+
+  assertContract(cssText.includes(".workspaceGridLeftCollapsed"), "左侧收起应有独立网格 class");
+  assertContract(cssText.includes(".workspaceGridRightCollapsed"), "右侧收起应有独立网格 class");
+  assertContract(cssText.includes(".workspaceGridCollapsed"), "双侧收起应有组合 class");
+  assertContract(cssText.includes("48px minmax(430px, 1fr) minmax(0, var(--feedback-panel-width, 430px))"), "左侧收起应锁定宽度 48px");
+  assertContract(cssText.includes("minmax(320px, var(--progress-panel-width, 320px)) minmax(0, 1fr) 48px"), "右侧收起应锁定宽度 48px");
+  assertContract(cssText.includes("48px minmax(0, 1fr) 48px"), "双侧收起应锁定 48px + 48px");
+}
+
+function test_workbench_feedback_panel_tabs_support_toggle_config(): void {
+  const tabsWithAll = buildFeedbackPanelTabs({
+    hasSummary: true,
+    hasLossPoints: true,
+    hasReferenceAnswer: true,
+    hasCandidateItems: true,
+    lossPointCount: 2,
+    candidateCount: 3,
+  });
+  const tabsNoLossNoCandidate = buildFeedbackPanelTabs({
+    hasSummary: true,
+    hasLossPoints: false,
+    hasReferenceAnswer: false,
+    hasCandidateItems: false,
+    lossPointCount: 0,
+    candidateCount: 0,
+  });
+
+  assertContract(tabsWithAll.map((tab) => tab.key).join(",") === "summary,lossPoints,referenceAnswer,candidate", "Sheet tab 顺序应为总评/失分点/参考回答/资产候选");
+  assertContract(tabsWithAll.every((tab) => !tab.disabled), "有内容时 Sheet tab 均可点击");
+  assertContract(tabsNoLossNoCandidate.find((tab) => tab.key === "lossPoints")?.disabled === true, "无失分点时失分点 tab 不可点");
+  assertContract(tabsNoLossNoCandidate.find((tab) => tab.key === "referenceAnswer")?.disabled === true, "无参考回答时参考回答 tab 不可点");
+  assertContract(tabsNoLossNoCandidate.find((tab) => tab.key === "candidate")?.disabled === true, "无候选项时资产候选 tab 不可点");
+  assertContract(
+    tabsNoLossNoCandidate.find((tab) => tab.key === "summary")?.disabled === false,
+    "有 summary 时总评 tab 不应被禁用",
+  );
+}
+
+function test_workbench_feedback_panel_tabs_use_stable_box_model_css(): void {
+  const cssText = readFileSync(new URL("./InterviewWorkbench.module.css", import.meta.url), "utf8");
+  const tabsRule = getCssRuleBody(cssText, ".feedbackPanelTabs");
+  const navRule = getCssRuleBody(cssText, ".feedbackPanelTabs :global(.ant-tabs-nav)");
+  const tabRule = getCssRuleBody(cssText, ".feedbackPanelTabs :global(.ant-tabs-tab)");
+  const activeTabRule = getCssRuleBody(cssText, ".feedbackPanelTabs :global(.ant-tabs-tab-active)");
+
+  assertContract(tabsRule.includes("height: 44px;"), "反馈 tab bar 根高度应固定，切换 tab 不应改变 top/height");
+  assertContract(navRule.includes("height: 44px;"), "反馈 tab nav 高度应固定");
+  assertContract(tabRule.includes("height: 40px;"), "反馈 tab button 高度应固定");
+  assertContract(tabRule.includes("box-sizing: border-box;"), "反馈 tab button 应预留一致盒模型");
+  assertContract(tabRule.includes("border: 1px solid transparent;"), "反馈 tab button 应预留等宽 border");
+  assertContract(tabRule.includes("padding: 0 4px;"), "反馈 tab button padding 不应由 active 状态改变");
+  assertContract(tabRule.includes("line-height: 1.35;"), "反馈 tab button line-height 不应由 active 状态改变");
+  assertContract(!activeTabRule.includes("margin-top"), "active tab 不得使用 margin-top 造成 reflow");
+  assertContract(!activeTabRule.includes("margin-bottom"), "active tab 不得使用 margin-bottom 造成 reflow");
+  assertContract(!activeTabRule.includes("transform"), "active tab 不得使用 transform 造成视觉跳动");
+  assertContract(activeTabRule.includes("box-shadow: inset 0 -2px 0"), "active tab 应使用 inset shadow 表达选中态");
+}
+
+function test_workbench_status_chip_rendering_is_dot_text_style(): void {
+  const cssText = readFileSync(new URL("./InterviewWorkbench.module.css", import.meta.url), "utf8");
+
+  assertContract(cssText.includes(".statusChip"), "status-chip 通用容器 class 应存在");
+  assertContract(cssText.includes(".statusChipDot"), "status-chip dot class 应存在");
+  assertContract(cssText.includes(".statusChipLabel"), "status-chip 文案 class 应存在");
+  assertContract(cssText.includes(".statusChipSuccess"), "status-chip success 主题应存在");
+  assertContract(cssText.includes(".statusChipProcessing"), "status-chip processing 主题应存在");
+  assertContract(cssText.includes(".statusChipSuccessDot"), "status-chip success dot 主题应存在");
+  assertContract(cssText.includes(".statusChipWarningDot"), "status-chip warning dot 主题应存在");
+  assertContract(cssText.includes(".statusChipProcessingDot"), "status-chip processing dot 主题应存在");
+  assertContract(cssText.includes(".statusChipDefaultDot"), "status-chip default dot 主题应存在");
+  assertContract(cssText.includes(".statusChipBlueDot"), "status-chip blue dot 主题应存在");
+  assertContract(cssText.includes(".statusChipOrangeDot"), "status-chip orange dot 主题应存在");
+}
+
+function test_feedback_card_does_not_inline_candidate_actions(): void {
+  const card = buildFeedbackCardViewModel({
+    answer_id: "ans_no_inline_actions",
+    answer_round: 1,
+    answer_text: "回答聚焦业务改造步骤，兼顾风险与指标。",
+    answer_created_at: "2026-06-08T03:00:00Z",
+    feedback_text: "建议补充失败回退方案。",
+    feedback_id: "fb_no_inline_actions",
+    score_result_id: null,
+    feedback_created_at: "2026-06-08T03:01:00Z",
+    feedback_payload: {
+      status: "generated" as const,
+      feedback_id: "fb_no_inline_actions",
+      feedback_text: "建议补充失败回退方案。",
+      score_result: {
+        score_value: 82,
+        score_type: "回答质量",
+      },
+    },
+  });
+
+  assertContract(
+    JSON.stringify(card).includes("确认候选") === false && JSON.stringify(card).includes("忽略候选") === false,
+    "反馈卡片不应内嵌候选确认/忽略按钮文案",
+  );
 }
 
 function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata(): void {
@@ -2424,9 +3071,11 @@ function test_workbench_candidate_actions_render_in_fixed_composer_bar(): void {
   const actionBar = buildWorkbenchCandidateActionBarViewModel(review);
 
   assertContract(INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY.feedbackCard === "readonly", "反馈卡应保持只读策略");
-  assertContract(INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY.candidateActions === "composer_action_bar", "候选确认/忽略应迁移到输入区动作条");
-  assertContract(actionBar !== null, "存在待处理 candidate 时应生成输入区候选动作条 view model");
-  assertContract(actionBar?.placement === INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT, "候选动作应与下一步建议共用输入区上方固定动作条");
+  assertContract(
+    INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY.candidateActions === "feedback_panel",
+    "候选确认/忽略应迁移到候选与反馈侧边栏",
+  );
+  assertContract(actionBar !== null, "存在待处理 candidate 时应生成候选动作视图模型");
   assertContract(actionBar?.pendingCount === 1, "候选动作条只应聚焦待处理 candidate");
   assertContract(actionBar?.items.map((item) => item.confirmLabel).join(",") === "确认候选", "候选确认按钮应使用中文文案");
   assertContract(actionBar?.items.map((item) => item.dismissLabel).join(",") === "忽略候选", "候选忽略按钮应使用中文文案");
@@ -2649,7 +3298,7 @@ function test_generated_feedback_card_view_model_shows_phase6_payload_sections()
   assertContract(visibleCopy.includes("总体点评"), "generated payload 应展示总体点评区块");
   assertContract(visibleCopy.includes("覆盖了接口编排"), "总体点评应展示 answer_summary.coverage");
   assertContract(visibleCopy.includes("主要缺口：缺少项目时间线澄清"), "总体点评应展示 answer_summary.main_gaps");
-  assertContract(visibleCopy.includes("分数：82"), "打分应展示 score_result.score_value");
+  assertContract(visibleCopy.includes("总分 82 / 100"), "打分应展示 score_result.score_value");
   assertContract(visibleCopy.includes("评分类型：回答打磨"), "打分应展示中文 score_type");
   assertContract(visibleCopy.includes("置信度：high"), "打分应展示 score_result.confidence_level");
   const lossPointsSection = card.sections.find((section) => section.key === "loss_points");
@@ -3444,7 +4093,27 @@ test_waiting_answer_bar_is_removed_from_workbench_contract();
 test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback();
 test_workbench_chat_auto_scroll_respects_manual_scroll_when_question_not_changed();
 test_workbench_sticky_header_view_model_matches_current_question_context();
+test_workbench_sticky_header_view_model_shows_node_context_without_focused_question();
+test_workbench_sticky_header_view_model_keeps_focused_question_for_selected_node();
+test_workbench_sticky_header_view_model_uses_empty_state_without_selected_node_or_priority();
 test_workbench_sticky_question_text_collapse_behavior();
+test_workbench_layout_collapse_classes_affect_grid_columns();
+test_workbench_feedback_panel_tabs_support_toggle_config();
+test_selected_question_defaults_to_latest_answer();
+test_selected_answer_feedback_meta_switches_between_answers();
+test_timeline_view_model_contains_interview_events_and_second_level_time();
+test_answer_quick_review_view_model_uses_score_maturity_and_suggestion();
+test_answer_quick_review_without_score_uses_safe_empty_state();
+test_middle_timeline_removes_full_feedback_card_dom_contract();
+test_selected_answer_feedback_panel_contract_is_explicit();
+test_sticky_popover_contract_splits_node_context_and_question();
+test_pinned_focused_question_uses_full_system_question_bubble();
+test_loss_point_suggestion_uses_business_fallback_when_empty();
+test_workbench_sticky_context_compact_css_classes_exist();
+test_workbench_feedback_panel_tabs_use_stable_box_model_css();
+test_workbench_status_chip_rendering_is_dot_text_style();
+test_feedback_card_does_not_inline_candidate_actions();
+test_current_focused_question_bubble_is_rendered_when_sticky_context_visible();
   test_progress_tree_pending_and_failed_states_use_generation_action();
   test_progress_tree_click_auto_generates_only_for_nodes_without_question();
   test_workbench_question_actions_follow_current_question_status();

@@ -9,6 +9,7 @@ import {
   CheckCircleOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  LeftOutlined,
   PlusOutlined,
   ReloadOutlined,
   RightOutlined,
@@ -26,6 +27,7 @@ import {
   Modal,
   Popover,
   Progress,
+  Tabs,
   Select,
   Space,
   Table,
@@ -40,6 +42,7 @@ import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  ReactElement,
   ReactNode,
 } from "react";
 import { useRouteController } from "../../app/routes/router";
@@ -177,6 +180,7 @@ export const INTERVIEW_WORKBENCH_LAYOUT_B_GRID_AREAS = [
   "right_conversation_header",
   "right_chat_scroll",
   "right_sticky_merged_context_card",
+  "right_feedback_sheet",
   "right_fixed_next_action_bar",
   "right_fixed_composer",
 ] as const;
@@ -184,7 +188,17 @@ export const INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT = {
   layoutArea: "right_sticky_merged_context_card",
   progressContext: "merged_into_current_question_card",
   currentQuestion: "same_sticky_card",
-  behavior: "sticky_collapsible",
+  behavior: "compact_sticky_popover",
+} as const;
+export const INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY = {
+  metaLayout: "question_first_status_only",
+  questionPrefix: "题干：",
+  collapsedQuestionLines: 2,
+  questionInlineToggle: "removed",
+  expandControl: "single_context_toggle",
+  toggleIcon: "progress_tree_chevron",
+  duplicatedNodeThemeCategory: "moved_to_summary_bar",
+  focusedQuestionBubble: "rendered_in_chat_flow",
 } as const;
 export const INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY = {
   root: "viewport_locked",
@@ -192,12 +206,19 @@ export const INTERVIEW_WORKBENCH_LAYOUT_B_SCROLL_POLICY = {
   chatScroll: "independent_auto_scroll",
   composer: "outside_chat_scroll",
 } as const;
+export const INTERVIEW_WORKBENCH_CHAT_SCROLL_PADDING_POLICY = {
+  top: 0,
+  horizontal: 20,
+  bottom: 24,
+  stickyCardOwnPadding: true,
+} as const;
 export const INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS = {
   root: "interview-workbench-viewport",
   progressPanel: "interview-workbench-progress-panel",
   progressNodeList: "interview-workbench-progress-node-list",
   conversationPanel: "interview-workbench-conversation-panel",
   chatScroll: "interview-workbench-chat-scroll",
+  feedbackPanel: "interview-workbench-feedback-sheet",
   currentQuestionComposer: "interview-workbench-current-question-composer",
 } as const;
 export const INTERVIEW_WORKBENCH_SCROLL_REGIONS = ["progress_node_list", "chat_scroll"] as const;
@@ -229,6 +250,7 @@ export const INTERVIEW_WORKBENCH_HEADER_CHIP_KEYS = [
   "简历",
   "当前节点",
   "能力主题",
+  "分类",
   "进度",
   "当前节点表现",
 ] as const;
@@ -317,7 +339,63 @@ export const INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT = "fixed_above_current_qu
 export const INTERVIEW_WORKBENCH_FEEDBACK_CARD_INTERACTION_POLICY = {
   feedbackCard: "readonly",
   nextActions: "composer_action_bar",
-  candidateActions: "composer_action_bar",
+  candidateActions: "feedback_panel",
+} as const;
+export const INTERVIEW_WORKBENCH_LAYOUT_B_FEEDBACK_PANEL_WIDTH_POLICY = {
+  defaultCollapsed: 48,
+  default: 430,
+  min: 220,
+  max: 520,
+} as const;
+export const INTERVIEW_WORKBENCH_FEEDBACK_PANEL_RESIZE_HANDLE_POLICY = {
+  owner: "feedback_panel",
+  edge: "left",
+  position: "absolute_panel_edge",
+  visualCentering: "translateX(-50%)",
+} as const;
+export const INTERVIEW_WORKBENCH_FEEDBACK_PANEL_TAB_LAYOUT_POLICY = {
+  columns: "repeat(4, minmax(0, 1fr))",
+  alignment: "center",
+  safeInset: "panel_horizontal_padding",
+} as const;
+export const INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY = {
+  defaultCollapsed: 48,
+  default: 320,
+  min: 320,
+  max: 520,
+} as const;
+export const INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICIES = {
+  allOpen: {
+    questionBubbleMaxWidth: "min(88%, 920px)",
+    answerBubbleMaxWidth: "min(88%, 920px)",
+    feedbackBubbleMaxWidth: "min(88%, 920px)",
+  },
+  progressCollapsed: {
+    questionBubbleMaxWidth: "min(92%, 1100px)",
+    answerBubbleMaxWidth: "min(92%, 1100px)",
+    feedbackBubbleMaxWidth: "min(92%, 1100px)",
+  },
+  feedbackCollapsed: {
+    questionBubbleMaxWidth: "min(92%, 1100px)",
+    answerBubbleMaxWidth: "min(92%, 1100px)",
+    feedbackBubbleMaxWidth: "min(92%, 1100px)",
+  },
+  bothCollapsed: {
+    questionBubbleMaxWidth: "min(96%, 1320px)",
+    answerBubbleMaxWidth: "min(96%, 1320px)",
+    feedbackBubbleMaxWidth: "min(96%, 1320px)",
+  },
+} as const;
+export const INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY = {
+  allOpen: "allOpen",
+  progressCollapsed: "progressCollapsed",
+  feedbackCollapsed: "feedbackCollapsed",
+  bothCollapsed: "bothCollapsed",
+} as const;
+export const INTERVIEW_WORKBENCH_QUICK_REVIEW_CARD_LAYOUT_POLICY = {
+  widthSource: "answer_bubble_max_width",
+  primaryRow: "label_score_maturity_status_link",
+  actionTreatment: "weak_text_link",
 } as const;
 export const INTERVIEW_WORKBENCH_ROUND_META_LABEL_POLICY = {
   answer: "compact_pill",
@@ -477,9 +555,17 @@ export type WorkbenchQuestionActionState = {
   canMarkQuestionCompleted: boolean;
 };
 
-const PROGRESS_PANEL_DEFAULT_WIDTH = 360;
-const PROGRESS_PANEL_MIN_WIDTH = 260;
-const PROGRESS_PANEL_MAX_WIDTH = 520;
+export type WorkbenchFeedbackPanelTab = "summary" | "lossPoints" | "referenceAnswer" | "candidate";
+
+export type WorkbenchFeedbackPanelTabItem = {
+  key: WorkbenchFeedbackPanelTab;
+  label: string;
+  disabled: boolean;
+};
+
+const PROGRESS_PANEL_DEFAULT_WIDTH = INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY.default;
+const PROGRESS_PANEL_MIN_WIDTH = INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY.min;
+const PROGRESS_PANEL_MAX_WIDTH = INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY.max;
 
 type ProgressTreeDisplayNode = PolishProgressTreeNode & {
   basis_type?: string | null;
@@ -522,8 +608,8 @@ export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE = "当前节点上下�
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT = "label_and_node_title_same_row" as const;
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY = "请选择一个进展节点查看本轮训练目标。";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY = {
-  expand: "展开",
-  collapse: "收起",
+  expand: "展开更多上下文",
+  collapse: "收起上下文",
 } as const;
 export const INTERVIEW_PROGRESS_TREE_DETAIL_PLACEMENT = "conversation_context_banner" as const;
 export const INTERVIEW_PROGRESS_TREE_LEFT_LIST_FIELDS = [
@@ -577,6 +663,9 @@ export type ProgressTreeContextBannerSection = {
 };
 
 const WORKBENCH_STICKY_QUESTION_TEXT_COLLAPSE_THRESHOLD = 130;
+const WORKBENCH_STICKY_NODE_EMPTY_TITLE = "请选择左侧节点";
+const WORKBENCH_STICKY_NODE_EMPTY_DESCRIPTION = "请选择左侧节点。";
+const WORKBENCH_STICKY_NODE_WITHOUT_SELECTED_QUESTION_HINT = "该节点暂无选中题目，可在下方为当前节点出题。";
 
 export type WorkbenchQuestionConversationAutoScrollTrigger = {
   focusedQuestionId: string | null;
@@ -586,12 +675,73 @@ export type WorkbenchQuestionConversationAutoScrollTrigger = {
 };
 
 export type WorkbenchStickyQuestionContextViewModel = {
-  focusedQuestionId: string;
+  focusedQuestionId: string | null;
+  selectedQuestionId: string | null;
+  progressNodeRef: string | null;
   progressNodeTitle: string;
-  capabilityTheme: string;
-  questionIndexLabel: string;
-  questionText: string;
+  capabilityThemeLabel: string;
+  nodeCategoryLabel: string;
+  nodeStatusLabel: string;
+  nodeSummary: string | null;
+  emptyDescription: string | null;
+  nonQuestionHint: string | null;
+  shouldShowQuestionContext: boolean;
+  questionIndexLabel: string | null;
+  questionText: string | null;
+  feedbackStatusLabel: string | null;
+};
+
+export type WorkbenchSelectedAnswerContextViewModel = {
+  questionId: string;
+  questionIndex: number;
+  questionLabel: string;
+  answerId: string;
+  answerIndex: number;
+  answerLabel: string;
+  answerTimeLabel: string;
   feedbackStatusLabel: string;
+};
+
+export type WorkbenchAnswerQuickReviewViewModel = {
+  answerId: string;
+  scoreLabel: string;
+  maturityLabel: string;
+  suggestion: string;
+  statusLabel: string;
+  createdAtLabel: string;
+};
+
+export type WorkbenchTimelineEventKind =
+  | "system_question"
+  | "user_answer"
+  | "quick_review"
+  | "system_hint";
+
+export type WorkbenchTimelineEventViewModel = {
+  id: string;
+  kind: WorkbenchTimelineEventKind;
+  alignment: "left" | "right";
+  questionId: string;
+  answerId: string | null;
+  metaLabel: string;
+  text: string;
+  quickReview: WorkbenchAnswerQuickReviewViewModel | null;
+  pinnedQuestionContext: boolean;
+};
+
+export type WorkbenchTimelineViewModel = {
+  events: WorkbenchTimelineEventViewModel[];
+};
+
+type WorkbenchStickyQuestionContextOptions = {
+  selectedProgressNode?: WorkbenchProgressNode | null;
+  selectedProgressNodeDetailRef?: string | null;
+};
+
+export type WorkbenchStickyQuestionContextMetaItem = {
+  key: "node" | "theme" | "category" | "status" | "question" | "feedback";
+  label: string;
+  value: string;
 };
 
 export function buildQuestionConversationAutoScrollTrigger(params: WorkbenchQuestionConversationAutoScrollTrigger): string | null {
@@ -635,6 +785,13 @@ export function shouldCollapseCurrentQuestionText(
     return false;
   }
   return !isExpanded;
+}
+
+export function shouldRenderQuestionBubbleInConversation(
+  _questionId: string,
+  _focusedQuestionIdWithStickyContext: string | null,
+): boolean {
+  return true;
 }
 
 type InterviewListError = {
@@ -1070,7 +1227,11 @@ function toSessionDisplayName(session: PolishSessionDetail): string {
 }
 
 function toPolishThemeLabel(session: { polish_theme_label?: string | null; polish_theme?: string | null }): string {
-  return session.polish_theme_label || session.polish_theme || "混合";
+  if (session.polish_theme_label) {
+    return session.polish_theme_label;
+  }
+  const themeOption = POLISH_THEME_OPTIONS.find((option) => option.value === session.polish_theme);
+  return themeOption?.label ?? session.polish_theme ?? "混合";
 }
 
 function toTopicLabel(session: PolishSessionDetail): string {
@@ -1448,6 +1609,7 @@ export function buildStickyQuestionContextViewModel(
   session: PolishSessionDetail | null,
   focusedQuestionId: string | null,
   selectedProgressNodeRef: string | null,
+  options: WorkbenchStickyQuestionContextOptions = {},
 ):
   | WorkbenchStickyQuestionContextViewModel
   | null {
@@ -1455,38 +1617,102 @@ export function buildStickyQuestionContextViewModel(
     return null;
   }
 
-  if (focusedQuestionId === null) {
-    return null;
-  }
-
-  const selectedQuestionIndex = session.turns.findIndex((turn) => turn.question_id === focusedQuestionId);
-  if (selectedQuestionIndex === -1) {
-    return null;
-  }
-
-  const turn = session.turns[selectedQuestionIndex];
+  const selectedProgressNode = options.selectedProgressNode ?? null;
+  const focusedTurn = focusedQuestionId === null
+    ? null
+    : session.turns.find((item) => item.question_id === focusedQuestionId) ?? null;
+  const hasExplicitSelectedProgressNode = Object.prototype.hasOwnProperty.call(options, "selectedProgressNode");
+  const progressNodeRef =
+    options.selectedProgressNodeDetailRef ??
+    selectedProgressNodeRef ??
+    getWorkbenchProgressNodeQuestionTargetRef(selectedProgressNode) ??
+    (hasExplicitSelectedProgressNode ? null : focusedTurn?.progress_node_ref) ??
+    session.progress_tree_state.current_priority?.progress_node_ref ??
+    null;
   const selectedNode = findProgressTreeNodeByRef(
     session.progress_tree_plan.nodes,
-    selectedProgressNodeRef ?? turn.progress_node_ref ?? null,
+    progressNodeRef,
   );
-  const latestAnswer = turn.answers.length > 0 ? turn.answers[turn.answers.length - 1] : null;
-  const feedbackStatusLabel = mapFeedbackCodeToDisplay(latestAnswer?.feedback_payload?.status ?? null).text;
-
   const nodeTitle = selectedNode === null
-    ? "未选择节点"
+    ? WORKBENCH_STICKY_NODE_EMPTY_TITLE
     : resolveProgressNodeTitle(selectedNode);
   const nodeCategory = selectedNode === null
-    ? "未选择能力主题"
+    ? "未选择节点分类"
     : resolveProgressNodeCategoryTitle(selectedNode);
+  const nodeStatusLabel = resolveStickyProgressNodeStatusLabel(session, progressNodeRef, selectedProgressNode);
+  const nodeSummary = resolveStickyProgressNodeSummary(session, progressNodeRef);
+  const selectedQuestionState = resolveQuestionNodeState(session, selectedProgressNode);
+  const focusedQuestionBelongsToProgressNode = focusedTurn !== null && (
+    progressNodeRef === null ||
+    focusedTurn.progress_node_ref === progressNodeRef
+  );
+  const selectedQuestionId = hasExplicitSelectedProgressNode
+    ? selectedQuestionState?.questionId ?? (focusedQuestionBelongsToProgressNode ? focusedTurn?.question_id ?? null : null)
+    : focusedQuestionId;
+  const selectedQuestionIndex = selectedQuestionId === null
+    ? -1
+    : session.turns.findIndex((turn) => turn.question_id === selectedQuestionId);
+  const turn = selectedQuestionIndex === -1 ? null : session.turns[selectedQuestionIndex];
+  const latestAnswer = turn !== null && turn.answers.length > 0 ? turn.answers[turn.answers.length - 1] : null;
+  const feedbackStatusLabel = turn === null
+    ? null
+    : mapFeedbackCodeToDisplay(latestAnswer?.feedback_payload?.status ?? null).text;
 
   return {
-    focusedQuestionId,
+    focusedQuestionId: turn?.question_id ?? null,
+    selectedQuestionId: turn?.question_id ?? null,
+    progressNodeRef,
     progressNodeTitle: nodeTitle,
-    capabilityTheme: nodeCategory,
-    questionIndexLabel: `题目 ${selectedQuestionIndex + 1}`,
-    questionText: turn.question_text || FALLBACK_QUESTION_TEXT,
+    capabilityThemeLabel: toPolishThemeLabel(session),
+    nodeCategoryLabel: nodeCategory,
+    nodeStatusLabel,
+    nodeSummary,
+    emptyDescription: selectedNode === null ? WORKBENCH_STICKY_NODE_EMPTY_DESCRIPTION : null,
+    nonQuestionHint: turn === null && selectedNode !== null ? WORKBENCH_STICKY_NODE_WITHOUT_SELECTED_QUESTION_HINT : null,
+    shouldShowQuestionContext: turn !== null,
+    questionIndexLabel: turn === null ? null : `题目 ${selectedQuestionIndex + 1}`,
+    questionText: turn === null ? null : turn.question_text || FALLBACK_QUESTION_TEXT,
     feedbackStatusLabel,
   };
+}
+
+export function buildStickyQuestionContextCompactMetaItems(
+  stickyQuestionContext: WorkbenchStickyQuestionContextViewModel,
+): WorkbenchStickyQuestionContextMetaItem[] {
+  const items: WorkbenchStickyQuestionContextMetaItem[] = [
+    { key: "status", label: "状态", value: stickyQuestionContext.nodeStatusLabel },
+  ];
+  if (stickyQuestionContext.feedbackStatusLabel !== null) {
+    items.push({ key: "feedback", label: "反馈", value: stickyQuestionContext.feedbackStatusLabel });
+  }
+  return items;
+}
+
+function resolveStickyProgressNodeStatusLabel(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null,
+  selectedProgressNode: WorkbenchProgressNode | null,
+): string {
+  const stateStatus = progressNodeRef === null
+    ? null
+    : session.progress_tree_state.node_states.find((item) => item.progress_node_ref === progressNodeRef)?.status ?? null;
+  return progressNodeStatusLabel((stateStatus ?? selectedProgressNode?.status ?? "pending") as WorkbenchProgressNode["status"]);
+}
+
+function resolveStickyProgressNodeSummary(
+  session: PolishSessionDetail,
+  progressNodeRef: string | null,
+): string | null {
+  if (progressNodeRef === null) {
+    return null;
+  }
+  const bannerContent = buildProgressTreeContextBannerContent(session, progressNodeRef);
+  const depthRequirement = bannerContent.depthRequirement?.trim();
+  if (depthRequirement) {
+    return depthRequirement;
+  }
+  const expandedSections = buildProgressTreeContextBannerExpandedSections(bannerContent);
+  return expandedSections.flatMap((section) => section.items)[0] ?? null;
 }
 
 export function resolveCurrentQuestionState(
@@ -1933,6 +2159,11 @@ function toCurrentNodeLabel(session: PolishSessionDetail): string {
   const currentNodeRef = resolveSessionCurrentProgressNodeRef(session);
   const node = findProgressTreeNodeByRef(session.progress_tree_plan.nodes, currentNodeRef);
   return node !== null ? resolveProgressNodeTitle(node) : session.progress_tree_state.current_priority?.title ?? "待生成";
+}
+
+function toCurrentNodeCategoryLabel(session: PolishSessionDetail): string {
+  const currentNodeRef = resolveSessionCurrentProgressNodeRef(session);
+  return resolveProgressTreePathInfo(session, currentNodeRef).categoryTitle ?? "未关联分类";
 }
 
 export function deriveWorkbenchMachineState(params: {
@@ -2383,6 +2614,31 @@ export function getWorkbenchChatMessageAlignmentClassName(
   return INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT[kind] === "right" ? "messageRowRight" : "messageRowLeft";
 }
 
+function resolveMessageWidthPolicy(
+  isProgressPanelCollapsed: boolean,
+  isFeedbackPanelCollapsed: boolean,
+): keyof typeof INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY {
+  if (isProgressPanelCollapsed && isFeedbackPanelCollapsed) {
+    return INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY.bothCollapsed;
+  }
+  if (isProgressPanelCollapsed) {
+    return INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY.progressCollapsed;
+  }
+  if (isFeedbackPanelCollapsed) {
+    return INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY.feedbackCollapsed;
+  }
+  return INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY.allOpen;
+}
+
+function resolveMessageWidthStyle(policy: keyof typeof INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICY): CSSProperties {
+  const widthProfile = INTERVIEW_WORKBENCH_MESSAGE_WIDTH_POLICIES[policy];
+  return {
+    "--workbench-question-bubble-max-width": widthProfile.questionBubbleMaxWidth,
+    "--workbench-answer-bubble-max-width": widthProfile.answerBubbleMaxWidth,
+    "--workbench-feedback-bubble-max-width": widthProfile.feedbackBubbleMaxWidth,
+  } as CSSProperties;
+}
+
 export function buildProgressTreeContextMenuItems(
   node: WorkbenchProgressNode | null | undefined,
   actionState: Pick<WorkbenchQuestionActionState, "canGenerateQuestion" | "canMarkQuestionCompleted">,
@@ -2452,6 +2708,7 @@ function buildWorkbenchHeaderChips(session: PolishSessionDetail, progressPercent
     { key: "resume", label: "简历", value: toDisplayResumeTitle(session) },
     { key: "node", label: "当前节点", value: toCurrentNodeLabel(session) },
     { key: "theme", label: "能力主题", value: toPolishThemeLabel(session) },
+    { key: "category", label: "分类", value: toCurrentNodeCategoryLabel(session) },
     { key: "progress", label: "进度", value: `${progressPercent}%` },
     { key: "score", label: "当前节点表现", value: WORKBENCH_NODE_SCORE_PLACEHOLDER },
   ] as const;
@@ -2506,6 +2763,8 @@ export function buildWorkbenchFixedNextActionBarViewModel(
     actions,
   };
 }
+
+type WorkbenchStatusChipTone = "success" | "warning" | "processing" | "default" | "blue" | "orange";
 
 type FeedbackSectionKey =
   | "failed_status"
@@ -2565,7 +2824,7 @@ export type CandidateReviewItemViewModel = {
   candidateId: string;
   typeLabel: string;
   statusLabel: string;
-  statusColor: string;
+  statusTone: WorkbenchStatusChipTone;
   title: string;
   summary: string;
   evidenceExcerpt: string | null;
@@ -2610,13 +2869,48 @@ const CANDIDATE_STATUS_LABELS: Record<string, string> = {
   archived: "已归档",
 };
 
-const CANDIDATE_STATUS_COLORS: Record<string, string> = {
+const CANDIDATE_STATUS_TONES: Record<string, WorkbenchStatusChipTone> = {
   candidate: "processing",
   confirmed: "success",
   dismissed: "default",
   merged: "blue",
-  archived: "default",
+  archived: "orange",
 };
+
+const WORKBENCH_STATUS_CHIP_CLASS_NAMES = {
+  success: "statusChipSuccess",
+  warning: "statusChipWarning",
+  processing: "statusChipProcessing",
+  default: "statusChipDefault",
+  blue: "statusChipBlue",
+  orange: "statusChipOrange",
+} as const;
+
+const WORKBENCH_STATUS_CHIP_DOT_CLASS_NAMES = {
+  success: "statusChipSuccessDot",
+  warning: "statusChipWarningDot",
+  processing: "statusChipProcessingDot",
+  default: "statusChipDefaultDot",
+  blue: "statusChipBlueDot",
+  orange: "statusChipOrangeDot",
+} as const;
+
+function resolveStatusChipClassName(tone: WorkbenchStatusChipTone): string {
+  return styles[WORKBENCH_STATUS_CHIP_CLASS_NAMES[tone]];
+}
+
+function resolveStatusChipDotClassName(tone: WorkbenchStatusChipTone): string {
+  return styles[WORKBENCH_STATUS_CHIP_DOT_CLASS_NAMES[tone]];
+}
+
+function renderStatusChip(tone: WorkbenchStatusChipTone, label: string): ReactElement {
+  return (
+    <span className={resolveStatusChipClassName(tone)}>
+      <span className={`${styles.statusChipDot} ${resolveStatusChipDotClassName(tone)}`} />
+      <span className={styles.statusChipLabel}>{label}</span>
+    </span>
+  );
+}
 
 export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): FeedbackCardViewModel {
   const payload = answer.feedback_payload;
@@ -2668,7 +2962,7 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         title: "失分点",
         items: [],
         tableColumns: FEEDBACK_LOSS_POINTS_TABLE_COLUMNS,
-        tableRows: buildLossPointRows(payload?.loss_points),
+        tableRows: buildLossPointRows(payload),
         defaultOpen: false,
       },
       {
@@ -2696,8 +2990,22 @@ function resolvePolishFeedbackStatus(
   return "pending";
 }
 
+const LOSS_POINT_SUGGESTION_FALLBACK = "建议补充该点的设计依据、关键步骤和验证方式。";
+
+function sanitizeFeedbackDisplayText(value: string | null | undefined, fallback: string): string {
+  const text = value?.trim();
+  if (!text) {
+    return fallback;
+  }
+  const normalized = text.toLowerCase();
+  if (text === "-" || text === "修正建议待补充" || normalized === "undefined" || normalized === "null") {
+    return fallback;
+  }
+  return text;
+}
+
 function getLossPointTableRowFallbackValue(text: string | null, fallback: string): string {
-  return text ?? fallback;
+  return sanitizeFeedbackDisplayText(text, fallback);
 }
 
 function pickFirstRecordText(record: Record<string, unknown>, fieldNames: string[]): string | null {
@@ -2733,7 +3041,34 @@ function mapFeedbackRecordText(fieldName: string, rawText: string | null): strin
   return rawText;
 }
 
-function buildLossPointRows(values: unknown): FeedbackLossPointTableRow[] {
+function resolveLossPointSuggestion(record: Record<string, unknown> | null, payload: PolishFeedbackPayload | undefined): string {
+  const directSuggestion = record === null
+    ? null
+    : pickFirstRecordText(record, ["suggestion", "fix", "recommendation", "improvement"]);
+  const sanitizedDirectSuggestion = sanitizeFeedbackDisplayText(directSuggestion, "");
+  if (sanitizedDirectSuggestion) {
+    return sanitizedDirectSuggestion;
+  }
+
+  const retryFocusRecord = toRecord(payload?.next_retry_focus);
+  const retryFocusSuggestion = retryFocusRecord === null
+    ? null
+    : pickFirstRecordText(retryFocusRecord, ["suggested_action", "suggestion", "action", "focus"]);
+  const sanitizedRetrySuggestion = sanitizeFeedbackDisplayText(retryFocusSuggestion, "");
+  if (sanitizedRetrySuggestion) {
+    return sanitizedRetrySuggestion;
+  }
+
+  const referenceSuggestion = sanitizeFeedbackDisplayText(buildReferenceAnswerItems(payload?.reference_answer)[0], "");
+  if (referenceSuggestion) {
+    return `可参考：${referenceSuggestion}`;
+  }
+
+  return LOSS_POINT_SUGGESTION_FALLBACK;
+}
+
+function buildLossPointRows(payload: PolishFeedbackPayload | undefined): FeedbackLossPointTableRow[] {
+  const values = payload?.loss_points;
   if (!Array.isArray(values) || values.length === 0) {
     return [];
   }
@@ -2745,7 +3080,7 @@ function buildLossPointRows(values: unknown): FeedbackLossPointTableRow[] {
         severity: CODE_NOT_AVAILABLE_TEXT,
         deduction: "0",
         issue: getLossPointTableRowFallbackValue(toOptionalText(value), "问题待补充"),
-        suggestion: "修正建议待补充",
+        suggestion: resolveLossPointSuggestion(null, payload),
       };
     }
     const severityCode = pickFirstRecordText(record, ["severity", "level", "criticality"]);
@@ -2757,16 +3092,12 @@ function buildLossPointRows(values: unknown): FeedbackLossPointTableRow[] {
       pickFirstRecordText(record, ["reason", "description", "content", "message"]),
       "问题待补充",
     );
-    const suggestion = getLossPointTableRowFallbackValue(
-      pickFirstRecordText(record, ["suggestion", "fix", "recommendation", "improvement"]),
-      getLossPointTableRowFallbackValue(pickFirstRecordText(record, ["title", "related_dimension", "dimension_id"]), "修正建议待补充"),
-    );
     return {
       index: index + 1,
       severity,
       deduction,
       issue,
-      suggestion,
+      suggestion: resolveLossPointSuggestion(record, payload),
     };
   });
 }
@@ -2784,7 +3115,7 @@ function buildFailedFeedbackItems(payload: PolishFeedbackPayload | undefined): s
   ]);
 }
 
-function feedbackStatusTagColor(status: string): "success" | "warning" | "processing" | "default" {
+function resolveFeedbackStatusTone(status: string): WorkbenchStatusChipTone {
   if (status === "generated") {
     return "success";
   }
@@ -2795,6 +3126,269 @@ function feedbackStatusTagColor(status: string): "success" | "warning" | "proces
     return "processing";
   }
   return "default";
+}
+
+function getTimestampParts(value: string | null | undefined): { date: string; time: string } | null {
+  const text = value?.trim();
+  if (!text) {
+    return null;
+  }
+  const directMatch = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+  if (directMatch) {
+    return {
+      date: directMatch[1],
+      time: directMatch[2],
+    };
+  }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const pad = (valueToPad: number) => String(valueToPad).padStart(2, "0");
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+  };
+}
+
+function formatWorkbenchTimelineTime(
+  value: string | null | undefined,
+  baseDate: string | null,
+  missingLabel = "时间未知",
+): string {
+  const parts = getTimestampParts(value);
+  if (parts === null) {
+    return missingLabel;
+  }
+  return baseDate !== null && parts.date === baseDate ? parts.time : `${parts.date} ${parts.time}`;
+}
+
+function getFeedbackGeneratedAt(answer: PolishSessionAnswer): string | null {
+  const payloadGeneratedAt = toOptionalText((answer.feedback_payload as Record<string, unknown> | undefined)?.generated_at);
+  return answer.feedback_created_at ?? payloadGeneratedAt;
+}
+
+function getFeedbackScoreValue(payload: PolishFeedbackPayload | undefined): number | null {
+  const scoreRecord = toRecord(payload?.score_result);
+  if (scoreRecord === null) {
+    return null;
+  }
+  const rawScore = scoreRecord.score_value ?? scoreRecord.score ?? scoreRecord.total_score;
+  const score = typeof rawScore === "number" ? rawScore : Number(toOptionalText(rawScore));
+  return Number.isFinite(score) ? Math.round(score) : null;
+}
+
+function buildQuickReviewActionCopy(actions: readonly string[]): { maturityLabel: string; suggestion: string } | null {
+  if (actions.includes("answer_again")) {
+    return {
+      maturityLabel: "偏低",
+      suggestion: "当前回答成熟度偏低，建议重新组织一版回答。",
+    };
+  }
+  if (actions.includes("continue_same_question") || actions.includes("provide_more_answer_detail")) {
+    return {
+      maturityLabel: "待加强",
+      suggestion: actions.includes("provide_more_answer_detail")
+        ? "当前回答需要补充关键细节，建议继续完善本题。"
+        : "当前回答仍有关键缺口，建议继续打磨本题。",
+    };
+  }
+  if (actions.some((action) => String(action) === "move_next_node" || String(action).includes("move_next_node"))) {
+    return {
+      maturityLabel: "节点成熟",
+      suggestion: "当前节点成熟度较高，建议切换到下一个节点。",
+    };
+  }
+  if (actions.includes("generate_next_question")) {
+    return {
+      maturityLabel: "成熟",
+      suggestion: "当前回答已基本成熟，建议换一道题继续验证。",
+    };
+  }
+  return null;
+}
+
+function buildQuickReviewScoreCopy(score: number | null): { maturityLabel: string; suggestion: string } {
+  if (score === null) {
+    return {
+      maturityLabel: "待评估",
+      suggestion: "反馈尚未生成，请稍后查看完整反馈。",
+    };
+  }
+  if (score < 60) {
+    return {
+      maturityLabel: "偏低",
+      suggestion: "当前回答成熟度低，建议继续打磨本题。",
+    };
+  }
+  if (score < 75) {
+    return {
+      maturityLabel: "待加强",
+      suggestion: "当前回答框架可用，但关键细节不足，建议继续补充一版。",
+    };
+  }
+  if (score < 85) {
+    return {
+      maturityLabel: "较成熟",
+      suggestion: "当前回答已覆盖主要点，可针对失分点再优化一轮。",
+    };
+  }
+  if (score <= 92) {
+    return {
+      maturityLabel: "成熟",
+      suggestion: "当前回答成熟度较高，建议换一道题继续验证。",
+    };
+  }
+  return {
+    maturityLabel: "成熟",
+    suggestion: "当前回答质量较高，可进入下一题或下一节点。",
+  };
+}
+
+export function buildAnswerQuickReviewViewModel(
+  answer: PolishSessionAnswer,
+  baseDate: string | null = getTimestampParts(answer.answer_created_at)?.date ?? null,
+): WorkbenchAnswerQuickReviewViewModel {
+  const score = getFeedbackScoreValue(answer.feedback_payload);
+  const status = resolvePolishFeedbackStatus(toOptionalText(answer.feedback_payload?.status));
+  const actionCopy = buildQuickReviewActionCopy(getAnswerNextRecommendedActions(answer));
+  const scoreCopy = buildQuickReviewScoreCopy(score);
+  const feedbackGeneratedAt = getFeedbackGeneratedAt(answer);
+  return {
+    answerId: answer.answer_id,
+    scoreLabel: score === null ? "暂无评分" : `${score} / 100`,
+    maturityLabel: actionCopy?.maturityLabel ?? scoreCopy.maturityLabel,
+    suggestion: sanitizeFeedbackDisplayText(actionCopy?.suggestion ?? scoreCopy.suggestion, "反馈尚未生成，请稍后查看完整反馈。"),
+    statusLabel: mapFeedbackCodeToDisplay(status).text,
+    createdAtLabel: feedbackGeneratedAt === null
+      ? "反馈时间未知"
+      : formatWorkbenchTimelineTime(feedbackGeneratedAt, baseDate),
+  };
+}
+
+export function findSelectedAnswerContext(
+  session: PolishSessionDetail | null,
+  selectedAnswerId: string | null,
+): { turn: PolishSessionDetail["turns"][number]; turnIndex: number; answer: PolishSessionAnswer; answerIndex: number } | null {
+  if (session === null || selectedAnswerId === null) {
+    return null;
+  }
+  for (const [turnIndex, turn] of session.turns.entries()) {
+    const answerIndex = turn.answers.findIndex((answer) => answer.answer_id === selectedAnswerId);
+    if (answerIndex !== -1) {
+      return {
+        turn,
+        turnIndex,
+        answer: turn.answers[answerIndex],
+        answerIndex,
+      };
+    }
+  }
+  return null;
+}
+
+export function resolveLatestAnswerIdForQuestion(
+  session: PolishSessionDetail | null,
+  questionId: string | null,
+): string | null {
+  if (session === null || questionId === null) {
+    return null;
+  }
+  const turn = session.turns.find((item) => item.question_id === questionId);
+  if (turn === undefined || turn.answers.length === 0) {
+    return null;
+  }
+  return turn.answers[turn.answers.length - 1].answer_id;
+}
+
+export function buildSelectedAnswerFeedbackMetaViewModel(
+  session: PolishSessionDetail | null,
+  selectedAnswerId: string | null,
+): WorkbenchSelectedAnswerContextViewModel | null {
+  const context = findSelectedAnswerContext(session, selectedAnswerId);
+  if (context === null) {
+    return null;
+  }
+  return {
+    questionId: context.turn.question_id,
+    questionIndex: context.turnIndex + 1,
+    questionLabel: `题目 ${context.turnIndex + 1}`,
+    answerId: context.answer.answer_id,
+    answerIndex: context.answerIndex + 1,
+    answerLabel: buildAnswerRoundMetaLabel(context.answer.answer_round),
+    answerTimeLabel: formatWorkbenchTimelineTime(
+      context.answer.answer_created_at,
+      getTimestampParts(context.turn.question_created_at)?.date ?? null,
+    ),
+    feedbackStatusLabel: mapFeedbackCodeToDisplay(
+      resolvePolishFeedbackStatus(toOptionalText(context.answer.feedback_payload?.status)),
+    ).text,
+  };
+}
+
+export function buildInterviewTimelineViewModel(
+  session: PolishSessionDetail | null,
+  pinnedQuestionId: string | null,
+): WorkbenchTimelineViewModel {
+  if (session === null) {
+    return { events: [] };
+  }
+  const baseDate = getTimestampParts(session.turns[0]?.question_created_at)?.date ?? null;
+  const events: WorkbenchTimelineEventViewModel[] = [];
+  for (const [turnIndex, turn] of session.turns.entries()) {
+    const questionIsPinned = pinnedQuestionId !== null && turn.question_id === pinnedQuestionId;
+    events.push({
+      id: `question:${turn.question_id}`,
+      kind: "system_question",
+      alignment: "left",
+      questionId: turn.question_id,
+      answerId: null,
+      metaLabel: `${formatWorkbenchTimelineTime(turn.question_created_at, baseDate)} · 系统提问 · 题目 ${turnIndex + 1}`,
+      text: turn.question_text || FALLBACK_QUESTION_TEXT,
+      quickReview: null,
+      pinnedQuestionContext: questionIsPinned,
+    });
+    if (turn.answers.length === 0) {
+      events.push({
+        id: `answer-placeholder:${turn.question_id}`,
+        kind: "system_hint",
+        alignment: "left",
+        questionId: turn.question_id,
+        answerId: null,
+        metaLabel: `${formatWorkbenchTimelineTime(turn.question_created_at, baseDate)} · 等待回答`,
+        text: FALLBACK_ANSWER_TEXT,
+        quickReview: null,
+        pinnedQuestionContext: false,
+      });
+      continue;
+    }
+    for (const answer of turn.answers) {
+      const quickReview = buildAnswerQuickReviewViewModel(answer, baseDate);
+      events.push({
+        id: `answer:${answer.answer_id}`,
+        kind: "user_answer",
+        alignment: "right",
+        questionId: turn.question_id,
+        answerId: answer.answer_id,
+        metaLabel: `${formatWorkbenchTimelineTime(answer.answer_created_at, baseDate)} · ${buildAnswerRoundMetaLabel(answer.answer_round)}`,
+        text: answer.answer_text || FALLBACK_ANSWER_TEXT,
+        quickReview: null,
+        pinnedQuestionContext: false,
+      });
+      events.push({
+        id: `quick-review:${answer.answer_id}`,
+        kind: "quick_review",
+        alignment: "left",
+        questionId: turn.question_id,
+        answerId: answer.answer_id,
+        metaLabel: `${quickReview.createdAtLabel} · 简评 · ${buildAnswerRoundMetaLabel(answer.answer_round)}`,
+        text: quickReview.suggestion,
+        quickReview,
+        pinnedQuestionContext: false,
+      });
+    }
+  }
+  return { events };
 }
 
 export function buildCandidateReviewViewModel(
@@ -2813,14 +3407,14 @@ export function buildCandidateReviewViewModel(
       candidateId: candidate.candidate_id,
       typeLabel: CANDIDATE_TYPE_LABELS[candidateType] ?? candidateType,
       statusLabel: CANDIDATE_STATUS_LABELS[status] ?? status,
-      statusColor: CANDIDATE_STATUS_COLORS[status] ?? "default",
+      statusTone: CANDIDATE_STATUS_TONES[status] ?? "default",
       title,
       summary,
       evidenceExcerpt,
       confidenceLabel: confidence ? `置信度：${confidence}` : null,
       canConfirm: status === "candidate",
       canDismiss: status === "candidate",
-      mergeHint: mergeTarget ? "输入区上方动作条提供候选确认或忽略入口；候选合并将在后续面板完善。" : null,
+      mergeHint: mergeTarget ? "右侧反馈面板提供候选确认或忽略入口。" : null,
     };
   });
   return {
@@ -2828,7 +3422,7 @@ export function buildCandidateReviewViewModel(
     pendingCount: items.filter((item) => item.canConfirm || item.canDismiss).length,
     settledCount: items.filter((item) => !item.canConfirm && !item.canDismiss).length,
     mergeHint: items.length > 0
-      ? "输入区上方动作条提供候选确认或忽略入口；候选合并将在后续面板完善。"
+      ? "右侧反馈面板提供候选确认或忽略入口。"
       : null,
   };
 }
@@ -2851,6 +3445,30 @@ export function buildWorkbenchCandidateActionBarViewModel(
       dismissLabel: "忽略候选",
     })),
   };
+}
+
+export function buildFeedbackPanelTabs(params: {
+  hasSummary: boolean;
+  hasLossPoints: boolean;
+  hasReferenceAnswer: boolean;
+  hasCandidateItems: boolean;
+  lossPointCount: number;
+  candidateCount: number;
+}): WorkbenchFeedbackPanelTabItem[] {
+  return [
+    { key: "summary", label: "总评", disabled: !params.hasSummary },
+    { key: "lossPoints", label: `失分点 ${params.lossPointCount}`, disabled: !params.hasLossPoints },
+    {
+      key: "referenceAnswer",
+      label: "参考回答",
+      disabled: !params.hasReferenceAnswer,
+    },
+    {
+      key: "candidate",
+      label: `资产候选 ${params.candidateCount}`,
+      disabled: !params.hasCandidateItems,
+    },
+  ];
 }
 
 function candidateBelongsToAnswer(candidate: PolishCandidate, answer: PolishSessionAnswer): boolean {
@@ -3008,7 +3626,7 @@ function buildScoreResultItems(payload: PolishFeedbackPayload | undefined, fallb
   }
   const scoreType = mapFeedbackCodeToDisplay(score.score_type).text;
   return dedupeTextItems([
-    typeof score.score_value === "number" ? `分数：${score.score_value}` : null,
+    typeof score.score_value === "number" ? `总分 ${score.score_value} / 100` : null,
     score.score_type ? `评分类型：${scoreType}` : null,
     score.confidence_level ? `置信度：${score.confidence_level}` : null,
     score.score_result_id ? `score_result_id：${score.score_result_id}` : fallbackScoreResultId ? `score_result_id：${fallbackScoreResultId}` : null,
@@ -3179,36 +3797,48 @@ function renderFeedbackSectionContent(section: FeedbackCardSectionViewModel): Re
         </div>
       );
     }
-    const columns = section.tableColumns ?? FEEDBACK_LOSS_POINTS_TABLE_COLUMNS;
+    const severityChipToneClass = (severity: string): string => {
+      if (severity === "主要失分" || severity === "严重失分") {
+        return styles.feedbackLossPointSeverityChipCritical;
+      }
+      if (severity === "轻微失分") {
+        return styles.feedbackLossPointSeverityChipMinor;
+      }
+      return styles.feedbackLossPointSeverityChipDefault;
+    };
     return (
-      <div className={styles.feedbackSectionTableWrap}>
-        <table className={styles.feedbackSectionTable}>
-          <colgroup>
-            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.index }} />
-            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.severity }} />
-            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.deduction }} />
-            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.issue }} />
-            <col style={{ width: INTERVIEW_WORKBENCH_LOSS_POINT_TABLE_COLUMN_WIDTHS.suggestion }} />
-          </colgroup>
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {section.tableRows.map((row) => (
-              <tr key={`${section.key}:${row.index}`}>
-                <td>{row.index}</td>
-                <td>{row.severity}</td>
-                <td>{row.deduction}</td>
-                <td>{row.issue}</td>
-                <td>{row.suggestion}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className={styles.feedbackSectionLossPointCards}>
+        {section.tableRows.map((row) => (
+          <article key={`${section.key}:${row.index}`} className={styles.feedbackLossPointCard}>
+            <div className={styles.feedbackLossPointCardHeader}>
+              <Typography.Text strong className={styles.feedbackLossPointCardHeaderTitle}>
+                {`失分点 ${row.index}`}
+              </Typography.Text>
+              <div className={styles.feedbackLossPointCardHeaderMeta}>
+                <Tag className={`${styles.feedbackLossPointChip} ${severityChipToneClass(row.severity)}`}>{row.severity}</Tag>
+                <Tag className={`${styles.feedbackLossPointChip} ${styles.feedbackLossPointDeductionChip}`}>{`扣分 ${row.deduction}`}</Tag>
+              </div>
+            </div>
+            <div className={styles.feedbackLossPointCardBody}>
+              <div className={styles.feedbackLossPointCardField}>
+                <Typography.Text type="secondary" className={styles.feedbackLossPointCardFieldLabel}>
+                  问题
+                </Typography.Text>
+                <Typography.Paragraph className={styles.feedbackLossPointCardFieldValue} ellipsis={false}>
+                  {row.issue}
+                </Typography.Paragraph>
+              </div>
+              <div className={styles.feedbackLossPointCardField}>
+                <Typography.Text type="secondary" className={styles.feedbackLossPointCardFieldLabel}>
+                  修正建议
+                </Typography.Text>
+                <Typography.Paragraph className={styles.feedbackLossPointCardFieldValue} ellipsis={false}>
+                  {row.suggestion}
+                </Typography.Paragraph>
+              </div>
+            </div>
+          </article>
+        ))}
       </div>
     );
   }
@@ -3894,12 +4524,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const [expandedProgressNodeKeys, setExpandedProgressNodeKeys] = useState<Set<string>>(() => new Set());
   const [selectedProgressNodeRef, setSelectedProgressNodeRef] = useState<string | null>(null);
   const [selectedProgressNodeKey, setSelectedProgressNodeKey] = useState<string | null>(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const chatBodyRef = useRef<HTMLDivElement | null>(null);
   const chatScrollLastAutoTriggerRef = useRef<string | null>(null);
   const chatScrollManuallyScrolledRef = useRef<boolean>(false);
   const chatScrollIsAutoingRef = useRef<boolean>(false);
   const [isProgressPanelCollapsed, setProgressPanelCollapsed] = useState<boolean>(false);
   const [progressPanelWidth, setProgressPanelWidth] = useState<number>(PROGRESS_PANEL_DEFAULT_WIDTH);
+  const [isFeedbackPanelCollapsed, setFeedbackPanelCollapsed] = useState<boolean>(false);
+  const [feedbackPanelWidth, setFeedbackPanelWidth] = useState<number>(
+    INTERVIEW_WORKBENCH_LAYOUT_B_FEEDBACK_PANEL_WIDTH_POLICY.default,
+  );
+  const [activeFeedbackPanelTab, setActiveFeedbackPanelTab] = useState<WorkbenchFeedbackPanelTab>("summary");
   const [isProgressNodeContextExpanded, setProgressNodeContextExpanded] = useState(false);
   const [isCurrentQuestionTextExpanded, setCurrentQuestionTextExpanded] = useState<boolean>(false);
   const [candidates, setCandidates] = useState<PolishCandidate[]>([]);
@@ -3947,6 +4585,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setWorkbenchFailureState(null);
     setSelectedProgressNodeRef(null);
     setSelectedProgressNodeKey(null);
+    setSelectedQuestionId(null);
+    setSelectedAnswerId(null);
     setCandidates([]);
     setCandidateLoadError(null);
     setCandidateActionKey(null);
@@ -4179,8 +4819,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   const selectedProgressNodeDetailRef =
     session === null ? null : resolveProgressTreeDetailNodeRef(session, selectedProgressNodeRef);
+  const activeFeedbackPanelWidth = isFeedbackPanelCollapsed
+    ? INTERVIEW_WORKBENCH_LAYOUT_B_FEEDBACK_PANEL_WIDTH_POLICY.defaultCollapsed
+    : feedbackPanelWidth;
+  const stickyProgressNodeContextRef =
+    session === null
+      ? null
+      : selectedProgressNodeRef ??
+        getWorkbenchProgressNodeQuestionTargetRef(selectedProgressNode) ??
+        session.progress_tree_state.current_priority?.progress_node_ref ??
+        null;
   const selectedProgressNodeBanner =
-    session === null ? null : buildProgressTreeContextBannerContent(session, selectedProgressNodeDetailRef);
+    session === null || stickyProgressNodeContextRef === null
+      ? null
+      : buildProgressTreeContextBannerContent(session, stickyProgressNodeContextRef);
   const isSessionEnded = isPolishSessionEnded(session);
   const headerChips = session === null ? [] : buildWorkbenchHeaderChips(session, progressPercent);
   const isProgressTreeInsufficient = session?.progress_tree_status === "insufficient_context";
@@ -4210,8 +4862,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   });
   const canSendAnswer = questionActionState.canSendAnswer;
   const canRegenerateCurrentQuestion = composerActionState.canRegenerateCurrentQuestion;
-  const focusedQuestionId =
+  const fallbackFocusedQuestionId =
     session === null ? null : resolveWorkbenchQuestionFocusId(session, selectedProgressNode, selectedProgressNodeDetailRef);
+  const focusedQuestionId = selectedQuestionId ?? fallbackFocusedQuestionId;
   const focusedQuestionTurn = session === null || focusedQuestionId === null
     ? null
     : session.turns.find((turn) => turn.question_id === focusedQuestionId) ?? null;
@@ -4225,16 +4878,48 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       : focusedQuestionTurn.answers[focusedQuestionTurn.answers.length - 1];
   const focusedQuestionLatestFeedbackId =
     focusedQuestionLatestAnswer?.feedback_id ?? focusedQuestionLatestAnswer?.feedback_payload?.feedback_id ?? null;
+  const selectedAnswerContext = findSelectedAnswerContext(session, selectedAnswerId);
+  const selectedAnswerFeedbackMeta = buildSelectedAnswerFeedbackMetaViewModel(session, selectedAnswerId);
+  const selectedAnswer = selectedAnswerContext?.answer ?? null;
+  const selectedAnswerFeedbackCard = selectedAnswer === null ? null : buildFeedbackCardViewModel(selectedAnswer);
   const fixedNextActionBar = buildWorkbenchFixedNextActionBarViewModel(focusedQuestionLatestAnswer);
   const fixedNextActionProgressNodeRef = focusedQuestionTurn?.progress_node_ref ?? selectedProgressNodeDetailRef;
-  const focusedCandidateReview = buildCandidateReviewViewModel(
-    focusedQuestionLatestAnswer
-      ? candidates.filter((candidate) => candidateBelongsToAnswer(candidate, focusedQuestionLatestAnswer))
+  const selectedCandidateReview = buildCandidateReviewViewModel(
+    selectedAnswer
+      ? candidates.filter((candidate) => candidateBelongsToAnswer(candidate, selectedAnswer))
       : [],
   );
-  const fixedCandidateActionBar = buildWorkbenchCandidateActionBarViewModel(focusedCandidateReview);
-  const shouldShowFixedComposerActionBar = fixedNextActionBar !== null || fixedCandidateActionBar !== null;
-  const stickyQuestionContext = buildStickyQuestionContextViewModel(session, focusedQuestionId, selectedProgressNodeDetailRef);
+  const shouldShowFixedComposerActionBar = fixedNextActionBar !== null;
+  const feedbackPanelCandidateItems = {
+    pending: selectedCandidateReview?.items.filter((item) => item.canConfirm || item.canDismiss) ?? [],
+    settled: selectedCandidateReview?.items.filter((item) => !item.canConfirm && !item.canDismiss) ?? [],
+  };
+  const selectedAnswerFeedbackSummarySections = selectedAnswerFeedbackCard === null
+    ? []
+    : selectedAnswerFeedbackCard.sections.filter(
+        (section) => section.key === "feedback" || section.key === "score" || section.key === "positive_evidence_points",
+      );
+  const selectedAnswerLossPointsSection = selectedAnswerFeedbackCard?.sections.find(
+    (section) => section.key === "loss_points",
+  ) ?? null;
+  const selectedAnswerReferenceAnswerSection = selectedAnswerFeedbackCard?.sections.find(
+    (section) => section.key === "reference_answer",
+  ) ?? null;
+  const hasSelectedAnswerFeedback = selectedAnswer !== null && (
+    Boolean(selectedAnswer.feedback_id) ||
+    Boolean(selectedAnswer.feedback_created_at) ||
+    selectedAnswer.feedback_payload !== undefined
+  );
+  const timelineViewModel = buildInterviewTimelineViewModel(session, focusedQuestionId);
+  const stickyQuestionContext = buildStickyQuestionContextViewModel(
+    session,
+    focusedQuestionId,
+    selectedProgressNodeRef,
+    {
+      selectedProgressNode,
+      selectedProgressNodeDetailRef: stickyProgressNodeContextRef,
+    },
+  );
   const chatScrollAutoTrigger = buildQuestionConversationAutoScrollTrigger({
     focusedQuestionId,
     selectedProgressNodeRef: selectedProgressNodeDetailRef,
@@ -4385,6 +5070,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setExpandedProgressNodeKeys(new Set(collectDefaultExpandedProgressNodeKeys(progressNodes)));
   }, [session]);
 
+  useEffect(() => {
+    if (session === null) {
+      return;
+    }
+    const questionExists = selectedQuestionId !== null && session.turns.some((turn) => turn.question_id === selectedQuestionId);
+    const nextQuestionId = questionExists ? selectedQuestionId : fallbackFocusedQuestionId;
+    const answerContext = findSelectedAnswerContext(session, selectedAnswerId);
+    if (questionExists && answerContext !== null) {
+      return;
+    }
+    setSelectedQuestionId(nextQuestionId);
+    setSelectedAnswerId(resolveLatestAnswerIdForQuestion(session, nextQuestionId));
+  }, [session, fallbackFocusedQuestionId, selectedQuestionId, selectedAnswerId]);
+
   const scrollChatToQuestion = (questionId: string | null, behavior: ScrollBehavior = "smooth") => {
     const container = chatScrollRef.current;
     if (container === null) {
@@ -4447,7 +5146,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     setCurrentQuestionTextExpanded(false);
-  }, [focusedQuestionId]);
+  }, [stickyQuestionContext?.selectedQuestionId]);
 
   useEffect(() => {
     setProgressNodeContextExpanded(false);
@@ -4516,6 +5215,44 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     };
 
     window.addEventListener("pointermove", resizeProgressPanel);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+  };
+
+  const startFeedbackPanelResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (isFeedbackPanelCollapsed || chatBodyRef.current === null) {
+      return;
+    }
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = feedbackPanelWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const stopResize = () => {
+      window.removeEventListener("pointermove", resizeFeedbackPanel);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+
+    const resizeFeedbackPanel = (moveEvent: PointerEvent) => {
+      const nextWidth = startWidth + (startX - moveEvent.clientX);
+      setFeedbackPanelWidth(
+        Math.max(
+          INTERVIEW_WORKBENCH_LAYOUT_B_FEEDBACK_PANEL_WIDTH_POLICY.min,
+          Math.min(
+            INTERVIEW_WORKBENCH_LAYOUT_B_FEEDBACK_PANEL_WIDTH_POLICY.max,
+            Math.round(nextWidth),
+          ),
+        ),
+      );
+    };
+
+    window.addEventListener("pointermove", resizeFeedbackPanel);
     window.addEventListener("pointerup", stopResize);
     window.addEventListener("pointercancel", stopResize);
   };
@@ -4661,27 +5398,108 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     );
   };
 
-  const messageRowClassName = (kind: WorkbenchChatMessageKind) =>
-    [styles.messageRow, styles[getWorkbenchChatMessageAlignmentClassName(kind)]].join(" ");
+  const selectTimelineAnswer = (answerId: string | null) => {
+    if (answerId === null) {
+      return;
+    }
+    setSelectedAnswerId(answerId);
+    setActiveFeedbackPanelTab("summary");
+  };
+
+  const timelineItemClassName = (event: WorkbenchTimelineEventViewModel) => [
+    styles.timelineItem,
+    event.alignment === "right" ? styles.timelineItemRight : styles.timelineItemLeft,
+  ].join(" ");
+
+  const timelineBubbleClassName = (event: WorkbenchTimelineEventViewModel) => [
+    styles.timelineBubble,
+    event.kind === "system_question" ? styles.timelineBubbleQuestion : "",
+    event.kind === "system_hint" ? styles.timelineBubbleHint : "",
+    event.kind === "user_answer" ? styles.timelineBubbleAnswer : "",
+    event.kind === "quick_review" ? styles.timelineBubbleQuickReview : "",
+    event.answerId !== null && event.answerId === selectedAnswerId ? styles.timelineBubbleSelected : "",
+  ].filter(Boolean).join(" ");
+
+  const renderTimelineEvent = (event: WorkbenchTimelineEventViewModel) => {
+    const interactive = event.answerId !== null && (event.kind === "user_answer" || event.kind === "quick_review");
+    return (
+      <article
+        key={event.id}
+        className={timelineItemClassName(event)}
+        data-timeline-event-kind={event.kind}
+        data-answer-id={event.answerId ?? undefined}
+      >
+        <div className={styles.timelineMeta}>{event.metaLabel}</div>
+        {interactive ? (
+          <button
+            type="button"
+            className={timelineBubbleClassName(event)}
+            onClick={() => selectTimelineAnswer(event.answerId)}
+          >
+            {event.quickReview === null ? (
+              <Typography.Text>{event.text}</Typography.Text>
+            ) : (
+              <>
+                <div className={styles.timelineQuickReviewSummaryRow}>
+                  <Tag className={styles.feedbackRoundPill}>简评</Tag>
+                  <span className={styles.timelineQuickReviewMetric}>{event.quickReview.scoreLabel}</span>
+                  <span className={styles.timelineQuickReviewMetric}>{event.quickReview.maturityLabel}</span>
+                  {renderStatusChip("blue", event.quickReview.statusLabel)}
+                  <span className={styles.timelineQuickReviewLink}>查看完整反馈</span>
+                </div>
+                <Typography.Text>{event.quickReview.suggestion}</Typography.Text>
+              </>
+            )}
+          </button>
+        ) : (
+          <div className={timelineBubbleClassName(event)}>
+            <Typography.Text>{event.text}</Typography.Text>
+          </div>
+        )}
+      </article>
+    );
+  };
 
   const renderCurrentQuestionContextStickyHeader = () => {
     if (stickyQuestionContext === null) {
       return null;
     }
-    const progressContextCanExpand =
-      selectedProgressNodeBanner !== null
-      && selectedProgressNodeBanner.title !== null
-      && shouldShowProgressTreeContextBannerToggle(selectedProgressNodeBanner);
-    const progressContextExpandedSections =
-      selectedProgressNodeBanner !== null && selectedProgressNodeBanner.title !== null
-        ? buildProgressTreeContextBannerExpandedSections(selectedProgressNodeBanner)
-        : [];
-    const isQuestionTextCollapsed = shouldCollapseCurrentQuestionText(stickyQuestionContext.questionText, {
-      isExpanded: isCurrentQuestionTextExpanded,
-    });
-    const canToggleQuestionText = shouldCollapseCurrentQuestionText(stickyQuestionContext.questionText, {
-      isExpanded: false,
-    });
+    const stickyQuestionText =
+      stickyQuestionContext.selectedQuestionId !== null ? stickyQuestionContext.questionText : null;
+    const hasStickyQuestionContext = stickyQuestionText !== null;
+    const isStickyContextExpanded = isProgressNodeContextExpanded;
+    const stickyContextMetaItems = buildStickyQuestionContextCompactMetaItems(stickyQuestionContext);
+    const selectedAnswerLabel = selectedAnswerFeedbackMeta?.answerLabel ?? "暂无回答";
+    const questionSourceLabels = focusedQuestionTurn?.question_sources?.map((source) =>
+      QUESTION_SOURCE_TYPE_LABELS[source.source_type] ?? source.source_type,
+    ) ?? [];
+    const questionSourceText = questionSourceLabels.length > 0
+      ? Array.from(new Set(questionSourceLabels)).join("、")
+      : "暂无来源";
+    const nodeContextBlocks = [
+      {
+        title: "节点目标",
+        items: selectedProgressNodeBanner?.depthRequirement ? [selectedProgressNodeBanner.depthRequirement] : [],
+      },
+      {
+        title: "常见失分",
+        items: selectedProgressNodeBanner?.lossRisks ?? [],
+      },
+      {
+        title: "追问方向",
+        items: selectedProgressNodeBanner?.followUpDirections ?? [],
+      },
+      {
+        title: "证据摘要",
+        items: selectedProgressNodeBanner?.technicalCoverage ?? [],
+      },
+    ].filter((block) => block.items.length > 0);
+    const canExpandStickyContext = nodeContextBlocks.length > 0 || hasStickyQuestionContext;
+    const toggleStickyContext = () => {
+      const nextExpanded = !isStickyContextExpanded;
+      setProgressNodeContextExpanded(nextExpanded);
+      setCurrentQuestionTextExpanded(nextExpanded);
+    };
 
     return (
       <section
@@ -4689,97 +5507,325 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         aria-label="当前题目与节点上下文"
         data-layout-area={INTERVIEW_WORKBENCH_MERGED_CONTEXT_CARD_LAYOUT.layoutArea}
       >
-        <div className={styles.conversationQuestionHeaderMetaRow}>
-          <div className={styles.conversationQuestionHeaderMetaItem}>
-            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
-              当前节点上下文
-            </Typography.Text>
-            <Typography.Text className={styles.conversationQuestionHeaderValue}>{stickyQuestionContext.progressNodeTitle}</Typography.Text>
+        <div className={styles.conversationQuestionHeaderCompactBar}>
+          <div className={styles.conversationQuestionHeaderSummary}>
+            {hasStickyQuestionContext ? (
+              <Typography.Text className={styles.conversationQuestionHeaderQuestionLine}>
+                <span className={styles.conversationQuestionHeaderQuestionPrefix}>
+                  {`${INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY.questionPrefix}${stickyQuestionContext.questionIndexLabel} · `}
+                </span>
+                {stickyQuestionText}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary" className={styles.conversationQuestionHeaderQuestionLine}>
+                {stickyQuestionContext.emptyDescription ?? stickyQuestionContext.nonQuestionHint}
+              </Typography.Text>
+            )}
+            {stickyContextMetaItems.length > 0 ? (
+              <div className={styles.conversationQuestionHeaderMetaRow}>
+                {stickyContextMetaItems.map((item) => (
+                  <span className={styles.conversationQuestionHeaderMetaItem} key={item.key}>
+                    <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
+                      {item.label}：
+                    </Typography.Text>
+                    <Typography.Text className={styles.conversationQuestionHeaderValue}>{item.value}</Typography.Text>
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <div className={styles.conversationQuestionHeaderMetaItem}>
-            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
-              能力主题
-            </Typography.Text>
-            <Typography.Text className={styles.conversationQuestionHeaderValue}>{stickyQuestionContext.capabilityTheme}</Typography.Text>
-          </div>
-        </div>
-        <div className={styles.conversationQuestionHeaderMetaRow}>
-          <div className={styles.conversationQuestionHeaderMetaItem}>
-            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
-              当前题目
-            </Typography.Text>
-            <Typography.Text className={styles.conversationQuestionHeaderValue}>
-              {stickyQuestionContext.questionIndexLabel}
-            </Typography.Text>
-          </div>
-          <div className={styles.conversationQuestionHeaderMetaItem}>
-            <Typography.Text type="secondary" className={styles.conversationQuestionHeaderMetaLabel}>
-              当前反馈状态
-            </Typography.Text>
-            <Typography.Text className={styles.conversationQuestionHeaderValue}>
-              {stickyQuestionContext.feedbackStatusLabel}
-            </Typography.Text>
-          </div>
-        </div>
-        <div className={styles.conversationQuestionHeaderQuestionRow}>
-          <Typography.Text strong>题目正文</Typography.Text>
           <button
-            type="button"
             className={styles.conversationQuestionHeaderToggle}
-            hidden={!canToggleQuestionText}
-            onClick={() => {
-              setCurrentQuestionTextExpanded((expanded) => !expanded);
-            }}
+            type="button"
+            aria-expanded={isStickyContextExpanded}
+            aria-label={isStickyContextExpanded ? "收起上下文浮层" : "展开上下文浮层"}
+            disabled={!canExpandStickyContext}
+            onClick={toggleStickyContext}
           >
-            {isCurrentQuestionTextExpanded ? "收起" : "展开"}
+            <span className={styles.nodeChevron}>
+              {isStickyContextExpanded ? <DownOutlined /> : <RightOutlined />}
+            </span>
           </button>
         </div>
-        <Typography.Text
-          className={`${styles.conversationQuestionHeaderText} ${
-            isQuestionTextCollapsed ? styles.conversationQuestionHeaderTextCollapsed : ""
-          }`}
-        >
-          {stickyQuestionContext.questionText}
-        </Typography.Text>
-        {selectedProgressNodeBanner?.depthRequirement && !isProgressNodeContextExpanded ? (
-          <Typography.Text type="secondary" className={styles.progressNodeContextDepth}>
-            {selectedProgressNodeBanner.depthRequirement}
-          </Typography.Text>
-        ) : null}
-        {progressContextCanExpand ? (
-          <button
-            className={styles.progressNodeContextToggle}
-            type="button"
-            aria-expanded={isProgressNodeContextExpanded}
-            onClick={() => setProgressNodeContextExpanded((isExpanded) => !isExpanded)}
-          >
-            {isProgressNodeContextExpanded
-              ? INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.collapse
-              : INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY.expand}
-          </button>
-        ) : null}
-        {isProgressNodeContextExpanded ? (
-          <div className={styles.progressNodeContextExpandedBody}>
-            {progressContextExpandedSections.map((section) => (
-              <section className={styles.progressNodeContextSection} key={section.key}>
-                <Typography.Text strong className={styles.progressNodeContextSectionTitle}>
-                  {section.title}
+        {isStickyContextExpanded ? (
+          <div className={styles.conversationQuestionHeaderPopover}>
+            <div className={styles.conversationQuestionHeaderPopoverGrid}>
+              <section className={styles.conversationQuestionHeaderPopoverSection}>
+                <Typography.Text strong className={styles.conversationQuestionHeaderPopoverTitle}>
+                  节点上下文
                 </Typography.Text>
-                {section.items.length === 1 ? (
-                  <Typography.Text type="secondary" className={styles.progressNodeContextSectionText}>
-                    {section.items[0]}
-                  </Typography.Text>
+                {nodeContextBlocks.length > 0 ? (
+                  nodeContextBlocks.map((block) => (
+                    <div className={styles.conversationQuestionHeaderPopoverBlock} key={block.title}>
+                      <Typography.Text type="secondary" className={styles.conversationQuestionHeaderPopoverBlockTitle}>
+                        {block.title}
+                      </Typography.Text>
+                      {block.items.length === 1 ? (
+                        <Typography.Paragraph className={styles.conversationQuestionHeaderPopoverText}>
+                          {block.items[0]}
+                        </Typography.Paragraph>
+                      ) : (
+                        <ul className={styles.conversationQuestionHeaderPopoverList}>
+                          {block.items.map((item) => (
+                            <li key={`${block.title}:${item}`}>{item}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))
                 ) : (
-                  <ul className={styles.progressNodeContextList}>
-                    {section.items.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
+                  <Typography.Text type="secondary">该节点暂无可展开上下文。</Typography.Text>
                 )}
               </section>
-            ))}
+              {hasStickyQuestionContext ? (
+                <section className={styles.conversationQuestionHeaderPopoverSection}>
+                  <Typography.Text strong className={styles.conversationQuestionHeaderPopoverTitle}>
+                    当前题目
+                  </Typography.Text>
+                  <div className={styles.conversationQuestionHeaderPopoverBlock}>
+                    <Typography.Text type="secondary" className={styles.conversationQuestionHeaderPopoverBlockTitle}>
+                      完整题干
+                    </Typography.Text>
+                    <Typography.Paragraph className={styles.conversationQuestionHeaderPopoverText}>
+                      {stickyQuestionText}
+                    </Typography.Paragraph>
+                  </div>
+                  <div className={styles.conversationQuestionHeaderPopoverBlock}>
+                    <Typography.Text type="secondary" className={styles.conversationQuestionHeaderPopoverBlockTitle}>
+                      题目来源
+                    </Typography.Text>
+                    <Typography.Text>{questionSourceText}</Typography.Text>
+                  </div>
+                  <div className={styles.conversationQuestionHeaderPopoverBlock}>
+                    <Typography.Text type="secondary" className={styles.conversationQuestionHeaderPopoverBlockTitle}>
+                      当前查看回答
+                    </Typography.Text>
+                    <Typography.Text>{selectedAnswerLabel}</Typography.Text>
+                  </div>
+                </section>
+              ) : null}
+            </div>
           </div>
         ) : null}
+      </section>
+    );
+  };
+
+  const renderCurrentQuestionFeedbackPanel = () => {
+    const activeCandidates = activeFeedbackPanelTab === "candidate"
+      ? feedbackPanelCandidateItems.pending
+      : feedbackPanelCandidateItems.settled;
+    const lossPointRows = selectedAnswerLossPointsSection?.tableRows ?? [];
+    const summarySectionNodes = selectedAnswerFeedbackSummarySections;
+    const hasSummary = selectedAnswerFeedbackCard !== null || summarySectionNodes.length > 0;
+    const hasLossPoints = lossPointRows.length > 0;
+    const hasReferenceAnswer = (selectedAnswerReferenceAnswerSection?.items.length ?? 0) > 0;
+    const hasCandidateItems = (selectedCandidateReview?.items.length ?? 0) > 0;
+    const feedbackPanelTabs = buildFeedbackPanelTabs({
+      hasSummary,
+      hasLossPoints,
+      hasReferenceAnswer,
+      hasCandidateItems,
+      lossPointCount: lossPointRows.length,
+      candidateCount: feedbackPanelCandidateItems.pending.length + feedbackPanelCandidateItems.settled.length,
+    });
+    const activeSummary = activeFeedbackPanelTab === "summary";
+    const activeLossPoints = activeFeedbackPanelTab === "lossPoints";
+    const activeReferenceAnswer = activeFeedbackPanelTab === "referenceAnswer";
+    const activeCandidatesTab = activeFeedbackPanelTab === "candidate";
+    const candidatePanelClassName = [styles.feedbackPanel, isFeedbackPanelCollapsed ? styles.feedbackPanelCollapsed : ""].join(" ");
+
+    if (isFeedbackPanelCollapsed) {
+      return (
+        <section
+          className={candidatePanelClassName}
+          data-layout-area="right_feedback_sheet"
+          data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.feedbackPanel}
+          aria-label="反馈分析侧边栏"
+        >
+          <button
+            type="button"
+            className={styles.feedbackPanelCollapsedButton}
+            aria-label="展开反馈分析面板"
+            onClick={() => {
+              setFeedbackPanelCollapsed(false);
+              if (hasCandidateItems) {
+                setActiveFeedbackPanelTab("candidate");
+                return;
+              }
+              if (hasLossPoints) {
+                setActiveFeedbackPanelTab("lossPoints");
+                return;
+              }
+              if (hasReferenceAnswer) {
+                setActiveFeedbackPanelTab("referenceAnswer");
+                return;
+              }
+              setActiveFeedbackPanelTab("summary");
+            }}
+          >
+            <LeftOutlined />
+          </button>
+        </section>
+      );
+    }
+
+    return (
+      <section
+        className={candidatePanelClassName}
+        data-layout-area="right_feedback_sheet"
+        data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.feedbackPanel}
+        aria-label="反馈分析侧边栏"
+      >
+        <button
+          className={styles.feedbackPanelResizeHandle}
+          type="button"
+          aria-label="拖拽调整反馈面板宽度"
+          onPointerDown={startFeedbackPanelResize}
+        />
+        <div className={styles.feedbackPanelHeader}>
+          <Typography.Text strong>反馈分析</Typography.Text>
+          <Button
+            type="text"
+            size="small"
+            icon={<LeftOutlined />}
+            aria-label="收起反馈分析面板"
+            onClick={() => {
+              setFeedbackPanelCollapsed(true);
+              setActiveFeedbackPanelTab("summary");
+            }}
+          />
+        </div>
+        {selectedAnswerId === null || selectedAnswer === null ? (
+          <div className={styles.feedbackPanelEmpty}>
+            <Typography.Text type="secondary">请选择一轮回答查看反馈分析</Typography.Text>
+          </div>
+        ) : !hasSelectedAnswerFeedback ? (
+          <div className={styles.feedbackPanelEmpty}>
+            <Typography.Text type="secondary">当前回答暂无反馈，可稍后重试生成反馈</Typography.Text>
+          </div>
+        ) : (
+          <>
+        {selectedAnswerFeedbackMeta !== null ? (
+          <div className={styles.feedbackPanelSelectedMeta}>
+            {`${selectedAnswerFeedbackMeta.questionLabel} · ${selectedAnswerFeedbackMeta.answerLabel} · ${selectedAnswerFeedbackMeta.answerTimeLabel} · ${selectedAnswerFeedbackMeta.feedbackStatusLabel}`}
+          </div>
+        ) : null}
+        <Tabs
+          className={styles.feedbackPanelTabs}
+          activeKey={activeFeedbackPanelTab}
+          onChange={(tabKey) => {
+            if (tabKey === "summary" || tabKey === "lossPoints" || tabKey === "referenceAnswer" || tabKey === "candidate") {
+              setActiveFeedbackPanelTab(tabKey);
+            }
+          }}
+          items={feedbackPanelTabs}
+        />
+        <div className={styles.feedbackPanelContent}>
+          {activeSummary ? (
+            <div className={styles.feedbackPanelSummarySections}>
+              {summarySectionNodes.length > 0 ? (
+                summarySectionNodes.map((section) => (
+                  <section
+                    className={`${styles.feedbackPanelSection} ${section.tone === "warning" ? styles.feedbackSectionWarning : ""}`}
+                    key={section.key}
+                  >
+                    {renderFeedbackSectionContent(section)}
+                  </section>
+                ))
+              ) : (
+                <Alert type="info" showIcon message={selectedAnswerFeedbackCard === null ? "当前回答暂无反馈" : "当前回答暂无总评内容"} />
+              )}
+            </div>
+          ) : null}
+          {activeLossPoints ? (
+            <div className={styles.feedbackPanelSummarySections}>
+              {selectedAnswerLossPointsSection === null ? (
+                <Alert type="info" showIcon message="当前未生成失分点" />
+              ) : selectedAnswerLossPointsSection.tableRows === undefined || selectedAnswerLossPointsSection.tableRows.length === 0 ? (
+                <Alert type="info" showIcon message="当前回答暂无失分点" />
+              ) : (
+                <>
+                  {renderFeedbackSectionContent(selectedAnswerLossPointsSection)}
+                </>
+              )}
+            </div>
+          ) : null}
+          {activeReferenceAnswer ? (
+            <div className={styles.feedbackPanelSummarySections}>
+              {selectedAnswerReferenceAnswerSection === null ? (
+                <Alert type="info" showIcon message="当前未生成参考回答" />
+              ) : (
+                <>
+                  {renderFeedbackSectionContent(selectedAnswerReferenceAnswerSection)}
+                </>
+              )}
+            </div>
+          ) : null}
+          {activeCandidatesTab ? (
+            <>
+              <div className={styles.candidateReviewSummary}>
+                {`待处理 ${feedbackPanelCandidateItems.pending.length} 项，已处理 ${feedbackPanelCandidateItems.settled.length} 项`}
+              </div>
+              {selectedCandidateReview?.mergeHint ? <Alert type="info" showIcon message={selectedCandidateReview.mergeHint} /> : null}
+              <div className={styles.candidateReviewList}>
+                {activeCandidates.length === 0 ? (
+                  <Alert type="info" showIcon message={activeFeedbackPanelTab === "candidate" ? "当前无候选对象" : ""} />
+                ) : null}
+                {activeCandidates.map((item) => (
+                  <article className={styles.candidateReviewItem} key={item.candidateId}>
+                    <div className={styles.candidateReviewItemHeader}>
+                      <Space size={[6, 6]} wrap>
+                        <Tag className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
+                        {renderStatusChip(item.statusTone, item.statusLabel)}
+                        {item.confidenceLabel ? <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag> : null}
+                      </Space>
+                      {item.canConfirm || item.canDismiss ? (
+                        <div className={styles.feedbackPanelCandidateActions}>
+                          <Button
+                            size="small"
+                            type="primary"
+                            icon={<CheckCircleOutlined />}
+                            loading={candidateActionKey === `${item.candidateId}:confirm`}
+                            disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`)}
+                            onClick={() => {
+                              void runCandidateAction(item.candidateId, "confirm");
+                            }}
+                          >
+                            确认候选
+                          </Button>
+                          <Button
+                            size="small"
+                            danger
+                            icon={<CloseCircleOutlined />}
+                            loading={candidateActionKey === `${item.candidateId}:dismiss`}
+                            disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`)}
+                            onClick={() => {
+                              void runCandidateAction(item.candidateId, "dismiss");
+                            }}
+                          >
+                            忽略候选
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className={styles.candidateReviewBody}>
+                      <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
+                      <Typography.Paragraph className={styles.candidateReviewText}>{item.summary}</Typography.Paragraph>
+                      {item.evidenceExcerpt ? (
+                        <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
+                          {`证据片段：${item.evidenceExcerpt}`}
+                        </Typography.Text>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+          </>
+        )}
       </section>
     );
   };
@@ -4814,49 +5860,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     >
                       {item.label}
                     </Button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {fixedCandidateActionBar !== null ? (
-              <div className={styles.currentQuestionActionGroup}>
-                <Typography.Text strong className={styles.currentQuestionNextActionTitle}>
-                  候选处理
-                </Typography.Text>
-                <Tag color="processing" className={styles.feedbackMetaTag}>
-                  {`待确认 ${fixedCandidateActionBar.pendingCount} 项`}
-                </Tag>
-                <div className={styles.currentQuestionCandidateActions}>
-                  {fixedCandidateActionBar.items.map((item) => (
-                    <div className={styles.currentQuestionCandidateActionItem} key={item.candidateId}>
-                      <Typography.Text className={styles.currentQuestionCandidateActionTitle}>
-                        {item.title}
-                      </Typography.Text>
-                      <Button
-                        size="small"
-                        type="primary"
-                        icon={<CheckCircleOutlined />}
-                        loading={candidateActionKey === `${item.candidateId}:confirm`}
-                        disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`)}
-                        onClick={() => {
-                          void runCandidateAction(item.candidateId, "confirm");
-                        }}
-                      >
-                        {item.confirmLabel}
-                      </Button>
-                      <Button
-                        size="small"
-                        danger
-                        icon={<CloseCircleOutlined />}
-                        loading={candidateActionKey === `${item.candidateId}:dismiss`}
-                        disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`)}
-                        onClick={() => {
-                          void runCandidateAction(item.candidateId, "dismiss");
-                        }}
-                      >
-                        {item.dismissLabel}
-                      </Button>
-                    </div>
                   ))}
                 </div>
               </div>
@@ -5031,8 +6034,13 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             canSelectNode
               ? () => {
                   const nextSelectedRef = resolveProgressTreeSelectedNodeRefAfterClick(node, selectedProgressNodeDetailRef);
+                  const nextQuestionId = session === null
+                    ? null
+                    : resolveWorkbenchQuestionFocusId(session, node, nextSelectedRef);
                   setSelectedProgressNodeRef(nextSelectedRef);
                   setSelectedProgressNodeKey(node.key);
+                  setSelectedQuestionId(nextQuestionId);
+                  setSelectedAnswerId(resolveLatestAnswerIdForQuestion(session, nextQuestionId));
                   chatScrollManuallyScrolledRef.current = false;
                   if (isExpandable) {
                     toggleProgressNode(node.key);
@@ -5092,7 +6100,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   const workspaceGridClassName = [
     styles.workspaceGrid,
-    isProgressPanelCollapsed ? styles.workspaceGridCollapsed : "",
+    isProgressPanelCollapsed ? styles.workspaceGridLeftCollapsed : "",
+    isFeedbackPanelCollapsed ? styles.workspaceGridRightCollapsed : "",
+    isProgressPanelCollapsed && isFeedbackPanelCollapsed ? styles.workspaceGridCollapsed : "",
   ].filter(Boolean).join(" ");
   const progressPanelClassName = [
     styles.progressPanel,
@@ -5100,6 +6110,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   ].filter(Boolean).join(" ");
   const workspaceGridStyle = {
     "--progress-panel-width": `${progressPanelWidth}px`,
+    "--feedback-panel-width": `${activeFeedbackPanelWidth}px`,
+    ...resolveMessageWidthStyle(resolveMessageWidthPolicy(isProgressPanelCollapsed, isFeedbackPanelCollapsed)),
   } as CSSProperties;
 
   return (
@@ -5335,7 +6347,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
               />
             )}
 
-            <main className={styles.conversationPanel} data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.conversationPanel}>
+            <main
+              ref={chatBodyRef}
+              className={styles.conversationPanel}
+              data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.conversationPanel}
+            >
               <div className={styles.conversationHeader} data-layout-area="right_conversation_header">
                 <div className={styles.conversationHeaderTitle}>
                   <Typography.Title level={5} className={styles.panelTitle}>
@@ -5347,13 +6363,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                 </div>
               </div>
 
+              {renderCurrentQuestionContextStickyHeader()}
+
               <div
                 ref={chatScrollRef}
                 className={styles.chatScroll}
                 data-layout-area="right_chat_scroll"
                 data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.chatScroll}
               >
-                {renderCurrentQuestionContextStickyHeader()}
                 {isSessionEnded ? <Alert type="info" showIcon message="模拟面试已结束" /> : null}
                 {candidateLoadError !== null ? (
                   <Alert
@@ -5371,137 +6388,21 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
                     reason="点击底部“生成题目”按钮，系统将基于当前主题生成题干。"
                   />
                 )}
-                {session.turns.map((turn, turnIndex) => (
-                  <section
-                    key={turn.question_id}
-                    className={styles.chatTurn}
+                <div className={styles.timeline}>
+                  {timelineViewModel.events.map((event) => renderTimelineEvent(event))}
+                </div>
+                {session.turns.map((turn) => (
+                  <div
+                    key={`anchor:${turn.question_id}`}
+                    className={styles.chatTurnBottomAnchor}
                     data-workbench-question-id={turn.question_id}
-                  >
-                    <div className={messageRowClassName("system_question")} data-message-kind="system_question">
-                      <div className={styles.questionBubble}>
-                        <Typography.Text strong>{`题目 ${turnIndex + 1}：`}</Typography.Text>
-                        <Typography.Text className={styles.questionText}>
-                          {renderQuestionTextWithSources(
-                            turn.question_text || FALLBACK_QUESTION_TEXT,
-                            turn.question_sources ?? [],
-                          )}
-                        </Typography.Text>
-                      </div>
-                    </div>
-                    {turn.answers.length === 0 ? (
-                      <>
-                        <div className={messageRowClassName("user_answer_placeholder")} data-message-kind="user_answer_placeholder">
-                          <div className={styles.answerBubble}>
-                            <Typography.Text>{FALLBACK_ANSWER_TEXT}</Typography.Text>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      turn.answers.map((answer) => {
-                        const feedbackCard = buildFeedbackCardViewModel(answer);
-                        const candidateReview = buildCandidateReviewViewModel(
-                          candidates.filter((candidate) => candidateBelongsToAnswer(candidate, answer)),
-                        );
-                        return (
-                          <section key={answer.answer_id} className={styles.chatAnswerGroup}>
-                            <div className={messageRowClassName("user_answer")} data-message-kind="user_answer">
-                              <div className={styles.answerBubble}>
-                                <div className={styles.answerBubbleHeader}>
-                                  <Tag className={styles.answerRoundPill}>{buildAnswerRoundMetaLabel(answer.answer_round)}</Tag>
-                                </div>
-                                <Typography.Text>{answer.answer_text || FALLBACK_ANSWER_TEXT}</Typography.Text>
-                              </div>
-                            </div>
-                            <div className={messageRowClassName("feedback")} data-message-kind="feedback">
-                              <section className={styles.feedbackAccordion} aria-label={`${feedbackCard.title}区域`}>
-                                <div className={styles.feedbackCardHeader}>
-                                  <div className={styles.feedbackTextBlock}>
-                                    <div className={styles.feedbackCardTitleRow}>
-                                      <Tag className={styles.feedbackRoundPill}>{feedbackCard.title}</Tag>
-                                      <Tag color={feedbackStatusTagColor(feedbackCard.status)} className={styles.feedbackMetaTag}>
-                                        {mapFeedbackCodeToDisplay(feedbackCard.status).text}
-                                      </Tag>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className={styles.feedbackSectionList}>
-                                  {feedbackCard.sections.map((section) => (
-                                    <details
-                                      key={section.key}
-                                      className={`${styles.feedbackSection} ${section.tone === "warning" ? styles.feedbackSectionWarning : ""}`}
-                                      open={section.defaultOpen}
-                                    >
-                                      <summary className={styles.feedbackSectionSummary}>{section.title}</summary>
-                                      {renderFeedbackSectionContent(section)}
-                                    </details>
-                                  ))}
-                                  {feedbackCard.traceItems.length > 0 ? (
-                                    <details className={styles.feedbackSection}>
-                                      <summary className={styles.feedbackSectionSummary}>引用与置信度</summary>
-                                      <ul className={styles.feedbackSectionItems}>
-                                        {feedbackCard.traceItems.map((item) => (
-                                          <li key={`trace:${item}`}>{item}</li>
-                                        ))}
-                                      </ul>
-                                    </details>
-                                  ) : null}
-                                </div>
-                                {candidateReview.items.length > 0 ? (
-                                  <section className={styles.candidateReviewPanel} aria-label="候选对象摘要">
-                                    <div className={styles.candidateReviewHeader}>
-                                      <div className={styles.feedbackTextBlock}>
-                                        <Typography.Text strong>候选摘要</Typography.Text>
-                                        <Typography.Text type="secondary" className={styles.candidateReviewSummary}>
-                                          {`待确认 ${candidateReview.pendingCount} 项，已处理 ${candidateReview.settledCount} 项；请在输入区上方动作条处理`}
-                                        </Typography.Text>
-                                      </div>
-                                      <Tag color={candidateReview.pendingCount > 0 ? "processing" : "default"} className={styles.feedbackMetaTag}>
-                                        内容沉淀
-                                      </Tag>
-                                    </div>
-                                    {candidateReview.mergeHint ? (
-                                      <Alert type="info" showIcon message={candidateReview.mergeHint} />
-                                    ) : null}
-                                    <div className={styles.candidateReviewList}>
-                                      {candidateReview.items.map((item) => (
-                                        <article className={styles.candidateReviewItem} key={item.candidateId}>
-                                          <div className={styles.candidateReviewItemHeader}>
-                                            <Space size={[6, 6]} wrap>
-                                              <Tag color="blue" className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
-                                              <Tag color={item.statusColor} className={styles.feedbackMetaTag}>{item.statusLabel}</Tag>
-                                              {item.confidenceLabel ? (
-                                                <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag>
-                                              ) : null}
-                                            </Space>
-                                          </div>
-                                          <div className={styles.candidateReviewBody}>
-                                            <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
-                                            <Typography.Paragraph className={styles.candidateReviewText}>
-                                              {item.summary}
-                                            </Typography.Paragraph>
-                                            {item.evidenceExcerpt ? (
-                                              <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
-                                                {`证据片段：${item.evidenceExcerpt}`}
-                                              </Typography.Text>
-                                            ) : null}
-                                          </div>
-                                        </article>
-                                      ))}
-                                    </div>
-                                  </section>
-                                ) : null}
-                              </section>
-                            </div>
-                          </section>
-                        );
-                      })
-                    )}
-                    <div className={styles.chatTurnBottomAnchor} data-workbench-question-bottom-anchor={turn.question_id} />
-                  </section>
+                    data-workbench-question-bottom-anchor={turn.question_id}
+                  />
                 ))}
               </div>
               {renderCurrentQuestionComposer()}
             </main>
+            {renderCurrentQuestionFeedbackPanel()}
           </section>
           {renderProgressTreeContextMenu()}
         </div>
