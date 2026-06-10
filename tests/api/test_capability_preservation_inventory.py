@@ -64,13 +64,6 @@ PREFIX_ONLY_SKELETON_MODULES = {
         "use_case_path": "apps/api/app/application/pressure/use_cases.py",
         "skeleton_marker": "pressure_skeleton",
     },
-    "reports": {
-        "api_module": "app.api.v1.reports",
-        "api_path": "apps/api/app/api/v1/reports.py",
-        "api_prefix": "/api/v1/reports",
-        "use_case_path": "apps/api/app/application/reports/use_cases.py",
-        "skeleton_marker": "report_skeleton",
-    },
     "reviews": {
         "api_module": "app.api.v1.reviews",
         "api_path": "apps/api/app/api/v1/reviews.py",
@@ -120,6 +113,7 @@ CURRENT_ROUTE_CONTRACT_SNAPSHOT = (
     ("POST", "/api/v1/polish-sessions/{session_id}/questions/{question_id}/complete", "app.api.v1.polish.complete_polish_question"),
     ("POST", "/api/v1/polish-sessions/{session_id}/report", "app.api.v1.polish.generate_polish_session_report"),
     ("GET", "/api/v1/polish-topics", "app.api.v1.polish.list_polish_topics"),
+    ("GET", "/api/v1/reports/{report_id}", "app.api.v1.reports.get_report"),
     ("POST", "/api/v1/resume-job-bindings", "app.api.v1.bindings.create_binding"),
     ("DELETE", "/api/v1/resume-job-bindings/{binding_id}", "app.api.v1.bindings.delete_binding"),
     ("GET", "/api/v1/resumes", "app.api.v1.resumes.list_resumes"),
@@ -176,6 +170,12 @@ POLISH_ROUTE_HANDLER_EXPECTATIONS = (
 
 NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS = frozenset(
     {"Pressure", "Reviews", "Reports", "ai-tasks", "Training", "Polish"}
+)
+
+REPORTS_RETRIEVAL_V1_ROUTE = (
+    "GET",
+    "/api/v1/reports/{report_id}",
+    "app.api.v1.reports.get_report",
 )
 
 
@@ -257,6 +257,25 @@ def test_prefix_only_skeleton_modules_are_detected_but_not_registered_as_routes(
             assert expected["repository_marker"] in repository_source, capability
 
 
+def test_reports_retrieval_v1_is_partial_route_not_prefix_only_skeleton() -> None:
+    snapshot = _route_contract_snapshot()
+    implemented_capabilities = {expectation.capability for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
+    route_source = (REPO_ROOT / "apps/api/app/api/v1/reports.py").read_text(encoding="utf-8")
+    use_case_source = (REPO_ROOT / "apps/api/app/application/reports/use_cases.py").read_text(encoding="utf-8")
+    matrix_rows = _matrix_rows()
+    reports = matrix_rows["Reports"]
+
+    assert "reports" not in PREFIX_ONLY_SKELETON_MODULES
+    assert REPORTS_RETRIEVAL_V1_ROUTE in snapshot
+    assert "Reports" not in implemented_capabilities
+    assert reports["current_status"] == "partial"
+    assert "GET `/api/v1/reports/{report_id}`" in " ".join(reports.values())
+    assert "polish_summary only" in " ".join(reports.values())
+    assert "@router.get" in route_source
+    assert "@router.post" not in route_source
+    assert "report_skeleton" in use_case_source
+
+
 def test_ai_tasks_prefix_alone_is_not_product_runtime_capability() -> None:
     expected = PREFIX_ONLY_SKELETON_MODULES["ai-tasks"]
     module = importlib.import_module(expected["api_module"])
@@ -302,3 +321,22 @@ def _routes_by_path() -> dict[str, list[object]]:
 def _route_methods(route: object) -> set[str]:
     methods = getattr(route, "methods", None) or set()
     return set(methods) - {"HEAD", "OPTIONS"}
+
+
+def _matrix_rows() -> dict[str, dict[str, str]]:
+    text = (REPO_ROOT / "docs/03-delivery/refactor/CAPABILITY_PRESERVATION_MATRIX.md").read_text(
+        encoding="utf-8"
+    )
+    table_lines = [
+        line
+        for line in text.splitlines()
+        if line.startswith("|") and not set(line.replace("|", "").strip()) <= {"-", ":"}
+    ]
+    headers = [cell.strip() for cell in table_lines[0].strip("|").split("|")]
+    rows: dict[str, dict[str, str]] = {}
+    for line in table_lines[1:]:
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == len(headers):
+            row = dict(zip(headers, cells))
+            rows[row["capability"]] = row
+    return rows

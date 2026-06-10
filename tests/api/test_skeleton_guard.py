@@ -10,7 +10,7 @@ BASELINE_PATH = REPO_ROOT / "docs/03-delivery/refactor/BASELINE_30f7237_CAPABILI
 MATRIX_PATH = REPO_ROOT / "docs/03-delivery/refactor/CAPABILITY_PRESERVATION_MATRIX.md"
 
 ALLOWED_STATUSES = {"implemented", "partial", "skeleton", "设计-only", "missing", "unknown"}
-SKELETON_CAPABILITIES = {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks"}
+SKELETON_CAPABILITIES = {"Pressure", "Reviews", "Scoring", "ai-tasks"}
 IMPLEMENTED_FORBIDDEN_MARKERS = (
     "_skeleton",
     " skeleton",
@@ -30,7 +30,7 @@ IMPLEMENTED_FORBIDDEN_MARKERS = (
     "TODO implement",
     "placeholder",
 )
-PREFIX_ONLY_CAPABILITIES = {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks"}
+PREFIX_ONLY_CAPABILITIES = {"Pressure", "Reviews", "Scoring", "ai-tasks"}
 REPOSITORY_PASS_CAPABILITIES = {"Scoring", "ai-tasks"}
 FORBIDDEN_STATUS_WORDS = ("基本完成", "差不多", "已接入", "待联调", "后续完善")
 FORBIDDEN_AMBIGUOUS_STATUS_WORDS = (
@@ -135,7 +135,7 @@ SAFE_TRAINING_EXCLUSION_MARKERS = (
 GUARDED_NON_IMPLEMENTED_STATUS_EXPECTATIONS = {
     "Pressure": "skeleton",
     "Reviews": "skeleton",
-    "Reports": "skeleton",
+    "Reports": "partial",
     "Scoring": "skeleton",
     "ai-tasks": "skeleton",
     "Training legacy endpoints, if present": "partial",
@@ -147,6 +147,13 @@ REQUIRED_MVP_WEAKNESS_REENTRY_CAPABILITIES = {
     "Weakness -> Polish re-entry",
     "Weakness -> Pressure/Mock re-entry",
 }
+REQUIRED_REPORT_RETRIEVAL_V1_FRAGMENTS = (
+    "GET `/api/v1/reports/{report_id}`",
+    "polish_summary only",
+    "owner-scoped read",
+    "no new generation or provider call",
+    "no Review, Pressure/Mock, frontend dashboard, or ScoringPolicy rewrite",
+)
 
 
 def test_phase0_baseline_and_matrix_documents_exist() -> None:
@@ -321,6 +328,18 @@ def test_ai_tasks_product_runtime_stays_skeleton_in_matrix() -> None:
     assert "`pass`" in ai_tasks["repository_or_db_model"]
     assert "no AiTask status/result/retry/cancel API flow" in ai_tasks["known_gap"]
     assert "route prefix 存在不等于能力实现" in ai_tasks["refactor_guard"]
+
+
+def test_reports_retrieval_v1_is_partial_and_guarded_in_matrix() -> None:
+    rows_by_capability = {row["capability"]: row for row in _matrix_rows()}
+    reports = rows_by_capability["Reports"]
+    report_text = " ".join(reports.values())
+
+    assert reports["current_status"] == "partial"
+    assert "apps/api/app/api/v1/reports.py" in reports["backend_api"]
+    assert "tests/api/test_reports_api.py" in reports["tests"]
+    for fragment in REQUIRED_REPORT_RETRIEVAL_V1_FRAGMENTS:
+        assert fragment in report_text
 
 
 def test_training_exclusion_terms_only_appear_in_safe_context() -> None:
