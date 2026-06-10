@@ -1,8 +1,8 @@
-"""Scoring model skeletons."""
+"""Scoring SQLAlchemy models."""
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.db.base import Base
@@ -35,12 +35,25 @@ class ScoreResult(OwnedRecordMixin, Base):
     __tablename__ = "score_results"
 
     score_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    target_parent_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    target_parent_id: Mapped[str | None] = mapped_column(String(80), index=True, nullable=True)
+    source_module: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source_event: Mapped[str | None] = mapped_column(String(120), nullable=True)
     target_ref_id: Mapped[str] = mapped_column(String(80), index=True)
     score_rule_version_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     ai_task_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     score_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    overall_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_level: Mapped[str | None] = mapped_column(String(40), nullable=True)
     score_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rubric_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    primary_bottleneck: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    next_action_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    dimension_scores_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    evidence_links_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -61,4 +74,3 @@ class LowConfidenceFlag(OwnedRecordMixin, Base):
     trace_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     reason: Mapped[str] = mapped_column(String(120), nullable=False)
     impact_scope: Mapped[str | None] = mapped_column(Text, nullable=True)
-

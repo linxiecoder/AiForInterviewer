@@ -78,15 +78,6 @@ PREFIX_ONLY_SKELETON_MODULES = {
         "use_case_path": "apps/api/app/application/reviews/use_cases.py",
         "skeleton_marker": "review_skeleton",
     },
-    "scoring": {
-        "api_module": "app.api.v1.scoring",
-        "api_path": "apps/api/app/api/v1/scoring.py",
-        "api_prefix": "/api/v1/scoring-results",
-        "repository_path": "apps/api/app/infrastructure/db/repositories/scoring.py",
-        "repository_marker": "pass",
-        "use_case_path": "apps/api/app/application/scoring/use_cases.py",
-        "skeleton_marker": "scoring_skeleton",
-    },
 }
 
 
@@ -136,6 +127,9 @@ CURRENT_ROUTE_CONTRACT_SNAPSHOT = (
     ("DELETE", "/api/v1/resumes/{resume_id}", "app.api.v1.resumes.delete_resume"),
     ("GET", "/api/v1/resumes/{resume_id}", "app.api.v1.resumes.get_resume"),
     ("PATCH", "/api/v1/resumes/{resume_id}", "app.api.v1.resumes.patch_resume"),
+    ("GET", "/api/v1/scoring-results", "app.api.v1.scoring.list_score_results"),
+    ("POST", "/api/v1/scoring-results", "app.api.v1.scoring.create_score_result"),
+    ("GET", "/api/v1/scoring-results/{score_result_id}", "app.api.v1.scoring.get_score_result"),
     ("GET", "/api/v1/training-suggestions", "app.api.v1.training.list_training_suggestions"),
     ("POST", "/api/v1/training-suggestions/{recommendation_id}/dismiss", "app.api.v1.training.dismiss_training_suggestion"),
     ("POST", "/api/v1/training-suggestions/{recommendation_id}/tasks", "app.api.v1.training.start_training_task"),
@@ -181,7 +175,7 @@ POLISH_ROUTE_HANDLER_EXPECTATIONS = (
 )
 
 NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS = frozenset(
-    {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks", "Training", "Polish"}
+    {"Pressure", "Reviews", "Reports", "ai-tasks", "Training", "Polish"}
 )
 
 
