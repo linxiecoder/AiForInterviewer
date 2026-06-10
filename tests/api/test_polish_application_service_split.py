@@ -105,6 +105,249 @@ def test_use_cases_reexports_split_service_classes_for_existing_imports() -> Non
         assert getattr(use_cases, class_name) is getattr(module, class_name)
 
 
+def test_answer_submission_boundary_rejects_blank_answer_with_existing_semantics() -> None:
+    from app.application.polish.answer_application_service import AnswerSubmissionBoundaryBuilder
+    from app.application.polish.commands import CreatePolishAnswerCommand
+
+    command = CreatePolishAnswerCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+        question_id="question-1",
+        answer_text="   ",
+    )
+
+    result = AnswerSubmissionBoundaryBuilder().prepare(command)
+
+    assert not result.is_success
+    assert result.error is not None
+    assert result.error.code == "validation_failed"
+    assert result.error.message == "Answer text cannot be empty"
+    assert result.error.details == {
+        "field": "answer_text",
+        "min_length": 2,
+        "max_length": 8000,
+    }
+
+
+def test_answer_submission_boundary_trims_answer_and_preserves_idempotency_normalization() -> None:
+    from app.application.polish.answer_application_service import AnswerSubmissionBoundaryBuilder
+    from app.application.polish.commands import CreatePolishAnswerCommand
+
+    command = CreatePolishAnswerCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+        question_id="question-1",
+        answer_text="  我会说明接口幂等和失败补偿。  ",
+    )
+    object.__setattr__(command, "idempotency_key", "  retry-key-1  ")
+
+    result = AnswerSubmissionBoundaryBuilder().prepare(command)
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.answer_text == "我会说明接口幂等和失败补偿。"
+    assert result.value.idempotency_key == "retry-key-1"
+
+
+def test_answer_submission_boundary_rejects_too_long_idempotency_key_with_existing_semantics() -> None:
+    from app.application.polish.answer_application_service import AnswerSubmissionBoundaryBuilder
+    from app.application.polish.commands import CreatePolishAnswerCommand
+
+    command = CreatePolishAnswerCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+        question_id="question-1",
+        answer_text="我会说明接口幂等和失败补偿。",
+    )
+    object.__setattr__(command, "idempotency_key", "k" * 129)
+
+    result = AnswerSubmissionBoundaryBuilder().prepare(command)
+
+    assert not result.is_success
+    assert result.error is not None
+    assert result.error.code == "validation_failed"
+    assert result.error.message == "Idempotency key is too long"
+    assert result.error.details == {
+        "field": "idempotency_key",
+        "max_length": 128,
+        "actual_length": 129,
+    }
+
+
+def test_answer_submission_boundary_constructs_polish_answer_fields() -> None:
+    from app.application.polish.answer_application_service import AnswerSubmissionBoundaryBuilder
+    from app.application.polish.commands import CreatePolishAnswerCommand
+
+    timestamp = datetime(2026, 6, 10, 1, 2, 3, tzinfo=UTC)
+    command = CreatePolishAnswerCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+        question_id="question-1",
+        answer_text="  我会说明接口幂等和失败补偿。  ",
+    )
+
+    answer = AnswerSubmissionBoundaryBuilder().build_answer(
+        command=command,
+        answer_id="answer-1",
+        answer_round=3,
+        answer_text="我会说明接口幂等和失败补偿。",
+        timestamp=timestamp,
+    )
+
+    assert answer.answer_id == "answer-1"
+    assert answer.owner_id == "owner-1"
+    assert answer.actor_id == "actor-1"
+    assert answer.session_id == "session-1"
+    assert answer.question_id == "question-1"
+    assert answer.answer_round == 3
+    assert answer.answer_text == "我会说明接口幂等和失败补偿。"
+    assert answer.status == "saved"
+    assert answer.created_at == timestamp
+    assert answer.updated_at == timestamp
+
+
+def test_polish_use_cases_create_answer_preserves_order_and_idempotency_behavior() -> None:
+    from app.application.polish.commands import CreatePolishAnswerCommand
+    from app.application.polish.entities import PolishAnswer, PolishQuestion, PolishSession
+    from app.application.polish.use_cases import PolishUseCases
+
+    now = datetime.now(UTC)
+    session = PolishSession(
+        session_id="session-m22-answer-order",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        binding_id="binding-1",
+        resume_id="resume-1",
+        resume_version_id="resume-version-1",
+        job_id="job-1",
+        job_version_id="job-version-1",
+        status="running",
+        topic_id="topic-1",
+        subtopic_id=None,
+        custom_topic_text_summary=None,
+        created_at=now,
+        updated_at=now,
+    )
+    question = PolishQuestion(
+        question_id="question-m22-answer-order",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        ai_task_id="task-question-1",
+        question_text="请说明你如何处理幂等提交。",
+        status="generated",
+        created_at=now,
+        updated_at=now,
+    )
+
+    class RepositorySpy:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+            self.answers_by_id: dict[str, PolishAnswer] = {}
+            self.added_answers: list[PolishAnswer] = []
+            self.answer_count_before_submission = 2
+
+        def get_session(self, owner_id: str, session_id: str) -> PolishSession | None:
+            self.calls.append("get_session")
+            if owner_id == session.owner_id and session_id == session.session_id:
+                return session
+            return None
+
+        def get_question(self, owner_id: str, question_id: str) -> PolishQuestion | None:
+            self.calls.append("get_question")
+            if owner_id == question.owner_id and question_id == question.question_id:
+                return question
+            return None
+
+        def get_answer(self, owner_id: str, answer_id: str) -> PolishAnswer | None:
+            self.calls.append("get_answer")
+            answer = self.answers_by_id.get(answer_id)
+            if answer is not None and answer.owner_id == owner_id:
+                return answer
+            return None
+
+        def count_answers_for_question(self, owner_id: str, question_id: str) -> int:
+            self.calls.append("count_answers_for_question")
+            assert owner_id == question.owner_id
+            assert question_id == question.question_id
+            return self.answer_count_before_submission
+
+        def add_answer(self, answer: PolishAnswer) -> None:
+            self.calls.append("add_answer")
+            self.answers_by_id[answer.answer_id] = answer
+            self.added_answers.append(answer)
+
+    class DummyRepository:
+        pass
+
+    repository = RepositorySpy()
+    use_cases = PolishUseCases(
+        polish_repository=repository,
+        binding_repository=DummyRepository(),
+        resume_repository=DummyRepository(),
+        job_repository=DummyRepository(),
+    )
+
+    command = CreatePolishAnswerCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        question_id=question.question_id,
+        answer_text="  我会使用幂等 key 复用已经保存的回答。  ",
+    )
+    object.__setattr__(command, "idempotency_key", "  m22-answer-order-key  ")
+
+    first_result = use_cases.create_answer(command)
+
+    assert first_result.is_success
+    assert first_result.value is repository.added_answers[0]
+    first_answer = first_result.value
+    assert first_answer is not None
+    assert first_answer.answer_round == repository.answer_count_before_submission + 1
+    assert first_answer.answer_text == "我会使用幂等 key 复用已经保存的回答。"
+    assert first_answer.status == "saved"
+    assert len(repository.added_answers) == 1
+    assert repository.calls.index("get_session") < repository.calls.index("get_question")
+    assert repository.calls.index("get_question") < repository.calls.index("count_answers_for_question")
+    assert repository.calls.index("count_answers_for_question") < repository.calls.index("add_answer")
+
+    second_result = use_cases.create_answer(command)
+
+    assert second_result.is_success
+    assert second_result.value is first_answer
+    assert len(repository.added_answers) == 1
+    assert repository.calls.count("count_answers_for_question") == 1
+    assert repository.calls.count("add_answer") == 1
+
+    conflicting_command = CreatePolishAnswerCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        question_id=question.question_id,
+        answer_text="我换了一个不同回答。",
+    )
+    object.__setattr__(conflicting_command, "idempotency_key", "m22-answer-order-key")
+
+    conflict_result = use_cases.create_answer(conflicting_command)
+
+    assert not conflict_result.is_success
+    assert conflict_result.error is not None
+    assert conflict_result.error.code == "validation_failed"
+    assert conflict_result.error.message == "Idempotency key conflicts with a different answer payload"
+    assert conflict_result.error.details == {
+        "field": "idempotency_key",
+        "reason": "idempotency_conflict",
+    }
+    assert len(repository.added_answers) == 1
+    assert repository.calls.count("count_answers_for_question") == 1
+    assert repository.calls.count("add_answer") == 1
+    assert repository.answers_by_id == {first_answer.answer_id: first_answer}
+
+
 def test_session_application_service_bootstrap_owns_skeleton_result_without_delegate_call() -> None:
     from app.application.polish.session_application_service import PolishSessionApplicationService
 

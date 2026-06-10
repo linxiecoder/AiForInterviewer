@@ -42,7 +42,10 @@ from app.application.polish.commands import (
     RefreshPolishProgressTreeStateCommand,
     SoftDeletePolishSessionCommand,
 )
-from app.application.polish.answer_application_service import PolishAnswerApplicationService
+from app.application.polish.answer_application_service import (
+    AnswerSubmissionBoundaryBuilder,
+    PolishAnswerApplicationService,
+)
 from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
@@ -119,7 +122,6 @@ SESSION_STATUS_RUNNING = "running"
 SESSION_STATUS_ENDED = "ended"
 SESSION_STATUS_DELETED = "deleted"
 QUESTION_STATUS_GENERATED = "generated"
-ANSWER_STATUS_SAVED = "saved"
 QUESTION_GENERATION_MODE_NEW = "new_question"
 QUESTION_GENERATION_MODE_FOLLOW_UP = "follow_up"
 QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE = "regenerate_current_node"
@@ -129,9 +131,6 @@ QUESTION_GENERATION_MODES = {
     QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE,
 }
 
-ANSWER_TEXT_MIN_LENGTH = 2
-ANSWER_TEXT_MAX_LENGTH = 8000
-ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 UNNAMED_JOB_TITLE = "未命名岗位"
 UNNAMED_RESUME_TITLE = "未命名简历"
 UNNAMED_COMPANY_TITLE = "未命名公司"
@@ -185,6 +184,7 @@ class _PolishUseCaseOperations:
         )
         self._feedback_generation_service = feedback_generation_service or FeedbackGenerationService()
         self._ai_orchestration_facade = ai_orchestration_facade
+        self._answer_submission_boundary_builder = AnswerSubmissionBoundaryBuilder()
 
     def _resolve_question_generation_policy(
         self,
@@ -923,15 +923,13 @@ class _PolishUseCaseOperations:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Question not found")
             )
-        answer_text = command.answer_text.strip()
-        text_error = _validate_answer_text(answer_text)
-        if text_error is not None:
-            return ApplicationResult(error=text_error)
-        raw_idempotency_key = getattr(command, "idempotency_key", None)
-        idempotency_key_error = _validate_answer_idempotency_key(raw_idempotency_key)
-        if idempotency_key_error is not None:
-            return ApplicationResult(error=idempotency_key_error)
-        idempotency_key = _normalize_answer_idempotency_key(raw_idempotency_key)
+        boundary_result = self._answer_submission_boundary_builder.prepare(command)
+        if not boundary_result.is_success:
+            return ApplicationResult(error=boundary_result.error)
+        boundary = boundary_result.value
+        assert boundary is not None
+        answer_text = boundary.answer_text
+        idempotency_key = boundary.idempotency_key
 
         answer_lock = _answer_submission_lock(
             owner_id=command.owner_id,
@@ -972,17 +970,12 @@ class _PolishUseCaseOperations:
                 command.question_id,
             ) + 1
             now = utc_now()
-            answer = PolishAnswer(
+            answer = self._answer_submission_boundary_builder.build_answer(
+                command=command,
                 answer_id=generate_resource_id(ResourceIdPrefix.ANSWER),
-                owner_id=command.owner_id,
-                actor_id=command.actor_id,
-                session_id=command.session_id,
-                question_id=command.question_id,
                 answer_round=answer_round,
                 answer_text=answer_text,
-                status=ANSWER_STATUS_SAVED,
-                created_at=now,
-                updated_at=now,
+                timestamp=now,
             )
             self._polish_repository.add_answer(answer)
             if idempotency_key is not None:
@@ -2336,64 +2329,6 @@ def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> 
             details={"field": "subtopic_id"},
         )
     return None
-
-
-def _validate_answer_text(answer_text: str) -> DomainError | None:
-    if not answer_text:
-        return DomainError(
-            code="validation_failed",
-            message="Answer text cannot be empty",
-            details={
-                "field": "answer_text",
-                "min_length": ANSWER_TEXT_MIN_LENGTH,
-                "max_length": ANSWER_TEXT_MAX_LENGTH,
-            },
-        )
-    if len(answer_text) < ANSWER_TEXT_MIN_LENGTH:
-        return DomainError(
-            code="validation_failed",
-            message="Answer text is too short",
-            details={
-                "field": "answer_text",
-                "min_length": ANSWER_TEXT_MIN_LENGTH,
-                "actual_length": len(answer_text),
-            },
-        )
-    if len(answer_text) > ANSWER_TEXT_MAX_LENGTH:
-        return DomainError(
-            code="validation_failed",
-            message="Answer text is too long",
-            details={
-                "field": "answer_text",
-                "max_length": ANSWER_TEXT_MAX_LENGTH,
-                "actual_length": len(answer_text),
-            },
-        )
-    return None
-
-
-def _validate_answer_idempotency_key(raw_key: object) -> DomainError | None:
-    key = _normalize_answer_idempotency_key(raw_key)
-    if key is None:
-        return None
-    if len(key) > ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH:
-        return DomainError(
-            code="validation_failed",
-            message="Idempotency key is too long",
-            details={
-                "field": "idempotency_key",
-                "max_length": ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH,
-                "actual_length": len(key),
-            },
-        )
-    return None
-
-
-def _normalize_answer_idempotency_key(raw_key: object) -> str | None:
-    if raw_key is None:
-        return None
-    key = str(raw_key).strip()
-    return key or None
 
 
 def _answer_submission_lock(*, owner_id: str, session_id: str, question_id: str) -> threading.Lock:
