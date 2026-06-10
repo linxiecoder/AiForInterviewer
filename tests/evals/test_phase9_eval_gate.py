@@ -10,6 +10,11 @@ from evals.graders.code_rules import grade_case, grade_dataset, load_jsonl
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+PHASE9_NON_PROVIDER_QUALITY_NON_CLAIMS = {
+    "replay_mode_is_not_real_provider_quality_evidence",
+    "fake_visible_eval_is_not_production_provider_quality_evidence",
+    "phase9_is_l5_foundation_regression_evidence_only_not_l5_release",
+}
 
 
 def _runner_env() -> dict[str, str]:
@@ -36,6 +41,18 @@ def test_phase9_manifest_binds_capabilities_to_datasets_and_grader_refs() -> Non
     }
     assert all(dataset["capability_ids"] for dataset in manifest["datasets"])
     assert all(dataset["grader_version"] == "code_rules.v2" for dataset in manifest["datasets"])
+
+
+def test_phase9_replay_fixture_and_fake_gate_are_not_live_provider_quality_claims() -> None:
+    manifest = json.loads((REPO_ROOT / "evals" / "suites" / "phase9.json").read_text(encoding="utf-8"))
+    runner_source = (REPO_ROOT / "scripts" / "evals" / "run_eval_gate.py").read_text(encoding="utf-8")
+    dataset_ids = {dataset["dataset_id"] for dataset in manifest["datasets"]}
+
+    assert manifest["mode"] == "replay"
+    assert PHASE9_NON_PROVIDER_QUALITY_NON_CLAIMS <= set(manifest["non_claims"])
+    assert "SUPPORTED_MODES = {\"replay\", \"fixture\"}" in runner_source
+    assert {"fake_gate", "runtime_foundation_contract"} <= dataset_ids
+    assert all(dataset["blocking"] is True for dataset in manifest["datasets"])
 
 
 def test_phase9_builtin_datasets_pass_code_rules() -> None:
