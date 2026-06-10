@@ -3384,12 +3384,24 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert "weaknesses" not in feedback_payload
     assert "assets" not in feedback_payload
     with session_factory() as db:
+        assert (
+            db.execute(
+                text("select mode from interview_sessions where id = :session_id"),
+                {"session_id": session_id},
+            ).scalar_one()
+            == "polish"
+        )
         for table_name in (
+            "pressure_session_details",
+            "interview_reports",
+            "report_sections",
+            "interview_reviews",
             "weaknesses",
             "weakness_candidates",
             "assets",
             "asset_versions",
             "training_recommendations",
+            "training_tasks",
         ):
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
     _assert_feedback_candidate_refs(feedback_body["data"]["candidate_refs"])
@@ -3479,6 +3491,17 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert status_code == 200
     assert detail_body["resource_type"] == "polish_session"
     detail_data = detail_body["data"]
+    assert detail_data["mode"] == "polish"
+    assert detail_data.get("report_id") is None
+    non_goal_fields = {
+        "pressure_session_id",
+        "pressure_session_detail",
+        "interview_review_id",
+        "review_id",
+        "training_recommendation_id",
+        "training_task_id",
+    }
+    assert not (set(detail_data) & non_goal_fields)
     assert detail_data["job_title"] == "Backend Engineer"
     assert detail_data["job_company"] == "ACME"
     assert detail_data["resume_title"] == "Backend Resume"
@@ -3487,6 +3510,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     turns = detail_data["turns"]
     assert isinstance(turns, list) and len(turns) == 1
     turn = turns[0]
+    assert not (set(turn) & non_goal_fields)
     assert turn["progress_node_ref"] == progress_node_ref
     assert turn["evidence_refs"] == question_evidence_refs
     assert turn["context_digest"]
@@ -3524,6 +3548,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert turn["answers"], "answers should be returned for submitted question"
     assert [answer["answer_round"] for answer in turn["answers"]] == [1, 2]
     assert [answer["answer_id"] for answer in turn["answers"]] == [first_answer_id, second_answer_id]
+    assert not any(set(answer) & non_goal_fields for answer in turn["answers"])
     assert turn["answers"][0]["answer_text"] == answer_text
     assert turn["answers"][1]["answer_text"] == second_answer_text
     assert turn["answers"][0]["feedback_text"] != "本轮反馈尚未生成"

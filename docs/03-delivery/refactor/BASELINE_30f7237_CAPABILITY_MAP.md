@@ -52,6 +52,12 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - fake/replay/deterministic eval 不等于 real-provider quality。
 - AI Runtime default-off、本地 replay、candidate-only 或 deterministic fixture 只能作为 local capability / regression evidence，不能写成 production release 或 provider-quality certification。
 - `docs/goals/**` 只作为 execution evidence，不替代 active docs、代码事实或本基线矩阵。
+- Training independent product mode = missing / intentionally excluded from MVP.
+- Training legacy endpoints = partial legacy preserve-only.
+- Weakness remediation target = Polish or Pressure/Mock, not Training.
+- Absence of full weakness-to-training loop is not an MVP gap.
+- Absence of full training loop is not an MVP gap.
+- No /training frontend route is required for MVP.
 
 ## 5. implemented capabilities
 
@@ -195,7 +201,11 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - repository_or_db_model: `apps/api/app/infrastructure/db/repositories/weaknesses.py`, `apps/api/app/infrastructure/db/models/weakness.py`
 - frontend_path: `apps/web/src/pages/weakness/WeaknessPage.tsx`, `apps/web/src/entities/weakness/api/weaknessApi.ts`
 - tests: `tests/api/test_assets_weaknesses_api.py`, `apps/web/src/pages/weakness/WeaknessPage.test.ts`
-- known_gap: list/detail/status/delete exists; extraction, merge suggestion, reassessment and full training loop remain incomplete.
+- known_gap: list/detail/status/delete exists; extraction, merge suggestion and reassessment evidence remains partial.
+- allowed_target: Weakness -> Polish re-entry.
+- allowed_target: Weakness -> Pressure / Mock re-entry.
+- forbidden_target: Weakness -> Training.
+- non_gap: Absence of full weakness-to-training loop is not an MVP gap.
 
 ### Training
 
@@ -203,9 +213,15 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - application_use_case: `apps/api/app/application/training/use_cases.py`
 - domain_model: `apps/api/app/domain/training/entities.py`
 - repository_or_db_model: `apps/api/app/infrastructure/db/repositories/training.py`, `apps/api/app/infrastructure/db/models/training.py`
-- frontend_path: missing `/training` route and page.
-- tests: training actions are covered through candidate and API-adjacent tests, but no dedicated frontend test exists.
-- known_gap: no training frontend page/client, no drill/pass criteria/score result/reassessment product flow.
+- independent_product_mode_status: missing.
+- product_status: intentionally excluded from MVP.
+- evidence_rule: absence of `/training` frontend route is not a MVP gap.
+- frontend_path: No /training frontend route is required for MVP.
+- tests: training legacy actions are covered through candidate and API-adjacent tests; regression protection only.
+- legacy_code_fact: Training legacy endpoints/use cases, if present, are partial legacy preserve-only code fact and out of MVP main flow.
+- allowed_action: regression protection only.
+- forbidden_action: expansion into product capability.
+- non_gap: Absence of full training loop is not an MVP gap.
 
 ### Frontend product paths
 
@@ -215,7 +231,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - repository_or_db_model: N/A.
 - frontend_path: `apps/web/src/app/routes/router.tsx`, `apps/web/src/widgets/app-shell/model/navigation.ts`, pages under `apps/web/src/pages/**`
 - tests: `apps/web/src/widgets/app-shell/model/navigation.test.ts`, page tests under `apps/web/src/pages/**`
-- known_gap: `/review` navigation is disabled; no `/pressure`, `/training`, standalone `/report` frontend path.
+- known_gap: `/review` navigation is disabled; no `/pressure` or standalone `/report` frontend path. `/training` frontend route is not required by MVP because Training independent product mode is intentionally excluded.
 
 ### Tests / Evals / CI evidence boundary
 
@@ -306,10 +322,10 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - Criterion-level role fit：scoring and JobMatch docs describe richer role fit, current JobMatch is partial.
 - MockInterviewSession / InterviewTurn / Followup / SessionReport real backend flow：design/model terms exist, backend generic interview flow is skeleton.
 - TranscriptReviewWorkflow：review design exists, current review backend route is prefix only.
-- `/training` frontend page/client：training design exists, current frontend route is missing.
+- Training independent product mode：missing / intentionally excluded from MVP；absence of `/training` frontend route is not a MVP gap.
 - Pressure frontend path/client：pressure design exists, current frontend route is missing.
 - Generic scoring result creation flow：scoring design exists, current scoring route and repository are skeleton.
-- Training drill/pass criteria/score result/reassessment：design exists, current backend training actions are only partial and no frontend.
+- Training legacy endpoints/use cases：partial legacy preserve-only code fact；allowed action is regression protection only；forbidden action is expansion into product capability.
 - Storybank / InterviewStory dedicated model：not found as a dedicated current product model.
 - RAG integration in question/feedback main runtime chain：RAG chunks exist for Assets; main question / feedback runtime chain is not proven as RAG-backed.
 
@@ -320,7 +336,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - Standalone generic reports API handlers.
 - Generic scoring result API handlers and repository implementation.
 - AiTask status/result/retry/cancel API handlers.
-- Training frontend route and client.
+- Training independent product mode is missing and intentionally excluded from MVP, not a gap to close.
 - Storybank / InterviewStory dedicated model.
 - Live-provider quality gate output for current prompt and graph flows.
 
@@ -335,7 +351,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - Pressure has active design docs and backend prefix only, but no frontend path/client and no route handlers.
 - Generic Reports have active design docs and backend prefix only, while the frontend only exposes a polish report dialog inside interview list/workbench context.
 - Scoring has active design docs, model files and a backend prefix, but no real route handlers and no generic frontend path.
-- Training has backend list/action routes and models, but no `/training` frontend page/client.
+- Training legacy API list/action routes and models exist as partial preserve-only code fact; no `/training` frontend page/client is required for MVP.
 - AiTask design docs mention task status surface, but backend `ai_tasks.py` is prefix only and no frontend task status route exists.
 
 ## 12. DB model exists but product flow missing list
@@ -345,7 +361,7 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor/baseline-30f7237-capabil
 - `apps/api/app/infrastructure/db/models/report.py` exists, but generic reports API/product flow remains skeleton.
 - `apps/api/app/infrastructure/db/models/interview.py` exists, but generic interview / pressure backend flow remains skeleton or polish-only.
 - `apps/api/app/infrastructure/db/models/ai_task.py` exists, but `ai_tasks.py` route and repository remain skeleton.
-- `apps/api/app/infrastructure/db/models/training.py` exists, but training frontend and full training product loop are missing.
+- `apps/api/app/infrastructure/db/models/training.py` exists only as partial legacy preserve-only code fact; absence of full training loop is not an MVP gap.
 - `apps/api/app/infrastructure/db/models/rag.py` exists, but RAG is not proven in question / feedback main runtime chain.
 
 ## 13. test/eval/CI evidence boundary

@@ -190,6 +190,138 @@ def test_binding_delete_unbinds_without_deleting_history() -> None:
     assert history[0].status == "unbound"
 
 
+def test_binding_delete_stale_base_version_returns_conflict_and_preserves_active_binding() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+    owner_id = _current_owner_id(app, owner_cookie)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/jobs",
+        "POST",
+        json_body={
+            "title": "Backend Engineer",
+            "responsibilities": ["Build services"],
+            "requirements": ["Python"],
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    job_id = body["data"]["job_id"]
+    _register_resume_version(owner_id, RESUME_ID, "resume_ver_150")
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resume-job-bindings",
+        "POST",
+        json_body={"resume_id": RESUME_ID, "job_id": job_id},
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    binding_id = body["data"]["resume_job_binding_id"]
+    record_version = body["data"]["record_version"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resume-job-bindings/{binding_id}",
+        "DELETE",
+        json_body={
+            "base_version_ref": {
+                "resource_type": "resume_job_binding",
+                "resource_id": binding_id,
+                "version_id": str(record_version - 1),
+            },
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 409
+    assert body["error"]["code"] == "stale_version_conflict"
+
+    repository = SqlAlchemyBindingRepository()
+    history = repository.list_by_owner(owner_id)
+    assert len(history) == 1
+    assert history[0].binding_id == binding_id
+    assert history[0].status == "active"
+    assert history[0].record_version == record_version
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resume-job-bindings/{binding_id}",
+        "DELETE",
+        json_body={"record_version": record_version},
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    assert body["data"]["binding_status"] == "unbound"
+    assert body["data"]["record_version"] == record_version + 1
+
+
+def test_binding_owner_scope_for_cross_owner_create_and_delete() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_a_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+    owner_b_cookie = _login_cookie(app, "user_b", USER_B_PASSWORD)
+    owner_a_id = _current_owner_id(app, owner_a_cookie)
+    owner_b_id = _current_owner_id(app, owner_b_cookie)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/jobs",
+        "POST",
+        json_body={
+            "title": "Security Engineer",
+            "responsibilities": ["Review access"],
+            "requirements": ["IAM"],
+        },
+        headers={"cookie": owner_a_cookie},
+    )
+    assert status_code == 200
+    job_id = body["data"]["job_id"]
+
+    _register_resume_version(owner_b_id, "resume_b_private", "resume_b_ver_001")
+    status_code, body = call_json(
+        app,
+        "/api/v1/resume-job-bindings",
+        "POST",
+        json_body={
+            "resume_id": "resume_b_private",
+            "job_id": job_id,
+            "resume_version_id": "resume_b_ver_001",
+        },
+        headers={"cookie": owner_a_cookie},
+    )
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+
+    _register_resume_version(owner_a_id, RESUME_ID, "resume_ver_300")
+    status_code, body = call_json(
+        app,
+        "/api/v1/resume-job-bindings",
+        "POST",
+        json_body={"resume_id": RESUME_ID, "job_id": job_id},
+        headers={"cookie": owner_a_cookie},
+    )
+    assert status_code == 200
+    binding_id = body["data"]["resume_job_binding_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resume-job-bindings/{binding_id}",
+        "DELETE",
+        json_body={},
+        headers={"cookie": owner_b_cookie},
+    )
+    assert status_code == 404
+    assert body["error"]["code"] == "not_found_or_inaccessible"
+
+    repository = SqlAlchemyBindingRepository()
+    history = repository.list_by_owner(owner_a_id)
+    assert len(history) == 1
+    assert history[0].binding_id == binding_id
+    assert history[0].status == "active"
+
+
 def test_binding_validation_error_without_required_fields() -> None:
     app = _app_with_two_users()
     _reset_repositories()

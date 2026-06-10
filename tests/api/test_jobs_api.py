@@ -243,6 +243,60 @@ def test_job_update_stale_base_version_returns_conflict() -> None:
     assert body["error"]["code"] == "stale_version_conflict"
 
 
+def test_job_update_stale_record_version_returns_conflict_and_preserves_latest_detail() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/jobs",
+        "POST",
+        json_body={
+            "title": "Data Engineer",
+            "responsibilities": ["Model data"],
+            "requirements": ["SQL"],
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    job_id = body["data"]["job_id"]
+    current_version_ref = body["data"]["current_version_ref"]
+    stale_record_version = body["data"]["record_version"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/jobs/{job_id}",
+        "PATCH",
+        json_body={
+            "record_version": stale_record_version,
+            "title": "Data Engineer II",
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    assert body["data"]["record_version"] == stale_record_version + 1
+    assert body["data"]["current_version_ref"] == current_version_ref
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/jobs/{job_id}",
+        "PATCH",
+        json_body={
+            "record_version": stale_record_version,
+            "title": "Stale Data Engineer",
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 409
+    assert body["error"]["code"] == "stale_version_conflict"
+
+    status_code, body = call_json(app, f"/api/v1/jobs/{job_id}", headers={"cookie": owner_cookie})
+    assert status_code == 200
+    assert body["data"]["title"] == "Data Engineer II"
+    assert body["data"]["current_version_ref"] == current_version_ref
+
+
 def test_job_can_be_archived_with_patch_status() -> None:
     app = _app_with_two_users()
     _reset_repositories()
@@ -373,6 +427,19 @@ def test_job_owner_scope_for_get_and_update() -> None:
     )
     assert status_code in {404, 403}
     assert body["error"]["code"] in {"not_found_or_inaccessible", "permission_denied", "owner_mismatch"}
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/jobs/{job_id}",
+        "DELETE",
+        headers={"cookie": owner_b_cookie},
+    )
+    assert status_code == 404
+    assert body["error"]["code"] == "not_found_or_inaccessible"
+
+    status_code, body = call_json(app, f"/api/v1/jobs/{job_id}", headers={"cookie": owner_a_cookie})
+    assert status_code == 200
+    assert body["data"]["status"] == "active"
 
 
 def test_job_update_validation_failed_without_base_version_or_record_version() -> None:

@@ -51,16 +51,15 @@ def test_login_fails_when_env_password_missing(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.delenv("API_AUTH_DEV_USER_PASSWORD", raising=False)
     app = create_app()
 
-    status_code, body = call_json(
+    status_code, body, headers = call_json_response(
         app,
         "/api/v1/auth/login",
         "POST",
         json_body={"identifier": "developer", "password": "any-password"},
     )
 
-    assert status_code == 401
-    assert body["error"]["code"] == "unauthenticated"
-    assert body["error"]["user_action"] == "login"
+    _assert_unauthenticated_error(status_code, body, headers)
+    _assert_no_sensitive_auth_fields(body, "any-password")
 
 
 def test_prod_like_env_defaults_to_no_dev_seed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,16 +69,16 @@ def test_prod_like_env_defaults_to_no_dev_seed(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("API_AUTH_DEV_USER_PASSWORD", "should-not-be-used")
     app = create_app()
 
-    status_code, body = call_json(
-        app,
-        "/api/v1/auth/login",
-        "POST",
-        json_body={"identifier": "developer", "password": "should-not-be-used"},
-    )
+    for identifier in ("developer", "developer@example.com"):
+        status_code, body, headers = call_json_response(
+            app,
+            "/api/v1/auth/login",
+            "POST",
+            json_body={"identifier": identifier, "password": "should-not-be-used"},
+        )
 
-    assert status_code == 401
-    assert body["error"]["code"] == "unauthenticated"
-    assert body["error"]["user_action"] == "login"
+        _assert_unauthenticated_error(status_code, body, headers)
+        _assert_no_sensitive_auth_fields(body, "should-not-be-used")
 
 
 def test_login_success_sets_httponly_cookie() -> None:
@@ -107,26 +106,24 @@ def test_login_success_sets_httponly_cookie() -> None:
 def test_wrong_password_returns_401_error_envelope() -> None:
     app = _auth_app()
 
-    status_code, body = call_json(
+    status_code, body, headers = call_json_response(
         app,
         "/api/v1/auth/login",
         "POST",
         json_body={"identifier": "developer@example.com", "password": "wrong"},
     )
 
-    assert status_code == 401
-    assert body["error"]["code"] == "unauthenticated"
-    assert body["error"]["user_action"] == "login"
-    _assert_no_sensitive_auth_fields(body)
+    _assert_unauthenticated_error(status_code, body, headers)
+    _assert_no_sensitive_auth_fields(body, "wrong")
 
 
 def test_me_without_cookie_returns_401() -> None:
     app = _auth_app()
 
-    status_code, body = call_json(app, "/api/v1/auth/me")
+    status_code, body, headers = call_json_response(app, "/api/v1/auth/me")
 
-    assert status_code == 401
-    assert body["error"]["code"] == "unauthenticated"
+    _assert_unauthenticated_error(status_code, body, headers)
+    _assert_no_sensitive_auth_fields(body)
 
 
 def test_me_with_cookie_returns_user_summary() -> None:
@@ -161,13 +158,34 @@ def test_logout_clears_cookie() -> None:
     assert "Path=/api/v1" in set_cookie
     assert "SameSite=lax" in set_cookie
 
-    status_code_after_logout, body_after_logout = call_json(
+    status_code_after_logout, body_after_logout, headers_after_logout = call_json_response(
         app,
         "/api/v1/auth/me",
         headers={"cookie": session_cookie},
     )
-    assert status_code_after_logout == 401
-    assert body_after_logout["error"]["code"] == "unauthenticated"
+    _assert_unauthenticated_error(
+        status_code_after_logout,
+        body_after_logout,
+        headers_after_logout,
+    )
+
+
+def test_logout_without_cookie_is_idempotent_and_clears_cookie() -> None:
+    app = _auth_app()
+
+    status_code, body, headers = call_json_response(
+        app,
+        "/api/v1/auth/logout",
+        "POST",
+    )
+
+    set_cookie = _single_set_cookie(headers)
+    assert status_code == 200
+    assert body["data"] == {"logged_out": True}
+    assert "aifi_session=" in set_cookie
+    assert "Max-Age=0" in set_cookie
+    assert "Path=/api/v1" in set_cookie
+    assert "SameSite=lax" in set_cookie
 
 
 def test_auth_session_endpoint_is_not_implemented() -> None:
@@ -206,7 +224,18 @@ def _single_set_cookie(headers: dict[str, list[str]]) -> str:
     return values[0]
 
 
-def _assert_no_sensitive_auth_fields(body: dict[str, Any]) -> None:
+def _assert_unauthenticated_error(
+    status_code: int,
+    body: dict[str, Any],
+    headers: dict[str, list[str]],
+) -> None:
+    assert status_code == 401
+    assert body["error"]["code"] == "unauthenticated"
+    assert body["error"]["user_action"] == "login"
+    assert headers.get("set-cookie", []) == []
+
+
+def _assert_no_sensitive_auth_fields(body: dict[str, Any], *extra_forbidden: str) -> None:
     serialized = dumps(body, ensure_ascii=False)
     forbidden = {
         "session_id",
@@ -215,6 +244,8 @@ def _assert_no_sensitive_auth_fields(body: dict[str, Any]) -> None:
         "password_hash",
         "salt",
         TEST_PASSWORD,
+        ENV_PASSWORD,
+        *extra_forbidden,
     }
     for item in forbidden:
         assert item not in serialized

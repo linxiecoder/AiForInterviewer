@@ -235,6 +235,8 @@ def test_create_asset_fails_closed_when_embedding_dimension_mismatches() -> None
     assert status_code == 502
     assert body["error"]["code"] == "provider_unavailable"
     assert _asset_count_by_title("维度错误资产") == 0
+    assert _table_count("assets") == 0
+    assert _table_count("asset_versions") == 0
     assert _rag_total_counts() == (0, 0)
 
 
@@ -258,6 +260,8 @@ def test_create_asset_rolls_back_when_rag_chunk_insert_fails() -> None:
     assert status_code == 500
     assert body["error"]["code"] == "internal_error"
     assert _asset_count_by_title("Chunk 入库失败资产") == 0
+    assert _table_count("assets") == 0
+    assert _table_count("asset_versions") == 0
     assert _rag_total_counts() == (0, 0)
 
 
@@ -284,8 +288,19 @@ def test_asset_delete_soft_deletes_without_physical_delete() -> None:
     app = _app_with_two_users()
     _reset_asset_weakness_tables()
     owner_cookie = _login_cookie(app, "asset-user-a@example.com", USER_A_PASSWORD)
+    other_cookie = _login_cookie(app, "asset-user-b", USER_B_PASSWORD)
     owner_id = _current_owner_id(app, owner_cookie)
     _seed_asset(owner_id=owner_id, asset_id="asset_soft_delete_story")
+
+    other_status, other_body = call_json(
+        app,
+        "/api/v1/assets/asset_soft_delete_story",
+        "DELETE",
+        headers={"cookie": other_cookie},
+    )
+    assert other_status == 404
+    assert other_body["error"]["code"] == "not_found_or_inaccessible"
+    assert _record_status("assets", "asset_soft_delete_story") == "asset_confirmed"
 
     status_code, body = call_json(
         app,
@@ -387,8 +402,19 @@ def test_weakness_delete_soft_deletes_without_physical_delete() -> None:
     app = _app_with_two_users()
     _reset_asset_weakness_tables()
     owner_cookie = _login_cookie(app, "asset-user-a@example.com", USER_A_PASSWORD)
+    other_cookie = _login_cookie(app, "asset-user-b", USER_B_PASSWORD)
     owner_id = _current_owner_id(app, owner_cookie)
     _seed_weakness(owner_id=owner_id, weakness_id="weak_soft_delete")
+
+    other_status, other_body = call_json(
+        app,
+        "/api/v1/weaknesses/weak_soft_delete",
+        "DELETE",
+        headers={"cookie": other_cookie},
+    )
+    assert other_status == 404
+    assert other_body["error"]["code"] == "not_found_or_inaccessible"
+    assert _record_status("weaknesses", "weak_soft_delete") == "weakness_confirmed"
 
     status_code, body = call_json(
         app,
@@ -398,6 +424,7 @@ def test_weakness_delete_soft_deletes_without_physical_delete() -> None:
     )
     assert status_code == 200
     assert body["data"]["status"] == "deleted"
+    assert body["data"]["user_confirmation_ref"]["resource_type"] == "user_confirmation"
 
     list_status, list_body = call_json(app, "/api/v1/weaknesses", headers={"cookie": owner_cookie})
     assert list_status == 200
@@ -687,6 +714,12 @@ def _record_count(table_name: str, record_id: str) -> int:
                 {"record_id": record_id},
             ).scalar_one()
         )
+
+
+def _table_count(table_name: str) -> int:
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        return int(session.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar_one())
 
 
 def _record_status(table_name: str, record_id: str) -> str | None:

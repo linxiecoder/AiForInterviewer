@@ -194,6 +194,67 @@ def test_update_resume_creates_new_version_and_returns_detail() -> None:
     assert list_body["data"][0]["current_version_ref"]["version_id"] == updated["current_version_ref"]["version_id"]
 
 
+def test_update_resume_stale_base_version_returns_conflict_and_preserves_latest_detail() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resumes",
+        "POST",
+        json_body={
+            "title": "待更新简历",
+            "markdown_text": "# 初始内容",
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 201
+    created = body["data"]
+    resume_id = created["resume_id"]
+    stale_version_ref = created["current_version_ref"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "PATCH",
+        json_body={
+            "title": "第一次更新",
+            "markdown_text": "# 第一次更新",
+            "base_version_ref": stale_version_ref,
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 200
+    current_version_ref = body["data"]["current_version_ref"]
+    assert current_version_ref["version_id"] != stale_version_ref["version_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "PATCH",
+        json_body={
+            "title": "过期更新",
+            "markdown_text": "# 不应写入",
+            "base_version_ref": stale_version_ref,
+        },
+        headers={"cookie": owner_cookie},
+    )
+    assert status_code == 409
+    assert body["error"]["code"] == "stale_version_conflict"
+
+    detail_status, detail_body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "GET",
+        headers={"cookie": owner_cookie},
+    )
+    assert detail_status == 200
+    assert detail_body["data"]["title"] == "第一次更新"
+    assert detail_body["data"]["markdown_text"] == "# 第一次更新"
+    assert detail_body["data"]["current_version_ref"] == current_version_ref
+
+
 def test_resume_delete_soft_deletes_without_physical_delete() -> None:
     app = _app_with_two_users()
     _reset_repositories()
@@ -271,6 +332,69 @@ def test_user_b_cannot_list_user_a_resumes() -> None:
     assert owner_a_status_code == 200
     assert len(owner_a_body["data"]) == 1
     assert owner_a_body["data"][0]["resume_id"] == "resume_a_only"
+
+
+def test_resume_owner_scope_for_detail_update_and_delete() -> None:
+    app = _app_with_two_users()
+    _reset_repositories()
+    owner_a_cookie = _login_cookie(app, "user_a@example.com", USER_A_PASSWORD)
+    owner_b_cookie = _login_cookie(app, "user_b", USER_B_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/resumes",
+        "POST",
+        json_body={
+            "title": "用户 A 简历",
+            "markdown_text": "# 用户 A",
+        },
+        headers={"cookie": owner_a_cookie},
+    )
+    assert status_code == 201
+    created = body["data"]
+    resume_id = created["resume_id"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "GET",
+        headers={"cookie": owner_b_cookie},
+    )
+    assert status_code == 404
+    assert body["error"]["code"] == "not_found_or_inaccessible"
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "PATCH",
+        json_body={
+            "title": "跨用户更新",
+            "markdown_text": "# 不应写入",
+            "base_version_ref": created["current_version_ref"],
+        },
+        headers={"cookie": owner_b_cookie},
+    )
+    assert status_code == 404
+    assert body["error"]["code"] == "not_found_or_inaccessible"
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "DELETE",
+        headers={"cookie": owner_b_cookie},
+    )
+    assert status_code == 404
+    assert body["error"]["code"] == "not_found_or_inaccessible"
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/resumes/{resume_id}",
+        "GET",
+        headers={"cookie": owner_a_cookie},
+    )
+    assert status_code == 200
+    assert body["data"]["title"] == "用户 A 简历"
+    assert body["data"]["status"] == "active"
 
 
 def test_list_resumes_unauthenticated() -> None:

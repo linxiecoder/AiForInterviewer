@@ -952,6 +952,48 @@ function test_interview_list_actions_cover_report_end_and_soft_delete(): void {
   assertContract(POLISH_API_PATHS.softDeleteSession("ses_report") === "/polish-sessions/ses_report/delete", "删除应命中软删除接口");
 }
 
+function test_polish_core_workbench_contract_stays_on_session_tree_question_answer_feedback(): void {
+  const session = buildSelectedAnswerFixtureSession();
+  const timeline = buildInterviewTimelineViewModel(session, "q_timeline");
+  const timelineKinds = timeline.events.map((event) => event.kind);
+  const latestAnswerId = resolveLatestAnswerIdForQuestion(session, "q_timeline");
+  const feedbackMeta = buildSelectedAnswerFeedbackMetaViewModel(session, latestAnswerId);
+  const feedbackCard = buildFeedbackCardViewModel(session.turns[0].answers[1]);
+  const clipboard = buildPolishSessionClipboardMarkdown(session);
+  const corePolishPaths = [
+    POLISH_API_PATHS.sessions,
+    POLISH_API_PATHS.sessionDetail("ses_core"),
+    POLISH_API_PATHS.progressTreeGenerate("ses_core"),
+    POLISH_API_PATHS.progressTreeState("ses_core"),
+    POLISH_API_PATHS.questionTask("ses_core"),
+    POLISH_API_PATHS.answers("ses_core"),
+    POLISH_API_PATHS.feedbackTask("ses_core"),
+  ];
+  const shellContractText = [
+    ...INTERVIEW_SUPPORTED_MODES.flatMap((mode) => [mode.value, mode.label]),
+    ...INTERVIEW_SESSION_WORKBENCH_FIELDS,
+    ...INTERVIEW_WORKBENCH_DISABLED_ACTIONS,
+    ...corePolishPaths,
+  ].join(" ");
+
+  assertContract(session.mode === "polish", "核心工作台测试夹具必须保持 Polish session");
+  assertContract(INTERVIEW_SUPPORTED_MODES.map((mode) => mode.value).join(",") === "polish", "创建入口不应新增 Pressure/Review/Training 模式");
+  assertContract(corePolishPaths.every((path) => path.startsWith("/polish-sessions")), "核心工作台 API 路径应全部落在 polish-sessions 下");
+  assertContract(corePolishPaths.join(" ").includes("progress-tree"), "核心工作台必须保留进展树路径");
+  assertContract(corePolishPaths.join(" ").includes("/questions"), "核心工作台必须保留题目路径");
+  assertContract(corePolishPaths.join(" ").includes("/answers"), "核心工作台必须保留回答路径");
+  assertContract(corePolishPaths.join(" ").includes("/feedback"), "核心工作台必须保留反馈路径");
+  assertContract(timelineKinds.includes("system_question"), "工作台时间线必须保留题目事件");
+  assertContract(timelineKinds.includes("user_answer"), "工作台时间线必须保留回答事件");
+  assertContract(timelineKinds.includes("quick_review"), "工作台时间线必须保留反馈简评事件");
+  assertContract(feedbackMeta?.answerLabel === "回答 #2", "右侧反馈区应绑定选中回答");
+  assertContract(feedbackCard.sections.some((section) => section.key === "reference_answer"), "反馈卡应保留参考回答区块");
+  assertContract(clipboard.includes("# 进展树") && clipboard.includes("# 题目信息"), "复制内容应保留进展树和题目信息");
+  for (const nonGoalTerm of ["pressure", "Pressure", "压力面", "review", "Review", "training", "Training"]) {
+    assertContract(!shellContractText.includes(nonGoalTerm), `Polish 工作台 shell 不应出现非目标主流程 ${nonGoalTerm}`);
+  }
+}
+
 function test_progress_tree_groups_flat_nodes_by_display_category_title(): void {
   const groupedNodes = buildWorkbenchProgressNodes(
     buildTestSession([
@@ -4063,6 +4105,7 @@ function test_interview_topic_title_neutralizes_interrogation_copy(): void {
 
 test_interview_list_toolbar_uses_shared_actions_and_search();
 test_interview_list_actions_cover_report_end_and_soft_delete();
+test_polish_core_workbench_contract_stays_on_session_tree_question_answer_feedback();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();
 test_progress_tree_group_headers_default_expanded_for_collapse_control();

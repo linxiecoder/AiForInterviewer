@@ -42,6 +42,23 @@ def test_optional_actor_returns_none_without_cookie() -> None:
     assert body == {"has_actor": False}
 
 
+def test_optional_actor_returns_none_with_invalid_cookie() -> None:
+    app = _auth_app()
+
+    @app.get("/probe/optional-actor-invalid-cookie")
+    async def probe(actor=Depends(optional_actor)):
+        return {"has_actor": actor is not None}
+
+    status_code, body = call_json(
+        app,
+        "/probe/optional-actor-invalid-cookie",
+        headers={"cookie": "aifi_session=invalid-token"},
+    )
+
+    assert status_code == 200
+    assert body == {"has_actor": False}
+
+
 def test_required_actor_without_cookie_returns_error_envelope() -> None:
     app = _auth_app()
 
@@ -53,6 +70,25 @@ def test_required_actor_without_cookie_returns_error_envelope() -> None:
 
     assert status_code == 401
     assert body["error"]["code"] == "unauthenticated"
+
+
+def test_required_actor_with_invalid_cookie_returns_error_envelope() -> None:
+    app = _auth_app()
+
+    @app.get("/probe/required-actor-invalid-cookie")
+    async def probe(_actor=Depends(require_authenticated_actor)):
+        return {"ok": True}
+
+    status_code, body, headers = call_json_response(
+        app,
+        "/probe/required-actor-invalid-cookie",
+        headers={"cookie": "aifi_session=invalid-token"},
+    )
+
+    assert status_code == 401
+    assert body["error"]["code"] == "unauthenticated"
+    assert body["error"]["user_action"] == "login"
+    assert headers.get("set-cookie", []) == []
 
 
 def _auth_app():

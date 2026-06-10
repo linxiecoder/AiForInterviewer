@@ -7,7 +7,7 @@ from app.api.errors import ApiHttpError, api_http_error_handler
 from app.api.v1.job_match_analyses import router as job_match_router
 from app.application.job_match.commands import CreateJobMatchAnalysisCommand
 from app.application.job_match.use_cases import JobMatchUseCases, build_source_bundle
-from app.application.job_match.ports import JobMatchAnalyzerUnavailableError
+from app.application.job_match.ports import JobMatchAnalyzerOutput, JobMatchAnalyzerUnavailableError
 from app.domain.auth.entities import CurrentActor
 from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.jobs.entities import Job, JobVersion
@@ -144,6 +144,31 @@ class _WeightedSourceCoverageTransport:
         )
 
 
+class _RecordingAnalyzer:
+    prompt_version = "job-match-preservation-test.v1"
+    model_name = "job-match-preservation-analyzer"
+
+    def __init__(self, *, invalid_evidence_ref: bool = False) -> None:
+        self.calls = 0
+        self.source_digest_seen: str | None = None
+        self.invalid_evidence_ref = invalid_evidence_ref
+
+    def analyze(self, source_bundle):
+        self.calls += 1
+        self.source_digest_seen = source_bundle.source_digest
+        result = _test_result_payload(source_bundle)
+        result.summary = "测试 analyzer contract：仅验证契约落库，不声明真实 AI 质量。"
+        if self.invalid_evidence_ref:
+            result.dimension_scores[0].supporting_evidence = [
+                SourceEvidenceRef(chunk_id="resume:missing:001")
+            ]
+        return JobMatchAnalyzerOutput(
+            payload=result,
+            prompt_version=self.prompt_version,
+            model_name=self.model_name,
+        )
+
+
 def test_create_analysis_persists_completed_result_payload_and_source_digest() -> None:
     session_factory = _session_factory()
     binding_id = _seed_match_sources(session_factory, OWNER_A)
@@ -180,6 +205,59 @@ def test_create_analysis_persists_completed_result_payload_and_source_digest() -
     assert stored is not None
     assert stored.result_payload_json["overall_score"] == data["overall_score"]
     assert stored.source_digest == data["source_digest"]
+
+
+def test_create_analysis_uses_analyzer_contract_and_preserves_readback_payload() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_match_sources(session_factory, OWNER_A)
+    analyzer = _RecordingAnalyzer()
+    app = _isolated_job_match_app(session_factory, ACTOR_A, job_match_analyzer=analyzer)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/job-match-analyses",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 200
+    assert body["resource_type"] == "job_match_analysis"
+    data = body["data"]
+    assert analyzer.calls == 1
+    assert analyzer.source_digest_seen == data["source_digest"]
+    assert data["status"] == "completed"
+    assert data["overall_score"] == data["result_payload"]["overall_score"] == 82
+    assert data["prompt_version"] == _RecordingAnalyzer.prompt_version
+    assert data["model_name"] == _RecordingAnalyzer.model_name
+    assert (
+        data["result_payload"]["summary"]
+        == "测试 analyzer contract：仅验证契约落库，不声明真实 AI 质量。"
+    )
+    assert "ai_task_id" not in data
+
+    stored = SqlAlchemyJobMatchAnalysisRepository(session_factory).get(
+        data["analysis_id"]
+    )
+    assert stored is not None
+    assert stored.result_payload_json == data["result_payload"]
+    assert stored.markdown_report_text == data["markdown_report_text"]
+    assert stored.prompt_version == data["prompt_version"]
+    assert stored.model_name == data["model_name"]
+    assert stored.source_digest == data["source_digest"]
+
+    read_status, read_body = call_json(
+        app,
+        f"/api/v1/job-match-analyses/{data['analysis_id']}",
+    )
+    latest_status, latest_body = call_json(
+        app,
+        f"/api/v1/job-match-analyses/latest?resume_job_binding_id={binding_id}",
+    )
+    assert read_status == 200
+    assert latest_status == 200
+    assert read_body["data"]["result_payload"] == data["result_payload"]
+    assert latest_body["data"]["result_payload"] == data["result_payload"]
+    assert latest_body["data"]["analysis_id"] == data["analysis_id"]
 
 
 def test_create_analysis_requires_llm_analyzer_or_explicit_test_builder() -> None:
@@ -459,6 +537,35 @@ def test_invalid_result_payload_is_not_saved_as_completed() -> None:
     assert repository.get_latest_by_binding(OWNER_A, binding_id) is None
 
 
+def test_invalid_analyzer_payload_returns_validation_failed_without_persistence() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_match_sources(session_factory, OWNER_A)
+    analyzer = _RecordingAnalyzer(invalid_evidence_ref=True)
+    app = _isolated_job_match_app(session_factory, ACTOR_A, job_match_analyzer=analyzer)
+    repository = SqlAlchemyJobMatchAnalysisRepository(session_factory)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/job-match-analyses",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["retryable"] is False
+    assert "unknown chunk_id" in body["error"]["details"]["reason"]
+    assert analyzer.calls == 1
+    assert repository.get_latest_by_binding(OWNER_A, binding_id) is None
+
+    latest_status, latest_body = call_json(
+        app,
+        f"/api/v1/job-match-analyses/latest?resume_job_binding_id={binding_id}",
+    )
+    assert latest_status == 404
+    assert latest_body["error"]["code"] == "not_found_or_inaccessible"
+
+
 def test_explicit_test_result_passes_slice_1_validation() -> None:
     session_factory = _session_factory()
     binding_id = _seed_match_sources(session_factory, OWNER_A)
@@ -509,7 +616,9 @@ def _session_factory():
     return session_factory
 
 
-def _isolated_job_match_app(session_factory, actor: CurrentActor) -> FastAPI:
+def _isolated_job_match_app(
+    session_factory, actor: CurrentActor, *, job_match_analyzer=None
+) -> FastAPI:
     app = FastAPI()
     app.add_exception_handler(ApiHttpError, api_http_error_handler)
     app.include_router(job_match_router, prefix="/api/v1")
@@ -521,7 +630,11 @@ def _isolated_job_match_app(session_factory, actor: CurrentActor) -> FastAPI:
         return session_factory
 
     async def _job_match_analyzer_override():
-        return LlmJobMatchAnalyzer(FakeLlmTransport())
+        return (
+            job_match_analyzer
+            if job_match_analyzer is not None
+            else LlmJobMatchAnalyzer(FakeLlmTransport())
+        )
 
     app.dependency_overrides[require_authenticated_actor] = _actor_override
     app.dependency_overrides[get_db_session_factory] = _session_factory_override

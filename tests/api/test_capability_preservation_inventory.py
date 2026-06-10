@@ -52,6 +52,8 @@ PREFIX_ONLY_SKELETON_MODULES = {
         "api_module": "app.api.v1.ai_tasks",
         "api_path": "apps/api/app/api/v1/ai_tasks.py",
         "api_prefix": "/api/v1/ai-tasks",
+        "repository_path": "apps/api/app/infrastructure/db/repositories/ai_tasks.py",
+        "repository_marker": "pass",
         "use_case_path": "apps/api/app/application/ai_tasks/use_cases.py",
         "skeleton_marker": "ai_task_skeleton",
     },
@@ -80,6 +82,8 @@ PREFIX_ONLY_SKELETON_MODULES = {
         "api_module": "app.api.v1.scoring",
         "api_path": "apps/api/app/api/v1/scoring.py",
         "api_prefix": "/api/v1/scoring-results",
+        "repository_path": "apps/api/app/infrastructure/db/repositories/scoring.py",
+        "repository_marker": "pass",
         "use_case_path": "apps/api/app/application/scoring/use_cases.py",
         "skeleton_marker": "scoring_skeleton",
     },
@@ -143,8 +147,41 @@ CURRENT_ROUTE_CONTRACT_SNAPSHOT = (
 )
 
 
+TRAINING_LEGACY_ROUTE_EXPECTATIONS = (
+    ("GET", "/api/v1/training-suggestions", "app.api.v1.training.list_training_suggestions"),
+    ("POST", "/api/v1/training-suggestions/{recommendation_id}/dismiss", "app.api.v1.training.dismiss_training_suggestion"),
+    ("POST", "/api/v1/training-suggestions/{recommendation_id}/tasks", "app.api.v1.training.start_training_task"),
+    (
+        "POST",
+        "/api/v1/training-suggestions/{recommendation_id}/tasks/{task_id}/complete",
+        "app.api.v1.training.complete_training_task",
+    ),
+)
+
+NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS = frozenset(
+    {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks", "Training"}
+)
+
+
 def test_current_route_contract_snapshot_matches_phase0_baseline() -> None:
     assert _route_contract_snapshot() == CURRENT_ROUTE_CONTRACT_SNAPSHOT
+
+
+def test_training_routes_are_legacy_preserve_only_not_mvp_product_mode() -> None:
+    snapshot = _route_contract_snapshot()
+    implemented_paths = {expectation.path for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
+    implemented_capabilities = {expectation.capability for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
+
+    for expectation in TRAINING_LEGACY_ROUTE_EXPECTATIONS:
+        assert expectation in snapshot
+    assert "Training" not in implemented_capabilities
+    assert not any(path.startswith("/api/v1/training") for path in implemented_paths)
+
+
+def test_skeleton_and_training_capabilities_are_not_in_implemented_route_inventory() -> None:
+    implemented_capabilities = {expectation.capability for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
+
+    assert implemented_capabilities.isdisjoint(NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS)
 
 
 def test_declared_implemented_route_capabilities_have_real_handlers() -> None:
@@ -187,6 +224,10 @@ def test_prefix_only_skeleton_modules_are_detected_but_not_registered_as_routes(
 
         use_case_source = (REPO_ROOT / expected["use_case_path"]).read_text(encoding="utf-8")
         assert expected["skeleton_marker"] in use_case_source, capability
+
+        if repository_path := expected.get("repository_path"):
+            repository_source = (REPO_ROOT / repository_path).read_text(encoding="utf-8")
+            assert expected["repository_marker"] in repository_source, capability
 
 
 def _route_contract_snapshot() -> tuple[tuple[str, str, str], ...]:
