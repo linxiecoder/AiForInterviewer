@@ -29,6 +29,16 @@ ALLOWED_DEFAULT_OFF_LOCAL_RUNTIME_WIRING = frozenset(
         "apps/api/app/infrastructure/ai_runtime/langgraph/in_memory_runtime.py",
     }
 )
+FORBIDDEN_MVP_TRAINING_FLOW_TERMS = (
+    "Weakness -> Training",
+    "Training -> Weakness resolved",
+    "Training Center",
+    "/training",
+    "TrainingPlan",
+    "TrainingDrill",
+    "TrainingTask",
+    "weakness_resolved",
+)
 
 
 def test_happy_path_creates_candidate_only_three_business_agent_workflow() -> None:
@@ -82,6 +92,29 @@ def test_handoff_refs_connect_feedback_to_asset_and_asset_to_training() -> None:
     assert asset_to_training.candidate_type == "training_plan_candidate"
     assert asset_to_training.candidate_ref == result.candidate_refs["training_plan_candidate"]
     assert asset_to_training.formal_write_blocked is True
+
+
+def test_training_plan_candidate_is_not_mvp_weakness_reentry_or_resolution_flow() -> None:
+    result = _slice()
+    candidates = {candidate.candidate_type: candidate for candidate in result.candidates}
+    training_candidate = candidates["training_plan_candidate"]
+    source = (REPO_ROOT / "apps/api/app/application/agents/orchestration/minimal_three_agent_slice.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert result.metadata["candidate_only"] is True
+    assert result.metadata["llm_call_count"] == 0
+    assert result.metadata["provider_call_count"] == 0
+    assert result.metadata["external_call_count"] == 0
+    assert training_candidate.formal_write_blocked is True
+    assert training_candidate.user_confirmation_required is False
+    assert training_candidate.depends_on_candidate_refs == (
+        result.candidate_refs["feedback_candidate"],
+        result.candidate_refs["asset_update_candidate"],
+    )
+    assert "weakness" not in " ".join(result.candidate_refs)
+    for term in FORBIDDEN_MVP_TRAINING_FLOW_TERMS:
+        assert term not in source
 
 
 def test_trace_refs_and_validation_refs_remain_separated() -> None:

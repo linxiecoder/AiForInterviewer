@@ -230,6 +230,26 @@ def test_prefix_only_skeleton_modules_are_detected_but_not_registered_as_routes(
             assert expected["repository_marker"] in repository_source, capability
 
 
+def test_ai_tasks_prefix_alone_is_not_product_runtime_capability() -> None:
+    expected = PREFIX_ONLY_SKELETON_MODULES["ai-tasks"]
+    module = importlib.import_module(expected["api_module"])
+    router = getattr(module, "router")
+    app_paths = {route.path for route in create_app().routes if getattr(route, "path", "").startswith("/api/v1")}
+
+    assert router.prefix == "/ai-tasks"
+    assert router.routes == []
+    assert expected["api_prefix"] not in app_paths
+    assert not any(path.startswith(f"{expected['api_prefix']}/") for path in app_paths)
+
+    route_source = (REPO_ROOT / expected["api_path"]).read_text(encoding="utf-8")
+    use_case_source = (REPO_ROOT / expected["use_case_path"]).read_text(encoding="utf-8")
+    repository_source = (REPO_ROOT / expected["repository_path"]).read_text(encoding="utf-8")
+
+    assert "@router." not in route_source
+    assert "ai_task_skeleton" in use_case_source
+    assert "pass" in repository_source
+
+
 def _route_contract_snapshot() -> tuple[tuple[str, str, str], ...]:
     snapshot: list[tuple[str, str, str]] = []
     for route in create_app().routes:

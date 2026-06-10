@@ -38,6 +38,20 @@ REQUIRED_EXECUTION_FIXTURES = {
     "option_d_local_multi_agent_replay_mismatch",
     "option_d_bounded_loop_stop",
 }
+NON_PROVIDER_QUALITY_EVIDENCE_TYPES = {
+    "deterministic_regression",
+    "replay",
+    "fixture",
+    "fake",
+    "fake_provider",
+    "mock_provider",
+    "mock_transport",
+    "default_off_graph",
+}
+REQUIRED_PROVIDER_QUALITY_NON_CLAIMS = {
+    "no_real_provider_quality_certification",
+    "deterministic_and_replay_evidence_are_not_provider_quality_certification",
+}
 
 
 def _runner_env() -> dict[str, str]:
@@ -80,6 +94,37 @@ def test_phase12_l5_manifest_defines_blocking_eval_gate_and_quality_lanes() -> N
     assert manifest["quality_lanes"]["provider_quality"]["not_claimed_by_default"] is True
     assert set(manifest["minimum_pass_criteria"]["required_case_categories"]) == REQUIRED_WINDOW_CATEGORIES
     assert set(manifest["capability_ids"]) >= {"L5-006", "EVAL-001", "L5-002", "L5-003", "L5-004", "L5-005"}
+
+
+def test_phase12_l5_non_provider_evidence_is_regression_only_not_live_quality() -> None:
+    manifest = _load_json(PHASE12_L5_SUITE)
+    non_provider_lanes = ("deterministic_regression", "replay_regression")
+
+    for lane in non_provider_lanes:
+        purpose = manifest["quality_lanes"][lane]["purpose"]
+        assert lane.endswith("_regression")
+        assert manifest["quality_lanes"][lane]["uses_live_provider"] is False
+        assert any(marker in purpose for marker in ("regression", "replay", "fixtures"))
+    assert manifest["quality_lanes"]["provider_quality"]["uses_live_provider"] is True
+    assert manifest["quality_lanes"]["provider_quality"]["not_claimed_by_default"] is True
+    assert manifest["release_path_policy"]["real_provider_evidence_required_for_quality_certification"] is True
+    assert REQUIRED_PROVIDER_QUALITY_NON_CLAIMS <= set(manifest["non_claims"])
+
+    non_provider_cases = [
+        case
+        for case in _phase12_l5_cases()
+        if case["provider_evidence_type"] in NON_PROVIDER_QUALITY_EVIDENCE_TYPES
+    ]
+    assert non_provider_cases
+    for case in non_provider_cases:
+        assert "no_real_provider_quality_certification" in case["non_claims"], case["case_id"]
+
+    quality_claim_case = next(case for case in non_provider_cases if case["case_id"] == "p12_l5_fake_replay_non_claim_visible")
+    pass_criteria = " ".join(quality_claim_case["pass_criteria"])
+    fail_criteria = " ".join(quality_claim_case["fail_criteria"])
+    assert "fake or replay evidence is not provider quality certification" in pass_criteria
+    assert "real provider quality requires separate scoped evidence" in pass_criteria
+    assert "L5 quality is claimed from deterministic fixture" in fail_criteria
 
 
 def test_phase12_l5_datasets_cover_window_required_scenarios_and_case_metadata() -> None:

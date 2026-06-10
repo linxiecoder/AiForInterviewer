@@ -39,6 +39,13 @@ REQUIRED_BASELINE_GUARDRAILS = (
     "disabled frontend nav 不等于页面存在",
     "fake/replay/deterministic eval 不等于 real-provider quality",
 )
+REQUIRED_EVAL_RUNTIME_NON_CLAIM_FRAGMENTS = (
+    "deterministic / replay / fixture / fake-provider / mock-transport / default-off graph evidence only regression/contract",
+    "provider quality: missing",
+    "live-provider verified: missing",
+    "not implemented AI Runtime product capability",
+    "no live-provider quality, no production quality, no real provider quality, no live LLM quality, no end-to-end provider quality",
+)
 REQUIRED_TRAINING_CORRECTION_FRAGMENTS = (
     "Training independent product mode = missing / intentionally excluded from MVP",
     "Training legacy endpoints = partial legacy preserve-only",
@@ -51,7 +58,9 @@ TRAINING_EXCLUSION_TERMS = (
     "full weakness-to-training loop",
     "full training loop",
     "Weakness -> Training",
+    "Training -> Weakness resolved",
     "complete training " + "resolves weakness",
+    "complete training == weakness resolved",
     "Training" + " Center",
     "Training" + " V1",
     "Training" + "Plan",
@@ -82,6 +91,10 @@ GUARDED_NON_IMPLEMENTED_STATUS_EXPECTATIONS = {
     "Training independent product mode": "missing",
     "Weakness -> Polish re-entry": "设计-only",
     "Weakness -> Pressure/Mock re-entry": "设计-only",
+}
+REQUIRED_MVP_WEAKNESS_REENTRY_CAPABILITIES = {
+    "Weakness -> Polish re-entry",
+    "Weakness -> Pressure/Mock re-entry",
 }
 
 
@@ -180,6 +193,56 @@ def test_training_product_correction_language_is_preserved() -> None:
     assert training_mode["current_status"] == "missing"
     assert "intentionally excluded from MVP, not a gap to close" in training_mode["known_gap"]
     assert "no /training route" in training_mode["refactor_guard"]
+    assert "no complete training == weakness resolved" in training_mode["refactor_guard"]
+
+
+def test_weakness_reentry_allows_only_polish_and_pressure_mock_in_mvp_matrix() -> None:
+    rows_by_capability = {row["capability"]: row for row in _matrix_rows()}
+    weakness_reentry_rows = {
+        row["capability"]: row
+        for row in _matrix_rows()
+        if row["capability"].startswith("Weakness ->")
+    }
+
+    assert set(weakness_reentry_rows) == REQUIRED_MVP_WEAKNESS_REENTRY_CAPABILITIES
+    assert "Weakness -> Training" not in rows_by_capability
+    assert weakness_reentry_rows["Weakness -> Polish re-entry"]["current_status"] == "设计-only"
+    assert weakness_reentry_rows["Weakness -> Pressure/Mock re-entry"]["current_status"] == "设计-only"
+
+    weakness = rows_by_capability["Weaknesses"]
+    assert "remediation target is Polish re-entry or Pressure/Mock re-entry" in weakness["known_gap"]
+    assert "no Weakness -> Training" in weakness["refactor_guard"]
+
+
+def test_eval_runtime_non_claim_language_is_preserved_in_matrix() -> None:
+    rows_by_capability = {row["capability"]: row for row in _matrix_rows()}
+    ai_runtime = rows_by_capability["AI Runtime"]
+    evals = rows_by_capability["Tests/Evals/CI"]
+    combined = " ".join(
+        (
+            ai_runtime["known_gap"],
+            ai_runtime["refactor_guard"],
+            evals["known_gap"],
+            evals["refactor_guard"],
+        )
+    )
+
+    assert ai_runtime["current_status"] == "partial"
+    assert evals["current_status"] == "partial"
+    for fragment in REQUIRED_EVAL_RUNTIME_NON_CLAIM_FRAGMENTS:
+        assert fragment in combined
+
+
+def test_ai_tasks_product_runtime_stays_skeleton_in_matrix() -> None:
+    rows_by_capability = {row["capability"]: row for row in _matrix_rows()}
+    ai_tasks = rows_by_capability["ai-tasks"]
+
+    assert ai_tasks["current_status"] == "skeleton"
+    assert "prefix only" in ai_tasks["backend_api"]
+    assert "ai_task_skeleton" in ai_tasks["application_use_case"]
+    assert "`pass`" in ai_tasks["repository_or_db_model"]
+    assert "no AiTask status/result/retry/cancel API flow" in ai_tasks["known_gap"]
+    assert "route prefix 存在不等于能力实现" in ai_tasks["refactor_guard"]
 
 
 def test_training_exclusion_terms_only_appear_in_safe_context() -> None:
