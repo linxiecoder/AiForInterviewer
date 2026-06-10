@@ -500,7 +500,8 @@ def test_polish_use_cases_create_feedback_task_is_shallow_delegate() -> None:
     from app.domain.shared.clock import utc_now
 
     class DummyBindingRepository:
-        pass
+        def get_answer(self, owner_id: str, answer_id: str):
+            return SimpleNamespace(owner_id=owner_id, answer_id=answer_id, session_id="session-1")
 
     class DummyResumeRepository:
         pass

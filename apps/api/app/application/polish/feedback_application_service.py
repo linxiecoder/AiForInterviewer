@@ -36,6 +36,7 @@ from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.errors import DomainError
 from app.domain.shared.ids import ResourceIdPrefix, generate_resource_id
 from app.domain.shared.refs import ResourceRef, TraceRef
+from app.usecases.polish import PersistPolishResultCommand, PolishPersistResultUseCase
 
 
 class _FeedbackOperations(Protocol):
@@ -174,14 +175,15 @@ class PolishFeedbackApplicationService:
                     duration_ms=_feedback_generation_duration_ms(generation_started_at),
                     **generation_log_fields,
                 )
-                self._operations._polish_repository.add_feedback(feedback)
-                self._operations._polish_repository.add_task(
-                    task,
-                    owner_id=command.owner_id,
-                    actor_id=command.actor_id,
-                    target_ref_id=command.answer_id,
+                return PolishPersistResultUseCase(self._operations._polish_repository).execute(
+                    PersistPolishResultCommand(
+                        feedback=feedback,
+                        task=task,
+                        owner_id=command.owner_id,
+                        actor_id=command.actor_id,
+                        target_ref_id=command.answer_id,
+                    )
                 )
-                return ApplicationResult(value=task)
 
             payload = _generated_feedback_payload_for_storage(
                 generation_result.payload,
@@ -221,12 +223,14 @@ class PolishFeedbackApplicationService:
                 user_visible_status="反馈已生成",
                 candidate_refs=planned_feedback_handoff.task_candidate_refs,
             )
-            self._operations._polish_repository.add_feedback(feedback)
-            self._operations._polish_repository.add_task(
-                task,
-                owner_id=command.owner_id,
-                actor_id=command.actor_id,
-                target_ref_id=command.answer_id,
+            persist_result = PolishPersistResultUseCase(self._operations._polish_repository).execute(
+                PersistPolishResultCommand(
+                    feedback=feedback,
+                    task=task,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    target_ref_id=command.answer_id,
+                )
             )
             generation_log_fields = _feedback_generation_log_fields(generation_result.metadata)
             LogUtil.feedback_generation_succeeded(
@@ -237,7 +241,7 @@ class PolishFeedbackApplicationService:
                 duration_ms=_feedback_generation_duration_ms(generation_started_at),
                 **generation_log_fields,
             )
-            return ApplicationResult(value=task)
+            return persist_result
 
 
 def _feedback_generation_lock(

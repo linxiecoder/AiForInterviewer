@@ -473,6 +473,7 @@ async def create_polish_feedback_task(
             actor_id=actor.actor_id,
             session_id=session_id,
             answer_id=payload.answer_id,
+            internal_scoring_context=payload.scoring_context,
         ),
     )
     if not result.is_success:

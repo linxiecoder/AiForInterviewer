@@ -330,7 +330,6 @@ class PolishFeedbackPayload(BaseModel):
     feedback_metadata: dict[str, Any] | None = None
     weakness_candidates: list[dict[str, Any]] | None = None
     asset_candidates: list[dict[str, Any]] | None = None
-    training_suggestion_candidates: list[dict[str, Any]] | None = None
     oral_script_candidates: list[dict[str, Any]] | None = None
     polished_answer_candidates: list[dict[str, Any]] | None = None
     technical_gaps: list[str] | None = None
@@ -374,6 +373,7 @@ class PolishSessionTurnResponse(BaseModel):
 
 class CreateFeedbackTaskRequest(BaseModel):
     answer_id: str = Field(min_length=1)
+    scoring_context: dict[str, Any] | None = None
 
 
 class PolishTaskStatusResponse(BaseModel):

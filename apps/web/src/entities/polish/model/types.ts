@@ -69,7 +69,6 @@ export interface PolishFeedbackResourceRef {
 export type PolishCandidateType =
   | "weakness_candidate"
   | "asset_candidate"
-  | "training_suggestion_candidate"
   | "oral_script_candidate"
   | "polished_answer_candidate"
   | string;
@@ -198,6 +197,7 @@ export interface PolishFeedbackPayload extends Record<string, unknown> {
   reference_answer_requirements?: PolishStructuredFeedbackRecordPayload[];
   oral_script?: string | null;
   oral_script_requirements?: PolishStructuredFeedbackRecordPayload[];
+  next_polish_suggestions?: string[];
   next_training_suggestions?: string[];
   mastery_status?: string | null;
   score_delta?: number | null;

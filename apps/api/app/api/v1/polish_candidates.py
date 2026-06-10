@@ -12,10 +12,7 @@ from app.api.deps import get_db_session_factory, require_authenticated_actor
 from app.api.envelope import success_envelope
 from app.api.errors import raise_api_error
 from app.domain.auth.entities import CurrentActor
-from app.infrastructure.db.repositories.polish_candidates import (
-    PolishCandidateActionError,
-    SqlAlchemyPolishCandidateRepository,
-)
+from app.repositories.polish_repository import PolishCandidateActionError, PolishRepository
 
 
 router = APIRouter(prefix="/polish-candidates", tags=["polish-candidates"])
@@ -37,7 +34,7 @@ async def list_polish_candidates(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    repository = PolishRepository(session_factory)
     candidates = repository.list_candidates(
         owner_id=actor.owner_id,
         status=status,
@@ -57,7 +54,7 @@ async def get_polish_candidate(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    repository = PolishRepository(session_factory)
     candidate = repository.get_candidate(owner_id=actor.owner_id, candidate_id=candidate_id)
     if candidate is None:
         raise_api_error(
@@ -74,7 +71,7 @@ async def confirm_polish_candidate(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    repository = PolishRepository(session_factory)
     try:
         result = repository.confirm_candidate(
             owner_id=actor.owner_id,
@@ -92,7 +89,7 @@ async def dismiss_polish_candidate(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    repository = PolishRepository(session_factory)
     try:
         result = repository.dismiss_candidate(
             owner_id=actor.owner_id,
@@ -111,7 +108,7 @@ async def merge_polish_candidate(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    repository = PolishRepository(session_factory)
     try:
         result = repository.merge_candidate(
             owner_id=actor.owner_id,
@@ -130,7 +127,7 @@ async def archive_polish_candidate(
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
 ) -> Any:
-    repository = SqlAlchemyPolishCandidateRepository(session_factory)
+    repository = PolishRepository(session_factory)
     try:
         result = repository.archive_candidate(
             owner_id=actor.owner_id,

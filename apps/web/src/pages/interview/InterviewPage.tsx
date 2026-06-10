@@ -274,7 +274,7 @@ export const INTERVIEW_WORKBENCH_FEEDBACK_ITEMS = [
   "口语化范本",
   "多次回答改进",
   "下一轮重答重点",
-  "下一轮训练建议",
+  "下一轮打磨建议",
 ] as const;
 export const INTERVIEW_WORKBENCH_CANDIDATE_REVIEW_ITEMS = [
   "candidate_type",
@@ -606,7 +606,7 @@ export const INTERVIEW_PROGRESS_TREE_CATEGORY_TITLE_BY_CATEGORY = {
 export const INTERVIEW_PROGRESS_TREE_OTHER_CATEGORY_TITLE = "其他打磨项";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TITLE = "当前节点上下文";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_HEADER_LAYOUT = "label_and_node_title_same_row" as const;
-export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY = "请选择一个进展节点查看本轮训练目标。";
+export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY = "请选择一个进展节点查看本轮打磨目标。";
 export const INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_TOGGLE_COPY = {
   expand: "展开更多上下文",
   collapse: "收起上下文",
@@ -2781,7 +2781,7 @@ type FeedbackSectionKey =
   | "oral_script"
   | "retry_delta"
   | "next_retry_focus"
-  | "next_training_suggestions"
+  | "next_polish_suggestions"
   | "asset_consistency_check";
 
 export type FeedbackLossPointTableRow = {
@@ -2856,7 +2856,7 @@ export type WorkbenchCandidateActionBarViewModel = {
 const CANDIDATE_TYPE_LABELS: Record<string, string> = {
   weakness_candidate: "薄弱项候选",
   asset_candidate: "资产候选",
-  training_suggestion_candidate: "训练建议候选",
+  training_suggestion_candidate: "后续打磨建议候选",
   oral_script_candidate: "口语化候选",
   polished_answer_candidate: "高阶回答候选",
 };
@@ -2974,7 +2974,7 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
       ...buildAssetConsistencySections(payload),
       ...buildThemeFeedbackSections(payload),
       ...buildRetryFeedbackSections(payload),
-      ...buildNextTrainingFeedbackSections(payload),
+      ...buildNextPolishFeedbackSections(payload),
     ],
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: buildFeedbackTraceItems(),
@@ -3575,12 +3575,12 @@ function buildRetryFeedbackSections(payload: PolishFeedbackPayload | undefined):
   ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
 }
 
-function buildNextTrainingFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
+function buildNextPolishFeedbackSections(payload: PolishFeedbackPayload | undefined): FeedbackCardSectionViewModel[] {
   if (!payload) {
     return [];
   }
   return [
-    buildOptionalFeedbackSection("next_training_suggestions", "下一轮训练建议", compactTextList(payload.next_training_suggestions), false),
+    buildOptionalFeedbackSection("next_polish_suggestions", "下一轮打磨建议", compactTextList(payload.next_polish_suggestions ?? payload.next_training_suggestions), false),
   ].filter((section): section is FeedbackCardSectionViewModel => section !== null);
 }
 
@@ -3862,6 +3862,321 @@ function renderFeedbackSectionContent(section: FeedbackCardSectionViewModel): Re
         <li key={`${section.key}:${item}`}>{item}</li>
       ))}
     </ul>
+  );
+}
+
+export type CandidateListProps = {
+  pendingCount: number;
+  settledCount: number;
+  mergeHint: string | null;
+  items: readonly CandidateReviewItemViewModel[];
+  emptyMessage: string;
+  candidateActionKey: string | null;
+  isSessionEnded: boolean;
+  onCandidateAction: (candidateId: string, action: "confirm" | "dismiss") => void;
+};
+
+export function CandidateList({
+  pendingCount,
+  settledCount,
+  mergeHint,
+  items,
+  emptyMessage,
+  candidateActionKey,
+  isSessionEnded,
+  onCandidateAction,
+}: CandidateListProps): ReactElement {
+  return (
+    <>
+      <div className={styles.candidateReviewSummary}>
+        {`待处理 ${pendingCount} 项，已处理 ${settledCount} 项`}
+      </div>
+      {mergeHint ? <Alert type="info" showIcon message={mergeHint} /> : null}
+      <div className={styles.candidateReviewList}>
+        {items.length === 0 ? <Alert type="info" showIcon message={emptyMessage} /> : null}
+        {items.map((item) => (
+          <article className={styles.candidateReviewItem} key={item.candidateId}>
+            <div className={styles.candidateReviewItemHeader}>
+              <Space size={[6, 6]} wrap>
+                <Tag className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
+                {renderStatusChip(item.statusTone, item.statusLabel)}
+                {item.confidenceLabel ? <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag> : null}
+              </Space>
+              {item.canConfirm || item.canDismiss ? (
+                <div className={styles.feedbackPanelCandidateActions}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    loading={candidateActionKey === `${item.candidateId}:confirm`}
+                    disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`)}
+                    onClick={() => onCandidateAction(item.candidateId, "confirm")}
+                  >
+                    确认候选
+                  </Button>
+                  <Button
+                    size="small"
+                    danger
+                    icon={<CloseCircleOutlined />}
+                    loading={candidateActionKey === `${item.candidateId}:dismiss`}
+                    disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`)}
+                    onClick={() => onCandidateAction(item.candidateId, "dismiss")}
+                  >
+                    忽略候选
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            <div className={styles.candidateReviewBody}>
+              <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
+              <Typography.Paragraph className={styles.candidateReviewText}>{item.summary}</Typography.Paragraph>
+              {item.evidenceExcerpt ? (
+                <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
+                  {`证据片段：${item.evidenceExcerpt}`}
+                </Typography.Text>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+export type ResultCardProps = {
+  activeTab: WorkbenchFeedbackPanelTab;
+  feedbackCard: FeedbackCardViewModel | null;
+  summarySections: readonly FeedbackCardSectionViewModel[];
+  lossPointsSection: FeedbackCardSectionViewModel | null;
+  referenceAnswerSection: FeedbackCardSectionViewModel | null;
+};
+
+export function ResultCard({
+  activeTab,
+  feedbackCard,
+  summarySections,
+  lossPointsSection,
+  referenceAnswerSection,
+}: ResultCardProps): ReactElement {
+  if (activeTab === "summary") {
+    return (
+      <div className={styles.feedbackPanelSummarySections}>
+        {summarySections.length > 0 ? (
+          summarySections.map((section) => (
+            <section
+              className={`${styles.feedbackPanelSection} ${section.tone === "warning" ? styles.feedbackSectionWarning : ""}`}
+              key={section.key}
+            >
+              {renderFeedbackSectionContent(section)}
+            </section>
+          ))
+        ) : (
+          <Alert type="info" showIcon message={feedbackCard === null ? "当前回答暂无反馈" : "当前回答暂无总评内容"} />
+        )}
+      </div>
+    );
+  }
+
+  if (activeTab === "lossPoints") {
+    return (
+      <div className={styles.feedbackPanelSummarySections}>
+        {lossPointsSection === null ? (
+          <Alert type="info" showIcon message="当前未生成失分点" />
+        ) : lossPointsSection.tableRows === undefined || lossPointsSection.tableRows.length === 0 ? (
+          <Alert type="info" showIcon message="当前回答暂无失分点" />
+        ) : (
+          <>{renderFeedbackSectionContent(lossPointsSection)}</>
+        )}
+      </div>
+    );
+  }
+
+  if (activeTab === "referenceAnswer") {
+    return (
+      <div className={styles.feedbackPanelSummarySections}>
+        {referenceAnswerSection === null ? (
+          <Alert type="info" showIcon message="当前未生成参考回答" />
+        ) : (
+          <>{renderFeedbackSectionContent(referenceAnswerSection)}</>
+        )}
+      </div>
+    );
+  }
+
+  return <div />;
+}
+
+export type FeedbackFormProps = {
+  answerError: string | null;
+  showNextActionBar: boolean;
+  fixedNextActionBar: WorkbenchFixedNextActionBarViewModel | null;
+  fixedNextActionProgressNodeRef: string | null;
+  creatingQuestion: boolean;
+  submittingAnswer: boolean;
+  feedbackGenerating: boolean;
+  completingQuestion: boolean;
+  isSessionEnded: boolean;
+  answerText: string;
+  canSendAnswer: boolean;
+  canRegenerateCurrentQuestion: boolean;
+  composerActionState: WorkbenchQuestionComposerActionViewModel;
+  onAnswerTextChange: (value: string) => void;
+  onSendAnswer: () => void;
+  onFollowUpCurrentQuestion: () => void;
+  onRegenerateCurrentQuestion: () => void;
+  onCompleteCurrentQuestion: () => void;
+  onNextRecommendedAction: (action: PolishRecommendedAction, progressNodeRef?: string | null) => void;
+};
+
+export function FeedbackForm({
+  answerError,
+  showNextActionBar,
+  fixedNextActionBar,
+  fixedNextActionProgressNodeRef,
+  creatingQuestion,
+  submittingAnswer,
+  feedbackGenerating,
+  completingQuestion,
+  isSessionEnded,
+  answerText,
+  canSendAnswer,
+  canRegenerateCurrentQuestion,
+  composerActionState,
+  onAnswerTextChange,
+  onSendAnswer,
+  onFollowUpCurrentQuestion,
+  onRegenerateCurrentQuestion,
+  onCompleteCurrentQuestion,
+  onNextRecommendedAction,
+}: FeedbackFormProps): ReactElement {
+  return (
+    <div
+      className={styles.currentQuestionComposer}
+      data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.currentQuestionComposer}
+      data-layout-area="right_fixed_composer"
+    >
+      {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
+      {showNextActionBar ? (
+        <div
+          className={styles.currentQuestionNextActionBar}
+          data-layout-area="right_fixed_next_action_bar"
+          aria-label="输入区操作"
+        >
+          {fixedNextActionBar !== null ? (
+            <div className={styles.currentQuestionActionGroup}>
+              <Typography.Text strong className={styles.currentQuestionNextActionTitle}>
+                下一步建议
+              </Typography.Text>
+              <div className={styles.currentQuestionNextActionButtons}>
+                {fixedNextActionBar.actions.map((item) => (
+                  <Button
+                    key={`${fixedNextActionBar.placement}:${item.action}`}
+                    size="small"
+                    disabled={creatingQuestion || submittingAnswer || feedbackGenerating || isSessionEnded}
+                    loading={item.action === "generate_next_question" && creatingQuestion}
+                    onClick={() => onNextRecommendedAction(item.action, fixedNextActionProgressNodeRef)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <Input.TextArea
+        className={styles.currentQuestionComposerInput}
+        rows={4}
+        value={answerText}
+        onChange={(event) => onAnswerTextChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (canSubmitAnswerFromKeyboard({
+            key: event.key,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            isComposing: event.nativeEvent.isComposing,
+          }, canSendAnswer)) {
+            event.preventDefault();
+            onSendAnswer();
+          }
+        }}
+        placeholder={composerActionState.sendAnswerPlaceholder}
+        maxLength={2000}
+        disabled={!canSendAnswer}
+      />
+      <div className={styles.currentQuestionComposerActions}>
+        <div className={styles.currentQuestionComposerLeftActions}>
+          {composerActionState.showFollowUpCurrentQuestionButton ? (
+            <Tooltip
+              title={composerActionState.followUpCurrentQuestionDisabledReason ?? INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON}
+            >
+              <span>
+                <Button
+                  icon={<PlusOutlined />}
+                  loading={creatingQuestion}
+                  disabled={!composerActionState.canFollowUpCurrentQuestion}
+                  onClick={onFollowUpCurrentQuestion}
+                >
+                  {INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : null}
+          <Tooltip
+            title={composerActionState.canRegenerateCurrentQuestion
+              ? composerActionState.regenerateQuestionButtonCopy
+              : composerActionState.regenerateQuestionDisabledReason ?? INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP}
+          >
+            <span>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={creatingQuestion}
+                disabled={!canRegenerateCurrentQuestion}
+                onClick={onRegenerateCurrentQuestion}
+              >
+                {composerActionState.regenerateQuestionButtonCopy}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip
+            title={composerActionState.canMarkCurrentQuestionCompleted
+              ? INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON
+              : composerActionState.markCurrentQuestionCompletedDisabledReason}
+          >
+            <span>
+              <Button
+                icon={<CheckCircleOutlined />}
+                loading={completingQuestion}
+                disabled={!composerActionState.canMarkCurrentQuestionCompleted}
+                onClick={onCompleteCurrentQuestion}
+              >
+                {INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON}
+              </Button>
+            </span>
+          </Tooltip>
+        </div>
+        <Tooltip title={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}>
+          <span
+            className={styles.sendButtonTooltipAnchor}
+            tabIndex={0}
+            aria-label={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}
+          >
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              loading={submittingAnswer || feedbackGenerating}
+              disabled={!canSendAnswer}
+              aria-label={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}
+              onClick={onSendAnswer}
+            >
+              {composerActionState.sendAnswerButtonLabel}
+            </Button>
+          </span>
+        </Tooltip>
+      </div>
+    </div>
   );
 }
 
@@ -5629,9 +5944,6 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       lossPointCount: lossPointRows.length,
       candidateCount: feedbackPanelCandidateItems.pending.length + feedbackPanelCandidateItems.settled.length,
     });
-    const activeSummary = activeFeedbackPanelTab === "summary";
-    const activeLossPoints = activeFeedbackPanelTab === "lossPoints";
-    const activeReferenceAnswer = activeFeedbackPanelTab === "referenceAnswer";
     const activeCandidatesTab = activeFeedbackPanelTab === "candidate";
     const candidatePanelClassName = [styles.feedbackPanel, isFeedbackPanelCollapsed ? styles.feedbackPanelCollapsed : ""].join(" ");
 
@@ -5722,107 +6034,28 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           items={feedbackPanelTabs}
         />
         <div className={styles.feedbackPanelContent}>
-          {activeSummary ? (
-            <div className={styles.feedbackPanelSummarySections}>
-              {summarySectionNodes.length > 0 ? (
-                summarySectionNodes.map((section) => (
-                  <section
-                    className={`${styles.feedbackPanelSection} ${section.tone === "warning" ? styles.feedbackSectionWarning : ""}`}
-                    key={section.key}
-                  >
-                    {renderFeedbackSectionContent(section)}
-                  </section>
-                ))
-              ) : (
-                <Alert type="info" showIcon message={selectedAnswerFeedbackCard === null ? "当前回答暂无反馈" : "当前回答暂无总评内容"} />
-              )}
-            </div>
-          ) : null}
-          {activeLossPoints ? (
-            <div className={styles.feedbackPanelSummarySections}>
-              {selectedAnswerLossPointsSection === null ? (
-                <Alert type="info" showIcon message="当前未生成失分点" />
-              ) : selectedAnswerLossPointsSection.tableRows === undefined || selectedAnswerLossPointsSection.tableRows.length === 0 ? (
-                <Alert type="info" showIcon message="当前回答暂无失分点" />
-              ) : (
-                <>
-                  {renderFeedbackSectionContent(selectedAnswerLossPointsSection)}
-                </>
-              )}
-            </div>
-          ) : null}
-          {activeReferenceAnswer ? (
-            <div className={styles.feedbackPanelSummarySections}>
-              {selectedAnswerReferenceAnswerSection === null ? (
-                <Alert type="info" showIcon message="当前未生成参考回答" />
-              ) : (
-                <>
-                  {renderFeedbackSectionContent(selectedAnswerReferenceAnswerSection)}
-                </>
-              )}
-            </div>
-          ) : null}
           {activeCandidatesTab ? (
-            <>
-              <div className={styles.candidateReviewSummary}>
-                {`待处理 ${feedbackPanelCandidateItems.pending.length} 项，已处理 ${feedbackPanelCandidateItems.settled.length} 项`}
-              </div>
-              {selectedCandidateReview?.mergeHint ? <Alert type="info" showIcon message={selectedCandidateReview.mergeHint} /> : null}
-              <div className={styles.candidateReviewList}>
-                {activeCandidates.length === 0 ? (
-                  <Alert type="info" showIcon message={activeFeedbackPanelTab === "candidate" ? "当前无候选对象" : ""} />
-                ) : null}
-                {activeCandidates.map((item) => (
-                  <article className={styles.candidateReviewItem} key={item.candidateId}>
-                    <div className={styles.candidateReviewItemHeader}>
-                      <Space size={[6, 6]} wrap>
-                        <Tag className={styles.feedbackMetaTag}>{item.typeLabel}</Tag>
-                        {renderStatusChip(item.statusTone, item.statusLabel)}
-                        {item.confidenceLabel ? <Tag className={styles.feedbackMetaTag}>{item.confidenceLabel}</Tag> : null}
-                      </Space>
-                      {item.canConfirm || item.canDismiss ? (
-                        <div className={styles.feedbackPanelCandidateActions}>
-                          <Button
-                            size="small"
-                            type="primary"
-                            icon={<CheckCircleOutlined />}
-                            loading={candidateActionKey === `${item.candidateId}:confirm`}
-                            disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:confirm`)}
-                            onClick={() => {
-                              void runCandidateAction(item.candidateId, "confirm");
-                            }}
-                          >
-                            确认候选
-                          </Button>
-                          <Button
-                            size="small"
-                            danger
-                            icon={<CloseCircleOutlined />}
-                            loading={candidateActionKey === `${item.candidateId}:dismiss`}
-                            disabled={isSessionEnded || (candidateActionKey !== null && candidateActionKey !== `${item.candidateId}:dismiss`)}
-                            onClick={() => {
-                              void runCandidateAction(item.candidateId, "dismiss");
-                            }}
-                          >
-                            忽略候选
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className={styles.candidateReviewBody}>
-                      <Typography.Text strong className={styles.candidateReviewTitle}>{item.title}</Typography.Text>
-                      <Typography.Paragraph className={styles.candidateReviewText}>{item.summary}</Typography.Paragraph>
-                      {item.evidenceExcerpt ? (
-                        <Typography.Text type="secondary" className={styles.candidateReviewEvidence}>
-                          {`证据片段：${item.evidenceExcerpt}`}
-                        </Typography.Text>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </>
-          ) : null}
+            <CandidateList
+              pendingCount={feedbackPanelCandidateItems.pending.length}
+              settledCount={feedbackPanelCandidateItems.settled.length}
+              mergeHint={selectedCandidateReview?.mergeHint ?? null}
+              items={activeCandidates}
+              emptyMessage="当前无候选对象"
+              candidateActionKey={candidateActionKey}
+              isSessionEnded={isSessionEnded}
+              onCandidateAction={(candidateId, action) => {
+                void runCandidateAction(candidateId, action);
+              }}
+            />
+          ) : (
+            <ResultCard
+              activeTab={activeFeedbackPanelTab}
+              feedbackCard={selectedAnswerFeedbackCard}
+              summarySections={summarySectionNodes}
+              lossPointsSection={selectedAnswerLossPointsSection}
+              referenceAnswerSection={selectedAnswerReferenceAnswerSection}
+            />
+          )}
         </div>
           </>
         )}
@@ -5832,141 +6065,35 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   const renderCurrentQuestionComposer = () => {
     return (
-      <div
-        className={styles.currentQuestionComposer}
-        data-testid={INTERVIEW_WORKBENCH_LAYOUT_TEST_IDS.currentQuestionComposer}
-        data-layout-area="right_fixed_composer"
-      >
-        {answerError !== null ? <Alert type="error" showIcon message={answerError} /> : null}
-        {shouldShowFixedComposerActionBar ? (
-          <div
-            className={styles.currentQuestionNextActionBar}
-            data-layout-area="right_fixed_next_action_bar"
-            aria-label="输入区操作"
-          >
-            {fixedNextActionBar !== null ? (
-              <div className={styles.currentQuestionActionGroup}>
-                <Typography.Text strong className={styles.currentQuestionNextActionTitle}>
-                  下一步建议
-                </Typography.Text>
-                <div className={styles.currentQuestionNextActionButtons}>
-                  {fixedNextActionBar.actions.map((item) => (
-                    <Button
-                      key={`${fixedNextActionBar.placement}:${item.action}`}
-                      size="small"
-                      disabled={creatingQuestion || submittingAnswer || feedbackGenerating || isSessionEnded}
-                      loading={item.action === "generate_next_question" && creatingQuestion}
-                      onClick={() => handleNextRecommendedAction(item.action, fixedNextActionProgressNodeRef)}
-                    >
-                      {item.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        <Input.TextArea
-          className={styles.currentQuestionComposerInput}
-          rows={4}
-          value={answerText}
-          onChange={(event) => setAnswerText(event.target.value)}
-          onKeyDown={(event) => {
-            if (canSubmitAnswerFromKeyboard({
-              key: event.key,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-              shiftKey: event.shiftKey,
-              altKey: event.altKey,
-              isComposing: event.nativeEvent.isComposing,
-            }, canSendAnswer)) {
-              event.preventDefault();
-              void sendAnswer();
-            }
-          }}
-          placeholder={composerActionState.sendAnswerPlaceholder}
-          maxLength={2000}
-          disabled={!canSendAnswer}
-        />
-        <div className={styles.currentQuestionComposerActions}>
-          <div className={styles.currentQuestionComposerLeftActions}>
-            {composerActionState.showFollowUpCurrentQuestionButton ? (
-              <Tooltip
-                title={composerActionState.followUpCurrentQuestionDisabledReason ?? INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON}
-              >
-                <span>
-                  <Button
-                    icon={<PlusOutlined />}
-                    loading={creatingQuestion}
-                    disabled={!composerActionState.canFollowUpCurrentQuestion}
-                    onClick={() => {
-                      void followUpCurrentQuestion();
-                    }}
-                  >
-                    {INTERVIEW_WORKBENCH_FOLLOW_UP_CURRENT_QUESTION_BUTTON}
-                  </Button>
-                </span>
-              </Tooltip>
-            ) : null}
-            <Tooltip
-              title={composerActionState.canRegenerateCurrentQuestion
-                ? composerActionState.regenerateQuestionButtonCopy
-                : composerActionState.regenerateQuestionDisabledReason ?? INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_NO_NODE_TOOLTIP}
-            >
-              <span>
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={creatingQuestion}
-                  disabled={!canRegenerateCurrentQuestion}
-                  onClick={() => {
-                    void regenerateCurrentQuestion();
-                  }}
-                >
-                  {composerActionState.regenerateQuestionButtonCopy}
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip
-              title={composerActionState.canMarkCurrentQuestionCompleted
-                ? INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON
-                : composerActionState.markCurrentQuestionCompletedDisabledReason}
-            >
-              <span>
-                <Button
-                  icon={<CheckCircleOutlined />}
-                  loading={completingQuestion}
-                  disabled={!composerActionState.canMarkCurrentQuestionCompleted}
-                  onClick={() => {
-                    void completeCurrentQuestion();
-                  }}
-                >
-                  {INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_BUTTON}
-                </Button>
-              </span>
-            </Tooltip>
-          </div>
-          <Tooltip title={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}>
-            <span
-              className={styles.sendButtonTooltipAnchor}
-              tabIndex={0}
-              aria-label={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}
-            >
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                loading={submittingAnswer || feedbackGenerating}
-                disabled={!canSendAnswer}
-                aria-label={INTERVIEW_WORKBENCH_SEND_BUTTON_TOOLTIP}
-                onClick={() => {
-                  void sendAnswer();
-                }}
-              >
-                {composerActionState.sendAnswerButtonLabel}
-              </Button>
-            </span>
-          </Tooltip>
-        </div>
-      </div>
+      <FeedbackForm
+        answerError={answerError}
+        showNextActionBar={shouldShowFixedComposerActionBar}
+        fixedNextActionBar={fixedNextActionBar}
+        fixedNextActionProgressNodeRef={fixedNextActionProgressNodeRef}
+        creatingQuestion={creatingQuestion}
+        submittingAnswer={submittingAnswer}
+        feedbackGenerating={feedbackGenerating}
+        completingQuestion={completingQuestion}
+        isSessionEnded={isSessionEnded}
+        answerText={answerText}
+        canSendAnswer={canSendAnswer}
+        canRegenerateCurrentQuestion={canRegenerateCurrentQuestion}
+        composerActionState={composerActionState}
+        onAnswerTextChange={setAnswerText}
+        onSendAnswer={() => {
+          void sendAnswer();
+        }}
+        onFollowUpCurrentQuestion={() => {
+          void followUpCurrentQuestion();
+        }}
+        onRegenerateCurrentQuestion={() => {
+          void regenerateCurrentQuestion();
+        }}
+        onCompleteCurrentQuestion={() => {
+          void completeCurrentQuestion();
+        }}
+        onNextRecommendedAction={handleNextRecommendedAction}
+      />
     );
   };
 

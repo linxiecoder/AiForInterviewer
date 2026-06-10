@@ -69,6 +69,9 @@ import {
   INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
   INTERVIEW_WORKBENCH_STATE_MACHINE,
+  CandidateList,
+  FeedbackForm,
+  ResultCard,
   buildPolishBindingOptions,
   buildPolishSessionPath,
   buildPolishSessionClipboardMarkdown,
@@ -494,7 +497,7 @@ type ProgressTreeContextBannerHeaderLayoutIsStable = Expect<
 type ProgressTreeContextBannerEmptyCopyIsStable = Expect<
   Equal<
     typeof INTERVIEW_PROGRESS_TREE_CONTEXT_BANNER_EMPTY_COPY,
-    "请选择一个进展节点查看本轮训练目标。"
+    "请选择一个进展节点查看本轮打磨目标。"
   >
 >;
 type ProgressTreeContextBannerToggleCopyIsStable = Expect<
@@ -585,7 +588,7 @@ type WorkbenchFeedbackItemsAreStable = Expect<
       "口语化范本",
       "多次回答改进",
       "下一轮重答重点",
-      "下一轮训练建议",
+      "下一轮打磨建议",
     ]
   >
 >;
@@ -992,6 +995,12 @@ function test_polish_core_workbench_contract_stays_on_session_tree_question_answ
   for (const nonGoalTerm of ["pressure", "Pressure", "压力面", "review", "Review", "training", "Training"]) {
     assertContract(!shellContractText.includes(nonGoalTerm), `Polish 工作台 shell 不应出现非目标主流程 ${nonGoalTerm}`);
   }
+}
+
+function test_polish_m25_components_are_split_and_exported(): void {
+  assertContract(typeof CandidateList === "function", "M2.5 应导出 CandidateList 组件");
+  assertContract(typeof FeedbackForm === "function", "M2.5 应导出 FeedbackForm 组件");
+  assertContract(typeof ResultCard === "function", "M2.5 应导出 ResultCard 组件");
 }
 
 function test_progress_tree_groups_flat_nodes_by_display_category_title(): void {
@@ -3174,7 +3183,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
       ],
       p7_reference_answer: "从 owner 视角补齐状态机、失败兜底和指标复盘。",
       oral_script: "我会先用 30 秒交代背景，再说明我的职责和关键取舍。",
-      next_training_suggestions: ["下一轮用 60/40 权重再答一版"],
+      next_polish_suggestions: ["下一轮用 60/40 权重再答一版"],
       mastery_status: "improving",
       score_delta: 8,
       dimension_delta: {
@@ -3231,7 +3240,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
     .map((row) => `${row.severity} ${row.deduction} ${row.issue} ${row.suggestion}`)
     .join(" ");
 
-  assertContract(card.sections.map((section) => section.title).join(",") === "总体点评,打分,得分点,失分点,参考回答,权重说明,面试意图,技术短板,表达短板,高阶参考答案,口语化范本,多次回答改进,下一轮重答重点,下一轮训练建议", "反馈卡应展示 final payload 和结构化反馈模块");
+  assertContract(card.sections.map((section) => section.title).join(",") === "总体点评,打分,得分点,失分点,参考回答,权重说明,面试意图,技术短板,表达短板,高阶参考答案,口语化范本,多次回答改进,下一轮重答重点,下一轮打磨建议", "反馈卡应展示 final payload 和结构化反馈模块");
   assertContract(card.contractId === "P-POLISH-003", "反馈卡应保留首个 contract_id 用于调试兜底");
   assertContract(contractIds.includes("P-POLISH-005"), "反馈卡应保留完整 contract_ids 便于 debug");
   assertContract(!visibleCopy.includes("P-POLISH-005"), "反馈卡默认不展示 contract_id raw code");
@@ -3250,7 +3259,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(visibleCopy.includes("仍需补齐：失败补偿仍需更具体"), "反馈卡应展示 remaining_gaps");
   assertContract(visibleCopy.includes("重复失分：技术取舍说明不足"), "反馈卡应展示 repeated_loss_points");
   assertContract(visibleCopy.includes("重点：失败补偿仍需更具体"), "反馈卡应展示 next_retry_focus");
-  assertContract(visibleCopy.includes("下一轮用 60/40 权重再答一版"), "反馈卡应展示下一轮训练建议");
+  assertContract(visibleCopy.includes("下一轮用 60/40 权重再答一版"), "反馈卡应展示下一轮打磨建议");
   assertContract(lossTableValues.includes("主要失分"), "失分表格应展示中文严重程度");
   assertContract(lossTableValues.includes("12"), "失分表格应展示扣分数值");
   assertContract(card.traceItems.length === 0, "反馈卡 view model 不应暴露 trace 引用字段");
@@ -4106,6 +4115,7 @@ function test_interview_topic_title_neutralizes_interrogation_copy(): void {
 test_interview_list_toolbar_uses_shared_actions_and_search();
 test_interview_list_actions_cover_report_end_and_soft_delete();
 test_polish_core_workbench_contract_stays_on_session_tree_question_answer_feedback();
+test_polish_m25_components_are_split_and_exported();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();
 test_progress_tree_group_headers_default_expanded_for_collapse_control();

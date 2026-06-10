@@ -97,7 +97,6 @@ STRUCTURED_FEEDBACK_OPTIONAL_FIELDS = (
     "next_retry_focus",
     "weakness_candidates",
     "asset_candidates",
-    "training_suggestion_candidates",
     "oral_script_candidates",
     "polished_answer_candidates",
 )
@@ -126,6 +125,8 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
     for field_name in STRUCTURED_FEEDBACK_OPTIONAL_FIELDS:
         assert field_name in PolishFeedbackPayload.model_fields
         assert not PolishFeedbackPayload.model_fields[field_name].is_required()
+
+    assert "training_suggestion_candidates" not in PolishFeedbackPayload.model_fields
 
     removed_fields = {
         "contract_id",

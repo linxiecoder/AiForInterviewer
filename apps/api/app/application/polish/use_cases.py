@@ -102,6 +102,7 @@ from app.application.polish.progress_tree import (
 )
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
 from app.application.resumes.ports import ResumeRepository
+from app.usecases.polish import PolishApplyFeedbackUseCase
 from app.domain.bindings.ports import BindingRepository
 from app.domain.jobs.entities import Job, JobVersion
 from app.domain.jobs.ports import JobRepository
@@ -1450,7 +1451,7 @@ class PolishUseCases(_PolishUseCaseOperations):
 
     def create_feedback_task(self, command: CreatePolishFeedbackTaskCommand) -> ApplicationResult[PolishTaskStatus]:
         self._sync_services()
-        return self._feedback_service.create_feedback_task(command)
+        return PolishApplyFeedbackUseCase(self._polish_repository, self._feedback_service).execute(command)
 
     def refresh_progress_tree_state(
         self,

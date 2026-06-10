@@ -1,0 +1,2 @@
+"""Use case compatibility entrypoints."""
+

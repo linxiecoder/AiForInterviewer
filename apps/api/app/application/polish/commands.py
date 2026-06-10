@@ -1,6 +1,7 @@
 """Polish commands."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from app.domain.shared.refs import VersionRef
 
@@ -86,6 +87,7 @@ class CreatePolishFeedbackTaskCommand:
     actor_id: str
     session_id: str
     answer_id: str
+    internal_scoring_context: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
