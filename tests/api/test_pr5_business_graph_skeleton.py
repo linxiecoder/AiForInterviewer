@@ -50,6 +50,11 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
         == "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
     )
     _assert_pr5_descriptor_is_default_off_refs_only(feedback_descriptor)
+    assert feedback_descriptor.lifecycle_status == "placeholder"
+    assert feedback_descriptor.migration_status == "skeleton_default_off_direct_path_retained"
+    assert feedback_descriptor.runtime_side_effect_policy == "candidate_write"
+    assert "formal_write_requested" in feedback_descriptor.runtime_stop_conditions
+    assert feedback_descriptor.disabled_behavior == "legacy_direct_path_retained"
 
     question_descriptor = registry.get_graph_descriptor(POLISH_QUESTION_GRAPH_NAME)
     assert question_descriptor.graph_name == POLISH_QUESTION_GRAPH_NAME == "polish_question_graph"
@@ -60,8 +65,11 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
         == "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
     )
     assert question_descriptor == build_polish_question_graph_descriptor()
-    assert question_descriptor.default_enabled is False
-    assert question_descriptor.provider_enabled is False
+    _assert_pr5_descriptor_is_default_off_refs_only(question_descriptor)
+    assert question_descriptor.lifecycle_status == "active"
+    assert question_descriptor.migration_status == "agent_orchestration_with_deterministic_fallback"
+    assert question_descriptor.runtime_side_effect_policy == "candidate_write"
+    assert "formal_write_requested" in question_descriptor.runtime_stop_conditions
     assert question_descriptor.disabled_behavior == "deterministic_fallback_with_reason"
 
     flag_decision = RuntimeFlagResolver().resolve_graph_flag(
@@ -162,4 +170,3 @@ def _assert_pr5_descriptor_is_default_off_refs_only(descriptor: object) -> None:
     assert descriptor.formal_write_targets == ()
     assert descriptor.db_business_write_targets == ()
     assert descriptor.rollback_safe is True
-    assert descriptor.disabled_behavior == "legacy_direct_path_retained"
