@@ -734,3 +734,332 @@ def test_polish_feedback_application_service_create_feedback_task_owns_main_flow
     assert len(repository.add_task_calls) == 1
     assert repository.add_task_calls[0][1] == "owner-1"
     assert repository.add_task_calls[0][3] == "answer-1"
+
+
+def test_polish_feedback_application_service_persists_feedback_and_task_with_candidate_refs_only() -> None:
+    import json
+
+    from sqlalchemy import func, select
+
+    from app.application.polish.commands import CreatePolishFeedbackTaskCommand
+    from app.application.polish.entities import (
+        PolishAnswer,
+        PolishQuestion,
+        PolishSession,
+        PolishSessionAnswerDetail,
+        PolishSessionDetail,
+        PolishSessionTurn,
+    )
+    from app.application.polish.feedback_application_service import PolishFeedbackApplicationService
+    from app.application.polish.feedback_generation_service import (
+        FeedbackGenerationContext,
+        FeedbackGenerationResult,
+    )
+    from app.domain.shared.clock import utc_now
+    from app.domain.shared.enums import AiTaskStatus
+    from app.infrastructure.db.models.ai_task import AiTask
+    from app.infrastructure.db.models.asset import Asset, AssetVersion
+    from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
+    from app.infrastructure.db.models.polish_candidate import PolishCandidateRecord
+    from app.infrastructure.db.models.training import TrainingRecommendation, TrainingTask
+    from app.infrastructure.db.models.weakness import Weakness
+    from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
+    from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
+
+    session_factory = build_session_factory(DbSettings(database_url="sqlite+pysqlite:///:memory:"))
+    initialize_schema(session_factory=session_factory)
+    repository = SqlAlchemyPolishRepository(session_factory)
+    now = utc_now()
+    session = PolishSession(
+        session_id="session-m23-feedback-boundary",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        binding_id="binding-1",
+        resume_id="resume-1",
+        resume_version_id="resume-version-1",
+        job_id="job-1",
+        job_version_id="job-version-1",
+        status="running",
+        topic_id="topic-1",
+        subtopic_id=None,
+        custom_topic_text_summary=None,
+        created_at=now,
+        updated_at=now,
+    )
+    question = PolishQuestion(
+        question_id="question-m23-feedback-boundary",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        ai_task_id="task-question-m23",
+        question_text="请说明你如何处理支付链路失败恢复。",
+        status="generated",
+        created_at=now,
+        updated_at=now,
+        progress_node_ref="progress-node-reliability",
+        evidence_refs=("evidence_resume_payment",),
+    )
+    answer = PolishAnswer(
+        answer_id="answer-m23-feedback-boundary",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        question_id=question.question_id,
+        answer_round=1,
+        answer_text="我会用 MQ 解耦、幂等键和补偿任务处理失败恢复。",
+        status="saved",
+        created_at=now,
+        updated_at=now,
+    )
+    repository.add_session(session)
+    repository.add_question(question)
+    repository.add_answer(answer)
+
+    generation_payload = {
+        "schema_id": "polish_feedback_generated_v1",
+        "schema_version": "1.0",
+        "status": "generated",
+        "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
+        "feedback_text": "回答覆盖了 MQ 解耦和幂等，但缺少失败恢复指标。",
+        "answer_summary": "候选人说明了补偿和幂等策略。",
+        "score_result": {"score_type": "polish_answer", "score_value": 82, "score_level": "good"},
+        "loss_points": [
+            {
+                "loss_point_id": "lp_failure_recovery_metric",
+                "severity": "minor",
+                "deduction": 8,
+                "reason": "缺少恢复耗时和堆积量指标。",
+                "evidence_refs": ["evidence_resume_payment"],
+            }
+        ],
+        "reference_answer": {
+            "sections": [
+                {
+                    "section_id": "ref_failure_recovery_metric",
+                    "title": "失败恢复指标",
+                    "content": "补充失败率、恢复耗时和消息堆积量的监控边界。",
+                    "addresses_loss_point_ids": ["lp_failure_recovery_metric"],
+                }
+            ]
+        },
+        "asset_consistency_check": {
+            "status": "consistent",
+            "checked_asset_refs": ["asset_payment_reliability"],
+            "conflicts": [],
+            "unsupported_claims": [],
+            "user_clarification_required": False,
+        },
+        "answer_coverage": {
+            "expected_points": ["幂等", "补偿", "观测"],
+            "covered_points": ["幂等", "补偿"],
+            "missing_points": ["观测"],
+            "weak_points": ["失败恢复指标"],
+            "contradicted_points": [],
+        },
+        "answer_change_analysis": {
+            "has_prior_attempts": False,
+            "previous_answer_refs": [],
+            "retained_points": [],
+            "newly_added_points": [],
+            "regressed_points": [],
+            "repeated_loss_points": [],
+            "fixed_loss_points": [],
+            "score_delta": None,
+            "trend": "unchanged",
+        },
+        "feedback_cards": [
+            {"card_type": "overall", "status": "generated", "payload": {"summary": "核心方案可用"}},
+            {
+                "card_type": "asset_update_candidates",
+                "status": "candidate",
+                "payload": [
+                    {
+                        "candidate_type": "project_asset_update_candidate",
+                        "candidate_ref": "asset_update_candidate_ref_m23_payment_metric",
+                        "user_confirmation_required": True,
+                        "target_asset_ref": {
+                            "resource_type": "asset",
+                            "resource_id": "asset_payment_reliability",
+                        },
+                        "summary": "补充支付链路失败恢复指标素材。",
+                    }
+                ],
+            },
+        ],
+        "next_recommended_actions": ["review_reference_answer"],
+        "low_confidence_flags": [],
+        "trace_refs": [{"resource_type": "llm_trace", "resource_id": "trace_feedback_m23"}],
+        "feedback_metadata": {"provider_status": "unit_test"},
+    }
+
+    class GenerationServiceStub:
+        def __init__(self) -> None:
+            self.contexts: list[FeedbackGenerationContext] = []
+
+        def generate(self, context: FeedbackGenerationContext) -> FeedbackGenerationResult:
+            self.contexts.append(context)
+            return FeedbackGenerationResult(
+                succeeded=True,
+                payload=generation_payload,
+                validation_errors=(),
+                trace_refs=("trace_generation_m23",),
+                metadata={
+                    "provider_status": "unit_test",
+                    "validation_stage": "final",
+                    "candidate_valid": True,
+                    "raw_prompt": "DO_NOT_PERSIST",
+                    "completion_payload": "DO_NOT_PERSIST",
+                    "secret_token": "DO_NOT_PERSIST",
+                },
+            )
+
+    class OperationsStub:
+        def __init__(self, generation_service: GenerationServiceStub) -> None:
+            self._polish_repository = repository
+            self._feedback_generation_service = generation_service
+
+        def _build_session_detail(
+            self,
+            *,
+            owner_id: str,
+            session: PolishSession,
+            include_turns: bool = True,
+        ) -> PolishSessionDetail:
+            assert owner_id == "owner-1"
+            assert include_turns is True
+            return PolishSessionDetail(
+                session=session,
+                job_title="Backend Engineer",
+                job_company="Example Inc.",
+                resume_title="支付平台项目",
+                binding_label="Backend Engineer / 支付平台项目",
+                turns=(
+                    PolishSessionTurn(
+                        question_id=question.question_id,
+                        question_text=question.question_text,
+                        question_created_at=question.created_at,
+                        progress_node_ref=question.progress_node_ref,
+                        evidence_refs=question.evidence_refs,
+                        answers=(
+                            PolishSessionAnswerDetail(
+                                answer_id=answer.answer_id,
+                                answer_round=answer.answer_round,
+                                answer_text=answer.answer_text,
+                                answer_created_at=answer.created_at,
+                                feedback_text=None,
+                                feedback_id=None,
+                                score_result_id=None,
+                                feedback_created_at=None,
+                                feedback_payload=None,
+                            ),
+                        ),
+                    ),
+                ),
+                progress_context={
+                    "canonical_project_assets": {
+                        "items": [
+                            {
+                                "asset_id": "asset_payment_reliability",
+                                "title": "支付链路可靠性",
+                                "summary": "支付链路已有补偿方案素材。",
+                            }
+                        ]
+                    }
+                },
+            )
+
+    generation_service = GenerationServiceStub()
+    service = PolishFeedbackApplicationService(OperationsStub(generation_service))
+
+    result = service.create_feedback_task(
+        CreatePolishFeedbackTaskCommand(
+            owner_id="owner-1",
+            actor_id="actor-1",
+            session_id=session.session_id,
+            answer_id=answer.answer_id,
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert len(generation_service.contexts) == 1
+    provider_context = generation_service.contexts[0]
+    assert provider_context.session_id == session.session_id
+    assert provider_context.question_id == question.question_id
+    assert provider_context.answer_id == answer.answer_id
+    assert provider_context.evidence_refs == ("evidence_resume_payment",)
+
+    task_refs = {(ref.resource_type, ref.resource_id) for ref in result.value.candidate_refs}
+    feedback_candidate_refs = [
+        ref.resource_id for ref in result.value.candidate_refs if ref.resource_type == "feedback_candidate"
+    ]
+    asset_candidate_refs = [
+        ref.resource_id for ref in result.value.candidate_refs if ref.resource_type == "asset_update_candidate"
+    ]
+    assert len(feedback_candidate_refs) == 1
+    assert asset_candidate_refs == ["asset_update_candidate_ref_m23_payment_metric"]
+    assert {
+        ref.resource_type for ref in result.value.candidate_refs
+    } <= {
+        "feedback_candidate",
+        "asset_update_candidate",
+        "answer",
+        "question",
+        "progress_node",
+        "evidence",
+        "validation_result",
+        "trace",
+    }
+    assert ("asset", "asset_payment_reliability") not in task_refs
+    assert ("weakness", "lp_failure_recovery_metric") not in task_refs
+
+    with session_factory() as db:
+        feedback_rows = list(db.scalars(select(FeedbackModel)))
+        ai_task_rows = list(db.scalars(select(AiTask)))
+        formal_counts = {
+            model.__tablename__: db.scalar(select(func.count()).select_from(model))
+            for model in (
+                PolishCandidateRecord,
+                Weakness,
+                Asset,
+                AssetVersion,
+                TrainingRecommendation,
+                TrainingTask,
+            )
+        }
+
+    assert len(feedback_rows) == 1
+    assert len(ai_task_rows) == 1
+    assert ai_task_rows[0].id == result.value.ai_task_id
+    assert ai_task_rows[0].target_ref_id == answer.answer_id
+    assert feedback_rows[0].id == result.value.result_ref.trace_ref_id
+    assert feedback_rows[0].ai_task_id == result.value.ai_task_id
+    assert formal_counts == {
+        "polish_candidates": 0,
+        "weaknesses": 0,
+        "assets": 0,
+        "asset_versions": 0,
+        "training_recommendations": 0,
+        "training_tasks": 0,
+    }
+
+    stored_payload = json.loads(feedback_rows[0].feedback_summary)
+    stored_metadata = stored_payload["feedback_metadata"]
+    assert stored_metadata["candidate_ref"] == feedback_candidate_refs[0]
+    assert stored_metadata["asset_update_candidate_refs"] == asset_candidate_refs
+    assert stored_metadata["asset_update_formal_write_performed"] is False
+    assert stored_metadata["asset_update_user_confirmation_required"] is True
+    assert "raw_prompt" not in stored_metadata
+    assert "completion_payload" not in stored_metadata
+    assert "secret_token" not in stored_metadata
+
+    asset_cards = [
+        card for card in stored_payload["feedback_cards"] if card["card_type"] == "asset_update_candidates"
+    ]
+    assert len(asset_cards) == 1
+    asset_candidate = asset_cards[0]["payload"][0]
+    assert asset_candidate["candidate_ref"] == "asset_update_candidate_ref_m23_payment_metric"
+    assert asset_candidate["user_confirmation_required"] is True
+    assert asset_candidate["formal_write_blocked_until"] == "user_confirmation"
+    assert stored_payload["loss_points"][0]["loss_point_id"] == "lp_failure_recovery_metric"
