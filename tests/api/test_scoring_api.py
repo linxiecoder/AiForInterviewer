@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.application.scoring.commands import CreateScoreResultCommand
 from app.application.scoring.use_cases import ScoringUseCases
 from app.domain.scoring.policies import CANONICAL_RUBRIC_VERSION, ScoringPolicy
@@ -179,6 +181,85 @@ def test_create_get_and_list_score_results_for_mock_turn_answer_owner_scoped() -
     assert body["data"] == []
 
 
+def test_list_score_results_filters_target_pair_and_owner_scope() -> None:
+    app = _app_with_two_users()
+    owner_a_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
+    owner_b_cookie = _login_cookie(app, "scoring-user-b@example.com", USER_B_PASSWORD)
+
+    target_match = _create_score_result(
+        app,
+        owner_a_cookie,
+        target_id="turn_target_pair_001",
+        target_parent_id="sess_target_pair_001",
+        dimensions=_dimensions(
+            substance=82,
+            structure=72,
+            relevance=62,
+            credibility=88,
+            differentiation=62,
+        ),
+    )
+    same_owner_other_target = _create_score_result(
+        app,
+        owner_a_cookie,
+        target_id="turn_target_pair_002",
+        target_parent_id="sess_target_pair_001",
+        dimensions=_dimensions(
+            substance=78,
+            structure=70,
+            relevance=64,
+            credibility=84,
+            differentiation=64,
+        ),
+    )
+    other_owner_same_target = _create_score_result(
+        app,
+        owner_b_cookie,
+        target_id="turn_target_pair_001",
+        target_parent_id="sess_target_pair_001",
+        dimensions=_dimensions(
+            substance=90,
+            structure=90,
+            relevance=90,
+            credibility=90,
+            differentiation=90,
+        ),
+    )
+
+    list_path = (
+        "/api/v1/scoring-results"
+        "?target_type=mock_turn_answer&target_id=turn_target_pair_001"
+    )
+    status_code, body = call_json(
+        app,
+        list_path,
+        headers={"cookie": owner_a_cookie},
+    )
+
+    assert status_code == 200
+    assert body["resource_type"] == "score_result_list"
+    returned_ids = [item["score_result_id"] for item in body["data"]]
+    assert returned_ids == [target_match["score_result_id"]]
+    assert same_owner_other_target["score_result_id"] not in returned_ids
+    assert other_owner_same_target["score_result_id"] not in returned_ids
+    assert body["data"][0]["target_type"] == "mock_turn_answer"
+    assert body["data"][0]["target_id"] == "turn_target_pair_001"
+
+
+def test_get_nonexistent_score_result_returns_404() -> None:
+    app = _app_with_two_users()
+    owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/scoring-results/nonexistent-score-result-id",
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 404
+    assert body["error"]["code"] == "not_found_or_inaccessible"
+
+
 def test_create_and_get_review_transcript_score_result_contract() -> None:
     app = _app_with_two_users()
     owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
@@ -227,6 +308,58 @@ def test_create_and_get_review_transcript_score_result_contract() -> None:
     assert body["data"]["target_type"] == "review_transcript"
 
 
+def test_create_score_result_persists_overall_score_and_confidence_average() -> None:
+    app = _app_with_two_users()
+    owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
+    dimensions = [
+        {"name": "substance", "score": 80, "confidence": 1.0},
+        {"name": "structure", "score": 80, "confidence": 0.8},
+        {"name": "relevance", "score": 80, "confidence": 0.6},
+        {"name": "credibility", "score": 80, "confidence": 0.4},
+        {"name": "differentiation", "score": 80, "confidence": 0.2},
+    ]
+    payload = _score_payload(
+        target_id="turn_confidence_average",
+        target_parent_id="sess_confidence_average",
+        dimensions=dimensions,
+    )
+    payload["overall_score"] = 80
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/scoring-results",
+        "POST",
+        json_body=payload,
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 200
+    assert body["resource_type"] == "score_result"
+    data = body["data"]
+    assert data["overall_score"] == 80
+    assert data["score_value"] == 80
+    assert data["confidence"] == 0.6
+    assert data["confidence_level"] == "medium"
+    assert [item["confidence"] for item in data["dimension_scores"]] == [
+        1.0,
+        0.8,
+        0.6,
+        0.4,
+        0.2,
+    ]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/scoring-results/{data['score_result_id']}",
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 200
+    assert body["data"]["score_result_id"] == data["score_result_id"]
+    assert body["data"]["overall_score"] == 80
+    assert body["data"]["confidence"] == 0.6
+
+
 def test_scoring_api_rejects_invalid_strict_rubric_dimension() -> None:
     app = _app_with_two_users()
     owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
@@ -254,6 +387,100 @@ def test_scoring_api_rejects_invalid_strict_rubric_dimension() -> None:
     assert status_code == 422
     assert body["error"]["code"] == "validation_failed"
     assert "canonical scoring dimensions" in body["error"]["message"]
+
+
+@pytest.mark.parametrize("overall_score", [-1, 101])
+def test_create_score_result_rejects_invalid_overall_score_range(
+    overall_score: int,
+) -> None:
+    app = _app_with_two_users()
+    owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
+    payload = _score_payload(
+        target_id=f"turn_invalid_overall_score_{overall_score}",
+        dimensions=_dimensions(
+            substance=80,
+            structure=80,
+            relevance=80,
+            credibility=80,
+            differentiation=80,
+        ),
+    )
+    payload["overall_score"] = overall_score
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/scoring-results",
+        "POST",
+        json_body=payload,
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 422
+    assert isinstance(body, dict)
+    assert "detail" in body or "error" in body
+
+
+def test_create_score_result_rejects_overall_score_mismatch() -> None:
+    app = _app_with_two_users()
+    owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
+    payload = _score_payload(
+        target_id="turn_overall_score_mismatch",
+        dimensions=_dimensions(
+            substance=80,
+            structure=80,
+            relevance=80,
+            credibility=80,
+            differentiation=80,
+        ),
+    )
+    payload["overall_score"] = 79
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/scoring-results",
+        "POST",
+        json_body=payload,
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert "overall_score must match" in body["error"]["message"]
+
+
+@pytest.mark.parametrize("confidence", [-0.1, 1.1])
+def test_create_score_result_rejects_invalid_dimension_confidence(
+    confidence: float,
+) -> None:
+    app = _app_with_two_users()
+    owner_cookie = _login_cookie(app, "scoring-user-a@example.com", USER_A_PASSWORD)
+    dimensions = [
+        dict(item)
+        for item in _dimensions(
+            substance=80,
+            structure=80,
+            relevance=80,
+            credibility=80,
+            differentiation=80,
+        )
+    ]
+    dimensions[0]["confidence"] = confidence
+    payload = _score_payload(
+        target_id=f"turn_invalid_confidence_{confidence}",
+        dimensions=dimensions,
+    )
+
+    status_code, body = call_json(
+        app,
+        "/api/v1/scoring-results",
+        "POST",
+        json_body=payload,
+        headers={"cookie": owner_cookie},
+    )
+
+    assert status_code == 422
+    assert isinstance(body, dict)
+    assert "detail" in body or "error" in body
 
 
 def test_scoring_api_rejects_invalid_score_range_missing_rubric_and_training_action() -> None:
