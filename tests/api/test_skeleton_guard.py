@@ -33,6 +33,11 @@ IMPLEMENTED_FORBIDDEN_MARKERS = (
 PREFIX_ONLY_CAPABILITIES = {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks"}
 REPOSITORY_PASS_CAPABILITIES = {"Scoring", "ai-tasks"}
 FORBIDDEN_STATUS_WORDS = ("基本完成", "差不多", "已接入", "待联调", "后续完善")
+FORBIDDEN_AMBIGUOUS_STATUS_WORDS = (
+    "done",
+    "future-only",
+    "blocked-by-missing-runtime",
+)
 REQUIRED_BASELINE_GUARDRAILS = (
     "route prefix 存在不等于能力实现",
     "DB model 存在不等于产品流程实现",
@@ -45,6 +50,52 @@ REQUIRED_EVAL_RUNTIME_NON_CLAIM_FRAGMENTS = (
     "live-provider verified: missing",
     "not implemented AI Runtime product capability",
     "no live-provider quality, no production quality, no real provider quality, no live LLM quality, no end-to-end provider quality",
+)
+REQUIRED_POLISH_AGGREGATE_GUARD_FRAGMENTS = (
+    "API handler evidence = implemented",
+    "aggregate remains partial until full API + UseCase + Repository/Model + Tests + frontend/user path + runtime quality evidence are independently proven",
+    "use cases = partial unless full evidence exists",
+    "tests = partial",
+    "frontend user path = partial",
+    "feedback generation, asset candidate boundary and weakness evidence boundary remain partial",
+    "runtime graph = partial/default-off/non-product",
+    "eval evidence = partial/deterministic-replay-fake-mock only",
+    "route handler presence does not imply aggregate Polish implemented",
+    "default-off graph != product runtime",
+    "fallback path != live-provider quality",
+    "deterministic/replay/fixture/fake-provider/mock-provider/default-off evidence != live-provider quality",
+    "no Agent Runtime productization",
+)
+POLISH_PARTIAL_CAPABILITIES = (
+    "Polish aggregate capability",
+    "Polish question",
+    "Polish feedback",
+    "Polish progress tree",
+    "Polish report",
+    "Polish candidates",
+    "Frontend interview workbench",
+)
+FORBIDDEN_RUNTIME_QUALITY_CLAIMS = (
+    "live-provider verified",
+    "live-provider quality",
+    "production quality",
+    "real provider quality",
+    "live LLM quality",
+    "end-to-end provider quality",
+    "implemented AI Runtime product capability",
+)
+SAFE_RUNTIME_QUALITY_NON_CLAIM_MARKERS = (
+    "no ",
+    "not ",
+    "missing",
+    "not proven",
+    "缺",
+    "未证明",
+    "does not prove",
+    "do not certify",
+    "!=",
+    "不能",
+    "不把",
 )
 REQUIRED_TRAINING_CORRECTION_FRAGMENTS = (
     "Training independent product mode = missing / intentionally excluded from MVP",
@@ -171,8 +222,35 @@ def test_baseline_guardrails_and_status_language_are_preserved() -> None:
         assert guardrail in baseline
     for forbidden in FORBIDDEN_STATUS_WORDS:
         assert forbidden not in combined
+    for forbidden in FORBIDDEN_AMBIGUOUS_STATUS_WORDS:
+        assert forbidden not in combined
     for capability in SKELETON_CAPABILITIES:
         assert capability in baseline
+
+
+def test_polish_aggregate_capability_remains_partial_until_full_evidence() -> None:
+    rows_by_capability = {row["capability"]: row for row in _matrix_rows()}
+    aggregate = rows_by_capability["Polish aggregate capability"]
+    aggregate_text = " ".join(aggregate.values())
+
+    assert aggregate["current_status"] == "partial"
+    for capability in POLISH_PARTIAL_CAPABILITIES:
+        assert rows_by_capability[capability]["current_status"] == "partial"
+    for fragment in REQUIRED_POLISH_AGGREGATE_GUARD_FRAGMENTS:
+        assert fragment in aggregate_text
+
+
+def test_runtime_and_eval_positive_quality_claims_stay_non_claims() -> None:
+    baseline = BASELINE_PATH.read_text(encoding="utf-8")
+    matrix = MATRIX_PATH.read_text(encoding="utf-8")
+    combined_lines = f"{baseline}\n{matrix}".splitlines()
+
+    for claim in FORBIDDEN_RUNTIME_QUALITY_CLAIMS:
+        _assert_term_only_appears_in_safe_context(
+            combined_lines,
+            claim,
+            SAFE_RUNTIME_QUALITY_NON_CLAIM_MARKERS,
+        )
 
 
 def test_training_product_correction_language_is_preserved() -> None:
@@ -251,7 +329,11 @@ def test_training_exclusion_terms_only_appear_in_safe_context() -> None:
     combined_lines = f"{baseline}\n{matrix}".splitlines()
 
     for term in TRAINING_EXCLUSION_TERMS:
-        _assert_term_only_appears_in_safe_context(combined_lines, term)
+        _assert_term_only_appears_in_safe_context(
+            combined_lines,
+            term,
+            SAFE_TRAINING_EXCLUSION_MARKERS,
+        )
 
 
 def _matrix_rows() -> list[dict[str, str]]:
@@ -276,7 +358,11 @@ def _matrix_rows() -> list[dict[str, str]]:
     return rows
 
 
-def _assert_term_only_appears_in_safe_context(lines: list[str], term: str) -> None:
+def _assert_term_only_appears_in_safe_context(
+    lines: list[str],
+    term: str,
+    safe_markers: tuple[str, ...],
+) -> None:
     normalized_term = term.lower()
     matches = [
         (index, line)
@@ -286,7 +372,7 @@ def _assert_term_only_appears_in_safe_context(lines: list[str], term: str) -> No
 
     for index, line in matches:
         context = " ".join(lines[max(0, index - 2) : index + 3]).lower()
-        assert any(marker in context for marker in SAFE_TRAINING_EXCLUSION_MARKERS), (
+        assert any(marker.lower() in context for marker in safe_markers), (
             term,
             line,
         )

@@ -158,8 +158,30 @@ TRAINING_LEGACY_ROUTE_EXPECTATIONS = (
     ),
 )
 
+POLISH_ROUTE_HANDLER_EXPECTATIONS = (
+    ("GET", "/api/v1/polish-candidates", "app.api.v1.polish_candidates.list_polish_candidates"),
+    ("GET", "/api/v1/polish-candidates/{candidate_id}", "app.api.v1.polish_candidates.get_polish_candidate"),
+    ("POST", "/api/v1/polish-candidates/{candidate_id}/archive", "app.api.v1.polish_candidates.archive_polish_candidate"),
+    ("POST", "/api/v1/polish-candidates/{candidate_id}/confirm", "app.api.v1.polish_candidates.confirm_polish_candidate"),
+    ("POST", "/api/v1/polish-candidates/{candidate_id}/dismiss", "app.api.v1.polish_candidates.dismiss_polish_candidate"),
+    ("POST", "/api/v1/polish-candidates/{candidate_id}/merge", "app.api.v1.polish_candidates.merge_polish_candidate"),
+    ("GET", "/api/v1/polish-sessions", "app.api.v1.polish.list_polish_sessions"),
+    ("POST", "/api/v1/polish-sessions", "app.api.v1.polish.create_polish_session"),
+    ("GET", "/api/v1/polish-sessions/{session_id}", "app.api.v1.polish.get_polish_session"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/answers", "app.api.v1.polish.create_polish_answer"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/delete", "app.api.v1.polish.soft_delete_polish_session"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/end", "app.api.v1.polish.end_polish_session"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/feedback", "app.api.v1.polish.create_polish_feedback_task"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/progress-tree/generate", "app.api.v1.polish.generate_initial_polish_progress_tree"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/progress-tree/state", "app.api.v1.polish.refresh_polish_progress_tree_state"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/questions", "app.api.v1.polish.create_polish_question_task"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/questions/{question_id}/complete", "app.api.v1.polish.complete_polish_question"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/report", "app.api.v1.polish.generate_polish_session_report"),
+    ("GET", "/api/v1/polish-topics", "app.api.v1.polish.list_polish_topics"),
+)
+
 NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS = frozenset(
-    {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks", "Training"}
+    {"Pressure", "Reviews", "Reports", "Scoring", "ai-tasks", "Training", "Polish"}
 )
 
 
@@ -176,6 +198,17 @@ def test_training_routes_are_legacy_preserve_only_not_mvp_product_mode() -> None
         assert expectation in snapshot
     assert "Training" not in implemented_capabilities
     assert not any(path.startswith("/api/v1/training") for path in implemented_paths)
+
+
+def test_polish_route_handlers_are_preserved_without_aggregate_implementation_claim() -> None:
+    snapshot = _route_contract_snapshot()
+    implemented_paths = {expectation.path for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
+    implemented_capabilities = {expectation.capability for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
+
+    for expectation in POLISH_ROUTE_HANDLER_EXPECTATIONS:
+        assert expectation in snapshot
+    assert "Polish" not in implemented_capabilities
+    assert not any(path.startswith("/api/v1/polish") for path in implemented_paths)
 
 
 def test_skeleton_and_training_capabilities_are_not_in_implemented_route_inventory() -> None:
