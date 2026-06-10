@@ -324,9 +324,10 @@ class OpenAICompatibleLlmTransport:
                 error_message=str(exc),
             )
             raise
-        # model_name 用于审计和落库，只能来自 provider 外层响应或本地配置；
-        # 不能信任模型正文里自报的 model_name，否则会出现"实际调用 deepseek，记录成 gpt-4"的偏差。
-        provider_model = _provider_model_name(response_json, self._settings.model)
+        # model_name 用于审计和落库，只能来自本地配置的请求/provider 边界；
+        # 不能信任 provider 响应正文或外层 model claim。
+        provider_model = self._settings.model
+        result["model_name"] = provider_model
         trace_ref = _trace_ref(request, response_json)
         evidence_ref = _evidence_ref(request)
         self._log_request_success(
@@ -787,14 +788,6 @@ def _llm_response_error_type(exc: LlmTransportResponseError) -> str:
     if isinstance(error_type, str) and error_type.strip():
         return error_type.strip()
     return "provider_response_error"
-
-
-def _provider_model_name(response_json: dict[str, Any], configured_model: str) -> str:
-    """从 provider 响应中提取实际模型名；不存在则返回配置的模型名。"""
-    model = response_json.get("model")
-    if isinstance(model, str) and model.strip():
-        return model.strip()
-    return configured_model
 
 
 def _confidence_level(result: dict[str, Any]) -> ConfidenceLevel:
