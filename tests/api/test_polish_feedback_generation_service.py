@@ -252,6 +252,9 @@ def test_service_metadata_includes_prompt_schema_llm_and_provider_status() -> No
     assert result.metadata["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
     assert result.metadata["llm_called"] is False
     assert result.metadata["provider_status"] == "fake_transport"
+    assert result.metadata["context_hygiene_status"] == "fallback"
+    assert result.metadata["safe_context_metadata"]["raw_model_io_storage"] is False
+    assert result.metadata["fallback_reason"] == "fake_transport_not_runtime_provider"
 
 
 def test_feedback_request_uses_structured_output_budget() -> None:
@@ -390,6 +393,15 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
     assert provider_prompt["feedback_metadata"]["prompt_char_count"] < 12000
     assert provider_prompt["feedback_metadata"]["evidence_item_count"] <= 5
     assert provider_prompt["feedback_metadata"]["context_compaction_applied"] is True
+    assert result.payload is not None
+    metadata = result.payload["feedback_metadata"]
+    assert metadata["context_hygiene_status"] == "clean"
+    assert metadata["safe_context_metadata"]["context_compaction_applied"] is True
+    assert metadata["safe_context_metadata"]["answer_text_is_bounded"] is True
+    assert metadata["safe_context_metadata"]["evidence_item_count"] <= 5
+    serialized_metadata = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+    for forbidden in ("raw_prompt", "provider_payload", "full_resume", "full_jd"):
+        assert forbidden not in serialized_metadata
 
 
 def test_no_llm_transport_returns_failed_without_fake_feedback() -> None:
@@ -518,6 +530,8 @@ def test_unsafe_provider_payload_returns_failed() -> None:
     assert result.succeeded is False
     assert result.payload is None
     assert "feedback_payload_unsafe_leakage" in result.validation_errors
+    assert result.metadata["context_hygiene_status"] == "blocked"
+    assert "feedback_payload_unsafe_leakage" in result.metadata["validation_signals"]["validation_errors"]
 
 
 def test_service_candidate_invalid_metadata_marks_candidate_stage_and_llm_called() -> None:

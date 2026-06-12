@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
+from app.application.polish.context_hygiene import (
+    CONTEXT_HYGIENE_STATUSES,
+    normalize_context_hygiene_metadata,
+)
+
 
 QUESTION_METADATA_SCHEMA_ID = "polish_question_metadata"
 QUESTION_METADATA_SCHEMA_VERSION = "1"
@@ -14,12 +19,17 @@ BUILDER_VERSION = "evidence-aware-question-builder-v1"
 VALIDATOR_VERSION = "question-quality-validator-v2"
 SIGNAL_VERSION = "evidence-signals-v1"
 FORBIDDEN_NESTED_METADATA_KEYS = {
+    "prompt",
     "raw_prompt",
     "system_prompt",
     "developer_prompt",
     "user_prompt",
+    "completion",
     "provider_payload",
+    "provider_response",
     "raw_completion",
+    "raw_provider_payload",
+    "raw_provider_response",
     "full_resume",
     "full_jd",
     "primary_evidence_text",
@@ -76,6 +86,10 @@ class QuestionMetadata:
     follow_up_focus_source: str | None = None
     recommended_follow_up_action: str | None = None
     follow_up_completion_status: str | None = None
+    context_hygiene_status: str = "unknown"
+    safe_context_metadata: dict[str, Any] | None = None
+    fallback_reason: str | None = None
+    validation_signals: dict[str, Any] | None = None
     builder_version: str = BUILDER_VERSION
     validator_version: str = VALIDATOR_VERSION
     signal_version: str = SIGNAL_VERSION
@@ -137,6 +151,10 @@ class QuestionMetadata:
             "follow_up_focus_source": self.follow_up_focus_source,
             "recommended_follow_up_action": self.recommended_follow_up_action,
             "follow_up_completion_status": self.follow_up_completion_status,
+            "context_hygiene_status": self.context_hygiene_status,
+            "safe_context_metadata": self.safe_context_metadata or {},
+            "fallback_reason": self.fallback_reason,
+            "validation_signals": self.validation_signals or {},
         }
 
 
@@ -151,6 +169,10 @@ def empty_question_metadata() -> QuestionMetadata:
         low_confidence_flags=(),
         evidence_signal_refs=(),
         anti_repeat_refs=(),
+        context_hygiene_status="unknown",
+        safe_context_metadata={},
+        fallback_reason="legacy_or_malformed_metadata",
+        validation_signals={},
     )
 
 
@@ -161,6 +183,7 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
     if not payload:
         return empty_question_metadata().to_dict()
 
+    context_hygiene = normalize_context_hygiene_metadata(payload)
     normalized = {
         "schema_id": _string_or_none(payload.get("schema_id")) or QUESTION_METADATA_SCHEMA_ID,
         "schema_version": _string_or_none(payload.get("schema_version")) or QUESTION_METADATA_SCHEMA_VERSION,
@@ -231,6 +254,10 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
             payload.get("follow_up_completion_status"),
             max_chars=120,
         ),
+        "context_hygiene_status": context_hygiene["context_hygiene_status"],
+        "safe_context_metadata": context_hygiene["safe_context_metadata"],
+        "fallback_reason": context_hygiene["fallback_reason"],
+        "validation_signals": context_hygiene["validation_signals"],
     }
     canonical_keys = {
         "source_support_level",
@@ -321,7 +348,8 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "llm_missing_context",
         "llm_clarification_needed",
     }
-    if any(key in payload for key in llm_keys):
+    llm_trigger_keys = llm_keys - {"fallback_reason"}
+    if any(key in payload for key in llm_trigger_keys):
         normalized.update(
             {
                 "llm_task_type": _string_or_none(payload.get("llm_task_type"), max_chars=120),
@@ -765,6 +793,11 @@ def _safe_string_map(
         if safe_key and safe_value:
             safe[safe_key] = safe_value
     return safe
+
+
+def _context_hygiene_status(raw: object) -> str:
+    value = _string_or_none(raw, max_chars=40)
+    return value if value in CONTEXT_HYGIENE_STATUSES else "unknown"
 
 
 def _safe_nested_string_map(raw: object) -> dict[str, dict[str, str]]:

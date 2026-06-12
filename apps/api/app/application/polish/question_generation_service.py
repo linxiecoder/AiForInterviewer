@@ -30,6 +30,7 @@ from app.application.polish.question_blueprint import (
     QuestionBlueprint,
     build_question_blueprint,
 )
+from app.application.polish.context_hygiene import build_context_hygiene_metadata
 from app.application.polish.question_generation_prompts import (
     build_follow_up_question_prompt_asset,
     build_question_prompt_asset,
@@ -327,6 +328,13 @@ class QuestionGenerationService:
         confidence_level = "low" if low_confidence_flags else ("medium" if draft_evidence_refs else "low")
         source_availability = "weak" if grounding_warnings else ("available" if draft_evidence_refs else "partial")
         next_question_metadata = _next_question_agent_metadata(llm_payload)
+        context_hygiene_metadata = _question_context_hygiene_metadata(
+            prompt_metadata=prompt_metadata,
+            generation_metadata=generation_metadata,
+            scope=scope,
+            missing_context=llm_payload.get("missing_context", ()) if llm_payload else (),
+            validation_errors=grounding_errors,
+        )
         draft = PolishQuestionDraft(
             question_text=question_text,
             question_sources=scope.question_sources,
@@ -362,6 +370,7 @@ class QuestionGenerationService:
                 **prompt_metadata,
                 **follow_up_metadata,
                 **generation_metadata,
+                **context_hygiene_metadata,
                 **rewrite_metadata,
                 **next_question_metadata,
                 "question_kind": question_pattern,
@@ -975,6 +984,50 @@ def _source_support_summary(scope: EvidenceScope) -> dict[str, object]:
         ),
     )
     return decision.to_summary().to_dict()
+
+
+def _question_context_hygiene_metadata(
+    *,
+    prompt_metadata: dict[str, Any],
+    generation_metadata: dict[str, Any],
+    scope: EvidenceScope,
+    missing_context: object,
+    validation_errors: tuple[str, ...],
+) -> dict[str, Any]:
+    missing_context_items = _safe_string_tuple(missing_context)
+    fallback_reason = _clean(generation_metadata.get("fallback_reason")) or None
+    fallback_visible = bool(generation_metadata.get("fallback_visible"))
+    provider_status = _clean(generation_metadata.get("provider_status")) or None
+    if validation_errors:
+        status = "blocked"
+    elif fallback_visible or provider_status in {"not_configured", "fake_transport", "failed"}:
+        status = "fallback"
+    elif missing_context_items or scope.source_support_level in {"partial", "weak", "insufficient"}:
+        status = "partial"
+    else:
+        status = "clean"
+    return build_context_hygiene_metadata(
+        status=status,
+        safe_context_metadata={
+            "raw_model_io_storage": False,
+            "raw_prompt_persisted": False,
+            "raw_completion_persisted": False,
+            "provider_payload_persisted": False,
+            "prompt_input_digest": prompt_metadata.get("prompt_input_digest"),
+            "evidence_refs_count": len(scope.evidence_refs),
+            "source_support_level": scope.source_support_level,
+            "canonical_project_assets_available": bool(scope.canonical_project_assets.get("available")),
+            "missing_context_count": len(missing_context_items),
+        },
+        fallback_reason=fallback_reason,
+        validation_errors=validation_errors,
+    ).to_dict()
+
+
+def _safe_string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(text for item in value if (text := _clean(item)))
 
 
 def _context_digest_with_canonical_assets(base_digest: str, context: dict[str, Any]) -> str:

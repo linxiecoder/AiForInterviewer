@@ -1,22 +1,122 @@
 ---
 title: G-001 Session Continuity / Context Hygiene
 type: goal-design
-status: deep-gap-analysis-ready-for-gpt-project-audit
+status: architecture-hardened-validated
 goal_id: G-001
-round: Round 3.5-E
+round: Round 6-C
 updated: 2026-06-12
 ---
 
 # G-001 Session Continuity / Context Hygiene
 
-本文件是 G-001 的实现前设计包。本轮只做 documentation-only 深度差距分析，不修改生产代码、生产测试、build/config、`AGENTS.md`、active docs、G-002 或其他 Goal。
+本文件是 G-001 的设计、实现与验证记录。Round 5-A 已仅实现 R-001 session continuity 与 R-002 context hygiene；Round 5-C 已完成 backend T-001~T-006 exit `0` 验证；Round 6 已重新执行 frontend validation；Round 6-C 已完成 architecture hardening 并通过 backend/frontend 验证。未实现 G-002 或其他 Goal，未新增 DB migration、endpoint 或 provider-facing schema change。
+
+## Round 6-C Architecture Hardening Result
+
+| Field | Result |
+|---|---|
+| Scope | G-001 architecture hardening only |
+| Status | `architecture-hardened-validated` |
+| Production changed | Yes |
+| New capability | No |
+| DB migration | No |
+| New endpoint | No |
+| Provider-facing schema changed | No |
+| User-visible behavior changed | No |
+| Raw prompt / provider payload exposure | No |
+| G-002 impact | No G-002 implementation or document change |
+
+### Technical Design Update
+
+| Area | Round 6-C result |
+|---|---|
+| Session continuity | `apps/api/app/application/polish/session_continuity.py` now owns `SessionContinuitySnapshot`, `ContinuityStatus`, `compute_session_continuity(...)`, fallback/status mapping, summary, and restored refs. `apps/api/app/api/v1/polish.py::_session_response` only builds API-safe refs/turn summaries and maps helper output into the response. |
+| Context hygiene | `apps/api/app/application/polish/context_hygiene.py` now owns `ContextHygieneMetadata`, `ContextHygieneStatus`, `build_context_hygiene_metadata(...)`, `normalize_context_hygiene_metadata(...)`, and `assert_safe_context_metadata(...)`. question generation, feedback generation, question metadata normalization, and failed feedback storage reuse this contract. |
+| Backend schema / frontend type | `apps/api/app/schemas/polish.py` now declares optional G-001 response fields: `continuity_status`, `continuity_summary`, `restored_refs`, and explicit `PolishContextHygieneMetadataResponse` for question / feedback metadata. `apps/web/src/entities/polish/model/types.ts` already had matching optional `PolishSessionContinuityStatus`, `PolishContextHygieneStatus`, `PolishSessionDetail`, and `PolishFeedbackPayload.feedback_metadata` contracts; no Round 6-C frontend type edit was required. |
+| Provider boundary | Provider-facing request/output schema unchanged. New helpers operate on response/internal metadata only and preserve no raw prompt/provider payload/full source exposure. |
+
+### Round 6-C Changed Files
+
+| File | Change |
+|---|---|
+| `apps/api/app/application/polish/session_continuity.py` | New application helper for continuity status, summary, restored refs, and legacy/fallback mapping |
+| `apps/api/app/api/v1/polish.py` | API response delegates continuity calculation to application helper |
+| `apps/api/app/application/polish/context_hygiene.py` | New shared context hygiene metadata contract, sanitizer, and no-leak assertion |
+| `apps/api/app/application/polish/question_metadata.py` | Question metadata normalization reuses shared context hygiene normalizer |
+| `apps/api/app/application/polish/question_generation_service.py` | Question generation builds context hygiene metadata through shared helper |
+| `apps/api/app/application/polish/feedback_generation_service.py` | Feedback generation builds context hygiene metadata through shared helper |
+| `apps/api/app/application/polish/feedback_application_service.py` | Failed feedback storage normalizes context hygiene metadata through shared helper |
+| `apps/api/app/schemas/polish.py` | Adds optional G-001 schema contract fields and `PolishContextHygieneMetadataResponse` |
+| `tests/api/test_polish_session_continuity.py` | New focused architecture tests for continuity helper and API delegation |
+| `tests/api/test_polish_context_hygiene.py` | New focused architecture tests for shared context hygiene contract/no-leak normalization |
+| `tests/api/test_polish_api.py` | Adds schema contract assertion and updates old continuity helper assertion to application helper |
+
+### Round 6-C Validation
+
+| Command | Exit | Result |
+|---|---:|---|
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_api.py -q` | 0 | 129 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_feedback_generation_service.py -q` | 0 | 37 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_feedback_validation.py -q` | 0 | 16 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_session_continuity.py -q` | 0 | 2 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_context_hygiene.py -q` | 0 | 2 passed |
+| `npm run web:test` | 0 | `tsc -p tsconfig.json --noEmit` passed |
+| `npm run web:build` | 0 | build passed; existing Vite chunk-size warning remains |
+
+### Round 6-C Risks
+
+| Risk | Status | Note |
+|---|---|---|
+| API adapter accumulating application logic | Mitigated | continuity rules moved to `session_continuity.py`; API keeps response mapping only |
+| Backend runtime/schema drift | Mitigated for G-001 fields | optional schema fields now cover continuity and context hygiene metadata contracts |
+| Context hygiene metadata drift | Mitigated | question and feedback paths reuse `context_hygiene.py` helper/normalizer |
+| Metadata leak | Mitigated with tests | helper sanitizer/no-leak assertion plus API/frontend no-leak tests remain in place |
+| Branch/merge scope mismatch | Open outside Round 6-C | AGENTS/SPECKIT history and `docs/active` cleanup are not remediated in this round |
+
+## Round 6 Production Validation / Merge Review Result
+
+| Field | Result |
+|---|---|
+| Verification scope | Frontend `npm run web:test` / `npm run web:build`; merge review |
+| Backend evidence | Latest backend evidence remains Round 5-C T-001~T-006 exit `0` with `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1`; backend was not rerun in Round 6 |
+| Frontend result | `npm run web:test` exited `0`; `npm run web:build` exited `0` with existing Vite chunk-size warning |
+| G-001 status | R-001/R-002 scope validated by Round 5-C backend evidence and Round 6 frontend evidence |
+| Merge status | `blocked_branch_scope_mismatch` before merging to `main` |
+| Blocking / abnormal condition | Feature branch history relative to `main` includes committed `AGENTS.md` and `.agents/.specify` changes; current worktree includes prior G-001 production code/test diffs requiring commit/scope decision |
+| Temp leak guard | Preexisting repo-root `tmp/` known risk remains recorded; no cleanup performed |
+| G-002 / other Goal impact | No G-002 or other Goal implementation verified or modified by Round 6 |
+| Detailed results | `.codex-temp/interview-coach-refactor/07-validation/test-results.md` |
+
+## Round 5-B Verification Result
+
+| Field | Result |
+|---|---|
+| Verification scope | T-001~T-007 backend + frontend commands from `Test Matrix` |
+| Backend pytest result | Selected assertions passed for all T-001~T-006 backend selectors, but each exact pytest command exited `1` because the preexisting repo-root `tmp/` directory triggered the test temp leak guard |
+| Frontend result | `npm run web:test` exited `0`; `npm run web:build` exited `0` with existing Vite chunk-size warning |
+| Validation status | `validated_with_environment_blocker` |
+| Blocking / abnormal condition | Preexisting repo-root `tmp/` leak guard remains open; no backend assertion failure observed |
+| G-002 / other Goal impact | No G-002 or other Goal implementation verified or modified by Round 5-B |
+| Detailed results | `.codex-temp/interview-coach-refactor/07-validation/test-results.md` |
+
+## Round 5-A Implementation Result
+
+| Field | Result |
+|---|---|
+| Implemented scope | R-001 session continuity；R-002 context hygiene |
+| Backend | `apps/api/app/api/v1/polish.py` 增加计算型 `continuity_status` / `continuity_summary` / `restored_refs`；question / feedback metadata 增加 bounded `context_hygiene_status` / `safe_context_metadata` / `fallback_reason` / `validation_signals` |
+| Frontend | `PolishSessionDetail`、`PolishFeedbackPayload`、question metadata 类型接受 optional G-001 字段；未新增页面流 |
+| Legacy compatibility | legacy / malformed question metadata 保持可读，并映射为 `unknown` / `legacy_or_malformed_metadata` fallback；旧 session 字段未移除 |
+| Boundary | No DB migration；No new endpoint；No provider-facing schema change；No G-002 |
 
 ## Source Inspiration
 
-| 来源能力 | 采纳方式 | G-001 解释 | 不采纳内容 | 证据 |
-|---|---|---|---|---|
-| interview-coach persistent coaching state | Adapt | 将“会话可恢复”和“当前上下文可解释”改造为 AiForInterviewer 现有 Polish session 的 DB-backed response contract | 不复制 flat `coaching_state.md`、命令体系、目录结构或原文文案 | `.codex-temp/interview-coach-refactor/02-scope/capability-map.md` |
-| interview-coach long-context hygiene | Adapt | 将上下文裁剪、missing/dropped/fallback signals 变成 bounded safe metadata，落到现有 question/feedback metadata 与 API response | 不引入 storybank、transcript ingestion、source scoring vocabulary、command routing | `.codex-temp/interview-coach-refactor/02-scope/scope-lock.md` |
+G-001 只 Adapt interview-coach 的能力模式。AIForInterviewer 的落点必须是现有 DB-backed Polish session、question/feedback metadata 和 provider boundary；不得复制 flat `coaching_state.md`、command system、menu、目录结构或 prompt prose。
+
+| Requirement / Capability | 来源能力模式 | 采纳方式 | G-001 解释 | 不采纳内容 | 直接 source evidence | 二级索引 |
+|---|---|---|---|---|---|---|
+| R-001 / R3-CAP-002 | persistent coaching state pattern | Adapt | 将“会话可恢复”和“当前上下文可解释”改造为现有 Polish session 的 DB-backed response contract，并用 optional continuity metadata 表达 ready/partial/stale/blocked/unknown | 不复制 flat `coaching_state.md`、schema section、migration prose、命令体系、目录结构或原文文案 | `/tmp/interview-coach-skill/references/coaching-state-schema.md`<br>`/tmp/interview-coach-skill/references/schema-migration.md`<br>`/tmp/interview-coach-skill/references/state-update-triggers.md`<br>`/tmp/interview-coach-skill/references/archival-rules.md` | `.codex-temp/interview-coach-refactor/02-scope/capability-map.md`<br>`.codex-temp/interview-coach-refactor/02-scope/scope-lock.md` |
+| R-002 / R3-CAP-010 | long-context hygiene pattern | Adapt | 将上下文裁剪、missing/dropped/fallback signals 变成 bounded safe metadata，落到现有 question/feedback metadata、API response 和 provider forbidden-key boundary | 不引入 storybank、transcript ingestion、source scoring vocabulary、command routing、state archival tables 或 source prompt prose | `/tmp/interview-coach-skill/references/archival-rules.md`<br>`/tmp/interview-coach-skill/SKILL.md`<br>`/tmp/interview-coach-skill/references/coaching-state-schema.md` | `.codex-temp/interview-coach-refactor/02-scope/capability-map.md`<br>`.codex-temp/interview-coach-refactor/02-scope/scope-lock.md` |
 
 ## AIForInterviewer Landing Point
 
@@ -226,20 +326,19 @@ Question/feedback request
 
 ### R-001 backend design
 
-1. 在 `apps/api/app/api/v1/polish.py` 增加 response-local helper，例如 `_session_continuity_payload(detail, turns)`。
-2. helper 只读取 `PolishSessionDetail`、turn payload、progress tree status/plan/state 和现有 ref fields。
-3. helper 返回 optional safe object，不写 DB。
-4. `_session_response` 合并 optional fields，并保持全部旧字段不变。
-5. `apps/api/app/schemas/polish.py::PolishSessionResponse` 增加 optional 字段，避免 schema 与 runtime response 继续漂移。
-6. frontend `PolishSessionDetail` 增加 optional fields；`InterviewPage.tsx` 保持缺字段 fallback。
+1. Round 6-C 后，session continuity 业务规则位于 `apps/api/app/application/polish/session_continuity.py`。
+2. `compute_session_continuity(...)` 只读取 `SessionContinuitySnapshot` 中的安全 session status、progress status/plan/state、turn count、refs 和 normalized question metadata；不写 DB。
+3. `_session_response` 只构造 API-safe snapshot，并合并 `to_response_payload()` 返回的 optional fields，全部旧字段保持不变。
+4. `apps/api/app/schemas/polish.py::PolishSessionResponse` 已增加 optional continuity/current refs 字段，避免 G-001 runtime/schema drift。
+5. frontend `PolishSessionDetail` 保持 optional fields；缺字段仍走 legacy fallback。
 
 ### R-002 backend design
 
-1. question metadata 的 normalizer 接受 optional `context_hygiene_status`, `safe_context_metadata`, `fallback_reason`, `validation_signals` 或等价字段。
-2. `QuestionGenerationService.generate` 从 existing prompt/generation/fallback signals 填充 safe status，不复制 raw prompt/provider payload。
-3. feedback successful/failed payload builder 在 `feedback_metadata` 内填充同等 safe status。
-4. API response sanitizer 对新 fields 使用 allowlist/denylist 双保险。
-5. provider request builders 和 provider-facing output schema 不变。
+1. context hygiene 统一 contract 位于 `apps/api/app/application/polish/context_hygiene.py`。
+2. question metadata normalizer、`QuestionGenerationService.generate`、`FeedbackGenerationService.generate` 和 failed feedback payload builder 均复用 shared helper/normalizer。
+3. `ContextHygieneStatus` 统一为 `clean` / `partial` / `fallback` / `blocked` / `unknown`。
+4. `safe_context_metadata`、`fallback_reason`、`validation_signals` 经 sanitizer 保持短小、安全，不包含 raw prompt/provider payload/full source/token/secret。
+5. API response sanitizer 对 feedback payload 继续执行 denylist；provider request builders 和 provider-facing output schema 不变。
 
 ### R-002 frontend design
 
@@ -264,15 +363,15 @@ Question/feedback request
 
 ## Implementation Plan
 
-仅供 GPT Project 审计通过后的未来实现轮使用。本轮不执行。
+Round 5-A 已按下表执行。实现保持 runtime response / existing JSON metadata 边界，不新增 schema/migration/endpoint。
 
 | Step | Scope | 文件/函数 | 验收点 |
 |---|---|---|---|
-| 1 | Add R-001 optional response helper | `apps/api/app/api/v1/polish.py::_session_response` | old fields remain; new optional continuity fields safe and bounded |
-| 2 | Sync backend schema | `apps/api/app/schemas/polish.py::PolishSessionResponse` | optional fields documented; no required breakage |
-| 3 | Add R-002 metadata normalization | `question_metadata.py`, `question_generation_service.py`, `feedback_application_service.py` | safe context metadata present; forbidden fields absent |
-| 4 | Add frontend optional types and fallback rendering | `apps/web/src/entities/polish/model/types.ts`, `InterviewPage.tsx` | missing optional fields do not break UI |
-| 5 | Add/modify tests | files in `Test Matrix` | backend/frontend no-leak and legacy fallback tests pass |
+| 1 | Add R-001 optional response helper | `apps/api/app/api/v1/polish.py::_session_response` | Done; old fields remain; new optional continuity fields safe and bounded |
+| 2 | Keep backend schema boundary | `apps/api/app/api/v1/polish.py` runtime response only | Done; route has no `response_model`; no provider-facing schema change |
+| 3 | Add R-002 metadata normalization | `question_metadata.py`, `question_generation_service.py`, `feedback_application_service.py`, `feedback_generation_service.py` | Done; safe context metadata present; forbidden fields absent |
+| 4 | Add frontend optional types | `apps/web/src/entities/polish/model/types.ts`, `InterviewPage.test.ts` | Done; missing optional fields do not break UI/typecheck |
+| 5 | Add/modify tests | files in `Test Matrix` | Done; selected backend assertions pass; frontend test/build pass |
 
 ## Acceptance Criteria
 
@@ -313,11 +412,25 @@ Question/feedback request
 |---|---|
 | Dedicated frontend session reopen route test | Unknown / Needs confirmation. Current evidence confirms workbench page tests, but exact route-level reopen test name is not confirmed. |
 
-本轮不运行自动化测试。本轮只做只读代码/测试/config 审计和文档修正。
+Round 5-B 已重新执行 T-001~T-007；backend 选中断言全部通过，但 pytest 命令受仓库根目录既有 `tmp/` leak guard 影响返回 exit code 1。该 `tmp/` 为 preexisting temp-like directory，本轮未删除或修改。
+
+### Round 5-B Validation Results
+
+| Test ID | Command | Result |
+|---|---|---|
+| T-001 | `.venv/bin/python -m pytest tests/api/test_polish_api.py -k "session_detail or continuity"` | 3 selected passed, 125 deselected；command exit 1 due preexisting repo-root `tmp/` leak guard |
+| T-002 | `.venv/bin/python -m pytest tests/api/test_polish_api.py -k "legacy or malformed or continuity"` | 6 selected passed, 122 deselected；command exit 1 due preexisting repo-root `tmp/` leak guard |
+| T-003 | `.venv/bin/python -m pytest tests/api/test_polish_api.py -k "progress_tree_refresh"` | 7 selected passed, 121 deselected；command exit 1 due preexisting repo-root `tmp/` leak guard |
+| T-004 | `.venv/bin/python -m pytest tests/api/test_polish_feedback_generation_service.py tests/api/test_polish_api.py -k "bounded or provider_request or prompt"` | 18 selected passed, 147 deselected；command exit 1 due preexisting repo-root `tmp/` leak guard |
+| T-005 | `.venv/bin/python -m pytest tests/api/test_polish_feedback_generation_service.py tests/api/test_polish_feedback_validation.py -k "metadata or unsafe or provider"` | 14 selected passed, 39 deselected；command exit 1 due preexisting repo-root `tmp/` leak guard |
+| T-006 | `.venv/bin/python -m pytest tests/api/test_polish_api.py -k "provider_payload or raw_prompt"` | 2 selected passed, 126 deselected；command exit 1 due preexisting repo-root `tmp/` leak guard |
+| T-006 | `npm run web:test` | Passed, exit 0 |
+| T-007 | `npm run web:test` | Passed, exit 0 |
+| T-007 | `npm run web:build` | Passed, exit 0, with existing Vite chunk-size warning |
 
 ## Validation Plan
 
-未来实现轮必须运行：
+后续重验可合并运行：
 
 ```bash
 .venv/bin/python -m pytest tests/api/test_polish_api.py -k "session_detail or continuity or legacy or progress_tree_refresh"
@@ -326,7 +439,7 @@ npm run web:test
 npm run web:build
 ```
 
-实现后还必须运行：
+边界检查仍需运行：
 
 ```bash
 git status --short --untracked-files=all
@@ -340,18 +453,18 @@ git diff -- AGENTS.md
 
 | Risk | 说明 | 缓解 |
 |---|---|---|
-| Runtime/schema drift | `_session_response` 已含 schema 未覆盖字段，新增字段会扩大 drift | 同步 `PolishSessionResponse` optional fields，并用 API test 锁定 |
+| Runtime/schema drift | `_session_response` 已含 schema 未覆盖字段；本轮保持 route runtime response 边界，不扩展 schema 文件 | 用 API response tests 锁定 optional fields；若后续 route 增加 `response_model`，再独立同步 schema |
 | False ready claim | legacy empty fallback 可能被误判为 ready | ready 必须要求 turns/progress/refs consistency；legacy/malformed 映射 partial/unknown |
 | Metadata leak | safe metadata 汇总时可能误带 raw/provider/full source | 使用 allowlist/denylist helper 和 no-leak tests |
 | Frontend brittle rendering | 新 optional fields 可能破坏现有 workbench layout | frontend types optional，缺字段走现有 fallback，增加 tests |
-| Scope creep | G-001 容易滑向 G-002、storybank、transcript 或 command routing | Implementation Boundary 明确 No；CONTROL 下一步只允许 GPT Project audit |
+| Scope creep | G-001 容易滑向 G-002、storybank、transcript 或 command routing | Implementation Boundary 明确 No；CONTROL 下一步要求人工决定下一个授权窗口 |
 
 ## Blockers
 
 | Blocker | 状态 | 说明 |
 |---|---|---|
-| Implementation approval | Blocked until GPT Project audit | 本文件 ready for GPT Project audit, not yet approved for implementation |
-| Unknown code behavior | None for design audit | 当前 G-001 必需的 API/use case/repository/prompt/provider/frontend/test landing points已完成只读定位 |
+| Implementation blocker | None for Round 5-B | G-001 已按授权实现并重验；未发现断言失败 |
+| Validation environment note | Open | backend pytest selected assertions pass, but exact commands exit 1 because repo-root `tmp/` preexists and triggers leak guard |
 
 ## Migration Notes for Active Doc
 

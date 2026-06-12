@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from app.application.llm.ports import LlmTransport
+from app.application.polish.context_hygiene import build_context_hygiene_metadata
 from app.application.polish.feedback_agent import FeedbackGenerationAgent
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 from app.application.polish.feedback_schema import (
@@ -80,7 +81,13 @@ class FeedbackGenerationService:
                 succeeded=False,
                 payload=None,
                 validation_errors=context_errors,
-                metadata=metadata | {"provider_status": "not_called", "llm_called": False},
+                metadata=metadata
+                | _feedback_context_hygiene_metadata(
+                    None,
+                    status="blocked",
+                    validation_errors=context_errors,
+                )
+                | {"provider_status": "not_called", "llm_called": False},
             )
 
         prompt_asset = build_feedback_prompt_asset(normalized_context)
@@ -94,14 +101,28 @@ class FeedbackGenerationService:
                 succeeded=False,
                 payload=None,
                 validation_errors=("llm_transport_unavailable",),
-                metadata=metadata | {"provider_status": "not_configured", "llm_called": False},
+                metadata=metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="fallback",
+                    fallback_reason="llm_transport_unavailable",
+                    validation_errors=("llm_transport_unavailable",),
+                )
+                | {"provider_status": "not_configured", "llm_called": False},
             )
         if _is_fake_transport(self._llm_transport):
             return FeedbackGenerationResult(
                 succeeded=False,
                 payload=None,
                 validation_errors=("fake_transport_not_runtime_provider",),
-                metadata=metadata | {"provider_status": "fake_transport", "llm_called": False},
+                metadata=metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="fallback",
+                    fallback_reason="fake_transport_not_runtime_provider",
+                    validation_errors=("fake_transport_not_runtime_provider",),
+                )
+                | {"provider_status": "fake_transport", "llm_called": False},
             )
 
         agent_result = FeedbackGenerationAgent(transport=self._llm_transport).generate(
@@ -118,6 +139,14 @@ class FeedbackGenerationService:
                 validation_errors=agent_result.validation_errors,
                 low_confidence_flags=agent_result.low_confidence_flags,
                 metadata=agent_metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="fallback",
+                    fallback_reason=agent_result.validation_errors[0]
+                    if agent_result.validation_errors
+                    else provider_status,
+                    validation_errors=agent_result.validation_errors,
+                )
                 | {
                     "validation_stage": "candidate",
                     "candidate_valid": False,
@@ -141,6 +170,12 @@ class FeedbackGenerationService:
                 ),
                 trace_refs=_string_tuple(agent_result.evidence_refs),
                 metadata=agent_metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="blocked",
+                    fallback_reason=validation_errors[0] if validation_errors else None,
+                    validation_errors=validation_errors,
+                )
                 | {
                     "validation_stage": "candidate",
                     "candidate_valid": False,
@@ -169,6 +204,12 @@ class FeedbackGenerationService:
                 else tuple(),
                 trace_refs=_string_tuple(normalized_payload.get("trace_refs")) if normalized_payload is not None else (),
                 metadata=agent_metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="blocked",
+                    fallback_reason=validation_errors[0] if validation_errors else None,
+                    validation_errors=validation_errors,
+                )
                 | {
                     "validation_stage": "final",
                     "candidate_valid": True,
@@ -187,6 +228,7 @@ class FeedbackGenerationService:
             low_confidence_flags=low_confidence_flags,
             trace_refs=trace_refs,
             metadata=agent_metadata
+            | _feedback_context_hygiene_metadata(prompt_asset, status="clean")
             | {
                 "validation_stage": "final",
                 "candidate_valid": True,
@@ -231,7 +273,8 @@ class FeedbackGenerationService:
                 )
             ),
             "trace_refs": list(dict.fromkeys(trace_refs)),
-            "feedback_metadata": _final_feedback_metadata(ruled_payload),
+            "feedback_metadata": _final_feedback_metadata(ruled_payload)
+            | _feedback_context_hygiene_metadata(prompt_asset, status="clean"),
         }
         return final_payload
 
@@ -277,6 +320,40 @@ def _base_metadata() -> dict[str, Any]:
         "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
     }
+
+
+def _feedback_context_hygiene_metadata(
+    prompt_asset: dict[str, Any] | None,
+    *,
+    status: str,
+    fallback_reason: str | None = None,
+    validation_errors: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    provider_prompt = (
+        prompt_asset.get("provider_prompt")
+        if isinstance(prompt_asset, dict) and isinstance(prompt_asset.get("provider_prompt"), dict)
+        else {}
+    )
+    input_contract = provider_prompt.get("input_contract") if isinstance(provider_prompt, dict) else {}
+    provider_metadata = provider_prompt.get("feedback_metadata") if isinstance(provider_prompt, dict) else {}
+    input_contract = input_contract if isinstance(input_contract, dict) else {}
+    provider_metadata = provider_metadata if isinstance(provider_metadata, dict) else {}
+    safe_context_metadata = {
+        "raw_model_io_storage": bool(input_contract.get("raw_model_io_storage", False)),
+        "answer_text_policy": _clean(input_contract.get("answer_text_policy"), max_chars=120),
+        "answer_text_max_chars": int(input_contract.get("answer_text_max_chars") or 0),
+        "answer_text_is_bounded": bool(input_contract.get("answer_text_is_bounded", False)),
+        "full_answer_forbidden": bool(input_contract.get("full_answer_forbidden", True)),
+        "context_compaction_applied": bool(provider_metadata.get("context_compaction_applied", False)),
+        "evidence_item_count": int(provider_metadata.get("evidence_item_count") or 0),
+        "context_char_count": int(provider_metadata.get("prompt_char_count") or 0),
+    }
+    return build_context_hygiene_metadata(
+        status=status,
+        safe_context_metadata=safe_context_metadata,
+        fallback_reason=fallback_reason,
+        validation_errors=validation_errors,
+    ).to_dict()
 
 
 def _normalize_context(

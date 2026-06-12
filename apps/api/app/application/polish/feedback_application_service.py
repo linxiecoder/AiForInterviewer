@@ -11,6 +11,7 @@ from app.application.common.logging import LogUtil
 from app.application.common.result import ApplicationResult
 from app.application.polish.agents.feedback import build_feedback_planned_handoff
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
+from app.application.polish.context_hygiene import normalize_context_hygiene_metadata
 from app.application.polish.entities import (
     PolishFeedback,
     PolishQuestionSource,
@@ -396,6 +397,16 @@ def _failed_feedback_payload_for_storage(
     ):
         if field_name in source_metadata:
             feedback_metadata[field_name] = source_metadata[field_name]
+    if any(
+        field_name in source_metadata
+        for field_name in (
+            "context_hygiene_status",
+            "safe_context_metadata",
+            "fallback_reason",
+            "validation_signals",
+        )
+    ):
+        feedback_metadata.update(normalize_context_hygiene_metadata(source_metadata))
     return {
         "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,

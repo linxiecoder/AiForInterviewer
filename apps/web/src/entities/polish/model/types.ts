@@ -9,6 +9,9 @@ export type PolishProgressTreeStatus =
   | "insufficient_context"
   | string;
 
+export type PolishSessionContinuityStatus = "ready" | "partial" | "stale" | "blocked" | "unknown";
+export type PolishContextHygieneStatus = "clean" | "partial" | "fallback" | "blocked" | "unknown";
+
 export interface PolishSessionSummary {
   id: string;
   session_id: string;
@@ -218,11 +221,19 @@ export interface PolishFeedbackPayload extends Record<string, unknown> {
   retryable?: boolean;
   user_visible_status?: string | null;
   validation_errors?: string[];
+  feedback_metadata?: PolishContextHygieneMetadata | null;
   error?: {
     code?: string | null;
     message?: string | null;
     metadata?: Record<string, unknown> | null;
   } | null;
+}
+
+export interface PolishContextHygieneMetadata extends Record<string, unknown> {
+  context_hygiene_status?: PolishContextHygieneStatus;
+  safe_context_metadata?: Record<string, unknown>;
+  fallback_reason?: string | null;
+  validation_signals?: Record<string, unknown>;
 }
 
 export interface PolishSessionAnswer {
@@ -263,11 +274,28 @@ export interface PolishSessionTurn {
   question_text: string;
   question_sources: PolishQuestionSource[];
   question_created_at: string;
-  question_metadata?: Record<string, unknown> | null;
+  question_metadata?: PolishContextHygieneMetadata | null;
   progress_node_ref?: string | null;
   evidence_refs?: string[];
   context_digest?: string | null;
   answers: PolishSessionAnswer[];
+}
+
+export interface PolishSessionContinuitySummary extends Record<string, unknown> {
+  restored_turn_count: number;
+  has_progress_plan: boolean;
+  has_progress_state: boolean;
+  progress_tree_status: PolishProgressTreeStatus;
+  fallback_reason?: string | null;
+  warnings?: string[];
+  computed_at?: string;
+}
+
+export interface PolishSessionRestoredRefs extends Record<string, unknown> {
+  current_question_id?: string | null;
+  current_progress_node_ref?: string | null;
+  evidence_refs?: Array<PolishResourceRef | string>;
+  context_digest?: string | null;
 }
 
 export interface PolishProgressTreeNode {
@@ -406,6 +434,9 @@ export interface PolishSessionDetail {
   active_question_progress_node_ref?: string | null;
   active_question_evidence_refs?: Array<PolishResourceRef | string>;
   active_question_context_digest?: string | null;
+  continuity_status?: PolishSessionContinuityStatus;
+  continuity_summary?: PolishSessionContinuitySummary;
+  restored_refs?: PolishSessionRestoredRefs;
   progress_tree_status: PolishProgressTreeStatus;
   progress_percent: number;
   progress_tree_plan: PolishProgressTreePlan;
