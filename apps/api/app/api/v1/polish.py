@@ -67,6 +67,10 @@ from app.application.polish.question_generation_policy import (
 )
 from app.application.polish.question_generation_service import QuestionGenerationService
 from app.application.polish.question_metadata import empty_question_metadata, normalize_question_metadata
+from app.application.polish.session_continuity import (
+    SessionContinuitySnapshot,
+    compute_session_continuity,
+)
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
 from app.domain.auth.entities import CurrentActor
@@ -715,7 +719,7 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
         else None
     )
     theme_strategy = _theme_strategy_for_session(core)
-    return {
+    payload = {
         "session_id": core.session_id,
         "session_status": core.status,
         "resume_job_binding_id": core.binding_id,
@@ -766,6 +770,22 @@ def _session_response(session: PolishSessionDetail) -> dict[str, object]:
         "mode": "polish",
         # keep legacy fields and compatibility shape for existing callers
     }
+    continuity = compute_session_continuity(
+        SessionContinuitySnapshot(
+            session_status=str(core.status or ""),
+            progress_tree_status=str(session.progress_tree_status or ""),
+            progress_tree_plan=session.progress_tree_plan if isinstance(session.progress_tree_plan, dict) else {},
+            progress_tree_state=session.progress_tree_state if isinstance(session.progress_tree_state, dict) else {},
+            turn_count=len(turns),
+            active_question_id=str(active_turn.get("question_id")) if active_turn else None,
+            active_progress_node_ref=active_node_ref,
+            evidence_refs=tuple(str(ref) for ref in active_turn.get("evidence_refs", ())) if active_turn else (),
+            context_digest=str(active_turn.get("context_digest")) if active_turn and active_turn.get("context_digest") else None,
+            question_metadata_items=tuple(turn.get("question_metadata") for turn in turns),
+        )
+    )
+    payload.update(continuity.to_response_payload())
+    return payload
 
 
 # ── 响应构建函数：会话摘要 ───────────────────────────────────────────

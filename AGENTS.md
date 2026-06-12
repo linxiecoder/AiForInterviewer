@@ -104,3 +104,8 @@ PYCHARM_DEBUG_HOST=<windows-host-ip> PYCHARM_DEBUG_PORT=5678 npm run dev:debug
 - 禁止绕过 `DELIVERY_PLAN.md` 新建阶段。
 - 禁止绕过 `REQUIREMENT_TRACEABILITY.md` 直接复用历史需求。
 - 禁止绕过 `archive/MANIFEST.md` 移动或删除文档。
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

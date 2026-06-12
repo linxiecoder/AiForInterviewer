@@ -28,6 +28,7 @@ from app.application.polish.progress_prompts import (
 from app.application.polish.entities import PolishFeedback, PolishQuestion
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
 from app.application.polish.question_metadata import empty_question_metadata
+from app.application.polish.session_continuity import SessionContinuitySnapshot, compute_session_continuity
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
 from app.application.polish import progress_prompts
@@ -56,7 +57,13 @@ from app.infrastructure.db.session import DbSettings, build_session_factory, ini
 from app.infrastructure.llm.errors import LlmTransportResponseError
 from tests.fakes.llm_transport import FakeLlmTransport
 from app.main import create_app
-from app.schemas.polish import PolishFeedbackPayload, PolishSessionAnswerResponse, PolishTaskStatusResponse
+from app.schemas.polish import (
+    PolishContextHygieneMetadataResponse,
+    PolishFeedbackPayload,
+    PolishSessionAnswerResponse,
+    PolishSessionResponse,
+    PolishTaskStatusResponse,
+)
 from tests.api.asgi_client import call_json
 
 
@@ -153,6 +160,50 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
     assert payload["feedback_text"] == "legacy feedback text"
     assert "retired_extra_payload" not in payload
     assert "candidate_refs" not in payload
+
+
+def test_polish_g001_response_schema_declares_optional_contract_fields() -> None:
+    session_fields = PolishSessionResponse.model_fields
+    for field_name in (
+        "active_question_ref",
+        "current_node_ref",
+        "current_node_progress_node_ref",
+        "active_question_refs",
+        "active_question_progress_node_ref",
+        "active_question_evidence_refs",
+        "active_question_context_digest",
+        "continuity_status",
+        "continuity_summary",
+        "restored_refs",
+    ):
+        assert field_name in session_fields
+        assert not session_fields[field_name].is_required()
+
+    context_fields = PolishContextHygieneMetadataResponse.model_fields
+    for field_name in (
+        "context_hygiene_status",
+        "safe_context_metadata",
+        "fallback_reason",
+        "validation_signals",
+    ):
+        assert field_name in context_fields
+        assert not context_fields[field_name].is_required()
+
+    payload = PolishFeedbackPayload.model_validate(
+        {
+            "feedback_text": "safe feedback",
+            "feedback_metadata": {
+                "context_hygiene_status": "clean",
+                "safe_context_metadata": {"context_compaction_applied": True},
+                "fallback_reason": None,
+                "validation_signals": {},
+                "llm_called": True,
+            },
+        }
+    ).model_dump(mode="json")
+    assert payload["feedback_metadata"]["context_hygiene_status"] == "clean"
+    assert payload["feedback_metadata"]["safe_context_metadata"]["context_compaction_applied"] is True
+    assert payload["feedback_metadata"]["llm_called"] is True
 
 
 def test_response_safe_feedback_payload_filters_forbidden_keys_values_and_preserves_fields() -> None:
@@ -671,6 +722,11 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
     assert status_code == 200
     generated_data = generate_body["data"]
     assert generated_data["progress_tree_status"] == "ready"
+    assert generated_data["continuity_status"] == "ready"
+    assert generated_data["continuity_summary"]["restored_turn_count"] == 0
+    assert generated_data["continuity_summary"]["has_progress_plan"] is True
+    assert generated_data["continuity_summary"]["has_progress_state"] is True
+    assert generated_data["restored_refs"]["current_progress_node_ref"]
     assert generated_data["progress_tree_plan"]["schema_id"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_SCHEMA_ID
     assert generated_data["progress_tree_plan"]["prompt_version"] == POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION
     assert generated_data["progress_tree_state"]["schema_id"] == POLISH_PROGRESS_TREE_STATE_SCHEMA_ID
@@ -706,6 +762,8 @@ def test_create_and_get_polish_session_persists_owner_scoped_context() -> None:
 
     assert status_code == 200
     assert body["data"]["session_id"] == session_id
+    assert body["data"]["continuity_status"] == "ready"
+    assert body["data"]["continuity_summary"]["fallback_reason"] is None
     assert body["data"]["resume_version_id"].startswith("res_ver_polish_")
     assert body["data"]["job_version_id"].startswith("job_ver_polish_")
 
@@ -2952,6 +3010,30 @@ def test_progress_tree_quality_first_response_does_not_expose_prompt_or_provider
         assert all(normalized_forbidden not in _compact_prompt_leak_text(value) for value in response_values)
 
 
+def test_polish_session_continuity_and_context_hygiene_do_not_expose_raw_prompt_or_provider_payload() -> None:
+    payload = {
+        "status": "generated",
+        "feedback_text": "safe feedback",
+        "feedback_metadata": {
+            "context_hygiene_status": "partial",
+            "safe_context_metadata": {
+                "context_compaction_applied": True,
+                "prompt": "prompt must not be returned",
+                "provider_payload": "provider payload must not be returned",
+            },
+            "raw_prompt": "raw prompt must not be returned",
+        },
+    }
+
+    sanitized = polish_api._response_safe_feedback_payload(payload)
+
+    assert sanitized["feedback_metadata"]["context_hygiene_status"] == "partial"
+    assert sanitized["feedback_metadata"]["safe_context_metadata"]["context_compaction_applied"] is True
+    assert "raw_prompt" not in _collect_keys(sanitized)
+    assert "prompt" not in _collect_keys(sanitized)
+    assert "provider_payload" not in _collect_keys(sanitized)
+
+
 def test_polish_progress_tree_requires_semantic_evidence_not_titles_only() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(
@@ -3112,6 +3194,8 @@ def test_progress_tree_refresh_keeps_insufficient_context_without_calling_llm() 
 
     assert status_code == 200
     assert refresh_body["data"]["progress_tree_status"] == "insufficient_context"
+    assert refresh_body["data"]["continuity_status"] == "partial"
+    assert refresh_body["data"]["continuity_summary"]["fallback_reason"] == "insufficient_context"
     assert refresh_body["data"]["progress_tree_plan"]["nodes"] == []
     assert transport.calls == []
 
@@ -3147,6 +3231,40 @@ def test_progress_tree_refresh_invalid_state_keeps_plan_and_returns_refresh_fail
     assert data["progress_tree_plan"]["nodes"] == original_nodes
     assert data["progress_tree_state"]["status"] == "ready"
     assert data["progress_tree_state"]["node_states"]
+
+
+def test_progress_tree_refresh_failed_status_maps_to_stale_continuity_payload() -> None:
+    snapshot = SessionContinuitySnapshot(
+        session_status="running",
+        progress_tree_status="refresh_failed",
+        progress_tree_plan={
+            "status": "ready",
+            "nodes": [
+                {
+                    "progress_node_ref": "node_legacy",
+                    "title": "旧链路节点",
+                    "children": [],
+                }
+            ],
+        },
+        progress_tree_state={
+            "status": "refresh_failed",
+            "node_states": [
+                {
+                    "progress_node_ref": "node_legacy",
+                    "status": "pending",
+                    "completed_questions_count": 0,
+                }
+            ],
+            "failure_reason": "llm_transport_missing",
+        },
+        active_progress_node_ref="node_legacy",
+    )
+
+    payload = compute_session_continuity(snapshot).to_response_payload()
+
+    assert payload["continuity_status"] == "stale"
+    assert payload["continuity_summary"]["fallback_reason"] == "refresh_failed"
 
 
 def test_get_polish_session_does_not_regenerate_progress_tree() -> None:
@@ -3943,6 +4061,10 @@ def test_polish_session_detail_returns_empty_metadata_for_legacy_or_malformed_qu
     empty = empty_question_metadata().to_dict()
     assert turns_by_id["que_session_legacy_metadata"]["question_metadata"] == empty
     assert turns_by_id["que_session_malformed_metadata"]["question_metadata"] == empty
+    assert detail_body["data"]["continuity_status"] in {"partial", "unknown"}
+    assert detail_body["data"]["continuity_summary"]["fallback_reason"] == "legacy_or_malformed_metadata"
+    assert turns_by_id["que_session_legacy_metadata"]["question_metadata"]["context_hygiene_status"] == "unknown"
+    assert turns_by_id["que_session_malformed_metadata"]["question_metadata"]["context_hygiene_status"] == "unknown"
 
 
 def test_progress_tree_refresh_rolls_up_parent_from_all_children_without_mutating_plan() -> None:

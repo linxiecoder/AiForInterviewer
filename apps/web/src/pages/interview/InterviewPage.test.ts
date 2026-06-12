@@ -169,6 +169,9 @@ import type {
   CreatePolishSessionRequest,
   PolishCandidate,
   PolishCandidateActionResult,
+  PolishContextHygieneStatus,
+  PolishFeedbackPayload,
+  PolishSessionContinuityStatus,
   PolishProgressTreeNode,
   PolishSessionAnswer,
   PolishSessionDetail,
@@ -649,6 +652,21 @@ type CandidateDismissApiReturnsActionResult = Expect<
 >;
 type ListApiReturnsSessionSummaries = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishSessions>>, PolishSessionSummary[]>
+>;
+type PolishSessionContinuityStatusAllowsFallbackStates = Expect<
+  Equal<PolishSessionContinuityStatus, "ready" | "partial" | "stale" | "blocked" | "unknown">
+>;
+type PolishContextHygieneStatusAllowsFallbackStates = Expect<
+  Equal<PolishContextHygieneStatus, "clean" | "partial" | "fallback" | "blocked" | "unknown">
+>;
+type PolishSessionDetailContinuityStatusIsOptional = Expect<
+  Equal<PolishSessionDetail["continuity_status"], PolishSessionContinuityStatus | undefined>
+>;
+type PolishFeedbackPayloadMetadataSupportsSafeContext = Expect<
+  Equal<
+    NonNullable<PolishFeedbackPayload["feedback_metadata"]>["context_hygiene_status"],
+    PolishContextHygieneStatus | undefined
+  >
 >;
 type TopicApiReturnsControlledCatalog = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishTopics>>, PolishTopic[]>
@@ -3027,6 +3045,24 @@ function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_met
   const clipboardWithMetadata = buildPolishSessionClipboardMarkdown(detailWithMetadata);
   const clipboardWithoutMetadata = buildPolishSessionClipboardMarkdown(detailWithoutMetadata);
   const metadata = detailWithMetadata.turns[0].question_metadata;
+  const detailWithContinuity: PolishSessionDetail = {
+    ...detailWithMetadata,
+    continuity_status: "partial",
+    continuity_summary: {
+      restored_turn_count: 1,
+      has_progress_plan: true,
+      has_progress_state: true,
+      progress_tree_status: "ready",
+      fallback_reason: "legacy_or_malformed_metadata",
+      warnings: ["legacy_or_malformed_metadata"],
+    },
+    restored_refs: {
+      current_question_id: "q_auth_smoke_metadata",
+      current_progress_node_ref: "node_auth_smoke",
+      evidence_refs: ["node_auth_smoke"],
+      context_digest: "auth-smoke-digest",
+    },
+  };
 
   assertContract(POLISH_API_PATHS.sessions === "/polish-sessions", "列表 smoke 应命中 polish session list API");
   assertContract(POLISH_API_PATHS.sessionDetail("ses_auth_smoke") === "/polish-sessions/ses_auth_smoke", "工作台 smoke 应命中 session detail API");
@@ -3038,6 +3074,8 @@ function test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_met
   assertContract(resolveCurrentQuestionId(detailWithMetadata, "node_auth_smoke") === "q_auth_smoke_metadata", "带 metadata 的工作台详情应可解析当前题目");
   assertContract(resolveCurrentQuestionId(detailWithoutMetadata, "node_auth_smoke") === "q_auth_smoke_legacy", "缺 metadata 的工作台详情应可解析当前题目");
   assertContract(metadata?.question_pattern === "authenticated_frontend_smoke", "前端类型应允许 session detail 携带 question_metadata");
+  assertContract(detailWithContinuity.continuity_status === "partial", "前端类型应允许 session detail 携带 continuity metadata");
+  assertContract(detailWithContinuity.restored_refs?.current_progress_node_ref === "node_auth_smoke", "前端类型应允许 restored refs 作为 current node fallback");
   assertContract(clipboardWithMetadata.includes("请说明你如何验证登录后的前端工作台路径。"), "带 metadata 的详情应可生成复制内容");
   assertContract(clipboardWithoutMetadata.includes("旧题目缺少 metadata 时也应稳定展示。"), "缺 metadata 的详情应可生成复制内容");
 }

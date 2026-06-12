@@ -6,7 +6,7 @@ from datetime import datetime
 import re
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.domain.shared.enums import AiTaskStatus, ScoreType
 from app.schemas.refs import LowConfidenceFlagSchema, ResourceRef, TraceRefSchema, VersionRef
@@ -131,6 +131,36 @@ class PolishProgressTreeStateResponse(BaseModel):
     failure_reason: str | None = None
 
 
+class PolishContextHygieneMetadataResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    context_hygiene_status: str | None = None
+    safe_context_metadata: dict[str, Any] = Field(default_factory=dict)
+    fallback_reason: str | None = None
+    validation_signals: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolishSessionContinuitySummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    restored_turn_count: int = 0
+    has_progress_plan: bool = False
+    has_progress_state: bool = False
+    progress_tree_status: str | None = None
+    fallback_reason: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    computed_at: str | None = None
+
+
+class PolishSessionRestoredRefsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    current_question_id: str | None = None
+    current_progress_node_ref: str | None = None
+    evidence_refs: list[ResourceRef | str] = Field(default_factory=list)
+    context_digest: str | None = None
+
+
 class PolishSessionResponse(BaseModel):
     session_id: str
     mode: str = "polish"
@@ -157,7 +187,17 @@ class PolishSessionResponse(BaseModel):
     subtopic_ref: PolishSubtopicRefResponse | None = None
     custom_topic_text_summary: str | None = None
     current_question_ref: ResourceRef | None = None
+    active_question_ref: ResourceRef | None = None
     progress_position_ref: ResourceRef | None = None
+    current_node_ref: ResourceRef | None = None
+    current_node_progress_node_ref: str | None = None
+    active_question_refs: list[ResourceRef] = Field(default_factory=list)
+    active_question_progress_node_ref: str | None = None
+    active_question_evidence_refs: list[ResourceRef | str] = Field(default_factory=list)
+    active_question_context_digest: str | None = None
+    continuity_status: str | None = None
+    continuity_summary: PolishSessionContinuitySummaryResponse | None = None
+    restored_refs: PolishSessionRestoredRefsResponse | None = None
     report_id: str | None = None
     report_status: str | None = None
     report_generated_at: datetime | None = None
@@ -327,7 +367,7 @@ class PolishFeedbackPayload(BaseModel):
     implicit_weight: int | None = None
     weight_explanation: str | None = None
     interview_intent: str | None = None
-    feedback_metadata: dict[str, Any] | None = None
+    feedback_metadata: PolishContextHygieneMetadataResponse | None = None
     weakness_candidates: list[dict[str, Any]] | None = None
     asset_candidates: list[dict[str, Any]] | None = None
     oral_script_candidates: list[dict[str, Any]] | None = None
@@ -367,7 +407,7 @@ class PolishSessionTurnResponse(BaseModel):
     question_text: str
     question_sources: list[PolishQuestionSourceResponse] = Field(default_factory=list)
     question_created_at: datetime
-    question_metadata: dict[str, Any] | None = None
+    question_metadata: PolishContextHygieneMetadataResponse | None = None
     answers: list[PolishSessionAnswerResponse] = Field(default_factory=list)
 
 
