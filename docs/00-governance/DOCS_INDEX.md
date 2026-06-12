@@ -22,6 +22,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 文档治理 | `docs/00-governance/DOCS_GOVERNANCE.md` | 文档生命周期、命名、归档、迁移和防腐规则 |
 | AI 工作流 | `docs/00-governance/AI_WORKFLOW.md` | Codex / AI 读取、修改、落库和确认流程 |
 | 测试策略 | `docs/00-governance/TEST_POLICY.md` | 测试临时产物治理、受管临时目录工具和测试残留检查规则 |
+| Interview Coach G-001 后合并记录 | `docs/active/interview-coach-refactor.md` | post-merge record for G-001 interview-coach-inspired refactor；记录已合入能力、架构边界、延后能力、验证范围和 main hygiene 状态；不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实 |
 | 执行证据目录索引 | `docs/goals/README.md` | 受控窗口 close-out execution evidence 目录索引；`docs/goals/` 只记录执行历史、验证证据、proposed delta 和剩余缺口，不替代 active requirement、active design、delivery plan、ADR、Project source 或代码事实；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md` 或 active docs 启动任务或变更事实源 |
 | 产品需求 | `docs/01-product/PRD.md` | MVP 产品需求唯一事实源 |
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 历史需求吸收、替代、后置、缺口和待决策项 |
@@ -78,6 +79,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`PROMPT_ASSET_SPEC.md`、`PROMPT_EVALUATION_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`SKILL_MODEL_SPEC.md`、`PRESSURE_MODE_SPEC.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 和 `RELEASE_HANDOFF_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
 | `docs/03-delivery/` | active | 当前 `DELIVERY_PLAN.md`、`BACKLOG.md` 是阶段与任务入口；`refactor-multiagent-langgraph-implementation/` 是 PR2-PR8 LangGraph MultiAgent implementation entry；历史 LangGraph planning package 已删除，superseded; see Git history |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
+| `docs/active/` | active | 承载已在本索引登记的长期 active records；这些记录只描述已合入事实、边界、验证和后续决策项，不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实 |
 | `docs/goals/` | evidence-only | 只承载受控窗口执行证据、final report、audit/backfill delta、validation evidence 和 remaining gaps；不是 active requirement、active design、delivery plan、ADR 或代码事实源；当与 GitHub main 当前代码、当前 active docs 或 Project source 冲突时，以后者为准；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md`、active docs 或 ADR 流程 |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
 
