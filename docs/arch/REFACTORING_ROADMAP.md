@@ -7,7 +7,7 @@ permalink: ai-for-interviewer/docs/arch/refactoring-roadmap
 
 # AiForInterviewer 机制优先重构路线
 
-本文是机制优先的重构输入，不是新的阶段计划或任务入口。正式执行必须拆成 `AIFI-*` 并登记到 `docs/03-delivery/BACKLOG.md`。
+本文是机制优先的重构输入，不是新的阶段计划或任务入口。正式执行必须拆成 `AIFI-*` 并登记到 `docs/03-implementation/BACKLOG.md`。
 
 ## 1. 路线结论
 

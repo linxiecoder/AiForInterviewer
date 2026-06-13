@@ -28,8 +28,8 @@ permalink: ai-for-interviewer/docs/02-design/tech-design
 - `docs/01-product/PRD.md`：MVP 业务对象、核心数据流、非目标、评分/复制/通过倾向口径和 UNKNOWN 台账。
 - `docs/02-design/UX_SPEC.md`：F2 低保真信息架构、核心页面场景、状态与异常路径。
 - `docs/02-design/UI_DESIGN_SYSTEM.md`：F3 设计系统草案、交互状态约束和前端实现交接边界。
-- `docs/03-delivery/DELIVERY_PLAN.md`：F4 / M4 目标、产物和阶段边界。
-- `docs/03-delivery/BACKLOG.md`：AIFI-ARCH、AIFI-DATA、AIFI-API、AIFI-PROMPT、AIFI-SEC 后续任务入口。
+- `docs/03-implementation/DELIVERY_PLAN.md`：F4 / M4 目标、产物和阶段边界。
+- `docs/03-implementation/BACKLOG.md`：AIFI-ARCH、AIFI-DATA、AIFI-API、AIFI-PROMPT、AIFI-SEC 后续任务入口。
 - 仓库技术配置：根目录 `package.json`、`requirements.txt`、`apps/web/package.json`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json` 和 API 启动入口；这些配置只证明前后端技术入口仍保留，具体页面、接口、持久化和测试实现以 F5/F6 后续落地为准。
 
 ## 4. 非目标
@@ -217,6 +217,24 @@ AI Task Contract 输出进入业务系统时，应先形成 `AiTaskResultRef`，
 - 风险提示禁止恐吓式、确定性、歧视性或不可解释表达；不得把岗位匹配缺口直接包装成稳定能力缺陷，也不得引用未脱敏第三方公司、面试官或无权限来源作为用户可见风险依据。
 - 用户可见评分、通过倾向和风险提示必须包含可信度说明和非决策性免责声明，说明结果基于当前材料、规则版本和证据生成，仅用于面试准备辅助，不代表真实招聘决定。
 - F7 至少形成断言：0-100 score 可正常生成；不出现精确通过概率；low confidence 时不输出确定倾向；source unavailable 时报告降级；validation failed 时不落正式报告评分；不暴露隐藏评分规则；`risk_level` 与 `evidence_refs` 同步存在；`score_version` / `rubric_version` 存在；copy content 不包含内部评分规则。
+
+### 14.3 Interview Coach G-003 / G-004 / Composition Layer 架构边界
+
+本节迁入原 standalone G-003 / G-004 / Composition 规格中已确认的架构含义；原规格文件不再作为 standalone system spec。这里仅记录 G-003、G-004 与 Composition Layer 的职责边界，不新增能力定义。
+
+| 层 | 架构职责 | 已确认实现路径 | 禁止外推 |
+|---|---|---|---|
+| G-003 Evaluation Layer | 产出 evaluation / feedback / UI-safe status labeling；反馈前可消费 bounded `structured_answer` | `apps/api/app/application/polish/transcript_signal_parser.py`、`feedback_generation_service.py`、`feedback_prompt_assets.py` | 不输出 transcript structure、behavioral signal extraction、candidate reasoning trace、understanding model、taxonomy 或 coaching plan |
+| G-004 Understanding Layer | 产出 `transcript_analysis_v1`、transcript structure 和 behavioral signals | `apps/api/app/application/transcript_analysis/models.py`、`parser.py`、`analyzer.py`、`service.py` | 不生成 feedback、score、rubric verdict、evaluation、coaching plan 或正式能力判断 |
+| Composition Layer | 按 mode 调用 G-003 / G-004，并做 response envelope 层级 routing / packaging | `apps/api/app/application/composition/service.py` | 不做跨层解释、重写、评分、语义升级、降级或状态覆盖 |
+
+G-003、G-004 与 Composition Layer 不是顺序 pipeline。G-003 不依赖 G-004 的内部语义，G-004 不依赖 G-003 的输出，Composition Layer 也不得把其中任一层转换成另一层的输入语义。组合只表示 routing 与 packaging，不表示跨层推理或语义转换。
+
+运行模式边界：
+
+- `interview` mode：G-004 always runs；G-003 conditionally runs；响应只在 envelope 层并列呈现可用输出。
+- `training` mode：G-004 runs；G-003 runs；返回 balanced output，但不得把训练建议写成正式 TrainingTask。
+- `analysis` mode：G-004 only；不得隐式触发 G-003，也不得从 G-004 输出推导 feedback。
 
 ## 15. 子文档输入边界
 

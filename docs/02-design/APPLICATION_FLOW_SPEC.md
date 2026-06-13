@@ -50,6 +50,18 @@ permalink: ai-for-interviewer/docs/02-design/application-flow-spec
 5. 需要业务落库时，runner 返回 handoff request；PR3 / PR4 只校验 handoff contract，不执行真实 formal write。
 6. API mapper 只返回 sanitized run status、timeline、interrupt detail 或 task refs。
 
+### 2.2 Interview Coach Composition Layer 编排边界
+
+本节迁入原 standalone G-003 / G-004 / Composition 规格中已确认的 composition runtime 规则；原规格文件删除后，本节与 `TECH_DESIGN.md` §14.3 共同承接 G-003 / G-004 / Composition Layer 的编排边界。
+
+| mode | G-004 Understanding | G-003 Evaluation | response packaging | 编排禁止项 |
+|---|---|---|---|---|
+| `interview` | always runs | conditionally runs | 在 envelope 层合并 transcript understanding 与可选 feedback | 不把 G-004 signals 改写成评分、反馈或 coaching |
+| `training` | runs | runs | 返回 balanced output；保留各层字段隔离 | 不自动创建 TrainingTask，不把训练建议写成正式对象 |
+| `analysis` | only | no | 只返回 understanding output | 不隐式触发 G-003，不从 G-004 推导 feedback |
+
+Composition Layer 的 merge 只能是 envelope-level packaging。它可以决定调用顺序、失败隔离、字段落位和可见状态，但不得解释、覆盖、降级、升级、normalize 或 synthesize 任一 layer 的业务语义。G-003 feedback task 继续属于 evaluation / feedback 路径；G-004 transcript analysis 继续属于 understanding-only 路径。
+
 ## 3. Prompt 输入结构模板
 
 本节定义结构，不写生产完整 Prompt 文案。

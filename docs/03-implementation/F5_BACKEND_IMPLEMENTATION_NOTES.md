@@ -4,7 +4,7 @@ type: implementation-note
 status: f5-m0-baseline
 owner: Backend
 source_task: AIFI-BE-001
-permalink: ai-for-interviewer/docs/03-delivery/f5-backend-implementation-notes
+permalink: ai-for-interviewer/docs/03-implementation/f5-backend-implementation-notes-1
 ---
 
 # F5 后端实现说明
@@ -16,8 +16,8 @@ permalink: ai-for-interviewer/docs/03-delivery/f5-backend-implementation-notes
 ## 2. 已读取的设计输入
 
 - `docs/02-design/reviews/F4_TO_F8_READINESS_ACCEPTANCE.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `docs/02-design/TECH_DESIGN.md`
 - `docs/02-design/API_SPEC.md`
 - `docs/02-design/DATA_MODEL.md`
@@ -272,3 +272,46 @@ F6 约束：
   - 不新增依赖，不直接在页面拼接 `fetch`。
   - 不展示 cookie、session、token、provider payload、system prompt、隐藏评分规则等敏感内容。
   - 不展示精确概率与文件导出入口（PDF/docx/Markdown 下载不包含）。
+
+## 13. Registry de-layer 后的已确认实现映射
+
+本节迁入原 capability / planning 来源文档中的实现映射。原 standalone 来源文档删除后，本节只保留已验证的实现路径、测试证据和 non-claim，不创建新的能力定义。
+
+### 13.1 Interview Coach G-003 / G-004 / Composition
+
+| 能力切片 | 实现路径 | 验证证据 | non-claim |
+|---|---|---|---|
+| G-003 Transcript Structured Signal Extraction | `apps/api/app/application/polish/transcript_signal_parser.py`、`feedback_generation_service.py`、`feedback_prompt_assets.py` | 迁移证据记录 GREEN：`67 passed in 0.96s` with `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1`；测试包括 `tests/api/test_polish_transcript_signal_parser.py`、`test_polish_feedback_generation_service.py`、`test_polish_feedback_pipeline_contract.py`、`test_polish_feedback_agent_io_alignment.py` | 只服务 evaluation / feedback，不成为 G-004、scoring、taxonomy 或 coaching |
+| G-004 Transcript Understanding | `apps/api/app/application/transcript_analysis/models.py`、`parser.py`、`analyzer.py`、`service.py` | `tests/api/test_transcript_analysis.py`、`tests/api/test_transcript_analysis_contract_lock.py`；迁移 GREEN 证据覆盖 | 只拥有 `transcript_analysis_v1`；不输出 feedback、score、rubric verdict 或 coaching plan |
+| Composition Layer | `apps/api/app/application/composition/service.py` | `tests/api/test_composition_layer.py` 覆盖 mode routing、analysis mode 不调用 G-003、G-003 / G-004 replacement independence 与 response field isolation | 只做 envelope-level routing / packaging，不做语义转换 |
+
+### 13.2 Capability preservation baseline
+
+| 能力 | 当前状态 | 核心路径 | 测试证据 | 边界 |
+|---|---|---|---|---|
+| Resume | `implemented` | `apps/api/app/api/v1/resumes.py`、`application/resumes/use_cases.py`、`infrastructure/db/repositories/resumes.py` | `tests/api/test_resumes_api.py`、`apps/web/src/pages/resume/ResumePage.test.ts` | 不包含 evidence extraction / derived outline |
+| Job | `implemented` | `apps/api/app/api/v1/jobs.py`、`application/jobs/use_cases.py`、`infrastructure/db/repositories/jobs.py` | `tests/api/test_jobs_api.py`、`tests/web/test_job_page_pagination.py`、`apps/web/src/pages/job/JobPage.test.ts` | 不包含 JD decode flow / 外部材料解析 |
+| Binding | `implemented` | `apps/api/app/api/v1/bindings.py`、`application/bindings/use_cases.py`、`infrastructure/db/repositories/bindings.py` | `tests/api/test_bindings_api.py`、`test_job_binding_owner_scope.py`、`test_resume_binding_candidates.py` | 不包含完整历史报告 / 复盘回看流 |
+| Polish session / answer | `implemented` | `apps/api/app/api/v1/polish.py`、`session_application_service.py`、`answer_application_service.py`、`infrastructure/db/repositories/polish.py` | `tests/api/test_polish_api.py`、`apps/web/src/pages/interview/InterviewPage.test.ts` | 不包含 pressure session、generic interview 或 feedback/scoring quality |
+| Polish module split | `implemented` | `apps/api/app/usecases/polish/fetch_candidate.py`、`apply_feedback.py`、`persist_result.py`、`repositories/polish_repository.py` | `tests/api/test_polish_m25_usecases.py`、`test_polish_application_service_split.py`、`test_polish_api.py`、`InterviewPage.test.ts` | 只代表 conservative split；aggregate Polish 仍是 `partial` |
+| Assets | `implemented` | `apps/api/app/api/v1/assets.py`、`application/assets/use_cases.py`、`infrastructure/db/repositories/assets.py` | `tests/api/test_assets_weaknesses_api.py`、`apps/web/src/pages/asset/AssetPage.test.ts` | RAG chunks 存在不证明 all-runtime RAG |
+
+### 13.3 Provider / Agent / Runtime / Eval implementation evidence
+
+| 能力切片 | 实现路径 | 验证证据 | 边界 |
+|---|---|---|---|
+| Provider boundary | `apps/api/app/application/llm/provider_boundary.py`、`types.py`、Polish feedback / question / progress / job match provider call sites | P7-W4.fix.01 记录 full-repo pytest `1067 passed`、`npm run web:test`、`npm run web:smoke:auth`、provider focused selector `21 passed`、`git diff --check`；测试包括 `tests/api/test_provider_boundary.py`、`test_provider_global_backstop.py`、`tests/architecture/test_provider_boundary_static.py` | 不声明 real-provider quality certification |
+| Runtime fake provider isolation | `apps/api/app/infrastructure/llm/runtime.py`、`feedback_generation_service.py`、`scripts/qa/authenticated-frontend-smoke.mjs`、`.github/workflows/eval-gate.yml` | `tests/api/test_llm_runtime.py`、`test_fake_llm_boundary.py`、`test_fake_llm_transport.py`；auth smoke 不依赖 `LLM_PROVIDER=fake` | fake / replay evidence 只算 regression evidence |
+| Agent definitions / handoff contracts | `apps/api/app/application/agents/definitions/**`、`agents/contracts/__init__.py`、`agents/handoff/__init__.py`、`agents/runtime/__init__.py` | `tests/architecture/test_agent_platform_c1_boundary.py`、`tests/api/test_agent_contracts.py` | candidate / suggestion / validation / trace only；formal writes 仍归 Application Service / Domain Policy / Handoff |
+| Question / Feedback planned workflows | `polish/agents/question/planned_workflow.py`、`question_application_service.py`、`feedback/planned_workflow.py`、`feedback_application_service.py`、`feedback_rules.py` | Question evidence includes `12 passed` graph integration、`15 passed` persistence handoff、`64 passed` phase1 refactor；Feedback evidence includes runtime `7 passed` and local eval `5 passed / 0 failed` | `validated_with_deferred_l5_runtime` 不等于 full runtime productization |
+| AI Runtime / L5 local multi-agent | `ai_runtime/facade.py`、`agents/runtime/__init__.py`、`infrastructure/ai_runtime/langgraph/in_memory_runtime.py`、`agents/orchestration/minimal_three_agent_slice.py`、`business_graphs/local_multi_agent_orchestrator.py` | `tests/api/test_ai_orchestration_facade.py`、`tests/application/agents/test_phase11_runtime_hardening.py`、`test_phase11_three_agent_product_slice.py`、`test_option_d_local_multi_agent_runtime_wiring.py`、`tests/evals/test_phase12_l5_eval_gate.py` | default-off / local deterministic / refs-only；不声明 production L5 release、remote CI hard claim 或 real-provider certification |
+| Eval regression gate | `evals/suites/phase9.json`、`evals/datasets/phase9/*.jsonl`、`scripts/evals/run_eval_gate.py`、`tests/evals/test_phase9_eval_gate.py`、`.github/workflows/eval-gate.yml` | 迁移证据记录 local replay gate `30 passed`、`0 blocking_failures`、`2 deferred`；negative control observed expected failure | `validated` 不是 `done`；remote GitHub Actions evidence remains deferred |
+
+### 13.4 Explicit non-claims after de-layering
+
+- No production L5 release is claimed.
+- No real-provider production quality certification is claimed.
+- No remote CI hard claim is made without visible passing GitHub Actions artifact evidence.
+- P8 Runtime remains `validated_with_deferred_gaps` / partial foundation, not full product runtime completion.
+- `L5-006B` remains deferred and out of scope.
+- route prefix、DB model、disabled frontend nav、fallback、deterministic / replay / fake / mock eval、default-off graph 不能单独证明产品能力已实现。

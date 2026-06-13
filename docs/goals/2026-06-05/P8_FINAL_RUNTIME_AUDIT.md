@@ -72,8 +72,8 @@ Remaining WARN after remediation:
 
 - `AGENTS.md`
 - `docs/00-governance/DOCS_INDEX.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `docs/tmp/goal0605/phase8_codex_goal_pack/docs/P8_MASTER_GOAL.md`
 
 ### Changed runtime / contract / test files

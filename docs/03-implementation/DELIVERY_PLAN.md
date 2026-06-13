@@ -4,7 +4,7 @@ type: delivery-plan
 status: active-f1
 owner: 项目交付
 source_report: archive/2026-05-doc-consolidation/audit/F0_AUDIT_REPORT.md
-permalink: ai-for-interviewer/docs/03-delivery/delivery-plan
+permalink: ai-for-interviewer/docs/03-implementation/delivery-plan-1
 ---
 
 # DELIVERY_PLAN
@@ -27,7 +27,7 @@ permalink: ai-for-interviewer/docs/03-delivery/delivery-plan
 
 ## 2. 执行规则
 
-1. 所有任务必须进入 `docs/03-delivery/BACKLOG.md`。
+1. 所有任务必须进入 `docs/03-implementation/BACKLOG.md`。
 2. 所有阶段必须进入本文件。
 3. 所有产品需求必须进入 `docs/01-product/PRD.md`。
 4. 所有历史需求处理必须进入 `docs/01-product/REQUIREMENT_TRACEABILITY.md`。
@@ -57,7 +57,7 @@ F2 开始前必须满足：
 1. F1 产物已完成本地审查，是否 staged 由用户在本轮后决定。
 2. `docs/01-product/PRD.md` 作为唯一产品需求事实源。
 3. `docs/01-product/REQUIREMENT_TRACEABILITY.md` 中无未分类高风险历史需求。
-4. F2 任务从 `docs/03-delivery/BACKLOG.md` 的 `AIFI-UX-001` 开始。
+4. F2 任务从 `docs/03-implementation/BACKLOG.md` 的 `AIFI-UX-001` 开始。
 5. 不创建新的路线图、阶段体系或任务体系。
 6. F2 起始任务必须基于 `PRD.md` 的用户故事、核心业务数据流、功能逻辑、输入 / 输出、状态异常和验收标准展开。
 7. F2 必须覆盖简历、简历中的项目经历模块、岗位 / JD、岗位绑定简历、岗位匹配分析、资产库、打磨模式多主题、压力面模式、进展树、面试报告、模拟面试复盘、真实面试复盘、薄弱项、训练建议和反馈回流，且不得只设计单次模拟面试流程。

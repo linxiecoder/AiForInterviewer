@@ -34,8 +34,8 @@ done_condition: report records source docs to update, false L5 claim risks, exac
 - `docs/tmp/goal0605/phase8_codex_goal_pack/agents/E_RISK_BACKFILL_RECON.md`
 - `docs/01-product/PRD.md`
 - `docs/01-product/REQUIREMENT_TRACEABILITY.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `archive/MANIFEST.md`
 - `docs/goals/README.md`
 - `docs/project-sources/README.md`
@@ -58,7 +58,7 @@ done_condition: report records source docs to update, false L5 claim risks, exac
 
 Additional read-only scans:
 
-- `rg --files docs/project-sources docs/goals docs/02-design docs/03-delivery docs/04-decisions archive`
+- `rg --files docs/project-sources docs/goals docs/02-design docs/03-implementation docs/04-decisions archive`
 - `rg -n "Phase 8|Phase8|P8|C4|L5|DONE|done|complete|partial|deferred|validated|validation|source backfill|SRC-001|LangGraph|runtime|release|M8|F8" ...`
 - `find docs/goals/2026-06-05 -maxdepth 2 -type f -name 'P8*' -print`
 - `git status --short --untracked-files=all`
@@ -161,7 +161,7 @@ Forbidden in this P8-W0 risk/source recon:
 - `docs/00-governance/**`
 - `docs/01-product/**`
 - `docs/02-design/**`
-- `docs/03-delivery/**`
+- `docs/03-implementation/**`
 - `docs/04-decisions/**`
 - `archive/**`
 - Any `docs/goals/**` file except `docs/goals/2026-06-05/P8_W0_AGENT_RISK_RECON.md`
@@ -179,8 +179,8 @@ Forbidden for future P8 implementation unless Controller records an explicit new
 - `frontend/**` / `apps/web/**`
 - `domain/polish/policies/**` except read-only recon
 - production fake provider wiring
-- `docs/03-delivery/RELEASE_CHECKLIST.md`, `CHANGELOG.md`, release runbook, rollback strategy, or formal F8 release artifacts unless the active F8/M8 release task is separately authorized after F7
-- `docs/03-delivery/BACKLOG.md`, `docs/03-delivery/DELIVERY_PLAN.md`, `docs/01-product/PRD.md`, `docs/01-product/REQUIREMENT_TRACEABILITY.md`, and `archive/MANIFEST.md` for P8 runtime source backfill, unless the task explicitly changes active delivery or archive governance
+- `docs/03-implementation/RELEASE_CHECKLIST.md`, `CHANGELOG.md`, release runbook, rollback strategy, or formal F8 release artifacts unless the active F8/M8 release task is separately authorized after F7
+- `docs/03-implementation/BACKLOG.md`, `docs/03-implementation/DELIVERY_PLAN.md`, `docs/01-product/PRD.md`, `docs/01-product/REQUIREMENT_TRACEABILITY.md`, and `archive/MANIFEST.md` for P8 runtime source backfill, unless the task explicitly changes active delivery or archive governance
 
 ## Stop-condition findings
 

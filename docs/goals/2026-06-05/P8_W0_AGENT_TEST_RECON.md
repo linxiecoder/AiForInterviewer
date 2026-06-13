@@ -26,8 +26,8 @@ done_condition: 产出测试 / 架构门禁 recon 报告，列出现有 must-pas
 - `AGENTS.md`
 - `docs/00-governance/DOCS_INDEX.md`
 - `docs/00-governance/TEST_POLICY.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `docs/tmp/goal0605/phase8_codex_goal_pack/docs/P8_MASTER_GOAL.md`
 - `docs/tmp/goal0605/phase8_codex_goal_pack/validation/P8_VALIDATION_COMMANDS.md`
 - `docs/tmp/goal0605/phase8_codex_goal_pack/agents/D_TEST_GATE_RECON.md`

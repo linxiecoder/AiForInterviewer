@@ -7,7 +7,7 @@ permalink: ai-for-interviewer/docs/arch/ai-skill-adoption-plan
 
 # AI Skill 控制架构采用方案
 
-本文是机制优先的采用方案，不是新的阶段计划或任务入口。正式实施必须拆成 `AIFI-*` 并登记到 `docs/03-delivery/BACKLOG.md`。
+本文是机制优先的采用方案，不是新的阶段计划或任务入口。正式实施必须拆成 `AIFI-*` 并登记到 `docs/03-implementation/BACKLOG.md`。
 
 ## 1. 采用目标
 

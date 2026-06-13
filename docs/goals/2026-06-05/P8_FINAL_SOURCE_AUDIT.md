@@ -43,8 +43,8 @@ files:
     - docs/00-governance/DOCS_GOVERNANCE.md
     - docs/01-product/PRD.md
     - docs/01-product/REQUIREMENT_TRACEABILITY.md
-    - docs/03-delivery/DELIVERY_PLAN.md
-    - docs/03-delivery/BACKLOG.md
+    - docs/03-implementation/DELIVERY_PLAN.md
+    - docs/03-implementation/BACKLOG.md
     - archive/MANIFEST.md
     - docs/tmp/goal0605/phase8_codex_goal_pack/docs/P8_MASTER_GOAL.md
     - docs/goals/README.md
@@ -78,8 +78,8 @@ Governance / active boundaries:
 - `docs/00-governance/DOCS_GOVERNANCE.md`
 - `docs/01-product/PRD.md`
 - `docs/01-product/REQUIREMENT_TRACEABILITY.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `archive/MANIFEST.md`
 
 P8 goal and execution evidence:

@@ -13,7 +13,7 @@ permalink: ai-for-interviewer/docs/goals
 ## 边界
 
 - 本目录不是 active requirement、active design、delivery plan、ADR、Project source 或代码事实源。
-- 本目录不得替代 `docs/01-product/PRD.md`、`docs/02-design/*.md`、`docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md`、`docs/04-decisions/ADR-*.md` 或当前代码。
+- 本目录不得替代 `docs/01-product/PRD.md`、`docs/02-design/*.md`、`docs/03-implementation/BACKLOG.md`、`docs/03-implementation/DELIVERY_PLAN.md`、`docs/04-decisions/ADR-*.md` 或当前代码。
 - 本目录中的 proposed delta 只表示执行后建议回填内容；除非后续授权窗口已经修改对应 active source docs，否则不得视为当前事实。
 - 本目录不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md`、active docs 或 ADR 流程启动任务、关闭阶段、改变需求、改变设计或改变实现事实。
 

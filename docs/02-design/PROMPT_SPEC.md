@@ -35,7 +35,7 @@ permalink: ai-for-interviewer/docs/02-design/prompt-spec
 | `docs/02-design/PROMPT_ASSET_SPEC.md` | Production Prompt Asset registry、asset 字段、runtime bundle、builder、validator、fixture 和 trace 映射 |
 | `docs/02-design/PROMPT_EVALUATION_SPEC.md` | Golden / regression / negative fixtures、quality metrics、fake / real provider gate、human review、CI gate 和 rollback policy |
 | `docs/02-design/PRESSURE_MODE_SPEC.md` | Pressure Mode lifecycle、turn loop、pace/end/report handoff、runtime graph boundary 和 `P-PRESSURE-*` mode-level sequencing |
-| `docs/03-delivery/BACKLOG.md` | `AIFI-PROMPT-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-SEC-001` 的依赖 |
+| `docs/03-implementation/BACKLOG.md` | `AIFI-PROMPT-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-SEC-001` 的依赖 |
 
 ### 2.2 非目标
 

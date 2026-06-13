@@ -28,6 +28,29 @@ permalink: ai-for-interviewer/docs/02-design/skill-model-spec
 
 结论：必须建立独立 Skill / Capability taxonomy。现有对象只能引用或消费 Skill Model，不能被临时升级为 Skill Model。
 
+### 2.1 已确认能力迁移边界
+
+本节迁入原 capability 状态矩阵中的能力状态口径；原 standalone 来源矩阵删除后，本文件只承接 capability 语义和状态边界，代码路径与验证证据由实现说明文档承接。
+
+| 能力域 | 当前状态口径 | 能力边界 |
+|---|---|---|
+| Resume | `implemented` | 保护 Markdown 简历 CRUD、versioning、owner scope；不把 evidence extraction、derived outline 或独立项目经历产品流计入已实现。 |
+| Job | `implemented` | 保护 manual Job CRUD、versioning、stale conflict；不把 JD decode flow、外部材料解析或 criterion-level role fit 计入已实现。 |
+| Binding | `implemented` | 保护 owner scope、active binding idempotency 和 version conflict；不外推到完整历史报告 / 复盘 / 匹配分析回看流。 |
+| Polish session / answer | `implemented` | 保护 polish session persistence、answer persistence 和 ended-session rejection；不把 scoring、feedback quality、pressure session 或 shared mock interview flow 合并为已实现。 |
+| Polish module split | `implemented` | 仅代表 conservative UseCase / Repository facade / frontend component extraction slice；不升级 aggregate Polish、live-provider quality、runtime graph productization、report、progress tree、full candidate lifecycle 或 full Weakness re-entry。 |
+| Assets | `implemented` | 保护 asset create / version / RAG chunks；不证明 RAG 已进入 question / feedback main runtime chain。 |
+| G-003 / G-004 / Composition Layer | `implemented` for registered slices | G-003 只做 evaluation / feedback；G-004 只做 transcript understanding；Composition Layer 只做 envelope-level routing / packaging。 |
+| Provider boundary / fake isolation | `validated` / guard capability | 保护 compact provider request、forbidden-key rejection、fake provider isolation；不作为 real-provider quality certification。 |
+| Agent definitions / handoff / runtime / L5 local slice | `validated` 或 `validated_with_deferred_gaps` | 只承接 candidate-only、refs-only、default-off、本地 deterministic / replay / eval evidence；不声明 production L5 release、remote CI hard claim 或 real-provider certification。 |
+
+保留的 non-claim：
+
+- `partial`、`skeleton`、`设计-only`、`missing`、`default-off`、`validated_with_deferred_gaps` 不得被改写为 `implemented`。
+- route prefix、DB model、disabled frontend nav、fallback、deterministic/replay/fake/mock eval、default-off graph 均不能单独证明产品能力已实现。
+- Training independent product mode 仍是 intentionally excluded from MVP；Weakness remediation target 仍是 Polish 或 Pressure/Mock，不是 Training。
+- aggregate Polish 仍是 `partial`，直到 API + UseCase + Repository/Model + Tests + frontend/user path + runtime quality evidence 独立闭合。
+
 ## 3. Non-goals
 
 - 不把 `ScoreDimension`、`ProgressTree`、`Weakness`、`Asset`、`TrainingRecommendation` 或 `TrainingTask` 改名为 Skill。

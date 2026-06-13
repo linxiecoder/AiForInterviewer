@@ -78,7 +78,7 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 保留边界：
 
 1. F6 / F7 / F8 不因 F4 阻断，但仍需满足各自依赖和后续阶段授权。
-2. F8 阶段仍需基于 `RELEASE_HANDOFF_SPEC.md` 创建正式 `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、rollback strategy、known limitations 和 release retrospective；本轮不创建这些 F8 产物。
+2. F8 阶段仍需基于 `RELEASE_HANDOFF_SPEC.md` 创建正式 `docs/03-implementation/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、rollback strategy、known limitations 和 release retrospective；本轮不创建这些 F8 产物。
 3. PRD / UX 中“展示主要简历模块”“维护项目经历”等上游产品口径如需改写为 Markdown-only + derived outline 表述，后续按产品变更流程处理；本轮不修改 PRD / UX。
 
 ## 6. 定向复核：AR-F4-F8-001
@@ -149,7 +149,7 @@ permalink: ai-for-interviewer/design/reviews/f4-to-f8-readiness-acceptance
 | provider failure / rate limit / retry | Verified | `RELEASE_HANDOFF_SPEC.md` §8 与 `API_SPEC.md` §14 明确可重试 / 不可重试 failure、retry 不扩大上下文、不启用互联网检索、不绕过 owner check、low confidence / partial 不伪装高置信，并要求 rate limit 响应进入 F8 release check |
 | retention / deletion / privacy | Verified | `RELEASE_HANDOFF_SPEC.md` §9 与 `SECURITY_PRIVACY.md` §22 覆盖删除后历史引用展示、source deleted / disabled / archived / unavailable 行为、audit / trace 保留边界、provider payload 不保存或只保存安全摘要、copy event 不存正文、删除 / 禁用 / 归档对后续 AI 生成的影响和 restore 后校验 |
 | Deferred→Backlog | Verified | `RELEASE_HANDOFF_SPEC.md` §10 将全部 Deferred 项映射到 owner、`AIFI-REL-001` 至 `AIFI-REL-007`、`AIFI-BE-001` 或 LATER / accepted risk / not blocking 理由；`BACKLOG.md` 已新增相应 AIFI-* 任务，不创建新阶段体系 |
-| F8 output mapping | Verified | `RELEASE_HANDOFF_SPEC.md` §11 说明如何生成 `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、known limitations、rollback strategy、release retrospective 和 next iteration backlog；本轮不创建这些 F8 产物 |
+| F8 output mapping | Verified | `RELEASE_HANDOFF_SPEC.md` §11 说明如何生成 `docs/03-implementation/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、known limitations、rollback strategy、release retrospective 和 next iteration backlog；本轮不创建这些 F8 产物 |
 
 本节只记录 `AR-F4-F8-003` 定向复核结果。所有 known findings 已 Verified；整体 `状态` 已在本轮人工批准后转为 `Accepted`，允许 F5 启动，但不自动批准 F6 / F7 / F8 独立启动或 F8 正式发布。
 

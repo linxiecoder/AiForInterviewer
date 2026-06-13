@@ -25,13 +25,12 @@ Status: warn
 - Governance / goal docs:
   - `AGENTS.md`
   - `docs/00-governance/DOCS_INDEX.md`
-  - `docs/03-delivery/BACKLOG.md`
-  - `docs/03-delivery/DELIVERY_PLAN.md`
+  - `docs/03-implementation/BACKLOG.md`
+  - `docs/03-implementation/DELIVERY_PLAN.md`
   - `docs/tmp/goal0605/phase8_codex_goal_pack/docs/P8_MASTER_GOAL.md`
   - `docs/tmp/goal0605/phase8_codex_goal_pack/agents/A_RUNTIME_SURFACE_RECON.md`
   - `docs/04-decisions/ADR-0005-langgraph-agentic-workflow-runtime.md`
-  - `docs/03-delivery/refactor-multiagent-langgraph-implementation/01_ARCHITECTURE_ASIS_TOBE.md`
-  - `docs/03-delivery/refactor-multiagent-langgraph-implementation/03_BACKEND_FUNCTION_PACKAGES/01_AI_RUNTIME_INFRA_PACKAGE.md`
+  - historical refactor planning docs, now de-layered and deleted; confirmed implementation evidence is retained in active design docs and `docs/03-implementation/F5_BACKEND_IMPLEMENTATION_NOTES.md`
   - `docs/02-design/SECURITY_PRIVACY.md`
 - Runtime application code:
   - `apps/api/app/application/agents/runtime/__init__.py`

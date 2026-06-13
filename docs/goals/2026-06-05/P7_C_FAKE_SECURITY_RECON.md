@@ -18,7 +18,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-05/p7-c-fake-security-recon
 
 | Label | Path |
 |---|---|
-| GITHUB_CODE | `AGENTS.md`, `docs/00-governance/DOCS_INDEX.md`, `docs/03-delivery/BACKLOG.md` |
+| GITHUB_CODE | `AGENTS.md`, `docs/00-governance/DOCS_INDEX.md`, `docs/03-implementation/BACKLOG.md` |
 | GOAL_SOURCE | `docs/tmp/goal0605/phase7_provider_fail_closed/GOAL_P7_PROVIDER_FAIL_CLOSED.md`, `P7_ACCEPTANCE_CHECKLIST.md` |
 | PROJECT_SOURCE | `docs/project-sources/07_CANONICAL_EVIDENCE_CONTRACT.md`, `08_DDD_TARGET_ARCHITECTURE.md`, `docs/02-design/SECURITY_PRIVACY.md` |
 | GITHUB_CODE | `apps/api/app/infrastructure/llm/**`, `apps/api/app/application/ai_runtime/**`, `apps/api/app/application/polish/**`, `tests/fakes/**`, `tests/evals/**`, `tests/api/test_fake_llm_boundary.py`, `tests/api/test_llm_runtime.py` |

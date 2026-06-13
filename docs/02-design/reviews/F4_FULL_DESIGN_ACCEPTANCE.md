@@ -28,8 +28,8 @@ Status: Pending
 - `AGENTS.md`
 - `docs/00-governance/DOCS_INDEX.md`
 - `docs/00-governance/AI_WORKFLOW.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `docs/01-product/PRD.md`
 - `docs/01-product/REQUIREMENT_TRACEABILITY.md`
 - `docs/02-design/UX_SPEC.md`

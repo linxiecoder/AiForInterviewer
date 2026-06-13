@@ -20,8 +20,8 @@ permalink: ai-for-interviewer/docs/02-design/ui-design-system
 - 输入依据：
   - `docs/01-product/PRD.md`。
   - `docs/02-design/UX_SPEC.md`。
-  - `docs/03-delivery/DELIVERY_PLAN.md`。
-  - `docs/03-delivery/BACKLOG.md`。
+  - `docs/03-implementation/DELIVERY_PLAN.md`。
+  - `docs/03-implementation/BACKLOG.md`。
   - Figma F2 Low Fidelity 分批审计结果。
 - 边界声明：
   - 本文档不修改 PRD。
@@ -56,8 +56,8 @@ permalink: ai-for-interviewer/docs/02-design/ui-design-system
 
 - `docs/01-product/PRD.md` 是 MVP 产品需求唯一事实源。
 - `docs/02-design/UX_SPEC.md` 是 F2 低保真设计唯一 active 文档。
-- `docs/03-delivery/DELIVERY_PLAN.md` 是唯一阶段与里程碑入口。
-- `docs/03-delivery/BACKLOG.md` 是唯一任务入口。
+- `docs/03-implementation/DELIVERY_PLAN.md` 是唯一阶段与里程碑入口。
+- `docs/03-implementation/BACKLOG.md` 是唯一任务入口。
 - 本文档只在 F3 范围内沉淀高保真设计系统草案，不反向修改上述入口。
 
 ### 4.2 Figma 证据边界

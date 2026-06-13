@@ -27,8 +27,8 @@ permalink: ai-for-interviewer/agents
 | 文档治理 | `docs/00-governance/DOCS_GOVERNANCE.md` | 维护生命周期、命名、归档和防腐规则 |
 | AI 工作流 | `docs/00-governance/AI_WORKFLOW.md` | 约束 Codex / AI 的读取、修改、落库和确认流程 |
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 追踪历史需求是否被吸收、替代、后置或待决策 |
-| 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
-| 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
+| 阶段计划 | `docs/03-implementation/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
+| 任务入口 | `docs/03-implementation/BACKLOG.md` | 唯一任务入口 |
 | 归档说明 | `archive/README.md` | 说明 archive 只作历史来源 |
 | 归档台账 | `archive/MANIFEST.md` | 登记所有归档动作、替代路径和阻断条件 |
 
@@ -42,8 +42,8 @@ permalink: ai-for-interviewer/agents
 
 ## 4. 写入边界
 
-- 所有任务必须进入 `docs/03-delivery/BACKLOG.md`。
-- 所有阶段必须进入 `docs/03-delivery/DELIVERY_PLAN.md`。
+- 所有任务必须进入 `docs/03-implementation/BACKLOG.md`。
+- 所有阶段必须进入 `docs/03-implementation/DELIVERY_PLAN.md`。
 - 所有需求追踪必须进入 `docs/01-product/REQUIREMENT_TRACEABILITY.md`。
 - 所有归档动作必须进入 `archive/MANIFEST.md`。
 - 重大治理、范围、架构或实现决策进入 `docs/04-decisions/ADR-*.md`；创建 ADR 前必须先确认确有决策需要长期保存。
