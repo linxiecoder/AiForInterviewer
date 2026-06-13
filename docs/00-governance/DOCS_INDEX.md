@@ -22,8 +22,9 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | 文档治理 | `docs/00-governance/DOCS_GOVERNANCE.md` | 文档生命周期、命名、归档、迁移和防腐规则 |
 | AI 工作流 | `docs/00-governance/AI_WORKFLOW.md` | Codex / AI 读取、修改、落库和确认流程 |
 | 测试策略 | `docs/00-governance/TEST_POLICY.md` | 测试临时产物治理、受管临时目录工具和测试残留检查规则 |
-| Interview Coach G-001 后合并记录 | `docs/active/interview-coach-refactor.md` | post-merge record for G-001 interview-coach-inspired refactor；记录已合入能力、架构边界、延后能力、验证范围和 main hygiene 状态；不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实 |
-| 执行证据目录索引 | `docs/goals/README.md` | 受控窗口 close-out execution evidence 目录索引；`docs/goals/` 只记录执行历史、验证证据、proposed delta 和剩余缺口，不替代 active requirement、active design、delivery plan、ADR、Project source 或代码事实；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md` 或 active docs 启动任务或变更事实源 |
+| 架构机制分析输入 | `docs/arch/*.md` | draft-input 架构机制分析材料；用于解释 Skill-first control architecture、LLM execution control loop、reference skill 机制和重构输入；不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、active design docs、ADR 或代码事实；不得作为新任务体系、阶段体系或实现完成声明 |
+| Interview Coach Refactor 规格 | `docs/02-design/INTERVIEW_COACH_REFACTOR_SPEC.md` | interview-coach-refactor 当前 active system spec；登记 G-003 / G-004 / Composition Layer 的职责边界、实现路径、验证证据和 non-claim；迁入自 `docs/active/interview-coach-refactor.md`，不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实 |
+| 执行证据目录索引 | `docs/goals/README.md` | 受控窗口 close-out execution evidence 目录索引；`docs/goals/` 只记录执行历史、验证证据、proposed delta 和剩余缺口，不替代 active requirement、active design、delivery plan、ADR 或代码事实；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md` 或 active docs 启动任务或变更事实源 |
 | 产品需求 | `docs/01-product/PRD.md` | MVP 产品需求唯一事实源 |
 | 需求追踪 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` | 历史需求吸收、替代、后置、缺口和待决策项 |
 | F2 低保真设计 | `docs/02-design/UX_SPEC.md` | F2 低保真设计唯一 active 文档；输入来源是 `PRD.md`，UNKNOWN 输入来源是 PRD §10；正文以功能场景设计包为主体，Figma 低保真稿链接、Page 名称、Prototype 表达状态和人工接受状态登记以 `UX_SPEC.md` 为准，仓库不存储 Figma 文件本体；不替代 `PRD.md`，不包含高保真 UI、技术设计、API、数据模型或 Prompt 设计 |
@@ -61,6 +62,7 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | docs/02 深度语义关联审计验收记录 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_ACCEPTANCE.md` | AIFI-ARCH-006 深度语义审计证据；记录审计范围、语义链路矩阵完成情况、finding 数量、F5/F6/F7/F8 readiness 结论、人工决策项和 MCP approval 状态占位；F4/M4 人工批准后作为后续 F6/F8 refinement evidence 保留，不阻断 F5，不替代 active design docs |
 | 阶段计划 | `docs/03-delivery/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-delivery/BACKLOG.md` | 唯一任务入口 |
+| 能力实现登记 | `docs/03-delivery/CAPABILITY_IMPLEMENTATION_REGISTRY.md` | confirmed implemented capability 的 active registry；登记从 `.codex-temp/interview-coach-refactor/`、`docs/active/`、`docs/project-sources/` 迁入的实现事实、真实路径、验证证据、行为影响和 explicit non-claims；不创建新任务体系，不把 design-only / deferred / partial 升级为 implemented |
 | F5 LangGraph MultiAgent implementation entry | `docs/03-delivery/refactor-multiagent-langgraph-implementation/` | PR2-PR8 LangGraph MultiAgent 后续实施入口；不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、active design docs 或 ADR；PR2 exact scope 已内联到 `02_BACKEND_REFACTOR_MASTER_PLAN.md` §4 / §5；历史 planning package 已删除，superseded; see Git history |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
 | 归档台账 | `archive/MANIFEST.md` | 归档动作、替代路径、阻断条件和状态 |
@@ -79,8 +81,8 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | `docs/02-design/` | active | 当前 `UX_SPEC.md`、`UI_DESIGN_SYSTEM.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`SECURITY_PRIVACY.md`、`PROMPT_SPEC.md`、`PROMPT_ASSET_SPEC.md`、`PROMPT_EVALUATION_SPEC.md`、`API_SPEC.md`、`SCORING_SPEC.md`、`SEMANTICS_GLOSSARY.md`、`SKILL_MODEL_SPEC.md`、`PRESSURE_MODE_SPEC.md`、`PERSISTENCE_MODEL.md`、`APPLICATION_FLOW_SPEC.md` 和 `RELEASE_HANDOFF_SPEC.md` 已登记为 active 设计文档；`docs/02-design/reviews/*` 仅作为已登记 F4 设计审查证据，不替代设计事实源；未创建或未登记的后续设计文档不得作为执行依据 |
 | `docs/03-delivery/` | active | 当前 `DELIVERY_PLAN.md`、`BACKLOG.md` 是阶段与任务入口；`refactor-multiagent-langgraph-implementation/` 是 PR2-PR8 LangGraph MultiAgent implementation entry；历史 LangGraph planning package 已删除，superseded; see Git history |
 | `docs/04-decisions/` | active | 只承载已确认长期决策 ADR |
-| `docs/active/` | active | 承载已在本索引登记的长期 active records；这些记录只描述已合入事实、边界、验证和后续决策项，不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实 |
-| `docs/goals/` | evidence-only | 只承载受控窗口执行证据、final report、audit/backfill delta、validation evidence 和 remaining gaps；不是 active requirement、active design、delivery plan、ADR 或代码事实源；当与 GitHub main 当前代码、当前 active docs 或 Project source 冲突时，以后者为准；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md`、active docs 或 ADR 流程 |
+| `docs/arch/` | draft-input | 只承载架构机制分析、reference skill 机制研究、Skill-first control architecture 采用输入和重构建议；不是 active requirement、active design、delivery plan、BACKLOG、ADR 或代码事实源；其中的 priority / slice / roadmap wording 只能作为输入，正式执行必须回写唯一入口 |
+| `docs/goals/` | evidence-only | 只承载受控窗口执行证据、final report、audit/backfill delta、validation evidence 和 remaining gaps；不是 active requirement、active design、delivery plan、ADR 或代码事实源；当与 GitHub main 当前代码或当前 active docs 冲突时，以后者为准；不得绕过 `BACKLOG.md`、`DELIVERY_PLAN.md`、active docs 或 ADR 流程 |
 | `archive/` | archive-only | 只作历史来源、证据和台账，不作执行依据 |
 
 ## 3. 编号规则

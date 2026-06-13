@@ -9,6 +9,8 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 本文档是 `D-W1 — Recon and Gap Classification` 的当前代码事实记录。它只记录本地 recon、测试证据、能力缺口和后续窗口边界，不声明任何 L5 capability `done`，也不替代 active Project sources、代码或测试结果。
 
+> 2026-06-13 cleanup note: former `docs/project-sources/**` has been retired. Confirmed implemented capability evidence migrated to `docs/03-delivery/CAPABILITY_IMPLEMENTATION_REGISTRY.md`; active doc entry is `docs/00-governance/DOCS_INDEX.md`. Historical references below to Project sources are retained as past-window context and must be refreshed before reuse.
+
 ## 1. Source Priority
 
 本轮按 canonical goal 的事实优先级执行：

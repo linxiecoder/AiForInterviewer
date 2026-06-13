@@ -277,15 +277,37 @@ def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> Non
     assert result.succeeded is True
     provider_prompt = transport.requests[-1].evidence_bundle
     current_answer = provider_prompt["current_answer"]
-    assert current_answer["answer_text"] == context["answer_text"]
-    assert current_answer["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert "answer_text" not in current_answer
+    assert current_answer["structured_answer"]["parse_status"] == "parsed"
+    assert current_answer["structured_answer"]["claims"][0]["text"] == context["answer_text"]
+    assert current_answer["answer_text_policy"] == "structured_answer_signal_primary_input"
     assert current_answer["answer_text_max_chars"] == 1200
     assert current_answer["answer_text_is_bounded"] is True
     assert current_answer["full_answer_forbidden"] is True
-    assert provider_prompt["input_contract"]["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert provider_prompt["input_contract"]["answer_text_policy"] == "structured_answer_signal_primary_input"
     assert provider_prompt["input_contract"]["answer_text_max_chars"] == 1200
     assert provider_prompt["input_contract"]["answer_text_is_bounded"] is True
     assert provider_prompt["input_contract"]["full_answer_forbidden"] is True
+
+
+def test_feedback_generation_wraps_raw_answer_when_parser_fails(monkeypatch: Any) -> None:
+    from app.application.polish import feedback_generation_service
+
+    class RaisingParser:
+        def parse(self, answer_text: str) -> object:
+            raise RuntimeError("parser failed")
+
+    monkeypatch.setattr(feedback_generation_service, "TranscriptSignalParser", RaisingParser)
+    transport = _PayloadTransport(_generated_payload())
+    context = _context()
+
+    result = _service(transport).generate(context)
+
+    assert result.succeeded is True
+    structured_answer = transport.requests[-1].evidence_bundle["current_answer"]["structured_answer"]
+    assert structured_answer["parse_status"] == "fallback"
+    assert structured_answer["claims"][0]["text"] == context["answer_text"]
+    assert structured_answer["confidence_indicators"][0]["kind"] == "parser_fallback"
 
 
 def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits() -> None:
@@ -593,7 +615,8 @@ def test_prompt_asset_contains_current_question_and_answer_without_private_field
 
     assert asset["task_type"] == POLISH_FEEDBACK_TASK_TYPE
     assert asset["input_data"]["current_question"]["question_text"] == _context()["question_text"]
-    assert asset["input_data"]["current_answer"]["answer_text"] == _context()["answer_text"]
+    assert "answer_text" not in asset["input_data"]["current_answer"]
+    assert asset["input_data"]["current_answer"]["structured_answer"]["claims"]
     assert not _contains_forbidden_key(asset)
 
 

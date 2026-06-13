@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from copy import deepcopy
 from typing import Any
 
@@ -19,6 +19,11 @@ from app.application.polish.feedback_rules import apply_feedback_core_rules
 from app.application.polish.feedback_validation import (
     validate_feedback_candidate_payload,
     validate_final_feedback_payload,
+)
+from app.application.polish.transcript_signal_parser import (
+    TranscriptSignalParser,
+    build_fallback_structured_answer,
+    structured_answer_to_evaluation_text,
 )
 
 
@@ -57,6 +62,7 @@ class FeedbackGenerationContext:
     job_snapshot: dict[str, Any] = field(default_factory=dict)
     resume_snapshot: dict[str, Any] = field(default_factory=dict)
     progress_node_snapshot: dict[str, Any] = field(default_factory=dict)
+    structured_answer: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -90,11 +96,13 @@ class FeedbackGenerationService:
                 | {"provider_status": "not_called", "llm_called": False},
             )
 
-        prompt_asset = build_feedback_prompt_asset(normalized_context)
+        evaluation_context = _with_structured_answer(normalized_context)
+        prompt_asset = build_feedback_prompt_asset(evaluation_context)
         metadata = metadata | {
             "prompt_version": prompt_asset["prompt_version"],
             "schema_id": prompt_asset["schema_id"],
             "schema_version": prompt_asset["schema_version"],
+            "structured_answer_parse_status": _structured_parse_status(evaluation_context),
         }
         if self._llm_transport is None:
             return FeedbackGenerationResult(
@@ -127,7 +135,7 @@ class FeedbackGenerationService:
 
         agent_result = FeedbackGenerationAgent(transport=self._llm_transport).generate(
             prompt_asset=prompt_asset,
-            input_refs=_input_refs(normalized_context),
+            input_refs=_input_refs(evaluation_context),
         )
         agent_metadata = metadata | _agent_envelope_metadata(agent_result)
         provider_status = str(agent_metadata.get("provider_status") or "not_called")
@@ -186,7 +194,7 @@ class FeedbackGenerationService:
             )
 
         assert candidate_payload is not None
-        ruled_payload = apply_feedback_core_rules(candidate_payload, normalized_context)
+        ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
         final_payload = self._build_final_payload(
             ruled_payload=ruled_payload,
             prompt_asset=prompt_asset,
@@ -370,6 +378,31 @@ def _normalize_context(
     if missing:
         return context, tuple(f"context_{field_name}_required" for field_name in missing)
     return context, ()
+
+
+def _with_structured_answer(context: FeedbackGenerationContext | dict[str, Any]) -> dict[str, Any]:
+    context_dict = _context_to_dict(context)
+    raw_answer_text = _value(context, "answer_text")
+    try:
+        structured_answer = TranscriptSignalParser().parse(raw_answer_text).to_dict()
+    except Exception:
+        structured_answer = build_fallback_structured_answer(raw_answer_text).to_dict()
+    context_dict["structured_answer"] = structured_answer
+    context_dict["answer_text"] = structured_answer_to_evaluation_text(structured_answer)
+    return context_dict
+
+
+def _context_to_dict(context: FeedbackGenerationContext | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(context, dict):
+        return dict(context)
+    return {field.name: getattr(context, field.name) for field in fields(FeedbackGenerationContext)}
+
+
+def _structured_parse_status(context: dict[str, Any]) -> str:
+    structured_answer = context.get("structured_answer")
+    if not isinstance(structured_answer, dict):
+        return ""
+    return _clean(structured_answer.get("parse_status"), max_chars=80)
 
 
 def _input_refs(context: FeedbackGenerationContext | dict[str, Any]) -> tuple[str, ...]:
