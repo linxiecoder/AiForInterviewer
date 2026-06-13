@@ -21,6 +21,12 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_CANDIDATE_TASK,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.transcript_signal_parser import (
+    POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
+    TranscriptSignalParser,
+    build_fallback_structured_answer,
+    structured_answer_to_evaluation_text,
+)
 
 _FEEDBACK_FORBIDDEN_OUTPUT_MARKERS = (
     "raw_prompt",
@@ -76,7 +82,7 @@ _UNSAFE_CONTEXT_KEYS = frozenset(
     }
 )
 _CURRENT_ANSWER_TEXT_MAX_CHARS = 1200
-_CURRENT_ANSWER_TEXT_POLICY = "current_answer_bounded_primary_input"
+_CURRENT_ANSWER_TEXT_POLICY = "structured_answer_signal_primary_input"
 _SOURCE_REF_KEYS = ("resource_type", "resource_id", "ref_type", "ref_id", "source_ref", "source_type")
 _EVIDENCE_ITEMS_LIMIT = 5
 _PROVIDER_EVIDENCE_ITEMS_LIMIT = 5
@@ -101,6 +107,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
     progress_node_ref = _get_text(context, "progress_node_ref", max_chars=200)
     related_terms = _related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))
     canonical_project_assets = _compact_canonical_project_assets(_get_dict(context, "canonical_project_assets"))
+    structured_answer = _structured_answer_for(context)
     input_data = {
         "current_question": {
             "question_id": _get_text(context, "question_id"),
@@ -116,8 +123,10 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         },
         "current_answer": {
             "answer_id": _get_text(context, "answer_id"),
-            "answer_text": _get_text(context, "answer_text", max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS),
+            "structured_answer": structured_answer,
             "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "structured_answer_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "structured_answer_schema_id": POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
             "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
             "answer_text_is_bounded": True,
             "full_answer_forbidden": True,
@@ -159,6 +168,8 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
             "required_context_refs": ["session_id", "question_id", "answer_id"],
             "raw_model_io_storage": False,
             "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "structured_answer_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "structured_answer_schema_id": POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
             "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
             "answer_text_is_bounded": True,
             "full_answer_forbidden": True,
@@ -351,11 +362,10 @@ def _provider_compact_prompt(
         },
         "current_answer": {
             "answer_id": _get_clean_text(current_answer.get("answer_id"), max_chars=120),
-            "answer_text": _get_clean_text(
-                current_answer.get("answer_text"),
-                max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS,
-            ),
+            "structured_answer": _compact_structured_answer(current_answer.get("structured_answer")),
             "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "structured_answer_policy": _CURRENT_ANSWER_TEXT_POLICY,
+            "structured_answer_schema_id": POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
             "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
             "answer_text_is_bounded": True,
             "full_answer_forbidden": True,
@@ -417,6 +427,7 @@ def _provider_compact_prompt(
 def _provider_evidence_items(values: list[Any]) -> list[dict[str, object]]:
     priority = {
         "current_answer": 100,
+        "current_answer_structured": 100,
         "canonical_project_asset": 95,
         "progress_node_summary": 90,
         "question_source": 80,
@@ -439,7 +450,11 @@ def _provider_evidence_items(values: list[Any]) -> list[dict[str, object]]:
                 "title": _get_clean_text(value.get("title"), max_chars=120),
                 "excerpt": _get_clean_text(
                     value.get("excerpt"),
-                    max_chars=300 if reason != "current_answer" else _CURRENT_ANSWER_TEXT_MAX_CHARS,
+                    max_chars=(
+                        _CURRENT_ANSWER_TEXT_MAX_CHARS
+                        if reason in {"current_answer", "current_answer_structured"}
+                        else 300
+                    ),
                 ),
                 "reason": reason,
                 "priority": priority[reason],
@@ -502,10 +517,70 @@ def _prompt_char_count(provider_prompt: dict[str, Any]) -> int:
     return len(json.dumps(provider_prompt, ensure_ascii=False, sort_keys=True))
 
 
+def _structured_answer_for(context: object) -> dict[str, Any]:
+    existing = _get_dict(context, "structured_answer")
+    if existing:
+        return _compact_structured_answer(existing)
+    answer_text = _get_text(context, "answer_text", max_chars=12000)
+    try:
+        return _compact_structured_answer(TranscriptSignalParser().parse(answer_text).to_dict())
+    except Exception:
+        return _compact_structured_answer(build_fallback_structured_answer(answer_text).to_dict())
+
+
+def _compact_structured_answer(value: object) -> dict[str, Any]:
+    source = value if isinstance(value, dict) else build_fallback_structured_answer("").to_dict()
+    return {
+        "schema_id": _get_clean_text(source.get("schema_id"), max_chars=80) or POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
+        "parse_status": _get_clean_text(source.get("parse_status"), max_chars=40) or "fallback",
+        "claims": _compact_structured_items(
+            source.get("claims"),
+            keys=("claim_id", "text", "evidence_ref"),
+            limit=8,
+            max_chars=300,
+        ),
+        "topics": _string_list(source.get("topics"), max_chars=80)[:12],
+        "sentiment": _get_clean_text(source.get("sentiment"), max_chars=40) or None,
+        "confidence_indicators": _compact_structured_items(
+            source.get("confidence_indicators"),
+            keys=("indicator_id", "text", "kind", "evidence_ref"),
+            limit=6,
+            max_chars=160,
+        ),
+        "experience_signals": _compact_structured_items(
+            source.get("experience_signals"),
+            keys=("signal_id", "signal_type", "text", "evidence_ref"),
+            limit=6,
+            max_chars=240,
+        ),
+    }
+
+
+def _compact_structured_items(
+    value: object,
+    *,
+    keys: tuple[str, ...],
+    limit: int,
+    max_chars: int,
+) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for item in _safe_list(value)[:limit]:
+        if not isinstance(item, dict):
+            continue
+        compact = {key: text for key in keys if (text := _get_clean_text(item.get(key), max_chars=max_chars))}
+        if compact:
+            items.append(compact)
+    return items
+
+
 def _evidence_items(context: object) -> list[AgentEvidenceItem]:
     items: list[AgentEvidenceItem] = []
     question_text = _get_text(context, "question_text", max_chars=600)
-    answer_text = _get_text(context, "answer_text", max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS)
+    structured_answer = _structured_answer_for(context)
+    answer_signal_text = _get_clean_text(
+        structured_answer_to_evaluation_text(structured_answer),
+        max_chars=_CURRENT_ANSWER_TEXT_MAX_CHARS,
+    )
     question_id = _get_text(context, "question_id") or "current_question"
     answer_id = _get_text(context, "answer_id") or "current_answer"
     evidence_refs = _string_list(_get_list(context, "evidence_refs"))
@@ -534,16 +609,16 @@ def _evidence_items(context: object) -> list[AgentEvidenceItem]:
             )
         )
 
-    if answer_text:
+    if answer_signal_text:
         items.append(
             AgentEvidenceItem(
                 ref=answer_id,
                 source_type="answer_excerpt",
                 title="Current answer",
-                excerpt=answer_text,
+                excerpt=answer_signal_text,
                 source_ref={"resource_type": "answer", "resource_id": answer_id},
                 priority=100,
-                reason="current_answer",
+                reason="current_answer_structured",
             )
         )
 

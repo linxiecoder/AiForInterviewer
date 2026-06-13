@@ -6,6 +6,8 @@ permalink: ai-for-interviewer/docs/03-delivery/refactor-multiagent-langgraph-imp
 
 # Codex Option D Reconciled Trigger Package
 
+> 2026-06-13 cleanup note: former `docs/project-sources/**` has been retired. Confirmed implemented capability evidence migrated to `docs/03-delivery/CAPABILITY_IMPLEMENTATION_REGISTRY.md`; active doc entry is `docs/00-governance/DOCS_INDEX.md`. Historical prompts below that mention `docs/project-sources/**` are not executable without refreshing their source paths.
+
 ## Purpose
 
 This package replaces the earlier generic Option D trigger with the current-code-informed reconciliation plan supplied by Codex Plan Mode.

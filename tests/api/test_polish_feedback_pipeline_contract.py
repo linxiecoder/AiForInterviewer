@@ -131,9 +131,11 @@ def test_feedback_pipeline_passes_normalized_candidate_to_core_rules(monkeypatch
     from app.application.polish.feedback_rules import apply_feedback_core_rules
 
     seen_payloads: list[dict[str, Any]] = []
+    seen_contexts: list[object] = []
 
     def spy_apply_feedback_core_rules(payload: dict[str, Any], context: object) -> dict[str, Any]:
         seen_payloads.append(payload)
+        seen_contexts.append(context)
         return apply_feedback_core_rules(payload, context)
 
     monkeypatch.setattr(feedback_generation_service, "apply_feedback_core_rules", spy_apply_feedback_core_rules)
@@ -142,6 +144,12 @@ def test_feedback_pipeline_passes_normalized_candidate_to_core_rules(monkeypatch
 
     assert result.succeeded is True
     assert seen_payloads
+    assert seen_contexts
+    context_seen_by_rules = seen_contexts[0]
+    assert isinstance(context_seen_by_rules, dict)
+    assert context_seen_by_rules["structured_answer"]["parse_status"] == "parsed"
+    assert context_seen_by_rules["answer_text"] != _context()["answer_text"]
+    assert "Claims:" in context_seen_by_rules["answer_text"]
     candidate_seen_by_rules = seen_payloads[0]
     assert candidate_seen_by_rules["loss_points"][0]["loss_point_id"] == "lp_recovery"
     assert candidate_seen_by_rules["loss_points"][0]["reason"] == "没有说明重试终止条件和死信处理。"

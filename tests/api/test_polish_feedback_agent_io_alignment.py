@@ -209,11 +209,13 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert provider_prompt["prompt"] == prompt_asset["prompt"]
     assert provider_prompt["output_schema"] == prompt_asset["output_schema"]
     assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
-    assert provider_prompt["input_contract"]["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert provider_prompt["input_contract"]["answer_text_policy"] == "structured_answer_signal_primary_input"
     assert provider_prompt["input_contract"]["answer_text_max_chars"] == 1200
     assert provider_prompt["input_contract"]["answer_text_is_bounded"] is True
     assert provider_prompt["input_contract"]["full_answer_forbidden"] is True
-    assert provider_prompt["current_answer"]["answer_text_policy"] == "current_answer_bounded_primary_input"
+    assert "answer_text" not in provider_prompt["current_answer"]
+    assert provider_prompt["current_answer"]["structured_answer"]["claims"]
+    assert provider_prompt["current_answer"]["answer_text_policy"] == "structured_answer_signal_primary_input"
     assert provider_prompt["current_answer"]["answer_text_max_chars"] == 1200
     assert provider_prompt["current_answer"]["answer_text_is_bounded"] is True
     assert provider_prompt["current_answer"]["full_answer_forbidden"] is True
