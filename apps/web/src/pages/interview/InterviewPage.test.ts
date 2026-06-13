@@ -3300,7 +3300,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(visibleCopy.includes("下一轮用 60/40 权重再答一版"), "反馈卡应展示下一轮打磨建议");
   assertContract(lossTableValues.includes("主要失分"), "失分表格应展示中文严重程度");
   assertContract(lossTableValues.includes("12"), "失分表格应展示扣分数值");
-  assertContract(card.traceItems.length === 0, "反馈卡 view model 不应暴露 trace 引用字段");
+  assertContract(card.traceItems.includes("Trace：1 条安全引用"), "反馈卡应展示安全 trace 元数据数量");
   assertContract(!visibleCopy.includes("trace_should_not_render"), "反馈卡不应暴露 trace 字段");
   assertContract(!visibleCopy.includes("internal_should_not_render"), "反馈卡不应暴露 internal 字段");
   assertContract(!visibleCopy.includes("fake_should_not_render"), "反馈卡不应暴露 fake 字段");
@@ -3796,7 +3796,7 @@ function test_feedback_card_view_model_handles_failed_payload(): void {
     ...card.nextActions.map(toNextRecommendedActionLabel),
   ].join(" ");
 
-  assertContract(card.status === "failed", "failed payload 应保持失败态");
+  assertContract(card.status === "generation_failed", "legacy failed payload 应归一为 generation_failed");
   assertContract(card.title === "反馈生成失败", "失败反馈卡标题应明确展示反馈生成失败");
   assertContract(titles.join(",") === "失败状态", "failed 不应展开打分/失分点/参考回答等空 section");
   assertContract(visibleCopy.includes("反馈生成超时或失败，可重试"), "失败态应展示可重试提示");
@@ -3809,6 +3809,107 @@ function test_feedback_card_view_model_handles_failed_payload(): void {
   assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "失败态不应暴露 provider payload");
   assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "失败态不应暴露 raw prompt");
   assertContract(!visibleCopy.includes("raw_provider_payload_should_not_render"), "失败态不应暴露 raw provider payload");
+}
+
+function test_feedback_card_view_model_maps_structured_status_taxonomy(): void {
+  const cases: Array<{
+    status: NonNullable<PolishFeedbackPayload["status"]>;
+    expectedStatus: string;
+    expectedTitle: string;
+    expectedCopy: string;
+  }> = [
+    {
+      status: "partial",
+      expectedStatus: "partial",
+      expectedTitle: "反馈 #1",
+      expectedCopy: "反馈状态：部分生成",
+    },
+    {
+      status: "low_confidence",
+      expectedStatus: "low_confidence",
+      expectedTitle: "反馈 #1",
+      expectedCopy: "低置信度：需要补充量化指标",
+    },
+    {
+      status: "validation_failed",
+      expectedStatus: "validation_failed",
+      expectedTitle: "反馈校验失败",
+      expectedCopy: "反馈校验失败，可补充回答后重试",
+    },
+    {
+      status: "generation_failed",
+      expectedStatus: "generation_failed",
+      expectedTitle: "反馈生成失败",
+      expectedCopy: "反馈生成超时或失败，可重试",
+    },
+    {
+      status: "failed",
+      expectedStatus: "generation_failed",
+      expectedTitle: "反馈生成失败",
+      expectedCopy: "反馈生成超时或失败，可重试",
+    },
+  ];
+
+  for (const item of cases) {
+    const isFailure = item.expectedStatus === "validation_failed" || item.expectedStatus === "generation_failed";
+    const answer: PolishSessionAnswer = {
+      answer_id: `ans_feedback_${item.status}`,
+      answer_round: 1,
+      answer_text: "回答已保存。",
+      answer_created_at: "2026-05-30T10:00:00Z",
+      feedback_text: isFailure ? item.expectedCopy : "结构化反馈文本",
+      feedback_id: "feedback_structured_status",
+      score_result_id: null,
+      feedback_created_at: "2026-05-30T10:01:00Z",
+      feedback_payload: {
+        status: item.status,
+        feedback_text: isFailure ? item.expectedCopy : "结构化反馈文本",
+        retryable: isFailure,
+        validation_errors: item.status === "validation_failed" ? ["trace_refs_required"] : [],
+        score_result: isFailure
+          ? null
+          : {
+              score_type: "polish_answer",
+              score_value: 76,
+            },
+        loss_points: isFailure
+          ? []
+          : [
+              {
+                severity: "minor",
+                deduction: 4,
+                reason: "需要补充量化指标",
+              },
+            ],
+        reference_answer: isFailure
+          ? null
+          : {
+              summary: "补充量化指标和恢复边界。",
+            },
+        next_recommended_actions: ["provide_more_answer_detail"],
+        low_confidence_flags:
+          item.status === "low_confidence" ? [{ flag_id: "需要补充量化指标" }] : [],
+        trace_refs: isFailure ? [] : [{ trace_type: "llm_trace", trace_ref_id: "raw_trace_should_not_render" }],
+      },
+    };
+
+    const card = buildFeedbackCardViewModel(answer);
+    const visibleCopy = [
+      card.title,
+      card.status,
+      ...card.sections.flatMap((section) => [section.title, ...section.items]),
+      ...card.traceItems,
+    ].join(" ");
+
+    assertContract(card.status === item.expectedStatus, `${item.status} 应映射为 ${item.expectedStatus}`);
+    assertContract(card.title === item.expectedTitle, `${item.status} 应展示正确标题`);
+    assertContract(visibleCopy.includes(item.expectedCopy), `${item.status} 应展示状态提示文案`);
+    assertContract(!visibleCopy.includes("raw_trace_should_not_render"), `${item.status} 不应暴露 raw trace id`);
+    if (isFailure) {
+      const titles = card.sections.map((section) => section.title);
+      assertContract(titles.join(",") === "失败状态", `${item.status} 失败态不应展开普通 score section`);
+    }
+  }
 }
 
 function test_feedback_card_view_model_does_not_calculate_score_on_frontend(): void {
@@ -4232,6 +4333,7 @@ test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
 test_feedback_card_view_model_handles_failed_payload();
+test_feedback_card_view_model_maps_structured_status_taxonomy();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();
 test_clipboard_markdown_stays_compatible_with_structured_feedback_payload();
 test_session_clipboard_markdown_includes_full_context_tree_and_all_questions();

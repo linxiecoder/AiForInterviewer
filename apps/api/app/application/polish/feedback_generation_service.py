@@ -248,10 +248,18 @@ class FeedbackGenerationService:
         agent_low_confidence_flags: tuple[str, ...],
     ) -> dict[str, Any]:
         trace_refs = _string_tuple(agent_trace_refs) + _string_tuple(ruled_payload.get("trace_refs"))
+        low_confidence_flags = tuple(
+            _string_tuple(
+                (
+                    *agent_low_confidence_flags,
+                    *_string_tuple(ruled_payload.get("low_confidence_flags")),
+                )
+            )
+        )
         final_payload: dict[str, Any] = {
             "schema_id": _clean(prompt_asset.get("schema_id"), max_chars=120),
             "schema_version": _clean(prompt_asset.get("schema_version"), max_chars=40),
-            "status": _feedback_status(ruled_payload),
+            "status": _feedback_status(ruled_payload, low_confidence_flags=low_confidence_flags),
             "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
             "feedback_id": "",
             "feedback_text": _clean(ruled_payload.get("feedback_text"), max_chars=12000),
@@ -264,14 +272,7 @@ class FeedbackGenerationService:
             "answer_change_analysis": deepcopy(ruled_payload.get("answer_change_analysis")),
             "feedback_cards": deepcopy(ruled_payload.get("feedback_cards")),
             "next_recommended_actions": list(_string_tuple(ruled_payload.get("next_recommended_actions"))),
-            "low_confidence_flags": tuple(
-                _string_tuple(
-                    (
-                        *agent_low_confidence_flags,
-                        *_string_tuple(ruled_payload.get("low_confidence_flags")),
-                    )
-                )
-            ),
+            "low_confidence_flags": low_confidence_flags,
             "trace_refs": list(dict.fromkeys(trace_refs)),
             "feedback_metadata": _final_feedback_metadata(ruled_payload)
             | _feedback_context_hygiene_metadata(prompt_asset, status="clean"),
@@ -279,9 +280,13 @@ class FeedbackGenerationService:
         return final_payload
 
 
-def _feedback_status(ruled_payload: dict[str, Any]) -> str:
+def _feedback_status(ruled_payload: dict[str, Any], *, low_confidence_flags: tuple[str, ...] = ()) -> str:
     status = _clean(ruled_payload.get("status"), max_chars=40)
-    if status in {"generated", "partial", "low_confidence", "validation_failed"}:
+    if status == "validation_failed":
+        return status
+    if low_confidence_flags:
+        return "low_confidence"
+    if status in {"generated", "partial", "low_confidence"}:
         return status
     metadata = ruled_payload.get("feedback_metadata")
     validation_warnings = metadata.get("validation_warnings") if isinstance(metadata, dict) else None

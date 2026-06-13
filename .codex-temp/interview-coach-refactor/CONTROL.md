@@ -2,7 +2,7 @@
 title: Interview Coach Refactor Control
 type: control
 status: active
-round: Round 6
+round: Round 5 G-003
 updated: 2026-06-12
 ---
 
@@ -10,7 +10,9 @@ updated: 2026-06-12
 
 | Field | Value |
 |---|---|
-| Current Goal | G-001 session continuity / context hygiene |
-| Phase | Round 6-C architecture hardening |
-| Blockers | None for Round 6-C validation. Merge-scope mismatch remains out of scope for this round. |
-| Next Task | GPT Project audit Round 6-C, then merge gate remediation / clean branch decision. Do not start G-002 without explicit approval. |
+| Phase | Implementation / Validation |
+| Current Goal | G-003 Structured Answer Evaluation |
+| Goal File | `.codex-temp/interview-coach-refactor/05-goals/G-003-structured-answer-evaluation.md` |
+| Goal Status | Implemented and validated |
+| Blockers | None for G-003 automated validation. Manual browser validation not run. |
+| Next Codex Task | Final review / commit decision for G-003, then decide next authorized Goal |

@@ -1,14 +1,56 @@
 ---
-title: G-001 Test Results
+title: Interview Coach Refactor Test Results
 type: validation-results
-status: round-6-frontend-validated-merge-blocked
-round: Round 6
+status: g003-structured-answer-evaluation-validated
+round: Round 5 G-003
 updated: 2026-06-12
 ---
 
 # Test Results
 
-本文记录 G-001 session continuity / context hygiene 的验证结果。Round 6 重新执行 frontend production validation，并完成 merge review；不验证、不实现、不修改 G-002 或其他 Goal。
+本文记录 `interview-coach-refactor` 临时工作区的验证结果。最新验证窗口为 G-003 Structured Answer Evaluation；历史 G-001 结果保留在后续章节。
+
+## Round 5 G-003 Structured Answer Evaluation Commands Run
+
+### Expected RED Before Implementation
+
+| Command | Exit | Observed result | Note |
+|---|---:|---|---|
+| `.venv/bin/python -m pytest tests/api/test_polish_feedback_generation_service.py -q` | 1 | 37 passed, 2 failed | Expected RED: low-confidence payloads still returned `generated` |
+| `.venv/bin/python -m pytest tests/api/test_polish_application_service_split.py -q` | 1 | 17 passed, 1 failed | Expected RED: validation-stage failure still persisted as `generation_failed` |
+| `npm --workspace apps/web run test` | 2 | TypeScript errors | Expected RED: frontend status type only allowed `pending/generated/failed` |
+| `.venv/bin/python -m pytest tests/api/test_polish_api.py::test_polish_feedback_payload_schema_accepts_structured_evaluation_status_and_trace_refs -q` | 1 | 1 failed | Expected RED: schema rejected string `trace_refs` |
+
+### GREEN Validation After Implementation
+
+| Command | Exit | Observed result |
+|---|---:|---|
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_feedback_generation_service.py -q` | 0 | 39 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_feedback_models.py tests/api/test_polish_feedback_pipeline_contract.py -q` | 0 | 15 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_application_service_split.py -q` | 0 | 18 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_api.py -q` | 0 | 130 passed |
+| `npm --workspace apps/web run test` | 0 | `tsc -p tsconfig.json --noEmit` passed |
+
+## Round 5 G-003 Boundary Result
+
+| Boundary | Result |
+|---|---|
+| Status taxonomy | `generated`, `partial`, `low_confidence`, `validation_failed`, `generation_failed`, `pending`, and legacy `failed` covered by backend/frontend tests |
+| Embedded score | Response-level `PolishFeedbackPayload.score_result` preserved; `score_result_id=None` asserted |
+| Formal `ScoreResult` persistence | Not implemented; no scoring API/model/repository files modified |
+| Trace safety | Frontend tests assert sanitized count/type metadata and no raw trace id/provider/prompt/completion exposure |
+| Request shape | Unchanged; feedback still uses saved `answer_id` |
+| Deferred/rejected capabilities | Transcript/storybank/outcome calibration/self-assessment/root-cause/formal object writes not implemented |
+| `AGENTS.md` | Not modified |
+| Temp leak guard | Backend pytest commands use `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1` due preexisting repo-root `tmp/` |
+
+## Round 5 G-003 Remaining Risks
+
+| Risk | Status |
+|---|---|
+| Preexisting repo-root `tmp/` leak guard | Known environment risk; not cleaned in this window |
+| Manual browser validation | Not run; automated API/service/frontend contract checks passed |
+| Formal scoring integration | Deferred by Goal; remains future work only |
 
 ## Round 6-C Architecture Hardening Commands Run
 

@@ -162,6 +162,25 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
     assert "candidate_refs" not in payload
 
 
+def test_polish_feedback_payload_schema_accepts_structured_evaluation_status_and_trace_refs() -> None:
+    payload = PolishFeedbackPayload.model_validate(
+        {
+            "status": "low_confidence",
+            "feedback_text": "结构化反馈文本",
+            "score_result": {"score_type": "polish_answer", "score_value": 76},
+            "trace_refs": ["trace_provider_001", {"trace_type": "llm_trace", "trace_ref_id": "trace_safe"}],
+            "low_confidence_flags": ["needs_more_context", {"flag_id": "needs_more_metrics"}],
+        }
+    ).model_dump(mode="json")
+
+    assert payload["status"] == "low_confidence"
+    assert payload["trace_refs"] == [
+        "trace_provider_001",
+        {"trace_type": "llm_trace", "trace_ref_id": "trace_safe"},
+    ]
+    assert payload["low_confidence_flags"] == ["needs_more_context", {"flag_id": "needs_more_metrics"}]
+
+
 def test_polish_g001_response_schema_declares_optional_contract_fields() -> None:
     session_fields = PolishSessionResponse.model_fields
     for field_name in (
@@ -3482,6 +3501,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_body["data"]["task_type"] == "polish_feedback_generation"
     assert feedback_body["data"]["status"] == "succeeded"
     assert feedback_body["data"]["score_type"] is None
+    assert feedback_body["data"]["score_result_id"] is None
     feedback_payload = feedback_body["data"]["feedback_payload"]
     assert feedback_payload["schema_id"] == "polish_feedback_generated_v1"
     assert feedback_payload["schema_version"] == "1.0"
@@ -3521,6 +3541,7 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
             "asset_versions",
             "training_recommendations",
             "training_tasks",
+            "score_results",
         ):
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
     _assert_feedback_candidate_refs(feedback_body["data"]["candidate_refs"])

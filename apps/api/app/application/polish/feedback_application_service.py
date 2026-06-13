@@ -132,6 +132,7 @@ class PolishFeedbackApplicationService:
             )
             generation_result = self._operations._feedback_generation_service.generate(generation_context)
             if not generation_result.succeeded or generation_result.payload is None:
+                failure_status = _feedback_failure_status(generation_result.metadata)
                 failed_payload = _failed_feedback_payload_for_storage(
                     session_id=session.session_id,
                     question_id=question.question_id,
@@ -139,15 +140,16 @@ class PolishFeedbackApplicationService:
                     feedback_id=feedback_id,
                     validation_errors=generation_result.validation_errors,
                     metadata=generation_result.metadata,
+                    feedback_status=failure_status,
                 )
                 task = PolishTaskStatus(
                     ai_task_id=task_id,
                     task_type=POLISH_FEEDBACK_TASK_TYPE,
-                    status=AiTaskStatus.GENERATION_FAILED,
+                    status=failure_status,
                     contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
                     retryable=True,
                     result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
-                    user_visible_status="反馈生成失败，可重试",
+                    user_visible_status=_feedback_failure_user_visible_status(failure_status),
                     validation_errors=generation_result.validation_errors,
                 )
                 feedback = PolishFeedback(
@@ -159,7 +161,7 @@ class PolishFeedbackApplicationService:
                     ai_task_id=task_id,
                     score_result_id=None,
                     feedback_summary=json.dumps(failed_payload, ensure_ascii=False, sort_keys=True),
-                    status=str(AiTaskStatus.GENERATION_FAILED),
+                    status=str(failure_status),
                     created_at=now,
                     updated_at=now,
                 )
@@ -374,10 +376,14 @@ def _failed_feedback_payload_for_storage(
     feedback_id: str,
     validation_errors: tuple[str, ...],
     metadata: dict[str, Any],
+    feedback_status: AiTaskStatus = AiTaskStatus.GENERATION_FAILED,
 ) -> dict[str, Any]:
     error_code = validation_errors[0] if validation_errors else "llm_transport_generation_failed"
     source_metadata = metadata if isinstance(metadata, dict) else {}
     error_type = source_metadata.get("provider_error_type")
+    is_validation_failure = feedback_status == AiTaskStatus.VALIDATION_FAILED
+    visible_status = _feedback_failure_user_visible_status(feedback_status)
+    error_message = "反馈校验失败，可补充回答后重试" if is_validation_failure else "反馈生成超时或失败，可重试"
     feedback_metadata: dict[str, Any] = {
         "llm_called": _metadata_bool(source_metadata.get("llm_called")) or False,
         "task_type": POLISH_FEEDBACK_TASK_TYPE,
@@ -411,15 +417,15 @@ def _failed_feedback_payload_for_storage(
         "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
-        "status": str(AiTaskStatus.GENERATION_FAILED),
+        "status": str(feedback_status),
         "feedback_id": feedback_id,
-        "feedback_text": "反馈生成失败，可重试",
+        "feedback_text": visible_status,
         "answer_summary": "",
-        "user_visible_status": "反馈生成失败，可重试",
+        "user_visible_status": visible_status,
         "retryable": True,
         "error": {
             "code": error_code,
-            "message": "反馈生成超时或失败，可重试",
+            "message": error_message,
             "metadata": {"error_type": error_type} if error_type else {},
         },
         "validation_errors": list(validation_errors),
@@ -431,6 +437,27 @@ def _failed_feedback_payload_for_storage(
         "low_confidence_flags": [],
         "feedback_metadata": feedback_metadata,
     }
+
+
+def _feedback_failure_status(metadata: dict[str, Any]) -> AiTaskStatus:
+    source_metadata = metadata if isinstance(metadata, dict) else {}
+    provider_status = _metadata_string(source_metadata.get("provider_status"))
+    validation_stage = _metadata_string(source_metadata.get("validation_stage"))
+    output_validation_status = _metadata_string(source_metadata.get("llm_output_validation_status"))
+    provider_failure_statuses = {"failed", "not_called", "not_configured", "fake_transport"}
+    if (
+        validation_stage in {"candidate", "final"}
+        and output_validation_status == "invalid"
+        and provider_status not in provider_failure_statuses
+    ):
+        return AiTaskStatus.VALIDATION_FAILED
+    return AiTaskStatus.GENERATION_FAILED
+
+
+def _feedback_failure_user_visible_status(status: AiTaskStatus) -> str:
+    if status == AiTaskStatus.VALIDATION_FAILED:
+        return "反馈校验失败，可补充回答后重试"
+    return "反馈生成失败，可重试"
 
 
 def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:

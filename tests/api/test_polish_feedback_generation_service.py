@@ -128,8 +128,16 @@ def _generated_payload() -> dict[str, Any]:
 
 
 class _PayloadTransport:
-    def __init__(self, payload: object) -> None:
+    def __init__(
+        self,
+        payload: object,
+        *,
+        low_confidence_flags: tuple[str, ...] = (),
+        trace_refs: tuple[str, ...] = ("trace_provider_001",),
+    ) -> None:
         self.payload = payload
+        self.low_confidence_flags = low_confidence_flags
+        self.trace_refs = trace_refs
         self.requests: list[LlmTransportRequest] = []
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
@@ -138,8 +146,8 @@ class _PayloadTransport:
             result=self.payload,  # type: ignore[arg-type]
             validation_status=ValidationStatus.VALID,
             confidence_level=ConfidenceLevel.MEDIUM,
-            low_confidence_flags=(),
-            trace_refs=("trace_provider_001",),
+            low_confidence_flags=self.low_confidence_flags,
+            trace_refs=self.trace_refs,
             evidence_refs=("evidence_provider_001",),
         )
 
@@ -934,7 +942,33 @@ def test_service_unknown_loss_point_severity_generates_zero_deduction_and_low_co
     assert result.payload is not None
     assert result.payload["loss_points"][1]["deduction"] == 0
     assert result.payload["score_result"]["score_value"] == 80
+    assert result.payload["status"] == "low_confidence"
     assert any(flag.startswith("score_point_unknown_severity:") for flag in result.payload["low_confidence_flags"])
+
+
+def test_service_provider_low_confidence_flags_derive_low_confidence_status() -> None:
+    payload = _generated_payload()
+
+    result = _service(
+        _PayloadTransport(payload, low_confidence_flags=("provider_low_confidence",))
+    ).generate(_context())
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["status"] == "low_confidence"
+    assert "provider_low_confidence" in result.payload["low_confidence_flags"]
+
+
+def test_service_missing_final_trace_refs_fails_validation_without_score_payload() -> None:
+    payload = _generated_payload()
+
+    result = _service(_PayloadTransport(payload, trace_refs=())).generate(_context())
+
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.metadata["validation_stage"] == "final"
+    assert "trace_refs_required" in result.validation_errors
+    assert result.trace_refs == ()
 
 
 def test_phase4_missing_points_remove_generate_next_question() -> None:

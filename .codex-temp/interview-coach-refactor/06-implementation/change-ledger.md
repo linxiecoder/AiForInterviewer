@@ -1,12 +1,80 @@
 ---
 title: Change Ledger
 type: change-ledger
-status: active
-round: Round 6
+status: active-g003-implemented
+round: Round 5 G-003
 updated: 2026-06-12
 ---
 
 # Change Ledger
+
+## Round 5 G-003
+
+| Field | Value |
+|---|---|
+| Task | Structured Answer Evaluation implementation |
+| Goal | G-003 Structured Answer Evaluation |
+| Code changed | Yes |
+| Production changed | Yes, only G-003 allowlisted production files |
+| Tests changed | Yes, only G-003 allowlisted test files |
+| DB migration | No |
+| New endpoint | No |
+| Request body shape changed | No; feedback still requires saved `answer_id` |
+| Provider-facing schema changed | No |
+| Formal `ScoreResult` persistence | No; embedded `PolishFeedbackPayload.score_result` only |
+| Scoring API/model/repository touched | No |
+| Transcript/storybank/outcome calibration touched | No |
+| Weakness/Asset/Training/Report writes added | No |
+| `AGENTS.md` changed | No |
+| Validation status | `g003_validated_exit_0` |
+
+### Summary
+
+G-003 implemented structured answer evaluation status taxonomy on the existing Polish feedback path. Backend now derives `low_confidence` from merged provider/rules low-confidence flags, keeps recoverable validation warnings as `partial`, and stores validation-stage hard failures as `validation_failed` instead of collapsing them into provider `generation_failed`. Provider/no-transport/fake/runtime failures remain `generation_failed`.
+
+API response schema now accepts string or object `trace_refs` / `low_confidence_flags` for compatibility with current final payloads. Frontend recognizes `generated`, `partial`, `low_confidence`, `validation_failed`, `generation_failed`, `pending`, and legacy `failed`; legacy `failed` renders as `generation_failed`. The feedback card shows status-specific copy and sanitized trace metadata count/type only, not raw ids or provider/prompt/completion payloads.
+
+Formal scoring remains deferred: feedback persistence keeps `score_result_id=None`; no scoring API/model/repository file was modified.
+
+### Files Updated
+
+| File | Change |
+|---|---|
+| `apps/api/app/application/polish/feedback_generation_service.py` | Low-confidence status derivation from merged flags |
+| `apps/api/app/application/polish/feedback_application_service.py` | Validation-failed vs generation-failed persistence/task/payload distinction |
+| `apps/api/app/schemas/polish.py` | Response compatibility for string/object trace refs and low-confidence flags |
+| `apps/web/src/entities/polish/model/types.ts` | Expanded feedback status and low-confidence flag types |
+| `apps/web/src/pages/interview/InterviewPage.tsx` | Expanded status rendering, failure cards, status summaries, sanitized trace metadata |
+| `tests/api/test_polish_feedback_generation_service.py` | Low-confidence and missing trace validation coverage |
+| `tests/api/test_polish_application_service_split.py` | Validation-failed persistence and `score_result_id=None` coverage |
+| `tests/api/test_polish_api.py` | Schema compatibility and response-level score boundary coverage |
+| `apps/web/src/pages/interview/InterviewPage.test.ts` | Frontend taxonomy and trace metadata contract coverage |
+| `.codex-temp/interview-coach-refactor/05-goals/G-003-structured-answer-evaluation.md` | Implementation evidence |
+| `.codex-temp/interview-coach-refactor/06-implementation/change-ledger.md` | This G-003 ledger entry |
+| `.codex-temp/interview-coach-refactor/07-validation/test-results.md` | G-003 validation evidence |
+| `.codex-temp/interview-coach-refactor/CONTROL.md` | Lightweight status board update |
+
+### Tests Run
+
+| Command | Exit | Result |
+|---|---:|---|
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_feedback_generation_service.py -q` | 0 | 39 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_feedback_models.py tests/api/test_polish_feedback_pipeline_contract.py -q` | 0 | 15 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_application_service_split.py -q` | 0 | 18 passed |
+| `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/api/test_polish_api.py -q` | 0 | 130 passed |
+| `npm --workspace apps/web run test` | 0 | `tsc -p tsconfig.json --noEmit` passed |
+
+### Remaining Risks
+
+| Risk | Status |
+|---|---|
+| Preexisting repo-root `tmp/` leak guard | Known environment risk; backend validation used documented `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1` override |
+| Manual browser validation | Not run; automated contract/type/API tests passed |
+| Formal `ScoreResult` integration | Still deferred; no implementation or claim added |
+
+### Next Step
+
+Run final scope checks (`git diff --check`, status/diff-stat, forbidden capability search, `AGENTS.md` no-diff check), then request review/commit decision for G-003.
 
 ## Round 6-C
 

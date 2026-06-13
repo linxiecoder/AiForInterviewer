@@ -92,7 +92,7 @@ export interface PolishCandidate {
   source_type?: string | null;
   source_refs?: Array<Record<string, unknown>>;
   evidence_refs?: Array<Record<string, unknown>>;
-  trace_refs?: Array<Record<string, unknown>>;
+  trace_refs?: Array<Record<string, unknown> | string>;
   session_id?: string | null;
   question_id?: string | null;
   answer_id?: string | null;
@@ -181,7 +181,15 @@ export interface PolishProjectAssetConsistencyCheck extends Record<string, unkno
 
 export interface PolishFeedbackPayload extends Record<string, unknown> {
   contract_ids?: string[];
-  status?: "pending" | "generated" | "failed";
+  status?:
+    | "pending"
+    | "generated"
+    | "partial"
+    | "low_confidence"
+    | "validation_failed"
+    | "generation_failed"
+    | "failed"
+    | (string & {});
   feedback_id?: string | null;
   feedback_text?: string | null;
   answer_summary?: PolishFeedbackAnswerSummary | null;
@@ -216,8 +224,8 @@ export interface PolishFeedbackPayload extends Record<string, unknown> {
   asset_consistency_check?: PolishProjectAssetConsistencyCheck | null;
   next_recommended_actions?: PolishRecommendedAction[];
   validation_result_ref?: PolishFeedbackResourceRef | null;
-  trace_refs?: Array<Record<string, unknown>>;
-  low_confidence_flags?: PolishLowConfidenceFlag[];
+  trace_refs?: Array<Record<string, unknown> | string>;
+  low_confidence_flags?: Array<PolishLowConfidenceFlag | string>;
   retryable?: boolean;
   user_visible_status?: string | null;
   validation_errors?: string[];
@@ -247,7 +255,7 @@ export interface PolishSessionAnswer {
   feedback_created_at: string | null;
   feedback_payload?: PolishFeedbackPayload;
   next_recommended_actions?: PolishRecommendedAction[];
-  low_confidence_flags?: PolishLowConfidenceFlag[];
+  low_confidence_flags?: Array<PolishLowConfidenceFlag | string>;
   trace_refs?: Array<Record<string, unknown>>;
 }
 

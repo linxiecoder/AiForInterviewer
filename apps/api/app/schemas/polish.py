@@ -344,8 +344,8 @@ class PolishFeedbackPayload(BaseModel):
     session_similarity_check: dict[str, Any] | None = None
     project_asset_update_candidates: list[dict[str, Any]] | None = None
     evidence_refs: list[str] | None = None
-    trace_refs: list[dict[str, Any]] | None = None
-    low_confidence_flags: list[dict[str, Any]] | None = None
+    trace_refs: list[dict[str, Any] | str] | None = None
+    low_confidence_flags: list[dict[str, Any] | str] | None = None
     answer_diagnosis: dict[str, Any] | None = None
     positive_evidence_points: list[dict[str, Any]] | None = None
     missing_answer_dimensions: list[dict[str, Any]] | None = None
@@ -389,8 +389,8 @@ class PolishSessionAnswerResponse(BaseModel):
     feedback_created_at: datetime | None = None
     feedback_payload: PolishFeedbackPayload | None = None
     next_recommended_actions: list[str] = Field(default_factory=list)
-    low_confidence_flags: list[dict[str, Any]] = Field(default_factory=list)
-    trace_refs: list[dict[str, Any]] = Field(default_factory=list)
+    low_confidence_flags: list[dict[str, Any] | str] = Field(default_factory=list)
+    trace_refs: list[dict[str, Any] | str] = Field(default_factory=list)
 
 
 class PolishQuestionSourceResponse(BaseModel):

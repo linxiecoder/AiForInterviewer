@@ -737,10 +737,185 @@ def test_polish_feedback_application_service_create_feedback_task_owns_main_flow
     assert repository.add_task_calls[0][3] == "answer-1"
 
 
+def test_polish_feedback_application_service_persists_validation_failure_status_without_score_result() -> None:
+    import json
+
+    from app.application.polish.commands import CreatePolishFeedbackTaskCommand
+    from app.application.polish.entities import (
+        PolishAnswer,
+        PolishFeedback,
+        PolishQuestion,
+        PolishSession,
+        PolishSessionAnswerDetail,
+        PolishSessionDetail,
+        PolishSessionTurn,
+        PolishTaskStatus,
+    )
+    from app.application.polish.feedback_application_service import PolishFeedbackApplicationService
+    from app.application.common.result import ApplicationResult
+    from app.domain.shared.clock import utc_now
+    from app.domain.shared.enums import AiTaskStatus
+
+    now = utc_now()
+    session = PolishSession(
+        session_id="session-validation-failed",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        binding_id="binding-1",
+        resume_id="resume-1",
+        resume_version_id="resume-version-1",
+        job_id="job-1",
+        job_version_id="job-version-1",
+        status="running",
+        topic_id="topic-1",
+        subtopic_id=None,
+        custom_topic_text_summary=None,
+        created_at=now,
+        updated_at=now,
+    )
+    answer = PolishAnswer(
+        answer_id="answer-validation-failed",
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        question_id="question-validation-failed",
+        answer_round=1,
+        answer_text="我会说明异步和幂等。",
+        status="saved",
+        created_at=now,
+        updated_at=now,
+    )
+    question = PolishQuestion(
+        question_id=answer.question_id,
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id=session.session_id,
+        ai_task_id="task-question-validation-failed",
+        question_text="请给我一份回答建议。",
+        status="generated",
+        created_at=now,
+        updated_at=now,
+    )
+
+    class RepositoryStub:
+        def __init__(self) -> None:
+            self.add_feedback_calls: list[PolishFeedback] = []
+            self.add_task_calls: list[tuple[PolishTaskStatus, str, str, str]] = []
+
+        def get_session(self, owner_id: str, session_id: str) -> PolishSession | None:
+            return session if owner_id == "owner-1" and session_id == session.session_id else None
+
+        def get_answer(self, owner_id: str, answer_id: str) -> PolishAnswer | None:
+            return answer if owner_id == "owner-1" and answer_id == answer.answer_id else None
+
+        def get_question(self, owner_id: str, question_id: str) -> PolishQuestion | None:
+            return question if owner_id == "owner-1" and question_id == question.question_id else None
+
+        def get_latest_feedback_for_answer(self, *, owner_id: str, answer_id: str, status: str) -> None:
+            return None
+
+        def add_feedback(self, feedback: PolishFeedback) -> None:
+            self.add_feedback_calls.append(feedback)
+
+        def add_task(
+            self,
+            task: PolishTaskStatus,
+            *,
+            owner_id: str,
+            actor_id: str,
+            target_ref_id: str,
+        ) -> None:
+            self.add_task_calls.append((task, owner_id, actor_id, target_ref_id))
+
+    class GenerationResult:
+        succeeded = False
+        payload = None
+        validation_errors = ("feedback_text_required",)
+        metadata = {
+            "provider_status": "called",
+            "validation_stage": "candidate",
+            "candidate_valid": False,
+            "llm_output_validation_status": "invalid",
+            "llm_called": True,
+        }
+        low_confidence_flags = ()
+        trace_refs = ()
+
+    class GenerationServiceStub:
+        def generate(self, *_: object, **__: object) -> GenerationResult:
+            return GenerationResult()
+
+    class OperationsStub:
+        def __init__(self, repository: RepositoryStub) -> None:
+            self._polish_repository = repository
+            self._feedback_generation_service = GenerationServiceStub()
+
+        def _build_session_detail(
+            self,
+            *,
+            owner_id: str,
+            session: PolishSession,
+            include_turns: bool = True,
+        ) -> PolishSessionDetail:
+            return PolishSessionDetail(
+                session=session,
+                job_title="Job",
+                job_company="Company",
+                resume_title="Resume",
+                binding_label="Job / Resume",
+                turns=(
+                    PolishSessionTurn(
+                        question_id=question.question_id,
+                        question_text=question.question_text,
+                        question_created_at=now,
+                        answers=(
+                            PolishSessionAnswerDetail(
+                                answer_id=answer.answer_id,
+                                answer_round=answer.answer_round,
+                                answer_text=answer.answer_text,
+                                answer_created_at=now,
+                                feedback_text=None,
+                                feedback_id=None,
+                                score_result_id=None,
+                                feedback_created_at=None,
+                                feedback_payload=None,
+                            ),
+                        ),
+                    ),
+                ),
+            )
+
+    repository = RepositoryStub()
+    service = PolishFeedbackApplicationService(OperationsStub(repository))
+
+    result = service.create_feedback_task(
+        CreatePolishFeedbackTaskCommand(
+            owner_id="owner-1",
+            actor_id="actor-1",
+            session_id=session.session_id,
+            answer_id=answer.answer_id,
+        )
+    )
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.VALIDATION_FAILED
+    assert result.value.retryable is True
+    assert result.value.validation_errors == ("feedback_text_required",)
+    assert len(repository.add_feedback_calls) == 1
+    stored_feedback = repository.add_feedback_calls[0]
+    assert stored_feedback.status == "validation_failed"
+    assert stored_feedback.score_result_id is None
+    stored_payload = json.loads(stored_feedback.feedback_summary)
+    assert stored_payload["status"] == "validation_failed"
+    assert stored_payload["score_result"] is None
+    assert stored_payload["validation_errors"] == ["feedback_text_required"]
+
+
 def test_polish_feedback_application_service_persists_feedback_and_task_with_candidate_refs_only() -> None:
     import json
 
-    from sqlalchemy import func, select
+    from sqlalchemy import func, select, text
 
     from app.application.polish.commands import CreatePolishFeedbackTaskCommand
     from app.application.polish.entities import (
@@ -1029,6 +1204,7 @@ def test_polish_feedback_application_service_persists_feedback_and_task_with_can
                 TrainingTask,
             )
         }
+        score_result_count = db.execute(text("select count(*) from score_results")).scalar_one()
 
     assert len(feedback_rows) == 1
     assert len(ai_task_rows) == 1
@@ -1036,6 +1212,8 @@ def test_polish_feedback_application_service_persists_feedback_and_task_with_can
     assert ai_task_rows[0].target_ref_id == answer.answer_id
     assert feedback_rows[0].id == result.value.result_ref.trace_ref_id
     assert feedback_rows[0].ai_task_id == result.value.ai_task_id
+    assert feedback_rows[0].score_result_id is None
+    assert score_result_count == 0
     assert formal_counts == {
         "polish_candidates": 0,
         "weaknesses": 0,

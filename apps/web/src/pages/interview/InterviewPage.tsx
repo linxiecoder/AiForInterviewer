@@ -413,6 +413,10 @@ export const INTERVIEW_WORKBENCH_CHAT_BUBBLE_ALIGNMENT = {
 const FEEDBACK_CODE_DISPLAY_MAP: Record<string, string> = {
   pending: "待处理",
   generated: "已生成",
+  partial: "部分生成",
+  low_confidence: "低置信度",
+  validation_failed: "校验失败",
+  generation_failed: "生成失败",
   failed: "生成失败",
   complete: "已完成",
   completed: "已完成",
@@ -2768,6 +2772,7 @@ type WorkbenchStatusChipTone = "success" | "warning" | "processing" | "default" 
 
 type FeedbackSectionKey =
   | "failed_status"
+  | "status_summary"
   | "feedback"
   | "score"
   | "positive_evidence_points"
@@ -2918,10 +2923,10 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     new Set((payload?.contract_ids ?? []).map((item) => toOptionalText(item)).filter((item): item is string => item !== null)),
   );
   const contractId = contractIds[0] ?? null;
-  const status = resolvePolishFeedbackStatus(toOptionalText(payload?.status));
-  if (status === "failed") {
+  const status = resolvePolishFeedbackStatus(toOptionalText(payload?.status), payload);
+  if (status === "validation_failed" || status === "generation_failed") {
     return {
-      title: "反馈生成失败",
+      title: status === "validation_failed" ? "反馈校验失败" : "反馈生成失败",
       status,
       contractId,
       contractIds,
@@ -2929,7 +2934,7 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
         {
           key: "failed_status",
           title: "失败状态",
-          items: buildFailedFeedbackItems(payload),
+          items: buildFailedFeedbackItems(payload, status),
           defaultOpen: true,
           tone: "warning",
         },
@@ -2944,6 +2949,7 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     contractId,
     contractIds,
     sections: [
+      ...buildFeedbackStatusSections(payload, status),
       {
         key: "feedback",
         title: "总体点评",
@@ -2977,17 +2983,42 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
       ...buildNextPolishFeedbackSections(payload),
     ],
     nextActions: getAnswerNextRecommendedActions(answer),
-    traceItems: buildFeedbackTraceItems(),
+    traceItems: buildFeedbackTraceItems(payload),
   };
 }
 
 function resolvePolishFeedbackStatus(
   status: string | null | undefined,
-): "pending" | "generated" | "failed" {
-  if (status === "pending" || status === "generated" || status === "failed") {
+  payload?: PolishFeedbackPayload,
+): "pending" | "generated" | "partial" | "low_confidence" | "validation_failed" | "generation_failed" {
+  if (status === "failed") {
+    return "generation_failed";
+  }
+  if (
+    status === "pending" ||
+    status === "generated" ||
+    status === "partial" ||
+    status === "low_confidence" ||
+    status === "validation_failed" ||
+    status === "generation_failed"
+  ) {
     return status;
   }
+  if (hasGeneratedCompatibleFeedbackPayload(payload)) {
+    return "generated";
+  }
   return "pending";
+}
+
+function hasGeneratedCompatibleFeedbackPayload(payload: PolishFeedbackPayload | undefined): boolean {
+  if (payload === undefined) {
+    return false;
+  }
+  const hasFeedbackText = toOptionalText(payload.feedback_text) !== null;
+  const hasScoreResult = toRecord(payload.score_result) !== null;
+  const hasLossPoints = Array.isArray(payload.loss_points) && payload.loss_points.length > 0;
+  const hasReferenceAnswer = payload.reference_answer !== undefined && payload.reference_answer !== null;
+  return hasFeedbackText || hasScoreResult || hasLossPoints || hasReferenceAnswer;
 }
 
 const LOSS_POINT_SUGGESTION_FALLBACK = "建议补充该点的设计依据、关键步骤和验证方式。";
@@ -3102,24 +3133,102 @@ function buildLossPointRows(payload: PolishFeedbackPayload | undefined): Feedbac
   });
 }
 
-function buildFailedFeedbackItems(payload: PolishFeedbackPayload | undefined): string[] {
+function buildFailedFeedbackItems(
+  payload: PolishFeedbackPayload | undefined,
+  status: "validation_failed" | "generation_failed",
+): string[] {
   const validationErrors = Array.isArray(payload?.validation_errors)
     ? payload.validation_errors.map((item) => toOptionalText(item)).filter((item): item is string => item !== null)
     : [];
   const errorCode = toOptionalText(payload?.error?.code);
   const codes = Array.from(new Set([...(errorCode ? [errorCode] : []), ...validationErrors]));
   return dedupeTextItems([
-    "反馈生成超时或失败，可重试",
+    status === "validation_failed" ? "反馈校验失败，可补充回答后重试" : "反馈生成超时或失败，可重试",
     payload?.retryable === true ? "可重试：是" : null,
     ...codes.map((code) => `错误码：${code}`),
   ]);
+}
+
+function buildFeedbackStatusSections(
+  payload: PolishFeedbackPayload | undefined,
+  status: "pending" | "generated" | "partial" | "low_confidence" | "validation_failed" | "generation_failed",
+): FeedbackCardSectionViewModel[] {
+  if (status === "partial") {
+    return [
+      {
+        key: "status_summary",
+        title: "反馈状态",
+        items: dedupeTextItems([
+          "反馈状态：部分生成",
+          "部分字段来自可恢复解析或确定性补全，建议结合提示补充回答后重试。",
+          ...buildValidationErrorItems(payload),
+        ]),
+        defaultOpen: true,
+        tone: "warning",
+      },
+    ];
+  }
+  if (status === "low_confidence") {
+    return [
+      {
+        key: "status_summary",
+        title: "反馈状态",
+        items: dedupeTextItems([
+          "反馈状态：低置信度",
+          ...buildLowConfidenceFlagItems(payload),
+          "建议补充证据、量化指标或更完整回答后重试。",
+        ]),
+        defaultOpen: true,
+        tone: "warning",
+      },
+    ];
+  }
+  return [];
+}
+
+function buildValidationErrorItems(payload: PolishFeedbackPayload | undefined): string[] {
+  if (!Array.isArray(payload?.validation_errors)) {
+    return [];
+  }
+  return payload.validation_errors
+    .map((item) => toOptionalText(item))
+    .filter((item): item is string => item !== null)
+    .slice(0, 4)
+    .map((item) => `校验提示：${mapFeedbackSafeCode(item)}`);
+}
+
+function buildLowConfidenceFlagItems(payload: PolishFeedbackPayload | undefined): string[] {
+  if (!Array.isArray(payload?.low_confidence_flags)) {
+    return [];
+  }
+  return payload.low_confidence_flags
+    .map((item) => {
+      const record = toRecord(item);
+      const rawFlag = record === null
+        ? toOptionalText(item)
+        : pickFirstRecordText(record, ["flag_id", "code", "reason", "message"]);
+      if (rawFlag === null) {
+        return null;
+      }
+      return `低置信度：${mapFeedbackSafeCode(rawFlag)}`;
+    })
+    .filter((item): item is string => item !== null)
+    .slice(0, 4);
+}
+
+function mapFeedbackSafeCode(value: string): string {
+  const display = mapFeedbackCodeToDisplay(value);
+  return display.isKnownCode ? display.text : value;
 }
 
 function resolveFeedbackStatusTone(status: string): WorkbenchStatusChipTone {
   if (status === "generated") {
     return "success";
   }
-  if (status === "failed") {
+  if (status === "partial" || status === "low_confidence") {
+    return "orange";
+  }
+  if (status === "validation_failed" || status === "generation_failed" || status === "failed") {
     return "warning";
   }
   if (status === "pending") {
@@ -3735,8 +3844,32 @@ function buildRecordItems(value: unknown, fieldLabels: Array<[string, string]>):
     .slice(0, 6);
 }
 
-function buildFeedbackTraceItems(): string[] {
-  return [];
+function buildFeedbackTraceItems(payload: PolishFeedbackPayload | undefined): string[] {
+  const traceRefs = Array.isArray(payload?.trace_refs) ? (payload.trace_refs as unknown[]) : [];
+  if (traceRefs.length === 0) {
+    return [];
+  }
+  const types = Array.from(
+    new Set(
+      traceRefs
+        .map((item) => {
+          const record = toRecord(item);
+          if (record === null) {
+            return "text";
+          }
+          return (
+            pickFirstRecordText(record, ["trace_type", "resource_type", "type", "status"]) ??
+            "metadata"
+          );
+        })
+        .map((item) => mapFeedbackSafeCode(item))
+        .filter((item) => item.length > 0),
+    ),
+  ).slice(0, 3);
+  return dedupeTextItems([
+    `Trace：${traceRefs.length} 条安全引用`,
+    types.length > 0 ? `Trace 类型：${types.join("、")}` : null,
+  ]);
 }
 
 function isUserVisibleFeedbackRecordKey(key: string): boolean {
