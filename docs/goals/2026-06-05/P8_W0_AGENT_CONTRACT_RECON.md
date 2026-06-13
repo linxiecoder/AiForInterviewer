@@ -15,8 +15,8 @@ Status: warn
 
 - `AGENTS.md`
 - `docs/00-governance/DOCS_INDEX.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `docs/02-design/API_SPEC.md`
 - `docs/02-design/PROMPT_SPEC.md`
 - `docs/02-design/SEMANTICS_GLOSSARY.md`

@@ -33,8 +33,8 @@ permalink: ai-for-interviewer/docs/02-design/data-model
 | `docs/02-design/SEMANTICS_GLOSSARY.md` | `confidence_level`、`validation_status`、`source_availability`、candidate / suggestion / formal object 统一语义 |
 | `docs/02-design/PERSISTENCE_MODEL.md` | F5 建议物理模型、字段组、关系、join / reference table、API schema 映射和 persistence fixture |
 | `docs/02-design/PRESSURE_MODE_SPEC.md` | Pressure Mode lifecycle、turn model、pace/end/report handoff、candidate handoff 和 PR2 graph hold 的 mode-level 数据承接 |
-| `docs/03-delivery/DELIVERY_PLAN.md` | F4 / M4 阶段边界和不得遗留的技术设计 UNKNOWN 类型 |
-| `docs/03-delivery/BACKLOG.md` | `AIFI-DATA-001` 范围和与 `AIFI-ARCH-002`、`AIFI-PROMPT-001`、`AIFI-SEC-001` 的依赖 |
+| `docs/03-implementation/DELIVERY_PLAN.md` | F4 / M4 阶段边界和不得遗留的技术设计 UNKNOWN 类型 |
+| `docs/03-implementation/BACKLOG.md` | `AIFI-DATA-001` 范围和与 `AIFI-ARCH-002`、`AIFI-PROMPT-001`、`AIFI-SEC-001` 的依赖 |
 
 ### 2.2 非目标
 

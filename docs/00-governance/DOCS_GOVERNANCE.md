@@ -15,8 +15,8 @@ permalink: ai-for-interviewer/docs/00-governance/docs-governance
 | 事项 | 唯一写入位置 |
 | --- | --- |
 | 当前有效文档索引 | `docs/00-governance/DOCS_INDEX.md` |
-| 阶段与里程碑 | `docs/03-delivery/DELIVERY_PLAN.md` |
-| 任务与优先级 | `docs/03-delivery/BACKLOG.md` |
+| 阶段与里程碑 | `docs/03-implementation/DELIVERY_PLAN.md` |
+| 任务与优先级 | `docs/03-implementation/BACKLOG.md` |
 | 历史需求继承和缺口 | `docs/01-product/REQUIREMENT_TRACEABILITY.md` |
 | 归档动作 | `archive/MANIFEST.md` |
 | AI / 人工协作约束 | `AGENTS.md`、`docs/00-governance/AI_WORKFLOW.md` |

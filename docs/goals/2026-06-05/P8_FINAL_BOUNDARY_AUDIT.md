@@ -22,8 +22,8 @@ WARN 原因：`AgentSideEffectGuard.authorize_tool_call()` 已经要求 register
 
 - `AGENTS.md`
 - `docs/00-governance/DOCS_INDEX.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 - `docs/tmp/goal0605/phase8_codex_goal_pack/docs/P8_MASTER_GOAL.md`
 
 ### Current diff and related changed files

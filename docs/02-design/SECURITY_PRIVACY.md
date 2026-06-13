@@ -29,8 +29,8 @@ permalink: ai-for-interviewer/docs/02-design/security-privacy
 | `docs/02-design/UI_DESIGN_SYSTEM.md` | F3 页面 / 组件状态边界、复制非导出、低置信度和内容沉淀交接语义 |
 | `docs/02-design/TECH_DESIGN.md` | 前后端职责、LLM 后端隔离、模块边界、F4 子文档交接边界 |
 | `docs/02-design/DATA_MODEL.md` | `OwnerRef`、`RoleScope`、`PermissionBoundary`、`AuditEvent`、`TraceRef`、`RetentionPolicyRef`、`RedactionRef` 等逻辑对象 |
-| `docs/03-delivery/DELIVERY_PLAN.md` | F4 / M4 安全隐私作为技术设计评审输入的阶段边界 |
-| `docs/03-delivery/BACKLOG.md` | `AIFI-SEC-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-PROMPT-001` 的依赖关系 |
+| `docs/03-implementation/DELIVERY_PLAN.md` | F4 / M4 安全隐私作为技术设计评审输入的阶段边界 |
+| `docs/03-implementation/BACKLOG.md` | `AIFI-SEC-001` 范围，以及与 `AIFI-ARCH-002`、`AIFI-DATA-001`、`AIFI-PROMPT-001` 的依赖关系 |
 | `.env.example`、`apps/api/app/main.py` | 当前 API 入口只保留最小运行配置；真实密钥、真实 token、真实 DSN 不得进入示例环境文件或启动日志 |
 
 ### 2.2 非目标

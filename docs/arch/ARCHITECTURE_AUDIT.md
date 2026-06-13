@@ -7,7 +7,7 @@ permalink: ai-for-interviewer/docs/arch/architecture-audit
 
 # AiForInterviewer 控制能力架构审计
 
-本文是机制级架构输入，不是新的计划、任务入口或实现事实。正式执行必须进入 `docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md` 或 ADR。
+本文是机制级架构输入，不是新的计划、任务入口或实现事实。正式执行必须进入 `docs/03-implementation/BACKLOG.md`、`docs/03-implementation/DELIVERY_PLAN.md` 或 ADR。
 
 ## 1. 审计结论
 

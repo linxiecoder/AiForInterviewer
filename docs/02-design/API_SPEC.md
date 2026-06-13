@@ -41,8 +41,8 @@ permalink: ai-for-interviewer/docs/02-design/api-spec
 | `docs/02-design/PERSISTENCE_MODEL.md` | API schema 到建议物理模型、join / reference table 和 persistence fixture 的交接 |
 | `docs/02-design/APPLICATION_FLOW_SPEC.md` | endpoint 到 use-case orchestration、LLM call plan、Prompt 输入结构和持久化流程的交接 |
 | `docs/02-design/PRESSURE_MODE_SPEC.md` | Pressure Mode session lifecycle、turn loop、pause / resume / end、report / review handoff、graph boundary 和实现前 API 承接 |
-| `docs/03-delivery/DELIVERY_PLAN.md` | F4 / F5 / F7 阶段交接、无文件导出和 F7 可测试性要求 |
-| `docs/03-delivery/BACKLOG.md` | `AIFI-API-001`、`AIFI-BE-001`、`AIFI-FE-001`、`AIFI-QA-001` 的范围和依赖 |
+| `docs/03-implementation/DELIVERY_PLAN.md` | F4 / F5 / F7 阶段交接、无文件导出和 F7 可测试性要求 |
+| `docs/03-implementation/BACKLOG.md` | `AIFI-API-001`、`AIFI-BE-001`、`AIFI-FE-001`、`AIFI-QA-001` 的范围和依赖 |
 
 ### 2.2 非目标
 

@@ -16,7 +16,7 @@ permalink: ai-for-interviewer/docs/goals/2026-06-05/p7-e-audit-report
 
 - 工作区：`/home/administrator/code/AiForInterviewer`
 - Branch / HEAD：`main` / `be30e8b13ac863c18a1238005c3cf97a941f07d2`
-- 已直接读取用户指定 8 个文件，并补读 `docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md`。
+- 已直接读取用户指定 8 个文件，并补读 `docs/03-implementation/BACKLOG.md`、`docs/03-implementation/DELIVERY_PLAN.md`。
 - 当前审计基于本轮 `git status`、`git diff`、代码/测试读取和新鲜 pytest；不采信 Agent D 自述作为结论。
 - Basic Memory 未检索到 P7 专项历史记录；历史记忆仅用于确认 P5/P6 candidate/fail-closed 背景，当前判定以本轮取证为准。
 

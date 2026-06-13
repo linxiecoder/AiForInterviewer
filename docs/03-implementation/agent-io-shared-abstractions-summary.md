@@ -3,7 +3,7 @@ title: Agent IO Shared Abstractions Summary
 type: delivery-summary
 status: draft
 owner: 后端实现
-permalink: ai-for-interviewer/docs/03-delivery/agent-io-shared-abstractions-summary
+permalink: ai-for-interviewer/docs/03-implementation/agent-io-shared-abstractions-summary-1
 ---
 
 # Agent IO Shared Abstractions Summary

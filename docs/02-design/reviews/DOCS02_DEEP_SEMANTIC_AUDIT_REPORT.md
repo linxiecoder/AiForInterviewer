@@ -28,15 +28,15 @@ permalink: ai-for-interviewer/docs/02-design/reviews/docs02-deep-semantic-audit-
 - `AGENTS.md`
 - `docs/00-governance/DOCS_INDEX.md`
 - `docs/00-governance/AI_WORKFLOW.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 
 ### 上游和下游依据
 
 - `docs/01-product/PRD.md`
 - `docs/01-product/REQUIREMENT_TRACEABILITY.md`
-- `docs/03-delivery/DELIVERY_PLAN.md`
-- `docs/03-delivery/BACKLOG.md`
+- `docs/03-implementation/DELIVERY_PLAN.md`
+- `docs/03-implementation/BACKLOG.md`
 
 ### docs/02 active 设计文档
 
@@ -272,8 +272,8 @@ F5 会在实现 shared schema、AI task、confirmation flow 和 audit log 时自
 Severity: High  
 Category: F8 / Governance / Security / API / Data  
 Source Documents:
-- `docs/03-delivery/DELIVERY_PLAN.md` §F8
-- `docs/03-delivery/BACKLOG.md` §AIFI-REL-001、AIFI-ARCH-002 至 AIFI-ARCH-006
+- `docs/03-implementation/DELIVERY_PLAN.md` §F8
+- `docs/03-implementation/BACKLOG.md` §AIFI-REL-001、AIFI-ARCH-002 至 AIFI-ARCH-006
 - `docs/00-governance/DOCS_INDEX.md` §当前有效入口
 - `docs/02-design/reviews/F4_TO_F8_READINESS_RISK_REGISTER.md` §AR-F4-F8-003
 - `docs/02-design/API_SPEC.md` §Non-goals / Observability boundary

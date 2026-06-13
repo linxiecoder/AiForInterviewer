@@ -7,7 +7,7 @@ permalink: ai-for-interviewer/docs/arch/mechanism-analysis
 
 # AiForInterviewer LLM 执行机制分析
 
-本文是架构机制分析输入，不是新的阶段计划、任务入口或 ADR。正式执行必须回写到 `docs/03-delivery/BACKLOG.md`、`docs/03-delivery/DELIVERY_PLAN.md` 或 ADR。
+本文是架构机制分析输入，不是新的阶段计划、任务入口或 ADR。正式执行必须回写到 `docs/03-implementation/BACKLOG.md`、`docs/03-implementation/DELIVERY_PLAN.md` 或 ADR。
 
 ## 1. 核心结论
 

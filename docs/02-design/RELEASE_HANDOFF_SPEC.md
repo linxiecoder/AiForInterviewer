@@ -13,7 +13,7 @@ permalink: ai-for-interviewer/docs/02-design/release-handoff-spec
 
 - 本文件是 F4 -> F8 release / ops / retrospective handoff spec，作为 F8 发布、运维和复盘交接的 canonical active design doc。
 - 本文件不是实际发布清单，不是运行手册成品，不是监控平台实现，不是部署脚本，不是数据库 migration 文件，也不是最终 rollback runbook。
-- 本文件为 F8 的 `docs/03-delivery/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、known limitations、rollback strategy、release retrospective 和 next-iteration backlog 提供输入。
+- 本文件为 F8 的 `docs/03-implementation/RELEASE_CHECKLIST.md`、`CHANGELOG.md`、runbook、known limitations、rollback strategy、release retrospective 和 next-iteration backlog 提供输入。
 - 本文件不改变 MVP 非目标，不新增文件导出、PDF / docx / Word 下载、文件上传解析、外部材料解析岗位、精确通过概率、多租户、商业化或企业治理能力。
 - 本文件不表示 F8 运维能力已经实现；F8 仍需基于本文件生成正式发布产物并经过人工 approval。
 - 本文件不暴露 system prompt、provider payload、completion 原文、hidden scoring rules、secret、token、cookie、request / response body、简历正文、岗位全文、回答全文、报告正文或复盘正文。
@@ -219,7 +219,7 @@ F8 runbook 应按以下场景生成。恢复动作是 F8 runbook 输入，不代
 
 | F8 产物 | 从本文件生成的输入 | 不在本轮创建 |
 |---|---|---|
-| `docs/03-delivery/RELEASE_CHECKLIST.md` | §3 checklist matrix、§7 signals、§8 retry / rate limit、§9 retention / deletion | 本轮不创建正式 release checklist |
+| `docs/03-implementation/RELEASE_CHECKLIST.md` | §3 checklist matrix、§7 signals、§8 retry / rate limit、§9 retention / deletion | 本轮不创建正式 release checklist |
 | `CHANGELOG.md` | route inventory 变化、known limitations、migration / rollback notes、ScoreRuleVersion / API contract 变化摘要 | 本轮不创建 changelog |
 | runbook | §5 runbook source 表、§8 provider / retry policy、§9 privacy handoff | 本轮不创建运行手册成品 |
 | known limitations | §4 known limitations、§10 deferred mapping | 本轮不创建独立 known limitations 文档 |
