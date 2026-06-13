@@ -1,126 +1,145 @@
 ---
-title: Interview Coach Refactor G-001 Post-Merge Record
-type: active-record
-status: active-completed
-updated: 2026-06-12
+title: Interview Coach Refactor Final System Spec
+type: final-system-spec
+status: final
+updated: 2026-06-13
 permalink: ai-for-interviewer/interview-coach-refactor
+canonical: true
 ---
 
-# Interview Coach Refactor G-001 Post-Merge Record
+# Interview Coach Refactor Final System Spec
 
-Status: Active / Completed
+Status: FINAL SYSTEM SPEC
 
-本文记录 PR #32 合入后的 G-001 最终状态。它是 `interview-coach` 启发式重构在 AiForInterviewer 仓库中的长期记录，不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、ADR 或代码事实。
+本文是 AiForInterviewer interview-coach-refactor 的唯一权威系统规格。它覆盖 G-003、G-004 与 Composition Layer 合入后的最终系统定义，并取代此前所有 G-003 / G-004 / Composition Layer 设计说明、审计记录、临时计划、历史摘要和阶段性记录的系统定义地位。
 
-## Background
+此前文档只保留为 historical evidence。任何旧文档、旧计划、历史审计或 archive 内容不得作为当前系统架构、职责边界、运行模式或语义 contract 的 authoritative source。
 
-G-001 只吸收 `interview-coach` 工作流中适合当前 Polish 工作台的两个方向：session continuity 与 context hygiene。实现已经合入 `main`，生产事实以当前代码、测试和 active docs 为准。
+## Final System Architecture
 
-本记录替换旧的临时摘要口径；临时工作区已从本仓库移除。`interview-coach` 的 command system、menu、目录结构、prompt prose、workflow wording 和 source scoring vocabulary 未复制到 AiForInterviewer。
+### System Overview
 
-## Implemented Capabilities
+最终系统由三个独立模块组成：
 
-### G-001 session continuity
+- G-003: Evaluation Layer
+- G-004: Understanding Layer
+- Composition Layer: Orchestration Layer
 
-现有 Polish session detail / refresh 响应可以携带向后兼容的可选 continuity metadata：
+三者不是顺序 pipeline。G-003 不依赖 G-004 的内部语义，G-004 不依赖 G-003 的输出，Composition Layer 也不把其中任一层转换成另一层的输入语义。
 
-- `continuity_status`
-- `continuity_summary`
-- `restored_refs`
+系统通过 Composition Layer 进行组合。Composition Layer 只负责按运行模式决定是否调用 G-003 / G-004，并把各层输出以可返回的响应形态组合在一起。组合只表示 routing 与 packaging，不表示跨层解释、重写、推理、评分或语义升级。
 
-这些字段基于既有 session 状态、progress tree、turns、active question refs、evidence refs 和 context digest 计算，不新增 endpoint，不新增 DB migration。
-
-### G-001 context hygiene
-
-question / feedback metadata 统一输出有界且安全的 context hygiene contract：
-
-- `context_hygiene_status`
-- `safe_context_metadata`
-- `fallback_reason`
-- `validation_signals`
-
-该 contract 只允许短 metadata、状态、fallback 与 validation signal，不暴露 raw prompt、provider payload、完整 source document 或敏感凭据。
-
-### Final behavior
-
-- Session detail 保持现有 API 路径与响应主体，只追加 optional metadata。
-- Question generation 与 feedback generation 使用同一 context hygiene contract。
-- Feedback application 会归一化已保存 metadata，legacy / malformed metadata 退化为 `unknown` 或带 fallback 的安全形态。
-- 前端类型只接受 optional contract，不要求 UI 新增展示，也不改变现有工作台流程。
-
-## Key Architecture Notes
-
-### session continuity in application layer
-
-`apps/api/app/application/polish/session_continuity.py` 承载 continuity 计算规则。API 层只组装 `SessionContinuitySnapshot` 并把 `compute_session_continuity(...).to_response_payload()` 合入响应，不在 router 中复制业务规则。
-
-### context hygiene unified contract
-
-`apps/api/app/application/polish/context_hygiene.py` 是统一 contract。它集中处理 status normalization、安全 JSON 裁剪、forbidden key 过滤和敏感文本 redaction。
-
-### API layer mapping only
-
-`apps/api/app/api/v1/polish.py` 只负责从既有 session detail 映射 snapshot 与 response payload。G-001 没有新增 endpoint，也没有把 context hygiene 或 continuity 变成新的命令入口。
-
-### backend schema / frontend type optional contract
-
-`apps/api/app/schemas/polish.py` 与 `apps/web/src/entities/polish/model/types.ts` 只登记 optional response/type contract。缺失这些字段的既有调用方仍可工作。
-
-### no raw prompt/provider payload exposure
-
-G-001 明确禁止 raw prompt、provider response、provider payload、full source、source document、API key、token、secret、cookie 等内容进入 `safe_context_metadata`。
-
-## Key Changed Files
-
-- `apps/api/app/application/polish/session_continuity.py`
-- `apps/api/app/application/polish/context_hygiene.py`
-- `apps/api/app/api/v1/polish.py`
-- `apps/api/app/schemas/polish.py`
-- `apps/api/app/application/polish/question_generation_service.py`
-- `apps/api/app/application/polish/feedback_generation_service.py`
-- `apps/api/app/application/polish/feedback_application_service.py`
-- `apps/api/app/application/polish/question_metadata.py`
-- `apps/web/src/entities/polish/model/types.ts`
-- `tests/api/test_polish_session_continuity.py`
-- `tests/api/test_polish_context_hygiene.py`
-- `tests/api/test_polish_api.py`
-- `tests/api/test_polish_feedback_generation_service.py`
-- `apps/web/src/pages/interview/InterviewPage.test.ts`
-
-## Deferred Capabilities
-
-G-002 remains draft / not implemented. It may cover capture / analysis separation in a separate authorized window, but this G-001 record does not implement it.
-
-- storybank memory: deferred; no current model/API/UI/test landing point.
-- transcript ingestion: deferred; no current transcript source model/API/UI/test landing point.
-- outcome / progress calibration: deferred; no outcome log or drift lifecycle in this scope.
-- command routing: rejected as source shape for production; no command system, command menu, or command prose was copied.
-- external feedback taxonomy and root-cause scoring expansion: deferred; no change beyond existing safe metadata boundary.
-
-## Validation Summary
-
-| Area | Command | Round 7-A status |
+| Layer | Final responsibility | Output boundary |
 | --- | --- | --- |
-| Backend focused pytest / eval gate | `python -m pytest tests/evals -q` or `.venv/bin/python -m pytest tests/evals -q` | Initial chained command found `python` unavailable, then pytest passed 43 tests but local `tmp/` leak guard returned failure; rerun with `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/evals -q` passed 43 tests |
-| Frontend type/test gate | `npm run web:test` | Passed; `tsc -p tsconfig.json --noEmit` completed |
-| Frontend build gate | `npm run web:build` | Passed; `tsc -p tsconfig.json --noEmit && vite build` completed with existing chunk-size warning |
+| G-003 | Evaluation Layer | 只产出 evaluation / feedback / UI-safe status labeling |
+| G-004 | Understanding Layer | 只产出 transcript structure / behavioral signals |
+| Composition Layer | Orchestration Layer | 只产出按 mode 组合后的 response envelope |
 
-PR #32 already carried focused backend and frontend validation for G-001. Round 7-A re-ran the hygiene branch validation after removing the temporary workspace and updating this active record.
+## System Contract (Final State)
 
-## Known Risks
+### G-003 responsibilities
 
-- Repo-root `tmp/` may trigger the local tmp leak guard in pytest environments. If that happens, use `AI_FOR_INTERVIEWER_ALLOW_TEST_DIR_LEAKS=1 .venv/bin/python -m pytest tests/evals -q` and report the guard condition.
-- `AGENTS.md` remains unchanged in this hygiene round by instruction. It currently contains a managed `SPECKIT` marker while `.specify` is absent; owner should decide separately whether that marker is still desired.
-- `.agents/skills/**` and `.claude/skills/**` contain retained AI skill assets. They are not required by G-001 production behavior and need a separate owner decision.
+G-003 是 Evaluation Layer，职责固定为：
 
-## Follow-up Work
+- evaluation only
+- feedback generation
+- UI-safe status labeling
 
-- Decide whether retained `.agents` and `.claude` skill assets are long-term repository capabilities or should be removed in a separate cleanup PR.
-- Decide whether the remaining `AGENTS.md` `SPECKIT` marker belongs in current governance.
-- Start G-002 only after explicit scope approval.
+G-003 MUST NOT perform reasoning or understanding. 它不得解析 transcript 结构，不得抽取 behavioral signal，不得推断候选人的长期能力模型，也不得把 feedback 扩展成 coaching system。
 
-## Main Hygiene Note
+### G-004 responsibilities
 
-- `.codex-temp/interview-coach-refactor/` removed from the hygiene branch.
-- `.specify` absent.
-- Any retained `.agents/.claude` skill assets require separate owner decision if still present.
+G-004 是 Understanding Layer，职责固定为：
+
+- transcript understanding only
+- structure extraction
+- behavioral signal extraction
+
+G-004 MUST NOT perform evaluation or scoring. 它不得生成 feedback，不得输出分数，不得解释为 rubric verdict，不得把 behavioral signal 升级为评价结论，也不得维护 taxonomy system。
+
+### Composition Layer responsibilities
+
+Composition Layer 是 Orchestration Layer，职责固定为：
+
+- routing only
+- decides invocation of G-003 / G-004
+- MUST NOT modify or interpret outputs
+
+Composition Layer 可以决定某个 mode 下调用哪些 layer，也可以把多个 layer 的输出放入同一个 response envelope。它不得修改任一 layer 的字段语义，不得替换 status 含义，不得把 G-004 的结构化理解解释成 G-003 的评价，也不得把 G-003 的 feedback 解释成 G-004 的 transcript understanding。
+
+## Hard System Invariants
+
+以下 invariant 是最终系统边界，不得被后续实现、文档、prompt、UI copy 或 orchestration 改写：
+
+- No scoring system exists.
+- No taxonomy system exists.
+- No coaching system exists.
+- No cross-layer semantic mutation is allowed.
+- No layer may override another layer's output semantics.
+- Each layer is independent and immutable in responsibility.
+- G-003, G-004 与 Composition Layer 不构成 sequential pipeline.
+- Composition Layer 的 merge 只能是 envelope-level packaging，不得变成 semantic transformation.
+- Layer 输出只能由产出该输出的 layer 负责定义，其他 layer 只能透传或并列返回。
+- 历史设计中出现的 scoring、taxonomy、coaching 或 pipeline 表述不得被恢复为当前系统事实。
+
+## Runtime Behavior Specification
+
+### interview mode
+
+- G-004 always runs.
+- G-003 runs conditionally.
+- Composition Layer merges outputs.
+- 这里的 merge 只表示把 G-004 输出与可选 G-003 输出放入同一 response envelope；不得修改、解释或覆盖任一 layer 的语义。
+
+### training mode
+
+- G-004 runs.
+- G-003 runs.
+- balanced output returned.
+- balanced output 表示同时返回 understanding 与 evaluation / feedback 两类结果；不得引入 scoring system、taxonomy system 或 coaching system。
+
+### analysis mode
+
+- G-004 only.
+- no feedback returned.
+- Composition Layer 不得在 analysis mode 中隐式触发 G-003，也不得从 G-004 输出推导 feedback。
+
+## System Boundary Rules
+
+### Forbidden Behaviors
+
+- G-004 must NOT evolve into scoring engine.
+- G-003 must NOT include reasoning logic.
+- Composition Layer must NOT transform semantic meaning.
+- No implicit shared taxonomy between layers.
+- G-004 must NOT emit evaluation, feedback, verdict, score, grade, coaching plan, or rubric decision.
+- G-003 must NOT emit transcript structure, behavioral-signal extraction, candidate reasoning trace, or understanding model.
+- Composition Layer must NOT synthesize new semantic fields from cross-layer data.
+- Composition Layer must NOT downgrade, upgrade, normalize, reinterpret, or override layer-owned status semantics.
+- UI copy, API schemas, prompt wording, tests and future docs must preserve this boundary.
+
+## Deprecation Rule
+
+`docs/active/interview-coach-refactor.md` is the FINAL SYSTEM SPEC for interview-coach-refactor.
+
+No other documentation is authoritative for the system definition of G-003, G-004, Composition Layer, runtime modes, layer responsibilities, or cross-layer semantic boundaries.
+
+All previous design docs, audit notes, temporary workspace documents, planning records, goal packages, and merge records are historical. They may be used only as evidence of how the system reached this state. They must not override this final spec, reopen deprecated responsibilities, or introduce a competing source of truth.
+
+Any future change to this architecture requires an explicitly authorized update to this file. Until such update is made, this file remains the single source of truth.
+
+## Proof: Non-existent Systems
+
+The final architecture defines only these system modules:
+
+- G-003: Evaluation Layer
+- G-004: Understanding Layer
+- Composition Layer: Orchestration Layer
+
+It does not define a Scoring System. Any appearance of `scoring`, `score`, `rubric`, `grade`, or similar vocabulary in older artifacts is historical or forbidden in this architecture unless this file is explicitly updated.
+
+It does not define a Taxonomy System. Any labels used inside one layer are layer-local contract fields only; they do not create shared ontology, cross-layer taxonomy, candidate classification model, or global semantic hierarchy.
+
+It does not define a Coaching System. Feedback generation in G-003 is not coaching, not a training planner, not a long-term mentor model, and not a behavioral intervention system.
+
+Therefore, the authoritative final system contains no scoring system, no taxonomy system, and no coaching system.
