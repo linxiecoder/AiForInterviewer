@@ -63,6 +63,117 @@ def _context() -> dict[str, Any]:
         "job_snapshot": {"job_id": "job_001", "requirements": ["高可用后端设计", "故障恢复"]},
         "resume_snapshot": {"resume_id": "resume_001", "projects": ["支付系统"]},
         "progress_node_snapshot": {"node_ref": "progress_node_reliability", "title": "可靠性设计"},
+        "progress_state": {
+            "progress_state_ref": "progress_node_reliability",
+            "current_priority": {
+                "progress_node_ref": "progress_node_reliability",
+                "title": "可靠性设计",
+                "expected_capability": "说明失败恢复、幂等和观测指标。",
+            },
+            "weak_skill_refs": ["failure_recovery", "tradeoff_reasoning", "observability"],
+            "strong_skill_refs": ["structured_reasoning"],
+            "node_states": [
+                {"progress_node_ref": "progress_node_reliability", "status": "in_progress"},
+                {"progress_node_ref": "progress_node_structure", "status": "completed"},
+            ],
+        },
+    }
+
+
+def _adaptive_score_result() -> dict[str, Any]:
+    return {
+        "score_type": "polish_answer",
+        "score_value": 1,
+        "progress_state_ref": "progress_node_reliability",
+        "reasoning": "ProgressState 显示 failure_recovery、tradeoff_reasoning 和 observability 仍需强化。",
+        "adaptive_rubric": {
+            "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+            "progress_state_ref": "progress_node_reliability",
+            "dimensions": [
+                {
+                    "dimension": "correctness",
+                    "adaptive_weight": 0.16,
+                    "progress_basis": ["current_priority:progress_node_reliability"],
+                    "anchor_refs": ["anchor_correctness"],
+                },
+                {
+                    "dimension": "depth",
+                    "adaptive_weight": 0.22,
+                    "progress_basis": ["weak_skill:failure_recovery"],
+                    "anchor_refs": ["anchor_depth"],
+                },
+                {
+                    "dimension": "tradeoff_reasoning",
+                    "adaptive_weight": 0.22,
+                    "progress_basis": ["weak_skill:tradeoff_reasoning"],
+                    "anchor_refs": ["anchor_tradeoff_reasoning"],
+                },
+                {
+                    "dimension": "structure",
+                    "adaptive_weight": 0.14,
+                    "progress_basis": ["strong_skill:structured_reasoning"],
+                    "anchor_refs": ["anchor_structure"],
+                },
+                {
+                    "dimension": "engineering_awareness",
+                    "adaptive_weight": 0.26,
+                    "progress_basis": ["weak_skill:observability"],
+                    "anchor_refs": ["anchor_engineering_awareness"],
+                },
+            ],
+        },
+        "dimension_scores": [
+            {
+                "dimension": "correctness",
+                "score": 88,
+                "adaptive_weight": 0.16,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "方向正确，覆盖 MQ 解耦。",
+            },
+            {
+                "dimension": "depth",
+                "score": 76,
+                "adaptive_weight": 0.22,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "恢复链路展开不足。",
+            },
+            {
+                "dimension": "tradeoff_reasoning",
+                "score": 72,
+                "adaptive_weight": 0.22,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "延迟、可靠性和人工介入取舍不足。",
+            },
+            {
+                "dimension": "structure",
+                "score": 84,
+                "adaptive_weight": 0.14,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "结构清楚。",
+            },
+            {
+                "dimension": "engineering_awareness",
+                "score": 70,
+                "adaptive_weight": 0.26,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "观测指标和告警阈值不足。",
+            },
+        ],
+        "adaptive_insights": {
+            "weak_skills": ["failure_recovery", "tradeoff_reasoning", "observability"],
+            "strong_skills": ["structured_reasoning"],
+            "unstable_skills": ["reliability"],
+            "overweighted_skills": ["depth", "tradeoff_reasoning", "engineering_awareness"],
+            "underweighted_skills": ["structure"],
+        },
+        "signals": ["weakness_detected", "progress_update"],
+        "progress_updates": [
+            {
+                "progress_node_ref": "progress_node_reliability",
+                "signal": "needs_focus",
+                "dimension": "engineering_awareness",
+            }
+        ],
     }
 
 
@@ -70,6 +181,7 @@ def _generated_payload() -> dict[str, Any]:
     return {
         "feedback_text": "回答覆盖了 MQ 解耦，但故障恢复和观测指标仍不够可验证。",
         "answer_summary": "候选人说明了异步解耦和失败重试表。",
+        "score_result": _adaptive_score_result(),
         "score_reasoning": [
             {
                 "dimension": "reliability",
@@ -155,6 +267,13 @@ def _service(llm_transport: object):
     return FeedbackGenerationService(llm_transport=llm_transport)
 
 
+def test_feedback_generation_service_exposes_v1_entry_only() -> None:
+    service = _service(_PayloadTransport(_generated_payload()))
+
+    assert hasattr(service, "generate_feedback_v1")
+    assert not hasattr(service, "generate")
+
+
 def _generated_final_payload() -> dict[str, Any]:
     payload = _generated_payload()
     payload.pop("same_question_effect", None)
@@ -168,7 +287,6 @@ def _generated_final_payload() -> dict[str, Any]:
             "status": "generated",
             "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
             "feedback_id": "feedback_001",
-            "score_result": {"score_value": 82, "score_type": "polish_answer"},
             "trace_refs": [{"resource_type": "llm_trace", "resource_id": "trace_001"}],
             "feedback_metadata": {
                 "prompt_version": POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
@@ -205,14 +323,16 @@ def _generated_final_payload() -> dict[str, Any]:
     return payload
 
 
-def test_service_with_fake_transport_returns_fake_visible_non_success() -> None:
-    result = _service(FakeLlmTransport()).generate(_context())
+def test_service_with_fake_transport_returns_blocked_non_success() -> None:
+    result = _service(FakeLlmTransport()).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
     assert result.validation_errors == ("fake_transport_not_runtime_provider",)
     assert result.metadata["provider_status"] == "fake_transport"
     assert result.metadata["llm_called"] is False
+    assert result.metadata["context_hygiene_status"] == "blocked"
+    assert "fallback_reason" not in result.metadata
 
 
 def test_fake_transport_fixture_payload_remains_available_for_explicit_tests() -> None:
@@ -241,26 +361,34 @@ def test_fake_transport_fixture_payload_remains_available_for_explicit_tests() -
     assert "schema_id" not in payload
     assert "schema_version" not in payload
     assert "contract_ids" not in payload
-    assert "score_result" not in payload
+    assert payload["score_result"]["progress_state_ref"] == "progress_node_reliability"
+    assert payload["score_result"]["adaptive_rubric"]["progress_state_ref"] == "progress_node_reliability"
+    assert {item["dimension"] for item in payload["score_result"]["dimension_scores"]} == {
+        "correctness",
+        "depth",
+        "tradeoff_reasoning",
+        "structure",
+        "engineering_awareness",
+    }
     assert "project_asset_update_candidates" in payload
 
 
 def test_service_metadata_includes_prompt_schema_llm_and_provider_status() -> None:
-    result = _service(FakeLlmTransport()).generate(_context())
+    result = _service(FakeLlmTransport()).generate_feedback_v1(_context())
 
     assert result.metadata["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
     assert result.metadata["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
     assert result.metadata["llm_called"] is False
     assert result.metadata["provider_status"] == "fake_transport"
-    assert result.metadata["context_hygiene_status"] == "fallback"
+    assert result.metadata["context_hygiene_status"] == "blocked"
     assert result.metadata["safe_context_metadata"]["raw_model_io_storage"] is False
-    assert result.metadata["fallback_reason"] == "fake_transport_not_runtime_provider"
+    assert "fallback_reason" not in result.metadata
 
 
 def test_feedback_request_uses_structured_output_budget() -> None:
     transport = _PayloadTransport(_generated_payload())
 
-    result = _service(transport).generate(_context())
+    result = _service(transport).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert transport.requests
@@ -272,7 +400,7 @@ def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> Non
     context = _context()
     context["answer_text"] = "Short complete answer that is still the current primary task input."
 
-    result = _service(transport).generate(context)
+    result = _service(transport).generate_feedback_v1(context)
 
     assert result.succeeded is True
     provider_prompt = transport.requests[-1].evidence_bundle
@@ -290,7 +418,7 @@ def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> Non
     assert provider_prompt["input_contract"]["full_answer_forbidden"] is True
 
 
-def test_feedback_generation_wraps_raw_answer_when_parser_fails(monkeypatch: Any) -> None:
+def test_feedback_generation_blocks_when_parser_fails(monkeypatch: Any) -> None:
     from app.application.polish import feedback_generation_service
 
     class RaisingParser:
@@ -301,17 +429,25 @@ def test_feedback_generation_wraps_raw_answer_when_parser_fails(monkeypatch: Any
     transport = _PayloadTransport(_generated_payload())
     context = _context()
 
-    result = _service(transport).generate(context)
+    result = _service(transport).generate_feedback_v1(context)
 
-    assert result.succeeded is True
-    structured_answer = transport.requests[-1].evidence_bundle["current_answer"]["structured_answer"]
-    assert structured_answer["parse_status"] == "fallback"
-    assert structured_answer["claims"][0]["text"] == context["answer_text"]
-    assert structured_answer["confidence_indicators"][0]["kind"] == "parser_fallback"
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors == ("structured_answer_parse_failed",)
+    assert transport.requests == []
+    assert result.metadata["context_hygiene_status"] == "blocked"
+    assert "fallback_reason" not in result.metadata
 
 
-def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits() -> None:
-    transport = _PayloadTransport(_generated_payload())
+def test_feedback_request_uses_v1_provider_prompt_budget_and_evidence_limits() -> None:
+    payload = _generated_payload()
+    payload["score_result"]["progress_state_ref"] = "progress_node_hybrid_search"
+    payload["score_result"]["adaptive_rubric"]["progress_state_ref"] = "progress_node_hybrid_search"
+    for item in payload["score_result"]["dimension_scores"]:
+        item["progress_focus"] = ["progress_node_hybrid_search"]
+    for item in payload["score_result"]["progress_updates"]:
+        item["progress_node_ref"] = "progress_node_hybrid_search"
+    transport = _PayloadTransport(payload)
     context = _context()
     context["question_text"] = "请深入说明混合检索策略优化如何在召回率、精排质量和延迟之间做取舍。"
     context["answer_text"] = "我会先用关键词召回保证确定性，再用向量召回补语义覆盖，最后用重排模型统一打分。 " * 80
@@ -366,8 +502,19 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
         "expected_capability": "说明多路召回、重排、评估指标和延迟取舍。" * 10,
         "related_resume_evidence": ["混合检索策略优化"],
     }
+    context["progress_state"] = {
+        "progress_state_ref": "progress_node_hybrid_search",
+        "current_priority": {
+            "progress_node_ref": "progress_node_hybrid_search",
+            "title": "混合检索策略优化",
+            "expected_capability": "说明多路召回、重排、评估指标和延迟取舍。",
+        },
+        "weak_skill_refs": ["latency_tradeoff", "evaluation_metrics"],
+        "strong_skill_refs": ["retrieval_architecture"],
+        "node_states": [{"progress_node_ref": "progress_node_hybrid_search", "status": "in_progress"}],
+    }
 
-    result = _service(transport).generate(context)
+    result = _service(transport).generate_feedback_v1(context)
 
     assert result.succeeded is True
     request = transport.requests[-1]
@@ -383,6 +530,9 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
     )
 
     assert provider_prompt["feedback_mode"] == "candidate_compact"
+    assert provider_prompt["input_contract"]["context_mode"] == "compact_v1"
+    assert provider_prompt["progress_state"]["progress_state_ref"] == "progress_node_hybrid_search"
+    assert provider_prompt["adaptive_rubric"]["weight_policy"] == "llm_judge_must_return_progress_derived_adaptive_weight"
     assert provider_prompt["task"] == "polish_feedback_candidate_v1"
     assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
     assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
@@ -427,20 +577,22 @@ def test_feedback_request_uses_quick_provider_prompt_budget_and_evidence_limits(
 
 
 def test_no_llm_transport_returns_failed_without_fake_feedback() -> None:
-    result = _service(None).generate(_context())
+    result = _service(None).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
     assert result.validation_errors == ("llm_transport_unavailable",)
     assert result.metadata["provider_status"] == "not_configured"
     assert result.metadata["llm_called"] is False
+    assert result.metadata["context_hygiene_status"] == "blocked"
+    assert "fallback_reason" not in result.metadata
 
 
 def test_provider_invalid_schema_returns_failed() -> None:
     payload = _generated_payload()
     payload["feedback_text"] = ""
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
@@ -453,7 +605,7 @@ def test_provider_loss_reference_mapping_invalid_is_recovered_with_warning() -> 
     payload = _generated_payload()
     payload["reference_answer"]["sections"][0]["addresses_loss_point_ids"] = ["lp_unknown"]
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -468,7 +620,7 @@ def test_provider_reference_sections_without_titles_generate_feedback_with_defau
     for section in payload["reference_answer"]["sections"]:
         section.pop("title")
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -483,7 +635,7 @@ def test_provider_reference_sections_without_ids_generate_feedback_with_stable_i
     for section in payload["reference_answer"]["sections"]:
         section.pop("section_id")
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -498,7 +650,6 @@ def test_provider_phase4_fields_and_loss_point_id_alias_generate_feedback() -> N
     payload["schema_version"] = "1.0"
     payload["status"] = "generated"
     payload["contract_ids"] = list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS)
-    payload["score_result"] = {"score_type": "polish_answer", "score_value": 91}
     payload["explicit_score"] = 88
     payload["implicit_score"] = 83
     payload["scoring_dimensions"] = [{"dimension": "reliability", "score": 84}]
@@ -515,7 +666,7 @@ def test_provider_phase4_fields_and_loss_point_id_alias_generate_feedback() -> N
     payload["trace_refs"] = ["trace_model_001"]
     payload["feedback_metadata"] = {"provider": "deepseek-v4-pro"}
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -532,7 +683,7 @@ def test_provider_invalid_enhancement_fields_are_warnings_not_generation_failure
     payload["project_asset_update_candidates"] = "invalid-enhancement"
     payload["session_similarity_check"] = ["invalid-enhancement"]
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -547,7 +698,7 @@ def test_unsafe_provider_payload_returns_failed() -> None:
     payload = _generated_payload()
     payload["feedback_text"] = "当前文本包含 token=hidden-chain，不应下沉。"
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
@@ -560,7 +711,7 @@ def test_service_candidate_invalid_metadata_marks_candidate_stage_and_llm_called
     payload = _generated_payload()
     payload["feedback_text"] = ""
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
@@ -580,7 +731,7 @@ def test_service_final_validation_failure_marks_final_stage_and_candidate_valid(
 
     monkeypatch.setattr(feedback_generation_service, "validate_final_feedback_payload", fail_final)
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
@@ -591,7 +742,7 @@ def test_service_final_validation_failure_marks_final_stage_and_candidate_valid(
 
 
 def test_provider_exception_returns_failed() -> None:
-    result = _service(_RaisingTransport()).generate(_context())
+    result = _service(_RaisingTransport()).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
@@ -601,7 +752,7 @@ def test_provider_exception_returns_failed() -> None:
 
 
 def test_provider_non_dict_payload_returns_failed() -> None:
-    result = _service(_PayloadTransport(["not", "a", "dict"])).generate(_context())
+    result = _service(_PayloadTransport(["not", "a", "dict"])).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
@@ -784,7 +935,7 @@ def test_phase4_confirmed_asset_conflict_surfaces_first_card_and_blocks_next_que
         asset_status="asset_confirmed",
     )
 
-    result = _service(_PayloadTransport(payload)).generate(context)
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -804,7 +955,7 @@ def test_phase4_archived_asset_is_not_used_as_canonical_conflict_source() -> Non
         asset_status="asset_archived",
     )
 
-    result = _service(_PayloadTransport(payload)).generate(context)
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -817,7 +968,7 @@ def test_phase4_confirmed_asset_unsupported_new_project_fact_is_candidate_claim(
         asset_status="asset_confirmed",
     )
 
-    result = _service(_PayloadTransport(_generated_payload())).generate(context)
+    result = _service(_PayloadTransport(_generated_payload())).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -833,7 +984,7 @@ def test_phase4_missing_asset_consistency_from_llm_with_assets_gets_explicit_pol
         asset_status="asset_confirmed",
     )
 
-    result = _service(_PayloadTransport(_generated_payload())).generate(context)
+    result = _service(_PayloadTransport(_generated_payload())).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -862,7 +1013,7 @@ def test_phase4_rules_normalize_provider_aliases_before_validation() -> None:
             }
         ]
     }
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -908,7 +1059,7 @@ def test_phase4_same_question_regression_and_fixed_loss_points_are_reported() ->
         }
     ]
 
-    result = _service(_PayloadTransport(payload)).generate(context)
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -919,25 +1070,28 @@ def test_phase4_same_question_regression_and_fixed_loss_points_are_reported() ->
     assert any(card["card_type"] == "answer_change" for card in result.payload["feedback_cards"])
 
 
-def test_service_overrides_candidate_score_and_deduction_with_scoring_policy() -> None:
+def test_service_uses_llm_comparator_dimensions_and_does_not_rule_score_loss_points() -> None:
     payload = _generated_payload()
     payload["loss_points"][0]["deduction"] = 20
     payload["loss_points"][1]["deducted_points"] = 20
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None
     assert result.payload["score_result"]["score_type"] == "polish_answer"
-    assert result.payload["score_result"]["score_value"] == 82
-    assert "scoring_basis" in result.payload["score_result"]
-    assert "score_result computed from loss_point severities" in result.payload["score_result"]["scoring_basis"]
-    assert result.payload["loss_points"][0]["deduction"] == 12
-    assert result.payload["loss_points"][1]["deduction"] == 6
+    assert result.payload["score_result"]["score_value"] == 76.6
+    assert result.payload["score_result"]["scoring_basis"] == "progress_adaptive_llm_comparator_v1"
+    assert result.payload["score_result"]["aggregation_method"] == "progress_weighted_dimension_scores"
+    assert result.payload["score_result"]["progress_state_ref"] == "progress_node_reliability"
+    assert result.payload["score_result"]["signals"] == ["weakness_detected", "progress_update"]
+    assert result.payload["loss_points"][0]["deduction"] == 20
+    assert "deduction" not in result.payload["loss_points"][1]
 
 
-def test_service_unknown_loss_point_severity_generates_zero_deduction_and_low_confidence_warning() -> None:
+def test_service_missing_llm_comparator_score_fails_without_fallback_scoring() -> None:
     payload = _generated_payload()
+    payload.pop("score_result")
     payload["loss_points"] = [
         {
             "loss_point_id": "lp_recovery",
@@ -951,13 +1105,12 @@ def test_service_unknown_loss_point_severity_generates_zero_deduction_and_low_co
         },
     ]
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
-    assert result.succeeded is True
-    assert result.payload is not None
-    assert result.payload["loss_points"][1]["deduction"] == 0
-    assert result.payload["score_result"]["score_value"] == 80
-    assert any(flag.startswith("score_point_unknown_severity:") for flag in result.payload["low_confidence_flags"])
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors == ("score_result_required",)
+    assert result.metadata["llm_output_validation_status"] == "invalid"
 
 
 def test_phase4_missing_points_remove_generate_next_question() -> None:
@@ -966,7 +1119,7 @@ def test_phase4_missing_points_remove_generate_next_question() -> None:
     context["answer_text"] = "我只说明了 MQ 解耦。"
     context["question_metadata"] = {"expected_answer_dimensions": ["MQ 解耦", "幂等键", "观测指标"]}
 
-    result = _service(_PayloadTransport(payload)).generate(context)
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -987,7 +1140,7 @@ def test_phase4_next_action_regression_retries_same_question() -> None:
         }
     ]
 
-    result = _service(_PayloadTransport(payload)).generate(context)
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(context)
 
     assert result.succeeded is True
     assert result.payload is not None
@@ -1026,7 +1179,7 @@ def test_phase4_asset_update_candidates_are_forced_to_user_confirmation() -> Non
     payload = _generated_payload()
     payload["project_asset_update_candidates"][0]["user_confirmation_required"] = False
 
-    result = _service(_PayloadTransport(payload)).generate(_context())
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert result.payload is not None

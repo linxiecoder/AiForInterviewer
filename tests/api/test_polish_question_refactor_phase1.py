@@ -108,7 +108,7 @@ class _FeedbackGenerationServiceStub:
     def __init__(self) -> None:
         self.contexts: list[Any] = []
 
-    def generate(self, context: Any) -> FeedbackGenerationResult:
+    def generate_feedback_v1(self, context: Any) -> FeedbackGenerationResult:
         self.contexts.append(context)
         return FeedbackGenerationResult(
             succeeded=True,

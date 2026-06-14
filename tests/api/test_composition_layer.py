@@ -23,13 +23,13 @@ class _FeedbackSpy:
         self.output = output
         self.contexts: list[Any] = []
 
-    def generate(self, context: Any) -> Any:
+    def generate_feedback_v1(self, context: Any) -> Any:
         self.contexts.append(context)
         return self.output
 
 
 class _ForbiddenFeedbackService:
-    def generate(self, context: Any) -> Any:
+    def generate_feedback_v1(self, context: Any) -> Any:
         raise AssertionError("G-003 feedback must not be called in analysis mode")
 
 
