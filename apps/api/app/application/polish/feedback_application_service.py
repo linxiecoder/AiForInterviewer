@@ -130,7 +130,7 @@ class PolishFeedbackApplicationService:
                 owner_id=command.owner_id,
                 actor_id=command.actor_id,
             )
-            generation_result = self._operations._feedback_generation_service.generate(generation_context)
+            generation_result = self._operations._feedback_generation_service.generate_feedback_v1(generation_context)
             if not generation_result.succeeded or generation_result.payload is None:
                 failed_payload = _failed_feedback_payload_for_storage(
                     session_id=session.session_id,
@@ -299,6 +299,7 @@ def _build_feedback_generation_context(
             progress_node_ref=turn.progress_node_ref,
             question_text=turn.question_text,
         ),
+        progress_state=detail.progress_tree_state if isinstance(detail.progress_tree_state, dict) else {},
     )
 
 
@@ -402,11 +403,16 @@ def _failed_feedback_payload_for_storage(
         for field_name in (
             "context_hygiene_status",
             "safe_context_metadata",
-            "fallback_reason",
             "validation_signals",
         )
     ):
-        feedback_metadata.update(normalize_context_hygiene_metadata(source_metadata))
+        normalized_hygiene = normalize_context_hygiene_metadata(source_metadata)
+        for hygiene_field_name in (
+            "context_hygiene_status",
+            "safe_context_metadata",
+            "validation_signals",
+        ):
+            feedback_metadata[hygiene_field_name] = normalized_hygiene[hygiene_field_name]
     return {
         "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
         "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,

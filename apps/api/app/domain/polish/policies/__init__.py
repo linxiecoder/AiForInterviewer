@@ -51,10 +51,10 @@ from app.domain.polish.policies.source_support_policy import (
     SourceSupportTarget,
 )
 from app.domain.polish.policies.scoring_policy import (
+    AdaptiveRubricDimension,
+    SemanticScoreDimension,
     ScoringDecision,
-    ScoredLossPoint,
     ScoringInput,
-    ScoringLossPoint,
     ScoringPolicy,
 )
 
@@ -71,6 +71,7 @@ __all__ = [
     "AssetConsistencyInput",
     "AssetConsistencyPolicy",
     "AssetConsistencyStatus",
+    "AdaptiveRubricDimension",
     "CanonicalAssetItem",
     "CoverageLevel",
     "FeedbackNextActionDecision",
@@ -94,10 +95,9 @@ __all__ = [
     "SourceSupportPolicy",
     "SourceSupportSummary",
     "SourceSupportTarget",
-    "ScoredLossPoint",
+    "SemanticScoreDimension",
     "ScoringDecision",
     "ScoringInput",
-    "ScoringLossPoint",
     "ScoringPolicy",
     "UnsupportedAssetClaim",
 ]

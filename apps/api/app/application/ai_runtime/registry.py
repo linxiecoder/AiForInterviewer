@@ -183,7 +183,6 @@ class AgentGraphRegistry:
         task_map = {
             LOCAL_MULTI_AGENT_TASK_TYPE: LOCAL_MULTI_AGENT_GRAPH_NAME,
             "polish_question_generation": "polish_question_graph",
-            "polish_feedback_generation": "polish_feedback_graph",
             "job_match_analysis": "job_match_graph",
             "resume_analysis": "resume_analysis_graph",
             "report_generation": "report_generation_graph",

@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.application.polish.feedback_evaluation import normalize_semantic_score_result
 from app.application.polish.feedback_models import FeedbackCandidatePayload, FeedbackFinalPayload
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
@@ -56,6 +57,7 @@ _FULL_ASSET_BODY_FIELDS = ("asset_body", "asset_payload", "full_asset", "full_as
 _CANDIDATE_REQUIRED_FIELDS = (
     "feedback_text",
     "answer_summary",
+    "score_result",
     "loss_points",
     "reference_answer",
 )
@@ -114,6 +116,8 @@ _FINAL_FORBIDDEN_FIELDS = frozenset()
 
 def validate_feedback_candidate_payload(
     payload: object,
+    *,
+    expected_progress_state_ref: str | None = None,
 ) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
     if not isinstance(payload, dict):
         return None, ("feedback_payload_schema_invalid",)
@@ -150,8 +154,14 @@ def validate_feedback_candidate_payload(
         normalized.get("score_reasoning"),
         warnings=warnings,
     )
-    if not _candidate_has_score_signal(normalized):
-        warnings.append("score_result_missing_server_scored_from_loss_points")
+    normalized_score_result, score_errors, score_warnings = normalize_semantic_score_result(
+        normalized.get("score_result"),
+        expected_progress_state_ref=expected_progress_state_ref,
+    )
+    errors.extend(score_errors)
+    warnings.extend(score_warnings)
+    if normalized_score_result is not None:
+        normalized["score_result"] = normalized_score_result
     normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=20, max_item_chars=160)
     normalized["evidence_refs"] = _string_list(normalized.get("evidence_refs"), max_items=40, max_item_chars=200)
 
@@ -257,9 +267,19 @@ def validate_final_feedback_payload(
         errors.append("answer_summary_required")
     normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=40, max_item_chars=160)
 
-    _, score_errors = _score_value(normalized.get("score_result"))
+    normalized_score_result, score_errors, score_warnings = normalize_semantic_score_result(normalized.get("score_result"))
     errors.extend(score_errors)
-    normalized["score_result"] = normalized.get("score_result")
+    if score_warnings:
+        metadata = normalized.get("feedback_metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        existing = _string_list(metadata.get("validation_warnings"), max_items=40, max_item_chars=160)
+        metadata["validation_warnings"] = list(dict.fromkeys([*existing, *score_warnings]))
+        normalized["feedback_metadata"] = metadata
+    if normalized_score_result is not None:
+        normalized["score_result"] = normalized_score_result
+    else:
+        normalized["score_result"] = normalized.get("score_result")
 
     normalized["loss_points"] = _normalize_loss_point_evidence_refs(normalized.get("loss_points"), errors=errors)
     loss_point_ids, _, _, loss_errors = _loss_points(
@@ -393,6 +413,8 @@ def _candidate_model_errors(exc: ValidationError) -> tuple[str, ...]:
             errors.append("loss_point_identity_unrecoverable")
         elif loc.startswith("loss_points"):
             errors.append("loss_point_invalid")
+        elif loc == "score_result":
+            errors.append("score_result_required")
         elif loc == "reference_answer":
             errors.append("reference_answer_required")
         elif loc == "reference_answer.sections":
@@ -588,31 +610,6 @@ def _generated_reference_section_id(index: int, seen_section_ids: set[str]) -> s
         suffix += 1
         candidate = f"section_{suffix}"
     return candidate
-
-
-def _candidate_has_score_signal(payload: dict[str, Any]) -> bool:
-    score_result = payload.get("score_result")
-    if isinstance(score_result, dict) and _is_number(score_result.get("score_value")):
-        return True
-    if _is_number(payload.get("explicit_score")) or _is_number(payload.get("implicit_score")):
-        return True
-    return bool(payload.get("score_reasoning"))
-
-
-def _score_value(score_result: object) -> tuple[float | None, list[str]]:
-    errors: list[str] = []
-    if not isinstance(score_result, dict):
-        return None, ["score_result_required"]
-
-    score_value = score_result.get("score_value")
-    if not _is_number(score_value):
-        return None, ["score_value_invalid"]
-
-    numeric_score = float(score_value)
-    if numeric_score < 0 or numeric_score > 100:
-        errors.append("score_value_out_of_range")
-    score_type = _clean(score_result.get("score_type"), max_chars=80)
-    return numeric_score, errors
 
 
 def _loss_points(

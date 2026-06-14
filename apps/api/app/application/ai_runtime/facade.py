@@ -31,6 +31,7 @@ from app.application.ai_runtime.contracts import (
     GraphDisabledError,
     OwnerScopeError,
     RuntimeConflictError,
+    RuntimePolicyError,
     RuntimeValidationError,
     sanitize_payload,
 )
@@ -117,14 +118,7 @@ class AiOrchestrationFacade:
         requested_outputs: tuple[str, ...],
         idempotency_key: str,
     ) -> AgentTaskStatusRef:
-        return self._start_run(
-            task_type="polish_feedback_generation",
-            owner_id=owner_id,
-            actor_id=actor_id,
-            input_refs=(session_ref, question_ref, answer_ref),
-            requested_outputs=requested_outputs,
-            idempotency_key=idempotency_key,
-        )
+        raise RuntimePolicyError("polish feedback generation must use FeedbackGenerationService.generate_feedback_v1")
 
     def start_local_multi_agent_orchestration(
         self,
