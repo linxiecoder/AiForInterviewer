@@ -112,6 +112,11 @@ _FINAL_REQUIRED_FIELDS = (
     "feedback_metadata",
 )
 _FINAL_FORBIDDEN_FIELDS = frozenset()
+_PHASE5_SCORE_RESULT_EXTENSION_FIELDS = (
+    "stability_layer",
+    "calibration_layer",
+    "learning_control",
+)
 
 
 def validate_feedback_candidate_payload(
@@ -277,7 +282,10 @@ def validate_final_feedback_payload(
         metadata["validation_warnings"] = list(dict.fromkeys([*existing, *score_warnings]))
         normalized["feedback_metadata"] = metadata
     if normalized_score_result is not None:
-        normalized["score_result"] = normalized_score_result
+        normalized["score_result"] = _restore_phase5_score_result_extensions(
+            normalized_score_result,
+            normalized.get("score_result"),
+        )
     else:
         normalized["score_result"] = normalized.get("score_result")
 
@@ -426,6 +434,20 @@ def _candidate_model_errors(exc: ValidationError) -> tuple[str, ...]:
         else:
             errors.append("feedback_payload_schema_invalid")
     return tuple(dict.fromkeys(errors or ["feedback_payload_schema_invalid"]))
+
+
+def _restore_phase5_score_result_extensions(
+    normalized_score_result: dict[str, Any],
+    source_score_result: object,
+) -> dict[str, Any]:
+    restored = dict(normalized_score_result)
+    if not isinstance(source_score_result, dict):
+        return restored
+    for field_name in _PHASE5_SCORE_RESULT_EXTENSION_FIELDS:
+        value = source_score_result.get(field_name)
+        if isinstance(value, dict):
+            restored[field_name] = deepcopy(value)
+    return restored
 
 
 def _final_model_errors(exc: ValidationError) -> tuple[str, ...]:

@@ -17,7 +17,7 @@ ADAPTIVE_RUBRIC_DIMENSIONS = (
     "structure",
     "engineering_awareness",
 )
-ADAPTIVE_SIGNAL_TYPES = ("weakness_detected", "strength_detected", "progress_update")
+ADAPTIVE_SIGNAL_TYPES = ("weakness_detected", "strength_detected", "drift_detected", "progress_update")
 
 # Backwards-compatible names for callers that import the semantic constants directly.
 SEMANTIC_SCORE_BASIS = ADAPTIVE_SCORE_BASIS
@@ -228,6 +228,12 @@ def _normalize_progress_updates(value: tuple[dict[str, object], ...]) -> tuple[d
         rationale = _clean(item.get("rationale"), max_chars=1000)
         if rationale:
             normalized["rationale"] = rationale
+        learning_rate = item.get("learning_rate")
+        if isinstance(learning_rate, (int, float)) and not isinstance(learning_rate, bool) and learning_rate > 0:
+            normalized["learning_rate"] = round(float(learning_rate), 6)
+        learning_rate_basis = _clean(item.get("learning_rate_basis"), max_chars=120)
+        if learning_rate_basis:
+            normalized["learning_rate_basis"] = learning_rate_basis
         updates.append(normalized)
     return tuple(updates)
 

@@ -751,6 +751,110 @@ def test_phase1_question_metadata_records_prompt_asset_digest_without_prompt_bod
     assert "支付链路需要覆盖幂等" not in json.dumps(metadata, ensure_ascii=False)
 
 
+def test_phase6_question_metadata_records_skill_driven_adaptive_interview_flow() -> None:
+    service = QuestionGenerationService()
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性薄弱项",
+        expected_capability="能说明支付链路的幂等、补偿、验证和复盘信号。",
+    )
+    state["node_states"] = [
+        {
+            "progress_node_ref": NODE_REF,
+            "status": "in_progress",
+            "weak_points": ["补偿触发条件不清晰", "缺少上线验证指标"],
+        }
+    ]
+    context["evaluation_history"] = [
+        {
+            "progress_node_ref": NODE_REF,
+            "signals": ["weakness_detected"],
+            "missing_points": ["补偿触发条件不清晰"],
+        }
+    ]
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    metadata = result.draft.question_metadata
+    flow = metadata["adaptive_interview_flow"]
+    assert flow["question_driver"] == "progress_state_weak_skill"
+    assert flow["target_skill"]["progress_node_ref"] == NODE_REF
+    assert flow["difficulty_level"] == "easy"
+    assert flow["difficulty_transition"] == "decrease_for_foundation"
+    assert flow["difficulty_basis"] == "progress_state_and_evaluation_history"
+    assert flow["random_generation_allowed"] is False
+    assert [item["stage"] for item in flow["session_structure"]] == [
+        "warmup",
+        "core_technical",
+        "deep_dive",
+        "pressure",
+    ]
+    assert flow["learning_path"]["progression_path"] == ["weak", "medium", "strong"]
+    assert flow["learning_path"]["skill_sequence"][0]["progress_node_ref"] == NODE_REF
+    assert metadata["adaptive_difficulty_level"] == "easy"
+    assert metadata["adaptive_session_structure"][0]["stage"] == "warmup"
+    assert "threshold" not in json.dumps(flow, ensure_ascii=False).lower()
+
+
+def test_phase6_question_provider_request_uses_progress_history_for_adaptive_difficulty() -> None:
+    transport = _RecordingQuestionTransport()
+    service = QuestionGenerationService(llm_transport=transport)
+    session, context, plan, state = _question_generation_inputs(
+        primary_text="支付链路需要覆盖幂等、失败补偿和上线验证指标。",
+        node_title="支付可靠性进阶项",
+        expected_capability="能说明支付链路的幂等、补偿、验证和复盘信号。",
+    )
+    state["node_states"] = [
+        {
+            "progress_node_ref": NODE_REF,
+            "status": "in_progress",
+            "last_question_difficulty": "medium",
+        }
+    ]
+    context["evaluation_history"] = [
+        {
+            "progress_node_ref": NODE_REF,
+            "signals": ["strength_detected"],
+            "progress_updates": [
+                {"progress_node_ref": NODE_REF, "signal": "strength_detected"},
+            ],
+        }
+    ]
+
+    result = service.generate(
+        session=session,
+        context=context,
+        plan=plan,
+        state=state,
+        requested_ref=NODE_REF,
+    )
+
+    assert result.succeeded
+    assert result.draft is not None
+    assert len(transport.requests) == 1
+    provider_request = transport.requests[0].evidence_bundle
+    adaptive_flow = provider_request["history_summary"]["adaptive_interview_flow"]
+    assert adaptive_flow["difficulty_level"] == "hard"
+    assert adaptive_flow["difficulty_transition"] == "increase_for_improvement"
+    assert adaptive_flow["difficulty_basis"] == "progress_state_and_evaluation_history"
+    assert adaptive_flow["question_driver"] == "progress_state_weak_skill"
+    assert adaptive_flow["random_generation_allowed"] is False
+    assert result.draft.question_metadata["adaptive_difficulty_level"] == "hard"
+    assert result.draft.question_metadata["adaptive_learning_path"]["progression_path"] == [
+        "weak",
+        "medium",
+        "strong",
+    ]
+
+
 def test_question_service_sends_structured_prompt_asset_to_llm_transport() -> None:
     transport = _RecordingQuestionTransport()
     service = QuestionGenerationService(llm_transport=transport)
@@ -2415,6 +2519,39 @@ def test_question_metadata_normalization_keeps_safe_prompt_asset_fields_only() -
         "raw_completion",
     ):
         assert forbidden_key not in normalized
+
+
+def test_question_metadata_normalization_keeps_phase6_adaptive_flow_safely() -> None:
+    normalized = normalize_question_metadata(
+        {
+            "question_pattern": "technical_chain_deep_dive",
+            "adaptive_difficulty_level": "easy",
+            "adaptive_learning_path": {
+                "progression_path": ["weak", "medium", "strong"],
+                "skill_sequence": [{"progress_node_ref": NODE_REF, "skill": "支付可靠性"}],
+                "raw_prompt": "must be dropped",
+            },
+            "adaptive_session_structure": [
+                {"stage": "warmup", "difficulty": "easy"},
+                {"stage": "core_technical", "difficulty": "medium"},
+            ],
+            "adaptive_interview_flow": {
+                "difficulty_level": "easy",
+                "random_generation_allowed": False,
+                "session_structure": [{"stage": "warmup", "difficulty": "easy"}],
+                "provider_payload": {"secret": "must be dropped"},
+            },
+        }
+    )
+
+    assert normalized["adaptive_difficulty_level"] == "easy"
+    assert normalized["adaptive_learning_path"]["progression_path"] == ["weak", "medium", "strong"]
+    assert normalized["adaptive_session_structure"][0]["stage"] == "warmup"
+    assert normalized["adaptive_interview_flow"]["random_generation_allowed"] is False
+    serialized = json.dumps(normalized, ensure_ascii=False)
+    assert "raw_prompt" not in serialized
+    assert "provider_payload" not in serialized
+    assert "secret" not in serialized
 
 
 def test_question_task_metadata_uses_business_state_not_prototype_markers() -> None:

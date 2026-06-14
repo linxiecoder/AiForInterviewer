@@ -4162,6 +4162,62 @@ def test_progress_tree_refresh_rolls_up_parent_from_all_children_without_mutatin
     assert result["progress_tree_state"]["progress"]["progress_percent"] == 50
 
 
+def test_quality_first_progress_refresh_smooths_upward_progress_spike_with_history() -> None:
+    node = {
+        "progress_node_ref": "node_reliability",
+        "title": "可靠性设计",
+        "expected_capability": "说明失败恢复、幂等和观测指标。",
+        "children": [],
+    }
+    original_plan = {
+        "schema_id": "polish_progress_quality_first_menu_v1",
+        "status": "ready",
+        "context_digest": "digest",
+        "nodes": [node],
+    }
+    existing_state = {
+        "status": "ready",
+        "node_states": [
+            {
+                "progress_node_ref": "node_reliability",
+                "status": "in_progress",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            }
+        ],
+        "current_priority": {
+            "progress_node_ref": "node_reliability",
+            "title": "可靠性设计",
+            "expected_capability": "说明失败恢复、幂等和观测指标。",
+        },
+        "updated_from_turns_count": 4,
+        "progress": {"progress_percent": 20},
+    }
+    context = {
+        "turns": [
+            {
+                "progress_node_ref": "node_reliability",
+                "feedback_text": "本轮反馈已生成",
+                "answers": [],
+            }
+        ]
+    }
+
+    result = PolishProgressTreeLlmService(None).refresh_state(
+        context=context,
+        existing_plan=original_plan,
+        existing_state=existing_state,
+    )
+
+    progress = result["progress_tree_state"]["progress"]
+    assert progress["progress_percent"] == 36
+    assert progress["raw_progress_percent"] == 100
+    assert progress["normalization"]["strategy"] == "historical_weighting"
+    assert progress["normalization"]["previous_turn_weight"] == 4
+    assert progress["normalization"]["new_turn_weight"] == 1
+    assert result["progress_tree_state"]["updated_from_turns_count"] == 5
+
+
 def test_progress_tree_refresh_no_longer_refreshes_grounded_plan_v2_as_active_schema() -> None:
     existing_plan = {
         "schema_id": "polish_progress_tree_" + "grounded_plan_v2",

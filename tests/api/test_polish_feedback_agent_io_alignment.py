@@ -401,7 +401,12 @@ def test_feedback_prompt_carries_adaptive_rubric_anchors_and_comparator_contract
     )
     output_requirements = "\n".join(provider_prompt["output_requirements"])
     assert "reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates" in output_requirements
-    assert provider_prompt["semantic_signals"] == ["weakness_detected", "strength_detected", "progress_update"]
+    assert provider_prompt["semantic_signals"] == [
+        "weakness_detected",
+        "strength_detected",
+        "drift_detected",
+        "progress_update",
+    ]
 
 
 def test_feedback_agent_fails_closed_when_compact_provider_prompt_missing() -> None:
@@ -559,7 +564,7 @@ def test_service_fails_closed_when_envelope_has_validation_errors() -> None:
     assert result.validation_errors == ("feedback_payload_schema_invalid",)
 
 
-def test_service_calls_candidate_and_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
+def test_service_calls_dual_pass_candidate_and_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
 
     def spy_candidate(
@@ -590,8 +595,9 @@ def test_service_calls_candidate_and_final_validator_after_envelope_parse(monkey
     assert result.succeeded is True
     assert len(calls) >= 2
     assert calls[0]["validator"] == "candidate"
-    assert calls[1]["validator"] == "final"
-    assert calls[1]["require_feedback_id"] is False
+    assert calls[1]["validator"] == "candidate"
+    assert calls[2]["validator"] == "final"
+    assert calls[2]["require_feedback_id"] is False
 
 
 def _contains_forbidden_key(value: object) -> bool:

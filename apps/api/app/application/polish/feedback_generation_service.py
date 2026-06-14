@@ -20,6 +20,7 @@ from app.application.polish.feedback_validation import (
     validate_feedback_candidate_payload,
     validate_final_feedback_payload,
 )
+from app.application.polish.phase5_evaluation_controls import apply_phase5_evaluation_controls
 from app.application.polish.transcript_signal_parser import (
     TranscriptSignalParser,
     structured_answer_to_evaluation_text,
@@ -204,12 +205,40 @@ class FeedbackGenerationService:
             )
 
         assert candidate_payload is not None
-        ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
-        final_payload = self._build_final_payload(
-            ruled_payload=ruled_payload,
+        secondary_candidate_payload: dict[str, Any] | None = None
+        secondary_validation_errors: tuple[str, ...] = ()
+        secondary_low_confidence_flags: tuple[str, ...] = ()
+        secondary_trace_refs: tuple[str, ...] = ()
+        secondary_agent_result = FeedbackGenerationAgent(transport=self._llm_transport).invoke_provider_v1(
             prompt_asset=prompt_asset,
-            agent_trace_refs=agent_result.trace_refs,
-            agent_low_confidence_flags=agent_result.low_confidence_flags,
+            input_refs=_input_refs(evaluation_context),
+        )
+        secondary_low_confidence_flags = secondary_agent_result.low_confidence_flags
+        secondary_trace_refs = secondary_agent_result.trace_refs
+        if secondary_agent_result.succeeded:
+            secondary_candidate_payload, secondary_validation_errors = validate_feedback_candidate_payload(
+                secondary_agent_result.payload,
+                expected_progress_state_ref=_progress_state_ref(evaluation_context),
+            )
+            if secondary_validation_errors:
+                secondary_candidate_payload = None
+        else:
+            secondary_validation_errors = secondary_agent_result.validation_errors or ("secondary_pass_failed",)
+
+        ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
+        controlled_payload = apply_phase5_evaluation_controls(
+            ruled_payload,
+            secondary_candidate_payload=secondary_candidate_payload,
+            secondary_validation_errors=secondary_validation_errors,
+            secondary_low_confidence_flags=secondary_low_confidence_flags,
+        )
+        final_payload = self._build_final_payload(
+            ruled_payload=controlled_payload,
+            prompt_asset=prompt_asset,
+            agent_trace_refs=tuple(dict.fromkeys((*agent_result.trace_refs, *secondary_trace_refs))),
+            agent_low_confidence_flags=tuple(
+                dict.fromkeys((*agent_result.low_confidence_flags, *secondary_low_confidence_flags))
+            ),
         )
         normalized_payload, validation_errors = validate_final_feedback_payload(final_payload, require_feedback_id=False)
         if validation_errors:

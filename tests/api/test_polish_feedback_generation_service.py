@@ -256,6 +256,24 @@ class _PayloadTransport:
         )
 
 
+class _SequencePayloadTransport:
+    def __init__(self, *payloads: object) -> None:
+        self.payloads = list(payloads)
+        self.requests: list[LlmTransportRequest] = []
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.requests.append(request)
+        payload = self.payloads[min(len(self.requests) - 1, len(self.payloads) - 1)]
+        return LlmTransportResult(
+            result=payload,  # type: ignore[arg-type]
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=(f"trace_provider_{len(self.requests):03d}",),
+            evidence_refs=(f"evidence_provider_{len(self.requests):03d}",),
+        )
+
+
 class _RaisingTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         raise TimeoutError("provider timed out")
@@ -393,6 +411,41 @@ def test_feedback_request_uses_structured_output_budget() -> None:
     assert result.succeeded is True
     assert transport.requests
     assert 4000 <= getattr(transport.requests[-1], "max_tokens", 8000) < 8000
+
+
+def test_feedback_generation_service_runs_dual_pass_stability_layer_and_bounds_variance() -> None:
+    primary_payload = _generated_payload()
+    secondary_payload = deepcopy(_generated_payload())
+    for item in secondary_payload["score_result"]["dimension_scores"]:
+        item["score"] = item["score"] + 10
+    secondary_payload["score_result"]["signals"].append("drift_detected")
+    transport = _SequencePayloadTransport(primary_payload, secondary_payload)
+
+    result = _service(transport).generate_feedback_v1(_context())
+
+    assert result.succeeded is True
+    assert len(transport.requests) == 2
+    assert result.payload is not None
+    score_result = result.payload["score_result"]
+    assert score_result["score_value"] == 81.6
+    assert score_result["signals"] == ["weakness_detected", "progress_update", "drift_detected"]
+    assert score_result["stability_layer"]["dual_pass_judging"] is True
+    assert score_result["stability_layer"]["pass_count"] == 2
+    assert score_result["stability_layer"]["score_value_passes"] == [76.6, 86.6]
+    assert score_result["stability_layer"]["variance_bounded"] is True
+    assert score_result["stability_layer"]["numeric_variance_detected"] is True
+    assert score_result["calibration_layer"]["semantic_adjustment_applied"] is False
+    assert score_result["learning_control"]["hardcoded_thresholds_used"] is False
+    assert score_result["learning_control"]["learning_rate"] == 0.333333
+    assert all(item["learning_rate"] == 0.333333 for item in score_result["progress_updates"])
+    assert "evaluation_drift_detected" in result.payload["low_confidence_flags"]
+    assert result.payload["feedback_metadata"]["phase5_pipeline"] == [
+        "evaluate",
+        "stability_layer",
+        "calibration",
+        "learning_control",
+        "normalized_progress_update",
+    ]
 
 
 def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> None:

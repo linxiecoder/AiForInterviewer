@@ -93,6 +93,7 @@ def build_question_prompt_asset(
     scope: EvidenceScope,
     *,
     runtime_policy: QuestionGenerationRuntimePolicy | None = None,
+    adaptive_flow: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a structured prompt asset; callers must persist only its safe metadata."""
 
@@ -148,8 +149,9 @@ def build_question_prompt_asset(
             "source": "evidence_summaries",
         },
         "interview_stage": "polish_mode_next_question",
-        "difficulty": _difficulty_for_blueprint(blueprint),
+        "difficulty": _adaptive_difficulty(adaptive_flow, blueprint),
         "skill_dimension": selected_node_title,
+        "adaptive_interview_flow": _safe_adaptive_flow(adaptive_flow),
         "generation_policy": {
             "question_kind": blueprint.question_kind,
             "claim_mode": blueprint.claim_mode,
@@ -236,7 +238,7 @@ def build_question_prompt_asset(
                 "job": "job_* 或 match_gap evidence summary",
                 "resume": "resume_* evidence summary",
                 "interview_stage": "service controlled value",
-                "difficulty": "service policy derived from claim_mode",
+                "difficulty": "service policy derived from adaptive_interview_flow.difficulty_level",
                 "skill_dimension": "progress_node.title primary; expected_capability auxiliary_only",
                 "evidence_refs": "selected progress evidence refs",
                 "canonical_project_assets": "CanonicalEvidencePack.canonical_project_assets compact selected assets",
@@ -454,11 +456,17 @@ def build_follow_up_question_prompt_asset(
     *,
     follow_up_context: dict[str, Any],
     runtime_policy: QuestionGenerationRuntimePolicy | None = None,
+    adaptive_flow: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the provider-facing prompt asset for follow-up question generation."""
 
     policy = _runtime_policy(runtime_policy)
-    base_asset = build_question_prompt_asset(blueprint, scope, runtime_policy=policy)
+    base_asset = build_question_prompt_asset(
+        blueprint,
+        scope,
+        runtime_policy=policy,
+        adaptive_flow=adaptive_flow,
+    )
     follow_up = _follow_up_prompt_input(follow_up_context)
     input_data = {
         **base_asset["input_data"],
@@ -694,6 +702,7 @@ def build_question_provider_request(
         },
         "history_summary": {
             "generation_mode": _compact(_clean(input_data.get("generation_mode")), limit=80) or "new_question",
+            "adaptive_interview_flow": _safe_adaptive_flow(input_data.get("adaptive_interview_flow")),
             "follow_up": {
                 "parent_question_id": _compact(_clean(follow_up.get("parent_question_id")), limit=80),
                 "parent_answer_id": _compact(_clean(follow_up.get("parent_answer_id")), limit=80),
@@ -979,6 +988,47 @@ def _difficulty_for_blueprint(blueprint: QuestionBlueprint) -> str:
     if blueprint.claim_mode == CLAIM_MODE_JOB_GAP_PROBE:
         return "medium"
     return "hard"
+
+
+def _adaptive_difficulty(adaptive_flow: dict[str, Any] | None, blueprint: QuestionBlueprint) -> str:
+    if isinstance(adaptive_flow, dict):
+        difficulty = _clean(adaptive_flow.get("difficulty_level")).lower()
+        if difficulty in {"easy", "medium", "hard", "clarification"}:
+            return difficulty
+    return _difficulty_for_blueprint(blueprint)
+
+
+def _safe_adaptive_flow(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return _safe_json_dict(value)
+
+
+def _safe_json_dict(value: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, item in value.items():
+        safe_key = _compact(_clean(key), limit=120)
+        if not safe_key:
+            continue
+        safe_value = _safe_json_value(item)
+        if safe_value is not None:
+            result[safe_key] = safe_value
+    return result
+
+
+def _safe_json_value(value: object) -> Any:
+    if isinstance(value, dict):
+        return _safe_json_dict(value)
+    if isinstance(value, list):
+        return [item for item in (_safe_json_value(item) for item in value[:20]) if item is not None]
+    if isinstance(value, tuple):
+        return [item for item in (_safe_json_value(item) for item in value[:20]) if item is not None]
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    text = _compact(_clean(value), limit=600)
+    return text if text else None
 
 
 def _question_prompt_examples() -> list[dict[str, Any]]:

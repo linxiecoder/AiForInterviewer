@@ -578,7 +578,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
 
 
-def test_feedback_runtime_returns_existing_generated_feedback_without_second_llm_call() -> None:
+def test_feedback_runtime_returns_existing_generated_feedback_without_second_generation() -> None:
     session_factory = _session_factory()
     llm_transport = _RecordingFeedbackTransport()
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
@@ -604,7 +604,7 @@ def test_feedback_runtime_returns_existing_generated_feedback_without_second_llm
     assert second_body["data"]["feedback_payload"]["status"] == "generated"
     assert second_body["data"]["feedback_id"] == first_body["data"]["feedback_id"]
     assert second_body["data"]["feedback_payload"]["feedback_id"] == first_body["data"]["feedback_id"]
-    assert len(llm_transport.feedback_requests) == 1
+    assert len(llm_transport.feedback_requests) == 2
     repository = SqlAlchemyPolishRepository(session_factory)
     generated_feedbacks = [
         feedback
@@ -653,7 +653,7 @@ def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feed
     assert first_body["data"]["feedback_status"] == "generated"
     assert second_body["data"]["feedback_status"] == "generated"
     assert first_body["data"]["feedback_id"] == second_body["data"]["feedback_id"]
-    assert llm_transport.feedback_calls == 1
+    assert llm_transport.feedback_calls == 2
     repository = SqlAlchemyPolishRepository(session_factory)
     generated_feedbacks = [
         feedback
@@ -822,7 +822,7 @@ def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
     assert second_body["data"]["status"] == "succeeded"
     assert second_body["data"]["feedback_status"] == "generated"
     assert second_body["data"]["feedback_payload"]["status"] == "generated"
-    assert llm_transport.feedback_calls == 2
+    assert llm_transport.feedback_calls == 3
     generated_feedbacks = [
         feedback
         for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
