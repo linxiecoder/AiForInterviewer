@@ -21,6 +21,7 @@ from app.application.llm.agent_io import (
 from app.application.llm.ports import LlmTransport
 from app.application.llm.provider_boundary import ProviderRequestValidationError, build_validated_transport_request
 from app.application.llm.types import LlmTransportResult
+from app.application.polish.adaptive_interview_orchestration import build_adaptive_interview_flow
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
 from app.application.polish.next_question_agent import validate_next_question_agent_output
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
@@ -148,6 +149,12 @@ class QuestionGenerationService:
             scope,
             question_kind_taxonomy=policy.question_kind_taxonomy,
         )
+        adaptive_flow = build_adaptive_interview_flow(
+            progress_state=state,
+            evaluation_history=_evaluation_history(context),
+            progress_node=node,
+            blueprint=blueprint,
+        )
         is_follow_up = isinstance(follow_up_context, dict)
         prompt_asset = (
             build_follow_up_question_prompt_asset(
@@ -155,9 +162,15 @@ class QuestionGenerationService:
                 scope,
                 follow_up_context=follow_up_context or {},
                 runtime_policy=policy,
+                adaptive_flow=adaptive_flow,
             )
             if is_follow_up
-            else build_question_prompt_asset(blueprint, scope, runtime_policy=policy)
+            else build_question_prompt_asset(
+                blueprint,
+                scope,
+                runtime_policy=policy,
+                adaptive_flow=adaptive_flow,
+            )
         )
         prompt_contract_errors = validate_question_prompt_anchor_contract(prompt_asset)
         if prompt_contract_errors:
@@ -373,6 +386,10 @@ class QuestionGenerationService:
                 **context_hygiene_metadata,
                 **rewrite_metadata,
                 **next_question_metadata,
+                "adaptive_interview_flow": adaptive_flow,
+                "adaptive_difficulty_level": adaptive_flow.get("difficulty_level"),
+                "adaptive_learning_path": adaptive_flow.get("learning_path"),
+                "adaptive_session_structure": adaptive_flow.get("session_structure"),
                 "question_kind": question_pattern,
                 "claim_mode": blueprint.claim_mode,
                 "llm_difficulty": llm_payload.get("difficulty") if llm_payload else None,
@@ -1156,6 +1173,16 @@ def _expected_answer_dimensions(
     if blueprint.required_answer_materials:
         return blueprint.required_answer_materials
     return ("业务背景", "关键技术链路", "异常处理或取舍", "验证指标")
+
+
+def _evaluation_history(context: dict[str, Any]) -> object:
+    direct = context.get("evaluation_history")
+    if isinstance(direct, list):
+        return direct
+    turns = context.get("turns")
+    if isinstance(turns, list):
+        return turns
+    return []
 
 
 def _string_list(value: object, *, max_items: int | None = None) -> list[str]:

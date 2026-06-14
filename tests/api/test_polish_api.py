@@ -3486,7 +3486,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert feedback_payload["schema_id"] == "polish_feedback_generated_v1"
     assert feedback_payload["schema_version"] == "1.0"
     assert feedback_payload["status"] in {"generated", "partial"}
-    assert feedback_payload["score_result"]["score_value"] == 82
+    _assert_progress_weighted_score_contract(
+        feedback_payload["score_result"],
+        expected_progress_state_ref=progress_node_ref,
+    )
     assert feedback_payload["reference_answer"]["sections"]
     for index, section in enumerate(feedback_payload["reference_answer"]["sections"], start=1):
         assert section["section_id"]
@@ -3545,7 +3548,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     assert structured_session_payload["status"] in {"generated", "partial"}
     assert "candidate_refs" not in structured_session_payload
     assert "project_asset_update_candidates" not in structured_session_payload
-    assert structured_session_payload["score_result"]["score_value"] == 82
+    _assert_progress_weighted_score_contract(
+        structured_session_payload["score_result"],
+        expected_progress_state_ref=progress_node_ref,
+    )
     for phase4_field in ("asset_consistency_check", "answer_coverage", "answer_change_analysis", "feedback_cards"):
         assert phase4_field in structured_session_payload
     for forbidden_key in ("prompt", "completion", "provider_payload", "raw_prompt", "raw_completion"):
@@ -3578,7 +3584,10 @@ def test_polish_question_answer_and_feedback_task_core() -> None:
     retry_payload = second_feedback_body["data"]["feedback_payload"]
     assert "answer_ref" not in retry_payload
     assert retry_payload["status"] in {"generated", "partial"}
-    assert retry_payload["score_result"]["score_value"] == 82
+    _assert_progress_weighted_score_contract(
+        retry_payload["score_result"],
+        expected_progress_state_ref=progress_node_ref,
+    )
     assert "candidate_refs" not in retry_payload
     assert retry_payload["feedback_metadata"]["llm_called"] is True
     json.dumps(retry_payload, ensure_ascii=False)
@@ -3734,7 +3743,10 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     assert elapsed_seconds < 5.0
     payload = feedback_body["data"]["feedback_payload"]
     assert payload["status"] in {"generated", "partial"}
-    assert payload["score_result"]["score_value"] == 82
+    _assert_progress_weighted_score_contract(
+        payload["score_result"],
+        expected_progress_state_ref=progress_node_ref,
+    )
     assert "candidate_refs" not in payload
     assert payload["feedback_metadata"]["llm_called"] is True
     assert "same_question_effect" not in payload
@@ -4148,6 +4160,62 @@ def test_progress_tree_refresh_rolls_up_parent_from_all_children_without_mutatin
     assert state_by_ref["node_child_a"]["status"] == "completed"
     assert state_by_ref["node_child_b"]["status"] == "pending"
     assert result["progress_tree_state"]["progress"]["progress_percent"] == 50
+
+
+def test_quality_first_progress_refresh_smooths_upward_progress_spike_with_history() -> None:
+    node = {
+        "progress_node_ref": "node_reliability",
+        "title": "可靠性设计",
+        "expected_capability": "说明失败恢复、幂等和观测指标。",
+        "children": [],
+    }
+    original_plan = {
+        "schema_id": "polish_progress_quality_first_menu_v1",
+        "status": "ready",
+        "context_digest": "digest",
+        "nodes": [node],
+    }
+    existing_state = {
+        "status": "ready",
+        "node_states": [
+            {
+                "progress_node_ref": "node_reliability",
+                "status": "in_progress",
+                "completed_questions_count": 0,
+                "latest_feedback_summary": None,
+            }
+        ],
+        "current_priority": {
+            "progress_node_ref": "node_reliability",
+            "title": "可靠性设计",
+            "expected_capability": "说明失败恢复、幂等和观测指标。",
+        },
+        "updated_from_turns_count": 4,
+        "progress": {"progress_percent": 20},
+    }
+    context = {
+        "turns": [
+            {
+                "progress_node_ref": "node_reliability",
+                "feedback_text": "本轮反馈已生成",
+                "answers": [],
+            }
+        ]
+    }
+
+    result = PolishProgressTreeLlmService(None).refresh_state(
+        context=context,
+        existing_plan=original_plan,
+        existing_state=existing_state,
+    )
+
+    progress = result["progress_tree_state"]["progress"]
+    assert progress["progress_percent"] == 36
+    assert progress["raw_progress_percent"] == 100
+    assert progress["normalization"]["strategy"] == "historical_weighting"
+    assert progress["normalization"]["previous_turn_weight"] == 4
+    assert progress["normalization"]["new_turn_weight"] == 1
+    assert result["progress_tree_state"]["updated_from_turns_count"] == 5
 
 
 def test_progress_tree_refresh_no_longer_refreshes_grounded_plan_v2_as_active_schema() -> None:
@@ -5084,6 +5152,10 @@ def _api_polish_feedback_candidate_payload(value: object) -> object:
         return value
     filtered = {key: value[key] for key in POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS if key in value}
     filtered.pop("project_asset_update_candidates", None)
+    filtered.setdefault(
+        "score_result",
+        _api_default_progress_adaptive_score_result(),
+    )
     reference_answer = filtered.get("reference_answer")
     if isinstance(reference_answer, dict) and isinstance(reference_answer.get("sections"), list):
         for section in reference_answer["sections"]:
@@ -5106,6 +5178,61 @@ def _api_polish_feedback_candidate_payload(value: object) -> object:
                 },
             ]
     return filtered
+
+
+def _api_default_progress_adaptive_score_result() -> dict[str, object]:
+    progress_state_ref = "progress_node_reliability"
+    dimensions = (
+        ("correctness", 88, "方向正确。"),
+        ("depth", 80, "细节基本完整。"),
+        ("tradeoff_reasoning", 76, "取舍略少。"),
+        ("structure", 84, "结构清楚。"),
+        ("engineering_awareness", 82, "工程边界基本覆盖。"),
+    )
+    return {
+        "score_type": "polish_answer",
+        "score_value": 1,
+        "progress_state_ref": progress_state_ref,
+        "reasoning": "ProgressState 驱动 adaptive rubric 与 LLM comparator 评分。",
+        "adaptive_rubric": {
+            "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+            "progress_state_ref": progress_state_ref,
+            "dimensions": [
+                {
+                    "dimension": dimension,
+                    "adaptive_weight": 0.2,
+                    "progress_basis": [f"current_priority:{progress_state_ref}"],
+                    "anchor_refs": [f"anchor_{dimension}"],
+                }
+                for dimension, _, _ in dimensions
+            ],
+        },
+        "dimension_scores": [
+            {
+                "dimension": dimension,
+                "score": score,
+                "adaptive_weight": 0.2,
+                "progress_focus": [progress_state_ref],
+                "rationale": rationale,
+            }
+            for dimension, score, rationale in dimensions
+        ],
+        "adaptive_insights": {
+            "weak_skills": [progress_state_ref],
+            "strong_skills": [],
+            "unstable_skills": [progress_state_ref],
+            "overweighted_skills": [],
+            "underweighted_skills": [],
+        },
+        "signals": ["weakness_detected", "progress_update"],
+        "progress_updates": [
+            {
+                "progress_node_ref": progress_state_ref,
+                "signal": "needs_focus",
+                "dimension": "engineering_awareness",
+            }
+        ],
+    }
 
 
 def _api_question_request_input_data(request: LlmTransportRequest) -> dict:
@@ -6352,3 +6479,61 @@ def _collect_keys(value: object) -> set[str]:
             keys.update(_collect_keys(item))
         return keys
     return set()
+
+
+def _assert_progress_weighted_score_contract(
+    score_result: object,
+    *,
+    expected_progress_state_ref: str,
+) -> float:
+    assert isinstance(score_result, dict)
+    assert score_result["score_type"] == "polish_answer"
+    assert score_result["scoring_basis"] == "progress_adaptive_llm_comparator_v1"
+    assert score_result["aggregation_method"] == "progress_weighted_dimension_scores"
+    assert score_result["progress_state_ref"] == expected_progress_state_ref
+
+    adaptive_rubric = score_result["adaptive_rubric"]
+    assert isinstance(adaptive_rubric, dict)
+    assert adaptive_rubric["rubric_version"] == "polish_answer.progress_adaptive_rubric.v1"
+    assert adaptive_rubric["progress_state_ref"] == expected_progress_state_ref
+
+    rubric_dimensions = adaptive_rubric["dimensions"]
+    dimension_scores = score_result["dimension_scores"]
+    assert isinstance(rubric_dimensions, list)
+    assert isinstance(dimension_scores, list)
+    assert len(rubric_dimensions) == 5
+    assert len(dimension_scores) == 5
+
+    weights_by_dimension = {
+        item["dimension"]: item["adaptive_weight"]
+        for item in rubric_dimensions
+        if isinstance(item, dict)
+    }
+    assert set(weights_by_dimension) == {
+        "correctness",
+        "depth",
+        "tradeoff_reasoning",
+        "structure",
+        "engineering_awareness",
+    }
+
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for item in dimension_scores:
+        assert isinstance(item, dict)
+        dimension = item["dimension"]
+        assert dimension in weights_by_dimension
+        assert item["adaptive_weight"] == pytest.approx(weights_by_dimension[dimension])
+        assert 0 <= item["score"] <= 100
+        assert expected_progress_state_ref in item["progress_focus"]
+        weighted_sum += item["score"] * item["adaptive_weight"]
+        total_weight += item["adaptive_weight"]
+
+    expected_score = round(weighted_sum / total_weight, 2)
+    assert score_result["score_value"] == pytest.approx(expected_score)
+    assert "progress_update" in score_result["signals"]
+    assert any(
+        isinstance(item, dict) and item.get("progress_node_ref") == expected_progress_state_ref
+        for item in score_result["progress_updates"]
+    )
+    return float(score_result["score_value"])

@@ -287,7 +287,7 @@ def test_polish_question_and_feedback_context_include_canonical_assets(monkeypat
     feedback_payload = json.loads(polish_repository.feedbacks[0].feedback_summary)
     assert feedback_payload["status"] == "generated"
     assert feedback_payload["feedback_metadata"]["candidate_output"] == "feedback_candidate"
-    assert feedback_payload["feedback_metadata"]["fallback_reported_as_generated_success"] is False
+    assert feedback_payload["feedback_metadata"]["silent_degradation_reported_as_generated_success"] is False
 
 
 def test_feedback_prompt_asset_compacts_only_confirmed_canonical_project_assets() -> None:
@@ -348,7 +348,7 @@ class _FeedbackGenerationServiceStub:
     def __init__(self) -> None:
         self.contexts: list[Any] = []
 
-    def generate(self, context: Any) -> FeedbackGenerationResult:
+    def generate_feedback_v1(self, context: Any) -> FeedbackGenerationResult:
         self.contexts.append(context)
         return FeedbackGenerationResult(
             succeeded=True,

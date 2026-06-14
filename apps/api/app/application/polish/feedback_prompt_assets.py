@@ -12,6 +12,7 @@ from app.application.llm.agent_io import (
     AgentSafetyPolicy,
 )
 from app.application.polish.feedback_models import FeedbackCandidatePayload
+from app.application.polish.feedback_evaluation import semantic_evaluation_contract
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
@@ -24,7 +25,6 @@ from app.application.polish.feedback_schema import (
 from app.application.polish.transcript_signal_parser import (
     POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
     TranscriptSignalParser,
-    build_fallback_structured_answer,
     structured_answer_to_evaluation_text,
 )
 
@@ -102,9 +102,16 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
 
     safety_policy = _feedback_safety_policy()
     validation_rules = _validation_rules()
+    evaluation_contract = semantic_evaluation_contract()
     output_schema = _feedback_candidate_output_schema()
     evidence_refs = _string_list(_get_list(context, "evidence_refs"))
     progress_node_ref = _get_text(context, "progress_node_ref", max_chars=200)
+    progress_node_snapshot = _compact_progress_node_snapshot(_get_dict(context, "progress_node_snapshot"))
+    progress_state = _compact_progress_state(
+        _get_dict(context, "progress_state"),
+        progress_node_ref=progress_node_ref,
+        progress_node_snapshot=progress_node_snapshot,
+    )
     related_terms = _related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))
     canonical_project_assets = _compact_canonical_project_assets(_get_dict(context, "canonical_project_assets"))
     structured_answer = _structured_answer_for(context)
@@ -136,11 +143,12 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         "same_project_turns": _compact_recent_turns(_get_list(context, "same_project_turns")),
         "session_recent_turns": _compact_recent_turns(_get_list(context, "session_recent_turns")),
         "project_asset_summaries": _compact_project_asset_summaries(_get_list(context, "project_asset_summaries")),
+        "progress_state": progress_state,
         "canonical_project_assets": canonical_project_assets,
         "context_snapshots": {
             "job_snapshot": _compact_job_snapshot(_get_dict(context, "job_snapshot")),
             "resume_snapshot": _compact_resume_snapshot(_get_dict(context, "resume_snapshot"), related_terms=related_terms),
-            "progress_node_snapshot": _compact_progress_node_snapshot(_get_dict(context, "progress_node_snapshot")),
+            "progress_node_snapshot": progress_node_snapshot,
         },
     }
     input_data["evidence_items"] = [item.to_prompt_dict() for item in _evidence_items(context)]
@@ -154,6 +162,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         prompt="\n".join(
             [
                 "Generate structured polish feedback for the current answer.",
+                "Evaluate semantically with the rubric, anchors, and LLM comparator contract.",
                 *safety_policy.to_prompt_rules(),
                 *validation_rules,
             ]
@@ -161,7 +170,14 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         input_data=input_data,
         output_schema=output_schema,
         system_role="You review interview polish answers and return validated feedback JSON.",
-        developer_constraints=tuple((*safety_policy.to_prompt_rules(), *validation_rules)),
+        developer_constraints=tuple(
+            (
+                *safety_policy.to_prompt_rules(),
+                *validation_rules,
+                "Do not use rule-based scoring, keyword scoring, quick/full path influence, or fallback scoring.",
+                "Return score_result.reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates.",
+            )
+        ),
         user_task="Evaluate the current answer using only the provided evidence and context snapshots.",
         input_contract={
             "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
@@ -197,6 +213,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
                 "project_asset_conflict": "clarify instead of choosing for the user",
                 "same_session_similarity": "mark repeated, covered, or conflicting with evidence",
             },
+            "semantic_evaluation": evaluation_contract,
         },
     ).to_prompt_asset_dict()
     prompt_asset["feedback_mode"] = POLISH_FEEDBACK_CANDIDATE_MODE
@@ -245,8 +262,9 @@ def _feedback_safety_policy() -> AgentSafetyPolicy:
 def _validation_rules() -> tuple[str, ...]:
     return (
         "feedback_id is produced by the service and must not be output by the model.",
-        "score_reasoning is recommended but may be omitted when evidence is insufficient; service-side scoring remains authoritative.",
-        "Final fields such as score_result, asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, and next_recommended_actions are produced by the service.",
+        "score_reasoning is recommended but may be omitted when evidence is insufficient.",
+        "score_result must include reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates produced by comparing the answer with progress_state, adaptive_rubric, and anchor_examples.",
+        "asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, and next_recommended_actions are optional candidate fields.",
         "Do not output raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         "Do not invent user experience or project facts.",
         "Every major loss point must be covered by a reference answer section.",
@@ -285,6 +303,7 @@ def _required_json_schema(output_schema: dict[str, Any]) -> dict[str, Any]:
         for field_name in (
             "feedback_text",
             "answer_summary",
+            "score_result",
             "loss_points",
             "reference_answer.sections",
             "low_confidence_flags",
@@ -323,12 +342,14 @@ def _provider_compact_prompt(
     current_answer = _safe_dict(input_data.get("current_answer"))
     question_sources = _limit_question_sources(_safe_list(current_question.get("question_sources")))
     same_question_answers = _limit_same_question_answers(_safe_list(input_data.get("same_question_answers")))
+    progress_state = _safe_dict(input_data.get("progress_state"))
     context_snapshots = _safe_dict(input_data.get("context_snapshots"))
     progress_node = _safe_dict(context_snapshots.get("progress_node_snapshot"))
     job_snapshot = _safe_dict(context_snapshots.get("job_snapshot"))
     resume_snapshot = _safe_dict(context_snapshots.get("resume_snapshot"))
     evidence_items = _provider_evidence_items(_safe_list(input_data.get("evidence_items")))
     canonical_project_assets = _safe_dict(input_data.get("canonical_project_assets"))
+    evaluation_contract = _provider_evaluation_contract()
     provider_prompt: dict[str, Any] = {
         "task": POLISH_FEEDBACK_CANDIDATE_TASK,
         "task_type": POLISH_FEEDBACK_TASK_TYPE,
@@ -337,11 +358,11 @@ def _provider_compact_prompt(
         "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
         "prompt_version": prompt_version,
         "prompt": prompt,
-        "output_schema": output_schema,
+        "output_schema": _provider_output_schema_summary(output_schema),
         "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
         "input_contract": {
             "raw_model_io_storage": False,
-            "context_mode": "quick_compact",
+            "context_mode": "compact_v1",
             "answer_text_policy": _CURRENT_ANSWER_TEXT_POLICY,
             "answer_text_max_chars": _CURRENT_ANSWER_TEXT_MAX_CHARS,
             "answer_text_is_bounded": True,
@@ -371,18 +392,15 @@ def _provider_compact_prompt(
             "full_answer_forbidden": True,
             "answer_round": current_answer.get("answer_round"),
         },
-        "scoring_rules": {
-            "scale": "0-100",
-            "score_reasoning": "Each entry includes dimension and rationale.",
-            "major_loss_points": "must be mapped by reference_answer.sections.addresses_loss_point_ids",
-        },
+        **evaluation_contract,
+        "progress_state": progress_state,
         "evidence": evidence_items,
         "canonical_project_assets": canonical_project_assets,
         "same_question_answers": same_question_answers,
         "progress_node_snapshot": {
             "node_ref": _get_clean_text(progress_node.get("node_ref"), max_chars=120),
             "title": _get_clean_text(progress_node.get("title"), max_chars=200),
-            "expected_capability": _get_clean_text(progress_node.get("expected_capability"), max_chars=200),
+            "expected_capability": _get_clean_text(progress_node.get("expected_capability"), max_chars=160),
             "missing_points": _string_list(progress_node.get("missing_points"), max_chars=120)[:3],
             "related_job_requirements": _string_list(progress_node.get("related_job_requirements"), max_chars=120)[:2],
             "related_resume_evidence": _string_list(progress_node.get("related_resume_evidence"), max_chars=120)[:2],
@@ -392,14 +410,14 @@ def _provider_compact_prompt(
         "output_requirements": [
             "Return JSON only.",
             "Use only output_schema candidate fields.",
-            "Required: feedback_text, answer_summary, loss_points, reference_answer, low_confidence_flags, evidence_refs.",
+            "Required: feedback_text, answer_summary, score_result, loss_points, reference_answer, low_confidence_flags, evidence_refs.",
+            "score_result requires reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates.",
             "reference_answer.sections[].title recommended; service generates if omitted.",
             "reference_answer.sections[].content required for display.",
-            "score_reasoning is recommended; if uncertain, omit it.",
             "Optional candidate fields: same_question_effect, project_asset_update_candidates.",
-            "Aliases accepted: loss_points[].id/loss_id, reference_answer.sections[].id.",
-            "same_question_effect may be an object or unchanged/improved/regressed/mixed/first_attempt.",
-            "Do not include final/metadata fields: feedback_id, schema_id, schema_version, model_name, prompt_version, score_result.",
+            "Aliases accepted for loss_points and reference sections.",
+            "same_question_effect may be object or enum string.",
+            "Do not include final/metadata fields: feedback_id, schema_id, schema_version, model_name, prompt_version.",
             "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         ],
         "feedback_metadata": {
@@ -468,6 +486,44 @@ def _provider_evidence_items(values: list[Any]) -> list[dict[str, object]]:
     return list(deduped.values())[:_PROVIDER_EVIDENCE_ITEMS_LIMIT]
 
 
+def _provider_output_schema_summary(output_schema: dict[str, Any]) -> dict[str, object]:
+    fields = list(FeedbackCandidatePayload.model_fields)
+    return {
+        "schema_id": _get_clean_text(output_schema.get("schema_id"), max_chars=120),
+        "schema_version": _get_clean_text(output_schema.get("schema_version"), max_chars=40),
+        "fields": fields,
+        "candidate_payload_fields": fields,
+    }
+
+
+def _provider_evaluation_contract() -> dict[str, Any]:
+    contract = semantic_evaluation_contract()
+    adaptive_rubric = _safe_dict(contract.get("adaptive_rubric"))
+    llm_comparator = _safe_dict(contract.get("llm_comparator"))
+    return {
+        "evaluation_pipeline": contract.get("evaluation_pipeline", []),
+        "evaluation_agents": list(_safe_dict(contract.get("evaluation_agents")).keys()),
+        "progress_state_requirement": {"required": True, "source": "progress_state"},
+        "adaptive_rubric": {
+            "rubric_version": adaptive_rubric.get("rubric_version"),
+            "weight_policy": adaptive_rubric.get("weight_policy"),
+            "dimensions": [
+                item.get("dimension")
+                for item in _safe_list(adaptive_rubric.get("dimensions"))
+                if isinstance(item, dict) and item.get("dimension")
+            ],
+        },
+        "anchor_examples": contract.get("anchor_examples", {}),
+        "llm_comparator": {
+            "comparator_version": llm_comparator.get("comparator_version"),
+            "anchor_set_id": llm_comparator.get("anchor_set_id"),
+            "required_output": llm_comparator.get("required_output"),
+            "forbidden_influences": llm_comparator.get("forbidden_influences", []),
+        },
+        "semantic_signals": contract.get("semantic_signals", []),
+    }
+
+
 def _limit_question_sources(values: list[Any]) -> list[dict[str, object]]:
     sources: list[dict[str, object]] = []
     for index, source in enumerate(values[:_QUESTION_SOURCE_LIMIT], start=1):
@@ -493,9 +549,9 @@ def _limit_same_question_answers(values: list[Any]) -> list[dict[str, object]]:
             {
                 "answer_id": _get_clean_text(answer.get("answer_id"), max_chars=120) or f"same_question_answer_{index}",
                 "answer_round": _get_clean_text(answer.get("answer_round"), max_chars=20),
-                "answer_summary": _get_clean_text(answer.get("answer_summary"), max_chars=240),
-                "feedback_summary": _get_clean_text(answer.get("feedback_summary"), max_chars=240),
-                "loss_point_ids": _string_list(answer.get("loss_point_ids"), max_chars=120)[:5],
+                "answer_summary": _get_clean_text(answer.get("answer_summary"), max_chars=80),
+                "feedback_summary": _get_clean_text(answer.get("feedback_summary"), max_chars=80),
+                "loss_point_ids": _string_list(answer.get("loss_point_ids"), max_chars=80)[:3],
             }
         )
     return answers
@@ -522,17 +578,16 @@ def _structured_answer_for(context: object) -> dict[str, Any]:
     if existing:
         return _compact_structured_answer(existing)
     answer_text = _get_text(context, "answer_text", max_chars=12000)
-    try:
-        return _compact_structured_answer(TranscriptSignalParser().parse(answer_text).to_dict())
-    except Exception:
-        return _compact_structured_answer(build_fallback_structured_answer(answer_text).to_dict())
+    return _compact_structured_answer(TranscriptSignalParser().parse(answer_text).to_dict())
 
 
 def _compact_structured_answer(value: object) -> dict[str, Any]:
-    source = value if isinstance(value, dict) else build_fallback_structured_answer("").to_dict()
+    if not isinstance(value, dict):
+        raise ValueError("structured_answer_required")
+    source = value
     return {
         "schema_id": _get_clean_text(source.get("schema_id"), max_chars=80) or POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
-        "parse_status": _get_clean_text(source.get("parse_status"), max_chars=40) or "fallback",
+        "parse_status": _get_clean_text(source.get("parse_status"), max_chars=40) or "parsed",
         "claims": _compact_structured_items(
             source.get("claims"),
             keys=("claim_id", "text", "evidence_ref"),
@@ -849,7 +904,7 @@ def _compact_canonical_project_assets(value: dict[str, Any]) -> dict[str, object
     items = _canonical_project_asset_items(value)
     return {
         "available": bool(value.get("available")) and bool(items),
-        "selection_policy": _first_text(value.get("selection_policy"), "rule_based_keyword_overlap_v1"),
+        "selection_policy": "semantic_evidence_ref_selection_v1",
         "items": items,
     }
 
@@ -935,6 +990,78 @@ def _compact_progress_node_snapshot(value: dict[str, Any]) -> dict[str, object]:
         "related_job_requirements": _string_list(value.get("related_job_requirements"), max_chars=120)[:2],
         "related_resume_evidence": _string_list(value.get("related_resume_evidence"), max_chars=120)[:2],
     }
+
+
+def _compact_progress_state(
+    value: dict[str, Any],
+    *,
+    progress_node_ref: str,
+    progress_node_snapshot: dict[str, object],
+) -> dict[str, object]:
+    current_priority = _safe_dict(value.get("current_priority"))
+    fallback_ref = _first_text(
+        current_priority.get("progress_node_ref"),
+        current_priority.get("node_ref"),
+        value.get("progress_state_ref"),
+        progress_node_ref,
+        progress_node_snapshot.get("progress_node_ref"),
+        progress_node_snapshot.get("node_ref"),
+    )
+    fallback_title = _first_text_limited(
+        current_priority.get("title"),
+        progress_node_snapshot.get("title"),
+        progress_node_snapshot.get("question_title"),
+        max_chars=160,
+    )
+    fallback_capability = _first_text_limited(
+        current_priority.get("expected_capability"),
+        progress_node_snapshot.get("expected_capability"),
+        max_chars=160,
+    )
+    compact_priority = {
+        "progress_node_ref": fallback_ref,
+        "title": fallback_title,
+        "expected_capability": fallback_capability,
+    }
+    weak_skill_refs = _string_list(value.get("weak_skill_refs"), max_chars=120)
+    strong_skill_refs = _string_list(value.get("strong_skill_refs"), max_chars=120)
+    node_states = _compact_progress_node_states(value.get("node_states"))
+    if not weak_skill_refs:
+        weak_skill_refs = _progress_refs_for_status(node_states, statuses=("in_progress", "pending", "not_started"))
+    if not strong_skill_refs:
+        strong_skill_refs = _progress_refs_for_status(node_states, statuses=("completed",))
+    return {
+        "progress_state_ref": _first_text(value.get("progress_state_ref"), fallback_ref),
+        "current_priority": compact_priority,
+        "weak_skill_refs": weak_skill_refs[:5],
+        "strong_skill_refs": strong_skill_refs[:5],
+        "node_states": node_states[:8],
+    }
+
+
+def _compact_progress_node_states(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        node_ref = _first_text(item.get("progress_node_ref"), item.get("node_ref"))
+        status = _first_text(item.get("status"))
+        if not node_ref or not status:
+            continue
+        result.append(
+            {
+                "progress_node_ref": node_ref,
+                "status": status,
+            }
+        )
+    return result
+
+
+def _progress_refs_for_status(node_states: list[dict[str, str]], *, statuses: tuple[str, ...]) -> list[str]:
+    allowed = set(statuses)
+    return [item["progress_node_ref"] for item in node_states if item.get("status") in allowed]
 
 
 def _focus_target(context: object) -> AgentFocusTarget:

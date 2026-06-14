@@ -20,6 +20,7 @@ from app.application.ai_runtime.contracts import (
     GraphDisabledError,
     OwnerScopeError,
     RuntimeConflictError,
+    RuntimePolicyError,
     RuntimeValidationError,
 )
 from app.application.ai_runtime.facade import AiOrchestrationFacade
@@ -161,18 +162,6 @@ def test_facade_direct_start_routes_through_agent_executor_plan_metadata() -> No
             },
             ("session_1", "progress_node_1", "focus_1"),
             ("candidate_refs",),
-        ),
-        (
-            "start_polish_feedback_generation",
-            "polish_feedback_generation",
-            {
-                "session_ref": "session_1",
-                "question_ref": "question_1",
-                "answer_ref": "answer_1",
-                "requested_outputs": ("candidate_refs", "suggestion_refs"),
-            },
-            ("session_1", "question_1", "answer_1"),
-            ("candidate_refs", "suggestion_refs"),
         ),
         (
             "start_job_match_analysis",
@@ -439,7 +428,7 @@ def test_facade_same_idempotency_key_with_different_input_refs_conflicts_without
     assert runner.started[0].run_id == first.agent_run_id
 
 
-def test_facade_same_idempotency_key_with_different_requested_outputs_conflicts_without_new_run() -> None:
+def test_facade_polish_feedback_generation_fails_closed_without_runner_call() -> None:
     runner = _RecordingRunner()
     facade = AiOrchestrationFacade(
         runner=runner,
@@ -449,29 +438,23 @@ def test_facade_same_idempotency_key_with_different_requested_outputs_conflicts_
         ),
     )
 
-    first = facade.start_polish_feedback_generation(
-        owner_id="owner_1",
-        actor_id="actor_1",
-        session_ref="session_1",
-        question_ref="question_1",
-        answer_ref="answer_1",
-        requested_outputs=("candidate_refs",),
-        idempotency_key="idem_1",
-    )
-
-    with pytest.raises(RuntimeConflictError):
+    with pytest.raises(RuntimePolicyError, match="generate_feedback_v1"):
         facade.start_polish_feedback_generation(
             owner_id="owner_1",
             actor_id="actor_1",
             session_ref="session_1",
             question_ref="question_1",
             answer_ref="answer_1",
-            requested_outputs=("candidate_refs", "suggestion_refs"),
+            requested_outputs=("candidate_refs",),
             idempotency_key="idem_1",
         )
 
-    assert len(runner.started) == 1
-    assert runner.started[0].run_id == first.agent_run_id
+    assert runner.started == []
+
+
+def test_registry_no_longer_routes_polish_feedback_generation_task_type() -> None:
+    with pytest.raises(RuntimeValidationError, match="unknown graph descriptor"):
+        AgentGraphRegistry.default().get_graph_descriptor("polish_feedback_generation")
 
 
 def test_facade_different_idempotency_key_creates_separate_request() -> None:

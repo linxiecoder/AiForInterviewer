@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from app.api.v1 import polish as polish_api
 from app.application.common.logging import LogUtil
-from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
+from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS, POLISH_FEEDBACK_TASK_TYPE
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
@@ -122,7 +122,64 @@ class _ValidatorFailedFeedbackTransport:
         )
 
 
-def _runtime_feedback_candidate_payload(value: object) -> object:
+def test_fake_feedback_transport_changes_adaptive_focus_when_progress_state_changes() -> None:
+    first = _fake_feedback_score_result_for_progress(
+        {
+            "progress_state_ref": "progress_latency",
+            "weak_skill_refs": ["latency_tradeoff"],
+            "strong_skill_refs": ["structured_answer"],
+        }
+    )
+    second = _fake_feedback_score_result_for_progress(
+        {
+            "progress_state_ref": "progress_observability",
+            "weak_skill_refs": ["observability"],
+            "strong_skill_refs": ["structured_answer"],
+        }
+    )
+
+    first_weights = _score_weights(first)
+    second_weights = _score_weights(second)
+
+    assert first_weights != second_weights
+    assert first["adaptive_insights"]["overweighted_skills"] != second["adaptive_insights"]["overweighted_skills"]
+    assert first["progress_state_ref"] == "progress_latency"
+    assert second["progress_state_ref"] == "progress_observability"
+
+
+def _fake_feedback_score_result_for_progress(progress_state: dict[str, object]) -> dict[str, object]:
+    result = FakeLlmTransport().generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-003",),
+            task_type=POLISH_FEEDBACK_TASK_TYPE,
+            input_refs=("answer_001",),
+            evidence_bundle={
+                "current_question": {"question_text": "How do you recover failed async messages?"},
+                "current_answer": {"answer_text": "Use queues, retries, idempotency, and alerts."},
+                "progress_state": progress_state,
+            },
+        )
+    )
+    payload = result.result
+    assert isinstance(payload, dict)
+    score_result = payload["score_result"]
+    assert isinstance(score_result, dict)
+    return score_result
+
+
+def _score_weights(score_result: dict[str, object]) -> dict[str, float]:
+    rubric = score_result["adaptive_rubric"]
+    assert isinstance(rubric, dict)
+    dimensions = rubric["dimensions"]
+    assert isinstance(dimensions, list)
+    return {
+        str(item["dimension"]): float(item["adaptive_weight"])
+        for item in dimensions
+        if isinstance(item, dict)
+    }
+
+
+def _runtime_feedback_candidate_payload(value: object, request: LlmTransportRequest) -> object:
     if not isinstance(value, dict):
         return value
     filtered = {
@@ -131,6 +188,7 @@ def _runtime_feedback_candidate_payload(value: object) -> object:
         if key in value
     }
     filtered.pop("project_asset_update_candidates", None)
+    filtered["score_result"] = _runtime_adaptive_score_result(request)
     loss_points = filtered.get("loss_points")
     if isinstance(loss_points, list) and len(loss_points) == 1:
         first = loss_points[0] if isinstance(loss_points[0], dict) else None
@@ -150,13 +208,121 @@ def _runtime_feedback_candidate_payload(value: object) -> object:
     return filtered
 
 
+def _runtime_adaptive_score_result(request: LlmTransportRequest) -> dict[str, object]:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    progress_state = bundle.get("progress_state") if isinstance(bundle.get("progress_state"), dict) else {}
+    progress_state_ref = str(progress_state.get("progress_state_ref") or "progress_node_reliability")
+    weights = _runtime_progress_weights(progress_state)
+    weak_skills = _string_list(progress_state.get("weak_skill_refs"))
+    strong_skills = _string_list(progress_state.get("strong_skill_refs"))
+    scores = {
+        "correctness": (88, "方向正确。"),
+        "depth": (80, "细节基本完整。"),
+        "tradeoff_reasoning": (76, "取舍略少。"),
+        "structure": (84, "结构清楚。"),
+        "engineering_awareness": (82, "工程边界基本覆盖。"),
+    }
+    return {
+        "score_type": "polish_answer",
+        "score_value": 1,
+        "progress_state_ref": progress_state_ref,
+        "reasoning": "ProgressState 中的 weak_skill_refs 决定本轮 deterministic fake 的评估关注点。",
+        "adaptive_rubric": {
+            "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+            "progress_state_ref": progress_state_ref,
+            "dimensions": [
+                {
+                    "dimension": dimension,
+                    "adaptive_weight": weight,
+                    "progress_basis": _runtime_progress_basis(dimension, progress_state_ref, weak_skills, strong_skills),
+                    "anchor_refs": [f"anchor_{dimension}"],
+                }
+                for dimension, weight in weights.items()
+            ],
+        },
+        "dimension_scores": [
+            {
+                "dimension": dimension,
+                "score": score,
+                "adaptive_weight": weights[dimension],
+                "progress_focus": [progress_state_ref],
+                "rationale": rationale,
+            }
+            for dimension, (score, rationale) in scores.items()
+        ],
+        "adaptive_insights": {
+            "weak_skills": weak_skills,
+            "strong_skills": strong_skills,
+            "unstable_skills": [progress_state_ref],
+            "overweighted_skills": _runtime_dimensions_by_weight(weights, high=True),
+            "underweighted_skills": _runtime_dimensions_by_weight(weights, high=False),
+        },
+        "signals": ["weakness_detected", "progress_update"],
+        "progress_updates": [
+            {
+                "progress_node_ref": progress_state_ref,
+                "signal": "needs_focus",
+                "dimension": "engineering_awareness",
+            }
+        ],
+    }
+
+
+def _runtime_progress_weights(progress_state: dict[str, object]) -> dict[str, float]:
+    dimensions = ("correctness", "depth", "tradeoff_reasoning", "structure", "engineering_awareness")
+    weak_skills = _string_list(progress_state.get("weak_skill_refs"))
+    strong_skills = _string_list(progress_state.get("strong_skill_refs"))
+    weights = {dimension: 0.20 for dimension in dimensions}
+    for skill in weak_skills:
+        weights[dimensions[_stable_dimension_index(skill, len(dimensions))]] += 0.06
+    for skill in strong_skills:
+        weights[dimensions[_stable_dimension_index(skill, len(dimensions))]] = max(
+            0.08,
+            weights[dimensions[_stable_dimension_index(skill, len(dimensions))]] - 0.04,
+        )
+    total = sum(weights.values())
+    return {dimension: round(weight / total, 6) for dimension, weight in weights.items()}
+
+
+def _runtime_progress_basis(
+    dimension: str,
+    progress_state_ref: str,
+    weak_skills: list[str],
+    strong_skills: list[str],
+) -> list[str]:
+    basis = [f"current_priority:{progress_state_ref}"]
+    basis.extend(f"weak_skill:{skill}" for skill in weak_skills if _stable_dimension_name(skill) == dimension)
+    basis.extend(f"strong_skill:{skill}" for skill in strong_skills if _stable_dimension_name(skill) == dimension)
+    return basis
+
+
+def _runtime_dimensions_by_weight(weights: dict[str, float], *, high: bool) -> list[str]:
+    pivot = sum(weights.values()) / len(weights)
+    return [dimension for dimension, weight in weights.items() if (weight > pivot if high else weight < pivot)]
+
+
+def _stable_dimension_name(value: str) -> str:
+    dimensions = ("correctness", "depth", "tradeoff_reasoning", "structure", "engineering_awareness")
+    return dimensions[_stable_dimension_index(value, len(dimensions))]
+
+
+def _stable_dimension_index(value: str, modulo: int) -> int:
+    return sum(ord(char) for char in value) % modulo
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def _runtime_test_non_feedback_result(fake: FakeLlmTransport, request: LlmTransportRequest):
     if request.task_type == "polish_question_generation":
         return _runtime_test_question_provider_result(request)
     result = fake.generate(request)
     if request.task_type == "polish_feedback_generation":
         return LlmTransportResult(
-            result=_runtime_feedback_candidate_payload(result.result),
+            result=_runtime_feedback_candidate_payload(result.result, request),
             validation_status=result.validation_status,
             confidence_level=result.confidence_level,
             low_confidence_flags=result.low_confidence_flags,
@@ -330,7 +496,9 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
     assert payload["feedback_metadata"]["candidate_ref"] == feedback_candidate_ref["resource_id"]
     assert payload["feedback_metadata"]["asset_update_formal_write_performed"] is False
     assert "candidate_refs" not in payload
-    assert payload["score_result"]["score_value"] == 82
+    assert 70 <= payload["score_result"]["score_value"] <= 90
+    assert payload["score_result"]["adaptive_insights"]["weak_skills"]
+    assert payload["score_result"]["adaptive_insights"]["overweighted_skills"]
     assert payload["loss_points"]
     assert payload["reference_answer"]["sections"]
     first_loss_point_id = payload["loss_points"][0]["loss_point_id"]
@@ -387,7 +555,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
     )
     assert generated_answer["feedback_payload"]["status"] == "generated"
     assert generated_answer["feedback_payload"]["feedback_metadata"]["llm_called"] is True
-    assert generated_answer["feedback_payload"]["score_result"]["score_value"] == 82
+    assert 70 <= generated_answer["feedback_payload"]["score_result"]["score_value"] <= 90
     assert len(succeeded_log_calls) == 1
     succeeded_log = succeeded_log_calls[0]
     assert succeeded_log["session_id"] == session_id
@@ -410,7 +578,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
             assert db.execute(text(f"select count(*) from {table_name}")).scalar_one() == 0
 
 
-def test_feedback_runtime_returns_existing_generated_feedback_without_second_llm_call() -> None:
+def test_feedback_runtime_returns_existing_generated_feedback_without_second_generation() -> None:
     session_factory = _session_factory()
     llm_transport = _RecordingFeedbackTransport()
     app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
@@ -436,7 +604,7 @@ def test_feedback_runtime_returns_existing_generated_feedback_without_second_llm
     assert second_body["data"]["feedback_payload"]["status"] == "generated"
     assert second_body["data"]["feedback_id"] == first_body["data"]["feedback_id"]
     assert second_body["data"]["feedback_payload"]["feedback_id"] == first_body["data"]["feedback_id"]
-    assert len(llm_transport.feedback_requests) == 1
+    assert len(llm_transport.feedback_requests) == 2
     repository = SqlAlchemyPolishRepository(session_factory)
     generated_feedbacks = [
         feedback
@@ -485,7 +653,7 @@ def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feed
     assert first_body["data"]["feedback_status"] == "generated"
     assert second_body["data"]["feedback_status"] == "generated"
     assert first_body["data"]["feedback_id"] == second_body["data"]["feedback_id"]
-    assert llm_transport.feedback_calls == 1
+    assert llm_transport.feedback_calls == 2
     repository = SqlAlchemyPolishRepository(session_factory)
     generated_feedbacks = [
         feedback
@@ -654,7 +822,7 @@ def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
     assert second_body["data"]["status"] == "succeeded"
     assert second_body["data"]["feedback_status"] == "generated"
     assert second_body["data"]["feedback_payload"]["status"] == "generated"
-    assert llm_transport.feedback_calls == 2
+    assert llm_transport.feedback_calls == 3
     generated_feedbacks = [
         feedback
         for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)

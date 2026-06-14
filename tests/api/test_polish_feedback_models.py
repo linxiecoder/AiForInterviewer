@@ -17,6 +17,17 @@ def _candidate_payload() -> dict[str, Any]:
     return {
         "feedback_text": "回答覆盖了 MQ 解耦，但恢复边界还不够完整。",
         "answer_summary": "候选人说明了队列、幂等和重试任务。",
+        "score_result": {
+            "score_type": "polish_answer",
+            "score_value": 82,
+            "dimension_scores": [
+                {"dimension": "correctness", "score": 88, "rationale": "方向正确。"},
+                {"dimension": "depth", "score": 80, "rationale": "细节基本完整。"},
+                {"dimension": "tradeoff_reasoning", "score": 76, "rationale": "取舍略少。"},
+                {"dimension": "structure", "score": 84, "rationale": "结构清楚。"},
+                {"dimension": "engineering_awareness", "score": 82, "rationale": "工程边界基本覆盖。"},
+            ],
+        },
         "score_reasoning": [
             {"dimension": "reliability", "rationale": "恢复停止条件仍不明确。"},
         ],

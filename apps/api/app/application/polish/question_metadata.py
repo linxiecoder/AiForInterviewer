@@ -277,6 +277,37 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
             }
         )
 
+    adaptive_keys = {
+        "adaptive_interview_flow",
+        "adaptive_difficulty_level",
+        "adaptive_learning_path",
+        "adaptive_session_structure",
+    }
+    if any(key in payload for key in adaptive_keys):
+        normalized.update(
+            {
+                "adaptive_interview_flow": _safe_json_dict(
+                    payload.get("adaptive_interview_flow"),
+                    max_items=80,
+                    max_depth=6,
+                ),
+                "adaptive_difficulty_level": _string_or_none(
+                    payload.get("adaptive_difficulty_level"),
+                    max_chars=80,
+                ),
+                "adaptive_learning_path": _safe_json_dict(
+                    payload.get("adaptive_learning_path"),
+                    max_items=80,
+                    max_depth=6,
+                ),
+                "adaptive_session_structure": _safe_json_list(
+                    payload.get("adaptive_session_structure"),
+                    max_items=16,
+                    max_depth=5,
+                ),
+            }
+        )
+
     prompt_keys = {
         "prompt_asset_version",
         "prompt_schema_id",
@@ -817,6 +848,11 @@ def _safe_nested_string_map(raw: object) -> dict[str, dict[str, str]]:
 def _safe_json_dict(raw: object, *, max_items: int = 32, max_depth: int = 4) -> dict[str, Any]:
     value = _safe_json_value(raw, max_items=max_items, max_depth=max_depth)
     return value if isinstance(value, dict) else {}
+
+
+def _safe_json_list(raw: object, *, max_items: int = 32, max_depth: int = 4) -> list[Any]:
+    value = _safe_json_value(raw, max_items=max_items, max_depth=max_depth)
+    return value if isinstance(value, list) else []
 
 
 def _safe_json_value(raw: object, *, max_items: int, max_depth: int) -> Any:

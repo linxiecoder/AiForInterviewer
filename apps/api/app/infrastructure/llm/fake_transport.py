@@ -151,6 +151,7 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
             "回答已经覆盖异步解耦，但还需要把失败恢复边界、幂等处理和观测指标讲清楚。"
         ),
         "answer_summary": f"候选人回答摘要：{answer_text}",
+        "score_result": _fake_progress_adaptive_score_result(request),
         "score_reasoning": [
             {"dimension": "failure_recovery", "rationale": "失败恢复边界与终止条件未充分展开。"},
             {"dimension": "observability", "rationale": "关键观测指标与告警阈值解释不足。"},
@@ -200,6 +201,112 @@ def _generate_fake_polish_feedback(request: LlmTransportRequest) -> LlmTransport
         trace_refs=(trace_ref,),
         evidence_refs=(evidence_ref,),
     )
+
+
+def _fake_progress_adaptive_score_result(request: LlmTransportRequest) -> dict[str, Any]:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    progress_state = bundle.get("progress_state") if isinstance(bundle.get("progress_state"), dict) else {}
+    progress_state_ref = str(progress_state.get("progress_state_ref") or "progress_node_reliability").strip()
+    weights = _fake_progress_weights(progress_state)
+    weak_skills = _fake_string_list(progress_state.get("weak_skill_refs"))
+    strong_skills = _fake_string_list(progress_state.get("strong_skill_refs"))
+    scores = {
+        "correctness": (88, "方向正确。"),
+        "depth": (80, "细节基本完整。"),
+        "tradeoff_reasoning": (76, "取舍略少。"),
+        "structure": (84, "结构清楚。"),
+        "engineering_awareness": (82, "工程边界基本覆盖。"),
+    }
+    return {
+        "score_type": "polish_answer",
+        "score_value": 1,
+        "progress_state_ref": progress_state_ref,
+        "reasoning": "ProgressState 中的 weak_skill_refs 决定本轮 deterministic fake 的评估关注点。",
+        "adaptive_rubric": {
+            "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+            "progress_state_ref": progress_state_ref,
+            "dimensions": [
+                {
+                    "dimension": dimension,
+                    "adaptive_weight": weight,
+                    "progress_basis": _fake_progress_basis(dimension, progress_state_ref, weak_skills, strong_skills),
+                    "anchor_refs": [f"anchor_{dimension}"],
+                }
+                for dimension, weight in weights.items()
+            ],
+        },
+        "dimension_scores": [
+            {
+                "dimension": dimension,
+                "score": score,
+                "adaptive_weight": weights[dimension],
+                "progress_focus": [progress_state_ref],
+                "rationale": rationale,
+            }
+            for dimension, (score, rationale) in scores.items()
+        ],
+        "adaptive_insights": {
+            "weak_skills": weak_skills,
+            "strong_skills": strong_skills,
+            "unstable_skills": [progress_state_ref],
+            "overweighted_skills": _fake_dimensions_by_weight(weights, high=True),
+            "underweighted_skills": _fake_dimensions_by_weight(weights, high=False),
+        },
+        "signals": ["weakness_detected", "progress_update"],
+        "progress_updates": [
+            {
+                "progress_node_ref": progress_state_ref,
+                "signal": "needs_focus",
+                "dimension": "engineering_awareness",
+            }
+        ],
+    }
+
+
+def _fake_progress_weights(progress_state: dict[str, Any]) -> dict[str, float]:
+    dimensions = ("correctness", "depth", "tradeoff_reasoning", "structure", "engineering_awareness")
+    weak_skills = _fake_string_list(progress_state.get("weak_skill_refs"))
+    strong_skills = _fake_string_list(progress_state.get("strong_skill_refs"))
+    weights = {dimension: 0.20 for dimension in dimensions}
+    for skill in weak_skills:
+        weights[dimensions[_fake_stable_dimension_index(skill, len(dimensions))]] += 0.06
+    for skill in strong_skills:
+        dimension = dimensions[_fake_stable_dimension_index(skill, len(dimensions))]
+        weights[dimension] = max(0.08, weights[dimension] - 0.04)
+    total = sum(weights.values())
+    return {dimension: round(weight / total, 6) for dimension, weight in weights.items()}
+
+
+def _fake_progress_basis(
+    dimension: str,
+    progress_state_ref: str,
+    weak_skills: list[str],
+    strong_skills: list[str],
+) -> list[str]:
+    basis = [f"current_priority:{progress_state_ref}"]
+    basis.extend(f"weak_skill:{skill}" for skill in weak_skills if _fake_stable_dimension_name(skill) == dimension)
+    basis.extend(f"strong_skill:{skill}" for skill in strong_skills if _fake_stable_dimension_name(skill) == dimension)
+    return basis
+
+
+def _fake_dimensions_by_weight(weights: dict[str, float], *, high: bool) -> list[str]:
+    pivot = sum(weights.values()) / len(weights)
+    return [dimension for dimension, weight in weights.items() if (weight > pivot if high else weight < pivot)]
+
+
+def _fake_stable_dimension_name(value: str) -> str:
+    dimensions = ("correctness", "depth", "tradeoff_reasoning", "structure", "engineering_awareness")
+    return dimensions[_fake_stable_dimension_index(value, len(dimensions))]
+
+
+def _fake_stable_dimension_index(value: str, modulo: int) -> int:
+    return sum(ord(char) for char in value) % modulo
+
+
+def _fake_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _generate_fake_polish_question(request: LlmTransportRequest) -> LlmTransportResult:

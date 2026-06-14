@@ -89,6 +89,117 @@ def _context() -> dict[str, Any]:
             "missing_points": ["stop conditions", "alert thresholds"],
             "provider_payload": "must not leak",
         },
+        "progress_state": {
+            "progress_state_ref": "progress_node_reliability",
+            "current_priority": {
+                "progress_node_ref": "progress_node_reliability",
+                "title": "Reliability design",
+                "expected_capability": "Explains retry, compensation, idempotency, and alerts.",
+            },
+            "weak_skill_refs": ["recovery_boundaries", "alert_thresholds"],
+            "strong_skill_refs": ["structured_answer"],
+            "node_states": [
+                {"progress_node_ref": "progress_node_reliability", "status": "in_progress"},
+                {"progress_node_ref": "progress_node_structure", "status": "completed"},
+            ],
+        },
+    }
+
+
+def _adaptive_score_result() -> dict[str, Any]:
+    return {
+        "score_type": "polish_answer",
+        "score_value": 1,
+        "progress_state_ref": "progress_node_reliability",
+        "reasoning": "ProgressState shows recovery_boundaries and alert_thresholds still need focused evaluation.",
+        "adaptive_rubric": {
+            "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+            "progress_state_ref": "progress_node_reliability",
+            "dimensions": [
+                {
+                    "dimension": "correctness",
+                    "adaptive_weight": 0.16,
+                    "progress_basis": ["current_priority:progress_node_reliability"],
+                    "anchor_refs": ["anchor_correctness"],
+                },
+                {
+                    "dimension": "depth",
+                    "adaptive_weight": 0.24,
+                    "progress_basis": ["weak_skill:recovery_boundaries"],
+                    "anchor_refs": ["anchor_depth"],
+                },
+                {
+                    "dimension": "tradeoff_reasoning",
+                    "adaptive_weight": 0.20,
+                    "progress_basis": ["weak_skill:alert_thresholds"],
+                    "anchor_refs": ["anchor_tradeoff_reasoning"],
+                },
+                {
+                    "dimension": "structure",
+                    "adaptive_weight": 0.14,
+                    "progress_basis": ["strong_skill:structured_answer"],
+                    "anchor_refs": ["anchor_structure"],
+                },
+                {
+                    "dimension": "engineering_awareness",
+                    "adaptive_weight": 0.26,
+                    "progress_basis": ["weak_skill:alert_thresholds"],
+                    "anchor_refs": ["anchor_engineering_awareness"],
+                },
+            ],
+        },
+        "dimension_scores": [
+            {
+                "dimension": "correctness",
+                "score": 86,
+                "adaptive_weight": 0.16,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "Correct direction.",
+            },
+            {
+                "dimension": "depth",
+                "score": 74,
+                "adaptive_weight": 0.24,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "Recovery details are thin.",
+            },
+            {
+                "dimension": "tradeoff_reasoning",
+                "score": 70,
+                "adaptive_weight": 0.20,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "Tradeoffs are limited.",
+            },
+            {
+                "dimension": "structure",
+                "score": 82,
+                "adaptive_weight": 0.14,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "Clear structure.",
+            },
+            {
+                "dimension": "engineering_awareness",
+                "score": 78,
+                "adaptive_weight": 0.26,
+                "progress_focus": ["progress_node_reliability"],
+                "rationale": "Operational awareness is partial.",
+            },
+        ],
+        "adaptive_insights": {
+            "weak_skills": ["recovery_boundaries", "alert_thresholds"],
+            "strong_skills": ["structured_answer"],
+            "unstable_skills": ["reliability"],
+            "overweighted_skills": ["depth", "tradeoff_reasoning", "engineering_awareness"],
+            "underweighted_skills": ["structure"],
+        },
+        "signals": ["weakness_detected", "progress_update"],
+        "progress_updates": [
+            {
+                "progress_node_ref": "progress_node_reliability",
+                "signal": "needs_focus",
+                "dimension": "engineering_awareness",
+            }
+        ],
     }
 
 
@@ -96,6 +207,7 @@ def _generated_payload(*, low_confidence_flags: list[str] | None = None) -> dict
     return {
         "feedback_text": "The answer covers async decoupling but should define recovery boundaries.",
         "answer_summary": "The answer mentions queues, idempotency, retry jobs, and alerts.",
+        "score_result": _adaptive_score_result(),
         "score_reasoning": [
             {"dimension": "reliability", "rationale": "Recovery boundaries and alert thresholds remain underspecified."},
         ],
@@ -198,7 +310,7 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     transport = _PayloadTransport({"payload": _generated_payload()})
     prompt_asset = build_feedback_prompt_asset(_context())
 
-    FeedbackGenerationAgent(transport=transport).generate(
+    FeedbackGenerationAgent(transport=transport).invoke_provider_v1(
         prompt_asset=prompt_asset,
         input_refs=("answer_001",),
     )
@@ -207,8 +319,9 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert provider_prompt["task_type"] == POLISH_FEEDBACK_TASK_TYPE
     assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
     assert provider_prompt["prompt"] == prompt_asset["prompt"]
-    assert provider_prompt["output_schema"] == prompt_asset["output_schema"]
     assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
+    assert "$defs" not in provider_prompt["output_schema"]
+    assert provider_prompt["output_schema"]["fields"] == list(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)
     assert provider_prompt["input_contract"]["answer_text_policy"] == "structured_answer_signal_primary_input"
     assert provider_prompt["input_contract"]["answer_text_max_chars"] == 1200
     assert provider_prompt["input_contract"]["answer_text_is_bounded"] is True
@@ -231,6 +344,7 @@ def test_feedback_prompt_required_json_schema_separates_core_and_optional_fields
     assert required_fields == {
         "feedback_text",
         "answer_summary",
+        "score_result",
         "loss_points",
         "reference_answer.sections",
         "low_confidence_flags",
@@ -240,7 +354,6 @@ def test_feedback_prompt_required_json_schema_separates_core_and_optional_fields
     assert not provider_prompt["required_json_schema"]["not_applicable_fields"]
     assert "score_reasoning" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "score_reasoning" in provider_prompt["required_json_schema"]["optional_fields"]
-    assert "score_result" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "asset_consistency_check" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "answer_coverage" not in provider_prompt["required_json_schema"]["required_fields"]
     assert "feedback_cards" not in provider_prompt["required_json_schema"]["required_fields"]
@@ -251,10 +364,49 @@ def test_feedback_prompt_required_json_schema_separates_core_and_optional_fields
         "same_question_effect",
     }
     requirements_text = "\n".join(provider_prompt["output_requirements"]).lower()
-    assert "feedback_text, answer_summary, loss_points" in requirements_text
+    assert "feedback_text, answer_summary, score_result, loss_points" in requirements_text
     assert "optional candidate fields" in requirements_text
     for final_field in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
         assert final_field not in provider_prompt["output_schema"]["fields"]
+
+
+def test_feedback_prompt_carries_adaptive_rubric_anchors_and_comparator_contract() -> None:
+    provider_prompt = build_feedback_prompt_asset(_context())["provider_prompt"]
+
+    assert "scoring_rules" not in provider_prompt
+    assert provider_prompt["evaluation_pipeline"] == [
+        "input",
+        "progress_state",
+        "adaptive_rubric",
+        "anchor_examples",
+        "llm_comparator",
+        "signals",
+        "progress_update",
+        "kernel_aggregation",
+    ]
+    assert provider_prompt["evaluation_agents"] == ["discovery", "adaptive_rubric", "llm_judge", "validation"]
+    assert provider_prompt["progress_state"]["progress_state_ref"] == "progress_node_reliability"
+    assert provider_prompt["adaptive_rubric"]["dimensions"] == [
+        "correctness",
+        "depth",
+        "tradeoff_reasoning",
+        "structure",
+        "engineering_awareness",
+    ]
+    assert provider_prompt["adaptive_rubric"]["weight_policy"] == "llm_judge_must_return_progress_derived_adaptive_weight"
+    assert set(provider_prompt["anchor_examples"]) == {"good_answer", "bad_answer", "borderline"}
+    assert (
+        provider_prompt["llm_comparator"]["required_output"]
+        == "score_result.reasoning + score_result.adaptive_rubric + score_result.dimension_scores + score_result.adaptive_insights + score_result.progress_updates"
+    )
+    output_requirements = "\n".join(provider_prompt["output_requirements"])
+    assert "reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates" in output_requirements
+    assert provider_prompt["semantic_signals"] == [
+        "weakness_detected",
+        "strength_detected",
+        "drift_detected",
+        "progress_update",
+    ]
 
 
 def test_feedback_agent_fails_closed_when_compact_provider_prompt_missing() -> None:
@@ -262,7 +414,7 @@ def test_feedback_agent_fails_closed_when_compact_provider_prompt_missing() -> N
     prompt_asset = build_feedback_prompt_asset(_context())
     prompt_asset.pop("provider_prompt")
 
-    envelope = FeedbackGenerationAgent(transport=transport).generate(
+    envelope = FeedbackGenerationAgent(transport=transport).invoke_provider_v1(
         prompt_asset=prompt_asset,
         input_refs=("answer_001",),
     )
@@ -278,7 +430,7 @@ def test_feedback_agent_blocks_forbidden_provider_prompt_before_transport() -> N
     prompt_asset = build_feedback_prompt_asset(_context())
     prompt_asset["provider_prompt"]["nested"] = [{"full_asset_body": "must not reach provider"}]
 
-    envelope = FeedbackGenerationAgent(transport=transport).generate(
+    envelope = FeedbackGenerationAgent(transport=transport).invoke_provider_v1(
         prompt_asset=prompt_asset,
         input_refs=("answer_001",),
     )
@@ -294,7 +446,7 @@ def test_feedback_agent_blocks_full_answer_before_transport() -> None:
     prompt_asset = build_feedback_prompt_asset(_context())
     prompt_asset["provider_prompt"]["current_answer"]["nested"] = {"full_answer": "must not reach provider"}
 
-    envelope = FeedbackGenerationAgent(transport=transport).generate(
+    envelope = FeedbackGenerationAgent(transport=transport).invoke_provider_v1(
         prompt_asset=prompt_asset,
         input_refs=("answer_001",),
     )
@@ -344,7 +496,7 @@ def test_feedback_agent_returns_agent_output_envelope_for_valid_provider_payload
         low_confidence_flags=("provider_low_confidence",),
         evidence_refs=("provider_evidence",),
     )
-    envelope = FeedbackGenerationAgent(transport=transport).generate(
+    envelope = FeedbackGenerationAgent(transport=transport).invoke_provider_v1(
         prompt_asset=build_feedback_prompt_asset(_context()),
         input_refs=("answer_001",),
     )
@@ -360,7 +512,7 @@ def test_feedback_agent_returns_agent_output_envelope_for_valid_provider_payload
     assert envelope.payload["loss_points"][0]["loss_point_id"] == "lp_recovery"
     assert envelope.payload["low_confidence_flags"] == ["payload_low_confidence"]
     assert envelope.payload["evidence_refs"] == ["resume_project_payment", "job_requirement_reliability"]
-    assert "score_result" not in envelope.payload
+    assert envelope.payload["score_result"]["dimension_scores"]
     assert "asset_consistency_check" not in envelope.payload
     assert envelope.low_confidence_flags == ("provider_low_confidence", "payload_low_confidence")
     assert envelope.evidence_refs == (
@@ -371,7 +523,7 @@ def test_feedback_agent_returns_agent_output_envelope_for_valid_provider_payload
 
 
 def test_feedback_agent_invalid_provider_payload_returns_envelope_validation_errors() -> None:
-    envelope = FeedbackGenerationAgent(transport=_PayloadTransport({"payload": ["not-a-dict"]})).generate(
+    envelope = FeedbackGenerationAgent(transport=_PayloadTransport({"payload": ["not-a-dict"]})).invoke_provider_v1(
         prompt_asset=build_feedback_prompt_asset(_context()),
         input_refs=("answer_001",),
     )
@@ -392,7 +544,7 @@ def test_feedback_agent_envelope_payload_dict_filters_unsafe_metadata_keys() -> 
                 "raw_completion": "must not leak",
             }
         )
-    ).generate(
+    ).invoke_provider_v1(
         prompt_asset=build_feedback_prompt_asset(_context()),
         input_refs=("answer_001",),
     )
@@ -405,19 +557,29 @@ def test_feedback_agent_envelope_payload_dict_filters_unsafe_metadata_keys() -> 
 def test_service_fails_closed_when_envelope_has_validation_errors() -> None:
     result = feedback_generation_service.FeedbackGenerationService(
         llm_transport=_PayloadTransport({"payload": ["not-a-dict"]})
-    ).generate(_context())
+    ).generate_feedback_v1(_context())
 
     assert result.succeeded is False
     assert result.payload is None
     assert result.validation_errors == ("feedback_payload_schema_invalid",)
 
 
-def test_service_calls_candidate_and_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
+def test_service_calls_dual_pass_candidate_and_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
 
-    def spy_candidate(payload: object) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
-        calls.append({"validator": "candidate", "payload": payload})
-        return validate_feedback_candidate_payload(payload)
+    def spy_candidate(
+        payload: object,
+        *,
+        expected_progress_state_ref: str | None = None,
+    ) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+        calls.append(
+            {
+                "validator": "candidate",
+                "payload": payload,
+                "expected_progress_state_ref": expected_progress_state_ref,
+            }
+        )
+        return validate_feedback_candidate_payload(payload, expected_progress_state_ref=expected_progress_state_ref)
 
     def spy_final(payload: object, *, require_feedback_id: bool = False) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
         calls.append({"validator": "final", "payload": payload, "require_feedback_id": require_feedback_id})
@@ -428,13 +590,14 @@ def test_service_calls_candidate_and_final_validator_after_envelope_parse(monkey
 
     result = feedback_generation_service.FeedbackGenerationService(
         llm_transport=_PayloadTransport({"payload": _generated_payload()})
-    ).generate(_context())
+    ).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert len(calls) >= 2
     assert calls[0]["validator"] == "candidate"
-    assert calls[1]["validator"] == "final"
-    assert calls[1]["require_feedback_id"] is False
+    assert calls[1]["validator"] == "candidate"
+    assert calls[2]["validator"] == "final"
+    assert calls[2]["require_feedback_id"] is False
 
 
 def _contains_forbidden_key(value: object) -> bool:

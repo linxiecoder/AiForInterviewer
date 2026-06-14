@@ -35,7 +35,14 @@ _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
         "required_json_schema",
         "current_question",
         "current_answer",
-        "scoring_rules",
+        "evaluation_pipeline",
+        "evaluation_agents",
+        "progress_state_requirement",
+        "adaptive_rubric",
+        "anchor_examples",
+        "llm_comparator",
+        "semantic_signals",
+        "progress_state",
         "evidence",
         "canonical_project_assets",
         "same_question_answers",
@@ -68,7 +75,7 @@ class FeedbackGenerationAgent:
     def __init__(self, *, transport: LlmTransport) -> None:
         self._transport = transport
 
-    def generate(
+    def invoke_provider_v1(
         self,
         *,
         prompt_asset: dict[str, Any],

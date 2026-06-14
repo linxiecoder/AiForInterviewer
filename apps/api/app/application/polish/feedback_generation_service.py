@@ -20,9 +20,9 @@ from app.application.polish.feedback_validation import (
     validate_feedback_candidate_payload,
     validate_final_feedback_payload,
 )
+from app.application.polish.phase5_evaluation_controls import apply_phase5_evaluation_controls
 from app.application.polish.transcript_signal_parser import (
     TranscriptSignalParser,
-    build_fallback_structured_answer,
     structured_answer_to_evaluation_text,
 )
 
@@ -62,6 +62,7 @@ class FeedbackGenerationContext:
     job_snapshot: dict[str, Any] = field(default_factory=dict)
     resume_snapshot: dict[str, Any] = field(default_factory=dict)
     progress_node_snapshot: dict[str, Any] = field(default_factory=dict)
+    progress_state: dict[str, Any] = field(default_factory=dict)
     structured_answer: dict[str, Any] = field(default_factory=dict)
 
 
@@ -79,7 +80,7 @@ class FeedbackGenerationService:
     def __init__(self, *, llm_transport: LlmTransport | None = None) -> None:
         self._llm_transport = llm_transport
 
-    def generate(self, context: FeedbackGenerationContext | dict[str, Any]) -> FeedbackGenerationResult:
+    def generate_feedback_v1(self, context: FeedbackGenerationContext | dict[str, Any]) -> FeedbackGenerationResult:
         normalized_context, context_errors = _normalize_context(context)
         metadata = _base_metadata()
         if context_errors:
@@ -96,7 +97,20 @@ class FeedbackGenerationService:
                 | {"provider_status": "not_called", "llm_called": False},
             )
 
-        evaluation_context = _with_structured_answer(normalized_context)
+        evaluation_context, structured_answer_errors = _with_structured_answer(normalized_context)
+        if structured_answer_errors:
+            return FeedbackGenerationResult(
+                succeeded=False,
+                payload=None,
+                validation_errors=structured_answer_errors,
+                metadata=metadata
+                | _feedback_context_hygiene_metadata(
+                    None,
+                    status="blocked",
+                    validation_errors=structured_answer_errors,
+                )
+                | {"provider_status": "not_called", "llm_called": False},
+            )
         prompt_asset = build_feedback_prompt_asset(evaluation_context)
         metadata = metadata | {
             "prompt_version": prompt_asset["prompt_version"],
@@ -112,8 +126,7 @@ class FeedbackGenerationService:
                 metadata=metadata
                 | _feedback_context_hygiene_metadata(
                     prompt_asset,
-                    status="fallback",
-                    fallback_reason="llm_transport_unavailable",
+                    status="blocked",
                     validation_errors=("llm_transport_unavailable",),
                 )
                 | {"provider_status": "not_configured", "llm_called": False},
@@ -126,14 +139,13 @@ class FeedbackGenerationService:
                 metadata=metadata
                 | _feedback_context_hygiene_metadata(
                     prompt_asset,
-                    status="fallback",
-                    fallback_reason="fake_transport_not_runtime_provider",
+                    status="blocked",
                     validation_errors=("fake_transport_not_runtime_provider",),
                 )
                 | {"provider_status": "fake_transport", "llm_called": False},
             )
 
-        agent_result = FeedbackGenerationAgent(transport=self._llm_transport).generate(
+        agent_result = FeedbackGenerationAgent(transport=self._llm_transport).invoke_provider_v1(
             prompt_asset=prompt_asset,
             input_refs=_input_refs(evaluation_context),
         )
@@ -149,10 +161,7 @@ class FeedbackGenerationService:
                 metadata=agent_metadata
                 | _feedback_context_hygiene_metadata(
                     prompt_asset,
-                    status="fallback",
-                    fallback_reason=agent_result.validation_errors[0]
-                    if agent_result.validation_errors
-                    else provider_status,
+                    status="blocked",
                     validation_errors=agent_result.validation_errors,
                 )
                 | {
@@ -164,7 +173,10 @@ class FeedbackGenerationService:
                 },
             )
 
-        candidate_payload, validation_errors = validate_feedback_candidate_payload(agent_result.payload)
+        candidate_payload, validation_errors = validate_feedback_candidate_payload(
+            agent_result.payload,
+            expected_progress_state_ref=_progress_state_ref(evaluation_context),
+        )
         if validation_errors:
             candidate_payload_metadata = agent_result.payload if isinstance(agent_result.payload, dict) else {}
             return FeedbackGenerationResult(
@@ -181,7 +193,6 @@ class FeedbackGenerationService:
                 | _feedback_context_hygiene_metadata(
                     prompt_asset,
                     status="blocked",
-                    fallback_reason=validation_errors[0] if validation_errors else None,
                     validation_errors=validation_errors,
                 )
                 | {
@@ -194,12 +205,40 @@ class FeedbackGenerationService:
             )
 
         assert candidate_payload is not None
-        ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
-        final_payload = self._build_final_payload(
-            ruled_payload=ruled_payload,
+        secondary_candidate_payload: dict[str, Any] | None = None
+        secondary_validation_errors: tuple[str, ...] = ()
+        secondary_low_confidence_flags: tuple[str, ...] = ()
+        secondary_trace_refs: tuple[str, ...] = ()
+        secondary_agent_result = FeedbackGenerationAgent(transport=self._llm_transport).invoke_provider_v1(
             prompt_asset=prompt_asset,
-            agent_trace_refs=agent_result.trace_refs,
-            agent_low_confidence_flags=agent_result.low_confidence_flags,
+            input_refs=_input_refs(evaluation_context),
+        )
+        secondary_low_confidence_flags = secondary_agent_result.low_confidence_flags
+        secondary_trace_refs = secondary_agent_result.trace_refs
+        if secondary_agent_result.succeeded:
+            secondary_candidate_payload, secondary_validation_errors = validate_feedback_candidate_payload(
+                secondary_agent_result.payload,
+                expected_progress_state_ref=_progress_state_ref(evaluation_context),
+            )
+            if secondary_validation_errors:
+                secondary_candidate_payload = None
+        else:
+            secondary_validation_errors = secondary_agent_result.validation_errors or ("secondary_pass_failed",)
+
+        ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
+        controlled_payload = apply_phase5_evaluation_controls(
+            ruled_payload,
+            secondary_candidate_payload=secondary_candidate_payload,
+            secondary_validation_errors=secondary_validation_errors,
+            secondary_low_confidence_flags=secondary_low_confidence_flags,
+        )
+        final_payload = self._build_final_payload(
+            ruled_payload=controlled_payload,
+            prompt_asset=prompt_asset,
+            agent_trace_refs=tuple(dict.fromkeys((*agent_result.trace_refs, *secondary_trace_refs))),
+            agent_low_confidence_flags=tuple(
+                dict.fromkeys((*agent_result.low_confidence_flags, *secondary_low_confidence_flags))
+            ),
         )
         normalized_payload, validation_errors = validate_final_feedback_payload(final_payload, require_feedback_id=False)
         if validation_errors:
@@ -215,7 +254,6 @@ class FeedbackGenerationService:
                 | _feedback_context_hygiene_metadata(
                     prompt_asset,
                     status="blocked",
-                    fallback_reason=validation_errors[0] if validation_errors else None,
                     validation_errors=validation_errors,
                 )
                 | {
@@ -334,7 +372,6 @@ def _feedback_context_hygiene_metadata(
     prompt_asset: dict[str, Any] | None,
     *,
     status: str,
-    fallback_reason: str | None = None,
     validation_errors: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     provider_prompt = (
@@ -359,7 +396,6 @@ def _feedback_context_hygiene_metadata(
     return build_context_hygiene_metadata(
         status=status,
         safe_context_metadata=safe_context_metadata,
-        fallback_reason=fallback_reason,
         validation_errors=validation_errors,
     ).to_dict()
 
@@ -380,16 +416,18 @@ def _normalize_context(
     return context, ()
 
 
-def _with_structured_answer(context: FeedbackGenerationContext | dict[str, Any]) -> dict[str, Any]:
+def _with_structured_answer(
+    context: FeedbackGenerationContext | dict[str, Any],
+) -> tuple[dict[str, Any], tuple[str, ...]]:
     context_dict = _context_to_dict(context)
     raw_answer_text = _value(context, "answer_text")
     try:
         structured_answer = TranscriptSignalParser().parse(raw_answer_text).to_dict()
     except Exception:
-        structured_answer = build_fallback_structured_answer(raw_answer_text).to_dict()
+        return context_dict, ("structured_answer_parse_failed",)
     context_dict["structured_answer"] = structured_answer
     context_dict["answer_text"] = structured_answer_to_evaluation_text(structured_answer)
-    return context_dict
+    return context_dict, ()
 
 
 def _context_to_dict(context: FeedbackGenerationContext | dict[str, Any]) -> dict[str, Any]:
@@ -415,6 +453,19 @@ def _input_refs(context: FeedbackGenerationContext | dict[str, Any]) -> tuple[st
         *_canonical_asset_refs(context),
     )
     return tuple(ref for ref in refs if ref)
+
+
+def _progress_state_ref(context: FeedbackGenerationContext | dict[str, Any]) -> str | None:
+    value = context.get("progress_state") if isinstance(context, dict) else getattr(context, "progress_state", {})
+    if not isinstance(value, dict):
+        return None
+    progress_state_ref = _clean(value.get("progress_state_ref"), max_chars=120)
+    if progress_state_ref:
+        return progress_state_ref
+    current_priority = value.get("current_priority")
+    if isinstance(current_priority, dict):
+        return _clean(current_priority.get("progress_node_ref") or current_priority.get("node_ref"), max_chars=120) or None
+    return None
 
 
 def _canonical_asset_refs(context: FeedbackGenerationContext | dict[str, Any]) -> tuple[str, ...]:

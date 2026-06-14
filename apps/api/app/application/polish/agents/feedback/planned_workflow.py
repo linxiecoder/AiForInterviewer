@@ -79,7 +79,7 @@ def build_feedback_planned_handoff(
             "formal_write_boundary": "Application Service -> Feedback planned handoff",
             "asset_update_formal_write_performed": False,
             "asset_update_user_confirmation_required": bool(asset_candidate_refs),
-            "fallback_reported_as_generated_success": False,
+            "silent_degradation_reported_as_generated_success": False,
         }
     )
     stored["feedback_metadata"] = metadata

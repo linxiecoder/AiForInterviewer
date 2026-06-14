@@ -17,6 +17,100 @@ def _candidate_payload() -> dict[str, Any]:
     return {
         "feedback_text": "回答清晰地覆盖了核心方案和失败恢复。",
         "answer_summary": "候选人在异步链路上给出了可验证的补偿策略。",
+        "score_result": {
+            "score_type": "polish_answer",
+            "score_value": 1,
+            "progress_state_ref": "progress_node_reliability",
+            "reasoning": "ProgressState 显示 observability 和 tradeoff_reasoning 仍薄弱，因此本轮更关注工程边界与取舍说明。",
+            "adaptive_rubric": {
+                "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+                "progress_state_ref": "progress_node_reliability",
+                "dimensions": [
+                    {
+                        "dimension": "correctness",
+                        "adaptive_weight": 0.16,
+                        "progress_basis": ["current_priority:progress_node_reliability"],
+                        "anchor_refs": ["anchor_correctness"],
+                    },
+                    {
+                        "dimension": "depth",
+                        "adaptive_weight": 0.22,
+                        "progress_basis": ["weak_skill:failure_recovery"],
+                        "anchor_refs": ["anchor_depth"],
+                    },
+                    {
+                        "dimension": "tradeoff_reasoning",
+                        "adaptive_weight": 0.22,
+                        "progress_basis": ["weak_skill:tradeoff_reasoning"],
+                        "anchor_refs": ["anchor_tradeoff_reasoning"],
+                    },
+                    {
+                        "dimension": "structure",
+                        "adaptive_weight": 0.14,
+                        "progress_basis": ["strong_skill:structured_reasoning"],
+                        "anchor_refs": ["anchor_structure"],
+                    },
+                    {
+                        "dimension": "engineering_awareness",
+                        "adaptive_weight": 0.26,
+                        "progress_basis": ["weak_skill:observability"],
+                        "anchor_refs": ["anchor_engineering_awareness"],
+                    },
+                ],
+            },
+            "dimension_scores": [
+                {
+                    "dimension": "correctness",
+                    "score": 88,
+                    "adaptive_weight": 0.16,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "方案方向正确。",
+                },
+                {
+                    "dimension": "depth",
+                    "score": 76,
+                    "adaptive_weight": 0.22,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "恢复链路有展开，但终止条件不足。",
+                },
+                {
+                    "dimension": "tradeoff_reasoning",
+                    "score": 72,
+                    "adaptive_weight": 0.22,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "取舍说明仍偏少。",
+                },
+                {
+                    "dimension": "structure",
+                    "score": 84,
+                    "adaptive_weight": 0.14,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "结构清晰。",
+                },
+                {
+                    "dimension": "engineering_awareness",
+                    "score": 70,
+                    "adaptive_weight": 0.26,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "观测和人工介入边界不足。",
+                },
+            ],
+            "adaptive_insights": {
+                "weak_skills": ["failure_recovery", "tradeoff_reasoning", "observability"],
+                "strong_skills": ["structured_reasoning"],
+                "unstable_skills": ["reliability"],
+                "overweighted_skills": ["depth", "tradeoff_reasoning", "engineering_awareness"],
+                "underweighted_skills": ["structure"],
+            },
+            "signals": ["weakness_detected", "progress_update"],
+            "progress_updates": [
+                {
+                    "progress_node_ref": "progress_node_reliability",
+                    "signal": "needs_focus",
+                    "dimension": "engineering_awareness",
+                }
+            ],
+        },
         "score_reasoning": [
             {
                 "dimension": "architecture",
@@ -74,7 +168,7 @@ def _final_payload() -> dict[str, Any]:
         "feedback_id": "feedback_001",
         "feedback_text": "回答覆盖了失败恢复的关键边界。",
         "answer_summary": "候选人说明了重试、补偿和幂等策略。",
-        "score_result": {"score_type": "polish_answer", "score_value": 82},
+        "score_result": deepcopy(_candidate_payload()["score_result"]),
         "loss_points": [
             {
                 "loss_point_id": "lp_observability",
@@ -141,6 +235,42 @@ def test_validate_feedback_candidate_payload_accepts_valid_payload() -> None:
     assert normalized is not None
     assert normalized["feedback_text"]
     assert len(normalized["loss_points"]) == 1
+    assert normalized["score_result"]["score_value"] == 76.6
+    assert normalized["score_result"]["scoring_basis"] == "progress_adaptive_llm_comparator_v1"
+    assert normalized["score_result"]["aggregation_method"] == "progress_weighted_dimension_scores"
+    assert normalized["score_result"]["progress_state_ref"] == "progress_node_reliability"
+    assert normalized["score_result"]["reasoning"].startswith("ProgressState 显示")
+    assert normalized["score_result"]["adaptive_insights"] == {
+        "weak_skills": ["failure_recovery", "tradeoff_reasoning", "observability"],
+        "strong_skills": ["structured_reasoning"],
+        "unstable_skills": ["reliability"],
+        "overweighted_skills": ["depth", "tradeoff_reasoning", "engineering_awareness"],
+        "underweighted_skills": ["structure"],
+    }
+    assert [item["adaptive_weight"] for item in normalized["score_result"]["dimension_scores"]] == [
+        0.16,
+        0.22,
+        0.22,
+        0.14,
+        0.26,
+    ]
+    assert [item["dimension"] for item in normalized["score_result"]["dimension_scores"]] == [
+        "correctness",
+        "depth",
+        "tradeoff_reasoning",
+        "structure",
+        "engineering_awareness",
+    ]
+
+
+def test_validate_feedback_candidate_payload_requires_llm_comparator_score_result() -> None:
+    payload = _candidate_payload()
+    payload.pop("score_result")
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert errors == ("score_result_required",)
 
 
 def test_validate_feedback_candidate_payload_accepts_phase4_fields_without_unknown_error() -> None:
@@ -151,7 +281,6 @@ def test_validate_feedback_candidate_payload_accepts_phase4_fields_without_unkno
             "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
             "status": "generated",
             "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
-            "score_result": {"score_type": "polish_answer", "score_value": 82},
             "explicit_score": 76,
             "implicit_score": 88,
             "scoring_dimensions": [{"dimension": "reliability", "score": 82}],
@@ -173,8 +302,79 @@ def test_validate_feedback_candidate_payload_accepts_phase4_fields_without_unkno
     assert normalized is not None
     assert "feedback_candidate_unknown_fields" not in errors
     assert errors == ()
-    assert "score_result" not in normalized
+    assert normalized["score_result"]["score_value"] == 76.6
     assert "feedback_metadata" not in normalized
+
+
+def test_validate_feedback_candidate_payload_rejects_static_score_without_progress_adaptation() -> None:
+    payload = _candidate_payload()
+    payload["score_result"] = {
+        "score_type": "polish_answer",
+        "dimension_scores": [
+            {"dimension": "correctness", "score": 88, "rationale": "方向正确。"},
+            {"dimension": "depth", "score": 76, "rationale": "恢复链路有展开。"},
+            {"dimension": "tradeoff_reasoning", "score": 72, "rationale": "取舍说明偏少。"},
+            {"dimension": "structure", "score": 84, "rationale": "结构清晰。"},
+            {"dimension": "engineering_awareness", "score": 70, "rationale": "工程边界不足。"},
+        ],
+        "signals": ["progress_update"],
+    }
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert errors == (
+        "score_result_reasoning_required",
+        "adaptive_insights_required",
+        "progress_state_ref_required",
+        "adaptive_rubric_required",
+        "progress_updates_required",
+        "adaptive_rubric_dimensions_incomplete",
+        "score_result_dimension_scores_incomplete",
+    )
+
+
+def test_validate_feedback_candidate_payload_rejects_self_inconsistent_adaptive_rubric_ref() -> None:
+    payload = _candidate_payload()
+    payload["score_result"]["adaptive_rubric"]["progress_state_ref"] = "progress_node_other"
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert errors == ("adaptive_rubric_progress_state_ref_mismatch",)
+
+
+def test_validate_feedback_candidate_payload_rejects_score_result_without_reasoning() -> None:
+    payload = _candidate_payload()
+    payload["score_result"].pop("reasoning")
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert errors == ("score_result_reasoning_required",)
+
+
+def test_validate_feedback_candidate_payload_rejects_score_result_without_adaptive_insights() -> None:
+    payload = _candidate_payload()
+    payload["score_result"].pop("adaptive_insights")
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert errors == ("adaptive_insights_required",)
+
+
+def test_validate_feedback_candidate_payload_rejects_incomplete_adaptive_insights() -> None:
+    payload = _candidate_payload()
+    payload["score_result"]["adaptive_insights"] = {
+        "weak_skills": ["observability"],
+        "strong_skills": ["structured_reasoning"],
+    }
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is None
+    assert errors == ("adaptive_insights_skill_diagnosis_required",)
 
 
 def test_validate_feedback_candidate_payload_normalizes_loss_point_id_alias() -> None:

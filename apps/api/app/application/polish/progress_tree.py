@@ -2197,18 +2197,21 @@ def _apply_turn_progress_to_state(
         existing_state=state,
         existing_plan=existing_plan,
     )
+    raw_progress_percent = _progress_percent_from_leaf_nodes(
+        _flatten_leaf_nodes(plan_nodes) or flat_plan_nodes,
+        rolled_node_states,
+    )
     return {
         **state,
         "node_states": rolled_node_states,
         "current_priority": current_priority,
-        "updated_from_turns_count": len(turn_updates),
+        "updated_from_turns_count": _updated_from_turns_count(state, len(turn_updates)),
         "summary": "v2_local_state_refresh",
-        "progress": {
-            "progress_percent": _progress_percent_from_leaf_nodes(
-                _flatten_leaf_nodes(plan_nodes) or flat_plan_nodes,
-                rolled_node_states,
-            )
-        },
+        "progress": _normalized_progress_payload(
+            state,
+            raw_progress_percent=raw_progress_percent,
+            new_turn_weight=len(turn_updates),
+        ),
     }
 
 
@@ -2324,6 +2327,41 @@ def _progress_percent_from_leaf_nodes(
         1 for node in leaf_nodes if status_by_ref.get(node["progress_node_ref"]) == "completed"
     )
     return _bounded_int(round(completed_leaf_count * 100 / len(leaf_nodes)), 0, 100)
+
+
+def _normalized_progress_payload(
+    existing_state: dict[str, Any],
+    *,
+    raw_progress_percent: int,
+    new_turn_weight: int,
+) -> dict[str, Any]:
+    previous_percent = _progress_percent(existing_state)
+    previous_turn_weight = _bounded_int(existing_state.get("updated_from_turns_count"), 0, 999)
+    if raw_progress_percent <= previous_percent or previous_turn_weight <= 0 or new_turn_weight <= 0:
+        return {"progress_percent": raw_progress_percent}
+
+    blended = round(
+        ((previous_percent * previous_turn_weight) + (raw_progress_percent * new_turn_weight))
+        / (previous_turn_weight + new_turn_weight)
+    )
+    normalized_percent = _bounded_int(blended, previous_percent, raw_progress_percent)
+    if normalized_percent == raw_progress_percent:
+        return {"progress_percent": raw_progress_percent}
+    return {
+        "progress_percent": normalized_percent,
+        "raw_progress_percent": raw_progress_percent,
+        "normalization": {
+            "strategy": "historical_weighting",
+            "previous_progress_percent": previous_percent,
+            "previous_turn_weight": previous_turn_weight,
+            "new_turn_weight": new_turn_weight,
+        },
+    }
+
+
+def _updated_from_turns_count(existing_state: dict[str, Any], new_turn_weight: int) -> int:
+    previous_turn_weight = _bounded_int(existing_state.get("updated_from_turns_count"), 0, 999)
+    return _bounded_int(previous_turn_weight + max(new_turn_weight, 0), 0, 999)
 
 
 def _turn_progress_updates(

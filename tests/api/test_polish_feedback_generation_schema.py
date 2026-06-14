@@ -48,6 +48,96 @@ def _valid_payload() -> dict[str, Any]:
         "score_result": {
             "score_value": 82,
             "score_type": "polish_answer",
+            "progress_state_ref": "progress_node_reliability",
+            "reasoning": "ProgressState 显示 consistency_depth、tradeoff_reasoning 和 observability 仍需强化。",
+            "adaptive_rubric": {
+                "rubric_version": "polish_answer.progress_adaptive_rubric.v1",
+                "progress_state_ref": "progress_node_reliability",
+                "dimensions": [
+                    {
+                        "dimension": "correctness",
+                        "adaptive_weight": 0.16,
+                        "progress_basis": ["current_priority:progress_node_reliability"],
+                        "anchor_refs": ["anchor_correctness"],
+                    },
+                    {
+                        "dimension": "depth",
+                        "adaptive_weight": 0.22,
+                        "progress_basis": ["weak_skill:consistency_depth"],
+                        "anchor_refs": ["anchor_depth"],
+                    },
+                    {
+                        "dimension": "tradeoff_reasoning",
+                        "adaptive_weight": 0.22,
+                        "progress_basis": ["weak_skill:tradeoff_reasoning"],
+                        "anchor_refs": ["anchor_tradeoff_reasoning"],
+                    },
+                    {
+                        "dimension": "structure",
+                        "adaptive_weight": 0.14,
+                        "progress_basis": ["strong_skill:structured_reasoning"],
+                        "anchor_refs": ["anchor_structure"],
+                    },
+                    {
+                        "dimension": "engineering_awareness",
+                        "adaptive_weight": 0.26,
+                        "progress_basis": ["weak_skill:observability"],
+                        "anchor_refs": ["anchor_engineering_awareness"],
+                    },
+                ],
+            },
+            "dimension_scores": [
+                {
+                    "dimension": "correctness",
+                    "score": 88,
+                    "adaptive_weight": 0.16,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "方向正确。",
+                },
+                {
+                    "dimension": "depth",
+                    "score": 80,
+                    "adaptive_weight": 0.22,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "细节基本完整。",
+                },
+                {
+                    "dimension": "tradeoff_reasoning",
+                    "score": 76,
+                    "adaptive_weight": 0.22,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "取舍略少。",
+                },
+                {
+                    "dimension": "structure",
+                    "score": 84,
+                    "adaptive_weight": 0.14,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "结构清楚。",
+                },
+                {
+                    "dimension": "engineering_awareness",
+                    "score": 82,
+                    "adaptive_weight": 0.26,
+                    "progress_focus": ["progress_node_reliability"],
+                    "rationale": "工程边界基本覆盖。",
+                },
+            ],
+            "adaptive_insights": {
+                "weak_skills": ["consistency_depth", "tradeoff_reasoning", "observability"],
+                "strong_skills": ["structured_reasoning"],
+                "unstable_skills": ["reliability"],
+                "overweighted_skills": ["depth", "tradeoff_reasoning", "engineering_awareness"],
+                "underweighted_skills": ["structure"],
+            },
+            "signals": ["weakness_detected", "progress_update"],
+            "progress_updates": [
+                {
+                    "progress_node_ref": "progress_node_reliability",
+                    "signal": "needs_focus",
+                    "dimension": "tradeoff_reasoning",
+                }
+            ],
         },
         "loss_points": [
             {
@@ -165,6 +255,7 @@ def test_feedback_payload_field_lists_are_explicit() -> None:
     }
     assert set(schema.POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS) == {
         "score_reasoning",
+        "score_result",
         "loss_points",
         "reference_answer",
         "same_question_effect",
@@ -185,6 +276,7 @@ def test_feedback_payload_cross_layer_fields_are_explicitly_excluded() -> None:
         "loss_points",
         "reference_answer",
         "low_confidence_flags",
+        "score_result",
     }
     assert set(schema.POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS) & set(
         schema.POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
@@ -194,7 +286,7 @@ def test_feedback_payload_cross_layer_fields_are_explicitly_excluded() -> None:
 def test_provider_output_schema_keeps_reference_section_title_property() -> None:
     from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 
-    output_schema = build_feedback_prompt_asset(_prompt_context())["provider_prompt"]["output_schema"]
+    output_schema = build_feedback_prompt_asset(_prompt_context())["output_schema"]
     reference_section_schema = output_schema["$defs"]["ReferenceAnswerSection"]
 
     assert "title" in reference_section_schema["properties"]
@@ -204,7 +296,7 @@ def test_provider_output_schema_keeps_reference_section_title_property() -> None
 def test_provider_output_schema_has_no_required_fields_missing_from_properties() -> None:
     from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 
-    output_schema = build_feedback_prompt_asset(_prompt_context())["provider_prompt"]["output_schema"]
+    output_schema = build_feedback_prompt_asset(_prompt_context())["output_schema"]
 
     assert _required_missing_from_properties(output_schema) == []
 
@@ -236,7 +328,7 @@ def test_valid_feedback_payload_passes_and_does_not_mutate_input() -> None:
     assert normalized is not None
     assert normalized["schema_id"] == "polish_feedback_generated_v1"
     assert normalized["status"] == "generated"
-    assert normalized["score_result"]["score_value"] == 82
+    assert normalized["score_result"]["score_value"] == 81.48
     assert payload == original
 
 
@@ -256,7 +348,7 @@ def test_feedback_text_empty_fails() -> None:
 
 def test_score_out_of_range_fails() -> None:
     payload = _valid_payload()
-    payload["score_result"]["score_value"] = 101
+    payload["score_result"]["dimension_scores"][0]["score"] = 101
 
     normalized, errors = _validate(payload)
 

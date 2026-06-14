@@ -659,7 +659,17 @@ def test_polish_feedback_application_service_create_feedback_task_owns_main_flow
             "contract_ids": ["P-POLISH-005"],
             "feedback_text": "反馈文本",
             "answer_summary": "回答总结",
-            "score_result": {"score_value": 80, "score_level": "good"},
+            "score_result": {
+                "score_type": "polish_answer",
+                "score_value": 80,
+                "dimension_scores": [
+                    {"dimension": "correctness", "score": 84, "rationale": "方向正确。"},
+                    {"dimension": "depth", "score": 78, "rationale": "细节略少。"},
+                    {"dimension": "tradeoff_reasoning", "score": 76, "rationale": "取舍略少。"},
+                    {"dimension": "structure", "score": 82, "rationale": "结构清楚。"},
+                    {"dimension": "engineering_awareness", "score": 80, "rationale": "工程意识中等。"},
+                ],
+            },
             "loss_points": [],
             "reference_answer": None,
             "trace_refs": ("trace_feedback",),
@@ -672,7 +682,7 @@ def test_polish_feedback_application_service_create_feedback_task_owns_main_flow
         def __init__(self) -> None:
             self.calls = 0
 
-        def generate(self, *_: object, **__: object) -> GenerationResult:
+        def generate_feedback_v1(self, *_: object, **__: object) -> GenerationResult:
             self.calls += 1
             return GenerationResult()
 
@@ -897,7 +907,7 @@ def test_polish_feedback_application_service_persists_feedback_and_task_with_can
         def __init__(self) -> None:
             self.contexts: list[FeedbackGenerationContext] = []
 
-        def generate(self, context: FeedbackGenerationContext) -> FeedbackGenerationResult:
+        def generate_feedback_v1(self, context: FeedbackGenerationContext) -> FeedbackGenerationResult:
             self.contexts.append(context)
             return FeedbackGenerationResult(
                 succeeded=True,

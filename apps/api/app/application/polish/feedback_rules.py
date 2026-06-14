@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from app.application.polish.feedback_evaluation import normalize_semantic_score_result
 from app.domain.polish.policies.answer_change_policy import (
     AnswerChangeInput,
     AnswerChangePolicy,
@@ -14,7 +15,6 @@ from app.domain.polish.policies.asset_consistency_policy import (
     AssetConsistencyPolicy,
     CanonicalAssetItem,
 )
-from app.domain.polish.policies.scoring_policy import ScoringInput, ScoringLossPoint, ScoringPolicy
 from app.domain.polish.policies.feedback_next_action_policy import (
     FeedbackNextActionInput,
     FeedbackNextActionPolicy,
@@ -70,7 +70,7 @@ def apply_feedback_core_rules(payload: dict[str, Any], context: object) -> dict[
 
     _normalize_asset_update_candidates(result)
     _normalize_loss_points(result)
-    _apply_scoring_policy(result)
+    _apply_score_aggregation_kernel(result)
     _normalize_reference_answer(result)
     _normalize_same_question_effect(result)
 
@@ -382,51 +382,17 @@ def _normalize_loss_points(payload: dict[str, Any]) -> None:
     payload["loss_points"] = normalized
 
 
-def _apply_scoring_policy(payload: dict[str, Any]) -> None:
-    raw_loss_points = payload.get("loss_points")
-    normalized_loss_points = raw_loss_points if isinstance(raw_loss_points, list) else []
-
-    decision = ScoringPolicy.evaluate(
-        ScoringInput(
-            loss_points=tuple(
-                ScoringLossPoint(
-                    loss_point_id=_clean(loss_point.get("loss_point_id"), max_chars=120),
-                    severity=_clean(loss_point.get("severity"), max_chars=40),
-                    reason=_clean(loss_point.get("reason"), max_chars=1000),
-                )
-                for loss_point in _dict_list(payload.get("loss_points"))
-            )
-        )
-    )
-    payload["score_result"] = {
-        "score_type": "polish_answer",
-        "score_value": decision.score_value,
-        "scoring_basis": "score_result computed from loss_point severities on server; LLM score fields are not trusted",
-    }
-
-    scored_loss_points: list[dict[str, Any]] = []
-    scored_iter = iter(decision.scored_loss_points)
-    for loss_point in normalized_loss_points:
-        if not isinstance(loss_point, dict):
-            scored_loss_points.append(loss_point)
-            continue
-        scored_loss_point = next(scored_iter, None)
-        normalized = dict(loss_point)
-        if scored_loss_point is not None:
-            normalized["deduction"] = scored_loss_point.deduction
-            normalized["severity"] = scored_loss_point.severity
-            normalized.pop("deducted_points", None)
-        else:
-            normalized["deduction"] = 0.0
-        scored_loss_points.append(normalized)
-    payload["loss_points"] = scored_loss_points
-
-    warnings = _string_list(payload.get("low_confidence_flags"), max_items=20, max_item_chars=160)
-    for warning in decision.warnings:
-        warning_text = _clean(warning, max_chars=160)
-        if warning_text and warning_text not in warnings:
-            warnings.append(warning_text)
-    payload["low_confidence_flags"] = warnings
+def _apply_score_aggregation_kernel(payload: dict[str, Any]) -> None:
+    normalized_score_result, errors, warnings = normalize_semantic_score_result(payload.get("score_result"))
+    if normalized_score_result is not None:
+        payload["score_result"] = normalized_score_result
+    if errors or warnings:
+        flags = _string_list(payload.get("low_confidence_flags"), max_items=20, max_item_chars=160)
+        for item in (*errors, *warnings):
+            warning_text = _clean(item, max_chars=160)
+            if warning_text and warning_text not in flags:
+                flags.append(warning_text)
+        payload["low_confidence_flags"] = flags
 
 
 def _normalize_reference_answer(payload: dict[str, Any]) -> None:

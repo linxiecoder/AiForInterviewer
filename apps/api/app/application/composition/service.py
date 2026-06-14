@@ -20,8 +20,8 @@ FeedbackContextInput = FeedbackGenerationContext | Mapping[str, Any]
 COMPOSITION_MODES: tuple[CompositionMode, ...] = ("interview", "training", "analysis")
 _FEEDBACK_MODES: frozenset[CompositionMode] = frozenset(("interview", "training"))
 _SYSTEM_HINTS: dict[CompositionMode, str] = {
-    "interview": "fast_feedback: feedback_signal_enabled; analysis_signal_background",
-    "training": "balanced: feedback_signal_enabled; analysis_signal_enabled",
+    "interview": "feedback_v1: feedback_signal_enabled; analysis_signal_background",
+    "training": "feedback_v1: feedback_signal_enabled; analysis_signal_enabled",
     "analysis": "deep_understanding: analysis_signal_only",
 }
 
@@ -39,7 +39,7 @@ class AnalysisSignalService(Protocol):
 
 
 class FeedbackSignalService(Protocol):
-    def generate(self, context: FeedbackGenerationContext | dict[str, Any]) -> Any:
+    def generate_feedback_v1(self, context: FeedbackGenerationContext | dict[str, Any]) -> Any:
         ...
 
 
@@ -77,7 +77,7 @@ class CompositionService:
                 transcript,
                 explicit_context=feedback_context or _command_feedback_context(command),
             )
-            result["feedback"] = self._feedback_service.generate(context)
+            result["feedback"] = self._feedback_service.generate_feedback_v1(context)
 
         return result
 

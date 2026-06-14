@@ -205,6 +205,7 @@ class FeedbackInputPayload(_PayloadModel):
 class FeedbackCandidatePayload(_PayloadModel):
     feedback_text: str
     answer_summary: str
+    score_result: dict[str, Any]
     score_reasoning: list[ScoreReasoningItem] = Field(default_factory=list)
     loss_points: list[LossPoint] = Field(default_factory=list)
     reference_answer: ReferenceAnswer
