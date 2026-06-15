@@ -166,6 +166,7 @@ def test_pr8_no_feedback_task_candidate_or_formal_writes(monkeypatch) -> None:
 def test_pr8_no_application_polish_imports() -> None:
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
+        "local_multi_agent_orchestrator.py",
         "polish_feedback_graph.py",
         "polish_question_graph.py",
     ]

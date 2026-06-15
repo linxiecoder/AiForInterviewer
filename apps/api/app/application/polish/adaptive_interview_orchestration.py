@@ -81,7 +81,7 @@ def build_adaptive_interview_flow(
         },
         "learning_path": learning_path,
         "session_structure": session_structure,
-        "next_question": {
+        "question_generation": {
             "generation_mode": "skill_driven",
             "target_progress_node_ref": node_ref,
             "target_skill": node_title,

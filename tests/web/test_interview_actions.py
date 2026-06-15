@@ -52,3 +52,25 @@ def test_interview_list_actions_use_soft_delete_endpoint_without_delete_method()
     assert "softDeleteSession: (sessionId: string)" in api_source
     assert "/delete" in api_source
     assert "method: \"DELETE\"" not in api_source
+
+
+def test_interview_workbench_does_not_call_question_task_endpoint_directly() -> None:
+    source = _source(INTERVIEW_PAGE)
+
+    assert "createPolishQuestionTask" not in source
+    assert "const createQuestion" not in source
+    assert "await createQuestion" not in source
+
+
+def test_interview_workbench_next_recommendations_are_display_only() -> None:
+    source = _source(INTERVIEW_PAGE)
+
+    assert "resolveFeedbackNextRecommendedActionExecution" not in source
+    assert "onNextRecommendedAction" not in source
+    assert "feedback_next_question_intent" not in source
+
+
+def test_interview_workbench_progress_tree_does_not_trigger_question_execution() -> None:
+    source = _source(INTERVIEW_PAGE)
+
+    assert "\"generate_question\"" not in source

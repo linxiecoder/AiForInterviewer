@@ -1710,6 +1710,12 @@ button.timelineBubble {
   gap: 8px;
 }
 
+.currentQuestionNextActionTag {
+  margin-inline-end: 0;
+  line-height: 22px;
+  white-space: normal;
+}
+
 .currentQuestionCandidateActions {
   min-width: 0;
   display: flex;

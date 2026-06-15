@@ -23,6 +23,7 @@ from tests.api.test_polish_api import (
     _generate_initial_progress_tree,
     _isolated_polish_app,
     _seed_polish_sources,
+    _seed_polish_question_for_session,
     _session_factory,
     _run_inline_threadpool,
 )
@@ -398,13 +399,11 @@ def _create_answer_ready_for_feedback(app, session_factory) -> tuple[str, str]:
     progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"][
         "progress_node_ref"
     ]
-    _, question_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/questions",
-        "POST",
-        json_body={"progress_node_ref": progress_node_ref},
+    question_id = _seed_polish_question_for_session(
+        session_factory,
+        session_id=session_id,
+        progress_node_ref=progress_node_ref,
     )
-    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
     _, answer_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/answers",
@@ -442,13 +441,11 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
     progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"][
         "progress_node_ref"
     ]
-    _, question_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/questions",
-        "POST",
-        json_body={"progress_node_ref": progress_node_ref},
+    question_id = _seed_polish_question_for_session(
+        session_factory,
+        session_id=session_id,
+        progress_node_ref=progress_node_ref,
     )
-    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
     _, answer_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/answers",
@@ -691,13 +688,11 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
     progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"][
         "progress_node_ref"
     ]
-    _, question_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/questions",
-        "POST",
-        json_body={"progress_node_ref": progress_node_ref},
+    question_id = _seed_polish_question_for_session(
+        session_factory,
+        session_id=session_id,
+        progress_node_ref=progress_node_ref,
     )
-    question_id = question_body["data"]["result_ref"]["trace_ref_id"]
     _, answer_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/answers",

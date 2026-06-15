@@ -40,6 +40,10 @@ class CreatePolishQuestionTaskCommand:
     parent_feedback_id: str | None = None
     exclude_question_refs: tuple[str, ...] = ()
     completed_focus_refs: tuple[str, ...] = ()
+    execution_source: str = "direct_question_endpoint"
+    authorized_feedback_id: str | None = None
+    authorized_answer_id: str | None = None
+    authorized_parent_question_id: str | None = None
 
 
 @dataclass(frozen=True)

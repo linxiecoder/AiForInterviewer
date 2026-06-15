@@ -83,7 +83,7 @@ def test_all_candidate_focus_completed_returns_complete_decision() -> None:
 
     assert decision.action == FollowUpCoverageAction.COMPLETE
     assert decision.focus.completion_status == "all_focus_completed"
-    assert decision.focus.recommended_action == "ready_for_next_question"
+    assert decision.focus.recommended_action == "focus_complete"
     assert "all_candidate_focus_completed" in decision.reason_codes
 
 

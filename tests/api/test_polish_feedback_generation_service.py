@@ -981,7 +981,7 @@ def _context_with_canonical_assets(*, answer_text: str, asset_status: str = "ass
     return context
 
 
-def test_phase4_confirmed_asset_conflict_surfaces_first_card_and_blocks_next_question() -> None:
+def test_phase4_confirmed_asset_conflict_surfaces_first_card_and_blocks_feedback_question_intent() -> None:
     payload = _generated_payload()
     context = _context_with_canonical_assets(
         answer_text="I led the project with Django and MongoDB instead of the documented stack.",
@@ -998,7 +998,6 @@ def test_phase4_confirmed_asset_conflict_surfaces_first_card_and_blocks_next_que
         "technology_stack_conflict"
     }
     assert result.payload["feedback_cards"][0]["card_type"] == "asset_consistency"
-    assert "generate_next_question" not in result.payload["next_recommended_actions"]
 
 
 def test_phase4_archived_asset_is_not_used_as_canonical_conflict_source() -> None:
@@ -1166,7 +1165,7 @@ def test_service_missing_llm_comparator_score_fails_without_fallback_scoring() -
     assert result.metadata["llm_output_validation_status"] == "invalid"
 
 
-def test_phase4_missing_points_remove_generate_next_question() -> None:
+def test_phase4_missing_points_continue_same_question() -> None:
     payload = _generated_payload()
     context = _context()
     context["answer_text"] = "我只说明了 MQ 解耦。"
@@ -1176,7 +1175,6 @@ def test_phase4_missing_points_remove_generate_next_question() -> None:
 
     assert result.succeeded is True
     assert result.payload is not None
-    assert "generate_next_question" not in result.payload["next_recommended_actions"]
     assert result.payload["next_recommended_actions"][0] == "continue_same_question"
 
 
@@ -1197,35 +1195,9 @@ def test_phase4_next_action_regression_retries_same_question() -> None:
 
     assert result.succeeded is True
     assert result.payload is not None
-    assert "generate_next_question" not in result.payload["next_recommended_actions"]
-    assert result.payload["next_recommended_actions"][:2] == [
-        "retry_same_question_preserve_regressed_points",
-        "confirm_asset_update_candidate",
+    assert result.payload["next_recommended_actions"] == [
+        "retry_same_question_preserve_regressed_points"
     ]
-
-
-def test_phase4_validator_rejects_generate_next_question_with_unresolved_points() -> None:
-    payload = _generated_final_payload()
-    payload["answer_coverage"]["missing_points"] = ["未覆盖的关键点"]
-    payload.update(
-        {
-            "feedback_cards": [
-                {"card_type": "asset_consistency", "status": "consistent", "payload": {}},
-                {"card_type": "overall", "status": "generated", "payload": {}},
-                {"card_type": "answer_coverage", "status": "available", "payload": {}},
-                {"card_type": "loss_points", "status": "available", "payload": []},
-                {"card_type": "reference_answer", "status": "available", "payload": {}},
-                {"card_type": "next_actions", "status": "available", "payload": {}},
-                {"card_type": "asset_update_candidates", "status": "candidate", "payload": []},
-            ],
-            "next_recommended_actions": ["generate_next_question"],
-        }
-    )
-
-    normalized, errors = validate_final_feedback_payload(payload)
-
-    assert normalized is None
-    assert "next_action_generate_next_question_forbidden_unresolved_feedback" in errors
 
 
 def test_phase4_asset_update_candidates_are_forced_to_user_confirmation() -> None:

@@ -2,7 +2,7 @@ import { request, buildSuccessData } from "../../../shared/api/client";
 import type {
   CreatePolishAnswerRequest,
   CreatePolishFeedbackTaskRequest,
-  CreatePolishQuestionTaskRequest,
+  CreatePolishFeedbackNextQuestionIntentRequest,
   CreatePolishSessionRequest,
   PolishAnswer,
   PolishCandidate,
@@ -16,7 +16,8 @@ import type {
 export const POLISH_API_PATHS = {
   sessions: "/polish-sessions",
   sessionDetail: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}` as `/polish-sessions/${string}`,
-  questionTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions` as `/polish-sessions/${string}/questions`,
+  feedbackNextQuestionTask: (sessionId: string, feedbackId: string) =>
+    `/polish-sessions/${encodeURIComponent(sessionId)}/feedback/${encodeURIComponent(feedbackId)}/next-question` as `/polish-sessions/${string}/feedback/${string}/next-question`,
   completeQuestion: (sessionId: string, questionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/complete` as `/polish-sessions/${string}/questions/${string}/complete`,
   endSession: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/end` as `/polish-sessions/${string}/end`,
   sessionReport: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/report` as `/polish-sessions/${string}/report`,
@@ -107,17 +108,18 @@ export async function dismissPolishCandidate(candidateId: string): Promise<Polis
   return data;
 }
 
-export async function createPolishQuestionTask(
+export async function createPolishFeedbackNextQuestionTask(
   sessionId: string,
-  payload: CreatePolishQuestionTaskRequest,
+  feedbackId: string,
+  payload: CreatePolishFeedbackNextQuestionIntentRequest = {},
 ): Promise<PolishTaskStatus> {
-  const response = await request<PolishTaskStatus>(POLISH_API_PATHS.questionTask(sessionId), {
+  const response = await request<PolishTaskStatus>(POLISH_API_PATHS.feedbackNextQuestionTask(sessionId, feedbackId), {
     method: "POST",
     body: payload,
   });
   const data = buildSuccessData(response);
   if (data === null) {
-    throw new Error("题目生成任务返回为空");
+    throw new Error("下一题生成任务返回为空");
   }
   return data;
 }

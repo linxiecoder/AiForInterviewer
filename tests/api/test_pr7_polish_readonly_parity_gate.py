@@ -104,6 +104,7 @@ def test_pr7_readonly_parity_has_zero_provider_formal_and_db_writes() -> None:
 def test_pr7_readonly_parity_does_not_import_polish_application_or_db_repositories() -> None:
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
+        "local_multi_agent_orchestrator.py",
         "polish_feedback_graph.py",
         "polish_question_graph.py",
     ]

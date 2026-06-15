@@ -87,7 +87,6 @@ permalink: ai-for-interviewer/docs/03-implementation/agent-io-shared-abstraction
 - `tests/api/test_agent_io.py`：覆盖 `AgentEvidenceItem` prompt dict、`AgentSafetyPolicy` prompt rules / dict、`DEFAULT_AGENT_SAFETY_POLICY`、`ProgressEvidenceChunk` 到 `AgentEvidenceItem` 的映射、question prompt evidence summary 外部 shape，以及 `AgentOutputEnvelope` metadata 过滤。
 - `tests/api/test_agent_io_contracts.py`：覆盖 `agent_io.py` 无业务 / transport 反向依赖、公共类型导出、三个 prompt builder 使用 `AgentPromptBundle` 与 `AgentSafetyPolicy`、三类 prompt 外部 top-level shape、三个 output parser 使用 `AgentOutputEnvelope`、旧 parser 返回 shape、`AgentSafetyPolicy` 仅限本阶段 prompt builder 使用，以及未启动未规划 Agent 抽象。
 - `tests/api/test_polish_api.py`：覆盖 Progress Tree prompt / parser / API 相关回归，包括 state refresh prompt、quality-first initial prompt、parser envelope 接入和现有 API 行为。
-- `tests/api/test_polish_question_refactor_phase1.py`：覆盖出题链路 Phase 1 的 prompt bundle、progress evidence 到 question evidence 的桥接、parser envelope 以及出题行为回归。
 
 ## 6. Out of scope
 
@@ -118,6 +117,5 @@ permalink: ai-for-interviewer/docs/03-implementation/agent-io-shared-abstraction
 ```bash
 PYTHONPATH=.:apps/api .venv/bin/pytest tests/api/test_agent_io.py tests/api/test_agent_io_contracts.py -q
 PYTHONPATH=.:apps/api .venv/bin/pytest tests/api/test_polish_api.py -q
-PYTHONPATH=.:apps/api .venv/bin/pytest tests/api/test_polish_question_refactor_phase1.py -q
 git diff --check
 ```

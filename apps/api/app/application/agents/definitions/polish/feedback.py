@@ -207,7 +207,7 @@ def build_polish_feedback_skill_definitions() -> tuple[SkillDefinition, ...]:
             owner_agent_id=POLISH_FEEDBACK_AGENT_ID,
             purpose="Plan next actions that are valid for the current feedback candidate state.",
             tool_refs=("fag_next_action_validator",),
-            deterministic_policy_refs=("feedback_next_action_policy",),
+            deterministic_policy_refs=(),
             eval_refs=(FEEDBACK_EVAL_SUITE_ID,),
             output_summary="next-action recommendations are validated for candidate feedback",
         ),

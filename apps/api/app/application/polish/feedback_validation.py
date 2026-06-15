@@ -339,15 +339,6 @@ def validate_final_feedback_payload(
             require=True,
         )
     )
-    errors.extend(
-        _next_recommended_actions(
-            normalized.get("next_recommended_actions"),
-            asset_consistency_check=normalized.get("asset_consistency_check"),
-            answer_coverage=normalized.get("answer_coverage"),
-            answer_change_analysis=normalized.get("answer_change_analysis"),
-        )
-    )
-
     if errors:
         return None, tuple(dict.fromkeys(errors))
     return normalized, ()
@@ -831,29 +822,6 @@ def _feedback_cards(
         regressed_points = answer_change_analysis.get("regressed_points")
     if regressed_points and "answer_change" not in card_types:
         errors.append("feedback_cards_answer_change_required")
-    return errors
-
-
-def _next_recommended_actions(
-    value: object,
-    *,
-    asset_consistency_check: object,
-    answer_coverage: object,
-    answer_change_analysis: object,
-) -> list[str]:
-    actions = _string_list(value, max_items=20, max_item_chars=160)
-    if "generate_next_question" not in actions:
-        return []
-    errors: list[str] = []
-    asset_status = asset_consistency_check.get("status") if isinstance(asset_consistency_check, dict) else None
-    if asset_status == "conflict":
-        errors.append("next_action_generate_next_question_forbidden_asset_conflict")
-    if isinstance(answer_coverage, dict) and any(
-        answer_coverage.get(field_name) for field_name in ("missing_points", "weak_points", "contradicted_points")
-    ):
-        errors.append("next_action_generate_next_question_forbidden_unresolved_feedback")
-    if isinstance(answer_change_analysis, dict) and answer_change_analysis.get("regressed_points"):
-        errors.append("next_action_generate_next_question_forbidden_unresolved_feedback")
     return errors
 
 

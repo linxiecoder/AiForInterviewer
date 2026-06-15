@@ -13,6 +13,7 @@ def test_pr5_adds_only_polish_business_graph_files() -> None:
     assert BUSINESS_GRAPH_ROOT.exists()
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
+        "local_multi_agent_orchestrator.py",
         "polish_feedback_graph.py",
         "polish_question_graph.py",
     ]

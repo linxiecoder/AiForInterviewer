@@ -217,7 +217,7 @@ def _completed_follow_up_focus() -> FollowUpFocusDecision:
         source_type="completed",
         target_dimension="所有追问焦点已完成",
         follow_up_reason="all_focus_completed",
-        recommended_action="ready_for_next_question",
+        recommended_action="focus_complete",
         completion_status="all_focus_completed",
     )
 
