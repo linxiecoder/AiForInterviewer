@@ -359,11 +359,6 @@ def _generated_feedback_payload_for_storage(
         "question_id": question_id,
         "session_id": session_id,
     }
-    next_recommended_actions = list(stored.get("next_recommended_actions", []))
-    followup_action = "围绕失败恢复终止条件再追问一轮"
-    if followup_action not in next_recommended_actions:
-        next_recommended_actions.append(followup_action)
-    stored["next_recommended_actions"] = next_recommended_actions
     return stored
 
 

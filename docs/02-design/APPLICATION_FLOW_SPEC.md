@@ -140,6 +140,8 @@ Composition Layer 的 merge 只能是 envelope-level packaging。它可以决定
 
 MVP 默认建议把 `P-POLISH-003 Answer Diagnosis`、`P-POLISH-004 Round Score`、`P-POLISH-005 Loss Point Analysis`、`P-POLISH-009 Next Round Suggestion` 合并为一次 LLM call，前提是输出 schema 保留每个 `contract_id`、`validation_result_ref`、`evidence_refs` 和 `trace_refs`。
 
+`next_recommended_actions` 的权威来源是反馈规则 / 校验链路中的受控 action id 集合。feedback storage handoff 只允许补充 `feedback_id`、owner-scoped refs、metadata、trace / candidate refs 等持久化上下文，不得在 final validation 之后追加、改写或合成新的 action 文案；API response 可以继续透传 `next_recommended_actions` 字段，但不得把 storage-time 后处理作为推荐动作决策层。
+
 `progress_tree_state` / `progress_tree_status` 的刷新和持久化权威属于 Application 层的 `PolishUseCases.refresh_progress_tree_state()`。`POST /api/v1/polish-sessions/{session_id}/progress-tree/state` 只负责把 HTTP 请求转换为 `RefreshPolishProgressTreeStateCommand` 并返回 `PolishSessionDetail` response；API adapter 不得直接调用 `PolishProgressTreeLlmService.refresh_state()`、不得自行构造 `PolishSession` 进展树状态，也不得直接调用 `SqlAlchemyPolishRepository.update_progress_tree()`。`PolishProgressTreeLlmService` 只作为 application use case 内部的计算服务，repository 只作为 storage port implementation。
 
 `P-POLISH-006 Reference Answer`、`P-POLISH-007 Knowledge Point Explanation`、`P-POLISH-008 Technical Principle Expansion` 默认按用户点击 on-demand 创建独立任务，避免每次回答后过度调用。
@@ -166,6 +168,7 @@ session summary update 可以在 feedback task 后执行；短会话可用 deter
 | 日期 | 变更 | 影响 |
 |---|---|---|
 | 2026-06-15 | 收口进展树刷新写入 authority | 明确 `/progress-tree/state` API 只能委托 `PolishUseCases.refresh_progress_tree_state()`；禁止 API adapter 直接调用 progress-tree LLM service 或 repository 写入，避免绕过 Application 层决策与验证 |
+| 2026-06-15 | 收紧打磨反馈 `next_recommended_actions` storage handoff 边界 | 明确推荐动作只能来自规则 / 校验链路中的受控 action id；storage handoff 不得在 final validation 后追加自由文本 action，避免反馈持久化阶段绕过推荐动作白名单 |
 | 2026-05-24 | 增加 PR3 / PR4 AI Runtime application flow backfill | 补齐 Core UseCase -> `AiOrchestrationFacade` -> `AgentGraphRunner` port、PR3 contract scope、PR4 fake runtime、interrupt、handoff、formal write PR5+、replay/cancel/late write block；不进入代码实现 |
 | 2026-05-24 | 增加 Pressure Mode mode-level spec 交叉引用 | 将 Pressure lifecycle、turn loop、pace、end condition、report / review handoff 和 PR2 hold 交给 `PRESSURE_MODE_SPEC.md`；流程矩阵只保留 application orchestration 引用，不进入 implementation |
 | 2026-05-17 | 初始化 application flow handoff | 补齐 API 到应用编排、P-* contract、LLM call plan、Prompt 输入结构、持久化和 F7 fixture 的映射 |

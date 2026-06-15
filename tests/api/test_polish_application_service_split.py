@@ -87,6 +87,25 @@ def test_feedback_generation_storage_path_does_not_call_legacy_payload_cleaner()
     assert "_remove_legacy_feedback_payload_fields" not in source
 
 
+def test_generated_feedback_storage_payload_keeps_next_actions_allowlisted() -> None:
+    feedback_service = importlib.import_module("app.application.polish.feedback_application_service")
+    feedback_rules = importlib.import_module("app.application.polish.feedback_rules")
+    allowed_actions = feedback_rules.ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
+
+    stored = feedback_service._generated_feedback_payload_for_storage(
+        {
+            "next_recommended_actions": ["continue_same_question"],
+            "feedback_metadata": {"provider_status": "unit_test"},
+        },
+        session_id="session-1",
+        question_id="question-1",
+        answer_id="answer-1",
+        feedback_id="feedback-1",
+    )
+
+    assert set(stored["next_recommended_actions"]) <= allowed_actions
+
+
 def test_focused_service_modules_do_not_import_prompt_provider_db_api_or_runtime_paths() -> None:
     for module_name, _class_name in SERVICE_MODULES:
         module = importlib.import_module(f"app.application.polish.{module_name}")
