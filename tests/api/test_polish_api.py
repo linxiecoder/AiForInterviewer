@@ -3143,6 +3143,57 @@ def test_progress_tree_refresh_invalid_state_keeps_plan_and_returns_refresh_fail
     assert data["progress_tree_state"]["node_states"]
 
 
+def test_progress_tree_state_endpoint_delegates_refreshable_plan_to_use_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.polish.use_cases import PolishUseCases
+
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    assert generate_body["data"]["progress_tree_status"] == "ready"
+    assert generate_body["data"]["progress_tree_plan"]["nodes"]
+
+    calls: list[str] = []
+    original_refresh = PolishUseCases.refresh_progress_tree_state
+
+    def spy_refresh_progress_tree_state(self: PolishUseCases, command: object):
+        calls.append(getattr(command, "session_id", ""))
+        return original_refresh(self, command)
+
+    monkeypatch.setattr(PolishUseCases, "refresh_progress_tree_state", spy_refresh_progress_tree_state)
+
+    status_code, refresh_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/state",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    assert refresh_body["data"]["progress_tree_status"] == "ready"
+    assert calls == [session_id]
+
+
+def test_progress_tree_state_endpoint_keeps_progress_write_authority_out_of_api_layer() -> None:
+    source = inspect.getsource(polish_api.refresh_polish_progress_tree_state)
+
+    assert "PolishProgressTreeLlmService(" not in source
+    assert ".refresh_state(" not in source
+    assert "SqlAlchemyPolishRepository(" not in source
+    assert ".update_progress_tree(" not in source
+
+
 def test_progress_tree_refresh_failed_status_maps_to_stale_continuity_payload() -> None:
     snapshot = SessionContinuitySnapshot(
         session_status="running",

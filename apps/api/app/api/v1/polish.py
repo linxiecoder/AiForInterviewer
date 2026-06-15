@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import replace
 from time import perf_counter
 from typing import Any
 
@@ -78,7 +77,6 @@ from app.application.polish.use_cases import (
     PolishUseCases,
 )
 from app.domain.auth.entities import CurrentActor
-from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import ApiStatus
 from app.domain.shared.errors import DomainError
 from app.domain.shared.refs import TraceRef, VersionRef as DomainVersionRef
@@ -502,7 +500,7 @@ async def create_polish_feedback_next_question_task(
 
 
 # ── 进度树刷新端点 ──────────────────────────────────────────────────
-# 刷新进度树状态：若已有 LLM 可刷新的 plan 则走 LLM，否则走规则刷新
+# 刷新进度树状态：API 层只做适配，状态刷新与持久化统一委托 Application 层。
 @router.post("/polish-sessions/{session_id}/progress-tree/state")
 async def refresh_polish_progress_tree_state(
     session_id: str,
@@ -511,36 +509,6 @@ async def refresh_polish_progress_tree_state(
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
-    detail_result = use_cases.get_session(GetPolishSessionQuery(owner_id=actor.owner_id, session_id=session_id))
-    if not detail_result.is_success:
-        _raise_result_error(detail_result.error)
-    detail = detail_result.value
-
-    if _has_refreshable_progress_tree_plan(detail.progress_tree_plan):
-        progress_tree_service = PolishProgressTreeLlmService(llm_transport)
-        progress_artifacts = await run_in_threadpool(
-            progress_tree_service.refresh_state,
-            context=_progress_context_with_turn_refs(detail),
-            existing_plan=detail.progress_tree_plan,
-            existing_state=detail.progress_tree_state,
-        )
-        updated_session = replace(
-            detail.session,
-            updated_at=utc_now(),
-            progress_tree_status=progress_artifacts["status"],
-            progress_percent=progress_artifacts["progress_percent"],
-            progress_tree_plan=progress_artifacts["progress_tree_plan"],
-            progress_tree_state=progress_artifacts["progress_tree_state"],
-        )
-        SqlAlchemyPolishRepository(session_factory).update_progress_tree(updated_session)
-        refreshed_result = use_cases.get_session(GetPolishSessionQuery(owner_id=actor.owner_id, session_id=session_id))
-        if not refreshed_result.is_success:
-            _raise_result_error(refreshed_result.error)
-        return success_envelope(
-            resource_type="polish_session",
-            data=_session_response(refreshed_result.value),
-        )
-
     result = await run_in_threadpool(
         use_cases.refresh_progress_tree_state,
         RefreshPolishProgressTreeStateCommand(
@@ -608,68 +576,6 @@ def _use_cases(
         question_generation_policy_resolver=question_generation_policy_resolver,
         ai_orchestration_facade=ai_orchestration_facade,
     )
-
-
-# ── 辅助函数：进度树 LLM 刷新 ──────────────────────────────────────
-
-def _has_refreshable_progress_tree_plan(plan: dict[str, Any]) -> bool:
-    return plan.get("status") == "ready" and bool(plan.get("nodes"))
-
-
-# ── 辅助函数：进度树上下文构建 ─────────────────────────────────────
-
-def _progress_context_with_turn_refs(detail: PolishSessionDetail) -> dict[str, Any]:
-    context = {**detail.progress_context}
-    context["turns"] = [
-        _turn_progress_context(turn_index=index, turn=turn)
-        for index, turn in enumerate(detail.turns, start=1)
-    ]
-    return context
-
-
-# 构建单个轮次的进度上下文（包含该轮所有答案和反馈的快照）
-def _turn_progress_context(*, turn_index: int, turn: Any) -> dict[str, Any]:
-    latest_answer = turn.answers[-1] if turn.answers else None
-    return {
-        "turn_index": turn_index,
-        "question_id": turn.question_id,
-        "question_text": turn.question_text,
-        "created_at": _to_iso_string(turn.question_created_at),
-        "progress_node_ref": turn.progress_node_ref,
-        "evidence_refs": list(turn.evidence_refs),
-        "context_digest": turn.context_digest,
-        "answer_text": latest_answer.answer_text if latest_answer is not None else None,
-        "feedback_text": latest_answer.feedback_text if latest_answer is not None else None,
-        "feedback_id": latest_answer.feedback_id if latest_answer is not None else None,
-        "score_result_id": latest_answer.score_result_id if latest_answer is not None else None,
-        "answer_round": latest_answer.answer_round if latest_answer is not None else None,
-        "feedback_created_at": (
-            _to_iso_string(latest_answer.feedback_created_at) if latest_answer is not None else None
-        ),
-        "answers": [
-            {
-                "answer_id": answer.answer_id,
-                "answer_text": answer.answer_text,
-                "answer_round": answer.answer_round,
-                "created_at": _to_iso_string(answer.answer_created_at),
-                "feedback_text": answer.feedback_text,
-                "feedback_id": answer.feedback_id,
-                "score_result_id": answer.score_result_id,
-                "feedback_created_at": _to_iso_string(answer.feedback_created_at),
-            }
-            for answer in turn.answers
-        ],
-    }
-
-
-# ── 辅助函数：格式化 ────────────────────────────────────────────────
-
-def _to_iso_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
 
 
 # 计算从 started_at 至今的毫秒数（用于日志埋点）
