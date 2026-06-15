@@ -115,7 +115,6 @@ import {
   INTERVIEW_WORKBENCH_MARK_QUESTION_COMPLETED_DISABLED_WITHOUT_FEEDBACK,
   INTERVIEW_WORKBENCH_REGENERATE_CURRENT_QUESTION_BUTTON,
   INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON,
-  INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
   INTERVIEW_WORKBENCH_SEND_ANSWER_PLACEHOLDER,
   INTERVIEW_WORKBENCH_SEND_RETRY_PLACEHOLDER,
   getInterviewCreateAvailability,
@@ -146,7 +145,6 @@ import {
   shouldShowProgressTreeContextBannerToggle,
   shouldRenderQuestionBubbleInConversation,
   toNextRecommendedActionLabel,
-  buildCreatePolishQuestionTaskRequest,
   type PolishBindingOption,
 } from "./InterviewPage";
 import {
@@ -675,6 +673,9 @@ type PolishSessionCreatePathIsStable = Expect<Equal<typeof POLISH_API_PATHS.sess
 type PolishSessionDetailPathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.sessionDetail>, `/polish-sessions/${string}`>
 >;
+type PolishFeedbackNextQuestionPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.feedbackNextQuestionTask>, `/polish-sessions/${string}/feedback/${string}/next-question`>
+>;
 type PolishQuestionCompletePathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.completeQuestion>, `/polish-sessions/${string}/questions/${string}/complete`>
 >;
@@ -986,7 +987,8 @@ function test_polish_core_workbench_contract_stays_on_session_tree_question_answ
     POLISH_API_PATHS.sessionDetail("ses_core"),
     POLISH_API_PATHS.progressTreeGenerate("ses_core"),
     POLISH_API_PATHS.progressTreeState("ses_core"),
-    POLISH_API_PATHS.questionTask("ses_core"),
+    POLISH_API_PATHS.completeQuestion("ses_core", "q_core"),
+    POLISH_API_PATHS.feedbackNextQuestionTask("ses_core", "fb_core"),
     POLISH_API_PATHS.answers("ses_core"),
     POLISH_API_PATHS.feedbackTask("ses_core"),
   ];
@@ -1001,7 +1003,8 @@ function test_polish_core_workbench_contract_stays_on_session_tree_question_answ
   assertContract(INTERVIEW_SUPPORTED_MODES.map((mode) => mode.value).join(",") === "polish", "创建入口不应新增 Pressure/Review/Training 模式");
   assertContract(corePolishPaths.every((path) => path.startsWith("/polish-sessions")), "核心工作台 API 路径应全部落在 polish-sessions 下");
   assertContract(corePolishPaths.join(" ").includes("progress-tree"), "核心工作台必须保留进展树路径");
-  assertContract(corePolishPaths.join(" ").includes("/questions"), "核心工作台必须保留题目路径");
+  assertContract(corePolishPaths.join(" ").includes("/questions/q_core/complete"), "核心工作台只保留题目完成路径");
+  assertContract(corePolishPaths.join(" ").includes("/feedback/fb_core/next-question"), "生成下一题必须通过 feedback intent endpoint");
   assertContract(corePolishPaths.join(" ").includes("/answers"), "核心工作台必须保留回答路径");
   assertContract(corePolishPaths.join(" ").includes("/feedback"), "核心工作台必须保留反馈路径");
   assertContract(timelineKinds.includes("system_question"), "工作台时间线必须保留题目事件");
@@ -2025,40 +2028,6 @@ function test_workbench_composer_regenerate_preserves_draft_guard(): void {
   );
 }
 
-function test_workbench_rebuild_question_request_mode_for_regenerate_and_follow_up(): void {
-  const regenerateRequest = buildCreatePolishQuestionTaskRequest({
-    generationMode: INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
-    progressNodeRef: "node_current",
-    selectedCategoryPath: ["技术深度", "一致性治理"],
-    parentQuestionId: "q_parent",
-    parentAnswerId: "a_parent",
-    parentFeedbackId: "fb_parent",
-  });
-
-  assertContract(
-    regenerateRequest.generation_mode === INTERVIEW_WORKBENCH_REGENERATE_CURRENT_NODE_MODE,
-    "换一道题应使用新的 regenerate_current_node mode",
-  );
-  assertContract(
-    regenerateRequest.parent_question_id === "q_parent",
-    "换题请求可携带 parent_question_id",
-  );
-
-  const followUpRequest = buildCreatePolishQuestionTaskRequest({
-    generationMode: "follow_up",
-    progressNodeRef: "node_current",
-    selectedCategoryPath: ["技术深度", "一致性治理"],
-    parentQuestionId: "q_parent",
-    parentAnswerId: "a_parent",
-    parentFeedbackId: "fb_parent",
-  });
-
-  assertContract(
-    followUpRequest.generation_mode === "follow_up",
-    "追问本题仍使用 follow_up mode",
-  );
-}
-
 function test_workbench_composer_mark_completed_and_regenerate_confirmation_gate(): void {
   const session = buildTestSession([
     buildTestProgressNode("node_with_question", "已有题目节点", "resume_deep_dive", "深度打磨类"),
@@ -2235,16 +2204,13 @@ function test_progress_tree_context_menu_items_follow_question_action_state(): v
   const questionMenuItems = buildProgressTreeContextMenuItems(questionNode, questionState);
 
   assertContract(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_PLACEMENT === "fixed_at_pointer", "右键菜单应按鼠标位置 fixed 渲染");
-  assertContract(parentMenuItems.length >= 3, "右键父节点菜单内容不能为空");
-  assertContract(questionMenuItems.length >= 3, "右键题目节点菜单内容不能为空");
-  assertContract(parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.generateQuestion), "菜单应包含生成题目");
+  assertContract(parentMenuItems.length >= 2, "右键父节点菜单内容不能为空");
+  assertContract(questionMenuItems.length >= 2, "右键题目节点菜单内容不能为空");
+  assertContract(!parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.generateQuestion), "菜单不应包含生成题目");
   assertContract(parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.markQuestionCompleted), "菜单应包含标记完成");
   assertContract(parentMenuItems.map((item) => item.label).join(",").includes(INTERVIEW_PROGRESS_TREE_CONTEXT_MENU_ITEMS.copyNodeInfo), "菜单应包含复制节点信息");
-  assertContract(parentMenuItems.find((item) => item.key === "generate_question")?.disabled === !parentNodeQuestionState.canGenerateQuestion, "父节点生成题目禁用态应复用底部按钮规则");
   assertContract(parentMenuItems.find((item) => item.key === "mark_question_completed")?.disabled === !parentNodeQuestionState.canMarkQuestionCompleted, "父节点标记完成禁用态应复用底部按钮规则");
-  assertContract(noQuestionMenuItems.find((item) => item.key === "generate_question")?.disabled === !noQuestionState.canGenerateQuestion, "无题节点生成题目禁用态应复用底部按钮规则");
   assertContract(noQuestionMenuItems.find((item) => item.key === "mark_question_completed")?.disabled === !noQuestionState.canMarkQuestionCompleted, "无题节点标记完成禁用态应复用底部按钮规则");
-  assertContract(questionMenuItems.find((item) => item.key === "generate_question")?.disabled === !questionState.canGenerateQuestion, "题目节点生成题目禁用态应复用底部按钮规则");
   assertContract(questionMenuItems.find((item) => item.key === "mark_question_completed")?.disabled === !questionState.canMarkQuestionCompleted, "题目节点标记完成禁用态应复用底部按钮规则");
   assertContract(parentMenuItems.find((item) => item.key === "copy_node_info")?.disabled === false, "父节点复制信息应可用");
   assertContract(questionMenuItems.find((item) => item.key === "copy_node_info")?.disabled === false, "题目节点复制信息应可用");
@@ -2671,7 +2637,7 @@ function buildSelectedAnswerFixtureSession(): PolishSessionDetail {
               reference_answer: {
                 summary: "回答可继续补充线上监控和回滚策略。",
               },
-              next_recommended_actions: ["generate_next_question"],
+              next_recommended_actions: ["continue_same_question"],
             },
           },
         ],
@@ -3116,24 +3082,29 @@ function test_workbench_next_actions_render_in_fixed_composer_bar(): void {
     answer_round: 1,
     answer_text: "我会继续补充失败兜底和指标验证。",
     answer_created_at: "2026-06-08T01:00:00Z",
-    feedback_text: "建议继续补充细节，再生成下一题。",
+    feedback_text: "建议继续补充关键细节。",
     feedback_id: "fb_fixed_actions",
     score_result_id: null,
     feedback_created_at: "2026-06-08T01:01:00Z",
     feedback_payload: {
       status: "generated",
       feedback_id: "fb_fixed_actions",
-      feedback_text: "建议继续补充细节，再生成下一题。",
-      next_recommended_actions: ["provide_more_answer_detail", "generate_next_question", "provide_more_answer_detail"],
+      feedback_text: "建议继续补充关键细节。",
+      next_recommended_actions: ["provide_more_answer_detail", "continue_same_question", "provide_more_answer_detail"],
     },
   };
   const fixedBar = buildWorkbenchFixedNextActionBarViewModel(answer);
 
   assertContract(fixedBar !== null, "有下一步建议时应生成固定动作条 view model");
   assertContract(fixedBar?.placement === INTERVIEW_WORKBENCH_NEXT_ACTION_PLACEMENT, "下一步建议应固定在输入框正上方");
-  assertContract(fixedBar?.actions.map((item) => item.action).join(",") === "provide_more_answer_detail,generate_next_question", "固定动作条应对 contract enum 去重");
-  assertContract(fixedBar?.actions.map((item) => item.label).join(",") === "补充回答细节,生成下一题", "固定动作条应展示中文动作文案");
+  assertContract(fixedBar?.actions.map((item) => item.action).join(",") === "provide_more_answer_detail,continue_same_question", "固定动作条应对 contract enum 去重");
+  assertContract(fixedBar?.actions.map((item) => item.label).join(",") === "补充回答细节,继续打磨本题", "固定动作条应展示中文动作文案");
   assertContract(buildWorkbenchFixedNextActionBarViewModel(null) === null, "没有当前反馈时不应渲染固定动作条");
+}
+
+function test_workbench_next_action_recommendations_are_display_only(): void {
+  assertContract(toNextRecommendedActionLabel("continue_same_question") === "继续打磨本题", "下一步建议应保留展示文案");
+  assertContract(toNextRecommendedActionLabel("open_magic_panel") === "open_magic_panel", "未知 action 只能原样展示，不绑定执行");
 }
 
 function test_workbench_candidate_actions_render_in_fixed_composer_bar(): void {
@@ -3258,7 +3229,7 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
         summary: "先讲业务目标，再讲本人职责、方案取舍和结果指标。",
         outline: ["背景与约束", "关键技术方案", "量化结果"],
       },
-      next_recommended_actions: ["provide_more_answer_detail", "generate_next_question"],
+      next_recommended_actions: ["provide_more_answer_detail", "continue_same_question"],
       validation_result_ref: { resource_type: "validation_result", resource_id: "val_001" },
       trace_refs: [{ trace_type: "feedback", trace_ref_id: "fb_001" }],
       low_confidence_flags: [{ flag_id: "needs_more_metrics", reason: "missing_metrics" }],
@@ -3310,9 +3281,9 @@ function test_feedback_card_view_model_uses_contract_payload_sections_and_action
   assertContract(!visibleCopy.includes("candidate_ref_should_not_render"), "反馈卡不应暴露 candidate ref 字段");
   assertContract(!visibleCopy.includes("weakness_candidate:weak_001"), "反馈卡不应暴露 candidate ref");
   assertContract(!visibleCopy.includes("feedback:fb_001"), "反馈卡不应暴露 trace_refs");
-  assertContract(card.nextActions.join(",") === "provide_more_answer_detail,generate_next_question", "下一步建议应去重并保持 contract enum");
+  assertContract(card.nextActions.join(",") === "provide_more_answer_detail,continue_same_question", "下一步建议应去重并保持 contract enum");
   assertContract(toNextRecommendedActionLabel("provide_more_answer_detail") === "补充回答细节", "contract enum 应映射为按钮文案");
-  assertContract(toNextRecommendedActionLabel("generate_next_question") === "生成下一题", "生成下一题 enum 应映射为按钮文案");
+  assertContract(toNextRecommendedActionLabel("continue_same_question") === "继续打磨本题", "继续打磨 enum 应映射为按钮文案");
 }
 
 function test_generated_feedback_card_view_model_shows_phase6_payload_sections(): void {
@@ -3369,7 +3340,7 @@ function test_generated_feedback_card_view_model_shows_phase6_payload_sections()
         ],
         clarification_questions: ["请确认订单履约系统到底在几月上线？"],
       },
-      next_recommended_actions: ["retry_same_question", "generate_next_question"],
+      next_recommended_actions: ["retry_same_question", "continue_same_question"],
       raw_prompt: "raw_prompt_should_not_render",
       provider_payload: "provider_payload_should_not_render",
     },
@@ -3450,7 +3421,7 @@ function test_feedback_card_view_model_hides_raw_feedback_codes(): void {
       asset_consistency_check: {
         status: "insufficient_asset_context",
       },
-      next_recommended_actions: ["generate_next_question"],
+      next_recommended_actions: ["continue_same_question"],
     },
   };
 
@@ -3700,7 +3671,7 @@ function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload()
         summary: "旧参考回答摘要。",
         outline: ["先说结论", "补充证据"],
       },
-      next_recommended_actions: ["generate_next_question"],
+      next_recommended_actions: ["continue_same_question"],
       validation_result_ref: null,
       trace_refs: [],
       low_confidence_flags: [],
@@ -3725,7 +3696,7 @@ function test_feedback_card_view_model_hides_theme_sections_for_legacy_payload()
   assertContract(!titles.includes("口语化范本"), "旧 payload 缺 oral_script 时不应展示口语化范本空区块");
   assertContract(!titles.includes("多次回答改进"), "旧 payload 缺 retry delta 时不应展示多次回答改进空区块");
   assertContract(!titles.includes("下一轮重答重点"), "旧 payload 缺 next_retry_focus 时不应展示下一轮重答重点空区块");
-  assertContract(card.nextActions.join(",") === "generate_next_question", "旧 payload 应继续保留下一步 action");
+  assertContract(card.nextActions.join(",") === "continue_same_question", "旧 payload 应继续保留下一步 action");
 }
 
 function test_feedback_card_view_model_handles_pending_payload(): void {
@@ -4178,6 +4149,7 @@ test_question_node_clipboard_includes_full_question_answer_and_feedback();
 test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
 test_workbench_next_actions_render_in_fixed_composer_bar();
+test_workbench_next_action_recommendations_are_display_only();
 test_workbench_candidate_actions_render_in_fixed_composer_bar();
 test_workbench_round_labels_use_compact_meta_pills();
 test_waiting_answer_bar_is_removed_from_workbench_contract();
@@ -4214,7 +4186,6 @@ test_current_focused_question_bubble_is_rendered_when_sticky_context_visible();
   test_workbench_composer_regenerate_available_for_current_question_without_completion();
   test_workbench_composer_regenerate_for_node_without_selected_question_and_no_node_ref();
   test_workbench_composer_regenerate_preserves_draft_guard();
-  test_workbench_rebuild_question_request_mode_for_regenerate_and_follow_up();
   test_workbench_composer_mark_completed_and_regenerate_confirmation_gate();
   test_progress_tree_context_menu_items_follow_question_action_state();
 test_progress_tree_context_menu_closes_on_escape_and_external_events();

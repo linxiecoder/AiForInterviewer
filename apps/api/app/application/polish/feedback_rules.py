@@ -15,10 +15,6 @@ from app.domain.polish.policies.asset_consistency_policy import (
     AssetConsistencyPolicy,
     CanonicalAssetItem,
 )
-from app.domain.polish.policies.feedback_next_action_policy import (
-    FeedbackNextActionInput,
-    FeedbackNextActionPolicy,
-)
 
 
 FEEDBACK_CORE_RULES_VERSION = "polish_feedback_core_rules.phase4.v1"
@@ -48,6 +44,22 @@ FEEDBACK_CARD_TYPES = (
     "reference_answer",
     "next_actions",
     "asset_update_candidates",
+)
+ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS = frozenset(
+    {
+        "answer_again",
+        "continue_same_question",
+        "retry_same_question",
+        "retry_same_question_preserve_regressed_points",
+        "generate_reference_answer",
+        "explain_knowledge_point",
+        "expand_technical_principle",
+        "generate_next_round_suggestion",
+        "provide_more_answer_detail",
+        "clarify_asset_conflict",
+        "revise_current_answer",
+        "confirm_asset_update_candidate",
+    }
 )
 
 _PHASE4_FIELDS = (
@@ -261,32 +273,24 @@ def _next_recommended_actions(
     generation_status: str | None = "generated",
     validation_failed: bool = False,
 ) -> list[str]:
-    decision = FeedbackNextActionPolicy.decide(
-        FeedbackNextActionInput(
-            existing_actions=tuple(_string_list(value, max_items=20, max_item_chars=160)),
-            generation_status=generation_status,
-            validation_failed=validation_failed,
-            asset_status=_clean(asset_check.get("status"), max_chars=80),
-            asset_conflict_count=len(_dict_list(asset_check.get("conflicts"))),
-            unsupported_claim_count=len(_dict_list(asset_check.get("unsupported_claims"))),
-            asset_user_clarification_required=bool(asset_check.get("user_clarification_required")),
-            missing_points=tuple(_string_list(answer_coverage.get("missing_points"), max_items=40, max_item_chars=240)),
-            weak_points=tuple(_string_list(answer_coverage.get("weak_points"), max_items=40, max_item_chars=240)),
-            contradicted_points=tuple(
-                _string_list(answer_coverage.get("contradicted_points"), max_items=40, max_item_chars=240)
-            ),
-            regressed_points=tuple(
-                _string_list(answer_change.get("regressed_points"), max_items=40, max_item_chars=240)
-            ),
-            has_asset_update_candidates=bool(_dict_list(candidates)),
-            all_asset_update_candidates_require_confirmation=all(
-                bool(candidate.get("user_confirmation_required"))
-                for candidate in _dict_list(candidates)
-            ),
-            low_confidence_flags=tuple(_string_list(low_confidence_flags, max_items=20, max_item_chars=160)),
-        )
-    )
-    return decision.to_legacy_actions()
+    actions = [
+        action
+        for action in _string_list(value, max_items=20, max_item_chars=160)
+        if action in ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
+    ]
+    if _clean(generation_status, max_chars=80) not in {"generated", "partial", "low_confidence"}:
+        return ["retry_same_question", "continue_same_question"]
+    if validation_failed:
+        return ["retry_same_question", "continue_same_question"]
+    if asset_check.get("status") == "conflict" or asset_check.get("user_clarification_required"):
+        return _unique(["clarify_asset_conflict", "revise_current_answer", *actions])
+    if answer_change.get("regressed_points"):
+        return _unique(["retry_same_question_preserve_regressed_points", *actions])
+    if any(answer_coverage.get(field_name) for field_name in ("missing_points", "weak_points", "contradicted_points")):
+        return _unique(["continue_same_question", *actions])
+    if _dict_list(candidates):
+        actions.append("confirm_asset_update_candidate")
+    return _unique(actions)
 
 
 def _build_feedback_cards(

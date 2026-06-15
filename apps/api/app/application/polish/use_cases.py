@@ -131,6 +131,7 @@ QUESTION_GENERATION_MODES = {
     QUESTION_GENERATION_MODE_FOLLOW_UP,
     QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE,
 }
+QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT = "feedback_next_question_intent"
 
 UNNAMED_JOB_TITLE = "未命名岗位"
 UNNAMED_RESUME_TITLE = "未命名简历"
@@ -379,10 +380,24 @@ class _PolishUseCaseOperations:
                     details={"field": "session_status", "session_status": session.status},
                 )
             )
+        detail = self._build_session_detail(owner_id=command.owner_id, session=session)
+        feedbacks = self._polish_repository.list_feedbacks_for_session(
+            owner_id=command.owner_id,
+            session_id=command.session_id,
+        )
+        if _feedback_next_question_flow_active(command, feedbacks=feedbacks):
+            feedback_gate_result = _authorize_feedback_next_question_execution(
+                command=command,
+                detail=detail,
+                feedbacks=feedbacks,
+                latest_feedback_for_answer=self._polish_repository.get_latest_feedback_for_answer,
+            )
+            if isinstance(feedback_gate_result, DomainError):
+                return ApplicationResult(error=feedback_gate_result)
+            command = feedback_gate_result
         request_error = _validate_question_generation_request(command)
         if request_error is not None:
             return ApplicationResult(error=request_error)
-        detail = self._build_session_detail(owner_id=command.owner_id, session=session)
         requested_progress_node_ref = _question_generation_requested_ref(command)
         if requested_progress_node_ref is None:
             return ApplicationResult(
@@ -1783,7 +1798,7 @@ def _polish_question_graph_selected_evidence_summaries(
 ) -> list[dict[str, Any]]:
     selection = select_progress_tree_evidence_chunks(
         progress_context,
-        purpose="next_question",
+        purpose="question_generation",
         max_chunks=4,
         max_chars=1800,
         existing_plan=progress_tree_plan,
@@ -2064,6 +2079,223 @@ def _build_follow_up_generation_context(
     }
 
 
+def _feedback_next_question_flow_active(
+    command: CreatePolishQuestionTaskCommand,
+    *,
+    feedbacks: tuple[PolishFeedback, ...],
+) -> bool:
+    if command.execution_source == QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return True
+    if _clean_question_request_text(command.authorized_feedback_id) is not None:
+        return True
+    if _clean_question_request_text(command.authorized_answer_id) is not None:
+        return True
+    if _clean_question_request_text(command.authorized_parent_question_id) is not None:
+        return True
+    if _question_generation_mode(command) != QUESTION_GENERATION_MODE_NEW:
+        return False
+    return any(_clean_question_request_text(feedback.status) == "generated" for feedback in feedbacks)
+
+
+def _authorize_feedback_next_question_execution(
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    detail: PolishSessionDetail,
+    feedbacks: tuple[PolishFeedback, ...],
+    latest_feedback_for_answer: Any,
+) -> CreatePolishQuestionTaskCommand | DomainError:
+    if command.execution_source != QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback next-question execution requires intent endpoint authorization",
+            details={
+                "reason": "feedback_next_question_requires_intent_endpoint",
+                "field": "parent_feedback_id",
+            },
+        )
+
+    authorized_feedback_id = _clean_question_request_text(command.authorized_feedback_id)
+    if authorized_feedback_id is None:
+        return DomainError(
+            code="validation_failed",
+            message="authorized_feedback_id is required",
+            details={"reason": "authorized_feedback_id_required", "field": "authorized_feedback_id"},
+        )
+    explicit_parent_feedback_id = _clean_question_request_text(command.parent_feedback_id)
+    if explicit_parent_feedback_id is not None and explicit_parent_feedback_id != authorized_feedback_id:
+        return DomainError(
+            code="validation_failed",
+            message="parent_feedback_id does not match authorized feedback",
+            details={"reason": "authorized_feedback_id_mismatch", "field": "parent_feedback_id"},
+        )
+
+    feedback = next((item for item in feedbacks if item.feedback_id == authorized_feedback_id), None)
+    if feedback is None:
+        return DomainError(
+            code="not_found_or_inaccessible",
+            message="Feedback not found",
+            details={"reason": "authorized_feedback_not_in_session"},
+        )
+
+    turn, answer = _find_feedback_turn_answer(detail.turns, feedback)
+    if turn is None or answer is None:
+        return DomainError(
+            code="not_found_or_inaccessible",
+            message="Feedback answer not found in session",
+            details={"reason": "authorized_feedback_answer_not_in_session"},
+        )
+
+    latest_feedback = latest_feedback_for_answer(
+        owner_id=command.owner_id,
+        answer_id=feedback.answer_id,
+        status="generated",
+    )
+    if latest_feedback is None or latest_feedback.feedback_id != authorized_feedback_id:
+        return DomainError(
+            code="stale_version_conflict",
+            message="Feedback is not the latest generated feedback",
+            details={
+                "reason": "stale_feedback_replay",
+                "feedback_id": authorized_feedback_id,
+                "latest_feedback_id": latest_feedback.feedback_id if latest_feedback is not None else None,
+            },
+        )
+
+    if (
+        _clean_question_request_text(command.authorized_answer_id) is not None
+        and command.authorized_answer_id != feedback.answer_id
+    ):
+        return DomainError(
+            code="validation_failed",
+            message="authorized_answer_id does not match feedback",
+            details={"reason": "authorized_answer_id_mismatch", "field": "authorized_answer_id"},
+        )
+    if (
+        _clean_question_request_text(command.authorized_parent_question_id) is not None
+        and command.authorized_parent_question_id != turn.question_id
+    ):
+        return DomainError(
+            code="validation_failed",
+            message="authorized_parent_question_id does not match feedback",
+            details={"reason": "authorized_parent_question_id_mismatch", "field": "authorized_parent_question_id"},
+        )
+
+    feedback_payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    decision = _feedback_next_action_decision(feedback_payload, feedback_status=feedback.status)
+    if not decision["allowed"]:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback does not authorize next question generation",
+            details={
+                "reason": "feedback_next_question_not_allowed",
+                "feedback_id": authorized_feedback_id,
+                "outcome": decision["outcome"],
+                "blocking_reason_codes": list(decision["blocking_reason_codes"]),
+                "warning_reason_codes": list(decision["warning_reason_codes"]),
+            },
+        )
+
+    selected_progress_node_ref = (
+        _clean_question_request_text(command.selected_progress_node_ref)
+        or _clean_question_request_text(turn.progress_node_ref)
+    )
+    if selected_progress_node_ref is None:
+        return DomainError(
+            code="validation_failed",
+            message="authorized feedback question has no progress node",
+            details={"reason": "authorized_feedback_progress_node_missing", "field": "selected_progress_node_ref"},
+        )
+
+    return replace(
+        command,
+        generation_mode=QUESTION_GENERATION_MODE_NEW,
+        progress_node_ref=None,
+        selected_progress_node_ref=selected_progress_node_ref,
+        parent_question_id=None,
+        parent_answer_id=None,
+        parent_feedback_id=None,
+        authorized_feedback_id=authorized_feedback_id,
+        authorized_answer_id=feedback.answer_id,
+        authorized_parent_question_id=turn.question_id,
+    )
+
+
+def _find_feedback_turn_answer(
+    turns: tuple[PolishSessionTurn, ...],
+    feedback: PolishFeedback,
+) -> tuple[PolishSessionTurn | None, PolishSessionAnswerDetail | None]:
+    for turn in turns:
+        for answer in turn.answers:
+            if answer.answer_id == feedback.answer_id:
+                return turn, answer
+    return None, None
+
+
+def _feedback_next_action_decision(payload: dict[str, Any] | None, *, feedback_status: str) -> Any:
+    safe_payload = payload if isinstance(payload, dict) else {}
+    asset_check = _feedback_dict(safe_payload.get("asset_consistency_check"))
+    answer_coverage = _feedback_dict(safe_payload.get("answer_coverage"))
+    answer_change = _feedback_dict(safe_payload.get("answer_change_analysis"))
+    candidates = _feedback_dict_list(safe_payload.get("project_asset_update_candidates"))
+    blocking: list[str] = []
+    warnings: list[str] = []
+    generation_status = _clean_question_request_text(safe_payload.get("status"), max_chars=80) or feedback_status
+    if generation_status not in {"generated", "partial", "low_confidence"} or feedback_status != "generated":
+        blocking.append("feedback_generation_not_successful")
+    if asset_check.get("status") == "conflict":
+        blocking.append("asset_conflict_blocks_feedback_question_intent")
+    if asset_check.get("user_clarification_required"):
+        blocking.append("asset_clarification_blocks_feedback_question_intent")
+    if _feedback_dict_list(asset_check.get("conflicts")):
+        blocking.append("asset_conflict_blocks_feedback_question_intent")
+    if any(answer_coverage.get(field_name) for field_name in ("missing_points", "weak_points", "contradicted_points")):
+        blocking.append("unresolved_answer_points_block_feedback_question_intent")
+    if answer_change.get("regressed_points"):
+        blocking.append("answer_regression_blocks_feedback_question_intent")
+    if _feedback_string_tuple(safe_payload.get("low_confidence_flags")):
+        warnings.append("low_confidence_flags_present")
+    if candidates:
+        warnings.append("asset_update_candidate_requires_user_confirmation")
+    return {
+        "allowed": not blocking,
+        "outcome": "question_execution_authorized" if not blocking else "question_execution_blocked",
+        "blocking_reason_codes": tuple(dict.fromkeys(blocking)),
+        "warning_reason_codes": tuple(dict.fromkeys(warnings)),
+    }
+
+
+def _feedback_dict(value: object) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _feedback_dict_list(value: object) -> tuple[dict[str, Any], ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(dict(item) for item in value if isinstance(item, dict))
+
+
+def _feedback_string_tuple(
+    value: object,
+    *,
+    max_items: int = 20,
+    max_item_chars: int = 240,
+) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raw_items: list[object] = [value]
+    elif isinstance(value, (list, tuple)):
+        raw_items = list(value)
+    else:
+        return ()
+    cleaned: list[str] = []
+    for item in raw_items:
+        text = _clean_question_request_text(item, max_chars=max_item_chars)
+        if text is not None:
+            cleaned.append(text)
+        if len(cleaned) >= max_items:
+            break
+    return tuple(cleaned)
+
+
 def _follow_up_used_focus_refs(
     turns: tuple[PolishSessionTurn, ...],
     *,
@@ -2273,12 +2505,17 @@ def _question_generation_request_metadata(
         "parent_question_id": _clean_question_request_text(command.parent_question_id),
         "parent_answer_id": _clean_question_request_text(command.parent_answer_id),
         "parent_feedback_id": _clean_question_request_text(command.parent_feedback_id),
+        "authorized_feedback_id": _clean_question_request_text(command.authorized_feedback_id),
+        "authorized_answer_id": _clean_question_request_text(command.authorized_answer_id),
+        "authorized_parent_question_id": _clean_question_request_text(command.authorized_parent_question_id),
         "exclude_question_refs": list(_clean_question_request_list(command.exclude_question_refs)),
         "completed_focus_refs": list(_clean_question_request_list(command.completed_focus_refs)),
     }
 
 
 def _question_generation_request_source(command: CreatePolishQuestionTaskCommand, mode: str) -> str:
+    if command.execution_source == QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT
     if command.generation_mode is None:
         return "legacy_progress_node_ref" if _clean_question_request_text(command.progress_node_ref) else "legacy_fallback"
     if mode == QUESTION_GENERATION_MODE_FOLLOW_UP:

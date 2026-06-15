@@ -1,6 +1,6 @@
 ---
 name: aifi-context-index-gate
-description: Use Understand-Anything and CodeGraph before large AiForInterviewer refactors, docs governance audits, closeout or false-done risk reviews to refresh/query indexed context, inspect impact, and reduce blind Read/Grep or subagent exploration.
+description: Use when AiForInterviewer refactors, governance audits, closeout, false-done risk, or context checks need Understand-Anything/CodeGraph.
 ---
 
 # aifi-context-index-gate

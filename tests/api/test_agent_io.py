@@ -213,9 +213,7 @@ def test_question_prompt_evidence_summaries_keep_external_shape_and_schema_enums
     ]
     assert "chunk_id" not in evidence_summaries[0]
     assert "text" not in evidence_summaries[0]
-    decision_schema = prompt_asset["output_schema"]["properties"]["decision"]["properties"]
-    assert decision_schema["primary_evidence_refs"]["items"]["enum"] == ["resume_project_001"]
-    assert decision_schema["secondary_evidence_refs"]["items"]["enum"] == ["resume_project_001"]
+    assert "decision" not in prompt_asset["output_schema"]["properties"]
     root_evidence_refs = prompt_asset["output_schema"]["properties"]["evidence_refs"]
     assert root_evidence_refs["items"]["enum"] == ["resume_project_001"]
 

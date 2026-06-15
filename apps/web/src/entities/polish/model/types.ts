@@ -48,7 +48,6 @@ export type PolishRecommendedAction =
   | "explain_knowledge_point"
   | "expand_technical_principle"
   | "generate_next_round_suggestion"
-  | "generate_next_question"
   | "provide_more_answer_detail"
   | string;
 
@@ -379,16 +378,8 @@ export interface CreatePolishSessionRequest {
   custom_topic_text?: string | null;
 }
 
-export interface CreatePolishQuestionTaskRequest {
-  progress_node_ref?: string | null;
-  generation_mode?: "new_question" | "follow_up" | "regenerate_current_node" | string | null;
-  selected_primary_category_ref?: string | null;
-  selected_secondary_category_ref?: string | null;
+export interface CreatePolishFeedbackNextQuestionIntentRequest {
   selected_progress_node_ref?: string | null;
-  selected_category_path?: string[];
-  parent_question_id?: string | null;
-  parent_answer_id?: string | null;
-  parent_feedback_id?: string | null;
   exclude_question_refs?: string[];
   completed_focus_refs?: string[];
 }

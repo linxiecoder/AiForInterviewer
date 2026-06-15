@@ -19,7 +19,6 @@ PHASE3_DOMAIN_POLICY_FILES = {
     "answer_change_policy.py",
     "answer_coverage_policy.py",
     "asset_consistency_policy.py",
-    "feedback_next_action_policy.py",
     "follow_up_coverage_policy.py",
     "question_grounding_policy.py",
     "source_support_policy.py",
@@ -30,7 +29,6 @@ PHASE3_APPLICATION_POLICY_BRIDGES = {
         "app.domain.polish.policies.answer_change_policy",
         "app.domain.polish.policies.answer_coverage_policy",
         "app.domain.polish.policies.asset_consistency_policy",
-        "app.domain.polish.policies.feedback_next_action_policy",
     ),
     "question_generation_service.py": (
         "app.domain.polish.policies.source_support_policy",
@@ -48,7 +46,6 @@ PHASE3_APPLICATION_POLICY_CALLS = {
         "AnswerChangePolicy.evaluate",
         "AnswerCoveragePolicy.evaluate",
         "AssetConsistencyPolicy.evaluate",
-        "FeedbackNextActionPolicy.decide",
     ),
     "question_generation_service.py": (
         "SourceSupportPolicy.classify_question_context",

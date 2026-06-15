@@ -23,14 +23,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-ProgressEvidencePurpose = Literal["initial_plan", "state_refresh", "next_question"]
+ProgressEvidencePurpose = Literal["initial_plan", "state_refresh", "question_generation"]
 
 MAX_CHUNK_TEXT_CHARS = 1200
 ALLOWED_EVIDENCE_REF_EXCERPT_CHARS = 200
 DEFAULT_SELECTION_LIMITS: dict[ProgressEvidencePurpose, tuple[int, int]] = {
     "initial_plan": (18, 9000),
     "state_refresh": (12, 7000),
-    "next_question": (8, 5000),
+    "question_generation": (8, 5000),
 }
 
 ORDER_BY_PURPOSE = SOURCE_PRIORITY_POLICY_BY_PURPOSE
@@ -218,7 +218,7 @@ def select_progress_tree_evidence_chunks(
             0 if chunk.chunk_id in focus_chunk_ids else 1,
             order.get(chunk.source_type, 99),
             -chunk.priority,
-            -_turn_index(chunk) if purpose in {"state_refresh", "next_question"} else chunk.sequence,
+            -_turn_index(chunk) if purpose in {"state_refresh", "question_generation"} else chunk.sequence,
             chunk.sequence,
         ),
     )

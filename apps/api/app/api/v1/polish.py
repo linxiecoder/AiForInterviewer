@@ -72,7 +72,11 @@ from app.application.polish.session_continuity import (
     compute_session_continuity,
 )
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
-from app.application.polish.use_cases import POLISH_TOPICS, PolishUseCases
+from app.application.polish.use_cases import (
+    POLISH_TOPICS,
+    QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+    PolishUseCases,
+)
 from app.domain.auth.entities import CurrentActor
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import ApiStatus
@@ -88,9 +92,9 @@ from app.application.llm.ports import LlmTransport
 from app.infrastructure.observability.logging import LogUtil
 from app.schemas.polish import (
     CreateAnswerRequest,
+    CreateFeedbackNextQuestionIntentRequest,
     CreateFeedbackTaskRequest,
     CreatePolishSessionRequest,
-    CreateQuestionTaskRequest,
     PolishSessionResponse,
     PolishSessionSummaryResponse,
     PolishSubtopicRefResponse,
@@ -118,7 +122,6 @@ PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
 ANSWER_NEXT_RECOMMENDED_ACTIONS = (
     "answer_again",
     "continue_same_question",
-    "generate_next_question",
 )
 
 # 反馈 payload 中禁止暴露给前端的字段（LLM 原始输入/输出）
@@ -267,58 +270,6 @@ async def get_polish_session(
 
 
 # ── 出题/作答/反馈端点 ─────────────────────────────────────────────
-
-# 异步创建出题任务（LLM 异步生成），返回 ai_task 状态，前端轮询
-@router.post("/polish-sessions/{session_id}/questions", status_code=202)
-async def create_polish_question_task(
-    session_id: str,
-    payload: CreateQuestionTaskRequest,
-    actor: CurrentActor = Depends(require_authenticated_actor),
-    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
-    llm_transport: LlmTransport = Depends(get_llm_transport),
-    ai_orchestration_facade: AiOrchestrationFacade | None = Depends(get_ai_orchestration_facade),
-    question_generation_policy: QuestionGenerationRuntimePolicy = Depends(get_question_generation_runtime_policy),
-    question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver = Depends(
-        get_question_generation_runtime_policy_resolver
-    ),
-) -> Any:
-    use_cases = _use_cases(
-        session_factory,
-        llm_transport,
-        ai_orchestration_facade=ai_orchestration_facade,
-        question_generation_policy=question_generation_policy,
-        question_generation_policy_resolver=question_generation_policy_resolver,
-    )
-    result = await run_in_threadpool(
-        use_cases.create_question_task,
-        CreatePolishQuestionTaskCommand(
-            owner_id=actor.owner_id,
-            actor_id=actor.actor_id,
-            session_id=session_id,
-            progress_node_ref=payload.progress_node_ref,
-            generation_mode=payload.generation_mode,
-            selected_primary_category_ref=payload.selected_primary_category_ref,
-            selected_secondary_category_ref=payload.selected_secondary_category_ref,
-            selected_progress_node_ref=payload.selected_progress_node_ref,
-            selected_category_path=tuple(payload.selected_category_path),
-            parent_question_id=payload.parent_question_id,
-            parent_answer_id=payload.parent_answer_id,
-            parent_feedback_id=payload.parent_feedback_id,
-            exclude_question_refs=tuple(payload.exclude_question_refs),
-            completed_focus_refs=tuple(payload.completed_focus_refs),
-        ),
-    )
-    if not result.is_success:
-        _raise_result_error(result.error)
-    return success_envelope(
-        status=ApiStatus.ACCEPTED,
-        resource_type="ai_task",
-        data=_task_response(
-            result.value,
-            contract_shape=_question_task_contract_shape(result.value),
-        ),
-    )
-
 
 # 将题目标记为已完成，返回更新后的会话详情
 @router.post("/polish-sessions/{session_id}/questions/{question_id}/complete")
@@ -499,6 +450,53 @@ async def create_polish_feedback_task(
             answer,
             session_id=session_id,
             question_id=turn_question_id,
+        ),
+    )
+
+
+@router.post("/polish-sessions/{session_id}/feedback/{feedback_id}/next-question", status_code=202)
+async def create_polish_feedback_next_question_task(
+    session_id: str,
+    feedback_id: str,
+    payload: CreateFeedbackNextQuestionIntentRequest | None = None,
+    actor: CurrentActor = Depends(require_authenticated_actor),
+    session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
+    llm_transport: LlmTransport = Depends(get_llm_transport),
+    ai_orchestration_facade: AiOrchestrationFacade | None = Depends(get_ai_orchestration_facade),
+    question_generation_policy: QuestionGenerationRuntimePolicy = Depends(get_question_generation_runtime_policy),
+    question_generation_policy_resolver: QuestionGenerationRuntimePolicyResolver = Depends(
+        get_question_generation_runtime_policy_resolver
+    ),
+) -> Any:
+    intent = payload or CreateFeedbackNextQuestionIntentRequest()
+    use_cases = _use_cases(
+        session_factory,
+        llm_transport,
+        ai_orchestration_facade=ai_orchestration_facade,
+        question_generation_policy=question_generation_policy,
+        question_generation_policy_resolver=question_generation_policy_resolver,
+    )
+    result = await run_in_threadpool(
+        use_cases.create_question_task,
+        CreatePolishQuestionTaskCommand(
+            owner_id=actor.owner_id,
+            actor_id=actor.actor_id,
+            session_id=session_id,
+            selected_progress_node_ref=intent.selected_progress_node_ref,
+            exclude_question_refs=tuple(intent.exclude_question_refs),
+            completed_focus_refs=tuple(intent.completed_focus_refs),
+            execution_source=QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+            authorized_feedback_id=feedback_id,
+        ),
+    )
+    if not result.is_success:
+        _raise_result_error(result.error)
+    return success_envelope(
+        status=ApiStatus.ACCEPTED,
+        resource_type="ai_task",
+        data=_task_response(
+            result.value,
+            contract_shape=_question_task_contract_shape(result.value),
         ),
     )
 

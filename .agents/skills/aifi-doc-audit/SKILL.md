@@ -1,6 +1,6 @@
 ---
 name: aifi-doc-audit
-description: Audit AiForInterviewer active/archive documentation boundaries, source-of-truth entries, obsolete roadmap residue, duplicate docs, and governance compliance. Use during F0 before modifying product, design, delivery, or archive documents.
+description: Use when auditing AiForInterviewer active/archive docs, truth sources, roadmap residue, duplicates, or F0 governance.
 ---
 
 # aifi-doc-audit

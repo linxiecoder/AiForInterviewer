@@ -20,7 +20,6 @@ FEEDBACK_POLICY_REFS = (
     "asset_consistency_policy.v1",
     "answer_coverage_policy.v1",
     "answer_change_policy.v1",
-    "feedback_next_action_policy.v1",
 )
 
 

@@ -70,6 +70,9 @@ class QuestionMetadata:
     parent_question_id: str | None = None
     parent_answer_id: str | None = None
     parent_feedback_id: str | None = None
+    authorized_feedback_id: str | None = None
+    authorized_answer_id: str | None = None
+    authorized_parent_question_id: str | None = None
     exclude_question_refs: tuple[str, ...] = ()
     completed_focus_refs: tuple[str, ...] = ()
     focus_dimension: str | None = None
@@ -135,6 +138,9 @@ class QuestionMetadata:
             "parent_question_id": self.parent_question_id,
             "parent_answer_id": self.parent_answer_id,
             "parent_feedback_id": self.parent_feedback_id,
+            "authorized_feedback_id": self.authorized_feedback_id,
+            "authorized_answer_id": self.authorized_answer_id,
+            "authorized_parent_question_id": self.authorized_parent_question_id,
             "exclude_question_refs": list(self.exclude_question_refs),
             "completed_focus_refs": list(self.completed_focus_refs),
             "focus_dimension": self.focus_dimension,
@@ -228,6 +234,11 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "parent_question_id": _string_or_none(payload.get("parent_question_id"), max_chars=120),
         "parent_answer_id": _string_or_none(payload.get("parent_answer_id"), max_chars=120),
         "parent_feedback_id": _string_or_none(payload.get("parent_feedback_id"), max_chars=120),
+        "authorized_feedback_id": _string_or_none(payload.get("authorized_feedback_id"), max_chars=120),
+        "authorized_answer_id": _string_or_none(payload.get("authorized_answer_id"), max_chars=120),
+        "authorized_parent_question_id": _string_or_none(
+            payload.get("authorized_parent_question_id"), max_chars=120
+        ),
         "exclude_question_refs": _string_list(payload.get("exclude_question_refs")),
         "completed_focus_refs": _string_list(payload.get("completed_focus_refs")),
         "focus_dimension": _string_or_none(payload.get("focus_dimension"), max_chars=160),
@@ -412,67 +423,6 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
                     bool(payload.get("llm_clarification_needed"))
                     if isinstance(payload.get("llm_clarification_needed"), bool)
                     else None
-                ),
-            }
-        )
-    next_question_keys = {
-        "next_question_schema_id",
-        "next_question_schema_version",
-        "next_question_prompt_version",
-        "next_question_clarification_needed",
-        "next_question_confidence",
-        "next_question_missing_context",
-        "next_question_decision",
-        "next_question_question",
-        "next_question_persistence_hints",
-        "next_question_evidence_refs",
-        "next_question_post_check_hints",
-        "turn_intent",
-        "evidence_support_level",
-        "main_question_style",
-        "allowed_extension_depth",
-        "unsupported_capability_claims",
-    }
-    if any(key in payload for key in next_question_keys):
-        normalized.update(
-            {
-                "next_question_schema_id": _string_or_none(payload.get("next_question_schema_id"), max_chars=120),
-                "next_question_schema_version": _string_or_none(
-                    payload.get("next_question_schema_version"), max_chars=80
-                ),
-                "next_question_prompt_version": _string_or_none(
-                    payload.get("next_question_prompt_version"), max_chars=120
-                ),
-                "next_question_clarification_needed": (
-                    bool(payload.get("next_question_clarification_needed"))
-                    if isinstance(payload.get("next_question_clarification_needed"), bool)
-                    else None
-                ),
-                "next_question_confidence": _string_or_none(payload.get("next_question_confidence"), max_chars=80),
-                "next_question_missing_context": _string_list(
-                    payload.get("next_question_missing_context"), max_item_chars=160
-                ),
-                "next_question_decision": _safe_json_dict(payload.get("next_question_decision")),
-                "next_question_question": _safe_json_dict(payload.get("next_question_question")),
-                "next_question_persistence_hints": _safe_json_dict(
-                    payload.get("next_question_persistence_hints")
-                ),
-                "next_question_evidence_refs": _string_list(
-                    payload.get("next_question_evidence_refs"), max_item_chars=160
-                ),
-                "next_question_post_check_hints": _safe_json_dict(
-                    payload.get("next_question_post_check_hints")
-                ),
-                "turn_intent": _string_or_none(payload.get("turn_intent"), max_chars=120),
-                "evidence_support_level": _string_or_none(
-                    payload.get("evidence_support_level"), max_chars=120
-                ),
-                "main_question_style": _string_or_none(payload.get("main_question_style"), max_chars=120),
-                "allowed_extension_depth": _string_or_none(
-                    payload.get("allowed_extension_depth"), max_chars=120
-                ),
-                "unsupported_capability_claims": _string_list(
-                    payload.get("unsupported_capability_claims"), max_item_chars=160
                 ),
             }
         )
@@ -697,7 +647,7 @@ def _completed_follow_up_focus(matrix: dict[str, Any]) -> dict[str, str]:
         source_type="completed",
         target_dimension="所有追问焦点已完成",
         follow_up_reason="all_focus_completed",
-        recommended_action="ready_for_next_question",
+        recommended_action="focus_complete",
     )
     matrix["focus_key"] = completed["focus_key"]
     matrix["focus_source"] = completed["focus_source"]

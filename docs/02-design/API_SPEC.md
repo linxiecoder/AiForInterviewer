@@ -356,13 +356,13 @@ Async 规则：
 | API-JOBMATCH-002 | GET | /api/v1/job-match-analyses/{analysis_id} | 获取岗位匹配分析（Get job match analysis） | Job match analysis | sync | required | not required | analysis.owner_ref 必须匹配当前 actor | N/A | JobMatchAnalysisResponse | ApiErrorEnvelope | JobMatchAnalysis, ScoreResult, EvidenceRef, TraceRef, SourceAvailability | P-JOBMATCH-* | api.job_match.get.low_confidence_visible |
 | API-POLISH-001 | POST | /api/v1/polish-sessions | 创建打磨会话（Create polish session） | Polish session | sync | required | required | resume/job/resume_job_binding_id/source_refs 必须同 owner；topic/subtopic 必须来自可用 Polish topic options | CreatePolishSessionRequest | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PolishSessionDetail, ProgressTree, IdempotencyRecord | P-POLISH-001 | api.polish_session.create.success; polish.session.create.with_topic_subtopic |
 | API-POLISH-002 | GET | /api/v1/polish-sessions/{session_id} | 获取打磨会话（Get polish session） | Polish session | sync | required | not required | session.owner_ref 必须匹配当前 actor | N/A | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PolishSessionDetail, ProgressTree, SessionSummary | N/A | api.polish_session.get.owner_scoped |
-| API-POLISH-003 | POST | /api/v1/polish-sessions/{session_id}/questions | 创建打磨题目任务（Create polish question task） | Question | async | required | required | session、progress_node、source_refs 必须同 owner | CreateQuestionTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Question, AiTask, RAGContextAssembly, IdempotencyRecord | P-POLISH-002, P-SHARED-* | api.polish_question.create.async_success |
+| API-POLISH-003 | POST | /api/v1/polish-sessions/{session_id}/feedback/{feedback_id}/next-question | 通过反馈意图创建打磨题目任务（Feedback intent question task） | Question | async | required | not required | session、feedback、answer、question 必须同 owner，且 feedback 必须是 answer 最新反馈 | CreateFeedbackNextQuestionIntentRequest | AiTaskStatusResponse | ApiErrorEnvelope | Question, AiTask, RAGContextAssembly | P-POLISH-002 | api.polish_feedback_next_question.intent_authorized |
 | API-POLISH-004 | POST | /api/v1/polish-sessions/{session_id}/answers | 创建打磨回答（Create polish answer） | Answer | sync | required | required | session/question.owner_ref 必须匹配当前 actor | CreateAnswerRequest | AnswerResponse | ApiErrorEnvelope | Answer, Question, InterviewSession, AuditEvent, IdempotencyRecord | N/A | api.polish_answer.create.validation_failed |
 | API-POLISH-005 | POST | /api/v1/polish-sessions/{session_id}/feedback | 创建打磨反馈任务（Create polish feedback task） | Feedback | async | required | required | session/answer/evidence owner 必须匹配当前 actor | CreateFeedbackTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Feedback, ScoreResult, AssetCandidate, WeaknessCandidate, AiTask, IdempotencyRecord | P-POLISH-003, P-POLISH-004, P-POLISH-005, P-POLISH-006, P-POLISH-007, P-POLISH-008, P-POLISH-009, P-POLISH-010, P-POLISH-011 | api.polish_feedback.create.low_confidence_visible |
 | API-POLISH-006 | GET | /api/v1/polish-topics | 列出打磨主题和次主题（List polish topics and subtopics） | Polish topic options | sync | required | not required | 可选 resume_job_binding_id 必须指向当前 actor 的 JobResumeBinding；主题目录不是正式业务对象 | N/A（查询参数） | PolishTopic[] | ApiErrorEnvelope | PolishTopicRef, PolishSubtopicRef, JobResumeBinding | P-POLISH-001, P-POLISH-002 | polish.topic.list.success |
 | API-PRESSURE-001 | POST | /api/v1/pressure-sessions | 创建压力面会话（Create pressure session） | Pressure session | sync | required | required | resume/job/resume_job_binding_id/source_refs 必须同 owner | CreatePressureSessionRequest | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PressureSessionDetail, ProgressTree, IdempotencyRecord | P-PRESSURE-001 | api.pressure_session.create.success |
 | API-PRESSURE-002 | GET | /api/v1/pressure-sessions/{session_id} | 获取压力面会话（Get pressure session） | Pressure session | sync | required | not required | session.owner_ref 必须匹配当前 actor | N/A | InterviewSessionResponse | ApiErrorEnvelope | InterviewSession, PressureSessionDetail, ProgressTree, SessionSummary | N/A | api.pressure_session.get.owner_scoped |
-| API-PRESSURE-003 | POST | /api/v1/pressure-sessions/{session_id}/questions | 创建压力面题目任务（Create pressure question task） | Question | async | required | required | session/answer/source_refs 必须同 owner | CreateQuestionTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Question, AiTask, PressureSessionDetail, IdempotencyRecord | P-PRESSURE-002, P-PRESSURE-004, P-PRESSURE-005 | api.pressure_question.create.async_success |
+| API-PRESSURE-003 | POST | /api/v1/pressure-sessions/{session_id}/questions | 创建压力面题目任务（Create pressure question task） | Question | async | required | required | session/answer/source_refs 必须同 owner | CreatePressureQuestionTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Question, AiTask, PressureSessionDetail, IdempotencyRecord | P-PRESSURE-002, P-PRESSURE-004, P-PRESSURE-005 | api.pressure_question.create.async_success |
 | API-PRESSURE-004 | POST | /api/v1/pressure-sessions/{session_id}/answers | 创建压力面回答（Create pressure answer） | Answer | sync | required | required | session/question.owner_ref 必须匹配当前 actor | CreateAnswerRequest | AnswerResponse | ApiErrorEnvelope | Answer, Question, InterviewSession, AuditEvent, IdempotencyRecord | N/A | api.pressure_answer.create.success |
 | API-PRESSURE-005 | POST | /api/v1/pressure-sessions/{session_id}/feedback | 创建压力面反馈任务（Create pressure feedback task） | Feedback | async | required | required | session/answer/evidence owner 必须匹配当前 actor | CreateFeedbackTaskRequest | AiTaskStatusResponse | ApiErrorEnvelope | Feedback, ScoreResult, SessionSummary, AiTask, IdempotencyRecord | P-PRESSURE-003, P-PRESSURE-006, P-PRESSURE-007, P-PRESSURE-008, P-PRESSURE-009 | api.pressure_feedback.create.generation_failed_visible |
 | API-PROGRESS-001 | GET | /api/v1/interview-sessions/{session_id}/progress-tree | 获取进展树（Get progress tree） | Progress tree | sync | required | not required | session.owner_ref 必须匹配当前 actor | N/A | ProgressTreeResponse | ApiErrorEnvelope | ProgressTree, ProgressNode, ProgressPosition | N/A | api.progress_tree.get.owner_scoped |
@@ -1591,24 +1591,25 @@ HTTP: 200 OK
 - `api.polish_session.get.validation_failed`
 - `api.polish_session.get.cross_user_denied`
 
-### API-POLISH-003 创建打磨题目任务（Create polish question task）
+### API-POLISH-003 通过反馈意图创建打磨题目任务（Feedback intent question task）
 
 方法（Method）： POST
-路径（Path）： `/api/v1/polish-sessions/{session_id}/questions`
+路径（Path）： `/api/v1/polish-sessions/{session_id}/feedback/{feedback_id}/next-question`
 领域（Domain）： Question
 同步 / 异步（Sync/Async）： async
 认证（Auth）： required
-幂等键（Idempotency-Key）： required
-Owner 校验（Owner Check）： session、progress_node、source_refs 必须同 owner
-关联数据对象： Question, AiTask, RAGContextAssembly, IdempotencyRecord
-关联 Prompt Contract： P-POLISH-002, P-SHARED-*
-F7 契约测试（F7 Contract Tests）： api.polish_question.create.async_success, api.polish_question.create.validation_failed, api.polish_question.create.cross_user_denied, api.polish_question.create.idempotency_required, api.polish_question.create.idempotency_conflict, api.polish_question.create.source_unavailable, api.polish_question.create.provider_unavailable, api.polish_question.create.task_timeout
+幂等键（Idempotency-Key）： not required
+Owner 校验（Owner Check）： session、feedback、answer、question 必须同 owner，且 feedback 必须是 answer 最新反馈
+关联数据对象： Question, AiTask, RAGContextAssembly
+关联 Prompt Contract： P-POLISH-002
+F7 契约测试（F7 Contract Tests）： api.polish_feedback_next_question.intent_authorized, api.polish_feedback_next_question.intent_rejected
 
 #### 路径参数（Path Params）
 
 | 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
 | --- | --- | --- | --- | --- | --- |
 | session_id | 是 | string | session_id path id | 路径资源标识；服务端必须做 owner check | loggable |
+| feedback_id | 是 | string | fb_* | 授权题目生成的反馈 ID；必须属于当前 session 的最新 answer feedback | loggable |
 
 #### 查询参数（Query Params）
 
@@ -1619,17 +1620,14 @@ N/A
 | 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
 | --- | --- | --- | --- | --- | --- |
 | X-Request-Id | 否 | string | 8..128 visible chars | 客户端请求追踪 ID；非法时服务端生成新值 | loggable |
-| Idempotency-Key | 是 | string | 8..128 stable key | mutation 幂等键；scope=actor_id+method+path+key+request_body_hash | loggable |
 
 #### 请求体（Request Body）
 
 | 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
 | --- | --- | --- | --- | --- | --- |
-| progress_node_ref | 否 | TraceRef | node ref | 进展节点 | loggable |
-| topic_ref | 否 | TraceRef | topic ref | 主题引用 | loggable |
-| question_type | 否 | enum | first / follow_up / polish | 题目类型 | loggable |
-| answer_id | 否 | string | ans_* | 追问时的上一回答 | loggable |
-| difficulty_hint | 否 | enum | easy / medium / hard / adaptive | 难度提示 | loggable |
+| selected_progress_node_ref | 否 | string | 1..128, ref pattern | 可选进展节点覆盖；缺省时由 feedback intent 执行路径选择 | loggable |
+| exclude_question_refs | 否 | string[] | max 20, ref pattern | 可选排除题目 ref 列表 | loggable |
+| completed_focus_refs | 否 | string[] | max 20, ref pattern | 可选已完成 focus ref 列表 | loggable |
 
 #### 成功响应（Success Response）
 
@@ -1658,9 +1656,6 @@ HTTP: 202 Accepted
 | 404 | not_found_or_inaccessible | 资源不存在或为避免泄露存在性统一不可访问 | check_target | false | auth.not_found_or_inaccessible |
 | 422 | validation_failed | 字段缺失、非法 enum、业务前置条件不满足或输出校验失败 | fix_input | false | validation.failed |
 | 409 | stale_version_conflict | If-Match、base_version_ref 或 source version 过期 | reload_and_retry | true | conflict.stale_version |
-| 400 | idempotency_required | 需要 Idempotency-Key 的 mutation 未提供 header | retry_with_key | true | idempotency.required |
-| 409 | idempotency_conflict | 同一 key 对应不同 request body hash | manual_review | false | idempotency.conflict |
-| 409 | source_unavailable | 来源删除、禁用、归档、不可访问或缺少生成快照 | choose_available_source | false | source.unavailable |
 | 200 / 422 | low_confidence | 资料不足、证据冲突或输出弱通过 | manual_review | true | generation.low_confidence_visible |
 | 502 | provider_unavailable | LLM/RAG provider timeout、限流或暂不可用 | retry_later | true | generation.provider_unavailable |
 | 504 | task_timeout / generation_failed | 生成任务超时或不可恢复失败 | retry_later | true | async.timeout |
@@ -1668,14 +1663,10 @@ HTTP: 202 Accepted
 
 #### F7 契约测试（F7 Contract Tests）
 
-- `api.polish_question.create.async_success`
-- `api.polish_question.create.validation_failed`
-- `api.polish_question.create.cross_user_denied`
-- `api.polish_question.create.idempotency_required`
-- `api.polish_question.create.idempotency_conflict`
-- `api.polish_question.create.source_unavailable`
-- `api.polish_question.create.provider_unavailable`
-- `api.polish_question.create.task_timeout`
+- `api.polish_feedback_next_question.intent_authorized`
+- `api.polish_feedback_next_question.intent_rejected`
+- `api.polish_feedback_next_question.stale_feedback_replay`
+- `api.polish_feedback_next_question.cross_session_feedback_denied`
 
 ### API-POLISH-004 创建打磨回答（Create polish answer）
 
@@ -4905,7 +4896,7 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 | start_mode | 否 | enum | first_question / continue_from_weakness / manual_topic | 启动模式 | loggable |
 | source_refs | 否 | SourceRef[] | owner scoped | 增强来源 | loggable |
 
-#### CreateQuestionTaskRequest
+#### CreatePressureQuestionTaskRequest
 
 | 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
 | --- | --- | --- | --- | --- | --- |

@@ -23,7 +23,6 @@ from app.application.llm.provider_boundary import ProviderRequestValidationError
 from app.application.llm.types import LlmTransportResult
 from app.application.polish.adaptive_interview_orchestration import build_adaptive_interview_flow
 from app.application.polish.entities import PolishQuestionDraft, PolishQuestionSource, PolishSession
-from app.application.polish.next_question_agent import validate_next_question_agent_output
 from app.application.polish.progress_evidence import ProgressEvidenceChunk, select_progress_tree_evidence_chunks
 from app.application.polish.question_blueprint import (
     CLAIM_MODE_CLARIFICATION_NEEDED,
@@ -242,8 +241,7 @@ class QuestionGenerationService:
                 input_ref=scope.progress_node_ref,
                 output_ref=_clean(llm_result.result.get("trace_ref")) or None,
             )
-            if llm_payload.get("next_question_agent"):
-                question_pattern = _clean(llm_payload.get("question_kind")) or question_pattern
+            question_pattern = _clean(llm_payload.get("question_kind")) or question_pattern
             question_text = str(llm_payload["question_text"]).strip()
             transport_kind = _clean(llm_result.result.get("transport"))
             is_fake_transport = transport_kind == "fake"
@@ -282,12 +280,11 @@ class QuestionGenerationService:
                 "provider_status": "not_configured",
             }
         question_text = str(question_text).strip()
-        if not llm_payload or not llm_payload.get("next_question_agent"):
-            question_text, rewrite_metadata = _rewrite_project_clarification_question(
-                question_text,
-                scope=scope,
-                blueprint=blueprint,
-            )
+        question_text, rewrite_metadata = _rewrite_project_clarification_question(
+            question_text,
+            scope=scope,
+            blueprint=blueprint,
+        )
         if not question_text:
             return _validation_failed("question_text_required", progress_node_ref=scope.progress_node_ref)
         if is_follow_up and _same_compact_text(
@@ -340,7 +337,6 @@ class QuestionGenerationService:
         grounding_status = "passed_warning" if grounding_warnings else "passed"
         confidence_level = "low" if low_confidence_flags else ("medium" if draft_evidence_refs else "low")
         source_availability = "weak" if grounding_warnings else ("available" if draft_evidence_refs else "partial")
-        next_question_metadata = _next_question_agent_metadata(llm_payload)
         context_hygiene_metadata = _question_context_hygiene_metadata(
             prompt_metadata=prompt_metadata,
             generation_metadata=generation_metadata,
@@ -385,7 +381,6 @@ class QuestionGenerationService:
                 **generation_metadata,
                 **context_hygiene_metadata,
                 **rewrite_metadata,
-                **next_question_metadata,
                 "adaptive_interview_flow": adaptive_flow,
                 "adaptive_difficulty_level": adaptive_flow.get("difficulty_level"),
                 "adaptive_learning_path": adaptive_flow.get("learning_path"),
@@ -668,43 +663,6 @@ def _question_payload_envelope(
     *,
     blueprint: QuestionBlueprint,
 ) -> LegacyAgentOutputEnvelope:
-    if isinstance(payload.get("decision"), dict) or isinstance(payload.get("question"), dict):
-        agent_payload, agent_errors = validate_next_question_agent_output(
-            payload,
-            allowed_evidence_refs=blueprint.evidence_refs,
-        )
-        if agent_errors or agent_payload is None:
-            return LegacyAgentOutputEnvelope(
-                task_type=_QUESTION_OUTPUT_TASK_TYPE,
-                schema_id=_clean(payload.get("schema_id")) or None,
-                prompt_version=_clean(payload.get("prompt_version")) or None,
-                validation_errors=agent_errors,
-            )
-        question = agent_payload["question"]
-        normalized_payload = {
-            "question_text": question["question_text"],
-            "question_kind": question["question_kind"],
-            "focus_dimension": question["question_kind"],
-            "difficulty": question["difficulty"],
-            "skill_dimension": question["skill_dimension"],
-            "expected_signal": question["expected_signal"],
-            "follow_ups": list(question["follow_ups"]),
-            "scoring_rubric": list(question["scoring_rubric"]),
-            "missing_context": list(agent_payload["missing_context"]),
-            "evidence_refs": list(agent_payload["evidence_refs"]),
-            "confidence": agent_payload["confidence"],
-            "clarification_needed": agent_payload["clarification_needed"],
-            "next_question_agent": agent_payload,
-        }
-        return LegacyAgentOutputEnvelope(
-            task_type=_QUESTION_OUTPUT_TASK_TYPE,
-            schema_id=_clean(agent_payload.get("schema_id")) or None,
-            schema_version=_clean(agent_payload.get("schema_version")) or None,
-            prompt_version=_clean(agent_payload.get("prompt_version")) or None,
-            payload=normalized_payload,
-            evidence_refs=tuple(agent_payload["evidence_refs"]),
-        )
-
     errors: list[str] = []
     question_text = _clean(payload.get("question_text"))
     if not question_text:
@@ -788,40 +746,6 @@ def _parse_llm_question_payload(
     return envelope.payload, ()
 
 
-def _next_question_agent_metadata(llm_payload: dict[str, Any] | None) -> dict[str, Any]:
-    if not isinstance(llm_payload, dict):
-        return {}
-    agent = llm_payload.get("next_question_agent")
-    if not isinstance(agent, dict):
-        return {}
-    decision = agent.get("decision") if isinstance(agent.get("decision"), dict) else {}
-    question = agent.get("question") if isinstance(agent.get("question"), dict) else {}
-    persistence_hints = (
-        agent.get("persistence_hints") if isinstance(agent.get("persistence_hints"), dict) else {}
-    )
-    post_check_hints = (
-        agent.get("post_check_hints") if isinstance(agent.get("post_check_hints"), dict) else {}
-    )
-    return {
-        "next_question_schema_id": agent.get("schema_id"),
-        "next_question_schema_version": agent.get("schema_version"),
-        "next_question_prompt_version": agent.get("prompt_version"),
-        "next_question_clarification_needed": bool(agent.get("clarification_needed")),
-        "next_question_confidence": agent.get("confidence"),
-        "next_question_missing_context": list(agent.get("missing_context") or []),
-        "next_question_decision": dict(decision),
-        "next_question_question": dict(question),
-        "next_question_persistence_hints": dict(persistence_hints),
-        "next_question_evidence_refs": list(agent.get("evidence_refs") or []),
-        "next_question_post_check_hints": dict(post_check_hints),
-        "turn_intent": decision.get("turn_intent"),
-        "evidence_support_level": decision.get("evidence_support_level"),
-        "main_question_style": decision.get("main_question_style"),
-        "allowed_extension_depth": decision.get("allowed_extension_depth"),
-        "unsupported_capability_claims": list(decision.get("unsupported_capability_claims") or []),
-    }
-
-
 def _scoring_rubric(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -866,7 +790,7 @@ def _build_evidence_scope(
     focus_target = _focus_target_from_progress_node(node, requested_ref)
     selection = select_progress_tree_evidence_chunks(
         context,
-        purpose="next_question",
+        purpose="question_generation",
         max_chunks=4,
         max_chars=1800,
         existing_plan=plan,
@@ -1147,7 +1071,7 @@ def _primary_chunk(
 ) -> ProgressEvidenceChunk | None:
     if not chunks:
         return None
-    order = source_priority_policy.get("next_question", {})
+    order = source_priority_policy.get("question_generation", {})
     return min(chunks, key=lambda chunk: (order.get(chunk.source_type, 99), chunk.sequence))
 
 

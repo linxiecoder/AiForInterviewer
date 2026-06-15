@@ -92,7 +92,7 @@ def _pending_payload(*, feedback_id: str, old_payload: dict[str, Any]) -> dict[s
         "score_result": None,
         "loss_points": [],
         "reference_answer": None,
-        "next_recommended_actions": ["answer_again", "continue_same_question", "generate_next_question"],
+        "next_recommended_actions": ["answer_again", "continue_same_question"],
         "evidence_refs": _string_list(old_payload.get("evidence_refs")),
         "trace_refs": _trace_refs(old_payload.get("trace_refs")),
         "low_confidence_flags": [],

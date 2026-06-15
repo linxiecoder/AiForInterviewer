@@ -25,7 +25,7 @@ class QuestionGenerationPolicyResolutionContext:
     generation_mode: str | None = None
     requested_progress_node_ref: str | None = None
     selected_progress_node_ref: str | None = None
-    request_source: str = "app.api.v1.polish.create_polish_question_task"
+    request_source: str = "app.api.v1.polish.create_polish_feedback_next_question_task"
 
     def to_metadata(self) -> dict[str, str]:
         values = {
@@ -47,8 +47,8 @@ class QuestionGenerationPolicyResolutionContext:
 class QuestionGenerationRuntimePolicy:
     policy_version: str = QUESTION_GENERATION_POLICY_VERSION
     prompt_asset_id: str = "polish_question_generation"
-    prompt_version: str = "polish_next_question_agent_prompt.v1"
-    prompt_schema_id: str = "polish_next_question_agent_decision_v1"
+    prompt_version: str = "polish_question_generation_prompt.v1"
+    prompt_schema_id: str = "polish_question_generation_output_v1"
     prompt_schema_version: str = "v1"
     task_type: str = "polish_question_generation"
     contract_ids: tuple[str, ...] = ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
@@ -156,7 +156,7 @@ SOURCE_PRIORITY_POLICY_BY_PURPOSE: dict[str, dict[str, int]] = {
         "asset_summary": 15,
         "weakness": 16,
     },
-    "next_question": {
+    "question_generation": {
         "match_gap": 1,
         "turn_feedback": 2,
         "job_requirement": 3,
@@ -190,8 +190,8 @@ QUESTION_KIND_TAXONOMY = {
 
 def _copy_source_priority_policy() -> dict[str, dict[str, int]]:
     policy = {purpose: dict(priority_map) for purpose, priority_map in SOURCE_PRIORITY_POLICY_BY_PURPOSE.items()}
-    policy["next_question"] = {
-        **policy.get("next_question", {}),
+    policy["question_generation"] = {
+        **policy.get("question_generation", {}),
         "asset_summary": 1,
         "resume_project": 2,
         "resume_project_contribution": 3,
