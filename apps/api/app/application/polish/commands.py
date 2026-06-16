@@ -3,6 +3,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+from app.application.polish.next_question_authorization import (
+    NextQuestionExecutionGrant,
+    NextQuestionExecutionGrantSnapshot,
+)
 from app.domain.shared.refs import VersionRef
 
 
@@ -44,6 +48,8 @@ class CreatePolishQuestionTaskCommand:
     authorized_feedback_id: str | None = None
     authorized_answer_id: str | None = None
     authorized_parent_question_id: str | None = None
+    next_question_execution_grant: NextQuestionExecutionGrant | None = None
+    next_question_execution_grant_snapshot: NextQuestionExecutionGrantSnapshot | dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

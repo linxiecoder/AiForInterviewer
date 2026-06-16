@@ -8,8 +8,6 @@ from dataclasses import fields, replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-import pytest
-
 
 SERVICE_MODULES = (
     ("session_application_service", "PolishSessionApplicationService"),
@@ -126,36 +124,64 @@ def test_use_cases_reexports_split_service_classes_for_existing_imports() -> Non
         assert getattr(use_cases, class_name) is getattr(module, class_name)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "PHASE0_EXPECTED_GAP: Phase 1 creates the additive NextQuestionExecutionGrant model; "
-        "current command can only carry legacy authorized_* metadata."
-    ),
-    strict=True,
-)
-def test_create_question_task_execution_grant_contract_fields_expected_gap() -> None:
+def test_create_question_task_execution_grant_contract_fields_are_additive() -> None:
     from app.application.polish.commands import CreatePolishQuestionTaskCommand
 
     command_fields = {field.name for field in fields(CreatePolishQuestionTaskCommand)}
 
     assert "next_question_execution_grant" in command_fields
     assert "next_question_execution_grant_snapshot" in command_fields
+    legacy_command = CreatePolishQuestionTaskCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+    )
+    assert legacy_command.next_question_execution_grant is None
+    assert legacy_command.next_question_execution_grant_snapshot is None
+    assert legacy_command.authorized_feedback_id is None
+    assert legacy_command.authorized_answer_id is None
+    assert legacy_command.authorized_parent_question_id is None
 
 
-@pytest.mark.xfail(
-    reason=(
-        "PHASE0_EXPECTED_GAP: expired/consumed/mismatch grant states are not representable "
-        "until Phase 1 introduces the grant value object and validator."
-    ),
-    strict=True,
-)
-def test_next_question_execution_grant_lifecycle_states_expected_gap() -> None:
-    use_cases = importlib.import_module("app.application.polish.use_cases")
-    source = inspect.getsource(use_cases)
+def test_next_question_execution_grant_lifecycle_states_are_represented() -> None:
+    from app.application.polish.next_question_authorization import (
+        build_next_question_execution_grant,
+        consume_next_question_execution_grant,
+        validate_next_question_intent,
+    )
 
-    assert "expires_at" in source
-    assert "consumed_at" in source
-    assert "target_progress_node_not_allowed" in source
+    issued_at = datetime(2026, 6, 16, 1, 0, tzinfo=UTC)
+    grant = build_next_question_execution_grant(
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-1",
+        allowed_progress_node_refs=("node-1",),
+        freshness_marker="feedback-1:v1",
+        issued_at=issued_at,
+        ttl_seconds=60,
+    )
+
+    assert grant.lifecycle_state(now=issued_at) == "active"
+    assert grant.lifecycle_state(now=issued_at.replace(minute=2)) == "expired"
+    assert (
+        validate_next_question_intent(
+            grant,
+            session_id="session-1",
+            feedback_id="feedback-1",
+            answer_id="answer-1",
+            parent_question_id="question-1",
+            selected_progress_node_ref="node-2",
+            freshness_marker="feedback-1:v1",
+            now=issued_at,
+        ).reason
+        == "target_progress_node_mismatch"
+    )
+    consumed = consume_next_question_execution_grant(grant, now=issued_at)
+    assert consumed.is_valid
+    assert consumed.grant is not None
+    assert consumed.grant.lifecycle_state(now=issued_at) == "consumed"
 
 
 def test_answer_submission_boundary_rejects_blank_answer_with_existing_semantics() -> None:
