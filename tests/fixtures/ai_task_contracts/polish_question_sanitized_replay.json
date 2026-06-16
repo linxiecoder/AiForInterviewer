@@ -1,0 +1,43 @@
+{
+  "fixture_schema_id": "aifi.sanitized_ai_task_replay.v1",
+  "contract_id": "ai_task_contract.polish_question.v1",
+  "task_type": "polish_question_generation",
+  "input_refs": [
+    "progress_node_reliability"
+  ],
+  "trace_refs": [
+    "trace_question_sanitized_001"
+  ],
+  "evidence_refs": [
+    "evidence_reliability"
+  ],
+  "candidate_payload": {
+    "question_text": "请说明补偿任务如何保证幂等和可观测。",
+    "question_kind": "failure_recovery_deep_dive",
+    "focus_dimension": "failure_recovery",
+    "difficulty": "medium",
+    "skill_dimension": "reliability",
+    "expected_signal": "能说明重试、补偿、幂等键和监控指标。",
+    "follow_ups": [
+      "失败补偿何时停止？"
+    ],
+    "scoring_rubric": [
+      {
+        "dimension": "reliability",
+        "signals": [
+          "幂等",
+          "观测"
+        ]
+      }
+    ],
+    "missing_context": [],
+    "evidence_refs": [
+      "evidence_reliability"
+    ],
+    "confidence": "medium",
+    "clarification_needed": false,
+    "trace_refs": [
+      "trace_question_sanitized_001"
+    ]
+  }
+}
