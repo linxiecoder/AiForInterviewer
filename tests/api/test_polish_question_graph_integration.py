@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from app.application.ai_runtime.business_graphs.polish_question_graph import (
@@ -151,6 +152,72 @@ def test_create_question_task_starts_graph_when_facade_enabled() -> None:
     assert context_snapshot["progress_context"]["resume_snapshot"]["resume_version_id"] == "resver_pr5_q2"
     assert context_snapshot["progress_context"]["job_snapshot"]["job_version_id"] == "jobver_pr5_q2"
     assert context_snapshot["progress_tree_plan"]["nodes"][0]["progress_node_ref"] == NODE_REF
+
+
+def test_question_grant_snapshot_shape_matches_graph_context_and_direct_metadata() -> None:
+    grant_snapshot = _grant_snapshot()
+    command = _command(next_question_execution_grant_snapshot=grant_snapshot)
+    facade = _FakeQuestionFacade()
+    use_cases, _repository = _use_cases(ai_orchestration_facade=facade)
+    use_cases._question_generation_service = _DirectQuestionGenerationBlocker()
+
+    result = use_cases.create_question_task(command)
+
+    assert result.is_success
+    graph_snapshot = facade.calls[0]["context_snapshot"]["next_question_execution_grant"]
+    direct_metadata = polish_use_cases_module._question_generation_request_metadata(
+        command,
+        requested_progress_node_ref=NODE_REF,
+        resolved_progress_node_ref=NODE_REF,
+    )
+    assert graph_snapshot == grant_snapshot
+    assert direct_metadata["next_question_execution_grant"] == graph_snapshot
+
+
+def test_feedback_next_question_trusted_metadata_requires_consumed_grant_snapshot() -> None:
+    command = _command(
+        execution_source=polish_use_cases_module.QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+        authorized_feedback_id="feedback_graph_direct_test",
+        authorized_answer_id="answer_graph_direct_test",
+        authorized_parent_question_id="question_graph_direct_test",
+        selected_progress_node_ref=NODE_REF,
+    )
+
+    error = polish_use_cases_module._feedback_next_question_trusted_metadata_error(command, {})
+
+    assert error is not None
+    assert error.code == "validation_failed"
+    assert error.details["reason"] == "next_question_execution_grant_required"
+    assert error.details["field"] == "next_question_execution_grant"
+
+
+def test_feedback_next_question_target_error_details_are_stable() -> None:
+    turn = SimpleNamespace(progress_node_ref=NODE_REF)
+    plan_with_peer = {
+        "nodes": [
+            {"progress_node_ref": NODE_REF, "children": []},
+            {"progress_node_ref": "progress_node_peer", "children": []},
+        ]
+    }
+    missing = polish_use_cases_module._feedback_next_question_selected_progress_node_ref(
+        command=_command(selected_progress_node_ref="progress_node_missing"),
+        detail=SimpleNamespace(progress_tree_plan=plan_with_peer),
+        turn=turn,
+    )
+    not_allowed = polish_use_cases_module._feedback_next_question_selected_progress_node_ref(
+        command=_command(selected_progress_node_ref="progress_node_peer"),
+        detail=SimpleNamespace(progress_tree_plan=plan_with_peer),
+        turn=turn,
+    )
+    stale = polish_use_cases_module._feedback_next_question_selected_progress_node_ref(
+        command=_command(),
+        detail=SimpleNamespace(progress_tree_plan={"nodes": [{"progress_node_ref": "progress_node_peer"}]}),
+        turn=turn,
+    )
+
+    assert missing.details["reason"] == "target_node_not_found"
+    assert not_allowed.details["reason"] == "target_node_not_allowed"
+    assert stale.details["reason"] == "stale_progress_selection"
 
 
 def test_graph_task_status_mapping_uses_runtime_status_taxonomy_without_api_or_db_status_expansion() -> None:
@@ -927,6 +994,26 @@ def _command(**overrides: Any) -> CreatePolishQuestionTaskCommand:
     }
     values.update(overrides)
     return CreatePolishQuestionTaskCommand(**values)
+
+
+def _grant_snapshot() -> dict[str, Any]:
+    return {
+        "schema_id": "polish_next_question_execution_grant_snapshot",
+        "schema_version": "1",
+        "grant_id": "nqg_graph_direct_test",
+        "session_id": SESSION_ID,
+        "feedback_id": "feedback_graph_direct_test",
+        "answer_id": "answer_graph_direct_test",
+        "parent_question_id": "question_graph_direct_test",
+        "selected_progress_node_ref": NODE_REF,
+        "allowed_progress_node_refs": [NODE_REF],
+        "freshness_marker": "feedback_graph_direct_test:generated:2026-06-16T00:00:00Z",
+        "reason_codes": ["feedback_next_question_intent"],
+        "issued_at": "2026-06-16T00:00:00Z",
+        "expires_at": "2026-06-16T00:10:00Z",
+        "consumed_at": "2026-06-16T00:00:00Z",
+        "lifecycle_state": "consumed",
+    }
 
 
 def _progress_plan() -> dict[str, Any]:

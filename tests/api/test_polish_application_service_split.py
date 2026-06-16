@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -87,6 +87,25 @@ def test_feedback_generation_storage_path_does_not_call_legacy_payload_cleaner()
     assert "_remove_legacy_feedback_payload_fields" not in source
 
 
+def test_generated_feedback_storage_payload_keeps_next_actions_allowlisted() -> None:
+    feedback_service = importlib.import_module("app.application.polish.feedback_application_service")
+    feedback_rules = importlib.import_module("app.application.polish.feedback_rules")
+    allowed_actions = feedback_rules.ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
+
+    stored = feedback_service._generated_feedback_payload_for_storage(
+        {
+            "next_recommended_actions": ["continue_same_question"],
+            "feedback_metadata": {"provider_status": "unit_test"},
+        },
+        session_id="session-1",
+        question_id="question-1",
+        answer_id="answer-1",
+        feedback_id="feedback-1",
+    )
+
+    assert set(stored["next_recommended_actions"]) <= allowed_actions
+
+
 def test_focused_service_modules_do_not_import_prompt_provider_db_api_or_runtime_paths() -> None:
     for module_name, _class_name in SERVICE_MODULES:
         module = importlib.import_module(f"app.application.polish.{module_name}")
@@ -103,6 +122,66 @@ def test_use_cases_reexports_split_service_classes_for_existing_imports() -> Non
         module = importlib.import_module(f"app.application.polish.{module_name}")
 
         assert getattr(use_cases, class_name) is getattr(module, class_name)
+
+
+def test_create_question_task_execution_grant_contract_fields_are_additive() -> None:
+    from app.application.polish.commands import CreatePolishQuestionTaskCommand
+
+    command_fields = {field.name for field in fields(CreatePolishQuestionTaskCommand)}
+
+    assert "next_question_execution_grant" in command_fields
+    assert "next_question_execution_grant_snapshot" in command_fields
+    legacy_command = CreatePolishQuestionTaskCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+    )
+    assert legacy_command.next_question_execution_grant is None
+    assert legacy_command.next_question_execution_grant_snapshot is None
+    assert legacy_command.authorized_feedback_id is None
+    assert legacy_command.authorized_answer_id is None
+    assert legacy_command.authorized_parent_question_id is None
+
+
+def test_next_question_execution_grant_lifecycle_states_are_represented() -> None:
+    from app.application.polish.next_question_authorization import (
+        build_next_question_execution_grant,
+        consume_next_question_execution_grant,
+        validate_next_question_intent,
+    )
+
+    issued_at = datetime(2026, 6, 16, 1, 0, tzinfo=UTC)
+    grant = build_next_question_execution_grant(
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-1",
+        allowed_progress_node_refs=("node-1",),
+        freshness_marker="feedback-1:v1",
+        issued_at=issued_at,
+        ttl_seconds=60,
+    )
+
+    assert grant.lifecycle_state(now=issued_at) == "active"
+    assert grant.lifecycle_state(now=issued_at.replace(minute=2)) == "expired"
+    assert (
+        validate_next_question_intent(
+            grant,
+            session_id="session-1",
+            feedback_id="feedback-1",
+            answer_id="answer-1",
+            parent_question_id="question-1",
+            selected_progress_node_ref="node-2",
+            freshness_marker="feedback-1:v1",
+            now=issued_at,
+        ).reason
+        == "target_progress_node_mismatch"
+    )
+    consumed = consume_next_question_execution_grant(grant, now=issued_at)
+    assert consumed.is_valid
+    assert consumed.grant is not None
+    assert consumed.grant.lifecycle_state(now=issued_at) == "consumed"
 
 
 def test_answer_submission_boundary_rejects_blank_answer_with_existing_semantics() -> None:

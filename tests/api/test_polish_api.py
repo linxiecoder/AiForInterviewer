@@ -27,6 +27,9 @@ from app.application.polish.progress_prompts import (
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion, PolishQuestionSource
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
+from app.application.polish.next_question_authorization import (
+    NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID,
+)
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.session_continuity import SessionContinuitySnapshot, compute_session_continuity
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
@@ -51,6 +54,7 @@ from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingReposit
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.infrastructure.db.models.interview import PolishSessionDetail as PolishSessionDetailModel
+from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
 from app.infrastructure.db.models.question import Question as QuestionModel
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
@@ -3143,6 +3147,57 @@ def test_progress_tree_refresh_invalid_state_keeps_plan_and_returns_refresh_fail
     assert data["progress_tree_state"]["node_states"]
 
 
+def test_progress_tree_state_endpoint_delegates_refreshable_plan_to_use_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.polish.use_cases import PolishUseCases
+
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = _RecordingPolishProgressTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": binding_id,
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    assert generate_body["data"]["progress_tree_status"] == "ready"
+    assert generate_body["data"]["progress_tree_plan"]["nodes"]
+
+    calls: list[str] = []
+    original_refresh = PolishUseCases.refresh_progress_tree_state
+
+    def spy_refresh_progress_tree_state(self: PolishUseCases, command: object):
+        calls.append(getattr(command, "session_id", ""))
+        return original_refresh(self, command)
+
+    monkeypatch.setattr(PolishUseCases, "refresh_progress_tree_state", spy_refresh_progress_tree_state)
+
+    status_code, refresh_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/progress-tree/state",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 200
+    assert refresh_body["data"]["progress_tree_status"] == "ready"
+    assert calls == [session_id]
+
+
+def test_progress_tree_state_endpoint_keeps_progress_write_authority_out_of_api_layer() -> None:
+    source = inspect.getsource(polish_api.refresh_polish_progress_tree_state)
+
+    assert "PolishProgressTreeLlmService(" not in source
+    assert ".refresh_state(" not in source
+    assert "SqlAlchemyPolishRepository(" not in source
+    assert ".update_progress_tree(" not in source
+
+
 def test_progress_tree_refresh_failed_status_maps_to_stale_continuity_payload() -> None:
     snapshot = SessionContinuitySnapshot(
         session_status="running",
@@ -3745,6 +3800,101 @@ def test_polish_feedback_next_question_intent_rejects_cross_session_feedback_inj
     assert status_code == 404
     assert body["error"]["code"] == "not_found_or_inaccessible"
     assert body["error"]["details"]["reason"] == "authorized_feedback_not_in_session"
+
+
+def test_polish_feedback_next_question_intent_writes_execution_grant_snapshot_metadata() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_FeedbackIntentAllowedTransport(),
+    )
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={},
+    )
+    assert status_code == 202, body.get("error", {}).get("details", body)
+    next_question_id = body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{flow['session_id']}")
+    turns = {turn["question_id"]: turn for turn in detail_body["data"]["turns"]}
+    next_metadata = turns[next_question_id]["question_metadata"]
+
+    grant_snapshot = next_metadata["next_question_execution_grant"]
+    assert grant_snapshot["schema_id"] == NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID
+    assert grant_snapshot["schema_version"] == "1"
+    assert grant_snapshot["grant_id"]
+    assert grant_snapshot["session_id"] == flow["session_id"]
+    assert grant_snapshot["feedback_id"] == flow["feedback_id"]
+    assert grant_snapshot["answer_id"] == flow["answer_id"]
+    assert grant_snapshot["parent_question_id"] == flow["question_id"]
+    assert grant_snapshot["selected_progress_node_ref"] == flow["progress_node_ref"]
+    assert grant_snapshot["allowed_progress_node_refs"] == [flow["progress_node_ref"]]
+    assert grant_snapshot["reason_codes"] == ["feedback_next_question_intent"]
+    assert grant_snapshot["issued_at"]
+    assert grant_snapshot["expires_at"]
+    assert grant_snapshot["consumed_at"]
+    assert grant_snapshot["lifecycle_state"] == "consumed"
+    assert next_metadata["authorized_feedback_id"] == flow["feedback_id"]
+    assert next_metadata["authorized_answer_id"] == flow["answer_id"]
+    assert next_metadata["authorized_parent_question_id"] == flow["question_id"]
+
+
+def test_polish_feedback_next_question_intent_rejects_payload_tamper() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+    _overwrite_feedback_summary_payload(
+        session_factory,
+        feedback_id=flow["feedback_id"],
+        updates={
+            "status": "generated",
+            "asset_consistency_check": {"status": "aligned", "conflicts": [], "user_clarification_required": False},
+            "answer_coverage": {"missing_points": [], "weak_points": [], "contradicted_points": []},
+            "answer_change_analysis": {"regressed_points": []},
+            "project_asset_update_candidates": [],
+            "low_confidence_flags": [],
+        },
+    )
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["reason"] == "feedback_payload_tamper_rejected"
+
+
+def test_polish_feedback_next_question_intent_rejects_target_node_mismatch() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_FeedbackIntentAllowedTransport(),
+    )
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={"selected_progress_node_ref": "progress_node_tampered_target"},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["reason"] == "target_node_not_found"
+    assert body["error"]["details"]["field"] == "selected_progress_node_ref"
 
 
 def test_polish_end_session_rejects_answer_submission() -> None:
@@ -4947,6 +5097,22 @@ def _create_polish_answer_with_feedback(
         "answer_id": answer_id,
         "feedback_id": feedback_body["data"]["feedback_payload"]["feedback_id"],
     }
+
+
+def _overwrite_feedback_summary_payload(
+    session_factory: sessionmaker[Session],
+    *,
+    feedback_id: str,
+    updates: dict[str, object],
+) -> None:
+    with session_factory() as db:
+        feedback = db.get(FeedbackModel, feedback_id)
+        assert feedback is not None
+        payload = json.loads(feedback.feedback_summary or "{}")
+        assert isinstance(payload, dict)
+        payload.update(updates)
+        feedback.feedback_summary = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        db.commit()
 
 
 def _seed_polish_question_for_session(

@@ -73,6 +73,7 @@ class QuestionMetadata:
     authorized_feedback_id: str | None = None
     authorized_answer_id: str | None = None
     authorized_parent_question_id: str | None = None
+    next_question_execution_grant: dict[str, Any] | None = None
     exclude_question_refs: tuple[str, ...] = ()
     completed_focus_refs: tuple[str, ...] = ()
     focus_dimension: str | None = None
@@ -141,6 +142,7 @@ class QuestionMetadata:
             "authorized_feedback_id": self.authorized_feedback_id,
             "authorized_answer_id": self.authorized_answer_id,
             "authorized_parent_question_id": self.authorized_parent_question_id,
+            "next_question_execution_grant": self.next_question_execution_grant,
             "exclude_question_refs": list(self.exclude_question_refs),
             "completed_focus_refs": list(self.completed_focus_refs),
             "focus_dimension": self.focus_dimension,
@@ -238,6 +240,9 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
         "authorized_answer_id": _string_or_none(payload.get("authorized_answer_id"), max_chars=120),
         "authorized_parent_question_id": _string_or_none(
             payload.get("authorized_parent_question_id"), max_chars=120
+        ),
+        "next_question_execution_grant": _safe_next_question_execution_grant_snapshot(
+            payload.get("next_question_execution_grant")
         ),
         "exclude_question_refs": _string_list(payload.get("exclude_question_refs")),
         "completed_focus_refs": _string_list(payload.get("completed_focus_refs")),
@@ -429,6 +434,13 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
     return normalized
 
 
+def next_question_execution_grant_snapshot_to_metadata(snapshot: object) -> dict[str, Any]:
+    normalized = _safe_next_question_execution_grant_snapshot(snapshot)
+    if normalized is None:
+        return {}
+    return {"next_question_execution_grant": normalized}
+
+
 def question_metadata_to_dict(raw: object) -> dict[str, Any]:
     if isinstance(raw, QuestionMetadata):
         return normalize_question_metadata(raw.to_dict())
@@ -439,6 +451,45 @@ def question_metadata_to_dict(raw: object) -> dict[str, Any]:
         except Exception:
             return empty_question_metadata().to_dict()
     return normalize_question_metadata(raw)
+
+
+def _safe_next_question_execution_grant_snapshot(value: object) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        source = value
+    else:
+        to_dict = getattr(value, "to_dict", None)
+        if callable(to_dict):
+            candidate = to_dict()
+            source = candidate if isinstance(candidate, dict) else {}
+        else:
+            source = {}
+    grant_id = _string_or_none(source.get("grant_id"), max_chars=160)
+    if grant_id is None:
+        return None
+    return {
+        "schema_id": _string_or_none(source.get("schema_id"), max_chars=160)
+        or "polish_next_question_execution_grant_snapshot",
+        "schema_version": _string_or_none(source.get("schema_version"), max_chars=40) or "1",
+        "grant_id": grant_id,
+        "session_id": _string_or_none(source.get("session_id"), max_chars=160),
+        "feedback_id": _string_or_none(source.get("feedback_id"), max_chars=160),
+        "answer_id": _string_or_none(source.get("answer_id"), max_chars=160),
+        "parent_question_id": _string_or_none(source.get("parent_question_id"), max_chars=160),
+        "selected_progress_node_ref": _string_or_none(
+            source.get("selected_progress_node_ref"), max_chars=160
+        ),
+        "allowed_progress_node_refs": _string_list(
+            source.get("allowed_progress_node_refs"), max_item_chars=160
+        ),
+        "freshness_marker": _string_or_none(source.get("freshness_marker"), max_chars=240),
+        "reason_codes": _string_list(source.get("reason_codes"), max_item_chars=120),
+        "issued_at": _string_or_none(source.get("issued_at"), max_chars=80),
+        "expires_at": _string_or_none(source.get("expires_at"), max_chars=80),
+        "consumed_at": _string_or_none(source.get("consumed_at"), max_chars=80),
+        "lifecycle_state": _string_or_none(source.get("lifecycle_state"), max_chars=80),
+    }
 
 
 def build_follow_up_coverage_decision(

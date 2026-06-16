@@ -4,6 +4,7 @@ from pathlib import Path
 
 INTERVIEW_PAGE = Path("apps/web/src/pages/interview/InterviewPage.tsx")
 POLISH_API = Path("apps/web/src/entities/polish/api/polishApi.ts")
+POLISH_TYPES = Path("apps/web/src/entities/polish/model/types.ts")
 
 
 def _source(path: Path) -> str:
@@ -68,6 +69,27 @@ def test_interview_workbench_next_recommendations_are_display_only() -> None:
     assert "resolveFeedbackNextRecommendedActionExecution" not in source
     assert "onNextRecommendedAction" not in source
     assert "feedback_next_question_intent" not in source
+
+
+def test_interview_workbench_has_no_grant_client_fields() -> None:
+    combined_source = "\n".join(
+        [
+            _source(INTERVIEW_PAGE),
+            _source(POLISH_API),
+            _source(POLISH_TYPES),
+        ]
+    )
+
+    for forbidden in (
+        "NextQuestionExecutionGrant",
+        "next_question_execution_grant",
+        "grant_token",
+        "grantId",
+        "consumeGrant",
+        "createGrant",
+        "next_question_authorization",
+    ):
+        assert forbidden not in combined_source
 
 
 def test_interview_workbench_progress_tree_does_not_trigger_question_execution() -> None:

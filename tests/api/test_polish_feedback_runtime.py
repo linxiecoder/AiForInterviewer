@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.api.v1 import polish as polish_api
 from app.application.common.logging import LogUtil
+from app.application.polish.feedback_rules import ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS, POLISH_FEEDBACK_TASK_TYPE
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
@@ -505,7 +506,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
     )
     assert "project_asset_update_candidates" not in payload
     assert payload["next_recommended_actions"][0] == "continue_same_question"
-    assert "围绕失败恢复终止条件再追问一轮" in payload["next_recommended_actions"]
+    assert set(payload["next_recommended_actions"]) <= ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
     assert llm_transport.feedback_request is not None
     assert 4000 <= getattr(llm_transport.feedback_request, "max_tokens", 8000) < 8000
     provider_prompt = llm_transport.feedback_request.evidence_bundle
