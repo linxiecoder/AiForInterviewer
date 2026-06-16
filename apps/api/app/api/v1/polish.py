@@ -892,7 +892,12 @@ def _answer_feedback_payload(
     feedback_id = getattr(answer, "feedback_id", None)
     stored_payload = getattr(answer, "feedback_payload", None)
     if isinstance(stored_payload, dict) and feedback_id:
-        return _response_safe_feedback_payload(stored_payload)
+        payload = _response_safe_feedback_payload(stored_payload)
+        if "feedback_text" not in payload:
+            fallback_text = getattr(answer, "feedback_text", None)
+            if isinstance(fallback_text, str) and fallback_text.strip():
+                payload["feedback_text"] = fallback_text
+        return payload
     return _pending_feedback_payload(
         answer_id=answer_id,
         session_id=answer_session_id,
