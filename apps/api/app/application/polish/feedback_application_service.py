@@ -31,6 +31,9 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.next_question_authorization import (
+    feedback_next_question_authorization_metadata,
+)
 from app.application.polish.ports import PolishRepository
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
@@ -359,6 +362,7 @@ def _generated_feedback_payload_for_storage(
         "question_id": question_id,
         "session_id": session_id,
     }
+    stored["feedback_metadata"].update(feedback_next_question_authorization_metadata(stored))
     return stored
 
 

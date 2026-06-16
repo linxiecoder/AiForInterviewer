@@ -67,6 +67,13 @@ from app.application.polish.agents.question import (
 from app.application.polish.feedback_generation_service import (
     FeedbackGenerationService,
 )
+from app.application.polish.next_question_authorization import (
+    build_next_question_execution_grant,
+    consume_next_question_execution_grant,
+    validate_consumed_next_question_execution_grant_snapshot,
+    validate_feedback_next_question_authorization_payload,
+    validate_next_question_intent,
+)
 from app.application.polish.ports import PolishRepository
 from app.application.polish.progress_application_service import PolishProgressApplicationService
 from app.application.polish.question_generation_policy import (
@@ -82,6 +89,7 @@ from app.application.polish.question_generation_service import QuestionGeneratio
 from app.application.polish.question_metadata import (
     empty_question_metadata,
     merge_follow_up_completed_focus_refs,
+    next_question_execution_grant_snapshot_to_metadata,
     normalize_question_metadata,
     sync_follow_up_completed_focus_refs,
 )
@@ -395,6 +403,9 @@ class _PolishUseCaseOperations:
             if isinstance(feedback_gate_result, DomainError):
                 return ApplicationResult(error=feedback_gate_result)
             command = feedback_gate_result
+            trusted_execution_error = _feedback_next_question_trusted_execution_error(command)
+            if trusted_execution_error is not None:
+                return ApplicationResult(error=trusted_execution_error)
         request_error = _validate_question_generation_request(command)
         if request_error is not None:
             return ApplicationResult(error=request_error)
@@ -608,6 +619,11 @@ class _PolishUseCaseOperations:
                     runtime_policy=runtime_policy,
                 )
                 if candidate_payload is not None:
+                    candidate_payload = _question_candidate_payload_with_request_metadata(
+                        candidate_payload,
+                        command=command,
+                        requested_progress_node_ref=requested_progress_node_ref,
+                    )
                     workflow_result = run_question_planned_workflow(
                         owner_id=command.owner_id,
                         session_id=command.session_id,
@@ -637,6 +653,12 @@ class _PolishUseCaseOperations:
                             target_ref_id=command.session_id,
                         )
                         return ApplicationResult(value=task)
+                    trusted_metadata_error = _feedback_next_question_trusted_metadata_error(
+                        command,
+                        workflow_result.candidate.get("question_metadata"),
+                    )
+                    if trusted_metadata_error is not None:
+                        return ApplicationResult(error=trusted_metadata_error)
                     try:
                         plan = build_question_result_write_plan(
                             owner_id=command.owner_id,
@@ -747,6 +769,9 @@ class _PolishUseCaseOperations:
                 resolved_progress_node_ref=question_draft.progress_node_ref,
             )
         )
+        trusted_metadata_error = _feedback_next_question_trusted_metadata_error(command, question_metadata)
+        if trusted_metadata_error is not None:
+            return ApplicationResult(error=trusted_metadata_error)
         question_metadata["completed_focus_refs"] = list(completed_focus_refs)
         if graph_fallback_reason is not None:
             question_metadata["graph_fallback_reason"] = graph_fallback_reason
@@ -1723,7 +1748,7 @@ def _polish_question_graph_context_snapshot(
     runtime_policy: QuestionGenerationRuntimePolicy,
 ) -> dict[str, Any]:
     session = detail.session
-    return {
+    context_snapshot = {
         "context_source": "use_case_repository_snapshot",
         "context_source_version": "polish_question_graph_context.v1",
         "session": {
@@ -1786,6 +1811,12 @@ def _polish_question_graph_context_snapshot(
             "fallback": runtime_policy.fallback,
         },
     }
+    context_snapshot.update(
+        next_question_execution_grant_snapshot_to_metadata(
+            command.next_question_execution_grant_snapshot
+        )
+    )
+    return context_snapshot
 
 
 def _polish_question_graph_selected_evidence_summaries(
@@ -2097,6 +2128,103 @@ def _feedback_next_question_flow_active(
     return any(_clean_question_request_text(feedback.status) == "generated" for feedback in feedbacks)
 
 
+def _feedback_next_question_trusted_execution_error(command: CreatePolishQuestionTaskCommand) -> DomainError | None:
+    if command.execution_source != QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return None
+    result = validate_consumed_next_question_execution_grant_snapshot(
+        command.next_question_execution_grant_snapshot,
+        session_id=command.session_id,
+        feedback_id=_clean_question_request_text(command.authorized_feedback_id) or "",
+        answer_id=_clean_question_request_text(command.authorized_answer_id) or "",
+        parent_question_id=_clean_question_request_text(command.authorized_parent_question_id) or "",
+        selected_progress_node_ref=command.selected_progress_node_ref,
+    )
+    if result.is_valid:
+        return None
+    return DomainError(
+        code="validation_failed",
+        message="Feedback next-question execution grant is not trusted",
+        details={"reason": result.reason, **result.details},
+    )
+
+
+def _feedback_next_question_trusted_metadata_error(
+    command: CreatePolishQuestionTaskCommand,
+    metadata: object,
+) -> DomainError | None:
+    if command.execution_source != QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return None
+    safe_metadata = metadata if isinstance(metadata, dict) else {}
+    result = validate_consumed_next_question_execution_grant_snapshot(
+        safe_metadata.get("next_question_execution_grant"),
+        session_id=command.session_id,
+        feedback_id=_clean_question_request_text(command.authorized_feedback_id) or "",
+        answer_id=_clean_question_request_text(command.authorized_answer_id) or "",
+        parent_question_id=_clean_question_request_text(command.authorized_parent_question_id) or "",
+        selected_progress_node_ref=command.selected_progress_node_ref,
+    )
+    if result.is_valid:
+        return None
+    return DomainError(
+        code="validation_failed",
+        message="Feedback next-question trusted output is missing consumed grant snapshot",
+        details={"reason": result.reason, **result.details},
+    )
+
+
+def _feedback_next_question_selected_progress_node_ref(
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    detail: PolishSessionDetail,
+    turn: PolishSessionTurn,
+) -> str | DomainError:
+    parent_progress_node_ref = _clean_question_request_text(turn.progress_node_ref)
+    if parent_progress_node_ref is None:
+        return DomainError(
+            code="validation_failed",
+            message="authorized feedback question has no progress node",
+            details={"reason": "authorized_feedback_progress_node_missing", "field": "selected_progress_node_ref"},
+        )
+
+    plan_progress_node_refs = set(_plan_progress_node_refs(detail.progress_tree_plan))
+    if plan_progress_node_refs and parent_progress_node_ref not in plan_progress_node_refs:
+        return DomainError(
+            code="validation_failed",
+            message="authorized feedback progress node is stale",
+            details={
+                "reason": "stale_progress_selection",
+                "field": "selected_progress_node_ref",
+                "progress_node_ref": parent_progress_node_ref,
+            },
+        )
+
+    requested_progress_node_ref = _clean_question_request_text(command.selected_progress_node_ref)
+    if requested_progress_node_ref is None:
+        return parent_progress_node_ref
+    if plan_progress_node_refs and requested_progress_node_ref not in plan_progress_node_refs:
+        return DomainError(
+            code="validation_failed",
+            message="selected progress node could not be located",
+            details={
+                "reason": "target_node_not_found",
+                "field": "selected_progress_node_ref",
+                "progress_node_ref": requested_progress_node_ref,
+            },
+        )
+    if requested_progress_node_ref != parent_progress_node_ref:
+        return DomainError(
+            code="validation_failed",
+            message="selected progress node is not allowed by feedback grant",
+            details={
+                "reason": "target_node_not_allowed",
+                "field": "selected_progress_node_ref",
+                "allowed_progress_node_refs": [parent_progress_node_ref],
+                "progress_node_ref": requested_progress_node_ref,
+            },
+        )
+    return requested_progress_node_ref
+
+
 def _authorize_feedback_next_question_execution(
     *,
     command: CreatePolishQuestionTaskCommand,
@@ -2181,6 +2309,20 @@ def _authorize_feedback_next_question_execution(
         )
 
     feedback_payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    payload_guard = validate_feedback_next_question_authorization_payload(
+        feedback_payload,
+        feedback_id=authorized_feedback_id,
+        session_id=command.session_id,
+        answer_id=feedback.answer_id,
+        parent_question_id=turn.question_id,
+    )
+    if not payload_guard.is_valid:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback payload cannot authorize next question generation",
+            details={"reason": payload_guard.reason, **payload_guard.details},
+        )
+
     decision = _feedback_next_action_decision(feedback_payload, feedback_status=feedback.status)
     if not decision["allowed"]:
         return DomainError(
@@ -2195,16 +2337,51 @@ def _authorize_feedback_next_question_execution(
             },
         )
 
-    selected_progress_node_ref = (
-        _clean_question_request_text(command.selected_progress_node_ref)
-        or _clean_question_request_text(turn.progress_node_ref)
+    selected_progress_node_ref = _feedback_next_question_selected_progress_node_ref(
+        command=command,
+        detail=detail,
+        turn=turn,
     )
-    if selected_progress_node_ref is None:
+    if isinstance(selected_progress_node_ref, DomainError):
+        return selected_progress_node_ref
+
+    issued_at = utc_now()
+    freshness_marker = _feedback_next_question_grant_freshness_marker(feedback)
+    grant = build_next_question_execution_grant(
+        session_id=command.session_id,
+        feedback_id=authorized_feedback_id,
+        answer_id=feedback.answer_id,
+        parent_question_id=turn.question_id,
+        selected_progress_node_ref=selected_progress_node_ref,
+        allowed_progress_node_refs=(selected_progress_node_ref,),
+        freshness_marker=freshness_marker,
+        reason_codes=(QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,),
+        issued_at=issued_at,
+    )
+    validation_result = validate_next_question_intent(
+        grant,
+        session_id=command.session_id,
+        feedback_id=authorized_feedback_id,
+        answer_id=feedback.answer_id,
+        parent_question_id=turn.question_id,
+        selected_progress_node_ref=selected_progress_node_ref,
+        freshness_marker=freshness_marker,
+        now=issued_at,
+    )
+    if not validation_result.is_valid:
         return DomainError(
             code="validation_failed",
-            message="authorized feedback question has no progress node",
-            details={"reason": "authorized_feedback_progress_node_missing", "field": "selected_progress_node_ref"},
+            message="Feedback next-question execution grant is invalid",
+            details={"reason": validation_result.reason, **validation_result.details},
         )
+    consumed_result = consume_next_question_execution_grant(grant, now=issued_at)
+    if not consumed_result.is_valid or consumed_result.grant is None:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback next-question execution grant could not be consumed",
+            details={"reason": consumed_result.reason, **consumed_result.details},
+        )
+    grant_snapshot = consumed_result.grant.to_snapshot(now=issued_at)
 
     return replace(
         command,
@@ -2217,6 +2394,8 @@ def _authorize_feedback_next_question_execution(
         authorized_feedback_id=authorized_feedback_id,
         authorized_answer_id=feedback.answer_id,
         authorized_parent_question_id=turn.question_id,
+        next_question_execution_grant=consumed_result.grant,
+        next_question_execution_grant_snapshot=grant_snapshot,
     )
 
 
@@ -2229,6 +2408,10 @@ def _find_feedback_turn_answer(
             if answer.answer_id == feedback.answer_id:
                 return turn, answer
     return None, None
+
+
+def _feedback_next_question_grant_freshness_marker(feedback: PolishFeedback) -> str:
+    return f"{feedback.feedback_id}:{feedback.status}:{feedback.updated_at.isoformat()}"
 
 
 def _feedback_next_action_decision(payload: dict[str, Any] | None, *, feedback_status: str) -> Any:
@@ -2495,7 +2678,7 @@ def _question_generation_request_metadata(
         or requested_progress_node_ref
         or _clean_question_request_text(resolved_progress_node_ref)
     )
-    return {
+    metadata = {
         "generation_mode": mode,
         "request_source": _question_generation_request_source(command, mode),
         "selected_primary_category_ref": _clean_question_request_text(command.selected_primary_category_ref),
@@ -2511,6 +2694,32 @@ def _question_generation_request_metadata(
         "exclude_question_refs": list(_clean_question_request_list(command.exclude_question_refs)),
         "completed_focus_refs": list(_clean_question_request_list(command.completed_focus_refs)),
     }
+    metadata.update(
+        next_question_execution_grant_snapshot_to_metadata(
+            command.next_question_execution_grant_snapshot
+        )
+    )
+    return metadata
+
+
+def _question_candidate_payload_with_request_metadata(
+    candidate_payload: dict[str, Any],
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    requested_progress_node_ref: str | None,
+) -> dict[str, Any]:
+    candidate = dict(candidate_payload)
+    metadata = candidate.get("question_metadata") if isinstance(candidate.get("question_metadata"), dict) else {}
+    metadata = dict(metadata)
+    metadata.update(
+        _question_generation_request_metadata(
+            command,
+            requested_progress_node_ref=requested_progress_node_ref,
+            resolved_progress_node_ref=_clean_question_request_text(candidate.get("progress_node_ref")),
+        )
+    )
+    candidate["question_metadata"] = metadata
+    return candidate
 
 
 def _question_generation_request_source(command: CreatePolishQuestionTaskCommand, mode: str) -> str:

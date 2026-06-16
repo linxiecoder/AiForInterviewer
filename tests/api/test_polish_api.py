@@ -27,6 +27,9 @@ from app.application.polish.progress_prompts import (
 )
 from app.application.polish.entities import PolishFeedback, PolishQuestion, PolishQuestionSource
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
+from app.application.polish.next_question_authorization import (
+    NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID,
+)
 from app.application.polish.question_metadata import empty_question_metadata
 from app.application.polish.session_continuity import SessionContinuitySnapshot, compute_session_continuity
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
@@ -3799,14 +3802,7 @@ def test_polish_feedback_next_question_intent_rejects_cross_session_feedback_inj
     assert body["error"]["details"]["reason"] == "authorized_feedback_not_in_session"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "PHASE0_EXPECTED_GAP: Phase 1/2 introduces and wires NextQuestionExecutionGrant; "
-        "Phase 0 only records that current next-question metadata has authorized_* fields."
-    ),
-    strict=True,
-)
-def test_polish_feedback_next_question_intent_execution_grant_snapshot_expected_gap() -> None:
+def test_polish_feedback_next_question_intent_writes_execution_grant_snapshot_metadata() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(
@@ -3828,19 +3824,27 @@ def test_polish_feedback_next_question_intent_execution_grant_snapshot_expected_
     turns = {turn["question_id"]: turn for turn in detail_body["data"]["turns"]}
     next_metadata = turns[next_question_id]["question_metadata"]
 
-    assert "next_question_execution_grant" in next_metadata
-    assert next_metadata["next_question_execution_grant"]["consumed_at"]
-    assert next_metadata["next_question_execution_grant"]["grant_id"]
+    grant_snapshot = next_metadata["next_question_execution_grant"]
+    assert grant_snapshot["schema_id"] == NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID
+    assert grant_snapshot["schema_version"] == "1"
+    assert grant_snapshot["grant_id"]
+    assert grant_snapshot["session_id"] == flow["session_id"]
+    assert grant_snapshot["feedback_id"] == flow["feedback_id"]
+    assert grant_snapshot["answer_id"] == flow["answer_id"]
+    assert grant_snapshot["parent_question_id"] == flow["question_id"]
+    assert grant_snapshot["selected_progress_node_ref"] == flow["progress_node_ref"]
+    assert grant_snapshot["allowed_progress_node_refs"] == [flow["progress_node_ref"]]
+    assert grant_snapshot["reason_codes"] == ["feedback_next_question_intent"]
+    assert grant_snapshot["issued_at"]
+    assert grant_snapshot["expires_at"]
+    assert grant_snapshot["consumed_at"]
+    assert grant_snapshot["lifecycle_state"] == "consumed"
+    assert next_metadata["authorized_feedback_id"] == flow["feedback_id"]
+    assert next_metadata["authorized_answer_id"] == flow["answer_id"]
+    assert next_metadata["authorized_parent_question_id"] == flow["question_id"]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "PHASE0_EXPECTED_GAP: current authorization trusts persisted feedback payload fields; "
-        "Phase 3 should fail-closed when payload tamper attempts to convert blocked feedback into authorization."
-    ),
-    strict=True,
-)
-def test_polish_feedback_next_question_intent_rejects_payload_tamper_expected_gap() -> None:
+def test_polish_feedback_next_question_intent_rejects_payload_tamper() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(session_factory, ACTOR_A)
@@ -3870,14 +3874,7 @@ def test_polish_feedback_next_question_intent_rejects_payload_tamper_expected_ga
     assert body["error"]["details"]["reason"] == "feedback_payload_tamper_rejected"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "PHASE0_EXPECTED_GAP: selected_progress_node_ref is accepted as user intent; "
-        "Phase 3 should fail-closed when the selected target is not allowed by the grant lock set."
-    ),
-    strict=True,
-)
-def test_polish_feedback_next_question_intent_rejects_target_node_mismatch_expected_gap() -> None:
+def test_polish_feedback_next_question_intent_rejects_target_node_mismatch() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(
@@ -3896,7 +3893,8 @@ def test_polish_feedback_next_question_intent_rejects_target_node_mismatch_expec
 
     assert status_code == 422
     assert body["error"]["code"] == "validation_failed"
-    assert body["error"]["details"]["reason"] == "target_progress_node_not_allowed"
+    assert body["error"]["details"]["reason"] == "target_node_not_found"
+    assert body["error"]["details"]["field"] == "selected_progress_node_ref"
 
 
 def test_polish_end_session_rejects_answer_submission() -> None:

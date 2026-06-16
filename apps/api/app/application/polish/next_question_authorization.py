@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from typing import Any, Callable, Iterable
 from uuid import uuid4
 
@@ -11,6 +13,26 @@ from uuid import uuid4
 NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID = "polish_next_question_execution_grant_snapshot"
 NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_VERSION = "1"
 NEXT_QUESTION_EXECUTION_GRANT_TTL_SECONDS = 300
+NEXT_QUESTION_AUTHORIZATION_DIGEST_METADATA_KEY = "next_question_authorization_digest"
+NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION_METADATA_KEY = "next_question_authorization_digest_version"
+NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION = "1"
+_AUTHORIZATION_PAYLOAD_KEYS = (
+    "feedback_id",
+    "status",
+    "asset_consistency_check",
+    "answer_coverage",
+    "answer_change_analysis",
+    "project_asset_update_candidates",
+    "low_confidence_flags",
+)
+_AUTHORIZATION_METADATA_KEYS = (
+    "generated",
+    "llm_called",
+    "task_type",
+    "answer_id",
+    "question_id",
+    "session_id",
+)
 
 
 @dataclass(frozen=True)
@@ -224,6 +246,191 @@ def consume_next_question_execution_grant(
     )
 
 
+def feedback_next_question_authorization_metadata(payload: dict[str, Any]) -> dict[str, str]:
+    return {
+        NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION_METADATA_KEY: NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION,
+        NEXT_QUESTION_AUTHORIZATION_DIGEST_METADATA_KEY: feedback_next_question_authorization_digest(payload),
+    }
+
+
+def feedback_next_question_authorization_digest(payload: dict[str, Any]) -> str:
+    digest_payload = _feedback_next_question_authorization_digest_payload(payload)
+    encoded = json.dumps(
+        digest_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha256(encoded).hexdigest()
+
+
+def validate_feedback_next_question_authorization_payload(
+    payload: object,
+    *,
+    feedback_id: str,
+    session_id: str,
+    answer_id: str,
+    parent_question_id: str,
+) -> NextQuestionExecutionGrantValidationResult:
+    if not isinstance(payload, dict):
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="feedback_payload_missing",
+            details={"field": "feedback_summary"},
+        )
+
+    metadata = payload.get("feedback_metadata") if isinstance(payload.get("feedback_metadata"), dict) else {}
+    expected_identity = {
+        "feedback_id": feedback_id,
+        "session_id": session_id,
+        "answer_id": answer_id,
+        "question_id": parent_question_id,
+    }
+    actual_identity = {
+        "feedback_id": _optional_text(payload.get("feedback_id")),
+        "session_id": _optional_text(metadata.get("session_id")),
+        "answer_id": _optional_text(metadata.get("answer_id")),
+        "question_id": _optional_text(metadata.get("question_id")),
+    }
+    for field_name, expected in expected_identity.items():
+        if _optional_text(expected) != actual_identity[field_name]:
+            return NextQuestionExecutionGrantValidationResult(
+                is_valid=False,
+                reason="feedback_payload_identity_mismatch",
+                details={
+                    "field": field_name,
+                    "expected": expected,
+                    "actual": actual_identity[field_name],
+                },
+            )
+
+    digest_version = _optional_text(metadata.get(NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION_METADATA_KEY))
+    if digest_version != NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="feedback_payload_authorization_digest_missing",
+            details={
+                "field": NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION_METADATA_KEY,
+                "expected": NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION,
+                "actual": digest_version,
+            },
+        )
+    expected_digest = _optional_text(metadata.get(NEXT_QUESTION_AUTHORIZATION_DIGEST_METADATA_KEY))
+    if expected_digest is None:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="feedback_payload_authorization_digest_missing",
+            details={"field": NEXT_QUESTION_AUTHORIZATION_DIGEST_METADATA_KEY},
+        )
+    actual_digest = feedback_next_question_authorization_digest(payload)
+    if actual_digest != expected_digest:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="feedback_payload_tamper_rejected",
+            details={
+                "field": NEXT_QUESTION_AUTHORIZATION_DIGEST_METADATA_KEY,
+                "expected": expected_digest,
+                "actual": actual_digest,
+            },
+        )
+    return NextQuestionExecutionGrantValidationResult(is_valid=True)
+
+
+def validate_consumed_next_question_execution_grant_snapshot(
+    snapshot: object,
+    *,
+    session_id: str,
+    feedback_id: str,
+    answer_id: str,
+    parent_question_id: str,
+    selected_progress_node_ref: str | None = None,
+) -> NextQuestionExecutionGrantValidationResult:
+    source = _snapshot_dict(snapshot)
+    grant_id = _optional_text(source.get("grant_id"))
+    if grant_id is None:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="next_question_execution_grant_required",
+            details={"field": "next_question_execution_grant"},
+        )
+    schema_id = _optional_text(source.get("schema_id"))
+    if schema_id != NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="grant_snapshot_schema_mismatch",
+            details={
+                "grant_id": grant_id,
+                "field": "schema_id",
+                "expected": NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID,
+                "actual": schema_id,
+            },
+        )
+    lifecycle_state = _optional_text(source.get("lifecycle_state"))
+    if lifecycle_state == "expired":
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="grant_expired",
+            details={"grant_id": grant_id, "lifecycle_state": lifecycle_state},
+        )
+    if lifecycle_state != "consumed" or _optional_text(source.get("consumed_at")) is None:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="grant_not_consumed",
+            details={
+                "grant_id": grant_id,
+                "lifecycle_state": lifecycle_state,
+                "field": "consumed_at",
+            },
+        )
+
+    expected_fields = {
+        "session_id": session_id,
+        "feedback_id": feedback_id,
+        "answer_id": answer_id,
+        "parent_question_id": parent_question_id,
+    }
+    for field_name, expected in expected_fields.items():
+        actual = _optional_text(source.get(field_name))
+        if _optional_text(expected) != actual:
+            return NextQuestionExecutionGrantValidationResult(
+                is_valid=False,
+                reason=f"{field_name.removesuffix('_id')}_mismatch",
+                details={
+                    "grant_id": grant_id,
+                    "field": field_name,
+                    "expected": expected,
+                    "actual": actual,
+                },
+            )
+
+    selected_ref = _optional_text(selected_progress_node_ref)
+    snapshot_selected_ref = _optional_text(source.get("selected_progress_node_ref"))
+    if selected_ref is not None and snapshot_selected_ref != selected_ref:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="target_node_not_allowed",
+            details={
+                "grant_id": grant_id,
+                "field": "selected_progress_node_ref",
+                "expected": snapshot_selected_ref,
+                "actual": selected_ref,
+            },
+        )
+    allowed_refs = _string_tuple(source.get("allowed_progress_node_refs", ()))
+    if selected_ref is not None and allowed_refs and selected_ref not in allowed_refs:
+        return NextQuestionExecutionGrantValidationResult(
+            is_valid=False,
+            reason="target_node_not_allowed",
+            details={
+                "grant_id": grant_id,
+                "field": "selected_progress_node_ref",
+                "allowed_progress_node_refs": list(allowed_refs),
+                "actual": selected_ref,
+            },
+        )
+    return NextQuestionExecutionGrantValidationResult(is_valid=True)
+
+
 def _invalid(
     reason: str,
     grant: NextQuestionExecutionGrant,
@@ -274,3 +481,39 @@ def _string_tuple(values: Iterable[str]) -> tuple[str, ...]:
         if cleaned is not None and cleaned not in result:
             result.append(cleaned)
     return tuple(result)
+
+
+def _feedback_next_question_authorization_digest_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = payload.get("feedback_metadata") if isinstance(payload.get("feedback_metadata"), dict) else {}
+    return {
+        "digest_version": NEXT_QUESTION_AUTHORIZATION_DIGEST_VERSION,
+        "payload": {key: _stable_json_value(payload.get(key)) for key in _AUTHORIZATION_PAYLOAD_KEYS},
+        "feedback_metadata": {
+            key: _stable_json_value(metadata.get(key)) for key in _AUTHORIZATION_METADATA_KEYS
+        },
+    }
+
+
+def _snapshot_dict(snapshot: object) -> dict[str, Any]:
+    if isinstance(snapshot, dict):
+        return snapshot
+    to_dict = getattr(snapshot, "to_dict", None)
+    if callable(to_dict):
+        candidate = to_dict()
+        return candidate if isinstance(candidate, dict) else {}
+    return {}
+
+
+def _stable_json_value(value: object) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {
+            str(key): _stable_json_value(value[key])
+            for key in sorted(value, key=lambda item: str(item))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_stable_json_value(item) for item in value]
+    if isinstance(value, set):
+        return [_stable_json_value(item) for item in sorted(value, key=lambda item: str(item))]
+    return str(value)

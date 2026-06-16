@@ -7,6 +7,9 @@ from app.application.polish.next_question_authorization import (
     NextQuestionExecutionGrantSnapshot,
     build_next_question_execution_grant,
     consume_next_question_execution_grant,
+    feedback_next_question_authorization_metadata,
+    validate_consumed_next_question_execution_grant_snapshot,
+    validate_feedback_next_question_authorization_payload,
     validate_next_question_intent,
 )
 from app.application.polish.question_metadata import (
@@ -135,6 +138,45 @@ def test_validate_next_question_intent_rejects_session_and_freshness_mismatch() 
     assert freshness_result.reason == "feedback_freshness_mismatch"
 
 
+def test_validate_next_question_intent_rejects_feedback_answer_and_parent_mismatch() -> None:
+    now = datetime(2026, 6, 16, 1, 0, tzinfo=UTC)
+
+    feedback_result = validate_next_question_intent(
+        _grant(now),
+        session_id="session-1",
+        feedback_id="feedback-other",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-allowed",
+        freshness_marker="feedback-1:v1",
+        now=now,
+    )
+    answer_result = validate_next_question_intent(
+        _grant(now),
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-other",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-allowed",
+        freshness_marker="feedback-1:v1",
+        now=now,
+    )
+    parent_result = validate_next_question_intent(
+        _grant(now),
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-other",
+        selected_progress_node_ref="node-allowed",
+        freshness_marker="feedback-1:v1",
+        now=now,
+    )
+
+    assert feedback_result.reason == "feedback_mismatch"
+    assert answer_result.reason == "answer_mismatch"
+    assert parent_result.reason == "parent_question_mismatch"
+
+
 def test_validate_next_question_intent_rejects_target_mismatch_and_not_allowed() -> None:
     now = datetime(2026, 6, 16, 1, 0, tzinfo=UTC)
     locked_target = validate_next_question_intent(
@@ -226,3 +268,101 @@ def test_next_question_execution_grant_snapshot_metadata_helper_preserves_normal
         "node-peer",
     ]
     assert normalized["next_question_execution_grant"]["lifecycle_state"] == "active"
+
+
+def test_validate_consumed_next_question_execution_grant_snapshot_rejects_missing_snapshot() -> None:
+    result = validate_consumed_next_question_execution_grant_snapshot(
+        None,
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-allowed",
+    )
+
+    assert not result.is_valid
+    assert result.reason == "next_question_execution_grant_required"
+    assert result.details["field"] == "next_question_execution_grant"
+
+
+def test_validate_consumed_next_question_execution_grant_snapshot_requires_consumed_state() -> None:
+    now = datetime(2026, 6, 16, 1, 0, tzinfo=UTC)
+    active_snapshot = _grant(now).to_snapshot(now=now).to_dict()
+    expired_snapshot = _grant(now).to_snapshot(now=now + timedelta(seconds=61)).to_dict()
+
+    active_result = validate_consumed_next_question_execution_grant_snapshot(
+        active_snapshot,
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-allowed",
+    )
+    expired_result = validate_consumed_next_question_execution_grant_snapshot(
+        expired_snapshot,
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-allowed",
+    )
+
+    assert active_result.reason == "grant_not_consumed"
+    assert expired_result.reason == "grant_expired"
+
+
+def test_validate_consumed_next_question_execution_grant_snapshot_accepts_trusted_snapshot() -> None:
+    now = datetime(2026, 6, 16, 1, 0, tzinfo=UTC)
+    consumed = consume_next_question_execution_grant(_grant(now), now=now)
+    assert consumed.grant is not None
+
+    result = validate_consumed_next_question_execution_grant_snapshot(
+        consumed.grant.to_snapshot(now=now),
+        session_id="session-1",
+        feedback_id="feedback-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+        selected_progress_node_ref="node-allowed",
+    )
+
+    assert result.is_valid
+
+
+def test_validate_feedback_next_question_authorization_payload_rejects_tamper() -> None:
+    payload = {
+        "feedback_id": "feedback-1",
+        "status": "generated",
+        "asset_consistency_check": {"status": "conflict", "conflicts": [{"conflict_type": "asset"}]},
+        "answer_coverage": {"missing_points": ["缺少幂等失败处理"]},
+        "answer_change_analysis": {"regressed_points": []},
+        "project_asset_update_candidates": [],
+        "low_confidence_flags": [],
+        "feedback_metadata": {
+            "generated": True,
+            "llm_called": True,
+            "task_type": "polish_feedback_generation",
+            "answer_id": "answer-1",
+            "question_id": "question-1",
+            "session_id": "session-1",
+        },
+    }
+    payload["feedback_metadata"].update(feedback_next_question_authorization_metadata(payload))
+
+    valid = validate_feedback_next_question_authorization_payload(
+        payload,
+        feedback_id="feedback-1",
+        session_id="session-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+    )
+    payload["asset_consistency_check"] = {"status": "aligned", "conflicts": []}
+    tampered = validate_feedback_next_question_authorization_payload(
+        payload,
+        feedback_id="feedback-1",
+        session_id="session-1",
+        answer_id="answer-1",
+        parent_question_id="question-1",
+    )
+
+    assert valid.is_valid
+    assert tampered.reason == "feedback_payload_tamper_rejected"
