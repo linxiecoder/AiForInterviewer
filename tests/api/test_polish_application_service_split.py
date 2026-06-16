@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
+
+import pytest
 
 
 SERVICE_MODULES = (
@@ -122,6 +124,38 @@ def test_use_cases_reexports_split_service_classes_for_existing_imports() -> Non
         module = importlib.import_module(f"app.application.polish.{module_name}")
 
         assert getattr(use_cases, class_name) is getattr(module, class_name)
+
+
+@pytest.mark.xfail(
+    reason=(
+        "PHASE0_EXPECTED_GAP: Phase 1 creates the additive NextQuestionExecutionGrant model; "
+        "current command can only carry legacy authorized_* metadata."
+    ),
+    strict=True,
+)
+def test_create_question_task_execution_grant_contract_fields_expected_gap() -> None:
+    from app.application.polish.commands import CreatePolishQuestionTaskCommand
+
+    command_fields = {field.name for field in fields(CreatePolishQuestionTaskCommand)}
+
+    assert "next_question_execution_grant" in command_fields
+    assert "next_question_execution_grant_snapshot" in command_fields
+
+
+@pytest.mark.xfail(
+    reason=(
+        "PHASE0_EXPECTED_GAP: expired/consumed/mismatch grant states are not representable "
+        "until Phase 1 introduces the grant value object and validator."
+    ),
+    strict=True,
+)
+def test_next_question_execution_grant_lifecycle_states_expected_gap() -> None:
+    use_cases = importlib.import_module("app.application.polish.use_cases")
+    source = inspect.getsource(use_cases)
+
+    assert "expires_at" in source
+    assert "consumed_at" in source
+    assert "target_progress_node_not_allowed" in source
 
 
 def test_answer_submission_boundary_rejects_blank_answer_with_existing_semantics() -> None:

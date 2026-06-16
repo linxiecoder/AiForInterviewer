@@ -51,6 +51,7 @@ from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingReposit
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
 from app.infrastructure.db.models.interview import PolishSessionDetail as PolishSessionDetailModel
+from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
 from app.infrastructure.db.models.question import Question as QuestionModel
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
@@ -3798,6 +3799,106 @@ def test_polish_feedback_next_question_intent_rejects_cross_session_feedback_inj
     assert body["error"]["details"]["reason"] == "authorized_feedback_not_in_session"
 
 
+@pytest.mark.xfail(
+    reason=(
+        "PHASE0_EXPECTED_GAP: Phase 1/2 introduces and wires NextQuestionExecutionGrant; "
+        "Phase 0 only records that current next-question metadata has authorized_* fields."
+    ),
+    strict=True,
+)
+def test_polish_feedback_next_question_intent_execution_grant_snapshot_expected_gap() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_FeedbackIntentAllowedTransport(),
+    )
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={},
+    )
+    assert status_code == 202, body.get("error", {}).get("details", body)
+    next_question_id = body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{flow['session_id']}")
+    turns = {turn["question_id"]: turn for turn in detail_body["data"]["turns"]}
+    next_metadata = turns[next_question_id]["question_metadata"]
+
+    assert "next_question_execution_grant" in next_metadata
+    assert next_metadata["next_question_execution_grant"]["consumed_at"]
+    assert next_metadata["next_question_execution_grant"]["grant_id"]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "PHASE0_EXPECTED_GAP: current authorization trusts persisted feedback payload fields; "
+        "Phase 3 should fail-closed when payload tamper attempts to convert blocked feedback into authorization."
+    ),
+    strict=True,
+)
+def test_polish_feedback_next_question_intent_rejects_payload_tamper_expected_gap() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+    _overwrite_feedback_summary_payload(
+        session_factory,
+        feedback_id=flow["feedback_id"],
+        updates={
+            "status": "generated",
+            "asset_consistency_check": {"status": "aligned", "conflicts": [], "user_clarification_required": False},
+            "answer_coverage": {"missing_points": [], "weak_points": [], "contradicted_points": []},
+            "answer_change_analysis": {"regressed_points": []},
+            "project_asset_update_candidates": [],
+            "low_confidence_flags": [],
+        },
+    )
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["reason"] == "feedback_payload_tamper_rejected"
+
+
+@pytest.mark.xfail(
+    reason=(
+        "PHASE0_EXPECTED_GAP: selected_progress_node_ref is accepted as user intent; "
+        "Phase 3 should fail-closed when the selected target is not allowed by the grant lock set."
+    ),
+    strict=True,
+)
+def test_polish_feedback_next_question_intent_rejects_target_node_mismatch_expected_gap() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_FeedbackIntentAllowedTransport(),
+    )
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={"selected_progress_node_ref": "progress_node_tampered_target"},
+    )
+
+    assert status_code == 422
+    assert body["error"]["code"] == "validation_failed"
+    assert body["error"]["details"]["reason"] == "target_progress_node_not_allowed"
+
+
 def test_polish_end_session_rejects_answer_submission() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -4998,6 +5099,22 @@ def _create_polish_answer_with_feedback(
         "answer_id": answer_id,
         "feedback_id": feedback_body["data"]["feedback_payload"]["feedback_id"],
     }
+
+
+def _overwrite_feedback_summary_payload(
+    session_factory: sessionmaker[Session],
+    *,
+    feedback_id: str,
+    updates: dict[str, object],
+) -> None:
+    with session_factory() as db:
+        feedback = db.get(FeedbackModel, feedback_id)
+        assert feedback is not None
+        payload = json.loads(feedback.feedback_summary or "{}")
+        assert isinstance(payload, dict)
+        payload.update(updates)
+        feedback.feedback_summary = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        db.commit()
 
 
 def _seed_polish_question_for_session(
