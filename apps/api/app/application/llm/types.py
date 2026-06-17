@@ -45,14 +45,21 @@ class LlmTransportRequest:
     node_name: str | None = None
     prompt_version: str | None = None
     schema_id: str | None = None
+    max_tokens: int | None = None
 
     def __post_init__(self) -> None:
-        errors = tuple(
+        errors = [
             f"forbidden_provider_request_key:{path}"
             for path in _forbidden_provider_key_paths(self.evidence_bundle)
-        )
+        ]
+        if self.max_tokens is not None and (
+            isinstance(self.max_tokens, bool)
+            or not isinstance(self.max_tokens, int)
+            or self.max_tokens <= 0
+        ):
+            errors.append("invalid_provider_request_max_tokens")
         if errors:
-            raise LlmTransportRequestValidationError(errors)
+            raise LlmTransportRequestValidationError(tuple(errors))
 
 
 @dataclass(frozen=True)

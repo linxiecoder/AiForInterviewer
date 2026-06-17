@@ -477,6 +477,8 @@ def _max_tokens_for_request(
     settings: OpenAICompatibleLlmSettings,
     request: LlmTransportRequest,
 ) -> int:
+    if request.max_tokens is not None:
+        return request.max_tokens
     if request.task_type == PROGRESS_TREE_QUALITY_FIRST_TASK_TYPE:
         return settings.progress_tree_max_tokens
     return settings.max_tokens

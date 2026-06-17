@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import replace
 from typing import Any
 
 from app.application.llm.agent_io import (
@@ -45,6 +42,7 @@ _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
         "progress_state",
         "evidence",
         "canonical_project_assets",
+        "retrieved_rag_chunks",
         "same_question_answers",
         "progress_node_snapshot",
         "job_requirements",
@@ -91,13 +89,12 @@ class FeedbackGenerationAgent:
                 schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
                 required_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
                 allowed_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+                max_tokens=FEEDBACK_GENERATION_MAX_TOKENS,
             )
         except ProviderRequestValidationError as exc:
             return _provider_request_validation_failed(prompt_asset, exc)
-        object.__setattr__(request, "max_tokens", FEEDBACK_GENERATION_MAX_TOKENS)
         try:
-            with _temporary_transport_max_tokens(self._transport, FEEDBACK_GENERATION_MAX_TOKENS):
-                provider_result = self._transport.generate(request)
+            provider_result = self._transport.generate(request)
         except Exception as exc:
             validation_error = _transport_validation_error(exc)
             return LegacyAgentOutputEnvelope(
@@ -216,26 +213,6 @@ def _provider_status(result: LlmTransportResult, payload: dict[str, Any] | None)
     if isinstance(status, str) and status.strip():
         return status.strip()
     return "called"
-
-
-@contextmanager
-def _temporary_transport_max_tokens(transport: LlmTransport, max_tokens: int) -> Iterator[None]:
-    settings = getattr(transport, "_settings", None)
-    original_settings = settings
-    changed = False
-    current_max_tokens = getattr(settings, "max_tokens", None)
-    if isinstance(current_max_tokens, int) and current_max_tokens > max_tokens:
-        try:
-            compact_settings = replace(settings, max_tokens=max_tokens)
-            setattr(transport, "_settings", compact_settings)
-            changed = True
-        except (TypeError, AttributeError, ValueError):
-            changed = False
-    try:
-        yield
-    finally:
-        if changed:
-            setattr(transport, "_settings", original_settings)
 
 
 def _transport_validation_error(exc: Exception) -> str:

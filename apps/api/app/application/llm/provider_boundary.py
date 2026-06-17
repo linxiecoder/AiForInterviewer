@@ -67,6 +67,7 @@ def build_validated_transport_request(
     node_name: str | None = None,
     prompt_version: str | None = None,
     schema_id: str | None = None,
+    max_tokens: int | None = None,
     required_evidence_keys: Collection[str] = (),
     allowed_evidence_keys: Collection[str] | None = None,
 ) -> LlmTransportRequest:
@@ -83,6 +84,7 @@ def build_validated_transport_request(
         node_name=node_name,
         prompt_version=prompt_version,
         schema_id=schema_id,
+        max_tokens=max_tokens,
     )
 
 
