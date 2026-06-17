@@ -2111,7 +2111,8 @@ function getLatestAnswer(session: PolishSessionDetail): PolishSessionAnswer | nu
 }
 
 function answerHasGeneratedFeedback(answer: PolishSessionAnswer | null): boolean {
-  return Boolean(answer?.feedback_id || answer?.feedback_created_at || answer?.feedback_payload?.status === "generated");
+  const feedbackStatus = resolvePolishFeedbackStatus(toOptionalText(answer?.feedback_payload?.status));
+  return Boolean(answer?.feedback_id || answer?.feedback_created_at || feedbackStatus !== "pending");
 }
 
 export function resolveSessionCurrentProgressNodeRef(session: PolishSessionDetail): string | null {
@@ -2948,8 +2949,22 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
 function resolvePolishFeedbackStatus(
   status: string | null | undefined,
 ): "pending" | "generated" | "failed" {
-  if (status === "pending" || status === "generated" || status === "failed") {
-    return status;
+  const normalizedStatus = status?.trim().toLowerCase();
+  if (normalizedStatus === "pending" || normalizedStatus === "generated") {
+    return normalizedStatus;
+  }
+  if (
+    normalizedStatus === "failed" ||
+    normalizedStatus === "generation_failed" ||
+    normalizedStatus === "validation_failed" ||
+    normalizedStatus === "timed_out" ||
+    normalizedStatus === "cancelled" ||
+    normalizedStatus === "source_unavailable" ||
+    normalizedStatus?.includes("failed") === true ||
+    normalizedStatus?.includes("timeout") === true ||
+    normalizedStatus?.includes("cancelled") === true
+  ) {
+    return "failed";
   }
   return "pending";
 }

@@ -180,7 +180,16 @@ export interface PolishProjectAssetConsistencyCheck extends Record<string, unkno
 
 export interface PolishFeedbackPayload extends Record<string, unknown> {
   contract_ids?: string[];
-  status?: "pending" | "generated" | "failed";
+  status?:
+    | "pending"
+    | "generated"
+    | "failed"
+    | "generation_failed"
+    | "validation_failed"
+    | "timed_out"
+    | "cancelled"
+    | "source_unavailable"
+    | string;
   feedback_id?: string | null;
   feedback_text?: string | null;
   answer_summary?: PolishFeedbackAnswerSummary | null;

@@ -3782,6 +3782,87 @@ function test_feedback_card_view_model_handles_failed_payload(): void {
   assertContract(!visibleCopy.includes("raw_provider_payload_should_not_render"), "失败态不应暴露 raw provider payload");
 }
 
+function test_feedback_card_view_model_maps_generation_failed_to_failure_card(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_generation_failed",
+    answer_round: 1,
+    answer_text: "回答已保存，但反馈生成失败。",
+    answer_created_at: "2026-05-30T10:00:00Z",
+    feedback_text: "反馈生成失败，可重试",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "generation_failed",
+      feedback_text: "反馈生成失败，可重试",
+      user_visible_status: "反馈生成失败，可重试",
+      retryable: true,
+      validation_errors: ["llm_transport_generation_failed"],
+      error: {
+        code: "llm_transport_generation_failed",
+        metadata: {
+          provider_payload: "provider_payload_should_not_render",
+          raw_prompt: "raw_prompt_should_not_render",
+        },
+      },
+      score_result: null,
+      loss_points: [],
+      reference_answer: null,
+      next_recommended_actions: ["retry_same_question", "continue_same_question"],
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const titles = card.sections.map((section) => section.title);
+  const visibleCopy = [
+    card.title,
+    card.status,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.nextActions.map(toNextRecommendedActionLabel),
+  ].join(" ");
+
+  assertContract(card.status === "failed", "generation_failed payload 应归一为失败态");
+  assertContract(card.title === "反馈生成失败", "generation_failed 不应展示 pending 标题");
+  assertContract(titles.join(",") === "失败状态", "generation_failed 不应展开 generated sections");
+  assertContract(visibleCopy.includes("反馈生成超时或失败，可重试"), "generation_failed 应展示失败提示");
+  assertContract(visibleCopy.includes("错误码：llm_transport_generation_failed"), "generation_failed 应展示错误码");
+  assertContract(visibleCopy.includes("可重试：是"), "generation_failed 应保留 retryable 展示");
+  assertContract(visibleCopy.includes("继续打磨本题"), "generation_failed 应保留 display-only next action");
+  assertContract(!visibleCopy.includes("本轮反馈尚未生成"), "generation_failed 不应回退为 pending");
+  assertContract(!visibleCopy.includes("provider_payload_should_not_render"), "generation_failed 不应暴露 provider payload");
+  assertContract(!visibleCopy.includes("raw_prompt_should_not_render"), "generation_failed 不应暴露 raw prompt");
+}
+
+function test_feedback_card_view_model_fail_closes_unknown_failure_like_status(): void {
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_unknown_failure",
+    answer_round: 1,
+    answer_text: "回答已保存，但反馈状态来自旧 runtime。",
+    answer_created_at: "2026-05-30T10:00:00Z",
+    feedback_text: "反馈生成失败，可重试",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "provider_failed_unexpected",
+      feedback_text: "反馈生成失败，可重试",
+      retryable: false,
+      validation_errors: ["provider_failed_unexpected"],
+      score_result: null,
+      loss_points: [],
+      reference_answer: null,
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = [card.title, card.status, ...card.sections.flatMap((section) => [section.title, ...section.items])].join(" ");
+
+  assertContract(card.status === "failed", "unknown failure-like status 应 fail-closed 到失败态");
+  assertContract(card.title === "反馈生成失败", "unknown failure-like status 不应展示 pending 标题");
+  assertContract(visibleCopy.includes("错误码：provider_failed_unexpected"), "unknown failure-like status 应展示错误码");
+  assertContract(!visibleCopy.includes("本轮反馈尚未生成"), "unknown failure-like status 不应回退为 pending");
+}
+
 function test_feedback_card_view_model_does_not_calculate_score_on_frontend(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_feedback_score_calc",
@@ -4203,6 +4284,8 @@ test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
 test_feedback_card_view_model_handles_failed_payload();
+test_feedback_card_view_model_maps_generation_failed_to_failure_card();
+test_feedback_card_view_model_fail_closes_unknown_failure_like_status();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();
 test_clipboard_markdown_stays_compatible_with_structured_feedback_payload();
 test_session_clipboard_markdown_includes_full_context_tree_and_all_questions();
