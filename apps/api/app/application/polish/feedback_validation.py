@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -38,6 +39,39 @@ _UNSAFE_MARKERS = (
     "token",
     "secret",
     "cookie",
+)
+_UNSAFE_KEY_MARKERS = frozenset(_UNSAFE_MARKERS) | frozenset(
+    {
+        "prompt",
+        "user_prompt",
+        "internal_prompt",
+        "hidden_rubric",
+        "hidden_scoring",
+        "hidden_scoring_rules",
+    }
+)
+_UNSAFE_VALUE_MARKERS = (
+    "raw_prompt",
+    "system_prompt",
+    "developer_prompt",
+    "user_prompt",
+    "internal_prompt",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "provider_response",
+    "raw_provider_response",
+    "full_resume",
+    "full_jd",
+    "hidden_rubric",
+    "hidden_scoring",
+)
+_UNSAFE_VALUE_PATTERNS = (
+    re.compile(r"\bapi[_-]?key\s*[:=]\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"\bcookie\s*[:=]\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"\btoken\s*[:=]\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"\bsecret\s*[:=]\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"\bbearer\s+[a-z0-9._~+/=-]+", re.IGNORECASE),
 )
 _CONFLICT_REQUIRED_FIELDS = (
     "conflict_type",
@@ -955,8 +989,8 @@ def _deduction_value(item: dict[str, Any]) -> float | None:
 def _contains_unsafe_marker(value: object) -> bool:
     if isinstance(value, dict):
         for key, nested in value.items():
-            key_text = str(key).lower()
-            if any(marker in key_text for marker in _UNSAFE_MARKERS):
+            key_text = _normalize_unsafe_marker_text(key)
+            if key_text in _UNSAFE_KEY_MARKERS:
                 return True
             if _contains_unsafe_marker(nested):
                 return True
@@ -964,9 +998,15 @@ def _contains_unsafe_marker(value: object) -> bool:
     if isinstance(value, (list, tuple)):
         return any(_contains_unsafe_marker(item) for item in value)
     if isinstance(value, str):
-        lowered = value.lower()
-        return any(marker in lowered for marker in _UNSAFE_MARKERS)
+        normalized = _normalize_unsafe_marker_text(value)
+        if any(marker in normalized for marker in _UNSAFE_VALUE_MARKERS):
+            return True
+        return any(pattern.search(value) for pattern in _UNSAFE_VALUE_PATTERNS)
     return False
+
+
+def _normalize_unsafe_marker_text(value: object) -> str:
+    return re.sub(r"[\s-]+", "_", str(value).strip().lower())
 
 
 def _string_list(value: object, *, max_items: int, max_item_chars: int) -> list[str]:

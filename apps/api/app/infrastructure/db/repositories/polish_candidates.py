@@ -60,13 +60,26 @@ FORBIDDEN_CANDIDATE_PAYLOAD_KEYS = {
     "api_key",
     "cookie",
     "secret",
+    "hidden_scoring",
+    "hidden_scoring_rules",
 }
-FORBIDDEN_CANDIDATE_VALUE_MARKERS = tuple(FORBIDDEN_CANDIDATE_PAYLOAD_KEYS)
+FORBIDDEN_CANDIDATE_VALUE_MARKERS = tuple(
+    key
+    for key in FORBIDDEN_CANDIDATE_PAYLOAD_KEYS
+    if key
+    not in {
+        "api_key",
+        "cookie",
+        "secret",
+        "token",
+    }
+)
 FORBIDDEN_CANDIDATE_ASSIGNMENT_PATTERNS = (
     re.compile(r"api[_-]?key\s*=\s*[^\s,;，；]+", re.IGNORECASE),
     re.compile(r"cookie\s*=\s*[^\s,;，；]+", re.IGNORECASE),
     re.compile(r"token\s*=\s*[^\s,;，；]+", re.IGNORECASE),
     re.compile(r"secret\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"\bbearer\s+[a-z0-9._~+/=-]+", re.IGNORECASE),
 )
 
 

@@ -957,11 +957,15 @@ ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
         "api_key",
         "cookie",
         "secret",
+        "hidden_scoring",
+        "hidden_scoring_rules",
     }
 )
 FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS = (
     "raw_prompt",  # sensitive response denylist marker
     "system_prompt",  # sensitive response denylist marker
+    "developer_prompt",
+    "user_prompt",
     "raw_completion",
     "completion",
     "provider_payload",  # sensitive response denylist marker
@@ -974,12 +978,15 @@ FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS = (
     "full_resume_markdown",
     "full_jd",
     "full_jd_text",
+    "hidden_scoring",
+    "hidden_scoring_rules",
 )
 FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_ASSIGNMENT_PATTERNS = (
     re.compile(r"api[_-]?key\s*=\s*[^\s,;，；]+", re.IGNORECASE),
     re.compile(r"cookie\s*=\s*[^\s,;，；]+", re.IGNORECASE),
     re.compile(r"token\s*=\s*[^\s,;，；]+", re.IGNORECASE),
     re.compile(r"secret\s*=\s*[^\s,;，；]+", re.IGNORECASE),
+    re.compile(r"\bbearer\s+[a-z0-9._~+/=-]+", re.IGNORECASE),
 )
 
 

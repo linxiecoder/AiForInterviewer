@@ -263,6 +263,22 @@ def test_validate_feedback_candidate_payload_accepts_valid_payload() -> None:
     ]
 
 
+def test_validate_feedback_candidate_payload_allows_ordinary_sensitive_marker_terms() -> None:
+    payload = _candidate_payload()
+    payload["feedback_text"] = (
+        "回答讨论了 token bucket 限流、JWT token rotation 和 secret management 流程，"
+        "这些都是普通技术概念，不包含真实凭据。"
+    )
+    payload["answer_summary"] = "候选人用普通技术词描述认证、限流和密钥治理边界。"
+    payload["score_reasoning"][0]["rationale"] = "JWT token lifecycle 和 secret management 被作为概念说明。"
+    payload["reference_answer"]["sections"][0]["content"] = "可以说明 token bucket 的限流窗口和 secret 管理职责。"
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+
+
 def test_validate_feedback_candidate_payload_requires_llm_comparator_score_result() -> None:
     payload = _candidate_payload()
     payload.pop("score_result")
