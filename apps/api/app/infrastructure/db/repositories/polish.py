@@ -389,6 +389,38 @@ class SqlAlchemyPolishRepository(PolishRepository):
             )
             db.commit()
 
+    def add_feedback_running_task(
+        self,
+        task: PolishTaskStatus,
+        *,
+        owner_id: str,
+        actor_id: str,
+        target_ref_id: str,
+        idempotency_record_id: str | None = None,
+    ) -> None:
+        with self._session_factory() as db:
+            existing = db.get(AiTask, task.ai_task_id)
+            if existing is None:
+                db.add(
+                    _task_to_model(
+                        task,
+                        owner_id=owner_id,
+                        actor_id=actor_id,
+                        target_ref_id=target_ref_id,
+                        idempotency_record_id=idempotency_record_id,
+                    )
+                )
+            else:
+                _apply_task_to_model(
+                    existing,
+                    task,
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    target_ref_id=target_ref_id,
+                    idempotency_record_id=idempotency_record_id,
+                )
+            db.commit()
+
     def add_feedback_task_result(
         self,
         feedback: PolishFeedback,
@@ -401,15 +433,26 @@ class SqlAlchemyPolishRepository(PolishRepository):
     ) -> None:
         with self._session_factory() as db:
             db.add(_feedback_to_model(feedback))
-            db.add(
-                _task_to_model(
+            existing_task = db.get(AiTask, task.ai_task_id)
+            if existing_task is None:
+                db.add(
+                    _task_to_model(
+                        task,
+                        owner_id=owner_id,
+                        actor_id=actor_id,
+                        target_ref_id=target_ref_id,
+                        idempotency_record_id=idempotency_record_id,
+                    )
+                )
+            else:
+                _apply_task_to_model(
+                    existing_task,
                     task,
                     owner_id=owner_id,
                     actor_id=actor_id,
                     target_ref_id=target_ref_id,
                     idempotency_record_id=idempotency_record_id,
                 )
-            )
             db.add(_task_result_to_model(task, owner_id=owner_id, actor_id=actor_id))
             try:
                 db.commit()
@@ -867,6 +910,27 @@ def _task_to_model(
         created_at=task.result_ref.created_at,
         updated_at=task.result_ref.created_at,
     )
+
+
+def _apply_task_to_model(
+    model: AiTask,
+    task: PolishTaskStatus,
+    *,
+    owner_id: str,
+    actor_id: str,
+    target_ref_id: str,
+    idempotency_record_id: str | None,
+) -> None:
+    model.owner_id = owner_id
+    model.actor_id = actor_id
+    model.status = str(task.status)
+    model.trace_ref_ids = [task.result_ref.trace_ref_id]
+    model.evidence_ref_ids = None
+    model.task_type = task.task_type
+    model.contract_ids = list(task.contract_ids)
+    model.idempotency_record_id = idempotency_record_id
+    model.target_ref_id = target_ref_id
+    model.updated_at = task.result_ref.created_at
 
 
 def _task_result_to_model(

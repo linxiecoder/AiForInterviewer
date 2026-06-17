@@ -4,6 +4,7 @@ import type {
   CreatePolishFeedbackTaskRequest,
   CreatePolishFeedbackNextQuestionIntentRequest,
   CreatePolishSessionRequest,
+  PolishAiTaskResult,
   PolishAnswer,
   PolishCandidate,
   PolishCandidateActionResult,
@@ -26,6 +27,8 @@ export const POLISH_API_PATHS = {
   progressTreeState: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/progress-tree/state` as `/polish-sessions/${string}/progress-tree/state`,
   answers: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/answers` as `/polish-sessions/${string}/answers`,
   feedbackTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/feedback` as `/polish-sessions/${string}/feedback`,
+  aiTaskStatus: (aiTaskId: string) => `/ai-tasks/${encodeURIComponent(aiTaskId)}` as `/ai-tasks/${string}`,
+  aiTaskResult: (aiTaskId: string) => `/ai-tasks/${encodeURIComponent(aiTaskId)}/result` as `/ai-tasks/${string}/result`,
   topics: "/polish-topics",
   candidates: "/polish-candidates",
   candidateDetail: (candidateId: string) => `/polish-candidates/${encodeURIComponent(candidateId)}` as `/polish-candidates/${string}`,
@@ -230,6 +233,24 @@ export async function createPolishFeedbackTask(
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("反馈生成任务返回为空");
+  }
+  return data;
+}
+
+export async function fetchPolishAiTaskStatus(aiTaskId: string): Promise<PolishTaskStatus> {
+  const response = await request<PolishTaskStatus>(POLISH_API_PATHS.aiTaskStatus(aiTaskId));
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("AI 任务状态返回为空");
+  }
+  return data;
+}
+
+export async function fetchPolishAiTaskResult(aiTaskId: string): Promise<PolishAiTaskResult> {
+  const response = await request<PolishAiTaskResult>(POLISH_API_PATHS.aiTaskResult(aiTaskId));
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("AI 任务结果返回为空");
   }
   return data;
 }

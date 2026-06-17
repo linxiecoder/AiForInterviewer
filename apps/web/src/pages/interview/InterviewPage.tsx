@@ -57,6 +57,7 @@ import {
   createPolishSession,
   dismissPolishCandidate,
   endPolishSession,
+  fetchPolishAiTaskResult,
   fetchPolishCandidates,
   fetchPolishSession,
   fetchPolishSessions,
@@ -114,6 +115,19 @@ export const INTERVIEW_CREATE_PENDING_STATUS = {
   message: "正在创建模拟面试",
   logHint: "后端日志可搜索 polish_session_create_started / polish_session_create_completed / polish_session_create_failed。",
 } as const;
+export const POLISH_AI_TASK_RUNNING_STATUSES = ["queued", "running"] as const;
+export const POLISH_AI_TASK_FINAL_STATUSES = [
+  "succeeded",
+  "partial",
+  "low_confidence",
+  "validation_failed",
+  "source_unavailable",
+  "generation_failed",
+  "timed_out",
+  "cancelled",
+] as const;
+const POLISH_FEEDBACK_TASK_POLL_INTERVAL_MS = 600;
+const POLISH_FEEDBACK_TASK_POLL_ATTEMPTS = 20;
 export const INTERVIEW_LIST_HEADER_CONTROL_ORDER = ["actions", "search"] as const;
 export const INTERVIEW_LIST_HEADER_TEXT_STATE = "removed" as const;
 export const INTERVIEW_SEARCH_PLACEHOLDER = "搜索模拟面试名称、岗位、简历、主题" as const;
@@ -985,6 +999,29 @@ export function buildPolishSessionPath<const TSessionId extends string>(sessionI
 export function buildInterviewCreatePendingDescription(elapsedSeconds: number): string {
   const safeElapsedSeconds = Math.max(0, Math.floor(elapsedSeconds));
   return `已等待 ${safeElapsedSeconds} 秒，正在创建会话并生成进展树。耗时较长时请勿重复点击；${INTERVIEW_CREATE_PENDING_STATUS.logHint}`;
+}
+
+export function isPolishAiTaskRunningStatus(status: string | null | undefined): boolean {
+  return POLISH_AI_TASK_RUNNING_STATUSES.includes(status as (typeof POLISH_AI_TASK_RUNNING_STATUSES)[number]);
+}
+
+export function isPolishAiTaskFinalStatus(status: string | null | undefined): boolean {
+  return POLISH_AI_TASK_FINAL_STATUSES.includes(status as (typeof POLISH_AI_TASK_FINAL_STATUSES)[number]);
+}
+
+async function waitForPolishFeedbackTaskResult(aiTaskId: string): Promise<void> {
+  for (let attempt = 0; attempt < POLISH_FEEDBACK_TASK_POLL_ATTEMPTS; attempt += 1) {
+    const result = await fetchPolishAiTaskResult(aiTaskId);
+    if (isPolishAiTaskFinalStatus(result.status)) {
+      return;
+    }
+    await delay(POLISH_FEEDBACK_TASK_POLL_INTERVAL_MS);
+  }
+  throw new Error("反馈生成仍在进行中，请稍后刷新查看结果。");
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 export function mapFeedbackCodeToDisplay(code: string | null | undefined): {
@@ -4978,9 +5015,12 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       });
       setFeedbackGenerating(true);
       try {
-        await createPolishFeedbackTask(sessionId, {
+        const feedbackTask = await createPolishFeedbackTask(sessionId, {
           answer_id: answer.answer_id,
         });
+        if (isPolishAiTaskRunningStatus(feedbackTask.status)) {
+          await waitForPolishFeedbackTaskResult(feedbackTask.ai_task_id);
+        }
       } catch (feedbackError) {
         setWorkbenchFailureState("feedbackFailedAnswerSaved");
         setAnswerError(

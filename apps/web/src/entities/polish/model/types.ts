@@ -486,6 +486,18 @@ export interface PolishTaskStatus {
   score_result_id?: string | null;
   feedback_payload?: PolishFeedbackPayload;
   next_recommended_actions?: PolishRecommendedAction[];
+  provider_payload?: null;
+}
+
+export interface PolishAiTaskResult {
+  ai_task_id: string;
+  status: "queued" | "running" | "succeeded" | "partial" | "low_confidence" | "validation_failed" | "source_unavailable" | "generation_failed" | "timed_out" | "cancelled" | string;
+  result_ref?: PolishTraceRef | null;
+  candidate_refs: Array<{ resource_type: string; resource_id: string }>;
+  suggestion_refs: Array<{ resource_type: string; resource_id: string }>;
+  validation_result_ref?: { resource_type: string; resource_id: string } | null;
+  result_payload?: PolishFeedbackPayload | null;
+  provider_payload: null;
 }
 
 export interface PolishAnswer {

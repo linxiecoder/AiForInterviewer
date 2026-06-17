@@ -1,8 +1,261 @@
-"""AI task repository placeholder."""
+"""SQLAlchemy repository for AI task status and result read paths."""
 
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from sqlalchemy import select
+
+from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
+from app.infrastructure.db.models.feedback import Feedback
 from app.infrastructure.db.repositories.base import SqlAlchemyRepository
 
 
 class SqlAlchemyAiTaskRepository(SqlAlchemyRepository):
-    pass
+    def get_status(self, *, owner_id: str, ai_task_id: str) -> dict[str, object] | None:
+        with self.session_scope() as db:
+            task = db.scalar(
+                select(AiTask)
+                .where(AiTask.owner_id == owner_id, AiTask.id == ai_task_id)
+                .limit(1)
+            )
+            if task is None:
+                return None
+            result = db.scalar(
+                select(AiTaskResult)
+                .where(AiTaskResult.owner_id == owner_id, AiTaskResult.ai_task_id == ai_task_id)
+                .order_by(AiTaskResult.created_at.desc(), AiTaskResult.id.desc())
+                .limit(1)
+            )
+            payload = _feedback_payload_for_task(db, owner_id=owner_id, ai_task_id=ai_task_id)
+            return _status_projection(task, result=result, payload=payload)
 
+    def get_result(self, *, owner_id: str, ai_task_id: str) -> dict[str, object] | None:
+        with self.session_scope() as db:
+            task = db.scalar(
+                select(AiTask)
+                .where(AiTask.owner_id == owner_id, AiTask.id == ai_task_id)
+                .limit(1)
+            )
+            if task is None:
+                return None
+            result = db.scalar(
+                select(AiTaskResult)
+                .where(AiTaskResult.owner_id == owner_id, AiTaskResult.ai_task_id == ai_task_id)
+                .order_by(AiTaskResult.created_at.desc(), AiTaskResult.id.desc())
+                .limit(1)
+            )
+            payload = _feedback_payload_for_task(db, owner_id=owner_id, ai_task_id=ai_task_id)
+            return _result_projection(task, result=result, payload=payload)
+
+    def get_ref(self, ai_task_id: str):
+        with self.session_scope() as db:
+            task = db.get(AiTask, ai_task_id)
+            if task is None:
+                return None
+            from app.domain.shared.refs import ResourceRef
+
+            return ResourceRef(resource_type="ai_task", resource_id=ai_task_id)
+
+
+def _status_projection(
+    task: AiTask,
+    *,
+    result: AiTaskResult | None,
+    payload: dict[str, Any] | None,
+) -> dict[str, object]:
+    return {
+        "ai_task_id": task.id,
+        "task_type": task.task_type,
+        "status": task.status,
+        "contract_ids": _string_list(task.contract_ids),
+        "retryable": _is_retryable(task.status, payload),
+        "result_ref": _result_ref(task, result=result),
+        "user_visible_status": _user_visible_status(task.status, payload),
+        "candidate_refs": _candidate_refs(payload),
+        "suggestion_refs": _suggestion_refs(payload),
+        "validation_errors": _validation_errors(payload),
+        "provider_payload": None,
+    }
+
+
+def _result_projection(
+    task: AiTask,
+    *,
+    result: AiTaskResult | None,
+    payload: dict[str, Any] | None,
+) -> dict[str, object]:
+    return {
+        "ai_task_id": task.id,
+        "status": result.status if result is not None else task.status,
+        "result_ref": _result_ref(task, result=result),
+        "candidate_refs": _candidate_refs(payload),
+        "suggestion_refs": _suggestion_refs(payload),
+        "validation_result_ref": _validation_result_ref(result),
+        "result_payload": _sanitize_payload(payload),
+        "provider_payload": None,
+    }
+
+
+def _feedback_payload_for_task(db, *, owner_id: str, ai_task_id: str) -> dict[str, Any] | None:
+    feedback = db.scalar(
+        select(Feedback)
+        .where(Feedback.owner_id == owner_id, Feedback.ai_task_id == ai_task_id)
+        .order_by(Feedback.created_at.desc(), Feedback.id.desc())
+        .limit(1)
+    )
+    if feedback is None or not feedback.feedback_summary:
+        return None
+    try:
+        payload = json.loads(feedback.feedback_summary)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _result_ref(task: AiTask, *, result: AiTaskResult | None) -> dict[str, object] | None:
+    if result is not None:
+        ref_id = result.result_ref_id or result.validation_result_ref_id or result.trace_ref_id
+        if ref_id:
+            return {
+                "trace_ref_id": ref_id,
+                "trace_type": "validation_result" if result.validation_result_ref_id else "feedback",
+                "created_at": result.created_at,
+            }
+    trace_refs = task.trace_ref_ids if isinstance(task.trace_ref_ids, list) else []
+    first_ref = next((str(item) for item in trace_refs if str(item).strip()), None)
+    if first_ref is None:
+        return None
+    return {"trace_ref_id": first_ref, "trace_type": "ai_task", "created_at": task.created_at}
+
+
+def _validation_result_ref(result: AiTaskResult | None) -> dict[str, str] | None:
+    if result is None or not result.validation_result_ref_id:
+        return None
+    return {"resource_type": "validation_result", "resource_id": result.validation_result_ref_id}
+
+
+def _candidate_refs(payload: dict[str, Any] | None) -> list[dict[str, str]]:
+    if not isinstance(payload, dict):
+        return []
+    refs: list[dict[str, str]] = []
+    metadata = payload.get("feedback_metadata")
+    if isinstance(metadata, dict):
+        candidate_ref = str(metadata.get("candidate_ref") or "").strip()
+        if candidate_ref:
+            refs.append({"resource_type": "feedback_candidate", "resource_id": candidate_ref})
+        asset_refs = metadata.get("asset_update_candidate_refs")
+        if isinstance(asset_refs, list):
+            for item in asset_refs:
+                resource_id = str(item or "").strip()
+                if resource_id:
+                    refs.append({"resource_type": "asset_update_candidate", "resource_id": resource_id})
+    return _dedupe_refs(refs)
+
+
+def _suggestion_refs(payload: dict[str, Any] | None) -> list[dict[str, str]]:
+    if not isinstance(payload, dict):
+        return []
+    refs = payload.get("suggestion_refs")
+    if not isinstance(refs, list):
+        return []
+    return _dedupe_refs(
+        [
+            {"resource_type": str(item.get("resource_type") or ""), "resource_id": str(item.get("resource_id") or "")}
+            for item in refs
+            if isinstance(item, dict)
+        ]
+    )
+
+
+def _dedupe_refs(refs: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[tuple[str, str]] = set()
+    result: list[dict[str, str]] = []
+    for ref in refs:
+        resource_type = ref["resource_type"].strip()
+        resource_id = ref["resource_id"].strip()
+        key = (resource_type, resource_id)
+        if resource_type and resource_id and key not in seen:
+            seen.add(key)
+            result.append({"resource_type": resource_type, "resource_id": resource_id})
+    return result
+
+
+def _validation_errors(payload: dict[str, Any] | None) -> list[str]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("validation_errors"), list):
+        return []
+    return [str(item) for item in payload["validation_errors"] if str(item).strip()]
+
+
+def _user_visible_status(status: str, payload: dict[str, Any] | None) -> str:
+    if isinstance(payload, dict):
+        value = payload.get("user_visible_status")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    if status == "running":
+        return "反馈生成中"
+    if status == "queued":
+        return "任务已排队"
+    if status == "succeeded":
+        return "反馈已生成"
+    if status == "generation_failed":
+        return "反馈生成失败，可重试"
+    if status == "timed_out":
+        return "任务已超时，可重试"
+    if status == "cancelled":
+        return "任务已取消"
+    return status
+
+
+def _is_retryable(status: str, payload: dict[str, Any] | None) -> bool:
+    if isinstance(payload, dict) and isinstance(payload.get("retryable"), bool):
+        return bool(payload["retryable"])
+    return status in {"generation_failed", "timed_out", "source_unavailable"}
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+_FORBIDDEN_KEYS = {
+    "raw_prompt",
+    "prompt",
+    "completion",
+    "raw_completion",
+    "provider_payload",
+    "raw_provider_payload",
+    "hidden_rubric",
+    "full_evidence_text",
+    "full_resume",
+    "full_jd",
+    "token",
+    "api_key",
+    "cookie",
+    "secret",
+}
+
+
+def _sanitize_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).lower()
+            if normalized_key in _FORBIDDEN_KEYS:
+                continue
+            sanitized[str(key)] = _sanitize_payload(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_payload(item) for item in value]
+    if isinstance(value, str) and _contains_forbidden_marker(value):
+        return "redacted_sensitive_detail"
+    return value
+
+
+def _contains_forbidden_marker(value: str) -> bool:
+    normalized = value.lower()
+    return any(marker in normalized for marker in _FORBIDDEN_KEYS)

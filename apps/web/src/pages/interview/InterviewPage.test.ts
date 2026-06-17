@@ -121,6 +121,8 @@ import {
   getWorkbenchProgressNodeQuestionTargetRef,
   getWorkbenchProgressNodeStatusLightTone,
   isQuestionNode,
+  isPolishAiTaskFinalStatus,
+  isPolishAiTaskRunningStatus,
   normalizeInterviewTopicTitle,
   normalizeProgressTreeDetailCopy,
   resolveProgressTreeRecoveryAction,
@@ -155,6 +157,8 @@ import {
   createPolishSession,
   dismissPolishCandidate,
   endPolishSession,
+  fetchPolishAiTaskResult,
+  fetchPolishAiTaskStatus,
   fetchPolishCandidates,
   fetchPolishSession,
   fetchPolishSessions,
@@ -166,6 +170,7 @@ import {
 import type { JobSummary } from "../../entities/job/model/types";
 import type {
   CreatePolishSessionRequest,
+  PolishAiTaskResult,
   PolishCandidate,
   PolishCandidateActionResult,
   PolishContextHygieneStatus,
@@ -175,6 +180,7 @@ import type {
   PolishSessionAnswer,
   PolishSessionDetail,
   PolishSessionSummary,
+  PolishTaskStatus,
   PolishTopic,
 } from "../../entities/polish/model/types";
 
@@ -652,6 +658,12 @@ type CandidateDismissApiReturnsActionResult = Expect<
 type ListApiReturnsSessionSummaries = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishSessions>>, PolishSessionSummary[]>
 >;
+type AiTaskStatusApiReturnsTaskStatus = Expect<
+  Equal<Awaited<ReturnType<typeof fetchPolishAiTaskStatus>>, PolishTaskStatus>
+>;
+type AiTaskResultApiReturnsResult = Expect<
+  Equal<Awaited<ReturnType<typeof fetchPolishAiTaskResult>>, PolishAiTaskResult>
+>;
 type PolishSessionContinuityStatusAllowsFallbackStates = Expect<
   Equal<PolishSessionContinuityStatus, "ready" | "partial" | "stale" | "blocked" | "unknown">
 >;
@@ -1017,6 +1029,28 @@ function test_polish_core_workbench_contract_stays_on_session_tree_question_answ
   for (const nonGoalTerm of ["pressure", "Pressure", "压力面", "review", "Review", "training", "Training"]) {
     assertContract(!shellContractText.includes(nonGoalTerm), `Polish 工作台 shell 不应出现非目标主流程 ${nonGoalTerm}`);
   }
+}
+
+function test_polish_feedback_runtime_reads_ai_task_status_and_result_paths(): void {
+  assertContract(POLISH_API_PATHS.aiTaskStatus("task_feedback") === "/ai-tasks/task_feedback", "反馈运行态应读取 AI task status");
+  assertContract(POLISH_API_PATHS.aiTaskResult("task_feedback") === "/ai-tasks/task_feedback/result", "反馈运行态应读取 AI task result");
+  assertContract(isPolishAiTaskRunningStatus("running"), "running 应进入轮询状态");
+  assertContract(isPolishAiTaskRunningStatus("queued"), "queued 应进入轮询状态");
+  assertContract(!isPolishAiTaskRunningStatus("succeeded"), "succeeded 不应继续轮询");
+  assertContract(isPolishAiTaskFinalStatus("succeeded"), "succeeded 应视为终态");
+  assertContract(isPolishAiTaskFinalStatus("generation_failed"), "generation_failed 应视为终态");
+  assertContract(isPolishAiTaskFinalStatus("timed_out"), "timed_out 应视为终态");
+  const result: PolishAiTaskResult = {
+    ai_task_id: "task_feedback",
+    status: "succeeded",
+    result_ref: null,
+    candidate_refs: [],
+    suggestion_refs: [],
+    validation_result_ref: null,
+    result_payload: null,
+    provider_payload: null,
+  };
+  assertContract(result.provider_payload === null, "AI task result 不应携带 provider payload");
 }
 
 function test_polish_m25_components_are_split_and_exported(): void {
@@ -4254,6 +4288,7 @@ function test_interview_topic_title_neutralizes_interrogation_copy(): void {
 test_interview_list_toolbar_uses_shared_actions_and_search();
 test_interview_list_actions_cover_report_end_and_soft_delete();
 test_polish_core_workbench_contract_stays_on_session_tree_question_answer_feedback();
+test_polish_feedback_runtime_reads_ai_task_status_and_result_paths();
 test_polish_m25_components_are_split_and_exported();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();
