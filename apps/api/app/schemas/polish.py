@@ -250,6 +250,11 @@ class CreateFeedbackNextQuestionIntentRequest(BaseModel):
                 raise ValueError("ref entries must match the allowed ref pattern")
         return value
 
+
+class CreateQuestionTaskRequest(CreateFeedbackNextQuestionIntentRequest):
+    pass
+
+
 class CreateAnswerRequest(BaseModel):
     question_id: str = Field(min_length=1)
     answer_text: str

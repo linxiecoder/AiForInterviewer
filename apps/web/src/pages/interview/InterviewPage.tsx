@@ -52,6 +52,7 @@ import {
   completePolishQuestion,
   confirmPolishCandidate,
   createPolishAnswer,
+  createPolishNodeQuestionTask,
   createPolishFeedbackTask,
   createPolishFeedbackNextQuestionTask,
   createPolishSession,
@@ -78,6 +79,7 @@ import type {
   PolishSessionAnswer,
   PolishSessionDetail,
   PolishSessionSummary,
+  PolishTaskStatus,
   PolishTopic,
 } from "../../entities/polish/model/types";
 import { isApiHttpError } from "../../shared/api/errors";
@@ -1954,6 +1956,48 @@ export type WorkbenchQuestionComposerActionViewModel = {
   followUpQuestionParentFeedbackId: string | null;
 };
 
+export type WorkbenchQuestionGenerationButtonMode = "current_node_question" | "feedback_next_question";
+
+export type WorkbenchQuestionGenerationButtonViewModel = {
+  mode: WorkbenchQuestionGenerationButtonMode;
+  canCreate: boolean;
+  copy: string;
+  tooltip: string;
+};
+
+export function deriveQuestionGenerationButtonViewModel(params: {
+  canCreateCurrentNodeQuestion: boolean;
+  canCreateFeedbackNextQuestion: boolean;
+  currentNodeQuestionCopy: string;
+  currentNodeQuestionDisabledReason: string | null;
+  feedbackNextQuestionCopy: string;
+  feedbackNextQuestionTooltip: string;
+  feedbackNextQuestionDisabledReason: string;
+}): WorkbenchQuestionGenerationButtonViewModel {
+  if (params.canCreateFeedbackNextQuestion) {
+    return {
+      mode: "feedback_next_question",
+      canCreate: true,
+      copy: params.feedbackNextQuestionCopy,
+      tooltip: params.feedbackNextQuestionTooltip,
+    };
+  }
+  if (params.canCreateCurrentNodeQuestion) {
+    return {
+      mode: "current_node_question",
+      canCreate: true,
+      copy: params.currentNodeQuestionCopy,
+      tooltip: params.currentNodeQuestionCopy,
+    };
+  }
+  return {
+    mode: "feedback_next_question",
+    canCreate: false,
+    copy: params.feedbackNextQuestionCopy,
+    tooltip: params.currentNodeQuestionDisabledReason ?? params.feedbackNextQuestionDisabledReason,
+  };
+}
+
 export function deriveComposerActionViewModel(params: {
   session: PolishSessionDetail | null;
   questionActionState: WorkbenchQuestionActionState;
@@ -2414,6 +2458,36 @@ export function resolveWorkbenchQuestionFocusId(
     resolveCurrentQuestionState(session, progressNodeRef)?.questionId ??
     null
   );
+}
+
+export interface WorkbenchGeneratedQuestionFocus {
+  selectedProgressNodeRef: string | null;
+  selectedProgressNodeKey: string | null;
+  selectedQuestionId: string | null;
+}
+
+function findTaskCandidateResourceId(
+  task: Pick<PolishTaskStatus, "candidate_refs">,
+  resourceType: string,
+): string | null {
+  return task.candidate_refs.find((ref) => ref.resource_type === resourceType && ref.resource_id.length > 0)
+    ?.resource_id ?? null;
+}
+
+export function resolveGeneratedQuestionFocusFromTask(
+  task: Pick<PolishTaskStatus, "candidate_refs">,
+  fallbackProgressNodeRef: string | null,
+): WorkbenchGeneratedQuestionFocus {
+  const selectedQuestionId = findTaskCandidateResourceId(task, "question");
+  const selectedProgressNodeRef =
+    findTaskCandidateResourceId(task, "progress_node") ?? fallbackProgressNodeRef;
+  return {
+    selectedProgressNodeRef,
+    selectedProgressNodeKey: selectedQuestionId !== null
+      ? `question:${selectedQuestionId}`
+      : selectedProgressNodeRef,
+    selectedQuestionId,
+  };
 }
 
 export function buildProgressTreeNodeDetailViewModel(
@@ -4103,11 +4177,11 @@ export type FeedbackFormProps = {
   isSessionEnded: boolean;
   answerText: string;
   canSendAnswer: boolean;
-  canCreateFeedbackNextQuestion: boolean;
+  questionGenerationButton: WorkbenchQuestionGenerationButtonViewModel;
   composerActionState: WorkbenchQuestionComposerActionViewModel;
   onAnswerTextChange: (value: string) => void;
   onSendAnswer: () => void;
-  onCreateFeedbackNextQuestion: () => void;
+  onCreateQuestionFromComposer: (mode: WorkbenchQuestionGenerationButtonMode) => void;
   onCompleteCurrentQuestion: () => void;
 };
 
@@ -4122,11 +4196,11 @@ export function FeedbackForm({
   isSessionEnded,
   answerText,
   canSendAnswer,
-  canCreateFeedbackNextQuestion,
+  questionGenerationButton,
   composerActionState,
   onAnswerTextChange,
   onSendAnswer,
-  onCreateFeedbackNextQuestion,
+  onCreateQuestionFromComposer,
   onCompleteCurrentQuestion,
 }: FeedbackFormProps): ReactElement {
   return (
@@ -4185,19 +4259,15 @@ export function FeedbackForm({
       />
       <div className={styles.currentQuestionComposerActions}>
         <div className={styles.currentQuestionComposerLeftActions}>
-          <Tooltip
-            title={canCreateFeedbackNextQuestion
-              ? "由后端根据当前反馈策略决定是否生成下一题"
-              : "需要当前题目已有反馈后才能请求生成下一题"}
-          >
+          <Tooltip title={questionGenerationButton.tooltip}>
             <span>
               <Button
                 icon={<PlusOutlined />}
                 loading={creatingQuestion}
-                disabled={!canCreateFeedbackNextQuestion}
-                onClick={onCreateFeedbackNextQuestion}
+                disabled={!questionGenerationButton.canCreate}
+                onClick={() => onCreateQuestionFromComposer(questionGenerationButton.mode)}
               >
-                生成下一题
+                {questionGenerationButton.copy}
               </Button>
             </span>
           </Tooltip>
@@ -4986,12 +5056,21 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     void loadSession();
   }, [sessionId]);
 
-  const createFeedbackNextQuestion = async (feedbackId: string, progressNodeRef?: string | null) => {
+  const focusGeneratedQuestionTask = (task: PolishTaskStatus, progressNodeRef: string | null) => {
+    const generatedFocus = resolveGeneratedQuestionFocusFromTask(task, progressNodeRef);
+    setSelectedProgressNodeRef(generatedFocus.selectedProgressNodeRef);
+    setSelectedProgressNodeKey(generatedFocus.selectedProgressNodeKey);
+    setSelectedQuestionId(generatedFocus.selectedQuestionId);
+    setSelectedAnswerId(null);
+    chatScrollManuallyScrolledRef.current = false;
+  };
+
+  const createCurrentNodeQuestion = async (progressNodeRef?: string | null) => {
     if (session === null) {
       return;
     }
     if (isPolishSessionEnded(session)) {
-      setAnswerError("模拟面试已结束，不能继续生成题目。");
+      setAnswerError("\u6a21\u62df\u9762\u8bd5\u5df2\u7ed3\u675f\uff0c\u4e0d\u80fd\u7ee7\u7eed\u751f\u6210\u9898\u76ee\u3002");
       return;
     }
     const targetProgressNodeRef = resolveQuestionGenerationProgressNodeRef(
@@ -5000,23 +5079,62 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       selectedProgressNodeDetailRef,
     );
     if (targetProgressNodeRef === null) {
-      setAnswerError("请先选择一个进展栏目后再生成题目。");
+      setAnswerError("\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u8fdb\u5c55\u680f\u76ee\u540e\u518d\u751f\u6210\u9898\u76ee\u3002");
       return;
     }
     setCreatingQuestion(true);
     setAnswerError(null);
     setWorkbenchFailureState(null);
     try {
-      await createPolishFeedbackNextQuestionTask(sessionId, feedbackId, {
+      const task = await createPolishNodeQuestionTask(sessionId, {
         selected_progress_node_ref: targetProgressNodeRef,
         completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
       });
+      focusGeneratedQuestionTask(task, targetProgressNodeRef);
       await loadSession();
     } catch (createError) {
       setAnswerError(
         createError instanceof Error
           ? createError.message
-          : "生成题目失败，请稍后重试。",
+          : "\u751f\u6210\u9898\u76ee\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002",
+      );
+    } finally {
+      setCreatingQuestion(false);
+    }
+  };
+
+  const createFeedbackNextQuestion = async (feedbackId: string, progressNodeRef?: string | null) => {
+    if (session === null) {
+      return;
+    }
+    if (isPolishSessionEnded(session)) {
+      setAnswerError("\u6a21\u62df\u9762\u8bd5\u5df2\u7ed3\u675f\uff0c\u4e0d\u80fd\u7ee7\u7eed\u751f\u6210\u9898\u76ee\u3002");
+      return;
+    }
+    const targetProgressNodeRef = resolveQuestionGenerationProgressNodeRef(
+      session,
+      progressNodeRef,
+      selectedProgressNodeDetailRef,
+    );
+    if (targetProgressNodeRef === null) {
+      setAnswerError("\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u8fdb\u5c55\u680f\u76ee\u540e\u518d\u751f\u6210\u9898\u76ee\u3002");
+      return;
+    }
+    setCreatingQuestion(true);
+    setAnswerError(null);
+    setWorkbenchFailureState(null);
+    try {
+      const task = await createPolishFeedbackNextQuestionTask(sessionId, feedbackId, {
+        selected_progress_node_ref: targetProgressNodeRef,
+        completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
+      });
+      focusGeneratedQuestionTask(task, targetProgressNodeRef);
+      await loadSession();
+    } catch (createError) {
+      setAnswerError(
+        createError instanceof Error
+          ? createError.message
+          : "\u751f\u6210\u9898\u76ee\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002",
       );
     } finally {
       setCreatingQuestion(false);
@@ -5229,6 +5347,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       !completingQuestion &&
       !endingSession,
   );
+  const canCreateCurrentNodeQuestion = Boolean(
+    questionActionState.canGenerateQuestion &&
+      focusedQuestionLatestFeedbackId === null &&
+      selectedProgressNodeDetailRef !== null,
+  );
+  const questionGenerationButton = deriveQuestionGenerationButtonViewModel({
+    canCreateCurrentNodeQuestion,
+    canCreateFeedbackNextQuestion,
+    currentNodeQuestionCopy: composerActionState.regenerateQuestionButtonCopy,
+    currentNodeQuestionDisabledReason: composerActionState.regenerateQuestionDisabledReason,
+    feedbackNextQuestionCopy: "生成下一题",
+    feedbackNextQuestionTooltip: "由后端根据当前反馈策略决定是否生成下一题",
+    feedbackNextQuestionDisabledReason: "需要当前题目已有反馈后才能请求生成下一题",
+  });
   const selectedCandidateReview = buildCandidateReviewViewModel(
     selectedAnswer
       ? candidates.filter((candidate) => candidateBelongsToAnswer(candidate, selectedAnswer))
@@ -6096,13 +6228,17 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         isSessionEnded={isSessionEnded}
         answerText={answerText}
         canSendAnswer={canSendAnswer}
-        canCreateFeedbackNextQuestion={canCreateFeedbackNextQuestion}
+        questionGenerationButton={questionGenerationButton}
         composerActionState={composerActionState}
         onAnswerTextChange={setAnswerText}
         onSendAnswer={() => {
           void sendAnswer();
         }}
-        onCreateFeedbackNextQuestion={() => {
+        onCreateQuestionFromComposer={(mode) => {
+          if (mode === "current_node_question") {
+            void createCurrentNodeQuestion(selectedProgressNodeDetailRef);
+            return;
+          }
           if (focusedQuestionLatestFeedbackId === null) {
             setAnswerError("当前题目还没有可授权的反馈，无法生成下一题。");
             return;

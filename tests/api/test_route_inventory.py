@@ -44,6 +44,8 @@ def test_route_inventory_registers_polish_core_routes() -> None:
     assert "/api/v1/polish-sessions" in paths
     assert {"GET", "POST"}.issubset(methods_by_path["/api/v1/polish-sessions"])
     assert "/api/v1/polish-sessions/{session_id}" in paths
+    assert "/api/v1/polish-sessions/{session_id}/questions" in paths
+    assert {"POST"}.issubset(methods_by_path["/api/v1/polish-sessions/{session_id}/questions"])
     assert "/api/v1/polish-sessions/{session_id}/feedback/{feedback_id}/next-question" in paths
     assert "/api/v1/polish-sessions/{session_id}/answers" in paths
     assert "/api/v1/polish-sessions/{session_id}/feedback" in paths

@@ -106,6 +106,7 @@ import {
   canFollowUpCurrentQuestion,
   canMarkCurrentQuestionCompleted,
   deriveComposerActionViewModel,
+  deriveQuestionGenerationButtonViewModel,
   deriveWorkbenchQuestionActionState,
   deriveWorkbenchMachineState,
   canRegenerateQuestionForCurrentNode,
@@ -138,6 +139,7 @@ import {
   resolveCurrentWorkbenchProgressNodeKey,
   resolveProgressTreeDetailNodeRef,
   resolveWorkbenchQuestionFocusId,
+  resolveGeneratedQuestionFocusFromTask,
   resolveProgressTreeSelectedNodeRefAfterClick,
   canSubmitAnswerFromKeyboard,
   getWorkbenchChatMessageAlignmentClassName,
@@ -157,6 +159,7 @@ import {
   POLISH_API_PATHS,
   completePolishQuestion,
   confirmPolishCandidate,
+  createPolishNodeQuestionTask,
   createPolishSession,
   dismissPolishCandidate,
   endPolishSession,
@@ -664,6 +667,9 @@ type ListApiReturnsSessionSummaries = Expect<
 type AiTaskStatusApiReturnsTaskStatus = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishAiTaskStatus>>, PolishTaskStatus>
 >;
+type PolishNodeQuestionTaskApiReturnsTaskStatus = Expect<
+  Equal<Awaited<ReturnType<typeof createPolishNodeQuestionTask>>, PolishTaskStatus>
+>;
 type AiTaskResultApiReturnsResult = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishAiTaskResult>>, PolishAiTaskResult>
 >;
@@ -691,6 +697,9 @@ type PolishSessionDetailPathIsStable = Expect<
 >;
 type PolishFeedbackNextQuestionPathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.feedbackNextQuestionTask>, `/polish-sessions/${string}/feedback/${string}/next-question`>
+>;
+type PolishQuestionTaskPathIsStable = Expect<
+  Equal<ReturnType<typeof POLISH_API_PATHS.questionTask>, `/polish-sessions/${string}/questions`>
 >;
 type PolishQuestionCompletePathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.completeQuestion>, `/polish-sessions/${string}/questions/${string}/complete`>
@@ -1003,6 +1012,7 @@ function test_polish_core_workbench_contract_stays_on_session_tree_question_answ
     POLISH_API_PATHS.sessionDetail("ses_core"),
     POLISH_API_PATHS.progressTreeGenerate("ses_core"),
     POLISH_API_PATHS.progressTreeState("ses_core"),
+    POLISH_API_PATHS.questionTask("ses_core"),
     POLISH_API_PATHS.completeQuestion("ses_core", "q_core"),
     POLISH_API_PATHS.feedbackNextQuestionTask("ses_core", "fb_core"),
     POLISH_API_PATHS.answers("ses_core"),
@@ -2079,6 +2089,44 @@ function test_workbench_composer_regenerate_for_node_without_selected_question_a
   );
 }
 
+function test_workbench_question_generation_button_supports_selected_node_without_feedback(): void {
+  const currentNodeButton = deriveQuestionGenerationButtonViewModel({
+    canCreateCurrentNodeQuestion: true,
+    canCreateFeedbackNextQuestion: false,
+    currentNodeQuestionCopy: INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON,
+    currentNodeQuestionDisabledReason: null,
+    feedbackNextQuestionCopy: "Generate next",
+    feedbackNextQuestionTooltip: "Feedback next enabled",
+    feedbackNextQuestionDisabledReason: "Feedback next disabled",
+  });
+  const feedbackButton = deriveQuestionGenerationButtonViewModel({
+    canCreateCurrentNodeQuestion: true,
+    canCreateFeedbackNextQuestion: true,
+    currentNodeQuestionCopy: INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON,
+    currentNodeQuestionDisabledReason: null,
+    feedbackNextQuestionCopy: "Generate next",
+    feedbackNextQuestionTooltip: "Feedback next enabled",
+    feedbackNextQuestionDisabledReason: "Feedback next disabled",
+  });
+  const disabledButton = deriveQuestionGenerationButtonViewModel({
+    canCreateCurrentNodeQuestion: false,
+    canCreateFeedbackNextQuestion: false,
+    currentNodeQuestionCopy: INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON,
+    currentNodeQuestionDisabledReason: "Pick a node first",
+    feedbackNextQuestionCopy: "Generate next",
+    feedbackNextQuestionTooltip: "Feedback next enabled",
+    feedbackNextQuestionDisabledReason: "Feedback next disabled",
+  });
+
+  assertContract(currentNodeButton.mode === "current_node_question", "selected node without feedback should create a node question");
+  assertContract(currentNodeButton.canCreate, "selected node question button should be enabled");
+  assertContract(currentNodeButton.copy === INTERVIEW_WORKBENCH_REGENERATE_NODE_BUTTON, "selected node button should use node generation copy");
+  assertContract(feedbackButton.mode === "feedback_next_question", "feedback next should stay preferred when authorized feedback exists");
+  assertContract(feedbackButton.copy === "Generate next", "feedback next copy should stay stable");
+  assertContract(!disabledButton.canCreate, "button should be disabled without either creation path");
+  assertContract(disabledButton.tooltip === "Pick a node first", "disabled button should surface node selection reason first");
+}
+
 function test_workbench_composer_regenerate_preserves_draft_guard(): void {
   assertContract(
     !shouldConfirmBeforeRegenerateQuestion(""),
@@ -2348,6 +2396,25 @@ function test_progress_tree_click_focuses_latest_question_for_node(): void {
 
   assertContract(resolveWorkbenchQuestionFocusId(session, progressNode, "node_focus") === "q_focus_latest", "点击进展节点应定位到该节点最新题目");
   assertContract(resolveWorkbenchQuestionFocusId(session, oldQuestionNode, "node_focus") === "q_focus_old", "点击题目节点应定位到该题目");
+}
+
+function test_generated_question_task_focus_selects_question_node_key(): void {
+  const generatedFocus = resolveGeneratedQuestionFocusFromTask({
+    candidate_refs: [
+      { resource_type: "progress_node", resource_id: "node_second_level" },
+      { resource_type: "question", resource_id: "q_next" },
+    ],
+  }, "node_fallback");
+  const pendingFocus = resolveGeneratedQuestionFocusFromTask({
+    candidate_refs: [],
+  }, "node_fallback");
+
+  assertContract(generatedFocus.selectedProgressNodeRef === "node_second_level", "generated question focus should keep the target progress node");
+  assertContract(generatedFocus.selectedProgressNodeKey === "question:q_next", "generated question focus should highlight the question entry");
+  assertContract(generatedFocus.selectedQuestionId === "q_next", "generated question focus should select the generated question");
+  assertContract(pendingFocus.selectedProgressNodeRef === "node_fallback", "pending task focus should keep the requested node fallback");
+  assertContract(pendingFocus.selectedProgressNodeKey === "node_fallback", "pending task focus should keep the node highlighted");
+  assertContract(pendingFocus.selectedQuestionId === null, "pending task focus should not invent a question id");
 }
 
 function test_workbench_chat_auto_scroll_trigger_changes_on_focus_and_feedback(): void {
@@ -4384,6 +4451,7 @@ test_current_focused_question_bubble_is_rendered_when_sticky_context_visible();
   test_workbench_composer_follow_up_disabled_without_history_or_contract();
   test_workbench_composer_regenerate_available_for_current_question_without_completion();
   test_workbench_composer_regenerate_for_node_without_selected_question_and_no_node_ref();
+  test_workbench_question_generation_button_supports_selected_node_without_feedback();
   test_workbench_composer_regenerate_preserves_draft_guard();
   test_workbench_composer_mark_completed_and_regenerate_confirmation_gate();
   test_progress_tree_context_menu_items_follow_question_action_state();
@@ -4391,6 +4459,7 @@ test_progress_tree_context_menu_closes_on_escape_and_external_events();
 test_progress_tree_question_entry_is_selectable_by_node_type();
 test_progress_tree_click_focuses_latest_question_for_node();
 test_authenticated_frontend_smoke_fixture_covers_list_and_workbench_metadata();
+test_generated_question_task_focus_selects_question_node_key();
 test_map_feedback_code_to_display_to_chinese_by_default();
 test_feedback_card_view_model_hides_raw_feedback_codes();
 test_feedback_card_view_model_uses_contract_payload_sections_and_actions();

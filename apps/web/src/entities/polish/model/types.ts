@@ -393,6 +393,12 @@ export interface CreatePolishFeedbackNextQuestionIntentRequest {
   completed_focus_refs?: string[];
 }
 
+export interface CreatePolishQuestionTaskRequest {
+  selected_progress_node_ref?: string | null;
+  exclude_question_refs?: string[];
+  completed_focus_refs?: string[];
+}
+
 export interface CreatePolishAnswerRequest {
   question_id: string;
   answer_text: string;

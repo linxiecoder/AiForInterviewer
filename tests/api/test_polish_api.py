@@ -3696,6 +3696,40 @@ def test_progress_tree_refresh_no_longer_refreshes_grounded_plan_v2_as_active_sc
     assert result["progress_tree_state"]["failure_reason"] == "llm_transport_missing"
 
 
+def test_polish_question_task_generates_for_selected_progress_node() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_ProviderStyleQuestionTransport(),
+    )
+    status_code, ready_body = _create_ready_polish_session(app, {"resume_job_binding_id": binding_id})
+    assert status_code == 200
+    session_data = ready_body["data"]
+    session_id = session_data["session_id"]
+    progress_node_ref = session_data["progress_tree_state"]["current_priority"]["progress_node_ref"]
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/questions",
+        "POST",
+        json_body={"selected_progress_node_ref": progress_node_ref},
+    )
+
+    assert status_code == 202, body.get("error", {}).get("details", body)
+    question_id = body["data"]["result_ref"]["trace_ref_id"]
+    assert question_id
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    turns = {turn["question_id"]: turn for turn in detail_body["data"]["turns"]}
+    assert question_id in turns
+    assert turns[question_id]["progress_node_ref"] == progress_node_ref
+    metadata = turns[question_id]["question_metadata"]
+    assert metadata["generation_mode"] == "new_question"
+    assert metadata["request_source"] == "explicit_selected_category"
+    assert metadata["selected_progress_node_ref"] == progress_node_ref
+
+
 def test_polish_feedback_next_question_intent_authorizes_latest_feedback() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)

@@ -1,6 +1,7 @@
 import { request, buildSuccessData } from "../../../shared/api/client";
 import type {
   CreatePolishAnswerRequest,
+  CreatePolishQuestionTaskRequest,
   CreatePolishFeedbackTaskRequest,
   CreatePolishFeedbackNextQuestionIntentRequest,
   CreatePolishSessionRequest,
@@ -19,6 +20,7 @@ export const POLISH_API_PATHS = {
   sessionDetail: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}` as `/polish-sessions/${string}`,
   feedbackNextQuestionTask: (sessionId: string, feedbackId: string) =>
     `/polish-sessions/${encodeURIComponent(sessionId)}/feedback/${encodeURIComponent(feedbackId)}/next-question` as `/polish-sessions/${string}/feedback/${string}/next-question`,
+  questionTask: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions` as `/polish-sessions/${string}/questions`,
   completeQuestion: (sessionId: string, questionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/complete` as `/polish-sessions/${string}/questions/${string}/complete`,
   endSession: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/end` as `/polish-sessions/${string}/end`,
   sessionReport: (sessionId: string) => `/polish-sessions/${encodeURIComponent(sessionId)}/report` as `/polish-sessions/${string}/report`,
@@ -107,6 +109,21 @@ export async function dismissPolishCandidate(candidateId: string): Promise<Polis
   const data = buildSuccessData(response);
   if (data === null) {
     throw new Error("候选忽略返回为空");
+  }
+  return data;
+}
+
+export async function createPolishNodeQuestionTask(
+  sessionId: string,
+  payload: CreatePolishQuestionTaskRequest = {},
+): Promise<PolishTaskStatus> {
+  const response = await request<PolishTaskStatus>(POLISH_API_PATHS.questionTask(sessionId), {
+    method: "POST",
+    body: payload,
+  });
+  const data = buildSuccessData(response);
+  if (data === null) {
+    throw new Error("Question generation task response is empty");
   }
   return data;
 }
