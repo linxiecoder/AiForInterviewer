@@ -67,7 +67,8 @@ def test_alembic_upgrade_creates_version_and_representative_tables(monkeypatch) 
         }.issubset(tables)
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0004_feedback_reserved_pending"
+        assert version == "0005_answer_idempotency_columns"
+        assert {"idempotency_key", "request_body_hash"}.issubset(_column_names(engine, "answers"))
     finally:
         temp_artifacts.cleanup()
 
@@ -205,7 +206,7 @@ def test_asset_rag_revision_preserves_legacy_unversioned_rag_tables(monkeypatch)
                 text("SELECT COUNT(*) FROM rag_documents_legacy_pre_0003")
             ).scalar_one()
             legacy_chunks = connection.execute(text("SELECT COUNT(*) FROM rag_chunks_legacy_pre_0003")).scalar_one()
-        assert version == "0004_feedback_reserved_pending"
+        assert version == "0005_answer_idempotency_columns"
         assert legacy_documents == 1
         assert legacy_chunks == 1
     finally:
@@ -268,7 +269,7 @@ def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypa
 
         payload = json.loads(row["feedback_summary"])
         assert row["status"] == "pending"
-        assert version == "0004_feedback_reserved_pending"
+        assert version == "0005_answer_idempotency_columns"
         assert payload["schema_id"] == "polish_feedback_generated_v1"
         assert payload["status"] == "pending"
         assert payload["feedback_text"] == "本轮反馈尚未生成"
@@ -279,6 +280,27 @@ def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypa
         assert "retired_extra_payload" not in payload
         assert "feedback_summary" not in payload
         assert "contract_id" not in payload
+    finally:
+        temp_artifacts.cleanup()
+
+
+def test_alembic_head_adds_answer_idempotency_columns_to_existing_schema(monkeypatch) -> None:
+    temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-answer-idempotency")
+    workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    try:
+        db_url = f"sqlite+pysqlite:///{(workspace / 'legacy-answer.sqlite').as_posix()}"
+        monkeypatch.setenv("API_DATABASE_URL", db_url)
+
+        config = Config("alembic.ini")
+        command.upgrade(config, "0004_feedback_reserved_pending")
+
+        engine = create_engine(db_url, future=True)
+        assert "idempotency_key" not in _column_names(engine, "answers")
+
+        command.upgrade(config, "head")
+
+        answer_columns = set(_column_names(engine, "answers"))
+        assert {"idempotency_key", "request_body_hash"}.issubset(answer_columns)
     finally:
         temp_artifacts.cleanup()
 
