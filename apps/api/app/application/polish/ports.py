@@ -12,6 +12,13 @@ from app.application.polish.entities import (
 from app.domain.shared.refs import ResourceRef
 
 
+class PolishSessionVersionConflictError(RuntimeError):
+    def __init__(self, *, base_record_version: int, current_record_version: int) -> None:
+        super().__init__("stale_version_conflict")
+        self.base_record_version = base_record_version
+        self.current_record_version = current_record_version
+
+
 class PolishRepository(Protocol):
     def add_session(self, session: PolishSession) -> None: ...
 

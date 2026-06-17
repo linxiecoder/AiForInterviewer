@@ -73,7 +73,7 @@ from app.application.polish.next_question_authorization import (
     validate_feedback_next_question_authorization_payload,
     validate_next_question_intent,
 )
-from app.application.polish.ports import PolishRepository
+from app.application.polish.ports import PolishRepository, PolishSessionVersionConflictError
 from app.application.polish.progress_application_service import PolishProgressApplicationService
 from app.application.polish.question_generation_policy import (
     DEFAULT_QUESTION_GENERATION_RUNTIME_POLICY,
@@ -148,6 +148,23 @@ UNNAMED_ANSWER_TEXT = "暂无回答"
 UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
 
 
+def _stale_session_version_error(exc: PolishSessionVersionConflictError) -> DomainError:
+    return DomainError(
+        code="stale_version_conflict",
+        message="Polish session state changed. Reload the latest session before retrying.",
+        details={
+            "base_record_version": exc.base_record_version,
+            "current_record_version": exc.current_record_version,
+        },
+        retryable=True,
+        user_action="reload_session",
+    )
+
+
+def _session_with_next_record_version(session: PolishSession) -> PolishSession:
+    return replace(session, record_version=session.record_version + 1)
+
+
 class _PolishUseCaseOperations:
     def __init__(
         self,
@@ -219,6 +236,20 @@ class _PolishUseCaseOperations:
 
     def bootstrap(self) -> ApplicationResult[str]:
         return ApplicationResult(value="polish_skeleton")
+
+    def _persist_progress_tree(self, session: PolishSession) -> ApplicationResult[PolishSession]:
+        try:
+            self._polish_repository.update_progress_tree(session)
+        except PolishSessionVersionConflictError as exc:
+            return ApplicationResult(error=_stale_session_version_error(exc))
+        return ApplicationResult(value=_session_with_next_record_version(session))
+
+    def _persist_session_status(self, session: PolishSession) -> ApplicationResult[PolishSession]:
+        try:
+            self._polish_repository.save_session_status(session)
+        except PolishSessionVersionConflictError as exc:
+            return ApplicationResult(error=_stale_session_version_error(exc))
+        return ApplicationResult(value=_session_with_next_record_version(session))
 
     def list_topics(self, query: ListPolishTopicsQuery) -> ApplicationResult[tuple[PolishTopic, ...]]:
         if query.resume_job_binding_id:
@@ -340,7 +371,10 @@ class _PolishUseCaseOperations:
             progress_tree_plan=generating_artifacts["progress_tree_plan"],
             progress_tree_state=generating_artifacts["progress_tree_state"],
         )
-        self._polish_repository.update_progress_tree(generating_session)
+        generating_result = self._persist_progress_tree(generating_session)
+        if not generating_result.is_success:
+            return ApplicationResult(error=generating_result.error)
+        generating_session = generating_result.value
 
         try:
             progress_artifacts = self._progress_tree_service.generate_initial(detail.progress_context)
@@ -351,14 +385,17 @@ class _PolishUseCaseOperations:
             )
         progress_artifacts = _progress_artifacts_with_theme(progress_artifacts, theme_strategy)
         updated_session = replace(
-            session,
+            generating_session,
             updated_at=utc_now(),
             progress_tree_status=progress_artifacts["status"],
             progress_percent=progress_artifacts["progress_percent"],
             progress_tree_plan=progress_artifacts["progress_tree_plan"],
             progress_tree_state=progress_artifacts["progress_tree_state"],
         )
-        self._polish_repository.update_progress_tree(updated_session)
+        update_result = self._persist_progress_tree(updated_session)
+        if not update_result.is_success:
+            return ApplicationResult(error=update_result.error)
+        updated_session = update_result.value
         return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
 
     def get_session(self, query: GetPolishSessionQuery) -> ApplicationResult[PolishSessionDetail]:
@@ -935,7 +972,10 @@ class _PolishUseCaseOperations:
             completed_at=now,
         )
         updated_session = replace(session, progress_tree_state=progress_tree_state, updated_at=now)
-        self._polish_repository.update_progress_tree(updated_session)
+        update_result = self._persist_progress_tree(updated_session)
+        if not update_result.is_success:
+            return ApplicationResult(error=update_result.error)
+        updated_session = update_result.value
         return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
 
     def end_session(self, command: EndPolishSessionCommand) -> ApplicationResult[PolishSessionDetail]:
@@ -954,7 +994,10 @@ class _PolishUseCaseOperations:
             progress_tree_state=updated_state,
             updated_at=now,
         )
-        self._polish_repository.update_progress_tree(updated_session)
+        update_result = self._persist_progress_tree(updated_session)
+        if not update_result.is_success:
+            return ApplicationResult(error=update_result.error)
+        updated_session = update_result.value
         return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
 
     def create_answer(self, command: CreatePolishAnswerCommand) -> ApplicationResult[PolishAnswer]:
@@ -1103,7 +1146,10 @@ class _PolishUseCaseOperations:
             progress_tree_plan=progress_artifacts["progress_tree_plan"],
             progress_tree_state=progress_artifacts["progress_tree_state"],
         )
-        self._polish_repository.update_progress_tree(updated_session)
+        update_result = self._persist_progress_tree(updated_session)
+        if not update_result.is_success:
+            return ApplicationResult(error=update_result.error)
+        updated_session = update_result.value
         return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=updated_session))
 
     def generate_session_report(
@@ -1138,7 +1184,10 @@ class _PolishUseCaseOperations:
             return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=session))
         now = utc_now()
         deleted_session = replace(session, status=SESSION_STATUS_DELETED, updated_at=now)
-        self._polish_repository.save_session_status(deleted_session)
+        delete_result = self._persist_session_status(deleted_session)
+        if not delete_result.is_success:
+            return ApplicationResult(error=delete_result.error)
+        deleted_session = delete_result.value
         return ApplicationResult(value=self._build_session_detail(owner_id=command.owner_id, session=deleted_session))
 
     def _build_session_detail(

@@ -2128,6 +2128,28 @@ export function resolveProgressTreeRecoveryAction(
   return "none";
 }
 
+export interface ProgressWriteErrorRecovery {
+  action: "reload_session";
+  message: string;
+  failureState: "progressRefreshFailed";
+}
+
+export function resolveProgressWriteErrorRecovery(error: unknown): ProgressWriteErrorRecovery | null {
+  const errorCode = isApiHttpError(error)
+    ? error.code
+    : typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+      ? error.code
+      : null;
+  if (errorCode !== "stale_version_conflict") {
+    return null;
+  }
+  return {
+    action: "reload_session",
+    failureState: "progressRefreshFailed",
+    message: "会话状态已刷新，请基于最新进展继续操作。",
+  };
+}
+
 function isPolishSessionEnded(session: PolishSessionDetail | null): boolean {
   return session?.session_status === "ended";
 }
@@ -4918,6 +4940,17 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     }
   };
 
+  const recoverProgressWriteConflict = async (writeError: unknown): Promise<boolean> => {
+    const recovery = resolveProgressWriteErrorRecovery(writeError);
+    if (recovery === null) {
+      return false;
+    }
+    setWorkbenchFailureState(recovery.failureState);
+    await loadSession();
+    message.warning(recovery.message);
+    return true;
+  };
+
   useEffect(() => {
     setAnswerText("");
     answerSubmissionKeyDraftRef.current = null;
@@ -5048,6 +5081,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           setWorkbenchFailureState(null);
         }
       } catch (refreshError) {
+        if (await recoverProgressWriteConflict(refreshError)) {
+          return;
+        }
         setWorkbenchFailureState("progressRefreshFailed");
         setAnswerError(
           refreshError instanceof Error
@@ -5271,6 +5307,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         message.success("进展树已生成。");
       }
     } catch (error) {
+      if (await recoverProgressWriteConflict(error)) {
+        return;
+      }
       message.error(error instanceof Error ? error.message : "生成进展树失败，请稍后重试。");
     } finally {
       setGeneratingProgressTree(false);
@@ -5293,6 +5332,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         message.success("进展树已刷新。");
       }
     } catch (error) {
+      if (await recoverProgressWriteConflict(error)) {
+        return;
+      }
       setWorkbenchFailureState("progressRefreshFailed");
       message.error(error instanceof Error ? error.message : "刷新进展树失败，请稍后重试。");
     } finally {
@@ -5327,6 +5369,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       await loadCandidateRecords();
       message.success("当前问题已标记为完成。");
     } catch (completeError) {
+      if (await recoverProgressWriteConflict(completeError)) {
+        return;
+      }
       setAnswerError(
         completeError instanceof Error
           ? completeError.message
@@ -5349,6 +5394,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setEndConfirmOpen(false);
       message.success("模拟面试已结束。");
     } catch (endError) {
+      if (await recoverProgressWriteConflict(endError)) {
+        return;
+      }
       setAnswerError(
         endError instanceof Error
           ? endError.message

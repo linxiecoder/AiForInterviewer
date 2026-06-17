@@ -52,6 +52,7 @@ class PolishSession:
     custom_topic_text_summary: str | None
     created_at: datetime
     updated_at: datetime
+    record_version: int = 1
     polish_theme: str | None = None
     progress_tree_status: str = "insufficient_context"
     progress_percent: int = 0

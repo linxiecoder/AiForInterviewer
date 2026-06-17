@@ -144,6 +144,7 @@ import {
   shouldSubmitAnswerFromKeyboard,
   shouldConfirmBeforeRegenerateQuestion,
   resolveAnswerSubmissionKeyDraft,
+  resolveProgressWriteErrorRecovery,
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
   shouldRenderQuestionBubbleInConversation,
@@ -1420,6 +1421,19 @@ function test_progress_tree_pending_and_failed_states_use_generation_action(): v
   assertContract(resolveProgressTreeRecoveryAction("failed") === "generate", "failed 状态应允许重试初始生成");
   assertContract(resolveProgressTreeRecoveryAction("refresh_failed") === "refresh", "refresh_failed 状态应继续刷新现有进展树状态");
   assertContract(resolveProgressTreeRecoveryAction("ready") === "none", "ready 状态不应展示恢复操作");
+}
+
+function test_progress_stale_conflict_recovery_refreshes_session_without_local_overwrite(): void {
+  const recovery = resolveProgressWriteErrorRecovery({
+    name: "ApiHttpError",
+    code: "stale_version_conflict",
+    message: "Base version is stale",
+    status: 409,
+  });
+
+  assertContract(recovery?.action === "reload_session", "stale_version_conflict 必须通过重新读取 session 恢复");
+  assertContract(recovery?.failureState === "progressRefreshFailed", "stale recovery 应复用进展刷新失败提示态");
+  assertContract(recovery?.message.includes("状态已刷新") === true, "stale recovery 文案应提示已重新读取最新状态");
 }
 
 function test_progress_node_context_banner_supports_expand_toggle_for_depth(): void {
@@ -4344,6 +4358,7 @@ test_workbench_status_chip_rendering_is_dot_text_style();
 test_feedback_card_does_not_inline_candidate_actions();
 test_current_focused_question_bubble_is_rendered_when_sticky_context_visible();
   test_progress_tree_pending_and_failed_states_use_generation_action();
+  test_progress_stale_conflict_recovery_refreshes_session_without_local_overwrite();
   test_progress_tree_click_auto_generates_only_for_nodes_without_question();
   test_workbench_question_actions_follow_current_question_status();
   test_workbench_composer_primary_button_stays_send_for_selected_question();

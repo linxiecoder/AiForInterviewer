@@ -6,7 +6,7 @@ from dataclasses import replace
 from hashlib import sha256
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -21,7 +21,7 @@ from app.application.polish.entities import (
     PolishTaskStatus,
 )
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_TASK_TYPE
-from app.application.polish.ports import PolishRepository
+from app.application.polish.ports import PolishRepository, PolishSessionVersionConflictError
 from app.application.polish.question_metadata import (
     empty_question_metadata,
     normalize_question_metadata,
@@ -57,22 +57,37 @@ class SqlAlchemyPolishRepository(PolishRepository):
 
     def update_progress_tree(self, session: PolishSession) -> None:
         with self._session_factory() as db:
-            detail = db.scalar(
-                select(PolishSessionDetailModel).where(
+            session_model = db.get(InterviewSessionModel, session.session_id)
+            if session_model is None or session_model.owner_id != session.owner_id:
+                return
+            result = db.execute(
+                update(PolishSessionDetailModel)
+                .where(
                     PolishSessionDetailModel.owner_id == session.owner_id,
                     PolishSessionDetailModel.session_id == session.session_id,
+                    PolishSessionDetailModel.record_version == session.record_version,
+                )
+                .values(
+                    progress_tree_status=session.progress_tree_status,
+                    progress_percent=session.progress_percent,
+                    progress_tree_plan_json=_payload_with_theme_metadata(session.progress_tree_plan, session.polish_theme),
+                    progress_tree_state_json=_payload_with_theme_metadata(session.progress_tree_state, session.polish_theme),
+                    status=session.status,
+                    updated_at=session.updated_at,
+                    record_version=PolishSessionDetailModel.record_version + 1,
                 )
             )
-            session_model = db.get(InterviewSessionModel, session.session_id)
-            if detail is None or session_model is None or session_model.owner_id != session.owner_id:
+            if result.rowcount == 0:
+                _raise_session_version_conflict_if_present(
+                    db,
+                    owner_id=session.owner_id,
+                    session_id=session.session_id,
+                    base_record_version=session.record_version,
+                )
                 return
-            detail.progress_tree_status = session.progress_tree_status
-            detail.progress_percent = session.progress_percent
-            detail.progress_tree_plan_json = _payload_with_theme_metadata(session.progress_tree_plan, session.polish_theme)
-            detail.progress_tree_state_json = _payload_with_theme_metadata(session.progress_tree_state, session.polish_theme)
-            detail.updated_at = session.updated_at
             session_model.status = session.status
             session_model.updated_at = session.updated_at
+            session_model.record_version = session_model.record_version + 1
             db.commit()
 
     def save_session_status(self, session: PolishSession) -> None:
@@ -80,17 +95,30 @@ class SqlAlchemyPolishRepository(PolishRepository):
             session_model = db.get(InterviewSessionModel, session.session_id)
             if session_model is None or session_model.owner_id != session.owner_id:
                 return
-            detail = db.scalar(
-                select(PolishSessionDetailModel).where(
+            result = db.execute(
+                update(PolishSessionDetailModel)
+                .where(
                     PolishSessionDetailModel.owner_id == session.owner_id,
                     PolishSessionDetailModel.session_id == session.session_id,
+                    PolishSessionDetailModel.record_version == session.record_version,
+                )
+                .values(
+                    status=session.status,
+                    updated_at=session.updated_at,
+                    record_version=PolishSessionDetailModel.record_version + 1,
                 )
             )
+            if result.rowcount == 0:
+                _raise_session_version_conflict_if_present(
+                    db,
+                    owner_id=session.owner_id,
+                    session_id=session.session_id,
+                    base_record_version=session.record_version,
+                )
+                return
             session_model.status = session.status
             session_model.updated_at = session.updated_at
-            if detail is not None:
-                detail.status = session.status
-                detail.updated_at = session.updated_at
+            session_model.record_version = session_model.record_version + 1
             db.commit()
 
     def create_session_report(
@@ -679,6 +707,27 @@ def _get_session_detail_model(
     )
 
 
+def _raise_session_version_conflict_if_present(
+    db: Session,
+    *,
+    owner_id: str,
+    session_id: str,
+    base_record_version: int,
+) -> None:
+    current_record_version = db.scalar(
+        select(PolishSessionDetailModel.record_version).where(
+            PolishSessionDetailModel.owner_id == owner_id,
+            PolishSessionDetailModel.session_id == session_id,
+        )
+    )
+    if current_record_version is None:
+        return
+    raise PolishSessionVersionConflictError(
+        base_record_version=base_record_version,
+        current_record_version=current_record_version,
+    )
+
+
 def _latest_report_model(
     db: Session,
     *,
@@ -757,6 +806,7 @@ def _session_to_entity(
         custom_topic_text_summary=detail_model.custom_topic_text_summary,
         created_at=session_model.created_at,
         updated_at=session_model.updated_at,
+        record_version=detail_model.record_version,
         polish_theme=_theme_from_detail(detail_model),
         progress_tree_status=detail_model.progress_tree_status or "insufficient_context",
         progress_percent=detail_model.progress_percent or 0,
