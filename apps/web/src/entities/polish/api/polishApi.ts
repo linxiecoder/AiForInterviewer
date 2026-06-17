@@ -205,10 +205,12 @@ export async function generateInitialPolishProgressTree(sessionId: string): Prom
 export async function createPolishAnswer(
   sessionId: string,
   payload: CreatePolishAnswerRequest,
+  options: { idempotencyKey?: string | null } = {},
 ): Promise<PolishAnswer> {
   const response = await request<PolishAnswer>(POLISH_API_PATHS.answers(sessionId), {
     method: "POST",
     body: payload,
+    headers: options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : undefined,
   });
   const data = buildSuccessData(response);
   if (data === null) {

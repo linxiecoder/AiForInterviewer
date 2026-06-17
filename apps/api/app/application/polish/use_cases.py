@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import threading
 from dataclasses import replace
 from hashlib import sha256
 from typing import Any
@@ -147,10 +146,6 @@ UNNAMED_COMPANY_TITLE = "未命名公司"
 UNNAMED_QUESTION_TEXT = "题干缺失"
 UNNAMED_ANSWER_TEXT = "暂无回答"
 UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
-_ANSWER_SUBMISSION_LOCKS_GUARD = threading.Lock()
-_ANSWER_SUBMISSION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
-_ANSWER_IDEMPOTENCY_CACHE_GUARD = threading.Lock()
-_ANSWER_IDEMPOTENCY_CACHE: dict[tuple[str, str, str, str], tuple[str, str]] = {}
 
 
 class _PolishUseCaseOperations:
@@ -195,6 +190,7 @@ class _PolishUseCaseOperations:
         self._feedback_generation_service = feedback_generation_service or FeedbackGenerationService()
         self._ai_orchestration_facade = ai_orchestration_facade
         self._answer_submission_boundary_builder = AnswerSubmissionBoundaryBuilder()
+        self._answer_submission_records: dict[tuple[str, str, str, str], tuple[str, str]] = {}
 
     def _resolve_question_generation_policy(
         self,
@@ -971,64 +967,94 @@ class _PolishUseCaseOperations:
         assert boundary is not None
         answer_text = boundary.answer_text
         idempotency_key = boundary.idempotency_key
-
-        answer_lock = _answer_submission_lock(
-            owner_id=command.owner_id,
-            session_id=command.session_id,
-            question_id=command.question_id,
+        now = utc_now()
+        answer = self._answer_submission_boundary_builder.build_answer(
+            command=command,
+            answer_id=generate_resource_id(ResourceIdPrefix.ANSWER),
+            answer_round=0,
+            answer_text=answer_text,
+            timestamp=now,
         )
-        with answer_lock:
-            if idempotency_key is not None:
-                cached = _cached_answer_idempotency_record(
-                    owner_id=command.owner_id,
-                    session_id=command.session_id,
-                    question_id=command.question_id,
-                    idempotency_key=idempotency_key,
-                )
-                if cached is not None:
-                    cached_answer_id, cached_answer_text = cached
-                    if cached_answer_text != answer_text:
-                        return ApplicationResult(
-                            error=DomainError(
-                                code="validation_failed",
-                                message="Idempotency key conflicts with a different answer payload",
-                                details={
-                                    "field": "idempotency_key",
-                                    "reason": "idempotency_conflict",
-                                },
-                            )
-                        )
-                    existing_answer = self._polish_repository.get_answer(command.owner_id, cached_answer_id)
-                    if (
-                        existing_answer is not None
-                        and existing_answer.session_id == command.session_id
-                        and existing_answer.question_id == command.question_id
-                    ):
-                        return ApplicationResult(value=existing_answer)
-
-            answer_round = self._polish_repository.count_answers_for_question(
-                command.owner_id,
-                command.question_id,
-            ) + 1
-            now = utc_now()
-            answer = self._answer_submission_boundary_builder.build_answer(
+        add_answer_once = getattr(self._polish_repository, "add_answer_once", None)
+        if not callable(add_answer_once):
+            return self._create_answer_with_legacy_repository(
                 command=command,
-                answer_id=generate_resource_id(ResourceIdPrefix.ANSWER),
-                answer_round=answer_round,
-                answer_text=answer_text,
-                timestamp=now,
+                answer=answer,
+                idempotency_key=idempotency_key,
+                request_body_hash=boundary.request_body_hash,
             )
-            self._polish_repository.add_answer(answer)
-            if idempotency_key is not None:
-                _remember_answer_idempotency_record(
-                    owner_id=command.owner_id,
-                    session_id=command.session_id,
-                    question_id=command.question_id,
-                    idempotency_key=idempotency_key,
-                    answer_id=answer.answer_id,
-                    answer_text=answer_text,
+
+        saved_answer = add_answer_once(
+            answer=answer,
+            idempotency_key=idempotency_key,
+            request_body_hash=boundary.request_body_hash,
+        )
+        if (
+            idempotency_key is not None
+            and saved_answer.answer_id != answer.answer_id
+            and saved_answer.request_body_hash != boundary.request_body_hash
+        ):
+            return ApplicationResult(
+                error=DomainError(
+                    code="idempotency_conflict",
+                    message="Idempotency key conflicts with a different answer payload",
+                    details={
+                        "field": "idempotency_key",
+                        "reason": "idempotency_conflict",
+                    },
                 )
-        return ApplicationResult(value=answer)
+            )
+        return ApplicationResult(value=saved_answer)
+
+    def _create_answer_with_legacy_repository(
+        self,
+        *,
+        command: CreatePolishAnswerCommand,
+        answer: PolishAnswer,
+        idempotency_key: str | None,
+        request_body_hash: str,
+    ) -> ApplicationResult[PolishAnswer]:
+        if idempotency_key is not None:
+            record_key = (command.owner_id, command.session_id, command.question_id, idempotency_key)
+            cached = self._answer_submission_records.get(record_key)
+            if cached is not None:
+                cached_answer_id, cached_request_body_hash = cached
+                if cached_request_body_hash != request_body_hash:
+                    return ApplicationResult(
+                        error=DomainError(
+                            code="validation_failed",
+                            message="Idempotency key conflicts with a different answer payload",
+                            details={
+                                "field": "idempotency_key",
+                                "reason": "idempotency_conflict",
+                            },
+                        )
+                    )
+                existing_answer = self._polish_repository.get_answer(command.owner_id, cached_answer_id)
+                if (
+                    existing_answer is not None
+                    and existing_answer.session_id == command.session_id
+                    and existing_answer.question_id == command.question_id
+                ):
+                    return ApplicationResult(value=existing_answer)
+
+        answer_round = self._polish_repository.count_answers_for_question(
+            command.owner_id,
+            command.question_id,
+        ) + 1
+        answer_to_save = replace(
+            answer,
+            answer_round=answer_round,
+            idempotency_key=idempotency_key,
+            request_body_hash=request_body_hash,
+        )
+        self._polish_repository.add_answer(answer_to_save)
+        if idempotency_key is not None:
+            self._answer_submission_records[(command.owner_id, command.session_id, command.question_id, idempotency_key)] = (
+                answer_to_save.answer_id,
+                request_body_hash,
+            )
+        return ApplicationResult(value=answer_to_save)
 
     def create_feedback_task(self, command: CreatePolishFeedbackTaskCommand) -> ApplicationResult[PolishTaskStatus]:
         return self._feedback_service.create_feedback_task(command)
@@ -2776,43 +2802,6 @@ def _validate_topic_selection(topic_id: str | None, subtopic_id: str | None) -> 
             details={"field": "subtopic_id"},
         )
     return None
-
-
-def _answer_submission_lock(*, owner_id: str, session_id: str, question_id: str) -> threading.Lock:
-    lock_key = (owner_id, session_id, question_id)
-    with _ANSWER_SUBMISSION_LOCKS_GUARD:
-        lock = _ANSWER_SUBMISSION_LOCKS.get(lock_key)
-        if lock is None:
-            lock = threading.Lock()
-            _ANSWER_SUBMISSION_LOCKS[lock_key] = lock
-        return lock
-
-
-def _cached_answer_idempotency_record(
-    *,
-    owner_id: str,
-    session_id: str,
-    question_id: str,
-    idempotency_key: str,
-) -> tuple[str, str] | None:
-    with _ANSWER_IDEMPOTENCY_CACHE_GUARD:
-        return _ANSWER_IDEMPOTENCY_CACHE.get((owner_id, session_id, question_id, idempotency_key))
-
-
-def _remember_answer_idempotency_record(
-    *,
-    owner_id: str,
-    session_id: str,
-    question_id: str,
-    idempotency_key: str,
-    answer_id: str,
-    answer_text: str,
-) -> None:
-    with _ANSWER_IDEMPOTENCY_CACHE_GUARD:
-        _ANSWER_IDEMPOTENCY_CACHE[(owner_id, session_id, question_id, idempotency_key)] = (
-            answer_id,
-            answer_text,
-        )
 
 
 def _dict_list(value: object) -> list[dict[str, Any]]:

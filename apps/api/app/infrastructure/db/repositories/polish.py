@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from hashlib import sha256
 from threading import Lock
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.polish.entities import (
@@ -40,6 +42,7 @@ from app.infrastructure.db.session import get_session_factory
 
 
 _QUESTION_IDEMPOTENCY_LOCK_STRIPES = tuple(Lock() for _ in range(64))
+_ANSWER_ROUND_RETRY_LIMIT = 3
 
 
 class SqlAlchemyPolishRepository(PolishRepository):
@@ -225,6 +228,63 @@ class SqlAlchemyPolishRepository(PolishRepository):
             db.add(_answer_to_model(answer))
             db.commit()
 
+    def add_answer_once(
+        self,
+        *,
+        answer: PolishAnswer,
+        idempotency_key: str | None,
+        request_body_hash: str | None,
+    ) -> PolishAnswer:
+        last_error: IntegrityError | None = None
+        for _ in range(_ANSWER_ROUND_RETRY_LIMIT):
+            with self._session_factory() as db:
+                if idempotency_key is not None:
+                    existing = _find_answer_model_by_idempotency_key(
+                        db,
+                        owner_id=answer.owner_id,
+                        actor_id=answer.actor_id,
+                        session_id=answer.session_id,
+                        question_id=answer.question_id,
+                        idempotency_key=idempotency_key,
+                    )
+                    if existing is not None:
+                        return _answer_to_entity(existing)
+
+                answer_to_save = replace(
+                    answer,
+                    answer_round=_next_answer_round(
+                        db,
+                        owner_id=answer.owner_id,
+                        question_id=answer.question_id,
+                    ),
+                    idempotency_key=idempotency_key,
+                    request_body_hash=request_body_hash,
+                )
+                model = _answer_to_model(answer_to_save)
+                db.add(model)
+                try:
+                    db.commit()
+                except IntegrityError as exc:
+                    db.rollback()
+                    last_error = exc
+                    if idempotency_key is not None:
+                        existing = _find_answer_model_by_idempotency_key(
+                            db,
+                            owner_id=answer.owner_id,
+                            actor_id=answer.actor_id,
+                            session_id=answer.session_id,
+                            question_id=answer.question_id,
+                            idempotency_key=idempotency_key,
+                        )
+                        if existing is not None:
+                            return _answer_to_entity(existing)
+                    continue
+                return _answer_to_entity(model)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("answer round allocation failed")
+
     def get_answer(self, owner_id: str, answer_id: str) -> PolishAnswer | None:
         with self._session_factory() as db:
             found = db.get(AnswerModel, answer_id)
@@ -379,6 +439,36 @@ def _find_question_model_by_graph_persistence_idempotency_key(
         if metadata.get("graph_persistence_idempotency_key") == graph_persistence_idempotency_key:
             return row
     return None
+
+
+def _find_answer_model_by_idempotency_key(
+    db: Session,
+    *,
+    owner_id: str,
+    actor_id: str,
+    session_id: str,
+    question_id: str,
+    idempotency_key: str,
+) -> AnswerModel | None:
+    return db.scalar(
+        select(AnswerModel).where(
+            AnswerModel.owner_id == owner_id,
+            AnswerModel.actor_id == actor_id,
+            AnswerModel.session_id == session_id,
+            AnswerModel.question_id == question_id,
+            AnswerModel.idempotency_key == idempotency_key,
+        )
+    )
+
+
+def _next_answer_round(db: Session, *, owner_id: str, question_id: str) -> int:
+    current_max = db.scalar(
+        select(func.max(AnswerModel.answer_round)).where(
+            AnswerModel.owner_id == owner_id,
+            AnswerModel.question_id == question_id,
+        )
+    )
+    return int(current_max or 0) + 1
 
 
 def _theme_from_detail(detail_model: PolishSessionDetailModel) -> str | None:
@@ -645,6 +735,8 @@ def _answer_to_model(answer: PolishAnswer) -> AnswerModel:
         question_id=answer.question_id,
         answer_round=answer.answer_round,
         answer_text=answer.answer_text,
+        idempotency_key=answer.idempotency_key,
+        request_body_hash=answer.request_body_hash,
     )
 
 
@@ -660,6 +752,8 @@ def _answer_to_entity(model: AnswerModel) -> PolishAnswer:
         status=model.status,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        idempotency_key=getattr(model, "idempotency_key", None),
+        request_body_hash=getattr(model, "request_body_hash", None),
     )
 
 

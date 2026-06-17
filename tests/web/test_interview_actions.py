@@ -71,6 +71,17 @@ def test_interview_workbench_next_recommendations_are_display_only() -> None:
     assert "feedback_next_question_intent" not in source
 
 
+def test_interview_workbench_answer_submit_uses_stable_idempotency_key() -> None:
+    page_source = _source(INTERVIEW_PAGE)
+    api_source = _source(POLISH_API)
+
+    assert "resolveAnswerSubmissionKeyDraft" in page_source
+    assert "answerSubmissionKeyDraftRef" in page_source
+    assert "idempotencyKey: keyDraft.idempotencyKey" in page_source
+    assert "answerSubmissionKeyDraftRef.current = null" in page_source
+    assert "\"Idempotency-Key\"" in api_source
+
+
 def test_interview_workbench_has_no_grant_client_fields() -> None:
     combined_source = "\n".join(
         [

@@ -49,6 +49,14 @@ class PolishRepository(Protocol):
 
     def add_answer(self, answer: PolishAnswer) -> None: ...
 
+    def add_answer_once(
+        self,
+        *,
+        answer: PolishAnswer,
+        idempotency_key: str | None,
+        request_body_hash: str | None,
+    ) -> PolishAnswer: ...
+
     def get_answer(self, owner_id: str, answer_id: str) -> PolishAnswer | None: ...
 
     def list_answers_for_session(self, owner_id: str, session_id: str) -> tuple[PolishAnswer, ...]: ...

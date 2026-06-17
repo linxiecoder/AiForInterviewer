@@ -89,6 +89,7 @@ class CreatePolishAnswerCommand:
     question_id: str
     answer_text: str
     base_question_version_ref: VersionRef | None = None
+    idempotency_key: str | None = None
 
 
 @dataclass(frozen=True)

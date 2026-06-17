@@ -118,6 +118,8 @@ class PolishAnswer:
     status: str
     created_at: datetime
     updated_at: datetime
+    idempotency_key: str | None = None
+    request_body_hash: str | None = None
 
 
 @dataclass(frozen=True)

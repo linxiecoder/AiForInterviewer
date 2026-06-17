@@ -549,6 +549,44 @@ export type WorkbenchQuestionActionState = {
   canMarkQuestionCompleted: boolean;
 };
 
+export type AnswerSubmissionKeyDraft = {
+  sessionId: string;
+  questionId: string;
+  answerText: string;
+  idempotencyKey: string;
+};
+
+export function resolveAnswerSubmissionKeyDraft(
+  current: AnswerSubmissionKeyDraft | null,
+  params: {
+    sessionId: string;
+    questionId: string;
+    answerText: string;
+  },
+  createKey: () => string = createAnswerSubmissionIdempotencyKey,
+): AnswerSubmissionKeyDraft {
+  if (
+    current !== null &&
+    current.sessionId === params.sessionId &&
+    current.questionId === params.questionId &&
+    current.answerText === params.answerText
+  ) {
+    return current;
+  }
+  return {
+    ...params,
+    idempotencyKey: createKey(),
+  };
+}
+
+function createAnswerSubmissionIdempotencyKey(): string {
+  const browserCrypto = globalThis.crypto;
+  if (browserCrypto && typeof browserCrypto.randomUUID === "function") {
+    return `polish-answer-${browserCrypto.randomUUID()}`;
+  }
+  return `polish-answer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 export type WorkbenchFeedbackPanelTab = "summary" | "lossPoints" | "referenceAnswer" | "candidate";
 
 export type WorkbenchFeedbackPanelTabItem = {
@@ -4794,6 +4832,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const chatScrollLastAutoTriggerRef = useRef<string | null>(null);
   const chatScrollManuallyScrolledRef = useRef<boolean>(false);
   const chatScrollIsAutoingRef = useRef<boolean>(false);
+  const answerSubmissionKeyDraftRef = useRef<AnswerSubmissionKeyDraft | null>(null);
   const [isProgressPanelCollapsed, setProgressPanelCollapsed] = useState<boolean>(false);
   const [progressPanelWidth, setProgressPanelWidth] = useState<number>(PROGRESS_PANEL_DEFAULT_WIDTH);
   const [isFeedbackPanelCollapsed, setFeedbackPanelCollapsed] = useState<boolean>(false);
@@ -4844,6 +4883,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     setAnswerText("");
+    answerSubmissionKeyDraftRef.current = null;
     setAnswerError(null);
     setWorkbenchFailureState(null);
     setSelectedProgressNodeRef(null);
@@ -4920,10 +4960,21 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setAnswerError(null);
     setWorkbenchFailureState(null);
     setSubmittingAnswer(true);
+    const keyDraft = resolveAnswerSubmissionKeyDraft(
+      answerSubmissionKeyDraftRef.current,
+      {
+        sessionId,
+        questionId: currentQuestionState.questionId,
+        answerText: trimmedAnswer,
+      },
+    );
+    answerSubmissionKeyDraftRef.current = keyDraft;
     try {
       const answer = await createPolishAnswer(sessionId, {
         question_id: currentQuestionState.questionId,
         answer_text: trimmedAnswer,
+      }, {
+        idempotencyKey: keyDraft.idempotencyKey,
       });
       setFeedbackGenerating(true);
       try {
@@ -4949,6 +5000,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         setSession(refreshed);
         await loadCandidateRecords();
         setAnswerText("");
+        answerSubmissionKeyDraftRef.current = null;
         if (refreshed.progress_tree_status === "refresh_failed") {
           setWorkbenchFailureState("progressRefreshFailed");
           setAnswerError("反馈已生成，但进展树刷新失败；当前题目、回答和反馈不会丢失。");

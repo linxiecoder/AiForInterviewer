@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
+from hashlib import sha256
 from typing import Protocol
 
 from app.application.common.result import ApplicationResult
@@ -22,6 +24,7 @@ ANSWER_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 class AnswerSubmissionBoundary:
     answer_text: str
     idempotency_key: str | None
+    request_body_hash: str
 
 
 class AnswerSubmissionBoundaryBuilder:
@@ -39,6 +42,7 @@ class AnswerSubmissionBoundaryBuilder:
             value=AnswerSubmissionBoundary(
                 answer_text=answer_text,
                 idempotency_key=self._normalize_answer_idempotency_key(raw_idempotency_key),
+                request_body_hash=_answer_request_body_hash(command=command, answer_text=answer_text),
             )
         )
 
@@ -62,6 +66,8 @@ class AnswerSubmissionBoundaryBuilder:
             status=ANSWER_STATUS_SAVED,
             created_at=timestamp,
             updated_at=timestamp,
+            idempotency_key=self._normalize_answer_idempotency_key(getattr(command, "idempotency_key", None)),
+            request_body_hash=_answer_request_body_hash(command=command, answer_text=answer_text),
         )
 
     @staticmethod
@@ -120,6 +126,23 @@ class AnswerSubmissionBoundaryBuilder:
             return None
         key = str(raw_key).strip()
         return key or None
+
+
+def _answer_request_body_hash(*, command: CreatePolishAnswerCommand, answer_text: str) -> str:
+    base_ref = command.base_question_version_ref
+    payload = {
+        "question_id": command.question_id,
+        "answer_text": answer_text,
+        "base_question_version_ref": None
+        if base_ref is None
+        else {
+            "resource_type": base_ref.resource_type,
+            "resource_id": base_ref.resource_id,
+            "version_id": base_ref.version_id,
+        },
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return sha256(encoded).hexdigest()
 
 
 class _AnswerOperations(Protocol):

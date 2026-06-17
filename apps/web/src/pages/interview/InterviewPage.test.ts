@@ -141,6 +141,7 @@ import {
   shouldCloseProgressTreeContextMenuFromKeyboard,
   shouldSubmitAnswerFromKeyboard,
   shouldConfirmBeforeRegenerateQuestion,
+  resolveAnswerSubmissionKeyDraft,
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
   shouldRenderQuestionBubbleInConversation,
@@ -3076,6 +3077,54 @@ function test_workbench_ctrl_enter_submits_answer(): void {
   assertContract(!canSubmitAnswerFromKeyboard({ key: "Enter", ctrlKey: false }, true), "普通 Enter 应继续保留换行行为");
 }
 
+function test_answer_submission_idempotency_key_reuses_current_draft(): void {
+  const generatedKeys = ["key-1", "key-2", "key-3"];
+  let keyIndex = 0;
+  const createKey = () => generatedKeys[keyIndex++] ?? `key-${keyIndex}`;
+  const firstDraft = resolveAnswerSubmissionKeyDraft(
+    null,
+    {
+      sessionId: "ses_001",
+      questionId: "que_001",
+      answerText: "first answer",
+    },
+    createKey,
+  );
+  const retryDraft = resolveAnswerSubmissionKeyDraft(
+    firstDraft,
+    {
+      sessionId: "ses_001",
+      questionId: "que_001",
+      answerText: "first answer",
+    },
+    createKey,
+  );
+  const changedTextDraft = resolveAnswerSubmissionKeyDraft(
+    retryDraft,
+    {
+      sessionId: "ses_001",
+      questionId: "que_001",
+      answerText: "changed answer",
+    },
+    createKey,
+  );
+  const changedQuestionDraft = resolveAnswerSubmissionKeyDraft(
+    changedTextDraft,
+    {
+      sessionId: "ses_001",
+      questionId: "que_002",
+      answerText: "changed answer",
+    },
+    createKey,
+  );
+
+  assertContract(firstDraft.idempotencyKey === "key-1", "首次回答草稿应生成提交 key");
+  assertContract(retryDraft === firstDraft, "同一题目同一回答草稿 retry/rerender 应复用提交 key");
+  assertContract(changedTextDraft.idempotencyKey === "key-2", "回答文本变化应生成新的提交 key");
+  assertContract(changedQuestionDraft.idempotencyKey === "key-3", "题目变化应生成新的提交 key");
+  assertContract(keyIndex === 3, "复用当前草稿时不应额外生成 key");
+}
+
 function test_workbench_next_actions_render_in_fixed_composer_bar(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_fixed_actions",
@@ -4229,6 +4278,7 @@ test_workbench_layout_b_keeps_progress_and_conversation_scroll_independent();
 test_question_node_clipboard_includes_full_question_answer_and_feedback();
 test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
+test_answer_submission_idempotency_key_reuses_current_draft();
 test_workbench_next_actions_render_in_fixed_composer_bar();
 test_workbench_next_action_recommendations_are_display_only();
 test_workbench_candidate_actions_render_in_fixed_composer_bar();

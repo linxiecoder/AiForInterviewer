@@ -397,9 +397,8 @@ async def create_polish_answer(
         question_id=payload.question_id,
         answer_text=payload.answer_text,
         base_question_version_ref=base_ref,
+        idempotency_key=clean_idempotency_key,
     )
-    if clean_idempotency_key is not None:
-        object.__setattr__(command, "idempotency_key", clean_idempotency_key)
     result = await run_in_threadpool(use_cases.create_answer, command)
     if not result.is_success:
         _raise_result_error(result.error)
