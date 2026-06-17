@@ -687,6 +687,14 @@ class _PolishUseCaseOperations:
                             target_ref_id=command.session_id,
                         )
                         return ApplicationResult(value=task)
+                    except RuntimeConflictError:
+                        return ApplicationResult(
+                            error=DomainError(
+                                code="validation_failed",
+                                message="Polish question graph persistence conflicts",
+                                details={"reason": "question_final_write_conflict"},
+                            )
+                        )
                     except RuntimePolicyError:
                         return ApplicationResult(
                             error=DomainError(
@@ -868,6 +876,14 @@ class _PolishUseCaseOperations:
                 target_ref_id=command.session_id,
             )
             return ApplicationResult(value=task)
+        except RuntimeConflictError:
+            return ApplicationResult(
+                error=DomainError(
+                    code="validation_failed",
+                    message="Polish question candidate handoff conflicts",
+                    details={"reason": "question_final_write_conflict"},
+                )
+            )
         except RuntimePolicyError:
             return ApplicationResult(
                 error=DomainError(

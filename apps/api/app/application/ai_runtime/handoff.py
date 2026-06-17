@@ -8,7 +8,12 @@ from hashlib import sha256
 import json
 from typing import Any, Callable, Protocol
 
-from app.application.ai_runtime.contracts import RuntimePolicyError, RuntimeValidationError, contains_sensitive_payload
+from app.application.ai_runtime.contracts import (
+    RuntimeConflictError,
+    RuntimePolicyError,
+    RuntimeValidationError,
+    contains_sensitive_payload,
+)
 from app.application.polish.entities import PolishQuestion, PolishQuestionSource, PolishTaskStatus
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
@@ -58,6 +63,8 @@ class QuestionResultWritePlan:
     validation_result_ref: str
     side_effect_key: str
     candidate_digest: str
+    generation_intent_digest: str
+    final_question_digest: str
     contract_ids: tuple[str, ...]
 
 
@@ -150,6 +157,8 @@ class AgentPersistenceHandoff:
                 graph_persistence_idempotency_key=plan.side_effect_key,
                 question=question,
             )
+            if not created:
+                _assert_question_final_write_replay_matches(persisted_question, plan)
             return _question_write_result(
                 question=persisted_question,
                 plan=plan,
@@ -162,6 +171,7 @@ class AgentPersistenceHandoff:
         # should implement add_question_once to avoid naked read-then-write races.
         existing = _find_existing_question(question_repository, plan)
         if existing is not None:
+            _assert_question_final_write_replay_matches(existing, plan)
             return _question_write_result(question=existing, plan=plan, created=False, timestamp=timestamp)
 
         question_repository.add_question(question)
@@ -239,17 +249,22 @@ def build_question_result_write_plan(
             "quality_gate": quality_gate,
         }
     )
+    generation_intent_digest = _generation_intent_digest(
+        owner_id=owner_id,
+        session_id=session_id,
+        progress_node_ref=resolved_progress_node_ref,
+        context_digest=context_digest,
+        question_metadata=question_metadata,
+    )
+    final_question_digest = _final_question_digest(
+        question_text=question_text,
+        progress_node_ref=resolved_progress_node_ref,
+        context_digest=context_digest,
+        evidence_refs=evidence_refs,
+    )
     combined_trace_refs = _unique_texts((*trace_refs, *_clean_text_tuple(candidate.get("trace_refs", ()))))
     validation_result_ref = _validation_ref(combined_trace_refs, candidate_ref)
-    side_effect_key = "polish_question:" + _stable_json_digest(
-        {
-            "owner_id": owner_id,
-            "session_id": session_id,
-            "progress_node_ref": resolved_progress_node_ref,
-            "candidate_digest": candidate_digest,
-            "context_digest": context_digest,
-        }
-    )
+    side_effect_key = "polish_question:" + generation_intent_digest
     return QuestionResultWritePlan(
         owner_id=owner_id,
         actor_id=actor_id,
@@ -268,6 +283,8 @@ def build_question_result_write_plan(
         validation_result_ref=validation_result_ref,
         side_effect_key=side_effect_key,
         candidate_digest=candidate_digest,
+        generation_intent_digest=generation_intent_digest,
+        final_question_digest=final_question_digest,
         contract_ids=contract_ids,
     )
 
@@ -336,7 +353,10 @@ def _question_metadata_for_write(plan: QuestionResultWritePlan) -> dict[str, Any
             "graph_trace_refs": list(plan.trace_refs),
             "graph_validation_result_ref": plan.validation_result_ref,
             "graph_persistence_idempotency_key": plan.side_effect_key,
+            "generation_intent_key": plan.side_effect_key,
+            "generation_intent_digest": plan.generation_intent_digest,
             "candidate_digest": plan.candidate_digest,
+            "final_question_digest": plan.final_question_digest,
             "quality_gate": plan.quality_gate,
             "context_digest": plan.context_digest,
             "progress_node_ref": plan.progress_node_ref,
@@ -344,6 +364,97 @@ def _question_metadata_for_write(plan: QuestionResultWritePlan) -> dict[str, Any
         }
     )
     return metadata
+
+
+def _assert_question_final_write_replay_matches(
+    question: PolishQuestion,
+    plan: QuestionResultWritePlan,
+) -> None:
+    metadata = question.question_metadata if isinstance(question.question_metadata, dict) else {}
+    existing_digest = str(metadata.get("final_question_digest") or "").strip()
+    if existing_digest:
+        if existing_digest != plan.final_question_digest:
+            raise RuntimeConflictError("question final-write intent conflict")
+        return
+
+    if _question_final_write_signature(question) != _plan_final_write_signature(plan):
+        raise RuntimeConflictError("question final-write intent conflict")
+
+
+def _question_final_write_signature(question: PolishQuestion) -> tuple[object, ...]:
+    return (
+        _clean_text(question.question_text),
+        _clean_text(question.progress_node_ref),
+        _clean_text(question.context_digest),
+        _clean_text_tuple(question.evidence_refs),
+    )
+
+
+def _plan_final_write_signature(plan: QuestionResultWritePlan) -> tuple[object, ...]:
+    return (
+        _clean_text(plan.question_text),
+        _clean_text(plan.progress_node_ref),
+        _clean_text(plan.context_digest),
+        _clean_text_tuple(plan.evidence_refs),
+    )
+
+
+def _generation_intent_digest(
+    *,
+    owner_id: str,
+    session_id: str,
+    progress_node_ref: str,
+    context_digest: str,
+    question_metadata: dict[str, Any],
+) -> str:
+    return _stable_json_digest(
+        {
+            "owner_id": owner_id,
+            "session_id": session_id,
+            "generation_mode": _clean_text(question_metadata.get("generation_mode")),
+            "request_source": _clean_text(question_metadata.get("request_source")),
+            "selected_primary_category_ref": _clean_text(
+                question_metadata.get("selected_primary_category_ref")
+            ),
+            "selected_secondary_category_ref": _clean_text(
+                question_metadata.get("selected_secondary_category_ref")
+            ),
+            "selected_progress_node_ref": _clean_text(
+                question_metadata.get("selected_progress_node_ref")
+            )
+            or progress_node_ref,
+            "selected_category_path": _clean_text_tuple(question_metadata.get("selected_category_path")),
+            "parent_question_id": _clean_text(question_metadata.get("parent_question_id")),
+            "parent_answer_id": _clean_text(question_metadata.get("parent_answer_id")),
+            "parent_feedback_id": _clean_text(question_metadata.get("parent_feedback_id")),
+            "authorized_feedback_id": _clean_text(question_metadata.get("authorized_feedback_id")),
+            "authorized_answer_id": _clean_text(question_metadata.get("authorized_answer_id")),
+            "authorized_parent_question_id": _clean_text(
+                question_metadata.get("authorized_parent_question_id")
+            ),
+            "exclude_question_refs": _clean_text_tuple(question_metadata.get("exclude_question_refs")),
+            "completed_focus_refs": _clean_text_tuple(question_metadata.get("completed_focus_refs")),
+            "progress_node_ref": progress_node_ref,
+            "context_digest": context_digest,
+        }
+    )
+
+
+def _final_question_digest(
+    *,
+    question_text: str,
+    progress_node_ref: str,
+    context_digest: str,
+    evidence_refs: tuple[str, ...],
+) -> str:
+    return _stable_json_digest(
+        {
+            "question_text": question_text,
+            "progress_node_ref": progress_node_ref,
+            "context_digest": context_digest,
+            "evidence_refs": evidence_refs,
+        }
+    )
 
 
 def _question_sources_to_entities(raw_sources: tuple[dict[str, Any], ...]) -> tuple[PolishQuestionSource, ...]:
@@ -396,6 +507,10 @@ def _validation_ref(trace_refs: tuple[str, ...], candidate_ref: str) -> str:
         if "validation" in trace_ref:
             return trace_ref
     return candidate_ref
+
+
+def _clean_text(value: object) -> str:
+    return str(value or "").strip()
 
 
 def _clean_text_tuple(value: object) -> tuple[str, ...]:

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 from hashlib import sha256
-from threading import Lock
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.ai_runtime.contracts import RuntimeConflictError
 from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
@@ -42,7 +42,6 @@ from app.infrastructure.db.models.report import InterviewReport as InterviewRepo
 from app.infrastructure.db.session import get_session_factory
 
 
-_QUESTION_IDEMPOTENCY_LOCK_STRIPES = tuple(Lock() for _ in range(64))
 _ANSWER_ROUND_RETRY_LIMIT = 3
 
 
@@ -197,25 +196,26 @@ class SqlAlchemyPolishRepository(PolishRepository):
         graph_persistence_idempotency_key: str,
         question: PolishQuestion,
     ) -> tuple[PolishQuestion, bool]:
-        lock = _question_idempotency_lock(
-            owner_id=owner_id,
-            session_id=session_id,
-            graph_persistence_idempotency_key=graph_persistence_idempotency_key,
-        )
-        with lock:
-            with self._session_factory() as db:
-                existing = _find_question_model_by_graph_persistence_idempotency_key(
-                    db,
-                    owner_id=owner_id,
-                    session_id=session_id,
-                    graph_persistence_idempotency_key=graph_persistence_idempotency_key,
-                )
-                if existing is not None:
-                    return _question_to_entity(existing), False
+        with self._session_factory() as db:
+            _acquire_question_final_write_db_lock(
+                db,
+                owner_id=owner_id,
+                session_id=session_id,
+                graph_persistence_idempotency_key=graph_persistence_idempotency_key,
+            )
+            existing = _find_question_model_by_graph_persistence_idempotency_key(
+                db,
+                owner_id=owner_id,
+                session_id=session_id,
+                graph_persistence_idempotency_key=graph_persistence_idempotency_key,
+            )
+            if existing is not None:
+                _assert_question_final_write_replay_matches(existing, question)
+                return _question_to_entity(existing), False
 
-                db.add(_question_to_model(question))
-                db.commit()
-                return question, True
+            db.add(_question_to_model(question))
+            db.commit()
+            return question, True
 
     def get_question(self, owner_id: str, question_id: str) -> PolishQuestion | None:
         with self._session_factory() as db:
@@ -519,15 +519,77 @@ def _payload_with_theme_metadata(payload: dict | None, theme: str | None) -> dic
     return result
 
 
-def _question_idempotency_lock(
+def _acquire_question_final_write_db_lock(
+    db: Session,
     *,
     owner_id: str,
     session_id: str,
     graph_persistence_idempotency_key: str,
-) -> Lock:
+) -> None:
     lock_key = f"{owner_id}:{session_id}:{graph_persistence_idempotency_key}"
-    digest = sha256(lock_key.encode("utf-8")).digest()
-    return _QUESTION_IDEMPOTENCY_LOCK_STRIPES[digest[0] % len(_QUESTION_IDEMPOTENCY_LOCK_STRIPES)]
+    dialect_name = db.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": _signed_lock_id(lock_key)})
+        return
+    if dialect_name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
+        return
+    db.execute(
+        select(InterviewSessionModel.session_id)
+        .where(
+            InterviewSessionModel.owner_id == owner_id,
+            InterviewSessionModel.session_id == session_id,
+        )
+        .with_for_update()
+    ).first()
+
+
+def _signed_lock_id(lock_key: str) -> int:
+    raw = int.from_bytes(sha256(lock_key.encode("utf-8")).digest()[:8], "big", signed=False)
+    return raw if raw < 2**63 else raw - 2**64
+
+
+def _assert_question_final_write_replay_matches(existing: QuestionModel, incoming: PolishQuestion) -> None:
+    existing_metadata = (
+        existing.question_metadata_json if isinstance(existing.question_metadata_json, dict) else {}
+    )
+    incoming_metadata = incoming.question_metadata if isinstance(incoming.question_metadata, dict) else {}
+    existing_digest = str(existing_metadata.get("final_question_digest") or "").strip()
+    incoming_digest = str(incoming_metadata.get("final_question_digest") or "").strip()
+    if existing_digest and incoming_digest:
+        if existing_digest != incoming_digest:
+            raise RuntimeConflictError("question final-write intent conflict")
+        return
+    if _question_model_final_write_signature(existing) != _question_entity_final_write_signature(incoming):
+        raise RuntimeConflictError("question final-write intent conflict")
+
+
+def _question_model_final_write_signature(question: QuestionModel) -> tuple[object, ...]:
+    return (
+        _clean_final_write_text(question.question_text),
+        _clean_final_write_text(question.progress_node_ref),
+        _clean_final_write_text(question.context_digest),
+        _clean_final_write_refs(question.evidence_ref_ids),
+    )
+
+
+def _question_entity_final_write_signature(question: PolishQuestion) -> tuple[object, ...]:
+    return (
+        _clean_final_write_text(question.question_text),
+        _clean_final_write_text(question.progress_node_ref),
+        _clean_final_write_text(question.context_digest),
+        _clean_final_write_refs(question.evidence_refs),
+    )
+
+
+def _clean_final_write_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _clean_final_write_refs(value: object) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple, set)):
+        return ()
+    return tuple(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
 
 
 def _find_question_model_by_graph_persistence_idempotency_key(
