@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from hashlib import sha256
 from typing import Any, Protocol
 
 from app.application.common.logging import LogUtil
@@ -58,6 +59,7 @@ class _FeedbackOperations(Protocol):
 
 _FEEDBACK_GENERATION_LOCKS_GUARD = threading.Lock()
 _FEEDBACK_GENERATION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
+_FEEDBACK_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 
 
 class PolishFeedbackApplicationService:
@@ -71,6 +73,12 @@ class PolishFeedbackApplicationService:
         self,
         command: CreatePolishFeedbackTaskCommand,
     ) -> ApplicationResult[PolishTaskStatus]:
+        idempotency_key = _normalize_feedback_idempotency_key(getattr(command, "idempotency_key", None))
+        idempotency_key_error = _validate_feedback_idempotency_key(idempotency_key)
+        if idempotency_key_error is not None:
+            return ApplicationResult(error=idempotency_key_error)
+        request_body_hash = _feedback_request_body_hash(command)
+
         session = self._operations._polish_repository.get_session(command.owner_id, command.session_id)
         if session is None:
             return ApplicationResult(
@@ -93,6 +101,41 @@ class PolishFeedbackApplicationService:
             answer_id=answer.answer_id,
         )
         with feedback_lock:
+            if idempotency_key is not None:
+                replay_result = _feedback_idempotency_lookup(
+                    self._operations._polish_repository,
+                    owner_id=command.owner_id,
+                    idempotency_key=idempotency_key,
+                    request_body_hash=request_body_hash,
+                )
+                replay_status = replay_result.get("status") if isinstance(replay_result, dict) else None
+                if replay_status == "conflict":
+                    return ApplicationResult(
+                        error=DomainError(
+                            code="idempotency_conflict",
+                            message="Feedback task idempotency key conflicts with request body",
+                            details={
+                                "field": "idempotency_key",
+                                "reason": "idempotency_conflict",
+                            },
+                        )
+                    )
+                if replay_status == "orphan":
+                    return ApplicationResult(
+                        error=DomainError(
+                            code="generation_failed",
+                            message="Feedback task result is incomplete and requires retry",
+                            details={
+                                "reason": "orphan_feedback_task_result",
+                                "ai_task_id": str(replay_result.get("ai_task_id") or ""),
+                            },
+                            retryable=True,
+                        )
+                    )
+                replay_feedback = replay_result.get("feedback") if isinstance(replay_result, dict) else None
+                if isinstance(replay_feedback, PolishFeedback):
+                    return ApplicationResult(value=_existing_feedback_task(replay_feedback))
+
             existing_feedback = self._operations._polish_repository.get_latest_feedback_for_answer(
                 owner_id=command.owner_id,
                 answer_id=answer.answer_id,
@@ -179,14 +222,17 @@ class PolishFeedbackApplicationService:
                     duration_ms=_feedback_generation_duration_ms(generation_started_at),
                     **generation_log_fields,
                 )
-                return PolishPersistResultUseCase(self._operations._polish_repository).execute(
-                    PersistPolishResultCommand(
-                        feedback=feedback,
-                        task=task,
-                        owner_id=command.owner_id,
-                        actor_id=command.actor_id,
-                        target_ref_id=command.answer_id,
-                    )
+                return _persist_feedback_task_result(
+                    self._operations._polish_repository,
+                    feedback=feedback,
+                    task=task,
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    target_ref_id=command.answer_id,
+                    idempotency_record_id=_feedback_idempotency_record_id(
+                        idempotency_key,
+                        request_body_hash,
+                    ),
                 )
 
             payload = _generated_feedback_payload_for_storage(
@@ -227,14 +273,17 @@ class PolishFeedbackApplicationService:
                 user_visible_status="反馈已生成",
                 candidate_refs=planned_feedback_handoff.task_candidate_refs,
             )
-            persist_result = PolishPersistResultUseCase(self._operations._polish_repository).execute(
-                PersistPolishResultCommand(
-                    feedback=feedback,
-                    task=task,
-                    owner_id=command.owner_id,
-                    actor_id=command.actor_id,
-                    target_ref_id=command.answer_id,
-                )
+            persist_result = _persist_feedback_task_result(
+                self._operations._polish_repository,
+                feedback=feedback,
+                task=task,
+                owner_id=command.owner_id,
+                actor_id=command.actor_id,
+                target_ref_id=command.answer_id,
+                idempotency_record_id=_feedback_idempotency_record_id(
+                    idempotency_key,
+                    request_body_hash,
+                ),
             )
             generation_log_fields = _feedback_generation_log_fields(generation_result.metadata)
             LogUtil.feedback_generation_succeeded(
@@ -261,6 +310,105 @@ def _feedback_generation_lock(
             existing = threading.Lock()
             _FEEDBACK_GENERATION_LOCKS[lock_key] = existing
         return existing
+
+
+def _normalize_feedback_idempotency_key(raw_key: object) -> str | None:
+    if raw_key is None:
+        return None
+    key = str(raw_key).strip()
+    return key or None
+
+
+def _validate_feedback_idempotency_key(idempotency_key: str | None) -> DomainError | None:
+    if idempotency_key is None:
+        return None
+    if len(idempotency_key) > _FEEDBACK_IDEMPOTENCY_KEY_MAX_LENGTH:
+        return DomainError(
+            code="validation_failed",
+            message="Idempotency key is too long",
+            details={
+                "field": "idempotency_key",
+                "max_length": _FEEDBACK_IDEMPOTENCY_KEY_MAX_LENGTH,
+                "actual_length": len(idempotency_key),
+            },
+        )
+    return None
+
+
+def _feedback_request_body_hash(command: CreatePolishFeedbackTaskCommand) -> str:
+    payload = {
+        "session_id": command.session_id,
+        "answer_id": command.answer_id,
+        "scoring_context": getattr(command, "internal_scoring_context", None),
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    return sha256(encoded).hexdigest()
+
+
+def _feedback_idempotency_record_id(
+    idempotency_key: str | None,
+    request_body_hash: str,
+) -> str | None:
+    if idempotency_key is None:
+        return None
+    key_hash = sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
+    return f"polish_feedback:{key_hash}:{request_body_hash[:24]}"
+
+
+def _feedback_idempotency_lookup(
+    repository: PolishRepository,
+    *,
+    owner_id: str,
+    idempotency_key: str,
+    request_body_hash: str,
+) -> dict[str, object]:
+    lookup = getattr(repository, "get_feedback_task_idempotency_record", None)
+    if not callable(lookup):
+        return {"status": "missing"}
+    result = lookup(
+        owner_id=owner_id,
+        idempotency_key=idempotency_key,
+        request_body_hash=request_body_hash,
+    )
+    return result if isinstance(result, dict) else {"status": "missing"}
+
+
+def _persist_feedback_task_result(
+    repository: PolishRepository,
+    *,
+    feedback: PolishFeedback,
+    task: PolishTaskStatus,
+    owner_id: str,
+    actor_id: str,
+    target_ref_id: str,
+    idempotency_record_id: str | None,
+) -> ApplicationResult[PolishTaskStatus]:
+    atomic_writer = getattr(repository, "add_feedback_task_result", None)
+    if callable(atomic_writer):
+        atomic_writer(
+            feedback,
+            task,
+            owner_id=owner_id,
+            actor_id=actor_id,
+            target_ref_id=target_ref_id,
+            idempotency_record_id=idempotency_record_id,
+        )
+        return ApplicationResult(value=task)
+    return PolishPersistResultUseCase(repository).execute(
+        PersistPolishResultCommand(
+            feedback=feedback,
+            task=task,
+            owner_id=owner_id,
+            actor_id=actor_id,
+            target_ref_id=target_ref_id,
+        )
+    )
 
 
 def _build_feedback_generation_context(
@@ -454,6 +602,36 @@ def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskSta
         user_visible_status="反馈已存在",
         candidate_refs=_feedback_candidate_refs_from_payload(payload),
     )
+
+
+def _existing_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:
+    payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    if str(feedback.status) == str(AiTaskStatus.GENERATION_FAILED) or (
+        isinstance(payload, dict) and payload.get("status") == str(AiTaskStatus.GENERATION_FAILED)
+    ):
+        validation_errors = ()
+        if isinstance(payload, dict) and isinstance(payload.get("validation_errors"), list):
+            validation_errors = tuple(str(item) for item in payload["validation_errors"] if str(item))
+        user_visible_status = "反馈生成失败，可重试"
+        if isinstance(payload, dict):
+            raw_status = payload.get("user_visible_status")
+            if isinstance(raw_status, str) and raw_status.strip():
+                user_visible_status = raw_status.strip()
+        return PolishTaskStatus(
+            ai_task_id=feedback.ai_task_id,
+            task_type=POLISH_FEEDBACK_TASK_TYPE,
+            status=AiTaskStatus.GENERATION_FAILED,
+            contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+            retryable=True,
+            result_ref=TraceRef(
+                trace_ref_id=feedback.ai_task_id,
+                trace_type="validation_result",
+                created_at=feedback.created_at,
+            ),
+            user_visible_status=user_visible_status,
+            validation_errors=validation_errors,
+        )
+    return _existing_generated_feedback_task(feedback)
 
 
 def _has_generated_feedback_payload(feedback: PolishFeedback) -> bool:

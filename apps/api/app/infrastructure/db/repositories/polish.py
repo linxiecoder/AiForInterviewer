@@ -20,6 +20,7 @@ from app.application.polish.entities import (
     PolishSessionReportSummary,
     PolishTaskStatus,
 )
+from app.application.polish.feedback_schema import POLISH_FEEDBACK_TASK_TYPE
 from app.application.polish.ports import PolishRepository
 from app.application.polish.question_metadata import (
     empty_question_metadata,
@@ -29,7 +30,7 @@ from app.application.polish.question_metadata import (
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.domain.shared.clock import utc_now
 from app.domain.shared.refs import ResourceRef
-from app.infrastructure.db.models.ai_task import AiTask
+from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.models.answer import Answer as AnswerModel
 from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
 from app.infrastructure.db.models.interview import (
@@ -387,6 +388,73 @@ class SqlAlchemyPolishRepository(PolishRepository):
                 )
             )
             db.commit()
+
+    def add_feedback_task_result(
+        self,
+        feedback: PolishFeedback,
+        task: PolishTaskStatus,
+        *,
+        owner_id: str,
+        actor_id: str,
+        target_ref_id: str,
+        idempotency_record_id: str | None = None,
+    ) -> None:
+        with self._session_factory() as db:
+            db.add(_feedback_to_model(feedback))
+            db.add(
+                _task_to_model(
+                    task,
+                    owner_id=owner_id,
+                    actor_id=actor_id,
+                    target_ref_id=target_ref_id,
+                    idempotency_record_id=idempotency_record_id,
+                )
+            )
+            db.add(_task_result_to_model(task, owner_id=owner_id, actor_id=actor_id))
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    def get_feedback_task_idempotency_record(
+        self,
+        *,
+        owner_id: str,
+        idempotency_key: str,
+        request_body_hash: str,
+    ) -> dict[str, object]:
+        prefix = _feedback_idempotency_record_prefix(idempotency_key)
+        expected_record_id = _feedback_idempotency_record_id(idempotency_key, request_body_hash)
+        with self._session_factory() as db:
+            tasks = db.scalars(
+                select(AiTask)
+                .where(
+                    AiTask.owner_id == owner_id,
+                    AiTask.task_type == POLISH_FEEDBACK_TASK_TYPE,
+                    AiTask.idempotency_record_id.like(f"{prefix}%"),
+                )
+                .order_by(AiTask.created_at.asc(), AiTask.id.asc())
+            ).all()
+            if not tasks:
+                return {"status": "missing"}
+            task = next((item for item in tasks if item.idempotency_record_id == expected_record_id), None)
+            if task is None:
+                return {"status": "conflict"}
+            result = db.scalar(
+                select(AiTaskResult)
+                .where(AiTaskResult.owner_id == owner_id, AiTaskResult.ai_task_id == task.id)
+                .limit(1)
+            )
+            feedback = db.scalar(
+                select(FeedbackModel)
+                .where(FeedbackModel.owner_id == owner_id, FeedbackModel.ai_task_id == task.id)
+                .order_by(FeedbackModel.created_at.desc(), FeedbackModel.id.desc())
+                .limit(1)
+            )
+            if result is None or feedback is None:
+                return {"status": "orphan", "ai_task_id": task.id}
+            return {"status": "replay", "feedback": _feedback_to_entity(feedback)}
 
     def get_ref(self, session_id: str) -> ResourceRef | None:
         with self._session_factory() as db:
@@ -774,6 +842,72 @@ def _feedback_to_model(feedback: PolishFeedback) -> FeedbackModel:
         score_result_id=feedback.score_result_id,
         feedback_summary=feedback.feedback_summary,
     )
+
+
+def _task_to_model(
+    task: PolishTaskStatus,
+    *,
+    owner_id: str,
+    actor_id: str,
+    target_ref_id: str,
+    idempotency_record_id: str | None,
+) -> AiTask:
+    return AiTask(
+        id=task.ai_task_id,
+        owner_id=owner_id,
+        actor_id=actor_id,
+        record_version=1,
+        status=str(task.status),
+        trace_ref_ids=[task.result_ref.trace_ref_id],
+        evidence_ref_ids=None,
+        task_type=task.task_type,
+        contract_ids=list(task.contract_ids),
+        idempotency_record_id=idempotency_record_id,
+        target_ref_id=target_ref_id,
+        created_at=task.result_ref.created_at,
+        updated_at=task.result_ref.created_at,
+    )
+
+
+def _task_result_to_model(
+    task: PolishTaskStatus,
+    *,
+    owner_id: str,
+    actor_id: str,
+) -> AiTaskResult:
+    result_ref_id = (
+        task.result_ref.trace_ref_id
+        if task.result_ref.trace_type != "validation_result"
+        else None
+    )
+    validation_result_ref_id = (
+        task.result_ref.trace_ref_id if task.result_ref.trace_type == "validation_result" else None
+    )
+    return AiTaskResult(
+        id=f"{task.ai_task_id}_result",
+        owner_id=owner_id,
+        actor_id=actor_id,
+        record_version=1,
+        status=str(task.status),
+        trace_ref_ids=[task.result_ref.trace_ref_id],
+        evidence_ref_ids=None,
+        created_at=task.result_ref.created_at,
+        updated_at=task.result_ref.created_at,
+        ai_task_id=task.ai_task_id,
+        result_sequence="0",
+        validation_result_ref_id=validation_result_ref_id,
+        trace_ref_id=task.result_ref.trace_ref_id,
+        result_ref_id=result_ref_id,
+    )
+
+
+def _feedback_idempotency_record_prefix(idempotency_key: str) -> str:
+    key_hash = sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
+    return f"polish_feedback:{key_hash}:"
+
+
+def _feedback_idempotency_record_id(idempotency_key: str, request_body_hash: str) -> str:
+    return f"{_feedback_idempotency_record_prefix(idempotency_key)}{request_body_hash[:24]}"
 
 
 def _feedback_to_entity(model: FeedbackModel) -> PolishFeedback:

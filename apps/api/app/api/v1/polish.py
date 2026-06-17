@@ -413,20 +413,24 @@ async def create_polish_answer(
 async def create_polish_feedback_task(
     session_id: str,
     payload: CreateFeedbackTaskRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     actor: CurrentActor = Depends(require_authenticated_actor),
     session_factory: sessionmaker[Session] = Depends(get_db_session_factory),
     llm_transport: LlmTransport = Depends(get_llm_transport),
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
+    clean_idempotency_key = _clean_optional_header(idempotency_key)
+    command = CreatePolishFeedbackTaskCommand(
+        owner_id=actor.owner_id,
+        actor_id=actor.actor_id,
+        session_id=session_id,
+        answer_id=payload.answer_id,
+        internal_scoring_context=payload.scoring_context,
+    )
+    object.__setattr__(command, "idempotency_key", clean_idempotency_key)
     result = await run_in_threadpool(
         use_cases.create_feedback_task,
-        CreatePolishFeedbackTaskCommand(
-            owner_id=actor.owner_id,
-            actor_id=actor.actor_id,
-            session_id=session_id,
-            answer_id=payload.answer_id,
-            internal_scoring_context=payload.scoring_context,
-        ),
+        command,
     )
     if not result.is_success:
         _raise_result_error(result.error)
