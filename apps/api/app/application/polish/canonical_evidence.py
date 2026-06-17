@@ -15,6 +15,9 @@ CANONICAL_EVIDENCE_PACK_SCHEMA_VERSION = "canonical_evidence_pack.v1"
 CANONICAL_ASSET_SELECTION_POLICY = "rule_based_keyword_overlap_v1"
 # Archived assets are historical/reference-only in the active product specs.
 CANONICAL_ASSET_STATUS_POLICY = "asset_confirmed_only_v1"
+RAG_RETRIEVAL_UNAVAILABLE_REASON = "full_retrieval_not_enabled"
+RAG_RETRIEVAL_UNAVAILABLE_USER_MESSAGE = "资产已保存，但本次生成未启用知识库检索。"
+RAG_RETRIEVAL_NON_CLAIM_POLICY = "canonical_project_assets_are_not_retrieved_rag_chunks"
 CANONICAL_ASSET_STATUSES = ("asset_confirmed",)
 CANONICAL_EXCLUDED_ASSET_STATUSES = {"asset_archived": "historical_reference_only"}
 CANONICAL_ASSET_TYPES = (
@@ -59,7 +62,7 @@ class CanonicalEvidenceService:
             "resume_snapshot_ref": _version_ref("resume", resume_id, resume_version_id),
             "progress_node_ref": progress_node_ref,
             "canonical_project_assets": canonical_project_assets,
-            "retrieved_rag_chunks": {"available": False, "items": []},
+            "retrieved_rag_chunks": empty_retrieved_rag_chunks(),
             "prior_answer_refs": [],
             "prior_feedback_refs": [],
             "answer_attempt_refs": [],
@@ -119,6 +122,16 @@ def empty_canonical_project_assets() -> dict[str, Any]:
         "status_policy": CANONICAL_ASSET_STATUS_POLICY,
         "excluded_statuses": dict(CANONICAL_EXCLUDED_ASSET_STATUSES),
         "items": [],
+    }
+
+
+def empty_retrieved_rag_chunks() -> dict[str, Any]:
+    return {
+        "available": False,
+        "items": [],
+        "unavailable_reason": RAG_RETRIEVAL_UNAVAILABLE_REASON,
+        "user_message": RAG_RETRIEVAL_UNAVAILABLE_USER_MESSAGE,
+        "non_claim_policy": RAG_RETRIEVAL_NON_CLAIM_POLICY,
     }
 
 
@@ -230,6 +243,7 @@ def _version_ref(resource_type: str, resource_id: str | None, version_id: str | 
 
 def _canonical_pack_digest_payload(pack: dict[str, Any]) -> dict[str, Any]:
     canonical_project_assets = pack.get("canonical_project_assets")
+    retrieved_rag_chunks = pack.get("retrieved_rag_chunks")
     return {
         "schema_version": pack.get("schema_version"),
         "owner_ref": pack.get("owner_ref"),
@@ -242,6 +256,7 @@ def _canonical_pack_digest_payload(pack: dict[str, Any]) -> dict[str, Any]:
         if isinstance(pack.get("source_support_summary"), dict)
         else {},
         "canonical_project_assets": canonical_project_assets if isinstance(canonical_project_assets, dict) else {},
+        "retrieved_rag_chunks": retrieved_rag_chunks if isinstance(retrieved_rag_chunks, dict) else {},
     }
 
 

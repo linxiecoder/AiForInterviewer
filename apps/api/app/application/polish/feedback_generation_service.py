@@ -58,6 +58,7 @@ class FeedbackGenerationContext:
     session_recent_turns: tuple[dict[str, Any], ...] = ()
     project_asset_summaries: tuple[dict[str, Any], ...] = ()
     canonical_project_assets: dict[str, Any] = field(default_factory=dict)
+    retrieved_rag_chunks: dict[str, Any] = field(default_factory=dict)
     question_metadata: dict[str, Any] = field(default_factory=dict)
     job_snapshot: dict[str, Any] = field(default_factory=dict)
     resume_snapshot: dict[str, Any] = field(default_factory=dict)

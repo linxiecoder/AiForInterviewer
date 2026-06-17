@@ -108,6 +108,36 @@ def test_candidate_output_is_used_for_must_have_and_must_not_have() -> None:
     assert not any(failure.startswith("must_have_missing:Redis") for failure in result["failures"])
 
 
+def test_rag_non_claim_eval_blocks_knowledge_base_retrieval_claim() -> None:
+    result = grade_case(
+        {
+            "case_id": "rag_unavailable_non_claim",
+            "task_type": "question_generation",
+            "input": {
+                "source_support_level": "direct_project_evidence",
+                "retrieved_rag_chunks": {
+                    "available": False,
+                    "items": [],
+                    "unavailable_reason": "full_retrieval_not_enabled",
+                },
+            },
+            "expected": {
+                "required_question_focus": ["真实实现链路", "职责边界", "关键取舍", "验证方式"],
+            },
+            "candidate_output": {
+                "question": "AI 已经检索并使用知识库，请结合检索片段说明实现链路。"
+            },
+            "must_have": [],
+            "must_not_have": ["AI 已经检索并使用知识库", "检索片段"],
+            "grader_notes": "available=false means saved assets exist, but this generation did not use knowledge base retrieval.",
+        }
+    )
+
+    assert result["passed"] is False
+    assert "must_not_have_present:AI 已经检索并使用知识库" in result["failures"]
+    assert "must_not_have_present:检索片段" in result["failures"]
+
+
 def test_archived_asset_excluded_sample_is_recognized() -> None:
     cases = load_jsonl(REPO_ROOT / "evals" / "datasets" / "feedback_asset_consistency.jsonl")
     archived_case = next(case for case in cases if case["case_id"] == "fb_archived_asset_excluded")

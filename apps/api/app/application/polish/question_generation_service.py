@@ -817,6 +817,7 @@ def _build_evidence_scope(
             context,
         ),
         canonical_project_assets=_canonical_project_assets(context),
+        retrieved_rag_chunks=_retrieved_rag_chunks(context),
         source_support_level=_source_support_level(
             context,
             chunks=chunks,
@@ -857,6 +858,24 @@ def _canonical_project_assets(context: dict[str, Any]) -> dict[str, Any]:
         "available": bool(value.get("available")) and bool(safe_items),
         "selection_policy": _clean(value.get("selection_policy")) or "rule_based_keyword_overlap_v1",
         "items": safe_items,
+    }
+
+
+def _retrieved_rag_chunks(context: dict[str, Any]) -> dict[str, Any]:
+    value = context.get("retrieved_rag_chunks")
+    if not isinstance(value, dict):
+        pack = context.get("canonical_evidence_pack")
+        value = pack.get("retrieved_rag_chunks") if isinstance(pack, dict) else {}
+    if not isinstance(value, dict):
+        value = {}
+    items = value.get("items") if isinstance(value.get("items"), list) else []
+    return {
+        "available": bool(value.get("available")) and bool(items),
+        "items": items if bool(value.get("available")) else [],
+        "unavailable_reason": _clean(value.get("unavailable_reason")) or "full_retrieval_not_enabled",
+        "user_message": _clean(value.get("user_message")) or "资产已保存，但本次生成未启用知识库检索。",
+        "non_claim_policy": _clean(value.get("non_claim_policy"))
+        or "canonical_project_assets_are_not_retrieved_rag_chunks",
     }
 
 

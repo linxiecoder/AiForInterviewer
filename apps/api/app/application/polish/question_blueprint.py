@@ -39,6 +39,7 @@ class EvidenceScope:
     question_sources: tuple[PolishQuestionSource, ...] = ()
     context_digest: str | None = None
     canonical_project_assets: dict[str, Any] = field(default_factory=dict)
+    retrieved_rag_chunks: dict[str, Any] = field(default_factory=dict)
     source_support_level: str | None = None
     dropped_context_summary: dict[str, Any] = field(default_factory=dict)
 

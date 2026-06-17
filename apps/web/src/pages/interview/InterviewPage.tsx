@@ -166,6 +166,10 @@ export const INTERVIEW_LIST_CONFIRM_COPY = {
   okDelete: "确认删除",
   cancel: "取消",
 } as const;
+export const INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY = {
+  unavailable: "资产已保存，但本次生成未启用知识库检索。",
+  available: "知识库检索状态已记录。",
+} as const;
 export const INTERVIEW_LIST_TABLE_CELL_TEXT_POLICY = {
   overflow: "single_line_ellipsis",
   hover: "tooltip",
@@ -2963,6 +2967,18 @@ function resolveStatusChipClassName(tone: WorkbenchStatusChipTone): string {
 
 function resolveStatusChipDotClassName(tone: WorkbenchStatusChipTone): string {
   return styles[WORKBENCH_STATUS_CHIP_DOT_CLASS_NAMES[tone]];
+}
+
+export function resolveRagRetrievalCopy(value: unknown): string {
+  const record = toRecord(value);
+  if (record === null) {
+    return INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY.unavailable;
+  }
+  const items = Array.isArray(record.items) ? record.items : [];
+  if (record.available === true && items.length > 0) {
+    return INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY.available;
+  }
+  return INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY.unavailable;
 }
 
 function renderStatusChip(tone: WorkbenchStatusChipTone, label: string): ReactElement {

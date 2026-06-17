@@ -8,6 +8,7 @@ from hashlib import sha256
 from typing import Any
 
 from app.application.job_match.entities import JobMatchAnalysis
+from app.application.polish.canonical_evidence import empty_retrieved_rag_chunks
 from app.application.polish.entities import PolishSessionDetail, PolishSessionTurn
 from app.application.polish.progress_evidence import has_sufficient_initial_evidence
 from app.domain.jobs.entities import Job, JobVersion
@@ -41,6 +42,7 @@ def build_polish_progress_context(
     weakness_context = _build_collection_context(weaknesses)
     asset_context = _build_collection_context(assets)
     canonical_project_assets = _canonical_project_assets(canonical_evidence_pack)
+    retrieved_rag_chunks = _retrieved_rag_chunks(canonical_evidence_pack)
     turns = _build_turn_context(session_detail.turns)
     context = {
         "session": {
@@ -56,6 +58,7 @@ def build_polish_progress_context(
         "weakness_context": weakness_context,
         "asset_context": asset_context,
         "canonical_project_assets": canonical_project_assets,
+        "retrieved_rag_chunks": retrieved_rag_chunks,
         "canonical_evidence_pack": _compact_canonical_evidence_pack(canonical_evidence_pack),
         "turns": turns,
     }
@@ -74,6 +77,7 @@ def build_polish_progress_context(
             },
             "match_context": match_context,
             "canonical_project_assets": canonical_project_assets,
+            "retrieved_rag_chunks": retrieved_rag_chunks,
             "source_support_level": context["canonical_evidence_pack"].get("source_support_level"),
             "canonical_evidence_digest": context["canonical_evidence_pack"].get("context_digest"),
             "turns": turns,
@@ -289,8 +293,28 @@ def _compact_canonical_evidence_pack(canonical_evidence_pack: dict[str, Any] | N
         "progress_node_ref": truncate_text(canonical_evidence_pack.get("progress_node_ref"), max_chars=160),
         "source_support_level": truncate_text(canonical_evidence_pack.get("source_support_level"), max_chars=120),
         "context_digest": truncate_text(canonical_evidence_pack.get("context_digest"), max_chars=160),
+        "retrieved_rag_chunks": _retrieved_rag_chunks(canonical_evidence_pack),
         "warnings": clean_list(tuple(canonical_evidence_pack.get("warnings") or ()), limit=10),
         "blocking_issues": clean_list(tuple(canonical_evidence_pack.get("blocking_issues") or ()), limit=10),
+    }
+
+
+def _retrieved_rag_chunks(canonical_evidence_pack: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(canonical_evidence_pack, dict):
+        return empty_retrieved_rag_chunks()
+    value = canonical_evidence_pack.get("retrieved_rag_chunks")
+    if not isinstance(value, dict):
+        return empty_retrieved_rag_chunks()
+    items = value.get("items") if isinstance(value.get("items"), list) else []
+    return {
+        "available": bool(value.get("available")) and bool(items),
+        "items": items if bool(value.get("available")) else [],
+        "unavailable_reason": truncate_text(value.get("unavailable_reason"), max_chars=120)
+        or "full_retrieval_not_enabled",
+        "user_message": truncate_text(value.get("user_message"), max_chars=160)
+        or "资产已保存，但本次生成未启用知识库检索。",
+        "non_claim_policy": truncate_text(value.get("non_claim_policy"), max_chars=160)
+        or "canonical_project_assets_are_not_retrieved_rag_chunks",
     }
 
 

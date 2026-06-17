@@ -69,6 +69,7 @@ import {
   INTERVIEW_WORKBENCH_STICKY_CONTEXT_CARD_DISPLAY_POLICY,
   INTERVIEW_WORKBENCH_STATE_REGIONS,
   INTERVIEW_WORKBENCH_STATE_MACHINE,
+  INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY,
   CandidateList,
   FeedbackForm,
   ResultCard,
@@ -148,6 +149,7 @@ import {
   shouldAutoCreateQuestionForProgressNode,
   shouldShowProgressTreeContextBannerToggle,
   shouldRenderQuestionBubbleInConversation,
+  resolveRagRetrievalCopy,
   toNextRecommendedActionLabel,
   type PolishBindingOption,
 } from "./InterviewPage";
@@ -1052,6 +1054,21 @@ function test_polish_feedback_runtime_reads_ai_task_status_and_result_paths(): v
     provider_payload: null,
   };
   assertContract(result.provider_payload === null, "AI task result 不应携带 provider payload");
+}
+
+function test_interview_workbench_rag_unavailable_copy_is_non_claiming(): void {
+  assertContract(
+    INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY.unavailable === "资产已保存，但本次生成未启用知识库检索。",
+    "RAG unavailable 文案必须说明本次生成未启用知识库检索",
+  );
+  assertContract(
+    resolveRagRetrievalCopy({ available: false, items: [] }) === INTERVIEW_WORKBENCH_RAG_RETRIEVAL_COPY.unavailable,
+    "available=false 时不得展示已检索知识库声明",
+  );
+
+  const source = readFileSync("apps/web/src/pages/interview/InterviewPage.tsx", "utf-8");
+  assertContract(!source.includes("AI 已经检索并使用知识库"), "前端不得声明 AI 已经检索并使用知识库");
+  assertContract(!source.includes("knowledge base retrieved"), "前端不得声明 knowledge base retrieved");
 }
 
 function test_polish_m25_components_are_split_and_exported(): void {
@@ -4303,6 +4320,7 @@ test_interview_list_toolbar_uses_shared_actions_and_search();
 test_interview_list_actions_cover_report_end_and_soft_delete();
 test_polish_core_workbench_contract_stays_on_session_tree_question_answer_feedback();
 test_polish_feedback_runtime_reads_ai_task_status_and_result_paths();
+test_interview_workbench_rag_unavailable_copy_is_non_claiming();
 test_polish_m25_components_are_split_and_exported();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();

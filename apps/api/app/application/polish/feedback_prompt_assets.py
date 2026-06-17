@@ -114,6 +114,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
     )
     related_terms = _related_terms(context, evidence_refs=(*evidence_refs, progress_node_ref))
     canonical_project_assets = _compact_canonical_project_assets(_get_dict(context, "canonical_project_assets"))
+    retrieved_rag_chunks = _compact_retrieved_rag_chunks(_get_dict(context, "retrieved_rag_chunks"))
     structured_answer = _structured_answer_for(context)
     input_data = {
         "current_question": {
@@ -145,6 +146,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
         "project_asset_summaries": _compact_project_asset_summaries(_get_list(context, "project_asset_summaries")),
         "progress_state": progress_state,
         "canonical_project_assets": canonical_project_assets,
+        "retrieved_rag_chunks": retrieved_rag_chunks,
         "context_snapshots": {
             "job_snapshot": _compact_job_snapshot(_get_dict(context, "job_snapshot")),
             "resume_snapshot": _compact_resume_snapshot(_get_dict(context, "resume_snapshot"), related_terms=related_terms),
@@ -175,6 +177,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
                 *safety_policy.to_prompt_rules(),
                 *validation_rules,
                 "Do not use rule-based scoring, keyword scoring, quick/full path influence, or fallback scoring.",
+                "If retrieved_rag_chunks.available=false, state only that saved assets exist but this generation did not use knowledge base retrieval.",
                 "Return score_result.reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates.",
             )
         ),
@@ -195,6 +198,7 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
             "evidence_retrieval_hints": {
                 "prefer": ["current_answer", "project_asset_summaries", "progress_node_snapshot"],
                 "avoid": ["full_resume", "full_jd", "provider_payload"],
+                "non_claim": "canonical_project_assets are saved assets, not retrieved RAG chunks.",
             },
             "evidence_selection_policy": {
                 "evidence_items_field": "input_data.evidence_items",
@@ -349,6 +353,7 @@ def _provider_compact_prompt(
     resume_snapshot = _safe_dict(context_snapshots.get("resume_snapshot"))
     evidence_items = _provider_evidence_items(_safe_list(input_data.get("evidence_items")))
     canonical_project_assets = _safe_dict(input_data.get("canonical_project_assets"))
+    retrieved_rag_chunks = _compact_retrieved_rag_chunks(_safe_dict(input_data.get("retrieved_rag_chunks")))
     evaluation_contract = _provider_evaluation_contract()
     provider_prompt: dict[str, Any] = {
         "task": POLISH_FEEDBACK_CANDIDATE_TASK,
@@ -396,6 +401,7 @@ def _provider_compact_prompt(
         "progress_state": progress_state,
         "evidence": evidence_items,
         "canonical_project_assets": canonical_project_assets,
+        "retrieved_rag_chunks": retrieved_rag_chunks,
         "same_question_answers": same_question_answers,
         "progress_node_snapshot": {
             "node_ref": _get_clean_text(progress_node.get("node_ref"), max_chars=120),
@@ -906,6 +912,21 @@ def _compact_canonical_project_assets(value: dict[str, Any]) -> dict[str, object
         "available": bool(value.get("available")) and bool(items),
         "selection_policy": "semantic_evidence_ref_selection_v1",
         "items": items,
+    }
+
+
+def _compact_retrieved_rag_chunks(value: dict[str, Any]) -> dict[str, object]:
+    raw_items = value.get("items") if isinstance(value.get("items"), list) else []
+    available = bool(value.get("available")) and bool(raw_items)
+    return {
+        "available": available,
+        "items": raw_items[:5] if available else [],
+        "unavailable_reason": _first_text(value.get("unavailable_reason"), "full_retrieval_not_enabled"),
+        "user_message": _first_text(value.get("user_message"), "资产已保存，但本次生成未启用知识库检索。"),
+        "non_claim_policy": _first_text(
+            value.get("non_claim_policy"),
+            "canonical_project_assets_are_not_retrieved_rag_chunks",
+        ),
     }
 
 

@@ -537,6 +537,11 @@ def _build_feedback_generation_context(
             if isinstance(progress_context.get("canonical_project_assets"), dict)
             else {}
         ),
+        retrieved_rag_chunks=(
+            progress_context.get("retrieved_rag_chunks")
+            if isinstance(progress_context.get("retrieved_rag_chunks"), dict)
+            else {}
+        ),
         question_metadata=turn.question_metadata if isinstance(turn.question_metadata, dict) else {},
         job_snapshot=_feedback_job_snapshot(progress_context.get("job_snapshot")),
         resume_snapshot=_feedback_resume_snapshot(progress_context.get("resume_snapshot")),
