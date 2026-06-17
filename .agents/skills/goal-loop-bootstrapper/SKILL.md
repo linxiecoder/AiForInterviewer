@@ -129,6 +129,7 @@ ${OUTPUT_ROOT}/runs/.gitkeep
 ${OUTPUT_ROOT}/scripts/goal_gate.py
 ${OUTPUT_ROOT}/scripts/validate_goal.py
 ${OUTPUT_ROOT}/scripts/goal_status.py
+${OUTPUT_ROOT}/scripts/update_goal_state.py
 ```
 
 可选生成到稳定 Skill 位置：
@@ -344,6 +345,47 @@ python3 ${OUTPUT_ROOT}/scripts/validate_goal.py --state ${OUTPUT_ROOT}/state.jso
 python3 ${OUTPUT_ROOT}/scripts/goal_status.py --state ${OUTPUT_ROOT}/state.json
 ```
 
+### 6.4 update_goal_state.py 必须支持
+
+以后生成的 Loop 控制面必须生成：
+
+```text
+${OUTPUT_ROOT}/scripts/update_goal_state.py
+```
+
+脚本必须只更新同一控制面的 `${OUTPUT_ROOT}/state.json`，不得修改业务文件、测试文件、active docs、goal 输入包或 goal result 文件。支持命令：
+
+```bash
+python3 ${OUTPUT_ROOT}/scripts/update_goal_state.py --state ${OUTPUT_ROOT}/state.json --goal <goal-id> --status PASS --commit-sha <sha>
+python3 ${OUTPUT_ROOT}/scripts/update_goal_state.py --state ${OUTPUT_ROOT}/state.json --goal <goal-id> --status FAIL --reason "<reason>"
+python3 ${OUTPUT_ROOT}/scripts/update_goal_state.py --state ${OUTPUT_ROOT}/state.json --goal <goal-id> --status NEEDS_HUMAN --reason "<reason>"
+```
+
+`PASS` 前置检查：
+- goal 存在。
+- `result_dir` 存在，且是 `${GOAL_RESULT_ROOT}/<phase>/<goal-id>/`。
+- `review_path` 存在，且 `REVIEW.md` 中可识别 `verdict = PASS`、`Review verdict: PASS` 或明确 `PASS`。
+- `commit_info_path` 存在，且 `COMMIT_INFO.md` 中记录 commit sha 或 no commit needed reason。
+- 如果提供 `--commit-sha`，写入当前 goal 的 `last_commit_sha`；如果未提供但 `COMMIT_INFO.md` 记录 no commit needed，也允许 `PASS`。
+- `active_goal` 必须为当前 goal 或 `null`；如果是其它 goal，必须失败。
+
+`FAIL` / `NEEDS_HUMAN`：
+- 允许写入 `--reason` 到当前 goal 的 `last_state_update_reason`。
+- 如果 `active_goal` 是当前 goal，必须更新为 `null`。
+- 不要求 Review PASS，也不要求 `COMMIT_INFO.md` 完整。
+
+只允许修改：
+- 当前 goal 的 `status`、`last_commit_sha`、`updated_at`、`last_state_update_reason`、`last_completed_at`。
+- 顶层 `active_goal`。
+- 顶层 `last_run_id` 如果既有脚本需要且 state 已存在该字段；不得为此设计复杂结构。
+
+禁止修改：
+- `id`、`phase`、`depends_on`、`prompt_path`、`spec_path`、`goal_dir`、`result_dir`、`review_path`、`commit_info_path`、`expected_result_files`。
+- `allowed_scope`、`forbidden_scope`、`validation.commands`。
+- 后续 goal 定义或任何业务文件。
+
+成功输出必须包含 `UPDATE_STATE PASS <goal-id>`、`UPDATE_STATE FAIL <goal-id>` 或 `UPDATE_STATE NEEDS_HUMAN <goal-id>`；失败时必须输出错误原因并使用非 0 exit code。
+
 ---
 
 ## 7. 生成执行器 Skill 规则
@@ -374,10 +416,15 @@ python3 ${LOOP_ROOT}/scripts/goal_gate.py --state ${LOOP_ROOT}/state.json --prom
 python3 ${LOOP_ROOT}/scripts/goal_gate.py --state ${LOOP_ROOT}/state.json --next
 python3 ${LOOP_ROOT}/scripts/validate_goal.py --state ${LOOP_ROOT}/state.json <goal_id>
 python3 ${LOOP_ROOT}/scripts/goal_status.py --state ${LOOP_ROOT}/state.json
+python3 ${LOOP_ROOT}/scripts/update_goal_state.py --state ${LOOP_ROOT}/state.json --goal <goal_id> --status PASS --commit-sha <sha>
 ```
 
 不得硬编码 `docs/goal-loop` 或 `tmp/goal-loop`。
 不得跳过 `--promote`；如果已有唯一 `READY` goal，`--promote` 应输出 skip/no-op 并返回成功。
+执行器 Skill 必须固定执行顺序：解析 `LOOP_ROOT` / `STATE_PATH`，检测 `python3` / `python`，运行 `--check`、`--promote`、`--next`，只执行 `--next` 返回的唯一 `READY` goal，读取该 goal 的 `prompt_path`，执行 `PROMPT.md`，检查 `REVIEW.md`，检查 `COMMIT_INFO.md`，运行 `validate_goal.py`，调用 `update_goal_state.py` 回写 `PASS` / `FAIL` / `NEEDS_HUMAN`，再运行 `--check`、`--promote`、`--next` 只报告下一个 goal，然后停止。
+状态回写属于 Loop 控制面职责，不属于业务 goal 的 `allowed_scope`；但只能修改 `STATE_PATH` 中当前 goal 的状态字段，不得修改业务文件或后续 goal 定义。
+执行器 Skill 必须明确不得 `push`。
+执行器 Skill 的最终输出必须包含 `Goal`、`Prompt path`、`Status`、`Result directory`、`Review verdict`、`Commit`、`State update`、`Validation`、`Next`。
 
 ---
 
@@ -401,7 +448,12 @@ STATE_PATH=<OUTPUT_ROOT>/state.json
 并要求：
 - 每次只执行一个 READY goal。
 - 必须先按固定顺序运行 gate：`--check`、`--promote`、`--next`。
-- 必须执行 validate。
+- 必须检查 `REVIEW.md`。
+- 必须检查 `COMMIT_INFO.md`。
+- 必须执行 `validate_goal.py`。
+- 必须调用 `update_goal_state.py` 回写当前 goal 的 `PASS` / `FAIL` / `NEEDS_HUMAN`。
+- 状态回写后必须再次运行 `--check`、`--promote`、`--next`。
+- 只能报告 next，不得执行 next。
 - FAIL / NEEDS_HUMAN / NEEDS_HUMAN_DRAFT 即停。
 - 不得执行下一个 goal。
 - 不得修改 allowed_scope 之外文件。
