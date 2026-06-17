@@ -50,6 +50,14 @@ LOCAL_LLM_RAW_IO_ENABLED_ENV = "AIFI_LOCAL_LLM_RAW_IO_ENABLED"
 LOCAL_LLM_RAW_IO_DIR_ENV = "AIFI_LOCAL_LLM_RAW_IO_DIR"
 LOCAL_LLM_RAW_IO_INCLUDE_HEADERS_ENV = "AIFI_LOCAL_LLM_RAW_IO_INCLUDE_HEADERS"
 DEFAULT_LOCAL_LLM_RAW_IO_DIR = ".local/llm-raw"
+LOCAL_LLM_RAW_IO_BLOCKED_ENVIRONMENTS = frozenset({"production", "prod", "shared"})
+LOCAL_LLM_RAW_IO_CI_ENV_NAMES = (
+    "CI",
+    "GITHUB_ACTIONS",
+    "GITLAB_CI",
+    "BUILDKITE",
+    "TF_BUILD",
+)
 COMPACT_JSON_REASONING_CONSTRAINT = (
     "请在保证推理准确的前提下，用最精简的步骤完成思考，"
     "避免不必要的分点展开和重复验证。最终输出必须是一个合法、完整的 JSON 对象，"
@@ -505,7 +513,16 @@ def _base_url_host(base_url: str) -> str:
 
 
 def _local_raw_io_enabled(environ: Mapping[str, str] | None = None) -> bool:
-    return EnvReader(environ).bool(LOCAL_LLM_RAW_IO_ENABLED_ENV, False)
+    values = os.environ if environ is None else environ
+    env = EnvReader(values)
+    if not env.bool(LOCAL_LLM_RAW_IO_ENABLED_ENV, False):
+        return False
+    if any(env.bool(name, False) for name in LOCAL_LLM_RAW_IO_CI_ENV_NAMES):
+        return False
+    runtime_environment = (
+        env.first_of("API_AUTH_ENV", "API_ENV", "APP_ENV", "ENVIRONMENT") or "local"
+    ).strip().lower()
+    return runtime_environment not in LOCAL_LLM_RAW_IO_BLOCKED_ENVIRONMENTS
 
 
 def _local_raw_io_dir(environ: Mapping[str, str] | None = None) -> Path:

@@ -32,6 +32,40 @@ def test_local_raw_llm_io_dump_disabled_by_default(
     assert not (tmp_path / ".local" / "llm-raw").exists()
 
 
+@pytest.mark.parametrize("api_env", ["production", "shared"])
+def test_local_raw_llm_io_dump_fails_closed_outside_local_environments(
+    api_env: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dump_dir = tmp_path / "raw-dump"
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_ENABLED_ENV, "true")
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_DIR_ENV, str(dump_dir))
+    monkeypatch.setenv("API_ENV", api_env)
+    transport = _transport_with_response(_successful_provider_response())
+
+    result = transport.generate(_raw_debug_request())
+
+    assert result.result["question_text"] == "请结合 FastAPI 项目说明一次接口编排取舍。"
+    assert not dump_dir.exists()
+
+
+def test_local_raw_llm_io_dump_fails_closed_in_ci(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dump_dir = tmp_path / "raw-dump"
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_ENABLED_ENV, "true")
+    monkeypatch.setenv(LOCAL_LLM_RAW_IO_DIR_ENV, str(dump_dir))
+    monkeypatch.setenv("CI", "true")
+    transport = _transport_with_response(_successful_provider_response())
+
+    result = transport.generate(_raw_debug_request())
+
+    assert result.result["question_text"] == "请结合 FastAPI 项目说明一次接口编排取舍。"
+    assert not dump_dir.exists()
+
+
 def test_local_raw_llm_io_dump_writes_full_request_and_response(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
