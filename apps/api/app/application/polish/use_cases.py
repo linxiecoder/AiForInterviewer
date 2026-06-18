@@ -757,19 +757,34 @@ class _PolishUseCaseOperations:
                         )
                         return ApplicationResult(value=task)
 
-                task = _polish_question_graph_task_status(
-                    graph_status,
-                    requested_progress_node_ref=requested_progress_node_ref,
-                    created_at=now,
-                    runtime_policy=runtime_policy,
+                graph_polish_status = _graph_task_status_to_polish_status(graph_status.status)
+                has_graph_candidate_payloads = _graph_status_has_candidate_payloads(graph_status)
+                if graph_polish_status in {
+                    AiTaskStatus.QUEUED,
+                    AiTaskStatus.RUNNING,
+                } or has_graph_candidate_payloads:
+                    task = _polish_question_graph_task_status(
+                        graph_status,
+                        requested_progress_node_ref=requested_progress_node_ref,
+                        created_at=now,
+                        runtime_policy=runtime_policy,
+                    )
+                    self._polish_repository.add_task(
+                        task,
+                        owner_id=command.owner_id,
+                        actor_id=command.actor_id,
+                        target_ref_id=command.session_id,
+                    )
+                    return ApplicationResult(value=task)
+                graph_fallback_reason = "graph_candidate_absent"
+                LogUtil.agent_runtime_step(
+                    task_type=runtime_policy.task_type,
+                    phase="graph_candidate",
+                    status="fallback",
+                    input_ref=requested_progress_node_ref,
+                    output_ref=graph_status.agent_run_id,
+                    error_type="GraphCandidateAbsent",
                 )
-                self._polish_repository.add_task(
-                    task,
-                    owner_id=command.owner_id,
-                    actor_id=command.actor_id,
-                    target_ref_id=command.session_id,
-                )
-                return ApplicationResult(value=task)
 
         task_id = generate_resource_id(ResourceIdPrefix.TASK)
         if graph_fallback_reason is None and self._ai_orchestration_facade is None:
@@ -1985,6 +2000,10 @@ def _polish_question_graph_task_status(
             requested_progress_node_ref=requested_progress_node_ref,
         ),
     )
+
+
+def _graph_status_has_candidate_payloads(status_ref: object) -> bool:
+    return bool(getattr(status_ref, "candidate_payloads", ()) or ())
 
 
 def _graph_status_candidate_payload(

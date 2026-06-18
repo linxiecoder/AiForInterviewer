@@ -25,9 +25,13 @@ from app.application.polish.entities import (
     PolishAnswer,
     PolishFeedback,
     PolishQuestion,
+    PolishQuestionDraft,
+    PolishQuestionSource,
     PolishSession,
     PolishTaskStatus,
 )
+from app.application.polish.question_generation_service import QuestionGenerationResult
+from app.application.polish.question_grounding import GroundingResult
 from app.application.polish.use_cases import PolishUseCases
 from app.domain.bindings.entities import ResumeJobBinding
 from app.domain.jobs.entities import Job, JobVersion
@@ -334,6 +338,35 @@ def test_graph_enabled_path_uses_only_accepted_polish_question_candidate_payload
     assert blocker.calls == 0
 
 
+def test_graph_status_without_candidate_falls_back_to_direct_generation_and_persists_question() -> None:
+    facade = _FakeQuestionFacade(
+        status_ref=_GraphStatus(
+            candidate=None,
+            candidate_refs=(),
+            candidate_payloads=(),
+            status="validation_failed",
+        )
+    )
+    use_cases, repository = _use_cases(ai_orchestration_facade=facade)
+    direct_service = _DirectQuestionGenerationService()
+    use_cases._question_generation_service = direct_service
+
+    result = use_cases.create_question_task(_command())
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.status == AiTaskStatus.SUCCEEDED
+    assert direct_service.calls == 1
+    assert len(repository.questions) == 1
+    question = repository.questions[0]
+    assert question.question_text == _DirectQuestionGenerationService.QUESTION_TEXT
+    assert question.progress_node_ref == NODE_REF
+    assert question.question_metadata["graph_fallback_reason"] == "graph_candidate_absent"
+    assert question.question_metadata["fallback_reason"] == "graph_candidate_absent"
+    assert repository.tasks == [result.value]
+    assert any(ref.resource_type == "question" and ref.resource_id == question.question_id for ref in result.value.candidate_refs)
+
+
 def test_graph_status_does_not_fallback_to_dynamic_candidate_when_formal_payloads_are_present() -> None:
     pending_question_payload = AgentCandidatePayload(
         candidate_ref="question_candidate_ref_pending",
@@ -565,6 +598,43 @@ class _FakeQuestionFacade:
         if self.error is not None:
             raise self.error
         return self.status_ref
+
+
+class _DirectQuestionGenerationService:
+    QUESTION_TEXT = "Explain payment consistency with idempotency, compensation, and validation metrics."
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, **_: Any) -> QuestionGenerationResult:
+        self.calls += 1
+        return QuestionGenerationResult(
+            succeeded=True,
+            draft=PolishQuestionDraft(
+                question_text=self.QUESTION_TEXT,
+                question_sources=(
+                    PolishQuestionSource(
+                        index=1,
+                        source_type="resume_project",
+                        title="Payment consistency",
+                        excerpt="Owned payment state transitions, idempotency, and failure compensation.",
+                        ref_id="resume_evidence_ref_q4",
+                        availability="available",
+                    ),
+                ),
+                progress_node_ref=NODE_REF,
+                evidence_refs=("resume_evidence_ref_q4",),
+                context_digest="ctx_q4_direct_fallback",
+                question_pattern="polish_structured_experience",
+                confidence_level="high",
+                question_metadata={"llm_generation_mode": "direct_generation_fallback"},
+            ),
+            blueprint=None,
+            grounding_result=GroundingResult(passed=True),
+            validation_errors=(),
+            progress_node_ref=NODE_REF,
+            evidence_refs=("resume_evidence_ref_q4",),
+        )
 
 
 class _DirectQuestionGenerationBlocker:
