@@ -15,6 +15,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 
 - 仅基于 `docs/goals/2026-06-17/refactor-for-arch-01/1-audit-report.md`。
 - 仅基于 `docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md`。
+- 承接用户确认的 breaking-change decisions：ADR-0005 addendum 后置落库、统一入口 + domain handler、暂不优先 durable idempotency、旧 direct path 默认删除、旧 API compat 默认破坏式替换、Progress 拆分 canonical write / projection refresh、旧测试按新契约重写。
 - 不引入外部 issue 模型、外部 issue 清单或额外架构推断。
 
 输出边界：
@@ -23,6 +24,37 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 - 本文件不替代 `BACKLOG.md`、`DELIVERY_PLAN.md`、active design docs、ADR 或代码事实。
 - 后续实现必须在授权窗口内回写唯一入口。
 - 所有任务保持工程实施粒度，不做架构重设计，不引入新的编译器、图谱或运行时模型，不做图化任务拆分。
+
+## Preflight: Breaking-change Scope And ADR Delta
+
+### 1. Objective
+
+在实施前锁定破坏式清理边界，避免后续继续保留旧兼容层。本 Preflight 不创建新 active docs，不替代 ADR / BACKLOG / DELIVERY_PLAN；它只整理后续回写 ADR-0005 addendum 和 active docs 所需的 delta。
+
+### 2. Tasks
+
+1. 列出旧 direct path、旧 API compat fields / mirror payload、legacy mapper、placeholder / skeleton route、旧测试断言。
+2. 为每一项标记处理方式：`delete`、`replace`、`rewrite`、`temporary_exception`。
+3. 默认不保留旧 direct path、不保留旧 compat payload、不保留旧 contract test expected。
+4. 明确本轮不实现 durable idempotency / running task lifecycle；`decision_ref` 只作为追踪引用。
+5. 整理 expected ADR-0005 addendum delta，待重构完成后回写最终决策。
+6. 任何 `temporary_exception` 必须使用固定字段记录：`reason`、`allowed_scope`、`blocking_condition`、`delete_condition`、`cleanup_phase_or_task`、`owner_check`；不得只写“暂时保留”。
+7. 开发前必须用 `rg` 做定向现状复核，并把结果回填到 legacy cleanup inventory 后才能进入 Phase 1：
+   - route / API endpoint：`apps/api/app/api/v1/polish.py`。
+   - use case / application service：`apps/api/app/application/polish/use_cases.py`。
+   - repository / persistence：`apps/api/app/infrastructure/db/repositories/polish.py`。
+   - frontend request construction：`apps/web/src/pages/interview/InterviewPage.tsx`。
+   - frontend types / API client：`apps/web/src/entities/polish/model/types.ts` 及实际 API client 文件。
+   - tests / contract tests：`tests/api/*polish*`、frontend 相关 tests。
+   - legacy direct / fallback / compat payload 残留：定向扫描 `direct`、`fallback`、`compat`、`mirror`、`selected_progress_node_ref`、`completed_focus_refs`、`candidate_refs`、`legacy_direct_path_retained`。
+
+### 3. Validation Plan
+
+- 形成 legacy cleanup inventory，且每一项只有 `delete`、`replace`、`rewrite` 或 `temporary_exception` 四类处理方式。
+- 确认没有把 temporary exception 写成长期 fallback、长期 compat 或长期测试保护。
+- 确认每个 `temporary_exception` 都包含 blocking condition、删除条件和后续清理任务位置。
+- 确认开发前 `rg` 复核已覆盖 route、use case、repository、frontend request、frontend types / API client、tests 和 legacy direct / fallback / compat payload 残留。
+- 确认后续 Phase 的任务描述不再要求保留旧 direct path、旧 compat shape 或旧 fallback success。
 
 ## Phase 1: Control-plane Isolation
 
@@ -37,7 +69,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 - `apps/api/app/api/v1/polish.py`
 - `CreatePolishQuestionTaskCommand`
 - `NextQuestionExecutionGrant`
-- `QuestionAuthority` / `FeedbackAuthority` / `ProgressAuthority` 的模块级输出边界
+- `QuestionAuthority` / `FeedbackAuthority` / `ProgressCanonicalAuthority` / `ProgressProjectionPolicy` 的模块级输出边界
 - `SourceSupportPolicy`、`QuestionGroundingPolicy`、`AssetConsistencyPolicy` 等 policy result 的消费位置
 
 本阶段只处理 authority 收敛，不处理 executor 合并、snapshot 冻结、frontend UI 改造或 legacy cleanup。
@@ -58,7 +90,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   - `allowed=true` 时 `rejected=false`，且 `execution_target` 非空。
   - `allowed=false` 时 `rejected=true`，且 `reason_codes` 至少包含一个拒绝原因。
   - `allowed` 与 `rejected` 不会同时为 `true` 或同时为 `false`。
-  - `decision_ref` 能贯穿后续 response、幂等和持久化计划。
+  - `decision_ref` 能贯穿后续 response、结果关联和持久化追踪计划，但不声明 durable idempotency。
 - Test Points:
   - 覆盖 allowed question intent，断言输出包含 `execution_target=generate_question` 或 `retry_question_generation`。
   - 覆盖 rejected question intent，断言不进入后续执行入口。
@@ -67,7 +99,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 - Risk Notes:
   - 如果仅新增字段而不移除旧字段消费，authority 仍会分叉。
   - 如果 `reason_codes` 被复用为 executor 结果状态，会继续混淆解释信号和执行结果。
-  - 如果 `decision_ref` 只出现在 response，不进入持久化计划，后续幂等无法闭合。
+  - 如果 `decision_ref` 只出现在 response，不进入持久化追踪，后续排查无法关联 authority decision 与结果。
 
 #### Task 1.2: 移除非 backend 的执行目标派生
 
@@ -78,21 +110,21 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   2. 将 frontend local state、UI selection、display status、optimistic state 从 execution target 决策来源中移出。
   3. 将 LLM recommendation、candidate text、graph/fallback availability、provider transport success 标记为非授权来源。
   4. 保留 route 层的请求适配职责，但不允许 route 层直接生成执行授权或执行目标。
-  5. 对仍需保留的 compatibility signal，仅作为 adapter output 或 safe response metadata 处理。
+  5. 默认删除旧适配信号；如确实无法立刻删除，只能登记为 `temporary_exception`，并限定为 adapter output 或 safe response metadata。
 - Checkpoints:
   - API route 不直接生成 `execution_target`。
   - frontend 传入的 selection 类字段不会被解释为授权目标。
   - LLM / graph / provider 输出不能直接触发 persistence。
-  - rejected authority path 不会因 compatibility fallback 继续执行。
+  - rejected authority path 不会因 legacy fallback 或 temporary exception 继续执行。
 - Test Points:
   - 通过 direct question path 与 feedback next-question path 传入相同 intent，断言执行目标只来自 authority。
   - 模拟 frontend selection 变化，断言 backend `execution_target` 不被 UI focus 改写。
   - 模拟 provider success 但 authority rejected，断言不持久化业务结果。
   - 模拟 graph disabled / fallback available，断言不产生授权。
 - Risk Notes:
-  - route 文件当前同时承担 dependency wiring、response contract、compat shape、payload filtering，改动时容易把 response 兼容误当 authority。
+  - route 文件当前同时承担 dependency wiring、response contract、compat shape、payload filtering；本轮默认删除旧 compat shape，改动时不得把旧响应兼容误当 authority。
   - feedback payload 中 evaluation-shaped fields 可能继续越界成 orchestration signal。
-  - 保留 legacy mapper 时必须确认其输出不是目标选择器。
+  - legacy mapper 默认删除；若登记为 temporary exception，必须确认其输出不是目标选择器，并写明删除条件。
 
 #### Task 1.3: 分离 policy reason 与执行控制
 
@@ -119,11 +151,65 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   - 如果 metadata 命名与 authority 字段过近，后续实现容易误用。
   - 不能在本阶段顺手改 artifact lifecycle 终态；该项留给 Phase 5。
 
+#### Task 1.4: 修复 repository / application entity 依赖方向
+
+- Task Name: 修复 repository / application entity 依赖方向
+- Target Area: `apps/api/app/infrastructure/db/repositories/polish.py`、`apps/api/app/application/polish/ports.py`、`apps/api/app/application/polish/entities.py`
+- Steps:
+  1. 梳理 repository 当前是否直接 import 或返回 application entity。
+  2. 明确 repository 只能消费 persistence model、repository DTO、primitive persistence shape 或 port 定义的出入参；不得反向依赖 application entity。
+  3. 将 application 层通过 port 接口消费 repository，application entity 的组装留在 application boundary 内。
+  4. 若需要跨层数据承载，定义 repository DTO / persistence DTO，并保证其不携带 authority、snapshot 或 executor 语义。
+  5. 增加 import boundary test 或 contract test，防止 `infrastructure/db/repositories/*` 重新 import `application/polish/entities.py`。
+- Checkpoints:
+  - repository 不再反向 import application entity。
+  - persistence DTO 与 application entity 的边界清晰。
+  - repository 不成为新的 domain decision 或 execution authority 来源。
+  - import boundary test 能防止依赖方向回归。
+- Test Points:
+  - import boundary test 覆盖 repository 到 application entity 的禁止依赖。
+  - repository contract test 覆盖 DTO / persistence shape 与 port 约定。
+  - application use case 能在 port 边界内组装 application entity。
+  - rejected authority path 不因 repository helper 产生业务写入。
+- Risk Notes:
+  - 如果只移动 import 但保留 application entity 在 repository 内组装，依赖方向仍未修复。
+  - 如果 repository DTO 命名过像 domain entity，后续实现容易把 persistence shape 当业务事实源。
+  - 本任务不新增数据库 schema，不引入 migration；只修复依赖方向和边界测试。
+
+#### Task 1.5: 定义 `use_cases.py` 最小模块拆分落点
+
+- Task Name: 定义 `use_cases.py` 最小模块拆分落点
+- Target Area: `apps/api/app/application/polish/use_cases.py` 与同目录新增或既有 application 模块
+- Steps:
+  1. 先给出最小模块拆分图，再移动代码；不得只按行数切文件。
+  2. 将 `AuthorityDecisionResult`、`ExecutionSnapshot`、`ExecutionResult` 等纯 contract / entity 放在 `entities.py` 或明确的 contract 模块。
+  3. 将 `QuestionAuthority`、`FeedbackAuthority`、`ProgressCanonicalAuthority` 放在 authority 模块。
+  4. 将 `ProgressProjectionPolicy` 放在 policy / projection 模块，避免被误用为业务 execution authority。
+  5. 将 `ExecutionExecutor` 放在 executor 模块；executor 只做 snapshot 边界校验和 domain handler dispatch。
+  6. 将 `QuestionExecutionHandler`、`FeedbackExecutionHandler`、`ProgressCanonicalHandler`、`ProgressProjectionHandler` 放在 handler 模块或按 domain 拆分的 handler 模块。
+  7. 将 `use_cases.py` 收敛为 route-facing application orchestration，不再同时持有 repository、LLM、progress、runtime facade、policy resolver 和 persistence handoff 的全部细节。
+- Checkpoints:
+  - 拆分图能说明每个 use case / handler / authority / policy 的文件落点。
+  - `use_cases.py` 不再是单体业务事实 owner。
+  - executor 不是单体大 executor；domain 细节落到 handler。
+  - 拆分后责任边界可由 focused tests 或 import boundary tests 验证。
+- Test Points:
+  - authority tests 只覆盖 decision output，不调用 provider 或 persistence。
+  - executor tests 只断言 snapshot dispatch，不重建 context。
+  - handler tests 覆盖各 domain 持久化行为，不互相隐式授权。
+  - import / contract tests 覆盖 use case、authority、executor、handler 的依赖方向。
+- Risk Notes:
+  - 不能把 `use_cases.py` 的单体复杂度搬到 `executor.py`。
+  - 不能为了拆文件新增未授权抽象或新的运行时模型。
+  - done condition 是职责边界可测，而不是文件数量增加或单个文件变小。
+
 ### 4. Validation Plan
 
 - 验证修复有效：用 focused tests 覆盖 allowed / rejected authority path，断言 rejected decision 不创建 snapshot、不调用 executor、不写业务结果；断言 allowed decision 必须携带非空 `execution_target`。
-- 确认没有 regression：保留现有 API safe response 和 compatibility shape 的只读展示语义，覆盖 direct question path、feedback next-question path、feedback evaluation path 的基本响应。
+- 确认没有 regression：按新 API response contract 覆盖 direct question path、feedback next-question path、feedback evaluation path 的用户主路径；不保留旧 compatibility shape 作为断言目标。
 - 确认 control-plane 没新增分叉：扫描 route、command、use case、policy result 消费点，确认只有 backend authority 输出 `execution_target`，frontend、LLM、graph/fallback、provider、legacy mapper 不再生成执行授权。
+- 确认 repository 边界没有反向依赖：扫描 `infrastructure/db/repositories/*`，确认不存在对 application entity 的反向 import，且 import boundary test 已覆盖。
+- 确认 `use_cases.py` 拆分不是形式拆分：每个 authority、policy、executor、handler 的责任边界与文件落点均可被测试或 import rule 区分。
 
 ## Phase 2: Execution Flow Stabilization
 
@@ -191,64 +277,89 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   - feedback authority rejected 时不调用 feedback service。
   - feedback payload 中 recommendation 存在时不触发 next-question persistence。
 - Risk Notes:
-  - feedback path 当前仍有 v1 命名和 legacy 兼容字段，不能把命名清理扩成执行语义改造。
+  - feedback path 当前仍有 v1 命名和 legacy 兼容字段；本轮默认删除旧 compat 字段，但不能把命名清理扩成未授权的新业务语义。
   - evaluation-shaped fields 继续被下游当 orchestration signal 会复发 authority 分裂。
   - safe response 不应泄露 provider exception stack、transport detail 或 secret。
 
-#### Task 2.3: 收敛 progress projection 执行路径
+#### Task 2.3A: 收敛 canonical progress write
 
-- Task Name: 收敛 progress projection 执行路径
-- Target Area: progress tree update / refresh use case
+- Task Name: 收敛 canonical progress write
+- Target Area: canonical progress update use case、`ProgressCanonicalAuthority`、`ProgressCanonicalHandler`
 - Steps:
-  1. 将 progress update 限定为 backend execution result 触发的 intent。
-  2. 通过 `ProgressAuthority` 校验 projection 更新依附于已完成 backend execution result。
-  3. 将 progress projection 更新纳入 executor target：`update_progress_projection` 或 `refresh_progress_projection`。
-  4. 禁止 progress projection 更新改写 question / answer / feedback canonical state。
-  5. 对 progress failed / refresh_failed response 保持 safe failure 语义。
+  1. 将 canonical progress write 限定为 backend execution result 触发的 intent。
+  2. 通过 `ProgressCanonicalAuthority` 校验 canonical progress write 依附于已完成 backend execution result。
+  3. 将 canonical progress write 纳入 executor target：`update_progress_canonical`。
+  4. 让 `ProgressCanonicalHandler` 只消费 snapshot 与已完成 execution result，不读取 frontend display status 或 projection state 来选择目标。
+  5. 对 progress canonical write 失败返回 safe failure / rejection，不改写 question / answer / feedback canonical state。
 - Checkpoints:
-  - progress update 不由 frontend display status 触发。
-  - progress projection 不成为隐式 execution target 来源。
-  - progress update 只能跟随 backend execution result。
-  - projection failure 不改写 canonical state。
+  - canonical progress write 不由 frontend display status 触发。
+  - canonical progress write 只能跟随 backend execution result。
+  - `ProgressCanonicalAuthority` rejected 时不创建 snapshot、不调用 handler、不写 canonical state。
+  - canonical write 与 projection refresh 的入口、handler 和测试断言分开。
 - Test Points:
-  - question result persisted 后触发 progress projection update。
-  - feedback result persisted 后触发 progress projection update。
-  - 缺失 backend execution result 时 `ProgressAuthority` rejected。
-  - projection stale 或 state version conflict 时返回 safe rejection / failure。
+  - question result persisted 后触发 canonical progress write。
+  - feedback result persisted 后触发 canonical progress write。
+  - 缺失 backend execution result 时 `ProgressCanonicalAuthority` rejected。
+  - canonical write state version conflict 时返回 safe rejection / failure。
 - Risk Notes:
   - 审计报告指出 progress tree 读 turns / feedback / question completion，容易继续成为隐式状态汇聚点。
+  - 如果 canonical write 从 projection state 派生目标，Progress authority 会再次分裂。
+  - 不能在本任务调整 progress 文案或 UI fallback；只处理 canonical write。
+
+#### Task 2.3B: 收敛 progress projection refresh
+
+- Task Name: 收敛 progress projection refresh
+- Target Area: progress projection refresh use case、`ProgressProjectionPolicy`、`ProgressProjectionHandler`
+- Steps:
+  1. 将 projection refresh 限定为 `ProgressProjectionPolicy` + `ProgressProjectionHandler` 的派生读模型更新。
+  2. 明确 projection refresh 不产生业务授权，不创建新的 question / feedback execution decision。
+  3. 禁止 progress projection 更新改写 question / answer / feedback canonical state。
+  4. 禁止 projection refresh 结果反向成为 `execution_target`、frontend target selection 或 retry authorization。
+  5. 对 progress failed / refresh_failed response 保持 safe display / safe failure 语义。
+- Checkpoints:
+  - projection refresh 不成为隐式 execution target 来源。
+  - projection failure 不改写 canonical state。
+  - `ProgressProjectionPolicy` 与 `ProgressCanonicalAuthority` 的返回语义可测试区分。
+  - projection handler 不调用 canonical write handler，也不绕过 executor 写业务结果。
+- Test Points:
+  - projection stale 时返回 safe display / failure，不改写 canonical state。
+  - refresh_failed 只影响 projection / display state，不影响 question / feedback canonical state。
+  - frontend 将 progress tree 当 action target 时，不会通过 projection refresh 派生 backend target。
+  - projection refresh 测试断言 adapter / read-model 语义，而不是业务 execution authority。
+- Risk Notes:
   - frontend 将 progress tree 当 action target 时，会与 Phase 4 产生边界依赖。
-  - 不能在本阶段调整 progress 文案或 UI fallback；只处理执行路径。
+  - projection refresh 不能因为返回 `execution_target=refresh_progress_projection` 而被误升格为 question / feedback 同级业务执行。
+  - 不能用一个泛化 progress status 同时覆盖 canonical write failure 和 projection refresh failure。
 
-#### Task 2.4: 持久化绑定 `decision_ref` 与 `execution_target`
+#### Task 2.4: 持久化绑定 `decision_ref` 与 `execution_target`（非幂等）
 
-- Task Name: 持久化绑定 `decision_ref` 与 `execution_target`
+- Task Name: 持久化绑定 `decision_ref` 与 `execution_target`（非幂等）
 - Target Area: question / feedback / progress persistence handoff
 - Steps:
   1. 为 question result persistence 写入 `decision_ref` 与 `execution_target`。
   2. 为 feedback result persistence 写入 `decision_ref` 与 `execution_target`。
-  3. 为 progress projection result 写入 `decision_ref` 与 `execution_target`。
-  4. 以 `decision_ref` 和目标状态实现重复执行的返回已有结果或 no-op。
-  5. 将写入失败统一为 safe failure response。
+  3. 为 canonical progress result / projection refresh result 写入 `decision_ref` 与 `execution_target`，或在派生刷新响应中保留可追踪引用。
+  4. 将写入失败统一为 safe failure response。
+  5. 明确本轮不实现 durable duplicate suppression、running task recovery、resume / cancel / deadline lifecycle。
 - Checkpoints:
   - 每个 persisted result 都能追溯到 authority decision。
-  - 同一 `decision_ref` 不产生重复业务结果。
+  - `decision_ref` 只承担追踪与排查，不作为 durable idempotency contract。
   - rejected decision 没有业务写入。
   - failure response 不包含 raw provider payload。
 - Test Points:
-  - 重放同一 `decision_ref` 的 question execution，断言无重复 question result。
-  - 重放同一 `decision_ref` 的 feedback execution，断言无重复 feedback result。
+  - question execution 写入结果时携带 `decision_ref` 与 `execution_target`。
+  - feedback execution 写入结果时携带 `decision_ref` 与 `execution_target`。
   - 持久化失败时返回 safe response。
   - rejected decision 后检查 repository 没有新增业务结果。
 - Risk Notes:
-  - 如果旧 persistence path 没有同步关闭，idempotency 会只保护新路径。
+  - 如果旧 persistence path 没有同步关闭，旧路径仍可能绕过追踪字段。
   - 如果 `execution_target` 只写日志不写结果，后续排查无法确认执行来源。
   - 不能把 provider transport success 当 persisted success。
 
 ### 4. Validation Plan
 
 - 验证修复有效：用 flow-level tests 覆盖 question、feedback、progress 三条链路，断言都符合 `intent → authority → snapshot → executor → persist result`，且 executor 不调用 authority、不重建 context。
-- 确认没有 regression：覆盖现有 direct question、feedback next-question、answer-submit、feedback retry、progress refresh 的 safe response 和持久化结果，确认用户可见响应不因入口收敛丢字段。
+- 确认没有 regression：覆盖现有 direct question、feedback next-question、answer-submit、feedback retry、progress refresh 的用户主路径和新 response contract；旧 compat 字段不作为保留目标。
 - 确认 control-plane 没新增分叉：扫描 route、service、facade、handoff、provider callback，确认没有新的 direct persistence、direct execution target、route-level write 或 provider-triggered write。
 
 ## Phase 3: Snapshot Introduction
@@ -277,7 +388,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   1. 在 application polish entity 边界定义 `ExecutionSnapshot` 的字段集合。
   2. 将 `authority_decision_result` 完整保存到 snapshot。
   3. 将 `execution_target` 约束为等于 `authority_decision_result.execution_target`。
-  4. 将 `decision_ref` 作为 snapshot、日志、幂等、持久化的贯穿引用。
+  4. 将 `decision_ref` 作为 snapshot、日志、结果关联和持久化追踪的贯穿引用，不声明 durable idempotency。
   5. 将 `asset_snapshot` 保持为可选冻结引用，不作为决策来源。
 - Checkpoints:
   - snapshot 字段集合与现有方案一致。
@@ -332,13 +443,13 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 - Checkpoints:
   - snapshot 创建后 runtime flag 变化不影响本次执行。
   - `asset_snapshot` 没有授权含义。
-  - graph/fallback 只返回可用性、调用结果或兼容信号。
+  - graph/fallback 只返回可用性、调用结果或 adapter status。
   - provider success 不会改写 `execution_target`。
 - Test Points:
   - 创建 snapshot 后切换 runtime flag，断言 executor 仍按 snapshot 执行。
   - 缺少 provider 时返回 safe failure，不改变 execution target。
   - graph disabled 时不改变 snapshot target。
-  - asset version 变化不影响已创建 snapshot 的重放。
+  - asset version 变化不影响已创建 snapshot 的确定性检查和调试复盘。
 - Risk Notes:
   - runtime fallback 语义当前不等价，容易把安全边界、可用性边界、兼容边界混成一个 status。
   - prompt / runtime 多套并存时，asset ref 必须是版本引用，不是重新决策入口。
@@ -353,7 +464,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   2. 删除或改造 executor 中为了选择目标而读取 repository、frontend state、LLM output、graph/fallback adapter、provider response 的逻辑。
   3. 保留 executor 为执行动作所需的 service dependency，但不得用 dependency 输出重新决策。
   4. 对 snapshot 中没有的输入，禁止参与 execution。
-  5. 为同一 snapshot 的幂等重放补充断言。
+  5. 为同一 snapshot 的目标不可变和输入不可扩展补充断言；不要求幂等重放。
 - Checkpoints:
   - executor 不接收 frontend intent。
   - executor 不接收 authority input。
@@ -362,7 +473,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 - Test Points:
   - executor 入参缺少 snapshot 时失败。
   - snapshot 中没有的 field 不参与 service call。
-  - 同一 snapshot 重放返回已有结果或 no-op。
+  - 同一 snapshot 的检查结果保持目标不可变，不要求返回已有结果或 no-op。
   - provider / graph output 变化不改变 execution target。
 - Risk Notes:
   - 如果 executor 仍读取 progress tree 当前状态来选目标，Phase 1 authority 收敛会被破坏。
@@ -371,7 +482,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 
 ### 4. Validation Plan
 
-- 验证修复有效：覆盖 allowed 创建 snapshot、rejected 不创建 snapshot、snapshot target 等于 authority target、runtime flag 变化不影响已创建 snapshot、同一 snapshot 可幂等重放。
+- 验证修复有效：覆盖 allowed 创建 snapshot、rejected 不创建 snapshot、snapshot target 等于 authority target、runtime flag 变化不影响已创建 snapshot、同一 snapshot 的目标不可变。
 - 确认没有 regression：覆盖 question / feedback / progress 的 happy path 与 safe failure path，确认响应仍能返回用户需要的 safe response，不泄露 raw provider payload、exception stack、transport detail 或 secret。
 - 确认 control-plane 没新增分叉：扫描 executor 和 service dependency 调用点，确认没有从 repository、frontend state、LLM output、graph/fallback adapter、provider response 重建 execution target。
 
@@ -384,13 +495,42 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 ### 2. Scope
 
 - `apps/web/src/pages/interview/InterviewPage.tsx`
+- `apps/api/app/schemas/polish.py`
+- `apps/web/src/entities/polish/model/types.ts`
+- frontend API client / request adapter
 - frontend next-question / answer-submit / feedback-retry request construction
 - frontend task refs 与 local focus reconciliation
 - UI fallback mapper 与 safe response rendering
+- API / contract tests
 
 本阶段只做 UI 权限隔离，不改 backend authority 规则，不合并 executor，不清理 backend legacy route。
 
 ### 3. Tasks
+
+#### Task 4.0: 同步破坏式 API contract 替换
+
+- Task Name: 同步破坏式 API contract 替换
+- Target Area: backend schema、frontend model/types、API client、API / contract tests
+- Steps:
+  1. 梳理新 response / request contract 对 backend Pydantic schema 的影响，更新 `apps/api/app/schemas/polish.py` 中与 question、feedback、progress、task response 相关的字段。
+  2. 同步更新 frontend model/types，至少覆盖 `apps/web/src/entities/polish/model/types.ts` 中对应 request / response 类型。
+  3. 同步更新 frontend API client / request adapter，确保 request construction 不再发送旧 compat fields、mirror payload 或 execution target 类 UI selection 字段。
+  4. 同步更新 API tests / contract tests，断言目标改为新 authority / snapshot / executor-handler contract。
+  5. 明确删除旧 compat shape、mirror payload、fallback success shape 的断言；不得通过双 shape 或 optional compat fields 保持旧契约。
+- Checkpoints:
+  - backend schema、frontend types、API client 和 tests 在同一切片内同步。
+  - API response 不再输出旧 compat mirror payload。
+  - frontend request 不再携带旧 execution target 类 UI selection 字段。
+  - contract tests 不再以旧 compat shape 作为 expected。
+- Test Points:
+  - backend API tests 覆盖新 response contract。
+  - frontend request payload tests 覆盖 intent-only request。
+  - frontend type checks 或 focused tests 覆盖新 response shape 的消费。
+  - forbidden contract tests 覆盖 compat payload reintroduction。
+- Risk Notes:
+  - 只改 backend schema 会造成 frontend contract drift。
+  - 只改 frontend types 但保留 API client 旧字段，会继续把 UI selection 发送给后端。
+  - 不能用 optional fields 暗中保留旧 compat shape；本轮接受破坏式替换。
 
 #### Task 4.1: 将 frontend action payload 收敛为 intent-only
 
@@ -414,7 +554,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   - backend rejected safe response 能被前端正常展示。
 - Risk Notes:
   - 不能把字段简单改名后继续作为 target 使用。
-  - 若 backend 尚未完成 Phase 1/2，frontend intent-only 改动需要与后端兼容窗口同步。
+  - 若 backend 尚未完成 Phase 1/2，frontend intent-only 改动必须与后端破坏式契约更新在同一切片同步完成，不保留长期兼容窗口。
   - optimistic UI 不能提前展示 persisted 成功状态。
 
 #### Task 4.2: 移除 task refs 对本地焦点的执行授权作用
@@ -470,6 +610,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 ### 4. Validation Plan
 
 - 验证修复有效：用 frontend-focused tests 覆盖 next-question、answer-submit、feedback-retry payload，断言 frontend 只提交 intent / input payload，不提交授权目标；覆盖 UI focus 变化不影响 backend target。
+- 验证 contract 同步有效：backend schema、frontend model/types、API client、API / contract tests 均已按新契约更新，且旧 compat shape / mirror payload 不再作为断言目标。
 - 确认没有 regression：覆盖 question、feedback、progress 的用户可见状态渲染，确认 pending、safe rejection、safe failure、candidate-only、formal persisted success 都能正常展示。
 - 确认 control-plane 没新增分叉：扫描 `InterviewPage.tsx` 中 request construction、local focus reconciliation、status mapper，确认没有从 UI selection、task refs、fallback mapper 生成 execution authorization 或 target selection。
 
@@ -477,7 +618,7 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 
 ### 1. Objective
 
-清理遗留路径和风险。审计报告指出 active、placeholder、skeleton、default-off、legacy_direct_path_retained 同时是运行事实；placeholder route 和 skeleton use case 已挂入 v1 API；status 语义在 candidate、formal、fallback、partial、skeleton、validation_failed 等模块间扩散；tests 会固化当前分裂结构。现有方案要求任何绕过 authority、snapshot 或 executor 的执行都必须删除或改为 adapter / intent / persistence response。
+清理遗留路径和风险。审计报告指出 active、placeholder、skeleton、default-off、legacy_direct_path_retained 同时是运行事实；placeholder route 和 skeleton use case 已挂入 v1 API；status 语义在 candidate、formal、fallback、partial、skeleton、validation_failed 等模块间扩散；tests 会固化当前分裂结构。本轮要求任何绕过 authority、snapshot 或 executor 的旧执行路径默认删除；只有已登记的 `temporary_exception` 可以短期隔离为 unavailable / adapter-only，并必须写明删除条件。
 
 ### 2. Scope
 
@@ -492,13 +633,13 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
 
 ### 3. Tasks
 
-#### Task 5.1: 下线或隔离 placeholder / skeleton 运行入口
+#### Task 5.1: 删除 placeholder / skeleton 运行入口
 
-- Task Name: 下线或隔离 placeholder / skeleton 运行入口
+- Task Name: 删除 placeholder / skeleton 运行入口
 - Target Area: `apps/api/app/api/v1/polish.py` 中的 placeholder route 与 skeleton use case
 - Steps:
   1. 梳理 `pressure_skeleton`、`review_skeleton`、`ai_task_skeleton` 是否仍挂入 v1 API。
-  2. 将不会进入真实 execution flow 的 route 标记为 unavailable safe response，或移出运行入口。
+  2. 默认将不会进入真实 execution flow 的 route 移出运行入口；无法立即移除时登记为 `temporary_exception` 并返回 unavailable safe response。
   3. 防止 skeleton success 被前端或调用方解释为真实业务 capability。
   4. 保留必要的历史来源说明，但不作为 active execution path。
   5. 补充 false capability 防回归测试。
@@ -513,18 +654,18 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   - frontend 不把 skeleton response 渲染为真实成功。
   - route inventory 不把 placeholder 计入 active capability。
 - Risk Notes:
-  - 删除 route 可能破坏兼容调用方；隔离时必须保证不会形成 false capability。
+  - 删除 route 可能破坏旧调用方；本轮接受破坏式清理，只有 temporary exception 可短期隔离，且必须保证不会形成 false capability。
   - skeleton_succeeded 这类状态名容易被误解为业务成功。
   - 不能把 placeholder cleanup 扩成新功能实现。
 
-#### Task 5.2: 将 graph / fallback / provider legacy 分支降级为 adapter-only
+#### Task 5.2: 删除 graph / fallback / provider legacy direct 分支
 
-- Task Name: 将 graph / fallback / provider legacy 分支降级为 adapter-only
+- Task Name: 删除 graph / fallback / provider legacy direct 分支
 - Target Area: `AiOrchestrationFacade`、graph facade、direct fallback、fake transport gate、provider boundary
 - Steps:
   1. 梳理 graph default-off、legacy direct path、fake runtime、provider boundary 的调用分支。
-  2. 将 graph/fallback 输出限制为可用性、调用结果或兼容信号。
-  3. 删除或改造绕过 authority / snapshot / executor 的 legacy direct execution path。
+  2. 将 graph/fallback 输出限制为可用性、调用结果或 safe adapter status。
+  3. 删除绕过 authority / snapshot / executor 的 legacy direct execution path；无法立即删除时必须登记为 `temporary_exception` 并降级为 adapter-only。
   4. 将 fake provider 配置错误与 provider missing、graph disabled 区分为不同 safe failure / adapter status。
   5. 覆盖 graph disabled、fake provider、provider missing 的路径差异。
 - Checkpoints:
@@ -567,33 +708,49 @@ source_plan: docs/goals/2026-06-17/refactor-for-arch-01/2-implementation-plan.md
   - 不能用统一文案掩盖不同 failure cause。
   - lifecycle cleanup 不等于新增统一状态机。
 
-#### Task 5.4: 清理固化旧分裂结构的测试断言
+#### Task 5.4: 重写固化旧结构的测试断言
 
-- Task Name: 清理固化旧分裂结构的测试断言
+- Task Name: 重写固化旧结构的测试断言
 - Target Area: polish API / application / frontend 相关 contract tests 与 flow tests
 - Steps:
-  1. 梳理直接断言多入口、多 fallback、多 UI focus 行为的测试。
-  2. 将断言目标改为 authority-only、snapshot-only、executor-only 的边界行为。
-  3. 保留 response compatibility 的测试，但不再要求旧 direct path 存活。
-  4. 增加 forbidden path 回归断言，覆盖 bypass authority、bypass snapshot、bypass executor。
-  5. 将 placeholder / skeleton / default-off 的 non-claim 语义纳入测试。
+  1. 梳理直接断言多入口、多 fallback、多 UI focus、旧 compat payload 的测试。
+  2. 先判断测试保护的是用户主路径还是旧实现细节。
+  3. 用户主路径测试按新 authority / snapshot / executor-handler 契约重写。
+  4. 旧 compat / direct path / fallback success 行为测试默认删除。
+  5. 增加 forbidden path 回归断言，覆盖 bypass authority、bypass snapshot、bypass executor、legacy mapper target selection 和 compat payload reintroduction。
 - Checkpoints:
   - 测试不再要求 frontend selection 参与 backend target。
   - 测试不再要求 graph/fallback direct path retained。
-  - 测试仍覆盖 safe response 与 compatibility shape。
+  - 测试不再覆盖旧 response compatibility shape。
   - forbidden path 断言覆盖主要 bypass。
 - Test Points:
-  - 旧 direct path 测试改为断言 safe adapter / unavailable / executor-only。
+  - 用户主路径测试按新 response contract 重写。
   - UI focus 测试改为断言 intent-only payload。
-  - provider / graph 测试改为断言 adapter-only。
-  - skeleton / placeholder 测试断言 false capability 不成立。
+  - provider / graph 测试改为断言 adapter-only 或 no direct execution。
+  - skeleton / placeholder 测试断言不存在、不可用或不声明 implemented。
 - Risk Notes:
   - 如果测试只跟随实现删除断言，可能漏掉 regression。
   - 如果保留旧测试但改 expected 为新 success，会固化新的分叉。
-  - 测试调整必须区分 response compatibility 与 execution authority。
+  - 测试调整必须区分用户主路径、新执行契约和旧实现细节。
 
 ### 4. Validation Plan
 
-- 验证修复有效：运行 focused regression 覆盖 placeholder / skeleton route、graph disabled、fake provider、provider missing、candidate-only、formal write、progress failed / refresh_failed，确认绕过 authority、snapshot 或 executor 的路径被删除或降级。
-- 确认没有 regression：运行 polish API / application / frontend 相关测试，确认 safe response、compatibility shape、用户可见状态、持久化结果、幂等行为仍符合前四个 Phase 的 contract。
+- 验证修复有效：运行 focused regression 覆盖 placeholder / skeleton route、graph disabled、fake provider、provider missing、candidate-only、formal write、progress failed / refresh_failed，确认绕过 authority、snapshot 或 executor 的路径被删除；temporary exception 必须可清点。
+- 确认没有 regression：运行 polish API / application / frontend 相关测试，确认用户主路径、新 response contract、用户可见状态和持久化结果符合前四个 Phase 的 contract；不要求旧 compatibility shape 或 durable idempotency 行为。
 - 确认 control-plane 没新增分叉：做 forbidden path scan，确认不存在 route-level direct write、frontend target selection、LLM-triggered execution、graph/fallback authorization、provider-triggered persistence、legacy mapper target selection、skeleton false capability。
+
+## Final Cleanup Gate
+
+完成条件：
+
+- route / use case 中不存在旧 direct execution path。
+- API response 不再输出旧 compat mirror payload。
+- frontend 不再发送 execution target 类 UI selection 字段。
+- tests 不再断言旧 direct path、旧 compat shape、旧 fallback success。
+- 仅保留新 authority / snapshot / executor-handler 契约测试。
+- `ProgressCanonicalAuthority` 与 `ProgressProjectionPolicy` 的边界可被测试区分。
+- `decision_ref` 只作为追踪引用，不被描述为 durable idempotency contract。
+- repository / persistence 层不存在反向 import application entity，且 import boundary test 或 contract test 已覆盖。
+- backend schema、frontend model/types、API client、contract tests 已同步到新 API contract。
+- `use_cases.py` 不再作为 repository、LLM、progress、runtime facade、policy resolver 和 persistence handoff 的单体事实 owner。
+- ADR-0005 addendum delta 已整理，可进入后续 active docs 回写窗口。
