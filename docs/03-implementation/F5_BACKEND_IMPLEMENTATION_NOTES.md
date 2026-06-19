@@ -315,3 +315,16 @@ F6 约束：
 - P8 Runtime remains `validated_with_deferred_gaps` / partial foundation, not full product runtime completion.
 - `L5-006B` remains deferred and out of scope.
 - route prefix、DB model、disabled frontend nav、fallback、deterministic / replay / fake / mock eval、default-off graph 不能单独证明产品能力已实现。
+
+## 14. Polish Execution Minimal Model active-docs backfill
+
+本节记录 `refactor-for-arch-01` 完成后的实现证据索引。长期架构事实已回写到 `ADR-0005`、`APPLICATION_FLOW_SPEC.md`、`API_SPEC.md`、`TECH_DESIGN.md`、`DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`SECURITY_PRIVACY.md` 和 `PROMPT_SPEC.md`；`docs/goals/` 与 `tmp/` 仍只作为 execution evidence，不作为 active fact source。
+
+| 事实 | 实现路径 | 验证证据 | non-claim |
+|---|---|---|---|
+| Execution authority / snapshot / executor | `apps/api/app/application/polish/ports.py`、`execution_flow.py`、`use_cases.py`、`feedback_application_service.py` | `tests/api/test_polish_execution_authority.py`、`test_polish_execution_snapshot.py`、`test_polish_execution_flow.py`、`test_polish_application_service_split.py`、`test_polish_api.py` | `decision_ref` 只是 trace-only；不声明 durable idempotency、running task recovery、resume / cancel / deadline lifecycle |
+| Progress canonical write / projection refresh split | `ProgressCanonicalWriteHandler`、`ProgressProjectionRefreshHandler`、`PolishUseCases.refresh_progress_tree_state()` | `tests/api/test_polish_execution_flow.py`、progress-tree focused tests、final cleanup grep gate | projection refresh 不成为 question / feedback execution authority |
+| Intent-only frontend / API contract | `apps/api/app/schemas/polish.py`、`apps/api/app/api/v1/polish.py`、`apps/web/src/entities/polish/model/types.ts`、`InterviewPage.tsx` | `tests/api/test_polish_api.py`、`tests/api/test_polish_feedback_payload_compatibility.py`、`apps/web/src/pages/interview/InterviewPage.test.ts` | 不保留顶层 `next_recommended_actions` mirror；frontend 不提交 execution target override |
+| graph / fallback / provider adapter-only | AI Runtime descriptors、Polish question / feedback graph skeletons、provider trace tests | renamed business contract tests：`test_polish_business_graph_contracts.py`、`test_polish_question_graph_contracts.py`、`test_polish_feedback_runtime_integration.py`、`test_polish_feedback_readonly_parity.py`、`test_polish_feedback_provider_trace_contracts.py` | default-off / adapter-only / unavailable 不等于 product graph enablement 或 real-provider certification |
+
+Remaining cleanup 进入 `BACKLOG.md` 的 `AIFI-BE-008`：formal business graph enablement 前必须关闭 remaining skeleton / placeholder temporary exceptions，保留 blocking condition、delete condition、cleanup task、owner check 和 unavailable safe response，并禁止恢复旧 direct path、legacy fallback-as-authority 或旧 API compat mirror payload。

@@ -324,6 +324,21 @@ AI Runtime handoff 规则：
 - replay / debug replay 默认 read-only；不得从 checkpoint 或 `AgentState` 重放 formal write。
 - cancel、timeout、validation_failed、generation_failed、source_unavailable 后不得 late formal write。
 
+#### 4.4.7 Polish execution trace metadata
+
+Polish question / feedback execution 可以在 authority decision、snapshot、question result、feedback result、progress canonical write、projection refresh 和 trace / audit metadata 中记录以下追踪字段：
+
+| 字段 | 语义 | 边界 |
+|---|---|---|
+| `decision_ref` | authority decision 的追踪引用，用于关联 snapshot、日志、结果和调试排查 | 不是 `IdempotencyRecord`，不是 durable task key，不承担 resume / cancel / deadline recovery |
+| `execution_target` | backend authority 产生的执行目标，例如 `generate_question`、`evaluate_feedback`、`update_progress_canonical`、`refresh_progress_projection` | 只能由 authority / policy 产生；frontend、LLM、graph、provider 或 repository 不得改写 |
+| `authority_decision_result` | `allowed` / `rejected`、`execution_target`、`reason_codes`、`decision_ref` 的决策结果 | rejected 时不得创建 execution snapshot 或 formal business result |
+| `execution_snapshot_ref` | 指向 immutable execution snapshot 或其 trace summary | snapshot 只冻结本次执行上下文，不等于 business truth source |
+
+这些字段属于 trace / execution metadata。它们可以帮助排查 authority decision 与 persisted result 的对应关系，但不得替代 `IdempotencyRecord`、`AiTask` lifecycle、`AgentRun` recovery、业务对象版本或用户确认记录。
+
+Progress 数据语义必须区分 canonical write 与 projection refresh：canonical write 才能改变 `ProgressTree` / `ProgressPosition` / 会话进度事实；projection refresh 只更新派生读模型或展示状态，不得写 question / answer / feedback canonical state，也不得成为 question / feedback execution authority。
+
 ## 5. 核心数据对象清单
 
 ### 5.1 用户、账号与角色
@@ -806,6 +821,7 @@ Rubric / rule version 的最小维度如下：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-19 | 回写 Polish execution trace metadata | 明确 `decision_ref` / `execution_target` 只是 authority / snapshot / persisted result 的追踪元数据，不是 durable idempotency 或 runtime recovery contract；Progress canonical write 与 projection refresh 在数据语义上拆分 |
 | 2026-05-24 | 增加 PR3 / PR4 AI Runtime logical objects backfill | 新增 `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall`、`LlmCallPayload` 逻辑对象和 raw-off / checkpoint non-truth-source / handoff 边界；不写 ORM、DDL、migration 或代码 |
 | 2026-05-24 | 增加 Pressure Mode mode-level 数据承接 | 将 `PressureSessionDetail` 扩展为引用 `PressureTurn`、pace、end condition、session score、report input package 和 review handoff 的逻辑承接；不新增物理 schema，不进入 implementation |
 | 2026-05-17 | 增加 F5 persistence handoff 交接 | 明确本文仍是逻辑模型，物理模型、join / reference table、关系和 API schema 映射以 `PERSISTENCE_MODEL.md` 为 canonical；避免 F5 从逻辑对象自行推导物理关系 |

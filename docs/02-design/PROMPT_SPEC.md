@@ -380,6 +380,8 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 - 用户确认前，只能写入候选、待确认或 validation / trace 状态，不得写入正式资产、薄弱项或训练建议。
 - 用户对低置信 candidate / suggestion 的校对内容必须先形成 `CandidateCorrection` / `UserCorrectionRef`，经过 owner 校验、结构化校验、敏感信息处理和 validation 后，才能作为后续 confirmation 或 task input；不得直接反向污染 Prompt source、覆盖原始候选或创建正式对象。
 - Prompt contract 可以输出 `suggested_deposit_targets[]` 或下一步动作建议，但不得静默决定正式沉淀目标。允许建议的目标类型只限 `asset`、`weakness`、`training_suggestion`、`polish_input`、`pressure_input`、`next_interview_input`、`review_note`、`none` / `skip`；正式 `DepositTarget`、`target_ref` 和 `created_formal_ref` 由 API / DATA 的用户确认链路承接。
+- Prompt contract、LLM recommendation、graph candidate、fallback result 或 provider transport success 不得输出、覆盖或暗示 Polish `execution_target`。Polish question / feedback execution target 只能由 backend authority 产生，并在 `ExecutionSnapshot` 中冻结；LLM 只消费 snapshot 中允许的 refs 和 output schema。
+- `decision_ref` 如进入 Prompt trace 或 validation metadata，只能作为 trace association，不得被 Prompt、provider 或 model output 解释为幂等键、恢复键、授权 token 或可执行命令。
 - `EvidenceRef` 应能回溯到题目、回答、点评、评分解释、RAG 检索证据、用户确认、面试官反馈或生成时版本 / 快照。
 - `TraceRef` 应能回溯到检索、Context Assembly、LLM request、LLM response、Output Schema 校验、Validation、Low Confidence classification、Failure Handling 和 audit event。
 - Persistence 语义只定义业务交接和状态；物理表、ORM、DDL、索引和 migration 由后续实现承接。
@@ -584,6 +586,7 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-19 | 回写 Polish execution authority Prompt 边界 | 明确 Prompt / LLM / graph / fallback / provider 只能给 recommendation / candidate / validation / trace，不能产生或覆盖 `execution_target`；`decision_ref` 在 Prompt trace 中仍是 trace-only |
 | 2026-05-24 | 增加 Pressure Mode mode-level spec 交叉引用 | 将 `P-PRESSURE-*` 的 lifecycle、runtime handoff、graph boundary 和 PR2 hold 交给 `PRESSURE_MODE_SPEC.md`；不新增 contract ID，不替代 Prompt Asset / Evaluation 设计 |
 | 2026-05-24 | 补充 Prompt Asset / Evaluation 交叉引用 | 明确 `PROMPT_SPEC.md` 只维护 `P-*` contract registry；Production Prompt Asset、fixture、model comparison、release / rollback 和 runtime builder 映射由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 承接 |
 | 2026-05-24 | 补充 Skill / Capability Model 交叉引用 | 明确 Prompt contracts 通过字段族引用 `SKILL_MODEL_SPEC.md`，不新增 `P-*` contract ID，不把 Prompt 输出直接 formalize 为 Weakness / Asset / Training 或 Skill 事实 |

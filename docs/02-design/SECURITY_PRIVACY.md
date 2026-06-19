@@ -320,6 +320,19 @@ F7 / PR4+ 验证至少覆盖：
 - serializer / checkpoint tests 证明 raw state payload 被拒绝或只形成不可展示 hash / ref。
 - provider call 前 trace write fail closed，不出现 provider 已调用但无安全 trace 的状态。
 
+### 11.2 Execution authority 安全边界
+
+Polish question / feedback execution 的安全授权只来自 backend authority。以下来源不得单独或组合成为 formal business write 授权：
+
+- frontend local state、UI selection、display status、optimistic state、`selected_progress_node_ref`、`completed_focus_refs` 或等价 request override。
+- LLM recommendation、candidate text、suggested action、score draft、reference answer、knowledge point 或 provider-generated payload。
+- graph descriptor、graph health、fallback branch、fake runtime availability、provider transport success 或 retry success。
+- legacy mapper、compat parser、storage-time mirror payload、repository post-processing 或 checkpoint payload。
+
+graph / fallback / provider path 只能返回 adapter-only 状态、safe unavailable response、sanitized trace 或结构化候选结果。它们不得直接写 `Question`、`Feedback`、`ScoreResult`、`LossPoint`、`ProgressTree` canonical state、Asset / Weakness / Training formal object，也不得在 rejected authority 后继续执行 provider call 或 persistence handoff。
+
+`decision_ref`、`execution_target` 和 execution snapshot metadata 只可作为 trace / audit / result association。它们不得进入前端可编辑状态，不得被前端作为后续授权 token，不得与 secret、provider payload、checkpoint payload、raw prompt 或 raw completion 一同记录。将 `decision_ref` 升级为 durable idempotency、running task lifecycle 或 runtime recovery contract 需要另行 ADR / active docs / security review。
+
 ## 12. 日志、审计、错误追踪和风控事件最小记录
 
 最小审计事件应覆盖：
@@ -607,6 +620,7 @@ F8 发布复盘至少记录以下安全隐私输入：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-19 | 回写 Polish execution authority security boundary | 明确 frontend、LLM、graph、fallback、provider、legacy mapper 和 repository post-processing 都不能授权 formal write；`decision_ref` / `execution_target` 只能作为安全追踪元数据 |
 | 2026-05-24 | 增加 PR3 / PR4 AI Runtime raw-off security backfill | 明确 runtime rows、timeline、interrupt drawer、checkpoint refs、LLM debug raw capture、real provider gate 和 graph descriptor/config 的安全隐私边界；不授权 real provider default-on 或 raw debug default-on |
 | 2026-05-17 | 修复 `AR-F4-F8-003` security / privacy release handoff 缺口 | 新增发布前 security / privacy checklist，覆盖 owner boundary、session / cookie / token、secret handling、log redaction、provider payload、system prompt、completion 原文、copy boundary、third-party privacy、retention / deletion、backup restore、rate limit、provider failure、audit event、trace 和 source availability；不实现监控平台、SIEM、KMS、DPA 或运维自动化 |
 | 2026-05-17 | 修复 `AR-DOCS02-SEM-001` 安全隐私断链 | 补齐岗位解绑 owner / 历史保留继承口径、复盘复制第三方隐私脱敏和 copy audit no body、低置信校对 owner / validation / 敏感信息处理、内容沉淀 `target_ref` owner scope；不处理 `AR-DOCS02-SEM-002/003`，不进入 implementation |

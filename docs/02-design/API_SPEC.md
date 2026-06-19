@@ -336,6 +336,16 @@ Async 规则：
 - timeline 和 interrupt detail 只返回 refs、hashes、status、validation、failure category、low confidence flags、allowed actions 和 display-safe summary。
 - PR3 / PR4 不开放普通用户 debug page；debug raw capture 默认关闭。
 
+### 5.5 Polish execution authority API boundary
+
+本节承接 `ADR-0005` 和 `APPLICATION_FLOW_SPEC.md` 的 2026-06-19 Polish execution authority 回写。
+
+- `API-POLISH-003` 是 feedback intent endpoint。请求体只允许意图相关的安全输入，例如 `exclude_question_refs`；不得接受 `selected_progress_node_ref`、`completed_focus_refs` 或任何等价 execution target override。
+- `API-POLISH-005` 是 feedback task endpoint。前端只提交 `answer_id`、`requested_outputs`、`session_summary_ref` 等 task intent 字段；不得提交 feedback execution target、provider path、graph path 或 fallback path。
+- backend authority 是唯一产生 `execution_target` 的 API 后端事实源。`decision_ref` / `execution_target` 若出现在 trace、task result 或调试摘要中，只能作为 read-only trace metadata；前端不得把它们作为后续执行授权。
+- `FeedbackResponse` 的下一步建议 canonical 位置是 `feedback_payload.next_recommended_actions`。旧顶层 `next_recommended_actions` mirror payload 已破坏式移除，不作为长期兼容字段。
+- graph、fallback、provider、legacy mapper 或 LLM recommendation 不能通过 API response 被解释为 formal write 授权；API 只能返回 task status、safe rejection、low confidence、validation failed、source unavailable 或 sanitized result refs。
+
 ## 6. API 清单总表
 
 本节作为 F5 后端实现、F6 前端接入和 F7 API contract tests 的稳定 route inventory。旧版 endpoint matrix 不再作为唯一交接面；逐接口字段级 contract 见 §7，Schema 索引（Schema Index）见 §8。
@@ -1625,9 +1635,9 @@ N/A
 
 | 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
 | --- | --- | --- | --- | --- | --- |
-| selected_progress_node_ref | 否 | string | 1..128, ref pattern | 可选进展节点覆盖；缺省时由 feedback intent 执行路径选择 | loggable |
 | exclude_question_refs | 否 | string[] | max 20, ref pattern | 可选排除题目 ref 列表 | loggable |
-| completed_focus_refs | 否 | string[] | max 20, ref pattern | 可选已完成 focus ref 列表 | loggable |
+
+已移除字段：`selected_progress_node_ref`、`completed_focus_refs`。这些字段属于旧 frontend execution target / focus override，不能由前端提交；后端 authority 必须从 feedback、answer、question、session canonical state 和 progress canonical state 推导执行目标。
 
 #### 成功响应（Success Response）
 
@@ -4886,6 +4896,14 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 | custom_topic_text | 否 | string | 1..240 | 用户自定义主题文本；必须经过安全输入处理和 prompt injection 防护 | sensitive_summary_only |
 | source_refs | 否 | SourceRef[] | owner scoped | 增强来源 | loggable |
 
+#### CreateFeedbackNextQuestionIntentRequest
+
+| 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
+| --- | --- | --- | --- | --- | --- |
+| exclude_question_refs | 否 | string[] | max 20, ref pattern | 可选排除题目 ref 列表；不决定 execution target | loggable |
+
+本请求 schema 明确禁止 `selected_progress_node_ref`、`completed_focus_refs` 或等价 execution target override。非法额外字段必须返回 `validation_failed`，不得被 legacy mapper、compat parser 或 frontend adapter 静默吸收。
+
 #### CreatePressureSessionRequest
 
 | 字段 | 是否必填 | 类型 | 枚举 / 约束 | 说明 | 敏感性 / 是否可记录 |
@@ -5245,6 +5263,9 @@ Schema 索引（Schema Index）冻结字段级 contract 的最小交接面。F5 
 | score_ref | 否 | string | score_* | 评分引用 | loggable |
 | loss_point_refs[] | 否 | string[] | >=0 | 失分点引用 | loggable |
 | candidate_refs[] | 否 | CandidateRef[] | >=0 | 候选回流 | loggable |
+| feedback_payload | 否 | object | `PolishFeedbackPayload` | 结构化反馈 payload；`feedback_payload.next_recommended_actions` 是下一步建议 canonical 位置 | sensitive_summary_only |
+
+`FeedbackResponse` 不返回顶层 `next_recommended_actions` mirror。若历史调用方仍依赖该字段，必须迁移到 `feedback_payload.next_recommended_actions`；服务端不得为了兼容继续双写旧 mirror payload。
 
 #### ScoreResultResponse
 
@@ -5577,6 +5598,7 @@ F8 changelog input 至少从以下 API 变化提取：
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-19 | 回写 Polish intent-only API contract | 明确 `API-POLISH-003` / `API-POLISH-005` 不接受 frontend execution target override；删除 `selected_progress_node_ref` / `completed_focus_refs` 请求字段；`FeedbackResponse` 不再保留顶层 `next_recommended_actions` mirror，canonical 位置为 `feedback_payload.next_recommended_actions` |
 | 2026-05-24 | 增加 PR3 / PR4 Agent Runtime API contract skeleton | 登记 Agent run status、timeline、interrupt detail、resume interrupt、cancel run 和 PR6 graph descriptor read-only skeleton，并明确 sanitized response、no AgentState、no checkpoint payload、no raw prompt/completion/provider payload、no normal-user debug page |
 | 2026-05-24 | 增加 AIFI-BE-004 Pressure mode API handoff | 将 Pressure start / pause / resume / end / report / review handoff 的实现前置条件交给 `PRESSURE_MODE_SPEC.md`；不新增 endpoint，不修改代码，不授权 PR2 graph |
 | 2026-05-17 | 修复 `AR-F4-F8-003` API release handoff 缺口 | 新增 F8 API 发布检查映射，覆盖 route inventory、no export endpoint、copy content / copy event、rate limit、provider failure、async task status、retry / cancel、health / trace / audit 可见性、response / error envelope、source unavailable、low confidence、validation failed、no exact probability 和 provider payload / system prompt / hidden scoring rules 禁止项；不新增 endpoint，不进入 implementation |

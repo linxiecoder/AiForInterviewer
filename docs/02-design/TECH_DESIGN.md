@@ -236,6 +236,27 @@ G-003、G-004 与 Composition Layer 不是顺序 pipeline。G-003 不依赖 G-00
 - `training` mode：G-004 runs；G-003 runs；返回 balanced output，但不得把训练建议写成正式 TrainingTask。
 - `analysis` mode：G-004 only；不得隐式触发 G-003，也不得从 G-004 输出推导 feedback。
 
+### 14.4 Polish execution authority 架构边界
+
+本节承接 `ADR-0005` 的 2026-06-19 addendum。Polish question / feedback 不再以 API route、frontend selection、LLM output、graph fallback 或 provider availability 共同决定执行目标；长期架构边界固定为 Execution Minimal Model：
+
+```text
+intent -> authority -> snapshot -> executor -> persist result
+```
+
+分层要求：
+
+- API 边界层只接收 intent、owner-scoped refs 和安全输入，不接收 frontend execution target override。
+- 应用编排层拥有 backend authority：`QuestionAuthority`、`FeedbackAuthority`、`ProgressCanonicalAuthority` 和 `ProgressProjectionPolicy` 必须明确区分。
+- `ExecutionSnapshot` 是 authority allowed 后的冻结执行上下文；executor 只能消费 snapshot，不得从 repository、frontend state、LLM output、graph/fallback adapter 或 provider response 重建 context。
+- executor handler 只负责对应 domain 的执行和持久化交接，不得变成新的全域业务所有者；`use_cases.py` 不应重新退化为唯一事实源。
+- repository 只实现 storage port，不 import application entity / execution contract，也不通过 persistence-time mapper 反向决定业务执行目标。
+- graph、fallback、provider 和 fake runtime 只能作为 adapter-only / unavailable / transport 层证据，不能授权 formal business write。
+- `decision_ref` 和 `execution_target` 可作为 trace metadata 关联 authority decision、snapshot 和 persisted result，但 `decision_ref` 不是 durable idempotency、running task lifecycle、resume / cancel / deadline recovery 的长期契约。
+- Progress canonical write 与 projection refresh 必须拆分：projection refresh 不写 question / answer / feedback canonical state，也不得成为 question / feedback execution authority。
+
+后续如要把 `decision_ref` 绑定到 durable idempotency、running task 或 runtime recovery，必须先更新 ADR / active design docs / BACKLOG；不得在实现中把 trace 字段静默升级为恢复契约。
+
 ## 15. 子文档输入边界
 
 - `DATA_MODEL.md` 以本文件的模块划分、状态域和数据流为输入，定义业务对象、数据对象、状态枚举、版本策略和持久化边界。
