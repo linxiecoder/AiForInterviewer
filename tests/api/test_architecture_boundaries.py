@@ -56,7 +56,7 @@ def test_no_unbounded_utils_file_exists() -> None:
     assert list((APP_ROOT).rglob("utils.py")) == []
 
 
-def test_pr2_ai_runtime_persistence_does_not_import_concrete_runtime_or_providers() -> None:
+def test_ai_runtime_persistence_does_not_import_concrete_runtime_or_providers() -> None:
     concrete_runtime = "lang" + "graph"
     concrete_chain = "lang" + "chain"
     violations = _find_forbidden_imports(
@@ -101,7 +101,7 @@ def test_core_business_layers_do_not_import_ai_runtime_internals() -> None:
     assert violations == []
 
 
-def test_pr3_application_ai_runtime_keeps_contract_boundary() -> None:
+def test_application_ai_runtime_keeps_contract_boundary() -> None:
     concrete_runtime = "lang" + "graph"
     concrete_chain = "lang" + "chain"
     violations = _find_forbidden_imports(
@@ -119,7 +119,7 @@ def test_pr3_application_ai_runtime_keeps_contract_boundary() -> None:
     assert violations == []
 
 
-def test_pr5_business_graph_boundary_does_not_import_concrete_runtime() -> None:
+def test_business_graph_boundary_does_not_import_concrete_runtime() -> None:
     concrete_runtime = "lang" + "graph"
     concrete_chain = "lang" + "chain"
     business_graph_dir = "business_" + "graphs"

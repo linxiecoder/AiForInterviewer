@@ -13,7 +13,7 @@ from app.infrastructure.db.repositories.ai_runtime import LlmCallRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 
 
-def test_pr4_provider_gate_defaults_false_and_in_memory_runtime_does_not_bypass_it(monkeypatch) -> None:
+def test_provider_gate_defaults_false_and_in_memory_runtime_does_not_bypass_it(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     resolver = RuntimeFlagResolver(
         test_overrides={"AIFI_AI_RUNTIME_ENABLED": True, "AIFI_AI_RUNTIME_LANGGRAPH_ENABLED": True}
@@ -28,7 +28,7 @@ def test_pr4_provider_gate_defaults_false_and_in_memory_runtime_does_not_bypass_
     assert result.metadata["provider_calls"] == 0
 
 
-def test_pr4_persisted_transport_fails_closed_before_provider_invocation(monkeypatch) -> None:
+def test_persisted_transport_fails_closed_before_provider_invocation(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     session_factory = _session_factory()
     transport = FailClosedPersistedLlmTransport(
@@ -40,12 +40,12 @@ def test_pr4_persisted_transport_fails_closed_before_provider_invocation(monkeyp
         ai_task_id="aitask_1",
         agent_run_id="arun_1",
         agent_node_run_id="anode_1",
-        contract_ids=("P-PR4-FAKE-001",),
+        contract_ids=("P-RUNTIME-FAKE-001",),
         replay_mode="production_resume",
     )
     request = LlmTransportRequest(
-        contract_ids=("P-PR4-FAKE-001",),
-        task_type="pr4_fake_runtime",
+        contract_ids=("P-RUNTIME-FAKE-001",),
+        task_type="fake_runtime",
         input_refs=("input_ref_1",),
         evidence_bundle={"summary_ref": "evidence_ref_1"},
     )

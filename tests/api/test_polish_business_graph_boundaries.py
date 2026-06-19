@@ -9,7 +9,7 @@ APP_ROOT = REPO_ROOT / "apps" / "api" / "app"
 BUSINESS_GRAPH_ROOT = APP_ROOT / "application" / "ai_runtime" / "business_graphs"
 
 
-def test_pr5_adds_only_polish_business_graph_files() -> None:
+def test_polish_business_graph_allows_only_authorized_files() -> None:
     assert BUSINESS_GRAPH_ROOT.exists()
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
@@ -19,7 +19,7 @@ def test_pr5_adds_only_polish_business_graph_files() -> None:
     ]
 
 
-def test_pr5_business_graphs_do_not_import_concrete_runtime_or_providers() -> None:
+def test_polish_business_graphs_do_not_import_concrete_runtime_or_providers() -> None:
     violations = _find_forbidden_imports(
         BUSINESS_GRAPH_ROOT,
         forbidden_prefixes=(
@@ -36,7 +36,7 @@ def test_pr5_business_graphs_do_not_import_concrete_runtime_or_providers() -> No
     assert violations == []
 
 
-def test_pr5_business_graph_has_no_provider_call_or_api_key_path() -> None:
+def test_polish_business_graph_has_no_provider_call_or_api_key_path() -> None:
     forbidden_markers = (
         "openai",
         "anthropic",
@@ -51,7 +51,7 @@ def test_pr5_business_graph_has_no_provider_call_or_api_key_path() -> None:
     assert [marker for marker in forbidden_markers if marker in source] == []
 
 
-def test_pr5_business_graph_boundary_keeps_application_core_domain_api_concrete_free() -> None:
+def test_polish_business_graph_boundary_keeps_application_core_domain_api_concrete_free() -> None:
     concrete_runtime = "lang" + "graph"
     concrete_chain = "lang" + "chain"
 

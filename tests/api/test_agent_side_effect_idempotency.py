@@ -67,7 +67,7 @@ def test_side_effect_repository_conflicts_on_same_key_with_different_digest() ->
         )
 
 
-def test_pr2_side_effect_repository_has_no_formal_business_write_methods() -> None:
+def test_side_effect_repository_has_no_formal_business_write_methods() -> None:
     source = inspect.getsource(AgentSideEffectRepository)
 
     assert not hasattr(AgentSideEffectRepository, "persist_question_once")

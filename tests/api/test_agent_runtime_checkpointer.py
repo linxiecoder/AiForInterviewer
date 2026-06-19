@@ -9,7 +9,7 @@ from app.infrastructure.ai_runtime.langgraph.checkpointer import RefsOnlyLangGra
 RAW_KEY = "raw" + "_prompt"
 
 
-def test_pr4_checkpointer_stores_refs_only_and_rejects_raw_state() -> None:
+def test_checkpointer_stores_refs_only_and_rejects_raw_state() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
 
     with pytest.raises(RuntimePolicyError, match="raw graph state"):
@@ -51,7 +51,7 @@ def test_pr4_checkpointer_stores_refs_only_and_rejects_raw_state() -> None:
         assert forbidden not in serialized
 
 
-def test_pr4_checkpointer_blocks_business_metadata_and_is_rollback_safe() -> None:
+def test_checkpointer_blocks_business_metadata_and_is_rollback_safe() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     initial = checkpointer.snapshot()
 
@@ -92,7 +92,7 @@ def test_pr4_checkpointer_blocks_business_metadata_and_is_rollback_safe() -> Non
     assert checkpointer.snapshot() == initial
 
 
-def test_pr4_checkpointer_rejects_canonical_metadata_override() -> None:
+def test_checkpointer_rejects_canonical_metadata_override() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     initial = checkpointer.snapshot()
 

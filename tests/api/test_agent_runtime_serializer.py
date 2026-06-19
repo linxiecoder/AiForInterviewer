@@ -10,7 +10,7 @@ RAW_KEY = "raw" + "_prompt"
 PROVIDER_KEY = "provider_" + "payload"
 
 
-def test_pr4_serializer_rejects_raw_internal_graph_state() -> None:
+def test_serializer_rejects_raw_internal_graph_state() -> None:
     serializer = LangGraphRuntimeSerializer()
 
     with pytest.raises(RuntimePolicyError, match="raw internal graph state"):
@@ -23,7 +23,7 @@ def test_pr4_serializer_rejects_raw_internal_graph_state() -> None:
         )
 
 
-def test_pr4_serializer_emits_sanitized_runtime_timeline_only() -> None:
+def test_serializer_emits_sanitized_runtime_timeline_only() -> None:
     serializer = LangGraphRuntimeSerializer()
     page = AgentRunTimelinePage(
         run_id="arun_pr4",

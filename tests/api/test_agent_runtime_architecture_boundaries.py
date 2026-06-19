@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "apps" / "api" / "app"
 ALLOWED_LANG_IMPORT_PREFIX = Path("apps/api/app/infrastructure/ai_runtime/langgraph")
 BUSINESS_GRAPH_ROOT = APP_ROOT / "application" / "ai_runtime" / "business_graphs"
-ALLOWED_PR5_BUSINESS_GRAPH_FILES = {
+ALLOWED_POLISH_BUSINESS_GRAPH_FILES = {
     BUSINESS_GRAPH_ROOT / "__init__.py",
     BUSINESS_GRAPH_ROOT / "local_multi_agent_orchestrator.py",
     BUSINESS_GRAPH_ROOT / "polish_feedback_graph.py",
@@ -26,7 +26,7 @@ ALLOWED_PR5_BUSINESS_GRAPH_FILES = {
 }
 ALLOWED_TEST_IMPORTS = {
     Path("tests/api/test_langgraph_dependency_spike.py"),
-    Path("tests/api/test_pr4_runtime_architecture_boundary.py"),
+    Path("tests/api/test_agent_runtime_architecture_boundaries.py"),
 }
 FORBIDDEN_BUSINESS_GRAPH_IMPORT_PREFIXES = (
     "langgraph",
@@ -48,11 +48,11 @@ FORBIDDEN_BUSINESS_GRAPH_SOURCE_MARKERS = (
 )
 
 
-def test_pr4_concrete_langgraph_imports_do_not_leak_outside_infra_runtime_root() -> None:
+def test_concrete_langgraph_imports_do_not_leak_outside_infra_runtime_root() -> None:
     assert _concrete_lang_import_violations() == []
 
 
-def test_pr4_pr5_boundary_allows_only_authorized_skeleton_and_no_formal_write_bypass() -> None:
+def test_runtime_business_graph_boundary_allows_only_authorized_skeleton_and_no_formal_write_bypass() -> None:
     assert _business_graph_skeleton_boundary_violations() == []
 
     runtime = InMemoryLangGraphRuntime(
@@ -127,12 +127,12 @@ def _business_graph_skeleton_boundary_violations() -> list[str]:
 
     violations: list[str] = []
     business_graph_files = set(_python_files(BUSINESS_GRAPH_ROOT))
-    unauthorized_files = business_graph_files - ALLOWED_PR5_BUSINESS_GRAPH_FILES
+    unauthorized_files = business_graph_files - ALLOWED_POLISH_BUSINESS_GRAPH_FILES
     violations.extend(
         f"unexpected business graph file: {path.relative_to(REPO_ROOT)}" for path in unauthorized_files
     )
 
-    for path in sorted(business_graph_files & ALLOWED_PR5_BUSINESS_GRAPH_FILES):
+    for path in sorted(business_graph_files & ALLOWED_POLISH_BUSINESS_GRAPH_FILES):
         rel = path.relative_to(REPO_ROOT)
         for module_name in _imported_modules(path):
             if module_name.startswith(FORBIDDEN_BUSINESS_GRAPH_IMPORT_PREFIXES):

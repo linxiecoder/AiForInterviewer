@@ -21,7 +21,7 @@ RAW_KEY = "raw" + "_prompt"
 PROVIDER_KEY = "provider_" + "payload"
 
 
-def test_pr4_in_memory_runtime_fails_closed_when_runtime_flags_default_false() -> None:
+def test_in_memory_runtime_fails_closed_when_runtime_flags_default_false() -> None:
     runtime = InMemoryLangGraphRuntime()
     context = _context()
 
@@ -29,7 +29,7 @@ def test_pr4_in_memory_runtime_fails_closed_when_runtime_flags_default_false() -
         runtime.start(context, context.command)
 
 
-def test_pr4_in_memory_runtime_start_resume_and_timeline_are_sanitized() -> None:
+def test_in_memory_runtime_start_resume_and_timeline_are_sanitized() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
@@ -85,7 +85,7 @@ def test_pr4_in_memory_runtime_start_resume_and_timeline_are_sanitized() -> None
         assert forbidden not in serialized
 
 
-def test_pr4_in_memory_runtime_start_timeline_preserves_p8_ref_matrix_from_command_metadata() -> None:
+def test_in_memory_runtime_start_timeline_preserves_p8_ref_matrix_from_command_metadata() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     command = AgentCommandEnvelope(
         entrypoint="start",
@@ -153,7 +153,7 @@ def test_pr4_in_memory_runtime_start_timeline_preserves_p8_ref_matrix_from_comma
         assert forbidden not in serialized
 
 
-def test_pr4_in_memory_runtime_resume_timeline_preserves_p8_ref_matrix_from_command_metadata() -> None:
+def test_in_memory_runtime_resume_timeline_preserves_p8_ref_matrix_from_command_metadata() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     command = AgentCommandEnvelope(
         entrypoint="start",
@@ -237,7 +237,7 @@ def test_pr4_in_memory_runtime_resume_timeline_preserves_p8_ref_matrix_from_comm
         assert forbidden not in serialized
 
 
-def test_pr4_in_memory_runtime_cancel_records_refs_only_timeline_event() -> None:
+def test_in_memory_runtime_cancel_records_refs_only_timeline_event() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     context = _context()
 
@@ -282,7 +282,7 @@ def test_pr4_in_memory_runtime_cancel_records_refs_only_timeline_event() -> None
         assert forbidden not in serialized
 
 
-def test_pr4_in_memory_runtime_resume_requires_checkpoint_version_and_allowed_action() -> None:
+def test_in_memory_runtime_resume_requires_checkpoint_version_and_allowed_action() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     context = _context()
     started = runtime.start(context, context.command)
@@ -336,7 +336,7 @@ def test_pr4_in_memory_runtime_resume_requires_checkpoint_version_and_allowed_ac
         )
 
 
-def test_pr4_in_memory_runtime_replay_is_read_only_and_does_not_mutate_checkpoints() -> None:
+def test_in_memory_runtime_replay_is_read_only_and_does_not_mutate_checkpoints() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
@@ -355,7 +355,7 @@ def test_pr4_in_memory_runtime_replay_is_read_only_and_does_not_mutate_checkpoin
     assert runtime.get_timeline(context.run_id, context.owner_id) == timeline_before
 
 
-def test_pr4_in_memory_runtime_replay_preserves_failure_status_and_trace_comparison() -> None:
+def test_in_memory_runtime_replay_preserves_failure_status_and_trace_comparison() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
@@ -391,7 +391,7 @@ def test_pr4_in_memory_runtime_replay_preserves_failure_status_and_trace_compari
     assert replayed.metadata["formal_business_writes"] == 0
 
 
-def test_pr4_in_memory_runtime_replay_preserves_nested_trace_refs_metadata() -> None:
+def test_in_memory_runtime_replay_preserves_nested_trace_refs_metadata() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
@@ -431,7 +431,7 @@ def test_pr4_in_memory_runtime_replay_preserves_nested_trace_refs_metadata() -> 
     assert replayed.metadata["low_confidence_flags"] == ("source_gap_nested_replay",)
 
 
-def test_pr4_in_memory_runtime_resume_does_not_bypass_runtime_gate() -> None:
+def test_in_memory_runtime_resume_does_not_bypass_runtime_gate() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     enabled_runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags(), checkpointer=checkpointer)
     context = _context()
@@ -447,7 +447,7 @@ def test_pr4_in_memory_runtime_resume_does_not_bypass_runtime_gate() -> None:
         disabled_runtime.resume(context, interrupt_ref=started.interrupt_refs[0], resume_payload={"decision": "approved"})
 
 
-def test_pr4_in_memory_runtime_start_rejects_command_mismatch() -> None:
+def test_in_memory_runtime_start_rejects_command_mismatch() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     context = _context()
     mismatched_command = AgentCommandEnvelope(
@@ -461,7 +461,7 @@ def test_pr4_in_memory_runtime_start_rejects_command_mismatch() -> None:
         runtime.start(context, mismatched_command)
 
 
-def test_pr4_in_memory_runtime_start_requires_runtime_loop_policy_metadata() -> None:
+def test_in_memory_runtime_start_requires_runtime_loop_policy_metadata() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_flags())
     command = AgentCommandEnvelope(
         entrypoint="start",

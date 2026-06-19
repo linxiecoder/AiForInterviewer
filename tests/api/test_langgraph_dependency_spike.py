@@ -21,7 +21,7 @@ FORBIDDEN_IMPORT_ROOTS = (
 )
 
 
-def test_pr4_lg_dep_spike_compiles_invokes_and_keeps_boundary() -> None:
+def test_langgraph_dependency_spike_compiles_invokes_and_keeps_boundary() -> None:
     langgraph = importlib.import_module("langgraph")
     spike_module = importlib.import_module("app.infrastructure.ai_runtime.langgraph.dependency_spike")
 

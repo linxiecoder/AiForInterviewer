@@ -64,7 +64,7 @@ def test_explicit_environment_is_used_before_pr6_persisted_config(monkeypatch: p
     assert decision.source == "environment"
 
 
-def test_pr3_ignores_persisted_config_until_authorized() -> None:
+def test_persisted_config_is_ignored_until_authorized() -> None:
     resolver = RuntimeFlagResolver(persisted_config={"AIFI_AI_RUNTIME_ENABLED": True})
 
     decision = resolver.resolve_runtime_flag("AIFI_AI_RUNTIME_ENABLED", actor_id="actor_1")
