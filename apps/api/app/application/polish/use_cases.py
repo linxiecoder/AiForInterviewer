@@ -20,7 +20,6 @@ from app.application.ai_runtime.contracts import (
     classify_agent_runtime_status,
 )
 from app.application.ai_runtime.facade import AiOrchestrationFacade
-from app.application.ai_runtime.handoff import AgentPersistenceHandoff, build_question_result_write_plan
 from app.application.job_match.entities import JobMatchAnalysis
 from app.application.job_match.ports import JobMatchRepository
 from app.application.llm.errors import (
@@ -46,6 +45,7 @@ from app.application.polish.answer_application_service import (
     PolishAnswerApplicationService,
 )
 from app.application.polish.entities import (
+    AuthorityDecisionResult,
     PolishAnswer,
     PolishFeedback,
     PolishQuestion,
@@ -58,6 +58,13 @@ from app.application.polish.entities import (
     PolishTopic,
 )
 from app.application.polish.feedback_application_service import PolishFeedbackApplicationService
+from app.application.polish.execution_flow import (
+    ProgressCanonicalWriteHandler,
+    ProgressProjectionRefreshHandler,
+    QuestionExecutionHandler,
+    QuestionExecutionInput,
+    create_execution_snapshot,
+)
 from app.application.polish.agents.question import (
     build_direct_question_agent_run_id,
     build_question_candidate_validation_task,
@@ -139,6 +146,18 @@ QUESTION_GENERATION_MODES = {
     QUESTION_GENERATION_MODE_REGENERATE_CURRENT_NODE,
 }
 QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT = "feedback_next_question_intent"
+QUESTION_EXECUTION_AUTHORITY_SOURCE = "backend_question_execution_authority"
+QUESTION_EXECUTION_AUTHORITY_DECISION_REF_PREFIX = "qauth"
+
+POLISH_USE_CASE_SPLIT_LANDING_MAP = {
+    "session_lifecycle": "app.application.polish.session_application_service.PolishSessionApplicationService",
+    "question_execution_authority": "app.application.polish.use_cases._decide_question_execution_authority",
+    "question_generation": "app.application.polish.question_application_service.PolishQuestionApplicationService",
+    "answer_submission": "app.application.polish.answer_application_service.PolishAnswerApplicationService",
+    "feedback_generation": "app.application.polish.feedback_application_service.PolishFeedbackApplicationService",
+    "progress_canonical_write": "app.application.polish.progress_application_service.PolishProgressApplicationService",
+    "report_generation": "app.application.polish.report_application_service.PolishReportApplicationService",
+}
 
 UNNAMED_JOB_TITLE = "未命名岗位"
 UNNAMED_RESUME_TITLE = "未命名简历"
@@ -206,6 +225,9 @@ class _PolishUseCaseOperations:
         )
         self._feedback_generation_service = feedback_generation_service or FeedbackGenerationService()
         self._ai_orchestration_facade = ai_orchestration_facade
+        self._question_execution_handler = QuestionExecutionHandler(self._polish_repository)
+        self._progress_canonical_write_handler = ProgressCanonicalWriteHandler(self._polish_repository)
+        self._progress_projection_refresh_handler = ProgressProjectionRefreshHandler(self._progress_tree_service)
         self._answer_submission_boundary_builder = AnswerSubmissionBoundaryBuilder()
         self._answer_submission_records: dict[tuple[str, str, str, str], tuple[str, str]] = {}
 
@@ -225,7 +247,7 @@ class _PolishUseCaseOperations:
             job_version_id=session.job_version_id,
             generation_mode=_question_generation_mode(command),
             requested_progress_node_ref=requested_progress_node_ref,
-            selected_progress_node_ref=command.selected_progress_node_ref,
+            selected_progress_node_ref=requested_progress_node_ref,
         )
         resolved = self._question_generation_policy_resolver(context, self._question_generation_policy)
         if not isinstance(resolved, QuestionGenerationRuntimePolicy):
@@ -239,7 +261,7 @@ class _PolishUseCaseOperations:
 
     def _persist_progress_tree(self, session: PolishSession) -> ApplicationResult[PolishSession]:
         try:
-            self._polish_repository.update_progress_tree(session)
+            self._progress_canonical_write_handler.write(session)
         except PolishSessionVersionConflictError as exc:
             return ApplicationResult(error=_stale_session_version_error(exc))
         return ApplicationResult(value=_session_with_next_record_version(session))
@@ -442,7 +464,10 @@ class _PolishUseCaseOperations:
         request_error = _validate_question_generation_request(command)
         if request_error is not None:
             return ApplicationResult(error=request_error)
-        requested_progress_node_ref = _question_generation_requested_ref(command)
+        authority_decision = _decide_question_execution_authority(command=command, detail=detail)
+        if not authority_decision.allowed:
+            return ApplicationResult(error=_question_execution_authority_error(authority_decision))
+        requested_progress_node_ref = authority_decision.execution_target
         if requested_progress_node_ref is None:
             return ApplicationResult(
                 error=DomainError(
@@ -525,6 +550,12 @@ class _PolishUseCaseOperations:
             detail.progress_context,
             completed_focus_refs,
         )
+        execution_snapshot = create_execution_snapshot(
+            flow="question_generation",
+            authority_decision=authority_decision,
+            runtime_flags=_question_runtime_snapshot_flags(runtime_policy),
+            asset_refs=_question_execution_snapshot_asset_refs(progress_context),
+        )
         if follow_up_context is not None and follow_up_context.get("completion_status") == "all_focus_completed":
             task_id = generate_resource_id(ResourceIdPrefix.TASK)
             task = _follow_up_completed_task_status(
@@ -571,6 +602,7 @@ class _PolishUseCaseOperations:
                         completed_focus_refs=completed_focus_refs,
                         follow_up_context=follow_up_context,
                         runtime_policy=runtime_policy,
+                        authority_decision=authority_decision,
                     ),
                 )
             except GraphDisabledError:
@@ -656,6 +688,7 @@ class _PolishUseCaseOperations:
                         candidate_payload,
                         command=command,
                         requested_progress_node_ref=requested_progress_node_ref,
+                        authority_decision=authority_decision,
                     )
                     workflow_result = run_question_planned_workflow(
                         owner_id=command.owner_id,
@@ -693,20 +726,18 @@ class _PolishUseCaseOperations:
                     if trusted_metadata_error is not None:
                         return ApplicationResult(error=trusted_metadata_error)
                     try:
-                        plan = build_question_result_write_plan(
-                            owner_id=command.owner_id,
-                            actor_id=command.actor_id,
-                            session_id=command.session_id,
-                            ai_task_id=graph_status.ai_task_id,
-                            agent_run_id=graph_status.agent_run_id,
-                            candidate=candidate_payload,
-                            progress_node_ref=requested_progress_node_ref,
-                            trace_refs=workflow_result.trace_refs,
-                            contract_ids=runtime_policy.contract_ids,
-                        )
-                        write_result = AgentPersistenceHandoff().write_question_result(
-                            plan,
-                            question_repository=self._polish_repository,
+                        write_result = self._question_execution_handler.persist_result(
+                            QuestionExecutionInput(
+                                owner_id=command.owner_id,
+                                actor_id=command.actor_id,
+                                session_id=command.session_id,
+                                ai_task_id=graph_status.ai_task_id,
+                                agent_run_id=graph_status.agent_run_id,
+                                candidate=candidate_payload,
+                                snapshot=execution_snapshot,
+                                trace_refs=workflow_result.trace_refs,
+                                contract_ids=runtime_policy.contract_ids,
+                            ),
                             now=now,
                         )
                     except RuntimeValidationError as exc:
@@ -823,6 +854,7 @@ class _PolishUseCaseOperations:
                 command,
                 requested_progress_node_ref=requested_progress_node_ref,
                 resolved_progress_node_ref=question_draft.progress_node_ref,
+                authority_decision=authority_decision,
             )
         )
         trusted_metadata_error = _feedback_next_question_trusted_metadata_error(command, question_metadata)
@@ -897,20 +929,18 @@ class _PolishUseCaseOperations:
             )
             return ApplicationResult(value=task)
         try:
-            plan = build_question_result_write_plan(
-                owner_id=command.owner_id,
-                actor_id=command.actor_id,
-                session_id=command.session_id,
-                ai_task_id=task_id,
-                agent_run_id=agent_run_id,
-                candidate=candidate_payload,
-                progress_node_ref=requested_progress_node_ref,
-                trace_refs=workflow_result.trace_refs,
-                contract_ids=runtime_policy.contract_ids,
-            )
-            write_result = AgentPersistenceHandoff().write_question_result(
-                plan,
-                question_repository=self._polish_repository,
+            write_result = self._question_execution_handler.persist_result(
+                QuestionExecutionInput(
+                    owner_id=command.owner_id,
+                    actor_id=command.actor_id,
+                    session_id=command.session_id,
+                    ai_task_id=task_id,
+                    agent_run_id=agent_run_id,
+                    candidate=candidate_payload,
+                    snapshot=execution_snapshot,
+                    trace_refs=workflow_result.trace_refs,
+                    contract_ids=runtime_policy.contract_ids,
+                ),
                 now=now,
             )
         except RuntimeValidationError as exc:
@@ -1144,14 +1174,10 @@ class _PolishUseCaseOperations:
             )
 
         detail = self._build_session_detail(owner_id=command.owner_id, session=session)
-        if _should_regenerate_progress_tree(detail):
-            progress_artifacts = self._progress_tree_service.generate_initial(detail.progress_context)
-        else:
-            progress_artifacts = self._progress_tree_service.refresh_state(
-                context=detail.progress_context,
-                existing_plan=detail.progress_tree_plan,
-                existing_state=detail.progress_tree_state,
-            )
+        progress_artifacts = self._progress_projection_refresh_handler.refresh(
+            detail,
+            regenerate=_should_regenerate_progress_tree(detail),
+        )
         progress_artifacts = _progress_artifacts_with_theme(progress_artifacts, _session_theme_strategy(session))
         updated_session = replace(
             session,
@@ -1633,6 +1659,39 @@ def _session_canonical_project_assets(canonical_evidence_pack: dict[str, Any] | 
     return tuple(item for item in items if isinstance(item, dict))
 
 
+def _question_runtime_snapshot_flags(runtime_policy: QuestionGenerationRuntimePolicy) -> dict[str, Any]:
+    return {
+        "policy_version": runtime_policy.policy_version,
+        "prompt_asset_id": runtime_policy.prompt_asset_id,
+        "prompt_schema_id": runtime_policy.prompt_schema_id,
+        "prompt_schema_version": runtime_policy.prompt_schema_version,
+        "task_type": runtime_policy.task_type,
+        "source": runtime_policy.source,
+        "source_type": runtime_policy.source_type,
+        "source_version": runtime_policy.source_version,
+        "fallback": runtime_policy.fallback,
+    }
+
+
+def _question_execution_snapshot_asset_refs(progress_context: dict[str, Any]) -> tuple[str, ...]:
+    canonical_project_assets = progress_context.get("canonical_project_assets")
+    if not isinstance(canonical_project_assets, dict):
+        return ()
+    items = canonical_project_assets.get("items")
+    if not isinstance(items, list):
+        return ()
+    refs: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for key in ("asset_id", "asset_ref", "ref_id"):
+            value = _clean_question_request_text(item.get(key), max_chars=160)
+            if value:
+                refs.append(value)
+                break
+    return tuple(dict.fromkeys(refs))
+
+
 def _canonical_evidence_query_inputs(
     *,
     detail: PolishSessionDetail,
@@ -1852,6 +1911,7 @@ def _polish_question_graph_context_snapshot(
     completed_focus_refs: tuple[str, ...],
     follow_up_context: dict[str, Any] | None,
     runtime_policy: QuestionGenerationRuntimePolicy,
+    authority_decision: AuthorityDecisionResult,
 ) -> dict[str, Any]:
     session = detail.session
     context_snapshot = {
@@ -1871,6 +1931,7 @@ def _polish_question_graph_context_snapshot(
             "polish_theme": session.polish_theme,
         },
         "requested_progress_node_ref": requested_progress_node_ref,
+        "execution_authority": _authority_decision_metadata(authority_decision),
         "completed_focus_refs": list(completed_focus_refs),
         "generation_mode": _question_generation_mode(command),
         "request_refs": {
@@ -2717,6 +2778,106 @@ def _follow_up_blueprint_signature(parent_question_id: str, parent_answer_id: st
     return f"bp:{sha256(seed.encode('utf-8')).hexdigest()[:16]}"
 
 
+def _decide_question_execution_authority(
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    detail: PolishSessionDetail,
+) -> AuthorityDecisionResult:
+    mode = _question_generation_mode(command)
+    requested_progress_node_ref = _backend_question_execution_target(command, detail)
+    decision_ref = _question_authority_decision_ref(
+        command=command,
+        requested_progress_node_ref=requested_progress_node_ref,
+    )
+    if requested_progress_node_ref is None:
+        return AuthorityDecisionResult(
+            allowed=False,
+            decision_ref=decision_ref,
+            rejection_reason="execution_target_missing",
+            control_reason_codes=("execution_target_missing",),
+            policy_reason_codes=(mode,),
+            details={
+                "field": "progress_node_ref",
+                "decision_ref_contract": "trace_only",
+                "authority_source": QUESTION_EXECUTION_AUTHORITY_SOURCE,
+            },
+        )
+
+    plan_progress_node_refs = _plan_progress_node_refs(detail.progress_tree_plan)
+    if plan_progress_node_refs and requested_progress_node_ref not in plan_progress_node_refs:
+        return AuthorityDecisionResult(
+            allowed=False,
+            decision_ref=decision_ref,
+            execution_target=requested_progress_node_ref,
+            rejection_reason="target_progress_node_not_found",
+            control_reason_codes=("execution_target_not_in_backend_plan",),
+            policy_reason_codes=(mode,),
+            details={
+                "field": "progress_node_ref",
+                "progress_node_ref": requested_progress_node_ref,
+                "decision_ref_contract": "trace_only",
+                "authority_source": QUESTION_EXECUTION_AUTHORITY_SOURCE,
+            },
+        )
+
+    return AuthorityDecisionResult(
+        allowed=True,
+        decision_ref=decision_ref,
+        execution_target=requested_progress_node_ref,
+        control_reason_codes=("backend_authority_target_selected",),
+        policy_reason_codes=(mode,),
+        details={
+            "decision_ref_contract": "trace_only",
+            "authority_source": QUESTION_EXECUTION_AUTHORITY_SOURCE,
+        },
+    )
+
+
+def _question_execution_authority_error(decision: AuthorityDecisionResult) -> DomainError:
+    return DomainError(
+        code="validation_failed",
+        message="Question execution target is not authorized",
+        details={
+            "reason": decision.rejection_reason or "execution_authority_rejected",
+            **decision.details,
+        },
+    )
+
+
+def _authority_decision_metadata(decision: AuthorityDecisionResult | None) -> dict[str, Any]:
+    if decision is None:
+        return {}
+    return {
+        "authority_source": QUESTION_EXECUTION_AUTHORITY_SOURCE,
+        "decision_ref": decision.decision_ref,
+        "decision_ref_contract": "trace_only",
+        "allowed": decision.allowed,
+        "execution_target": decision.execution_target,
+        "control_reason_codes": list(decision.control_reason_codes),
+        "policy_reason_codes": list(decision.policy_reason_codes),
+        "rejection_reason": decision.rejection_reason,
+    }
+
+
+def _question_authority_decision_ref(
+    *,
+    command: CreatePolishQuestionTaskCommand,
+    requested_progress_node_ref: str | None,
+) -> str:
+    seed = "|".join(
+        (
+            command.owner_id,
+            command.session_id,
+            _question_generation_mode(command),
+            requested_progress_node_ref or "",
+            _clean_question_request_text(command.authorized_feedback_id) or "",
+            _clean_question_request_text(command.authorized_answer_id) or "",
+            _clean_question_request_text(command.authorized_parent_question_id) or "",
+        )
+    )
+    return f"{QUESTION_EXECUTION_AUTHORITY_DECISION_REF_PREFIX}_{sha256(seed.encode('utf-8')).hexdigest()[:16]}"
+
+
 def _validate_question_generation_request(command: CreatePolishQuestionTaskCommand) -> DomainError | None:
     mode = _question_generation_mode(command)
     if mode not in QUESTION_GENERATION_MODES:
@@ -2726,12 +2887,6 @@ def _validate_question_generation_request(command: CreatePolishQuestionTaskComma
             details={"field": "generation_mode"},
         )
     if command.generation_mode is not None and mode == QUESTION_GENERATION_MODE_NEW:
-        if _question_generation_requested_ref(command) is None:
-            return DomainError(
-                code="validation_failed",
-                message="new_question requires a selected progress node",
-                details={"field": "selected_progress_node_ref"},
-            )
         if (
             _clean_question_request_text(command.parent_question_id) is not None
             or _clean_question_request_text(command.parent_answer_id) is not None
@@ -2771,9 +2926,25 @@ def _question_generation_mode(command: CreatePolishQuestionTaskCommand) -> str:
 def _question_generation_requested_ref(command: CreatePolishQuestionTaskCommand) -> str | None:
     return (
         _clean_question_request_text(command.selected_progress_node_ref)
-        or _clean_question_request_text(command.selected_secondary_category_ref)
         or _clean_question_request_text(command.progress_node_ref)
     )
+
+
+def _backend_question_execution_target(
+    command: CreatePolishQuestionTaskCommand,
+    detail: PolishSessionDetail,
+) -> str | None:
+    return _question_generation_requested_ref(command) or _backend_current_priority_progress_node_ref(detail)
+
+
+def _backend_current_priority_progress_node_ref(detail: PolishSessionDetail) -> str | None:
+    progress_tree_state = getattr(detail, "progress_tree_state", None)
+    if not isinstance(progress_tree_state, dict):
+        return None
+    current_priority = progress_tree_state.get("current_priority")
+    if not isinstance(current_priority, dict):
+        return None
+    return _clean_question_request_text(current_priority.get("progress_node_ref"))
 
 
 def _question_generation_request_metadata(
@@ -2781,6 +2952,7 @@ def _question_generation_request_metadata(
     *,
     requested_progress_node_ref: str | None,
     resolved_progress_node_ref: str | None,
+    authority_decision: AuthorityDecisionResult | None = None,
 ) -> dict[str, Any]:
     mode = _question_generation_mode(command)
     selected_progress_node_ref = (
@@ -2801,6 +2973,7 @@ def _question_generation_request_metadata(
         "authorized_feedback_id": _clean_question_request_text(command.authorized_feedback_id),
         "authorized_answer_id": _clean_question_request_text(command.authorized_answer_id),
         "authorized_parent_question_id": _clean_question_request_text(command.authorized_parent_question_id),
+        "execution_authority": _authority_decision_metadata(authority_decision),
         "exclude_question_refs": list(_clean_question_request_list(command.exclude_question_refs)),
         "completed_focus_refs": list(_clean_question_request_list(command.completed_focus_refs)),
     }
@@ -2817,6 +2990,7 @@ def _question_candidate_payload_with_request_metadata(
     *,
     command: CreatePolishQuestionTaskCommand,
     requested_progress_node_ref: str | None,
+    authority_decision: AuthorityDecisionResult | None = None,
 ) -> dict[str, Any]:
     candidate = dict(candidate_payload)
     metadata = candidate.get("question_metadata") if isinstance(candidate.get("question_metadata"), dict) else {}
@@ -2826,6 +3000,7 @@ def _question_candidate_payload_with_request_metadata(
             command,
             requested_progress_node_ref=requested_progress_node_ref,
             resolved_progress_node_ref=_clean_question_request_text(candidate.get("progress_node_ref")),
+            authority_decision=authority_decision,
         )
     )
     candidate["question_metadata"] = metadata
@@ -2835,6 +3010,8 @@ def _question_candidate_payload_with_request_metadata(
 def _question_generation_request_source(command: CreatePolishQuestionTaskCommand, mode: str) -> str:
     if command.execution_source == QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
         return QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT
+    if mode == QUESTION_GENERATION_MODE_NEW and _question_generation_requested_ref(command) is None:
+        return "backend_current_priority"
     if command.generation_mode is None:
         return "legacy_progress_node_ref" if _clean_question_request_text(command.progress_node_ref) else "legacy_fallback"
     if mode == QUESTION_GENERATION_MODE_FOLLOW_UP:

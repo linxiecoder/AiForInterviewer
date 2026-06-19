@@ -2202,19 +2202,6 @@ function isPolishSessionEnded(session: PolishSessionDetail | null): boolean {
   return session?.session_status === "ended";
 }
 
-function resolveQuestionGenerationProgressNodeRef(
-  session: PolishSessionDetail,
-  explicitProgressNodeRef: string | null | undefined,
-  selectedProgressNodeRef: string | null,
-): string | null {
-  return (
-    explicitProgressNodeRef ??
-    selectedProgressNodeRef ??
-    session.progress_tree_state.current_priority?.progress_node_ref ??
-    null
-  );
-}
-
 function buildSelectedCategoryPath(
   nodes: readonly PolishProgressTreeNode[],
   progressNodeRef: string | null,
@@ -2235,16 +2222,6 @@ function buildSelectedCategoryPath(
     }
   }
   return [];
-}
-
-function completedFocusRefsForProgressNode(
-  session: PolishSessionDetail,
-  progressNodeRef: string | null,
-): string[] {
-  return (session.progress_tree_state.completed_focus_refs ?? [])
-    .filter((item) => item.focus_key && (!progressNodeRef || !item.progress_node_ref || item.progress_node_ref === progressNodeRef))
-    .map((item) => item.focus_key!)
-    .filter((item, index, list) => list.indexOf(item) === index);
 }
 
 function getLatestAnswer(session: PolishSessionDetail): PolishSessionAnswer | null {
@@ -2862,7 +2839,7 @@ function logInterviewCreateEvent(event: string, payload: Record<string, unknown>
 }
 
 function getAnswerNextRecommendedActions(answer: PolishSessionAnswer): PolishRecommendedAction[] {
-  const actions = answer.next_recommended_actions ?? answer.feedback_payload?.next_recommended_actions ?? [];
+  const actions = answer.feedback_payload?.next_recommended_actions ?? [];
   return actions.filter((action, index) => actions.indexOf(action) === index);
 }
 
@@ -5073,12 +5050,9 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("\u6a21\u62df\u9762\u8bd5\u5df2\u7ed3\u675f\uff0c\u4e0d\u80fd\u7ee7\u7eed\u751f\u6210\u9898\u76ee\u3002");
       return;
     }
-    const targetProgressNodeRef = resolveQuestionGenerationProgressNodeRef(
-      session,
-      progressNodeRef,
-      selectedProgressNodeDetailRef,
-    );
-    if (targetProgressNodeRef === null) {
+    void progressNodeRef;
+    const backendCurrentProgressNodeRef = session.progress_tree_state.current_priority?.progress_node_ref ?? null;
+    if (backendCurrentProgressNodeRef === null) {
       setAnswerError("\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u8fdb\u5c55\u680f\u76ee\u540e\u518d\u751f\u6210\u9898\u76ee\u3002");
       return;
     }
@@ -5086,11 +5060,8 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setAnswerError(null);
     setWorkbenchFailureState(null);
     try {
-      const task = await createPolishNodeQuestionTask(sessionId, {
-        selected_progress_node_ref: targetProgressNodeRef,
-        completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
-      });
-      focusGeneratedQuestionTask(task, targetProgressNodeRef);
+      const task = await createPolishNodeQuestionTask(sessionId);
+      focusGeneratedQuestionTask(task, null);
       await loadSession();
     } catch (createError) {
       setAnswerError(
@@ -5111,24 +5082,13 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
       setAnswerError("\u6a21\u62df\u9762\u8bd5\u5df2\u7ed3\u675f\uff0c\u4e0d\u80fd\u7ee7\u7eed\u751f\u6210\u9898\u76ee\u3002");
       return;
     }
-    const targetProgressNodeRef = resolveQuestionGenerationProgressNodeRef(
-      session,
-      progressNodeRef,
-      selectedProgressNodeDetailRef,
-    );
-    if (targetProgressNodeRef === null) {
-      setAnswerError("\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u8fdb\u5c55\u680f\u76ee\u540e\u518d\u751f\u6210\u9898\u76ee\u3002");
-      return;
-    }
+    void progressNodeRef;
     setCreatingQuestion(true);
     setAnswerError(null);
     setWorkbenchFailureState(null);
     try {
-      const task = await createPolishFeedbackNextQuestionTask(sessionId, feedbackId, {
-        selected_progress_node_ref: targetProgressNodeRef,
-        completed_focus_refs: completedFocusRefsForProgressNode(session, targetProgressNodeRef),
-      });
-      focusGeneratedQuestionTask(task, targetProgressNodeRef);
+      const task = await createPolishFeedbackNextQuestionTask(sessionId, feedbackId);
+      focusGeneratedQuestionTask(task, null);
       await loadSession();
     } catch (createError) {
       setAnswerError(

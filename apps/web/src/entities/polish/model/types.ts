@@ -254,7 +254,6 @@ export interface PolishSessionAnswer {
   score_result_id: string | null;
   feedback_created_at: string | null;
   feedback_payload?: PolishFeedbackPayload;
-  next_recommended_actions?: PolishRecommendedAction[];
   low_confidence_flags?: PolishLowConfidenceFlag[];
   trace_refs?: Array<Record<string, unknown>>;
 }
@@ -388,15 +387,11 @@ export interface CreatePolishSessionRequest {
 }
 
 export interface CreatePolishFeedbackNextQuestionIntentRequest {
-  selected_progress_node_ref?: string | null;
   exclude_question_refs?: string[];
-  completed_focus_refs?: string[];
 }
 
 export interface CreatePolishQuestionTaskRequest {
-  selected_progress_node_ref?: string | null;
   exclude_question_refs?: string[];
-  completed_focus_refs?: string[];
 }
 
 export interface CreatePolishAnswerRequest {
@@ -491,7 +486,6 @@ export interface PolishTaskStatus {
   feedback_created_at?: string | null;
   score_result_id?: string | null;
   feedback_payload?: PolishFeedbackPayload;
-  next_recommended_actions?: PolishRecommendedAction[];
   provider_payload?: null;
 }
 
@@ -516,7 +510,6 @@ export interface PolishAnswer {
   created_at: string;
   updated_at: string;
   feedback_payload?: PolishFeedbackPayload;
-  next_recommended_actions?: PolishRecommendedAction[];
   feedback_text?: string;
   feedback_id?: string | null;
 }

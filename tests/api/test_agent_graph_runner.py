@@ -406,7 +406,7 @@ def test_runtime_status_taxonomy_is_enforced_by_runtime_dtos() -> None:
         AgentRunStatus(
             run_id="arun_false_status",
             owner_id="owner_1",
-            status="skeleton_succeeded",
+            status="generated",
             metadata={"failure_reason": "provider_failed"},
         )
 

@@ -51,7 +51,7 @@ def build_local_multi_agent_orchestrator_graph_descriptor() -> "GraphDescriptor"
         formal_write_targets=(),
         db_business_write_targets=(),
         rollback_safe=True,
-        disabled_behavior="legacy_direct_path_retained",
+        disabled_behavior="adapter_only_unavailable",
     )
 
 

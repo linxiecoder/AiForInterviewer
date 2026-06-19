@@ -35,7 +35,7 @@ QUESTION_TEXT_KEY = "question" + "_text"
 ANSWER_TEXT_KEY = "answer" + "_text"
 
 
-def test_pr6_graph_flag_default_false_blocks_in_memory_execution_and_retains_legacy_path() -> None:
+def test_graph_flag_default_false_blocks_feedback_runtime_execution_and_is_adapter_only() -> None:
     descriptor = build_polish_feedback_graph_descriptor()
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_without_graph_flag())
     context = _context()
@@ -47,19 +47,19 @@ def test_pr6_graph_flag_default_false_blocks_in_memory_execution_and_retains_leg
     assert descriptor.provider_enabled is False
     assert descriptor.formal_write_targets == ()
     assert descriptor.db_business_write_targets == ()
-    assert descriptor.disabled_behavior == "legacy_direct_path_retained"
+    assert descriptor.disabled_behavior == "adapter_only_unavailable"
 
     with pytest.raises(GraphDisabledError):
         runtime.start(context, context.command)
 
 
-def test_pr6_feedback_direct_runtime_requires_descriptor_runtime_loop_policy() -> None:
+def test_feedback_runtime_requires_descriptor_runtime_loop_policy() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     command = AgentCommandEnvelope(
         entrypoint="start",
         input_refs=("session_ref_1", "question_ref_1", "answer_ref_1"),
         requested_outputs=("result_refs", "candidate_refs", "suggestion_refs"),
-        idempotency_key="idem_pr6",
+        idempotency_key="idem_feedback_runtime",
         metadata={"request_digest": "digest_ref_1", "idempotency_key_hash": "idem_hash_ref_1"},
     )
     context = _context(command=command)
@@ -68,7 +68,7 @@ def test_pr6_feedback_direct_runtime_requires_descriptor_runtime_loop_policy() -
         runtime.start(context, context.command)
 
 
-def test_pr6_feedback_direct_runtime_rejects_runtime_loop_policy_mismatch() -> None:
+def test_feedback_runtime_rejects_runtime_loop_policy_mismatch() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     command = _command(metadata={"runtime_loop_policy": _runtime_loop_policy_metadata({"max_steps": 4})})
     context = _context(command=command)
@@ -77,7 +77,7 @@ def test_pr6_feedback_direct_runtime_rejects_runtime_loop_policy_mismatch() -> N
         runtime.start(context, context.command)
 
 
-def test_pr6_enabled_in_memory_integration_returns_refs_only_sanitized_schema() -> None:
+def test_enabled_in_memory_feedback_runtime_returns_refs_only_sanitized_schema() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     context = _context(
         command=_command(
@@ -165,12 +165,12 @@ def test_pr6_enabled_in_memory_integration_returns_refs_only_sanitized_schema() 
     }
     assert payload["rollback"] == {
         "checkpoint_refs_are_business_facts": False,
-        "legacy_direct_path_retained_when_disabled": True,
+        "adapter_only_when_disabled": True,
     }
     assert contains_sensitive_payload(payload) is False
 
 
-def test_pr6_feedback_start_timeline_preserves_p8_ref_matrix_from_command_metadata() -> None:
+def test_feedback_start_timeline_preserves_command_ref_matrix_metadata() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     command = _command(
         metadata={
@@ -221,7 +221,7 @@ def test_pr6_feedback_start_timeline_preserves_p8_ref_matrix_from_command_metada
         assert forbidden not in serialized
 
 
-def test_pr6_replay_is_read_only_and_does_not_mutate_checkpoint_or_timeline_refs() -> None:
+def test_feedback_replay_is_read_only_and_does_not_mutate_checkpoint_or_timeline_refs() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag(), checkpointer=checkpointer)
     context = _context()
@@ -250,7 +250,7 @@ def test_pr6_replay_is_read_only_and_does_not_mutate_checkpoint_or_timeline_refs
     }
 
 
-def test_pr6_replay_preserves_feedback_trace_refs_metadata() -> None:
+def test_feedback_replay_preserves_trace_refs_metadata() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     context = _context()
     started = runtime.start(context, context.command)
@@ -268,7 +268,7 @@ def test_pr6_replay_preserves_feedback_trace_refs_metadata() -> None:
     assert replayed.metadata["low_confidence_flags"] == low_confidence_refs
 
 
-def test_pr6_asset_conflict_opens_checkpoint_bound_hitl_interrupt_without_formal_refs() -> None:
+def test_asset_conflict_opens_checkpoint_bound_hitl_interrupt_without_formal_refs() -> None:
     interrupt_service = AgentInterruptService()
     runtime = InMemoryLangGraphRuntime(
         flag_resolver=_enabled_runtime_with_graph_flag(),
@@ -355,7 +355,7 @@ def test_pr6_asset_conflict_opens_checkpoint_bound_hitl_interrupt_without_formal
         ),
     ),
 )
-def test_pr6_remaining_hitl_triggers_open_checkpoint_bound_interrupts_and_resume(
+def test_remaining_hitl_triggers_open_checkpoint_bound_interrupts_and_resume(
     metadata_key: str,
     trigger_ref: str,
     interrupt_type: str,
@@ -408,7 +408,7 @@ def test_pr6_remaining_hitl_triggers_open_checkpoint_bound_interrupts_and_resume
     assert resumed_interrupt.status == "resumed"
 
 
-def test_pr6_asset_conflict_resume_validates_checkpoint_version_and_action_at_runner_boundary() -> None:
+def test_asset_conflict_resume_validates_checkpoint_version_and_action_at_runner_boundary() -> None:
     def started_asset_conflict_run():
         interrupt_service = AgentInterruptService()
         runtime = InMemoryLangGraphRuntime(
@@ -507,7 +507,7 @@ def test_pr6_asset_conflict_resume_validates_checkpoint_version_and_action_at_ru
     }
 
 
-def test_pr6_asset_conflict_resume_timeline_retains_candidate_and_validation_refs() -> None:
+def test_asset_conflict_resume_timeline_retains_candidate_and_validation_refs() -> None:
     interrupt_service = AgentInterruptService()
     runtime = InMemoryLangGraphRuntime(
         flag_resolver=_enabled_runtime_with_graph_flag(),
@@ -544,7 +544,7 @@ def test_pr6_asset_conflict_resume_timeline_retains_candidate_and_validation_ref
     assert resume_event.metadata["validation_refs"] == tuple(started.metadata["trace_refs"]["validation_refs"])
 
 
-def test_pr6_feedback_cancel_timeline_retains_candidate_and_validation_refs() -> None:
+def test_feedback_cancel_timeline_retains_candidate_and_validation_refs() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
     command = _command(
         metadata={
@@ -573,7 +573,7 @@ def test_pr6_feedback_cancel_timeline_retains_candidate_and_validation_refs() ->
     assert cancel_event.metadata["formal_business_writes"] == 0
 
 
-def test_pr6_checkpoint_refs_are_runtime_refs_and_rollback_is_flag_only() -> None:
+def test_checkpoint_refs_are_runtime_refs_and_rollback_is_flag_only() -> None:
     checkpointer = RefsOnlyLangGraphCheckpointer()
     enabled_runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag(), checkpointer=checkpointer)
     context = _context()
@@ -593,7 +593,7 @@ def test_pr6_checkpoint_refs_are_runtime_refs_and_rollback_is_flag_only() -> Non
     assert checkpointer.snapshot() == checkpoint_snapshot
 
 
-def test_pr6_rejects_raw_text_inputs_and_exposes_no_private_runtime_markers() -> None:
+def test_feedback_runtime_rejects_raw_text_inputs_and_exposes_no_private_runtime_markers() -> None:
     runtime = InMemoryLangGraphRuntime(flag_resolver=_enabled_runtime_with_graph_flag())
 
     with pytest.raises(RuntimeValidationError):
@@ -659,8 +659,8 @@ def _context(command: AgentCommandEnvelope | None = None) -> AgentRunContext:
     return AgentRunContext(
         owner_id="owner_1",
         actor_id="actor_1",
-        run_id="arun_pr6_fake",
-        ai_task_id="aitask_pr6_fake",
+        run_id="arun_feedback_runtime",
+        ai_task_id="aitask_feedback_runtime",
         graph_name=POLISH_FEEDBACK_GRAPH_NAME,
         graph_version=POLISH_FEEDBACK_GRAPH_VERSION,
         command=command,
@@ -682,7 +682,7 @@ def _command(
         entrypoint="start",
         input_refs=input_refs,
         requested_outputs=("result_refs", "candidate_refs", "suggestion_refs"),
-        idempotency_key="idem_pr6",
+        idempotency_key="idem_feedback_runtime",
         metadata=command_metadata,
     )
 

@@ -913,7 +913,7 @@ class AgentGraphRunnerExecutorAdapter:
         if cls._contains_runtime_fake_provider_metadata(metadata):
             raise ValueError("runtime metadata cannot expose fake provider")
         if cls._contains_runtime_fail_open_fallback_metadata(metadata):
-            raise ValueError("runtime metadata cannot report fail-open fallback success")
+            raise ValueError("runtime metadata cannot report fail-open generated fallback")
 
     @classmethod
     def _contains_runtime_formal_write_metadata(cls, value: object) -> bool:

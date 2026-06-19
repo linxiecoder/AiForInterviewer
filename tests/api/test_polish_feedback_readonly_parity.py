@@ -27,7 +27,7 @@ GRAPH_FILE = (
 BUSINESS_GRAPH_ROOT = GRAPH_FILE.parent
 
 
-def test_pr7_readonly_parity_accepts_refs_only() -> None:
+def test_readonly_parity_accepts_refs_only() -> None:
     first = _build_gate()
     second = _build_gate()
 
@@ -36,17 +36,17 @@ def test_pr7_readonly_parity_accepts_refs_only() -> None:
     assert first["parity_gate_version"] == "pr7-readonly-parity"
     assert first["mode"] == "readonly_contract_ref_parity"
     assert first["input_refs"] == {
-        "session_ref": "session_ref_pr7",
-        "question_ref": "question_ref_pr7",
-        "answer_ref": "answer_ref_pr7",
+            "session_ref": "session_ref_readonly",
+            "question_ref": "question_ref_readonly",
+            "answer_ref": "answer_ref_readonly",
         "prior_answer_refs": ["answer_ref_prior_1"],
         "prior_feedback_refs": ["feedback_ref_prior_1"],
-        "rubric_summary_ref": "rubric_summary_ref_pr7",
+            "rubric_summary_ref": "rubric_summary_ref_readonly",
     }
     assert first["diagnostics"] == {
         "contract_parity": "refs_only",
         "semantic_payload_parity": "not_evaluated",
-        "legacy_direct_path_retained": True,
+        "adapter_only": True,
         "legacy_writer_touched": False,
         "provider_path_touched": False,
     }
@@ -63,10 +63,10 @@ def test_pr7_readonly_parity_accepts_refs_only() -> None:
     assert descriptor.provider_enabled is False
     assert descriptor.formal_write_targets == ()
     assert descriptor.db_business_write_targets == ()
-    assert descriptor.disabled_behavior == "legacy_direct_path_retained"
+    assert descriptor.disabled_behavior == "adapter_only_unavailable"
 
 
-def test_pr7_readonly_parity_rejects_raw_question_answer_and_provider_payload() -> None:
+def test_readonly_parity_rejects_raw_question_answer_and_provider_payload() -> None:
     forbidden_inputs = {
         _key("question", "text"): "hidden question body",
         _key("answer", "text"): "hidden answer body",
@@ -89,7 +89,7 @@ def test_pr7_readonly_parity_rejects_raw_question_answer_and_provider_payload() 
             _build_gate(**{forbidden_key: forbidden_value})
 
 
-def test_pr7_readonly_parity_has_zero_provider_formal_and_db_writes() -> None:
+def test_readonly_parity_has_zero_provider_formal_and_db_writes() -> None:
     payload = _build_gate()
 
     assert payload["counters"] == {
@@ -101,7 +101,7 @@ def test_pr7_readonly_parity_has_zero_provider_formal_and_db_writes() -> None:
     assert payload["output_refs"]["candidate_refs"] == []
 
 
-def test_pr7_readonly_parity_does_not_import_polish_application_or_db_repositories() -> None:
+def test_readonly_parity_does_not_import_polish_application_or_db_repositories() -> None:
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
         "local_multi_agent_orchestrator.py",
@@ -114,12 +114,12 @@ def test_pr7_readonly_parity_does_not_import_polish_application_or_db_repositori
     assert violations == []
 
 
-def test_pr7_readonly_parity_rollback_is_flag_only() -> None:
+def test_readonly_parity_rollback_is_flag_only() -> None:
     payload = _build_gate()
 
     assert payload["rollback"] == {
         "flag_only": True,
-        "legacy_direct_path_is_only_writer": True,
+        "adapter_only_no_formal_writer": True,
         "checkpoint_refs_are_business_facts": False,
     }
     assert payload["diagnostics"]["legacy_writer_touched"] is False
@@ -129,17 +129,17 @@ def test_pr7_readonly_parity_rollback_is_flag_only() -> None:
 
 def _build_gate(**extra_inputs: object) -> dict[str, object]:
     return build_polish_feedback_readonly_parity_gate(
-        owner_id="owner_pr7",
-        actor_id="actor_pr7",
-        run_id="run_pr7",
-        ai_task_id="task_pr7",
-        session_ref="session_ref_pr7",
-        question_ref="question_ref_pr7",
-        answer_ref="answer_ref_pr7",
+        owner_id="owner_readonly",
+        actor_id="actor_readonly",
+        run_id="run_readonly",
+        ai_task_id="task_readonly",
+        session_ref="session_ref_readonly",
+        question_ref="question_ref_readonly",
+        answer_ref="answer_ref_readonly",
         prior_answer_refs=("answer_ref_prior_1",),
         prior_feedback_refs=("feedback_ref_prior_1",),
-        rubric_summary_ref="rubric_summary_ref_pr7",
-        idempotency_digest="digest_pr7",
+        rubric_summary_ref="rubric_summary_ref_readonly",
+        idempotency_digest="digest_readonly",
         **extra_inputs,
     )
 

@@ -299,9 +299,7 @@ async def create_polish_question_task(
             actor_id=actor.actor_id,
             generation_mode=QUESTION_GENERATION_MODE_NEW,
             session_id=session_id,
-            selected_progress_node_ref=intent.selected_progress_node_ref,
             exclude_question_refs=tuple(intent.exclude_question_refs),
-            completed_focus_refs=tuple(intent.completed_focus_refs),
         ),
     )
     if not result.is_success:
@@ -530,9 +528,7 @@ async def create_polish_feedback_next_question_task(
             owner_id=actor.owner_id,
             actor_id=actor.actor_id,
             session_id=session_id,
-            selected_progress_node_ref=intent.selected_progress_node_ref,
             exclude_question_refs=tuple(intent.exclude_question_refs),
-            completed_focus_refs=tuple(intent.completed_focus_refs),
             execution_source=QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
             authorized_feedback_id=feedback_id,
         ),
@@ -859,7 +855,6 @@ def _session_answer_payload(answer: object, *, session_id: str, question_id: str
         "score_result_id": getattr(answer, "score_result_id", None),
         "feedback_created_at": getattr(answer, "feedback_created_at", None),
         "feedback_payload": feedback_payload,
-        "next_recommended_actions": list(feedback_payload.get("next_recommended_actions", [])),
         "low_confidence_flags": list(feedback_payload.get("low_confidence_flags", [])),
         "trace_refs": list(feedback_payload.get("trace_refs", [])),
     }
@@ -881,7 +876,6 @@ def _answer_response(answer: PolishAnswer, *, idempotency_key: str | None = None
         "score_result_id": None,
         "feedback_created_at": None,
         "feedback_payload": feedback_payload,
-        "next_recommended_actions": list(feedback_payload.get("next_recommended_actions", [])),
         "low_confidence_flags": list(feedback_payload.get("low_confidence_flags", [])),
         "trace_refs": list(feedback_payload.get("trace_refs", [])),
     }
@@ -912,7 +906,6 @@ def _feedback_response(
             "score_result_id": getattr(answer, "score_result_id", None),
             "score_result": feedback_payload.get("score_result"),
             "feedback_payload": feedback_payload,
-            "next_recommended_actions": list(feedback_payload.get("next_recommended_actions", [])),
             "low_confidence_flags": list(feedback_payload.get("low_confidence_flags", [])),
             "trace_refs": list(feedback_payload.get("trace_refs", [])),
         }

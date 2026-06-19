@@ -66,8 +66,8 @@ def test_old_generated_feedback_payload_remains_display_compatible() -> None:
     assert payload["feedback_payload"]["score_result"]["score_value"] == 76
     assert payload["feedback_payload"]["loss_points"][0]["title"] == "旧失分点"
     assert payload["feedback_payload"]["reference_answer"]["summary"] == "旧参考回答摘要。"
-    assert payload["next_recommended_actions"] == ["continue_same_question"]
-    assert payload["next_recommended_actions"] == payload["feedback_payload"]["next_recommended_actions"]
+    assert "next_recommended_actions" not in payload
+    assert payload["feedback_payload"]["next_recommended_actions"] == ["continue_same_question"]
     assert "feedback_summary" not in payload["feedback_payload"]
     assert "raw_prompt" not in payload["feedback_payload"]
     assert "provider_payload" not in payload["feedback_payload"]
@@ -123,12 +123,13 @@ def test_legacy_feedback_summary_json_renders_as_feedback_text_response() -> Non
     assert detail.feedback_text == "旧 feedback_summary JSON 仍应作为用户可见反馈展示。"
     assert payload["feedback_text"] == "旧 feedback_summary JSON 仍应作为用户可见反馈展示。"
     assert payload["feedback_payload"]["feedback_text"] == payload["feedback_text"]
-    assert payload["next_recommended_actions"] == ["continue_same_question"]
+    assert "next_recommended_actions" not in payload
+    assert payload["feedback_payload"]["next_recommended_actions"] == ["continue_same_question"]
     assert "feedback_summary" not in payload["feedback_payload"]
     _assert_no_grant_client_fields(payload)
 
 
-def test_api_top_level_next_recommended_actions_is_display_mirror_only() -> None:
+def test_api_top_level_next_recommended_actions_mirror_is_removed() -> None:
     answer = SimpleNamespace(
         answer_id="ans_top_level_actions_display",
         answer_round=1,
@@ -145,7 +146,7 @@ def test_api_top_level_next_recommended_actions_is_display_mirror_only() -> None
             "feedback_text": "展示反馈。",
             "next_recommended_actions": ["retry_same_question", "continue_same_question"],
             "feedback_metadata": {
-                "display_owner": "api_response_mirror",
+                "display_owner": "feedback_payload",
                 "authorization_owner": "backend_application_grant",
             },
         },
@@ -157,10 +158,9 @@ def test_api_top_level_next_recommended_actions_is_display_mirror_only() -> None
         question_id=answer.question_id,
     )
 
-    assert payload["next_recommended_actions"] == ["retry_same_question", "continue_same_question"]
-    assert payload["next_recommended_actions"] is not payload["feedback_payload"]["next_recommended_actions"]
-    assert payload["next_recommended_actions"] == payload["feedback_payload"]["next_recommended_actions"]
-    assert payload["feedback_payload"]["feedback_metadata"]["display_owner"] == "api_response_mirror"
+    assert "next_recommended_actions" not in payload
+    assert payload["feedback_payload"]["next_recommended_actions"] == ["retry_same_question", "continue_same_question"]
+    assert payload["feedback_payload"]["feedback_metadata"]["display_owner"] == "feedback_payload"
     _assert_no_grant_client_fields(payload)
 
 

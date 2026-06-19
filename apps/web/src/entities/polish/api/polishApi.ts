@@ -113,13 +113,45 @@ export async function dismissPolishCandidate(candidateId: string): Promise<Polis
   return data;
 }
 
+type PolishQuestionIntentInput = CreatePolishQuestionTaskRequest | Record<string, unknown>;
+type PolishFeedbackNextQuestionIntentInput = CreatePolishFeedbackNextQuestionIntentRequest | Record<string, unknown>;
+
+function normalizeExcludeQuestionRefs(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const refs = value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim())
+    .filter((item, index, list) => list.indexOf(item) === index);
+  return refs.length > 0 ? refs : undefined;
+}
+
+export function buildPolishQuestionTaskIntentPayload(
+  payload: PolishQuestionIntentInput = {},
+): CreatePolishQuestionTaskRequest {
+  const excludeQuestionRefs = normalizeExcludeQuestionRefs(
+    (payload as { exclude_question_refs?: unknown }).exclude_question_refs,
+  );
+  return excludeQuestionRefs === undefined ? {} : { exclude_question_refs: excludeQuestionRefs };
+}
+
+export function buildPolishFeedbackNextQuestionIntentPayload(
+  payload: PolishFeedbackNextQuestionIntentInput = {},
+): CreatePolishFeedbackNextQuestionIntentRequest {
+  const excludeQuestionRefs = normalizeExcludeQuestionRefs(
+    (payload as { exclude_question_refs?: unknown }).exclude_question_refs,
+  );
+  return excludeQuestionRefs === undefined ? {} : { exclude_question_refs: excludeQuestionRefs };
+}
+
 export async function createPolishNodeQuestionTask(
   sessionId: string,
   payload: CreatePolishQuestionTaskRequest = {},
 ): Promise<PolishTaskStatus> {
   const response = await request<PolishTaskStatus>(POLISH_API_PATHS.questionTask(sessionId), {
     method: "POST",
-    body: payload,
+    body: buildPolishQuestionTaskIntentPayload(payload),
   });
   const data = buildSuccessData(response);
   if (data === null) {
@@ -135,7 +167,7 @@ export async function createPolishFeedbackNextQuestionTask(
 ): Promise<PolishTaskStatus> {
   const response = await request<PolishTaskStatus>(POLISH_API_PATHS.feedbackNextQuestionTask(sessionId, feedbackId), {
     method: "POST",
-    body: payload,
+    body: buildPolishFeedbackNextQuestionIntentPayload(payload),
   });
   const data = buildSuccessData(response);
   if (data === null) {

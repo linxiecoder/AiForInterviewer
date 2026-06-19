@@ -8,7 +8,7 @@ from app.application.polish.entities import PolishFeedback, PolishTaskStatus
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.refs import TraceRef
-from app.infrastructure.db.models.ai_task import AiTask
+from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from tests.api.test_polish_api import ACTOR_A, OWNER_A, _session_factory
 
@@ -18,6 +18,7 @@ def test_feedback_task_result_persistence_rolls_back_feedback_when_task_write_fa
     repository = SqlAlchemyPolishRepository(session_factory)
     now = utc_now()
     duplicate_task_id = "task_feedback_atomic_duplicate"
+    duplicate_result_id = f"{duplicate_task_id}_result"
     with session_factory() as db:
         db.add(
             AiTask(
@@ -32,6 +33,24 @@ def test_feedback_task_result_persistence_rolls_back_feedback_when_task_write_fa
                 contract_ids=["P-POLISH-005"],
                 idempotency_record_id=None,
                 target_ref_id="answer_atomicity_001",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.add(
+            AiTaskResult(
+                id=duplicate_result_id,
+                owner_id=OWNER_A,
+                actor_id=ACTOR_A.actor_id,
+                record_version=1,
+                status=str(AiTaskStatus.SUCCEEDED),
+                trace_ref_ids=["feedback_existing"],
+                evidence_ref_ids=None,
+                ai_task_id=duplicate_task_id,
+                result_sequence="0",
+                validation_result_ref_id=None,
+                trace_ref_id="feedback_existing",
+                result_ref_id="feedback_existing",
                 created_at=now,
                 updated_at=now,
             )
@@ -87,5 +106,5 @@ def test_feedback_task_result_persistence_rolls_back_feedback_when_task_write_fa
                 text("select count(*) from ai_task_results where ai_task_id = :task_id"),
                 {"task_id": duplicate_task_id},
             ).scalar_one()
-            == 0
+            == 1
         )

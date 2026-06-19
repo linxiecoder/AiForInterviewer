@@ -157,6 +157,8 @@ import {
 } from "./InterviewPage";
 import {
   POLISH_API_PATHS,
+  buildPolishFeedbackNextQuestionIntentPayload,
+  buildPolishQuestionTaskIntentPayload,
   completePolishQuestion,
   confirmPolishCandidate,
   createPolishNodeQuestionTask,
@@ -175,6 +177,8 @@ import {
 } from "../../entities/polish/api/polishApi";
 import type { JobSummary } from "../../entities/job/model/types";
 import type {
+  CreatePolishFeedbackNextQuestionIntentRequest,
+  CreatePolishQuestionTaskRequest,
   CreatePolishSessionRequest,
   PolishAiTaskResult,
   PolishCandidate,
@@ -701,6 +705,21 @@ type PolishFeedbackNextQuestionPathIsStable = Expect<
 type PolishQuestionTaskPathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.questionTask>, `/polish-sessions/${string}/questions`>
 >;
+type PolishQuestionTaskIntentHasNoExecutionTarget = Expect<
+  Equal<
+    Extract<keyof CreatePolishQuestionTaskRequest, "selected_progress_node_ref" | "completed_focus_refs">,
+    never
+  >
+>;
+type PolishFeedbackNextQuestionIntentHasNoExecutionTarget = Expect<
+  Equal<
+    Extract<keyof CreatePolishFeedbackNextQuestionIntentRequest, "selected_progress_node_ref" | "completed_focus_refs">,
+    never
+  >
+>;
+type PolishSessionAnswerHasNoTopLevelNextActions = Expect<
+  Equal<"next_recommended_actions" extends keyof PolishSessionAnswer ? true : false, false>
+>;
 type PolishQuestionCompletePathIsStable = Expect<
   Equal<ReturnType<typeof POLISH_API_PATHS.completeQuestion>, `/polish-sessions/${string}/questions/${string}/complete`>
 >;
@@ -934,6 +953,26 @@ function assertContract(condition: boolean, message: string): void {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function test_polish_question_generation_request_payload_is_intent_only(): void {
+  const questionPayload = buildPolishQuestionTaskIntentPayload({
+    exclude_question_refs: [" q_existing ", "q_existing", ""],
+    selected_progress_node_ref: "progress_node_from_ui",
+    completed_focus_refs: ["focus_from_ui"],
+  });
+  const feedbackPayload = buildPolishFeedbackNextQuestionIntentPayload({
+    selected_progress_node_ref: "progress_node_from_ui",
+    completed_focus_refs: ["focus_from_ui"],
+  });
+
+  assertContract(
+    JSON.stringify(questionPayload) === JSON.stringify({ exclude_question_refs: ["q_existing"] }),
+    "普通出题请求 payload 只能保留 intent-only 字段",
+  );
+  assertContract(!("selected_progress_node_ref" in questionPayload), "普通出题请求不得携带 UI execution target");
+  assertContract(!("completed_focus_refs" in questionPayload), "普通出题请求不得携带 UI focus refs");
+  assertContract(Object.keys(feedbackPayload).length === 0, "feedback 下一题请求不得从 UI payload 携带 execution target");
 }
 
 function test_interview_list_toolbar_uses_shared_actions_and_search(): void {
@@ -4413,6 +4452,7 @@ test_question_node_clipboard_includes_full_question_answer_and_feedback();
 test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
 test_answer_submission_idempotency_key_reuses_current_draft();
+test_polish_question_generation_request_payload_is_intent_only();
 test_workbench_next_actions_render_in_fixed_composer_bar();
 test_workbench_next_action_recommendations_are_display_only();
 test_workbench_candidate_actions_render_in_fixed_composer_bar();

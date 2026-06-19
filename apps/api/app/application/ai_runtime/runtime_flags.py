@@ -16,7 +16,7 @@ class RuntimeFlagDecision:
     enabled: bool
     source: str
     audit_summary: dict[str, Any] = field(default_factory=dict)
-    rollback_behavior: str = "disabled_fail_closed_or_legacy_direct_path"
+    rollback_behavior: str = "disabled_fail_closed_or_adapter_only"
 
 
 class RuntimeFlagResolver:

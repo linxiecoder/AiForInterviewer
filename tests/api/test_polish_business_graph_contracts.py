@@ -15,7 +15,7 @@ from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
 from app.infrastructure.ai_runtime.langgraph.serializer import LangGraphRuntimeSerializer
 
 
-def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
+def test_registers_default_off_polish_business_graph_descriptors() -> None:
     from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
         POLISH_FEEDBACK_GRAPH_FLAG,
         POLISH_FEEDBACK_GRAPH_NAME,
@@ -31,17 +31,17 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
     )
 
     registry = AgentGraphRegistry.default()
-    pr5_descriptors = {
+    feedback_skeleton_descriptors = {
         descriptor.graph_name: descriptor
         for descriptor in registry.list_graph_descriptors()
         if descriptor.implementation_pr == "PR5"
     }
 
-    assert pr5_descriptors == {
+    assert feedback_skeleton_descriptors == {
         POLISH_FEEDBACK_GRAPH_NAME: build_polish_feedback_graph_descriptor(),
     }
 
-    feedback_descriptor = pr5_descriptors[POLISH_FEEDBACK_GRAPH_NAME]
+    feedback_descriptor = feedback_skeleton_descriptors[POLISH_FEEDBACK_GRAPH_NAME]
     assert feedback_descriptor.graph_name == POLISH_FEEDBACK_GRAPH_NAME == "polish_feedback_graph"
     assert feedback_descriptor.graph_version == POLISH_FEEDBACK_GRAPH_VERSION == "pr5-skeleton"
     assert (
@@ -49,12 +49,12 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
         == POLISH_FEEDBACK_GRAPH_FLAG
         == "AIFI_GRAPH_POLISH_FEEDBACK_ENABLED"
     )
-    _assert_pr5_descriptor_is_default_off_refs_only(feedback_descriptor)
+    _assert_descriptor_is_default_off_refs_only(feedback_descriptor)
     assert feedback_descriptor.lifecycle_status == "placeholder"
-    assert feedback_descriptor.migration_status == "skeleton_default_off_direct_path_retained"
+    assert feedback_descriptor.migration_status == "skeleton_default_off_adapter_only"
     assert feedback_descriptor.runtime_side_effect_policy == "candidate_write"
     assert "formal_write_requested" in feedback_descriptor.runtime_stop_conditions
-    assert feedback_descriptor.disabled_behavior == "legacy_direct_path_retained"
+    assert feedback_descriptor.disabled_behavior == "adapter_only_unavailable"
 
     question_descriptor = registry.get_graph_descriptor(POLISH_QUESTION_GRAPH_NAME)
     assert question_descriptor.graph_name == POLISH_QUESTION_GRAPH_NAME == "polish_question_graph"
@@ -65,12 +65,12 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
         == "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
     )
     assert question_descriptor == build_polish_question_graph_descriptor()
-    _assert_pr5_descriptor_is_default_off_refs_only(question_descriptor)
+    _assert_descriptor_is_default_off_refs_only(question_descriptor)
     assert question_descriptor.lifecycle_status == "active"
-    assert question_descriptor.migration_status == "agent_orchestration_with_deterministic_fallback"
+    assert question_descriptor.migration_status == "agent_orchestration_adapter_only"
     assert question_descriptor.runtime_side_effect_policy == "candidate_write"
     assert "formal_write_requested" in question_descriptor.runtime_stop_conditions
-    assert question_descriptor.disabled_behavior == "deterministic_fallback_with_reason"
+    assert question_descriptor.disabled_behavior == "adapter_only_unavailable"
 
     flag_decision = RuntimeFlagResolver().resolve_graph_flag(
         feedback_descriptor,
@@ -84,7 +84,7 @@ def test_pr5_registers_default_off_polish_business_graph_descriptors() -> None:
         run_polish_feedback_skeleton(context=_context(), command=_context().command)
 
 
-def test_pr5_polish_feedback_skeleton_is_deterministic_refs_only_and_sanitized() -> None:
+def test_polish_feedback_skeleton_returns_unavailable_safe_response() -> None:
     from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
         POLISH_FEEDBACK_GRAPH_FLAG,
         run_polish_feedback_skeleton,
@@ -96,7 +96,7 @@ def test_pr5_polish_feedback_skeleton_is_deterministic_refs_only_and_sanitized()
             entrypoint="start",
             input_refs=("session_ref_1", "question_ref_1", "answer_ref_1"),
             requested_outputs=("result_refs", "candidate_refs", "suggestion_refs"),
-            idempotency_key="idem_pr5",
+            idempotency_key="idem_feedback_skeleton",
             metadata={
                 "safe_context_ref": "ctx_ref_1",
                 "raw_prompt": "hidden",
@@ -110,10 +110,8 @@ def test_pr5_polish_feedback_skeleton_is_deterministic_refs_only_and_sanitized()
     second = run_polish_feedback_skeleton(context=context, command=context.command, flag_resolver=resolver)
 
     assert first == second
-    assert len(first.output_refs) == 3
-    assert first.output_refs[0].startswith("result_ref_")
-    assert first.output_refs[1].startswith("candidate_ref_")
-    assert first.output_refs[2].startswith("suggestion_ref_")
+    assert first.status == "blocked"
+    assert first.output_refs == ()
     assert len(first.trace_refs) == 1
     assert first.trace_refs[0].startswith("ackpt_")
     assert first.interrupt_refs == ()
@@ -123,6 +121,12 @@ def test_pr5_polish_feedback_skeleton_is_deterministic_refs_only_and_sanitized()
     assert first.metadata["db_business_writes"] == 0
     assert first.metadata["checkpoint_refs_only"] is True
     assert first.metadata["checkpoint_refs_are_business_facts"] is False
+    assert first.metadata["adapter_only_unavailable_when_disabled"] is True
+    assert first.metadata["temporary_exception"] == "phase5_skeleton_entrypoint_retained_for_contract_tests"
+    assert first.metadata["blocking_condition"]
+    assert first.metadata["delete_condition"]
+    assert first.metadata["cleanup_task"]
+    assert first.metadata["unavailable_response"] is True
     assert first.metadata["sanitized"] is True
 
     serialized = LangGraphRuntimeSerializer().serialize_run_result(first)
@@ -133,7 +137,7 @@ def test_pr5_polish_feedback_skeleton_is_deterministic_refs_only_and_sanitized()
     assert "sk-demo" not in repr(serialized)
 
 
-def test_pr5_polish_feedback_replay_is_read_only_and_has_no_writes_to_undo() -> None:
+def test_polish_feedback_replay_is_read_only_and_has_no_writes_to_undo() -> None:
     from app.application.ai_runtime.business_graphs.polish_feedback_graph import replay_polish_feedback_skeleton
 
     replay = replay_polish_feedback_skeleton(context=_context(), checkpoint_ref="ackpt_2e136a52112155ae")
@@ -151,20 +155,20 @@ def _context(command: AgentCommandEnvelope | None = None) -> AgentRunContext:
         entrypoint="start",
         input_refs=("session_ref_1", "question_ref_1", "answer_ref_1"),
         requested_outputs=("result_refs",),
-        idempotency_key="idem_pr5",
+        idempotency_key="idem_feedback_skeleton",
     )
     return AgentRunContext(
         owner_id="owner_1",
         actor_id="actor_1",
-        run_id="arun_pr5",
-        ai_task_id="aitask_pr5",
+        run_id="arun_feedback_skeleton",
+        ai_task_id="aitask_feedback_skeleton",
         graph_name="polish_feedback_graph",
         graph_version="pr5-skeleton",
         command=command,
     )
 
 
-def _assert_pr5_descriptor_is_default_off_refs_only(descriptor: object) -> None:
+def _assert_descriptor_is_default_off_refs_only(descriptor: object) -> None:
     assert descriptor.default_enabled is False
     assert descriptor.provider_enabled is False
     assert descriptor.formal_write_targets == ()

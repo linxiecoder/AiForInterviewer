@@ -13,6 +13,11 @@ from app.application.common.result import ApplicationResult
 from app.application.polish.agents.feedback import build_feedback_planned_handoff
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
 from app.application.polish.context_hygiene import normalize_context_hygiene_metadata
+from app.application.polish.execution_flow import (
+    FeedbackExecutionHandler,
+    feedback_execution_flow_metadata,
+    feedback_payload_with_execution_flow,
+)
 from app.application.polish.entities import (
     PolishFeedback,
     PolishQuestionSource,
@@ -249,7 +254,14 @@ def _complete_feedback_generation(
     generation_started_at: float,
 ) -> ApplicationResult[PolishTaskStatus]:
     now = utc_now()
-    generation_result = operations._feedback_generation_service.generate_feedback_v1(generation_context)
+    execution_flow = feedback_execution_flow_metadata(
+        owner_id=owner_id,
+        session_id=session_id,
+        answer_id=answer_id,
+        task_id=task_id,
+    )
+    generation_result = FeedbackExecutionHandler(operations._feedback_generation_service).generate(generation_context)
+    generation_metadata = dict(generation_result.metadata) | {"execution_flow": execution_flow}
     if not generation_result.succeeded or generation_result.payload is None:
         failed_payload = _failed_feedback_payload_for_storage(
             session_id=session_id,
@@ -257,7 +269,7 @@ def _complete_feedback_generation(
             answer_id=answer_id,
             feedback_id=feedback_id,
             validation_errors=generation_result.validation_errors,
-            metadata=generation_result.metadata,
+            metadata=generation_metadata,
         )
         task = PolishTaskStatus(
             ai_task_id=task_id,
@@ -282,7 +294,7 @@ def _complete_feedback_generation(
             created_at=now,
             updated_at=now,
         )
-        generation_log_fields = _feedback_generation_log_fields(generation_result.metadata)
+        generation_log_fields = _feedback_generation_log_fields(generation_metadata)
         LogUtil.feedback_generation_failed(
             session_id=session_id,
             question_id=question_id,
@@ -312,6 +324,7 @@ def _complete_feedback_generation(
         answer_id=answer_id,
         feedback_id=feedback_id,
     )
+    payload = feedback_payload_with_execution_flow(payload, execution_flow=execution_flow)
     planned_feedback_handoff = build_feedback_planned_handoff(
         payload=payload,
         generation_result=generation_result,
@@ -352,7 +365,7 @@ def _complete_feedback_generation(
         target_ref_id=target_ref_id,
         idempotency_record_id=idempotency_record_id,
     )
-    generation_log_fields = _feedback_generation_log_fields(generation_result.metadata)
+    generation_log_fields = _feedback_generation_log_fields(generation_metadata)
     LogUtil.feedback_generation_succeeded(
         session_id=session_id,
         question_id=question_id,
@@ -497,13 +510,7 @@ def _persist_feedback_running_task(
             idempotency_record_id=idempotency_record_id,
         )
         return ApplicationResult(value=task)
-    add_task = getattr(repository, "add_task", None)
-    if callable(add_task):
-        add_task(task, owner_id=owner_id, actor_id=actor_id, target_ref_id=target_ref_id)
-        return ApplicationResult(value=task)
-    return ApplicationResult(
-        error=DomainError(code="generation_failed", message="Feedback task repository is unavailable", retryable=True)
-    )
+    return ApplicationResult(value=task)
 
 
 def _build_feedback_generation_context(
@@ -642,6 +649,7 @@ def _failed_feedback_payload_for_storage(
         "schema_id",
         "schema_version",
         "provider_error_type",
+        "execution_flow",
     ):
         if field_name in source_metadata:
             feedback_metadata[field_name] = source_metadata[field_name]

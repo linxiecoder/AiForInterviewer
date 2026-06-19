@@ -9,6 +9,7 @@ from time import perf_counter
 from fastapi import FastAPI
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import text
 
 import app.api.v1.polish as polish_api
@@ -62,6 +63,8 @@ from app.infrastructure.llm.errors import LlmTransportResponseError
 from tests.fakes.llm_transport import FakeLlmTransport
 from app.main import create_app
 from app.schemas.polish import (
+    CreateFeedbackNextQuestionIntentRequest,
+    CreateQuestionTaskRequest,
     PolishContextHygieneMetadataResponse,
     PolishFeedbackPayload,
     PolishSessionAnswerResponse,
@@ -163,6 +166,19 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
     assert payload["feedback_text"] == "legacy feedback text"
     assert "retired_extra_payload" not in payload
     assert "candidate_refs" not in payload
+
+
+def test_question_intent_request_schemas_forbid_execution_target_fields() -> None:
+    for request_model in (CreateQuestionTaskRequest, CreateFeedbackNextQuestionIntentRequest):
+        assert "selected_progress_node_ref" not in request_model.model_fields
+        assert "completed_focus_refs" not in request_model.model_fields
+        assert request_model.model_validate({"exclude_question_refs": ["question_ref_1"]}).exclude_question_refs == [
+            "question_ref_1"
+        ]
+        with pytest.raises(ValidationError):
+            request_model.model_validate({"selected_progress_node_ref": "progress_node_ui"})
+        with pytest.raises(ValidationError):
+            request_model.model_validate({"completed_focus_refs": ["focus_ui"]})
 
 
 def test_polish_g001_response_schema_declares_optional_contract_fields() -> None:
@@ -3696,7 +3712,7 @@ def test_progress_tree_refresh_no_longer_refreshes_grounded_plan_v2_as_active_sc
     assert result["progress_tree_state"]["failure_reason"] == "llm_transport_missing"
 
 
-def test_polish_question_task_generates_for_selected_progress_node() -> None:
+def test_polish_question_task_generates_for_backend_current_priority() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
     app = _isolated_polish_app(
@@ -3714,7 +3730,7 @@ def test_polish_question_task_generates_for_selected_progress_node() -> None:
         app,
         f"/api/v1/polish-sessions/{session_id}/questions",
         "POST",
-        json_body={"selected_progress_node_ref": progress_node_ref},
+        json_body={},
     )
 
     assert status_code == 202, body.get("error", {}).get("details", body)
@@ -3726,8 +3742,7 @@ def test_polish_question_task_generates_for_selected_progress_node() -> None:
     assert turns[question_id]["progress_node_ref"] == progress_node_ref
     metadata = turns[question_id]["question_metadata"]
     assert metadata["generation_mode"] == "new_question"
-    assert metadata["request_source"] == "explicit_selected_category"
-    assert metadata["selected_progress_node_ref"] == progress_node_ref
+    assert metadata["request_source"] == "backend_current_priority"
 
 
 def test_polish_feedback_next_question_intent_authorizes_latest_feedback() -> None:
@@ -3926,9 +3941,9 @@ def test_polish_feedback_next_question_intent_rejects_target_node_mismatch() -> 
     )
 
     assert status_code == 422
-    assert body["error"]["code"] == "validation_failed"
-    assert body["error"]["details"]["reason"] == "target_node_not_found"
-    assert body["error"]["details"]["field"] == "selected_progress_node_ref"
+    serialized_body = json.dumps(body, ensure_ascii=False, sort_keys=True)
+    assert "selected_progress_node_ref" in serialized_body
+    assert "extra_forbidden" in serialized_body
 
 
 def test_polish_end_session_rejects_answer_submission() -> None:

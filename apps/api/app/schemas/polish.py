@@ -238,11 +238,11 @@ class PolishSessionSummaryResponse(BaseModel):
 QUESTION_REF_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_:\-.]{0,127}$"
 _QUESTION_REF_RE = re.compile(QUESTION_REF_PATTERN)
 class CreateFeedbackNextQuestionIntentRequest(BaseModel):
-    selected_progress_node_ref: str | None = Field(default=None, min_length=1, max_length=128, pattern=QUESTION_REF_PATTERN)
-    exclude_question_refs: list[str] = Field(default_factory=list, max_length=20)
-    completed_focus_refs: list[str] = Field(default_factory=list, max_length=20)
+    model_config = ConfigDict(extra="forbid")
 
-    @field_validator("exclude_question_refs", "completed_focus_refs")
+    exclude_question_refs: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("exclude_question_refs")
     @classmethod
     def _validate_ref_list(cls, value: list[str]) -> list[str]:
         for item in value:
@@ -342,7 +342,6 @@ class PolishSessionAnswerResponse(BaseModel):
     score_result_id: str | None = None
     feedback_created_at: datetime | None = None
     feedback_payload: PolishFeedbackPayload | None = None
-    next_recommended_actions: list[str] = Field(default_factory=list)
     low_confidence_flags: list[dict[str, Any]] = Field(default_factory=list)
     trace_refs: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -397,6 +396,5 @@ class PolishTaskStatusResponse(BaseModel):
     score_result_id: str | None = None
     score_result: dict[str, Any] | None = None
     feedback_payload: PolishFeedbackPayload | None = None
-    next_recommended_actions: list[str] = Field(default_factory=list)
     low_confidence_flags: list[dict[str, Any]] = Field(default_factory=list)
     trace_refs: list[dict[str, Any]] = Field(default_factory=list)

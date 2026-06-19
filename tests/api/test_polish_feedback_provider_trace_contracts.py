@@ -46,14 +46,14 @@ TRANSPORT_FILE = (
 )
 BUSINESS_GRAPH_ROOT = GRAPH_FILE.parent
 
-OWNER_ID = "owner_ref_pr8"
-ACTOR_ID = "actor_ref_pr8"
-AI_TASK_ID = "aitask_ref_pr8"
-AGENT_RUN_ID = "arun_ref_pr8"
-AGENT_NODE_RUN_ID = "anode_ref_pr8"
+OWNER_ID = "owner_ref_provider_trace"
+ACTOR_ID = "actor_ref_provider_trace"
+AI_TASK_ID = "aitask_ref_provider_trace"
+AGENT_RUN_ID = "arun_ref_provider_trace"
+AGENT_NODE_RUN_ID = "anode_ref_provider_trace"
 
 
-def test_pr8_sanitized_trace_request_persists_failed_llm_call_refs_only(monkeypatch) -> None:
+def test_sanitized_trace_request_persists_failed_llm_call_refs_only(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     session_factory = _session_factory()
     transport = FailClosedPersistedLlmTransport(
@@ -93,7 +93,7 @@ def test_pr8_sanitized_trace_request_persists_failed_llm_call_refs_only(monkeypa
         assert hidden_value not in public_repr
 
 
-def test_pr8_provider_invoked_false_when_provider_disabled(monkeypatch) -> None:
+def test_provider_invoked_false_when_provider_disabled(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     session_factory = _session_factory()
 
@@ -116,7 +116,7 @@ def test_pr8_provider_invoked_false_when_provider_disabled(monkeypatch) -> None:
     assert enabled_call["fallback_reason"] == "provider_unavailable_fail_closed"
 
 
-def test_pr8_provider_gate_default_false_before_invocation(monkeypatch) -> None:
+def test_provider_gate_default_false_before_invocation(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     decision = RuntimeFlagResolver().is_real_provider_enabled(actor_id=ACTOR_ID)
 
@@ -124,7 +124,7 @@ def test_pr8_provider_gate_default_false_before_invocation(monkeypatch) -> None:
     assert decision.source == "hardcoded_default"
 
 
-def test_pr8_llm_call_row_is_planned_or_failed_only(monkeypatch) -> None:
+def test_llm_call_row_is_planned_or_failed_only(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     planned_factory = _session_factory()
     planned_transport = FailClosedPersistedLlmTransport(
@@ -151,7 +151,7 @@ def test_pr8_llm_call_row_is_planned_or_failed_only(monkeypatch) -> None:
     assert statuses == {"failed"}
 
 
-def test_pr8_no_feedback_task_candidate_or_formal_writes(monkeypatch) -> None:
+def test_provider_trace_gate_has_no_feedback_task_candidate_or_formal_writes(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     session_factory = _session_factory()
 
@@ -163,7 +163,7 @@ def test_pr8_no_feedback_task_candidate_or_formal_writes(monkeypatch) -> None:
         assert _table_count(session_factory, table_name) == 0
 
 
-def test_pr8_no_application_polish_imports() -> None:
+def test_provider_trace_gate_has_no_application_polish_imports() -> None:
     assert sorted(path.name for path in BUSINESS_GRAPH_ROOT.glob("*.py")) == [
         "__init__.py",
         "local_multi_agent_orchestrator.py",
@@ -176,7 +176,7 @@ def test_pr8_no_application_polish_imports() -> None:
     assert violations == []
 
 
-def test_pr8_rollback_leaves_no_business_facts(monkeypatch) -> None:
+def test_provider_trace_gate_rollback_leaves_no_business_facts(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     session_factory = _session_factory()
 
@@ -189,12 +189,12 @@ def test_pr8_rollback_leaves_no_business_facts(monkeypatch) -> None:
 
     descriptor = build_polish_feedback_graph_descriptor()
     assert descriptor.rollback_safe is True
-    assert descriptor.disabled_behavior == "legacy_direct_path_retained"
+    assert descriptor.disabled_behavior == "adapter_only_unavailable"
     assert descriptor.formal_write_targets == ()
     assert descriptor.db_business_write_targets == ()
 
 
-def test_pr8_graph_descriptor_remains_default_off_provider_off() -> None:
+def test_graph_descriptor_remains_default_off_provider_off() -> None:
     descriptor = build_polish_feedback_graph_descriptor()
 
     assert descriptor.graph_name == POLISH_FEEDBACK_GRAPH_NAME == "polish_feedback_graph"
@@ -202,17 +202,17 @@ def test_pr8_graph_descriptor_remains_default_off_provider_off() -> None:
     assert descriptor.provider_enabled is False
     assert descriptor.formal_write_targets == ()
     assert descriptor.db_business_write_targets == ()
-    assert descriptor.disabled_behavior == "legacy_direct_path_retained"
+    assert descriptor.disabled_behavior == "adapter_only_unavailable"
 
 
-def test_pr8_trace_gate_requires_registered_runtime_tool(monkeypatch) -> None:
+def test_trace_gate_requires_registered_runtime_tool(monkeypatch) -> None:
     monkeypatch.setattr(polish_feedback_graph, "POLISH_FEEDBACK_TRACE_GATE_NODE_NAME", "unregistered_trace_gate")
 
     with pytest.raises(RuntimePolicyError, match="tool_not_allowed"):
         polish_feedback_graph.build_polish_feedback_trace_request(**_request_kwargs())
 
 
-def test_pr8_trace_gate_rejects_runtime_loop_policy_caller_mismatch(monkeypatch) -> None:
+def test_trace_gate_rejects_runtime_loop_policy_caller_mismatch(monkeypatch) -> None:
     monkeypatch.setattr(
         polish_feedback_graph,
         "_runtime_loop_policy",
@@ -223,7 +223,7 @@ def test_pr8_trace_gate_rejects_runtime_loop_policy_caller_mismatch(monkeypatch)
         build_polish_feedback_trace_request(**_request_kwargs())
 
 
-def test_pr8_trace_gate_rejects_runtime_loop_policy_side_effect_mismatch(monkeypatch) -> None:
+def test_trace_gate_rejects_runtime_loop_policy_side_effect_mismatch(monkeypatch) -> None:
     monkeypatch.setattr(
         polish_feedback_graph,
         "_runtime_loop_policy",
@@ -234,21 +234,21 @@ def test_pr8_trace_gate_rejects_runtime_loop_policy_side_effect_mismatch(monkeyp
         build_polish_feedback_trace_request(**_request_kwargs())
 
 
-def test_pr8_trace_gate_rejects_runtime_permission_scope_mismatch(monkeypatch) -> None:
+def test_trace_gate_rejects_runtime_permission_scope_mismatch(monkeypatch) -> None:
     monkeypatch.setattr(polish_feedback_graph, "_RUNTIME_TOOL_PERMISSION_SCOPE", "runtime:other", raising=False)
 
     with pytest.raises(RuntimePolicyError, match="permission_scope mismatch"):
         build_polish_feedback_trace_request(**_request_kwargs())
 
 
-def test_pr8_trace_gate_rejects_runtime_owner_scope_mismatch(monkeypatch) -> None:
+def test_trace_gate_rejects_runtime_owner_scope_mismatch(monkeypatch) -> None:
     monkeypatch.setattr(polish_feedback_graph, "_RUNTIME_TOOL_OWNER_SCOPE", "other_owner_scope", raising=False)
 
     with pytest.raises(RuntimePolicyError, match="owner_scope mismatch"):
         build_polish_feedback_trace_request(**_request_kwargs())
 
 
-def test_pr8_trace_gate_rejects_tool_declared_forbidden_data(monkeypatch) -> None:
+def test_trace_gate_rejects_tool_declared_forbidden_data(monkeypatch) -> None:
     tool = polish_feedback_graph._runtime_tool_definition(polish_feedback_graph.POLISH_FEEDBACK_TRACE_GATE_NODE_NAME)
     blocked_tool = replace(
         tool,
@@ -260,7 +260,7 @@ def test_pr8_trace_gate_rejects_tool_declared_forbidden_data(monkeypatch) -> Non
         build_polish_feedback_trace_request(**_request_kwargs())
 
 
-def _test_pr8_raw_inputs_rejected() -> None:
+def _test_raw_inputs_rejected() -> None:
     forbidden_inputs = {
         _key("question", "text"): "hidden question body",
         _key("answer", "text"): "hidden answer body",
@@ -295,7 +295,7 @@ def _test_pr8_raw_inputs_rejected() -> None:
         )
 
 
-def _test_pr8_no_provider_sdk_import_or_key_dependency(monkeypatch) -> None:
+def _test_no_provider_sdk_import_or_key_dependency(monkeypatch) -> None:
     monkeypatch.delenv("AIFI_REAL_PROVIDER_ENABLED", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -310,11 +310,11 @@ def _test_pr8_no_provider_sdk_import_or_key_dependency(monkeypatch) -> None:
     assert _only_llm_call(session_factory)["error_summary_json"]["provider_invoked"] is False
 
 
-globals()["test_pr8_raw_question_answer_prompt_completion_provider" + "_payload_rejected"] = (
-    _test_pr8_raw_inputs_rejected
+globals()["test_raw_question_answer_prompt_completion_provider" + "_payload_rejected"] = (
+    _test_raw_inputs_rejected
 )
-globals()["test_pr8_no_provider_sdk_import_or_api" + "_key_dependency"] = (
-    _test_pr8_no_provider_sdk_import_or_key_dependency
+globals()["test_no_provider_sdk_import_or_api" + "_key_dependency"] = (
+    _test_no_provider_sdk_import_or_key_dependency
 )
 
 
@@ -336,19 +336,19 @@ def _request_kwargs(**overrides: Any) -> dict[str, Any]:
         "ai_task_id": AI_TASK_ID,
         "agent_run_id": AGENT_RUN_ID,
         "agent_node_run_id": AGENT_NODE_RUN_ID,
-        "session_ref": "session_ref_pr8",
-        "question_ref": "question_ref_pr8",
-        "answer_ref": "answer_ref_pr8",
-        "prior_answer_refs": ("answer_ref_prior_pr8",),
-        "prior_feedback_refs": ("feedback_ref_prior_pr8",),
-        "rubric_summary_ref": "rubric_summary_ref_pr8",
+        "session_ref": "session_ref_provider_trace",
+        "question_ref": "question_ref_provider_trace",
+        "answer_ref": "answer_ref_provider_trace",
+        "prior_answer_refs": ("answer_ref_prior_provider_trace",),
+        "prior_feedback_refs": ("feedback_ref_prior_provider_trace",),
+        "rubric_summary_ref": "rubric_summary_ref_provider_trace",
         "idempotency_digest": "sha256:" + "1" * 64,
         "question_digest": "sha256:" + "2" * 64,
         "answer_digest": "sha256:" + "3" * 64,
-        "evidence_ref_ids": ("evidence_ref_pr8",),
-        "validation_ref_ids": ("validation_ref_pr8",),
-        "low_confidence_ref_ids": ("low_confidence_ref_pr8",),
-        "parity_result_ref": "parity_result_ref_pr8",
+        "evidence_ref_ids": ("evidence_ref_provider_trace",),
+        "validation_ref_ids": ("validation_ref_provider_trace",),
+        "low_confidence_ref_ids": ("low_confidence_ref_provider_trace",),
+        "parity_result_ref": "parity_result_ref_provider_trace",
     }
     kwargs.update(overrides)
     return kwargs

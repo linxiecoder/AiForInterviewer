@@ -181,12 +181,12 @@ def build_polish_feedback_graph_descriptor() -> "GraphDescriptor":
         health_summary_refs=("health.polish_feedback.pr5_skeleton",),
         config_schema_ref="graph_config.polish_feedback.pr5_skeleton",
         implementation_pr="PR5",
-        migration_status="skeleton_default_off_direct_path_retained",
+        migration_status="skeleton_default_off_adapter_only",
         provider_enabled=False,
         formal_write_targets=(),
         db_business_write_targets=(),
         rollback_safe=True,
-        disabled_behavior="legacy_direct_path_retained",
+        disabled_behavior="adapter_only_unavailable",
     )
 
 
@@ -274,7 +274,6 @@ def run_polish_feedback_skeleton(
     if not decision.enabled:
         raise GraphDisabledError(f"graph disabled: {descriptor.graph_name}")
 
-    output_refs, interrupt_refs = _build_output_refs(context=context, command=command)
     checkpoint_ref = "ackpt_" + _stable_id(context.owner_id, context.run_id, "checkpoint")
     metadata = {
         "graph_name": descriptor.graph_name,
@@ -287,7 +286,12 @@ def run_polish_feedback_skeleton(
         "checkpoint_refs_only": True,
         "checkpoint_refs_are_business_facts": False,
         "rollback_safe": True,
-        "legacy_direct_path_retained_when_disabled": True,
+        "adapter_only_unavailable_when_disabled": True,
+        "temporary_exception": "phase5_skeleton_entrypoint_retained_for_contract_tests",
+        "blocking_condition": "skeleton entrypoint is not an execution target",
+        "delete_condition": "replace with real graph runtime entrypoint before product enablement",
+        "cleanup_task": "record active BACKLOG cleanup task before enabling formal graph runtime",
+        "unavailable_response": True,
         "sanitized": True,
         "input_refs": command.input_refs,
         "requested_outputs": command.requested_outputs,
@@ -295,10 +299,10 @@ def run_polish_feedback_skeleton(
     }
     return AgentRunResult(
         run_id=context.run_id,
-        status="skeleton_succeeded",
-        output_refs=output_refs,
+        status="blocked",
+        output_refs=(),
         trace_refs=(checkpoint_ref,),
-        interrupt_refs=interrupt_refs,
+        interrupt_refs=(),
         formal_refs=(),
         metadata=sanitize_payload(metadata),
     )
@@ -358,7 +362,7 @@ def build_polish_feedback_fake_runtime_payload(
         },
         "rollback": {
             "checkpoint_refs_are_business_facts": False,
-            "legacy_direct_path_retained_when_disabled": True,
+            "adapter_only_when_disabled": True,
         },
     }
     return sanitize_payload(payload)
@@ -414,7 +418,7 @@ def build_polish_feedback_readonly_parity_gate(
         "diagnostics": {
             "contract_parity": "refs_only",
             "semantic_payload_parity": "not_evaluated",
-            "legacy_direct_path_retained": True,
+            "adapter_only": True,
             "legacy_writer_touched": False,
             "provider_path_touched": False,
         },
@@ -430,7 +434,7 @@ def build_polish_feedback_readonly_parity_gate(
         },
         "rollback": {
             "flag_only": True,
-            "legacy_direct_path_is_only_writer": True,
+            "adapter_only_no_formal_writer": True,
             "checkpoint_refs_are_business_facts": False,
         },
     }

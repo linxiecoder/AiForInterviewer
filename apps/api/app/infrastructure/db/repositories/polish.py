@@ -11,17 +11,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ai_runtime.contracts import RuntimeConflictError
-from app.application.polish.entities import (
+from app.application.polish.ports import (
     PolishAnswer,
     PolishFeedback,
     PolishQuestion,
     PolishQuestionSource,
+    PolishRepository,
     PolishSession,
     PolishSessionReportSummary,
+    PolishSessionVersionConflictError,
     PolishTaskStatus,
 )
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_TASK_TYPE
-from app.application.polish.ports import PolishRepository, PolishSessionVersionConflictError
 from app.application.polish.question_metadata import (
     empty_question_metadata,
     normalize_question_metadata,

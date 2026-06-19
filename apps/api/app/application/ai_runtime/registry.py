@@ -39,7 +39,7 @@ class GraphDescriptor:
     formal_write_targets: tuple[str, ...] = field(default_factory=tuple)
     db_business_write_targets: tuple[str, ...] = field(default_factory=tuple)
     rollback_safe: bool = True
-    disabled_behavior: str = "legacy_direct_path_retained"
+    disabled_behavior: str = "adapter_only_unavailable"
 
     def __post_init__(self) -> None:
         allowed_lifecycle = frozenset({"active", "disabled", "planned", "placeholder", "deferred"})

@@ -49,7 +49,7 @@ SESSION_ID = "ses_pr5_q2"
 NODE_REF = "progress_node_payment_consistency"
 
 
-def test_create_question_task_uses_direct_service_when_facade_absent() -> None:
+def test_create_question_task_uses_bounded_planned_workflow_when_facade_absent() -> None:
     use_cases, repository = _use_cases(ai_orchestration_facade=None)
 
     result = use_cases.create_question_task(_command())
@@ -96,7 +96,7 @@ def test_create_question_task_invokes_question_planned_workflow(monkeypatch: Any
     )
 
 
-def test_create_question_task_uses_direct_service_when_graph_disabled() -> None:
+def test_create_question_task_uses_bounded_planned_workflow_when_graph_disabled() -> None:
     facade = _FakeQuestionFacade(error=GraphDisabledError("disabled"))
     use_cases, repository = _use_cases(ai_orchestration_facade=facade)
 

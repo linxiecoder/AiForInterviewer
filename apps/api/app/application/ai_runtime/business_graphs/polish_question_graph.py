@@ -199,12 +199,12 @@ def build_polish_question_graph_descriptor() -> "GraphDescriptor":
         health_summary_refs=("health.polish_question.agent_orchestration",),
         config_schema_ref="graph_config.polish_question.agent_orchestration",
         implementation_pr="Goal0526",
-        migration_status="agent_orchestration_with_deterministic_fallback",
+        migration_status="agent_orchestration_adapter_only",
         provider_enabled=POLISH_QUESTION_PROVIDER_GATE,
         formal_write_targets=(),
         db_business_write_targets=(),
         rollback_safe=True,
-        disabled_behavior="deterministic_fallback_with_reason",
+        disabled_behavior="adapter_only_unavailable",
     )
 
 
@@ -220,7 +220,6 @@ def run_polish_question_skeleton(
     if not decision.enabled:
         raise GraphDisabledError(f"graph disabled: {descriptor.graph_name}")
 
-    output_refs, interrupt_refs = _build_output_refs(context=context, command=command)
     checkpoint_ref = "ackpt_" + _stable_id(context.owner_id, context.run_id, "question_checkpoint")
     metadata = {
         "graph_name": descriptor.graph_name,
@@ -240,7 +239,12 @@ def run_polish_question_skeleton(
         "checkpoint_refs_only": True,
         "checkpoint_refs_are_business_facts": False,
         "rollback_safe": True,
-        "legacy_direct_path_retained_when_disabled": True,
+        "adapter_only_unavailable_when_disabled": True,
+        "temporary_exception": "phase5_skeleton_entrypoint_retained_for_contract_tests",
+        "blocking_condition": "skeleton entrypoint is not an execution target",
+        "delete_condition": "replace with real graph runtime entrypoint before product enablement",
+        "cleanup_task": "record active BACKLOG cleanup task before enabling formal graph runtime",
+        "unavailable_response": True,
         "sanitized": True,
         "input_refs": command.input_refs,
         "requested_outputs": command.requested_outputs,
@@ -248,10 +252,10 @@ def run_polish_question_skeleton(
     }
     return AgentRunResult(
         run_id=context.run_id,
-        status="skeleton_succeeded",
-        output_refs=output_refs,
+        status="blocked",
+        output_refs=(),
         trace_refs=(checkpoint_ref,),
-        interrupt_refs=interrupt_refs,
+        interrupt_refs=(),
         formal_refs=(),
         metadata=sanitize_payload(metadata),
     )

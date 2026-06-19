@@ -21,7 +21,7 @@ FORBIDDEN_METADATA_KEYS = {
 }
 
 
-def test_descriptor_is_default_off_and_pr5_owned() -> None:
+def test_polish_question_descriptor_is_default_off_and_agent_orchestration_owned() -> None:
     from app.application.ai_runtime.business_graphs.polish_question_graph import (
         POLISH_QUESTION_GRAPH_FLAG,
         POLISH_QUESTION_GRAPH_NAME,
@@ -35,7 +35,7 @@ def test_descriptor_is_default_off_and_pr5_owned() -> None:
     assert descriptor.graph_version == POLISH_QUESTION_GRAPH_VERSION == "pr9-agent-orchestration"
     assert descriptor.runtime_flag_key == POLISH_QUESTION_GRAPH_FLAG == "AIFI_GRAPH_POLISH_QUESTION_ENABLED"
     assert descriptor.default_enabled is False
-    assert descriptor.migration_status == "agent_orchestration_with_deterministic_fallback"
+    assert descriptor.migration_status == "agent_orchestration_adapter_only"
     assert descriptor.implementation_pr == "Goal0526"
     assert descriptor.lifecycle_status == "active"
     assert descriptor.provider_enabled is False
@@ -69,7 +69,7 @@ def test_skeleton_fails_closed_when_graph_flag_disabled() -> None:
         run_polish_question_skeleton(context, context.command)
 
 
-def test_skeleton_returns_refs_only_when_enabled() -> None:
+def test_skeleton_returns_unavailable_safe_response_when_enabled() -> None:
     from app.application.ai_runtime.business_graphs.polish_question_graph import (
         POLISH_QUESTION_GRAPH_FLAG,
         run_polish_question_skeleton,
@@ -80,7 +80,7 @@ def test_skeleton_returns_refs_only_when_enabled() -> None:
             entrypoint="start",
             input_refs=("session_ref_1", "progress_node_ref_1", "completed_focus_ref_1"),
             requested_outputs=("candidate_refs", "result_refs"),
-            idempotency_key="idem_pr5_question",
+            idempotency_key="idem_question_skeleton",
             metadata={
                 "safe_context_ref": "ctx_ref_1",
                 "raw_prompt": "hidden",
@@ -94,18 +94,23 @@ def test_skeleton_returns_refs_only_when_enabled() -> None:
 
     result = run_polish_question_skeleton(context, context.command, flag_resolver=resolver)
 
-    assert result.status == "skeleton_succeeded"
-    assert len(result.output_refs) == 2
-    assert result.output_refs[0].startswith("question_candidate_ref_")
-    assert result.output_refs[1].startswith("question_result_ref_")
+    assert result.status == "blocked"
+    assert result.output_refs == ()
     assert result.trace_refs
     assert result.trace_refs[0].startswith("ackpt_")
+    assert result.interrupt_refs == ()
     assert result.formal_refs == ()
     assert result.metadata["provider_calls"] == 0
     assert result.metadata["formal_business_writes"] == 0
     assert result.metadata["db_business_writes"] == 0
     assert result.metadata["checkpoint_refs_only"] is True
     assert result.metadata["checkpoint_refs_are_business_facts"] is False
+    assert result.metadata["adapter_only_unavailable_when_disabled"] is True
+    assert result.metadata["temporary_exception"] == "phase5_skeleton_entrypoint_retained_for_contract_tests"
+    assert result.metadata["blocking_condition"]
+    assert result.metadata["delete_condition"]
+    assert result.metadata["cleanup_task"]
+    assert result.metadata["unavailable_response"] is True
     assert result.metadata["input_refs"] == context.command.input_refs
     assert result.metadata["requested_outputs"] == context.command.requested_outputs
     assert result.metadata["runtime_flag_source"] == "test_override"
@@ -127,13 +132,13 @@ def _context(command: AgentCommandEnvelope | None = None) -> AgentRunContext:
         entrypoint="start",
         input_refs=("session_ref_1",),
         requested_outputs=("candidate_refs",),
-        idempotency_key="idem_pr5_question",
+        idempotency_key="idem_question_skeleton",
     )
     return AgentRunContext(
         owner_id="owner_1",
         actor_id="actor_1",
-        run_id="arun_pr5_question",
-        ai_task_id="aitask_pr5_question",
+        run_id="arun_question_skeleton",
+        ai_task_id="aitask_question_skeleton",
         graph_name="polish_question_graph",
         graph_version="pr9-agent-orchestration",
         command=command,
