@@ -23,5 +23,5 @@ class AiTaskResultResponse(BaseModel):
     candidate_refs: list[ResourceRef] = Field(default_factory=list)
     suggestion_refs: list[ResourceRef] = Field(default_factory=list)
     validation_result_ref: ResourceRef | None = None
+    validation_errors: list[str] | None = None
     provider_payload: None = None
-

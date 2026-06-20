@@ -15,6 +15,7 @@ from sqlalchemy import text
 import app.api.v1.polish as polish_api
 from app.api.deps import get_db_session_factory, get_llm_transport, require_authenticated_actor
 from app.api.errors import ApiHttpError, api_http_error_handler
+from app.api.v1.ai_tasks import router as ai_tasks_router
 from app.api.v1.polish import router as polish_router
 from app.application.polish.progress_prompts import (
     POLISH_PROGRESS_QUALITY_FIRST_MENU_PROMPT_VERSION,
@@ -54,6 +55,7 @@ from app.domain.shared.refs import OwnerRef, VersionRef
 from app.infrastructure.db.repositories.bindings import SqlAlchemyBindingRepository
 from app.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from app.infrastructure.db.repositories.resumes import SqlAlchemyResumeRepository
+from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.models.interview import PolishSessionDetail as PolishSessionDetailModel
 from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
 from app.infrastructure.db.models.question import Question as QuestionModel
@@ -62,6 +64,7 @@ from app.infrastructure.db.session import DbSettings, build_session_factory, ini
 from app.infrastructure.llm.errors import LlmTransportResponseError
 from tests.fakes.llm_transport import FakeLlmTransport
 from app.main import create_app
+from app.schemas.ai_tasks import AiTaskResultResponse
 from app.schemas.polish import (
     CreateFeedbackNextQuestionIntentRequest,
     CreateQuestionTaskRequest,
@@ -179,6 +182,127 @@ def test_question_intent_request_schemas_forbid_execution_target_fields() -> Non
             request_model.model_validate({"selected_progress_node_ref": "progress_node_ui"})
         with pytest.raises(ValidationError):
             request_model.model_validate({"completed_focus_refs": ["focus_ui"]})
+
+
+def test_ai_task_result_response_schema_exposes_safe_failure_summary_without_result_payload() -> None:
+    fields = AiTaskResultResponse.model_fields
+    assert "validation_errors" in fields
+    assert not fields["validation_errors"].is_required()
+    assert "result_payload" not in fields
+
+    response = AiTaskResultResponse.model_validate(
+        {
+            "ai_task_id": "ait_question_validation_failed",
+            "status": "validation_failed",
+            "validation_errors": ["question_text_required"],
+            "provider_payload": None,
+        }
+    ).model_dump(mode="json")
+
+    assert response["validation_errors"] == ["question_text_required"]
+    assert response["provider_payload"] is None
+    assert "result_payload" not in response
+
+
+def test_ai_task_result_endpoint_projects_question_failure_summary_without_result_payload() -> None:
+    session_factory = _session_factory()
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    app.include_router(ai_tasks_router, prefix="/api/v1")
+    now = utc_now()
+
+    with session_factory() as db:
+        db.add(
+            AiTask(
+                id="ait_question_failure_projection",
+                owner_id=OWNER_A,
+                actor_id=OWNER_A,
+                record_version=1,
+                status="validation_failed",
+                trace_ref_ids=["trace_question_failure_projection"],
+                evidence_ref_ids=["evidence_question_failure_projection"],
+                task_type="polish_question_generation",
+                contract_ids=["API-AITASK-003", "PROMPT-POLISH-QUESTION-GENERATION"],
+                target_ref_id="ses_question_failure_projection",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.add(
+            AiTaskResult(
+                id="aitr_question_failure_projection",
+                owner_id=OWNER_A,
+                actor_id=OWNER_A,
+                record_version=1,
+                status="validation_failed",
+                trace_ref_ids=["trace_question_failure_projection"],
+                evidence_ref_ids=["evidence_question_failure_projection"],
+                ai_task_id="ait_question_failure_projection",
+                result_sequence="0",
+                validation_result_ref_id="validation_question_failure_projection",
+                trace_ref_id="trace_question_failure_projection",
+                result_ref_id=None,
+                candidate_refs_json=[
+                    {"resource_type": "question_candidate", "resource_id": "candidate_question_safe"},
+                    {"resource_type": "question_candidate", "resource_id": "candidate_question_safe"},
+                ],
+                suggestion_refs_json=[
+                    {"resource_type": "question_generation_retry", "resource_id": "retry_same_context"}
+                ],
+                validation_errors_json=["question_text_required", "evidence_refs_required"],
+                source_availability="available",
+                low_confidence_flags_json=[],
+                safe_summary_json={
+                    "user_visible_status": "题目生成失败，可重试",
+                    "retryable": True,
+                    "raw_prompt": "must_not_leak",
+                    "provider_payload": {"completion": "must_not_leak"},
+                    "hidden_rubric": "must_not_leak",
+                    "validation_errors": ["raw_prompt_should_not_override_direct_errors"],
+                },
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+
+    status_code, status_body = call_json(app, "/api/v1/ai-tasks/ait_question_failure_projection")
+    assert status_code == 200
+    status_data = status_body["data"]
+    assert status_data["validation_errors"] == ["question_text_required", "evidence_refs_required"]
+    assert status_data["candidate_refs"] == [
+        {"resource_type": "question_candidate", "resource_id": "candidate_question_safe"}
+    ]
+    assert status_data["suggestion_refs"] == [
+        {"resource_type": "question_generation_retry", "resource_id": "retry_same_context"}
+    ]
+    assert status_data["user_visible_status"] == "题目生成失败，可重试"
+    assert status_data["retryable"] is True
+    assert status_data["provider_payload"] is None
+    assert "result_payload" not in status_data
+    assert "raw_prompt" not in _collect_keys(status_data)
+    assert "completion" not in _collect_keys(status_data)
+    assert "hidden_rubric" not in _collect_keys(status_data)
+
+    result_code, result_body = call_json(app, "/api/v1/ai-tasks/ait_question_failure_projection/result")
+    assert result_code == 200
+    result_data = result_body["data"]
+    assert result_data["status"] == "validation_failed"
+    assert result_data["validation_errors"] == ["question_text_required", "evidence_refs_required"]
+    assert result_data["candidate_refs"] == [
+        {"resource_type": "question_candidate", "resource_id": "candidate_question_safe"}
+    ]
+    assert result_data["suggestion_refs"] == [
+        {"resource_type": "question_generation_retry", "resource_id": "retry_same_context"}
+    ]
+    assert result_data["validation_result_ref"] == {
+        "resource_type": "validation_result",
+        "resource_id": "validation_question_failure_projection",
+    }
+    assert result_data["provider_payload"] is None
+    assert "result_payload" not in result_data
+    assert "raw_prompt" not in _collect_keys(result_data)
+    assert "completion" not in _collect_keys(result_data)
+    assert "hidden_rubric" not in _collect_keys(result_data)
 
 
 def test_polish_g001_response_schema_declares_optional_contract_fields() -> None:

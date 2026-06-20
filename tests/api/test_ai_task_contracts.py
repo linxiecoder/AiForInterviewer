@@ -4,10 +4,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+from pydantic import ValidationError
+
 from app.application.llm.task_contracts import AI_TASK_CONTRACT_FAILURE_CODES
 from app.application.llm.types import LlmTransportRequest
 from app.application.polish.task_contracts.feedback_contract import POLISH_FEEDBACK_TASK_CONTRACT
 from app.application.polish.task_contracts.question_contract import POLISH_QUESTION_TASK_CONTRACT
+from app.domain.shared.enums import AiTaskStatus
+from app.schemas.ai_tasks import AiTaskResultResponse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -154,6 +159,50 @@ def test_task_contract_layer_does_not_change_transport_request_contract() -> Non
     assert request.contract_ids == ("P-POLISH-002", "P-SHARED-001", "P-SHARED-003")
     assert request.schema_id == "polish_question_generation_output_v1"
     assert request.evidence_bundle == {"safe_ref": "evidence_reliability"}
+
+
+def test_ai_task_result_contract_exposes_safe_validation_errors_without_question_result_payload() -> None:
+    api_spec = (REPO_ROOT / "docs" / "02-design" / "API_SPEC.md").read_text(encoding="utf-8")
+    frontend_types = (
+        REPO_ROOT / "apps" / "web" / "src" / "entities" / "polish" / "model" / "types.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "| data.validation_errors[]" in api_spec
+    assert "| validation_errors[]" in api_spec
+    assert "validation_errors?: string[] | null;" in frontend_types
+
+    fields = AiTaskResultResponse.model_fields
+    assert "validation_errors" in fields
+    assert not fields["validation_errors"].is_required()
+    assert "result_payload" not in fields
+
+    response = AiTaskResultResponse.model_validate(
+        {
+            "ai_task_id": "ait_question_validation_failed",
+            "status": AiTaskStatus.VALIDATION_FAILED,
+            "validation_errors": ["question_text_required"],
+            "provider_payload": None,
+        }
+    ).model_dump(mode="json")
+
+    assert response["validation_errors"] == ["question_text_required"]
+    assert response["provider_payload"] is None
+    assert "result_payload" not in response
+
+    legacy_response = AiTaskResultResponse.model_validate(
+        {"ai_task_id": "ait_legacy", "status": AiTaskStatus.SUCCEEDED}
+    )
+    assert legacy_response.validation_errors is None
+    assert legacy_response.provider_payload is None
+
+    with pytest.raises(ValidationError):
+        AiTaskResultResponse.model_validate(
+            {
+                "ai_task_id": "ait_provider_leak",
+                "status": AiTaskStatus.VALIDATION_FAILED,
+                "provider_payload": {"raw_completion": "must not leak"},
+            }
+        )
 
 
 def _question_candidate(

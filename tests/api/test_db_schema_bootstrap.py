@@ -123,6 +123,14 @@ def test_initialize_schema_creates_ai_runtime_tables_and_columns() -> None:
         "retention_expires_at",
         "access_audit_ref_id",
     }.issubset(_column_names(inspector, "llm_call_payloads"))
+    assert {
+        "candidate_refs_json",
+        "suggestion_refs_json",
+        "validation_errors_json",
+        "source_availability",
+        "low_confidence_flags_json",
+        "safe_summary_json",
+    }.issubset(_column_names(inspector, "ai_task_results"))
 
 
 def _column_names(inspector, table_name: str) -> set[str]:

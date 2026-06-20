@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,7 +39,8 @@ from app.domain.jobs.entities import Job, JobVersion
 from app.domain.resumes.entities import Resume, ResumeVersion
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
-from app.domain.shared.refs import OwnerRef, ResourceRef, VersionRef
+from app.domain.shared.refs import OwnerRef, ResourceRef, TraceRef, VersionRef
+from app.infrastructure.db.models.ai_task import AiTaskResult
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from tools.testing.temp_artifacts import ManagedTempArtifacts
@@ -219,6 +221,132 @@ def test_sqlalchemy_repository_add_question_once_reuses_existing_graph_question_
         assert "raw_prompt" not in stored_questions[0].question_metadata
         assert "raw_completion" not in stored_questions[0].question_metadata
         assert "provider_payload" not in stored_questions[0].question_metadata
+    finally:
+        temp_artifacts.cleanup()
+
+
+@pytest.mark.parametrize(
+    "status",
+    (
+        AiTaskStatus.VALIDATION_FAILED,
+        AiTaskStatus.SOURCE_UNAVAILABLE,
+        AiTaskStatus.GENERATION_FAILED,
+        AiTaskStatus.TIMED_OUT,
+        AiTaskStatus.CANCELLED,
+    ),
+)
+def test_sqlalchemy_repository_add_task_persists_safe_summary_for_terminal_question_failures(
+    status: AiTaskStatus,
+) -> None:
+    temp_artifacts, repository, session_factory = _sqlite_polish_repository(
+        f"api-pr5-polish-task-result-{status.value}"
+    )
+    try:
+        task = _question_task_status(status)
+
+        repository.add_task(task, owner_id=OWNER_ID, actor_id=ACTOR_ID, target_ref_id=SESSION_ID)
+
+        with session_factory() as db:
+            stored = db.get(AiTaskResult, f"{task.ai_task_id}_result")
+        assert stored is not None
+        assert stored.ai_task_id == task.ai_task_id
+        assert stored.status == status.value
+        assert stored.candidate_refs_json == [
+            {"resource_type": "progress_node", "resource_id": NODE_REF},
+            {"resource_type": "evidence", "resource_id": "resume_evidence_ref_q4"},
+        ]
+        assert stored.suggestion_refs_json == [
+            {"resource_type": "trace", "resource_id": "trace_retry_hint"}
+        ]
+        assert stored.validation_errors_json == ["question_text_required", "source_missing"]
+        expected_source_availability = (
+            "source_unavailable" if status == AiTaskStatus.SOURCE_UNAVAILABLE else None
+        )
+        assert stored.source_availability == expected_source_availability
+        assert stored.low_confidence_flags_json == []
+        assert stored.safe_summary_json == {
+            "task_type": "polish_question_generation",
+            "status": status.value,
+            "user_visible_status": f"visible status: {status.value}",
+            "retryable": status
+            in {
+                AiTaskStatus.SOURCE_UNAVAILABLE,
+                AiTaskStatus.GENERATION_FAILED,
+                AiTaskStatus.TIMED_OUT,
+            },
+            "candidate_refs": stored.candidate_refs_json,
+            "suggestion_refs": stored.suggestion_refs_json,
+            "validation_errors": stored.validation_errors_json,
+            "source_availability": expected_source_availability,
+            "low_confidence_flags": [],
+        }
+        safe_summary_text = json.dumps(stored.safe_summary_json, ensure_ascii=False)
+        for forbidden in ("provider_payload", "raw_prompt", "raw_completion", "hidden_rubric"):
+            assert forbidden not in safe_summary_text
+        assert repository.list_questions_for_session(OWNER_ID, SESSION_ID) == ()
+    finally:
+        temp_artifacts.cleanup()
+
+
+@pytest.mark.parametrize(
+    "status",
+    (
+        AiTaskStatus.SUCCEEDED,
+        AiTaskStatus.PARTIAL,
+        AiTaskStatus.LOW_CONFIDENCE,
+    ),
+)
+def test_sqlalchemy_repository_add_task_does_not_persist_failure_summary_for_non_failure_question_statuses(
+    status: AiTaskStatus,
+) -> None:
+    temp_artifacts, repository, session_factory = _sqlite_polish_repository(
+        f"api-pr5-polish-task-result-non-failure-{status.value}"
+    )
+    try:
+        task = _question_task_status(status)
+
+        repository.add_task(task, owner_id=OWNER_ID, actor_id=ACTOR_ID, target_ref_id=SESSION_ID)
+
+        with session_factory() as db:
+            stored = db.get(AiTaskResult, f"{task.ai_task_id}_result")
+        assert stored is None
+    finally:
+        temp_artifacts.cleanup()
+
+
+def test_ai_task_result_safe_summary_fields_are_nullable_for_legacy_rows() -> None:
+    temp_artifacts, _, session_factory = _sqlite_polish_repository(
+        "api-pr5-polish-task-result-legacy-null"
+    )
+    try:
+        with session_factory() as db:
+            db.add(
+                AiTaskResult(
+                    id="aitask_legacy_result",
+                    owner_id=OWNER_ID,
+                    actor_id=ACTOR_ID,
+                    record_version=1,
+                    status="succeeded",
+                    trace_ref_ids=None,
+                    evidence_ref_ids=None,
+                    ai_task_id="aitask_legacy",
+                    result_sequence="0",
+                    validation_result_ref_id=None,
+                    trace_ref_id="trace_legacy",
+                    result_ref_id="question_legacy",
+                )
+            )
+            db.commit()
+
+        with session_factory() as db:
+            stored = db.get(AiTaskResult, "aitask_legacy_result")
+        assert stored is not None
+        assert stored.candidate_refs_json is None
+        assert stored.suggestion_refs_json is None
+        assert stored.validation_errors_json is None
+        assert stored.source_availability is None
+        assert stored.low_confidence_flags_json is None
+        assert stored.safe_summary_json is None
     finally:
         temp_artifacts.cleanup()
 
@@ -500,6 +628,43 @@ def _assert_question_planned_workflow_metadata(question: PolishQuestion) -> None
     assert metadata["source_support_summary"]["level"] == "direct_project_evidence"
     assert metadata["grounding_policy_result"]
     assert metadata["validation_refs"]
+
+
+def _sqlite_polish_repository(test_id: str) -> tuple[ManagedTempArtifacts, SqlAlchemyPolishRepository, Any]:
+    temp_artifacts = ManagedTempArtifacts(test_id=test_id)
+    workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    settings = DbSettings(database_url=f"sqlite+pysqlite:///{(workspace / 'polish.sqlite').as_posix()}")
+    session_factory = build_session_factory(settings)
+    initialize_schema(session_factory=session_factory)
+    return temp_artifacts, SqlAlchemyPolishRepository(session_factory), session_factory
+
+
+def _question_task_status(status: AiTaskStatus) -> PolishTaskStatus:
+    trace_type = "validation_result" if status == AiTaskStatus.VALIDATION_FAILED else "task_result"
+    retryable = status in {
+        AiTaskStatus.SOURCE_UNAVAILABLE,
+        AiTaskStatus.GENERATION_FAILED,
+        AiTaskStatus.TIMED_OUT,
+    }
+    return PolishTaskStatus(
+        ai_task_id=f"aitask_q4_{status.value}",
+        task_type="polish_question_generation",
+        status=status,
+        contract_ids=("ai_task_contract.polish_question.v1",),
+        retryable=retryable,
+        result_ref=TraceRef(
+            trace_ref_id=f"trace_q4_{status.value}",
+            trace_type=trace_type,
+            created_at=utc_now(),
+        ),
+        user_visible_status=f"visible status: {status.value}",
+        candidate_refs=(
+            ResourceRef(resource_type="progress_node", resource_id=NODE_REF),
+            ResourceRef(resource_type="evidence", resource_id="resume_evidence_ref_q4"),
+        ),
+        suggestion_refs=(ResourceRef(resource_type="trace", resource_id="trace_retry_hint"),),
+        validation_errors=("question_text_required", "source_missing"),
+    )
 
 
 def _accepted_candidate(**overrides: Any) -> dict[str, Any]:

@@ -67,6 +67,95 @@ def test_interview_workbench_uses_question_task_adapter_for_composer_generation(
     assert "/questions`" in api_source
 
 
+def test_interview_workbench_waits_for_running_question_task_before_refresh() -> None:
+    source = _source(INTERVIEW_PAGE)
+
+    current_node_flow = re.search(
+        r"const createCurrentNodeQuestion = async .*?"
+        r"const task = await createPolishNodeQuestionTask\(sessionId\);"
+        r".*?let focusTask: .*? = task;"
+        r".*?if \(isPolishAiTaskRunningStatus\(task\.status\)\) \{"
+        r".*?focusTask = await waitForPolishAiTaskFinalStatus\(task\.ai_task_id,"
+        r".*?assertPolishQuestionTaskCanFocus\(focusTask,"
+        r".*?focusGeneratedQuestionTask\(focusTask, null\);"
+        r".*?await loadSession\(\);"
+        r".*?await loadCandidateRecords\(\);",
+        source,
+        re.S,
+    )
+    feedback_next_flow = re.search(
+        r"const createFeedbackNextQuestion = async .*?"
+        r"const task = await createPolishFeedbackNextQuestionTask\(sessionId, feedbackId\);"
+        r".*?let focusTask: .*? = task;"
+        r".*?if \(isPolishAiTaskRunningStatus\(task\.status\)\) \{"
+        r".*?focusTask = await waitForPolishAiTaskFinalStatus\(task\.ai_task_id,"
+        r".*?assertPolishQuestionTaskCanFocus\(focusTask,"
+        r".*?focusGeneratedQuestionTask\(focusTask, null\);"
+        r".*?await loadSession\(\);"
+        r".*?await loadCandidateRecords\(\);",
+        source,
+        re.S,
+    )
+
+    assert current_node_flow is not None
+    assert feedback_next_flow is not None
+    assert "题目生成仍在进行中，请稍后刷新查看结果。" in source
+    assert "下一题生成仍在进行中，请稍后刷新查看结果。" in source
+
+
+def test_interview_workbench_failed_question_task_stops_before_focus() -> None:
+    source = _source(INTERVIEW_PAGE)
+
+    assert "POLISH_QUESTION_TASK_FAILURE_STATUSES" in source
+    assert "export function isPolishQuestionTaskFailureStatus" in source
+    for status in (
+        "validation_failed",
+        "source_unavailable",
+        "generation_failed",
+        "timed_out",
+        "cancelled",
+    ):
+        assert status in source
+
+    assert "function buildPolishQuestionTaskFailureMessage" in source
+    assert "task.validation_errors" in source
+    assert "assertPolishQuestionTaskCanFocus(focusTask, \"题目生成失败，可重试。\")" in source
+    assert "assertPolishQuestionTaskCanFocus(focusTask, \"下一题生成失败，可重试。\")" in source
+
+    current_node_flow = re.search(
+        r"const createCurrentNodeQuestion = async .*?"
+        r"assertPolishQuestionTaskCanFocus\(focusTask, \"题目生成失败，可重试。\"\);"
+        r"\s*focusGeneratedQuestionTask\(focusTask, null\);",
+        source,
+        re.S,
+    )
+    feedback_next_flow = re.search(
+        r"const createFeedbackNextQuestion = async .*?"
+        r"assertPolishQuestionTaskCanFocus\(focusTask, \"下一题生成失败，可重试。\"\);"
+        r"\s*focusGeneratedQuestionTask\(focusTask, null\);",
+        source,
+        re.S,
+    )
+
+    assert current_node_flow is not None
+    assert feedback_next_flow is not None
+
+
+def test_interview_workbench_question_failure_does_not_consume_provider_or_result_payload() -> None:
+    source = _source(INTERVIEW_PAGE)
+    helper_match = re.search(
+        r"function buildPolishQuestionTaskFailureMessage\(.*?\n\}",
+        source,
+        re.S,
+    )
+
+    assert helper_match is not None
+    helper_source = helper_match.group(0)
+    assert "validation_errors" in helper_source
+    assert "provider_payload" not in helper_source
+    assert "result_payload" not in helper_source
+
+
 def test_interview_workbench_next_recommendations_are_display_only() -> None:
     source = _source(INTERVIEW_PAGE)
 

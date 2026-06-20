@@ -30,6 +30,7 @@ from app.application.polish.question_metadata import (
 )
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.domain.shared.clock import utc_now
+from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.refs import ResourceRef
 from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.models.answer import Answer as AnswerModel
@@ -44,6 +45,17 @@ from app.infrastructure.db.session import get_session_factory
 
 
 _ANSWER_ROUND_RETRY_LIMIT = 3
+_QUESTION_GENERATION_TASK_TYPES = {
+    "polish_question_generation",
+    "polish_question_follow_up_generation",
+}
+_TASK_RESULT_TERMINAL_FAILURE_STATUSES = {
+    AiTaskStatus.VALIDATION_FAILED.value,
+    AiTaskStatus.SOURCE_UNAVAILABLE.value,
+    AiTaskStatus.GENERATION_FAILED.value,
+    AiTaskStatus.TIMED_OUT.value,
+    AiTaskStatus.CANCELLED.value,
+}
 
 
 class SqlAlchemyPolishRepository(PolishRepository):
@@ -402,20 +414,16 @@ class SqlAlchemyPolishRepository(PolishRepository):
     def add_task(self, task: PolishTaskStatus, *, owner_id: str, actor_id: str, target_ref_id: str) -> None:
         with self._session_factory() as db:
             db.add(
-                AiTask(
-                    id=task.ai_task_id,
+                _task_to_model(
+                    task,
                     owner_id=owner_id,
                     actor_id=actor_id,
-                    record_version=1,
-                    status=str(task.status),
-                    trace_ref_ids=[task.result_ref.trace_ref_id],
-                    evidence_ref_ids=None,
-                    task_type=task.task_type,
-                    contract_ids=list(task.contract_ids),
-                    idempotency_record_id=None,
                     target_ref_id=target_ref_id,
+                    idempotency_record_id=None,
                 )
             )
+            if _should_persist_task_safe_summary(task):
+                db.add(_task_result_to_model(task, owner_id=owner_id, actor_id=actor_id))
             db.commit()
 
     def add_feedback_running_task(
@@ -1052,6 +1060,26 @@ def _task_result_to_model(
     owner_id: str,
     actor_id: str,
 ) -> AiTaskResult:
+    candidate_refs_json = _resource_refs_to_safe_json(task.candidate_refs)
+    suggestion_refs_json = _resource_refs_to_safe_json(task.suggestion_refs)
+    validation_errors_json = list(task.validation_errors)
+    low_confidence_flags_json: list[str] = []
+    source_availability = _source_availability_for_task(task)
+    safe_summary_json = (
+        {
+            "task_type": task.task_type,
+            "status": _task_status_value(task.status),
+            "user_visible_status": task.user_visible_status,
+            "retryable": task.retryable,
+            "candidate_refs": candidate_refs_json,
+            "suggestion_refs": suggestion_refs_json,
+            "validation_errors": validation_errors_json,
+            "source_availability": source_availability,
+            "low_confidence_flags": low_confidence_flags_json,
+        }
+        if _should_persist_task_safe_summary(task)
+        else None
+    )
     result_ref_id = (
         task.result_ref.trace_ref_id
         if task.result_ref.trace_type != "validation_result"
@@ -1075,7 +1103,37 @@ def _task_result_to_model(
         validation_result_ref_id=validation_result_ref_id,
         trace_ref_id=task.result_ref.trace_ref_id,
         result_ref_id=result_ref_id,
+        candidate_refs_json=candidate_refs_json if safe_summary_json is not None else None,
+        suggestion_refs_json=suggestion_refs_json if safe_summary_json is not None else None,
+        validation_errors_json=validation_errors_json if safe_summary_json is not None else None,
+        source_availability=source_availability if safe_summary_json is not None else None,
+        low_confidence_flags_json=low_confidence_flags_json if safe_summary_json is not None else None,
+        safe_summary_json=safe_summary_json,
     )
+
+
+def _should_persist_task_safe_summary(task: PolishTaskStatus) -> bool:
+    return (
+        task.task_type in _QUESTION_GENERATION_TASK_TYPES
+        and _task_status_value(task.status) in _TASK_RESULT_TERMINAL_FAILURE_STATUSES
+    )
+
+
+def _task_status_value(status: object) -> str:
+    return str(getattr(status, "value", status))
+
+
+def _resource_refs_to_safe_json(refs: tuple[ResourceRef, ...]) -> list[dict[str, str]]:
+    return [
+        {"resource_type": ref.resource_type, "resource_id": ref.resource_id}
+        for ref in refs
+    ]
+
+
+def _source_availability_for_task(task: PolishTaskStatus) -> str | None:
+    if _task_status_value(task.status) == AiTaskStatus.SOURCE_UNAVAILABLE.value:
+        return AiTaskStatus.SOURCE_UNAVAILABLE.value
+    return None
 
 
 def _feedback_idempotency_record_prefix(idempotency_key: str) -> str:

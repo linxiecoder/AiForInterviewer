@@ -1,6 +1,7 @@
 """AI task model skeletons."""
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,4 +28,10 @@ class AiTaskResult(OwnedRecordMixin, Base):
     validation_result_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     trace_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     result_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    candidate_refs_json: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, nullable=True)
+    suggestion_refs_json: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, nullable=True)
+    validation_errors_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    source_availability: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    low_confidence_flags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    safe_summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 

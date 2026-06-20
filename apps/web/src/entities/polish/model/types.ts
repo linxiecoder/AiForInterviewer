@@ -496,6 +496,7 @@ export interface PolishAiTaskResult {
   candidate_refs: Array<{ resource_type: string; resource_id: string }>;
   suggestion_refs: Array<{ resource_type: string; resource_id: string }>;
   validation_result_ref?: { resource_type: string; resource_id: string } | null;
+  validation_errors?: string[] | null;
   result_payload?: PolishFeedbackPayload | null;
   provider_payload: null;
 }

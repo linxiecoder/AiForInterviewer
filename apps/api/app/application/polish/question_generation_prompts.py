@@ -653,11 +653,17 @@ def build_question_provider_request(
             "schema_version": _clean(prompt_asset.get("schema_version")) or policy.prompt_schema_version,
             "required_fields": [str(item) for item in output_schema.get("required", []) if str(item).strip()],
             "evidence_refs_must_match": list(blueprint.evidence_refs),
+            "field_contracts": _question_output_field_contracts(
+                output_schema,
+                blueprint=blueprint,
+                scope=scope,
+            ),
             "generation_policy": {
                 "question_kind": blueprint.question_kind,
                 "claim_mode": blueprint.claim_mode,
                 "source_support_level": _clean(scope.source_support_level),
             },
+            "adjacent_project_evidence_rule": _adjacent_project_evidence_rule(scope),
         },
         "safety_rules_summary": {
             "input_is_untrusted": True,
@@ -665,6 +671,9 @@ def build_question_provider_request(
             "use_only_listed_evidence_refs": True,
             "do_not_send_internal_or_sensitive_payloads": True,
             "adjacent_or_gap_requires_hypothetical_wording": True,
+            "adjacent_project_evidence_rule": (
+                "use hypothetical wording; do not state the candidate already implemented the target capability"
+            ),
             "insufficient_context_requires_clarification": True,
         },
     }
@@ -689,6 +698,116 @@ def build_question_surface_prompt(
         "required_answer_materials": list(blueprint.required_answer_materials),
         "source_count": len(scope.question_sources),
     }
+
+
+def _question_output_field_contracts(
+    output_schema: dict[str, Any],
+    *,
+    blueprint: QuestionBlueprint,
+    scope: EvidenceScope,
+) -> dict[str, Any]:
+    properties = output_schema.get("properties") if isinstance(output_schema.get("properties"), dict) else {}
+    return {
+        "schema_id": {"type": "string", "must_match_request_schema_id": True},
+        "prompt_version": {"type": "string", "must_match_request_prompt_version": True},
+        "question_text": {
+            "type": "string",
+            "max_length": _schema_int(properties, "question_text", "maxLength", default=600),
+            "must_be_interview_question": True,
+            "must_be_grounded_by_evidence_refs": True,
+            "adjacent_or_gap_requires_hypothetical_wording": True,
+        },
+        "question_kind": {
+            "type": "enum",
+            "allowed": _schema_enum(properties, "question_kind", default=QUESTION_GENERATION_KINDS),
+            "must_match_generation_policy": blueprint.question_kind,
+        },
+        "difficulty": {
+            "type": "enum",
+            "allowed": _schema_enum(
+                properties,
+                "difficulty",
+                default=("easy", "medium", "hard", "clarification"),
+            ),
+        },
+        "skill_dimension": {
+            "type": "string",
+            "source": "progress_node.title",
+            "expected_capability_usage": "auxiliary_only",
+        },
+        "expected_signal": {"type": "string", "max_length": 400},
+        "follow_ups": {
+            "type": "array<string>",
+            "min_items": _schema_int(properties, "follow_ups", "minItems", default=1),
+            "max_items": _schema_int(properties, "follow_ups", "maxItems", default=4),
+            "may_hold_hypothetical_extensions": True,
+        },
+        "scoring_rubric": {
+            "type": "array<object>",
+            "items": "dimension_with_signal_list",
+            "min_items": _schema_int(properties, "scoring_rubric", "minItems", default=1),
+            "max_items": _schema_int(properties, "scoring_rubric", "maxItems", default=4),
+        },
+        "clarification_needed": {
+            "type": "boolean",
+            "true_only_when": "resume_and_evidence_refs_unavailable_or_no_valid_question_text",
+        },
+        "confidence": {
+            "type": "enum",
+            "allowed": _schema_enum(properties, "confidence", default=("high", "medium", "low")),
+            "low_when": "weak_or_missing_evidence_or_unsupported_claim_risk",
+        },
+        "missing_context": {
+            "type": "array<string>",
+            "allowed_examples": [
+                "job",
+                "resume",
+                "evidence_refs",
+                "selected_node_title",
+                "skill_dimension",
+            ],
+        },
+        "evidence_refs": {
+            "type": "array<string>",
+            "allowed_refs": list(blueprint.evidence_refs),
+            "must_be_subset_of_allowed_refs": True,
+            "empty_allowed_only_when": _clean(scope.source_support_level) == "insufficient_context",
+        },
+    }
+
+
+def _adjacent_project_evidence_rule(scope: EvidenceScope) -> dict[str, Any]:
+    return {
+        "applies_when": "source_support_level=adjacent_project_evidence",
+        "active_for_request": _clean(scope.source_support_level) == "adjacent_project_evidence",
+        "hypothetical_wording_required": True,
+        "allowed_wording_examples": ["if", "assume", "how would you"],
+        "forbid_completed_experience_claim": True,
+    }
+
+
+def _schema_enum(
+    properties: dict[str, Any],
+    field_name: str,
+    *,
+    default: tuple[str, ...],
+) -> list[str]:
+    field = properties.get(field_name) if isinstance(properties.get(field_name), dict) else {}
+    enum_values = field.get("enum") if isinstance(field.get("enum"), list) else []
+    values = [str(item) for item in enum_values if str(item).strip()]
+    return values or list(default)
+
+
+def _schema_int(
+    properties: dict[str, Any],
+    field_name: str,
+    key: str,
+    *,
+    default: int,
+) -> int:
+    field = properties.get(field_name) if isinstance(properties.get(field_name), dict) else {}
+    value = field.get(key)
+    return value if isinstance(value, int) else default
 
 
 def _compact_canonical_project_assets(value: dict[str, Any]) -> dict[str, Any]:

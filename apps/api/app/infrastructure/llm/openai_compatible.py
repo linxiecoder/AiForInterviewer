@@ -740,7 +740,7 @@ def _system_prompt(task_type: str) -> str:
             "只返回合法 JSON，不要 Markdown 包裹。",
             COMPACT_JSON_REASONING_CONSTRAINT,
             "不要输出思考过程、分析过程、推理过程或额外说明。",
-            "必须严格遵守 user message 中 evidence_bundle.prompt、output_schema、schema_id 和 prompt_version。",
+            "必须严格遵守 user message 中 evidence_bundle.expected_output_contract、safety_rules_summary、schema_id 和 prompt_version；compact request 不一定包含 evidence_bundle.prompt 或 output_schema，若存在也必须遵守。",
             "不得暴露 provider payload、secret、token 或原始 completion。",
         ]
     )

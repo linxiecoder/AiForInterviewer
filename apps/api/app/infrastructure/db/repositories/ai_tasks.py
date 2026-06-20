@@ -65,17 +65,18 @@ def _status_projection(
     result: AiTaskResult | None,
     payload: dict[str, Any] | None,
 ) -> dict[str, object]:
+    safe_summary = _safe_summary(result)
     return {
         "ai_task_id": task.id,
         "task_type": task.task_type,
         "status": task.status,
         "contract_ids": _string_list(task.contract_ids),
-        "retryable": _is_retryable(task.status, payload),
+        "retryable": _is_retryable(task.status, payload, safe_summary=safe_summary),
         "result_ref": _result_ref(task, result=result),
-        "user_visible_status": _user_visible_status(task.status, payload),
-        "candidate_refs": _candidate_refs(payload),
-        "suggestion_refs": _suggestion_refs(payload),
-        "validation_errors": _validation_errors(payload),
+        "user_visible_status": _user_visible_status(task.status, payload, safe_summary=safe_summary),
+        "candidate_refs": _projected_candidate_refs(result, payload=payload, safe_summary=safe_summary),
+        "suggestion_refs": _projected_suggestion_refs(result, payload=payload, safe_summary=safe_summary),
+        "validation_errors": _projected_validation_errors(result, payload=payload, safe_summary=safe_summary),
         "provider_payload": None,
     }
 
@@ -86,16 +87,21 @@ def _result_projection(
     result: AiTaskResult | None,
     payload: dict[str, Any] | None,
 ) -> dict[str, object]:
-    return {
+    safe_summary = _safe_summary(result)
+    projection = {
         "ai_task_id": task.id,
         "status": result.status if result is not None else task.status,
         "result_ref": _result_ref(task, result=result),
-        "candidate_refs": _candidate_refs(payload),
-        "suggestion_refs": _suggestion_refs(payload),
+        "candidate_refs": _projected_candidate_refs(result, payload=payload, safe_summary=safe_summary),
+        "suggestion_refs": _projected_suggestion_refs(result, payload=payload, safe_summary=safe_summary),
         "validation_result_ref": _validation_result_ref(result),
-        "result_payload": _sanitize_payload(payload),
+        "validation_errors": _projected_validation_errors(result, payload=payload, safe_summary=safe_summary),
         "provider_payload": None,
     }
+    result_payload = _feedback_result_payload(task, payload)
+    if result_payload is not None:
+        projection["result_payload"] = result_payload
+    return projection
 
 
 def _feedback_payload_for_task(db, *, owner_id: str, ai_task_id: str) -> dict[str, Any] | None:
@@ -169,6 +175,61 @@ def _suggestion_refs(payload: dict[str, Any] | None) -> list[dict[str, str]]:
     )
 
 
+def _projected_candidate_refs(
+    result: AiTaskResult | None,
+    *,
+    payload: dict[str, Any] | None,
+    safe_summary: dict[str, Any],
+) -> list[dict[str, str]]:
+    return (
+        _refs_from_json(getattr(result, "candidate_refs_json", None))
+        or _refs_from_json(safe_summary.get("candidate_refs"))
+        or _candidate_refs(payload)
+    )
+
+
+def _projected_suggestion_refs(
+    result: AiTaskResult | None,
+    *,
+    payload: dict[str, Any] | None,
+    safe_summary: dict[str, Any],
+) -> list[dict[str, str]]:
+    return (
+        _refs_from_json(getattr(result, "suggestion_refs_json", None))
+        or _refs_from_json(safe_summary.get("suggestion_refs"))
+        or _suggestion_refs(payload)
+    )
+
+
+def _projected_validation_errors(
+    result: AiTaskResult | None,
+    *,
+    payload: dict[str, Any] | None,
+    safe_summary: dict[str, Any],
+) -> list[str]:
+    return (
+        _safe_string_list(getattr(result, "validation_errors_json", None))
+        or _safe_string_list(safe_summary.get("validation_errors"))
+        or _validation_errors(payload)
+    )
+
+
+def _refs_from_json(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    refs: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        refs.append(
+            {
+                "resource_type": _safe_text(item.get("resource_type")),
+                "resource_id": _safe_text(item.get("resource_id")),
+            }
+        )
+    return _dedupe_refs(refs)
+
+
 def _dedupe_refs(refs: list[dict[str, str]]) -> list[dict[str, str]]:
     seen: set[tuple[str, str]] = set()
     result: list[dict[str, str]] = []
@@ -185,14 +246,22 @@ def _dedupe_refs(refs: list[dict[str, str]]) -> list[dict[str, str]]:
 def _validation_errors(payload: dict[str, Any] | None) -> list[str]:
     if not isinstance(payload, dict) or not isinstance(payload.get("validation_errors"), list):
         return []
-    return [str(item) for item in payload["validation_errors"] if str(item).strip()]
+    return _safe_string_list(payload["validation_errors"])
 
 
-def _user_visible_status(status: str, payload: dict[str, Any] | None) -> str:
+def _user_visible_status(
+    status: str,
+    payload: dict[str, Any] | None,
+    *,
+    safe_summary: dict[str, Any],
+) -> str:
     if isinstance(payload, dict):
         value = payload.get("user_visible_status")
         if isinstance(value, str) and value.strip():
-            return value.strip()
+            return _safe_text(value)
+    value = safe_summary.get("user_visible_status")
+    if isinstance(value, str) and value.strip():
+        return _safe_text(value)
     if status == "running":
         return "反馈生成中"
     if status == "queued":
@@ -208,9 +277,11 @@ def _user_visible_status(status: str, payload: dict[str, Any] | None) -> str:
     return status
 
 
-def _is_retryable(status: str, payload: dict[str, Any] | None) -> bool:
+def _is_retryable(status: str, payload: dict[str, Any] | None, *, safe_summary: dict[str, Any]) -> bool:
     if isinstance(payload, dict) and isinstance(payload.get("retryable"), bool):
         return bool(payload["retryable"])
+    if isinstance(safe_summary.get("retryable"), bool):
+        return bool(safe_summary["retryable"])
     return status in {"generation_failed", "timed_out", "source_unavailable"}
 
 
@@ -218,6 +289,40 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if str(item).strip()]
+
+
+def _safe_summary(result: AiTaskResult | None) -> dict[str, Any]:
+    safe_summary_json = getattr(result, "safe_summary_json", None)
+    if result is None or not isinstance(safe_summary_json, dict):
+        return {}
+    sanitized = _sanitize_payload(safe_summary_json)
+    return sanitized if isinstance(sanitized, dict) else {}
+
+
+def _safe_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = _safe_text(item)
+        if text:
+            result.append(text)
+    return result
+
+
+def _safe_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    sanitized = _sanitize_payload(text)
+    return sanitized.strip() if isinstance(sanitized, str) else ""
+
+
+def _feedback_result_payload(task: AiTask, payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    if task.task_type != "polish_feedback_generation" or not isinstance(payload, dict):
+        return None
+    sanitized = _sanitize_payload(payload)
+    return sanitized if isinstance(sanitized, dict) else None
 
 
 _FORBIDDEN_KEYS = {

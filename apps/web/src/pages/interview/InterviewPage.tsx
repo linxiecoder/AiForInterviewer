@@ -72,6 +72,7 @@ import type {
   CreatePolishSessionRequest,
   PolishCandidate,
   PolishFeedbackPayload,
+  PolishAiTaskResult,
   PolishQuestionSource,
   PolishTheme,
   PolishRecommendedAction,
@@ -128,8 +129,15 @@ export const POLISH_AI_TASK_FINAL_STATUSES = [
   "timed_out",
   "cancelled",
 ] as const;
-const POLISH_FEEDBACK_TASK_POLL_INTERVAL_MS = 600;
-const POLISH_FEEDBACK_TASK_POLL_ATTEMPTS = 20;
+export const POLISH_QUESTION_TASK_FAILURE_STATUSES = [
+  "validation_failed",
+  "source_unavailable",
+  "generation_failed",
+  "timed_out",
+  "cancelled",
+] as const;
+const POLISH_AI_TASK_POLL_INTERVAL_MS = 600;
+const POLISH_AI_TASK_POLL_ATTEMPTS = 20;
 export const INTERVIEW_LIST_HEADER_CONTROL_ORDER = ["actions", "search"] as const;
 export const INTERVIEW_LIST_HEADER_TEXT_STATE = "removed" as const;
 export const INTERVIEW_SEARCH_PLACEHOLDER = "搜索模拟面试名称、岗位、简历、主题" as const;
@@ -1015,15 +1023,45 @@ export function isPolishAiTaskFinalStatus(status: string | null | undefined): bo
   return POLISH_AI_TASK_FINAL_STATUSES.includes(status as (typeof POLISH_AI_TASK_FINAL_STATUSES)[number]);
 }
 
-async function waitForPolishFeedbackTaskResult(aiTaskId: string): Promise<void> {
-  for (let attempt = 0; attempt < POLISH_FEEDBACK_TASK_POLL_ATTEMPTS; attempt += 1) {
+export function isPolishQuestionTaskFailureStatus(status: string | null | undefined): boolean {
+  return POLISH_QUESTION_TASK_FAILURE_STATUSES.includes(
+    status as (typeof POLISH_QUESTION_TASK_FAILURE_STATUSES)[number],
+  );
+}
+
+async function waitForPolishAiTaskFinalStatus(aiTaskId: string, timeoutMessage: string): Promise<PolishAiTaskResult> {
+  for (let attempt = 0; attempt < POLISH_AI_TASK_POLL_ATTEMPTS; attempt += 1) {
     const result = await fetchPolishAiTaskResult(aiTaskId);
     if (isPolishAiTaskFinalStatus(result.status)) {
-      return;
+      return result;
     }
-    await delay(POLISH_FEEDBACK_TASK_POLL_INTERVAL_MS);
+    await delay(POLISH_AI_TASK_POLL_INTERVAL_MS);
   }
-  throw new Error("反馈生成仍在进行中，请稍后刷新查看结果。");
+  throw new Error(timeoutMessage);
+}
+
+type PolishQuestionTaskFocusCandidate = Pick<PolishTaskStatus | PolishAiTaskResult, "candidate_refs" | "status"> & {
+  validation_errors?: string[] | null;
+};
+
+function buildPolishQuestionTaskFailureMessage(task: PolishQuestionTaskFocusCandidate, fallbackMessage: string): string {
+  const validationErrors = Array.isArray(task.validation_errors)
+    ? task.validation_errors.map((item) => toOptionalText(item)).filter((item): item is string => item !== null)
+    : [];
+  if (validationErrors.length === 0) {
+    return fallbackMessage;
+  }
+  return `${fallbackMessage} 失败原因：${validationErrors.join("；")}`;
+}
+
+function assertPolishQuestionTaskCanFocus(
+  task: PolishQuestionTaskFocusCandidate,
+  fallbackMessage: string,
+): void {
+  if (!isPolishQuestionTaskFailureStatus(task.status)) {
+    return;
+  }
+  throw new Error(buildPolishQuestionTaskFailureMessage(task, fallbackMessage));
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -5033,7 +5071,10 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     void loadSession();
   }, [sessionId]);
 
-  const focusGeneratedQuestionTask = (task: PolishTaskStatus, progressNodeRef: string | null) => {
+  const focusGeneratedQuestionTask = (
+    task: Pick<PolishTaskStatus | PolishAiTaskResult, "candidate_refs">,
+    progressNodeRef: string | null,
+  ) => {
     const generatedFocus = resolveGeneratedQuestionFocusFromTask(task, progressNodeRef);
     setSelectedProgressNodeRef(generatedFocus.selectedProgressNodeRef);
     setSelectedProgressNodeKey(generatedFocus.selectedProgressNodeKey);
@@ -5061,8 +5102,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setWorkbenchFailureState(null);
     try {
       const task = await createPolishNodeQuestionTask(sessionId);
-      focusGeneratedQuestionTask(task, null);
+      let focusTask: PolishQuestionTaskFocusCandidate = task;
+      if (isPolishAiTaskRunningStatus(task.status)) {
+        focusTask = await waitForPolishAiTaskFinalStatus(task.ai_task_id, "题目生成仍在进行中，请稍后刷新查看结果。");
+      }
+      assertPolishQuestionTaskCanFocus(focusTask, "题目生成失败，可重试。");
+      focusGeneratedQuestionTask(focusTask, null);
       await loadSession();
+      await loadCandidateRecords();
     } catch (createError) {
       setAnswerError(
         createError instanceof Error
@@ -5088,8 +5135,14 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     setWorkbenchFailureState(null);
     try {
       const task = await createPolishFeedbackNextQuestionTask(sessionId, feedbackId);
-      focusGeneratedQuestionTask(task, null);
+      let focusTask: PolishQuestionTaskFocusCandidate = task;
+      if (isPolishAiTaskRunningStatus(task.status)) {
+        focusTask = await waitForPolishAiTaskFinalStatus(task.ai_task_id, "下一题生成仍在进行中，请稍后刷新查看结果。");
+      }
+      assertPolishQuestionTaskCanFocus(focusTask, "下一题生成失败，可重试。");
+      focusGeneratedQuestionTask(focusTask, null);
       await loadSession();
+      await loadCandidateRecords();
     } catch (createError) {
       setAnswerError(
         createError instanceof Error
@@ -5146,7 +5199,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           answer_id: answer.answer_id,
         });
         if (isPolishAiTaskRunningStatus(feedbackTask.status)) {
-          await waitForPolishFeedbackTaskResult(feedbackTask.ai_task_id);
+          await waitForPolishAiTaskFinalStatus(feedbackTask.ai_task_id, "反馈生成仍在进行中，请稍后刷新查看结果。");
         }
       } catch (feedbackError) {
         setWorkbenchFailureState("feedbackFailedAnswerSaved");

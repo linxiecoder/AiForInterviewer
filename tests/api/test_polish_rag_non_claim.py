@@ -67,6 +67,55 @@ def test_question_prompt_carries_rag_unavailable_non_claim_separately_from_canon
     assert "AI 已经检索并使用知识库" not in provider_json
 
 
+def test_question_provider_request_exposes_compact_field_contracts_and_adjacent_rule() -> None:
+    scope = EvidenceScope(
+        progress_node_ref="node_backend_workflow",
+        node_title="后端工作流可靠性",
+        expected_capability="说明真实实现链路和验证方式",
+        canonical_project_assets=_canonical_assets(),
+        retrieved_rag_chunks=_rag_chunks(),
+        source_support_level="adjacent_project_evidence",
+    )
+    blueprint = QuestionBlueprint(
+        question_kind="project_deep_dive",
+        claim_mode="evidence_grounded",
+        progress_node_ref="node_backend_workflow",
+        node_title="后端工作流可靠性",
+        expected_capability="说明真实实现链路和验证方式",
+        primary_evidence_ref="asset_backend_workflow",
+        primary_evidence_text="Backend workflow automation uses FastAPI APIs and PostgreSQL persistence.",
+        evidence_refs=("asset_backend_workflow",),
+    )
+
+    prompt_asset = build_question_prompt_asset(blueprint, scope)
+    provider_request = build_question_provider_request(prompt_asset, blueprint=blueprint, scope=scope)
+
+    assert "prompt" not in provider_request
+    assert "output_schema" not in provider_request
+    contract = provider_request["expected_output_contract"]
+    field_contracts = contract["field_contracts"]
+    assert {
+        "question_text",
+        "scoring_rubric",
+        "confidence",
+        "clarification_needed",
+        "missing_context",
+        "evidence_refs",
+    }.issubset(field_contracts)
+    assert field_contracts["scoring_rubric"]["items"] == "dimension_with_signal_list"
+    assert field_contracts["confidence"]["allowed"] == ["high", "medium", "low"]
+    assert field_contracts["clarification_needed"]["true_only_when"] == (
+        "resume_and_evidence_refs_unavailable_or_no_valid_question_text"
+    )
+    assert field_contracts["evidence_refs"]["allowed_refs"] == ["asset_backend_workflow"]
+    assert field_contracts["evidence_refs"]["must_be_subset_of_allowed_refs"] is True
+    assert contract["adjacent_project_evidence_rule"]["hypothetical_wording_required"] is True
+    assert contract["adjacent_project_evidence_rule"]["forbid_completed_experience_claim"] is True
+    assert provider_request["safety_rules_summary"]["adjacent_project_evidence_rule"] == (
+        "use hypothetical wording; do not state the candidate already implemented the target capability"
+    )
+
+
 def test_feedback_prompt_carries_rag_unavailable_non_claim_separately_from_canonical_assets() -> None:
     rag_chunks = _rag_chunks()
     prompt_asset = build_feedback_prompt_asset(

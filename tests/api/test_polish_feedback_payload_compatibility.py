@@ -8,6 +8,7 @@ from app.application.polish.entities import PolishAnswer, PolishFeedback
 from app.application.polish.feedback_application_service import _failed_feedback_payload_for_storage
 from app.application.polish.use_cases import _to_session_answer_detail
 from app.domain.shared.clock import utc_now
+from app.infrastructure.db.repositories.ai_tasks import _result_projection
 
 
 FORBIDDEN_GRANT_CLIENT_KEYS = (
@@ -29,6 +30,59 @@ def _assert_no_grant_client_fields(payload: object) -> None:
     serialized = _serialized(payload)
     for forbidden in FORBIDDEN_GRANT_CLIENT_KEYS:
         assert forbidden not in serialized
+
+
+def test_ai_task_result_projection_preserves_feedback_result_payload_compatibility() -> None:
+    now = utc_now()
+    task = SimpleNamespace(
+        id="ait_feedback_result_payload_compat",
+        task_type="polish_feedback_generation",
+        status="succeeded",
+        trace_ref_ids=[],
+        created_at=now,
+    )
+    result = SimpleNamespace(
+        status="succeeded",
+        result_ref_id="feedback_result_payload_compat",
+        validation_result_ref_id=None,
+        trace_ref_id="trace_feedback_result_payload_compat",
+        created_at=now,
+    )
+    projected = _result_projection(
+        task,
+        result=result,
+        payload={
+            "status": "generated",
+            "feedback_text": "结构化反馈仍通过 result_payload 暴露给旧客户端。",
+            "score_result": {"score_value": 82, "score_type": "polish_answer"},
+            "feedback_metadata": {
+                "candidate_ref": "feedback_candidate_safe",
+                "asset_update_candidate_refs": ["asset_candidate_safe"],
+            },
+            "suggestion_refs": [
+                {"resource_type": "feedback_suggestion", "resource_id": "retry_same_question"}
+            ],
+            "validation_errors": [],
+            "provider_payload": {"completion": "must_not_leak"},
+            "raw_prompt": "must_not_leak",
+        },
+    )
+
+    assert projected["result_payload"]["status"] == "generated"
+    assert projected["result_payload"]["feedback_text"] == "结构化反馈仍通过 result_payload 暴露给旧客户端。"
+    assert projected["result_payload"]["score_result"]["score_value"] == 82
+    assert projected["candidate_refs"] == [
+        {"resource_type": "feedback_candidate", "resource_id": "feedback_candidate_safe"},
+        {"resource_type": "asset_update_candidate", "resource_id": "asset_candidate_safe"},
+    ]
+    assert projected["suggestion_refs"] == [
+        {"resource_type": "feedback_suggestion", "resource_id": "retry_same_question"}
+    ]
+    assert projected["provider_payload"] is None
+    serialized = _serialized(projected)
+    assert "raw_prompt" not in serialized
+    assert "provider_payload" in projected
+    assert "must_not_leak" not in serialized
 
 
 def test_old_generated_feedback_payload_remains_display_compatible() -> None:

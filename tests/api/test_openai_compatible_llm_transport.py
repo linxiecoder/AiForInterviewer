@@ -217,6 +217,58 @@ def test_openai_compatible_transport_uses_progress_tree_token_budget_and_json_mo
     assert "最终输出必须是一个合法、完整的 JSON 对象" in system_prompt
 
 
+def test_openai_compatible_transport_generic_prompt_supports_compact_contract_fields() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["payload"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_polish_question",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {
+                            "content": json.dumps(
+                                {"status": "success", "confidence": "medium"},
+                                ensure_ascii=False,
+                            )
+                        },
+                    }
+                ],
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-002",),
+            task_type="polish_question_generation",
+            evidence_bundle={
+                "expected_output_contract": {"field_contracts": {"question_text": {}}},
+                "safety_rules_summary": {"use_only_listed_evidence_refs": True},
+            },
+        )
+    )
+
+    payload = observed["payload"]
+    assert isinstance(payload, dict)
+    system_prompt = payload["messages"][0]["content"]
+    assert "expected_output_contract" in system_prompt
+    assert "safety_rules_summary" in system_prompt
+    assert "compact request" in system_prompt
+
+
 def test_openai_compatible_transport_uses_progress_tree_max_tokens_env_override() -> None:
     observed: dict[str, object] = {}
 
