@@ -5,6 +5,7 @@ Thumbs.db
 # Editors / local tooling
 .idea/
 .vscode/
+.codex/
 .claude/*
 !.claude/settings.json
 !.claude/agents/
