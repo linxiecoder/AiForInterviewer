@@ -787,7 +787,8 @@ def _build_evidence_scope(
     requested_ref: str,
     source_priority_policy: dict[str, dict[str, int]],
 ) -> EvidenceScope:
-    focus_target = _focus_target_from_progress_node(node, requested_ref)
+    focus_path = _find_progress_node_path(plan.get("nodes"), requested_ref) or (node,)
+    focus_target = _focus_target_from_progress_node(node, requested_ref, path=focus_path)
     selection = select_progress_tree_evidence_chunks(
         context,
         purpose="question_generation",
@@ -1020,14 +1021,60 @@ def _canonical_asset_refs(canonical_project_assets: dict[str, Any]) -> list[str]
     return refs
 
 
-def _focus_target_from_progress_node(node: dict[str, Any], requested_ref: str) -> AgentFocusTarget:
-    title = _first_text(node.get("display_title"), node.get("title"), node.get("exam_point"), requested_ref)
-    expected_capability = _first_text(node.get("expected_capability"), node.get("description"), node.get("title"))
+def _focus_target_from_progress_node(
+    node: dict[str, Any],
+    requested_ref: str,
+    *,
+    path: tuple[dict[str, Any], ...] | None = None,
+) -> AgentFocusTarget:
+    path_nodes = tuple(item for item in (path or ()) if isinstance(item, dict))
+    own_title = _first_text(node.get("display_title"), node.get("title"), node.get("exam_point"), requested_ref)
+    path_titles = tuple(
+        title
+        for item in path_nodes
+        if (title := _first_text(item.get("display_title"), item.get("title"), item.get("exam_point")))
+    )
+    title = " / ".join(path_titles[-2:]) if len(path_titles) >= 2 else (path_titles[0] if path_titles else own_title)
+    own_expected_capability = _first_text(
+        node.get("expected_capability"),
+        node.get("description"),
+        node.get("title"),
+    )
+    path_capabilities = tuple(
+        capability
+        for item in path_nodes
+        if (
+            capability := _first_text(
+                item.get("expected_capability"),
+                item.get("description"),
+                item.get("title"),
+            )
+        )
+    )
+    expected_capability = (
+        "；".join(dict.fromkeys(path_capabilities[-2:]))
+        if len(path_capabilities) >= 2
+        else own_expected_capability
+    )
     metadata = {
         key: text
         for key in ("category", "node_type", "exam_point", "confidence_level", "basis_type")
         if (text := _clean(node.get(key)))
     }
+    if len(path_nodes) >= 2:
+        parent_node = path_nodes[-2]
+        parent_ref = _clean(parent_node.get("progress_node_ref"))
+        parent_title = _first_text(
+            parent_node.get("display_title"),
+            parent_node.get("title"),
+            parent_node.get("exam_point"),
+        )
+        if parent_ref:
+            metadata["parent_node_ref"] = parent_ref
+        if parent_title:
+            metadata["parent_title"] = parent_title
+        if path_titles:
+            metadata["progress_node_path"] = " / ".join(path_titles)
     return AgentFocusTarget(
         ref=_first_text(node.get("progress_node_ref"), requested_ref),
         title=title,
@@ -1035,6 +1082,25 @@ def _focus_target_from_progress_node(node: dict[str, Any], requested_ref: str) -
         missing_points=tuple(_string_list(node.get("missing_points"))),
         metadata=metadata,
     )
+
+
+def _find_progress_node_path(
+    nodes: object,
+    progress_node_ref: str,
+    ancestors: tuple[dict[str, Any], ...] = (),
+) -> tuple[dict[str, Any], ...]:
+    if not isinstance(nodes, list):
+        return ()
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        path = (*ancestors, node)
+        if _clean(node.get("progress_node_ref")) == progress_node_ref:
+            return path
+        child_path = _find_progress_node_path(node.get("children", []), progress_node_ref, path)
+        if child_path:
+            return child_path
+    return ()
 
 
 def _resolve_progress_node(

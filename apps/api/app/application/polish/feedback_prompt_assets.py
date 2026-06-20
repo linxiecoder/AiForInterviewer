@@ -178,7 +178,6 @@ def build_feedback_prompt_asset(context: object) -> dict[str, Any]:
                 *validation_rules,
                 "Do not use rule-based scoring, keyword scoring, quick/full path influence, or fallback scoring.",
                 "If retrieved_rag_chunks.available=false, state only that saved assets exist but this generation did not use knowledge base retrieval.",
-                "Return score_result.reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates.",
             )
         ),
         user_task="Evaluate the current answer using only the provided evidence and context snapshots.",
@@ -267,7 +266,8 @@ def _validation_rules() -> tuple[str, ...]:
     return (
         "feedback_id is produced by the service and must not be output by the model.",
         "score_reasoning is recommended but may be omitted when evidence is insufficient.",
-        "score_result must include reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates produced by comparing the answer with progress_state, adaptive_rubric, and anchor_examples.",
+        "score_result must include progress_state_ref, reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, progress_updates.",
+        "Use adaptive_insights weak_skills/strong_skills/unstable_skills ([] allowed); dimension_scores[].score uses 0-100.",
         "asset_consistency_check, answer_coverage, answer_change_analysis, feedback_cards, and next_recommended_actions are optional candidate fields.",
         "Do not output raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         "Do not invent user experience or project facts.",
@@ -335,6 +335,70 @@ def _required_json_schema(output_schema: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _provider_output_shape_hints() -> dict[str, object]:
+    return {
+        "loss_points": {
+            "type": "array<object>",
+            "not_type": "array<string>",
+            "required_item_fields": ["loss_point_id", "reason"],
+            "optional_item_fields": ["severity", "deduction", "evidence_refs"],
+            "id_policy": (
+                "Use stable ids like loss_point_1; reference same ids from reference sections."
+            ),
+            "accepted_aliases": {
+                "loss_point_id": ["id", "loss_id"],
+                "reason": ["description"],
+            },
+        },
+        "reference_answer.sections": {
+            "type": "array<object>",
+            "required_item_fields": ["content"],
+            "recommended_item_fields": ["section_id", "title", "addresses_loss_point_ids"],
+            "link_policy": "addresses_loss_point_ids must match loss_points[].loss_point_id.",
+        },
+        "low_confidence_flags": {
+            "type": "array<string>",
+            "not_type": "array<object>",
+            "item_policy": "Use short codes/reasons; no objects.",
+        },
+        "score_result": {
+            "type": "object",
+            "required_fields": ["progress_state_ref", "reasoning", "adaptive_rubric", "dimension_scores"],
+            "also_required": ["adaptive_insights", "signals", "progress_updates"],
+            "policy": (
+                "dimension_scores/adaptive_rubric.dimensions array<object>; all dims; "
+                "same adaptive_weight; 0-100 score; progress_basis/progress_focus; "
+                "insights weak_skills/strong_skills/unstable_skills; signals array<string>."
+            ),
+            "item_example": "dimension_scores:[{dimension,score,adaptive_weight,progress_focus,rationale}]",
+        },
+    }
+
+
+def _provider_output_examples() -> dict[str, object]:
+    return {
+        "loss_points": [
+            {
+                "loss_point_id": "loss_point_1",
+                "severity": "major",
+                "reason": "Explain the missing or weak part of the current answer.",
+                "evidence_refs": ["answer_claim_1"],
+            }
+        ],
+        "reference_answer": {
+            "sections": [
+                {
+                    "section_id": "section_1",
+                    "title": "Improved answer structure",
+                    "content": "Show the improved answer content for this loss point.",
+                    "addresses_loss_point_ids": ["loss_point_1"],
+                }
+            ]
+        },
+        "low_confidence_flags": ["answer_parsing_low_confidence"],
+    }
+
+
 def _provider_compact_prompt(
     input_data: dict[str, Any],
     *,
@@ -374,6 +438,8 @@ def _provider_compact_prompt(
             "full_answer_forbidden": True,
         },
         "required_json_schema": _required_json_schema(output_schema),
+        "output_shape_hints": _provider_output_shape_hints(),
+        "output_examples": _provider_output_examples(),
         "current_question": {
             "question_id": _get_clean_text(current_question.get("question_id"), max_chars=120),
             "question_text": _get_clean_text(current_question.get("question_text"), max_chars=600),
@@ -418,13 +484,17 @@ def _provider_compact_prompt(
             "Use only output_schema candidate fields.",
             "Required: feedback_text, answer_summary, score_result, loss_points, reference_answer, low_confidence_flags, evidence_refs.",
             "score_result requires reasoning, adaptive_rubric, dimension_scores, adaptive_insights, signals, and progress_updates.",
-            "reference_answer.sections[].title recommended; service generates if omitted.",
-            "reference_answer.sections[].content required for display.",
+            "score_result nested: dimension_scores/adaptive_rubric.dimensions array<object>; adaptive_insights object arrays; signals array<string>.",
+            "score_result.progress_state_ref=current_question.progress_node_ref; insights weak/strong/unstable; scores 0-100.",
+            "loss_points must be an array of objects, not strings; each item must include loss_point_id and reason.",
+            "reference_answer.sections[].addresses_loss_point_ids should reference loss_points[].loss_point_id values when applicable.",
+            "low_confidence_flags array<string>, not objects.",
+            "reference_answer.sections[].title recommended.",
+            "reference_answer.sections[].content required.",
             "Optional candidate fields: same_question_effect, project_asset_update_candidates.",
             "Aliases accepted for loss_points and reference sections.",
             "same_question_effect may be object or enum string.",
             "Do not include final/metadata fields: feedback_id, schema_id, schema_version, model_name, prompt_version.",
-            "Do not include raw prompt, provider payload, full resume, full JD, token, secret, or cookie.",
         ],
         "feedback_metadata": {
             "feedback_mode": POLISH_FEEDBACK_CANDIDATE_MODE,

@@ -335,6 +335,21 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     assert "input_data" not in provider_prompt
     assert "developer_constraints" not in provider_prompt
     assert "refusal_and_low_confidence_policy" not in provider_prompt
+    assert provider_prompt["output_shape_hints"]["loss_points"]["type"] == "array<object>"
+    assert provider_prompt["output_shape_hints"]["loss_points"]["not_type"] == "array<string>"
+    assert provider_prompt["output_shape_hints"]["low_confidence_flags"]["type"] == "array<string>"
+    assert provider_prompt["output_shape_hints"]["low_confidence_flags"]["not_type"] == "array<object>"
+    assert "dimension_scores" in provider_prompt["output_shape_hints"]["score_result"]["required_fields"]
+    assert "adaptive_insights" in provider_prompt["output_shape_hints"]["score_result"]["also_required"]
+    assert "signals array<string>" in provider_prompt["output_shape_hints"]["score_result"]["policy"]
+    assert "dimension_scores:[{dimension,score,adaptive_weight,progress_focus,rationale}]" in provider_prompt[
+        "output_shape_hints"
+    ]["score_result"]["item_example"]
+    assert provider_prompt["output_examples"]["loss_points"][0]["loss_point_id"] == "loss_point_1"
+    assert provider_prompt["output_examples"]["low_confidence_flags"] == ["answer_parsing_low_confidence"]
+    assert provider_prompt["output_examples"]["reference_answer"]["sections"][0]["addresses_loss_point_ids"] == [
+        "loss_point_1"
+    ]
 
 
 def test_feedback_prompt_required_json_schema_separates_core_and_optional_fields() -> None:
@@ -365,6 +380,13 @@ def test_feedback_prompt_required_json_schema_separates_core_and_optional_fields
     }
     requirements_text = "\n".join(provider_prompt["output_requirements"]).lower()
     assert "feedback_text, answer_summary, score_result, loss_points" in requirements_text
+    assert "dimension_scores/adaptive_rubric.dimensions array<object>" in requirements_text
+    assert "adaptive_insights object arrays" in requirements_text
+    assert "signals array<string>" in requirements_text
+    assert "loss_points must be an array of objects, not strings" in requirements_text
+    assert "each item must include loss_point_id and reason" in requirements_text
+    assert "addresses_loss_point_ids should reference loss_points[].loss_point_id" in requirements_text
+    assert "low_confidence_flags array<string>, not objects" in requirements_text
     assert "optional candidate fields" in requirements_text
     for final_field in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
         assert final_field not in provider_prompt["output_schema"]["fields"]

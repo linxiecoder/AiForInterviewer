@@ -63,6 +63,29 @@ def test_source_support_summary_records_insufficient_context() -> None:
     assert summary.confidence == "low"
 
 
+def test_rag_project_evidence_counts_as_direct_support_for_rag_skill() -> None:
+    decision = SourceSupportPolicy.classify_question_context(
+        target=SourceSupportTarget(
+            title="AI工程化与RAG系统构建",
+            expected_capability="验证候选人在RAG各环节的实际贡献与设计权衡",
+        ),
+        evidence=(
+            SourceSupportEvidence(
+                source_type="resume_project",
+                text=(
+                    "硬件测试设计平台&AI硬件测试知识库；设计 ES 的 KNN 向量检索与 BM25 "
+                    "关键词检索相结合的混合检索方案，并通过 Prompt 工程、阈值过滤和多模型接入控制幻觉。"
+                ),
+                ref="resume_project_rag",
+            ),
+        ),
+    )
+
+    assert decision.level == SourceSupportLevel.DIRECT_PROJECT_EVIDENCE
+    assert decision.reason_codes == ("direct_project_term_overlap",)
+    assert decision.evidence_refs == ("resume_project_rag",)
+
+
 def test_existing_level_summary_keeps_safe_project_refs() -> None:
     decision = SourceSupportPolicy.classify_question_context(
         existing_level="direct_project_evidence",

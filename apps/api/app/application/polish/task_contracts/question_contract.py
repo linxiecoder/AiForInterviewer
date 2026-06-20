@@ -135,7 +135,8 @@ def _valid_scoring_rubric(value: object) -> bool:
     for item in value:
         if not isinstance(item, dict):
             return False
-        if not _clean(item.get("dimension")) or not _string_list(item.get("signals")):
+        signals = _string_list(item.get("signals"))
+        if not _clean(item.get("dimension")) or not signals:
             return False
     return True
 

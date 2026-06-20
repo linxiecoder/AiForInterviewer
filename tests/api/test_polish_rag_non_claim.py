@@ -102,18 +102,37 @@ def test_question_provider_request_exposes_compact_field_contracts_and_adjacent_
         "missing_context",
         "evidence_refs",
     }.issubset(field_contracts)
-    assert field_contracts["scoring_rubric"]["items"] == "dimension_with_signal_list"
+    assert field_contracts["scoring_rubric"]["items"] == {
+        "type": "object",
+        "required_fields": ["dimension", "signals"],
+        "field_contracts": {
+            "dimension": "string",
+            "signals": "array<string>",
+        },
+        "do_not_use_fields": ["signal", "expected_signals"],
+    }
     assert field_contracts["confidence"]["allowed"] == ["high", "medium", "low"]
     assert field_contracts["clarification_needed"]["true_only_when"] == (
         "resume_and_evidence_refs_unavailable_or_no_valid_question_text"
     )
+    assert field_contracts["question_text"]["prefer_implementation_detail_or_technical_decision_first"] is True
+    assert field_contracts["question_text"]["broad_tradeoff_should_move_to_follow_ups"] is True
     assert field_contracts["evidence_refs"]["allowed_refs"] == ["asset_backend_workflow"]
     assert field_contracts["evidence_refs"]["must_be_subset_of_allowed_refs"] is True
     assert contract["adjacent_project_evidence_rule"]["hypothetical_wording_required"] is True
     assert contract["adjacent_project_evidence_rule"]["forbid_completed_experience_claim"] is True
+    pacing_policy = contract["interview_pacing_policy"]
+    assert pacing_policy["active_for_request"] is True
+    assert pacing_policy["depth_progression"] == [
+        "implementation_detail",
+        "why_this_choice",
+        "tradeoff_or_failure_follow_up",
+    ]
+    assert "复杂检索" in pacing_policy["avoid_in_main_question"][0]
     assert provider_request["safety_rules_summary"]["adjacent_project_evidence_rule"] == (
         "use hypothetical wording; do not state the candidate already implemented the target capability"
     )
+    assert "broad tradeoffs in follow_ups" in provider_request["safety_rules_summary"]["real_interview_pacing"]
 
 
 def test_feedback_prompt_carries_rag_unavailable_non_claim_separately_from_canonical_assets() -> None:

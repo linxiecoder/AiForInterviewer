@@ -30,6 +30,8 @@ _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
         "contract_ids",
         "input_contract",
         "required_json_schema",
+        "output_shape_hints",
+        "output_examples",
         "current_question",
         "current_answer",
         "evaluation_pipeline",

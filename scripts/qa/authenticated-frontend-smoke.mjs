@@ -12,14 +12,30 @@ const DEV_PASSWORD = process.env.AIFI_AUTH_SMOKE_DEV_PASSWORD ?? "phase-2c-auth-
 const DEV_EMAIL = "developer@example.com";
 const API_BASE = `http://127.0.0.1:${API_PORT}`;
 const WEB_BASE = `http://127.0.0.1:${WEB_PORT}`;
-const PYTHON = existsSync(path.join(ROOT_DIR, ".venv/bin/python"))
-  ? path.join(ROOT_DIR, ".venv/bin/python")
-  : "python3";
+const PYTHON = resolvePython();
 
 const tempDir = mkdtempSync(path.join(tmpdir(), "aifi-auth-smoke-"));
 const databasePath = path.join(tempDir, "smoke.sqlite3");
 const databaseUrl = `sqlite+pysqlite:///${databasePath}`;
 const children = [];
+
+function resolvePython() {
+  const candidates = [
+    process.env.PYTHON,
+    path.join(ROOT_DIR, ".venv/bin/python"),
+    path.join(ROOT_DIR, ".venv/Scripts/python.exe"),
+    "python3",
+    "python",
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (candidate === "python3" || candidate === "python" || existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "python";
+}
 
 try {
   const seedResult = seedDatabase();

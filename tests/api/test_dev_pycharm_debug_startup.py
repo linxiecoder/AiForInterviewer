@@ -1,4 +1,8 @@
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from scripts.dev.pycharm_debug_uvicorn import (
     PyCharmDebugSettings,
@@ -10,14 +14,256 @@ from scripts.dev.pycharm_debug_uvicorn import (
 def test_start_api_debug_uses_pycharm_wrapper_without_uvicorn_reload() -> None:
     script = Path("scripts/dev/start-api.sh").read_text(encoding="utf-8")
 
-    assert "exec .venv/bin/python scripts/dev/pycharm_debug_uvicorn.py" in script
-    assert "exec .venv/bin/python -m uvicorn" in script
-    debug_exec_index = script.index("exec .venv/bin/python scripts/dev/pycharm_debug_uvicorn.py")
-    normal_exec_index = script.index("exec .venv/bin/python -m uvicorn")
+    assert 'API_HOST="${API_HOST:-127.0.0.1}"' in script
+    assert 'API_PORT="${API_PORT:-8001}"' in script
+    assert "export API_PORT" in script
+    assert 'PYTHON_BIN="$(resolve_python "$ROOT_DIR")"' in script
+    assert 'scripts/dev/check_auth_dev_user.py' in script
+    assert 'exec "$PYTHON_BIN" scripts/dev/pycharm_debug_uvicorn.py --host "$API_HOST" --port "$API_PORT"' in script
+    assert 'exec "$PYTHON_BIN" scripts/dev/run_api.py --host "$API_HOST" --port "$API_PORT"' in script
+    assert 'exec "$PYTHON_BIN" -m uvicorn' not in script
+    assert script.index("scripts/dev/check_auth_dev_user.py") < script.index(
+        'exec "$PYTHON_BIN" scripts/dev/run_api.py --host "$API_HOST" --port "$API_PORT"'
+    )
+    debug_exec_index = script.index(
+        'exec "$PYTHON_BIN" scripts/dev/pycharm_debug_uvicorn.py --host "$API_HOST" --port "$API_PORT"'
+    )
+    normal_exec_index = script.index(
+        'exec "$PYTHON_BIN" scripts/dev/run_api.py --host "$API_HOST" --port "$API_PORT"'
+    )
     debug_branch_start = script.rindex('if [ "$MODE" = "debug" ]; then', 0, debug_exec_index)
     debug_branch = script[debug_branch_start:debug_exec_index]
     assert debug_exec_index < normal_exec_index
     assert "--reload" not in debug_branch
+
+
+def test_shell_python_resolver_supports_posix_and_windows_venv() -> None:
+    helper = Path("scripts/lib/python.sh").read_text(encoding="utf-8")
+
+    assert "${root_dir}/.venv/bin/python" in helper
+    assert "${root_dir}/.venv/Scripts/python.exe" in helper
+    assert "${PYTHON:-}" in helper
+
+
+def test_shell_dotenv_loader_preserves_explicit_environment() -> None:
+    helper = Path("scripts/lib/env.sh").read_text(encoding="utf-8")
+    start_script = Path("scripts/dev/start.sh").read_text(encoding="utf-8")
+    api_script = Path("scripts/dev/start-api.sh").read_text(encoding="utf-8")
+
+    assert "load_dotenv_preserving_explicit_env" in helper
+    assert "remember_explicit_env" in helper
+    assert "restore_explicit_env" in helper
+    assert "source \"${ROOT_DIR}/scripts/lib/env.sh\"" in start_script
+    assert "source \"${ROOT_DIR}/scripts/lib/env.sh\"" in api_script
+    assert "load_dotenv_preserving_explicit_env .env API_HOST API_PORT WEB_PORT VITE_API_PROXY_TARGET" in start_script
+    assert "load_dotenv_preserving_explicit_env .env API_HOST API_PORT PYCHARM_DEBUG_HOST" in api_script
+
+
+def test_db_scripts_use_resolved_python() -> None:
+    for path in ("scripts/db/migrate.sh", "scripts/db/revision.sh"):
+        script = Path(path).read_text(encoding="utf-8")
+
+        assert 'source "${ROOT_DIR}/scripts/lib/python.sh"' in script
+        assert 'PYTHON_BIN="$(resolve_python "$ROOT_DIR")"' in script
+        assert 'exec "$PYTHON_BIN"' in script
+        assert ".venv/bin/python" not in script
+
+
+def test_kill_ports_clears_windows_listeners_for_wsl_web_runtime() -> None:
+    script = Path("scripts/dev/kill-ports.sh").read_text(encoding="utf-8")
+
+    assert "find_pids_with_ss" in script
+    assert "is_wsl_shell" in script
+    assert "find_wsl_pids" in script
+    assert "kill_wsl_pids" in script
+    assert "find_windows_pids" in script
+    assert "find_windows_pids_with_netstat" in script
+    assert "kill_windows_port" in script
+    assert "kill_windows_pids" in script
+    assert "describe_windows_pids" in script
+    assert "normalize_pids" in script
+    assert "pause_after_kill" in script
+    assert "local seen=\" \"" in script
+    assert "fallback_pid_list" in script
+    assert "powershell.exe" in script
+    assert "Start-Sleep -Seconds 1" in script
+    assert "cmd.exe" in script
+    assert "ForEach-Object" in script
+    assert "netstat -ano -p tcp" in script
+    assert "wsl.exe sh -lc" in script
+    assert "ss -ltnp" in script
+    assert "Get-NetTCPConnection" in script
+    assert "Get-CimInstance Win32_Process" in script
+    assert "Stop-Process" in script
+    assert "taskkill.exe" in script
+    assert 'MSYS2_ARG_CONV_EXCL="*" taskkill.exe /F /PID "$process_id"' in script
+    assert "taskkill.exe /F /PID" in script
+    assert "taskkill.exe //F //PID" not in script
+    assert "taskkill failed for Windows PID" in script
+    assert "Stop-Process failed for Windows PID" in script
+    assert "unable to inspect process details" in script
+    assert "failed to free port" in script
+    assert "the listener is likely owned by System or the virtualization network layer" in script
+    assert '$env:API_PORT="8002"; npm run dev' in script
+    assert "xargs" not in script
+    assert "tr -d" not in script
+
+
+def test_auth_dev_user_preflight_accepts_configured_dev_credentials(monkeypatch) -> None:
+    from scripts.dev import check_auth_dev_user
+
+    monkeypatch.setenv("API_AUTH_DEV_USER_ENABLED", "true")
+    monkeypatch.setenv("API_AUTH_DEV_USER_IDENTIFIER", "developer")
+    monkeypatch.setenv("API_AUTH_DEV_USER_EMAIL", "developer@example.com")
+    monkeypatch.setenv("API_AUTH_DEV_USER_USERNAME", "developer")
+    monkeypatch.setenv("API_AUTH_DEV_USER_PASSWORD", "local-test-password")
+
+    assert check_auth_dev_user.main() == 0
+
+
+def test_auth_dev_user_preflight_fails_when_enabled_without_password(monkeypatch) -> None:
+    from scripts.dev import check_auth_dev_user
+
+    monkeypatch.setenv("API_AUTH_DEV_USER_ENABLED", "true")
+    monkeypatch.setenv("API_AUTH_DEV_USER_IDENTIFIER", "developer")
+    monkeypatch.delenv("API_AUTH_DEV_USER_PASSWORD", raising=False)
+
+    assert check_auth_dev_user.main() == 2
+
+
+def test_auth_dev_user_preflight_script_bootstraps_api_path_without_pythonpath() -> None:
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env.update(
+        {
+            "API_AUTH_DEV_USER_ENABLED": "true",
+            "API_AUTH_DEV_USER_IDENTIFIER": "developer",
+            "API_AUTH_DEV_USER_EMAIL": "developer@example.com",
+            "API_AUTH_DEV_USER_USERNAME": "developer",
+            "API_AUTH_DEV_USER_PASSWORD": "local-test-password",
+        }
+    )
+
+    result = subprocess.run(
+        [sys.executable, "scripts/dev/check_auth_dev_user.py"],
+        cwd=Path.cwd(),
+        env=env,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "[dev] auth dev user ready: developer" in result.stdout
+
+
+def test_dev_python_entrypoints_load_project_dotenv_and_api_path() -> None:
+    for path in (
+        "scripts/dev/check_auth_dev_user.py",
+        "scripts/dev/pycharm_debug_uvicorn.py",
+        "scripts/dev/run_api.py",
+    ):
+        script = Path(path).read_text(encoding="utf-8")
+
+        assert "load_project_dotenv" in script
+        assert "ensure_api_import_path" in script
+
+
+def test_dev_env_loader_preserves_explicit_environment(monkeypatch) -> None:
+    from scripts.dev import dev_env
+
+    monkeypatch.setenv("API_AUTH_DEV_USER_PASSWORD", "explicit-password")
+    monkeypatch.setenv("API_PORT", "8003")
+    dev_env.load_project_dotenv()
+
+    assert os.environ["API_AUTH_DEV_USER_PASSWORD"] == "explicit-password"
+    assert os.environ["API_PORT"] == "8003"
+
+
+def test_api_run_settings_prefer_cli_port_over_dotenv_environment(monkeypatch) -> None:
+    from scripts.dev import dev_env
+
+    monkeypatch.setenv("API_HOST", "127.0.0.1")
+    monkeypatch.setenv("API_PORT", "8001")
+
+    settings = dev_env.resolve_api_run_settings(["--host", "127.0.0.1", "--port", "8003"])
+    dev_env.apply_api_run_settings_to_env(settings)
+
+    assert settings == dev_env.ApiRunSettings(host="127.0.0.1", port=8003)
+    assert os.environ["API_HOST"] == "127.0.0.1"
+    assert os.environ["API_PORT"] == "8003"
+
+
+def test_start_script_resolves_web_runtime_before_starting_processes() -> None:
+    script = Path("scripts/dev/start.sh").read_text(encoding="utf-8")
+
+    assert 'source "${ROOT_DIR}/scripts/lib/node.sh"' in script
+    assert 'API_PORT="${API_PORT:-8001}"' in script
+    assert 'WEB_PORT="${WEB_PORT:-5173}"' in script
+    assert "API_PORT_WAS_EXPLICIT" in script
+    assert "VITE_API_PROXY_TARGET_WAS_EXPLICIT" in script
+    assert "resolve_api_port()" in script
+    assert 'resolve_api_port' in script
+    assert 'bash scripts/dev/kill-ports.sh "$port"' in script
+    assert 'if [ "$API_PORT_WAS_EXPLICIT" = "1" ]; then' in script
+    assert "API_PORT ${port} is unavailable; using ${candidate}" in script
+    assert 'VITE_API_PROXY_TARGET="http://127.0.0.1:${API_PORT}"' in script
+    assert 'bash scripts/dev/kill-ports.sh "$WEB_PORT"' in script
+    assert 'start_web_dev "$ROOT_DIR" &' in script
+    assert "npm --workspace apps/web run dev &" not in script
+    assert script.index("select_web_runtime") < script.index("bash scripts/dev/kill-ports.sh")
+
+
+def test_start_script_cleanup_clears_orphan_dev_port_listeners() -> None:
+    script = Path("scripts/dev/start.sh").read_text(encoding="utf-8")
+    cleanup_start = script.index("cleanup()")
+    cleanup_end = script.index("trap cleanup", cleanup_start)
+    cleanup_body = script[cleanup_start:cleanup_end]
+
+    assert 'kill "$API_PID"' in cleanup_body
+    assert 'kill "$WEB_PID"' in cleanup_body
+    assert 'bash scripts/dev/kill-ports.sh "$API_PORT" "$WEB_PORT"' in cleanup_body
+
+
+def test_start_web_script_uses_shared_node_resolver() -> None:
+    script = Path("scripts/dev/start-web.sh").read_text(encoding="utf-8")
+    root_package = json.loads(Path("package.json").read_text(encoding="utf-8"))
+
+    assert 'source "${ROOT_DIR}/scripts/lib/node.sh"' in script
+    assert "select_web_runtime" in script
+    assert 'start_web_dev "$ROOT_DIR"' in script
+    assert root_package["scripts"]["dev:web"] == "bash scripts/dev/kill-ports.sh 5173 && bash scripts/dev/start-web.sh"
+
+
+def test_node_resolver_falls_back_to_windows_npm_for_bash_on_windows() -> None:
+    helper = Path("scripts/lib/node.sh").read_text(encoding="utf-8")
+
+    assert 'WEB_NODE_MIN_VERSION="20.19.0"' in helper
+    assert "node_version_supports_web_dev" in helper
+    assert "is_wsl_shell" in helper
+    assert "cygpath -w" in helper
+    assert "powershell.exe" in helper
+    assert "powershell_single_quoted_literal" in helper
+    assert "if command -v powershell.exe >/dev/null 2>&1; then" in helper
+    assert "if is_wsl_shell && command -v powershell.exe" not in helper
+    assert 'Set-Location -LiteralPath ${powershell_root}' in helper
+    assert 'powershell_api_proxy_target="$(powershell_single_quoted_literal "$VITE_API_PROXY_TARGET")"' in helper
+    assert '$env:VITE_API_PROXY_TARGET=${powershell_api_proxy_target}' in helper
+    assert "npm.cmd --workspace apps/web run dev" in helper
+    assert 'VITE_API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-http://127.0.0.1:${API_PORT:-8001}}"' in helper
+    assert "$args[0]" not in helper
+
+
+def test_package_engines_match_vite_node_floor() -> None:
+    root_package = json.loads(Path("package.json").read_text(encoding="utf-8"))
+    web_package = json.loads(Path("apps/web/package.json").read_text(encoding="utf-8"))
+    lockfile = json.loads(Path("package-lock.json").read_text(encoding="utf-8"))
+
+    assert root_package["engines"]["node"] == ">=20.19.0"
+    assert web_package["engines"]["node"] == ">=20.19.0"
+    assert lockfile["packages"][""]["engines"]["node"] == ">=20.19.0"
+    assert lockfile["packages"]["apps/web"]["engines"]["node"] == ">=20.19.0"
 
 
 def test_resolve_pycharm_debug_settings_defaults_to_local_debug_server() -> None:

@@ -2,7 +2,7 @@
   "name": "ai-for-interviewer",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "workspaces": [
     "apps/web"
@@ -13,7 +13,7 @@
     "db:up": "docker compose -f docker-compose.pg.yml up -d postgres",
     "dev:kill": "bash scripts/dev/kill-ports.sh 8001 5173",
     "dev:api": "bash scripts/dev/kill-ports.sh 8001 && bash scripts/dev/start-api.sh",
-    "dev:web": "bash scripts/dev/kill-ports.sh 5173 && npm --workspace apps/web run dev",
+    "dev:web": "bash scripts/dev/kill-ports.sh 5173 && bash scripts/dev/start-web.sh",
     "db:migrate": "bash scripts/db/migrate.sh",
     "db:revision": "bash scripts/db/revision.sh",
     "api:dev": "npm run dev:api",

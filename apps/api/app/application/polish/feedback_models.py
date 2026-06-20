@@ -216,10 +216,51 @@ class FeedbackCandidatePayload(_PayloadModel):
 
     _validation_warnings: list[str] = PrivateAttr(default_factory=list)
 
+    @field_validator("loss_points", mode="before")
+    @classmethod
+    def _normalize_loss_point_strings(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        normalized: list[object] = []
+        for index, item in enumerate(value, start=1):
+            if isinstance(item, str):
+                reason = _clean_text(item, max_chars=2000)
+                if reason:
+                    normalized.append(
+                        {
+                            "loss_point_id": f"loss_point_{index}",
+                            "reason": reason,
+                        }
+                    )
+                    continue
+            normalized.append(item)
+        return normalized
+
     @field_validator("score_reasoning", mode="before")
     @classmethod
     def _score_reasoning_or_empty(cls, value: object) -> object:
         return value if isinstance(value, list) else []
+
+    @field_validator("low_confidence_flags", mode="before")
+    @classmethod
+    def _normalize_low_confidence_flag_objects(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        normalized: list[object] = []
+        for item in value:
+            if isinstance(item, dict):
+                text = _clean_text(
+                    item.get("code")
+                    or item.get("flag")
+                    or item.get("reason")
+                    or item.get("source"),
+                    max_chars=160,
+                )
+                if text:
+                    normalized.append(text)
+                continue
+            normalized.append(item)
+        return normalized
 
     @field_validator("project_asset_update_candidates", mode="before")
     @classmethod

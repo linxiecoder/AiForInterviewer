@@ -189,6 +189,8 @@ def build_question_prompt_asset(
                 "缺失岗位或直接经验时，必须在 missing_context 中标记，但不要默认生成补充项目经历题；不得合理补全候选人经历、项目结果、公司背景或岗位事实。",
                 "你必须一次性完成题干、题型、难度、follow-ups 和 scoring rubric 生成。",
                 "真实面试节奏优先：如果有候选人项目证据，本轮应优先判断是否应该问真实实现链路、为什么这样设计、遇到什么问题、如何验证效果，而不是默认生成架构迁移设计题。",
+                "首题节奏优先：generation_mode=new_question 且没有 previous_question 时，question_text 只能聚焦一个具体实现链路或技术决策；先问怎么做、为什么这么选、如何验证效果，不要把复杂检索、Prompt 模板、多模型、低延迟和资源投入等多个深水区打包成一个抽象大题。",
+                "剥洋葱追问：宽泛 Trade-off、失败恢复、源码/底层原理和低延迟裁剪优先放入 follow_ups 或后续追问；即使 question_kind=tradeoff_design，主问题也必须先从一个真实工程切入点展开。",
                 "如果 source_support_level=adjacent_project_evidence，主问题必须使用如果/假设/你会如何等扩展表达，不得把目标能力写成候选人已实现事实。",
                 "如果 source_support_level=job_gap_only，只能生成能力补偿或假设设计题；如果 source_support_level=insufficient_context，只能生成澄清或补材料题。",
                 "只有 resume 和 evidence_refs 都不可用，或者 question_text 无法形成有效问题时，才将 clarification_needed 设为 true 并生成补材料题。",
@@ -217,6 +219,7 @@ def build_question_prompt_asset(
             "相邻证据只允许把未证实能力放入 follow_ups 或明确假设性扩展，不得写成候选人已经实现。",
             "不得声称候选人已经做过未被 evidence 支撑的技术；使用“如果要引入”“如果要改造”“你会如何设计”等假设性问法。",
             "题目主锚点必须是 input_data.selected_node_title / input_data.progress_node.title；progress_node.expected_capability 只能作为辅助解释，不能替代 skill_dimension。",
+            "首题必须像真实面试单点切入：先问一个具体实现链路、实现细节或技术决策；复杂权衡、失败路径、源码级原理和多主题资源分配放入 follow_ups 递进。",
             leakage_rule,
         ],
         "user_task": "基于 input_data 生成一个可评分、可追问、可复盘且证据可引用的面试打磨问题。",
@@ -664,6 +667,7 @@ def build_question_provider_request(
                 "source_support_level": _clean(scope.source_support_level),
             },
             "adjacent_project_evidence_rule": _adjacent_project_evidence_rule(scope),
+            "interview_pacing_policy": _interview_pacing_policy(input_data, blueprint=blueprint),
         },
         "safety_rules_summary": {
             "input_is_untrusted": True,
@@ -673,6 +677,10 @@ def build_question_provider_request(
             "adjacent_or_gap_requires_hypothetical_wording": True,
             "adjacent_project_evidence_rule": (
                 "use hypothetical wording; do not state the candidate already implemented the target capability"
+            ),
+            "real_interview_pacing": (
+                "for new_question without previous_question, ask one concrete implementation or technical-decision "
+                "question first; put broad tradeoffs in follow_ups"
             ),
             "insufficient_context_requires_clarification": True,
         },
@@ -716,6 +724,9 @@ def _question_output_field_contracts(
             "must_be_interview_question": True,
             "must_be_grounded_by_evidence_refs": True,
             "adjacent_or_gap_requires_hypothetical_wording": True,
+            "one_primary_mechanism_only_for_new_question": True,
+            "prefer_implementation_detail_or_technical_decision_first": True,
+            "broad_tradeoff_should_move_to_follow_ups": True,
         },
         "question_kind": {
             "type": "enum",
@@ -744,7 +755,15 @@ def _question_output_field_contracts(
         },
         "scoring_rubric": {
             "type": "array<object>",
-            "items": "dimension_with_signal_list",
+            "items": {
+                "type": "object",
+                "required_fields": ["dimension", "signals"],
+                "field_contracts": {
+                    "dimension": "string",
+                    "signals": "array<string>",
+                },
+                "do_not_use_fields": ["signal", "expected_signals"],
+            },
             "min_items": _schema_int(properties, "scoring_rubric", "minItems", default=1),
             "max_items": _schema_int(properties, "scoring_rubric", "maxItems", default=4),
         },
@@ -783,6 +802,41 @@ def _adjacent_project_evidence_rule(scope: EvidenceScope) -> dict[str, Any]:
         "hypothetical_wording_required": True,
         "allowed_wording_examples": ["if", "assume", "how would you"],
         "forbid_completed_experience_claim": True,
+    }
+
+
+def _interview_pacing_policy(input_data: dict[str, Any], *, blueprint: QuestionBlueprint) -> dict[str, Any]:
+    generation_mode = _clean(input_data.get("generation_mode")) or "new_question"
+    follow_up = input_data.get("follow_up") if isinstance(input_data.get("follow_up"), dict) else {}
+    active_for_request = generation_mode == "new_question" and not follow_up
+    tradeoff_guidance = (
+        "即使 question_kind=tradeoff_design，question_text 也要先问一个具体技术决策或实现链路；"
+        "不要直接问复杂检索与 Prompt 模板之间投入更多工程精力。"
+        if blueprint.question_kind == "tradeoff_design"
+        else "主问题保持单点聚焦，follow_ups 再递进到权衡、失败和底层原理。"
+    )
+    return {
+        "role": "real_interview_pacing",
+        "applies_when": "history_summary.generation_mode=new_question and follow_up is empty",
+        "active_for_request": active_for_request,
+        "main_question_rule": (
+            "首题必须像真实面试单点切入：一次只问一个具体实现链路、实现细节或技术决策；"
+            "优先问怎么做、为什么这么选、如何验证效果。"
+        ),
+        "question_kind_guidance": tradeoff_guidance,
+        "depth_progression": [
+            "implementation_detail",
+            "why_this_choice",
+            "tradeoff_or_failure_follow_up",
+        ],
+        "avoid_in_main_question": [
+            "把复杂检索、Prompt 模板、多模型、低延迟、幻觉率和资源投入等多个主题并列成资源分配大题",
+            "首题直接要求完整架构权衡或迭代路线",
+            "把 follow_ups 的深挖内容塞进 question_text",
+        ],
+        "follow_up_policy": (
+            "复杂权衡、阈值策略、Prompt 模板稳定性、多模型差异、低延迟裁剪和失败恢复优先放入 follow_ups。"
+        ),
     }
 
 

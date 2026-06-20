@@ -138,6 +138,9 @@ export const POLISH_QUESTION_TASK_FAILURE_STATUSES = [
 ] as const;
 const POLISH_AI_TASK_POLL_INTERVAL_MS = 600;
 const POLISH_AI_TASK_POLL_ATTEMPTS = 20;
+const POLISH_AI_TASK_FEEDBACK_POLL_ATTEMPTS = 60;
+const POLISH_AI_TASK_FEEDBACK_PENDING_MESSAGE = "反馈生成仍在进行中，请稍后刷新查看结果。";
+export const INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY = `回答已保存，${POLISH_AI_TASK_FEEDBACK_PENDING_MESSAGE}`;
 export const INTERVIEW_LIST_HEADER_CONTROL_ORDER = ["actions", "search"] as const;
 export const INTERVIEW_LIST_HEADER_TEXT_STATE = "removed" as const;
 export const INTERVIEW_SEARCH_PLACEHOLDER = "搜索模拟面试名称、岗位、简历、主题" as const;
@@ -1029,8 +1032,13 @@ export function isPolishQuestionTaskFailureStatus(status: string | null | undefi
   );
 }
 
-async function waitForPolishAiTaskFinalStatus(aiTaskId: string, timeoutMessage: string): Promise<PolishAiTaskResult> {
-  for (let attempt = 0; attempt < POLISH_AI_TASK_POLL_ATTEMPTS; attempt += 1) {
+async function waitForPolishAiTaskFinalStatus(
+  aiTaskId: string,
+  timeoutMessage: string,
+  options?: { attempts?: number },
+): Promise<PolishAiTaskResult> {
+  const attempts = options?.attempts ?? POLISH_AI_TASK_POLL_ATTEMPTS;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     const result = await fetchPolishAiTaskResult(aiTaskId);
     if (isPolishAiTaskFinalStatus(result.status)) {
       return result;
@@ -2353,6 +2361,13 @@ function buildQuestionProgressNodesByRef(session: PolishSessionDetail): Map<stri
     if (!turn.progress_node_ref) {
       continue;
     }
+    const displayTargetRef = resolveQuestionProgressNodeDisplayTargetRef(
+      session.progress_tree_plan.nodes,
+      turn.progress_node_ref,
+    );
+    if (!displayTargetRef) {
+      continue;
+    }
     const shortQuestion = turn.question_text.length > 24 ? `${turn.question_text.slice(0, 21)}...` : turn.question_text;
     const questionNode: WorkbenchProgressNode = {
       key: `question:${turn.question_id}`,
@@ -2363,12 +2378,40 @@ function buildQuestionProgressNodesByRef(session: PolishSessionDetail): Map<stri
       questionId: turn.question_id,
       questionTargetRef: turn.progress_node_ref ?? undefined,
     };
-    questionNodesByRef.set(turn.progress_node_ref, [
-      ...(questionNodesByRef.get(turn.progress_node_ref) ?? []),
+    questionNodesByRef.set(displayTargetRef, [
+      ...(questionNodesByRef.get(displayTargetRef) ?? []),
       questionNode,
     ]);
   }
   return questionNodesByRef;
+}
+
+function resolveQuestionProgressNodeDisplayTargetRef(
+  nodes: readonly PolishProgressTreeNode[],
+  progressNodeRef: string | null | undefined,
+): string | null {
+  if (!progressNodeRef) {
+    return null;
+  }
+  const node = findProgressTreeNodeByRef(nodes, progressNodeRef);
+  if (node === null) {
+    return progressNodeRef;
+  }
+  const leafNode = findFirstProgressTreeLeafNode(node.children);
+  return leafNode?.progress_node_ref ?? progressNodeRef;
+}
+
+function findFirstProgressTreeLeafNode(nodes: readonly PolishProgressTreeNode[]): PolishProgressTreeNode | null {
+  for (const node of nodes) {
+    if (node.children.length === 0) {
+      return node;
+    }
+    const leafNode = findFirstProgressTreeLeafNode(node.children);
+    if (leafNode !== null) {
+      return leafNode;
+    }
+  }
+  return null;
 }
 
 function dedupeProgressTreeNodesByRef(nodes: readonly PolishProgressTreeNode[]): PolishProgressTreeNode[] {
@@ -5199,9 +5242,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
           answer_id: answer.answer_id,
         });
         if (isPolishAiTaskRunningStatus(feedbackTask.status)) {
-          await waitForPolishAiTaskFinalStatus(feedbackTask.ai_task_id, "反馈生成仍在进行中，请稍后刷新查看结果。");
+          await waitForPolishAiTaskFinalStatus(
+            feedbackTask.ai_task_id,
+            POLISH_AI_TASK_FEEDBACK_PENDING_MESSAGE,
+            { attempts: POLISH_AI_TASK_FEEDBACK_POLL_ATTEMPTS },
+          );
         }
       } catch (feedbackError) {
+        if (feedbackError instanceof Error && feedbackError.message === POLISH_AI_TASK_FEEDBACK_PENDING_MESSAGE) {
+          setWorkbenchFailureState(null);
+          setAnswerError(INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY);
+          setAnswerText(trimmedAnswer);
+          await loadSession();
+          return;
+        }
         setWorkbenchFailureState("feedbackFailedAnswerSaved");
         setAnswerError(
           feedbackError instanceof Error

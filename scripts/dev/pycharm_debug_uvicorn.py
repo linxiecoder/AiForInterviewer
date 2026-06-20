@@ -12,16 +12,28 @@ from dataclasses import dataclass
 import importlib
 import inspect
 import os
-from pathlib import Path
 import sys
 
 import uvicorn
 
+try:
+    from scripts.dev.dev_env import (
+        apply_api_run_settings_to_env,
+        ensure_api_import_path,
+        load_project_dotenv,
+        resolve_api_run_settings,
+    )
+except ModuleNotFoundError:
+    from dev_env import (
+        apply_api_run_settings_to_env,
+        ensure_api_import_path,
+        load_project_dotenv,
+        resolve_api_run_settings,
+    )
+
 
 DEFAULT_DEBUG_HOST = "127.0.0.1"
 DEFAULT_DEBUG_PORT = 5678
-DEFAULT_API_HOST = "127.0.0.1"
-DEFAULT_API_PORT = 8001
 TRUTHY_VALUES = {"1", "true", "yes", "y", "on"}
 FALSY_VALUES = {"0", "false", "no", "n", "off"}
 
@@ -67,7 +79,10 @@ def attach_pycharm_debugger(
 
 
 def main() -> None:
-    _ensure_api_import_path()
+    load_project_dotenv()
+    api_settings = resolve_api_run_settings()
+    apply_api_run_settings_to_env(api_settings)
+    ensure_api_import_path()
     settings = resolve_pycharm_debug_settings()
     print(
         "[dev] connecting PyCharm debug server at "
@@ -77,19 +92,11 @@ def main() -> None:
     attach_pycharm_debugger(settings)
     uvicorn.run(
         "app.main:app",
-        host=_env_text(os.environ, "API_HOST", DEFAULT_API_HOST),
-        port=_env_int(os.environ, "API_PORT", DEFAULT_API_PORT),
+        host=api_settings.host,
+        port=api_settings.port,
         log_level="debug",
         reload=False,
     )
-
-
-def _ensure_api_import_path() -> None:
-    root_dir = Path(__file__).resolve().parents[2]
-    api_dir = root_dir / "apps" / "api"
-    api_path = str(api_dir)
-    if api_path not in sys.path:
-        sys.path.insert(0, api_path)
 
 
 def _settrace_kwargs(settrace: Callable[..., object], settings: PyCharmDebugSettings) -> dict[str, object]:

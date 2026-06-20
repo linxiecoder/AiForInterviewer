@@ -23,6 +23,7 @@ import {
   INTERVIEW_WORKBENCH_DISABLED_ACTIONS,
   INTERVIEW_WORKBENCH_END_CONFIRM_COPY,
   INTERVIEW_WORKBENCH_FEEDBACK_ITEMS,
+  INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY,
   INTERVIEW_WORKBENCH_HERO_ACTION_COPY,
   INTERVIEW_WORKBENCH_HERO_ACTION_ICON_POLICY,
   INTERVIEW_WORKBENCH_HERO_ACTION_PLACEMENT,
@@ -1092,6 +1093,10 @@ function test_polish_feedback_runtime_reads_ai_task_status_and_result_paths(): v
   assertContract(isPolishAiTaskFinalStatus("succeeded"), "succeeded 应视为终态");
   assertContract(isPolishAiTaskFinalStatus("generation_failed"), "generation_failed 应视为终态");
   assertContract(isPolishAiTaskFinalStatus("timed_out"), "timed_out 应视为终态");
+  assertContract(
+    INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY === "回答已保存，反馈生成仍在进行中，请稍后刷新查看结果。",
+    "反馈短轮询超时时不应把仍在运行展示为生成失败",
+  );
   const result: PolishAiTaskResult = {
     ai_task_id: "task_feedback",
     status: "succeeded",
@@ -1154,6 +1159,41 @@ function test_progress_tree_group_header_is_not_question_target(): void {
 
   assertContract(getWorkbenchProgressNodeQuestionTargetRef(groupHeader) === null, "分类标题不应成为生成题目目标");
   assertContract(getWorkbenchProgressNodeQuestionTargetRef(realNode) === "node_resume_1", "真实节点应传递 progress_node_ref");
+}
+
+function test_question_for_parent_progress_node_displays_under_child_node(): void {
+  const parentNode = buildTestProgressNode("node_parent", "AI工程化与RAG系统构建", "resume_deep_dive", "深度打磨类");
+  parentNode.children = [
+    buildTestProgressNode("node_child_retrieval", "混合检索策略选型与调优", "resume_deep_dive", "深度打磨类"),
+    buildTestProgressNode("node_child_oom", "大文件异步处理与OOM治理", "resume_deep_dive", "深度打磨类"),
+  ];
+  const session = buildTestSession([parentNode], "node_parent");
+  session.turns = [
+    {
+      question_id: "q_parent",
+      question_text: "在构建硬件测试知识库的RAG系统时，常面临哪些检索质量问题？",
+      question_sources: [],
+      question_created_at: "2026-05-21T10:00:00Z",
+      progress_node_ref: "node_parent",
+      evidence_refs: [],
+      context_digest: "digest-parent",
+      answers: [],
+    },
+  ];
+
+  const groupHeader = buildWorkbenchProgressNodes(session)[0];
+  const parentListNode = groupHeader.children?.[0];
+  const childNode = parentListNode?.children?.find((node) => node.key === "node_child_retrieval");
+  const directParentQuestionNode = parentListNode?.children?.find((node) => node.key === "question:q_parent");
+  const displayedQuestionNode = childNode?.children?.find((node) => node.key === "question:q_parent");
+
+  assertContract(directParentQuestionNode === undefined, "父节点题目不应与二级节点并列展示");
+  assertContract(displayedQuestionNode?.kind === "question", "父节点历史题目应显示到首个二级节点下");
+  assertContract(displayedQuestionNode?.questionTargetRef === "node_parent", "题目节点应保留原始 progress_node_ref");
+  assertContract(
+    resolveProgressTreeSelectedNodeRefAfterClick(displayedQuestionNode, null) === "node_parent",
+    "点击题目仍应回到原始题目目标节点",
+  );
 }
 
 function test_progress_node_context_renders_as_compact_banner(): void {
@@ -4430,6 +4470,7 @@ test_interview_workbench_rag_unavailable_copy_is_non_claiming();
 test_polish_m25_components_are_split_and_exported();
 test_progress_tree_groups_flat_nodes_by_display_category_title();
 test_progress_tree_group_header_is_not_question_target();
+test_question_for_parent_progress_node_displays_under_child_node();
 test_progress_tree_group_headers_default_expanded_for_collapse_control();
 test_progress_tree_uses_progress_node_ref_as_key_and_priority_match();
 test_interview_topic_title_neutralizes_interrogation_copy();

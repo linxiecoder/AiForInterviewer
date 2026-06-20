@@ -30,6 +30,61 @@ def test_backend_authority_emits_trace_only_execution_target() -> None:
     assert decision.details["decision_ref_contract"] == "trace_only"
 
 
+def test_backend_authority_resolves_new_question_parent_priority_to_leaf_target() -> None:
+    command = CreatePolishQuestionTaskCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+    )
+    detail = SimpleNamespace(
+        progress_tree_plan={
+            "nodes": [
+                {
+                    "progress_node_ref": "node-parent",
+                    "children": [
+                        {"progress_node_ref": "node-child-a", "children": []},
+                        {"progress_node_ref": "node-child-b", "children": []},
+                    ],
+                }
+            ]
+        },
+        progress_tree_state={"current_priority": {"progress_node_ref": "node-parent"}},
+    )
+
+    decision = polish_use_cases._decide_question_execution_authority(command=command, detail=detail)
+
+    assert decision.allowed
+    assert decision.execution_target == "node-child-a"
+    assert decision.control_reason_codes == ("backend_authority_target_selected",)
+
+
+def test_backend_authority_keeps_feedback_intent_execution_grant_target() -> None:
+    command = CreatePolishQuestionTaskCommand(
+        owner_id="owner-1",
+        actor_id="actor-1",
+        session_id="session-1",
+        selected_progress_node_ref="node-parent",
+        execution_source=polish_use_cases.QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+    )
+    detail = SimpleNamespace(
+        progress_tree_plan={
+            "nodes": [
+                {
+                    "progress_node_ref": "node-parent",
+                    "children": [{"progress_node_ref": "node-child", "children": []}],
+                }
+            ]
+        },
+        progress_tree_state={"current_priority": {"progress_node_ref": "node-child"}},
+    )
+
+    decision = polish_use_cases._decide_question_execution_authority(command=command, detail=detail)
+
+    assert decision.allowed
+    assert decision.execution_target == "node-parent"
+    assert decision.policy_reason_codes == (polish_use_cases.QUESTION_GENERATION_MODE_NEW,)
+
+
 def test_backend_authority_rejects_target_not_in_backend_plan() -> None:
     command = CreatePolishQuestionTaskCommand(
         owner_id="owner-1",

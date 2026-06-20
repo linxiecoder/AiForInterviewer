@@ -2934,7 +2934,49 @@ def _backend_question_execution_target(
     command: CreatePolishQuestionTaskCommand,
     detail: PolishSessionDetail,
 ) -> str | None:
-    return _question_generation_requested_ref(command) or _backend_current_priority_progress_node_ref(detail)
+    requested_ref = _question_generation_requested_ref(command) or _backend_current_priority_progress_node_ref(detail)
+    if requested_ref is None:
+        return None
+    if _question_generation_mode(command) != QUESTION_GENERATION_MODE_NEW:
+        return requested_ref
+    if command.execution_source == QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return requested_ref
+    return _question_generation_leaf_target_ref(detail.progress_tree_plan, requested_ref) or requested_ref
+
+
+def _question_generation_leaf_target_ref(raw_plan: object, progress_node_ref: str) -> str | None:
+    if not isinstance(raw_plan, dict):
+        return None
+    target_node = _find_plan_progress_node(raw_plan.get("nodes"), progress_node_ref)
+    if target_node is None:
+        return None
+    leaf_node = _first_leaf_plan_progress_node(target_node)
+    return _clean_question_request_text(leaf_node.get("progress_node_ref")) if leaf_node is not None else None
+
+
+def _find_plan_progress_node(nodes: object, progress_node_ref: str) -> dict[str, Any] | None:
+    if not isinstance(nodes, list):
+        return None
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if _clean_question_request_text(node.get("progress_node_ref")) == progress_node_ref:
+            return node
+        child = _find_plan_progress_node(node.get("children"), progress_node_ref)
+        if child is not None:
+            return child
+    return None
+
+
+def _first_leaf_plan_progress_node(node: dict[str, Any]) -> dict[str, Any] | None:
+    children = [child for child in node.get("children", []) if isinstance(child, dict)]
+    if not children:
+        return node
+    for child in children:
+        leaf = _first_leaf_plan_progress_node(child)
+        if leaf is not None:
+            return leaf
+    return node
 
 
 def _backend_current_priority_progress_node_ref(detail: PolishSessionDetail) -> str | None:

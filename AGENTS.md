@@ -95,7 +95,7 @@ PYCHARM_DEBUG_HOST=<windows-host-ip> PYCHARM_DEBUG_PORT=5678 npm run dev:debug
 
 若 PyCharm 提示 debugger 版本错误，以 IDE 提示的 `pydevd-pycharm` 版本为准更新 `requirements.txt` 并重新安装；当前依赖钉到 `pydevd-pycharm~=251.23774.444`。
 
-当前仓库没有 Alembic 或独立 migration 目录；本地 schema 初始化由 SQLAlchemy `Base.metadata.create_all()` 完成，API 启动时会执行同一初始化路径。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
+当前仓库已有 Alembic 迁移链路：`alembic.ini` 指向 `apps/api/migrations`，本地 API 启动默认经 `scripts/db/migrate.sh` / `scripts/db/upgrade.py` 执行迁移；`Base.metadata.create_all()` 只用于隔离测试或显式初始化，不作为 dev/prod 主 schema 路径。可用 `API_DB_AUTO_MIGRATE=false` 关闭启动期自动迁移。若从 Windows PowerShell 调用 WSL 工作区命令，优先使用 `wsl.exe -d Ubuntu --cd /home/administrator/code/AiForInterviewer ...`，避免在 `\\wsl.localhost` UNC 路径下调用 `npm.cmd` 时工作目录被切换。
 
 ## 9. 禁止事项
 
@@ -104,6 +104,16 @@ PYCHARM_DEBUG_HOST=<windows-host-ip> PYCHARM_DEBUG_PORT=5678 npm run dev:debug
 - 禁止绕过 `DELIVERY_PLAN.md` 新建阶段。
 - 禁止绕过 `REQUIREMENT_TRACEABILITY.md` 直接复用历史需求。
 - 禁止绕过 `archive/MANIFEST.md` 移动或删除文档。
+
+## 10. CodeGraph 与仓库知识地图
+
+- 仓库根目录存在 `.codegraph/` 时，理解或定位代码先用 CodeGraph；若 MCP 不可用，再用 `codegraph.cmd` shell 命令；若索引缺失或过期，说明降级原因后再用 `rg` / 文件读取。
+- 当前结构是根 npm orchestration + `apps/api` 后端 + `apps/web` 前端 + `tests` 回归测试 + `evals` 评测 + `tools/doc_governor` 文档治理工具。
+- `apps/api/` 是 FastAPI 后端。ASGI 入口是 `apps/api/app/main.py`；v1 路由从 `apps/api/app/api/v1/__init__.py` 聚合；主要分层是 `api`、`application`、`domain`、`infrastructure`、`schemas`。
+- `apps/web/` 是唯一 npm workspace。入口是 `apps/web/src/main.tsx` 和 `apps/web/src/app/App.tsx`；路由是自建 `RouteProvider` / `AppRouter`，不是 React Router。
+- `tests/` 以 pytest 为主；`apps/web/src/**/*.test.ts(x)` 由 `tsc --noEmit` 覆盖。当前未发现 Vitest、Jest、Testing Library 或 Playwright 配置。
+- `.github/workflows/eval-gate.yml` 当前只覆盖 eval gate，不代表 full pytest、web build、web test、smoke 或部署流水线已经通过。
+- 目录局部规则见 `apps/api/AGENTS.md`、`apps/web/AGENTS.md`、`tests/AGENTS.md`、`tools/doc_governor/AGENTS.md`；这些文件只补充局部协作规则，不替代本文件和 `docs/00-governance/DOCS_INDEX.md`。
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

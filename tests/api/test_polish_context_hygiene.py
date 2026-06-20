@@ -57,3 +57,35 @@ def test_question_and_feedback_generation_use_shared_context_hygiene_contract() 
     assert "build_context_hygiene_metadata" in question_source
     assert "build_context_hygiene_metadata" in feedback_source
     assert "normalize_context_hygiene_metadata" in metadata_source
+
+
+def test_question_focus_target_uses_parent_child_progress_path_context() -> None:
+    parent_node = {
+        "progress_node_ref": "node_parent",
+        "display_title": "AI工程化与RAG系统构建",
+        "expected_capability": "能说明AI工程化与RAG系统构建的总体方案。",
+        "children": [
+            {
+                "progress_node_ref": "node_child",
+                "display_title": "混合检索策略选型与调优",
+                "expected_capability": "能说明混合检索策略选型、调优和验证指标。",
+                "children": [],
+            }
+        ],
+    }
+    child_node = parent_node["children"][0]
+
+    path = question_generation_service._find_progress_node_path([parent_node], "node_child")
+    focus_target = question_generation_service._focus_target_from_progress_node(
+        child_node,
+        "node_child",
+        path=path,
+    )
+
+    assert focus_target.ref == "node_child"
+    assert focus_target.title == "AI工程化与RAG系统构建 / 混合检索策略选型与调优"
+    assert focus_target.expected_capability == (
+        "能说明AI工程化与RAG系统构建的总体方案。；能说明混合检索策略选型、调优和验证指标。"
+    )
+    assert focus_target.metadata["parent_node_ref"] == "node_parent"
+    assert focus_target.metadata["parent_title"] == "AI工程化与RAG系统构建"

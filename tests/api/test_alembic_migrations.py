@@ -35,6 +35,7 @@ def test_alembic_revision_ids_fit_version_table_limit() -> None:
 def test_alembic_upgrade_creates_version_and_representative_tables(monkeypatch) -> None:
     temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-upgrade")
     workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    engine = None
     try:
         db_url = f"sqlite+pysqlite:///{(workspace / 'alembic.sqlite').as_posix()}"
         monkeypatch.setenv("API_DATABASE_URL", db_url)
@@ -67,15 +68,26 @@ def test_alembic_upgrade_creates_version_and_representative_tables(monkeypatch) 
         }.issubset(tables)
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0005_answer_idempotency_columns"
+        assert version == "0006_ai_task_result_columns"
         assert {"idempotency_key", "request_body_hash"}.issubset(_column_names(engine, "answers"))
+        assert {
+            "candidate_refs_json",
+            "suggestion_refs_json",
+            "validation_errors_json",
+            "source_availability",
+            "low_confidence_flags_json",
+            "safe_summary_json",
+        }.issubset(_column_names(engine, "ai_task_results"))
     finally:
+        if engine is not None:
+            engine.dispose()
         temp_artifacts.cleanup()
 
 
 def test_known_column_backfill_revision_is_idempotent(monkeypatch) -> None:
     temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-backfill")
     workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    engine = None
     try:
         db_url = f"sqlite+pysqlite:///{(workspace / 'legacy.sqlite').as_posix()}"
         monkeypatch.setenv("API_DATABASE_URL", db_url)
@@ -94,12 +106,15 @@ def test_known_column_backfill_revision_is_idempotent(monkeypatch) -> None:
         assert before_columns == after_columns
         assert {"question_sources_json", "question_metadata_json"}.issubset(after_columns)
     finally:
+        if engine is not None:
+            engine.dispose()
         temp_artifacts.cleanup()
 
 
 def test_asset_rag_revision_preserves_legacy_unversioned_rag_tables(monkeypatch) -> None:
     temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-rag-legacy")
     workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    engine = None
     try:
         db_url = f"sqlite+pysqlite:///{(workspace / 'legacy-rag.sqlite').as_posix()}"
         monkeypatch.setenv("API_DATABASE_URL", db_url)
@@ -206,16 +221,19 @@ def test_asset_rag_revision_preserves_legacy_unversioned_rag_tables(monkeypatch)
                 text("SELECT COUNT(*) FROM rag_documents_legacy_pre_0003")
             ).scalar_one()
             legacy_chunks = connection.execute(text("SELECT COUNT(*) FROM rag_chunks_legacy_pre_0003")).scalar_one()
-        assert version == "0005_answer_idempotency_columns"
+        assert version == "0006_ai_task_result_columns"
         assert legacy_documents == 1
         assert legacy_chunks == 1
     finally:
+        if engine is not None:
+            engine.dispose()
         temp_artifacts.cleanup()
 
 
 def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypatch) -> None:
     temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-feedback-reserved")
     workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    engine = None
     try:
         db_url = f"sqlite+pysqlite:///{(workspace / 'legacy-feedback.sqlite').as_posix()}"
         monkeypatch.setenv("API_DATABASE_URL", db_url)
@@ -269,7 +287,7 @@ def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypa
 
         payload = json.loads(row["feedback_summary"])
         assert row["status"] == "pending"
-        assert version == "0005_answer_idempotency_columns"
+        assert version == "0006_ai_task_result_columns"
         assert payload["schema_id"] == "polish_feedback_generated_v1"
         assert payload["status"] == "pending"
         assert payload["feedback_text"] == "本轮反馈尚未生成"
@@ -281,12 +299,15 @@ def test_feedback_reserved_revision_migrates_legacy_reserved_to_pending(monkeypa
         assert "feedback_summary" not in payload
         assert "contract_id" not in payload
     finally:
+        if engine is not None:
+            engine.dispose()
         temp_artifacts.cleanup()
 
 
 def test_alembic_head_adds_answer_idempotency_columns_to_existing_schema(monkeypatch) -> None:
     temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-answer-idempotency")
     workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    engine = None
     try:
         db_url = f"sqlite+pysqlite:///{(workspace / 'legacy-answer.sqlite').as_posix()}"
         monkeypatch.setenv("API_DATABASE_URL", db_url)
@@ -302,6 +323,41 @@ def test_alembic_head_adds_answer_idempotency_columns_to_existing_schema(monkeyp
         answer_columns = set(_column_names(engine, "answers"))
         assert {"idempotency_key", "request_body_hash"}.issubset(answer_columns)
     finally:
+        if engine is not None:
+            engine.dispose()
+        temp_artifacts.cleanup()
+
+
+def test_alembic_head_adds_ai_task_result_summary_columns_to_existing_schema(monkeypatch) -> None:
+    temp_artifacts = ManagedTempArtifacts(test_id="api-alembic-ai-task-result-summary")
+    workspace = temp_artifacts.make_temp_dir("sqlite-db")
+    engine = None
+    try:
+        db_url = f"sqlite+pysqlite:///{(workspace / 'legacy-ai-task-result.sqlite').as_posix()}"
+        monkeypatch.setenv("API_DATABASE_URL", db_url)
+
+        config = Config("alembic.ini")
+        command.upgrade(config, "0005_answer_idempotency_columns")
+
+        engine = create_engine(db_url, future=True)
+        before_columns = set(_column_names(engine, "ai_task_results"))
+        assert "candidate_refs_json" not in before_columns
+        assert "safe_summary_json" not in before_columns
+
+        command.upgrade(config, "head")
+
+        result_columns = set(_column_names(engine, "ai_task_results"))
+        assert {
+            "candidate_refs_json",
+            "suggestion_refs_json",
+            "validation_errors_json",
+            "source_availability",
+            "low_confidence_flags_json",
+            "safe_summary_json",
+        }.issubset(result_columns)
+    finally:
+        if engine is not None:
+            engine.dispose()
         temp_artifacts.cleanup()
 
 

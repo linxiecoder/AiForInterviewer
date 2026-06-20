@@ -406,6 +406,179 @@ def test_validate_feedback_candidate_payload_normalizes_loss_point_id_alias() ->
     assert normalized["loss_points"][0]["loss_point_id"] == "lp_observability"
 
 
+def test_validate_feedback_candidate_payload_normalizes_string_loss_points() -> None:
+    payload = _candidate_payload()
+    payload["loss_points"] = [
+        "未提及具体使用的检索系统。",
+        "融合策略模糊，未给出明确执行流程。",
+    ]
+    payload["reference_answer"]["sections"][0]["addresses_loss_point_ids"] = []
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert "loss_point_invalid" not in errors
+    assert errors == ()
+    assert normalized["loss_points"] == [
+        {
+            "loss_point_id": "loss_point_1",
+            "reason": "未提及具体使用的检索系统。",
+            "evidence_refs": [],
+        },
+        {
+            "loss_point_id": "loss_point_2",
+            "reason": "融合策略模糊，未给出明确执行流程。",
+            "evidence_refs": [],
+        },
+    ]
+
+
+def test_validate_feedback_candidate_payload_normalizes_object_low_confidence_flags() -> None:
+    payload = _candidate_payload()
+    payload["low_confidence_flags"] = [
+        {"reason": "当前回答缺少完整数值，存在误读风险。", "source": "answer_parsing"},
+        {"code": "evidence_gap"},
+    ]
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert "feedback_payload_schema_invalid" not in errors
+    assert errors == ()
+    assert normalized["low_confidence_flags"] == [
+        "当前回答缺少完整数值，存在误读风险。",
+        "evidence_gap",
+    ]
+
+
+def test_validate_feedback_candidate_payload_normalizes_object_semantic_signals() -> None:
+    payload = _candidate_payload()
+    payload["score_result"]["signals"] = [
+        {"signal_type": "weakness_detected", "description": "缺少关键恢复指标。"},
+        {"signal_type": "progress_update"},
+    ]
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    assert normalized["score_result"]["signals"] == ["weakness_detected", "progress_update"]
+
+
+def test_validate_feedback_candidate_payload_normalizes_compact_provider_adaptive_eval_aliases() -> None:
+    payload = _candidate_payload()
+    score_result = payload["score_result"]
+    score_result["adaptive_rubric"]["dimensions"] = [
+        {"dimension": item["dimension"], "definition": f"{item['dimension']} 维度定义"}
+        for item in score_result["dimension_scores"]
+    ]
+    for index, item in enumerate(score_result["dimension_scores"]):
+        item["progress_focus"] = index == 0
+    score_result["adaptive_insights"] = [
+        {"type": "weakness", "content": "权重数值表述不完整。"},
+        {"type": "gap", "content": "准确率差异需要解释。"},
+    ]
+    score_result["progress_updates"] = [
+        {
+            "progress_node_ref": "progress_node_reliability",
+            "status": "in_progress",
+            "detail": "需要继续追问混合检索调参依据。",
+        }
+    ]
+
+    normalized, errors = validate_feedback_candidate_payload(payload)
+
+    assert normalized is not None
+    assert errors == ()
+    normalized_score = normalized["score_result"]
+    assert normalized_score["adaptive_insights"]["weak_skills"] == ["权重数值表述不完整。"]
+    assert normalized_score["adaptive_insights"]["unstable_skills"] == ["准确率差异需要解释。"]
+    assert [item["adaptive_weight"] for item in normalized_score["adaptive_rubric"]["dimensions"]] == [
+        0.16,
+        0.22,
+        0.22,
+        0.14,
+        0.26,
+    ]
+    assert all(
+        item["progress_basis"] == ["progress_node_reliability"]
+        for item in normalized_score["adaptive_rubric"]["dimensions"]
+    )
+    assert all(item["progress_focus"] == ["progress_node_reliability"] for item in normalized_score["dimension_scores"])
+    assert normalized_score["progress_updates"] == [
+        {
+            "progress_node_ref": "progress_node_reliability",
+            "signal": "progress_update",
+            "rationale": "需要继续追问混合检索调参依据。",
+        }
+    ]
+    assert "adaptive_insights_list_normalized" in normalized["feedback_metadata"]["validation_warnings"]
+
+
+def test_validate_feedback_candidate_payload_normalizes_deepseek_adaptive_result_shape() -> None:
+    payload = _candidate_payload()
+    score_result = payload["score_result"]
+    score_result.pop("progress_state_ref")
+    score_result["adaptive_rubric"].pop("progress_state_ref")
+    for item in score_result["adaptive_rubric"]["dimensions"]:
+        item.pop("progress_basis", None)
+        item["progress_focus"] = item["dimension"] in {"depth", "tradeoff_reasoning"}
+
+    unit_scores = {
+        "correctness": 0.4,
+        "depth": 0.3,
+        "tradeoff_reasoning": 0.25,
+        "structure": 0.35,
+        "engineering_awareness": 0.45,
+    }
+    for item in score_result["dimension_scores"]:
+        item.pop("adaptive_weight")
+        item.pop("progress_focus")
+        item["score"] = unit_scores[item["dimension"]]
+    score_result["adaptive_insights"] = {
+        "strengths": ["提到了二次 scoring 的概念"],
+        "weaknesses": ["融合策略描述模糊", "关键数字截断"],
+    }
+
+    normalized, errors = validate_feedback_candidate_payload(
+        payload,
+        expected_progress_state_ref="progress_node_reliability",
+    )
+
+    assert normalized is not None
+    assert errors == ()
+    normalized_score = normalized["score_result"]
+    assert normalized_score["progress_state_ref"] == "progress_node_reliability"
+    assert normalized_score["score_value"] == 35.1
+    assert [item["score"] for item in normalized_score["dimension_scores"]] == [
+        40.0,
+        30.0,
+        25.0,
+        35.0,
+        45.0,
+    ]
+    assert [item["adaptive_weight"] for item in normalized_score["dimension_scores"]] == [
+        0.16,
+        0.22,
+        0.22,
+        0.14,
+        0.26,
+    ]
+    assert all(item["progress_focus"] == ["progress_node_reliability"] for item in normalized_score["dimension_scores"])
+    assert normalized_score["adaptive_insights"] == {
+        "weak_skills": ["融合策略描述模糊", "关键数字截断"],
+        "strong_skills": ["提到了二次 scoring 的概念"],
+        "unstable_skills": [],
+        "overweighted_skills": [],
+        "underweighted_skills": [],
+    }
+    validation_warnings = normalized["feedback_metadata"]["validation_warnings"]
+    assert "adaptive_insights_dict_aliases_normalized" in validation_warnings
+    assert "score_result_scores_normalized_from_unit_scale" in validation_warnings
+    assert "score_result_adaptive_weight_recovered_from_adaptive_rubric" in validation_warnings
+    assert "score_result_progress_focus_defaulted_to_progress_state" in validation_warnings
+
+
 def test_validate_feedback_candidate_payload_normalizes_same_question_effect_string() -> None:
     payload = _candidate_payload()
     payload["same_question_effect"] = "unchanged"

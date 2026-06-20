@@ -6,6 +6,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 cd "$ROOT_DIR"
 
+source "${ROOT_DIR}/scripts/lib/python.sh"
+PYTHON_BIN="$(resolve_python "$ROOT_DIR")"
+
 if [ -f .env ]; then
   set -a
   # shellcheck disable=SC1091
@@ -20,4 +23,4 @@ if [ -z "$message" ]; then
 fi
 
 export PYTHONPATH="apps/api${PYTHONPATH:+:${PYTHONPATH}}"
-exec .venv/bin/python -m alembic -c alembic.ini revision --autogenerate -m "$message"
+exec "$PYTHON_BIN" -m alembic -c alembic.ini revision --autogenerate -m "$message"

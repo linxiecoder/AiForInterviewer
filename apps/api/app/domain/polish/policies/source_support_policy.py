@@ -45,6 +45,23 @@ DIRECT_SUPPORT_TERMS = (
     "MySQL",
     "Elasticsearch",
     "OpenSearch",
+    "RAG",
+    "LLM",
+    "Prompt",
+    "BM25",
+    "KNN",
+    "AI工程化",
+    "知识库",
+    "混合检索",
+    "向量检索",
+    "关键词检索",
+    "检索",
+    "检索阈值",
+    "阈值过滤",
+    "相似度",
+    "幻觉控制",
+    "多模型",
+    "模型切换",
     "分布式锁",
     "事务消息",
     "半消息回查",
@@ -62,6 +79,28 @@ DIRECT_SUPPORT_TERMS = (
 )
 
 GENERIC_SUPPORT_TERMS = frozenset({"设计", "能力", "项目", "说明", "验证", "技术", "链路"})
+
+RAG_TARGET_TERMS = frozenset({"rag", "ai工程化"})
+RAG_DIRECT_EVIDENCE_TERMS = frozenset(
+    {
+        "rag",
+        "llm",
+        "prompt",
+        "bm25",
+        "knn",
+        "知识库",
+        "混合检索",
+        "向量检索",
+        "关键词检索",
+        "检索",
+        "检索阈值",
+        "阈值过滤",
+        "相似度",
+        "幻觉控制",
+        "多模型",
+        "模型切换",
+    }
+)
 
 LEGACY_SOURCE_SUPPORT_LEVELS = {
     "canonical_asset_available": SourceSupportLevel.DIRECT_PROJECT_EVIDENCE,
@@ -250,7 +289,9 @@ class SourceSupportPolicy:
     def has_direct_project_support(cls, *, target_text: str, evidence_text: str) -> bool:
         target_terms = _support_terms(target_text)
         evidence_terms = _support_terms(evidence_text)
-        return bool(target_terms & evidence_terms)
+        return bool(target_terms & evidence_terms) or bool(
+            (target_terms & RAG_TARGET_TERMS) and (evidence_terms & RAG_DIRECT_EVIDENCE_TERMS)
+        )
 
 
 def _support_terms(value: object) -> set[str]:

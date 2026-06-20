@@ -64,6 +64,24 @@ FORBIDDEN_EVALUATION_INFLUENCES = (
 )
 ADAPTIVE_INSIGHT_REQUIRED_KEYS = ("weak_skills", "strong_skills", "unstable_skills")
 ADAPTIVE_INSIGHT_OPTIONAL_KEYS = ("overweighted_skills", "underweighted_skills")
+ADAPTIVE_INSIGHT_DICT_ALIASES = {
+    "weaknesses": "weak_skills",
+    "weakness": "weak_skills",
+    "weak_points": "weak_skills",
+    "gaps": "weak_skills",
+    "strengths": "strong_skills",
+    "strength": "strong_skills",
+    "strong_points": "strong_skills",
+    "risks": "unstable_skills",
+    "risk": "unstable_skills",
+    "drifts": "unstable_skills",
+    "drift": "unstable_skills",
+    "unstable": "unstable_skills",
+    "overweighted": "overweighted_skills",
+    "overweight": "overweighted_skills",
+    "underweighted": "underweighted_skills",
+    "underweight": "underweighted_skills",
+}
 
 
 def semantic_evaluation_contract() -> dict[str, Any]:
@@ -102,8 +120,8 @@ def normalize_semantic_score_result(
         return None, ("score_result_required",), ()
 
     errors: list[str] = []
-    progress_state_ref = _clean(score_result.get("progress_state_ref"), max_chars=120)
     expected_ref = _clean(expected_progress_state_ref, max_chars=120)
+    progress_state_ref = _clean(score_result.get("progress_state_ref"), max_chars=120) or expected_ref
     if expected_ref and progress_state_ref and progress_state_ref != expected_ref:
         errors.append("progress_state_ref_mismatch")
     raw_adaptive_rubric = score_result.get("adaptive_rubric")
@@ -118,15 +136,24 @@ def normalize_semantic_score_result(
     reasoning = _clean(score_result.get("reasoning"), max_chars=4000)
     if not reasoning:
         errors.append("score_result_reasoning_required")
-    adaptive_insights, adaptive_insight_errors = _normalize_adaptive_insights(score_result.get("adaptive_insights"))
+    normalization_warnings: list[str] = []
+    adaptive_insights, adaptive_insight_errors, adaptive_insight_warnings = _normalize_adaptive_insights(
+        score_result.get("adaptive_insights")
+    )
     errors.extend(adaptive_insight_errors)
+    normalization_warnings.extend(adaptive_insight_warnings)
 
-    adaptive_rubric_dimensions = _adaptive_rubric_dimensions(raw_adaptive_rubric)
     raw_dimensions = score_result.get("dimension_scores")
     if not isinstance(raw_dimensions, list):
         return None, ("score_result_dimension_scores_required",), ()
 
+    rubric_weight_by_key = _adaptive_rubric_weight_by_key(raw_adaptive_rubric)
+    score_scale_factor = _score_scale_factor(raw_dimensions)
+    if score_scale_factor != 1.0:
+        normalization_warnings.append("score_result_scores_normalized_from_unit_scale")
     dimensions: list[SemanticScoreDimension] = []
+    dimension_weight_by_key: dict[str, float] = {}
+    progress_focus_by_key: dict[str, tuple[str, ...]] = {}
     for raw_item in raw_dimensions:
         if not isinstance(raw_item, dict):
             errors.append("score_result_dimension_scores_invalid")
@@ -136,24 +163,54 @@ def normalize_semantic_score_result(
         if not _is_number(score):
             errors.append("score_value_invalid")
             continue
+        dimension_key = _dimension_key(dimension)
         adaptive_weight = raw_item.get("adaptive_weight")
+        if not _is_number(adaptive_weight) and dimension_key in rubric_weight_by_key:
+            adaptive_weight = rubric_weight_by_key[dimension_key]
+            normalization_warnings.append("score_result_adaptive_weight_recovered_from_adaptive_rubric")
+        progress_focus = tuple(
+            _progress_focus_list(
+                raw_item.get("progress_focus"),
+                default_progress_state_ref=progress_state_ref,
+            )
+        )
+        if not progress_focus and progress_state_ref:
+            progress_focus = (progress_state_ref,)
+            normalization_warnings.append("score_result_progress_focus_defaulted_to_progress_state")
+        if dimension_key and _is_number(adaptive_weight):
+            dimension_weight_by_key[dimension_key] = float(adaptive_weight)
+        if dimension_key and progress_focus:
+            progress_focus_by_key[dimension_key] = progress_focus
         dimensions.append(
             SemanticScoreDimension(
                 dimension=dimension,
-                score=float(score),
+                score=float(score) * score_scale_factor,
                 adaptive_weight=float(adaptive_weight) if _is_number(adaptive_weight) else 0.0,
-                progress_focus=tuple(_string_list(raw_item.get("progress_focus"), max_items=10, max_item_chars=160)),
+                progress_focus=progress_focus,
                 rationale=_clean(raw_item.get("rationale") or raw_item.get("reasoning"), max_chars=2000),
             )
         )
 
+    adaptive_rubric_dimensions, adaptive_rubric_warnings = _adaptive_rubric_dimensions(
+        raw_adaptive_rubric,
+        dimension_weight_by_key=dimension_weight_by_key,
+        progress_focus_by_key=progress_focus_by_key,
+        default_progress_state_ref=progress_state_ref,
+    )
+    normalization_warnings.extend(adaptive_rubric_warnings)
     decision = ScoringPolicy.evaluate(
         ScoringInput(
             progress_state_ref=progress_state_ref,
             adaptive_rubric_dimensions=tuple(adaptive_rubric_dimensions),
             dimension_scores=tuple(dimensions),
-            signals=tuple(_string_list(score_result.get("signals"), max_items=20, max_item_chars=80)),
-            progress_updates=tuple(_dict_list(score_result.get("progress_updates"), max_items=20)),
+            signals=tuple(_signal_list(score_result.get("signals"), max_items=20, max_item_chars=80)),
+            progress_updates=tuple(
+                _progress_update_list(
+                    score_result.get("progress_updates"),
+                    default_progress_state_ref=progress_state_ref,
+                    max_items=20,
+                )
+            ),
         )
     )
     validation_errors = tuple(dict.fromkeys((*errors, *decision.validation_errors)))
@@ -198,50 +255,154 @@ def normalize_semantic_score_result(
         "signals": list(decision.signals),
         "progress_updates": [dict(item) for item in decision.progress_updates],
     }
-    return normalized, (), decision.warnings
+    return normalized, (), tuple(dict.fromkeys((*normalization_warnings, *decision.warnings)))
 
 
-def _adaptive_rubric_dimensions(value: object) -> list[AdaptiveRubricDimension]:
+def _adaptive_rubric_dimensions(
+    value: object,
+    *,
+    dimension_weight_by_key: dict[str, float],
+    progress_focus_by_key: dict[str, tuple[str, ...]],
+    default_progress_state_ref: str,
+) -> tuple[list[AdaptiveRubricDimension], tuple[str, ...]]:
     if not isinstance(value, dict):
-        return []
+        return [], ()
     raw_dimensions = value.get("dimensions")
     if not isinstance(raw_dimensions, list):
-        return []
+        return [], ()
     dimensions: list[AdaptiveRubricDimension] = []
+    warnings: list[str] = []
     for raw_item in raw_dimensions:
         if not isinstance(raw_item, dict):
             continue
+        dimension = _clean(raw_item.get("dimension") or raw_item.get("dimension_key"), max_chars=80)
+        dimension_key = _dimension_key(dimension)
         weight = raw_item.get("adaptive_weight")
+        if not _is_number(weight) and dimension_key in dimension_weight_by_key:
+            weight = dimension_weight_by_key[dimension_key]
+            warnings.append("adaptive_rubric_weight_recovered_from_dimension_scores")
+        progress_basis = tuple(_string_list(raw_item.get("progress_basis"), max_items=10, max_item_chars=160))
+        if not progress_basis and dimension_key in progress_focus_by_key:
+            progress_basis = progress_focus_by_key[dimension_key]
+            warnings.append("adaptive_rubric_progress_basis_recovered_from_dimension_scores")
+        if not progress_basis and default_progress_state_ref:
+            progress_basis = (default_progress_state_ref,)
+            warnings.append("adaptive_rubric_progress_basis_defaulted_to_progress_state")
         dimensions.append(
             AdaptiveRubricDimension(
-                dimension=_clean(raw_item.get("dimension") or raw_item.get("dimension_key"), max_chars=80),
+                dimension=dimension,
                 adaptive_weight=float(weight) if _is_number(weight) else 0.0,
-                progress_basis=tuple(_string_list(raw_item.get("progress_basis"), max_items=10, max_item_chars=160)),
+                progress_basis=progress_basis,
                 anchor_refs=tuple(_string_list(raw_item.get("anchor_refs"), max_items=10, max_item_chars=120)),
             )
         )
-    return dimensions
+    return dimensions, tuple(dict.fromkeys(warnings))
 
 
-def _normalize_adaptive_insights(value: object) -> tuple[dict[str, list[str]], tuple[str, ...]]:
+def _normalize_adaptive_insights(value: object) -> tuple[dict[str, list[str]], tuple[str, ...], tuple[str, ...]]:
+    if isinstance(value, list):
+        normalized = {key: [] for key in (*ADAPTIVE_INSIGHT_REQUIRED_KEYS, *ADAPTIVE_INSIGHT_OPTIONAL_KEYS)}
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            text = _clean(
+                item.get("content") or item.get("text") or item.get("reason") or item.get("description"),
+                max_chars=160,
+            )
+            if not text:
+                continue
+            item_type = _clean(item.get("type") or item.get("category") or item.get("insight_type"), max_chars=80).lower()
+            if item_type in {"strength", "strong", "strong_skill"}:
+                target_key = "strong_skills"
+            elif item_type in {"gap", "drift", "unstable", "risk"}:
+                target_key = "unstable_skills"
+            elif item_type in {"overweight", "overweighted"}:
+                target_key = "overweighted_skills"
+            elif item_type in {"underweight", "underweighted"}:
+                target_key = "underweighted_skills"
+            else:
+                target_key = "weak_skills"
+            if text not in normalized[target_key]:
+                normalized[target_key].append(text)
+        if not any(normalized.values()):
+            return {}, ("adaptive_insights_required",), ()
+        return normalized, (), ("adaptive_insights_list_normalized",)
     if not isinstance(value, dict):
-        return {}, ("adaptive_insights_required",)
+        return {}, ("adaptive_insights_required",), ()
     errors: list[str] = []
-    if any(key not in value for key in ADAPTIVE_INSIGHT_REQUIRED_KEYS):
-        errors.append("adaptive_insights_skill_diagnosis_required")
+    warnings: list[str] = []
     normalized: dict[str, list[str]] = {}
     for key in (*ADAPTIVE_INSIGHT_REQUIRED_KEYS, *ADAPTIVE_INSIGHT_OPTIONAL_KEYS):
         normalized[key] = _string_list(value.get(key), max_items=20, max_item_chars=160)
-    return normalized, tuple(errors)
+    alias_data_found = False
+    for alias, target_key in ADAPTIVE_INSIGHT_DICT_ALIASES.items():
+        alias_items = _string_list(value.get(alias), max_items=20, max_item_chars=160)
+        if not alias_items:
+            continue
+        alias_data_found = True
+        warnings.append("adaptive_insights_dict_aliases_normalized")
+        for item in alias_items:
+            if item not in normalized[target_key]:
+                normalized[target_key].append(item)
+    if any(key not in value for key in ADAPTIVE_INSIGHT_REQUIRED_KEYS) and not alias_data_found:
+        errors.append("adaptive_insights_skill_diagnosis_required")
+    if not any(normalized.values()):
+        errors.append("adaptive_insights_required")
+    return normalized, tuple(dict.fromkeys(errors)), tuple(dict.fromkeys(warnings))
 
 
-def _dict_list(value: object, *, max_items: int) -> list[dict[str, object]]:
+def _adaptive_rubric_weight_by_key(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    raw_dimensions = value.get("dimensions")
+    if not isinstance(raw_dimensions, list):
+        return {}
+    result: dict[str, float] = {}
+    for item in raw_dimensions:
+        if not isinstance(item, dict):
+            continue
+        dimension_key = _dimension_key(item.get("dimension") or item.get("dimension_key"))
+        weight = item.get("adaptive_weight")
+        if dimension_key and _is_number(weight):
+            result.setdefault(dimension_key, float(weight))
+    return result
+
+
+def _score_scale_factor(raw_dimensions: object) -> float:
+    if not isinstance(raw_dimensions, list):
+        return 1.0
+    scores: list[float] = []
+    for item in raw_dimensions:
+        if not isinstance(item, dict):
+            continue
+        score = item.get("score", item.get("dimension_score"))
+        if _is_number(score):
+            scores.append(float(score))
+    if scores and all(0 <= score <= 1 for score in scores):
+        return 100.0
+    return 1.0
+
+
+def _progress_update_list(
+    value: object,
+    *,
+    default_progress_state_ref: str,
+    max_items: int,
+) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
     result: list[dict[str, object]] = []
     for item in value:
         if isinstance(item, dict):
-            result.append(dict(item))
+            normalized = dict(item)
+            if not normalized.get("progress_node_ref") and not normalized.get("node_ref") and default_progress_state_ref:
+                normalized["progress_node_ref"] = default_progress_state_ref
+            if not normalized.get("signal"):
+                signal = _clean(normalized.get("status") or normalized.get("type"), max_chars=80)
+                normalized["signal"] = signal if signal in ADAPTIVE_SIGNAL_TYPES else "progress_update"
+            if not normalized.get("rationale") and normalized.get("detail"):
+                normalized["rationale"] = _clean(normalized.get("detail"), max_chars=1000)
+            result.append(normalized)
         if len(result) >= max_items:
             break
     return result
@@ -258,6 +419,32 @@ def _string_list(value: object, *, max_items: int, max_item_chars: int) -> list[
         if len(result) >= max_items:
             break
     return result
+
+
+def _progress_focus_list(value: object, *, default_progress_state_ref: str) -> list[str]:
+    if isinstance(value, bool):
+        return [default_progress_state_ref] if default_progress_state_ref else []
+    return _string_list(value, max_items=10, max_item_chars=160)
+
+
+def _signal_list(value: object, *, max_items: int, max_item_chars: int) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            text = _clean(item.get("signal_type") or item.get("type"), max_chars=max_item_chars)
+        else:
+            text = _clean(item, max_chars=max_item_chars)
+        if text and text not in result:
+            result.append(text)
+        if len(result) >= max_items:
+            break
+    return result
+
+
+def _dimension_key(value: object) -> str:
+    return _clean(value, max_chars=80).lower().replace("-", "_").replace(" ", "_")
 
 
 def _is_number(value: object) -> bool:

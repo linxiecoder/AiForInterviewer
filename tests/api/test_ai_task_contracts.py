@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from app.application.llm.task_contracts import AI_TASK_CONTRACT_FAILURE_CODES
 from app.application.llm.types import LlmTransportRequest
+from app.application.polish.question_blueprint import QuestionBlueprint
+from app.application.polish.question_generation_service import _parse_llm_question_payload
 from app.application.polish.task_contracts.feedback_contract import POLISH_FEEDBACK_TASK_CONTRACT
 from app.application.polish.task_contracts.question_contract import POLISH_QUESTION_TASK_CONTRACT
 from app.domain.shared.enums import AiTaskStatus
@@ -29,6 +31,74 @@ def test_question_contract_parses_valid_json_candidate() -> None:
     assert result.payload["question_text"].startswith("请说明")
     assert result.evidence_refs == ("evidence_reliability",)
     assert result.failure_codes == ()
+
+
+def test_question_contract_rejects_expected_signals_rubric_shape() -> None:
+    payload = _question_candidate()
+    payload["scoring_rubric"] = [
+        {
+            "dimension": "reliability",
+            "expected_signals": ["幂等", "观测"],
+        }
+    ]
+
+    result = POLISH_QUESTION_TASK_CONTRACT.validate_candidate_payload(
+        payload,
+        allowed_evidence_refs=("evidence_reliability",),
+    )
+
+    assert result.ok is False
+    assert "business_rule_failed" in result.failure_codes
+    assert "llm_scoring_rubric_required" in result.failure_reasons
+
+
+def test_question_contract_rejects_single_signal_rubric_shape() -> None:
+    payload = _question_candidate()
+    payload["scoring_rubric"] = [
+        {
+            "dimension": "reliability",
+            "signal": "解释 KNN 与 BM25 分数的融合方法",
+        }
+    ]
+
+    result = POLISH_QUESTION_TASK_CONTRACT.validate_candidate_payload(
+        payload,
+        allowed_evidence_refs=("evidence_reliability",),
+    )
+
+    assert result.ok is False
+    assert "business_rule_failed" in result.failure_codes
+    assert "llm_scoring_rubric_required" in result.failure_reasons
+
+
+def test_question_generation_parser_rejects_expected_signals_rubric_shape() -> None:
+    payload = _question_candidate()
+    payload["scoring_rubric"] = [
+        {
+            "dimension": "reliability",
+            "expected_signals": ["幂等", "观测"],
+        }
+    ]
+
+    parsed, errors = _parse_llm_question_payload(payload, blueprint=_question_blueprint())
+
+    assert parsed is None
+    assert errors == ("llm_scoring_rubric_required",)
+
+
+def test_question_generation_parser_rejects_single_signal_rubric_shape() -> None:
+    payload = _question_candidate()
+    payload["scoring_rubric"] = [
+        {
+            "dimension": "reliability",
+            "signal": "解释 KNN 与 BM25 分数的融合方法",
+        }
+    ]
+
+    parsed, errors = _parse_llm_question_payload(payload, blueprint=_question_blueprint())
+
+    assert parsed is None
+    assert errors == ("llm_scoring_rubric_required",)
 
 
 def test_question_contract_maps_legal_json_business_invalid_to_contract_failure() -> None:
@@ -225,6 +295,19 @@ def _question_candidate(
         "clarification_needed": False,
         "trace_refs": ["trace_question_sanitized_001"],
     }
+
+
+def _question_blueprint() -> QuestionBlueprint:
+    return QuestionBlueprint(
+        question_kind="failure_recovery_deep_dive",
+        claim_mode="evidence_grounded",
+        progress_node_ref="progress_node_reliability",
+        node_title="reliability",
+        expected_capability="reliability",
+        primary_evidence_ref="evidence_reliability",
+        primary_evidence_text="Reliability evidence",
+        evidence_refs=("evidence_reliability",),
+    )
 
 
 def _feedback_candidate() -> dict[str, Any]:
