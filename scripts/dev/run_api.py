@@ -27,6 +27,8 @@ def main() -> None:
         "app.main:app",
         host=settings.host,
         port=settings.port,
+        log_level="info",
+        access_log=True,
         reload=True,
         reload_dirs=["apps/api"],
     )

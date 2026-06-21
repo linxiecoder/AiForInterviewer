@@ -73,14 +73,47 @@ find_windows_pids_with_netstat() {
   done < <(cmd.exe //D //S //C "netstat -ano -p tcp" 2>/dev/null || true)
 }
 
-kill_windows_port() {
-  local port="$1"
-  if ! command -v powershell.exe >/dev/null 2>&1; then
-    return
+windows_pid_exists() {
+  local process_id="$1"
+  local tasklist_output
+
+  if command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+      "\$targetProcessId = [int]'${process_id}'; \$process = Get-CimInstance Win32_Process -Filter \"ProcessId = \$targetProcessId\" -ErrorAction SilentlyContinue; if (\$null -eq \$process) { \$process = Get-Process -Id \$targetProcessId -ErrorAction SilentlyContinue }; if (\$null -eq \$process) { exit 1 }" \
+      >/dev/null 2>&1
+    return $?
   fi
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
-    "\$processIds = @(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique); foreach (\$processId in \$processIds) { try { Stop-Process -Id \$processId -Force -ErrorAction Stop } catch { Write-Output \"[dev] Stop-Process failed for Windows PID \$processId: \$(\$_.Exception.Message)\" } }" \
-    2>/dev/null | strip_cr_nonempty || true
+
+  if command -v tasklist.exe >/dev/null 2>&1; then
+    tasklist_output="$(MSYS2_ARG_CONV_EXCL="*" tasklist.exe /FI "PID eq ${process_id}" /NH 2>/dev/null || true)"
+    tasklist_output="${tasklist_output//$'\r'/}"
+    [[ "$tasklist_output" =~ (^|[[:space:]])${process_id}($|[[:space:]]) ]]
+    return $?
+  fi
+
+  return 0
+}
+
+filter_existing_windows_pids() {
+  local pid_list="$1"
+  local process_id
+
+  for process_id in $pid_list; do
+    if windows_pid_exists "$process_id"; then
+      printf "%s\n" "$process_id"
+    fi
+  done
+}
+
+filter_missing_windows_pids() {
+  local pid_list="$1"
+  local process_id
+
+  for process_id in $pid_list; do
+    if ! windows_pid_exists "$process_id"; then
+      printf "%s\n" "$process_id"
+    fi
+  done
 }
 
 strip_cr_nonempty() {
@@ -177,6 +210,8 @@ for port in "$@"; do
   pids="$(find_pids "$port" | normalize_pids || true)"
   wsl_pids="$(find_wsl_pids "$port" | normalize_pids || true)"
   windows_pids="$(find_windows_pids "$port" | normalize_pids || true)"
+  windows_live_pids="$(filter_existing_windows_pids "$windows_pids" | normalize_pids || true)"
+  windows_stale_pids="$(filter_missing_windows_pids "$windows_pids" | normalize_pids || true)"
   if [ -n "$pids" ]; then
     echo "[dev] port ${port} occupied by PID(s): ${pids}; killing"
     kill -9 $pids 2>/dev/null || true
@@ -185,24 +220,38 @@ for port in "$@"; do
     echo "[dev] WSL port ${port} occupied by PID(s): ${wsl_pids}; killing"
     kill_wsl_pids "$wsl_pids"
   fi
-  if [ -n "$windows_pids" ]; then
-    echo "[dev] Windows port ${port} occupied by PID(s): ${windows_pids}; killing"
-    describe_windows_pids "$windows_pids"
-    kill_windows_pids "$windows_pids"
+  if [ -n "$windows_live_pids" ]; then
+    echo "[dev] Windows port ${port} occupied by live PID(s): ${windows_live_pids}; killing"
+    describe_windows_pids "$windows_live_pids"
+    kill_windows_pids "$windows_live_pids"
   fi
-  if [ -n "$pids" ] || [ -n "$wsl_pids" ] || [ -n "$windows_pids" ]; then
+  if [ -n "$windows_stale_pids" ]; then
+    echo "[dev] stale Windows TCP listener PID(s): ${windows_stale_pids}"
+    echo "[dev] Windows PID(s) ${windows_stale_pids} are present in the TCP listen table but not attached to a live Windows process."
+  fi
+  if [ -n "$pids" ] || [ -n "$wsl_pids" ] || [ -n "$windows_live_pids" ] || [ -n "$windows_stale_pids" ]; then
     pause_after_kill
   fi
   remaining_pids="$(find_pids "$port" | normalize_pids || true)"
   remaining_wsl_pids="$(find_wsl_pids "$port" | normalize_pids || true)"
   remaining_windows_pids="$(find_windows_pids "$port" | normalize_pids || true)"
-  if [ -z "$remaining_pids" ] && [ -z "$remaining_wsl_pids" ] && [ -z "$remaining_windows_pids" ]; then
-    echo "[dev] port ${port} is free"
+  remaining_windows_live_pids="$(filter_existing_windows_pids "$remaining_windows_pids" | normalize_pids || true)"
+  remaining_windows_stale_pids="$(filter_missing_windows_pids "$remaining_windows_pids" | normalize_pids || true)"
+  if [ -z "$remaining_pids" ] && [ -z "$remaining_wsl_pids" ] && [ -z "$remaining_windows_live_pids" ]; then
+    if [ -n "$remaining_windows_stale_pids" ]; then
+      echo "[dev] port ${port} has only stale Windows TCP listener PID(s): ${remaining_windows_stale_pids}; treating as free"
+    else
+      echo "[dev] port ${port} is free"
+    fi
   else
-    echo "[dev] failed to free port ${port}; remaining PID(s): ${remaining_pids}${remaining_wsl_pids}${remaining_windows_pids}"
-    if [ -n "$remaining_windows_pids" ]; then
+    echo "[dev] failed to free port ${port}; remaining PID(s): ${remaining_pids}${remaining_wsl_pids}${remaining_windows_live_pids}"
+    if [ -n "$remaining_windows_live_pids" ]; then
       echo "[dev] Windows still reports port ${port} in the TCP table. If taskkill says the PID does not exist, the listener is likely owned by System or the virtualization network layer."
-      echo '[dev] bypass example (PowerShell): $env:API_PORT="8002"; npm run dev'
+    fi
+    if [ -n "$remaining_windows_stale_pids" ]; then
+      echo "[dev] Windows still reports stale Windows TCP listener PID(s): ${remaining_windows_stale_pids}"
+      echo "[dev] These PID(s) are not attached to a live Windows process; the listener is likely owned by System or the virtualization network layer."
+      echo "[dev] Stale Windows TCP listener PID(s) are ignored; the remaining live listener still blocks the port."
     fi
     exit 1
   fi

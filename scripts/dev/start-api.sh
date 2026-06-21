@@ -21,12 +21,21 @@ case "$MODE" in
     ;;
 esac
 
-load_dotenv_preserving_explicit_env .env API_HOST API_PORT PYCHARM_DEBUG_HOST PYCHARM_DEBUG_PORT PYCHARM_DEBUG_SUSPEND PYCHARM_DEBUG_STDOUT PYCHARM_DEBUG_STDERR
+load_dotenv_preserving_explicit_env .env API_HOST API_PORT API_LOG_FILE API_LOG_FILE_ENABLED PYCHARM_DEBUG_HOST PYCHARM_DEBUG_PORT PYCHARM_DEBUG_SUSPEND PYCHARM_DEBUG_STDOUT PYCHARM_DEBUG_STDERR
 
 API_HOST="${API_HOST:-127.0.0.1}"
 API_PORT="${API_PORT:-8001}"
+API_LOG_FILE="${API_LOG_FILE:-tmp/logs/api-dev.log}"
 export API_HOST
 export API_PORT
+export API_LOG_FILE
+
+if [ "${API_LOG_FILE_ENABLED:-true}" != "false" ]; then
+  mkdir -p "$(dirname "$API_LOG_FILE")"
+  echo "[dev] api log file ${API_LOG_FILE}"
+else
+  echo "[dev] api log file disabled"
+fi
 
 if [ "$MODE" = "debug" ]; then
   export API_DEBUG=true

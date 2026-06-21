@@ -11,12 +11,14 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 API_APP_DIR = ROOT_DIR / "apps" / "api"
 DEFAULT_API_HOST = "127.0.0.1"
 DEFAULT_API_PORT = 8001
+DEFAULT_API_LOG_FILE = "tmp/logs/api-dev.log"
 
 
 @dataclass(frozen=True)
 class ApiRunSettings:
     host: str
     port: int
+    log_file_path: str
 
 
 def ensure_api_import_path() -> None:
@@ -77,13 +79,15 @@ def resolve_api_run_settings(
     parser = argparse.ArgumentParser(description="Start the local API dev server.")
     parser.add_argument("--host", default=_env_text(values, "API_HOST", default_host))
     parser.add_argument("--port", type=int, default=_env_int(values, "API_PORT", default_port))
+    parser.add_argument("--log-file", default=_env_text(values, "API_LOG_FILE", DEFAULT_API_LOG_FILE))
     args = parser.parse_args(argv)
-    return ApiRunSettings(host=args.host, port=args.port)
+    return ApiRunSettings(host=args.host, port=args.port, log_file_path=args.log_file)
 
 
 def apply_api_run_settings_to_env(settings: ApiRunSettings) -> None:
     os.environ["API_HOST"] = settings.host
     os.environ["API_PORT"] = str(settings.port)
+    os.environ["API_LOG_FILE"] = settings.log_file_path
 
 
 def _env_text(values: Mapping[str, str], name: str, default: str) -> str:

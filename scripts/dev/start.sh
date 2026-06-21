@@ -18,7 +18,7 @@ if [ "${VITE_API_PROXY_TARGET+x}" = "x" ]; then
   VITE_API_PROXY_TARGET_WAS_EXPLICIT=1
 fi
 
-load_dotenv_preserving_explicit_env .env API_HOST API_PORT WEB_PORT VITE_API_PROXY_TARGET
+load_dotenv_preserving_explicit_env .env API_HOST API_PORT WEB_PORT VITE_API_PROXY_TARGET API_LOG_FILE API_LOG_FILE_ENABLED
 
 API_PORT="${API_PORT:-8001}"
 WEB_PORT="${WEB_PORT:-5173}"
@@ -48,10 +48,12 @@ resolve_api_port() {
   fi
 
   if [ "$API_PORT_WAS_EXPLICIT" = "1" ]; then
+    echo "[dev] API_PORT ${port} is unavailable; explicit API_PORT will not be auto-reassigned." >&2
     return 1
   fi
 
   if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    echo "[dev] API_PORT ${port} is unavailable and cannot be used as a numeric fallback base." >&2
     return 1
   fi
 
@@ -76,6 +78,12 @@ resolve_api_port() {
 }
 
 resolve_api_port
+if [ -z "${VITE_API_PROXY_TARGET:-}" ]; then
+  VITE_API_PROXY_TARGET="http://127.0.0.1:${API_PORT}"
+  export VITE_API_PROXY_TARGET
+fi
+echo "[dev] API_PORT=${API_PORT}"
+echo "[dev] VITE_API_PROXY_TARGET=${VITE_API_PROXY_TARGET}"
 bash scripts/dev/kill-ports.sh "$WEB_PORT"
 
 cleanup() {

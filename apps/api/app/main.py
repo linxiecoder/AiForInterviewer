@@ -35,6 +35,8 @@ API_PREFIX_ENV = "API_PREFIX"
 API_HOST_ENV = "API_HOST"
 API_PORT_ENV = "API_PORT"
 API_DEBUG_ENV = "API_DEBUG"
+API_LOG_FILE_ENV = "API_LOG_FILE"
+API_LOG_FILE_ENABLED_ENV = "API_LOG_FILE_ENABLED"
 API_CORS_ALLOW_ORIGINS_ENV = "API_CORS_ALLOW_ORIGINS"
 API_CORS_LOCAL_LIKE_ENV_VALUES = {"local", "test", "development", "dev"}
 DEFAULT_CORS_ALLOW_ORIGINS = (
@@ -59,11 +61,14 @@ class ApiSettings:
     host: str = DEFAULT_API_HOST
     port: int = DEFAULT_API_PORT
     debug: bool = False
+    log_file_path: str | None = None
+    log_file_enabled: bool = False
     cors_allow_origins: tuple[str, ...] = ()
 
 
 def get_settings() -> ApiSettings:
     """读取当前保留 API 入口需要的最小运行配置。"""
+    log_file_path = _env.optional(API_LOG_FILE_ENV)
     return ApiSettings(
         title=_env.str(API_TITLE_ENV, DEFAULT_API_TITLE),
         version=_env.str(API_VERSION_ENV, DEFAULT_API_VERSION),
@@ -71,6 +76,8 @@ def get_settings() -> ApiSettings:
         host=_env.str(API_HOST_ENV, DEFAULT_API_HOST),
         port=_env.int(API_PORT_ENV, DEFAULT_API_PORT),
         debug=_env.bool(API_DEBUG_ENV, False),
+        log_file_path=log_file_path,
+        log_file_enabled=log_file_path is not None and _env.bool(API_LOG_FILE_ENABLED_ENV, True),
         cors_allow_origins=_read_cors_allow_origins(),
     )
 
@@ -85,7 +92,11 @@ def create_app(
     """构建当前保留的 API app；schema 迁移由启动脚本或测试显式触发。"""
     resolved_settings = settings or get_settings()
     LogUtil.configure(
-        BackendLogSettings(level="DEBUG" if resolved_settings.debug else "INFO")
+        BackendLogSettings(
+            level="DEBUG" if resolved_settings.debug else "INFO",
+            file_path=resolved_settings.log_file_path,
+            file_enabled=resolved_settings.log_file_enabled,
+        )
     )
     db_session_factory = configure_session_factory(
         db_settings,
@@ -144,13 +155,16 @@ def _log_runtime_ready(settings: ApiSettings) -> None:
 
 def _startup_log_lines(settings: ApiSettings) -> tuple[str, ...]:
     server_url = _server_url(settings)
-    return (
+    lines = (
         "API server ready",
         f"API debug: {'enabled' if settings.debug else 'disabled'}",
         f"API base URL: {server_url}{settings.api_prefix}",
         f"Swagger UI: {server_url}/docs",
         f"OpenAPI JSON: {server_url}/openapi.json",
     )
+    if settings.log_file_enabled and settings.log_file_path is not None:
+        return (*lines, f"API log file: {settings.log_file_path}")
+    return lines
 
 
 def _server_url(settings: ApiSettings) -> str:

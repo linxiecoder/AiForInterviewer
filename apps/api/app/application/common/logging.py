@@ -551,7 +551,14 @@ def _configure_file_handler(logger: logging.Logger, settings: BackendLogSettings
             handler.close()
         return
     target = str(Path(settings.file_path))
-    if any(getattr(handler, "baseFilename", None) == target for handler in existing_file_handlers):
+    matching_handler_exists = False
+    for handler in existing_file_handlers:
+        if getattr(handler, "baseFilename", None) == target:
+            matching_handler_exists = True
+            continue
+        logger.removeHandler(handler)
+        handler.close()
+    if matching_handler_exists:
         return
     Path(target).parent.mkdir(parents=True, exist_ok=True)
     handler = logging.FileHandler(target, encoding="utf-8")

@@ -95,6 +95,7 @@ def main() -> None:
         host=api_settings.host,
         port=api_settings.port,
         log_level="debug",
+        access_log=True,
         reload=False,
     )
 

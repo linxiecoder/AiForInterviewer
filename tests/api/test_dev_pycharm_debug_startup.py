@@ -1,14 +1,36 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+
+import pytest
 
 from scripts.dev.pycharm_debug_uvicorn import (
     PyCharmDebugSettings,
     attach_pycharm_debugger,
     resolve_pycharm_debug_settings,
 )
+
+
+def resolve_git_bash_for_dev_script_tests() -> str | None:
+    candidates = [
+        os.environ.get("OMO_CODEX_GIT_BASH_PATH"),
+        r"C:\Program Files\Git\bin\bash.exe",
+        shutil.which("bash"),
+    ]
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate_path = Path(candidate)
+        normalized = str(candidate_path).replace("/", "\\").lower()
+        if "\\windows\\system32\\bash.exe" in normalized:
+            continue
+        if candidate_path.exists():
+            return str(candidate_path)
+    return None
 
 
 def test_start_api_debug_uses_pycharm_wrapper_without_uvicorn_reload() -> None:
@@ -55,8 +77,14 @@ def test_shell_dotenv_loader_preserves_explicit_environment() -> None:
     assert "restore_explicit_env" in helper
     assert "source \"${ROOT_DIR}/scripts/lib/env.sh\"" in start_script
     assert "source \"${ROOT_DIR}/scripts/lib/env.sh\"" in api_script
-    assert "load_dotenv_preserving_explicit_env .env API_HOST API_PORT WEB_PORT VITE_API_PROXY_TARGET" in start_script
-    assert "load_dotenv_preserving_explicit_env .env API_HOST API_PORT PYCHARM_DEBUG_HOST" in api_script
+    assert (
+        "load_dotenv_preserving_explicit_env .env API_HOST API_PORT WEB_PORT "
+        "VITE_API_PROXY_TARGET API_LOG_FILE API_LOG_FILE_ENABLED"
+    ) in start_script
+    assert (
+        "load_dotenv_preserving_explicit_env .env API_HOST API_PORT API_LOG_FILE "
+        "API_LOG_FILE_ENABLED PYCHARM_DEBUG_HOST"
+    ) in api_script
 
 
 def test_db_scripts_use_resolved_python() -> None:
@@ -78,8 +106,10 @@ def test_kill_ports_clears_windows_listeners_for_wsl_web_runtime() -> None:
     assert "kill_wsl_pids" in script
     assert "find_windows_pids" in script
     assert "find_windows_pids_with_netstat" in script
-    assert "kill_windows_port" in script
     assert "kill_windows_pids" in script
+    assert "windows_pid_exists" in script
+    assert "filter_existing_windows_pids" in script
+    assert "filter_missing_windows_pids" in script
     assert "describe_windows_pids" in script
     assert "normalize_pids" in script
     assert "pause_after_kill" in script
@@ -102,11 +132,67 @@ def test_kill_ports_clears_windows_listeners_for_wsl_web_runtime() -> None:
     assert "taskkill failed for Windows PID" in script
     assert "Stop-Process failed for Windows PID" in script
     assert "unable to inspect process details" in script
+    assert "stale Windows TCP listener PID(s)" in script
+    assert "not attached to a live Windows process" in script
     assert "failed to free port" in script
     assert "the listener is likely owned by System or the virtualization network layer" in script
-    assert '$env:API_PORT="8002"; npm run dev' in script
+    assert "treating as free" in script
     assert "xargs" not in script
     assert "tr -d" not in script
+
+
+def test_kill_ports_ignores_windows_tcp_ghost_without_taskkill(tmp_path) -> None:
+    bash = resolve_git_bash_for_dev_script_tests()
+    if bash is None:
+        pytest.skip("Git Bash is required for Windows dev shell script tests")
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_powershell = fake_bin / "powershell.exe"
+    fake_powershell.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                "command_text=\"$*\"",
+                "if [[ \"$command_text\" == *\"Win32_Process\"* ]]; then exit 1; fi",
+                "if [[ \"$command_text\" == *\"Get-Process\"* ]]; then exit 1; fi",
+                "if [[ \"$command_text\" == *\"Get-NetTCPConnection\"* ]]; then echo 26188; exit 0; fi",
+                "if [[ \"$command_text\" == *\"netstat -ano\"* ]]; then echo 26188; exit 0; fi",
+                "exit 0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    fake_powershell.chmod(0o755)
+    fake_taskkill = fake_bin / "taskkill.exe"
+    fake_taskkill.write_text(
+        "#!/usr/bin/env bash\n"
+        "echo 'taskkill should not run for a ghost PID' >&2\n"
+        "exit 7\n",
+        encoding="utf-8",
+    )
+    fake_taskkill.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    result = subprocess.run(
+        [bash, "scripts/dev/kill-ports.sh", "49213"],
+        cwd=Path.cwd(),
+        env=env,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "stale Windows TCP listener PID(s): 26188" in result.stdout
+    assert "not attached to a live Windows process" in result.stdout
+    assert "treating as free" in result.stdout
+    assert "taskkill should not run" not in result.stderr
 
 
 def test_auth_dev_user_preflight_accepts_configured_dev_credentials(monkeypatch) -> None:
@@ -190,9 +276,14 @@ def test_api_run_settings_prefer_cli_port_over_dotenv_environment(monkeypatch) -
     settings = dev_env.resolve_api_run_settings(["--host", "127.0.0.1", "--port", "8003"])
     dev_env.apply_api_run_settings_to_env(settings)
 
-    assert settings == dev_env.ApiRunSettings(host="127.0.0.1", port=8003)
+    assert settings == dev_env.ApiRunSettings(
+        host="127.0.0.1",
+        port=8003,
+        log_file_path="tmp/logs/api-dev.log",
+    )
     assert os.environ["API_HOST"] == "127.0.0.1"
     assert os.environ["API_PORT"] == "8003"
+    assert os.environ["API_LOG_FILE"] == "tmp/logs/api-dev.log"
 
 
 def test_start_script_resolves_web_runtime_before_starting_processes() -> None:
@@ -201,11 +292,11 @@ def test_start_script_resolves_web_runtime_before_starting_processes() -> None:
     assert 'source "${ROOT_DIR}/scripts/lib/node.sh"' in script
     assert 'API_PORT="${API_PORT:-8001}"' in script
     assert 'WEB_PORT="${WEB_PORT:-5173}"' in script
-    assert "API_PORT_WAS_EXPLICIT" in script
-    assert "VITE_API_PROXY_TARGET_WAS_EXPLICIT" in script
     assert "resolve_api_port()" in script
     assert 'resolve_api_port' in script
     assert 'bash scripts/dev/kill-ports.sh "$port"' in script
+    assert "API_PORT_WAS_EXPLICIT" in script
+    assert "VITE_API_PROXY_TARGET_WAS_EXPLICIT" in script
     assert 'if [ "$API_PORT_WAS_EXPLICIT" = "1" ]; then' in script
     assert "API_PORT ${port} is unavailable; using ${candidate}" in script
     assert 'VITE_API_PROXY_TARGET="http://127.0.0.1:${API_PORT}"' in script
