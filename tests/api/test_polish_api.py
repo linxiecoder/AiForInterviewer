@@ -3428,6 +3428,7 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": first_answer_body["data"]["answer_id"]},
+        headers={"Idempotency-Key": "polish-api-first-feedback-001"},
     )
     _, second_answer_body = call_json(
         app,
@@ -3442,6 +3443,7 @@ def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": second_answer_body["data"]["answer_id"]},
+        headers={"Idempotency-Key": "polish-api-second-feedback-001"},
     )
     elapsed_seconds = perf_counter() - started_at
 
@@ -3501,6 +3503,7 @@ def test_polish_feedback_generates_when_question_metadata_missing() -> None:
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_body["data"]["answer_id"]},
+        headers={"Idempotency-Key": "polish-api-missing-question-metadata-001"},
     )
 
     assert status_code == 202
@@ -3926,13 +3929,14 @@ def test_polish_feedback_next_question_intent_rejects_stale_feedback_replay() ->
         llm_transport=_FeedbackIntentAllowedTransport(),
     )
     flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
-    _, second_feedback_body = call_json(
-        app,
-        f"/api/v1/polish-sessions/{flow['session_id']}/feedback",
-        "POST",
-        json_body={"answer_id": flow["answer_id"]},
+    latest_feedback_id = _add_generated_feedback_record(
+        session_factory,
+        session_id=flow["session_id"],
+        answer_id=flow["answer_id"],
+        feedback_id="fb_feedback_intent_superseding",
+        feedback_text="newer generated feedback",
     )
-    assert second_feedback_body["data"]["feedback_payload"]["feedback_id"] != flow["feedback_id"]
+    assert latest_feedback_id != flow["feedback_id"]
 
     status_code, body = call_json(
         app,
@@ -3943,7 +3947,7 @@ def test_polish_feedback_next_question_intent_rejects_stale_feedback_replay() ->
 
     assert status_code == 409
     assert body["error"]["code"] == "stale_version_conflict"
-    assert body["error"]["details"]["latest_feedback_id"] == second_feedback_body["data"]["feedback_payload"]["feedback_id"]
+    assert body["error"]["details"]["latest_feedback_id"] == latest_feedback_id
 
 
 def test_polish_feedback_next_question_intent_rejects_cross_session_feedback_injection() -> None:
@@ -4142,12 +4146,14 @@ def test_polish_session_returns_latest_feedback_when_multiple_feedback_records_e
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers={"Idempotency-Key": "polish-api-session-feedback-first-001"},
     )
-    _, second_feedback = call_json(
-        app,
-        f"/api/v1/polish-sessions/{session_id}/feedback",
-        "POST",
-        json_body={"answer_id": answer_id},
+    second_feedback_id = _add_generated_feedback_record(
+        session_factory,
+        session_id=session_id,
+        answer_id=answer_id,
+        feedback_id="fb_latest_feedback_manual_second",
+        feedback_text="second generated feedback",
     )
 
     status_code, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
@@ -4157,7 +4163,7 @@ def test_polish_session_returns_latest_feedback_when_multiple_feedback_records_e
     answers = turns[0]["answers"]
     assert answers, "answers should exist"
     assert answers[0]["answer_text"] == "第一轮回答。"
-    assert answers[0]["feedback_id"] == second_feedback["data"]["result_ref"]["trace_ref_id"]
+    assert answers[0]["feedback_id"] == second_feedback_id
 
 
 def test_polish_answer_rejects_blank_text_with_error_envelope() -> None:
@@ -5262,6 +5268,7 @@ def _create_polish_answer_with_feedback(
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers={"Idempotency-Key": "polish-api-create-answer-with-feedback-001"},
     )
     return {
         "session_id": session_id,
@@ -5270,6 +5277,55 @@ def _create_polish_answer_with_feedback(
         "answer_id": answer_id,
         "feedback_id": feedback_body["data"]["feedback_payload"]["feedback_id"],
     }
+
+
+def _add_generated_feedback_record(
+    session_factory: sessionmaker[Session],
+    *,
+    session_id: str,
+    answer_id: str,
+    feedback_id: str,
+    feedback_text: str,
+) -> str:
+    now = utc_now()
+    payload = {
+        "schema_id": "polish_feedback.final.v1",
+        "schema_version": "1.0",
+        "contract_ids": ["P-POLISH-005"],
+        "status": "generated",
+        "feedback_id": feedback_id,
+        "feedback_text": feedback_text,
+        "answer_summary": {
+            "coverage": "manual test feedback",
+            "main_gaps": [],
+        },
+        "score_result": None,
+        "loss_points": [],
+        "reference_answer": None,
+        "next_recommended_actions": ["continue_same_question"],
+        "trace_refs": [],
+        "low_confidence_flags": [],
+        "feedback_metadata": {
+            "generated": True,
+            "llm_called": True,
+        },
+    }
+    SqlAlchemyPolishRepository(session_factory).add_feedback(
+        PolishFeedback(
+            feedback_id=feedback_id,
+            owner_id=OWNER_A,
+            actor_id=ACTOR_A.actor_id,
+            session_id=session_id,
+            answer_id=answer_id,
+            ai_task_id=f"ait_{feedback_id}",
+            score_result_id=None,
+            feedback_summary=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            status="generated",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return feedback_id
 
 
 def _overwrite_feedback_summary_payload(

@@ -4,10 +4,12 @@ import json
 from types import SimpleNamespace
 
 import app.api.v1.polish as polish_api
-from app.application.polish.entities import PolishAnswer, PolishFeedback
+from app.application.polish.entities import PolishAnswer, PolishFeedback, PolishTaskStatus
 from app.application.polish.feedback_application_service import _failed_feedback_payload_for_storage
 from app.application.polish.use_cases import _to_session_answer_detail
 from app.domain.shared.clock import utc_now
+from app.domain.shared.enums import AiTaskStatus
+from app.domain.shared.refs import ResourceRef, TraceRef
 from app.infrastructure.db.repositories.ai_tasks import _result_projection
 
 
@@ -126,6 +128,69 @@ def test_old_generated_feedback_payload_remains_display_compatible() -> None:
     assert "raw_prompt" not in payload["feedback_payload"]
     assert "provider_payload" not in payload["feedback_payload"]
     _assert_no_grant_client_fields(payload)
+
+
+def test_feedback_post_response_uses_active_feedback_contract_top_level() -> None:
+    now = utc_now()
+    task = PolishTaskStatus(
+        ai_task_id="ait_feedback_contract_top_level",
+        task_type="polish_feedback_generation",
+        status=AiTaskStatus.SUCCEEDED,
+        contract_ids=("P-POLISH-005",),
+        retryable=False,
+        result_ref=TraceRef(trace_ref_id="fb_contract_top_level", trace_type="feedback", created_at=now),
+        user_visible_status="反馈已生成",
+        candidate_refs=(
+            ResourceRef(resource_type="feedback_candidate", resource_id="feedback_candidate_contract"),
+        ),
+    )
+    answer = SimpleNamespace(
+        answer_id="ans_feedback_contract_top_level",
+        answer_round=1,
+        answer_text="回答正文。",
+        answer_created_at=now,
+        session_id="ses_feedback_contract_top_level",
+        question_id="que_feedback_contract_top_level",
+        feedback_id="fb_contract_top_level",
+        score_result_id="score_contract_top_level",
+        feedback_created_at=now,
+        feedback_payload={
+            "status": "generated",
+            "feedback_id": "fb_contract_top_level",
+            "feedback_text": "契约点评摘要。",
+            "score_result": {"score_value": 88, "score_type": "polish_answer"},
+            "loss_points": [
+                {"loss_point_id": "loss_contract_1", "reason": "缺少失败补偿。"},
+                {"id": "loss_contract_2", "reason": "缺少指标。"},
+                {"reason": "无稳定引用的旧失分点。"},
+            ],
+            "reference_answer": {"sections": []},
+            "next_recommended_actions": ["continue_same_question"],
+            "low_confidence_flags": [],
+            "trace_refs": [{"trace_ref_id": "trace_contract_top_level"}],
+        },
+    )
+
+    payload = polish_api._feedback_response(
+        task,
+        answer,
+        session_id=answer.session_id,
+        question_id=answer.question_id,
+    )
+
+    assert payload["summary"] == "契约点评摘要。"
+    assert payload["score_ref"] == "score_contract_top_level"
+    assert payload["loss_point_refs"] == ["loss_contract_1", "loss_contract_2"]
+    assert payload["candidate_refs"] == [
+        {"resource_type": "feedback_candidate", "resource_id": "feedback_candidate_contract"}
+    ]
+    assert payload["feedback_payload"]["next_recommended_actions"] == ["continue_same_question"]
+    assert "next_recommended_actions" not in payload
+    assert "feedback_text" not in payload
+    assert "score_result" not in payload
+    assert "score_result_id" not in payload
+    assert "low_confidence_flags" not in payload
+    assert "trace_refs" not in payload
 
 
 def test_legacy_feedback_summary_json_renders_as_feedback_text_response() -> None:

@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-import re
 from time import perf_counter
 from typing import Any
 
@@ -51,11 +50,11 @@ from app.application.polish.entities import (
     PolishTaskStatus,
     PolishTopic,
 )
-from app.application.polish.feedback_schema import (
-    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
-    POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS,
-    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
-    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+from app.application.polish.feedback_projection import (
+    ANSWER_NEXT_RECOMMENDED_ACTIONS,
+    PENDING_FEEDBACK_TEXT,
+    pending_feedback_payload,
+    response_safe_feedback_payload,
 )
 from app.application.polish.feedback_generation_service import FeedbackGenerationService
 from app.application.polish.queries import GetPolishSessionQuery, ListPolishSessionsQuery, ListPolishTopicsQuery
@@ -116,39 +115,6 @@ LEGACY_TOPIC_TITLE_BY_ID = {
     "topic_system_design": "能力深度与技术深挖",
     "topic_behavioral": "情景模拟与角色扮演",
 }
-PENDING_FEEDBACK_TEXT = "本轮反馈尚未生成"
-
-# 仅作答（无反馈）时允许的推荐操作
-ANSWER_NEXT_RECOMMENDED_ACTIONS = (
-    "answer_again",
-    "continue_same_question",
-)
-
-# 反馈 payload 中禁止暴露给前端的字段（LLM 原始输入/输出）
-FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
-    {
-        "prompt",
-        "raw_prompt",  # sensitive response denylist marker
-        "system_prompt",  # sensitive response denylist marker
-        "completion",
-        "raw_completion",
-        "provider_payload",  # sensitive response denylist marker
-        "raw_provider_payload",  # sensitive response denylist marker
-        "provider_response",
-        "raw_provider_response",
-    }
-)
-
-FEEDBACK_PAYLOAD_RESPONSE_TOP_LEVEL_KEYS = frozenset(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS) | frozenset(
-    {
-        "error",
-        "retryable",
-        "user_visible_status",
-        "validation_errors",
-    }
-)
-
-
 # ── 主题端点 ────────────────────────────────────────────────────────
 
 @router.get("/polish-topics")
@@ -307,10 +273,7 @@ async def create_polish_question_task(
     return success_envelope(
         status=ApiStatus.ACCEPTED,
         resource_type="ai_task",
-        data=_task_response(
-            result.value,
-            contract_shape=_question_task_contract_shape(result.value),
-        ),
+        data=_task_response(result.value),
     )
 
 
@@ -465,6 +428,15 @@ async def create_polish_feedback_task(
 ) -> Any:
     use_cases = _use_cases(session_factory, llm_transport)
     clean_idempotency_key = _clean_optional_header(idempotency_key)
+    if clean_idempotency_key is None:
+        raise_api_error(
+            status_code=400,
+            code="idempotency_required",
+            message="Idempotency-Key header is required for feedback generation.",
+            details={"field": "Idempotency-Key", "reason": "idempotency_required"},
+            retryable=True,
+            user_action="retry_with_key",
+        )
     command = CreatePolishFeedbackTaskCommand(
         owner_id=actor.owner_id,
         actor_id=actor.actor_id,
@@ -538,10 +510,7 @@ async def create_polish_feedback_next_question_task(
     return success_envelope(
         status=ApiStatus.ACCEPTED,
         resource_type="ai_task",
-        data=_task_response(
-            result.value,
-            contract_shape=_question_task_contract_shape(result.value),
-        ),
+        data=_task_response(result.value),
     )
 
 
@@ -892,7 +861,7 @@ def _feedback_response(
     question_id: str,
 ) -> dict[str, object]:
     feedback_payload = _answer_feedback_payload(answer, session_id=session_id, question_id=question_id)
-    payload = _task_response(task, contract_shape=feedback_payload)
+    payload = _task_response(task)
     payload.update(
         {
             "feedback_id": getattr(answer, "feedback_id", None),
@@ -901,16 +870,51 @@ def _feedback_response(
             "question_id": question_id,
             "answer_id": getattr(answer, "answer_id"),
             "answer_round": getattr(answer, "answer_round"),
-            "feedback_text": feedback_payload["feedback_text"],
+            "summary": _feedback_response_summary(feedback_payload),
             "feedback_created_at": getattr(answer, "feedback_created_at", None),
-            "score_result_id": getattr(answer, "score_result_id", None),
-            "score_result": feedback_payload.get("score_result"),
+            "score_ref": _feedback_score_ref(answer, feedback_payload),
+            "loss_point_refs": _feedback_loss_point_refs(feedback_payload),
             "feedback_payload": feedback_payload,
-            "low_confidence_flags": list(feedback_payload.get("low_confidence_flags", [])),
-            "trace_refs": list(feedback_payload.get("trace_refs", [])),
         }
     )
     return payload
+
+
+def _feedback_response_summary(feedback_payload: dict[str, object]) -> str:
+    feedback_text = feedback_payload.get("feedback_text")
+    return feedback_text.strip() if isinstance(feedback_text, str) and feedback_text.strip() else PENDING_FEEDBACK_TEXT
+
+
+def _feedback_score_ref(answer: object, feedback_payload: dict[str, object]) -> str | None:
+    score_result_id = getattr(answer, "score_result_id", None)
+    if isinstance(score_result_id, str) and score_result_id.strip():
+        return score_result_id.strip()
+    score_result = feedback_payload.get("score_result")
+    if isinstance(score_result, dict):
+        payload_score_result_id = score_result.get("score_result_id")
+        if isinstance(payload_score_result_id, str) and payload_score_result_id.strip():
+            return payload_score_result_id.strip()
+    return None
+
+
+def _feedback_loss_point_refs(feedback_payload: dict[str, object]) -> list[str]:
+    loss_points = feedback_payload.get("loss_points")
+    if not isinstance(loss_points, list):
+        return []
+    refs: list[str] = []
+    seen: set[str] = set()
+    for item in loss_points:
+        if not isinstance(item, dict):
+            continue
+        for key in ("loss_point_id", "loss_point_ref", "ref_id", "id"):
+            candidate = item.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                ref = candidate.strip()
+                if ref not in seen:
+                    seen.add(ref)
+                    refs.append(ref)
+                break
+    return refs
 
 
 # ── 辅助函数：幂等键清理 ────────────────────────────────────────────
@@ -958,128 +962,20 @@ def _pending_feedback_payload(
     feedback_id: str | None,
     trace_refs: list[dict[str, object]],
 ) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
-        "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
-        "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
-        "status": "pending",
-        "feedback_text": PENDING_FEEDBACK_TEXT,
-        "answer_summary": None,
-        "score_result": None,
-        "loss_points": [],
-        "reference_answer": None,
-        "next_recommended_actions": list(ANSWER_NEXT_RECOMMENDED_ACTIONS),
-        "trace_refs": trace_refs,
-        "low_confidence_flags": [],
-        "feedback_metadata": {
-            "llm_called": False,
-            "pending_reason": "feedback_not_generated",
-            "answer_id": answer_id,
-            "session_id": session_id,
-            "question_id": question_id,
-        },
-    }
-    if feedback_id:
-        payload["feedback_id"] = feedback_id
-    return payload
-
-
-# ── 安全脱敏 ────────────────────────────────────────────────────────
-
-REDACTED_SENSITIVE_FEEDBACK_DETAIL = "redacted_sensitive_detail"
-ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS = frozenset(
-    {
-        "hidden_rubric",
-        "full_evidence_text",
-        "full_resume",
-        "full_jd",
-        "token",
-        "api_key",
-        "cookie",
-        "secret",
-        "hidden_scoring",
-        "hidden_scoring_rules",
-    }
-)
-FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS = (
-    "raw_prompt",  # sensitive response denylist marker
-    "system_prompt",  # sensitive response denylist marker
-    "developer_prompt",
-    "user_prompt",
-    "raw_completion",
-    "completion",
-    "provider_payload",  # sensitive response denylist marker
-    "raw_provider_payload",  # sensitive response denylist marker
-    "provider_response",
-    "raw_provider_response",
-    "hidden_rubric",
-    "full_evidence_text",
-    "full_resume",
-    "full_resume_markdown",
-    "full_jd",
-    "full_jd_text",
-    "hidden_scoring",
-    "hidden_scoring_rules",
-)
-FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_ASSIGNMENT_PATTERNS = (
-    re.compile(r"api[_-]?key\s*=\s*[^\s,;，；]+", re.IGNORECASE),
-    re.compile(r"cookie\s*=\s*[^\s,;，；]+", re.IGNORECASE),
-    re.compile(r"token\s*=\s*[^\s,;，；]+", re.IGNORECASE),
-    re.compile(r"secret\s*=\s*[^\s,;，；]+", re.IGNORECASE),
-    re.compile(r"\bbearer\s+[a-z0-9._~+/=-]+", re.IGNORECASE),
-)
-
-
-# ── 安全脱敏 ────────────────────────────────────────────────────────
-
-# 检查 dict key 是否属于禁止暴露的字段
-def _is_forbidden_feedback_payload_response_key(key: str) -> bool:
-    normalized = key.strip().lower()
-    return (
-        normalized in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS
-        or normalized in ADDITIONAL_FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_KEYS
-        or "prompt" in normalized
+    return pending_feedback_payload(
+        answer_id=answer_id,
+        session_id=session_id,
+        question_id=question_id,
+        feedback_id=feedback_id,
+        trace_refs=trace_refs,
     )
 
 
-# 将字符串中的分隔符标准化为下划线（便于后续匹配标记）
-def _normalized_feedback_sensitive_marker_text(value: str) -> str:
-    return re.sub(r"[\s-]+", "_", value.lower())
-
-
-# 递归脱敏：检查文本中是否包含敏感标记
-def _redact_forbidden_feedback_payload_response_text(value: str) -> str:
-    normalized = _normalized_feedback_sensitive_marker_text(value)
-    if any(marker in normalized for marker in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_VALUE_MARKERS):
-        return REDACTED_SENSITIVE_FEEDBACK_DETAIL
-    if any(pattern.search(value) for pattern in FORBIDDEN_FEEDBACK_PAYLOAD_RESPONSE_ASSIGNMENT_PATTERNS):
-        return REDACTED_SENSITIVE_FEEDBACK_DETAIL
-    return value
+# ── 安全脱敏 ────────────────────────────────────────────────────────
 
 # 安全获取反馈 payload：先删除禁止字段，再脱敏文本值
 def _response_safe_feedback_payload(payload: dict[str, Any]) -> dict[str, object]:
-    sanitized = _drop_forbidden_feedback_payload_response_keys(payload)
-    if isinstance(sanitized, dict):
-        return sanitized
-    return {}
-
-
-# 递归删除 payload 中所有禁止暴露的键，并脱敏字符串值中的敏感内容
-def _drop_forbidden_feedback_payload_response_keys(value: Any, *, _depth: int = 0) -> Any:
-    if isinstance(value, dict):
-        return {
-            str(key): _drop_forbidden_feedback_payload_response_keys(item, _depth=_depth + 1)
-            for key, item in value.items()
-            if not _is_forbidden_feedback_payload_response_key(str(key))
-            and (_depth != 0 or str(key) in FEEDBACK_PAYLOAD_RESPONSE_TOP_LEVEL_KEYS)
-        }
-    if isinstance(value, list):
-        return [_drop_forbidden_feedback_payload_response_keys(item, _depth=_depth) for item in value]
-    if isinstance(value, tuple):
-        return [_drop_forbidden_feedback_payload_response_keys(item, _depth=_depth) for item in value]
-    if isinstance(value, str):
-        return _redact_forbidden_feedback_payload_response_text(value)
-    return value
+    return response_safe_feedback_payload(payload)
 
 
 # 构造答案的 trace 引用
@@ -1113,7 +1009,7 @@ def _resource_ref_dump(ref: ResourceRef | None) -> dict[str, str] | None:
 
 # ── 响应构建函数：任务状态 ──────────────────────────────────────────
 
-def _task_response(task: PolishTaskStatus, *, contract_shape: dict[str, Any] | None = None) -> dict[str, object]:
+def _task_response(task: PolishTaskStatus) -> dict[str, object]:
     active_question_refs = [
         {"resource_type": ref.resource_type, "resource_id": ref.resource_id}
         for ref in task.candidate_refs
@@ -1155,39 +1051,6 @@ def _task_response(task: PolishTaskStatus, *, contract_shape: dict[str, Any] | N
         "validation_errors": list(getattr(task, "validation_errors", ())),
     }
     return payload
-
-
-# ── 响应构建函数：题目契约形状 ──────────────────────────────────────
-
-def _question_task_contract_shape(task: PolishTaskStatus) -> dict[str, Any]:
-    question_ref: dict[str, str] | None = None
-    progress_node_ref: str | None = None
-    evidence_refs: list[dict[str, str]] = []
-    source_refs: list[dict[str, str]] = []
-    for ref in task.candidate_refs:
-        source_refs.append({"resource_type": ref.resource_type, "resource_id": ref.resource_id})
-        if ref.resource_type == "question":
-            question_ref = {"resource_type": ref.resource_type, "resource_id": ref.resource_id}
-        elif ref.resource_type == "progress_node":
-            progress_node_ref = ref.resource_id
-        elif ref.resource_type == "evidence":
-            evidence_refs.append({"resource_type": ref.resource_type, "resource_id": ref.resource_id})
-    return {
-        "contract_id": "P-POLISH-002",
-        "status": str(task.status),
-        "source_refs": source_refs,
-        "source_availability": "available" if source_refs else "partial",
-        "question_ref": question_ref,
-        "progress_node_ref": progress_node_ref,
-        "evidence_refs": evidence_refs,
-        "context_digest": None,
-        "low_confidence_flags": [],
-        "validation_result_ref": None,
-        "trace_refs": [_trace_ref(task.result_ref)] if task.result_ref is not None else [],
-        "session_summary_update_ref": None,
-        "next_recommended_actions": ["continue_same_question"],
-        "user_confirmation_required": False,
-    }
 
 
 # ── 响应构建函数：主题/子主题/标题/TraceRef ────────────────────────

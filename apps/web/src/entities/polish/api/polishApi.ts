@@ -116,6 +116,14 @@ export async function dismissPolishCandidate(candidateId: string): Promise<Polis
 type PolishQuestionIntentInput = CreatePolishQuestionTaskRequest | Record<string, unknown>;
 type PolishFeedbackNextQuestionIntentInput = CreatePolishFeedbackNextQuestionIntentRequest | Record<string, unknown>;
 
+export type CreatePolishFeedbackTaskOptions = {
+  readonly idempotencyKey?: string | null;
+};
+
+export function buildPolishFeedbackTaskIdempotencyKey(answerId: string): string {
+  return `polish-feedback-${answerId}`;
+}
+
 function normalizeExcludeQuestionRefs(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -274,10 +282,12 @@ export async function createPolishAnswer(
 export async function createPolishFeedbackTask(
   sessionId: string,
   payload: CreatePolishFeedbackTaskRequest,
+  options: CreatePolishFeedbackTaskOptions = {},
 ): Promise<PolishTaskStatus> {
   const response = await request<PolishTaskStatus>(POLISH_API_PATHS.feedbackTask(sessionId), {
     method: "POST",
     body: payload,
+    headers: options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : undefined,
   });
   const data = buildSuccessData(response);
   if (data === null) {

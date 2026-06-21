@@ -178,7 +178,7 @@ export interface PolishProjectAssetConsistencyCheck extends Record<string, unkno
   clarification_questions?: string[];
 }
 
-export interface PolishFeedbackPayload extends Record<string, unknown> {
+export interface PolishFeedbackPayload {
   contract_ids?: string[];
   status?:
     | "pending"

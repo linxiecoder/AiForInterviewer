@@ -7,6 +7,10 @@ from typing import Any
 
 from sqlalchemy import select
 
+from app.application.polish.feedback_projection import (
+    redact_feedback_payload_text,
+    response_safe_feedback_payload,
+)
 from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.models.feedback import Feedback
 from app.infrastructure.db.repositories.base import SqlAlchemyRepository
@@ -295,8 +299,7 @@ def _safe_summary(result: AiTaskResult | None) -> dict[str, Any]:
     safe_summary_json = getattr(result, "safe_summary_json", None)
     if result is None or not isinstance(safe_summary_json, dict):
         return {}
-    sanitized = _sanitize_payload(safe_summary_json)
-    return sanitized if isinstance(sanitized, dict) else {}
+    return response_safe_feedback_payload(safe_summary_json)
 
 
 def _safe_string_list(value: object) -> list[str]:
@@ -314,53 +317,10 @@ def _safe_text(value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    sanitized = _sanitize_payload(text)
-    return sanitized.strip() if isinstance(sanitized, str) else ""
+    return redact_feedback_payload_text(text).strip()
 
 
 def _feedback_result_payload(task: AiTask, payload: dict[str, Any] | None) -> dict[str, Any] | None:
     if task.task_type != "polish_feedback_generation" or not isinstance(payload, dict):
         return None
-    sanitized = _sanitize_payload(payload)
-    return sanitized if isinstance(sanitized, dict) else None
-
-
-_FORBIDDEN_KEYS = {
-    "raw_prompt",
-    "prompt",
-    "completion",
-    "raw_completion",
-    "provider_payload",
-    "raw_provider_payload",
-    "hidden_rubric",
-    "full_evidence_text",
-    "full_resume",
-    "full_jd",
-    "token",
-    "api_key",
-    "cookie",
-    "secret",
-}
-
-
-def _sanitize_payload(value: Any) -> Any:
-    if isinstance(value, dict):
-        sanitized: dict[str, Any] = {}
-        for key, item in value.items():
-            normalized_key = str(key).lower()
-            if normalized_key in _FORBIDDEN_KEYS:
-                continue
-            sanitized[str(key)] = _sanitize_payload(item)
-        return sanitized
-    if isinstance(value, list):
-        return [_sanitize_payload(item) for item in value]
-    if isinstance(value, tuple):
-        return [_sanitize_payload(item) for item in value]
-    if isinstance(value, str) and _contains_forbidden_marker(value):
-        return "redacted_sensitive_detail"
-    return value
-
-
-def _contains_forbidden_marker(value: str) -> bool:
-    normalized = value.lower()
-    return any(marker in normalized for marker in _FORBIDDEN_KEYS)
+    return response_safe_feedback_payload(payload)

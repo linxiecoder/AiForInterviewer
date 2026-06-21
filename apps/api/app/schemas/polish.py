@@ -391,10 +391,8 @@ class PolishTaskStatusResponse(BaseModel):
     question_id: str | None = None
     answer_id: str | None = None
     answer_round: int | None = Field(default=None, ge=1)
-    feedback_text: str | None = None
     feedback_created_at: datetime | None = None
-    score_result_id: str | None = None
-    score_result: dict[str, Any] | None = None
+    summary: str | None = None
+    score_ref: str | None = None
+    loss_point_refs: list[str] = Field(default_factory=list)
     feedback_payload: PolishFeedbackPayload | None = None
-    low_confidence_flags: list[dict[str, Any]] = Field(default_factory=list)
-    trace_refs: list[dict[str, Any]] = Field(default_factory=list)

@@ -313,9 +313,9 @@ def _required_json_schema(output_schema: dict[str, Any]) -> dict[str, Any]:
             "low_confidence_flags",
             "evidence_refs",
         )
-        if field_name.split(".", maxsplit=1)[0] in field_names
+        if _schema_field_root(field_name) in field_names
     ]
-    required_roots = {field_name.split(".", maxsplit=1)[0] for field_name in required_fields}
+    required_roots = {_schema_field_root(field_name) for field_name in required_fields}
     optional_fields = [field_name for field_name in field_names if field_name not in required_roots]
     return {
         "required_fields": required_fields,
@@ -333,6 +333,11 @@ def _required_json_schema(output_schema: dict[str, Any]) -> dict[str, Any]:
         ],
         "not_applicable_fields": [],
     }
+
+
+def _schema_field_root(field_name: str) -> str:
+    root, _, _ = field_name.partition(".")
+    return root
 
 
 def _provider_output_shape_hints() -> dict[str, object]:
@@ -653,7 +658,7 @@ def _structured_answer_for(context: object) -> dict[str, Any]:
     existing = _get_dict(context, "structured_answer")
     if existing:
         return _compact_structured_answer(existing)
-    answer_text = _get_text(context, "answer_text", max_chars=12000)
+    answer_text = _get_text(context, "answer_text", max_chars=_PROVIDER_PROMPT_CHAR_LIMIT)
     return _compact_structured_answer(TranscriptSignalParser().parse(answer_text).to_dict())
 
 

@@ -31,7 +31,7 @@ from app.application.polish.question_metadata import (
 from app.application.polish.theme_strategy import PolishThemeStrategy, resolve_polish_theme_strategy
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
-from app.domain.shared.refs import ResourceRef
+from app.domain.shared.refs import ResourceRef, TraceRef
 from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.models.answer import Answer as AnswerModel
 from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
@@ -533,6 +533,8 @@ class SqlAlchemyPolishRepository(PolishRepository):
                 .limit(1)
             )
             if result is None or feedback is None:
+                if task.status in {str(AiTaskStatus.QUEUED), str(AiTaskStatus.RUNNING)}:
+                    return {"status": "running", "task": _task_status_from_model(task)}
                 return {"status": "orphan", "ai_task_id": task.id}
             return {"status": "replay", "feedback": _feedback_to_entity(feedback)}
 
@@ -1143,6 +1145,32 @@ def _feedback_idempotency_record_prefix(idempotency_key: str) -> str:
 
 def _feedback_idempotency_record_id(idempotency_key: str, request_body_hash: str) -> str:
     return f"{_feedback_idempotency_record_prefix(idempotency_key)}{request_body_hash[:24]}"
+
+
+def _task_status_from_model(model: AiTask) -> PolishTaskStatus:
+    trace_refs = model.trace_ref_ids if isinstance(model.trace_ref_ids, list) else []
+    trace_ref_id = next((str(item) for item in trace_refs if str(item).strip()), model.id)
+    return PolishTaskStatus(
+        ai_task_id=model.id,
+        task_type=model.task_type,
+        status=AiTaskStatus(model.status),
+        contract_ids=tuple(str(item) for item in model.contract_ids or []),
+        retryable=False,
+        result_ref=TraceRef(
+            trace_ref_id=trace_ref_id,
+            trace_type="ai_task",
+            created_at=model.created_at,
+        ),
+        user_visible_status=_task_user_visible_status(model.status),
+    )
+
+
+def _task_user_visible_status(status: str) -> str:
+    if status == str(AiTaskStatus.RUNNING):
+        return "反馈生成中"
+    if status == str(AiTaskStatus.QUEUED):
+        return "任务已排队"
+    return status
 
 
 def _feedback_to_entity(model: FeedbackModel) -> PolishFeedback:

@@ -21,6 +21,7 @@ from tests.api.test_polish_api import (
     _session_factory,
 )
 from tests.api.test_polish_feedback_runtime import (
+    _feedback_headers,
     _RecordingFeedbackTransport,
     _create_answer_ready_for_feedback,
     _runtime_test_non_feedback_result,
@@ -51,6 +52,7 @@ def test_ai_task_status_and_result_read_feedback_task_without_provider_payload()
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("ai-task-feedback-readback-001"),
     )
     ai_task_id = feedback_body["data"]["ai_task_id"]
 
@@ -107,6 +109,7 @@ def test_feedback_task_returns_running_state_before_slow_provider_finishes() -> 
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("ai-task-feedback-running-001"),
     )
     elapsed = time.perf_counter() - started_at
 

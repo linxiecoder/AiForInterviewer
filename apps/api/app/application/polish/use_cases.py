@@ -73,6 +73,10 @@ from app.application.polish.agents.question import (
 from app.application.polish.feedback_generation_service import (
     FeedbackGenerationService,
 )
+from app.application.polish.feedback_projection import (
+    feedback_text_from_payload,
+    response_safe_feedback_payload,
+)
 from app.application.polish.next_question_authorization import (
     build_next_question_execution_grant,
     consume_next_question_execution_grant,
@@ -3261,11 +3265,7 @@ def _feedback_text_from_summary(value: str | None) -> str | None:
     payload = _feedback_payload_from_summary(value)
     if payload is None:
         return value
-    for key in ("feedback_text", "feedback_summary"):
-        text = payload.get(key)
-        if isinstance(text, str) and text.strip():
-            return text
-    return value
+    return feedback_text_from_payload(payload, fallback=value)
 
 
 def _should_regenerate_progress_tree(detail: PolishSessionDetail) -> bool:
@@ -3293,7 +3293,8 @@ def _to_session_answer_detail(
     answer: PolishAnswer,
     feedback: PolishFeedback | None,
 ) -> PolishSessionAnswerDetail:
-    feedback_payload = _feedback_payload_from_summary(feedback.feedback_summary) if feedback is not None else None
+    raw_feedback_payload = _feedback_payload_from_summary(feedback.feedback_summary) if feedback is not None else None
+    feedback_payload = response_safe_feedback_payload(raw_feedback_payload) if raw_feedback_payload is not None else None
     feedback_text = _feedback_text_from_summary(feedback.feedback_summary) if feedback is not None else None
     return PolishSessionAnswerDetail(
         answer_id=answer.answer_id,

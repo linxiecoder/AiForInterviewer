@@ -16,6 +16,29 @@ from tests.api.test_polish_feedback_runtime import (
 )
 
 
+def test_feedback_requires_idempotency_key_before_generation(monkeypatch) -> None:
+    monkeypatch.setattr(polish_api, "run_in_threadpool", _run_inline_threadpool)
+    session_factory = _session_factory()
+    llm_transport = _RecordingFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    status, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+    )
+
+    assert status == 400
+    assert body["error"]["code"] == "idempotency_required"
+    assert body["error"]["details"]["field"] == "Idempotency-Key"
+    assert body["error"]["retryable"] is True
+    assert len(llm_transport.feedback_requests) == 0
+    assert _count_rows(session_factory, "ai_tasks", "target_ref_id", answer_id) == 0
+    assert _count_rows(session_factory, "feedback", "answer_id", answer_id) == 0
+
+
 def test_feedback_idempotency_key_replays_task_result_without_second_generation(monkeypatch) -> None:
     monkeypatch.setattr(polish_api, "run_in_threadpool", _run_inline_threadpool)
     session_factory = _session_factory()
@@ -40,7 +63,14 @@ def test_feedback_idempotency_key_replays_task_result_without_second_generation(
     )
 
     assert first_status == 202
+    for retired_top_level_key in ("feedback_text", "score_result", "low_confidence_flags", "trace_refs"):
+        assert retired_top_level_key not in first_body["data"]
+    assert first_body["data"]["summary"] == first_body["data"]["feedback_payload"]["feedback_text"]
+    assert "score_ref" in first_body["data"]
+    assert "loss_point_refs" in first_body["data"]
     assert second_status == 202
+    for retired_top_level_key in ("feedback_text", "score_result", "low_confidence_flags", "trace_refs"):
+        assert retired_top_level_key not in second_body["data"]
     assert second_body["data"]["ai_task_id"] == first_body["data"]["ai_task_id"]
     assert second_body["data"]["feedback_id"] == first_body["data"]["feedback_id"]
     assert second_body["data"]["feedback_payload"]["feedback_id"] == first_body["data"]["feedback_id"]

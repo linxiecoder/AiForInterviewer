@@ -159,9 +159,11 @@ import {
 import {
   POLISH_API_PATHS,
   buildPolishFeedbackNextQuestionIntentPayload,
+  buildPolishFeedbackTaskIdempotencyKey,
   buildPolishQuestionTaskIntentPayload,
   completePolishQuestion,
   confirmPolishCandidate,
+  createPolishFeedbackTask,
   createPolishNodeQuestionTask,
   createPolishSession,
   dismissPolishCandidate,
@@ -175,10 +177,16 @@ import {
   generatePolishSessionReport,
   generateInitialPolishProgressTree,
   softDeletePolishSession,
+  type CreatePolishFeedbackTaskOptions,
 } from "../../entities/polish/api/polishApi";
+import type {
+  buildFeedbackCardViewModel as buildEntityFeedbackCardViewModel,
+  buildWorkbenchFixedNextActionBarViewModel as buildEntityWorkbenchFixedNextActionBarViewModel,
+} from "../../entities/polish/model/feedbackViewModel";
 import type { JobSummary } from "../../entities/job/model/types";
 import type {
   CreatePolishFeedbackNextQuestionIntentRequest,
+  CreatePolishFeedbackTaskRequest,
   CreatePolishQuestionTaskRequest,
   CreatePolishSessionRequest,
   PolishAiTaskResult,
@@ -692,6 +700,27 @@ type PolishFeedbackPayloadMetadataSupportsSafeContext = Expect<
     NonNullable<PolishFeedbackPayload["feedback_metadata"]>["context_hygiene_status"],
     PolishContextHygieneStatus | undefined
   >
+>;
+type PolishFeedbackPayloadHasNoArbitraryStringIndex = Expect<
+  Equal<string extends keyof PolishFeedbackPayload ? true : false, false>
+>;
+type FeedbackCardViewModelComesFromEntityHelper = Expect<
+  Equal<ReturnType<typeof buildFeedbackCardViewModel>, ReturnType<typeof buildEntityFeedbackCardViewModel>>
+>;
+type FeedbackNextActionBarComesFromEntityHelper = Expect<
+  Equal<
+    ReturnType<typeof buildWorkbenchFixedNextActionBarViewModel>,
+    ReturnType<typeof buildEntityWorkbenchFixedNextActionBarViewModel>
+  >
+>;
+type FeedbackTaskAcceptsIdempotencyKeyOptions = Expect<
+  Equal<
+    Exclude<Parameters<typeof createPolishFeedbackTask>[2], undefined>,
+    CreatePolishFeedbackTaskOptions
+  >
+>;
+type FeedbackTaskPayloadKeepsAnswerIdOnly = Expect<
+  Equal<CreatePolishFeedbackTaskRequest, { answer_id: string }>
 >;
 type TopicApiReturnsControlledCatalog = Expect<
   Equal<Awaited<ReturnType<typeof fetchPolishTopics>>, PolishTopic[]>
@@ -3336,6 +3365,13 @@ function test_answer_submission_idempotency_key_reuses_current_draft(): void {
   assertContract(keyIndex === 3, "复用当前草稿时不应额外生成 key");
 }
 
+function test_feedback_generation_idempotency_key_is_stable_per_answer(): void {
+  assertContract(
+    buildPolishFeedbackTaskIdempotencyKey("ans_feedback_001") === "polish-feedback-ans_feedback_001",
+    "反馈生成幂等键应由已保存 answer_id 稳定派生，避免回答已保存后生成反馈缺少 Idempotency-Key",
+  );
+}
+
 function test_workbench_next_actions_render_in_fixed_composer_bar(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_fixed_actions",
@@ -3601,8 +3637,12 @@ function test_generated_feedback_card_view_model_shows_phase6_payload_sections()
         clarification_questions: ["请确认订单履约系统到底在几月上线？"],
       },
       next_recommended_actions: ["retry_same_question", "continue_same_question"],
-      raw_prompt: "raw_prompt_should_not_render",
-      provider_payload: "provider_payload_should_not_render",
+      feedback_metadata: {
+        safe_context_metadata: {
+          raw_prompt: "raw_prompt_should_not_render",
+          provider_payload: "provider_payload_should_not_render",
+        },
+      },
     },
   };
 
@@ -4009,12 +4049,12 @@ function test_feedback_card_view_model_handles_failed_payload(): void {
         metadata: {
           provider_payload: "provider_payload_should_not_render",
           raw_prompt: "raw_prompt_should_not_render",
+          raw_provider_payload: "raw_provider_payload_should_not_render",
         },
       },
       score_result: null,
       loss_points: [],
       reference_answer: null,
-      raw_provider_payload: "raw_provider_payload_should_not_render",
     },
   };
 
@@ -4493,6 +4533,7 @@ test_question_node_clipboard_includes_full_question_answer_and_feedback();
 test_question_node_clipboard_uses_answer_and_feedback_placeholders();
 test_workbench_ctrl_enter_submits_answer();
 test_answer_submission_idempotency_key_reuses_current_draft();
+test_feedback_generation_idempotency_key_is_stable_per_answer();
 test_polish_question_generation_request_payload_is_intent_only();
 test_workbench_next_actions_render_in_fixed_composer_bar();
 test_workbench_next_action_recommendations_are_display_only();

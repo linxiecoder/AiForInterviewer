@@ -31,6 +31,10 @@ from app.application.polish.feedback_generation_service import (
     FeedbackGenerationContext,
     FeedbackGenerationService,
 )
+from app.application.polish.feedback_projection import (
+    FAILED_FEEDBACK_NEXT_RECOMMENDED_ACTIONS,
+    feedback_error_code,
+)
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
     POLISH_FEEDBACK_FINAL_SCHEMA_ID,
@@ -138,6 +142,9 @@ class PolishFeedbackApplicationService:
                             retryable=True,
                         )
                     )
+                replay_task = replay_result.get("task") if isinstance(replay_result, dict) else None
+                if replay_status == "running" and isinstance(replay_task, PolishTaskStatus):
+                    return ApplicationResult(value=replay_task)
                 replay_feedback = replay_result.get("feedback") if isinstance(replay_result, dict) else None
                 if isinstance(replay_feedback, PolishFeedback):
                     return ApplicationResult(value=_existing_feedback_task(replay_feedback))
@@ -300,7 +307,7 @@ def _complete_feedback_generation(
             question_id=question_id,
             answer_id=answer_id,
             error_code=(
-                generation_result.validation_errors[0]
+                feedback_error_code(generation_result.validation_errors)
                 if generation_result.validation_errors
                 else None
             ),
@@ -630,7 +637,7 @@ def _failed_feedback_payload_for_storage(
     validation_errors: tuple[str, ...],
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
-    error_code = validation_errors[0] if validation_errors else "llm_transport_generation_failed"
+    error_code = feedback_error_code(validation_errors)
     source_metadata = metadata if isinstance(metadata, dict) else {}
     error_type = source_metadata.get("provider_error_type")
     feedback_metadata: dict[str, Any] = {
@@ -687,7 +694,7 @@ def _failed_feedback_payload_for_storage(
         "score_result": None,
         "loss_points": [],
         "reference_answer": None,
-        "next_recommended_actions": ["retry_same_question", "continue_same_question"],
+        "next_recommended_actions": list(FAILED_FEEDBACK_NEXT_RECOMMENDED_ACTIONS),
         "trace_refs": [],
         "low_confidence_flags": [],
         "feedback_metadata": feedback_metadata,

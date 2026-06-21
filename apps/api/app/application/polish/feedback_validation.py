@@ -151,6 +151,15 @@ _PHASE5_SCORE_RESULT_EXTENSION_FIELDS = (
     "calibration_layer",
     "learning_control",
 )
+FEEDBACK_TEXT_MAX_CHARS = 12000
+FEEDBACK_ANSWER_SUMMARY_MAX_CHARS = 4000
+FEEDBACK_EVIDENCE_REF_MAX_ITEMS = 40
+FEEDBACK_EVIDENCE_REF_MAX_CHARS = 200
+FEEDBACK_VALIDATION_WARNING_MAX_ITEMS = 40
+FEEDBACK_VALIDATION_WARNING_MAX_CHARS = 160
+FEEDBACK_REFERENCE_SECTION_CONTENT_MAX_CHARS = 12000
+FEEDBACK_REFERENCE_LOSS_REF_MAX_ITEMS = 40
+FEEDBACK_REFERENCE_LOSS_REF_MAX_CHARS = 120
 
 
 def validate_feedback_candidate_payload(
@@ -183,10 +192,13 @@ def validate_feedback_candidate_payload(
     normalized = candidate_model.model_dump(mode="json", exclude_none=True)
     warnings.extend(candidate_model.validation_warnings)
 
-    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=12000)
+    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=FEEDBACK_TEXT_MAX_CHARS)
     if not normalized["feedback_text"]:
         errors.append("feedback_text_required")
-    normalized["answer_summary"] = _clean(normalized.get("answer_summary"), max_chars=4000)
+    normalized["answer_summary"] = _clean(
+        normalized.get("answer_summary"),
+        max_chars=FEEDBACK_ANSWER_SUMMARY_MAX_CHARS,
+    )
     if not normalized["answer_summary"]:
         errors.append("answer_summary_required")
     normalized["score_reasoning"] = _normalize_score_reasoning_for_candidate(
@@ -202,7 +214,11 @@ def validate_feedback_candidate_payload(
     if normalized_score_result is not None:
         normalized["score_result"] = normalized_score_result
     normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=20, max_item_chars=160)
-    normalized["evidence_refs"] = _string_list(normalized.get("evidence_refs"), max_items=40, max_item_chars=200)
+    normalized["evidence_refs"] = _string_list(
+        normalized.get("evidence_refs"),
+        max_items=FEEDBACK_EVIDENCE_REF_MAX_ITEMS,
+        max_item_chars=FEEDBACK_EVIDENCE_REF_MAX_CHARS,
+    )
 
     normalized["loss_points"] = _normalize_loss_point_evidence_refs(normalized.get("loss_points"), errors=errors)
     _normalize_loss_point_ids(normalized.get("loss_points"))
@@ -298,13 +314,20 @@ def validate_final_feedback_payload(
     normalized["feedback_id"] = _clean(normalized.get("feedback_id"), max_chars=120)
     if not normalized["feedback_id"] and require_feedback_id:
         errors.append("feedback_id_required")
-    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=12000)
+    normalized["feedback_text"] = _clean(normalized.get("feedback_text"), max_chars=FEEDBACK_TEXT_MAX_CHARS)
     if not normalized["feedback_text"]:
         errors.append("feedback_text_required")
-    normalized["answer_summary"] = _clean(normalized.get("answer_summary"), max_chars=4000)
+    normalized["answer_summary"] = _clean(
+        normalized.get("answer_summary"),
+        max_chars=FEEDBACK_ANSWER_SUMMARY_MAX_CHARS,
+    )
     if not normalized["answer_summary"]:
         errors.append("answer_summary_required")
-    normalized["low_confidence_flags"] = _string_list(normalized.get("low_confidence_flags"), max_items=40, max_item_chars=160)
+    normalized["low_confidence_flags"] = _string_list(
+        normalized.get("low_confidence_flags"),
+        max_items=FEEDBACK_VALIDATION_WARNING_MAX_ITEMS,
+        max_item_chars=FEEDBACK_VALIDATION_WARNING_MAX_CHARS,
+    )
 
     normalized_score_result, score_errors, score_warnings = normalize_semantic_score_result(normalized.get("score_result"))
     errors.extend(score_errors)
@@ -312,7 +335,11 @@ def validate_final_feedback_payload(
         metadata = normalized.get("feedback_metadata")
         if not isinstance(metadata, dict):
             metadata = {}
-        existing = _string_list(metadata.get("validation_warnings"), max_items=40, max_item_chars=160)
+        existing = _string_list(
+            metadata.get("validation_warnings"),
+            max_items=FEEDBACK_VALIDATION_WARNING_MAX_ITEMS,
+            max_item_chars=FEEDBACK_VALIDATION_WARNING_MAX_CHARS,
+        )
         metadata["validation_warnings"] = list(dict.fromkeys([*existing, *score_warnings]))
         normalized["feedback_metadata"] = metadata
     if normalized_score_result is not None:
@@ -346,7 +373,11 @@ def validate_final_feedback_payload(
         metadata = normalized.get("feedback_metadata")
         if not isinstance(metadata, dict):
             metadata = {}
-        existing = _string_list(metadata.get("validation_warnings"), max_items=40, max_item_chars=160)
+        existing = _string_list(
+            metadata.get("validation_warnings"),
+            max_items=FEEDBACK_VALIDATION_WARNING_MAX_ITEMS,
+            max_item_chars=FEEDBACK_VALIDATION_WARNING_MAX_CHARS,
+        )
         metadata["validation_warnings"] = list(dict.fromkeys([*existing, *final_reference_warnings]))
         normalized["feedback_metadata"] = metadata
 
@@ -546,7 +577,11 @@ def _normalize_loss_point_evidence_refs(
             if refs is None:
                 normalized_item["evidence_refs"] = []
             elif isinstance(refs, list):
-                normalized_item["evidence_refs"] = _string_list(refs, max_items=40, max_item_chars=200)
+                normalized_item["evidence_refs"] = _string_list(
+                    refs,
+                    max_items=FEEDBACK_EVIDENCE_REF_MAX_ITEMS,
+                    max_item_chars=FEEDBACK_EVIDENCE_REF_MAX_CHARS,
+                )
             else:
                 errors.append("loss_point_evidence_refs_invalid")
                 normalized_item["evidence_refs"] = []
@@ -591,7 +626,7 @@ def _normalize_reference_answer_sections(
     seen_section_ids: set[str] = set()
     for index, raw_section in enumerate(sections, start=1):
         section = dict(raw_section)
-        content = _clean(section.get("content"), max_chars=12000)
+        content = _clean(section.get("content"), max_chars=FEEDBACK_REFERENCE_SECTION_CONTENT_MAX_CHARS)
         if not content:
             warnings.append("reference_answer_section_content_missing")
             continue
@@ -629,7 +664,11 @@ def _normalize_reference_answer_sections(
             warnings.append("reference_answer_addresses_loss_point_ids_invalid")
         else:
             normalized_refs: list[str] = []
-            for ref in _string_list(raw_refs, max_items=40, max_item_chars=120):
+            for ref in _string_list(
+                raw_refs,
+                max_items=FEEDBACK_REFERENCE_LOSS_REF_MAX_ITEMS,
+                max_item_chars=FEEDBACK_REFERENCE_LOSS_REF_MAX_CHARS,
+            ):
                 if ref not in known_loss_point_ids:
                     if recoverable:
                         warnings.append("reference_answer_unknown_loss_point_ref_removed")
@@ -715,7 +754,11 @@ def _reference_answer(value: object, *, known_loss_point_ids: set[str]) -> tuple
             errors.append("reference_answer_section_id_duplicate")
         seen_section_ids.add(section_id)
 
-        refs = _string_list(section.get("addresses_loss_point_ids"), max_items=40, max_item_chars=120)
+        refs = _string_list(
+            section.get("addresses_loss_point_ids"),
+            max_items=FEEDBACK_REFERENCE_LOSS_REF_MAX_ITEMS,
+            max_item_chars=FEEDBACK_REFERENCE_LOSS_REF_MAX_CHARS,
+        )
         for ref in refs:
             if ref not in known_loss_point_ids:
                 errors.append("reference_answer_unknown_loss_point_ref")
@@ -958,7 +1001,11 @@ def _append_validation_warnings(payload: dict[str, Any], warnings: list[str]) ->
     metadata = payload.get("feedback_metadata")
     if not isinstance(metadata, dict):
         metadata = {}
-    existing = _string_list(metadata.get("validation_warnings"), max_items=40, max_item_chars=160)
+    existing = _string_list(
+        metadata.get("validation_warnings"),
+        max_items=FEEDBACK_VALIDATION_WARNING_MAX_ITEMS,
+        max_item_chars=FEEDBACK_VALIDATION_WARNING_MAX_CHARS,
+    )
     metadata["validation_warnings"] = list(dict.fromkeys([*existing, *deduped]))
     payload["feedback_metadata"] = metadata
 

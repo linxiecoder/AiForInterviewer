@@ -30,6 +30,10 @@ from tests.api.test_polish_api import (
 )
 
 
+def _feedback_headers(key: str) -> dict[str, str]:
+    return {"Idempotency-Key": key}
+
+
 @pytest.fixture(autouse=True)
 def _patch_polish_run_in_threadpool(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(polish_api, "run_in_threadpool", _run_inline_threadpool)
@@ -474,6 +478,7 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-generate-001"),
     )
 
     assert status_code == 202
@@ -587,12 +592,14 @@ def test_feedback_runtime_returns_existing_generated_feedback_without_second_gen
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-existing-001"),
     )
     second_status, second_body = call_json(
         app,
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-existing-002"),
     )
 
     assert first_status == 202
@@ -636,6 +643,7 @@ def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feed
             f"/api/v1/polish-sessions/{session_id}/feedback",
             "POST",
             json_body={"answer_id": answer_id},
+            headers=_feedback_headers("feedback-runtime-concurrent-001"),
         )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -710,6 +718,7 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-unavailable-001"),
     )
 
     assert status_code == 202
@@ -720,7 +729,7 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
     assert data["feedback_id"]
     assert data["feedback_status"] == "generation_failed"
     assert data["user_visible_status"] == "反馈生成失败，可重试"
-    assert data["feedback_text"] == "反馈生成失败，可重试"
+    assert data["summary"] == "反馈生成失败，可重试"
     assert data["feedback_payload"]["status"] == "generation_failed"
     assert data["feedback_payload"]["feedback_text"] == "反馈生成失败，可重试"
     assert data["feedback_payload"]["error"]["code"] == "llm_transport_generation_failed"
@@ -768,6 +777,7 @@ def test_feedback_runtime_provider_timeout_returns_failed_retryable_payload() ->
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-timeout-001"),
     )
 
     assert status_code == 202
@@ -797,6 +807,7 @@ def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-fail-retry-001"),
     )
     assert first_status == 202
     assert first_body["data"]["status"] == "generation_failed"
@@ -813,6 +824,7 @@ def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-fail-retry-002"),
     )
     assert second_status == 202
     assert second_body["data"]["status"] == "succeeded"
@@ -838,6 +850,7 @@ def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_
         f"/api/v1/polish-sessions/{session_id}/feedback",
         "POST",
         json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-validator-001"),
     )
 
     assert status_code == 202
