@@ -8,7 +8,15 @@ import time
 from hashlib import sha256
 from typing import Any, Protocol
 
-from app.application.common.logging import LogUtil
+from app.application.common.logging import (
+    BackgroundTaskLogContext,
+    LogUtil,
+    get_request_trace_context,
+    reset_background_task_log_context,
+    reset_request_trace_context,
+    set_background_task_log_context,
+    set_request_trace_context,
+)
 from app.application.common.result import ApplicationResult
 from app.application.polish.agents.feedback import build_feedback_planned_handoff
 from app.application.polish.commands import CreatePolishFeedbackTaskCommand
@@ -70,6 +78,8 @@ _FEEDBACK_GENERATION_LOCKS_GUARD = threading.Lock()
 _FEEDBACK_GENERATION_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
 _FEEDBACK_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 _FEEDBACK_SYNC_WAIT_SECONDS = 0.25
+_BACKGROUND_FEEDBACK_EXCEPTION_ERROR_CODE = "feedback_generation_background_exception"
+_BACKGROUND_FEEDBACK_EXCEPTION_STAGE = "background_worker"
 
 
 class PolishFeedbackApplicationService:
@@ -174,14 +184,31 @@ class PolishFeedbackApplicationService:
                 )
 
             generation_started_at = time.perf_counter()
-            LogUtil.feedback_generation_started(
+            now = utc_now()
+            task_id = generate_resource_id(ResourceIdPrefix.TASK)
+            feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
+            request_trace_context = get_request_trace_context()
+            feedback_log_context = BackgroundTaskLogContext(
+                request_id=request_trace_context.request_id
+                if request_trace_context is not None
+                else None,
+                trace_id=request_trace_context.trace_id
+                if request_trace_context is not None
+                else None,
+                ai_task_id=task_id,
                 session_id=session.session_id,
                 question_id=question.question_id,
                 answer_id=answer.answer_id,
             )
-            now = utc_now()
-            task_id = generate_resource_id(ResourceIdPrefix.TASK)
-            feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
+            feedback_log_token = set_background_task_log_context(feedback_log_context)
+            try:
+                LogUtil.feedback_generation_started(
+                    session_id=session.session_id,
+                    question_id=question.question_id,
+                    answer_id=answer.answer_id,
+                )
+            finally:
+                reset_background_task_log_context(feedback_log_token)
             generation_context = _build_feedback_generation_context(
                 detail=detail,
                 turn=turn,
@@ -215,23 +242,61 @@ class PolishFeedbackApplicationService:
             completion: dict[str, ApplicationResult[PolishTaskStatus] | None] = {"result": None}
 
             def run_generation() -> None:
-                completion["result"] = _complete_feedback_generation(
-                    self._operations,
-                    generation_context=generation_context,
-                    owner_id=command.owner_id,
-                    actor_id=command.actor_id,
-                    session_id=session.session_id,
-                    question_id=question.question_id,
-                    answer_id=answer.answer_id,
-                    task_id=task_id,
-                    feedback_id=feedback_id,
-                    target_ref_id=command.answer_id,
-                    idempotency_record_id=_feedback_idempotency_record_id(
-                        idempotency_key,
-                        request_body_hash,
-                    ),
-                    generation_started_at=generation_started_at,
-                )
+                feedback_thread_token = set_background_task_log_context(feedback_log_context)
+                request_thread_token = None
+                if (
+                    feedback_log_context.request_id is not None
+                    and feedback_log_context.trace_id is not None
+                ):
+                    request_thread_token = set_request_trace_context(
+                        request_id=feedback_log_context.request_id,
+                        trace_id=feedback_log_context.trace_id,
+                    )
+                try:
+                    completion["result"] = _complete_feedback_generation(
+                        self._operations,
+                        generation_context=generation_context,
+                        owner_id=command.owner_id,
+                        actor_id=command.actor_id,
+                        session_id=session.session_id,
+                        question_id=question.question_id,
+                        answer_id=answer.answer_id,
+                        task_id=task_id,
+                        feedback_id=feedback_id,
+                        target_ref_id=command.answer_id,
+                        idempotency_record_id=_feedback_idempotency_record_id(
+                            idempotency_key,
+                            request_body_hash,
+                        ),
+                        generation_started_at=generation_started_at,
+                    )
+                except Exception as exc:  # noqa: BROAD_EXCEPT_OK
+                    error_type = type(exc).__name__
+                    LogUtil.feedback_generation_background_exception(
+                        error_type=error_type,
+                        duration_ms=_feedback_generation_duration_ms(generation_started_at),
+                    )
+                    completion["result"] = _persist_feedback_generation_background_exception(
+                        self._operations,
+                        owner_id=command.owner_id,
+                        actor_id=command.actor_id,
+                        session_id=session.session_id,
+                        question_id=question.question_id,
+                        answer_id=answer.answer_id,
+                        task_id=task_id,
+                        feedback_id=feedback_id,
+                        target_ref_id=command.answer_id,
+                        idempotency_record_id=_feedback_idempotency_record_id(
+                            idempotency_key,
+                            request_body_hash,
+                        ),
+                        generation_started_at=generation_started_at,
+                        error_type=error_type,
+                    )
+                finally:
+                    if request_thread_token is not None:
+                        reset_request_trace_context(request_thread_token)
+                    reset_background_task_log_context(feedback_thread_token)
 
             generation_thread = threading.Thread(
                 target=run_generation,
@@ -278,6 +343,15 @@ def _complete_feedback_generation(
             validation_errors=generation_result.validation_errors,
             metadata=generation_metadata,
         )
+        safe_task_summary = _failed_feedback_task_safe_summary(
+            task_id=task_id,
+            session_id=session_id,
+            question_id=question_id,
+            answer_id=answer_id,
+            feedback_id=feedback_id,
+            validation_errors=generation_result.validation_errors,
+            metadata=generation_metadata,
+        )
         task = PolishTaskStatus(
             ai_task_id=task_id,
             task_type=POLISH_FEEDBACK_TASK_TYPE,
@@ -287,6 +361,7 @@ def _complete_feedback_generation(
             result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
             user_visible_status="反馈生成失败，可重试",
             validation_errors=generation_result.validation_errors,
+            safe_summary=safe_task_summary,
         )
         feedback = PolishFeedback(
             feedback_id=feedback_id,
@@ -382,6 +457,101 @@ def _complete_feedback_generation(
         **generation_log_fields,
     )
     return persist_result
+
+
+def _persist_feedback_generation_background_exception(
+    operations: _FeedbackOperations,
+    *,
+    owner_id: str,
+    actor_id: str,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    task_id: str,
+    feedback_id: str,
+    target_ref_id: str,
+    idempotency_record_id: str | None,
+    generation_started_at: float,
+    error_type: str,
+) -> ApplicationResult[PolishTaskStatus]:
+    now = utc_now()
+    validation_errors = (_BACKGROUND_FEEDBACK_EXCEPTION_ERROR_CODE,)
+    metadata: dict[str, Any] = {
+        "llm_called": False,
+        "provider_status": "not_called",
+        "provider_error_type": "unexpected_background_exception",
+        "error_type": error_type,
+        "stage": _BACKGROUND_FEEDBACK_EXCEPTION_STAGE,
+        "validation_stage": _BACKGROUND_FEEDBACK_EXCEPTION_STAGE,
+        "generation_stages": [
+            {
+                "stage": _BACKGROUND_FEEDBACK_EXCEPTION_STAGE,
+                "validation_status": str(AiTaskStatus.GENERATION_FAILED),
+                "provider_status": "not_called",
+                "provider_error_type": "unexpected_background_exception",
+                "failure_reason": _BACKGROUND_FEEDBACK_EXCEPTION_ERROR_CODE,
+                "validation_errors": list(validation_errors),
+            }
+        ],
+    }
+    failed_payload = _failed_feedback_payload_for_storage(
+        session_id=session_id,
+        question_id=question_id,
+        answer_id=answer_id,
+        feedback_id=feedback_id,
+        validation_errors=validation_errors,
+        metadata=metadata,
+    )
+    safe_task_summary = _failed_feedback_task_safe_summary(
+        task_id=task_id,
+        session_id=session_id,
+        question_id=question_id,
+        answer_id=answer_id,
+        feedback_id=feedback_id,
+        validation_errors=validation_errors,
+        metadata=metadata,
+    )
+    task = PolishTaskStatus(
+        ai_task_id=task_id,
+        task_type=POLISH_FEEDBACK_TASK_TYPE,
+        status=AiTaskStatus.GENERATION_FAILED,
+        contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+        retryable=True,
+        result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
+        user_visible_status="反馈生成失败，可重试",
+        validation_errors=validation_errors,
+        safe_summary=safe_task_summary,
+    )
+    feedback = PolishFeedback(
+        feedback_id=feedback_id,
+        owner_id=owner_id,
+        actor_id=actor_id,
+        session_id=session_id,
+        answer_id=answer_id,
+        ai_task_id=task_id,
+        score_result_id=None,
+        feedback_summary=json.dumps(failed_payload, ensure_ascii=False, sort_keys=True),
+        status=str(AiTaskStatus.GENERATION_FAILED),
+        created_at=now,
+        updated_at=now,
+    )
+    LogUtil.feedback_generation_failed(
+        session_id=session_id,
+        question_id=question_id,
+        answer_id=answer_id,
+        error_code=_BACKGROUND_FEEDBACK_EXCEPTION_ERROR_CODE,
+        duration_ms=_feedback_generation_duration_ms(generation_started_at),
+        **_feedback_generation_log_fields(metadata),
+    )
+    return _persist_feedback_task_result(
+        operations._polish_repository,
+        feedback=feedback,
+        task=task,
+        owner_id=owner_id,
+        actor_id=actor_id,
+        target_ref_id=target_ref_id,
+        idempotency_record_id=idempotency_record_id,
+    )
 
 
 def _feedback_generation_lock(
@@ -575,6 +745,10 @@ def _feedback_generation_log_fields(metadata: dict[str, Any]) -> dict[str, Any]:
         "provider_status": _metadata_string(source.get("provider_status")),
         "validation_stage": _metadata_string(source.get("validation_stage")),
         "candidate_valid": _metadata_bool(source.get("candidate_valid")),
+        "generation_stages": _metadata_generation_stages(source.get("generation_stages")),
+        "finish_reason": _metadata_string(source.get("finish_reason")),
+        "completion_tokens": _metadata_int(source.get("completion_tokens")),
+        "reasoning_tokens": _metadata_int(source.get("reasoning_tokens")),
         "prompt_char_count": _metadata_int(source.get("prompt_char_count")),
         "evidence_item_count": _metadata_int(source.get("evidence_item_count")),
     }
@@ -603,6 +777,48 @@ def _metadata_int(value: Any) -> int | None:
     if isinstance(value, float) and value.is_integer():
         return int(value)
     return None
+
+
+def _metadata_generation_stages(value: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(value, list):
+        return None
+    stages: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        safe_item: dict[str, Any] = {}
+        for field_name in (
+            "stage",
+            "validation_status",
+            "provider_status",
+            "provider_error_type",
+            "finish_reason",
+            "failure_reason",
+        ):
+            text = _metadata_string(item.get(field_name))
+            if text:
+                safe_item[field_name] = text
+        thinking_enabled = item.get("thinking_enabled")
+        if isinstance(thinking_enabled, bool):
+            safe_item["thinking_enabled"] = thinking_enabled
+        for field_name in (
+            "max_tokens",
+            "reasoning_tokens",
+            "completion_tokens",
+            "prompt_tokens",
+            "total_tokens",
+        ):
+            value_int = _metadata_int(item.get(field_name))
+            if value_int is not None:
+                safe_item[field_name] = value_int
+        validation_errors = item.get("validation_errors")
+        if isinstance(validation_errors, list):
+            safe_item["validation_errors"] = [
+                text for value in validation_errors if (text := _metadata_string(value))
+            ][:10]
+        if safe_item:
+            stages.append(safe_item)
+    return stages
 
 
 def _generated_feedback_payload_for_storage(
@@ -639,7 +855,10 @@ def _failed_feedback_payload_for_storage(
 ) -> dict[str, Any]:
     error_code = feedback_error_code(validation_errors)
     source_metadata = metadata if isinstance(metadata, dict) else {}
-    error_type = source_metadata.get("provider_error_type")
+    error_type = source_metadata.get("error_type") or source_metadata.get("provider_error_type")
+    error_metadata = _feedback_failure_diagnostic_metadata(source_metadata)
+    if error_type and "error_type" not in error_metadata:
+        error_metadata["error_type"] = str(error_type)
     feedback_metadata: dict[str, Any] = {
         "llm_called": _metadata_bool(source_metadata.get("llm_called")) or False,
         "task_type": POLISH_FEEDBACK_TASK_TYPE,
@@ -656,10 +875,27 @@ def _failed_feedback_payload_for_storage(
         "schema_id",
         "schema_version",
         "provider_error_type",
+        "error_type",
+        "finish_reason",
+        "stage",
         "execution_flow",
     ):
         if field_name in source_metadata:
             feedback_metadata[field_name] = source_metadata[field_name]
+    for field_name in (
+        "max_tokens",
+        "reasoning_tokens",
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens",
+    ):
+        value = _metadata_int(source_metadata.get(field_name))
+        if value is not None:
+            feedback_metadata[field_name] = value
+    if "stage" not in feedback_metadata:
+        stage = _metadata_string(source_metadata.get("validation_stage"))
+        if stage:
+            feedback_metadata["stage"] = stage
     if any(
         field_name in source_metadata
         for field_name in (
@@ -688,7 +924,7 @@ def _failed_feedback_payload_for_storage(
         "error": {
             "code": error_code,
             "message": "反馈生成超时或失败，可重试",
-            "metadata": {"error_type": error_type} if error_type else {},
+            "metadata": error_metadata,
         },
         "validation_errors": list(validation_errors),
         "score_result": None,
@@ -699,6 +935,107 @@ def _failed_feedback_payload_for_storage(
         "low_confidence_flags": [],
         "feedback_metadata": feedback_metadata,
     }
+
+
+def _failed_feedback_task_safe_summary(
+    *,
+    task_id: str,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    feedback_id: str,
+    validation_errors: tuple[str, ...],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    error_code = feedback_error_code(validation_errors)
+    diagnostics = _feedback_failure_diagnostics(
+        metadata,
+        task_id=task_id,
+        answer_id=answer_id,
+        error_code=error_code,
+    )
+    return {
+        "task_type": POLISH_FEEDBACK_TASK_TYPE,
+        "status": str(AiTaskStatus.GENERATION_FAILED),
+        "ai_task_id": task_id,
+        "session_id": session_id,
+        "question_id": question_id,
+        "answer_id": answer_id,
+        "feedback_id": feedback_id,
+        "retryable": True,
+        "user_visible_status": "反馈生成失败，可重试",
+        "validation_errors": list(validation_errors),
+        "error": diagnostics["error"],
+        "feedback_metadata": diagnostics,
+    }
+
+
+def _feedback_failure_diagnostics(
+    metadata: dict[str, Any],
+    *,
+    task_id: str,
+    answer_id: str,
+    error_code: str,
+) -> dict[str, Any]:
+    source_metadata = metadata if isinstance(metadata, dict) else {}
+    diagnostics: dict[str, Any] = {
+        "status": str(AiTaskStatus.GENERATION_FAILED),
+        "ai_task_id": task_id,
+        "answer_id": answer_id,
+        "retryable": True,
+    }
+    for field_name in ("provider_error_type", "error_type", "finish_reason"):
+        text = _metadata_string(source_metadata.get(field_name))
+        if text:
+            diagnostics[field_name] = text
+    stage = _metadata_string(source_metadata.get("stage")) or _metadata_string(
+        source_metadata.get("validation_stage")
+    )
+    if stage:
+        diagnostics["stage"] = stage
+    generation_stages = _metadata_generation_stages(source_metadata.get("generation_stages"))
+    if generation_stages:
+        diagnostics["generation_stages"] = generation_stages
+    for field_name in (
+        "max_tokens",
+        "reasoning_tokens",
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens",
+    ):
+        value = _metadata_int(source_metadata.get(field_name))
+        if value is not None:
+            diagnostics[field_name] = value
+    diagnostics["error"] = {
+        "code": error_code,
+        "metadata": _feedback_failure_diagnostic_metadata(source_metadata),
+    }
+    return diagnostics
+
+
+def _feedback_failure_diagnostic_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    source_metadata = metadata if isinstance(metadata, dict) else {}
+    result: dict[str, Any] = {}
+    for field_name in ("provider_error_type", "error_type", "finish_reason"):
+        text = _metadata_string(source_metadata.get(field_name))
+        if text:
+            result[field_name] = text
+    stage = _metadata_string(source_metadata.get("stage")) or _metadata_string(
+        source_metadata.get("validation_stage")
+    )
+    if stage:
+        result["stage"] = stage
+    for field_name in (
+        "max_tokens",
+        "reasoning_tokens",
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens",
+    ):
+        value = _metadata_int(source_metadata.get(field_name))
+        if value is not None:
+            result[field_name] = value
+    return result
 
 
 def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:

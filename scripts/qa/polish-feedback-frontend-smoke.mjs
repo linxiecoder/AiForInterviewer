@@ -1,53 +1,130 @@
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseArgs, resolvePython, validateScenario } from "./polish-feedback-smoke/cli.mjs";
+import { startForcedTruncationProvider } from "./polish-feedback-smoke/forced-provider.mjs";
+import {
+  requestJson,
+  runForcedFeedbackTruncationScenario,
+  waitForJson,
+  waitForText,
+} from "./polish-feedback-smoke/http-evidence.mjs";
+import { createSmokeRuntime, delay, resolvePort } from "./polish-feedback-smoke/runtime.mjs";
+import {
+  appendToTask6TextArtifacts,
+} from "./polish-feedback-smoke/sensitive-scan.mjs";
+import { runSensitiveScanSelfTest } from "./polish-feedback-smoke/sensitive-scan-self-test.mjs";
+
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const args = parseArgs(process.argv.slice(2));
+const scenario = args.get("scenario") ?? "seeded-feedback-states";
+const evidenceDir = path.resolve(
+  ROOT_DIR,
+  args.get("evidence-dir") ?? ".omo/evidence/polish-feedback-generation-observability-fix",
+);
 const API_PORT = await resolvePort("AIFI_FEEDBACK_SMOKE_API_PORT", 18181);
 const WEB_PORT = await resolvePort("AIFI_FEEDBACK_SMOKE_WEB_PORT", 15273);
+const PROVIDER_PORT = await resolvePort("AIFI_FEEDBACK_SMOKE_PROVIDER_PORT", 19081);
 const DEV_PASSWORD = process.env.AIFI_FEEDBACK_SMOKE_DEV_PASSWORD ?? "polish-feedback-smoke-password";
 const DEV_EMAIL = "developer@example.com";
 const API_BASE = `http://127.0.0.1:${API_PORT}`;
 const WEB_BASE = `http://127.0.0.1:${WEB_PORT}`;
-const PYTHON = resolvePython();
+const PROVIDER_BASE = `http://127.0.0.1:${PROVIDER_PORT}/v1`;
+const PYTHON = resolvePython(ROOT_DIR);
 const KEEP_ALIVE_MS = Number.parseInt(process.env.AIFI_FEEDBACK_SMOKE_KEEP_ALIVE_MS ?? "0", 10);
 const tempDir = mkdtempSync(path.join(tmpdir(), "aifi-auth-smoke-"));
 const databasePath = path.join(tempDir, "smoke.sqlite3");
 const databaseUrl = `sqlite+pysqlite:///${databasePath}`;
-const children = [];
+const apiLogPath = path.join(ROOT_DIR, "tmp/logs/api-dev.log");
+const runtime = createSmokeRuntime({
+  rootDir: ROOT_DIR,
+  tempDir,
+  evidenceDir,
+  scenario,
+  ports: {
+    api: API_PORT,
+    web: WEB_PORT,
+    provider: PROVIDER_PORT,
+  },
+  appendToTextArtifacts: (section) => appendToTask6TextArtifacts(evidenceDir, section),
+});
+
+if (args.has("self-test-sensitive-scan")) {
+  try {
+    mkdirSync(evidenceDir, { recursive: true });
+    runSensitiveScanSelfTest();
+    console.log(JSON.stringify({
+      ok: true,
+      scenario: "sensitive-scan-self-test",
+    }, null, 2));
+  } finally {
+    await runtime.cleanup();
+  }
+  process.exit(0);
+}
 
 try {
+  mkdirSync(evidenceDir, { recursive: true });
+  validateScenario(scenario);
+  if (scenario === "forced-feedback-truncation") {
+    runtime.setProviderServer(await startForcedTruncationProvider({ providerPort: PROVIDER_PORT }));
+  }
   const seedResult = seedDatabase();
-  const api = startProcess("api", PYTHON, [
-    "-m",
-    "uvicorn",
-    "app.main:app",
-    "--app-dir",
-    "apps/api",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    API_PORT,
-  ], smokeEnv());
-  const web = startProcess("web", process.execPath, [
-    path.join(ROOT_DIR, "node_modules/vite/bin/vite.js"),
-    path.join(ROOT_DIR, "apps/web"),
-    "--host",
-    "127.0.0.1",
-    "--port",
-    WEB_PORT,
-    "--strictPort",
-  ], {
-    ...process.env,
-    VITE_API_PROXY_TARGET: API_BASE,
+  const api = runtime.startProcess({
+    name: "api",
+    command: PYTHON,
+    args: [
+      "-m",
+      "uvicorn",
+      "app.main:app",
+      "--app-dir",
+      "apps/api",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      API_PORT,
+    ],
+    env: smokeEnv(),
+  });
+  const web = runtime.startProcess({
+    name: "web",
+    command: process.execPath,
+    args: [
+      path.join(ROOT_DIR, "node_modules/vite/bin/vite.js"),
+      path.join(ROOT_DIR, "apps/web"),
+      "--host",
+      "127.0.0.1",
+      "--port",
+      WEB_PORT,
+      "--strictPort",
+    ],
+    env: {
+      ...process.env,
+      VITE_API_PROXY_TARGET: API_BASE,
+    },
   });
 
-  await waitForJson("api health", `${API_BASE}/api/v1/health`, (body) => body?.status === "ok", [api, web]);
-  await waitForText("interview route html", `${WEB_BASE}/interview/${encodeURIComponent(seedResult.session_id)}`, (body) => body.includes('<div id="root"></div>'), [api, web]);
-  await waitForJson("proxied health", `${WEB_BASE}/api/v1/health`, (body) => body?.status === "ok", [api, web]);
+  await waitForJson({
+    label: "api health",
+    url: `${API_BASE}/api/v1/health`,
+    predicate: (body) => body?.status === "ok",
+    runtime,
+  });
+  await waitForText({
+    label: "interview route html",
+    url: `${WEB_BASE}/interview/${encodeURIComponent(seedResult.session_id)}`,
+    predicate: (body) => body.includes('<div id="root"></div>'),
+    runtime,
+  });
+  await waitForJson({
+    label: "proxied health",
+    url: `${WEB_BASE}/api/v1/health`,
+    predicate: (body) => body?.status === "ok",
+    runtime,
+  });
 
   const login = await requestJson(`${WEB_BASE}/api/v1/auth/login`, {
     method: "POST",
@@ -71,8 +148,23 @@ try {
   assert(samples.ans_feedback_smoke_failed?.status === "generation_failed", "failed answer should expose generation_failed payload");
   assert(!JSON.stringify(samples).includes("provider_payload_should_not_render"), "API samples should not leak provider payload fixtures");
 
+  if (scenario === "forced-feedback-truncation") {
+    const forcedResult = await runForcedFeedbackTruncationScenario({
+      rootDir: ROOT_DIR,
+      evidenceDir,
+      tempDir,
+      webBase: WEB_BASE,
+      apiLogPath,
+      seedResult,
+      cookie,
+      runtime,
+    });
+    console.log(JSON.stringify(forcedResult, null, 2));
+  }
+
   console.log(JSON.stringify({
     ok: true,
+    scenario,
     session_id: seedResult.session_id,
     api_base: API_BASE,
     web_base: WEB_BASE,
@@ -83,40 +175,7 @@ try {
     await delay(KEEP_ALIVE_MS);
   }
 } finally {
-  await cleanup();
-}
-
-function resolvePython() {
-  const candidates = [
-    process.env.PYTHON,
-    path.join(ROOT_DIR, ".venv/bin/python"),
-    path.join(ROOT_DIR, ".venv/Scripts/python.exe"),
-    "python3",
-    "python",
-  ].filter(Boolean);
-  return candidates.find((candidate) => candidate === "python3" || candidate === "python" || existsSync(candidate)) ?? "python";
-}
-
-async function resolvePort(envName, defaultPort) {
-  const configured = process.env[envName];
-  if (configured?.trim()) {
-    return configured.trim();
-  }
-  for (let port = defaultPort; port < defaultPort + 100; port += 1) {
-    if (await canListen(port)) {
-      return String(port);
-    }
-  }
-  throw new Error(`No free port found near ${defaultPort} for ${envName}`);
-}
-
-function canListen(port) {
-  return new Promise((resolve) => {
-    const server = createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => server.close(() => resolve(true)));
-    server.listen(port, "127.0.0.1");
-  });
+  await runtime.cleanup();
 }
 
 function seedDatabase() {
@@ -145,75 +204,16 @@ function smokeEnv() {
     API_AUTH_DEV_USER_PASSWORD: DEV_PASSWORD,
     API_PORT,
     API_DATABASE_URL: databaseUrl,
-    LLM_PROVIDER: "",
+    API_LOG_FILE: apiLogPath,
+    API_LOG_FILE_ENABLED: "true",
+    API_DB_AUTO_MIGRATE: "false",
+    LLM_PROVIDER: "openai_compatible",
+    LLM_OPENAI_API_KEY: "smoke-redacted-key",
+    LLM_OPENAI_BASE_URL: PROVIDER_BASE,
+    LLM_OPENAI_MODEL: "deepseek-v4-pro-smoke",
+    LLM_OPENAI_MAX_TOKENS: "4800",
     PYTHONPATH: process.env.PYTHONPATH ? `${pythonPath}${path.delimiter}${process.env.PYTHONPATH}` : pythonPath,
   };
-}
-
-function startProcess(name, command, args, env) {
-  const child = spawn(command, args, { cwd: ROOT_DIR, env, stdio: ["ignore", "pipe", "pipe"] });
-  const state = { name, child, exited: false, output: [] };
-  children.push(state);
-  const remember = (chunk) => {
-    const lines = chunk.toString().split(/\r?\n/).filter(Boolean);
-    state.output.push(...lines.map((line) => `[${name}] ${line}`));
-    if (state.output.length > 80) {
-      state.output.splice(0, state.output.length - 80);
-    }
-  };
-  child.stdout.on("data", remember);
-  child.stderr.on("data", remember);
-  child.on("exit", () => {
-    state.exited = true;
-  });
-  return state;
-}
-
-async function waitForJson(label, url, predicate, watchedProcesses) {
-  await waitFor(label, async () => {
-    const { body } = await requestJson(url);
-    return predicate(body);
-  }, watchedProcesses);
-}
-
-async function waitForText(label, url, predicate, watchedProcesses) {
-  await waitFor(label, async () => {
-    const response = await fetch(url);
-    const body = await response.text();
-    return response.ok && predicate(body);
-  }, watchedProcesses);
-}
-
-async function waitFor(label, probe, watchedProcesses) {
-  const started = Date.now();
-  let lastError = null;
-  while (Date.now() - started < 45_000) {
-    for (const processState of watchedProcesses) {
-      if (processState.exited) {
-        throw new Error(`${processState.name} exited while waiting for ${label}\n${processState.output.join("\n")}`);
-      }
-    }
-    try {
-      if (await probe()) {
-        console.log(`[feedback-smoke] ${label} ok`);
-        return;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await delay(500);
-  }
-  throw new Error(`Timed out waiting for ${label}${lastError ? `: ${lastError.message}` : ""}`);
-}
-
-async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
-  const raw = await response.text();
-  const body = raw ? JSON.parse(raw) : null;
-  if (!response.ok) {
-    throw new Error(`${options.method ?? "GET"} ${url} -> ${response.status}: ${raw}`);
-  }
-  return { response, body };
 }
 
 function extractSessionCookie(response) {
@@ -229,18 +229,4 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function cleanup() {
-  for (const { child } of [...children].reverse()) {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGTERM");
-    }
-  }
-  await delay(500);
-  rmSync(tempDir, { recursive: true, force: true });
 }

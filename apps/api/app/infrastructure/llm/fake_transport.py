@@ -210,6 +210,12 @@ def _fake_progress_adaptive_score_result(request: LlmTransportRequest) -> dict[s
     weights = _fake_progress_weights(progress_state)
     weak_skills = _fake_string_list(progress_state.get("weak_skill_refs"))
     strong_skills = _fake_string_list(progress_state.get("strong_skill_refs"))
+    overweighted_skills = _fake_dimensions_by_weight(weights, high=True) or [
+        _fake_stable_dimension_name(progress_state_ref)
+    ]
+    underweighted_skills = _fake_dimensions_by_weight(weights, high=False) or [
+        next(dimension for dimension in weights if dimension != overweighted_skills[0])
+    ]
     scores = {
         "correctness": (88, "方向正确。"),
         "depth": (80, "细节基本完整。"),
@@ -249,8 +255,8 @@ def _fake_progress_adaptive_score_result(request: LlmTransportRequest) -> dict[s
             "weak_skills": weak_skills,
             "strong_skills": strong_skills,
             "unstable_skills": [progress_state_ref],
-            "overweighted_skills": _fake_dimensions_by_weight(weights, high=True),
-            "underweighted_skills": _fake_dimensions_by_weight(weights, high=False),
+            "overweighted_skills": overweighted_skills,
+            "underweighted_skills": underweighted_skills,
         },
         "signals": ["weakness_detected", "progress_update"],
         "progress_updates": [

@@ -271,14 +271,38 @@ class _PayloadTransport:
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         self.requests.append(request)
+        result = (
+            _default_projection_payload(request)
+            if getattr(request, "stage", None) == "json_projection"
+            else self.result
+        )
         return LlmTransportResult(
-            result=self.result,
+            result=result,
             validation_status=ValidationStatus.VALID,
             confidence_level=ConfidenceLevel.MEDIUM,
             low_confidence_flags=self.low_confidence_flags,
             trace_refs=("trace_provider_001",),
             evidence_refs=self.evidence_refs,
+            metadata=_stage_transport_metadata(request),
         )
+
+
+def _default_projection_payload(request: LlmTransportRequest) -> dict[str, Any]:
+    server_facts = request.evidence_bundle.get("server_facts") if isinstance(request.evidence_bundle, dict) else None
+    if isinstance(server_facts, dict) and isinstance(server_facts.get("default_final_payload"), dict):
+        return dict(server_facts["default_final_payload"])
+    return {}
+
+
+def _stage_transport_metadata(request: LlmTransportRequest) -> dict[str, Any]:
+    stage = getattr(request, "stage", None)
+    return {
+        "stage": stage,
+        "thinking_enabled": getattr(request, "thinking_enabled", None),
+        "finish_reason": "stop",
+        "completion_tokens": 320 if stage == "json_projection" else 900,
+        "reasoning_tokens": 0 if stage == "json_projection" else 128,
+    }
 
 
 def test_feedback_prompt_builder_uses_agent_prompt_bundle_standard_shape() -> None:
@@ -315,6 +339,8 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
         input_refs=("answer_001",),
     )
 
+    assert transport.requests[-1].stage == "analysis_candidate"
+    assert transport.requests[-1].thinking_enabled is True
     provider_prompt = transport.requests[-1].evidence_bundle
     assert provider_prompt["task_type"] == POLISH_FEEDBACK_TASK_TYPE
     assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
@@ -586,7 +612,7 @@ def test_service_fails_closed_when_envelope_has_validation_errors() -> None:
     assert result.validation_errors == ("feedback_payload_schema_invalid",)
 
 
-def test_service_calls_dual_pass_candidate_and_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
+def test_service_calls_candidate_then_json_projection_final_validator_after_envelope_parse(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
 
     def spy_candidate(
@@ -610,16 +636,17 @@ def test_service_calls_dual_pass_candidate_and_final_validator_after_envelope_pa
     monkeypatch.setattr(feedback_generation_service, "validate_feedback_candidate_payload", spy_candidate)
     monkeypatch.setattr(feedback_generation_service, "validate_final_feedback_payload", spy_final)
 
-    result = feedback_generation_service.FeedbackGenerationService(
-        llm_transport=_PayloadTransport({"payload": _generated_payload()})
-    ).generate_feedback_v1(_context())
+    transport = _PayloadTransport({"payload": _generated_payload()})
+    result = feedback_generation_service.FeedbackGenerationService(llm_transport=transport).generate_feedback_v1(
+        _context()
+    )
 
     assert result.succeeded is True
-    assert len(calls) >= 2
+    assert len(calls) == 2
+    assert [request.stage for request in transport.requests] == ["analysis_candidate", "json_projection"]
     assert calls[0]["validator"] == "candidate"
-    assert calls[1]["validator"] == "candidate"
-    assert calls[2]["validator"] == "final"
-    assert calls[2]["require_feedback_id"] is False
+    assert calls[1]["validator"] == "final"
+    assert calls[1]["require_feedback_id"] is False
 
 
 def _contains_forbidden_key(value: object) -> bool:
@@ -629,7 +656,11 @@ def _contains_forbidden_key(value: object) -> bool:
         "developer_prompt",
         "completion",
         "raw_completion",
+        "full_completion",
+        "completion_text",
+        "reasoning_content",
         "provider_payload",
+        "raw_provider",
         "raw_provider_payload",
         "provider_response",
         "raw_provider_response",

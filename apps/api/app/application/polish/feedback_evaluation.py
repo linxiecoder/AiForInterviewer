@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeGuard
 
 from app.domain.polish.policies.scoring_policy import (
     ADAPTIVE_ANCHOR_SET_ID,
@@ -389,19 +389,27 @@ def _progress_update_list(
     default_progress_state_ref: str,
     max_items: int,
 ) -> list[dict[str, object]]:
-    if not isinstance(value, list):
+    if isinstance(value, dict):
+        raw_items = tuple(value.items())
+    elif isinstance(value, list):
+        raw_items = tuple((None, item) for item in value)
+    else:
         return []
+
     result: list[dict[str, object]] = []
-    for item in value:
+    for keyed_ref, item in raw_items:
         if isinstance(item, dict):
             normalized = dict(item)
-            if not normalized.get("progress_node_ref") and not normalized.get("node_ref") and default_progress_state_ref:
-                normalized["progress_node_ref"] = default_progress_state_ref
+            progress_node_ref = _clean(keyed_ref, max_chars=120)
+            if not normalized.get("progress_node_ref") and not normalized.get("node_ref"):
+                normalized["progress_node_ref"] = progress_node_ref or default_progress_state_ref
             if not normalized.get("signal"):
                 signal = _clean(normalized.get("status") or normalized.get("type"), max_chars=80)
                 normalized["signal"] = signal if signal in ADAPTIVE_SIGNAL_TYPES else "progress_update"
             if not normalized.get("rationale") and normalized.get("detail"):
                 normalized["rationale"] = _clean(normalized.get("detail"), max_chars=1000)
+            if not normalized.get("rationale") and normalized.get("reason"):
+                normalized["rationale"] = _clean(normalized.get("reason"), max_chars=1000)
             result.append(normalized)
         if len(result) >= max_items:
             break
@@ -447,7 +455,7 @@ def _dimension_key(value: object) -> str:
     return _clean(value, max_chars=80).lower().replace("-", "_").replace(" ", "_")
 
 
-def _is_number(value: object) -> bool:
+def _is_number(value: object) -> TypeGuard[int | float]:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 

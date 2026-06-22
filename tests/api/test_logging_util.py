@@ -13,9 +13,12 @@ _FEEDBACK_FORBIDDEN_LOG_KEYS = (
     "raw_prompt",
     "system_prompt",
     "developer_prompt",
-    "completion",
     "raw_completion",
+    "full_completion",
+    "completion_text",
+    "reasoning_content",
     "provider_payload",
+    "raw_provider",
     "raw_provider_payload",
     "provider_response",
     "raw_provider_response",
@@ -152,6 +155,10 @@ def test_logutil_feedback_generation_started_outputs_json_with_trace_context(cap
     assert payload["provider_status"] == "not_called"
     assert payload["validation_stage"] is None
     assert payload["candidate_valid"] is None
+    assert payload["generation_stages"] == []
+    assert payload["finish_reason"] is None
+    assert payload["completion_tokens"] is None
+    assert payload["reasoning_tokens"] is None
     assert payload["prompt_char_count"] is None
     assert payload["evidence_item_count"] is None
     assert payload["duration_ms"] == 0
@@ -168,8 +175,19 @@ def test_logutil_feedback_generation_failed_outputs_validation_provider_and_erro
             llm_called=True,
             provider_status="failed",
             error_code="llm_transport_generation_failed",
-            validation_stage="candidate",
+            validation_stage="analysis_candidate",
             candidate_valid=False,
+            generation_stages=[
+                {
+                    "stage": "analysis_candidate",
+                    "finish_reason": "length",
+                    "completion_tokens": 4800,
+                    "reasoning_tokens": 512,
+                }
+            ],
+            finish_reason="length",
+            completion_tokens=4800,
+            reasoning_tokens=512,
             prompt_char_count=4312,
             evidence_item_count=4,
             duration_ms=12.5,
@@ -183,8 +201,13 @@ def test_logutil_feedback_generation_failed_outputs_validation_provider_and_erro
     assert payload["llm_called"] is True
     assert payload["provider_status"] == "failed"
     assert payload["error_code"] == "llm_transport_generation_failed"
-    assert payload["validation_stage"] == "candidate"
+    assert payload["validation_stage"] == "analysis_candidate"
     assert payload["candidate_valid"] is False
+    assert payload["generation_stages"][0]["stage"] == "analysis_candidate"
+    assert payload["generation_stages"][0]["completion_tokens"] == 4800
+    assert payload["finish_reason"] == "length"
+    assert payload["completion_tokens"] == 4800
+    assert payload["reasoning_tokens"] == 512
     assert payload["prompt_char_count"] == 4312
     assert payload["evidence_item_count"] == 4
     assert payload["duration_ms"] == 12.5
@@ -200,8 +223,15 @@ def test_logutil_feedback_generation_succeeded_outputs_validation_and_provider(c
             answer_id="answer_1",
             llm_called=True,
             provider_status="called",
-            validation_stage="final",
+            validation_stage="json_projection",
             candidate_valid=True,
+            generation_stages=[
+                {"stage": "analysis_candidate", "completion_tokens": 900, "reasoning_tokens": 128},
+                {"stage": "json_projection", "completion_tokens": 320, "reasoning_tokens": 0},
+            ],
+            finish_reason="stop",
+            completion_tokens=320,
+            reasoning_tokens=0,
             prompt_char_count=5987,
             evidence_item_count=5,
             duration_ms=42.75,
@@ -215,8 +245,15 @@ def test_logutil_feedback_generation_succeeded_outputs_validation_and_provider(c
     assert payload["llm_called"] is True
     assert payload["provider_status"] == "called"
     assert payload["error_code"] is None
-    assert payload["validation_stage"] == "final"
+    assert payload["validation_stage"] == "json_projection"
     assert payload["candidate_valid"] is True
+    assert [stage["stage"] for stage in payload["generation_stages"]] == [
+        "analysis_candidate",
+        "json_projection",
+    ]
+    assert payload["finish_reason"] == "stop"
+    assert payload["completion_tokens"] == 320
+    assert payload["reasoning_tokens"] == 0
     assert payload["prompt_char_count"] == 5987
     assert payload["evidence_item_count"] == 5
     assert payload["duration_ms"] == 42.75
@@ -233,8 +270,12 @@ def test_logutil_feedback_generation_events_do_not_emit_forbidden_keys(caplog) -
             llm_called=True,
             provider_status="failed",
             error_code="llm_transport_generation_failed",
-            validation_stage="candidate",
+            validation_stage="analysis_candidate",
             candidate_valid=False,
+            generation_stages=[],
+            finish_reason=None,
+            completion_tokens=None,
+            reasoning_tokens=None,
             prompt_char_count=4312,
             evidence_item_count=4,
             duration_ms=12.5,
@@ -244,4 +285,7 @@ def test_logutil_feedback_generation_events_do_not_emit_forbidden_keys(caplog) -
     serialized = json.dumps(payload, ensure_ascii=False)
     for forbidden_key in _FEEDBACK_FORBIDDEN_LOG_KEYS:
         assert forbidden_key not in payload
-        assert forbidden_key not in serialized
+        if forbidden_key != "token":
+            assert forbidden_key not in serialized
+    assert "token=" not in serialized.lower()
+    assert "bearer " not in serialized.lower()

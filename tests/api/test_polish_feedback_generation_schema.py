@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib
 from copy import deepcopy
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -20,20 +22,31 @@ def _prompt_context() -> dict[str, Any]:
 
 
 
-def _schema_module():
+def _import_module(module_name: str) -> ModuleType:
     try:
-        from app.application.polish import feedback_schema
-    except ModuleNotFoundError as exc:  # pragma: no cover - schema import gate.
-        pytest.fail(f"feedback schema module is missing: {exc}")
-    return feedback_schema
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:  # pragma: no cover - module import gate.
+        pytest.fail(f"{module_name} module is missing: {exc}")
+
+
+def _schema_module():
+    return _import_module("app.application.polish.feedback_schema")
 
 
 def _validate(payload: object):
-    try:
-        from app.application.polish.feedback_validation import validate_final_feedback_payload
-    except ModuleNotFoundError as exc:  # pragma: no cover - schema import gate.
-        pytest.fail(f"feedback validator module is missing: {exc}")
+    validate_final_feedback_payload = getattr(
+        _import_module("app.application.polish.feedback_validation"),
+        "validate_final_feedback_payload",
+    )
     return validate_final_feedback_payload(payload)
+
+
+def _validate_candidate(payload: object, *, expected_progress_state_ref: str | None = None):
+    validate_feedback_candidate_payload = getattr(
+        _import_module("app.application.polish.feedback_validation"),
+        "validate_feedback_candidate_payload",
+    )
+    return validate_feedback_candidate_payload(payload, expected_progress_state_ref=expected_progress_state_ref)
 
 
 def _valid_payload() -> dict[str, Any]:
@@ -284,7 +297,10 @@ def test_feedback_payload_cross_layer_fields_are_explicitly_excluded() -> None:
 
 
 def test_provider_output_schema_keeps_reference_section_title_property() -> None:
-    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+    build_feedback_prompt_asset = getattr(
+        _import_module("app.application.polish.feedback_prompt_assets"),
+        "build_feedback_prompt_asset",
+    )
 
     output_schema = build_feedback_prompt_asset(_prompt_context())["output_schema"]
     reference_section_schema = output_schema["$defs"]["ReferenceAnswerSection"]
@@ -294,7 +310,10 @@ def test_provider_output_schema_keeps_reference_section_title_property() -> None
 
 
 def test_provider_output_schema_has_no_required_fields_missing_from_properties() -> None:
-    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+    build_feedback_prompt_asset = getattr(
+        _import_module("app.application.polish.feedback_prompt_assets"),
+        "build_feedback_prompt_asset",
+    )
 
     output_schema = build_feedback_prompt_asset(_prompt_context())["output_schema"]
 
@@ -330,6 +349,52 @@ def test_valid_feedback_payload_passes_and_does_not_mutate_input() -> None:
     assert normalized["status"] == "generated"
     assert normalized["score_result"]["score_value"] == 81.48
     assert payload == original
+
+
+def test_feedback_candidate_accepts_progress_updates_keyed_by_progress_ref() -> None:
+    payload = _valid_payload()
+    score_result = deepcopy(payload["score_result"])
+    score_result["progress_updates"] = {
+        "progress_node_reliability": {
+            "status": "completed",
+            "confidence": "low",
+            "reason": "回答缺少一致性取舍，建议继续追问。",
+        }
+    }
+    candidate_payload = {
+        "feedback_text": payload["feedback_text"],
+        "answer_summary": payload["answer_summary"],
+        "score_result": score_result,
+        "loss_points": payload["loss_points"],
+        "reference_answer": payload["reference_answer"],
+        "low_confidence_flags": payload["low_confidence_flags"],
+        "evidence_refs": ["answer_001"],
+    }
+
+    normalized, errors = _validate_candidate(
+        candidate_payload,
+        expected_progress_state_ref="progress_node_reliability",
+    )
+
+    assert errors == ()
+    assert normalized is not None
+    assert normalized["score_result"]["progress_updates"] == [
+        {
+            "progress_node_ref": "progress_node_reliability",
+            "signal": "progress_update",
+            "rationale": "回答缺少一致性取舍，建议继续追问。",
+        }
+    ]
+
+
+def test_feedback_final_schema_status_does_not_allow_generation_failed() -> None:
+    payload = _valid_payload()
+    payload["status"] = "generation_failed"
+
+    normalized, errors = _validate(payload)
+
+    assert normalized is None
+    assert "feedback_status_invalid" in errors
 
 
 def test_schema_id_invalid_fails() -> None:

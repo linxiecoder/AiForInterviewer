@@ -1,20 +1,30 @@
 from __future__ import annotations
 
+import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 import pytest
 from sqlalchemy import text
 
 from app.api.v1 import polish as polish_api
+from app.application.polish import feedback_application_service as feedback_app_service
 from app.application.common.logging import LogUtil
 from app.application.polish.feedback_rules import ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS, POLISH_FEEDBACK_TASK_TYPE
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
+from app.infrastructure.db.models.ai_task import AiTaskResult
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
+from app.infrastructure.llm.openai_compatible import (
+    OpenAICompatibleLlmSettings,
+    OpenAICompatibleLlmTransport,
+)
+from app.infrastructure.observability.http_logging import HttpAccessLogMiddleware
 from tests.fakes.llm_transport import FakeLlmTransport
 from tests.api.asgi_client import call_json
 from tests.api.test_polish_api import (
@@ -128,6 +138,57 @@ class _ValidatorFailedFeedbackTransport:
         )
 
 
+class _TruncatedProviderFeedbackTransport:
+    def __init__(self) -> None:
+        self._fake = FakeLlmTransport()
+        self.observed_payloads: list[dict[str, object]] = []
+        self.observed_reasoning_tokens = 0
+        self._provider = OpenAICompatibleLlmTransport(
+            OpenAICompatibleLlmSettings(
+                api_key="test-key",
+                model="deepseek-v4-pro",
+                base_url="https://llm.example/v1",
+            ),
+            client=httpx.Client(transport=httpx.MockTransport(self._handler)),
+        )
+
+    def generate(self, request: LlmTransportRequest):
+        if request.task_type != "polish_feedback_generation":
+            return _runtime_test_non_feedback_result(self._fake, request)
+        return self._provider.generate(request)
+
+    @property
+    def feedback_payload(self) -> dict[str, object]:
+        return self.observed_payloads[-1]
+
+    def _handler(self, request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        assert isinstance(payload, dict)
+        self.observed_payloads.append(payload)
+        self.observed_reasoning_tokens = 3658
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_feedback_truncated",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"content": '{"feedback_text":"partial'},
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 4200,
+                    "completion_tokens": 4800,
+                    "total_tokens": 9000,
+                    "completion_tokens_details": {
+                        "reasoning_tokens": self.observed_reasoning_tokens,
+                    },
+                },
+            },
+        )
+
+
 def test_fake_feedback_transport_changes_adaptive_focus_when_progress_state_changes() -> None:
     first = _fake_feedback_score_result_for_progress(
         {
@@ -221,6 +282,12 @@ def _runtime_adaptive_score_result(request: LlmTransportRequest) -> dict[str, ob
     weights = _runtime_progress_weights(progress_state)
     weak_skills = _string_list(progress_state.get("weak_skill_refs"))
     strong_skills = _string_list(progress_state.get("strong_skill_refs"))
+    overweighted_skills = _runtime_dimensions_by_weight(weights, high=True) or [
+        _stable_dimension_name(progress_state_ref)
+    ]
+    underweighted_skills = _runtime_dimensions_by_weight(weights, high=False) or [
+        next(dimension for dimension in weights if dimension != overweighted_skills[0])
+    ]
     scores = {
         "correctness": (88, "方向正确。"),
         "depth": (80, "细节基本完整。"),
@@ -260,8 +327,8 @@ def _runtime_adaptive_score_result(request: LlmTransportRequest) -> dict[str, ob
             "weak_skills": weak_skills,
             "strong_skills": strong_skills,
             "unstable_skills": [progress_state_ref],
-            "overweighted_skills": _runtime_dimensions_by_weight(weights, high=True),
-            "underweighted_skills": _runtime_dimensions_by_weight(weights, high=False),
+            "overweighted_skills": overweighted_skills,
+            "underweighted_skills": underweighted_skills,
         },
         "signals": ["weakness_detected", "progress_update"],
         "progress_updates": [
@@ -325,6 +392,22 @@ def _string_list(value: object) -> list[str]:
 def _runtime_test_non_feedback_result(fake: FakeLlmTransport, request: LlmTransportRequest):
     if request.task_type == "polish_question_generation":
         return _runtime_test_question_provider_result(request)
+    if request.task_type == "polish_feedback_generation" and request.stage == "json_projection":
+        return LlmTransportResult(
+            result=_runtime_feedback_projection_payload(request),
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=("trace_feedback_runtime_projection",),
+            evidence_refs=("evidence_feedback_runtime_projection",),
+            metadata={
+                "stage": "json_projection",
+                "thinking_enabled": False,
+                "finish_reason": "stop",
+                "completion_tokens": 320,
+                "reasoning_tokens": 0,
+            },
+        )
     result = fake.generate(request)
     if request.task_type == "polish_feedback_generation":
         return LlmTransportResult(
@@ -334,8 +417,27 @@ def _runtime_test_non_feedback_result(fake: FakeLlmTransport, request: LlmTransp
             low_confidence_flags=result.low_confidence_flags,
             trace_refs=result.trace_refs,
             evidence_refs=result.evidence_refs,
+            metadata={
+                "stage": "analysis_candidate",
+                "thinking_enabled": True,
+                "finish_reason": "stop",
+                "completion_tokens": 900,
+                "reasoning_tokens": 128,
+            },
         )
     return result
+
+
+def _runtime_feedback_projection_payload(request: LlmTransportRequest) -> dict[str, object]:
+    bundle = request.evidence_bundle if isinstance(request.evidence_bundle, dict) else {}
+    server_facts = bundle.get("server_facts") if isinstance(bundle.get("server_facts"), dict) else {}
+    default_payload = (
+        server_facts.get("default_final_payload")
+        if isinstance(server_facts, dict)
+        and isinstance(server_facts.get("default_final_payload"), dict)
+        else {}
+    )
+    return dict(default_payload)
 
 
 def _runtime_test_question_provider_result(request: LlmTransportRequest) -> LlmTransportResult:
@@ -512,9 +614,13 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
     assert "project_asset_update_candidates" not in payload
     assert payload["next_recommended_actions"][0] == "continue_same_question"
     assert set(payload["next_recommended_actions"]) <= ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
-    assert llm_transport.feedback_request is not None
-    assert 4000 <= getattr(llm_transport.feedback_request, "max_tokens", 8000) < 8000
-    provider_prompt = llm_transport.feedback_request.evidence_bundle
+    assert [request.stage for request in llm_transport.feedback_requests] == [
+        "analysis_candidate",
+        "json_projection",
+    ]
+    analysis_request = llm_transport.feedback_requests[0]
+    assert 4000 <= getattr(analysis_request, "max_tokens", 8000) < 8000
+    provider_prompt = analysis_request.evidence_bundle
     assert provider_prompt["task_type"] == "polish_feedback_generation"
     assert provider_prompt["feedback_mode"] == "candidate_compact"
     assert provider_prompt["task"] == "polish_feedback_candidate_v1"
@@ -566,8 +672,12 @@ def test_feedback_runtime_generates_and_persists_fake_payload(monkeypatch: pytes
     assert succeeded_log["answer_id"] == answer_id
     assert succeeded_log["llm_called"] is True
     assert succeeded_log["error_code"] is None
-    assert succeeded_log["validation_stage"] == "final"
+    assert succeeded_log["validation_stage"] == "json_projection"
     assert succeeded_log["candidate_valid"] is True
+    assert [stage["stage"] for stage in succeeded_log["generation_stages"]] == [
+        "analysis_candidate",
+        "json_projection",
+    ]
     assert succeeded_log["duration_ms"] >= 0
 
     with session_factory() as db:
@@ -796,6 +906,333 @@ def test_feedback_runtime_provider_timeout_returns_failed_retryable_payload() ->
     )
 
 
+def test_feedback_generation_truncated_provider_response_persists_safe_task_diagnostics() -> None:
+    session_factory = _session_factory()
+    llm_transport = _TruncatedProviderFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-truncated-001"),
+    )
+
+    assert status_code == 202
+    data = feedback_body["data"]
+    assert data["status"] == "generation_failed"
+    assert data["retryable"] is True
+    assert data["feedback_status"] == "generation_failed"
+    assert data["feedback_payload"]["status"] == "generation_failed"
+    error_code = data["feedback_payload"]["error"]["code"]
+    assert error_code in {"llm_transport_generation_failed", "provider_output_truncated"}
+    assert error_code not in {"LlmTransportResponseError", "length", "JSONDecodeError"}
+    assert llm_transport.feedback_payload["max_tokens"] == 4800
+    assert llm_transport.observed_reasoning_tokens > 0
+
+    with session_factory() as db:
+        stored_result = db.get(AiTaskResult, f"{data['ai_task_id']}_result")
+
+    assert stored_result is not None
+    diagnostic_payloads = [
+        payload
+        for payload in (
+            stored_result.validation_errors_json,
+            stored_result.safe_summary_json,
+        )
+        if payload
+    ]
+    assert diagnostic_payloads, (
+        "expected feedback generation failure to persist safe diagnostics in "
+        "ai_task_results.validation_errors_json or safe_summary_json"
+    )
+    serialized_diagnostics = json.dumps(diagnostic_payloads, ensure_ascii=False, sort_keys=True)
+    assert "provider_output_truncated" in serialized_diagnostics
+    assert "finish_reason" in serialized_diagnostics
+    assert "length" in serialized_diagnostics
+    assert "max_tokens" in serialized_diagnostics
+    assert "4800" in serialized_diagnostics
+    assert "reasoning_tokens" in serialized_diagnostics
+    assert str(llm_transport.observed_reasoning_tokens) in serialized_diagnostics
+    assert data["ai_task_id"] in serialized_diagnostics
+    assert answer_id in serialized_diagnostics
+
+    forbidden_markers = (
+        "raw_prompt",
+        "system_prompt",
+        "developer_prompt",
+        "raw_completion",
+        "completion text",
+        "provider_payload",
+        "raw_provider_payload",
+        "reasoning_content",
+        "api_key",
+        "secret",
+        "cookie",
+        "token=",
+    )
+    serialized_response = json.dumps(feedback_body, ensure_ascii=False, sort_keys=True)
+    serialized_all = f"{serialized_response}\n{serialized_diagnostics}".lower()
+    for marker in forbidden_markers:
+        assert marker not in serialized_all
+
+
+def test_feedback_generation_background_failure_logs_trace_and_task_context(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    LogUtil.configure()
+    caplog.set_level(logging.INFO)
+    request_id = "feedback-runtime-log-request-001"
+    trace_id = "feedback-runtime-log-trace-001"
+
+    session_factory = _session_factory()
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_TruncatedProviderFeedbackTransport(),
+    )
+    app.add_middleware(HttpAccessLogMiddleware)
+    session_id = _create_session_for_feedback_log_test(app, session_factory)
+    question_id = _create_question_for_feedback_log_test(app, session_factory, session_id)
+    answer_id = _create_answer_for_feedback_log_test(app, session_id, question_id)
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers={
+            **_feedback_headers("feedback-runtime-logs-001"),
+            "x-request-id": request_id,
+            "x-trace-id": trace_id,
+        },
+    )
+
+    assert status_code == 202
+    ai_task_id = feedback_body["data"]["ai_task_id"]
+    log_records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.getMessage().startswith("{")
+    ]
+    expected_context = {
+        "request_id": request_id,
+        "trace_id": trace_id,
+        "ai_task_id": ai_task_id,
+        "session_id": session_id,
+        "question_id": question_id,
+        "answer_id": answer_id,
+    }
+    started_log = next(record for record in log_records if record["event"] == "feedback_generation_started")
+    transport_failed_log = next(
+        record
+        for record in log_records
+        if record["event"] == "llm_transport_request_failed"
+        and record["task_type"] == "polish_feedback_generation"
+    )
+    failed_log = next(record for record in log_records if record["event"] == "feedback_generation_failed")
+    assert transport_failed_log["error_type"] == "provider_output_truncated"
+    for log_record in (started_log, transport_failed_log, failed_log):
+        for field_name, expected_value in expected_context.items():
+            assert log_record[field_name] == expected_value
+
+    caplog.clear()
+
+    def raise_background_exception(*_args, **_kwargs):
+        raise RuntimeError("synthetic background feedback failure")
+
+    monkeypatch.setattr(
+        feedback_app_service,
+        "_complete_feedback_generation",
+        raise_background_exception,
+    )
+    exception_session_factory = _session_factory()
+    exception_app = _isolated_polish_app(exception_session_factory, ACTOR_A)
+    exception_app.add_middleware(HttpAccessLogMiddleware)
+    exception_session_id = _create_session_for_feedback_log_test(
+        exception_app,
+        exception_session_factory,
+    )
+    exception_question_id = _create_question_for_feedback_log_test(
+        exception_app,
+        exception_session_factory,
+        exception_session_id,
+    )
+    exception_answer_id = _create_answer_for_feedback_log_test(
+        exception_app,
+        exception_session_id,
+        exception_question_id,
+    )
+    exception_request_id = "feedback-runtime-log-request-002"
+    exception_trace_id = "feedback-runtime-log-trace-002"
+
+    call_json(
+        exception_app,
+        f"/api/v1/polish-sessions/{exception_session_id}/feedback",
+        "POST",
+        json_body={"answer_id": exception_answer_id},
+        headers={
+            **_feedback_headers("feedback-runtime-logs-002"),
+            "x-request-id": exception_request_id,
+            "x-trace-id": exception_trace_id,
+        },
+    )
+
+    exception_log_records = [
+        json.loads(record.getMessage())
+        for record in caplog.records
+        if record.getMessage().startswith("{")
+    ]
+    exception_started_log = next(
+        record for record in exception_log_records if record["event"] == "feedback_generation_started"
+    )
+    exception_expected_context = {
+        "request_id": exception_request_id,
+        "trace_id": exception_trace_id,
+        "ai_task_id": exception_started_log["ai_task_id"],
+        "session_id": exception_session_id,
+        "question_id": exception_question_id,
+        "answer_id": exception_answer_id,
+    }
+    exception_log = next(
+        record
+        for record in exception_log_records
+        if record["event"] == "feedback_generation_background_exception"
+    )
+    assert exception_log["error_type"] == "RuntimeError"
+    for field_name, expected_value in exception_expected_context.items():
+        assert exception_log[field_name] == expected_value
+
+
+def test_feedback_generation_delayed_background_exception_persists_failed_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def raise_after_sync_wait(*_args, **_kwargs):
+        started.set()
+        assert release.wait(timeout=2), "background feedback failure was not released"
+        raise RuntimeError("synthetic delayed background feedback failure")
+
+    monkeypatch.setattr(
+        feedback_app_service,
+        "_complete_feedback_generation",
+        raise_after_sync_wait,
+    )
+    session_factory = _session_factory()
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+    idempotency_key = "feedback-runtime-delayed-background-exception-001"
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers(idempotency_key),
+    )
+
+    assert status_code == 202
+    assert started.wait(timeout=2)
+    assert feedback_body["data"]["status"] == "running"
+    ai_task_id = feedback_body["data"]["ai_task_id"]
+
+    release.set()
+    terminal_answer = None
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        detail_status, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+        assert detail_status == 200
+        terminal_answer = next(
+            answer
+            for turn in detail_body["data"]["turns"]
+            for answer in turn["answers"]
+            if answer["answer_id"] == answer_id
+        )
+        feedback_payload = terminal_answer.get("feedback_payload")
+        if isinstance(feedback_payload, dict) and feedback_payload.get("status") == "generation_failed":
+            break
+        time.sleep(0.02)
+
+    assert terminal_answer is not None
+    failed_payload = terminal_answer["feedback_payload"]
+    assert failed_payload["status"] == "generation_failed"
+    assert failed_payload["retryable"] is True
+    assert failed_payload["error"]["code"] == "feedback_generation_background_exception"
+    assert failed_payload["error"]["metadata"]["stage"] == "background_worker"
+    assert failed_payload["error"]["metadata"]["error_type"] == "RuntimeError"
+
+    replay_status, replay_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers(idempotency_key),
+    )
+    assert replay_status == 202
+    assert replay_body["data"]["status"] == "generation_failed"
+    assert replay_body["data"]["feedback_payload"]["status"] == "generation_failed"
+    assert replay_body["data"]["ai_task_id"] == ai_task_id
+
+    with session_factory() as db:
+        stored_result = db.get(AiTaskResult, f"{ai_task_id}_result")
+
+    assert stored_result is not None
+    serialized_diagnostics = json.dumps(
+        [stored_result.validation_errors_json, stored_result.safe_summary_json],
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    assert "feedback_generation_background_exception" in serialized_diagnostics
+    assert "background_worker" in serialized_diagnostics
+    assert "RuntimeError" in serialized_diagnostics
+    assert "synthetic delayed background feedback failure" not in serialized_diagnostics
+
+
+def _create_session_for_feedback_log_test(app, session_factory) -> str:
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={
+            "resume_job_binding_id": _seed_polish_sources(session_factory, OWNER_A),
+            "topic_id": "topic_technical_depth",
+        },
+    )
+    session_id = create_body["data"]["session_id"]
+    _generate_initial_progress_tree(app, session_id)
+    return session_id
+
+
+def _create_question_for_feedback_log_test(app, session_factory, session_id: str) -> str:
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    progress_node_ref = detail_body["data"]["progress_tree_state"]["current_priority"][
+        "progress_node_ref"
+    ]
+    return _seed_polish_question_for_session(
+        session_factory,
+        session_id=session_id,
+        progress_node_ref=progress_node_ref,
+    )
+
+
+def _create_answer_for_feedback_log_test(app, session_id: str, question_id: str) -> str:
+    _, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": "我会说明异步解耦、失败补偿、幂等键和观测指标。",
+        },
+    )
+    return answer_body["data"]["answer_id"]
+
+
 def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
     session_factory = _session_factory()
     llm_transport = _FailOnceFeedbackTransport()
@@ -867,7 +1304,7 @@ def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_
     assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is True
     assert data["feedback_payload"]["feedback_metadata"]["provider_status"] == "called"
     assert data["feedback_payload"]["feedback_metadata"]["candidate_valid"] is False
-    assert data["feedback_payload"]["feedback_metadata"]["validation_stage"] == "candidate"
+    assert data["feedback_payload"]["feedback_metadata"]["validation_stage"] == "analysis_candidate"
     repository = SqlAlchemyPolishRepository(session_factory)
     stored_feedbacks = repository.list_feedbacks_for_session(OWNER_A, session_id)
     assert not any(feedback.status == "generated" for feedback in stored_feedbacks)

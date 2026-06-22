@@ -211,6 +211,7 @@ class PolishTaskStatus:
     candidate_refs: tuple[ResourceRef, ...] = field(default_factory=tuple)
     suggestion_refs: tuple[ResourceRef, ...] = field(default_factory=tuple)
     validation_errors: tuple[str, ...] = field(default_factory=tuple)
+    safe_summary: dict[str, Any] | None = None
 
 
 class PolishRepository(Protocol):

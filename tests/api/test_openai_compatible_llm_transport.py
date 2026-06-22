@@ -175,6 +175,68 @@ def test_openai_compatible_transport_disables_request_timeout_for_polish_feedbac
     assert all(value is None for value in timeout.values())
 
 
+@pytest.mark.parametrize(
+    ("thinking_enabled", "expected_thinking_type"),
+    [(True, "enabled"), (False, "disabled")],
+)
+def test_openai_compatible_transport_passes_request_level_thinking_controls_and_stage_metadata(
+    thinking_enabled: bool,
+    expected_thinking_type: str,
+) -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["payload"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_feedback_projection",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": '{"status":"success"}'},
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 1200,
+                    "completion_tokens": 320,
+                    "total_tokens": 1520,
+                    "completion_tokens_details": {"reasoning_tokens": 0},
+                },
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    result = transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-FEEDBACK-GENERATED",),
+            task_type="polish_feedback_generation",
+            stage="json_projection",
+            thinking_enabled=thinking_enabled,
+            max_tokens=4800,
+        )
+    )
+
+    payload = observed["payload"]
+    assert isinstance(payload, dict)
+    assert payload["thinking"] == {"type": expected_thinking_type}
+    assert payload["max_tokens"] == 4800
+    assert result.metadata["stage"] == "json_projection"
+    assert result.metadata["thinking_enabled"] is thinking_enabled
+    assert result.metadata["finish_reason"] == "stop"
+    assert result.metadata["completion_tokens"] == 320
+    assert result.metadata["reasoning_tokens"] == 0
+
+
 def test_openai_compatible_transport_uses_progress_tree_token_budget_and_json_mode() -> None:
     observed: dict[str, object] = {}
 
@@ -334,6 +396,12 @@ def test_openai_compatible_transport_raises_truncated_error_for_length_finish_re
                         "message": {"content": '{"status":"success"'},
                     }
                 ],
+                "usage": {
+                    "prompt_tokens": 1400,
+                    "completion_tokens": 4800,
+                    "total_tokens": 6200,
+                    "completion_tokens_details": {"reasoning_tokens": 512},
+                },
             },
         )
 
@@ -351,10 +419,24 @@ def test_openai_compatible_transport_raises_truncated_error_for_length_finish_re
             LlmTransportRequest(
                 contract_ids=("P-POLISH-PROGRESS-QUALITY-FIRST-MENU",),
                 task_type="polish_progress_quality_first_menu",
+                stage="analysis_candidate",
+                thinking_enabled=True,
+                max_tokens=4800,
             )
         )
 
     assert getattr(exc_info.value, "error_type") == "provider_output_truncated"
+    assert getattr(exc_info.value, "safe_metadata") == {
+        "provider_error_type": "provider_output_truncated",
+        "stage": "analysis_candidate",
+        "thinking_enabled": True,
+        "finish_reason": "length",
+        "max_tokens": 4800,
+        "prompt_tokens": 1400,
+        "completion_tokens": 4800,
+        "total_tokens": 6200,
+        "reasoning_tokens": 512,
+    }
 
 
 def test_openai_compatible_transport_keeps_invalid_json_error_for_non_length_finish_reason() -> None:

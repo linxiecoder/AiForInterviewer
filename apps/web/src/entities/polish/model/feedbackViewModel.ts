@@ -1,7 +1,8 @@
-import type { PolishSessionAnswer } from "./types";
+import type { PolishSessionAnswer, PolishSessionDetail } from "./types";
 import { buildFailedFeedbackSection, buildGeneratedFeedbackSections } from "./feedbackCardSections";
 import {
   getAnswerNextRecommendedActions,
+  hasPolishGeneratedFeedback,
   resolvePolishFeedbackStatus,
   toNextRecommendedActionLabel,
   toOptionalText,
@@ -74,6 +75,54 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: [],
   };
+}
+
+export interface FeedbackTimeoutRefreshViewModel {
+  readonly selectedQuestionId: string;
+  readonly selectedAnswerId: string;
+  readonly hasTerminalFeedback: boolean;
+  readonly shouldKeepPendingCopy: boolean;
+  readonly feedbackCard: FeedbackCardViewModel | null;
+}
+
+export function buildFeedbackTimeoutRefreshViewModel(
+  refreshed: PolishSessionDetail,
+  submittedQuestionId: string,
+  submittedAnswerId: string,
+): FeedbackTimeoutRefreshViewModel {
+  const answerContext = findFeedbackTimeoutAnswerContext(refreshed, submittedAnswerId);
+  const hasTerminalFeedback = hasPolishGeneratedFeedback(answerContext?.answer);
+  return {
+    selectedQuestionId: answerContext?.questionId ?? submittedQuestionId,
+    selectedAnswerId: submittedAnswerId,
+    hasTerminalFeedback,
+    shouldKeepPendingCopy: !hasTerminalFeedback,
+    feedbackCard:
+      hasTerminalFeedback && answerContext !== null
+        ? buildFeedbackCardViewModel(answerContext.answer)
+        : null,
+  };
+}
+
+interface FeedbackTimeoutAnswerContext {
+  readonly questionId: string;
+  readonly answer: PolishSessionAnswer;
+}
+
+function findFeedbackTimeoutAnswerContext(
+  session: PolishSessionDetail,
+  answerId: string,
+): FeedbackTimeoutAnswerContext | null {
+  for (const turn of session.turns) {
+    const answer = turn.answers.find((item) => item.answer_id === answerId);
+    if (answer !== undefined) {
+      return {
+        questionId: turn.question_id,
+        answer,
+      };
+    }
+  }
+  return null;
 }
 
 function buildFeedbackRoundMetaLabel(round: number | null | undefined): string {

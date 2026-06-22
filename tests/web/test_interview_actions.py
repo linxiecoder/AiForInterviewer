@@ -1,14 +1,230 @@
 import re
+import subprocess
 from pathlib import Path
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 INTERVIEW_PAGE = Path("apps/web/src/pages/interview/InterviewPage.tsx")
 POLISH_API = Path("apps/web/src/entities/polish/api/polishApi.ts")
 POLISH_TYPES = Path("apps/web/src/entities/polish/model/types.ts")
+FEEDBACK_VIEW_MODEL = Path("apps/web/src/entities/polish/model/feedbackViewModel.ts")
 
 
 def _source(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def _assert_feedback_timeout_refresh_view_model_scenario() -> None:
+    script = r"""
+const ts = require("typescript");
+
+function assertScenario(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+require.extensions[".ts"] = function compileTypeScript(module, filename) {
+  const source = require("node:fs").readFileSync(filename, "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  module._compile(output.outputText, filename);
+};
+
+const {
+  buildFeedbackTimeoutRefreshViewModel,
+} = require("./apps/web/src/entities/polish/model/feedbackViewModel.ts");
+
+const submittedQuestionId = "q_timeout_original";
+const submittedAnswerId = "ans_timeout_terminal";
+const refreshed = {
+  turns: [
+    {
+      question_id: submittedQuestionId,
+      answers: [
+        {
+          answer_id: submittedAnswerId,
+          answer_round: 1,
+          answer_text: "Submitted answer kept in focus",
+          feedback_id: null,
+          feedback_created_at: null,
+          feedback_text: "",
+          score_result_id: null,
+          feedback_payload: {
+            status: "generation_failed",
+            feedback_text: "Backend terminal failure from refreshed detail",
+            retryable: true,
+            validation_errors: ["feedback_generation_failed"],
+            error: {
+              code: "feedback_generation_failed",
+            },
+            next_recommended_actions: ["continue_same_question"],
+          },
+        },
+      ],
+    },
+  ],
+};
+
+const viewModel = buildFeedbackTimeoutRefreshViewModel(
+  refreshed,
+  submittedQuestionId,
+  submittedAnswerId,
+);
+const card = viewModel.feedbackCard;
+const visibleCopy = [
+  card?.title,
+  card?.status,
+  ...(card?.sections ?? []).flatMap((section) => [
+    section.title,
+    ...(section.items ?? []),
+  ]),
+].filter(Boolean).join("\n");
+
+assertScenario(viewModel.selectedQuestionId === submittedQuestionId, "submitted question focus must be kept");
+assertScenario(viewModel.selectedAnswerId === submittedAnswerId, "submitted answer focus must be kept");
+assertScenario(viewModel.hasTerminalFeedback === true, "terminal refreshed payload must be detected");
+assertScenario(viewModel.shouldKeepPendingCopy === false, "pending copy must stop when terminal payload exists");
+assertScenario(card?.title === "反馈生成失败", "terminal payload must build failure feedback card title");
+assertScenario(card?.status === "failed", "generation_failed must normalize to failed card status");
+assertScenario(card?.sections[0]?.title === "失败状态", "failure feedback section must be rendered");
+assertScenario(visibleCopy.includes("反馈生成超时或失败，可重试"), "failure feedback card copy must be visible");
+assertScenario(!visibleCopy.includes("本轮反馈尚未生成"), "terminal payload must not render pending-only copy");
+"""
+    subprocess.run(
+        ["node", "-e", script],
+        cwd=REPO_ROOT,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _assert_failed_feedback_summary_sections_scenario() -> None:
+    script = r"""
+const ts = require("typescript");
+const Module = require("node:module");
+
+function assertScenario(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function compileTypeScript(module, filename) {
+  const source = require("node:fs").readFileSync(filename, "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  module._compile(output.outputText, filename);
+}
+
+require.extensions[".ts"] = compileTypeScript;
+require.extensions[".tsx"] = compileTypeScript;
+require.extensions[".css"] = function compileCssModule(module) {
+  module.exports = new Proxy({}, {
+    get: (_target, property) => String(property),
+  });
+};
+
+const originalLoad = Module._load;
+Module._load = function loadPageDependency(request, parent, isMain) {
+  if (request.includes("entities/job/api/jobApi") || request.includes("entities/polish/api/polishApi")) {
+    return new Proxy({}, {
+      get: (_target, property) => {
+        if (property === "__esModule") {
+          return true;
+        }
+        return function noopApiDependency() {
+          throw new Error(`Unexpected API dependency call: ${String(property)}`);
+        };
+      },
+    });
+  }
+  if (request.includes("app/routes/router")) {
+    return {
+      useRouteController: () => ({
+        navigate: () => undefined,
+        params: {},
+      }),
+    };
+  }
+  if (request.includes("shared/api/errors")) {
+    return { isApiHttpError: () => false };
+  }
+  if (
+    request.includes("shared/ui/EmptyState") ||
+    request.includes("shared/ui/ErrorState") ||
+    request.includes("shared/ui/LoadingState") ||
+    request.includes("widgets/app-shell/AppShell")
+  ) {
+    return new Proxy({}, {
+      get: (_target, property) => function noopComponent() {
+        return property === "AppShell" ? null : null;
+      },
+    });
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+
+const {
+  buildFeedbackCardViewModel,
+  buildFeedbackSummarySections,
+} = require("./apps/web/src/pages/interview/InterviewPage.tsx");
+
+const failedAnswer = {
+  answer_id: "ans_failed_summary",
+  answer_round: 1,
+  answer_text: "Submitted answer has terminal feedback failure",
+  feedback_id: null,
+  feedback_created_at: null,
+  feedback_text: "",
+  score_result_id: null,
+  feedback_payload: {
+    status: "generation_failed",
+    retryable: true,
+    validation_errors: ["feedback_generation_failed"],
+    error: {
+      code: "feedback_generation_failed",
+    },
+  },
+};
+
+const feedbackCard = buildFeedbackCardViewModel(failedAnswer);
+const summarySections = buildFeedbackSummarySections(feedbackCard);
+const visibleCopy = summarySections.flatMap((section) => [
+  section.key,
+  section.title,
+  ...(section.items ?? []),
+]).join("\n");
+
+assertScenario(feedbackCard?.title === "反馈生成失败", "failed payload must build a failure feedback card");
+assertScenario(summarySections.some((section) => section.key === "failed_status"), "summary must include failed_status section");
+assertScenario(visibleCopy.includes("失败状态"), "summary must include failed section title");
+assertScenario(visibleCopy.includes("反馈生成超时或失败，可重试"), "summary must include failed retry copy");
+assertScenario(!visibleCopy.includes("当前回答暂无总评内容"), "summary must not fall back to empty-summary copy");
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        cwd=REPO_ROOT,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_interview_workbench_end_uses_system_modal_not_native_dialog() -> None:
@@ -173,6 +389,47 @@ def test_interview_workbench_answer_submit_uses_stable_idempotency_key() -> None
     assert "idempotencyKey: keyDraft.idempotencyKey" in page_source
     assert "answerSubmissionKeyDraftRef.current = null" in page_source
     assert "\"Idempotency-Key\"" in api_source
+
+
+def test_interview_workbench_feedback_timeout_reloads_terminal_feedback_payload() -> None:
+    source = _source(INTERVIEW_PAGE)
+    view_model_source = _source(FEEDBACK_VIEW_MODEL)
+    timeout_marker = (
+        "if (feedbackError instanceof Error && feedbackError.message === POLISH_AI_TASK_FEEDBACK_PENDING_MESSAGE) {"
+    )
+    next_failure_marker = 'setWorkbenchFailureState("feedbackFailedAnswerSaved");'
+
+    assert timeout_marker in source
+    assert next_failure_marker in source
+    timeout_start = source.index(timeout_marker)
+    timeout_end = source.index(next_failure_marker, timeout_start)
+    branch_body = source[timeout_start:timeout_end]
+    assert "await fetchPolishSession(sessionId);" in branch_body
+    assert "setSession(refreshed);" in branch_body
+    assert "buildFeedbackTimeoutRefreshViewModel(" in branch_body
+    assert "setSelectedQuestionId(timeoutRefresh.selectedQuestionId);" in branch_body
+    assert "setSelectedAnswerId(timeoutRefresh.selectedAnswerId);" in branch_body
+    assert "timeoutRefresh.hasTerminalFeedback" in branch_body
+    assert "setAnswerError(null);" in branch_body
+    assert "setAnswerError(INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY);" in branch_body
+    assert "buildFeedbackCardViewModel(answerContext.answer)" in view_model_source
+    assert "hasPolishGeneratedFeedback(answerContext?.answer)" in view_model_source
+
+    assert branch_body.index("await fetchPolishSession(sessionId);") < branch_body.index(
+        "buildFeedbackTimeoutRefreshViewModel("
+    )
+    assert branch_body.index("timeoutRefresh.hasTerminalFeedback") < branch_body.index(
+        "setAnswerError(INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY);"
+    )
+    assert "await loadSession();" not in branch_body
+    assert "feedbackTask.status" not in branch_body
+    assert "feedbackTask.result" not in branch_body
+
+    _assert_feedback_timeout_refresh_view_model_scenario()
+
+
+def test_interview_workbench_failed_feedback_summary_sections_include_failed_status_copy() -> None:
+    _assert_failed_feedback_summary_sections_scenario()
 
 
 def test_interview_workbench_has_no_grant_client_fields() -> None:

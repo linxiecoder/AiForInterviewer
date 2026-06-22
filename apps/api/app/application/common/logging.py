@@ -36,6 +36,11 @@ SENSITIVE_FIELD_MARKERS = (
 )
 NON_SENSITIVE_FIELD_NAMES = (
     "prompt_char_count",
+    "prompt_tokens",
+    "completion_tokens",
+    "reasoning_tokens",
+    "total_tokens",
+    "max_tokens",
 )
 NON_SENSITIVE_EVENT_FIELD_NAMES = (
     ("feedback_generation_started", "session_id"),
@@ -50,8 +55,22 @@ class RequestTraceContext:
     trace_id: str
 
 
+@dataclass(frozen=True)
+class BackgroundTaskLogContext:
+    request_id: str | None
+    trace_id: str | None
+    ai_task_id: str
+    session_id: str
+    question_id: str
+    answer_id: str
+
+
 _REQUEST_TRACE_CONTEXT: ContextVar[RequestTraceContext | None] = ContextVar(
     "request_trace_context",
+    default=None,
+)
+_BACKGROUND_TASK_LOG_CONTEXT: ContextVar[BackgroundTaskLogContext | None] = ContextVar(
+    "background_task_log_context",
     default=None,
 )
 
@@ -60,12 +79,26 @@ def get_request_trace_context() -> RequestTraceContext | None:
     return _REQUEST_TRACE_CONTEXT.get()
 
 
+def get_background_task_log_context() -> BackgroundTaskLogContext | None:
+    return _BACKGROUND_TASK_LOG_CONTEXT.get()
+
+
 def set_request_trace_context(request_id: str, trace_id: str) -> Token[RequestTraceContext | None]:
     return _REQUEST_TRACE_CONTEXT.set(RequestTraceContext(request_id=request_id, trace_id=trace_id))
 
 
+def set_background_task_log_context(
+    context: BackgroundTaskLogContext,
+) -> Token[BackgroundTaskLogContext | None]:
+    return _BACKGROUND_TASK_LOG_CONTEXT.set(context)
+
+
 def reset_request_trace_context(token: Token[RequestTraceContext | None]) -> None:
     _REQUEST_TRACE_CONTEXT.reset(token)
+
+
+def reset_background_task_log_context(token: Token[BackgroundTaskLogContext | None]) -> None:
+    _BACKGROUND_TASK_LOG_CONTEXT.reset(token)
 
 
 @dataclass(frozen=True)
@@ -290,6 +323,10 @@ class LogUtil:
                 "provider_status": "not_called",
                 "validation_stage": None,
                 "candidate_valid": None,
+                "generation_stages": [],
+                "finish_reason": None,
+                "completion_tokens": None,
+                "reasoning_tokens": None,
                 "prompt_char_count": None,
                 "evidence_item_count": None,
                 "duration_ms": 0,
@@ -308,6 +345,10 @@ class LogUtil:
         error_code: str | None,
         validation_stage: str | None,
         candidate_valid: bool | None,
+        generation_stages: list[dict[str, Any]] | None,
+        finish_reason: str | None,
+        completion_tokens: int | None,
+        reasoning_tokens: int | None,
         prompt_char_count: int | None,
         evidence_item_count: int | None,
         duration_ms: float,
@@ -325,6 +366,10 @@ class LogUtil:
                 "error_code": error_code,
                 "validation_stage": validation_stage,
                 "candidate_valid": candidate_valid,
+                "generation_stages": generation_stages or [],
+                "finish_reason": finish_reason,
+                "completion_tokens": completion_tokens,
+                "reasoning_tokens": reasoning_tokens,
                 "prompt_char_count": prompt_char_count,
                 "evidence_item_count": evidence_item_count,
                 "duration_ms": duration_ms,
@@ -342,6 +387,10 @@ class LogUtil:
         provider_status: str | None,
         validation_stage: str | None,
         candidate_valid: bool | None,
+        generation_stages: list[dict[str, Any]] | None,
+        finish_reason: str | None,
+        completion_tokens: int | None,
+        reasoning_tokens: int | None,
         prompt_char_count: int | None,
         evidence_item_count: int | None,
         duration_ms: float,
@@ -360,8 +409,29 @@ class LogUtil:
                 "error_code": error_code,
                 "validation_stage": validation_stage,
                 "candidate_valid": candidate_valid,
+                "generation_stages": generation_stages or [],
+                "finish_reason": finish_reason,
+                "completion_tokens": completion_tokens,
+                "reasoning_tokens": reasoning_tokens,
                 "prompt_char_count": prompt_char_count,
                 "evidence_item_count": evidence_item_count,
+                "duration_ms": duration_ms,
+            },
+        )
+
+    @classmethod
+    def feedback_generation_background_exception(
+        cls,
+        *,
+        error_type: str,
+        duration_ms: float,
+    ) -> None:
+        cls._emit(
+            APP_LOGGER_NAME,
+            logging.ERROR,
+            "feedback_generation_background_exception",
+            {
+                "error_type": error_type,
                 "duration_ms": duration_ms,
             },
         )
@@ -494,6 +564,16 @@ class LogUtil:
         if trace_context is not None:
             record.setdefault("request_id", trace_context.request_id)
             record.setdefault("trace_id", trace_context.trace_id)
+        background_context = get_background_task_log_context()
+        if background_context is not None:
+            if background_context.request_id is not None:
+                record.setdefault("request_id", background_context.request_id)
+            if background_context.trace_id is not None:
+                record.setdefault("trace_id", background_context.trace_id)
+            record.setdefault("ai_task_id", background_context.ai_task_id)
+            record.setdefault("session_id", background_context.session_id)
+            record.setdefault("question_id", background_context.question_id)
+            record.setdefault("answer_id", background_context.answer_id)
         for key, value in fields.items():
             record[str(key)] = cls._sanitize(value, key=str(key), event=event)
         return record

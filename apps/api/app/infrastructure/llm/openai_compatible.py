@@ -305,7 +305,12 @@ class OpenAICompatibleLlmTransport:
 
         try:
             response_json = _response_json(response)
-            result = _parse_json_result(response_json)
+            result = _parse_json_result(
+                response_json,
+                request_max_tokens=_safe_int(chat_payload.get("max_tokens")),
+                stage=request.stage,
+                thinking_enabled=request.thinking_enabled,
+            )
         except LlmTransportResponseError as exc:
             response_body, response_text = _response_body_for_dump(response)
             error_type = _llm_response_error_type(exc)
@@ -338,6 +343,12 @@ class OpenAICompatibleLlmTransport:
         result["model_name"] = provider_model
         trace_ref = _trace_ref(request, response_json)
         evidence_ref = _evidence_ref(request)
+        provider_metadata = _provider_response_success_metadata(
+            response_json,
+            request_max_tokens=_safe_int(chat_payload.get("max_tokens")),
+            stage=request.stage,
+            thinking_enabled=request.thinking_enabled,
+        )
         self._log_request_success(
             request,
             started_at=started_at,
@@ -368,6 +379,7 @@ class OpenAICompatibleLlmTransport:
             trace_refs=(trace_ref,),
             evidence_refs=(evidence_ref,),
             metadata={
+                **provider_metadata,
                 "model_name": provider_model,
                 "provider_model": provider_model,
                 "prompt_version": _request_prompt_version(request),
@@ -455,7 +467,7 @@ def _chat_completion_payload(
     """构造 OpenAI Chat Completions 请求体，含 system prompt 和 evidence bundle。"""
     # Structured JSON tasks must wait for complete content before json.loads;
     # frontend streaming needs SSE/task state.
-    return {
+    payload = {
         "model": settings.model,
         "temperature": settings.temperature,
         "max_tokens": _max_tokens_for_request(settings, request),
@@ -479,6 +491,9 @@ def _chat_completion_payload(
             },
         ],
     }
+    if request.thinking_enabled is not None:
+        payload["thinking"] = {"type": "enabled" if request.thinking_enabled else "disabled"}
+    return payload
 
 
 def _max_tokens_for_request(
@@ -768,7 +783,13 @@ def _response_json(response: httpx.Response) -> dict[str, Any]:
     return data
 
 
-def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
+def _parse_json_result(
+    response_json: dict[str, Any],
+    *,
+    request_max_tokens: int | None = None,
+    stage: str | None = None,
+    thinking_enabled: bool | None = None,
+) -> dict[str, Any]:
     """从 Chat Completions 响应中提取 choices[0].message.content 并解析为 JSON。"""
     choices = response_json.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -780,6 +801,13 @@ def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
         raise _llm_response_error(
             "LLM provider 输出被截断，JSON 不完整。",
             error_type=PROVIDER_OUTPUT_TRUNCATED_ERROR_TYPE,
+            safe_metadata=_provider_response_error_metadata(
+                response_json,
+                error_type=PROVIDER_OUTPUT_TRUNCATED_ERROR_TYPE,
+                request_max_tokens=request_max_tokens,
+                stage=stage,
+                thinking_enabled=thinking_enabled,
+            ),
         )
     message = first_choice.get("message")
     if not isinstance(message, dict):
@@ -796,10 +824,88 @@ def _parse_json_result(response_json: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
-def _llm_response_error(message: str, *, error_type: str) -> LlmTransportResponseError:
+def _llm_response_error(
+    message: str,
+    *,
+    error_type: str,
+    safe_metadata: dict[str, Any] | None = None,
+) -> LlmTransportResponseError:
     error = LlmTransportResponseError(message)
     setattr(error, "error_type", error_type)
+    if safe_metadata:
+        setattr(error, "safe_metadata", safe_metadata)
     return error
+
+
+def _provider_response_error_metadata(
+    response_json: dict[str, Any],
+    *,
+    error_type: str,
+    request_max_tokens: int | None,
+    stage: str | None = None,
+    thinking_enabled: bool | None = None,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {"provider_error_type": error_type}
+    if stage:
+        metadata["stage"] = stage
+    if thinking_enabled is not None:
+        metadata["thinking_enabled"] = bool(thinking_enabled)
+    finish_reason = _first_choice_finish_reason(response_json)
+    if finish_reason:
+        metadata["finish_reason"] = finish_reason
+    if request_max_tokens is not None:
+        metadata["max_tokens"] = request_max_tokens
+    usage = response_json.get("usage")
+    if isinstance(usage, dict):
+        for field_name in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            value = _safe_int(usage.get(field_name))
+            if value is not None:
+                metadata[field_name] = value
+        completion_details = usage.get("completion_tokens_details")
+        if isinstance(completion_details, dict):
+            reasoning_tokens = _safe_int(completion_details.get("reasoning_tokens"))
+            if reasoning_tokens is not None:
+                metadata["reasoning_tokens"] = reasoning_tokens
+    return metadata
+
+
+def _provider_response_success_metadata(
+    response_json: dict[str, Any],
+    *,
+    request_max_tokens: int | None,
+    stage: str | None = None,
+    thinking_enabled: bool | None = None,
+) -> dict[str, Any]:
+    metadata = _provider_response_error_metadata(
+        response_json,
+        error_type="",
+        request_max_tokens=request_max_tokens,
+        stage=stage,
+        thinking_enabled=thinking_enabled,
+    )
+    metadata.pop("provider_error_type", None)
+    return metadata
+
+
+def _first_choice_finish_reason(response_json: dict[str, Any]) -> str:
+    choices = response_json.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return ""
+    finish_reason = first_choice.get("finish_reason")
+    return finish_reason.strip() if isinstance(finish_reason, str) else ""
+
+
+def _safe_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
 
 
 def _llm_response_error_type(exc: LlmTransportResponseError) -> str:
@@ -836,6 +942,7 @@ def _trace_ref(request: LlmTransportRequest, response_json: dict[str, Any]) -> s
             "provider_response_id": response_json.get("id"),
             "model": response_json.get("model"),
             "task_type": request.task_type,
+            "stage": request.stage,
             "input_refs": sorted(request.input_refs),
         },
         ensure_ascii=True,

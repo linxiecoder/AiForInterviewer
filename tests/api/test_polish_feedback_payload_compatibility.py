@@ -317,3 +317,33 @@ def test_failed_feedback_actions_remain_display_only_without_execution_grant() -
     assert payload["next_recommended_actions"] == ["retry_same_question", "continue_same_question"]
     assert payload["feedback_metadata"]["llm_called"] is True
     _assert_no_grant_client_fields(payload)
+
+
+def test_failure_payload_projection_keeps_stage_diagnostics_out_of_feedback_metadata() -> None:
+    payload = _failed_feedback_payload_for_storage(
+        session_id="ses_failed_stage_diagnostics",
+        question_id="que_failed_stage_diagnostics",
+        answer_id="ans_failed_stage_diagnostics",
+        feedback_id="fb_failed_stage_diagnostics",
+        validation_errors=("json_projection", "feedback_status_invalid"),
+        metadata={
+            "provider_status": "failed",
+            "llm_called": True,
+            "stage": "json_projection",
+            "finish_reason": "stop",
+            "completion_tokens": 320,
+            "reasoning_tokens": 0,
+            "generation_stages": [
+                {"stage": "analysis_candidate", "finish_reason": "stop", "completion_tokens": 900},
+                {"stage": "json_projection", "failure_reason": "json_projection", "completion_tokens": 320},
+            ],
+        },
+    )
+
+    assert payload["status"] == "generation_failed"
+    assert payload["error"]["code"] == "json_projection"
+    assert payload["error"]["metadata"]["stage"] == "json_projection"
+    assert payload["error"]["metadata"]["completion_tokens"] == 320
+    assert "generation_stages" not in payload["feedback_metadata"]
+    assert payload["next_recommended_actions"] == ["retry_same_question", "continue_same_question"]
+    _assert_no_grant_client_fields(payload)

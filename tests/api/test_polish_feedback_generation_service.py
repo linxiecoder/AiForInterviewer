@@ -240,19 +240,28 @@ def _generated_payload() -> dict[str, Any]:
 
 
 class _PayloadTransport:
-    def __init__(self, payload: object) -> None:
+    def __init__(self, payload: object, *, projection_payload: object | None = None) -> None:
         self.payload = payload
+        self.projection_payload = projection_payload
         self.requests: list[LlmTransportRequest] = []
 
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         self.requests.append(request)
+        payload = (
+            self.projection_payload
+            if getattr(request, "stage", None) == "json_projection" and self.projection_payload is not None
+            else _default_projection_payload(request)
+            if getattr(request, "stage", None) == "json_projection"
+            else self.payload
+        )
         return LlmTransportResult(
-            result=self.payload,  # type: ignore[arg-type]
+            result=payload,  # type: ignore[arg-type]
             validation_status=ValidationStatus.VALID,
             confidence_level=ConfidenceLevel.MEDIUM,
             low_confidence_flags=(),
             trace_refs=("trace_provider_001",),
             evidence_refs=("evidence_provider_001",),
+            metadata=_stage_transport_metadata(request),
         )
 
 
@@ -271,12 +280,65 @@ class _SequencePayloadTransport:
             low_confidence_flags=(),
             trace_refs=(f"trace_provider_{len(self.requests):03d}",),
             evidence_refs=(f"evidence_provider_{len(self.requests):03d}",),
+            metadata=_stage_transport_metadata(request),
         )
 
 
 class _RaisingTransport:
     def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
         raise TimeoutError("provider timed out")
+
+
+class _StageTruncationTransport:
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        self.requests: list[LlmTransportRequest] = []
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.requests.append(request)
+        if getattr(request, "stage", None) == self.stage:
+            error = RuntimeError("provider output truncated")
+            setattr(error, "error_type", "provider_output_truncated")
+            setattr(
+                error,
+                "safe_metadata",
+                {
+                    "provider_error_type": "provider_output_truncated",
+                    "stage": self.stage,
+                    "finish_reason": "length",
+                    "completion_tokens": 4800,
+                    "reasoning_tokens": 512 if self.stage == "analysis_candidate" else 0,
+                },
+            )
+            raise error
+        payload = _default_projection_payload(request) if getattr(request, "stage", None) == "json_projection" else _generated_payload()
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=(f"trace_provider_{len(self.requests):03d}",),
+            evidence_refs=(f"evidence_provider_{len(self.requests):03d}",),
+            metadata=_stage_transport_metadata(request),
+        )
+
+
+def _default_projection_payload(request: LlmTransportRequest) -> object:
+    server_facts = request.evidence_bundle.get("server_facts") if isinstance(request.evidence_bundle, dict) else None
+    if isinstance(server_facts, dict) and isinstance(server_facts.get("default_final_payload"), dict):
+        return deepcopy(server_facts["default_final_payload"])
+    return _generated_final_payload()
+
+
+def _stage_transport_metadata(request: LlmTransportRequest) -> dict[str, Any]:
+    stage = getattr(request, "stage", None)
+    return {
+        "stage": stage,
+        "thinking_enabled": getattr(request, "thinking_enabled", None),
+        "finish_reason": "stop",
+        "completion_tokens": 320 if stage == "json_projection" else 900,
+        "reasoning_tokens": 0 if stage == "json_projection" else 128,
+    }
 
 
 def _service(llm_transport: object):
@@ -413,32 +475,38 @@ def test_feedback_request_uses_structured_output_budget() -> None:
     assert 4000 <= getattr(transport.requests[-1], "max_tokens", 8000) < 8000
 
 
-def test_feedback_generation_service_runs_dual_pass_stability_layer_and_bounds_variance() -> None:
-    primary_payload = _generated_payload()
-    secondary_payload = deepcopy(_generated_payload())
-    for item in secondary_payload["score_result"]["dimension_scores"]:
-        item["score"] = item["score"] + 10
-    secondary_payload["score_result"]["signals"].append("drift_detected")
-    transport = _SequencePayloadTransport(primary_payload, secondary_payload)
+def test_feedback_generation_two_stage_uses_thinking_for_analysis_and_non_thinking_for_json_projection() -> None:
+    transport = _PayloadTransport(_generated_payload())
 
     result = _service(transport).generate_feedback_v1(_context())
 
     assert result.succeeded is True
     assert len(transport.requests) == 2
+    analysis_request, projection_request = transport.requests
+    assert analysis_request.stage == "analysis_candidate"
+    assert analysis_request.thinking_enabled is True
+    assert analysis_request.evidence_bundle["feedback_mode"] == "candidate_compact"
+    assert projection_request.stage == "json_projection"
+    assert projection_request.thinking_enabled is False
+    assert projection_request.evidence_bundle["feedback_mode"] == "final_json_projection"
+    assert projection_request.evidence_bundle["safe_candidate_summary"]["feedback_text"] == (
+        "回答覆盖了 MQ 解耦，但故障恢复和观测指标仍不够可验证。"
+    )
+    assert projection_request.evidence_bundle["server_facts"]["default_final_payload"]["status"] == "generated"
     assert result.payload is not None
     score_result = result.payload["score_result"]
-    assert score_result["score_value"] == 81.6
-    assert score_result["signals"] == ["weakness_detected", "progress_update", "drift_detected"]
-    assert score_result["stability_layer"]["dual_pass_judging"] is True
-    assert score_result["stability_layer"]["pass_count"] == 2
-    assert score_result["stability_layer"]["score_value_passes"] == [76.6, 86.6]
+    assert score_result["score_value"] == 76.6
+    assert score_result["signals"] == ["weakness_detected", "progress_update"]
+    assert score_result["stability_layer"]["dual_pass_judging"] is False
+    assert score_result["stability_layer"]["pass_count"] == 1
+    assert score_result["stability_layer"]["score_value_passes"] == [76.6]
     assert score_result["stability_layer"]["variance_bounded"] is True
-    assert score_result["stability_layer"]["numeric_variance_detected"] is True
+    assert score_result["stability_layer"]["numeric_variance_detected"] is False
     assert score_result["calibration_layer"]["semantic_adjustment_applied"] is False
     assert score_result["learning_control"]["hardcoded_thresholds_used"] is False
-    assert score_result["learning_control"]["learning_rate"] == 0.333333
-    assert all(item["learning_rate"] == 0.333333 for item in score_result["progress_updates"])
-    assert "evaluation_drift_detected" in result.payload["low_confidence_flags"]
+    assert score_result["learning_control"]["learning_rate"] == 0.5
+    assert all(item["learning_rate"] == 0.5 for item in score_result["progress_updates"])
+    assert "evaluation_drift_detected" not in result.payload["low_confidence_flags"]
     assert result.payload["feedback_metadata"]["phase5_pipeline"] == [
         "evaluate",
         "stability_layer",
@@ -446,6 +514,13 @@ def test_feedback_generation_service_runs_dual_pass_stability_layer_and_bounds_v
         "learning_control",
         "normalized_progress_update",
     ]
+    assert "generation_stages" not in result.payload["feedback_metadata"]
+    assert [stage["stage"] for stage in result.metadata["generation_stages"]] == [
+        "analysis_candidate",
+        "json_projection",
+    ]
+    assert result.metadata["generation_stages"][0]["thinking_enabled"] is True
+    assert result.metadata["generation_stages"][1]["thinking_enabled"] is False
 
 
 def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> None:
@@ -456,7 +531,7 @@ def test_feedback_request_marks_current_answer_as_bounded_primary_input() -> Non
     result = _service(transport).generate_feedback_v1(context)
 
     assert result.succeeded is True
-    provider_prompt = transport.requests[-1].evidence_bundle
+    provider_prompt = transport.requests[0].evidence_bundle
     current_answer = provider_prompt["current_answer"]
     assert "answer_text" not in current_answer
     assert current_answer["structured_answer"]["parse_status"] == "parsed"
@@ -570,7 +645,7 @@ def test_feedback_request_uses_v1_provider_prompt_budget_and_evidence_limits() -
     result = _service(transport).generate_feedback_v1(context)
 
     assert result.succeeded is True
-    request = transport.requests[-1]
+    request = transport.requests[0]
     provider_prompt = request.evidence_bundle
     serialized_provider_user = json.dumps(
         {
@@ -649,7 +724,7 @@ def test_provider_invalid_schema_returns_failed() -> None:
 
     assert result.succeeded is False
     assert result.payload is None
-    assert result.metadata["validation_stage"] == "candidate"
+    assert result.metadata["validation_stage"] == "analysis_candidate"
     assert result.metadata["candidate_valid"] is False
     assert "feedback_text_required" in result.validation_errors
 
@@ -760,6 +835,81 @@ def test_unsafe_provider_payload_returns_failed() -> None:
     assert "feedback_payload_unsafe_leakage" in result.metadata["validation_signals"]["validation_errors"]
 
 
+def test_feedback_generation_stage_a_truncation_fails_closed() -> None:
+    transport = _StageTruncationTransport("analysis_candidate")
+
+    result = _service(transport).generate_feedback_v1(_context())
+
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors == ("provider_output_truncated",)
+    assert len(transport.requests) == 1
+    assert result.metadata["validation_stage"] == "analysis_candidate"
+    assert result.metadata["stage"] == "analysis_candidate"
+    assert result.metadata["finish_reason"] == "length"
+    assert result.metadata["completion_tokens"] == 4800
+    assert result.metadata["reasoning_tokens"] == 512
+    stage = result.metadata["generation_stages"][0]
+    assert stage["stage"] == "analysis_candidate"
+    assert stage["finish_reason"] == "length"
+    assert stage["failure_reason"] == "provider_output_truncated"
+
+
+def test_feedback_generation_stage_b_truncation_fails_closed() -> None:
+    transport = _StageTruncationTransport("json_projection")
+
+    result = _service(transport).generate_feedback_v1(_context())
+
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors == ("provider_output_truncated",)
+    assert len(transport.requests) == 2
+    assert result.metadata["validation_stage"] == "json_projection"
+    assert result.metadata["stage"] == "json_projection"
+    assert result.metadata["finish_reason"] == "length"
+    assert result.metadata["completion_tokens"] == 4800
+    assert result.metadata["reasoning_tokens"] == 0
+    assert [stage["stage"] for stage in result.metadata["generation_stages"]] == [
+        "analysis_candidate",
+        "json_projection",
+    ]
+    projection_stage = result.metadata["generation_stages"][1]
+    assert projection_stage["finish_reason"] == "length"
+    assert projection_stage["failure_reason"] == "provider_output_truncated"
+
+
+def test_feedback_generation_stage_b_schema_invalid_reports_json_projection_failure() -> None:
+    invalid_projection = _generated_final_payload()
+    invalid_projection["status"] = "generation_failed"
+    transport = _PayloadTransport(_generated_payload(), projection_payload=invalid_projection)
+
+    result = _service(transport).generate_feedback_v1(_context())
+
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors[0] == "json_projection"
+    assert "feedback_status_invalid" in result.validation_errors
+    assert result.metadata["validation_stage"] == "json_projection"
+    assert result.metadata["candidate_valid"] is True
+    assert result.metadata["generation_stages"][1]["failure_reason"] == "json_projection"
+
+
+def test_feedback_generation_filters_stage_a_unsafe_reasoning_raw_provider_and_full_completion_leakage() -> None:
+    for unsafe_key in ("reasoning_content", "raw_prompt", "raw_provider", "full_completion"):
+        payload = _generated_payload()
+        payload[unsafe_key] = "must_not_leak"
+
+        result = _service(_PayloadTransport(payload)).generate_feedback_v1(_context())
+
+        assert result.succeeded is False
+        assert result.payload is None
+        assert result.validation_errors == ("feedback_candidate_forbidden_fields",) or (
+            "feedback_payload_unsafe_leakage" in result.validation_errors
+        )
+        assert result.metadata["validation_stage"] == "analysis_candidate"
+        assert "must_not_leak" not in json.dumps(result.metadata, ensure_ascii=False, sort_keys=True)
+
+
 def test_service_candidate_invalid_metadata_marks_candidate_stage_and_llm_called() -> None:
     payload = _generated_payload()
     payload["feedback_text"] = ""
@@ -768,7 +918,7 @@ def test_service_candidate_invalid_metadata_marks_candidate_stage_and_llm_called
 
     assert result.succeeded is False
     assert result.payload is None
-    assert result.metadata["validation_stage"] == "candidate"
+    assert result.metadata["validation_stage"] == "analysis_candidate"
     assert result.metadata["candidate_valid"] is False
     assert result.metadata["llm_called"] is True
 
@@ -788,8 +938,9 @@ def test_service_final_validation_failure_marks_final_stage_and_candidate_valid(
 
     assert result.succeeded is False
     assert result.payload is None
-    assert result.metadata["validation_stage"] == "final"
+    assert result.metadata["validation_stage"] == "json_projection"
     assert result.metadata["candidate_valid"] is True
+    assert result.validation_errors[0] == "json_projection"
     assert "force_invalid" in result.validation_errors
     assert "feedback_payload_schema_invalid" not in result.validation_errors
 
@@ -1233,7 +1384,11 @@ def _contains_forbidden_key(value: object) -> bool:
         "developer_prompt",
         "completion",
         "raw_completion",
+        "full_completion",
+        "completion_text",
+        "reasoning_content",
         "provider_payload",
+        "raw_provider",
         "raw_provider_payload",
         "provider_response",
         "raw_provider_response",

@@ -6,11 +6,16 @@ from typing import Any
 
 from app.application.llm.ports import LlmTransport
 from app.application.polish.context_hygiene import build_context_hygiene_metadata
-from app.application.polish.feedback_agent import FeedbackGenerationAgent
+from app.application.polish.feedback_agent import (
+    FEEDBACK_ANALYSIS_STAGE,
+    FEEDBACK_PROJECTION_STAGE,
+    FeedbackGenerationAgent,
+)
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_FINAL_SCHEMA_ID,
     POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
@@ -146,13 +151,22 @@ class FeedbackGenerationService:
                 | {"provider_status": "fake_transport", "llm_called": False},
             )
 
-        agent_result = FeedbackGenerationAgent(transport=self._llm_transport).invoke_provider_v1(
+        agent = FeedbackGenerationAgent(transport=self._llm_transport)
+        agent_result = agent.invoke_provider_v1(
             prompt_asset=prompt_asset,
             input_refs=_input_refs(evaluation_context),
+            stage=FEEDBACK_ANALYSIS_STAGE,
+            thinking_enabled=True,
         )
         agent_metadata = metadata | _agent_envelope_metadata(agent_result)
         provider_status = str(agent_metadata.get("provider_status") or "not_called")
         llm_called = bool(agent_metadata.get("llm_called", False))
+        analysis_stage = _stage_diagnostic(
+            FEEDBACK_ANALYSIS_STAGE,
+            agent_metadata,
+            validation_status="failed" if not agent_result.succeeded else "called",
+            validation_errors=agent_result.validation_errors,
+        )
         if not agent_result.succeeded:
             return FeedbackGenerationResult(
                 succeeded=False,
@@ -166,17 +180,25 @@ class FeedbackGenerationService:
                     validation_errors=agent_result.validation_errors,
                 )
                 | {
-                    "validation_stage": "candidate",
+                    "validation_stage": FEEDBACK_ANALYSIS_STAGE,
+                    "stage": FEEDBACK_ANALYSIS_STAGE,
                     "candidate_valid": False,
                     "llm_output_validation_status": "invalid",
                     "provider_status": provider_status,
                     "llm_called": llm_called,
+                    "generation_stages": [analysis_stage],
                 },
             )
 
         candidate_payload, validation_errors = validate_feedback_candidate_payload(
             agent_result.payload,
             expected_progress_state_ref=_progress_state_ref(evaluation_context),
+        )
+        analysis_stage = _stage_diagnostic(
+            FEEDBACK_ANALYSIS_STAGE,
+            agent_metadata,
+            validation_status="invalid" if validation_errors else "valid",
+            validation_errors=validation_errors,
         )
         if validation_errors:
             candidate_payload_metadata = agent_result.payload if isinstance(agent_result.payload, dict) else {}
@@ -197,72 +219,114 @@ class FeedbackGenerationService:
                     validation_errors=validation_errors,
                 )
                 | {
-                    "validation_stage": "candidate",
+                    "validation_stage": FEEDBACK_ANALYSIS_STAGE,
+                    "stage": FEEDBACK_ANALYSIS_STAGE,
                     "candidate_valid": False,
                     "llm_output_validation_status": "invalid",
                     "provider_status": provider_status,
                     "llm_called": llm_called,
+                    "generation_stages": [analysis_stage],
                 },
             )
 
         assert candidate_payload is not None
-        secondary_candidate_payload: dict[str, Any] | None = None
-        secondary_validation_errors: tuple[str, ...] = ()
-        secondary_low_confidence_flags: tuple[str, ...] = ()
-        secondary_trace_refs: tuple[str, ...] = ()
-        secondary_agent_result = FeedbackGenerationAgent(transport=self._llm_transport).invoke_provider_v1(
-            prompt_asset=prompt_asset,
-            input_refs=_input_refs(evaluation_context),
-        )
-        secondary_low_confidence_flags = secondary_agent_result.low_confidence_flags
-        secondary_trace_refs = secondary_agent_result.trace_refs
-        if secondary_agent_result.succeeded:
-            secondary_candidate_payload, secondary_validation_errors = validate_feedback_candidate_payload(
-                secondary_agent_result.payload,
-                expected_progress_state_ref=_progress_state_ref(evaluation_context),
-            )
-            if secondary_validation_errors:
-                secondary_candidate_payload = None
-        else:
-            secondary_validation_errors = secondary_agent_result.validation_errors or ("secondary_pass_failed",)
-
         ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
         controlled_payload = apply_phase5_evaluation_controls(
             ruled_payload,
-            secondary_candidate_payload=secondary_candidate_payload,
-            secondary_validation_errors=secondary_validation_errors,
-            secondary_low_confidence_flags=secondary_low_confidence_flags,
         )
-        final_payload = self._build_final_payload(
+        server_projected_payload = self._build_final_payload(
             ruled_payload=controlled_payload,
             prompt_asset=prompt_asset,
-            agent_trace_refs=tuple(dict.fromkeys((*agent_result.trace_refs, *secondary_trace_refs))),
-            agent_low_confidence_flags=tuple(
-                dict.fromkeys((*agent_result.low_confidence_flags, *secondary_low_confidence_flags))
-            ),
+            agent_trace_refs=agent_result.trace_refs,
+            agent_low_confidence_flags=agent_result.low_confidence_flags,
         )
-        normalized_payload, validation_errors = validate_final_feedback_payload(final_payload, require_feedback_id=False)
-        if validation_errors:
+        projection_prompt_asset = _build_projection_prompt_asset(
+            prompt_asset,
+            safe_candidate_payload=controlled_payload,
+            server_projected_payload=server_projected_payload,
+        )
+        projection_result = agent.invoke_provider_v1(
+            prompt_asset=projection_prompt_asset,
+            input_refs=_input_refs(evaluation_context),
+            stage=FEEDBACK_PROJECTION_STAGE,
+            thinking_enabled=False,
+        )
+        projection_metadata = metadata | _agent_envelope_metadata(projection_result)
+        projection_stage = _stage_diagnostic(
+            FEEDBACK_PROJECTION_STAGE,
+            projection_metadata,
+            validation_status="failed" if not projection_result.succeeded else "called",
+            validation_errors=projection_result.validation_errors,
+        )
+        projection_provider_status = str(projection_metadata.get("provider_status") or "not_called")
+        projection_llm_called = bool(projection_metadata.get("llm_called", False))
+        generation_stages = [analysis_stage, projection_stage]
+        if not projection_result.succeeded:
             return FeedbackGenerationResult(
                 succeeded=False,
                 payload=None,
-                validation_errors=validation_errors,
+                validation_errors=projection_result.validation_errors,
+                low_confidence_flags=tuple(
+                    dict.fromkeys((*agent_result.low_confidence_flags, *projection_result.low_confidence_flags))
+                ),
+                trace_refs=tuple(dict.fromkeys((*agent_result.trace_refs, *projection_result.trace_refs))),
+                metadata=projection_metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="blocked",
+                    validation_errors=projection_result.validation_errors,
+                )
+                | {
+                    "validation_stage": FEEDBACK_PROJECTION_STAGE,
+                    "stage": FEEDBACK_PROJECTION_STAGE,
+                    "candidate_valid": True,
+                    "llm_output_validation_status": "invalid",
+                    "provider_status": projection_provider_status,
+                    "llm_called": llm_called or projection_llm_called,
+                    "generation_stages": generation_stages,
+                },
+            )
+
+        projected_payload = _projected_payload_with_server_facts(
+            projection_result.payload,
+            server_projected_payload=server_projected_payload,
+            projection_trace_refs=projection_result.trace_refs,
+        )
+        normalized_payload, validation_errors = validate_final_feedback_payload(
+            projected_payload,
+            require_feedback_id=False,
+        )
+        projection_stage = _stage_diagnostic(
+            FEEDBACK_PROJECTION_STAGE,
+            projection_metadata,
+            validation_status="invalid" if validation_errors else "valid",
+            validation_errors=("json_projection", *validation_errors) if validation_errors else (),
+        )
+        generation_stages = [analysis_stage, projection_stage]
+        if validation_errors:
+            projection_errors = ("json_projection", *validation_errors)
+            return FeedbackGenerationResult(
+                succeeded=False,
+                payload=None,
+                validation_errors=projection_errors,
                 low_confidence_flags=tuple(_string_tuple(normalized_payload.get("low_confidence_flags")))
                 if normalized_payload is not None
                 else tuple(),
                 trace_refs=_string_tuple(normalized_payload.get("trace_refs")) if normalized_payload is not None else (),
-                metadata=agent_metadata
+                metadata=projection_metadata
                 | _feedback_context_hygiene_metadata(
                     prompt_asset,
                     status="blocked",
-                    validation_errors=validation_errors,
+                    validation_errors=projection_errors,
                 )
                 | {
-                    "validation_stage": "final",
+                    "validation_stage": FEEDBACK_PROJECTION_STAGE,
+                    "stage": FEEDBACK_PROJECTION_STAGE,
                     "candidate_valid": True,
                     "llm_output_validation_status": "invalid",
-                    "provider_status": provider_status,
-                    "llm_called": llm_called,
+                    "provider_status": projection_provider_status,
+                    "llm_called": llm_called or projection_llm_called,
+                    "generation_stages": generation_stages,
                 },
             )
 
@@ -274,14 +338,16 @@ class FeedbackGenerationService:
             validation_errors=(),
             low_confidence_flags=low_confidence_flags,
             trace_refs=trace_refs,
-            metadata=agent_metadata
+            metadata=projection_metadata
             | _feedback_context_hygiene_metadata(prompt_asset, status="clean")
             | {
-                "validation_stage": "final",
+                "validation_stage": FEEDBACK_PROJECTION_STAGE,
+                "stage": FEEDBACK_PROJECTION_STAGE,
                 "candidate_valid": True,
                 "llm_output_validation_status": "valid",
-                "provider_status": provider_status,
-                "llm_called": llm_called,
+                "provider_status": projection_provider_status,
+                "llm_called": llm_called or projection_llm_called,
+                "generation_stages": generation_stages,
             },
         )
 
@@ -324,6 +390,178 @@ class FeedbackGenerationService:
             | _feedback_context_hygiene_metadata(prompt_asset, status="clean"),
         }
         return final_payload
+
+
+def _build_projection_prompt_asset(
+    prompt_asset: dict[str, Any],
+    *,
+    safe_candidate_payload: dict[str, Any],
+    server_projected_payload: dict[str, Any],
+) -> dict[str, Any]:
+    projection_prompt = {
+        "task": "polish_feedback_json_projection_v1",
+        "task_type": POLISH_FEEDBACK_TASK_TYPE,
+        "feedback_mode": "final_json_projection",
+        "schema_id": _clean(prompt_asset.get("schema_id"), max_chars=120),
+        "schema_version": _clean(prompt_asset.get("schema_version"), max_chars=40),
+        "prompt_version": _clean(prompt_asset.get("prompt_version"), max_chars=120),
+        "output_schema": {
+            "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+            "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+            "fields": list(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS),
+            "status_allowed": ["generated", "partial", "low_confidence", "validation_failed"],
+            "status_forbidden": ["generation_failed"],
+        },
+        "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+        "input_contract": {
+            "source_stage": FEEDBACK_ANALYSIS_STAGE,
+            "projection_stage": FEEDBACK_PROJECTION_STAGE,
+            "raw_model_io_storage": False,
+            "raw_candidate_storage": False,
+            "candidate_is_safe_summary": True,
+        },
+        "required_json_schema": {
+            "required_fields": list(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS),
+            "forbidden_statuses": ["generation_failed"],
+            "forbidden_metadata_fields": [
+                "generation_stages",
+                "stage",
+                "finish_reason",
+                "completion_tokens",
+                "reasoning_tokens",
+                "provider_error_type",
+                "thinking_enabled",
+            ],
+        },
+        "safe_candidate_summary": deepcopy(safe_candidate_payload),
+        "server_facts": {
+            "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+            "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+            "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+            "default_final_payload": deepcopy(server_projected_payload),
+        },
+        "projection_contract": {
+            "mode": "strict_json_projection_only",
+            "analysis_forbidden": True,
+            "thinking_required": False,
+            "use_only_safe_candidate_summary_and_server_facts": True,
+            "do_not_emit_failure_payload": True,
+        },
+        "feedback_metadata": {
+            "stage": FEEDBACK_PROJECTION_STAGE,
+            "source_stage": FEEDBACK_ANALYSIS_STAGE,
+            "candidate_field_count": len(safe_candidate_payload),
+            "final_field_count": len(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS),
+        },
+    }
+    return {
+        "task_type": POLISH_FEEDBACK_TASK_TYPE,
+        "prompt_version": _clean(prompt_asset.get("prompt_version"), max_chars=120)
+        or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+        "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+        "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+        "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+        "prompt": "Project the safe feedback candidate into the final Polish feedback JSON contract.",
+        "input_contract": projection_prompt["input_contract"],
+        "output_schema": projection_prompt["output_schema"],
+        "feedback_mode": "final_json_projection",
+        "provider_prompt": projection_prompt,
+    }
+
+
+def _projected_payload_with_server_facts(
+    payload: object,
+    *,
+    server_projected_payload: dict[str, Any],
+    projection_trace_refs: tuple[str, ...],
+) -> object:
+    if not isinstance(payload, dict):
+        return payload
+    projected = deepcopy(payload)
+    for field_name in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
+        if field_name not in projected:
+            projected[field_name] = deepcopy(server_projected_payload.get(field_name))
+    projected["trace_refs"] = list(
+        dict.fromkeys(
+            (
+                *_string_tuple(server_projected_payload.get("trace_refs")),
+                *_string_tuple(projected.get("trace_refs")),
+                *projection_trace_refs,
+            )
+        )
+    )
+    server_metadata = server_projected_payload.get("feedback_metadata")
+    projected_metadata = projected.get("feedback_metadata")
+    metadata = dict(server_metadata) if isinstance(server_metadata, dict) else {}
+    if isinstance(projected_metadata, dict):
+        metadata.update(projected_metadata)
+    for field_name in _FINAL_PAYLOAD_DIAGNOSTIC_METADATA_FIELDS:
+        metadata.pop(field_name, None)
+    projected["feedback_metadata"] = metadata
+    return projected
+
+
+_FINAL_PAYLOAD_DIAGNOSTIC_METADATA_FIELDS = frozenset(
+    {
+        "generation_stages",
+        "stage",
+        "finish_reason",
+        "max_tokens",
+        "reasoning_tokens",
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens",
+        "provider_error_type",
+        "thinking_enabled",
+    }
+)
+
+
+def _stage_diagnostic(
+    stage: str,
+    metadata: dict[str, Any],
+    *,
+    validation_status: str,
+    validation_errors: tuple[str, ...],
+) -> dict[str, Any]:
+    source = metadata if isinstance(metadata, dict) else {}
+    diagnostic: dict[str, Any] = {
+        "stage": stage,
+        "validation_status": validation_status,
+        "finish_reason": _clean(source.get("finish_reason"), max_chars=80) or None,
+        "completion_tokens": _metadata_int(source.get("completion_tokens")),
+        "reasoning_tokens": _metadata_int(source.get("reasoning_tokens")),
+    }
+    provider_status = _clean(source.get("provider_status"), max_chars=80)
+    if provider_status:
+        diagnostic["provider_status"] = provider_status
+    provider_error_type = _clean(source.get("provider_error_type"), max_chars=120)
+    if provider_error_type:
+        diagnostic["provider_error_type"] = provider_error_type
+    thinking_enabled = source.get("thinking_enabled")
+    if isinstance(thinking_enabled, bool):
+        diagnostic["thinking_enabled"] = thinking_enabled
+    for field_name in ("max_tokens", "prompt_tokens", "total_tokens"):
+        value = _metadata_int(source.get(field_name))
+        if value is not None:
+            diagnostic[field_name] = value
+    if validation_errors:
+        safe_errors = [error for error in _string_tuple(validation_errors) if error]
+        diagnostic["failure_reason"] = safe_errors[0] if safe_errors else "validation_failed"
+        diagnostic["validation_errors"] = safe_errors
+    elif provider_error_type:
+        diagnostic["failure_reason"] = provider_error_type
+    return diagnostic
+
+
+def _metadata_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
 
 
 def _feedback_status(ruled_payload: dict[str, Any]) -> str:

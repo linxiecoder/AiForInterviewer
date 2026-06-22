@@ -239,7 +239,9 @@ for port in "$@"; do
   remaining_windows_stale_pids="$(filter_missing_windows_pids "$remaining_windows_pids" | normalize_pids || true)"
   if [ -z "$remaining_pids" ] && [ -z "$remaining_wsl_pids" ] && [ -z "$remaining_windows_live_pids" ]; then
     if [ -n "$remaining_windows_stale_pids" ]; then
-      echo "[dev] port ${port} has only stale Windows TCP listener PID(s): ${remaining_windows_stale_pids}; treating as free"
+      echo "[dev] failed to free port ${port}; stale Windows TCP listener PID(s): ${remaining_windows_stale_pids}"
+      echo "[dev] Windows still reports port ${port} in the TCP table but the owning PID cannot be inspected; blocking port reuse"
+      exit 1
     else
       echo "[dev] port ${port} is free"
     fi

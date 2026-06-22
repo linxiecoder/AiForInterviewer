@@ -13,7 +13,11 @@ P7_PROVIDER_FORBIDDEN_KEYS = frozenset(
         "system_prompt",
         "developer_prompt",
         "raw_completion",
+        "full_completion",
+        "completion_text",
+        "reasoning_content",
         "provider_payload",
+        "raw_provider",
         "raw_provider_payload",
         "full_resume",
         "full_jd",
@@ -46,6 +50,8 @@ class LlmTransportRequest:
     prompt_version: str | None = None
     schema_id: str | None = None
     max_tokens: int | None = None
+    stage: str | None = None
+    thinking_enabled: bool | None = None
 
     def __post_init__(self) -> None:
         errors = [
@@ -58,6 +64,8 @@ class LlmTransportRequest:
             or self.max_tokens <= 0
         ):
             errors.append("invalid_provider_request_max_tokens")
+        if self.stage is not None and not str(self.stage).strip():
+            errors.append("invalid_provider_request_stage")
         if errors:
             raise LlmTransportRequestValidationError(tuple(errors))
 

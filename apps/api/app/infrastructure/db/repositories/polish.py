@@ -1067,20 +1067,13 @@ def _task_result_to_model(
     validation_errors_json = list(task.validation_errors)
     low_confidence_flags_json: list[str] = []
     source_availability = _source_availability_for_task(task)
-    safe_summary_json = (
-        {
-            "task_type": task.task_type,
-            "status": _task_status_value(task.status),
-            "user_visible_status": task.user_visible_status,
-            "retryable": task.retryable,
-            "candidate_refs": candidate_refs_json,
-            "suggestion_refs": suggestion_refs_json,
-            "validation_errors": validation_errors_json,
-            "source_availability": source_availability,
-            "low_confidence_flags": low_confidence_flags_json,
-        }
-        if _should_persist_task_safe_summary(task)
-        else None
+    safe_summary_json = _task_safe_summary_json(
+        task,
+        candidate_refs_json=candidate_refs_json,
+        suggestion_refs_json=suggestion_refs_json,
+        validation_errors_json=validation_errors_json,
+        source_availability=source_availability,
+        low_confidence_flags_json=low_confidence_flags_json,
     )
     result_ref_id = (
         task.result_ref.trace_ref_id
@@ -1115,10 +1108,40 @@ def _task_result_to_model(
 
 
 def _should_persist_task_safe_summary(task: PolishTaskStatus) -> bool:
+    if isinstance(getattr(task, "safe_summary", None), dict):
+        return True
     return (
         task.task_type in _QUESTION_GENERATION_TASK_TYPES
         and _task_status_value(task.status) in _TASK_RESULT_TERMINAL_FAILURE_STATUSES
     )
+
+
+def _task_safe_summary_json(
+    task: PolishTaskStatus,
+    *,
+    candidate_refs_json: list[dict[str, str]],
+    suggestion_refs_json: list[dict[str, str]],
+    validation_errors_json: list[str],
+    source_availability: str | None,
+    low_confidence_flags_json: list[str],
+) -> dict[str, Any] | None:
+    base_summary: dict[str, Any] = {
+        "task_type": task.task_type,
+        "status": _task_status_value(task.status),
+        "user_visible_status": task.user_visible_status,
+        "retryable": task.retryable,
+        "candidate_refs": candidate_refs_json,
+        "suggestion_refs": suggestion_refs_json,
+        "validation_errors": validation_errors_json,
+        "source_availability": source_availability,
+        "low_confidence_flags": low_confidence_flags_json,
+    }
+    safe_summary = getattr(task, "safe_summary", None)
+    if isinstance(safe_summary, dict):
+        return base_summary | safe_summary
+    if _should_persist_task_safe_summary(task):
+        return base_summary
+    return None
 
 
 def _task_status_value(status: object) -> str:

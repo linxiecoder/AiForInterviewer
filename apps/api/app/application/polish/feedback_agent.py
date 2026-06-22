@@ -17,6 +17,8 @@ from app.application.polish.feedback_schema import (
 )
 
 FEEDBACK_GENERATION_MAX_TOKENS = 4800
+FEEDBACK_ANALYSIS_STAGE = "analysis_candidate"
+FEEDBACK_PROJECTION_STAGE = "json_projection"
 _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
     {
         "task",
@@ -53,6 +55,27 @@ _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS = frozenset(
         "feedback_metadata",
     }
 )
+_FEEDBACK_PROVIDER_PROJECTION_TOP_LEVEL_KEYS = frozenset(
+    {
+        "task",
+        "task_type",
+        "feedback_mode",
+        "schema_id",
+        "schema_version",
+        "prompt_version",
+        "output_schema",
+        "contract_ids",
+        "input_contract",
+        "required_json_schema",
+        "safe_candidate_summary",
+        "server_facts",
+        "projection_contract",
+        "feedback_metadata",
+    }
+)
+_FEEDBACK_PROVIDER_ALLOWED_TOP_LEVEL_KEYS = (
+    _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS | _FEEDBACK_PROVIDER_PROJECTION_TOP_LEVEL_KEYS
+)
 _PROVIDER_METADATA_FIELDS = frozenset(
     {
         "model_name",
@@ -67,6 +90,14 @@ _PROVIDER_METADATA_FIELDS = frozenset(
         "trace_id",
         "trace_refs",
         "raw_io_ref",
+        "stage",
+        "thinking_enabled",
+        "finish_reason",
+        "max_tokens",
+        "reasoning_tokens",
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens",
     }
 )
 
@@ -80,7 +111,11 @@ class FeedbackGenerationAgent:
         *,
         prompt_asset: dict[str, Any],
         input_refs: tuple[str, ...],
+        stage: str = FEEDBACK_ANALYSIS_STAGE,
+        thinking_enabled: bool | None = None,
     ) -> LegacyAgentOutputEnvelope:
+        provider_stage = _stage(stage)
+        provider_thinking_enabled = _thinking_enabled(provider_stage, thinking_enabled)
         try:
             request = build_validated_transport_request(
                 contract_ids=_contract_ids(prompt_asset),
@@ -89,16 +124,29 @@ class FeedbackGenerationAgent:
                 evidence_bundle=_provider_prompt(prompt_asset),
                 prompt_version=_text(prompt_asset.get("prompt_version")) or POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
                 schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
-                required_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
-                allowed_evidence_keys=_FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS,
+                required_evidence_keys=_required_provider_keys(provider_stage),
+                allowed_evidence_keys=_FEEDBACK_PROVIDER_ALLOWED_TOP_LEVEL_KEYS,
                 max_tokens=FEEDBACK_GENERATION_MAX_TOKENS,
+                stage=provider_stage,
+                thinking_enabled=provider_thinking_enabled,
             )
         except ProviderRequestValidationError as exc:
-            return _provider_request_validation_failed(prompt_asset, exc)
+            return _provider_request_validation_failed(
+                prompt_asset,
+                exc,
+                stage=provider_stage,
+                thinking_enabled=provider_thinking_enabled,
+            )
         try:
             provider_result = self._transport.generate(request)
         except Exception as exc:
             validation_error = _transport_validation_error(exc)
+            safe_error_metadata = _safe_transport_error_metadata(exc)
+            provider_error_type = _provider_error_type(
+                exc,
+                validation_error=validation_error,
+                safe_error_metadata=safe_error_metadata,
+            )
             return LegacyAgentOutputEnvelope(
                 task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
                 schema_id=_text(prompt_asset.get("schema_id")) or POLISH_FEEDBACK_FINAL_SCHEMA_ID,
@@ -107,19 +155,29 @@ class FeedbackGenerationAgent:
                 status="provider_failed",
                 validation_errors=(validation_error,),
                 metadata={
+                    **safe_error_metadata,
+                    "stage": provider_stage,
+                    "thinking_enabled": provider_thinking_enabled,
                     "provider_status": "failed",
-                    "provider_error_type": "timeout" if validation_error == "llm_transport_timeout" else exc.__class__.__name__,
+                    "provider_error_type": provider_error_type,
                     "llm_called": True,
                 },
             )
 
-        return _feedback_output_envelope(provider_result, prompt_asset=prompt_asset)
+        return _feedback_output_envelope(
+            provider_result,
+            prompt_asset=prompt_asset,
+            stage=provider_stage,
+            thinking_enabled=provider_thinking_enabled,
+        )
 
 
 def _feedback_output_envelope(
     result: LlmTransportResult,
     *,
     prompt_asset: dict[str, Any],
+    stage: str,
+    thinking_enabled: bool,
 ) -> LegacyAgentOutputEnvelope:
     raw_payload = result.result if isinstance(result.result, dict) else {}
     payload, extracted_metadata, extraction_errors = _extract_payload(result)
@@ -127,6 +185,8 @@ def _feedback_output_envelope(
     metadata = {
         **result.metadata,
         **extracted_metadata,
+        "stage": stage,
+        "thinking_enabled": thinking_enabled,
         "provider_status": provider_status,
         "provider_validation_status": str(result.validation_status),
         "provider_confidence_level": str(result.confidence_level),
@@ -220,9 +280,64 @@ def _provider_status(result: LlmTransportResult, payload: dict[str, Any] | None)
 def _transport_validation_error(exc: Exception) -> str:
     error_type = exc.__class__.__name__.lower()
     message = str(exc).lower()
+    provider_error_type = getattr(exc, "error_type", None)
+    if isinstance(provider_error_type, str) and provider_error_type.strip() == "provider_output_truncated":
+        return "provider_output_truncated"
     if isinstance(exc, TimeoutError) or "timeout" in error_type or "timed out" in message or "超时" in message:
         return "llm_transport_timeout"
     return "llm_transport_generation_failed"
+
+
+def _safe_transport_error_metadata(exc: Exception) -> dict[str, Any]:
+    raw_metadata = getattr(exc, "safe_metadata", None)
+    if not isinstance(raw_metadata, dict):
+        return {}
+    safe: dict[str, Any] = {}
+    for field_name in ("provider_error_type", "finish_reason", "stage"):
+        text = _text(raw_metadata.get(field_name))
+        if text:
+            safe[field_name] = text
+    thinking_enabled = raw_metadata.get("thinking_enabled")
+    if isinstance(thinking_enabled, bool):
+        safe["thinking_enabled"] = thinking_enabled
+    for field_name in (
+        "max_tokens",
+        "reasoning_tokens",
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens",
+    ):
+        value = _int_metadata(raw_metadata.get(field_name))
+        if value is not None:
+            safe[field_name] = value
+    return safe
+
+
+def _provider_error_type(
+    exc: Exception,
+    *,
+    validation_error: str,
+    safe_error_metadata: dict[str, Any],
+) -> str:
+    metadata_error_type = _text(safe_error_metadata.get("provider_error_type"))
+    if metadata_error_type:
+        return metadata_error_type
+    error_type = getattr(exc, "error_type", None)
+    if isinstance(error_type, str) and error_type.strip():
+        return error_type.strip()
+    if validation_error == "llm_transport_timeout":
+        return "timeout"
+    return exc.__class__.__name__
+
+
+def _int_metadata(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
 
 
 def _provider_prompt(prompt_asset: dict[str, Any]) -> dict[str, Any]:
@@ -235,6 +350,9 @@ def _provider_prompt(prompt_asset: dict[str, Any]) -> dict[str, Any]:
 def _provider_request_validation_failed(
     prompt_asset: dict[str, Any],
     exc: ProviderRequestValidationError,
+    *,
+    stage: str,
+    thinking_enabled: bool,
 ) -> LegacyAgentOutputEnvelope:
     return LegacyAgentOutputEnvelope(
         task_type=_text(prompt_asset.get("task_type")) or POLISH_FEEDBACK_TASK_TYPE,
@@ -247,8 +365,27 @@ def _provider_request_validation_failed(
             "provider_status": "not_called",
             "llm_called": False,
             "provider_request_errors": exc.errors,
+            "stage": stage,
+            "thinking_enabled": thinking_enabled,
         },
     )
+
+
+def _required_provider_keys(stage: str) -> frozenset[str]:
+    if stage == FEEDBACK_PROJECTION_STAGE:
+        return _FEEDBACK_PROVIDER_PROJECTION_TOP_LEVEL_KEYS
+    return _FEEDBACK_PROVIDER_REQUEST_TOP_LEVEL_KEYS
+
+
+def _stage(value: object) -> str:
+    text = _text(value)
+    return text or FEEDBACK_ANALYSIS_STAGE
+
+
+def _thinking_enabled(stage: str, value: bool | None) -> bool:
+    if value is not None:
+        return bool(value)
+    return stage != FEEDBACK_PROJECTION_STAGE
 
 
 def _contract_ids(prompt_asset: dict[str, Any]) -> tuple[str, ...]:

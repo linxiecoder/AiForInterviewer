@@ -84,6 +84,7 @@ import type {
 } from "../../entities/polish/model/types";
 import {
   buildFeedbackCardViewModel,
+  buildFeedbackTimeoutRefreshViewModel,
   buildWorkbenchFixedNextActionBarViewModel,
   getAnswerNextRecommendedActions,
   getPolishAnswerFeedbackScoreValue,
@@ -635,6 +636,20 @@ export type WorkbenchFeedbackPanelTabItem = {
   label: string;
   disabled: boolean;
 };
+
+const FEEDBACK_SUMMARY_SECTION_KEYS: readonly FeedbackCardSectionViewModel["key"][] = [
+  "feedback",
+  "score",
+  "positive_evidence_points",
+  "failed_status",
+];
+
+export function buildFeedbackSummarySections(feedbackCard: FeedbackCardViewModel | null): FeedbackCardSectionViewModel[] {
+  if (feedbackCard === null) {
+    return [];
+  }
+  return feedbackCard.sections.filter((section) => FEEDBACK_SUMMARY_SECTION_KEYS.includes(section.key));
+}
 
 const PROGRESS_PANEL_DEFAULT_WIDTH = INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY.default;
 const PROGRESS_PANEL_MIN_WIDTH = INTERVIEW_WORKBENCH_LAYOUT_B_PROGRESS_PANEL_WIDTH_POLICY.min;
@@ -4648,10 +4663,38 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
         }
       } catch (feedbackError) {
         if (feedbackError instanceof Error && feedbackError.message === POLISH_AI_TASK_FEEDBACK_PENDING_MESSAGE) {
+          let refreshed: PolishSessionDetail;
+          try {
+            refreshed = await fetchPolishSession(sessionId);
+          } catch (refreshError) {
+            setWorkbenchFailureState(null);
+            setSelectedQuestionId(currentQuestionState.questionId);
+            setSelectedAnswerId(answer.answer_id);
+            setAnswerText(trimmedAnswer);
+            setAnswerError(
+              refreshError instanceof Error
+                ? `${INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY} 详情刷新失败：${refreshError.message}`
+                : INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY,
+            );
+            return;
+          }
+          setSession(refreshed);
+          await loadCandidateRecords();
+          const timeoutRefresh = buildFeedbackTimeoutRefreshViewModel(
+            refreshed,
+            currentQuestionState.questionId,
+            answer.answer_id,
+          );
+          setSelectedQuestionId(timeoutRefresh.selectedQuestionId);
+          setSelectedAnswerId(timeoutRefresh.selectedAnswerId);
+          setAnswerText(trimmedAnswer);
+          if (timeoutRefresh.hasTerminalFeedback) {
+            setWorkbenchFailureState(null);
+            setAnswerError(null);
+            return;
+          }
           setWorkbenchFailureState(null);
           setAnswerError(INTERVIEW_WORKBENCH_FEEDBACK_PENDING_AFTER_SAVE_COPY);
-          setAnswerText(trimmedAnswer);
-          await loadSession();
           return;
         }
         setWorkbenchFailureState("feedbackFailedAnswerSaved");
@@ -4835,11 +4878,7 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
     pending: selectedCandidateReview?.items.filter((item) => item.canConfirm || item.canDismiss) ?? [],
     settled: selectedCandidateReview?.items.filter((item) => !item.canConfirm && !item.canDismiss) ?? [],
   };
-  const selectedAnswerFeedbackSummarySections = selectedAnswerFeedbackCard === null
-    ? []
-    : selectedAnswerFeedbackCard.sections.filter(
-        (section) => section.key === "feedback" || section.key === "score" || section.key === "positive_evidence_points",
-      );
+  const selectedAnswerFeedbackSummarySections = buildFeedbackSummarySections(selectedAnswerFeedbackCard);
   const selectedAnswerLossPointsSection = selectedAnswerFeedbackCard?.sections.find(
     (section) => section.key === "loss_points",
   ) ?? null;

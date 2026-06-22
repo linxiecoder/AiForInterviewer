@@ -136,12 +136,12 @@ def test_kill_ports_clears_windows_listeners_for_wsl_web_runtime() -> None:
     assert "not attached to a live Windows process" in script
     assert "failed to free port" in script
     assert "the listener is likely owned by System or the virtualization network layer" in script
-    assert "treating as free" in script
+    assert "blocking port reuse" in script
     assert "xargs" not in script
     assert "tr -d" not in script
 
 
-def test_kill_ports_ignores_windows_tcp_ghost_without_taskkill(tmp_path) -> None:
+def test_kill_ports_blocks_windows_tcp_listener_when_process_cannot_be_verified(tmp_path) -> None:
     bash = resolve_git_bash_for_dev_script_tests()
     if bash is None:
         pytest.skip("Git Bash is required for Windows dev shell script tests")
@@ -188,10 +188,10 @@ def test_kill_ports_ignores_windows_tcp_ghost_without_taskkill(tmp_path) -> None
         check=False,
     )
 
-    assert result.returncode == 0
+    assert result.returncode == 1
     assert "stale Windows TCP listener PID(s): 26188" in result.stdout
     assert "not attached to a live Windows process" in result.stdout
-    assert "treating as free" in result.stdout
+    assert "blocking port reuse" in result.stdout
     assert "taskkill should not run" not in result.stderr
 
 
