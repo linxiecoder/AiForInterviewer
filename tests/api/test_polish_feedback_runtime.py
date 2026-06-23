@@ -5,19 +5,28 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 
 import httpx
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.api.v1 import polish as polish_api
 from app.application.polish import feedback_application_service as feedback_app_service
 from app.application.common.logging import LogUtil
 from app.application.polish.feedback_rules import ALLOWED_FEEDBACK_RECOMMENDED_ACTIONS
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS, POLISH_FEEDBACK_TASK_TYPE
+from app.application.polish.commands import CreatePolishFeedbackTaskCommand
+from app.application.polish.feedback_application_service import (
+    _feedback_idempotency_record_id,
+    _feedback_request_body_hash,
+)
+from app.application.polish.feedback_schema import POLISH_FEEDBACK_FINAL_CONTRACT_IDS
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
-from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
-from app.infrastructure.db.models.ai_task import AiTaskResult
+from app.domain.shared.clock import utc_now
+from app.domain.shared.enums import AiTaskStatus, ConfidenceLevel, ValidationStatus
+from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
+from app.infrastructure.db.models.feedback import Feedback as FeedbackModel
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from app.infrastructure.llm.openai_compatible import (
@@ -111,6 +120,19 @@ class _FailOnceFeedbackTransport:
             self.feedback_calls += 1
             if self.feedback_calls == 1:
                 raise RuntimeError("first feedback provider failure")
+        return _runtime_test_non_feedback_result(self._fake, request)
+
+
+class _TimeoutOnceFeedbackTransport:
+    def __init__(self) -> None:
+        self._fake = FakeLlmTransport()
+        self.feedback_calls = 0
+
+    def generate(self, request: LlmTransportRequest):
+        if request.task_type == "polish_feedback_generation":
+            self.feedback_calls += 1
+            if self.feedback_calls == 1:
+                raise TimeoutError("first feedback provider timeout")
         return _runtime_test_non_feedback_result(self._fake, request)
 
 
@@ -779,6 +801,69 @@ def test_feedback_runtime_concurrent_duplicate_requests_write_one_generated_feed
     assert len(generated_feedbacks) == 1
 
 
+def test_feedback_runtime_already_running_read_replays_running_task_without_second_provider_call() -> None:
+    session_factory = _session_factory()
+    llm_transport = _BlockingFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+    idempotency_key = "feedback-runtime-running-read-001"
+
+    first_status, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers(idempotency_key),
+    )
+
+    assert first_status == 202
+    assert llm_transport.first_feedback_entered.wait(timeout=2)
+    assert first_body["data"]["status"] == "running"
+    ai_task_id = first_body["data"]["ai_task_id"]
+
+    second_status, second_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers(idempotency_key),
+    )
+
+    assert second_status == 202
+    assert second_body["data"]["status"] == "running"
+    assert second_body["data"]["ai_task_id"] == ai_task_id
+    provider_calls_before_release = llm_transport.feedback_calls
+    assert provider_calls_before_release == 1
+
+    llm_transport.release_feedback.set()
+    repository = SqlAlchemyPolishRepository(session_factory)
+    generated_feedbacks = []
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        generated_feedbacks = [
+            feedback
+            for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+            if feedback.answer_id == answer_id and feedback.status == "generated"
+        ]
+        if generated_feedbacks:
+            break
+        time.sleep(0.02)
+
+    assert len(generated_feedbacks) == 1
+    replay_status, replay_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers(idempotency_key),
+    )
+    assert replay_status == 202
+    assert replay_body["data"]["status"] == "succeeded"
+    assert replay_body["data"]["ai_task_id"] == ai_task_id
+    assert replay_body["data"]["feedback_status"] == "generated"
+    assert llm_transport.feedback_calls == provider_calls_before_release + 1
+
+
 def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(monkeypatch: pytest.MonkeyPatch) -> None:
     failed_log_calls: list[dict] = []
     monkeypatch.setattr(
@@ -904,6 +989,105 @@ def test_feedback_runtime_provider_timeout_returns_failed_retryable_payload() ->
         feedback.status == "generated"
         for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
     )
+
+
+def test_feedback_runtime_retries_after_provider_timeout_with_new_idempotency_key() -> None:
+    session_factory = _session_factory()
+    llm_transport = _TimeoutOnceFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    first_status, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-timeout-retry-first"),
+    )
+    second_status, second_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-timeout-retry-second"),
+    )
+
+    assert first_status == 202
+    assert first_body["data"]["status"] == "generation_failed"
+    assert first_body["data"]["retryable"] is True
+    assert first_body["data"]["feedback_payload"]["error"]["code"] == "llm_transport_timeout"
+    assert second_status == 202
+    assert second_body["data"]["status"] == "succeeded"
+    assert second_body["data"]["feedback_status"] == "generated"
+    assert second_body["data"]["feedback_payload"]["status"] == "generated"
+    assert llm_transport.feedback_calls == 3
+    repository = SqlAlchemyPolishRepository(session_factory)
+    generated_feedbacks = [
+        feedback
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+        if feedback.answer_id == answer_id and feedback.status == "generated"
+    ]
+    assert len(generated_feedbacks) == 1
+
+
+def test_feedback_runtime_deadline_read_materializes_timed_out_feedback_without_provider_call() -> None:
+    session_factory = _session_factory()
+    llm_transport = _RecordingFeedbackTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=llm_transport)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+    idempotency_key = "feedback-runtime-deadline-read-001"
+    command = CreatePolishFeedbackTaskCommand(
+        owner_id=OWNER_A,
+        actor_id=ACTOR_A.actor_id,
+        session_id=session_id,
+        answer_id=answer_id,
+        internal_scoring_context=None,
+    )
+    now = utc_now()
+    ai_task_id = "task_feedback_deadline_read_001"
+
+    with session_factory() as db:
+        db.add(
+            AiTask(
+                id=ai_task_id,
+                owner_id=OWNER_A,
+                actor_id=ACTOR_A.actor_id,
+                record_version=1,
+                status=str(AiTaskStatus.RUNNING),
+                trace_ref_ids=[ai_task_id],
+                evidence_ref_ids=None,
+                task_type=POLISH_FEEDBACK_TASK_TYPE,
+                contract_ids=list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+                idempotency_record_id=_feedback_idempotency_record_id(
+                    idempotency_key,
+                    _feedback_request_body_hash(command),
+                ),
+                target_ref_id=answer_id,
+                timeout_at=now - timedelta(seconds=1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers(idempotency_key),
+    )
+
+    assert status_code == 202
+    data = feedback_body["data"]
+    assert data["ai_task_id"] == ai_task_id
+    assert data["status"] == "timed_out"
+    assert data["retryable"] is True
+    assert data["feedback_status"] == "timed_out"
+    assert data["feedback_payload"]["status"] == "timed_out"
+    assert data["feedback_payload"]["retryable"] is True
+    assert data["feedback_payload"]["error"]["code"] == "feedback_generation_deadline_exceeded"
+    assert llm_transport.feedback_requests == []
 
 
 def test_feedback_generation_truncated_provider_response_persists_safe_task_diagnostics() -> None:
@@ -1112,6 +1296,7 @@ def test_feedback_generation_delayed_background_exception_persists_failed_task(
 ) -> None:
     started = threading.Event()
     release = threading.Event()
+    persisted = threading.Event()
 
     def raise_after_sync_wait(*_args, **_kwargs):
         started.set()
@@ -1122,6 +1307,20 @@ def test_feedback_generation_delayed_background_exception_persists_failed_task(
         feedback_app_service,
         "_complete_feedback_generation",
         raise_after_sync_wait,
+    )
+    original_persist_background_exception = (
+        feedback_app_service._persist_feedback_generation_background_exception
+    )
+
+    def persist_background_exception_and_signal(*args, **kwargs):
+        result = original_persist_background_exception(*args, **kwargs)
+        persisted.set()
+        return result
+
+    monkeypatch.setattr(
+        feedback_app_service,
+        "_persist_feedback_generation_background_exception",
+        persist_background_exception_and_signal,
     )
     session_factory = _session_factory()
     app = _isolated_polish_app(session_factory, ACTOR_A)
@@ -1142,23 +1341,16 @@ def test_feedback_generation_delayed_background_exception_persists_failed_task(
     ai_task_id = feedback_body["data"]["ai_task_id"]
 
     release.set()
-    terminal_answer = None
-    deadline = time.monotonic() + 2
-    while time.monotonic() < deadline:
-        detail_status, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
-        assert detail_status == 200
-        terminal_answer = next(
-            answer
-            for turn in detail_body["data"]["turns"]
-            for answer in turn["answers"]
-            if answer["answer_id"] == answer_id
-        )
-        feedback_payload = terminal_answer.get("feedback_payload")
-        if isinstance(feedback_payload, dict) and feedback_payload.get("status") == "generation_failed":
-            break
-        time.sleep(0.02)
+    assert persisted.wait(timeout=2), "background feedback failure was not persisted"
+    detail_status, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    assert detail_status == 200
+    terminal_answer = next(
+        answer
+        for turn in detail_body["data"]["turns"]
+        for answer in turn["answers"]
+        if answer["answer_id"] == answer_id
+    )
 
-    assert terminal_answer is not None
     failed_payload = terminal_answer["feedback_payload"]
     assert failed_payload["status"] == "generation_failed"
     assert failed_payload["retryable"] is True
@@ -1179,9 +1371,22 @@ def test_feedback_generation_delayed_background_exception_persists_failed_task(
     assert replay_body["data"]["ai_task_id"] == ai_task_id
 
     with session_factory() as db:
+        stored_task = db.get(AiTask, ai_task_id)
         stored_result = db.get(AiTaskResult, f"{ai_task_id}_result")
+        stored_feedbacks = db.scalars(
+            select(FeedbackModel).where(
+                FeedbackModel.owner_id == OWNER_A,
+                FeedbackModel.session_id == session_id,
+                FeedbackModel.answer_id == answer_id,
+                FeedbackModel.ai_task_id == ai_task_id,
+            )
+        ).all()
 
+    assert stored_task is not None
+    assert stored_task.status == "generation_failed"
     assert stored_result is not None
+    assert stored_result.status == "generation_failed"
+    assert [feedback.status for feedback in stored_feedbacks] == ["generation_failed"]
     serialized_diagnostics = json.dumps(
         [stored_result.validation_errors_json, stored_result.safe_summary_json],
         ensure_ascii=False,

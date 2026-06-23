@@ -4082,6 +4082,82 @@ function test_feedback_card_view_model_handles_failed_payload(): void {
   assertContract(!visibleCopy.includes("raw_provider_payload_should_not_render"), "失败态不应暴露 raw provider payload");
 }
 
+function test_feedback_card_view_model_filters_sensitive_failure_readback_markers(): void {
+  const sensitiveMarkers = [
+    "secret_cookie_token_provider_payload",
+    "raw_provider_payload_should_not_render",
+    "raw_prompt_should_not_render",
+    "raw_completion_should_not_render",
+    "token_should_not_render",
+    "cookie_should_not_render",
+    "secret_should_not_render",
+    "api_key_should_not_render",
+    "full_prompt_debug_dump_should_not_render",
+    "hidden_scoring_rules_should_not_render",
+  ] as const;
+  const answer: PolishSessionAnswer = {
+    answer_id: "ans_feedback_sensitive_failure",
+    answer_round: 1,
+    answer_text: "回答已保存，但反馈生成失败。",
+    answer_created_at: "2026-06-22T10:00:00Z",
+    feedback_text: "反馈生成失败，可重试",
+    feedback_id: null,
+    score_result_id: null,
+    feedback_created_at: null,
+    feedback_payload: {
+      status: "validation_failed",
+      feedback_text: "反馈生成失败，可重试",
+      retryable: true,
+      validation_errors: [
+        "validation_failed",
+        "secret_cookie_token_provider_payload",
+        "raw provider payload: raw_provider_payload_should_not_render",
+        "raw prompt: raw_prompt_should_not_render",
+        "raw completion: raw_completion_should_not_render",
+        "token=token_should_not_render",
+        "cookie=cookie_should_not_render",
+        "secret=secret_should_not_render",
+        "api_key=api_key_should_not_render",
+        "full prompt debug dump: full_prompt_debug_dump_should_not_render",
+        "hidden scoring rules: hidden_scoring_rules_should_not_render",
+      ],
+      error: {
+        code: "provider_failed_secret_cookie_token_provider_payload",
+        message: "provider raw payload leaked secret_cookie_token_provider_payload",
+        metadata: {
+          provider_payload: "secret_cookie_token_provider_payload",
+          raw_prompt: "raw_prompt_should_not_render",
+          completion: "raw_completion_should_not_render",
+          token: "token_should_not_render",
+          cookie: "cookie_should_not_render",
+          secret: "secret_should_not_render",
+          api_key: "api_key_should_not_render",
+          full_prompt_debug_dump: "full_prompt_debug_dump_should_not_render",
+          hidden_scoring_rules: "hidden_scoring_rules_should_not_render",
+        },
+      },
+      score_result: null,
+      loss_points: [],
+      reference_answer: null,
+    },
+  };
+
+  const card = buildFeedbackCardViewModel(answer);
+  const visibleCopy = [
+    card.title,
+    card.status,
+    ...card.sections.flatMap((section) => [section.title, ...section.items]),
+    ...card.nextActions.map(toNextRecommendedActionLabel),
+  ].join(" ");
+
+  assertContract(card.status === "failed", "validation_failed 应归一为失败态");
+  assertContract(visibleCopy.includes("反馈生成超时或失败，可重试"), "失败态必须保留安全摘要");
+  assertContract(visibleCopy.includes("错误码：validation_failed"), "安全 validation code 可以展示");
+  for (const marker of sensitiveMarkers) {
+    assertContract(!visibleCopy.includes(marker), `失败态 readback 不应暴露敏感 marker ${marker}`);
+  }
+}
+
 function test_feedback_card_view_model_maps_generation_failed_to_failure_card(): void {
   const answer: PolishSessionAnswer = {
     answer_id: "ans_feedback_generation_failed",
@@ -4593,6 +4669,7 @@ test_candidate_review_view_model_keeps_candidate_review_user_visible_and_action_
 test_feedback_card_view_model_hides_theme_sections_for_legacy_payload();
 test_feedback_card_view_model_handles_pending_payload();
 test_feedback_card_view_model_handles_failed_payload();
+test_feedback_card_view_model_filters_sensitive_failure_readback_markers();
 test_feedback_card_view_model_maps_generation_failed_to_failure_card();
 test_feedback_card_view_model_fail_closes_unknown_failure_like_status();
 test_feedback_card_view_model_does_not_calculate_score_on_frontend();

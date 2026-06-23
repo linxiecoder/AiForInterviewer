@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -18,9 +19,19 @@ from app.application.ai_runtime.business_graphs.polish_feedback_graph import (
 from app.application.agents.registry import ToolRegistry
 from app.application.ai_runtime.contracts import RuntimePolicyError
 from app.application.ai_runtime.runtime_flags import RuntimeFlagResolver
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
+from app.application.polish.feedback_generation_service import FeedbackGenerationService
+from app.application.polish.feedback_schema import (
+    POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_TASK_TYPE,
+)
+from app.domain.shared.enums import ConfidenceLevel, ValidationStatus
 from app.infrastructure.ai_runtime.llm_trace.persisted_transport import FailClosedPersistedLlmTransport
 from app.infrastructure.db.repositories.ai_runtime import LlmCallRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
+from tests.fakes.llm_transport import FakeLlmTransport
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -316,6 +327,195 @@ globals()["test_raw_question_answer_prompt_completion_provider" + "_payload_reje
 globals()["test_no_provider_sdk_import_or_api" + "_key_dependency"] = (
     _test_no_provider_sdk_import_or_key_dependency
 )
+
+
+def test_feedback_generation_rejects_stale_progress_update_refs_before_projection() -> None:
+    candidate_payload = _feedback_candidate_payload()
+    score_result = candidate_payload["score_result"]
+    assert isinstance(score_result, dict)
+    dimension_scores = score_result["dimension_scores"]
+    assert isinstance(dimension_scores, list)
+    assert isinstance(dimension_scores[0], dict)
+    dimension_scores[0]["progress_focus"] = ["progress_node_old_stale"]
+    progress_updates = score_result["progress_updates"]
+    assert isinstance(progress_updates, list)
+    assert isinstance(progress_updates[0], dict)
+    progress_updates[0]["progress_node_ref"] = "progress_node_old_stale"
+    transport = _FeedbackPayloadTransport(candidate_payload)
+
+    result = FeedbackGenerationService(llm_transport=transport).generate_feedback_v1(_feedback_context())
+
+    assert result.succeeded is False
+    assert result.payload is None
+    assert "progress_ref_mismatch" in result.validation_errors
+    assert len(transport.requests) == 1
+    assert transport.requests[0].stage == "analysis_candidate"
+
+
+@pytest.mark.parametrize("claimed_evidence_ref", ["rag_chunk_ghost", "source_ghost"])
+def test_feedback_generation_rejects_empty_rag_claimed_evidence_refs_before_projection(
+    claimed_evidence_ref: str,
+) -> None:
+    context = _feedback_context()
+    context["retrieved_rag_chunks"] = {
+        "available": False,
+        "items": [],
+        "unavailable_reason": "rag_empty",
+        "user_message": "saved assets exist, but no retrieved RAG chunks were used",
+        "non_claim_policy": "rag_empty_non_claim",
+    }
+    candidate_payload = _feedback_candidate_payload()
+    candidate_payload["evidence_refs"] = [claimed_evidence_ref]
+    loss_points = candidate_payload["loss_points"]
+    assert isinstance(loss_points, list)
+    assert isinstance(loss_points[0], dict)
+    loss_points[0]["evidence_refs"] = [claimed_evidence_ref]
+    transport = _FeedbackPayloadTransport(candidate_payload)
+
+    result = FeedbackGenerationService(llm_transport=transport).generate_feedback_v1(context)
+
+    assert result.succeeded is False
+    assert result.payload is None
+    assert "feedback_evidence_refs_unavailable" in result.validation_errors
+    assert len(transport.requests) == 1
+    assert transport.requests[0].stage == "analysis_candidate"
+
+
+def test_feedback_generation_allows_empty_rag_transport_owned_evidence_refs_before_projection() -> None:
+    context = _feedback_context()
+    context["retrieved_rag_chunks"] = {
+        "available": False,
+        "items": [],
+        "unavailable_reason": "rag_empty",
+        "user_message": "saved assets exist, but no retrieved RAG chunks were used",
+        "non_claim_policy": "rag_empty_non_claim",
+    }
+    candidate_payload = _feedback_candidate_payload()
+    evidence_refs = candidate_payload["evidence_refs"]
+    assert isinstance(evidence_refs, list)
+    transport_evidence_refs = tuple(str(ref) for ref in evidence_refs)
+    transport = _FeedbackPayloadTransport(
+        candidate_payload,
+        evidence_refs=transport_evidence_refs,
+    )
+
+    result = FeedbackGenerationService(llm_transport=transport).generate_feedback_v1(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.validation_errors == ()
+    assert len(transport.requests) == 2
+    assert transport.requests[0].stage == "analysis_candidate"
+    assert transport.requests[1].stage == "json_projection"
+
+
+class _FeedbackPayloadTransport:
+    def __init__(self, payload: dict[str, object], *, evidence_refs: tuple[str, ...] = ()) -> None:
+        self._payload = deepcopy(payload)
+        self._evidence_refs = evidence_refs
+        self.requests: list[LlmTransportRequest] = []
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        self.requests.append(request)
+        payload = _default_feedback_projection(request) if request.stage == "json_projection" else deepcopy(self._payload)
+        return LlmTransportResult(
+            result=payload,
+            validation_status=ValidationStatus.VALID,
+            confidence_level=ConfidenceLevel.MEDIUM,
+            low_confidence_flags=(),
+            trace_refs=(f"trace_ref_{len(self.requests)}",),
+            evidence_refs=self._evidence_refs or (f"evidence_ref_{len(self.requests)}",),
+            metadata={
+                "stage": request.stage,
+                "thinking_enabled": request.thinking_enabled,
+                "finish_reason": "stop",
+            },
+        )
+
+
+def _feedback_context() -> dict[str, object]:
+    return {
+        "owner_id": OWNER_ID,
+        "actor_id": ACTOR_ID,
+        "session_id": "session_ref_feedback_boundary",
+        "question_id": "question_ref_feedback_boundary",
+        "answer_id": "answer_ref_feedback_boundary",
+        "question_text": "How do you recover failed async payment messages?",
+        "answer_text": "I would use retry jobs, idempotency keys, alerts, and manual repair queues.",
+        "answer_round": 2,
+        "polish_theme": "payment reliability",
+        "progress_node_ref": "progress_node_reliability",
+        "question_sources": (
+            {"source_type": "progress_node", "source_ref": "progress_node_reliability"},
+        ),
+        "evidence_refs": ("answer_ref_feedback_boundary",),
+        "project_asset_summaries": (
+            {
+                "asset_id": "asset_payment_reliability",
+                "summary": "Payment project material covers retry jobs and idempotency.",
+            },
+        ),
+        "job_snapshot": {"job_id": "job_ref_feedback_boundary", "requirements": ["backend reliability"]},
+        "resume_snapshot": {"resume_id": "resume_ref_feedback_boundary", "projects": ["payment platform"]},
+        "progress_node_snapshot": {"node_ref": "progress_node_reliability", "title": "reliability"},
+        "progress_state": {
+            "progress_state_ref": "progress_node_reliability",
+            "current_priority": {
+                "progress_node_ref": "progress_node_reliability",
+                "title": "reliability",
+                "expected_capability": "Explain recovery boundaries and observability.",
+            },
+            "weak_skill_refs": ["failure_recovery", "observability"],
+            "strong_skill_refs": ["structured_reasoning"],
+            "node_states": [
+                {"progress_node_ref": "progress_node_reliability", "status": "in_progress"},
+            ],
+        },
+        "retrieved_rag_chunks": {
+            "available": True,
+            "items": [
+                {
+                    "chunk_ref": "rag_chunk_payment_retry",
+                    "summary": "Retry and idempotency notes from saved project material.",
+                },
+            ],
+        },
+    }
+
+
+def _feedback_candidate_payload() -> dict[str, object]:
+    request = LlmTransportRequest(
+        contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+        task_type=POLISH_FEEDBACK_TASK_TYPE,
+        input_refs=("answer_ref_feedback_boundary",),
+        evidence_bundle={
+            "current_question": {"question_text": "How do you recover failed async payment messages?"},
+            "current_answer": {"answer_text": "I would use retries, idempotency, alerts, and repair queues."},
+            "project_asset_summaries": [
+                {
+                    "asset_id": "asset_payment_reliability",
+                    "summary": "Payment project material covers retry jobs and idempotency.",
+                }
+            ],
+            "progress_state": {
+                "progress_state_ref": "progress_node_reliability",
+                "weak_skill_refs": ["failure_recovery", "observability"],
+                "strong_skill_refs": ["structured_reasoning"],
+            },
+        },
+        prompt_version=POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+        schema_id=POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    )
+    payload = FakeLlmTransport().generate(request).result
+    assert isinstance(payload, dict)
+    return deepcopy(payload)
+
+
+def _default_feedback_projection(request: LlmTransportRequest) -> dict[str, object]:
+    server_facts = request.evidence_bundle.get("server_facts") if isinstance(request.evidence_bundle, dict) else None
+    default_payload = server_facts.get("default_final_payload") if isinstance(server_facts, dict) else None
+    assert isinstance(default_payload, dict)
+    return deepcopy(default_payload)
 
 
 def _run_gate(*, session_factory, flag_resolver: RuntimeFlagResolver) -> None:

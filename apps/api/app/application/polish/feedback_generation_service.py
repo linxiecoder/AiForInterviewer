@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from copy import deepcopy
 from typing import Any
 
 from app.application.llm.ports import LlmTransport
+from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.application.polish.context_hygiene import build_context_hygiene_metadata
 from app.application.polish.feedback_agent import (
     FEEDBACK_ANALYSIS_STAGE,
@@ -14,6 +16,7 @@ from app.application.polish.feedback_agent import (
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
+    POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
     POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS,
     POLISH_FEEDBACK_FINAL_SCHEMA_ID,
@@ -33,6 +36,7 @@ from app.application.polish.transcript_signal_parser import (
 
 
 FEEDBACK_GENERATION_SERVICE_VERSION = "polish_feedback_generation_service.v1"
+_StringObjectMap = Mapping[str, object]
 _REQUIRED_CONTEXT_FIELDS = (
     "owner_id",
     "actor_id",
@@ -82,6 +86,30 @@ class FeedbackGenerationResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class _CandidateBoundaryInputs:
+    expected_progress_state_ref: str | None
+    prompt_asset: _StringObjectMap
+    rag_unavailable_guard_active: bool
+    transport_evidence_refs: tuple[str, ...] = ()
+
+
+class _TransportEvidenceCapture:
+    def __init__(self, transport: LlmTransport) -> None:
+        self._transport = transport
+        self._evidence_refs_by_stage: dict[str, tuple[str, ...]] = {}
+
+    def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+        result = self._transport.generate(request)
+        stage = request.stage or ""
+        if stage:
+            self._evidence_refs_by_stage[stage] = tuple(result.evidence_refs)
+        return result
+
+    def evidence_refs_for(self, stage: str) -> tuple[str, ...]:
+        return self._evidence_refs_by_stage.get(stage, ())
+
+
 class FeedbackGenerationService:
     def __init__(self, *, llm_transport: LlmTransport | None = None) -> None:
         self._llm_transport = llm_transport
@@ -117,7 +145,9 @@ class FeedbackGenerationService:
                 )
                 | {"provider_status": "not_called", "llm_called": False},
             )
-        prompt_asset = build_feedback_prompt_asset(evaluation_context)
+        prompt_asset = _with_provider_safe_candidate_prompt(
+            build_feedback_prompt_asset(evaluation_context)
+        )
         metadata = metadata | {
             "prompt_version": prompt_asset["prompt_version"],
             "schema_id": prompt_asset["schema_id"],
@@ -151,7 +181,8 @@ class FeedbackGenerationService:
                 | {"provider_status": "fake_transport", "llm_called": False},
             )
 
-        agent = FeedbackGenerationAgent(transport=self._llm_transport)
+        transport_capture = _TransportEvidenceCapture(self._llm_transport)
+        agent = FeedbackGenerationAgent(transport=transport_capture)
         agent_result = agent.invoke_provider_v1(
             prompt_asset=prompt_asset,
             input_refs=_input_refs(evaluation_context),
@@ -230,6 +261,52 @@ class FeedbackGenerationService:
             )
 
         assert candidate_payload is not None
+        boundary_errors = _candidate_boundary_errors(
+            candidate_payload,
+            inputs=_CandidateBoundaryInputs(
+                expected_progress_state_ref=_progress_state_ref(evaluation_context),
+                prompt_asset=prompt_asset,
+                rag_unavailable_guard_active=_explicit_retrieved_rag_unavailable(evaluation_context),
+                transport_evidence_refs=transport_capture.evidence_refs_for(FEEDBACK_ANALYSIS_STAGE),
+            ),
+        )
+        if boundary_errors:
+            analysis_stage = _stage_diagnostic(
+                FEEDBACK_ANALYSIS_STAGE,
+                agent_metadata,
+                validation_status="invalid",
+                validation_errors=boundary_errors,
+            )
+            return FeedbackGenerationResult(
+                succeeded=False,
+                payload=None,
+                validation_errors=boundary_errors,
+                low_confidence_flags=tuple(
+                    dict.fromkeys(
+                        (
+                            *agent_result.low_confidence_flags,
+                            *_string_tuple(candidate_payload.get("low_confidence_flags")),
+                            *_boundary_low_confidence_flags(boundary_errors),
+                        )
+                    )
+                ),
+                trace_refs=_string_tuple(agent_result.evidence_refs),
+                metadata=agent_metadata
+                | _feedback_context_hygiene_metadata(
+                    prompt_asset,
+                    status="blocked",
+                    validation_errors=boundary_errors,
+                )
+                | {
+                    "validation_stage": FEEDBACK_ANALYSIS_STAGE,
+                    "stage": FEEDBACK_ANALYSIS_STAGE,
+                    "candidate_valid": False,
+                    "llm_output_validation_status": "invalid",
+                    "provider_status": provider_status,
+                    "llm_called": llm_called,
+                    "generation_stages": [analysis_stage],
+                },
+            )
         ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
         controlled_payload = apply_phase5_evaluation_controls(
             ruled_payload,
@@ -392,6 +469,119 @@ class FeedbackGenerationService:
         return final_payload
 
 
+def _candidate_boundary_errors(
+    payload: _StringObjectMap,
+    *,
+    inputs: _CandidateBoundaryInputs,
+) -> tuple[str, ...]:
+    errors: list[str] = []
+    if _has_stale_progress_refs(payload, expected_progress_state_ref=inputs.expected_progress_state_ref):
+        errors.append("progress_ref_mismatch")
+    if _has_unavailable_rag_claims(
+        payload,
+        prompt_asset=inputs.prompt_asset,
+        guard_active=inputs.rag_unavailable_guard_active,
+        transport_evidence_refs=inputs.transport_evidence_refs,
+    ):
+        errors.append("feedback_evidence_refs_unavailable")
+    return tuple(dict.fromkeys(errors))
+
+
+def _has_stale_progress_refs(
+    payload: _StringObjectMap,
+    *,
+    expected_progress_state_ref: str | None,
+) -> bool:
+    expected_ref = _clean(expected_progress_state_ref, max_chars=120)
+    if not expected_ref:
+        return False
+    score_result = _mapping(payload.get("score_result"))
+    if score_result is None:
+        return False
+    for dimension_score in _list_items(score_result.get("dimension_scores")):
+        score = _mapping(dimension_score)
+        if score is None:
+            continue
+        if any(ref != expected_ref for ref in _string_tuple(score.get("progress_focus"))):
+            return True
+    for progress_update in _list_items(score_result.get("progress_updates")):
+        update = _mapping(progress_update)
+        if update is None:
+            continue
+        ref = _clean(update.get("progress_node_ref") or update.get("node_ref"), max_chars=120)
+        if ref and ref != expected_ref:
+            return True
+    return False
+
+
+def _has_unavailable_rag_claims(
+    payload: _StringObjectMap,
+    *,
+    prompt_asset: _StringObjectMap,
+    guard_active: bool,
+    transport_evidence_refs: tuple[str, ...],
+) -> bool:
+    if not guard_active:
+        return False
+    provider_prompt = _mapping(prompt_asset.get("provider_prompt"))
+    if provider_prompt is None:
+        return False
+    retrieved_rag_chunks = _mapping(provider_prompt.get("retrieved_rag_chunks"))
+    if not _retrieved_rag_unavailable(retrieved_rag_chunks):
+        return False
+    candidate_refs = _candidate_evidence_refs(payload)
+    if not candidate_refs:
+        return False
+    owned_refs = set(_string_tuple(transport_evidence_refs))
+    return any(ref not in owned_refs for ref in candidate_refs)
+
+
+def _explicit_retrieved_rag_unavailable(context: FeedbackGenerationContext | dict[str, Any]) -> bool:
+    if isinstance(context, FeedbackGenerationContext):
+        return bool(context.retrieved_rag_chunks) and _retrieved_rag_unavailable(
+            _mapping(context.retrieved_rag_chunks)
+        )
+    if "retrieved_rag_chunks" not in context:
+        return False
+    return _retrieved_rag_unavailable(_mapping(context.get("retrieved_rag_chunks")))
+
+
+def _retrieved_rag_unavailable(retrieved_rag_chunks: _StringObjectMap | None) -> bool:
+    if retrieved_rag_chunks is None:
+        return False
+    items = retrieved_rag_chunks.get("items")
+    return retrieved_rag_chunks.get("available") is not True or not isinstance(items, list) or not items
+
+
+def _candidate_evidence_refs(payload: _StringObjectMap) -> tuple[str, ...]:
+    refs = list(_string_tuple(payload.get("evidence_refs")))
+    for loss_point in _list_items(payload.get("loss_points")):
+        loss = _mapping(loss_point)
+        if loss is None:
+            continue
+        refs.extend(_string_tuple(loss.get("evidence_refs")))
+    return tuple(dict.fromkeys(refs))
+
+
+def _boundary_low_confidence_flags(errors: tuple[str, ...]) -> tuple[str, ...]:
+    flags: list[str] = []
+    if "progress_ref_mismatch" in errors:
+        flags.append("stale_progress_ref")
+    if "feedback_evidence_refs_unavailable" in errors:
+        flags.append("rag_evidence_unavailable")
+    return tuple(flags)
+
+
+def _mapping(value: object) -> _StringObjectMap | None:
+    return value if isinstance(value, dict) else None
+
+
+def _list_items(value: object) -> tuple[object, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(value)
+
+
 def _build_projection_prompt_asset(
     prompt_asset: dict[str, Any],
     *,
@@ -469,6 +659,17 @@ def _build_projection_prompt_asset(
     }
 
 
+def _with_provider_safe_candidate_prompt(prompt_asset: dict[str, Any]) -> dict[str, Any]:
+    provider_prompt = prompt_asset.get("provider_prompt")
+    if not isinstance(provider_prompt, dict):
+        return prompt_asset
+    provider_prompt["prompt"] = (
+        "Generate structured polish feedback for the current answer. "
+        "Use only the compact evidence bundle, follow the safety policy, and return JSON only."
+    )
+    return prompt_asset
+
+
 def _projected_payload_with_server_facts(
     payload: object,
     *,
@@ -477,6 +678,17 @@ def _projected_payload_with_server_facts(
 ) -> object:
     if not isinstance(payload, dict):
         return payload
+    if _looks_like_candidate_projection_payload(payload):
+        projected = deepcopy(server_projected_payload)
+        projected["trace_refs"] = list(
+            dict.fromkeys(
+                (
+                    *_string_tuple(projected.get("trace_refs")),
+                    *projection_trace_refs,
+                )
+            )
+        )
+        return projected
     projected = deepcopy(payload)
     for field_name in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
         if field_name not in projected:
@@ -499,6 +711,18 @@ def _projected_payload_with_server_facts(
         metadata.pop(field_name, None)
     projected["feedback_metadata"] = metadata
     return projected
+
+
+def _looks_like_candidate_projection_payload(payload: dict[str, Any]) -> bool:
+    keys = set(payload)
+    if {"feedback_id", "schema_id", "schema_version", "contract_ids"} & keys:
+        return False
+    required_candidate_keys = {"feedback_text", "score_result", "loss_points", "reference_answer"}
+    if not required_candidate_keys <= keys:
+        return False
+    candidate_keys = set(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)
+    final_keys = set(POLISH_FEEDBACK_FINAL_PAYLOAD_FIELDS)
+    return bool(keys & candidate_keys) and not {"feedback_metadata", "model_name", "prompt_version"} <= (keys & final_keys)
 
 
 _FINAL_PAYLOAD_DIAGNOSTIC_METADATA_FIELDS = frozenset(

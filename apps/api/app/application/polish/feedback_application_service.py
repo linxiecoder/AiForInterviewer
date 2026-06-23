@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any, Protocol
 
@@ -80,6 +81,17 @@ _FEEDBACK_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 _FEEDBACK_SYNC_WAIT_SECONDS = 0.25
 _BACKGROUND_FEEDBACK_EXCEPTION_ERROR_CODE = "feedback_generation_background_exception"
 _BACKGROUND_FEEDBACK_EXCEPTION_STAGE = "background_worker"
+_FEEDBACK_LIFECYCLE_RESPONSE_STATUSES = {
+    AiTaskStatus.CANCELLED.value: AiTaskStatus.CANCELLED,
+    AiTaskStatus.TIMED_OUT.value: AiTaskStatus.TIMED_OUT,
+}
+_FEEDBACK_LIFECYCLE_RETRYABLE_STATUSES = {AiTaskStatus.TIMED_OUT}
+
+
+@dataclass(frozen=True, slots=True)
+class _FeedbackRunningTaskPersistence:
+    task: PolishTaskStatus
+    created: bool
 
 
 class PolishFeedbackApplicationService:
@@ -130,30 +142,13 @@ class PolishFeedbackApplicationService:
                 )
                 replay_status = replay_result.get("status") if isinstance(replay_result, dict) else None
                 if replay_status == "conflict":
-                    return ApplicationResult(
-                        error=DomainError(
-                            code="idempotency_conflict",
-                            message="Feedback task idempotency key conflicts with request body",
-                            details={
-                                "field": "idempotency_key",
-                                "reason": "idempotency_conflict",
-                            },
-                        )
-                    )
+                    return _feedback_idempotency_conflict_result()
                 if replay_status == "orphan":
-                    return ApplicationResult(
-                        error=DomainError(
-                            code="generation_failed",
-                            message="Feedback task result is incomplete and requires retry",
-                            details={
-                                "reason": "orphan_feedback_task_result",
-                                "ai_task_id": str(replay_result.get("ai_task_id") or ""),
-                            },
-                            retryable=True,
-                        )
-                    )
+                    return _feedback_idempotency_orphan_result(replay_result)
                 replay_task = replay_result.get("task") if isinstance(replay_result, dict) else None
                 if replay_status == "running" and isinstance(replay_task, PolishTaskStatus):
+                    return ApplicationResult(value=replay_task)
+                if replay_status == "terminal" and isinstance(replay_task, PolishTaskStatus):
                     return ApplicationResult(value=replay_task)
                 replay_feedback = replay_result.get("feedback") if isinstance(replay_result, dict) else None
                 if isinstance(replay_feedback, PolishFeedback):
@@ -185,7 +180,11 @@ class PolishFeedbackApplicationService:
 
             generation_started_at = time.perf_counter()
             now = utc_now()
-            task_id = generate_resource_id(ResourceIdPrefix.TASK)
+            idempotency_record_id = _feedback_idempotency_record_id(
+                idempotency_key,
+                request_body_hash,
+            )
+            task_id = _feedback_task_id(idempotency_key, owner_id=command.owner_id)
             feedback_id = generate_resource_id(ResourceIdPrefix.TRACE)
             request_trace_context = get_request_trace_context()
             feedback_log_context = BackgroundTaskLogContext(
@@ -231,13 +230,31 @@ class PolishFeedbackApplicationService:
                 owner_id=command.owner_id,
                 actor_id=command.actor_id,
                 target_ref_id=command.answer_id,
-                idempotency_record_id=_feedback_idempotency_record_id(
-                    idempotency_key,
-                    request_body_hash,
-                ),
+                idempotency_record_id=idempotency_record_id,
             )
             if not running_persist_result.is_success:
-                return running_persist_result
+                return ApplicationResult(error=running_persist_result.error)
+            running_persistence = running_persist_result.value
+            if running_persistence is not None and not running_persistence.created:
+                if idempotency_key is not None:
+                    replay_result = _feedback_idempotency_lookup(
+                        self._operations._polish_repository,
+                        owner_id=command.owner_id,
+                        idempotency_key=idempotency_key,
+                        request_body_hash=request_body_hash,
+                    )
+                    replay_status = replay_result.get("status") if isinstance(replay_result, dict) else None
+                    if replay_status == "conflict":
+                        return _feedback_idempotency_conflict_result()
+                    if replay_status == "orphan":
+                        return _feedback_idempotency_orphan_result(replay_result)
+                    replay_task = replay_result.get("task") if isinstance(replay_result, dict) else None
+                    replay_feedback = replay_result.get("feedback") if isinstance(replay_result, dict) else None
+                    if isinstance(replay_feedback, PolishFeedback):
+                        return ApplicationResult(value=_existing_feedback_task(replay_feedback))
+                    if isinstance(replay_task, PolishTaskStatus):
+                        return ApplicationResult(value=replay_task)
+                return ApplicationResult(value=running_persistence.task)
 
             completion: dict[str, ApplicationResult[PolishTaskStatus] | None] = {"result": None}
 
@@ -264,10 +281,7 @@ class PolishFeedbackApplicationService:
                         task_id=task_id,
                         feedback_id=feedback_id,
                         target_ref_id=command.answer_id,
-                        idempotency_record_id=_feedback_idempotency_record_id(
-                            idempotency_key,
-                            request_body_hash,
-                        ),
+                        idempotency_record_id=idempotency_record_id,
                         generation_started_at=generation_started_at,
                     )
                 except Exception as exc:  # noqa: BROAD_EXCEPT_OK
@@ -286,10 +300,7 @@ class PolishFeedbackApplicationService:
                         task_id=task_id,
                         feedback_id=feedback_id,
                         target_ref_id=command.answer_id,
-                        idempotency_record_id=_feedback_idempotency_record_id(
-                            idempotency_key,
-                            request_body_hash,
-                        ),
+                        idempotency_record_id=idempotency_record_id,
                         generation_started_at=generation_started_at,
                         error_type=error_type,
                     )
@@ -614,8 +625,21 @@ def _feedback_idempotency_record_id(
 ) -> str | None:
     if idempotency_key is None:
         return None
+    return f"{_feedback_idempotency_task_key(idempotency_key)}:{request_body_hash[:24]}"
+
+
+def _feedback_task_id(idempotency_key: str | None, *, owner_id: str) -> str:
+    if idempotency_key is None:
+        return generate_resource_id(ResourceIdPrefix.TASK)
+    task_hash = sha256(
+        f"{owner_id}:{_feedback_idempotency_task_key(idempotency_key)}".encode("utf-8")
+    ).hexdigest()[:32]
+    return f"task_pf_{task_hash}"
+
+
+def _feedback_idempotency_task_key(idempotency_key: str) -> str:
     key_hash = sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
-    return f"polish_feedback:{key_hash}:{request_body_hash[:24]}"
+    return f"polish_feedback:{key_hash}"
 
 
 def _feedback_idempotency_lookup(
@@ -634,6 +658,35 @@ def _feedback_idempotency_lookup(
         request_body_hash=request_body_hash,
     )
     return result if isinstance(result, dict) else {"status": "missing"}
+
+
+def _feedback_idempotency_conflict_result() -> ApplicationResult[PolishTaskStatus]:
+    return ApplicationResult(
+        error=DomainError(
+            code="idempotency_conflict",
+            message="Feedback task idempotency key conflicts with request body",
+            details={
+                "field": "idempotency_key",
+                "reason": "idempotency_conflict",
+            },
+        )
+    )
+
+
+def _feedback_idempotency_orphan_result(
+    replay_result: dict[str, object],
+) -> ApplicationResult[PolishTaskStatus]:
+    return ApplicationResult(
+        error=DomainError(
+            code="generation_failed",
+            message="Feedback task result is incomplete and requires retry",
+            details={
+                "reason": "orphan_feedback_task_result",
+                "ai_task_id": str(replay_result.get("ai_task_id") or ""),
+            },
+            retryable=True,
+        )
+    )
 
 
 def _persist_feedback_task_result(
@@ -676,18 +729,26 @@ def _persist_feedback_running_task(
     actor_id: str,
     target_ref_id: str,
     idempotency_record_id: str | None,
-) -> ApplicationResult[PolishTaskStatus]:
+) -> ApplicationResult[_FeedbackRunningTaskPersistence]:
     running_writer = getattr(repository, "add_feedback_running_task", None)
     if callable(running_writer):
-        running_writer(
+        writer_result = running_writer(
             task,
             owner_id=owner_id,
             actor_id=actor_id,
             target_ref_id=target_ref_id,
             idempotency_record_id=idempotency_record_id,
         )
-        return ApplicationResult(value=task)
-    return ApplicationResult(value=task)
+        if isinstance(writer_result, tuple) and len(writer_result) == 2:
+            persisted_task, created = writer_result
+            if isinstance(persisted_task, PolishTaskStatus) and isinstance(created, bool):
+                return ApplicationResult(
+                    value=_FeedbackRunningTaskPersistence(
+                        task=persisted_task,
+                        created=created,
+                    )
+                )
+    return ApplicationResult(value=_FeedbackRunningTaskPersistence(task=task, created=True))
 
 
 def _build_feedback_generation_context(
@@ -1058,12 +1119,29 @@ def _existing_generated_feedback_task(feedback: PolishFeedback) -> PolishTaskSta
 
 def _existing_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:
     payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    lifecycle_status = _feedback_lifecycle_status(feedback.status, payload)
+    if lifecycle_status is not None:
+        validation_errors = _feedback_payload_validation_errors(payload) or (
+            _feedback_lifecycle_default_error_code(lifecycle_status),
+        )
+        return PolishTaskStatus(
+            ai_task_id=feedback.ai_task_id,
+            task_type=POLISH_FEEDBACK_TASK_TYPE,
+            status=lifecycle_status,
+            contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+            retryable=_feedback_lifecycle_retryable(lifecycle_status, payload),
+            result_ref=TraceRef(
+                trace_ref_id=feedback.ai_task_id,
+                trace_type="validation_result",
+                created_at=feedback.created_at,
+            ),
+            user_visible_status=_feedback_lifecycle_user_visible_status(lifecycle_status, payload),
+            validation_errors=validation_errors,
+        )
     if str(feedback.status) == str(AiTaskStatus.GENERATION_FAILED) or (
         isinstance(payload, dict) and payload.get("status") == str(AiTaskStatus.GENERATION_FAILED)
     ):
-        validation_errors = ()
-        if isinstance(payload, dict) and isinstance(payload.get("validation_errors"), list):
-            validation_errors = tuple(str(item) for item in payload["validation_errors"] if str(item))
+        validation_errors = _feedback_payload_validation_errors(payload)
         user_visible_status = "反馈生成失败，可重试"
         if isinstance(payload, dict):
             raw_status = payload.get("user_visible_status")
@@ -1084,6 +1162,55 @@ def _existing_feedback_task(feedback: PolishFeedback) -> PolishTaskStatus:
             validation_errors=validation_errors,
         )
     return _existing_generated_feedback_task(feedback)
+
+
+def _feedback_lifecycle_status(
+    feedback_status: object,
+    payload: dict[str, object] | None,
+) -> AiTaskStatus | None:
+    payload_status = str(payload.get("status") or "").strip() if isinstance(payload, dict) else ""
+    feedback_status_text = str(feedback_status or "").strip()
+    return _FEEDBACK_LIFECYCLE_RESPONSE_STATUSES.get(
+        payload_status,
+    ) or _FEEDBACK_LIFECYCLE_RESPONSE_STATUSES.get(feedback_status_text)
+
+
+def _feedback_lifecycle_retryable(
+    status: AiTaskStatus,
+    payload: dict[str, object] | None,
+) -> bool:
+    if isinstance(payload, dict) and isinstance(payload.get("retryable"), bool):
+        return bool(payload["retryable"])
+    return status in _FEEDBACK_LIFECYCLE_RETRYABLE_STATUSES
+
+
+def _feedback_lifecycle_user_visible_status(
+    status: AiTaskStatus,
+    payload: dict[str, object] | None,
+) -> str:
+    if isinstance(payload, dict):
+        raw_status = payload.get("user_visible_status")
+        if isinstance(raw_status, str) and raw_status.strip():
+            return raw_status.strip()
+    messages = {
+        AiTaskStatus.CANCELLED: "反馈生成已取消",
+        AiTaskStatus.TIMED_OUT: "反馈生成超时，可重试",
+    }
+    return messages[status]
+
+
+def _feedback_lifecycle_default_error_code(status: AiTaskStatus) -> str:
+    error_codes = {
+        AiTaskStatus.CANCELLED: "feedback_generation_cancelled",
+        AiTaskStatus.TIMED_OUT: "feedback_generation_deadline_exceeded",
+    }
+    return error_codes[status]
+
+
+def _feedback_payload_validation_errors(payload: dict[str, object] | None) -> tuple[str, ...]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("validation_errors"), list):
+        return ()
+    return tuple(str(item) for item in payload["validation_errors"] if str(item))
 
 
 def _has_generated_feedback_payload(feedback: PolishFeedback) -> bool:

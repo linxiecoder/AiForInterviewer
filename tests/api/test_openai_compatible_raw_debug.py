@@ -66,19 +66,19 @@ def test_local_raw_llm_io_dump_fails_closed_in_ci(
     assert not dump_dir.exists()
 
 
-def test_local_raw_llm_io_dump_writes_full_request_and_response(
+def test_local_raw_llm_io_dump_writes_safe_diagnostics_without_raw_io(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     dump_dir = tmp_path / "raw-dump"
     monkeypatch.setenv(LOCAL_LLM_RAW_IO_ENABLED_ENV, "true")
     monkeypatch.setenv(LOCAL_LLM_RAW_IO_DIR_ENV, str(dump_dir))
-    transport = _transport_with_response(_successful_provider_response())
+    transport = _transport_with_response(_provider_response_with_sensitive_marker())
 
-    result = transport.generate(_raw_debug_request())
+    result = transport.generate(_raw_debug_request_with_sensitive_marker())
 
     dump = _single_dump_json(dump_dir)
-    assert dump["schema_version"] == "local_llm_raw_io.v1"
+    assert dump["schema_version"] == "local_llm_safe_io.v1"
     assert dump["task_type"] == "polish_question_generation"
     assert dump["contract_ids"] == ["P-POLISH-002", "P-SHARED-001", "P-SHARED-003"]
     assert dump["model"] == "deepseek-v4-pro"
@@ -86,17 +86,26 @@ def test_local_raw_llm_io_dump_writes_full_request_and_response(
     assert dump["provider_base_host"] == "api.deepseek.com"
     assert dump["timeout_seconds"] == 90.0
     assert dump["temperature"] == 0.0
-    assert dump["request"]["chat_completion_payload"]["max_tokens"] == 8000
-    messages = dump["request"]["chat_completion_payload"]["messages"]
-    assert messages[0]["role"] == "system"
-    user_payload = json.loads(messages[1]["content"])
-    assert user_payload["evidence_bundle"]["resume_signal"] == "FastAPI 接口编排"
-    assert user_payload["evidence_bundle"]["quality_probe"]["must_keep"] == "完整审计输入"
+    request_summary = dump["request"]
+    assert request_summary["payload_sha256"].startswith("sha256:")
+    assert request_summary["top_level_keys"] == ["max_tokens", "messages", "model", "response_format", "temperature"]
+    assert request_summary["message_roles"] == ["system", "user"]
+    assert request_summary["message_count"] == 2
+    assert request_summary["max_tokens"] == 8000
+    assert "chat_completion_payload" not in request_summary
     assert dump["response"]["status_code"] == 200
-    assert dump["response"]["body"]["id"] == "chatcmpl_raw_debug"
-    assert dump["parsed_result"]["question_text"] == result.result["question_text"]
+    assert dump["response"]["body_sha256"].startswith("sha256:")
+    assert dump["response"]["json_top_level_keys"] == ["choices", "id", "model"]
+    assert "body" not in dump["response"]
+    assert dump["parsed_result"]["payload_sha256"].startswith("sha256:")
+    assert dump["parsed_result"]["top_level_keys"] == ["confidence", "model_name", "question_text"]
     assert dump["trace_refs"] == list(result.trace_refs)
     assert dump["evidence_refs"] == list(result.evidence_refs)
+    dump_text = _single_dump_path(dump_dir).read_text(encoding="utf-8")
+    assert _sensitive_marker() not in dump_text
+    assert "raw_prompt" not in dump_text
+    assert "raw_completion" not in dump_text
+    assert "provider_payload" not in dump_text
 
 
 def test_local_raw_llm_io_dump_records_no_timeout_for_polish_feedback_generation(
@@ -160,10 +169,12 @@ def test_local_raw_llm_io_dump_writes_failed_provider_response(
 
     dump = _single_dump_json(dump_dir)
     assert dump["response"]["status_code"] == 429
-    assert dump["response"]["body"]["error"]["type"] == "rate_limit"
+    assert dump["response"]["body_sha256"].startswith("sha256:")
+    assert dump["response"]["json_top_level_keys"] == ["error"]
+    assert "body" not in dump["response"]
     assert dump["error"]["type"] == "rate_limited"
     assert "限流" in dump["error"]["message"]
-    assert dump["request"]["chat_completion_payload"]["model"] == "deepseek-v4-pro"
+    assert dump["model"] == "deepseek-v4-pro"
     assert dump["parsed_result"] is None
 
 
@@ -181,7 +192,10 @@ def test_local_raw_llm_io_dump_marks_length_finish_reason_as_truncated(
 
     dump = _single_dump_json(dump_dir)
     assert dump["response"]["status_code"] == 200
-    assert dump["response"]["body"]["choices"][0]["finish_reason"] == "length"
+    assert dump["response"]["body_sha256"].startswith("sha256:")
+    assert dump["response"]["json_top_level_keys"] == ["choices", "id", "model"]
+    assert dump["response"]["finish_reason"] == "length"
+    assert "body" not in dump["response"]
     assert dump["error"]["type"] == "provider_output_truncated"
     assert "JSON 不完整" in dump["error"]["message"]
     assert dump["parsed_result"] is None
@@ -289,7 +303,9 @@ def test_local_raw_llm_io_dump_writes_client_initialization_failure(
     assert dump["parsed_result"] is None
     assert dump["error"]["type"] == "client_initialization_failed"
     assert "SOCKS proxy support" in dump["error"]["message"]
-    assert dump["request"]["chat_completion_payload"]["model"] == "deepseek-v4-pro"
+    assert dump["model"] == "deepseek-v4-pro"
+    assert dump["request"]["payload_sha256"].startswith("sha256:")
+    assert "chat_completion_payload" not in dump["request"]
 
 
 def _transport_with_response(
@@ -327,6 +343,18 @@ def _raw_debug_request() -> LlmTransportRequest:
     )
 
 
+def _raw_debug_request_with_sensitive_marker() -> LlmTransportRequest:
+    return LlmTransportRequest(
+        contract_ids=("P-POLISH-002", "P-SHARED-001", "P-SHARED-003"),
+        task_type="polish_question_generation",
+        input_refs=("resume_chunk:1", "job_requirement:1"),
+        evidence_bundle={
+            "resume_signal": "FastAPI 接口编排",
+            "quality_probe": {"must_keep": _sensitive_marker()},
+        },
+    )
+
+
 def _successful_provider_response() -> dict[str, object]:
     return {
         "id": "chatcmpl_raw_debug",
@@ -338,6 +366,26 @@ def _successful_provider_response() -> dict[str, object]:
                         {
                             "question_text": "请结合 FastAPI 项目说明一次接口编排取舍。",
                             "question_type": "behavioral",
+                            "confidence": "high",
+                        },
+                        ensure_ascii=False,
+                    )
+                }
+            }
+        ],
+    }
+
+
+def _provider_response_with_sensitive_marker() -> dict[str, object]:
+    return {
+        "id": "chatcmpl_raw_debug_sensitive",
+        "model": "deepseek-v4-pro",
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "question_text": _sensitive_marker(),
                             "confidence": "high",
                         },
                         ensure_ascii=False,
@@ -369,3 +417,7 @@ def _single_dump_path(dump_dir: Path) -> Path:
 
 def _single_dump_json(dump_dir: Path) -> dict[str, object]:
     return json.loads(_single_dump_path(dump_dir).read_text(encoding="utf-8"))
+
+
+def _sensitive_marker() -> str:
+    return "_".join(("secret", "cookie", "token", "provider", "payload"))

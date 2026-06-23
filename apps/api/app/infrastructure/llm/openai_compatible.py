@@ -22,6 +22,7 @@ from app.application.llm.errors import (
     LlmTransportResponseError,
     LlmTransportUnavailableError,
 )
+from app.application.llm.provider_boundary import redact_sensitive_provider_values
 from app.infrastructure.llm.job_match import JOB_MATCH_PROMPT_VERSION
 from app.application.llm.types import LlmTransportRequest, LlmTransportResult
 from app.infrastructure.env_reader import EnvReader
@@ -467,6 +468,7 @@ def _chat_completion_payload(
     """构造 OpenAI Chat Completions 请求体，含 system prompt 和 evidence bundle。"""
     # Structured JSON tasks must wait for complete content before json.loads;
     # frontend streaming needs SSE/task state.
+    safe_evidence_bundle = redact_sensitive_provider_values(request.evidence_bundle)
     payload = {
         "model": settings.model,
         "temperature": settings.temperature,
@@ -483,7 +485,7 @@ def _chat_completion_payload(
                     {
                         "task_type": request.task_type,
                         "input_refs": list(request.input_refs),
-                        "evidence_bundle": request.evidence_bundle,
+                        "evidence_bundle": safe_evidence_bundle,
                     },
                     ensure_ascii=False,
                     sort_keys=True,
@@ -572,20 +574,19 @@ def _maybe_dump_local_raw_llm_io(
         trace_context = get_request_trace_context()
         request_id = trace_context.request_id if trace_context else None
         trace_id = trace_context.trace_id if trace_context else None
-        response: dict[str, Any] = {
-            "status_code": response_status_code,
-            "body": response_body,
-        }
-        if response_body is None and response_text is not None:
-            response["text"] = response_text
+        response = _safe_raw_io_response_summary(
+            response_status_code=response_status_code,
+            response_body=response_body,
+            response_text=response_text,
+        )
 
-        dump_request: dict[str, Any] = {"chat_completion_payload": chat_payload}
+        dump_request = _safe_raw_io_request_summary(chat_payload)
         safe_headers = _local_raw_io_headers(request_headers)
         if safe_headers:
             dump_request["headers"] = safe_headers
 
         dump_payload = {
-            "schema_version": "local_llm_raw_io.v1",
+            "schema_version": "local_llm_safe_io.v1",
             "request_id": request_id,
             "trace_id": trace_id,
             "task_type": request.task_type,
@@ -606,7 +607,7 @@ def _maybe_dump_local_raw_llm_io(
             "duration_ms": _duration_ms(started_at),
             "request": dump_request,
             "response": response,
-            "parsed_result": parsed_result,
+            "parsed_result": _safe_raw_io_payload_summary(parsed_result),
             "trace_refs": list(trace_refs),
             "evidence_refs": list(evidence_refs),
             "error": (
@@ -635,6 +636,75 @@ def _maybe_dump_local_raw_llm_io(
         )
     except Exception:
         return
+
+
+def _safe_raw_io_request_summary(chat_payload: Mapping[str, object]) -> dict[str, object]:
+    messages_value = chat_payload.get("messages")
+    messages = messages_value if isinstance(messages_value, list) else []
+    message_roles: list[str] = []
+    for message in messages:
+        if isinstance(message, dict):
+            role = message.get("role")
+            if isinstance(role, str):
+                message_roles.append(role)
+    summary: dict[str, object] = {
+        "payload_sha256": _safe_payload_hash(chat_payload),
+        "top_level_keys": sorted(str(key) for key in chat_payload),
+        "message_count": len(messages),
+        "message_roles": message_roles,
+    }
+    max_tokens = _safe_int(chat_payload.get("max_tokens"))
+    if max_tokens is not None:
+        summary["max_tokens"] = max_tokens
+    return summary
+
+
+def _safe_raw_io_response_summary(
+    *,
+    response_status_code: int | None,
+    response_body: object,
+    response_text: str | None,
+) -> dict[str, object]:
+    summary: dict[str, object] = {"status_code": response_status_code}
+    if response_body is not None:
+        summary["body_sha256"] = _safe_payload_hash(response_body)
+        if isinstance(response_body, dict):
+            summary["json_top_level_keys"] = sorted(str(key) for key in response_body)
+            finish_reason = _first_choice_finish_reason(response_body)
+            if finish_reason:
+                summary["finish_reason"] = finish_reason
+        return summary
+    if response_text is not None:
+        summary["text_sha256"] = _safe_text_hash(response_text)
+        summary["text_char_count"] = len(response_text)
+    return summary
+
+
+def _safe_raw_io_payload_summary(value: object) -> dict[str, object] | None:
+    if value is None:
+        return None
+    summary: dict[str, object] = {
+        "payload_sha256": _safe_payload_hash(value),
+        "payload_type": type(value).__name__,
+    }
+    if isinstance(value, dict):
+        top_level_keys = sorted(str(key) for key in value)
+        summary["top_level_keys"] = top_level_keys
+        summary["field_count"] = len(top_level_keys)
+    elif isinstance(value, list):
+        summary["item_count"] = len(value)
+    elif isinstance(value, str):
+        summary["text_char_count"] = len(value)
+    return summary
+
+
+def _safe_payload_hash(value: object) -> str:
+    serialized = json.dumps(value, ensure_ascii=True, sort_keys=True, default=str)
+    return f"sha256:{sha256(serialized.encode('utf-8')).hexdigest()}"
+
+
+def _safe_text_hash(value: str) -> str:
+    return f"sha256:{sha256(value.encode('utf-8')).hexdigest()}"
 
 
 def _response_body_for_dump(response: httpx.Response) -> tuple[Any, str | None]:
@@ -821,7 +891,10 @@ def _parse_json_result(
         raise LlmTransportResponseError("LLM provider 文本内容不是合法 JSON。") from exc
     if not isinstance(parsed, dict):
         raise LlmTransportResponseError("LLM provider 文本 JSON 根节点不是对象。")
-    return parsed
+    safe_parsed = redact_sensitive_provider_values(parsed)
+    if not isinstance(safe_parsed, dict):
+        raise LlmTransportResponseError("LLM provider 文本 JSON 根节点不是对象。")
+    return safe_parsed
 
 
 def _llm_response_error(

@@ -237,6 +237,73 @@ def test_openai_compatible_transport_passes_request_level_thinking_controls_and_
     assert result.metadata["reasoning_tokens"] == 0
 
 
+def test_openai_compatible_transport_keeps_max_tokens_request_scoped_across_calls() -> None:
+    observed_payloads: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        assert isinstance(payload, dict)
+        observed_payloads.append(payload)
+        return httpx.Response(
+            200,
+            json={
+                "id": f"chatcmpl_feedback_{len(observed_payloads)}",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": '{"status":"success"}'},
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 100 + len(observed_payloads),
+                    "completion_tokens": 40 + len(observed_payloads),
+                    "total_tokens": 140 + len(observed_payloads),
+                    "completion_tokens_details": {"reasoning_tokens": 0},
+                },
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+            max_tokens=8000,
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    first = transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-FEEDBACK-GENERATED",),
+            task_type="polish_feedback_generation",
+            stage="analysis_candidate",
+            thinking_enabled=True,
+            max_tokens=321,
+        )
+    )
+    second = transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-FEEDBACK-GENERATED",),
+            task_type="polish_feedback_generation",
+            stage="json_projection",
+            thinking_enabled=False,
+            max_tokens=654,
+        )
+    )
+
+    assert [payload["max_tokens"] for payload in observed_payloads] == [321, 654]
+    assert [payload["thinking"] for payload in observed_payloads] == [
+        {"type": "enabled"},
+        {"type": "disabled"},
+    ]
+    assert first.metadata["max_tokens"] == 321
+    assert first.metadata["stage"] == "analysis_candidate"
+    assert second.metadata["max_tokens"] == 654
+    assert second.metadata["stage"] == "json_projection"
+
+
 def test_openai_compatible_transport_uses_progress_tree_token_budget_and_json_mode() -> None:
     observed: dict[str, object] = {}
 
@@ -619,6 +686,59 @@ def test_openai_compatible_transport_logs_progress_without_sensitive_payload(cap
     assert "raw_completion" not in joined_logs
 
 
+def test_openai_compatible_transport_redacts_sensitive_marker_before_provider_and_result() -> None:
+    observed: dict[str, object] = {}
+    marker = _sensitive_marker()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_text = request.content.decode("utf-8")
+        observed["request_text"] = request_text
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_sensitive_marker",
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "question_text": marker,
+                                    "confidence": "high",
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ],
+            },
+        )
+
+    transport = OpenAICompatibleLlmTransport(
+        OpenAICompatibleLlmSettings(
+            api_key="test-key",
+            model="deepseek-v4-pro",
+            base_url="https://llm.example/v1",
+        ),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    result = transport.generate(
+        LlmTransportRequest(
+            contract_ids=("P-POLISH-002",),
+            task_type="polish_question_generation",
+            evidence_bundle={"quality_probe": marker},
+        )
+    )
+
+    request_text = observed["request_text"]
+    assert isinstance(request_text, str)
+    assert marker not in request_text
+    serialized_result = json.dumps(result.result, ensure_ascii=False, sort_keys=True)
+    assert marker not in serialized_result
+    assert result.result["question_text"] == "[redacted]"
+
+
 def test_openai_compatible_transport_maps_rate_limit_to_provider_unavailable() -> None:
     client = httpx.Client(
         transport=httpx.MockTransport(lambda _request: httpx.Response(429, json={}))
@@ -675,3 +795,7 @@ def _successful_job_match_response() -> httpx.Response:
             ],
         },
     )
+
+
+def _sensitive_marker() -> str:
+    return "_".join(("secret", "cookie", "token", "provider", "payload"))

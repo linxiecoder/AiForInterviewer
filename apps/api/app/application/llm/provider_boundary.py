@@ -12,6 +12,29 @@ from app.application.llm.types import P7_PROVIDER_FORBIDDEN_KEYS, LlmTransportRe
 _SENSITIVE_VALUE_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|token|secret|cookie)\s*[:=]\s*[^\s,;]+|\bbearer\s+[^\s,;]+|\bsk-[a-z0-9._-]+)"
 )
+_SENSITIVE_COMPOSITE_MARKER = "_".join(("secret", "cookie", "token", "provider", "payload"))
+_SENSITIVE_VALUE_MARKERS = (
+    _SENSITIVE_COMPOSITE_MARKER,
+    "raw_prompt",
+    "system_prompt",
+    "developer_prompt",
+    "user_prompt",
+    "internal_prompt",
+    "raw_completion",
+    "full_completion",
+    "completion_text",
+    "reasoning_content",
+    "provider_payload",
+    "raw_provider_payload",
+    "raw_provider_response",
+    "full_prompt",
+    "full_debug_dump",
+    "debug_dump",
+    "hidden_rubric",
+    "hidden_scoring",
+    "hidden_scoring_rules",
+)
+_REDACTED_PROVIDER_VALUE = "[redacted]"
 
 
 class ProviderRequestValidationError(ValueError):
@@ -96,6 +119,10 @@ def is_forbidden_provider_key(key: object) -> bool:
     return _normalize_key(key) in P7_PROVIDER_FORBIDDEN_KEYS
 
 
+def redact_sensitive_provider_values(value: object) -> object:
+    return _redact_sensitive_values(value)
+
+
 def _forbidden_key_paths(value: object, *, path: str = "") -> tuple[str, ...]:
     paths: list[str] = []
     if isinstance(value, dict):
@@ -135,8 +162,17 @@ def _redact_sensitive_values(value: object) -> Any:
     if isinstance(value, list):
         return [_redact_sensitive_values(item) for item in value]
     if isinstance(value, str):
-        return _SENSITIVE_VALUE_PATTERN.sub("[redacted]", value)
+        if _contains_sensitive_value(value):
+            return _REDACTED_PROVIDER_VALUE
+        return _SENSITIVE_VALUE_PATTERN.sub(_REDACTED_PROVIDER_VALUE, value)
     return value
+
+
+def _contains_sensitive_value(value: str) -> bool:
+    normalized = re.sub(r"[\s-]+", "_", value.strip().lower())
+    return any(marker in normalized for marker in _SENSITIVE_VALUE_MARKERS) or bool(
+        _SENSITIVE_VALUE_PATTERN.search(value)
+    )
 
 
 def _normalize_key(key: object) -> str:

@@ -1,4 +1,4 @@
-import type { PolishSessionAnswer, PolishSessionDetail } from "./types";
+import type { PolishFeedbackPayload, PolishSessionAnswer, PolishSessionDetail } from "./types";
 import { buildFailedFeedbackSection, buildGeneratedFeedbackSections } from "./feedbackCardSections";
 import {
   getAnswerNextRecommendedActions,
@@ -56,12 +56,13 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
   const contractId = contractIds[0] ?? null;
   const status = resolvePolishFeedbackStatus(payload?.status);
   if (status === "failed") {
+    const safeFailurePayload = buildSafeFailedFeedbackPayload(payload);
     return {
       title: "反馈生成失败",
       status,
       contractId,
       contractIds,
-      sections: [buildFailedFeedbackSection(payload)],
+      sections: [buildFailedFeedbackSection(safeFailurePayload)],
       nextActions: getAnswerNextRecommendedActions(answer),
       traceItems: [],
     };
@@ -127,6 +128,53 @@ function findFeedbackTimeoutAnswerContext(
 
 function buildFeedbackRoundMetaLabel(round: number | null | undefined): string {
   return `反馈 #${normalizeRoundNumber(round)}`;
+}
+
+const FORBIDDEN_FAILURE_READBACK_CODE_FRAGMENTS = [
+  "api_key",
+  "authorization",
+  "bearer",
+  "completion",
+  "cookie",
+  "debug_dump",
+  "full_prompt",
+  "hidden_scoring",
+  "provider_payload",
+  "raw",
+  "secret",
+  "system_prompt",
+  "token",
+] as const;
+
+function buildSafeFailedFeedbackPayload(payload: PolishFeedbackPayload | undefined): PolishFeedbackPayload {
+  const safeCodes = collectSafeFailureCodes(payload);
+  return {
+    status: payload?.status ?? "failed",
+    retryable: payload?.retryable,
+    validation_errors: safeCodes,
+    error: null,
+    score_result: null,
+    loss_points: [],
+    reference_answer: null,
+  };
+}
+
+function collectSafeFailureCodes(payload: PolishFeedbackPayload | undefined): string[] {
+  const rawCodes = [
+    payload?.status,
+    payload?.error?.code,
+    ...(Array.isArray(payload?.validation_errors) ? payload.validation_errors : []),
+  ];
+  const safeCodes = rawCodes.map(toOptionalText).filter(isText).filter(isSafeFailureReadbackCode);
+  return safeCodes.length > 0 ? Array.from(new Set(safeCodes)) : ["generation_failed"];
+}
+
+function isSafeFailureReadbackCode(code: string): boolean {
+  const normalized = code.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_]{1,79}$/.test(normalized)) {
+    return false;
+  }
+  return !FORBIDDEN_FAILURE_READBACK_CODE_FRAGMENTS.some((fragment) => normalized.includes(fragment));
 }
 
 function normalizeRoundNumber(round: number | null | undefined): number {

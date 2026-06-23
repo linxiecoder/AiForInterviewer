@@ -34,6 +34,10 @@ def _assert_no_grant_client_fields(payload: object) -> None:
         assert forbidden not in serialized
 
 
+def _sensitive_marker() -> str:
+    return "_".join(("secret", "cookie", "token", "provider", "payload"))
+
+
 def test_ai_task_result_projection_preserves_feedback_result_payload_compatibility() -> None:
     now = utc_now()
     task = SimpleNamespace(
@@ -127,6 +131,48 @@ def test_old_generated_feedback_payload_remains_display_compatible() -> None:
     assert "feedback_summary" not in payload["feedback_payload"]
     assert "raw_prompt" not in payload["feedback_payload"]
     assert "provider_payload" not in payload["feedback_payload"]
+    _assert_no_grant_client_fields(payload)
+
+
+def test_generated_feedback_payload_redacts_sensitive_marker_from_api_response() -> None:
+    marker = _sensitive_marker()
+    answer = SimpleNamespace(
+        answer_id="ans_sensitive_payload_display",
+        answer_round=1,
+        answer_text="回答正文。",
+        answer_created_at=utc_now(),
+        session_id="ses_sensitive_payload_display",
+        question_id="que_sensitive_payload_display",
+        feedback_id="fb_sensitive_payload_display",
+        score_result_id=None,
+        feedback_created_at=utc_now(),
+        feedback_payload={
+            "status": "generated",
+            "feedback_id": "fb_sensitive_payload_display",
+            "feedback_text": marker,
+            "answer_summary": f"摘要 {marker}",
+            "loss_points": [{"reason": marker}],
+            "reference_answer": {"summary": marker},
+            "feedback_metadata": {"debug_summary": marker},
+            "next_recommended_actions": ["continue_same_question"],
+            "raw_completion": marker,
+            "hidden_scoring_rules": marker,
+        },
+    )
+
+    payload = polish_api._session_answer_payload(
+        answer,
+        session_id=answer.session_id,
+        question_id=answer.question_id,
+    )
+
+    serialized = _serialized(payload)
+    assert marker not in serialized
+    assert payload["feedback_text"] == "redacted_sensitive_detail"
+    assert payload["feedback_payload"]["answer_summary"] == "redacted_sensitive_detail"
+    assert payload["feedback_payload"]["loss_points"][0]["reason"] == "redacted_sensitive_detail"
+    assert "raw_completion" not in payload["feedback_payload"]
+    assert "hidden_scoring_rules" not in payload["feedback_payload"]
     _assert_no_grant_client_fields(payload)
 
 

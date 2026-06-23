@@ -3396,6 +3396,102 @@ def test_get_polish_session_does_not_regenerate_progress_tree() -> None:
     assert detail_body["data"]["progress_tree_status"] == "insufficient_context"
     assert detail_body["data"]["progress_tree_plan"]["nodes"] == []
     assert transport.calls == []
+
+
+def test_polish_answer_duplicate_same_key_replays_same_answer_without_second_row() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    session_id, question_id = _create_polish_session_with_seed_question(
+        app,
+        session_factory,
+        binding_id,
+        question_id="que_answer_idempotency_replay",
+    )
+    answer_payload = {
+        "question_id": question_id,
+        "answer_text": "我会先说明业务背景，再讲自动化链路、失败补偿和验证指标。",
+    }
+    headers = {"Idempotency-Key": "polish-answer-idempotency-replay-001"}
+
+    first_status, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body=answer_payload,
+        headers=headers,
+    )
+    replay_status, replay_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body=answer_payload,
+        headers=headers,
+    )
+
+    assert first_status == 201
+    assert replay_status == 201
+    assert replay_body["data"]["answer_id"] == first_body["data"]["answer_id"]
+    repository = SqlAlchemyPolishRepository(session_factory)
+    answers = tuple(
+        answer
+        for answer in repository.list_answers_for_session(OWNER_A, session_id)
+        if answer.question_id == question_id
+    )
+    assert [answer.answer_id for answer in answers] == [first_body["data"]["answer_id"]]
+    assert repository.count_answers_for_question(OWNER_A, question_id) == 1
+
+
+def test_polish_answer_same_key_different_payload_conflicts_without_second_answer_or_question() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    session_id, question_id = _create_polish_session_with_seed_question(
+        app,
+        session_factory,
+        binding_id,
+        question_id="que_answer_idempotency_conflict",
+    )
+    headers = {"Idempotency-Key": "polish-answer-idempotency-conflict-001"}
+    first_payload = {
+        "question_id": question_id,
+        "answer_text": "第一版回答会说明业务背景、关键链路和验证指标。",
+    }
+    conflicting_payload = {
+        "question_id": question_id,
+        "answer_text": "第二版回答改成强调另一个处理路径和不同边界。",
+    }
+
+    first_status, first_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body=first_payload,
+        headers=headers,
+    )
+    conflict_status, conflict_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body=conflicting_payload,
+        headers=headers,
+    )
+
+    assert first_status == 201
+    assert conflict_status == 409
+    assert conflict_body["error"]["code"] == "idempotency_conflict"
+    assert conflict_body["error"]["details"]["reason"] == "idempotency_conflict"
+    repository = SqlAlchemyPolishRepository(session_factory)
+    answers = tuple(
+        answer
+        for answer in repository.list_answers_for_session(OWNER_A, session_id)
+        if answer.question_id == question_id
+    )
+    assert [answer.answer_id for answer in answers] == [first_body["data"]["answer_id"]]
+    assert repository.count_answers_for_question(OWNER_A, question_id) == 1
+    assert len(repository.list_questions_for_session(OWNER_A, session_id)) == 1
+
+
 def test_polish_feedback_retry_repeated_loss_points_mark_stuck() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
@@ -5227,6 +5323,33 @@ def _create_ready_polish_session(app: FastAPI, json_body: dict[str, object]) -> 
     )
     assert status_code == 201
     return _generate_initial_progress_tree(app, create_body["data"]["session_id"])
+
+
+def _create_polish_session_with_seed_question(
+    app: FastAPI,
+    session_factory: sessionmaker[Session],
+    binding_id: str,
+    *,
+    question_id: str,
+) -> tuple[str, str]:
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id},
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"][
+        "progress_node_ref"
+    ]
+    seeded_question_id = _seed_polish_question_for_session(
+        session_factory,
+        session_id=session_id,
+        progress_node_ref=progress_node_ref,
+        question_id=question_id,
+    )
+    return session_id, seeded_question_id
 
 
 def _create_polish_answer_with_feedback(
