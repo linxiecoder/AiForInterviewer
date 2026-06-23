@@ -99,6 +99,37 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 | 自动回流是否需要用户确认 | OQ-F1-035 | HUMAN_CONFIRMATION | UNKNOWN 已绑定人工确认和 F2 承接 | AIFI-PROD-010、AIFI-UX-002 | `REQUIREMENT_TRACEABILITY.md`、`UX_SPEC.md` | 人工确认默认策略，F2 低保真体现确认入口、取消态和失败态 |
 | 薄弱项算法、合并、生命周期和自动消减 | OQ-F1-037、OQ-F1-038、OQ-F1-039 | F4_TECH_DESIGN | UNKNOWN 已绑定 F4 承接 | AIFI-DATA-001、AIFI-PROMPT-001、AIFI-ARCH-002 | `DATA_MODEL.md`、`PROMPT_SPEC.md`、`TECH_DESIGN.md` | F4 明确薄弱项提炼、合并、状态流转、来源证据和自动消减规则 |
 
-## 5. F1.3 结论
+## 5. BMAD feedback-loop C-ID 追踪登记
+
+本节只登记 2026-06-23 BMAD feedback-loop 需求进入 active docs 的追踪入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。BMAD PRD、brief、addendum 和 Lazycodex plan 不替代本文件、`PRD.md` 或 `BACKLOG.md` 的 active 治理入口。
+
+| 来源组 | 状态 | active doc 去向 | BACKLOG 承接 | 关闭条件 |
+|---|---|---|---|---|
+| C-001、C-003 到 C-014、C-016 到 C-019、C-021 到 C-029、C-031 到 C-032、C-034 到 C-047 | Confirmed，待 active docs 分流 | `PRD.md` §12、`API_SPEC.md`、`DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`SCORING_SPEC.md`、`PROMPT_SPEC.md`、`UX_SPEC.md`、`SECURITY_PRIVACY.md`、`RELEASE_HANDOFF_SPEC.md` | AIFI-PROD-011、AIFI-TRACE-001、AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002、AIFI-REL-008 | 对应 active docs 明确需求语义、兼容边界、验收边界和 release gate；实现前仍需当轮 scope lock |
+| C-002、C-015、C-020、C-030、C-033 | Rejected / Non-goal | `PRD.md` §9、§12；本文件 | AIFI-PROD-011、AIFI-TRACE-001 | 不进入实现范围；如后续重新评估，必须走 PRD 变更流程 |
+| C-048 / BR-024 | Confirmed product sorting rule | `PRD.md` §12、`PROMPT_SPEC.md`、`SCORING_SPEC.md`、`UX_SPEC.md` | AIFI-PROD-011、AIFI-ARCH-009、AIFI-QA-003 | 只关闭产品排序规则，不关闭 C-054 的具体算法 |
+| C-049 到 C-054 | Deferred / Open Question | `PRD.md` §12、相关 active design docs 的待确认项 | AIFI-TRACE-001、AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002、AIFI-REL-008 | 完成探索、人工确认和 active docs 更新前，不得进入 implementation-ready |
+
+### 5.1 C-049 到 C-054 保留探索项
+
+| C-ID | 当前状态 | 探索方向 | 禁止事项 |
+|---|---|---|---|
+| C-049 | Deferred / Open Question | 相似题拦截的评测方法、人工标注样本、误杀 / 漏拦截容忍度 | 不定义阈值，不选择算法 |
+| C-050 | Deferred / Open Question | 考察点与题目绑定关系属于数据、状态、反馈投影还是生成上下文 | 不新增表结构，不决定迁移 |
+| C-051 | Deferred / Open Question | 失败反馈、低置信、超时和 validation failed 的折叠与展示优先级 | 不设计最终 UI |
+| C-052 | Deferred / Open Question | provider / validator / request seam 到 API error、用户文案和 retryable 的映射 | 不新增错误码，不改 API 行为 |
+| C-053 | Deferred / Open Question | answer saved、feedback pending、task timeout、session refresh、progress refresh failed 的状态提示去重与恢复 | 不决定最终前端状态机 |
+| C-054 | Deferred / Open Question | 基于 C-048 产品排序规则拆解下一题算法输入 / 输出和 QA 断言 | 不选择算法，不写评分函数 |
+
+### 5.2 Plan Readiness P1 处理登记
+
+| P1 项 | active docs 承接 | 状态 |
+|---|---|---|
+| 验收语义仍需硬化 | `PRD.md` §12、`SCORING_SPEC.md`、`PROMPT_SPEC.md`、`UX_SPEC.md`、`RELEASE_HANDOFF_SPEC.md`；AIFI-QA-003 | 已登记，未完成语义硬化前不得开工 |
+| 兼容性矩阵不足 | `API_SPEC.md`、`DATA_MODEL.md`、`PERSISTENCE_MODEL.md`、`UX_SPEC.md`、`RELEASE_HANDOFF_SPEC.md`；AIFI-BE-009、AIFI-FE-002 | 已登记，旧反馈 / 状态 / API / 数据 / 刷新恢复必须后续探查 |
+| Lazycodex 输出边界要写硬 | `PRD.md` §12、本文件、`BACKLOG.md` §2、各 active design docs 回写段落 | 已登记，Lazycodex plan 只作为工程规划来源 |
+| 回滚 / 降级需要后续规划补出 TODO | `RELEASE_HANDOFF_SPEC.md`、`BACKLOG.md` AIFI-REL-008 | 已登记，未完成前不得进入 release-ready 判断 |
+
+## 6. F1.3 结论
 
 F1.2 已将 PRD 从“大能力清单”补全为产品需求规格说明书。F1.3 已将 PRD 中所有 UNKNOWN 绑定到分类、影响范围、当前处理策略、必须关闭阶段、承接 AIFI-* 任务、关闭后写入的目标文档和关闭标准。F1.4 已将 0-100 产品展示刻度、MVP 不做文件导出仅支持复制、通过概率不承诺精确实现同步到 PRD 和追踪关系。F1.5 已修正业务对象模型：项目经历归入简历模块，历史“项目打磨”归入打磨模式中的项目经历表达主题，历史“真实项目复盘”归入面试复盘并区分模拟面试复盘和真实面试复盘。F1.6 已关闭 OQ-F1-006，冻结岗位 / JD 仅支持手动录入，历史外部文件解析或剪贴板批量生成岗位信息的诉求按产品原因后置，不作为 MVP active 能力。当前无 `F1_PRODUCT_BLOCKING`；`F2_UX_BLOCKING` 由 AIFI-UX-002 在 `UX_SPEC.md` 关闭；`F4_TECH_DESIGN` 由 AIFI-ARCH-002 及 F4 设计任务关闭；影响验收的剩余项由 AIFI-QA-002 在 F7 验证。

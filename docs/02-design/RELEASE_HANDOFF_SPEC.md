@@ -240,8 +240,19 @@ F8 runbook 应按以下场景生成。恢复动作是 F8 runbook 输入，不代
 | 发布前检查覆盖 copy boundary、no export、no exact probability | §3、§4、`API_SPEC.md` §10 / F8 mapping |
 | 发布前检查覆盖 candidate not formal、low confidence、source unavailable、validation failed | §3、§7、§8、`SEMANTICS_GLOSSARY.md`、`DATA_MODEL.md`、`API_SPEC.md` |
 
-## 13. 变更记录
+## 13. BMAD feedback-loop rollback / degradation / release gate 回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 rollback / degradation / release gate（回滚 / 降级 / 发布门槛）规划，不创建正式 release checklist、runbook、rollback strategy 或部署脚本。
+
+- 后续 release gate 必须覆盖开关设计、数据兼容、迁移策略、恢复策略和发布门槛；未完成前不得声明 feedback-loop 重构 release-ready。
+- 开关设计当前只作为 TODO：不得在本节命名真实 env var、feature flag、部署步骤或 runtime 默认值。
+- 数据兼容必须覆盖旧反馈、旧题目状态、API 行为、数据读写 / 迁移、前端刷新恢复和前端展示验收证据。
+- rollback / restore 必须考虑 in-flight task、旧 feedback 读取、new optional fields、validation failed / low confidence / generation failed 降级和关闭开关后的恢复路径。
+- C-049 到 C-054 保持 Deferred / Open Question；BR-024 / C-048 只登记产品排序规则，不作为下一题算法 release gate 已关闭的证据。
+
+## 14. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop 回滚 / 降级 / 发布门槛回写边界 | 明确开关、数据兼容、迁移、恢复和发布门槛只进入 planning TODO；不创建正式 release checklist、runbook、rollback strategy 或部署脚本 |
 | 2026-05-17 | 初始化 F8 release handoff canonical spec | 修复 `AR-F4-F8-003` 的 active design handoff 缺口；为 F8 release checklist、known limitations、runbook、rollback strategy、changelog input、release retrospective 和 next iteration backlog 提供输入；不创建 F8 正式产物，不进入 implementation |

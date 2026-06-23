@@ -616,10 +616,20 @@ F8 发布复盘至少记录以下安全隐私输入：
 | SP-DEF-007 | 用户自助完整审计历史和管理员审计检索台 | MVP 仅展示本人关键动作摘要和维护范围摘要 | 用户无法自助检索全部历史安全事件 | 后续 UX / API 冻结审计查询、分页、保留和导出边界 |
 | SP-DEF-008 | URL 导入、远程知识抓取、外部站点解析 | MVP 不抓取 URL，不跟随上传内容中的远程链接 | 不能自动导入外部网页材料 | 若实现，补 SSRF 防护、域名 allowlist、内容净化和版权 / 来源治理 |
 
-## 24. 变更记录
+## 24. BMAD feedback-loop 安全隐私回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 security / privacy（安全与隐私）规划，不授权日志、trace、provider 或运行时实现变更。
+
+- 后续需要明确 provider payload、safe summary、日志、低置信、失败降级、敏感信息过滤和人工验收证据的安全表达边界。
+- BMAD 验收所需的同答一致、趋势、失分点和参考答案证据不得暴露 raw prompt、completion、provider payload、隐藏评分规则、用户敏感正文或第三方隐私。
+- 失败、低置信和 validation failed 不得被安全摘要包装成高置信 success；用户可见状态和 audit / trace summary 必须保留最小必要信息。
+- C-049 到 C-054 保持 Deferred / Open Question；安全文档不提前批准相似度算法、错误枚举扩展、刷新恢复状态机或下一题算法。
+
+## 25. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop 安全隐私回写边界 | 明确 provider payload、safe summary、日志、低置信、失败降级和敏感信息过滤只进入规划边界；不授权运行时实现变更 |
 | 2026-06-19 | 回写 Polish execution authority security boundary | 明确 frontend、LLM、graph、fallback、provider、legacy mapper 和 repository post-processing 都不能授权 formal write；`decision_ref` / `execution_target` 只能作为安全追踪元数据 |
 | 2026-05-24 | 增加 PR3 / PR4 AI Runtime raw-off security backfill | 明确 runtime rows、timeline、interrupt drawer、checkpoint refs、LLM debug raw capture、real provider gate 和 graph descriptor/config 的安全隐私边界；不授权 real provider default-on 或 raw debug default-on |
 | 2026-05-17 | 修复 `AR-F4-F8-003` security / privacy release handoff 缺口 | 新增发布前 security / privacy checklist，覆盖 owner boundary、session / cookie / token、secret handling、log redaction、provider payload、system prompt、completion 原文、copy boundary、third-party privacy、retention / deletion、backup restore、rate limit、provider failure、audit event、trace 和 source availability；不实现监控平台、SIEM、KMS、DPA 或运维自动化 |

@@ -256,8 +256,19 @@ F7 至少覆盖：
 - API 返回 `score_rule_version_ref`、`score_version`、`rubric_version`、`confidence_level`、`validation_status`、`evidence_refs` 和 `trace_refs`。
 - copy content 不包含隐藏评分规则、完整内部权重表、校准样例正文、system prompt、provider payload 或 completion 原文。
 
-## 11. 变更记录
+## 11. BMAD feedback-loop 评分验收回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 scoring / acceptance semantics（评分与验收语义）规划，不授权评分算法或阈值实现。
+
+- “基本一致”需要后续定义同题同答同上下文下的总分波动、维度分波动、核心失分点重叠和参考答案主旨一致边界。
+- “评分趋势应上升”需要后续定义用户补足失分点后的趋势窗口、允许波动、人工裁决边界和新增真实问题处理。
+- “大量失分点”需要后续定义数量、严重度和扣分组合，不得在未确认前固定阈值。
+- “用户补足失分点”需要后续定义 fixed / repeated / regressed 的评分影响和证据来源。
+- C-049 到 C-054 保持 Deferred / Open Question；BR-024 / C-048 只登记产品排序规则，不决定下一题算法或评分函数。
+
+## 12. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop 评分验收回写边界 | 明确评分趋势、同答一致、大量失分点和补足失分点只进入验收语义硬化规划；不授权评分算法或阈值实现 |
 | 2026-05-17 | 初始化评分 canonical spec | 新增 score type、rubric dimensions、权重、公式、低置信度、API / Prompt / persistence 映射和 F7 fixture 要求 |

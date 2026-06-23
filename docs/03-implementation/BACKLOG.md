@@ -66,8 +66,89 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-REL-005 | F8 | M8 | MUST | 完成 security / privacy 发布验证 | 验证 owner boundary、session / cookie / token、secret handling、log redaction、provider payload、system prompt、completion 原文、copy boundary、third-party privacy、retention / deletion、backup restore、rate limit、provider failure、audit event、trace 和 source availability；不保存 provider payload / completion 原文，不暴露 hidden scoring rules | security / privacy release verification | AIFI-SEC-001；AIFI-REL-001；F7 全链路通过 | NOT_STARTED |
 | AIFI-REL-006 | F8 | M8 | LATER | 梳理下一轮 advanced features | 承接不阻断 MVP 的 advanced / deferred 项：真实招聘结果校准、复杂动态权重学习、provider-specific tuning、可选 queue / worker 独立化、vector database / embedding model selection、full observability platform、full SIEM / log platform、enterprise SSO / OAuth、organization / team ACL、internet search governance、advanced backup restore automation、advanced semantic dedup / merge algorithm | next iteration backlog candidates 或 accepted risk 清单 | AIFI-REL-001 | NOT_STARTED |
 | AIFI-REL-007 | F8 | M8 | LATER | 评估 advanced release automation | 在人工 release checklist、changelog、runbook、rollback strategy 和 retrospective 流程稳定后，再评估自动生成、自动核对或自动归档能力；不阻断 MVP 发布 | release automation proposal 或 accepted risk 说明 | AIFI-REL-001 | NOT_STARTED |
+| AIFI-PROD-011 | F1 | M1 | MUST | BMAD feedback PRD active docs intake | 将 BMAD feedback-loop PRD 作为需求来源登记到 active PRD、需求追踪和相关设计文档；不改产品代码 | active docs 来源回写、Non-goals、Open Questions、追踪入口 | BMAD PRD；Lazycodex plan；AIFI-TRACE-001 | NOT_STARTED |
+| AIFI-TRACE-001 | F1 | M1 | MUST | BMAD C-ID traceability registration | 登记 C-001 到 C-054 的来源状态、active doc 去向、BACKLOG 承接和关闭条件；不把 Deferred 项改成已实现 | `REQUIREMENT_TRACEABILITY.md` C-ID 追踪矩阵 | BMAD PRD；Lazycodex plan；AIFI-PROD-011 | NOT_STARTED |
+| AIFI-ARCH-009 | F4 | M4 | MUST | Feedback stability architecture gap analysis | 规划级分析 feedback 稳定性、API、data、prompt、scoring、state 和 release 差距；不形成代码级实现方案 | active design docs 差距清单、ADR 是否需要的判断 | AIFI-PROD-011；AIFI-TRACE-001 | NOT_STARTED |
+| AIFI-QA-003 | F7 | M7 | MUST | Feedback acceptance semantics matrix | 硬化“基本一致、评分趋势应上升、大量失分点、用户补足失分点、自动验收 vs 人工验收”的验收语义；不定义未确认阈值 | QA 语义矩阵、人工抽样边界、待确认阈值清单 | AIFI-PROD-011；AIFI-ARCH-009 | NOT_STARTED |
+| AIFI-BE-009 | F5 | M5 | MUST | Feedback state and compatibility survey | 只做后端状态、旧反馈、旧题目状态、task 状态、payload projection、数据读写和迁移风险探查；不修改后端代码 | 兼容性矩阵、数据风险清单、迁移/回滚待确认项 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003 | NOT_STARTED |
+| AIFI-FE-002 | F6 | M6 | SHOULD | Feedback display and refresh recovery survey | 只做前端反馈展示、失败折叠、刷新恢复、状态提示去重和验收证据展示缺口探查；不修改页面代码 | UX/FE 展示差距清单、刷新恢复验收建议 | AIFI-PROD-011；AIFI-QA-003 | NOT_STARTED |
+| AIFI-REL-008 | F8 | M8 | MUST | Feedback rollback and degradation gate plan | 规划 feedback-loop 重构的开关、降级、数据兼容、迁移、恢复和发布门槛；不声明 release-ready | rollback/degradation gate TODO、发布门槛清单 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003；AIFI-BE-009；AIFI-FE-002 | NOT_STARTED |
 
-## 2. 优先级定义
+## 2. BMAD feedback-loop planning intake task details
+
+以下入口来自 2026-06-23 BMAD feedback-loop PRD 与 Lazycodex 重构规划。PRD 是需求来源；Lazycodex plan 是工程规划来源。以下任务只建立 active docs / BACKLOG 治理入口，不是可直接进入产品代码实现的开发任务。
+
+### AIFI-PROD-011 BMAD feedback PRD active docs intake
+
+- 背景：BMAD feedback-loop PRD 已通过 Plan Readiness Gate 允许进入 active docs / BACKLOG 回写，但当前仍不是可直接开工的实现方案。
+- 范围：回写 active PRD、需求追踪和相关设计文档的来源边界、Non-goals、Open Questions、验收术语和后续承接关系。
+- 非目标：不修改产品代码、不生成接口/数据/Prompt/页面实现方案、不关闭 C-049 到 C-054。
+- PRD 来源：`_bmad-output/planning-artifacts/PRD.md`、`_bmad-output/planning-artifacts/briefs/brief-AiForInterviewer-2026-06-23/brief-traceability.md`；工程规划来源：`.omo/plans/bmad-feedback-loop-refactor-planning.md`。
+- 验收标准：active docs 明确 BMAD PRD 是需求来源、Lazycodex plan 是工程规划来源；C-049 到 C-054 保持 Deferred / Open Question；BR-024 仅登记为产品排序规则，不登记为算法实现；没有产品代码 diff。
+- 依赖：BMAD PRD、Lazycodex plan、AIFI-TRACE-001。
+- 是否阻塞后续实现：是。未完成前不得进入 `$start-work` 或代码实现。
+
+### AIFI-TRACE-001 BMAD C-ID traceability registration
+
+- 背景：BMAD PRD 包含 C-001 到 C-054 的确认、拒绝和后置项，需要进入唯一需求追踪入口，避免 planning artifact 直接变成执行依据。
+- 范围：登记 C-ID 状态、目标 active docs、BACKLOG 承接和关闭条件；显式标注 C-049 到 C-054 Deferred。
+- 非目标：不把 BMAD C-ID 标为已实现，不把 Deferred 项改写成 MERGED / ACCEPTED，不从 brief 或 addendum 替代 PRD §13.2 / traceability 主证据。
+- PRD 来源：`_bmad-output/planning-artifacts/PRD.md` §13.2、`brief-traceability.md`；工程规划来源：`.omo/plans/bmad-feedback-loop-refactor-planning.md`。
+- 验收标准：`REQUIREMENT_TRACEABILITY.md` 可追踪 C-001 到 C-054；Rejected / Deferred 项不会出现在可开工实现范围；C-048 / BR-024 不关闭 C-054。
+- 依赖：AIFI-PROD-011。
+- 是否阻塞后续实现：是。未登记前不得按 BMAD PRD 启动实现。
+
+### AIFI-ARCH-009 Feedback stability architecture gap analysis
+
+- 背景：当前代码事实只证明已有 feedback task、payload、展示和部分兼容机制，不能证明 BMAD 的同答一致性、评分趋势和参考答案回灌验收已实现。
+- 范围：在 active API、data、persistence、prompt、scoring、UX、security 和 release docs 中登记差距分析入口和后续设计问题。
+- 非目标：不选择相似度算法、不定义数据迁移、不命名开关、不写接口字段、不写 Prompt 正文、不形成实现任务拆分。
+- PRD 来源：BMAD PRD 的 Goals、FR、Business Rules、Acceptance Criteria、Compatibility Constraints；工程规划来源：Lazycodex plan 的代码事实和风险矩阵。
+- 验收标准：相关 active design docs 均能说明 PRD 需求来源、工程规划来源、当前只登记差距和待确认项；必要 ADR 仅作为待判断项，不自动创建。
+- 依赖：AIFI-PROD-011、AIFI-TRACE-001。
+- 是否阻塞后续实现：是。未完成前不得将 feedback-loop 重构列为 implementation-ready。
+
+### AIFI-QA-003 Feedback acceptance semantics matrix
+
+- 背景：PRD Readiness P1 指出验收语义仍需硬化，尤其是“基本一致”“评分趋势应上升”“大量失分点”和“用户补足失分点”。
+- 范围：定义验收语义的规划口径、自动验收候选、人工验收边界、未决阈值和样本需求。
+- 非目标：不直接设定最终阈值、不写测试代码、不生成 fixtures、不把 LLM 语义判断完全自动化。
+- PRD 来源：BMAD PRD Acceptance Criteria 与 validation report；工程规划来源：Lazycodex plan 的验收语义硬化建议。
+- 验收标准：QA 语义矩阵覆盖基本一致、评分趋势应上升、大量失分点、用户补足失分点、自动验收 vs 人工验收边界；待确认阈值不得伪装成已确认。
+- 依赖：AIFI-PROD-011、AIFI-ARCH-009。
+- 是否阻塞后续实现：是。未完成前不得把 BMAD 验收写成代码验收标准。
+
+### AIFI-BE-009 Feedback state and compatibility survey
+
+- 背景：PRD Readiness P1 指出兼容性矩阵不足，Lazycodex plan 也标出旧反馈、旧题目状态、API 行为、数据读写和迁移风险。
+- 范围：只探查旧 feedback payload、旧 `feedback_summary`、question / progress / task 状态、API envelope、数据读写、迁移和 read-time projection 风险。
+- 非目标：不修改后端代码、不写 migration、不改 schema、不删除兼容字段、不恢复旧顶层 mirror。
+- PRD 来源：BMAD PRD Compatibility Constraints；工程规划来源：Lazycodex plan 的兼容性矩阵。
+- 验收标准：兼容性矩阵覆盖旧反馈、旧题目状态、API 行为、数据读写 / 迁移和 rollback 风险；明确哪些需要后续 active docs 或 ADR 判断。
+- 依赖：AIFI-PROD-011、AIFI-ARCH-009、AIFI-QA-003。
+- 是否阻塞后续实现：是。未完成前不得做 feedback state / persistence 类代码改动。
+
+### AIFI-FE-002 Feedback display and refresh recovery survey
+
+- 背景：Lazycodex plan 标出前端可展示 feedback card、score、loss_points、reference answer，但缺少同答一致性、趋势验收证据和完整刷新恢复验收闭环。
+- 范围：只探查 feedback card、失败折叠、task timeout、session refresh、状态提示去重、验收证据展示和暂停/恢复可见边界。
+- 非目标：不修改前端代码、不设计最终 UI、不关闭 C-051 / C-053、不写 Playwright 或截图验收。
+- PRD 来源：BMAD PRD UX/Compatibility 相关条目；工程规划来源：Lazycodex plan 的 frontend facts 与兼容性矩阵。
+- 验收标准：UX/FE 差距清单覆盖旧反馈展示、失败状态、刷新恢复、状态提示去重和验收证据展示；未确认 UI 样式不进入 active 事实。
+- 依赖：AIFI-PROD-011、AIFI-QA-003。
+- 是否阻塞后续实现：否。它依赖产品/QA语义，但不单独阻塞 active docs 回写；会阻塞具体前端改造开工。
+
+### AIFI-REL-008 Feedback rollback and degradation gate plan
+
+- 背景：PRD Readiness P1 指出回滚 / 降级需要后续规划补出 TODO，Lazycodex plan 要求开关设计、数据兼容、迁移策略、恢复策略和发布门槛。
+- 范围：在 release handoff 中登记 default-off / gray / rollback / restore / release gate 的规划入口和待确认问题。
+- 非目标：不命名真实 env var、不写部署脚本、不声明 release-ready、不修改 runtime、不写迁移或回滚命令。
+- PRD 来源：BMAD PRD Risk、Compatibility、Acceptance Criteria；工程规划来源：Lazycodex plan 的回滚 / 降级 / 发布门槛 TODO。
+- 验收标准：发布门槛 TODO 覆盖开关设计、数据兼容、迁移策略、恢复策略和发布门槛；明确未通过前禁止进入 `$start-work`。
+- 依赖：AIFI-PROD-011、AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002。
+- 是否阻塞后续实现：是。未完成前不得进入可发布或灰度执行判断。
+
+## 3. 优先级定义
 
 | 优先级 | 定义 |
 |---|---|
@@ -76,7 +157,7 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | COULD | 可选优化 |
 | LATER | 下一轮迭代 |
 
-## 3. 旧任务迁移规则
+## 4. 旧任务迁移规则
 
 1. 旧任务包只作为历史来源或归档证据，不得直接作为当前任务入口。
 2. 每个仍有效的旧任务必须映射到一个 `AIFI-*` 任务。

@@ -64,3 +64,12 @@ F2 开始前必须满足：
 8. F2 必须从 `PRD.md` §10 读取 `F2_UX_BLOCKING` 和必须在 F2 关闭的 `HUMAN_CONFIRMATION`，并在 `UX_SPEC.md` 中逐项关闭，不得留给 F4 或实现阶段静默处理。
 9. F2 必须从 AIFI-UX-001 和 AIFI-UX-002 开始，优先关闭 `F2_UX_BLOCKING` 与 OQ-F1-035。
 10. F2 必须设计报告复制入口和复制反馈，不得设计任何文件导出入口或精确通过概率展示。
+
+## 5. BMAD feedback-loop 规划入口边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。该回写不新增 F9、不新增里程碑、不创建平行 roadmap，也不改变 F0 到 F8 的阶段编号。
+
+- Phase 0 对应 active docs / BACKLOG 入口准备，只允许通过 `BACKLOG.md` 中 AIFI-PROD-011、AIFI-TRACE-001、AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002、AIFI-REL-008 承接。
+- Phase 1 到 Phase 4 只作为 Lazycodex 工程规划中的后续路线，不是本文件的新阶段体系；进入任何实现前必须回到现有 F5 / F6 / F7 / F8 任务、active design docs 和当轮 scope lock。
+- C-049 到 C-054 在本阶段计划中保持 Deferred / Open Question；不得因为已登记 BACKLOG 入口而视为 implementation-ready。
+- BR-024 / C-048 只登记产品排序规则，不改变 C-054 下一题算法的后置状态。

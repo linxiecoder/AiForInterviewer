@@ -5597,10 +5597,21 @@ F8 changelog input 至少从以下 API 变化提取：
 - copy content / copy event / no export boundary 变更。
 - scoring response 中 `score_version`、`rubric_version`、`score_rule_version_ref`、`evidence_refs` 或 `trace_refs` 的变更。
 
-## 15. 变更记录
+## 15. BMAD feedback-loop API 回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 API contract 层的后续设计边界，不授权产品代码或接口实现。
+
+- feedback payload、task response、error semantics、compatibility policy 和 `AiTaskResult.result_payload` 兼容口径需要后续在本文件内形成可评审 API 约束。
+- 新增验收证据字段若进入 API，只能先按 optional-first（先可选兼容）方式设计，且不得破坏旧 feedback、旧 `feedback_summary` JSON、旧 task response 和 canonical `feedback_payload.next_recommended_actions` 位置。
+- “基本一致”“评分趋势应上升”“大量失分点”“用户补足失分点”不得在 API 层被简化为未确认的固定字段或固定阈值；必须先由 PRD / scoring / QA 语义确认。
+- C-049 到 C-054 保持 Deferred / Open Question；API 不得提前选择相似度阈值、错误枚举扩展、刷新恢复状态机或下一题算法。
+- BR-024 / C-048 只影响产品排序规则表达，不代表 API 已确认下一题算法实现。
+
+## 16. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop API 回写边界 | 明确 BMAD PRD 是需求来源、Lazycodex plan 是工程规划来源；只承接 feedback payload、task response、error semantics 和兼容口径规划，不授权接口实现 |
 | 2026-06-19 | 回写 Polish intent-only API contract | 明确 `API-POLISH-003` / `API-POLISH-005` 不接受 frontend execution target override；删除 `selected_progress_node_ref` / `completed_focus_refs` 请求字段；`FeedbackResponse` 不再保留顶层 `next_recommended_actions` mirror，canonical 位置为 `feedback_payload.next_recommended_actions` |
 | 2026-05-24 | 增加 PR3 / PR4 Agent Runtime API contract skeleton | 登记 Agent run status、timeline、interrupt detail、resume interrupt、cancel run 和 PR6 graph descriptor read-only skeleton，并明确 sanitized response、no AgentState、no checkpoint payload、no raw prompt/completion/provider payload、no normal-user debug page |
 | 2026-05-24 | 增加 AIFI-BE-004 Pressure mode API handoff | 将 Pressure start / pause / resume / end / report / review handoff 的实现前置条件交给 `PRESSURE_MODE_SPEC.md`；不新增 endpoint，不修改代码，不授权 PR2 graph |

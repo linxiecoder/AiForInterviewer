@@ -817,10 +817,20 @@ Rubric / rule version 的最小维度如下：
 | `SECURITY_PRIVACY.md` | 哪些对象包含用户资料、简历、岗位、回答、报告、复盘、资产、知识库文档、RAG 证据和 LLM trace | 密钥管理、权限矩阵、复杂 ACL、企业多租户、数据可见性、日志脱敏、保留 / 删除细则、隐私字段分级 |
 | `TECH_DESIGN.md` | 本文回填数据模型子文档状态、F4 待决策项处置表和 deferred_non_blocking 边界 | 顶层架构重写、M4 整体验收、`AIFI-ARCH-002` 完成判定 |
 
-## 14. 变更记录
+## 14. BMAD feedback-loop 数据模型回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接逻辑数据模型层的后续设计问题，不授权物理 schema、migration 或代码实现。
+
+- 后续需要明确 feedback effective rules（有效反馈规则）、feedback payload optional / required 字段边界、历史 feedback 读取投影、低置信 / validation failed / generation failed 的数据状态承接。
+- 若要把结构化 feedback payload 从 summary JSON 升级为一等持久化对象，必须另行完成 API、persistence、rollback、security 和 release gate 设计；本文当前不新增逻辑对象结论。
+- C-049 到 C-054 保持 Deferred / Open Question；数据模型不得提前决定相似度阈值、考察点绑定模型、错误枚举、刷新恢复状态机或下一题算法。
+- BR-024 / C-048 只登记为产品排序规则，不得反推出具体数据结构或算法字段。
+
+## 15. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop 数据模型回写边界 | 明确只承接 feedback effective rules、payload 字段边界、历史读取投影和状态承接规划；不新增 schema 或 migration 结论 |
 | 2026-06-19 | 回写 Polish execution trace metadata | 明确 `decision_ref` / `execution_target` 只是 authority / snapshot / persisted result 的追踪元数据，不是 durable idempotency 或 runtime recovery contract；Progress canonical write 与 projection refresh 在数据语义上拆分 |
 | 2026-05-24 | 增加 PR3 / PR4 AI Runtime logical objects backfill | 新增 `AgentRun`、`AgentNodeRun`、`AgentInterrupt`、`AgentCheckpointRef`、`LlmCall`、`LlmCallPayload` 逻辑对象和 raw-off / checkpoint non-truth-source / handoff 边界；不写 ORM、DDL、migration 或代码 |
 | 2026-05-24 | 增加 Pressure Mode mode-level 数据承接 | 将 `PressureSessionDetail` 扩展为引用 `PressureTurn`、pace、end condition、session score、report input package 和 review handoff 的逻辑承接；不新增物理 schema，不进入 implementation |

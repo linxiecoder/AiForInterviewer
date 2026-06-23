@@ -237,10 +237,20 @@ F7 至少验证：
 - candidate / suggestion rollback 不能自动创建 formal object。
 - migration / rollback / restore 的失败路径必须保留 `request_id`、`trace_id`、audit summary 和用户可见状态，不得暴露正文、Prompt、completion、provider payload、token、cookie 或 secret。
 
-## 13. 变更记录
+## 13. BMAD feedback-loop 持久化回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 persistence handoff 层的规划 TODO，不授权 DDL、ORM、migration 或运行时变更。
+
+- 后续需要形成旧 feedback、旧题目状态、API 行为、数据读写 / 迁移、前端刷新恢复和前端展示验收证据的兼容性矩阵，并明确 persistence 影响。
+- migration / backfill / rollback 只可作为 TODO 登记：必须覆盖 schema 兼容、JSON payload 读取投影、in-flight task 处理、关闭开关后的恢复路径和 restore validation。
+- 新字段或新状态必须先证明旧版本不会把未知状态解释为高置信 success；旧 feedback 读取必须保留安全 fallback。
+- C-049 到 C-054 保持 Deferred / Open Question；本文不决定新表、新列、索引、相似度存储或下一题算法持久化方式。
+
+## 14. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop 持久化回写边界 | 明确兼容性矩阵、migration / backfill / rollback / restore 只作为规划 TODO；不授权 DDL、ORM、migration 或运行时变更 |
 | 2026-06-19 | 回写 Polish execution metadata persistence boundary | 明确 `decision_ref` / `execution_target` 只作为 trace / result metadata，不能升级为 durable idempotency 或 runtime recovery；Progress canonical write 与 projection refresh 分开，rollback 不恢复旧 direct path |
 | 2026-05-24 | 增加 PR3 / PR4 AI Runtime persistence backfill | 新增 runtime tables、Core Business truth source 边界、checkpoint refs-only、before-call fail-closed、resume/replay、`side_effect_key`、in-flight task 和 rollback 规则；不写 DDL、ORM、migration 或代码 |
 | 2026-05-24 | 增加 Pressure Mode persistence handoff | 将 Pressure turn refs、pace/end/report input package 和 review handoff 映射到现有 session/detail/question/answer/feedback/score/task/typed ref 组合；不写 DDL、ORM 或 migration |

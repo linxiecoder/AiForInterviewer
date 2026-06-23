@@ -582,10 +582,20 @@ Shared contracts 统一使用以下 failure signal 语义，业务 contracts 不
 
 本节不把 `AIFI-PROMPT-001` 标记为 DONE；只表示 Prompt 侧 `AR-F4-FULL-001` 阻断项已回写为可验证的设计结论或 deferred_non_blocking 后置项。整体 acceptance 仍保持 Pending，等待 verification。
 
-## 14. 变更记录
+## 14. BMAD feedback-loop Prompt 回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 Prompt contract（提示词契约）与输出边界规划，不写完整 Prompt 文本，不授权 provider 或模型参数实现。
+
+- 后续需要明确 feedback 输出 schema、validation failed 不伪成功、candidate / formal payload 边界、低置信和失败降级的 Prompt 侧约束。
+- “基本一致”“评分趋势应上升”“大量失分点”“用户补足失分点”只能先作为 contract expectation（契约期望）和评测需求登记，不得直接写成未确认 prompt magic 或固定判定规则。
+- provider payload、raw prompt、completion 原文、隐藏评分规则和内部校准样例不得进入前端、日志、API response 或 copy content。
+- C-049 到 C-054 保持 Deferred / Open Question；本文不选择相似题算法、阈值、下一题算法或 retry / fallback 具体参数。
+
+## 15. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop Prompt 回写边界 | 明确只承接 feedback 输出 schema、validation、candidate/formal 和失败降级规划；不写完整 Prompt 文本，不授权 provider 或模型参数实现 |
 | 2026-06-19 | 回写 Polish execution authority Prompt 边界 | 明确 Prompt / LLM / graph / fallback / provider 只能给 recommendation / candidate / validation / trace，不能产生或覆盖 `execution_target`；`decision_ref` 在 Prompt trace 中仍是 trace-only |
 | 2026-05-24 | 增加 Pressure Mode mode-level spec 交叉引用 | 将 `P-PRESSURE-*` 的 lifecycle、runtime handoff、graph boundary 和 PR2 hold 交给 `PRESSURE_MODE_SPEC.md`；不新增 contract ID，不替代 Prompt Asset / Evaluation 设计 |
 | 2026-05-24 | 补充 Prompt Asset / Evaluation 交叉引用 | 明确 `PROMPT_SPEC.md` 只维护 `P-*` contract registry；Production Prompt Asset、fixture、model comparison、release / rollback 和 runtime builder 映射由 `PROMPT_ASSET_SPEC.md` / `PROMPT_EVALUATION_SPEC.md` 承接 |

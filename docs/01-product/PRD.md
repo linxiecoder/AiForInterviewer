@@ -606,9 +606,41 @@ MVP 成功标准为：
 | 通过倾向 / 风险提示 | 帮助用户理解表现差距、岗位要求风险和改进方向的产品表达，最终展示边界由 F4 / F7 关闭 |
 | UNKNOWN | 当前尚未冻结但已绑定关闭阶段、承接任务、目标文档和关闭标准的问题 |
 
-## 12. 变更记录
+## 12. BMAD feedback-loop 需求来源回写
+
+本节登记 2026-06-23 BMAD feedback-loop 规划输入的 active PRD 入口。`_bmad-output/planning-artifacts/PRD.md` 是本轮 feedback-loop 重构的需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。二者均不得绕过 `REQUIREMENT_TRACEABILITY.md`、`BACKLOG.md` 和当前 active design docs 直接作为代码实现依据。
+
+### 12.1 产品范围
+
+- BMAD feedback-loop 需求只进入“当前模拟面试内单题稳定反馈闭环”的产品范围，重点覆盖打磨模式中的回答、点评、评分、失分点、参考答案、同题多轮改进和下一步建议。
+- 本节不改变现有 MVP 阶段体系，不新增 roadmap、plan-v2、latest-plan、codex-plan 或平行任务入口。
+- 本节不声明当前代码已经满足 BMAD 验收；实现事实必须以后续代码探查、测试和 active design docs 为准。
+
+### 12.2 已登记的需求状态
+
+- C-001 到 C-048 中，除 C-002、C-015、C-020、C-030、C-033 为 Rejected / Non-goal 外，其余按 BMAD PRD 主证据进入 active docs 追踪和后续规划承接。
+- C-049 到 C-054 保持 Deferred / Open Question，只允许进入探索计划、风险矩阵和待确认问题，不得改写为已确认实现方案。
+- BR-024 / C-048 只登记为产品排序规则：生成下一题时应优先围绕未补足失分点、未掌握考点和当前岗位相关性排序；该规则不关闭 C-054 的具体算法问题。
+- addendum 和 brief 可作为辅助材料，但 C-ID 主证据以 BMAD PRD §13.2 或 `brief-traceability.md` 为准。
+
+### 12.3 后续必须硬化的验收语义
+
+- “基本一致”需要定义同题、同答、同上下文快照下的分数波动、核心失分点重叠和参考答案主旨一致边界。
+- “评分趋势应上升”需要定义用户补足上一轮失分点后的趋势窗口、允许波动和新增真实问题的人工裁决边界。
+- “大量失分点”需要定义数量、严重度和扣分组合，不得在未确认阈值前写成自动通过或自动失败规则。
+- “用户补足失分点”需要定义上一轮失分点到本轮修复、重复或退化的判定口径。
+- 自动验收只覆盖结构、数值稳定、引用、状态和回归样本；语义等价、面试合理性和失分点解释质量必须保留人工验收边界。
+
+### 12.4 非目标和禁止提前拍板
+
+- 本节不定义相似度阈值、题目去重算法、下一题生成算法、数据表结构、迁移策略、Prompt 正文、开关名称或 UI 最终样式。
+- C-049 到 C-054 在 active docs 中只能以 Deferred / Open Question 出现，不能作为 implementation-ready 条目。
+- 任何后续实现必须先经过 `BACKLOG.md` 中对应 AIFI-* 入口、当轮 scope lock 和 active design docs 关闭条件。
+
+## 13. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop PRD 需求来源与 Lazycodex 工程规划来源，明确 C-049 到 C-054 Deferred、BR-024 仅为产品排序规则 | 同步 `REQUIREMENT_TRACEABILITY.md`、`BACKLOG.md` 和 feedback-loop active design docs 回写入口；不授权产品代码实现 |
 | 2026-05-03 | 修正业务对象模型：项目经历归入简历模块，项目经历打磨归入打磨模式主题，真实面试材料复盘统一为面试复盘 | 同步 F2 低保真输入、F4 数据结构边界和 F7 验收口径 |
 | 2026-05-02 | 明确 0-100 评分展示刻度、MVP 不做文件导出仅支持复制、通过概率只保留目标效果不承诺精确实现 | 同步 F2 低保真输入、F4 技术设计待关闭项和 F7 验收边界 |

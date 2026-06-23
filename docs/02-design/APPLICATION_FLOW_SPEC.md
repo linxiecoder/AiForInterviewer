@@ -190,10 +190,20 @@ session summary update 可以在 feedback task 后执行；短会话可用 deter
 
 `low_confidence`、`source_unavailable`、`validation_failed` 和 `partial` 结果必须返回用户可见状态和 `next_actions`，不得作为普通 `success` 隐藏。
 
-## 7. 变更记录
+## 7. BMAD feedback-loop 流程编排回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 application flow（应用编排流程）层的规划边界，不授权代码改动或 graph / runtime 实现。
+
+- 后续需要梳理 answer saved、feedback pending、feedback generated / failed、task timeout、session refresh、progress refresh failed 和 next question intent 的流程顺序与冲突边界。
+- feedback semantic validation（反馈语义验收）即使后续进入流程，也不得绕过 output validation、low confidence、candidate / formal boundary 和 persistence handoff。
+- C-052、C-053、C-054 保持 Deferred / Open Question；本文不新增错误枚举、不决定状态提示去重状态机、不选择下一题算法。
+- BR-024 / C-048 只登记产品排序规则，不授权流程层把 storage-time 后处理或前端状态作为推荐动作决策层。
+
+## 8. 变更记录
 
 | 日期 | 变更 | 影响 |
 |---|---|---|
+| 2026-06-23 | 登记 BMAD feedback-loop 流程编排回写边界 | 明确只承接 feedback 状态顺序、刷新恢复、语义验收与 next question intent 的规划边界；不授权代码或 graph/runtime 实现 |
 | 2026-06-19 | 回写 Polish Execution Minimal Model | 明确 question / feedback execution 必须经 backend authority、immutable snapshot 和 executor handler；frontend intent-only，graph / fallback / provider adapter-only，`decision_ref` trace-only，Progress canonical write 与 projection refresh 分离 |
 | 2026-06-15 | 收口进展树刷新写入 authority | 明确 `/progress-tree/state` API 只能委托 `PolishUseCases.refresh_progress_tree_state()`；禁止 API adapter 直接调用 progress-tree LLM service 或 repository 写入，避免绕过 Application 层决策与验证 |
 | 2026-06-15 | 收紧打磨反馈 `next_recommended_actions` storage handoff 边界 | 明确推荐动作只能来自规则 / 校验链路中的受控 action id；storage handoff 不得在 final validation 后追加自由文本 action，避免反馈持久化阶段绕过推荐动作白名单 |

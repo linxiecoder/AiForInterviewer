@@ -2071,3 +2071,12 @@ Figma 验收标准：
 - MVP 报告仅支持报告内容复制，不提供文件生成、文件下载或批量文件能力。
 - 不设计项目一级模块，不设计项目类一级页面，不设计对项目本身的复盘能力。
 - 不进入 F3 高保真视觉、设计系统或 F4 工程设计。
+
+## 9. BMAD feedback-loop UX 回写边界
+
+本节登记 2026-06-23 BMAD feedback-loop active docs 回写入口。`_bmad-output/planning-artifacts/PRD.md` 是需求来源；`.omo/plans/bmad-feedback-loop-refactor-planning.md` 是工程规划来源。本文只承接 UX planning（用户体验规划）和低保真语义边界，不授权前端代码或最终 UI 样式。
+
+- 后续需要确认 feedback card、失败折叠、状态提示去重、刷新恢复、暂停 / 恢复、验收证据展示和人工验收标注的用户可见边界。
+- 当前只登记“旧反馈展示、失败状态、刷新恢复、验收证据展示”这些差距，不声明现有页面已满足 BMAD 验收。
+- C-051 和 C-053 保持 Deferred / Open Question；不得在本节关闭失败折叠样式或状态提示去重状态机。
+- C-049 到 C-054 全部保持 Deferred / Open Question；BR-024 / C-048 只影响下一题产品排序规则，不等同于具体交互或算法方案。
