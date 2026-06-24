@@ -73,7 +73,7 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-BE-009 | F5 | M5 | MUST | Feedback state and compatibility survey | 只做后端状态、旧反馈、旧题目状态、task 状态、payload projection、数据读写和迁移风险探查；不修改后端代码 | 兼容性矩阵、数据风险清单、迁移/回滚待确认项 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003 | NOT_STARTED |
 | AIFI-FE-002 | F6 | M6 | SHOULD | Feedback display and refresh recovery survey | 只做前端反馈展示、失败折叠、刷新恢复、状态提示去重和验收证据展示缺口探查；不修改页面代码 | UX/FE 展示差距清单、刷新恢复验收建议 | AIFI-PROD-011；AIFI-QA-003 | NOT_STARTED |
 | AIFI-REL-008 | F8 | M8 | MUST | Feedback rollback and degradation gate plan | 规划 feedback-loop 重构的开关、降级、数据兼容、迁移、恢复和发布门槛；不声明 release-ready | rollback/degradation gate TODO、发布门槛清单 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003；AIFI-BE-009；AIFI-FE-002 | NOT_STARTED |
-| AIFI-QA-004 | F7 | M7 | MUST | Feedback acceptance semantics tests | 基于 `.omo/plans/plan.md` Step 1 补齐 feedback 验收语义测试入口 | `tests/api/test_polish_feedback_acceptance_semantics.py` 等 pytest 覆盖和语义矩阵证据 | AIFI-PROD-011；AIFI-TRACE-001；AIFI-QA-003 | READY_TO_START |
+| AIFI-QA-004 | F7 | M7 | MUST | Feedback acceptance semantics tests | 基于 `.omo/plans/plan.md` Step 1 建立 AC-001、AC-002、AC-003、AC-012 首批 feedback 验收语义测试护栏；当前收口为 `ACCEPTED_RED`，RED 作为后续实现缺口证据 | `tests/api/test_polish_feedback_acceptance_semantics.py` 等 pytest 覆盖和语义矩阵证据 | AIFI-PROD-011；AIFI-TRACE-001；当轮 scope lock | ACCEPTED_RED |
 | AIFI-BE-010 | F5 | M5 | MUST | Effective feedback state and compatibility | 实现有效 feedback 状态、旧 payload 兼容投影和 API/schema 兼容读取 | 后端状态契约、兼容投影、相关 tests/api | AIFI-QA-004；AIFI-BE-009 | NOT_STARTED |
 | AIFI-BE-011 | F5 | M5 | MUST | Fail-closed feedback validation | 实现 feedback 生成失败时的 fail-closed 校验、投影和错误折叠 | validation/projection/service 行为和失败路径 tests/api | AIFI-BE-010 | NOT_STARTED |
 | AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和改进趋势归一化 | scoring/runtime 稳定性行为和回归 tests/api | AIFI-BE-010；AIFI-BE-011 | NOT_STARTED |
@@ -163,15 +163,51 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 ### AIFI-QA-004 Feedback acceptance semantics tests
 
 - 背景：`.omo/plans/plan.md` Step 1 要求先把 feedback 验收语义落成可运行测试，避免后续后端/前端实现各自解释“有效反馈”“失败折叠”“追问/下一题”语义。
-- 范围：新增或更新 feedback acceptance semantics pytest，覆盖 AC-001 到 AC-015 的关键断言、Step 1 的 task acceptance、C-049 到 C-054 Deferred guard，以及后续 Step 2 到 Step 12 的回归入口。
-- 非目标：不实现后端业务逻辑、不修改前端、不创建迁移、不改变 API schema、不关闭 C-049 到 C-054。
+- 范围：新增或更新 feedback acceptance semantics pytest，只负责 feedback acceptance semantics tests 的首批护栏，覆盖 AC-001、AC-002、AC-003、AC-012。
+- 非目标：不实现后端业务逻辑、不修改前端、不创建迁移、不改变 API schema、不关闭 C-049 到 C-054。AC-004 到 AC-011、AC-013 到 AC-015 由后续 BE / FE / QA / REL steps 承接。
 - 允许修改路径：`tests/api/test_polish_feedback_acceptance_semantics.py`；必要时可补充同目录下命名清晰的 `tests/api/test_polish_feedback_*acceptance*.py` 测试文件。
 - 禁止修改路径：`apps/**`；`apps/api/migrations/**`；`apps/web/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
-- 依赖：AIFI-PROD-011；AIFI-TRACE-001；AIFI-QA-003；当前 BACKLOG 授权入口；当轮 scope lock 明确允许写 `tests/api/**`。
-- 验收标准：`tests/api/test_polish_feedback_acceptance_semantics.py` 能被单独运行；测试名称或断言注释可追踪到 AC-001 到 AC-015；测试显式断言 C-049 到 C-054 仍为 Deferred / Open Question；失败断言先红后绿，不通过 mock 直接绕过业务契约。
+- 依赖：AIFI-PROD-011；AIFI-TRACE-001；当前 BACKLOG 授权入口；当轮 scope lock 明确允许写 `tests/api/**`。`AIFI-QA-003` 可作为 QA 语义参考上下文，但不是 AIFI-QA-004 的硬阻塞依赖。
+- 验收标准：
+  - `tests/api/test_polish_feedback_acceptance_semantics.py` 能被单独运行。
+  - 测试名称、断言注释或 evidence 必须可追踪到 AC-001、AC-002、AC-003、AC-012。
+  - AC-004 到 AC-011、AC-013 到 AC-015 不属于 AIFI-QA-004 的完成范围，必须由后续对应 implementation / QA / release steps 承接。
+  - 测试必须显式断言 C-049 到 C-054 仍为 Deferred / Open Question。
+  - 失败断言允许先红后绿，不得通过 mock 直接绕过业务契约。
 - 对应 plan.md Step：Step 1。
-- 对应 PRD AC / FR / BR：AC-001 到 AC-015；FR-001 到 FR-064 中与 feedback-loop 相关的验收语义；BR-001 到 BR-024；active PRD 第 12 节登记的 BMAD feedback-loop PRD 作为需求来源，不作为独立执行入口。
+- 主要对应 PRD AC：AC-001、AC-002、AC-003、AC-012。
+- 参考 PRD 范围：FR-001 到 FR-064、BR-001 到 BR-024 仅作为语义上下文，不构成 AIFI-QA-004 的全量覆盖承诺。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只把 Deferred guard 写入测试，不把相似度阈值、持久化表、UI 形态、错误枚举、刷新恢复状态机或下一题算法升级为已决策。
+
+#### Step 1 Execution Result
+
+* Result：`ACCEPTED_RED`
+* Execution date：2026-06-24
+* Plan step：`.omo/plans/plan.md` Step 1 - 验收语义硬化与测试矩阵冻结
+* AIFI：`AIFI-QA-004`
+* Test command：`PYTHONPATH=.:apps/api python -m pytest -p no:cacheprovider tests/api/test_polish_feedback_acceptance_semantics.py -q`
+* Current result：`2 failed, 3 passed`
+
+Accepted RED failures：
+
+* AC-001：同题同答稳定性 RED。当前实现的 score band 超过允许范围，属于实现缺口，不是测试装配错误。
+* AC-003：参考答案回灌 RED。当前实现的 replay score 低于高分预期，属于实现缺口，不是测试装配错误。
+
+Current interpretation：
+
+* Step 1 已产出首批 feedback acceptance semantics tests。
+* 当前 RED 结果作为后续实现的验收护栏被接受。
+* Step 1 没有修改后端业务实现、前端、migration、配置、依赖或 API schema。
+* Step 1 只覆盖 AC-001、AC-002、AC-003、AC-012 的首批测试护栏。
+* AC-004 到 AC-011、AC-013 到 AC-015 由后续 BE / FE / QA / REL steps 承接。
+* C-049 到 C-054 仍保持 `Deferred / Open Question`。
+* Step 1 不授权 Step 2；Step 2 必须重新执行 scope lock。
+
+Downstream handling：
+
+* AC-001 RED 由后续 feedback stability / scoring consistency implementation 承接。
+* AC-003 RED 由后续 reference-answer replay / scoring consistency implementation 承接。
+* AC-002 和 AC-012 的当前测试结果按 pytest 输出记录，不扩大为全量 PRD 通过声明。
 
 ### AIFI-BE-010 Effective feedback state and compatibility
 

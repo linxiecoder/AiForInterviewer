@@ -203,6 +203,70 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 | Step 10、Step 11 | AIFI-FE-004 | 只允许 `InterviewPage.tsx` 页面交互、刷新恢复和相关 FE tests / smoke evidence |
 | Step 11、Step 12 | AIFI-REL-009 | 只允许 release docs / runbook / QA evidence docs；不得改业务代码或测试代码 |
 
+### 5.5 Step 1 / AIFI-QA-004 Accepted-RED 状态登记
+
+本节登记 `.omo/plans/plan.md` Step 1 的当前执行状态。该状态只用于追踪 Step 1 / AIFI-QA-004 的测试护栏结果，不改变 PRD 需求事实源，不关闭 C-049 到 C-054，也不授权 Step 2 或后续实现步骤。
+
+| 项 | 内容 |
+|---|---|
+| plan.md Step | Step 1：验收语义硬化与测试矩阵冻结 |
+| BACKLOG 授权入口 | AIFI-QA-004 |
+| 当前状态 | ACCEPTED_RED |
+| 测试命令 | `PYTHONPATH=.:apps/api python -m pytest -p no:cacheprovider tests/api/test_polish_feedback_acceptance_semantics.py -q` |
+| 当前结果 | `2 failed, 3 passed` |
+| 允许修改范围 | `tests/api/test_polish_feedback_acceptance_semantics.py`；必要时包括命名清晰的 `tests/api/test_polish_feedback_*acceptance*.py` |
+| 禁止修改范围 | `apps/**`；`apps/web/**`；`apps/api/migrations/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**` |
+| 下一步授权 | 本节不授权 Step 2；Step 2 必须重新执行 scope lock |
+
+#### Step 1 覆盖范围
+
+AIFI-QA-004 只覆盖首批 feedback acceptance semantics 测试护栏：
+
+| AC | 当前状态 | 说明 |
+|---|---|---|
+| AC-001 | RED | 同题同答稳定性测试已建立；当前实现的 score band 超过允许范围，属于实现缺口，不是测试装配错误 |
+| AC-002 | 已纳入 Step 1 测试护栏 | 改进趋势语义进入测试设计和断言范围；当前状态以 pytest 输出为准 |
+| AC-003 | RED | 参考答案回灌测试已建立；当前 replay score 低于高分预期，属于实现缺口，不是测试装配错误 |
+| AC-012 | 已纳入 Step 1 测试护栏 | 失败不伪成功语义进入测试设计和断言范围；当前状态以 pytest 输出为准 |
+
+AIFI-QA-004 不覆盖以下验收项的完成：
+
+- AC-004 到 AC-011。
+- AC-013 到 AC-015。
+
+这些验收项仍由后续 BE / FE / QA / REL steps 按 `BACKLOG.md` 和本文件 §5.4 的授权映射承接。
+
+#### Accepted-RED 解释
+
+`ACCEPTED_RED` 表示 Step 1 已产出首批可运行的 feedback acceptance semantics tests，且当前 RED 结果被接受为后续实现缺口证据。
+
+当前 RED 不表示 Step 1 失败，也不表示测试装配错误。当前 RED 只说明：
+
+- AC-001 的同题同答稳定性尚未由实现满足。
+- AC-003 的参考答案回灌高分自洽尚未由实现满足。
+
+Step 1 没有修改后端业务实现、前端实现、migration、配置、依赖或 API schema。
+
+#### Deferred Guard
+
+C-049 到 C-054 仍保持 `Deferred / Open Question`。
+
+Step 1 / AIFI-QA-004 只允许建立 Deferred guard 测试护栏，不得关闭或实现以下事项：
+
+- C-049：相似度阈值。
+- C-050：考察点与题目绑定模型。
+- C-051：失败记录折叠最终样式。
+- C-052：错误枚举最终映射。
+- C-053：状态提示去重与刷新恢复最终状态机。
+- C-054：生成下一题具体算法。
+
+#### 下一步约束
+
+Step 1 的 `ACCEPTED_RED` 不授权 Step 2。
+
+进入 Step 2 前必须重新执行 scope lock，并确认对应 AIFI 授权入口、允许修改路径和禁止修改路径。
+
+
 ## 6. F1.3 结论
 
 F1.2 已将 PRD 从“大能力清单”补全为产品需求规格说明书。F1.3 已将 PRD 中所有 UNKNOWN 绑定到分类、影响范围、当前处理策略、必须关闭阶段、承接 AIFI-* 任务、关闭后写入的目标文档和关闭标准。F1.4 已将 0-100 产品展示刻度、MVP 不做文件导出仅支持复制、通过概率不承诺精确实现同步到 PRD 和追踪关系。F1.5 已修正业务对象模型：项目经历归入简历模块，历史“项目打磨”归入打磨模式中的项目经历表达主题，历史“真实项目复盘”归入面试复盘并区分模拟面试复盘和真实面试复盘。F1.6 已关闭 OQ-F1-006，冻结岗位 / JD 仅支持手动录入，历史外部文件解析或剪贴板批量生成岗位信息的诉求按产品原因后置，不作为 MVP active 能力。当前无 `F1_PRODUCT_BLOCKING`；`F2_UX_BLOCKING` 由 AIFI-UX-002 在 `UX_SPEC.md` 关闭；`F4_TECH_DESIGN` 由 AIFI-ARCH-002 及 F4 设计任务关闭；影响验收的剩余项由 AIFI-QA-002 在 F7 验证。
